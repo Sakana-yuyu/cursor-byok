@@ -316,7 +316,7 @@ func buildRequestContextUserInfoSection(requestContext *agentv1.RequestContext) 
 		lines = append(lines, "Shell: "+shell)
 	}
 	if workspacePaths := env.GetWorkspacePaths(); len(workspacePaths) > 0 {
-		lines = append(lines, "Workspace Path: "+strings.TrimSpace(workspacePaths[0]))
+		lines = append(lines, buildWorkspacePathsSection(workspacePaths))
 	}
 	isGitRepo := "Unknown"
 	repositoryInfo := requestContext.GetRepositoryInfo()
@@ -336,6 +336,32 @@ func buildRequestContextUserInfoSection(requestContext *agentv1.RequestContext) 
 		return ""
 	}
 	return "<user_info>\n" + strings.Join(lines, "\n\n") + "\n</user_info>"
+}
+
+// buildWorkspacePathsSection 构造工作区路径片段。
+//
+// 渲染规则：
+//   - 单路径：`Workspace Path: <path>`，与历史格式保持一致；
+//   - 多路径：`Workspace Paths:` 起行，后续每行以 `- <path>` 列出全部路径，顺序保留输入顺序。
+func buildWorkspacePathsSection(workspacePaths []string) string {
+	trimmedPaths := make([]string, 0, len(workspacePaths))
+	for _, path := range workspacePaths {
+		if path = strings.TrimSpace(path); path != "" {
+			trimmedPaths = append(trimmedPaths, path)
+		}
+	}
+	if len(trimmedPaths) == 0 {
+		return ""
+	}
+	if len(trimmedPaths) == 1 {
+		return "Workspace Path: " + trimmedPaths[0]
+	}
+	items := make([]string, 0, len(trimmedPaths)+1)
+	items = append(items, "Workspace Paths:")
+	for _, path := range trimmedPaths {
+		items = append(items, "- "+path)
+	}
+	return strings.Join(items, "\n")
 }
 
 // buildRequestContextAgentTranscriptsSection 构造 <agent_transcripts> 片段。
