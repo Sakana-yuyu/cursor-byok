@@ -1,3 +1,11 @@
+<img  width="820"  alt="image" src="https://github.com/user-attachments/assets/2e1710b0-cdbd-4576-bd24-1614df016219" />
+
+<img width="820"  alt="image" src="https://github.com/user-attachments/assets/00885453-6a91-4052-aadf-f686daeec881" />
+
+<img  width="820"  alt="image" src="https://github.com/user-attachments/assets/a607be84-a738-4e33-9750-13352e74001c" />
+
+
+
 ## 为什么做这个项目
 
 公司喜欢把 Agent 服务与模型绑定在一起，让用户只能在指定模型、指定订阅和指定计费方式下使用工具。
@@ -10,9 +18,6 @@
 
 [正式版路线图](https://github.com/leookun/cursor-byok/discussions/32)
 [详细使用教程](https://dcne38qm5vlg.feishu.cn/wiki/JeP7wdGnziBXuikNaF5czWbrn8c)
-
-
-注：正式版发布后的不久，本代码库将会全面开源，并迎来更多有趣的工具，local-first是我们的终极目标
 
 ## 后续
 
@@ -28,15 +33,6 @@
 最终希望做到：让你的模型 API 可以自由接入到你想使用的任何工具中。
 
 
-## 截图
-
-
-
-<img  width="820"  alt="image" src="https://github.com/user-attachments/assets/2e1710b0-cdbd-4576-bd24-1614df016219" />
-
-<img width="820"  alt="image" src="https://github.com/user-attachments/assets/00885453-6a91-4052-aadf-f686daeec881" />
-
-<img  width="820"  alt="image" src="https://github.com/user-attachments/assets/a607be84-a738-4e33-9750-13352e74001c" />
 
 
 ## Star History
