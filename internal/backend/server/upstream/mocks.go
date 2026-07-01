@@ -46,6 +46,8 @@ const (
 	bootstrapStatsigDisableTerminalOutputUIStreaming = "disable_terminal_output_ui_streaming"
 	bootstrapStatsigBrowserCanvas                    = "browser_canvas"
 	bootstrapStatsigEnableMultitaskMode              = "enable_multitask_mode"
+	bootstrapStatsigDecomposeAlwaysLocalExtHostGate  = "decompose_always_local_ext_host"
+	bootstrapStatsigCursorExtensionsIsolationV2Gate  = "cursor_extensions_isolation_v2"
 	bootstrapStatsigCursorAgentWorkerExtension       = "enable_cursor_agent_worker_extension"
 	bootstrapStatsigExperimentName                   = "free_user_model_picker"
 	bootstrapStatsigVariantParam                     = "variant"
@@ -139,6 +141,8 @@ var bootstrapStatsigTemplate = statsigBootstrapTemplate{
 		bootstrapStatsigDisableTerminalOutputUIStreaming: buildEnabledStatsigGate(bootstrapStatsigDisableTerminalOutputUIStreaming),
 		bootstrapStatsigBrowserCanvas:                    buildEnabledStatsigGate(bootstrapStatsigBrowserCanvas),
 		bootstrapStatsigEnableMultitaskMode:              buildEnabledStatsigGate(bootstrapStatsigEnableMultitaskMode),
+		bootstrapStatsigDecomposeAlwaysLocalExtHostGate:  buildDisabledStatsigGate(bootstrapStatsigDecomposeAlwaysLocalExtHostGate),
+		bootstrapStatsigCursorExtensionsIsolationV2Gate:  buildDisabledStatsigGate(bootstrapStatsigCursorExtensionsIsolationV2Gate),
 		bootstrapStatsigCursorAgentWorkerExtension:       buildDisabledStatsigGate(bootstrapStatsigCursorAgentWorkerExtension),
 	},
 	DynamicConfigs: map[string]statsigDynamicConfigTemplate{
