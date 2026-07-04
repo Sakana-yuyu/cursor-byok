@@ -7,6 +7,7 @@ import {
   createEmptyModelAdapter,
   normalizeModelAdapter,
   OPENAI_ENDPOINT_CHAT_COMPLETIONS,
+  OPENAI_ENDPOINT_CUSTOM,
   OPENAI_ENDPOINT_RESPONSES,
   OPENAI_EXTRA_PARAMS_DEFAULT_JSON,
 } from "@/state/appState";
@@ -35,6 +36,7 @@ const anthropicThinkingEffortOptions = [
 const openAIEndpointOptions = [
   { label: "/v1/responses", value: OPENAI_ENDPOINT_RESPONSES, icon: "icon-[mdi--api]" },
   { label: "/v1/chat/completions", value: OPENAI_ENDPOINT_CHAT_COMPLETIONS, icon: "icon-[mdi--message-text-outline]" },
+  { label: "自定义路径", value: OPENAI_ENDPOINT_CUSTOM, icon: "icon-[mdi--pencil-outline]" },
 ];
 
 const fieldTips = {
