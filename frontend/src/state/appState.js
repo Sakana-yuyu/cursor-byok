@@ -27,6 +27,7 @@ const SUPPORTED_ANTHROPIC_THINKING_EFFORTS = new Set(["low", "medium", "high", "
 export const ANTHROPIC_THINKING_EFFORT_DEFAULT = "xhigh";
 export const OPENAI_ENDPOINT_RESPONSES = "/v1/responses";
 export const OPENAI_ENDPOINT_CHAT_COMPLETIONS = "/v1/chat/completions";
+export const OPENAI_ENDPOINT_CUSTOM = "/custom";
 export const OPENAI_EXTRA_PARAMS_DEFAULT_JSON = `{
   "service_tier": "priority"
 }`;
@@ -34,7 +35,7 @@ export const EXTRA_PARAMS_DEFAULT_JSON = `{
 }`;
 export const CUSTOM_HEADERS_DEFAULT_JSON = `{
 }`;
-const SUPPORTED_OPENAI_ENDPOINTS = new Set([OPENAI_ENDPOINT_RESPONSES, OPENAI_ENDPOINT_CHAT_COMPLETIONS]);
+const SUPPORTED_OPENAI_ENDPOINTS = new Set([OPENAI_ENDPOINT_RESPONSES, OPENAI_ENDPOINT_CHAT_COMPLETIONS, OPENAI_ENDPOINT_CUSTOM]);
 const SUPPORTED_ROUTE_MODES = new Set(["local", "upstream"]);
 const PROXY_STATE_EVENT = "proxy:state";
 const USER_CONFIG_CHANGED_EVENT = "user-config:changed";
@@ -282,12 +283,19 @@ export function createEmptyModelAdapter() {
   };
 }
 
+// normalizeOpenAIEndpoint 归一化 endpoint 路径。
+// 支持三个预设值：/v1/responses、/v1/chat/completions、/custom（自定义路径）。
+// 选 /custom 时，用户需在接口地址栏填写完整请求 URL。
 function normalizeOpenAIEndpoint(value) {
   const text = asString(value).toLowerCase();
   if (!text) {
     return OPENAI_ENDPOINT_RESPONSES;
   }
   return SUPPORTED_OPENAI_ENDPOINTS.has(text) ? text : "";
+}
+
+function isValidOpenAIEndpoint(value) {
+  return normalizeOpenAIEndpoint(value) !== "";
 }
 
 function validateJSONObject(value, label) {
@@ -426,8 +434,8 @@ export function validateModelAdapters(source) {
     if (adapter.type === "openai" && !SUPPORTED_REASONING_EFFORTS.has(adapter.reasoningEffort)) {
       return `${prefix} 的推理强度仅支持 low、medium、high、xhigh`;
     }
-    if (adapter.type === "openai" && !SUPPORTED_OPENAI_ENDPOINTS.has(adapter.openAIEndpoint)) {
-      return `${prefix} 的 OpenAI 端点仅支持 /v1/responses 或 /v1/chat/completions`;
+    if (adapter.type === "openai" && !isValidOpenAIEndpoint(adapter.openAIEndpoint)) {
+      return `${prefix} 的 OpenAI 端点仅支持 /v1/responses、/v1/chat/completions 或以 / 开头的自定义路径`;
     }
     if (adapter.type === "openai" && adapter.openAIExtraParamsEnabled) {
       const extraParamsError = validateOpenAIExtraParamsJSON(adapter.openAIExtraParamsJSON);
