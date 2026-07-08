@@ -40,7 +40,7 @@ const openAIEndpointOptions = [
 ];
 
 const fieldTips = {
-  openAIExtraParams: "开启后会把 JSON 对象合并到 OpenAI 请求体。OpenAI service_tier 支持 auto、default、flex、scale、priority；priority 可用于高优先级/Fast 类场景。",
+  openAIExtraParams: "开启后会把 JSON 对象覆盖到 OpenAI 请求体。同名字段以这里为准。OpenAI service_tier 支持 auto、default、flex、scale、priority；priority 可用于高优先级/Fast 类场景。",
 };
 
 const props = defineProps({
