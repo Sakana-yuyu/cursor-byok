@@ -29,7 +29,7 @@ type openAIRequestBody struct {
 	Tools           []json.RawMessage `json:"tools,omitempty"`
 	Messages        []map[string]any  `json:"messages"`
 	Stream          bool              `json:"stream"`
-	MaxTokens       int               `json:"max_tokens"`
+	MaxTokens       int               `json:"max_tokens,omitempty"`
 	StreamOptions   map[string]any    `json:"stream_options"`
 	ReasoningEffort string            `json:"reasoning_effort,omitempty"`
 	PromptCacheKey  string            `json:"prompt_cache_key,omitempty"`
@@ -41,7 +41,7 @@ type openAIResponsesRequestBody struct {
 	Input           []map[string]any          `json:"input"`
 	Tools           []map[string]any          `json:"tools,omitempty"`
 	Stream          bool                      `json:"stream"`
-	MaxOutputTokens int                       `json:"max_output_tokens"`
+	MaxOutputTokens int                       `json:"max_output_tokens,omitempty"`
 	Reasoning       *openAIResponsesReasoning `json:"reasoning,omitempty"`
 	Include         []string                  `json:"include,omitempty"`
 	PromptCacheKey  string                    `json:"prompt_cache_key,omitempty"`
@@ -455,8 +455,10 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 			Model:         modelID,
 			Messages:      normalizedMessages,
 			Stream:        true,
-			MaxTokens:     req.MaxTokens,
 			StreamOptions: map[string]any{"include_usage": true},
+		}
+		if shouldSendOpenAIMaxOutputTokens(modelID) {
+			requestBody.MaxTokens = req.MaxTokens
 		}
 		if key := openAIPromptCacheKey(req, modelID); key != "" {
 			requestBody.PromptCacheKey = key
@@ -914,12 +916,14 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			return err
 		}
 		requestBody := openAIResponsesRequestBody{
-			Model:           modelID,
-			Instructions:    instructions,
-			Input:           input,
-			Stream:          true,
-			MaxOutputTokens: req.MaxTokens,
-			Store:           false,
+			Model:        modelID,
+			Instructions: instructions,
+			Input:        input,
+			Stream:       true,
+			Store:        false,
+		}
+		if shouldSendOpenAIMaxOutputTokens(modelID) {
+			requestBody.MaxOutputTokens = req.MaxTokens
 		}
 		if key := openAIPromptCacheKey(req, modelID); key != "" {
 			requestBody.PromptCacheKey = key
@@ -1842,6 +1846,10 @@ func normalizeOpenAIProviderMessages(messages []Message, thinkingEnabled bool) (
 		items = append(items, item)
 	}
 	return items, nil
+}
+
+func shouldSendOpenAIMaxOutputTokens(modelID string) bool {
+	return !strings.Contains(strings.ToLower(strings.TrimSpace(modelID)), "gpt")
 }
 
 func shouldIncludeOpenAIReasoningContent(message Message, thinkingEnabled bool) bool {

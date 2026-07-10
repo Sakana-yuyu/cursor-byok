@@ -22,7 +22,7 @@ import {
 const APP_STATE_STORAGE_KEY = "cursor-client:runtime-state:v2";
 const GENERIC_SERVICE_ERROR = "服务错误";
 const SUPPORTED_MODEL_ADAPTER_TYPES = new Set(["openai", "anthropic"]);
-const SUPPORTED_REASONING_EFFORTS = new Set(["low", "medium", "high", "xhigh"]);
+const SUPPORTED_REASONING_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 const SUPPORTED_ANTHROPIC_THINKING_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 export const ANTHROPIC_THINKING_EFFORT_DEFAULT = "xhigh";
 export const OPENAI_ENDPOINT_RESPONSES = "/v1/responses";
@@ -432,7 +432,7 @@ export function validateModelAdapters(source) {
       return `${prefix} 的模型标识不能为空`;
     }
     if (adapter.type === "openai" && !SUPPORTED_REASONING_EFFORTS.has(adapter.reasoningEffort)) {
-      return `${prefix} 的推理强度仅支持 low、medium、high、xhigh`;
+      return `${prefix} 的推理强度仅支持 low、medium、high、xhigh、max`;
     }
     if (adapter.type === "openai" && !isValidOpenAIEndpoint(adapter.openAIEndpoint)) {
       return `${prefix} 的 OpenAI 端点仅支持 /v1/responses、/v1/chat/completions 或以 / 开头的自定义路径`;
