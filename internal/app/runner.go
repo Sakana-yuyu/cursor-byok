@@ -217,7 +217,7 @@ func Run(resources EmbeddedResources) error {
 		Hidden:              false,
 		HideOnEscape:        false,
 		MinimiseButtonState: application.ButtonEnabled,
-		MaximiseButtonState: application.ButtonHidden,
+		MaximiseButtonState: application.ButtonEnabled,
 		CloseButtonState:    application.ButtonEnabled,
 		BackgroundColour:    application.RGBA{Red: 25, Green: 25, Blue: 25, Alpha: 255},
 		Mac: application.MacWindow{
@@ -268,37 +268,89 @@ func Run(resources EmbeddedResources) error {
 	menu.AddSeparator()
 	startItem := menu.Add("启动服务")
 	stopItem := menu.Add("停止服务")
-	menu.Add("检查更新").OnClick(func(ctx *application.Context) {
+	updateItem := menu.Add("检查更新").OnClick(func(ctx *application.Context) {
 		updateManager.CheckNow(true)
 	})
 	menu.AddSeparator()
-	menu.Add("显示窗口").OnClick(func(ctx *application.Context) {
+	showItem := menu.Add("显示窗口").OnClick(func(ctx *application.Context) {
 		showMainWindow()
 	})
-	menu.Add("隐藏窗口").OnClick(func(ctx *application.Context) {
+	hideItem := menu.Add("隐藏窗口").OnClick(func(ctx *application.Context) {
 		window.Hide()
 	})
 	menu.AddSeparator()
-	menu.Add("退出").OnClick(func(ctx *application.Context) {
+	quitItem := menu.Add("退出").OnClick(func(ctx *application.Context) {
 		proxyService.ShutdownForQuit()
 		app.Quit()
 	})
 
+	var currentLocale = "zh-CN"
+
+	updateTrayLabels := func(locale string) {
+		currentLocale = locale
+		state := proxyService.GetState()
+		if state.Running {
+			if locale == "en-US" {
+				statusItem.SetLabel("Status: Running")
+			} else if locale == "ja-JP" {
+				statusItem.SetLabel("状態：実行中")
+			} else {
+				statusItem.SetLabel("状态：运行中")
+			}
+		} else {
+			if locale == "en-US" {
+				statusItem.SetLabel("Status: Not Started")
+			} else if locale == "ja-JP" {
+				statusItem.SetLabel("状態：未起動")
+			} else {
+				statusItem.SetLabel("状态：未启动")
+			}
+		}
+
+		if locale == "en-US" {
+			startItem.SetLabel("Start Service")
+			stopItem.SetLabel("Stop Service")
+			updateItem.SetLabel("Check for Updates")
+			showItem.SetLabel("Show Window")
+			hideItem.SetLabel("Hide Window")
+			quitItem.SetLabel("Exit")
+		} else if locale == "ja-JP" {
+			startItem.SetLabel("サービス起動")
+			stopItem.SetLabel("サービス停止")
+			updateItem.SetLabel("アップデートを確認")
+			showItem.SetLabel("ウィンドウを表示")
+			hideItem.SetLabel("ウィンドウを非表示")
+			quitItem.SetLabel("終了")
+		} else {
+			startItem.SetLabel("启动服务")
+			stopItem.SetLabel("停止服务")
+			updateItem.SetLabel("检查更新")
+			showItem.SetLabel("显示窗口")
+			hideItem.SetLabel("隐藏窗口")
+			quitItem.SetLabel("退出")
+		}
+	}
+
 	refreshTray := func() {
 		state := proxyService.GetState()
 		if state.Running {
-			statusItem.SetLabel("状态：运行中")
 			startItem.SetEnabled(false)
 			stopItem.SetEnabled(true)
 		} else {
-			statusItem.SetLabel("状态：未启动")
 			startItem.SetEnabled(true)
 			stopItem.SetEnabled(false)
 		}
+		updateTrayLabels(currentLocale)
 		if refreshAdAssetBaseURL() {
 			refreshAdRuntime()
 		}
 	}
+
+	app.Event.On("locale:changed", func(e *application.CustomEvent) {
+		if locale, ok := e.Data.(string); ok {
+			updateTrayLabels(locale)
+		}
+	})
 	app.Event.On("proxy:state", func(event *application.CustomEvent) {
 		refreshTray()
 	})
