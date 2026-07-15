@@ -1,4 +1,5 @@
 import { computed, ref } from "vue";
+import { Events } from "@wailsio/runtime";
 import {
   DEFAULT_LOCALE,
   LOCALE_OPTIONS,
@@ -143,6 +144,7 @@ class LocalizedText extends String {
 
 const currentLocale = ref(resolveInitialLocale());
 applyLocaleToDocument(currentLocale.value);
+Events.Emit("locale:changed", currentLocale.value);
 
 const localizedCache = new Map();
 
@@ -155,6 +157,7 @@ export function setLocale(locale) {
   currentLocale.value = nextLocale;
   persistManualLocale(nextLocale);
   applyLocaleToDocument(nextLocale);
+  Events.Emit("locale:changed", nextLocale);
   return nextLocale;
 }
 
