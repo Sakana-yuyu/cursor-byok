@@ -651,7 +651,7 @@ function collectCatalogRecords(rootDir) {
   return records;
 }
 
-function syncCatalogFiles(rootDir) {
+export function syncCatalogFiles(rootDir) {
   const records = collectCatalogRecords(rootDir);
   const catalog = mergeMessageRecords(records);
   const generatedDir = path.join(rootDir, "src/i18n/generated");

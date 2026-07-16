@@ -183,7 +183,7 @@ func (s *WindowService) OpenModelEditorWindow(index int, adapterJSON string) {
 		Hidden:              false,
 		HideOnEscape:        false,
 		MinimiseButtonState: application.ButtonEnabled,
-		MaximiseButtonState: application.ButtonHidden,
+		MaximiseButtonState: application.ButtonEnabled,
 		CloseButtonState:    application.ButtonEnabled,
 		BackgroundColour:    application.RGBA{Red: 25, Green: 25, Blue: 25, Alpha: 255},
 		Mac: application.MacWindow{

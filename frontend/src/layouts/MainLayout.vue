@@ -16,6 +16,7 @@ import {
 import { isWindows } from "@/utils/isWindows";
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRoute } from "vue-router";
+import { useLocale } from "@/i18n/runtime";
 import Logo from "@/assets/logo.png";
 
 const route = useRoute();
@@ -25,6 +26,30 @@ const title = computed(() => route.meta.title ?? "Cursor助手｜永久免费｜
 const directlyClose = computed(() => route.meta.directlyClose === true);
 const showFooter = computed(() => route.path === "/");
 const footerAuthorInfo = ref(null);
+const { locale } = useLocale();
+
+const localizedAuthorInfo = computed(() => {
+  if (!footerAuthorInfo.value) return null;
+  if (locale.value === "zh-CN") {
+    return footerAuthorInfo.value;
+  }
+  if (locale.value === "ja-JP") {
+    return {
+      buttonText: "著者 leookun",
+      dialogTitle: "著者からのメッセージ",
+      dialogContent: "このソフトウェアは完全に無料です。もし料金を請求された場合は、詐欺の可能性が高いです。\n著者のホームページ https://space.bilibili.com/311706663/upload/video にアクセスして、更新情報や利用方法などを確認してください。",
+      dialogConfirmText: "ホームページへ",
+      dialogCancelText: "閉じる"
+    };
+  }
+  return {
+    buttonText: "Author leookun",
+    dialogTitle: "Author's Message",
+    dialogContent: "This software is completely free. If you were charged, you were likely scammed.\nWelcome to visit the author's homepage at https://space.bilibili.com/311706663/upload/video\nto see more updates, sharing guides, and future content.",
+    dialogConfirmText: "Visit Homepage",
+    dialogCancelText: "Close"
+  };
+});
 const usageDocsURL = "https://docs.leokun.cn";
 let proxyStateTimer = null;
 const proxyStatePollIntervalMs = 10000;
@@ -106,14 +131,14 @@ async function showActionError(title, error) {
 }
 
 async function handleOpenAuthorHome() {
-  if (!footerAuthorInfo.value) {
+  if (!localizedAuthorInfo.value) {
     return;
   }
   const confirmed = await showModal({
-    title: footerAuthorInfo.value.dialogTitle,
-    content: footerAuthorInfo.value.dialogContent,
-    confirmText: footerAuthorInfo.value.dialogConfirmText,
-    cancelText: footerAuthorInfo.value.dialogCancelText,
+    title: localizedAuthorInfo.value.dialogTitle,
+    content: localizedAuthorInfo.value.dialogContent,
+    confirmText: localizedAuthorInfo.value.dialogConfirmText,
+    cancelText: localizedAuthorInfo.value.dialogCancelText,
     showCancel: true,
   });
   if (!confirmed) {
@@ -221,13 +246,13 @@ onUnmounted(() => {
         <span>使用教程</span>
       </button>
       <button
-        v-if="footerAuthorInfo"
+        v-if="localizedAuthorInfo"
         type="button"
         class="center-row shrink-0 gap-[6px] cursor-pointer rounded-[6px] px-[6px] py-[3px] transition-colors duration-150 hover:bg-[#1f1f1f] hover:text-[#e5e5e5]"
         @click="handleOpenAuthorHome"
       >
         <span class="icon-[ant-design--bilibili-outlined] text-[14px]"></span>
-        <span>{{ footerAuthorInfo.buttonText }}</span>
+        <span>{{ localizedAuthorInfo.buttonText }}</span>
       </button>
       <div
         v-if="updateViewState.footerDownloading"
