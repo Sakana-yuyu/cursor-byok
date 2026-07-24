@@ -57,8 +57,8 @@ jobs:
       - name: Enable Yarn classic
         shell: bash
         run: |
-          corepack enable
-          corepack prepare yarn@1.22.22 --activate
+          # 直接通过 npm 安装 yarn classic，避免 corepack 下载不稳定
+          npm install -g yarn@1.22.22
           yarn --version
 
       - name: Install Linux build dependencies
