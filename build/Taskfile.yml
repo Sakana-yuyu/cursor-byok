@@ -107,13 +107,12 @@ tasks:
       - "**/*"
     generates:
       - dist/**/*
-    deps:
+    cmds:
       - task: install:frontend:deps
       - task: generate:bindings
         vars:
           BUILD_FLAGS:
             ref: .BUILD_FLAGS
-    cmds:
       - yarn run {{.BUILD_COMMAND}}{{if eq .SCAN "true"}} --scan{{end}}
     env:
       PRODUCTION: '{{if eq .DEV "true"}}false{{else}}true{{end}}'

@@ -26,8 +26,9 @@ tasks:
   build:native:
     summary: 使用 Go 原生交叉编译构建 Windows 程序
     internal: true
-    deps:
+    cmds:
       - task: common:go:mod:tidy
+      - task: common:generate:icons
       - task: common:build:frontend
         vars:
           BUILD_FLAGS:
@@ -36,8 +37,6 @@ tasks:
             ref: .DEV
           SCAN:
             ref: .SCAN
-      - task: common:generate:icons
-    cmds:
       - task: generate:syso
         vars:
           ARCH:
