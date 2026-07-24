@@ -81,7 +81,7 @@ tasks:
           SCAN: '{{.SCAN}}'
 
   build:darwin:amd64:
-    internal: true
+    internal: false
     cmds:
       - task: darwin:package:dmg
         vars:
@@ -119,6 +119,14 @@ tasks:
           ARCH: amd64
           OUTPUT: '{{.BIN_DIR}}/windows-64.exe'
           ZIP_NAME: windows-64.zip
+          SCAN: '{{.SCAN}}'
+
+  build:windows:installer:
+    summary: 构建 Windows amd64 中文 NSIS 安装程序
+    cmds:
+      - task: windows:create:nsis:installer
+        vars:
+          ARCH: amd64
           SCAN: '{{.SCAN}}'
 
   build:linux:current:
@@ -167,15 +175,26 @@ tasks:
   clean:dist:
     internal: true
     cmds:
-      - mkdir -p "{{.BIN_DIR}}"
-      - rm -f "{{.BIN_DIR}}/macos-arm64.dmg" "{{.BIN_DIR}}/macos-intel.dmg" "{{.BIN_DIR}}/windows-32.zip" "{{.BIN_DIR}}/windows-64.zip" "{{.BIN_DIR}}/linux-amd64.tar.gz"
-      - rm -f "{{.BIN_DIR}}/macos-arm64" "{{.BIN_DIR}}/macos-intel" "{{.BIN_DIR}}/windows-32.exe" "{{.BIN_DIR}}/windows-64.exe" "{{.BIN_DIR}}/linux-amd64"
-      - rm -f "{{.BIN_DIR}}/{{.APP_NAME}}" "{{.BIN_DIR}}/{{.APP_NAME}}.exe"
-      - rm -rf "{{.BIN_DIR}}/macos-arm64.app" "{{.BIN_DIR}}/macos-intel.app" "{{.BIN_DIR}}/{{.APP_NAME}}.app" "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app"
+      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.BIN_DIR}}' | Out-Null"
+        platforms: [windows]
+      - cmd: mkdir -p "{{.BIN_DIR}}"
+        platforms: [darwin, linux]
+      - cmd: powershell -NoProfile -Command "Remove-Item -Force -ErrorAction SilentlyContinue '{{.BIN_DIR}}/*.dmg','{{.BIN_DIR}}/*.zip','{{.BIN_DIR}}/*.tar.gz','{{.BIN_DIR}}/{{.APP_NAME}}*'"
+        platforms: [windows]
+      - cmd: rm -f "{{.BIN_DIR}}/macos-arm64.dmg" "{{.BIN_DIR}}/macos-intel.dmg" "{{.BIN_DIR}}/windows-32.zip" "{{.BIN_DIR}}/windows-64.zip" "{{.BIN_DIR}}/linux-amd64.tar.gz"
+        platforms: [darwin, linux]
+      - cmd: rm -f "{{.BIN_DIR}}/macos-arm64" "{{.BIN_DIR}}/macos-intel" "{{.BIN_DIR}}/windows-32.exe" "{{.BIN_DIR}}/windows-64.exe" "{{.BIN_DIR}}/linux-amd64"
+        platforms: [darwin, linux]
+      - cmd: powershell -NoProfile -Command "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue '{{.BIN_DIR}}/*.app'"
+        platforms: [windows]
+      - cmd: rm -rf "{{.BIN_DIR}}/macos-arm64.app" "{{.BIN_DIR}}/macos-intel.app" "{{.BIN_DIR}}/{{.APP_NAME}}.app" "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app"
+        platforms: [darwin, linux]
 
   dev:
     summary: 启动开发模式（前台，终端会保持占用）
     cmds:
+      - cmd: powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/restart-dev-windows.ps1 -RepositoryRoot "{{.TASKFILE_DIR}}"
+        platforms: [windows]
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
 
   ads:install:

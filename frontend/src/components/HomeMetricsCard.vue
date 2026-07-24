@@ -224,12 +224,9 @@ async function toggleIncludeCacheWriteInHitRate(value) {
   }
 }
 
-const normalizedHomeAds = computed(() => {
-  const list = Array.isArray(props.homeAds) && props.homeAds.length > 0 ? props.homeAds : [props.homeAd];
-  return list.map(normalizeHomeAd).filter(Boolean);
-});
+const normalizedHomeAds = computed(() => []);
 
-const hasHomeAd = computed(() => normalizedHomeAds.value.length > 0);
+const hasHomeAd = computed(() => false);
 </script>
 
 <template>

@@ -35,6 +35,9 @@ func (store *Store) LegacyRuntimeSnapshot(ctx context.Context) (legacyruntime.Ru
 			AnthropicMaxTokens:          item.AnthropicMaxTokens,
 			AnthropicThinkingEffort:     item.AnthropicThinkingEffort,
 			ThinkingBudgetTokens:        item.ThinkingBudgetTokens,
+			Pricing:                     item.Pricing,
+			FastMode:                    item.FastMode,
+			OpenAIServiceTier:           item.OpenAIServiceTier,
 		})
 	}
 

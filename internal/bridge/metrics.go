@@ -26,6 +26,14 @@ func NewMetricsService() *MetricsService {
 	return &MetricsService{}
 }
 
+// GetRecentRequestMetrics 返回 usage.json 中已记录的最近请求明细。
+func (service *MetricsService) GetRecentRequestMetrics(limit int) ([]historymetrics.RequestMetric, error) {
+	if err := appdata.EnsureAssistantHome(); err != nil {
+		return nil, err
+	}
+	return historymetrics.LoadRecentRequestMetrics(appdata.UsageFilePath(), limit)
+}
+
 // GetHomeMetricsSummary 返回首页展示的全量历史统计摘要。
 func (service *MetricsService) GetHomeMetricsSummary() (HomeMetricsSummary, error) {
 	if err := appdata.EnsureAssistantHome(); err != nil {

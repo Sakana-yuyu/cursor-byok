@@ -1,7 +1,7 @@
 export const LOCALE_STORAGE_KEY = "cursor-client:locale:v1";
 export const LOCALE_STORAGE_SOURCE_KEY = "cursor-client:locale-source:v1";
 export const SOURCE_LOCALE = "zh-CN";
-export const DEFAULT_LOCALE = "en-US";
+export const DEFAULT_LOCALE = "zh-CN";
 export const SUPPORTED_LOCALES = ["zh-CN", "en-US", "ja-JP"];
 export const LOCALE_OPTIONS = [
   { label: "简体中文", value: "zh-CN" },

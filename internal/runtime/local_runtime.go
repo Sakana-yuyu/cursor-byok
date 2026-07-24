@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"cursor/internal/modelchannel"
+	"cursor/internal/modelcontext"
 )
 
 var (
@@ -33,11 +34,23 @@ const (
 	configurableChannelAnthropicThinkingEffort = "xhigh"
 )
 
+type ModelPricing struct {
+	Input      *float64 `json:"input,omitempty"`
+	Output     *float64 `json:"output,omitempty"`
+	CacheRead  *float64 `json:"cacheRead,omitempty"`
+	CacheWrite *float64 `json:"cacheWrite,omitempty"`
+	Currency   string   `json:"currency,omitempty"`
+	Known      bool     `json:"known"`
+	Source     string   `json:"source,omitempty"`
+}
+
 // ModelAdapterConfig 定义了当前模块中的 ModelAdapterConfig 类型。
 type ModelAdapterConfig struct {
 	ID string `json:"id,omitempty"`
 	// DisplayName 表示当前声明中的 DisplayName。
 	DisplayName string `json:"displayName"`
+	// GroupName 表示模型渠道所属的用户可编辑分组名称。
+	GroupName string `json:"groupName,omitempty"`
 	// Type 表示当前声明中的 Type。
 	Type string `json:"type"`
 	// BaseURL 表示当前声明中的 BaseURL。
@@ -74,6 +87,12 @@ type ModelAdapterConfig struct {
 	AnthropicThinkingEffort string `json:"anthropicThinkingEffort,omitempty"`
 	// ThinkingBudgetTokens 表示当前声明中的 ThinkingBudgetTokens。
 	ThinkingBudgetTokens int `json:"thinkingBudgetTokens"`
+	// Pricing 表示该模型的可选明确价格。
+	Pricing *ModelPricing `json:"pricing,omitempty"`
+	// FastMode 表示 OpenAI/GPT 是否请求 priority service tier。
+	FastMode bool `json:"fastMode,omitempty"`
+	// OpenAIServiceTier 表示显式 OpenAI service tier。
+	OpenAIServiceTier string `json:"openAIServiceTier,omitempty"`
 }
 
 // RuntimeConfigSnapshot 定义了当前模块中的 RuntimeConfigSnapshot 类型。
@@ -96,7 +115,7 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 	}
 
 	normalized := make([]ModelAdapterConfig, 0, len(input))
-	seenChannelIDs := make(map[string]struct{}, len(input))
+	channelIndexByID := make(map[string]int, len(input))
 	for _, item := range input {
 		baseURL, err := modelchannel.NormalizeBaseURL(item.BaseURL)
 		if err != nil {
@@ -104,6 +123,7 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 		}
 		next := ModelAdapterConfig{
 			DisplayName:          strings.TrimSpace(item.DisplayName),
+			GroupName:            strings.TrimSpace(item.GroupName),
 			Type:                 normalizeModelAdapterType(item.Type),
 			BaseURL:              baseURL,
 			APIKey:               strings.TrimSpace(item.APIKey),
@@ -111,10 +131,13 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			ModelID:              strings.TrimSpace(item.ModelID),
 			ReasoningEffort:      normalizeReasoningEffort(item.ReasoningEffort),
 			OpenAIEndpoint:       modelchannel.NormalizeOpenAIEndpoint(item.Type, item.OpenAIEndpoint),
-			ContextWindowTokens:  normalizeMaxCompletionTokens(item.ContextWindowTokens),
+			ContextWindowTokens:  modelcontext.Resolve(item.ModelID, normalizeMaxCompletionTokens(item.ContextWindowTokens)),
 			MaxCompletionTokens:  normalizeMaxCompletionTokens(item.MaxCompletionTokens),
 			AnthropicMaxTokens:   normalizeMaxCompletionTokens(item.AnthropicMaxTokens),
 			ThinkingBudgetTokens: normalizeMaxCompletionTokens(item.ThinkingBudgetTokens),
+			Pricing:              item.Pricing,
+			FastMode:             item.FastMode,
+			OpenAIServiceTier:    strings.TrimSpace(item.OpenAIServiceTier),
 		}
 		if next.Type == "openai" {
 			next.OpenAIExtraParamsEnabled = item.OpenAIExtraParamsEnabled
@@ -157,10 +180,24 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			return nil, errors.New("模型适配器 anthropicThinkingEffort 仅支持 low、medium、high、xhigh、max")
 		}
 		next.ID = modelchannel.BuildChannelID(next.BaseURL, next.ModelID, next.APIKey, next.DisplayName, next.OpenAIEndpoint)
-		if _, exists := seenChannelIDs[next.ID]; exists {
-			return nil, errors.New("模型适配器渠道不能重复，请检查 url、modelID、apiKey、displayName、endpoint 组合")
+		if existingIndex, exists := channelIndexByID[next.ID]; exists {
+			existing := normalized[existingIndex]
+			if existing.GroupName == "" {
+				existing.GroupName = next.GroupName
+			}
+			if existing.TooltipData == "" {
+				existing.TooltipData = next.TooltipData
+			}
+			if existing.ContextWindowTokens <= 0 {
+				existing.ContextWindowTokens = next.ContextWindowTokens
+			}
+			if existing.Pricing == nil {
+				existing.Pricing = next.Pricing
+			}
+			normalized[existingIndex] = existing
+			continue
 		}
-		seenChannelIDs[next.ID] = struct{}{}
+		channelIndexByID[next.ID] = len(normalized)
 		normalized = append(normalized, next)
 	}
 	return normalized, nil
@@ -283,6 +320,12 @@ type ResolvedChannel struct {
 	AnthropicMaxTokens int
 	// AnthropicThinkingEffort 表示 Anthropic adaptive thinking 的 output_config.effort。
 	AnthropicThinkingEffort string
+	// Pricing 表示该模型渠道的明确价格。
+	Pricing *ModelPricing
+	// FastMode 表示 OpenAI/GPT 是否请求 priority service tier。
+	FastMode bool
+	// OpenAIServiceTier 表示显式 OpenAI service tier。
+	OpenAIServiceTier string
 	// ThinkingEnabled 表示当前声明中的 ThinkingEnabled。
 	ThinkingEnabled bool
 	// ThinkingBudgetTokens 表示当前声明中的 ThinkingBudgetTokens。
@@ -388,7 +431,7 @@ func (s *FixedChannelService) SelectChannelForModel(ctx context.Context, modelID
 		resolved := ResolvedChannel{
 			ID:                          strings.TrimSpace(adapter.ID),
 			Name:                        strings.TrimSpace(adapter.DisplayName),
-			GroupName:                   "local",
+			GroupName:                   strings.TrimSpace(adapter.GroupName),
 			Code:                        strings.TrimSpace(adapter.ID),
 			Provider:                    strings.TrimSpace(adapter.Type),
 			BaseURL:                     strings.TrimSpace(adapter.BaseURL),
@@ -409,6 +452,9 @@ func (s *FixedChannelService) SelectChannelForModel(ctx context.Context, modelID
 			AnthropicThinkingEffort:     configurableChannelAnthropicThinkingEffort,
 			ThinkingEnabled:             true,
 			ThinkingBudgetTokens:        configurableChannelThinkingBudgetTokens,
+			Pricing:                     adapter.Pricing,
+			FastMode:                    adapter.FastMode,
+			OpenAIServiceTier:           strings.TrimSpace(adapter.OpenAIServiceTier),
 		}
 		if adapter.ContextWindowTokens > 0 {
 			resolved.ContextWindowTokens = adapter.ContextWindowTokens

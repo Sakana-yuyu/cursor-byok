@@ -346,6 +346,8 @@ func (service *Service) recordTurnUsageSnapshot(stream *ActiveStream, conversati
 			EventID:          usageEventID(requestID, effectiveModelCallID),
 			Kind:             usageEventKindProvider,
 			At:               lastEventAt,
+			Model:            modelName,
+			Provider:         provider,
 			InputTokens:      usage.InputTokens,
 			OutputTokens:     usage.OutputTokens,
 			CacheReadTokens:  usage.CacheReadTokens,

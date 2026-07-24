@@ -1,4 +1,4 @@
-Unicode true
+﻿Unicode true
 
 ####
 ## Please note: Template replacements don't work in this file. They are provided with default defines like
@@ -32,6 +32,18 @@ Unicode true
 ####
 ## Include the wails tools
 ####
+
+# 显式定义中文产品信息，覆盖 wails_tools.nsh 自动生成的值。
+# 原因：wails_tools.nsh 由 wails3 以 UTF-8 无 BOM 写出，makensis 在中文系统
+# 会按 GBK(ACP) 误读其中的 UTF-8 中文字节（"助手" 被解析为 "锡妳" 等乱码）。
+# 在此提前 !define，使 wails_tools.nsh 内 !ifndef 块跳过这些中文行；
+# 同时本文件保存为 UTF-8 with BOM，确保下方中文被 makensis 正确解析。
+!define INFO_PROJECTNAME "Cursor助手"
+!define INFO_COMPANYNAME "Cursor助手"
+!define INFO_PRODUCTNAME "Cursor助手"
+!define INFO_COPYRIGHT "© 2026, Cursor助手"
+!define PRODUCT_EXECUTABLE "${INFO_PROJECTNAME}.exe"
+
 !include "wails_tools.nsh"
 
 # The version information for this two must consist of 4 parts
@@ -92,6 +104,12 @@ FunctionEnd
 Section
     !insertmacro wails.setShellContext
 
+    ; 安装前关闭正在运行的程序，避免文件被占用导致覆盖写入失败
+    DetailPrint "正在关闭运行中的 ${INFO_PRODUCTNAME} ..."
+    nsExec::ExecToLog 'taskkill /F /IM "${PRODUCT_EXECUTABLE}" /T'
+    Pop $0
+    Sleep 500
+
     !insertmacro wails.webview2runtime
 
     SetOutPath $INSTDIR
@@ -111,8 +129,14 @@ Section
     WriteRegStr HKLM "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
 SectionEnd
 
-Section "uninstall" 
+Section "uninstall"
     !insertmacro wails.setShellContext
+
+    ; 卸载前关闭正在运行的程序，避免文件占用导致删除失败
+    DetailPrint "正在关闭运行中的 ${INFO_PRODUCTNAME} ..."
+    nsExec::ExecToLog 'taskkill /F /IM "${PRODUCT_EXECUTABLE}" /T'
+    Pop $0
+    Sleep 500
 
     RMDir /r "$AppData\${PRODUCT_EXECUTABLE}" # Remove the WebView2 DataPath
 

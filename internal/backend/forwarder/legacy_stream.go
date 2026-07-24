@@ -53,6 +53,9 @@ func (writer *legacyRunSSEHeaderWriter) Write(payload []byte) (int, error) {
 
 // Flush 尝试把底层缓冲区立即刷新给客户端。
 func (writer *legacyRunSSEHeaderWriter) Flush() {
+	if !writer.wroteHeader {
+		writer.WriteHeader(http.StatusOK)
+	}
 	if flusher, ok := writer.ResponseWriter.(http.Flusher); ok {
 		flusher.Flush()
 	}

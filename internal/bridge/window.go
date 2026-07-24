@@ -3,6 +3,7 @@ package bridge
 import (
 	"cursor/internal/buildinfo"
 	"cursor/internal/client"
+	"cursor/internal/i18n"
 	"cursor/internal/updater"
 	"fmt"
 	"os"
@@ -28,12 +29,20 @@ type WindowService struct {
 	modelConfigWindow *application.WebviewWindow
 	modelEditorWindow *application.WebviewWindow
 	editorCtx         *modelEditorContext
+	locale            string
 	mu                sync.RWMutex
 }
 
 // NewWindowService 用于处理与 NewWindowService 相关的逻辑。
 func NewWindowService() *WindowService {
-	return &WindowService{}
+	return &WindowService{locale: i18n.DefaultLocale}
+}
+
+// SetLocale updates the locale used for subsequently created native windows.
+func (s *WindowService) SetLocale(locale string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.locale = i18n.Normalize(locale)
 }
 
 // SetApp 用于处理与 SetApp 相关的逻辑。
@@ -70,9 +79,10 @@ func (s *WindowService) CheckForUpdates() {
 func (s *WindowService) InstallReadyUpdate() error {
 	s.mu.RLock()
 	manager := s.updater
+	locale := s.locale
 	s.mu.RUnlock()
 	if manager == nil {
-		return fmt.Errorf("更新管理器未初始化")
+		return fmt.Errorf("%s", i18n.T(locale, "error.update_manager_uninitialized"))
 	}
 	return manager.InstallReadyUpdate()
 }
@@ -99,7 +109,7 @@ func (s *WindowService) OpenModelConfigWindow() {
 	}
 
 	win := s.app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:               "模型配置",
+		Title:               i18n.T(s.locale, "window.model_config"),
 		Width:               980,
 		Height:              700,
 		MinWidth:            820,
@@ -166,9 +176,9 @@ func (s *WindowService) OpenModelEditorWindow(index int, adapterJSON string) {
 		return
 	}
 
-	title := "新增模型配置"
+	title := i18n.T(s.locale, "window.model_add")
 	if index >= 0 {
-		title = "编辑模型配置"
+		title = i18n.T(s.locale, "window.model_edit")
 	}
 
 	win := s.app.Window.NewWithOptions(application.WebviewWindowOptions{

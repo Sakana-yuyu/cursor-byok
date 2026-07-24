@@ -15,14 +15,16 @@ import (
 const configHotReloadMinInterval = 500 * time.Millisecond
 
 type Manager struct {
-	store       *Store
-	current     atomic.Pointer[Config]
-	listenersMu sync.RWMutex
-	listeners   []func(Config)
-	reloadMu    sync.Mutex
-	snapshot    fileSnapshot
-	lastReload  time.Time
-	reloadError string
+	store            *Store
+	current          atomic.Pointer[Config]
+	listenersMu      sync.RWMutex
+	listeners        []func(Config)
+	reloadMu         sync.Mutex
+	snapshot         fileSnapshot
+	lastReload       time.Time
+	reloadError      string
+	selectionMu      sync.Mutex
+	selectionOffsets map[string]int
 }
 
 func NewManager(ctx context.Context, store *Store) (*Manager, error) {
@@ -34,8 +36,9 @@ func NewManager(ctx context.Context, store *Store) (*Manager, error) {
 		return nil, err
 	}
 	manager := &Manager{
-		store:    store,
-		snapshot: store.snapshot(),
+		store:            store,
+		snapshot:         store.snapshot(),
+		selectionOffsets: make(map[string]int),
 	}
 	manager.setCurrent(cfg)
 	return manager, nil
@@ -148,6 +151,7 @@ func (manager *Manager) LegacyRuntimeSnapshot(_ context.Context) (legacyruntime.
 		adapters = append(adapters, legacyruntime.ModelAdapterConfig{
 			ID:                       item.ID,
 			DisplayName:              item.DisplayName,
+			GroupName:                item.GroupName,
 			Type:                     item.Type,
 			BaseURL:                  item.BaseURL,
 			APIKey:                   item.APIKey,
@@ -162,6 +166,9 @@ func (manager *Manager) LegacyRuntimeSnapshot(_ context.Context) (legacyruntime.
 			AnthropicMaxTokens:       item.AnthropicMaxTokens,
 			AnthropicThinkingEffort:  item.AnthropicThinkingEffort,
 			ThinkingBudgetTokens:     item.ThinkingBudgetTokens,
+			Pricing:                  item.Pricing,
+			FastMode:                 item.FastMode,
+			OpenAIServiceTier:        item.OpenAIServiceTier,
 		})
 	}
 	return legacyruntime.RuntimeConfigSnapshot{

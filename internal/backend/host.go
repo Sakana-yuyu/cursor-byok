@@ -413,7 +413,13 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 		tabServerUpstreamProcedure("/aiserver.v1.AiService/CppAppend", "ai_cpp_append", server.ConnectUnary(), routeDeps),
 		tabServerUpstreamProcedure("/aiserver.v1.AiService/CppEditHistoryAppend", "ai_cpp_edit_history_append", server.ConnectUnary(), routeDeps),
 		tabServerUpstreamProcedure("/aiserver.v1.AiService/ReportAiCodeChangeMetrics", "ai_report_ai_code_change_metrics", server.ConnectUnary(), routeDeps),
-		tabServerUpstreamProcedure("/aiserver.v1.AiService/WriteGitCommitMessage", "ai_write_git_commit_message", server.ConnectUnary(), routeDeps),
+		localHandlerWithTabServerUpstreamProcedure(
+			"/aiserver.v1.AiService/WriteGitCommitMessage",
+			"ai_write_git_commit_message",
+			server.ConnectUnary(),
+			server.HTTPHandlerAction(agentModule.AiHandler),
+			routeDeps,
+		),
 		tabServerUpstreamProcedure("/aiserver.v1.AiService/WriteGitBranchName", "ai_write_git_branch_name", server.ConnectUnary(), routeDeps),
 		repositoryServiceProcedure(forwarder.RepositoryServiceFastRepoInitHandshakeV2Procedure, "repository_fast_repo_init_handshake_v2", server.ConnectUnary(), agentModule, routeDeps),
 		repositoryServiceProcedure(forwarder.RepositoryServiceFastRepoInitHandshakeProcedure, "repository_fast_repo_init_handshake", server.ConnectUnary(), agentModule, routeDeps),
@@ -739,9 +745,34 @@ func uploadServiceProcedure(pattern string, name string, protocol server.RouteOp
 	)
 }
 
+func localHandlerWithTabServerUpstreamProcedure(
+	pattern string,
+	name string,
+	protocol server.RouteOption,
+	localAction server.HandlerFunc,
+	deps upstream.Dependencies,
+) server.Option {
+	return server.POST(pattern,
+		server.Name(name),
+		protocol,
+		server.Local(localAction),
+		server.Upstream(tabServerUpstreamAction(name, deps)),
+	)
+}
+
 func tabServerUpstreamProcedure(pattern string, name string, protocol server.RouteOption, deps upstream.Dependencies) server.Option {
+	action := tabServerUpstreamAction(name, deps)
+	return server.POST(pattern,
+		server.Name(name),
+		protocol,
+		server.Local(action),
+		server.Upstream(action),
+	)
+}
+
+func tabServerUpstreamAction(name string, deps upstream.Dependencies) server.HandlerFunc {
 	direct := upstream.DirectAction(deps, upstream.CompatRouteConfig{Name: name})
-	action := func(ctx *server.Context) error {
+	return func(ctx *server.Context) error {
 		if ctx != nil && ctx.Request != nil && ctx.Request.URL != nil {
 			baseURL, err := url.Parse(tabServerBaseURL)
 			if err != nil {
@@ -754,12 +785,6 @@ func tabServerUpstreamProcedure(pattern string, name string, protocol server.Rou
 		}
 		return direct(ctx)
 	}
-	return server.POST(pattern,
-		server.Name(name),
-		protocol,
-		server.Local(action),
-		server.Upstream(action),
-	)
 }
 
 type serverSystemSettings struct {

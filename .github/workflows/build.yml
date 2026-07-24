@@ -1,0 +1,137 @@
+name: Build desktop artifacts
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows amd64
+            runner: windows-latest
+            target: windows
+            artifact: windows-amd64
+          - name: Linux amd64
+            runner: ubuntu-24.04
+            target: linux
+            artifact: linux-amd64
+          - name: macOS amd64
+            runner: macos-15-intel
+            target: macos-amd64
+            artifact: macos-amd64
+          - name: macOS arm64
+            runner: macos-15
+            target: macos-arm64
+            artifact: macos-arm64
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Enable Yarn classic
+        shell: bash
+        run: |
+          corepack enable
+          corepack prepare yarn@1.22.22 --activate
+          yarn --version
+
+      - name: Install Task and Wails
+        shell: bash
+        run: |
+          go install github.com/go-task/task/v3/cmd/task@v3.44.1
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha.74
+          task --version
+          wails3 version
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config gcc libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Install Windows NSIS
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+            choco install nsis -y --no-progress
+          }
+          makensis /VERSION
+
+      - name: Build Windows amd64 packages
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          task build:windows:amd64
+          task build:windows:installer
+          if (-not (Test-Path 'bin/windows-64.zip')) { throw 'Windows ZIP was not produced' }
+          $installer = Get-ChildItem 'bin/*-amd64-installer.exe' -File | Select-Object -First 1
+          if (-not $installer) { throw 'Windows NSIS installer was not produced' }
+          Write-Host "Produced $($installer.FullName)"
+
+      - name: Build Linux amd64 package
+        if: matrix.target == 'linux'
+        shell: bash
+        run: |
+          task build:linux:amd64
+          test -f bin/linux-amd64.tar.gz
+
+      - name: Build macOS package
+        if: startsWith(matrix.target, 'macos-')
+        shell: bash
+        run: |
+          task "build:darwin:${{ endsWith(matrix.target, 'arm64') && 'arm64' || 'amd64' }}"
+          test -f "bin/${{ endsWith(matrix.target, 'arm64') && 'macos-arm64.dmg' || 'macos-intel.dmg' }}"
+
+      - name: Upload Windows artifacts
+        if: matrix.target == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          if-no-files-found: error
+          path: |
+            bin/windows-64.zip
+            bin/*-amd64-installer.exe
+
+      - name: Upload Linux artifact
+        if: matrix.target == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          if-no-files-found: error
+          path: bin/linux-amd64.tar.gz
+
+      - name: Upload macOS artifact
+        if: startsWith(matrix.target, 'macos-')
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          if-no-files-found: error
+          path: ${{ endsWith(matrix.target, 'arm64') && 'bin/macos-arm64.dmg' || 'bin/macos-intel.dmg' }}

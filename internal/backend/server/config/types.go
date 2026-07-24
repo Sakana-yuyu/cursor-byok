@@ -2,13 +2,15 @@ package config
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 	"strconv"
 	"strings"
 
+	"cursor/internal/i18n"
 	"cursor/internal/modelchannel"
+	"cursor/internal/modelcontext"
+	legacyruntime "cursor/internal/runtime"
 )
 
 const (
@@ -20,27 +22,33 @@ const (
 	MinProviderStreamIdleTimeoutSeconds     = 30
 )
 
+type ModelPricing = legacyruntime.ModelPricing
+
 type ModelAdapterConfig struct {
-	ID                          string `json:"id,omitempty" yaml:"-"`
-	DisplayName                 string `json:"displayName" yaml:"displayName"`
-	Type                        string `json:"type" yaml:"type"`
-	BaseURL                     string `json:"baseURL" yaml:"baseURL"`
-	APIKey                      string `json:"apiKey" yaml:"apiKey"`
-	TooltipData                 string `json:"tooltipData" yaml:"tooltipData"`
-	ModelID                     string `json:"modelID" yaml:"modelID"`
-	ReasoningEffort             string `json:"reasoningEffort" yaml:"reasoningEffort"`
-	OpenAIEndpoint              string `json:"openAIEndpoint" yaml:"openAIEndpoint"`
-	OpenAIExtraParamsEnabled    bool   `json:"openAIExtraParamsEnabled" yaml:"openAIExtraParamsEnabled"`
-	OpenAIExtraParamsJSON       string `json:"openAIExtraParamsJSON" yaml:"openAIExtraParamsJSON"`
-	CustomHeadersEnabled        bool   `json:"customHeadersEnabled" yaml:"customHeadersEnabled"`
-	CustomHeadersJSON           string `json:"customHeadersJSON" yaml:"customHeadersJSON"`
-	AnthropicExtraParamsEnabled bool   `json:"anthropicExtraParamsEnabled" yaml:"anthropicExtraParamsEnabled"`
-	AnthropicExtraParamsJSON    string `json:"anthropicExtraParamsJSON" yaml:"anthropicExtraParamsJSON"`
-	ContextWindowTokens         int    `json:"contextWindowTokens" yaml:"contextWindowTokens"`
-	MaxCompletionTokens         int    `json:"maxCompletionTokens" yaml:"maxCompletionTokens"`
-	AnthropicMaxTokens          int    `json:"anthropicMaxTokens" yaml:"anthropicMaxTokens"`
-	AnthropicThinkingEffort     string `json:"anthropicThinkingEffort,omitempty" yaml:"anthropicThinkingEffort,omitempty"`
-	ThinkingBudgetTokens        int    `json:"thinkingBudgetTokens" yaml:"thinkingBudgetTokens"`
+	ID                          string        `json:"id,omitempty" yaml:"-"`
+	DisplayName                 string        `json:"displayName" yaml:"displayName"`
+	GroupName                   string        `json:"groupName,omitempty" yaml:"groupName,omitempty"`
+	Type                        string        `json:"type" yaml:"type"`
+	BaseURL                     string        `json:"baseURL" yaml:"baseURL"`
+	APIKey                      string        `json:"apiKey" yaml:"apiKey"`
+	TooltipData                 string        `json:"tooltipData" yaml:"tooltipData"`
+	ModelID                     string        `json:"modelID" yaml:"modelID"`
+	ReasoningEffort             string        `json:"reasoningEffort" yaml:"reasoningEffort"`
+	OpenAIEndpoint              string        `json:"openAIEndpoint" yaml:"openAIEndpoint"`
+	OpenAIExtraParamsEnabled    bool          `json:"openAIExtraParamsEnabled" yaml:"openAIExtraParamsEnabled"`
+	OpenAIExtraParamsJSON       string        `json:"openAIExtraParamsJSON" yaml:"openAIExtraParamsJSON"`
+	CustomHeadersEnabled        bool          `json:"customHeadersEnabled" yaml:"customHeadersEnabled"`
+	CustomHeadersJSON           string        `json:"customHeadersJSON" yaml:"customHeadersJSON"`
+	AnthropicExtraParamsEnabled bool          `json:"anthropicExtraParamsEnabled" yaml:"anthropicExtraParamsEnabled"`
+	AnthropicExtraParamsJSON    string        `json:"anthropicExtraParamsJSON" yaml:"anthropicExtraParamsJSON"`
+	ContextWindowTokens         int           `json:"contextWindowTokens" yaml:"contextWindowTokens"`
+	MaxCompletionTokens         int           `json:"maxCompletionTokens" yaml:"maxCompletionTokens"`
+	AnthropicMaxTokens          int           `json:"anthropicMaxTokens" yaml:"anthropicMaxTokens"`
+	AnthropicThinkingEffort     string        `json:"anthropicThinkingEffort,omitempty" yaml:"anthropicThinkingEffort,omitempty"`
+	ThinkingBudgetTokens        int           `json:"thinkingBudgetTokens" yaml:"thinkingBudgetTokens"`
+	Pricing                     *ModelPricing `json:"pricing,omitempty" yaml:"pricing,omitempty"`
+	FastMode                    bool          `json:"fastMode,omitempty" yaml:"fastMode,omitempty"`
+	OpenAIServiceTier           string        `json:"openAIServiceTier,omitempty" yaml:"openAIServiceTier,omitempty"`
 }
 
 type RoutingConfig struct {
@@ -109,7 +117,7 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 	}
 
 	normalized := make([]ModelAdapterConfig, 0, len(input))
-	seenChannelIDs := make(map[string]struct{}, len(input))
+	channelIndexByID := make(map[string]int, len(input))
 	for _, item := range input {
 		baseURL, err := modelchannel.NormalizeBaseURL(item.BaseURL)
 		if err != nil {
@@ -118,6 +126,7 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 		nextType := normalizeModelAdapterType(item.Type)
 		next := ModelAdapterConfig{
 			DisplayName:          strings.TrimSpace(item.DisplayName),
+			GroupName:            strings.TrimSpace(item.GroupName),
 			Type:                 nextType,
 			BaseURL:              baseURL,
 			APIKey:               strings.TrimSpace(item.APIKey),
@@ -125,10 +134,13 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			ModelID:              strings.TrimSpace(item.ModelID),
 			ReasoningEffort:      normalizeReasoningEffort(item.ReasoningEffort),
 			OpenAIEndpoint:       modelchannel.NormalizeOpenAIEndpoint(item.Type, item.OpenAIEndpoint),
-			ContextWindowTokens:  normalizeMaxCompletionTokens(item.ContextWindowTokens),
+			ContextWindowTokens:  modelcontext.Resolve(item.ModelID, normalizeMaxCompletionTokens(item.ContextWindowTokens)),
 			MaxCompletionTokens:  normalizeMaxCompletionTokens(item.MaxCompletionTokens),
 			AnthropicMaxTokens:   normalizeMaxCompletionTokens(item.AnthropicMaxTokens),
 			ThinkingBudgetTokens: normalizeMaxCompletionTokens(item.ThinkingBudgetTokens),
+			Pricing:              item.Pricing,
+			FastMode:             item.FastMode,
+			OpenAIServiceTier:    strings.TrimSpace(item.OpenAIServiceTier),
 		}
 		if next.Type == "openai" {
 			next.OpenAIExtraParamsEnabled = item.OpenAIExtraParamsEnabled
@@ -142,19 +154,19 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 		next.CustomHeadersJSON = strings.TrimSpace(item.CustomHeadersJSON)
 		switch {
 		case next.DisplayName == "":
-			return nil, errors.New("模型适配器 displayName 不能为空")
+			return nil, i18n.NewError("error.model_adapter.display_name_required", i18n.CodeInvalidModelAdapter, "模型适配器 displayName 不能为空")
 		case next.Type == "":
-			return nil, errors.New("模型适配器 type 仅支持 openai 或 anthropic")
+			return nil, i18n.NewError("error.model_adapter.type_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 type 仅支持 openai 或 anthropic")
 		case next.APIKey == "":
-			return nil, errors.New("模型适配器 apiKey 不能为空")
+			return nil, i18n.NewError("error.model_adapter.api_key_required", i18n.CodeInvalidModelAdapter, "模型适配器 apiKey 不能为空")
 		case next.TooltipData == "":
-			return nil, errors.New("模型适配器 tooltipData 不能为空")
+			return nil, i18n.NewError("error.model_adapter.tooltip_required", i18n.CodeInvalidModelAdapter, "模型适配器 tooltipData 不能为空")
 		case next.ModelID == "":
-			return nil, errors.New("模型适配器 modelID 不能为空")
+			return nil, i18n.NewError("error.model_adapter.model_id_required", i18n.CodeInvalidModelAdapter, "模型适配器 modelID 不能为空")
 		case next.Type == "openai" && next.ReasoningEffort == "":
-			return nil, errors.New("模型适配器 reasoningEffort 仅支持 low、medium、high、xhigh、max")
+			return nil, i18n.NewError("error.model_adapter.reasoning_effort_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 reasoningEffort 仅支持 low、medium、high、xhigh、max")
 		case next.Type == "openai" && next.OpenAIEndpoint == "":
-			return nil, errors.New("模型适配器 openAIEndpoint 仅支持 /v1/responses、/v1/chat/completions 或 /custom（自定义路径）")
+			return nil, i18n.NewError("error.model_adapter.endpoint_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 openAIEndpoint 仅支持 /v1/responses、/v1/chat/completions 或 /custom（自定义路径）")
 		case next.Type == "openai" && next.OpenAIExtraParamsEnabled:
 			if err := validateJSONMap(next.OpenAIExtraParamsJSON, "openAIExtraParamsJSON"); err != nil {
 				return nil, err
@@ -168,13 +180,27 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 				return nil, err
 			}
 		case next.Type == "anthropic" && next.AnthropicThinkingEffort == "":
-			return nil, errors.New("模型适配器 anthropicThinkingEffort 仅支持 low、medium、high、xhigh、max")
+			return nil, i18n.NewError("error.model_adapter.thinking_effort_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 anthropicThinkingEffort 仅支持 low、medium、high、xhigh、max")
 		}
 		next.ID = modelchannel.BuildChannelID(next.BaseURL, next.ModelID, next.APIKey, next.DisplayName, next.OpenAIEndpoint)
-		if _, exists := seenChannelIDs[next.ID]; exists {
-			return nil, errors.New("模型适配器渠道不能重复，请检查 url、modelID、apiKey、displayName、endpoint 组合")
+		if existingIndex, exists := channelIndexByID[next.ID]; exists {
+			existing := normalized[existingIndex]
+			if existing.GroupName == "" {
+				existing.GroupName = next.GroupName
+			}
+			if existing.TooltipData == "" {
+				existing.TooltipData = next.TooltipData
+			}
+			if existing.ContextWindowTokens <= 0 {
+				existing.ContextWindowTokens = next.ContextWindowTokens
+			}
+			if existing.Pricing == nil {
+				existing.Pricing = next.Pricing
+			}
+			normalized[existingIndex] = existing
+			continue
 		}
-		seenChannelIDs[next.ID] = struct{}{}
+		channelIndexByID[next.ID] = len(normalized)
 		normalized = append(normalized, next)
 	}
 	return normalized, nil
@@ -183,14 +209,14 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 func validateJSONMap(value string, fieldName string) error {
 	text := strings.TrimSpace(value)
 	if text == "" {
-		return fmt.Errorf("模型适配器 %s 不能为空", fieldName)
+		return i18n.NewError("error.model_adapter.json_required", i18n.CodeInvalidModelAdapter, fmt.Sprintf("模型适配器 %s 不能为空", fieldName))
 	}
 	var parsed map[string]any
 	if err := json.Unmarshal([]byte(text), &parsed); err != nil {
-		return fmt.Errorf("模型适配器 %s 必须是合法 JSON 对象", fieldName)
+		return i18n.NewError("error.model_adapter.json_required", i18n.CodeInvalidModelAdapter, fmt.Sprintf("模型适配器 %s 必须是合法 JSON 对象", fieldName))
 	}
 	if parsed == nil {
-		return fmt.Errorf("模型适配器 %s 必须是 JSON 对象", fieldName)
+		return i18n.NewError("error.model_adapter.json_required", i18n.CodeInvalidModelAdapter, fmt.Sprintf("模型适配器 %s 必须是 JSON 对象", fieldName))
 	}
 	return nil
 }
@@ -202,11 +228,11 @@ func validateHeadersJSON(value string) error {
 	}
 	var parsed map[string]string
 	if err := json.Unmarshal([]byte(text), &parsed); err != nil {
-		return errors.New("模型适配器 customHeadersJSON 的值必须是字符串")
+		return i18n.NewError("error.model_adapter.headers_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 customHeadersJSON 的值必须是字符串")
 	}
 	for key := range parsed {
 		if strings.TrimSpace(key) == "" {
-			return errors.New("模型适配器 customHeadersJSON 的请求头名称不能为空")
+			return i18n.NewError("error.model_adapter.headers_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 customHeadersJSON 的请求头名称不能为空")
 		}
 	}
 	return nil

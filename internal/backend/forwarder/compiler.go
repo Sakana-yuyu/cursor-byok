@@ -7,6 +7,7 @@ import (
 
 	"cursor/gen/agentv1"
 	modeladapter "cursor/internal/backend/agent/model"
+	"cursor/internal/promptinject"
 	promptassets "cursor/prompt"
 )
 
@@ -20,15 +21,23 @@ type DefaultPromptCompiler struct {
 	catalog   ToolCatalog
 	reminders ReminderInjector
 	rules     *UserRuleStore
+	// injection is the single optional Codex-X-compatible system prompt decision point.
+	// A nil manager preserves the historical prompt byte-for-byte.
+	injection *promptinject.Manager
 }
 
-// NewPromptCompiler 创建默认 prompt 编译器。
-func NewPromptCompiler(projector *HistoryProjector, catalog ToolCatalog, reminders ReminderInjector, rules *UserRuleStore) *DefaultPromptCompiler {
+// NewPromptCompiler 创建默认 prompt 编译器。可选注入 manager 保持旧调用兼容。
+func NewPromptCompiler(projector *HistoryProjector, catalog ToolCatalog, reminders ReminderInjector, rules *UserRuleStore, injection ...*promptinject.Manager) *DefaultPromptCompiler {
+	var manager *promptinject.Manager
+	if len(injection) > 0 {
+		manager = injection[0]
+	}
 	return &DefaultPromptCompiler{
 		projector: projector,
 		catalog:   catalog,
 		reminders: reminders,
 		rules:     rules,
+		injection: manager,
 	}
 }
 
@@ -76,6 +85,11 @@ func (compiler *DefaultPromptCompiler) Compile(conversation *ConversationFile, m
 		systemParts = append(systemParts, sharedRulesPrompt)
 	}
 	systemText := strings.TrimSpace(strings.Join(filterNonEmpty(systemParts), "\n\n"))
+	if compiler.injection != nil {
+		// Apply only after the normal system prompt and shared rules are assembled.
+		// Commit-message generation uses its own path and never reaches this compiler.
+		systemText = compiler.injection.Apply(systemText)
+	}
 	if systemText != "" {
 		messages = append(messages, modeladapter.Message{
 			Role:    "system",

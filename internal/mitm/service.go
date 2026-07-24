@@ -484,7 +484,31 @@ func (s *ProxyServer) forwardToServer(incoming *http.Request) (*http.Response, e
 		return nil, fmt.Errorf("forward to backend server: %w", err)
 	}
 	removeHopByHop(resp.Header)
+	preserveResponseTrailers(resp)
 	return resp, nil
+}
+
+// preserveResponseTrailers 恢复 Connect/SSE 终态所需的 HTTP trailers。
+//
+// MITM 转发会先移除 hop-by-hop 头。对普通请求这没问题，但 Connect 流的
+// 结构化错误和结束状态可能通过 trailers 传递；如果这里丢掉 Trailer 头，
+// Cursor 只能看到一个不完整的长连接关闭，并显示为 Network disconnected。
+func preserveResponseTrailers(resp *http.Response) {
+	if resp == nil || len(resp.Trailer) == 0 {
+		return
+	}
+	keys := make([]string, 0, len(resp.Trailer))
+	for key := range resp.Trailer {
+		canonical := http.CanonicalHeaderKey(strings.TrimSpace(key))
+		if canonical == "" {
+			continue
+		}
+		keys = append(keys, canonical)
+	}
+	if len(keys) == 0 {
+		return
+	}
+	resp.Header.Set("Trailer", strings.Join(keys, ", "))
 }
 
 // requestHost 用于处理与 requestHost 相关的逻辑。

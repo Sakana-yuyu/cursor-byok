@@ -34,8 +34,18 @@ func NewRouter(resolver ChannelResolver) *Router {
 	}
 }
 
-// Stream 根据模型标识选择具体 provider 并转发请求。
+type streamAttemptKey struct{}
+
+// Stream 根据模型标识选择具体 provider，并在 provider 失败时切换到下一渠道。
 func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(ModelEvent) error) error {
+	attempts, _ := ctx.Value(streamAttemptKey{}).(int)
+	if attempts >= 8 {
+		return fmt.Errorf("all model channels failed")
+	}
+	return router.streamAttempt(context.WithValue(ctx, streamAttemptKey{}, attempts+1), req, sink)
+}
+
+func (router *Router) streamAttempt(ctx context.Context, req StreamRequest, sink func(ModelEvent) error) error {
 	if router == nil || router.resolver == nil {
 		return fmt.Errorf("model adapter resolver is unavailable")
 	}
@@ -59,6 +69,8 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 	resolved.OpenAIEndpoint = strings.TrimSpace(channel.OpenAIEndpoint)
 	resolved.OpenAIExtraParamsEnabled = channel.OpenAIExtraParamsEnabled
 	resolved.OpenAIExtraParamsJSON = strings.TrimSpace(channel.OpenAIExtraParamsJSON)
+	resolved.FastMode = channel.FastMode
+	resolved.OpenAIServiceTier = strings.TrimSpace(channel.OpenAIServiceTier)
 	resolved.CustomHeadersEnabled = channel.CustomHeadersEnabled
 	resolved.CustomHeadersJSON = strings.TrimSpace(channel.CustomHeadersJSON)
 	resolved.AnthropicExtraParamsEnabled = channel.AnthropicExtraParamsEnabled
@@ -108,6 +120,14 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 			}
 			resolved.RequestKnobs["openai_endpoint"] = resolved.OpenAIEndpoint
 			resolved.RequestKnobs["openai_extra_params_enabled"] = resolved.OpenAIExtraParamsEnabled
+			resolved.RequestKnobs["openai_fast_mode"] = resolved.FastMode
+			if resolved.FastMode {
+				resolved.RequestKnobs["openai_service_tier"] = "priority"
+			} else if strings.TrimSpace(resolved.OpenAIServiceTier) != "" {
+				resolved.RequestKnobs["openai_service_tier"] = strings.TrimSpace(resolved.OpenAIServiceTier)
+			} else {
+				delete(resolved.RequestKnobs, "openai_service_tier")
+			}
 			resolved.RequestKnobs["custom_headers_enabled"] = resolved.CustomHeadersEnabled
 		} else if resolved.Provider == "anthropic" {
 			delete(resolved.RequestKnobs, "reasoning_effort")
@@ -124,14 +144,24 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 		}
 	}
 
+	var streamErr error
 	switch resolved.Provider {
 	case "anthropic":
-		return router.anthropic.Stream(ctx, resolved, sink)
+		streamErr = router.anthropic.Stream(ctx, resolved, sink)
 	case "openai":
-		return router.openai.Stream(ctx, resolved, sink)
+		streamErr = router.openai.Stream(ctx, resolved, sink)
 	default:
-		return fmt.Errorf("unsupported provider %q", resolved.Provider)
+		streamErr = fmt.Errorf("unsupported provider %q", resolved.Provider)
 	}
+	if streamErr == nil || ctx.Err() != nil {
+		return streamErr
+	}
+	// 重新进入路由器会推进线程安全轮询游标；旧配置只有一个渠道时最多再尝试有限次数，最终返回原始错误。
+	nextErr := router.Stream(ctx, req, sink)
+	if nextErr == nil {
+		return nil
+	}
+	return streamErr
 }
 
 // sanitizeProviderMessages removes replay-only placeholders and trims trailing

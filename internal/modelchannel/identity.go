@@ -82,14 +82,20 @@ func BuildLegacyChannelID(baseURL string, modelID string, apiKey string, name st
 
 func BuildChannelID(baseURL string, modelID string, apiKey string, name string, openAIEndpoint string) string {
 	endpoint := strings.TrimSpace(openAIEndpoint)
+	// displayName is presentation-only and must not distinguish the same
+	// provider/model credential channel. Keep name in the legacy helper so
+	// previously persisted IDs remain resolvable during migration.
 	if endpoint == "" {
-		return BuildLegacyChannelID(baseURL, modelID, apiKey, name)
+		return buildChannelID([]string{
+			strings.TrimSpace(baseURL),
+			strings.TrimSpace(modelID),
+			strings.TrimSpace(apiKey),
+		})
 	}
 	return buildChannelID([]string{
 		strings.TrimSpace(baseURL),
 		strings.TrimSpace(modelID),
 		strings.TrimSpace(apiKey),
-		strings.TrimSpace(name),
 		endpoint,
 	})
 }

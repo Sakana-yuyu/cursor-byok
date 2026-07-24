@@ -1,4 +1,4 @@
-import { IsWindows } from "@bindings/cursor/internal/bridge/proxyservice.js";
 import { ref } from "vue";
+import { isBrowserPreview, runtimeIsWindows } from "@/services/runtimeAdapter";
 
-export const isWindows = ref(Boolean(await IsWindows()));
+export const isWindows = ref(isBrowserPreview ? false : runtimeIsWindows);

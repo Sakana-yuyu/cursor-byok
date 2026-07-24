@@ -75,21 +75,22 @@ tasks:
   create:nsis:installer:
     summary: 生成 NSIS 安装包
     internal: true
-    dir: build/windows/nsis
+    dir: '{{.TASKFILE_DIR}}/nsis'
     deps:
       - task: build
         vars:
           SCAN:
             ref: .SCAN
     cmds:
-      - wails3 generate webview2bootstrapper -dir "{{.ROOT_DIR}}/build/windows/nsis"
+      - wails3 generate webview2bootstrapper -dir "{{.PROJECT_ROOT}}/build/windows/nsis"
       - |
         {{if eq OS "windows"}}
-        makensis -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}\{{.BIN_DIR}}\{{.APP_NAME}}.exe" project.nsi
+        makensis -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.PROJECT_ROOT}}\{{.BIN_DIR}}\{{.APP_NAME}}.exe" project.nsi
         {{else}}
-        makensis -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.ROOT_DIR}}/{{.BIN_DIR}}/{{.APP_NAME}}.exe" project.nsi
+        makensis -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.PROJECT_ROOT}}/{{.BIN_DIR}}/{{.APP_NAME}}.exe" project.nsi
         {{end}}
     vars:
+      PROJECT_ROOT: '{{.TASKFILE_DIR}}/../..'
       ARCH: '{{.ARCH | default ARCH}}'
       ARG_FLAG: '{{if eq .ARCH "amd64"}}AMD64{{else}}ARM64{{end}}'
 
@@ -141,12 +142,28 @@ tasks:
             ref: .DEV
           SCAN:
             ref: .SCAN
-      - rm -rf "{{.STAGING_DIR}}"
-      - mkdir -p "{{.STAGING_DIR}}"
-      - cp "{{.OUTPUT}}" "{{.STAGING_DIR}}/"
-      - (cd "{{.STAGING_DIR}}" && zip -qry "../{{.ZIP_NAME}}" .)
-      - rm -rf "{{.STAGING_DIR}}"
-      - rm -f "{{.OUTPUT}}"
+      - cmd: powershell -NoProfile -Command "if (Test-Path bin/.zip-{{.ARCH}}) { Remove-Item -Recurse -Force bin/.zip-{{.ARCH}} }"
+        platforms: [windows]
+      - cmd: rm -rf "{{.STAGING_DIR}}"
+        platforms: [darwin, linux]
+      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path bin/.zip-{{.ARCH}} | Out-Null"
+        platforms: [windows]
+      - cmd: mkdir -p "{{.STAGING_DIR}}"
+        platforms: [darwin, linux]
+      - cmd: powershell -NoProfile -Command "Copy-Item -Force {{.OUTPUT}} bin/.zip-{{.ARCH}}/"
+        platforms: [windows]
+      - cmd: cp "{{.OUTPUT}}" "{{.STAGING_DIR}}/"
+        platforms: [darwin, linux]
+      - cmd: powershell -NoProfile -Command "Compress-Archive -Path bin/.zip-{{.ARCH}}/* -DestinationPath bin/{{.ZIP_NAME}} -Force"
+        platforms: [windows]
+      - cmd: (cd "{{.STAGING_DIR}}" && zip -qry "../{{.ZIP_NAME}}" .)
+        platforms: [darwin, linux]
+      - cmd: powershell -NoProfile -Command "if (Test-Path bin/.zip-{{.ARCH}}) { Remove-Item -Recurse -Force bin/.zip-{{.ARCH}} }; if (Test-Path {{.OUTPUT}}) { Remove-Item -Force {{.OUTPUT}} }"
+        platforms: [windows]
+      - cmd: rm -rf "{{.STAGING_DIR}}"
+        platforms: [darwin, linux]
+      - cmd: rm -f "{{.OUTPUT}}"
+        platforms: [darwin, linux]
 
   run:
     summary: 运行 Windows 可执行文件（仅在 Windows 可用）

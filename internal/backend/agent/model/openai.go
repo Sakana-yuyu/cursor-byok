@@ -32,6 +32,7 @@ type openAIRequestBody struct {
 	MaxTokens       int               `json:"max_tokens,omitempty"`
 	StreamOptions   map[string]any    `json:"stream_options"`
 	ReasoningEffort string            `json:"reasoning_effort,omitempty"`
+	ServiceTier     string            `json:"service_tier,omitempty"`
 	PromptCacheKey  string            `json:"prompt_cache_key,omitempty"`
 }
 
@@ -43,6 +44,7 @@ type openAIResponsesRequestBody struct {
 	Stream          bool                      `json:"stream"`
 	MaxOutputTokens int                       `json:"max_output_tokens,omitempty"`
 	Reasoning       *openAIResponsesReasoning `json:"reasoning,omitempty"`
+	ServiceTier     string                    `json:"service_tier,omitempty"`
 	Include         []string                  `json:"include,omitempty"`
 	PromptCacheKey  string                    `json:"prompt_cache_key,omitempty"`
 	Store           bool                      `json:"store"`
@@ -485,6 +487,7 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))
 		return err
 	}
+	applyOpenAIServiceTier(bodyMap, req)
 	body = bodyMap
 	requestURL := OpenAIEndpointURL(baseURL, req.OpenAIEndpoint)
 	recordLLMRequestArtifact(req, "openai", modelID, "POST", requestURL, body)
@@ -578,6 +581,7 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 	firstEventAt := time.Time{}
 	finishReason := ""
 	turnFinishedPending := false
+	streamTerminated := false
 	thinkingStarted := time.Time{}
 	thinkingActive := false
 	thinkParser := &openAIThinkTagParser{}
@@ -754,6 +758,7 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		}
 		payloadLine := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
 		if payloadLine == "[DONE]" {
+			streamTerminated = true
 			if err := flushTaggedContentTail(); err != nil {
 				return fail(err)
 			}
@@ -840,6 +845,7 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		}
 
 		if choice.FinishReason != nil {
+			streamTerminated = true
 			if err := flushTaggedContentTail(); err != nil {
 				return fail(err)
 			}
@@ -888,6 +894,9 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 			return fail(idleErr)
 		}
 		return fail(err)
+	}
+	if !streamTerminated {
+		return fail(fmt.Errorf("provider stream ended before terminal event"))
 	}
 	if err := flushTaggedContentTail(); err != nil {
 		return fail(err)
@@ -1033,6 +1042,12 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		Summary          json.RawMessage                `json:"summary,omitempty"`
 		Content          []openAIResponsesOutputContent `json:"content,omitempty"`
 	}
+	type openAIResponsesError struct {
+		Message string          `json:"message"`
+		Type    string          `json:"type"`
+		Code    string          `json:"code"`
+		Param   json.RawMessage `json:"param,omitempty"`
+	}
 	type openAIResponsesResponse struct {
 		ID                string                      `json:"id"`
 		Model             string                      `json:"model"`
@@ -1043,15 +1058,14 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		IncompleteDetails *struct {
 			Reason string `json:"reason"`
 		} `json:"incomplete_details,omitempty"`
-		Error *struct {
-			Message string `json:"message"`
-			Type    string `json:"type"`
-			Code    string `json:"code"`
-		} `json:"error,omitempty"`
+		Error *openAIResponsesError `json:"error,omitempty"`
 	}
 	type openAIResponsesStreamEvent struct {
 		Type            string                     `json:"type"`
 		RequestID       string                     `json:"request_id"`
+		Message         string                     `json:"message"`
+		Code            string                     `json:"code"`
+		Param           json.RawMessage            `json:"param,omitempty"`
 		Delta           string                     `json:"delta"`
 		Arguments       string                     `json:"arguments"`
 		PartialImageB64 string                     `json:"partial_image_b64"`
@@ -1060,11 +1074,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		ItemID          string                     `json:"item_id"`
 		Item            *openAIResponsesOutputItem `json:"item,omitempty"`
 		Response        *openAIResponsesResponse   `json:"response,omitempty"`
-		Error           *struct {
-			Message string `json:"message"`
-			Type    string `json:"type"`
-			Code    string `json:"code"`
-		} `json:"error,omitempty"`
+		Error           *openAIResponsesError      `json:"error,omitempty"`
 	}
 
 	tools := make(map[string]*openAIToolAccumulator)
@@ -1082,6 +1092,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 	firstEventAt := time.Time{}
 	finishReason := ""
 	turnFinishedPending := false
+	streamTerminated := false
 	emittedToolInvocation := false
 	emittedText := false
 	thinkingStarted := time.Time{}
@@ -1440,13 +1451,47 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		}
 	}
 	errorFromEvent := func(event openAIResponsesStreamEvent) error {
-		if event.Error != nil && strings.TrimSpace(event.Error.Message) != "" {
-			return fmt.Errorf("openai responses stream error %s: %s", openAIStreamErrorDetails(event.Error.Type, event.Error.Code, event.RequestID), strings.TrimSpace(event.Error.Message))
+		errorType := ""
+		code := strings.TrimSpace(event.Code)
+		message := strings.TrimSpace(event.Message)
+		if event.Error != nil {
+			errorType = strings.TrimSpace(event.Error.Type)
+			code = firstNonEmptyString(strings.TrimSpace(event.Error.Code), code)
+			message = firstNonEmptyString(strings.TrimSpace(event.Error.Message), message)
 		}
-		if event.Response != nil && event.Response.Error != nil && strings.TrimSpace(event.Response.Error.Message) != "" {
-			return fmt.Errorf("openai responses stream error %s: %s", openAIStreamErrorDetails(event.Response.Error.Type, event.Response.Error.Code, event.RequestID), strings.TrimSpace(event.Response.Error.Message))
+		if event.Response != nil && event.Response.Error != nil {
+			errorType = firstNonEmptyString(strings.TrimSpace(event.Response.Error.Type), errorType)
+			code = firstNonEmptyString(strings.TrimSpace(event.Response.Error.Code), code)
+			message = firstNonEmptyString(strings.TrimSpace(event.Response.Error.Message), message)
 		}
-		return fmt.Errorf("openai responses stream failed")
+		if message != "" {
+			return fmt.Errorf("openai responses stream error %s: %s", openAIStreamErrorDetails(errorType, code, event.RequestID), message)
+		}
+
+		details := make([]string, 0, 5)
+		if eventType := strings.TrimSpace(event.Type); eventType != "" {
+			details = append(details, "event_type="+eventType)
+		}
+		if providerDetails := openAIStreamErrorDetails(errorType, code, event.RequestID); providerDetails != "provider_error" {
+			details = append(details, providerDetails)
+		}
+		if event.Response != nil {
+			if responseID := strings.TrimSpace(event.Response.ID); responseID != "" {
+				details = append(details, "response_id="+responseID)
+			}
+			if status := strings.TrimSpace(event.Response.Status); status != "" {
+				details = append(details, "status="+status)
+			}
+			if event.Response.IncompleteDetails != nil {
+				if reason := strings.TrimSpace(event.Response.IncompleteDetails.Reason); reason != "" {
+					details = append(details, "reason="+reason)
+				}
+			}
+		}
+		if len(details) == 0 {
+			return fmt.Errorf("openai responses stream failed without error details")
+		}
+		return fmt.Errorf("openai responses stream failed %s", strings.Join(details, " "))
 	}
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -1463,6 +1508,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		}
 		payloadLine := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
 		if payloadLine == "[DONE]" {
+			streamTerminated = true
 			if err := flushTaggedContentTail(); err != nil {
 				return fail(err)
 			}
@@ -1570,6 +1616,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 				return fail(err)
 			}
 		case "response.completed", "response.incomplete":
+			streamTerminated = true
 			if event.Response != nil && !emittedText {
 				if strings.TrimSpace(event.Response.OutputText) != "" {
 					if err := emitTaggedContentParts(thinkParser.Consume(event.Response.OutputText)); err != nil {
@@ -1625,6 +1672,9 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			return fail(idleErr)
 		}
 		return fail(err)
+	}
+	if !streamTerminated {
+		return fail(fmt.Errorf("provider stream ended before terminal event"))
 	}
 	if err := flushTaggedContentTail(); err != nil {
 		return fail(err)
@@ -1846,6 +1896,22 @@ func normalizeOpenAIProviderMessages(messages []Message, thinkingEnabled bool) (
 		items = append(items, item)
 	}
 	return items, nil
+}
+
+func applyOpenAIServiceTier(body map[string]any, req StreamRequest) {
+	if body == nil || req.Provider != "openai" {
+		return
+	}
+	if _, exists := body["service_tier"]; exists {
+		return
+	}
+	tier := strings.TrimSpace(req.OpenAIServiceTier)
+	if req.FastMode {
+		tier = "priority"
+	}
+	if tier != "" {
+		body["service_tier"] = tier
+	}
 }
 
 func shouldSendOpenAIMaxOutputTokens(modelID string) bool {

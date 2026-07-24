@@ -11,56 +11,51 @@ func IsMetaModelAlias(modelRef string) bool {
 	}
 }
 
-func ResolveAdapterIndex[T any](adapters []T, requestedModelRef string, id func(T) string, providerModelID func(T) string, legacyIDs ...func(T) string) (int, bool) {
+func ResolveAdapterIndexes[T any](adapters []T, requestedModelRef string, id func(T) string, providerModelID func(T) string, legacyIDs ...func(T) string) []int {
 	if len(adapters) == 0 {
-		return -1, false
+		return nil
 	}
-
-	targetModelRef := strings.TrimSpace(requestedModelRef)
-	if targetModelRef == "" || IsMetaModelAlias(targetModelRef) {
-		targetModelRef = strings.TrimSpace(id(adapters[0]))
+	target := strings.TrimSpace(requestedModelRef)
+	if target == "" || IsMetaModelAlias(target) {
+		target = strings.TrimSpace(id(adapters[0]))
 	}
-	if targetModelRef == "" {
-		return -1, false
+	if target == "" {
+		return nil
 	}
-
+	matches := make([]int, 0, len(adapters))
 	for index, adapter := range adapters {
-		if strings.TrimSpace(id(adapter)) == targetModelRef {
-			return index, true
+		if strings.TrimSpace(id(adapter)) == target {
+			matches = append(matches, index)
 		}
 	}
-
-	legacyIndex := -1
+	if len(matches) > 0 {
+		return matches
+	}
 	for _, legacyID := range legacyIDs {
 		if legacyID == nil {
 			continue
 		}
 		for index, adapter := range adapters {
-			if strings.TrimSpace(legacyID(adapter)) != targetModelRef {
-				continue
+			if strings.TrimSpace(legacyID(adapter)) == target {
+				matches = append(matches, index)
 			}
-			if legacyIndex >= 0 && legacyIndex != index {
-				return -1, false
-			}
-			legacyIndex = index
+		}
+		if len(matches) > 0 {
+			return matches
 		}
 	}
-	if legacyIndex >= 0 {
-		return legacyIndex, true
-	}
-
-	fallbackIndex := -1
 	for index, adapter := range adapters {
-		if strings.TrimSpace(providerModelID(adapter)) != targetModelRef {
-			continue
+		if strings.TrimSpace(providerModelID(adapter)) == target {
+			matches = append(matches, index)
 		}
-		if fallbackIndex >= 0 {
-			return -1, false
-		}
-		fallbackIndex = index
 	}
-	if fallbackIndex < 0 {
+	return matches
+}
+
+func ResolveAdapterIndex[T any](adapters []T, requestedModelRef string, id func(T) string, providerModelID func(T) string, legacyIDs ...func(T) string) (int, bool) {
+	matches := ResolveAdapterIndexes(adapters, requestedModelRef, id, providerModelID, legacyIDs...)
+	if len(matches) != 1 {
 		return -1, false
 	}
-	return fallbackIndex, true
+	return matches[0], true
 }
