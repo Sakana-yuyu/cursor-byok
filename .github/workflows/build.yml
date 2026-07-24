@@ -68,8 +68,14 @@ jobs:
             sed -i.bak 's|registry.npmmirror.com|registry.npmjs.org|g' frontend/yarn.lock || true
             rm -f frontend/yarn.lock.bak
           fi
-          # Yarn 缓存可能已存损坏 tarball，指向全新缓存目录强制重新下载
-          echo "YARN_CACHE_FOLDER=$HOME/.yarn-cache-fresh" >> "$GITHUB_ENV"
+          # Yarn 缓存可能已存损坏 tarball，指向当前 runner 的原生临时目录强制重新下载。
+          # Windows 后续步骤在 PowerShell 中执行，不能把 MSYS 的 /c/Users 路径写入 GITHUB_ENV。
+          if [ "${RUNNER_OS:-}" = "Windows" ]; then
+            YARN_CACHE_FOLDER="${RUNNER_TEMP}\\yarn-cache-fresh"
+          else
+            YARN_CACHE_FOLDER="${RUNNER_TEMP:-$HOME}/yarn-cache-fresh"
+          fi
+          echo "YARN_CACHE_FOLDER=$YARN_CACHE_FOLDER" >> "$GITHUB_ENV"
           npm install -g yarn@1.22.22
           NPM_BIN="$(npm config get prefix)"
           if [ -d "$NPM_BIN/bin" ]; then NPM_BIN="$NPM_BIN/bin"; fi
@@ -175,7 +181,9 @@ jobs:
         shell: pwsh
         run: |
           task build:windows:amd64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           task build:windows:installer
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path 'bin/windows-64.zip')) { throw 'Windows ZIP was not produced' }
           $installer = Get-ChildItem 'bin/*-amd64-installer.exe' -File | Select-Object -First 1
           if (-not $installer) { throw 'Windows NSIS installer was not produced' }
