@@ -80,10 +80,24 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+          $candidatePaths = @(
+            (Join-Path ${env:ProgramFiles(x86)} 'NSIS\makensis.exe'),
+            (Join-Path $env:ProgramFiles 'NSIS\makensis.exe')
+          )
+          $makensis = $candidatePaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+
+          if (-not $makensis) {
             choco install nsis -y --no-progress
+            $makensis = $candidatePaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
           }
-          makensis /VERSION
+
+          if (-not $makensis) {
+            throw 'NSIS installation completed but makensis.exe was not found'
+          }
+
+          $nsisDirectory = Split-Path -Parent $makensis
+          $nsisDirectory | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & $makensis /VERSION
 
       - name: Build Windows amd64 packages
         if: matrix.target == 'windows'
