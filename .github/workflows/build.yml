@@ -211,6 +211,42 @@ jobs:
           if (-not $installer) { throw 'Windows NSIS installer was not produced' }
           Write-Host "Produced $($installer.FullName)"
 
+      - name: Self-sign Windows binaries
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          # 生成自签名代码签名证书（无 CA 根，不能消除 SmartScreen，但能减少部分 AV 误报）
+          $subject = "CN=Sakana, O=Sakana, C=CN"
+          $cert = New-SelfSignedCertificate `
+            -Type CodeSigningCert `
+            -Subject $subject `
+            -KeyAlgorithm RSA -KeyLength 2048 `
+            -HashAlgorithm SHA256 `
+            -NotAfter (Get-Date).AddYears(1) `
+            -CertStoreLocation "Cert:\CurrentUser\My"
+
+          # 导出 PFX 并导入到根 CA（让本地系统信任此签名）
+          $pfxPath = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+          $pwd = ConvertTo-SecureString -String "temp-signing-key" -Force -AsPlainText
+          Export-PfxCertificate -Cert $cert -FilePath $pfxPath -Password $pwd | Out-Null
+          Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation "Cert:\LocalMachine\Root" -Password $pwd | Out-Null
+
+          # 签名主 exe
+          $exe = Resolve-Path "bin/Cursor助手.exe"
+          & signtool sign /fd SHA256 /a /f $pfxPath /p "temp-signing-key" $exe.Path
+          if ($LASTEXITCODE -ne 0) { throw "signtool failed to sign exe" }
+          Write-Host "Signed $($exe.Path)"
+
+          # 签名 installer
+          $installer = Get-ChildItem 'bin/*-amd64-installer.exe' -File | Select-Object -First 1
+          & signtool sign /fd SHA256 /a /f $pfxPath /p "temp-signing-key" $installer.FullName
+          if ($LASTEXITCODE -ne 0) { throw "signtool failed to sign installer" }
+          Write-Host "Signed $($installer.FullName)"
+
+          # 清理证书
+          Remove-Item $pfxPath -Force
+          Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force
+
       - name: Build Linux amd64 package
         if: matrix.target == 'linux'
         shell: bash
