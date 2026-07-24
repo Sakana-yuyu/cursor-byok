@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -216,8 +216,12 @@ jobs:
         if: startsWith(matrix.target, 'macos-')
         shell: bash
         run: |
-          task "build:darwin:${{ endsWith(matrix.target, 'arm64') && 'arm64' || 'amd64' }}"
+          ARCH_NAME="${{ endsWith(matrix.target, 'arm64') && 'arm64' || 'amd64' }}"
+          VERSION="$(go run ./scripts/release version -config ./build/config.yml)"
+          task "build:darwin:${ARCH_NAME}"
           test -f "bin/${{ endsWith(matrix.target, 'arm64') && 'macos-arm64.dmg' || 'macos-intel.dmg' }}"
+          task "release:build:macos:${ARCH_NAME}"
+          test -f "bin/release/${VERSION}/cursor-byok-${VERSION}-macos-${ARCH_NAME}.tar.gz"
 
       - name: Upload Windows artifacts
         if: matrix.target == 'windows'
@@ -243,4 +247,92 @@ jobs:
         with:
           name: ${{ matrix.artifact }}
           if-no-files-found: error
-          path: ${{ endsWith(matrix.target, 'arm64') && 'bin/macos-arm64.dmg' || 'bin/macos-intel.dmg' }}
+          path: |
+            bin/macos-*.dmg
+            bin/release/**/*
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Prepare release assets and update manifest
+        env:
+          TAG: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p publish
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import shutil
+          from pathlib import Path
+
+          assets = list(Path("release-assets").rglob("*"))
+          tag = os.environ["TAG"]
+          version = tag.removeprefix("v")
+          publish = Path("publish")
+          wanted = {
+              "windows-64.zip": f"cursor-byok-{version}-windows-amd64.zip",
+              "linux-amd64.tar.gz": f"cursor-byok-{version}-linux-amd64.tar.gz",
+              f"cursor-byok-{version}-macos-arm64.tar.gz": f"cursor-byok-{version}-macos-arm64.tar.gz",
+              f"cursor-byok-{version}-macos-amd64.tar.gz": f"cursor-byok-{version}-macos-amd64.tar.gz",
+          }
+          for source_name, target_name in wanted.items():
+              source = next((path for path in assets if path.name == source_name), None)
+              if source is None:
+                  raise SystemExit(f"missing build asset: {source_name}")
+              shutil.copyfile(source, publish / target_name)
+          platforms = {}
+          for platform, suffix in {
+              "macos-arm64": ".tar.gz",
+              "macos-amd64": ".tar.gz",
+              "windows-amd64": ".zip",
+              "linux-amd64": ".tar.gz",
+          }.items():
+              filename = f"cursor-byok-{version}-{platform}{suffix}"
+              path = publish / filename
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              platforms[platform] = {
+                  "url": f"https://github.com/{os.environ['REPOSITORY']}/releases/download/{tag}/{filename}",
+                  "size": path.stat().st_size,
+                  "checksum": f"sha256:{digest}",
+              }
+          (publish / "update.json").write_text(
+              json.dumps({
+                  "version": version,
+                  "release_date": "",
+                  "release_notes": Path("release-notes.md").read_text(encoding="utf-8"),
+                  "platforms": platforms,
+                  "mandatory": False,
+              }, ensure_ascii=False, indent=2) + "\\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --notes-file release-notes.md
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --notes-file release-notes.md
+          fi
+          gh release upload "$TAG" publish/* --repo "$GITHUB_REPOSITORY" --clobber

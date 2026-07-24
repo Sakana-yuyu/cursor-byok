@@ -39,9 +39,9 @@
 # 在此提前 !define，使 wails_tools.nsh 内 !ifndef 块跳过这些中文行；
 # 同时本文件保存为 UTF-8 with BOM，确保下方中文被 makensis 正确解析。
 !define INFO_PROJECTNAME "Cursor助手"
-!define INFO_COMPANYNAME "Cursor助手"
+!define INFO_COMPANYNAME "Sakana"
 !define INFO_PRODUCTNAME "Cursor助手"
-!define INFO_COPYRIGHT "© 2026, Cursor助手"
+!define INFO_COPYRIGHT "© 2026, Sakana"
 !define PRODUCT_EXECUTABLE "${INFO_PROJECTNAME}.exe"
 
 !include "wails_tools.nsh"

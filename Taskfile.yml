@@ -11,7 +11,7 @@ vars:
   BIN_DIR: "bin"
   APP_VERSION:
     sh: 'go run ./scripts/release version -config ./build/config.yml'
-  RELEASE_REPO: "leookun/cursor-byok"
+  RELEASE_REPO: "Sakana-yuyu/cursor-byok"
   RELEASE_BASE_NAME: "cursor-byok"
   RELEASE_SOURCE_PATH: "release-notes.md"
   RELEASE_DIR: '{{.BIN_DIR}}/release/{{.APP_VERSION}}'

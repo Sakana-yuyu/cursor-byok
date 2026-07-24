@@ -169,7 +169,7 @@
   "8cbcf741e727dbf7": "Model Settings",
   "8cda7c9f2c09d670": "Enter a group name",
   "8d1de152be6360ce": "Valid ratio: {0}",
-  "8e1bb94537c392db": "Author: leookun",
+  "8e1bb94537c392db": "Author Sakana",
   "8e8dfda02f6f22c4": "Prompt list updated",
   "8f6f8d979c981ced": "Copied",
   "8f8baf5d18dd0492": "When enabled, the JSON object will override the OpenAI request body. Duplicate fields are determined by this field. OpenAI service_tier supports auto, default, flex, scale, priority; priority can be used for high-priority/Fast scenarios.",
