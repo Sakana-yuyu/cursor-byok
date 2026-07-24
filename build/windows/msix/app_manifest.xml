@@ -8,7 +8,7 @@
   IgnorableNamespaces="uap3">
   
   <Identity 
-    Name="com.cursor.wuxianxubei"
+    Name="com.sakana.cursor-byok"
     Publisher="CN=Cursor助手"
     Version="0.1.0.0" 
     ProcessorArchitecture="x64" />
@@ -29,7 +29,7 @@
   </Resources>
   
   <Applications>
-    <Application Id="com.cursor.wuxianxubei" Executable="Cursor助手" EntryPoint="Windows.FullTrustApplication">
+    <Application Id="com.sakana.cursor-byok" Executable="Cursor助手" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
         DisplayName="Cursor助手"
         Description="本地 MITM 代理客户端，支持中转转发与托盘控制"

@@ -169,7 +169,7 @@
   "8cbcf741e727dbf7": "模型配置",
   "8cda7c9f2c09d670": "请输入分组名称",
   "8d1de152be6360ce": "有效占比：{0}",
-  "8e1bb94537c392db": "著者 leookun",
+  "8e1bb94537c392db": "著者 Sakana",
   "8e8dfda02f6f22c4": "提示词清单已更新",
   "8f6f8d979c981ced": "已复制",
   "8f8baf5d18dd0492": "开启后会把 JSON 对象覆盖到 OpenAI 请求体。同名字段以这里为准。OpenAI service_tier 支持 auto、default、flex、scale、priority；priority 可用于高优先级/Fast 类场景。",

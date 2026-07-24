@@ -169,7 +169,7 @@
   "8cbcf741e727dbf7": "モデル設定",
   "8cda7c9f2c09d670": "グループ名を入力してください",
   "8d1de152be6360ce": "有効率: {0}",
-  "8e1bb94537c392db": "著者：leookun",
+  "8e1bb94537c392db": "著者 Sakana",
   "8e8dfda02f6f22c4": "プロンプト一覧を更新しました",
   "8f6f8d979c981ced": "コピーしました",
   "8f8baf5d18dd0492": "有効にすると、JSONオブジェクトがOpenAIのリクエストボディを上書きします。同名のフィールドはこの設定が優先されます。OpenAIのservice_tierはauto、default、flex、scale、priorityをサポートしており、priorityは高優先度/Fastのシナリオで使用できます。",

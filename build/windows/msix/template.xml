@@ -25,7 +25,7 @@
         </Capabilities>
         <Applications>
             <Application
-                Id="com.cursor.wuxianxubei"
+                Id="com.sakana.cursor-byok"
                 Description="Cursor助手"
                 DisplayName="Cursor助手"
                 ExecutableName="Cursor助手"
