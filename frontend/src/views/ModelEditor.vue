@@ -80,6 +80,11 @@ const openAIEndpointOptions = [
   { label: "自定义路径(请输入完整请求地址)", value: OPENAI_ENDPOINT_CUSTOM, icon: "icon-[mdi--pencil-outline]" },
 ];
 
+const providerTypeOptions = [
+  { label: "OpenAI / OAI", value: "openai" },
+  { label: "Anthropic / A社", value: "anthropic" },
+];
+
 const editorIndex = ref(-1);
 const router = useRouter();
 const draft = reactive(createEmptyModelAdapter());
@@ -130,7 +135,8 @@ const modelTestSummary = computed(() => {
   return activeModelTestResult.value?.summaryText || "尚未测试";
 });
 
-const title = computed(() => (editorIndex.value >= 0 ? "编辑模型配置" : "新增模型配置"));
+const isQuickMode = computed(() => editorIndex.value < 0);
+const title = computed(() => (isQuickMode.value ? "快速添加模型" : "编辑模型配置"));
 
 function ensureOpenAIExtraParamsJSON() {
   if (!String(draft.openAIExtraParamsJSON || "").trim()) {
@@ -338,7 +344,7 @@ async function handleBatchAddModels() {
       displayName: model.id,
       modelID: model.id,
       groupName: group.name || group.baseURL,
-      tooltipData: `来自 ${group.baseURL}`,
+      tooltipData: String(draft.tooltipData || "").trim() || `来自 ${group.baseURL}`,
       contextWindowTokens: model.contextWindowTokens || 0,
       pricing: model.pricing || null,
     }));
@@ -358,6 +364,74 @@ async function handleBatchAddModels() {
     catalogSaving.value = false;
   }
 }
+function ensureV1Suffix() {
+  let url = String(draft.baseURL || "").trim();
+  if (!url) return;
+  url = url.replace(/\/+$/, "");
+  if (!/\/v\d+(\/.*)?$/.test(url)) {
+    draft.baseURL = `${url}/v1`;
+  } else {
+    draft.baseURL = url;
+  }
+}
+
+async function handleQuickFetchAndAdd() {
+  catalogError.value = "";
+  ensureV1Suffix();
+  const baseURL = String(draft.baseURL || "").trim();
+  const apiKey = String(draft.apiKey || "").trim();
+  if (!baseURL || !apiKey) {
+    catalogError.value = "请先填写接口地址和访问密钥";
+    return;
+  }
+  catalogLoading.value = true;
+  try {
+    const result = await fetchModelCatalog({
+      type: draft.type,
+      baseURL,
+      apiKey,
+      customHeadersEnabled: Boolean(draft.customHeadersEnabled),
+      customHeadersJSON: draft.customHeadersJSON || "",
+    });
+    const fetchedModels = Array.isArray(result?.models) ? result.models : [];
+    if (fetchedModels.length === 0) {
+      catalogError.value = "服务未返回可用模型";
+      return;
+    }
+    const groupName = String(draft.groupName || "").trim() || baseURL;
+    catalogSaving.value = true;
+    try {
+      const adapters = fetchedModels.map((model) =>
+        normalizeModelAdapter({
+          ...createEmptyModelAdapter(),
+          type: draft.type,
+          baseURL,
+          apiKey: draft.apiKey,
+          customHeadersEnabled: Boolean(draft.customHeadersEnabled),
+          customHeadersJSON: draft.customHeadersJSON || "",
+          displayName: model.id,
+          modelID: model.id,
+          groupName,
+          tooltipData: String(draft.tooltipData || "").trim() || `来自 ${baseURL}`,
+          contextWindowTokens: model.contextWindowTokens || 0,
+          pricing: model.pricing || null,
+        }));
+      const saveResult = await saveModelAdaptersBatch(adapters);
+      if (!saveResult.ok) {
+        catalogError.value = saveResult.error || "批量添加失败";
+        return;
+      }
+      await closeEditor();
+    } finally {
+      catalogSaving.value = false;
+    }
+  } catch (error) {
+    catalogError.value = toUserError(error);
+  } finally {
+    catalogLoading.value = false;
+  }
+}
+
 async function handleTest() {
   localTestFailure.value = "";
   try {
@@ -444,12 +518,14 @@ onMounted(async () => {
       <h2 class="text-base font-medium text-white">{{ title }}</h2>
       <div class="flex items-center gap-2">
         <Button variant="default" @click="handleCancel">取消</Button>
-        <Button variant="default" :disabled="isCurrentConfigTesting || appState.configSaving" @click="handleTest">
-          {{ isCurrentConfigTesting ? "测试中..." : "保存并测试" }}
-        </Button>
-        <Button variant="primary" :disabled="appState.configSaving" @click="handleSave">
-          {{ appState.configSaving ? "保存中..." : "保存" }}
-        </Button>
+        <template v-if="!isQuickMode">
+          <Button variant="default" :disabled="isCurrentConfigTesting || appState.configSaving" @click="handleTest">
+            {{ isCurrentConfigTesting ? "测试中..." : "保存并测试" }}
+          </Button>
+          <Button variant="primary" :disabled="appState.configSaving" @click="handleSave">
+            {{ appState.configSaving ? "保存中..." : "保存" }}
+          </Button>
+        </template>
       </div>
     </div>
 
@@ -459,6 +535,67 @@ onMounted(async () => {
 
     <div v-else class="flex-1 overflow-y-auto min-h-0 px-4 pb-4">
       <div class="flex flex-col gap-4">
+        <div v-if="isQuickMode" class="flex flex-col gap-4">
+          <label class="flex flex-col gap-1">
+            <span class="text-sm text-[#d4d4d4]">模型类型</span>
+            <Select
+              :model-value="draft.type"
+              :options="providerTypeOptions"
+              button-class="h-9 text-sm"
+              @update:model-value="handleModelTypeChange"
+            />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-sm text-[#d4d4d4]">接口地址（自动补 /v1）</span>
+            <input
+              v-model="draft.baseURL"
+              type="text"
+              placeholder="例如：https://api.openai.com"
+              class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+              @blur="ensureV1Suffix"
+            />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-sm text-[#d4d4d4]">访问密钥</span>
+            <Input
+              v-model="draft.apiKey"
+              type="password"
+              allow-visibility-toggle
+              placeholder="例如：sk-xxxxxx"
+              autocomplete="off"
+            />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-sm text-[#d4d4d4]">用户分组名称</span>
+            <input
+              v-model="draft.groupName"
+              type="text"
+              placeholder="按 URL 或渠道归类"
+              class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+            />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-sm text-[#d4d4d4]">备注</span>
+            <textarea
+              v-model="draft.tooltipData"
+              rows="2"
+              placeholder="可选，例如：用于日常代码补全"
+              class="resize-none rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 py-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+            ></textarea>
+          </label>
+          <Button
+            variant="primary"
+            :disabled="catalogLoading || catalogSaving || !draft.baseURL || !draft.apiKey"
+            @click="handleQuickFetchAndAdd"
+          >
+            {{ catalogLoading ? "拉取中..." : catalogSaving ? "添加中..." : "拉取并添加全部" }}
+          </Button>
+          <div v-if="catalogError" class="rounded-[8px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-sm text-[#fca5a5]">
+            {{ catalogError }}
+          </div>
+        </div>
+
+        <template v-else>
         <div class="rounded-[8px] border border-[#343434] bg-[#252525] px-3 py-2 text-sm text-[#d4d4d4]">
           供应商：<span class="font-medium text-white">{{ draft.type === "anthropic" ? "Anthropic / A社" : "OpenAI / OAI" }}</span>
           <span class="ml-2 text-xs text-[#8f8f8f]">新增模型的供应商归属由模型配置分组决定</span>
@@ -756,6 +893,7 @@ onMounted(async () => {
         >
           {{ errorMessage }}
         </div>
+        </template>
       </div>
     </div>
   </div>

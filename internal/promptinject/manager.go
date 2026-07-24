@@ -60,6 +60,8 @@ type Config struct {
 	LastUpdated            string           `json:"lastUpdated,omitempty"`
 	LastError              string           `json:"lastError,omitempty"`
 	SourceLicense          string           `json:"sourceLicense,omitempty"`
+	CustomEnabled          bool             `json:"customEnabled,omitempty"`
+	CustomContent          string           `json:"customContent,omitempty"`
 }
 
 // PromptTemplate is one independently persisted prompt injection entry.
@@ -466,7 +468,7 @@ func (m *Manager) Apply(base string) string {
 	if _, err := m.loadLocked(); err != nil {
 		// Preserve the last known state if an optional settings file becomes unreadable.
 	}
-	if !m.cfg.Enabled && !m.cfg.SoftwareChineseEnabled {
+	if !m.cfg.Enabled && !m.cfg.SoftwareChineseEnabled && !m.cfg.CustomEnabled {
 		return base
 	}
 
@@ -499,6 +501,12 @@ func (m *Manager) Apply(base string) string {
 					result = content
 				}
 			}
+		}
+	}
+	if m.cfg.CustomEnabled {
+		custom := strings.TrimSpace(m.cfg.CustomContent)
+		if custom != "" {
+			result = strings.TrimSpace(result) + "\n\n" + custom
 		}
 	}
 	if m.cfg.SoftwareChineseEnabled {
