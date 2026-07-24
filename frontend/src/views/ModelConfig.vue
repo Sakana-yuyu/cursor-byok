@@ -70,6 +70,11 @@ const providerGroups = computed(() => Object.fromEntries(providers.map(({ value 
   return [value, Array.from(groups, ([name, adapters]) => ({ name, adapters }))];
 })));
 
+const providerFailedAdapters = computed(() => Object.fromEntries(providers.map(({ value }) => [
+  value,
+  providerAdapters.value[value].filter((adapter) => testResult(adapter)?.status === "error"),
+])));
+
 function providerLabel(type) {
   return providers.find((provider) => provider.value === type)?.label || type;
 }
@@ -123,6 +128,26 @@ async function deleteAdapter(adapter) {
   if (index < 0) return;
   const result = await deleteModelAdapterAt(index);
   if (!result.ok) await showActionError("删除失败", result.error);
+}
+
+async function deleteFailedAdapters(providerType) {
+  const failed = providerFailedAdapters.value[providerType];
+  if (!failed.length) return;
+  const confirmed = await showModal({
+    title: "删除测试失败的模型",
+    content: `将删除 ${failed.length} 个测试失败的 ${providerLabel(providerType)} 模型，确定继续吗？`,
+    confirmText: "删除",
+    cancelText: "取消",
+  });
+  if (!confirmed) return;
+  const indices = failed.map(groupIndex).filter((i) => i >= 0).sort((a, b) => b - a);
+  for (const index of indices) {
+    const result = await deleteModelAdapterAt(index);
+    if (!result.ok) {
+      await showActionError("删除失败", result.error);
+      return;
+    }
+  }
 }
 
 async function duplicateAdapter(adapter) {
@@ -212,6 +237,12 @@ onBeforeUnmount(() => { providers.forEach(({ value }) => { void stopProvider(val
                 :disabled="appState.configSaving || (!providerRuns[provider.value].testing && !providerAdapters[provider.value].length)"
                 @click="testProvider(provider.value)"
               >{{ batchText(provider.value) }}</Button>
+              <Button
+                v-if="providerFailedAdapters[provider.value].length && !providerRuns[provider.value].testing"
+                variant="default"
+                :disabled="appState.configSaving"
+                @click="deleteFailedAdapters(provider.value)"
+              >删除 {{ providerFailedAdapters[provider.value].length }} 个失败</Button>
               <Button
                 variant="primary"
                 :disabled="appState.configSaving || providerRuns[provider.value].testing"

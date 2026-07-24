@@ -91,6 +91,8 @@ async function handleOpenModelConfig() {
 const promptInjection = reactive({
   enabled: false,
   softwareChineseEnabled: false,
+  customEnabled: false,
+  customContent: "",
   mode: "replace",
   repo: "yynxxxxx/Codex-X",
   ref: "main",
@@ -128,6 +130,8 @@ function applyPromptInjectionStatus(status) {
   Object.assign(promptInjection, {
     enabled: Boolean(value.enabled),
     softwareChineseEnabled: Boolean(value.softwareChineseEnabled),
+    customEnabled: Boolean(value.customEnabled),
+    customContent: value.customContent || "",
     mode: value.mode === "append" ? "append" : "replace",
     repo: value.repo || "yynxxxxx/Codex-X",
     ref: value.ref || "main",
@@ -165,6 +169,34 @@ async function handleRefreshPromptInjection() {
       promptInjection.lastError = toUserError(fallbackError || error);
       await showActionError("拉取提示词失败", fallbackError || error);
     }
+  } finally {
+    promptInjectionBusy.value = false;
+  }
+}
+
+function buildPromptInjectionConfig() {
+  return {
+    enabled: promptInjection.enabled,
+    softwareChineseEnabled: promptInjection.softwareChineseEnabled,
+    customEnabled: promptInjection.customEnabled,
+    customContent: promptInjection.customContent,
+    mode: promptInjection.mode,
+    repo: promptInjection.repo,
+    ref: promptInjection.ref,
+    selectedTemplate: promptInjection.selectedTemplate,
+    localContent: promptInjection.localContent,
+    cacheContent: promptInjection.cacheContent,
+    templates: promptInjection.templates,
+  };
+}
+
+async function savePromptInjection() {
+  promptInjectionBusy.value = true;
+  try {
+    const status = await savePromptInjectionSettings(buildPromptInjectionConfig());
+    applyPromptInjectionStatus(status);
+  } catch (error) {
+    promptInjection.lastError = toUserError(error);
   } finally {
     promptInjectionBusy.value = false;
   }
@@ -332,6 +364,34 @@ onMounted(() => {
         <div v-if="promptInjection.lastError" class="rounded border border-[#4b1d1d] bg-[#2a1313] px-2 py-1 text-xs text-[#fca5a5]">
           {{ promptInjection.lastError }}
         </div>
+      </div>
+    </Card>
+
+    <Card>
+      <div class="flex items-start justify-between gap-4">
+        <div class="min-w-0 flex-1">
+          <h2 class="text-base font-medium text-white">自定义注入</h2>
+          <div class="mt-1 text-xs text-[#a3a3a3]">
+            填写自定义提示词，启用后追加到系统提示词末尾；与 Codex-X 模板和中文化独立开关。
+          </div>
+          <textarea
+            v-model="promptInjection.customContent"
+            class="mt-3 h-32 w-full resize-y rounded border border-white/10 bg-black/20 p-2 text-xs text-white placeholder:text-[#525252]"
+            placeholder="输入自定义注入内容，留空则不注入..."
+            :disabled="promptInjectionBusy || !promptInjectionLoaded"
+            @change="savePromptInjection"
+          ></textarea>
+        </div>
+        <Switch
+          compact
+          label=""
+          :enabled="promptInjection.customEnabled"
+          :busy="promptInjectionBusy || !promptInjectionLoaded"
+          :disabled="promptInjectionBusy || !promptInjectionLoaded"
+          enabled-text="已启用"
+          disabled-text="未启用"
+          @change="(value) => { promptInjection.customEnabled = value; void savePromptInjection(); }"
+        />
       </div>
     </Card>
 
