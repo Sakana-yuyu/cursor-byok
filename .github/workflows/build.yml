@@ -63,17 +63,24 @@ jobs:
         run: |
           # CI 环境使用官方 npm registry，避免 npmmirror 镜像缓存损坏
           printf 'registry "https://registry.npmjs.org/"\nnetwork-timeout 300000\n' > frontend/.yarnrc
+          # yarn.lock 中残留的 npmmirror resolved URL 会绕过 registry 配置，统一改写
+          if [ -f frontend/yarn.lock ]; then
+            sed -i.bak 's|registry.npmmirror.com|registry.npmjs.org|g' frontend/yarn.lock || true
+            rm -f frontend/yarn.lock.bak
+          fi
+          # Yarn 缓存可能已存损坏 tarball，指向全新缓存目录强制重新下载
+          echo "YARN_CACHE_FOLDER=$HOME/.yarn-cache-fresh" >> "$GITHUB_ENV"
           npm install -g yarn@1.22.22
           yarn --version
           yarn config get registry
 
-      - name: Install Task and Wails
-        shell: bash
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
         run: |
-          go install github.com/go-task/task/v3/cmd/task@v3.44.1
-          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha.74
-          task --version
-          wails3 version
+          # wails3 CLI 的 go install 需要 cgo 链接 GTK/WebKit，系统库必须先于 wails3 安装
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config gcc libgtk-3-dev libwebkit2gtk-4.1-dev build-essential
 
       - name: Install protoc (prebuilt, with well-known types)
         shell: bash
@@ -109,12 +116,13 @@ jobs:
           go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
           go install connectrpc.com/connect/cmd/protoc-gen-connect-go@latest
 
-      - name: Install Linux build dependencies
-        if: runner.os == 'Linux'
+      - name: Install Task and Wails
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config gcc libgtk-3-dev libwebkit2gtk-4.1-dev
+          go install github.com/go-task/task/v3/cmd/task@v3.44.1
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha.74
+          task --version
+          wails3 version
 
       - name: Install Windows NSIS
         if: runner.os == 'Windows'
