@@ -61,6 +61,13 @@ jobs:
           corepack prepare yarn@1.22.22 --activate
           yarn --version
 
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config gcc libgtk-3-dev libwebkit2gtk-4.1-dev protobuf-compiler
+
       - name: Install Task and Wails
         shell: bash
         run: |
@@ -68,13 +75,6 @@ jobs:
           go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha.74
           task --version
           wails3 version
-
-      - name: Install Linux build dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config gcc libgtk-3-dev libwebkit2gtk-4.1-dev protobuf-compiler
 
       - name: Install macOS build dependencies
         if: runner.os == 'macOS'
@@ -88,6 +88,28 @@ jobs:
         run: |
           go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
           go install connectrpc.com/connect/cmd/protoc-gen-connect-go@latest
+
+      - name: Install Windows protoc
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command protoc -ErrorAction SilentlyContinue)) {
+            choco install protoc -y --no-progress
+          }
+          $protocCmd = Get-Command protoc -ErrorAction SilentlyContinue
+          if (-not $protocCmd) {
+            $candidates = @(
+              'C:\Program Files\Protoc\bin\protoc.exe',
+              'C:\Program Files (x86)\Protoc\bin\protoc.exe',
+              'C:\ProgramData\chocolatey\bin\protoc.exe'
+            )
+            $found = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+            if (-not $found) { throw 'protoc was not found after installation' }
+            (Split-Path -Parent $found) | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            & $found --version
+          } else {
+            & $protocCmd.Source --version
+          }
 
       - name: Install Windows NSIS
         if: runner.os == 'Windows'
