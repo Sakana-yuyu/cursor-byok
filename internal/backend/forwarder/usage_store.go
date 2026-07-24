@@ -63,6 +63,8 @@ type usageFileEvent struct {
 	Kind             string    `json:"kind,omitempty"`
 	Status           string    `json:"status,omitempty"`
 	At               time.Time `json:"at"`
+	Model            string    `json:"model,omitempty"`
+	Provider         string    `json:"provider,omitempty"`
 	InputTokens      int64     `json:"input_tokens"`
 	OutputTokens     int64     `json:"output_tokens"`
 	CacheReadTokens  int64     `json:"cache_read_tokens"`

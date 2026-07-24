@@ -1,10 +1,13 @@
 package bridge
 
 import (
+	"context"
 	serverconfig "cursor/internal/backend/server/config"
 	"cursor/internal/certs"
 	"cursor/internal/client"
 	"cursor/internal/mitm"
+	"cursor/internal/promptinject"
+	"fmt"
 	"runtime"
 )
 
@@ -23,6 +26,24 @@ type ModelAdapterTestResult = client.ModelAdapterTestResult
 
 // ModelAdapterTestResultsPayload 定义测速结果事件载荷。
 type ModelAdapterTestResultsPayload = client.ModelAdapterTestResultsPayload
+
+// ModelCatalogRequest 定义模型列表拉取请求。
+type ModelCatalogRequest = client.ModelCatalogRequest
+
+// ModelCatalogItem 定义模型列表项。
+type ModelCatalogItem = client.ModelCatalogItem
+
+// ModelCatalogResult 定义模型列表结果。
+type ModelCatalogResult = client.ModelCatalogResult
+
+// PromptInjectionConfig 定义提示词注入设置。不会包含模型 API key。
+type PromptInjectionConfig = promptinject.Config
+
+// PromptInjectionStatus 定义提示词注入状态。
+type PromptInjectionStatus = promptinject.Status
+
+// PromptInjectionTemplate 定义单个可独立开关的提示词模板。
+type PromptInjectionTemplate = promptinject.PromptTemplate
 
 // LicenseActionRequest 定义了当前模块中的 LicenseActionRequest 类型。
 type LicenseActionRequest = client.LicenseActionRequest
@@ -48,12 +69,17 @@ type UsageRecordsResult = client.UsageRecordsResult
 // ProxyService 定义了当前模块中的 ProxyService 类型。
 type ProxyService struct {
 	// core 表示当前声明中的 core。
-	core *client.ProxyService
+	core            *client.ProxyService
+	promptInjection *promptinject.Manager
 }
 
 // NewProxyService 用于处理与 NewProxyService 相关的逻辑。
 func NewProxyService(proxy *mitm.ProxyServer, certManager *certs.Manager, caCertPEM []byte) *ProxyService {
-	return &ProxyService{core: client.NewProxyService(proxy, certManager, caCertPEM)}
+	manager := promptinject.New()
+	if _, err := manager.Load(); err != nil {
+		manager = promptinject.New()
+	}
+	return &ProxyService{core: client.NewProxyService(proxy, certManager, caCertPEM), promptInjection: manager}
 }
 
 // StartProxy 用于处理与 StartProxy 相关的逻辑。
@@ -94,6 +120,11 @@ func (s *ProxyService) SaveUserConfig(cfg UserConfig) error {
 // TestModelAdapter 用于处理与 TestModelAdapter 相关的逻辑。
 func (s *ProxyService) TestModelAdapter(adapter ModelAdapterConfig) (ModelAdapterTestResult, error) {
 	return s.core.TestModelAdapter(adapter)
+}
+
+// FetchModelCatalog 用于处理与 FetchModelCatalog 相关的逻辑。
+func (s *ProxyService) FetchModelCatalog(request ModelCatalogRequest) (ModelCatalogResult, error) {
+	return s.core.FetchModelCatalog(request)
 }
 
 // GetModelAdapterTestResults 用于处理与 GetModelAdapterTestResults 相关的逻辑。
@@ -139,6 +170,38 @@ func (s *ProxyService) ClearCursorSettings() error {
 // ShutdownForQuit 用于处理与 ShutdownForQuit 相关的逻辑。
 func (s *ProxyService) ShutdownForQuit() {
 	s.core.ShutdownForQuit()
+}
+
+// GetPromptInjectionSettings 返回提示词注入设置；其中不包含任何模型凭据。
+func (s *ProxyService) GetPromptInjectionSettings() (PromptInjectionStatus, error) {
+	if s == nil || s.promptInjection == nil {
+		return PromptInjectionStatus{Config: promptinject.DefaultConfig()}, nil
+	}
+	return s.promptInjection.Status()
+}
+
+// SavePromptInjectionSettings 保存提示词注入设置，默认仍保持关闭。
+func (s *ProxyService) SavePromptInjectionSettings(cfg PromptInjectionConfig) (PromptInjectionStatus, error) {
+	if s == nil || s.promptInjection == nil {
+		return PromptInjectionStatus{}, fmt.Errorf("prompt injection manager is not initialized")
+	}
+	return s.promptInjection.Save(cfg)
+}
+
+// RefreshPromptInjection 拉取用户选择的单个 examples/*.md 文件。
+func (s *ProxyService) RefreshPromptInjection() (PromptInjectionStatus, error) {
+	if s == nil || s.promptInjection == nil {
+		return PromptInjectionStatus{}, fmt.Errorf("prompt injection manager is not initialized")
+	}
+	return s.promptInjection.Refresh(context.Background())
+}
+
+// RefreshPromptInjectionCatalog 拉取仓库 examples 目录及其 Markdown 内容。
+func (s *ProxyService) RefreshPromptInjectionCatalog() (PromptInjectionStatus, error) {
+	if s == nil || s.promptInjection == nil {
+		return PromptInjectionStatus{}, fmt.Errorf("prompt injection manager is not initialized")
+	}
+	return s.promptInjection.RefreshCatalog(context.Background())
 }
 
 // IsWindows 用于处理与 IsWindows 相关的逻辑。

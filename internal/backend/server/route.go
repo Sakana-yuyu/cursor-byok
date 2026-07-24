@@ -163,7 +163,7 @@ func (app *App) buildRouteHandler(route Route) http.HandlerFunc {
 		trackedWriter := newTrackedResponseWriter(writer)
 		ctx := newContext(trackedWriter, request, route)
 		if err := final(ctx); err != nil {
-			writeServerError(trackedWriter, err)
+			writeServerError(trackedWriter, err, ctx.Locale)
 		}
 	}
 }

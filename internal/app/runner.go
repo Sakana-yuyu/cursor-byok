@@ -18,6 +18,7 @@ import (
 	"cursor/internal/buildinfo"
 	"cursor/internal/cursor"
 	"cursor/internal/historymetrics"
+	"cursor/internal/i18n"
 
 	"github.com/leaanthony/u"
 
@@ -33,8 +34,8 @@ import (
 )
 
 const (
-	// appName 表示当前模块中的 appName 状态值。
-	appName = "Cursor助手"
+	// appNameKey 是应用名称的统一翻译键。
+	appNameKey = "app.name"
 	// adRefreshInterval 表示后台广告拉取间隔。
 	adRefreshInterval = 3 * time.Minute
 )
@@ -65,6 +66,7 @@ func init() {
 func Run(resources EmbeddedResources) error {
 	logger.Init()
 	netproxy.InstallDefaultTransport()
+	appName := i18n.T(i18n.DefaultLocale, appNameKey)
 
 	embeddedCACertPEM := certs.EmbeddedCACertPEM()
 	logEmbeddedCAInfo(embeddedCACertPEM)
@@ -207,13 +209,13 @@ func Run(resources EmbeddedResources) error {
 
 	mainWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:               appName,
-		Width:               700,
-		Height:              520,
-		MinWidth:            640,
-		MinHeight:           480,
+		Width:               1280,
+		Height:              860,
+		MinWidth:            960,
+		MinHeight:           640,
 		DisableResize:       false,
 		Frameless:           goruntime.GOOS == "windows",
-		URL:                 "/",
+		URL:                 "/#/",
 		Hidden:              false,
 		HideOnEscape:        false,
 		MinimiseButtonState: application.ButtonEnabled,
@@ -252,6 +254,8 @@ func Run(resources EmbeddedResources) error {
 	})
 
 	showMainWindow := func() {
+		// 托盘恢复始终回到固定主页，避免复用主窗口当前的子路由。
+		window.SetURL("/#/")
 		window.Show().Focus()
 	}
 	toggleMainWindow := func() {
@@ -264,71 +268,43 @@ func Run(resources EmbeddedResources) error {
 
 	systray := app.SystemTray.New()
 	menu := app.Menu.New()
-	statusItem := menu.Add("状态：未启动").SetEnabled(false)
+	statusItem := menu.Add(i18n.T(i18n.DefaultLocale, "tray.status.not_started")).SetEnabled(false)
 	menu.AddSeparator()
-	startItem := menu.Add("启动服务")
-	stopItem := menu.Add("停止服务")
-	updateItem := menu.Add("检查更新").OnClick(func(ctx *application.Context) {
+	startItem := menu.Add(i18n.T(i18n.DefaultLocale, "tray.start"))
+	stopItem := menu.Add(i18n.T(i18n.DefaultLocale, "tray.stop"))
+	updateItem := menu.Add(i18n.T(i18n.DefaultLocale, "tray.update")).OnClick(func(ctx *application.Context) {
 		updateManager.CheckNow(true)
 	})
 	menu.AddSeparator()
-	showItem := menu.Add("显示窗口").OnClick(func(ctx *application.Context) {
+	showItem := menu.Add(i18n.T(i18n.DefaultLocale, "tray.show")).OnClick(func(ctx *application.Context) {
 		showMainWindow()
 	})
-	hideItem := menu.Add("隐藏窗口").OnClick(func(ctx *application.Context) {
+	hideItem := menu.Add(i18n.T(i18n.DefaultLocale, "tray.hide")).OnClick(func(ctx *application.Context) {
 		window.Hide()
 	})
 	menu.AddSeparator()
-	quitItem := menu.Add("退出").OnClick(func(ctx *application.Context) {
+	quitItem := menu.Add(i18n.T(i18n.DefaultLocale, "tray.quit")).OnClick(func(ctx *application.Context) {
 		proxyService.ShutdownForQuit()
 		app.Quit()
 	})
 
-	var currentLocale = "zh-CN"
+	var currentLocale = i18n.DefaultLocale
 
 	updateTrayLabels := func(locale string) {
-		currentLocale = locale
+		currentLocale = i18n.Normalize(locale)
 		state := proxyService.GetState()
+		statusKey := "tray.status.not_started"
 		if state.Running {
-			if locale == "en-US" {
-				statusItem.SetLabel("Status: Running")
-			} else if locale == "ja-JP" {
-				statusItem.SetLabel("状態：実行中")
-			} else {
-				statusItem.SetLabel("状态：运行中")
-			}
-		} else {
-			if locale == "en-US" {
-				statusItem.SetLabel("Status: Not Started")
-			} else if locale == "ja-JP" {
-				statusItem.SetLabel("状態：未起動")
-			} else {
-				statusItem.SetLabel("状态：未启动")
-			}
+			statusKey = "tray.status.running"
 		}
-
-		if locale == "en-US" {
-			startItem.SetLabel("Start Service")
-			stopItem.SetLabel("Stop Service")
-			updateItem.SetLabel("Check for Updates")
-			showItem.SetLabel("Show Window")
-			hideItem.SetLabel("Hide Window")
-			quitItem.SetLabel("Exit")
-		} else if locale == "ja-JP" {
-			startItem.SetLabel("サービス起動")
-			stopItem.SetLabel("サービス停止")
-			updateItem.SetLabel("アップデートを確認")
-			showItem.SetLabel("ウィンドウを表示")
-			hideItem.SetLabel("ウィンドウを非表示")
-			quitItem.SetLabel("終了")
-		} else {
-			startItem.SetLabel("启动服务")
-			stopItem.SetLabel("停止服务")
-			updateItem.SetLabel("检查更新")
-			showItem.SetLabel("显示窗口")
-			hideItem.SetLabel("隐藏窗口")
-			quitItem.SetLabel("退出")
-		}
+		statusItem.SetLabel(i18n.T(currentLocale, statusKey))
+		startItem.SetLabel(i18n.T(currentLocale, "tray.start"))
+		stopItem.SetLabel(i18n.T(currentLocale, "tray.stop"))
+		updateItem.SetLabel(i18n.T(currentLocale, "tray.update"))
+		showItem.SetLabel(i18n.T(currentLocale, "tray.show"))
+		hideItem.SetLabel(i18n.T(currentLocale, "tray.hide"))
+		quitItem.SetLabel(i18n.T(currentLocale, "tray.quit"))
+		systray.SetTooltip(i18n.T(currentLocale, appNameKey))
 	}
 
 	refreshTray := func() {
@@ -346,8 +322,12 @@ func Run(resources EmbeddedResources) error {
 		}
 	}
 
+	// The frontend may emit its initial locale before this callback can observe it.
+	// Keep native UI on the safe Chinese default, then correct it on the next
+	// locale:changed event; this preserves the existing Wails event API.
 	app.Event.On("locale:changed", func(e *application.CustomEvent) {
 		if locale, ok := e.Data.(string); ok {
+			windowService.SetLocale(locale)
 			updateTrayLabels(locale)
 		}
 	})

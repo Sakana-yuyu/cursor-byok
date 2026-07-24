@@ -1,5 +1,5 @@
 <script setup>
-import { Browser, Window } from "@wailsio/runtime";
+import { runtimeBrowser, runtimeWindow } from "@/services/runtimeAdapter";
 import LocaleSelect from "@/components/LocaleSelect.vue";
 import { useMessage } from "@/composables/useMessage";
 import { showModal } from "@/composables/useModal";
@@ -80,12 +80,12 @@ const proxyBadgeTitle = computed(() => {
 });
 
 async function minimizeWindow() {
-  await Window.Minimise();
+  await runtimeWindow.Minimise();
 }
 
 async function closeWindow() {
   if (directlyClose.value) {
-    await Window.Close();
+    await runtimeWindow.Close();
     return;
   }
   // const confirmed = await showModal({
@@ -96,7 +96,7 @@ async function closeWindow() {
   //   return;
   // }
   await new Promise((resolve) => setTimeout(resolve, 200));
-  await Window.Hide();
+  await runtimeWindow.Hide();
 }
 
 async function handleCheckForUpdates() {
@@ -153,7 +153,7 @@ async function handleOpenAuthorHome() {
 
 async function handleOpenUsageDocs() {
   try {
-    await Browser.OpenURL(usageDocsURL);
+    await runtimeBrowser.OpenURL(usageDocsURL);
   } catch (error) {
     await showActionError("打开使用教程失败", error);
   }

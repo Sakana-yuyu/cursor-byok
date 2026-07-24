@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"cursor/internal/i18n"
 )
 
 const HeaderServerUpstreamURL = "X-Server-Upstream-URL"
@@ -33,6 +35,7 @@ type Context struct {
 	Protocol  ProtocolClass
 	StartedAt time.Time
 
+	Locale      string
 	UpstreamURL *url.URL
 	Mode        ExecutionMode
 	LastError   error
@@ -41,6 +44,10 @@ type Context struct {
 }
 
 func newContext(writer http.ResponseWriter, request *http.Request, route Route) *Context {
+	locale := i18n.DefaultLocale
+	if request != nil {
+		locale = i18n.Normalize(strings.Split(request.Header.Get("Accept-Language"), ",")[0])
+	}
 	return &Context{
 		Writer:    writer,
 		Request:   request,
@@ -49,6 +56,7 @@ func newContext(writer http.ResponseWriter, request *http.Request, route Route) 
 		StartedAt: time.Now(),
 		Logger:    slog.Default(),
 		Mode:      ModeLocal,
+		Locale:    locale,
 	}
 }
 

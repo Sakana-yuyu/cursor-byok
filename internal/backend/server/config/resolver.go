@@ -16,7 +16,15 @@ const (
 	defaultChannelAnthropicEffort     = "xhigh"
 )
 
-func (manager *Manager) SelectChannelForModel(_ context.Context, modelID string) (*legacyruntime.ResolvedChannel, error) {
+func (manager *Manager) SelectChannelForModel(ctx context.Context, modelID string) (*legacyruntime.ResolvedChannel, error) {
+	channels, err := manager.SelectChannelsForModel(ctx, modelID)
+	if err != nil || len(channels) == 0 {
+		return nil, err
+	}
+	return channels[0], nil
+}
+
+func (manager *Manager) SelectChannelsForModel(_ context.Context, modelID string) ([]*legacyruntime.ResolvedChannel, error) {
 	if manager == nil {
 		return nil, legacyruntime.ErrChannelNotAvailable
 	}
@@ -24,11 +32,40 @@ func (manager *Manager) SelectChannelForModel(_ context.Context, modelID string)
 	if err != nil {
 		return nil, err
 	}
-	return resolveModelAdapterChannel(adapters, modelID)
+	matches := modelchannel.ResolveAdapterIndexes(
+		adapters,
+		modelID,
+		func(adapter ModelAdapterConfig) string { return adapter.ID },
+		func(adapter ModelAdapterConfig) string { return adapter.ModelID },
+		func(adapter ModelAdapterConfig) string {
+			return modelchannel.BuildLegacyChannelID(adapter.BaseURL, adapter.ModelID, adapter.APIKey, adapter.DisplayName)
+		},
+	)
+	if len(matches) == 0 {
+		return nil, legacyruntime.ErrChannelNotAvailable
+	}
+	manager.selectionMu.Lock()
+	if manager.selectionOffsets == nil {
+		manager.selectionOffsets = make(map[string]int)
+	}
+	key := strings.TrimSpace(modelID)
+	offset := manager.selectionOffsets[key] % len(matches)
+	manager.selectionOffsets[key] = (offset + 1) % len(matches)
+	manager.selectionMu.Unlock()
+	channels := make([]*legacyruntime.ResolvedChannel, 0, len(matches))
+	for index := 0; index < len(matches); index++ {
+		adapter := adapters[matches[(offset+index)%len(matches)]]
+		channel, resolveErr := resolveModelAdapterChannel([]ModelAdapterConfig{adapter}, adapter.ID)
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+		channels = append(channels, channel)
+	}
+	return channels, nil
 }
 
 func resolveModelAdapterChannel(adapters []ModelAdapterConfig, requestedModel string) (*legacyruntime.ResolvedChannel, error) {
-	matchIndex, ok := modelchannel.ResolveAdapterIndex(
+	matchIndexes := modelchannel.ResolveAdapterIndexes(
 		adapters,
 		requestedModel,
 		func(adapter ModelAdapterConfig) string { return adapter.ID },
@@ -37,15 +74,16 @@ func resolveModelAdapterChannel(adapters []ModelAdapterConfig, requestedModel st
 			return modelchannel.BuildLegacyChannelID(adapter.BaseURL, adapter.ModelID, adapter.APIKey, adapter.DisplayName)
 		},
 	)
-	if !ok {
+	if len(matchIndexes) == 0 {
 		return nil, legacyruntime.ErrChannelNotAvailable
 	}
+	matchIndex := matchIndexes[0]
 	matched := adapters[matchIndex]
 
 	resolved := &legacyruntime.ResolvedChannel{
 		ID:                          strings.TrimSpace(matched.ID),
 		Name:                        strings.TrimSpace(matched.DisplayName),
-		GroupName:                   "local",
+		GroupName:                   strings.TrimSpace(matched.GroupName),
 		Code:                        strings.TrimSpace(matched.ID),
 		Provider:                    strings.TrimSpace(matched.Type),
 		BaseURL:                     strings.TrimSpace(matched.BaseURL),
@@ -66,6 +104,9 @@ func resolveModelAdapterChannel(adapters []ModelAdapterConfig, requestedModel st
 		AnthropicThinkingEffort:     defaultChannelAnthropicEffort,
 		ThinkingEnabled:             true,
 		ThinkingBudgetTokens:        defaultChannelThinkingBudget,
+		Pricing:                     matched.Pricing,
+		FastMode:                    matched.FastMode,
+		OpenAIServiceTier:           strings.TrimSpace(matched.OpenAIServiceTier),
 	}
 	if matched.ContextWindowTokens > 0 {
 		resolved.ContextWindowTokens = matched.ContextWindowTokens

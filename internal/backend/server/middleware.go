@@ -1,6 +1,7 @@
 package server
 
 import (
+	"cursor/internal/i18n"
 	"cursor/internal/logger"
 	"errors"
 	"fmt"
@@ -62,7 +63,7 @@ func ErrorEncoder() Middleware {
 				if ctx == nil || ctx.Writer == nil {
 					return err
 				}
-				writeServerError(ctx.Writer, err)
+				writeServerError(ctx.Writer, err, ctx.Locale)
 				return nil
 			}
 			return nil
@@ -70,28 +71,43 @@ func ErrorEncoder() Middleware {
 	}
 }
 
-func writeServerError(writer http.ResponseWriter, err error) {
+func writeServerError(writer http.ResponseWriter, err error, locale ...string) {
 	if responseWriterHasWrittenHeader(writer) {
 		return
 	}
+	selectedLocale := i18n.DefaultLocale
+	if len(locale) > 0 {
+		selectedLocale = i18n.Normalize(locale[0])
+	}
 	status := http.StatusBadGateway
-	message := "bad gateway"
+	message := i18n.Display(selectedLocale, err)
 	switch {
 	case err == nil:
 		status = http.StatusOK
 		message = ""
 	case strings.TrimSpace(err.Error()) == "empty raw url":
 		status = http.StatusBadRequest
-		message = "invalid raw url"
+		message = i18n.T(selectedLocale, "error.request.invalid")
 	case errors.Is(err, ErrInvalidBidiAppendPayload):
 		status = http.StatusBadRequest
-		message = "invalid bidi append payload"
+		message = i18n.T(selectedLocale, "error.request.invalid")
 	case errors.Is(err, legacyruntime.ErrInvalidSystemSetting):
 		status = http.StatusInternalServerError
-		message = "invalid system setting"
+		message = i18n.T(selectedLocale, "error.backend.failed")
 	case errors.Is(err, legacyruntime.ErrChannelNotAvailable):
 		status = http.StatusServiceUnavailable
-		message = "no available channel"
+		message = i18n.T(selectedLocale, "error.provider.failed")
+	}
+	var userErr *i18n.UserError
+	if errors.As(err, &userErr) {
+		switch userErr.Code() {
+		case i18n.CodeInvalidModelAdapter, i18n.CodeModelCatalog, i18n.CodeInvalidRequest:
+			status = http.StatusBadRequest
+		case i18n.CodeCertificate, i18n.CodeUpdate, i18n.CodeBackend, i18n.CodeProxy:
+			status = http.StatusInternalServerError
+		case i18n.CodeProvider:
+			status = http.StatusBadGateway
+		}
 	}
 	http.Error(writer, message, status)
 }

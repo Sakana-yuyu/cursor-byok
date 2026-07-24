@@ -49,9 +49,15 @@ tasks:
       - sh: protoc-gen-connect-go --version >/dev/null 2>&1 || which protoc-gen-connect-go
         msg: "未检测到 protoc-gen-connect-go，请先安装。"
     cmds:
-      - rm -rf ./gen/agentv1 ./gen/aiserverv1
+      - cmd: powershell -NoProfile -Command "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue gen/agentv1,gen/aiserverv1"
+        platforms: [windows]
+      - cmd: rm -rf ./gen/agentv1 ./gen/aiserverv1
+        platforms: [darwin, linux]
       - protoc -I ./proto --go_out=. --go_opt=module=cursor --connect-go_out=. --connect-go_opt=module=cursor ./proto/agent_v1.proto ./proto/aiserver_v1.proto
-      - gofmt -w $(find ./gen -name '*.go' -type f)
+      - cmd: powershell -NoProfile -Command "gofmt -w (Get-ChildItem -Path gen -Recurse -Filter *.go | Select-Object -ExpandProperty FullName)"
+        platforms: [windows]
+      - cmd: gofmt -w $(find ./gen -name '*.go' -type f)
+        platforms: [darwin, linux]
 
   go:mod:tidy:
     summary: 整理 Go 依赖

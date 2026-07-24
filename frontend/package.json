@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:browser": "vite --mode browser-preview --host 0.0.0.0",
     "build:dev": "node ./scripts/run-vite-build.mjs --minify false --mode development",
     "build": "node ./scripts/run-vite-build.mjs --mode production",
     "preview": "vite preview"

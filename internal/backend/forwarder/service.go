@@ -24,6 +24,7 @@ import (
 	runtimecore "cursor/internal/backend/agent/core"
 	modeladapter "cursor/internal/backend/agent/model"
 	protocol "cursor/internal/backend/agent/protocol"
+	"cursor/internal/promptinject"
 )
 
 const (
@@ -251,6 +252,7 @@ type Service struct {
 	rules              *UserRuleStore
 	projector          *HistoryProjector
 	compiler           PromptCompiler
+	promptInjection    *promptinject.Manager
 	provider           ProviderGateway
 	resolver           modeladapter.ChannelResolver
 	modelMemory        agentModelMemory
@@ -273,6 +275,11 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 	store := NewConversationFileStore(historyRoot)
 	broker := NewStreamBroker()
 	rules := NewUserRuleStore(appdata.RulesRootPath())
+	promptInjection := promptinject.New()
+	if _, err := promptInjection.Load(); err != nil {
+		// A malformed optional prompt config must not prevent normal BYOK startup.
+		promptInjection = promptinject.New()
+	}
 	var modelMemory agentModelMemory
 	if candidate, ok := resolver.(agentModelMemory); ok {
 		modelMemory = candidate
@@ -289,7 +296,8 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 		docsIndexStore:     NewDocsIndexStore(appdata.DocsIndexRootPath()),
 		rules:              rules,
 		projector:          projector,
-		compiler:           NewPromptCompiler(projector, NewToolCatalog(), NewReminderInjector(), rules),
+		compiler:           NewPromptCompiler(projector, NewToolCatalog(), NewReminderInjector(), rules, promptInjection),
+		promptInjection:    promptInjection,
 		provider:           NewProviderGateway(resolver),
 		resolver:           resolver,
 		modelMemory:        modelMemory,
@@ -675,8 +683,37 @@ func (service *Service) decodeInboundIntent(requestID string, message *agentv1.A
 	return intent, nil
 }
 
+func (service *Service) shouldReuseActiveRun(intent InboundIntent) bool {
+	if service == nil || service.broker == nil || strings.TrimSpace(intent.RequestID) == "" || strings.TrimSpace(intent.ConversationID) == "" {
+		return false
+	}
+	stream, ok := service.broker.Get(intent.RequestID)
+	if !ok || stream == nil {
+		return false
+	}
+	stream.mu.Lock()
+	defer stream.mu.Unlock()
+	if strings.TrimSpace(stream.ConversationID) != strings.TrimSpace(intent.ConversationID) {
+		return false
+	}
+	if isTerminalStreamStatus(stream.Status) {
+		return false
+	}
+	switch stream.Phase {
+	case TurnPhaseCanceled, TurnPhaseCompleted, TurnPhaseFailed:
+		return false
+	}
+	// RunSSE 重连会重复提交同一个 run_request；只要该 request 仍处于活动回合，
+	// 就不能重新初始化 checkpoint、pending exec 或 provider pass。
+	return stream.TurnSeq > 0 || stream.ProviderActive || len(stream.PendingExecs) > 0 || len(stream.PendingInteractions) > 0
+}
+
 // handleRunIntent 处理 run/prewarm 类 intent，负责建会话、写 turn 和拉起 provider。
 func (service *Service) handleRunIntent(intent InboundIntent) error {
+	if service.shouldReuseActiveRun(intent) {
+		log.Printf("forwarder duplicate run reused request_id=%s conversation_id=%s", strings.TrimSpace(intent.RequestID), strings.TrimSpace(intent.ConversationID))
+		return nil
+	}
 	intent.UserMessage = normalizeUserMessageForStorage(intent.UserMessage)
 	if !intent.Prewarm {
 		service.cancelOtherConversationActors(
@@ -3547,7 +3584,12 @@ func buildRunSSEStructuredErrorWithDetail(code connect.Code, title string, detai
 	if trimmedDetail == "" {
 		trimmedDetail = cause.Error()
 	}
-	isRetryable := true
+	// Provider failures are already persisted and published as a terminal
+	// stream event. Marking only those details retryable makes Cursor wrap the
+	// response in RetriableError and replay the same request, which presents as
+	// a disconnected stream and can duplicate provider work. Preserve the
+	// existing retry metadata for non-provider RunSSE errors.
+	isRetryable := errorKind != aiserverv1.ErrorDetails_ERROR_PROVIDER_ERROR
 	allowUnsafeCommandLinks := true
 	showRequestID := true
 	shouldShowImmediateError := false

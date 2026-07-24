@@ -98,6 +98,10 @@ type StreamRequest struct {
 	OpenAIExtraParamsEnabled bool
 	// OpenAIExtraParamsJSON 表示 OpenAI 额外请求参数 JSON 对象。
 	OpenAIExtraParamsJSON string
+	// OpenAIServiceTier 表示显式 OpenAI service tier；fastMode 优先使用 priority。
+	OpenAIServiceTier string
+	// FastMode 表示 OpenAI/GPT 是否启用 priority service tier。
+	FastMode bool
 	// CustomHeadersEnabled 表示是否启用自定义请求头。
 	CustomHeadersEnabled bool
 	// CustomHeadersJSON 表示自定义请求头 JSON 对象。

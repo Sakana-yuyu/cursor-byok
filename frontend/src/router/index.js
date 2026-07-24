@@ -1,10 +1,13 @@
-import { createRouter, createWebHashHistory } from "vue-router";
+import { createRouter, createWebHashHistory, createWebHistory } from "vue-router";
+import { isBrowserPreview } from "@/services/runtimeAdapter";
 import Home from "@/views/Home.vue";
 import ModelConfig from "@/views/ModelConfig.vue";
 import ModelEditor from "@/views/ModelEditor.vue";
+import ModelGroups from "@/views/ModelGroups.vue";
+import RequestMetrics from "@/views/RequestMetrics.vue";
 
 const router = createRouter({
-  history: createWebHashHistory(),
+  history: isBrowserPreview ? createWebHistory() : createWebHashHistory(),
   routes: [
     {
       path: "/",
@@ -19,8 +22,19 @@ const router = createRouter({
     {
       path: "/model-editor",
       component: ModelEditor,
-      meta: { showIcon: false, title: "模型编辑", directlyClose: true },
+      meta: { showIcon: false, title: "模型配置", directlyClose: true },
     },
+    {
+      path: "/model-groups",
+      component: ModelGroups,
+      meta: { showIcon: false, title: "模型分组", directlyClose: true },
+    },
+    {
+      path: "/request-metrics",
+      component: RequestMetrics,
+      meta: { showIcon: false, title: "请求明细", directlyClose: true },
+    },
+
   ],
 });
 

@@ -1,7 +1,8 @@
 import { computed, reactive, watchSyncEffect } from "vue";
-import { Events } from "@wailsio/runtime";
+import { runtimeEvents } from "@/services/runtimeAdapter";
 import dayjs from "dayjs";
 import { getLocale } from "@/i18n/runtime";
+import { contextWindowTokensForModel } from "@/utils/modelContext";
 import {
   checkForUpdates,
   getAppVersion,
@@ -30,7 +31,6 @@ export const OPENAI_ENDPOINT_RESPONSES = "/v1/responses";
 export const OPENAI_ENDPOINT_CHAT_COMPLETIONS = "/v1/chat/completions";
 export const OPENAI_ENDPOINT_CUSTOM = "/custom";
 export const OPENAI_EXTRA_PARAMS_DEFAULT_JSON = `{
-  "service_tier": "priority"
 }`;
 export const EXTRA_PARAMS_DEFAULT_JSON = `{
 }`;
@@ -156,10 +156,10 @@ function normalizeBaseURL(value) {
 
 function buildModelAdapterIdentityKey(adapter) {
   return [
+    asString(adapter.type).toLowerCase(),
     normalizeBaseURL(adapter.baseURL),
-    asString(adapter.modelID),
+    asString(adapter.modelID).toLowerCase(),
     asString(adapter.apiKey),
-    asString(adapter.displayName),
     adapter.type === "openai" ? normalizeOpenAIEndpoint(adapter.openAIEndpoint) : "",
   ].join("\n");
 }
@@ -263,6 +263,7 @@ export function createEmptyModelAdapter() {
   return {
     id: "",
     displayName: "",
+    groupName: "",
     type: "openai",
     baseURL: "",
     apiKey: "",
@@ -281,6 +282,9 @@ export function createEmptyModelAdapter() {
     anthropicMaxTokens: 0,
     anthropicThinkingEffort: ANTHROPIC_THINKING_EFFORT_DEFAULT,
     thinkingBudgetTokens: 0,
+    pricing: null,
+    fastMode: false,
+    openAIServiceTier: "",
   };
 }
 
@@ -340,6 +344,25 @@ function validateAnthropicExtraParamsJSON(value) {
   return validateJSONObject(value, "Anthropic 额外参数 JSON");
 }
 
+function normalizePricing(value) {
+  if (!value || typeof value !== "object") return null;
+  const number = (input) => {
+    const parsed = Number(input);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+  };
+  const pricing = {
+    input: number(value.input ?? value.inputPrice ?? value.input_price),
+    output: number(value.output ?? value.outputPrice ?? value.output_price),
+    cacheRead: number(value.cacheRead ?? value.cache_read ?? value.cache_read_price),
+    cacheWrite: number(value.cacheWrite ?? value.cache_write ?? value.cache_write_price),
+    currency: asString(value.currency) || "USD",
+    known: Boolean(value.known),
+    source: asString(value.source),
+  };
+  pricing.known = pricing.known || [pricing.input, pricing.output, pricing.cacheRead, pricing.cacheWrite].some((item) => item != null);
+  return pricing.known ? pricing : null;
+}
+
 export function normalizeModelAdapter(source) {
   const raw = source && typeof source === "object" ? source : {};
   const normalizedType = asString(raw.type).toLowerCase();
@@ -370,6 +393,7 @@ export function normalizeModelAdapter(source) {
   return {
     id: asString(raw.id),
     displayName: asString(raw.displayName || raw.name),
+    groupName: asString(raw.groupName || raw.group_name),
     type: SUPPORTED_MODEL_ADAPTER_TYPES.has(normalizedType) ? normalizedType : "",
     baseURL: normalizeBaseURL(raw.baseURL || raw.url),
     apiKey: asString(raw.apiKey || raw.key),
@@ -385,7 +409,8 @@ export function normalizeModelAdapter(source) {
     customHeadersJSON,
     anthropicExtraParamsEnabled,
     anthropicExtraParamsJSON,
-    contextWindowTokens: asPositiveInteger(
+    contextWindowTokens: contextWindowTokensForModel(
+      raw.modelID,
       raw.contextWindowTokens ?? raw.context_window_tokens ?? raw.maxInputTokens ?? raw.max_input_tokens,
     ),
     maxCompletionTokens: asPositiveInteger(
@@ -402,6 +427,9 @@ export function normalizeModelAdapter(source) {
     thinkingBudgetTokens: asPositiveInteger(
       raw.thinkingBudgetTokens ?? raw.thinking_budget_tokens,
     ),
+    pricing: normalizePricing(raw.pricing),
+    fastMode: normalizedType === "openai" ? asBoolean(raw.fastMode ?? raw.fast_mode) : false,
+    openAIServiceTier: normalizedType === "openai" ? asString(raw.openAIServiceTier ?? raw.openai_service_tier) : "",
   };
 }
 
@@ -409,9 +437,37 @@ export function normalizeModelAdapters(source) {
   return asArray(source).map((item) => normalizeModelAdapter(item));
 }
 
+function mergeDuplicateModelAdapter(existing, incoming) {
+  return {
+    ...existing,
+    displayName: existing.displayName || incoming.displayName,
+    groupName: existing.groupName || incoming.groupName,
+    tooltipData: existing.tooltipData || incoming.tooltipData,
+    contextWindowTokens: existing.contextWindowTokens > 0
+      ? existing.contextWindowTokens
+      : incoming.contextWindowTokens,
+    pricing: existing.pricing || incoming.pricing,
+  };
+}
+
+export function dedupeModelAdapters(source) {
+  const result = [];
+  const indexByIdentity = new Map();
+  for (const adapter of normalizeModelAdapters(source)) {
+    const identity = buildModelAdapterIdentityKey(adapter);
+    const existingIndex = indexByIdentity.get(identity);
+    if (existingIndex == null) {
+      indexByIdentity.set(identity, result.length);
+      result.push(adapter);
+      continue;
+    }
+    result[existingIndex] = mergeDuplicateModelAdapter(result[existingIndex], adapter);
+  }
+  return result;
+}
+
 export function validateModelAdapters(source) {
-  const adapters = normalizeModelAdapters(source);
-  const seenIdentityKeys = new Set();
+  const adapters = dedupeModelAdapters(source);
   for (const [index, adapter] of adapters.entries()) {
     const prefix = `模型 ${index + 1}`;
     if (!adapter.displayName) {
@@ -471,11 +527,6 @@ export function validateModelAdapters(source) {
     if (adapter.thinkingBudgetTokens && (!Number.isInteger(adapter.thinkingBudgetTokens) || adapter.thinkingBudgetTokens <= 0)) {
       return `${prefix} 的思考预算 Token 必须为正整数`;
     }
-    const dedupeKey = buildModelAdapterIdentityKey(adapter);
-    if (seenIdentityKeys.has(dedupeKey)) {
-      return `模型渠道重复，请检查 url、modelID、apiKey、displayName、endpoint 组合`;
-    }
-    seenIdentityKeys.add(dedupeKey);
   }
   return "";
 }
@@ -539,7 +590,7 @@ function normalizeConfig(source) {
     providerStreamIdleTimeout: asPositiveInteger(raw.providerStreamIdleTimeout),
     backendListenAddr: asString(raw.configBackendListenAddr) || asString(raw.backendListenAddr),
     proxyListenAddr: asString(raw.configProxyListenAddr) || asString(raw.proxyListenAddr),
-    modelAdapters: normalizeModelAdapters(raw.modelAdapters),
+    modelAdapters: dedupeModelAdapters(raw.modelAdapters),
     routing: {
       mode: normalizeRouteMode(routing.mode),
     },
@@ -909,7 +960,7 @@ watchSyncEffect((onCleanup) => {
   if (typeof window === "undefined") {
     return;
   }
-  const unsubscribe = Events.On(PROXY_STATE_EVENT, handleProxyStateEvent);
+  const unsubscribe = runtimeEvents.On(PROXY_STATE_EVENT, handleProxyStateEvent);
   onCleanup(() => {
     unsubscribe();
   });
@@ -919,7 +970,7 @@ watchSyncEffect((onCleanup) => {
   if (typeof window === "undefined") {
     return;
   }
-  const unsubscribe = Events.On(USER_CONFIG_CHANGED_EVENT, handleUserConfigChangedEvent);
+  const unsubscribe = runtimeEvents.On(USER_CONFIG_CHANGED_EVENT, handleUserConfigChangedEvent);
   onCleanup(() => {
     unsubscribe();
   });
@@ -929,7 +980,7 @@ watchSyncEffect((onCleanup) => {
   if (typeof window === "undefined") {
     return;
   }
-  const unsubscribe = Events.On(MODEL_ADAPTER_TEST_UPDATED_EVENT, handleModelAdapterTestUpdatedEvent);
+  const unsubscribe = runtimeEvents.On(MODEL_ADAPTER_TEST_UPDATED_EVENT, handleModelAdapterTestUpdatedEvent);
   onCleanup(() => {
     unsubscribe();
   });
@@ -939,7 +990,7 @@ watchSyncEffect((onCleanup) => {
   if (typeof window === "undefined") {
     return;
   }
-  const unsubscribe = Events.On(UPDATE_STATE_EVENT, handleUpdateStateEvent);
+  const unsubscribe = runtimeEvents.On(UPDATE_STATE_EVENT, handleUpdateStateEvent);
   onCleanup(() => {
     unsubscribe();
   });
@@ -949,7 +1000,7 @@ watchSyncEffect((onCleanup) => {
   if (typeof window === "undefined") {
     return;
   }
-  const unsubscribe = Events.On(UPDATE_PROGRESS_EVENT, handleUpdateProgressEvent);
+  const unsubscribe = runtimeEvents.On(UPDATE_PROGRESS_EVENT, handleUpdateProgressEvent);
   onCleanup(() => {
     unsubscribe();
   });
@@ -959,7 +1010,7 @@ watchSyncEffect((onCleanup) => {
   if (typeof window === "undefined") {
     return;
   }
-  const unsubscribe = Events.On(UPDATE_READY_EVENT, handleUpdateReadyEvent);
+  const unsubscribe = runtimeEvents.On(UPDATE_READY_EVENT, handleUpdateReadyEvent);
   onCleanup(() => {
     unsubscribe();
   });
@@ -969,7 +1020,7 @@ watchSyncEffect((onCleanup) => {
   if (typeof window === "undefined") {
     return;
   }
-  const unsubscribe = Events.On(UPDATE_ERROR_EVENT, handleUpdateErrorEvent);
+  const unsubscribe = runtimeEvents.On(UPDATE_ERROR_EVENT, handleUpdateErrorEvent);
   onCleanup(() => {
     unsubscribe();
   });
@@ -1206,9 +1257,8 @@ export async function reloadUserConfig(options = {}) {
 
 export async function saveModelAdapterAt(index, adapter) {
   const currentConfig = await loadPersistedUserConfig();
-  const nextAdapters = normalizeModelAdapters(currentConfig.modelAdapters);
+  const nextAdapters = dedupeModelAdapters(currentConfig.modelAdapters);
   const nextAdapter = normalizeModelAdapter(adapter);
-  const targetIndex = index >= 0 && index < nextAdapters.length ? index : nextAdapters.length;
 
   if (index >= 0 && index < nextAdapters.length) {
     nextAdapters.splice(index, 1, nextAdapter);
@@ -1216,10 +1266,15 @@ export async function saveModelAdapterAt(index, adapter) {
     nextAdapters.push(nextAdapter);
   }
 
+  const dedupedAdapters = dedupeModelAdapters(nextAdapters);
+  const targetIdentity = buildModelAdapterIdentityKey(nextAdapter);
+  const targetIndex = dedupedAdapters.findIndex(
+    (item) => buildModelAdapterIdentityKey(item) === targetIdentity,
+  );
   const result = await persistConfigPayload(
     {
       ...currentConfig,
-      modelAdapters: nextAdapters,
+      modelAdapters: dedupedAdapters,
     },
     { modelAdaptersOnly: true },
   );
@@ -1233,6 +1288,54 @@ export async function saveModelAdapterAt(index, adapter) {
   };
 }
 
+export async function saveModelAdaptersBatch(adapters) {
+  const currentConfig = await loadPersistedUserConfig();
+  const existingAdapters = normalizeModelAdapters(currentConfig.modelAdapters);
+  const nextAdapters = existingAdapters.slice();
+  const indexByIdentity = new Map(nextAdapters.map((adapter, index) => [buildModelAdapterIdentityKey(adapter), index]));
+  let added = 0;
+  let skipped = 0;
+  let updated = 0;
+
+  for (const source of Array.isArray(adapters) ? adapters : []) {
+    const adapter = normalizeModelAdapter(source);
+    const identity = buildModelAdapterIdentityKey(adapter);
+    const existingIndex = indexByIdentity.get(identity);
+    if (existingIndex == null) {
+      indexByIdentity.set(identity, nextAdapters.length);
+      nextAdapters.push(adapter);
+      added += 1;
+      continue;
+    }
+
+    const existing = nextAdapters[existingIndex];
+    const merged = { ...existing };
+    if ((!existing.contextWindowTokens || existing.contextWindowTokens <= 0) && adapter.contextWindowTokens > 0) {
+      merged.contextWindowTokens = adapter.contextWindowTokens;
+    }
+    if (!existing.pricing && adapter.pricing) {
+      merged.pricing = adapter.pricing;
+    }
+    if (JSON.stringify(merged) !== JSON.stringify(existing)) {
+      nextAdapters[existingIndex] = merged;
+      updated += 1;
+    } else {
+      skipped += 1;
+    }
+  }
+
+  if (added === 0 && updated === 0) {
+    return { ok: true, error: "", added, skipped, updated, total: 0 };
+  }
+  const result = await persistConfigPayload(
+    {
+      ...currentConfig,
+      modelAdapters: nextAdapters,
+    },
+    { modelAdaptersOnly: true },
+  );
+  return result.ok ? { ...result, added, skipped, updated, total: added + skipped + updated } : result;
+}
 export async function deleteModelAdapterAt(index) {
   const currentConfig = await loadPersistedUserConfig();
   const nextAdapters = normalizeModelAdapters(currentConfig.modelAdapters);
