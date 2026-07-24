@@ -54,6 +54,9 @@ ManifestDPIAware true
 !define MUI_UNICON "..\icon.ico"
 # !define MUI_WELCOMEFINISHPAGE_BITMAP "resources\leftimage.bmp" #Include this to add a bitmap on the left side of the Welcome Page. Must be a size of 164x314
 !define MUI_FINISHPAGE_NOAUTOCLOSE # Wait on the INSTFILES page so the user can take a look into the details of the installation steps
+!define MUI_FINISHPAGE_RUN "$INSTDIR\\${PRODUCT_EXECUTABLE}"
+!define MUI_FINISHPAGE_RUN_TEXT "启动 ${INFO_PRODUCTNAME}"
+!define MUI_FINISHPAGE_RUN_DEFAULT
 !define MUI_ABORTWARNING # This will warn the user if they exit from the installer.
 
 !insertmacro MUI_PAGE_WELCOME # Welcome to the installer page.
@@ -64,7 +67,7 @@ ManifestDPIAware true
 
 !insertmacro MUI_UNPAGE_INSTFILES # Uninstalling page
 
-!insertmacro MUI_LANGUAGE "English" # Set the Language of the installer
+!insertmacro MUI_LANGUAGE "SimpChinese" # Set the Language of the installer
 
 ## The following two statements can be used to sign the installer and the uninstaller. The path to the binaries are provided in %1
 #!uninstfinalize 'signtool --file "%1"'
@@ -73,10 +76,17 @@ ManifestDPIAware true
 Name "${INFO_PRODUCTNAME}"
 OutFile "..\..\..\bin\${INFO_PROJECTNAME}-${ARCH}-installer.exe" # Name of the installer's file.
 InstallDir "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}" # Default installing folder ($PROGRAMFILES is Program Files folder).
+InstallDirRegKey HKLM "${UNINST_KEY}" "InstallLocation"
+SetOverwrite on
 ShowInstDetails show # This will always show the installation details.
 
 Function .onInit
    !insertmacro wails.checkArchitecture
+   SetRegView 64
+   ReadRegStr $0 HKLM "${UNINST_KEY}" "InstallLocation"
+   ${If} $0 != ""
+      StrCpy $INSTDIR $0
+   ${EndIf}
 FunctionEnd
 
 Section
@@ -97,6 +107,8 @@ Section
     !insertmacro wails.associateCustomProtocols
     
     !insertmacro wails.writeUninstaller
+    SetRegView 64
+    WriteRegStr HKLM "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
 SectionEnd
 
 Section "uninstall" 
