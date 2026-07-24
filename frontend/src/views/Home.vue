@@ -106,6 +106,7 @@ const promptInjection = reactive({
 });
 const promptInjectionBusy = ref(false);
 const promptInjectionLoaded = ref(false);
+const promptInjectionExpanded = ref(false);
 const promptPreview = ref(null);
 
 function openPromptPreview(template) {
@@ -286,23 +287,36 @@ onMounted(() => {
     </Card>
 
     <Card>
+      <!-- 提示词注入折叠容器：标题栏常驻，内容区按需展开 -->
       <div class="flex flex-col gap-3">
-        <div class="flex items-start justify-between gap-3">
+        <button
+          type="button"
+          class="flex items-center justify-between gap-3 text-left"
+          @click="promptInjectionExpanded = !promptInjectionExpanded"
+        >
           <div>
             <h2 class="text-base font-medium text-white">提示词注入</h2>
-            <div class="text-xs text-[#a3a3a3]">Codex-X examples · 默认关闭，不影响现有请求</div>
+            <div class="text-xs text-[#a3a3a3]">
+              Codex-X · 自定义 · 中文化 · 默认关闭
+              <span v-if="promptInjection.enabled || promptInjection.customEnabled || promptInjection.softwareChineseEnabled" class="text-green-400"> · 已启用</span>
+            </div>
           </div>
-          <Switch
-            compact
-            label=""
-            :enabled="promptInjection.enabled"
-            :busy="promptInjectionBusy || !promptInjectionLoaded"
-            :disabled="promptInjectionBusy || !promptInjectionLoaded"
-            enabled-text="已启用"
-            disabled-text="未启用"
-            @change="(value) => { promptInjection.enabled = value; void savePromptInjection(); }"
-          />
-        </div>
+          <div class="flex items-center gap-2">
+            <Switch
+              compact
+              label=""
+              :enabled="promptInjection.enabled"
+              :busy="promptInjectionBusy || !promptInjectionLoaded"
+              :disabled="promptInjectionBusy || !promptInjectionLoaded"
+              enabled-text="已启用"
+              disabled-text="未启用"
+              @change="(value) => { promptInjection.enabled = value; void savePromptInjection(); }"
+            />
+            <span class="text-xs text-[#737373] transition-transform" :class="{ 'rotate-90': promptInjectionExpanded }">▶</span>
+          </div>
+        </button>
+
+        <template v-if="promptInjectionExpanded">
         <div v-if="promptInjection.templates.length" class="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Card v-for="template in promptInjection.templates" :key="template.name">
             <div class="flex flex-col gap-3">
@@ -378,10 +392,11 @@ onMounted(() => {
         <div v-if="promptInjection.lastError" class="rounded border border-[#4b1d1d] bg-[#2a1313] px-2 py-1 text-xs text-[#fca5a5]">
           {{ promptInjection.lastError }}
         </div>
+        </template>
       </div>
     </Card>
 
-    <Card>
+    <Card v-if="promptInjectionExpanded">
       <div class="flex items-start justify-between gap-4">
         <div class="min-w-0 flex-1">
           <h2 class="text-base font-medium text-white">自定义注入</h2>
@@ -409,7 +424,7 @@ onMounted(() => {
       </div>
     </Card>
 
-    <Card>
+    <Card v-if="promptInjectionExpanded">
       <div class="flex items-start justify-between gap-4">
         <div>
           <h2 class="text-base font-medium text-white">软件使用中文化</h2>

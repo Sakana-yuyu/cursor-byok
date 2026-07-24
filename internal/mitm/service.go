@@ -436,6 +436,18 @@ func (s *ProxyServer) newGoproxyHandler() *goproxy.ProxyHttpServer {
 			if parsedRaw, rawErr := rawURLForRelay(req); rawErr == nil {
 				raw = parsedRaw
 			}
+
+			// 对 commit message 等 unary RPC 使用 streaming forward：
+			// 立即返回 HTTP 响应头，body 异步填充，避免 Cursor 客户端短超时断连。
+			if req.URL != nil && isUnaryRPCNeedStreamingForward(req.URL.Path) {
+				resp, err := s.forwardToServerStreaming(req)
+				if err != nil {
+					logger.Errorf("streaming 转发失败： %s %s %v", req.Method, raw, err)
+					return req, goproxy.NewResponse(req, goproxy.ContentTypeText, http.StatusBadGateway, "bad gateway")
+				}
+				return req, resp
+			}
+
 			resp, err := s.forwardToServer(req)
 			if err != nil {
 				logger.Errorf("转发失败： %s %s %v", req.Method, raw, err)
@@ -488,7 +500,117 @@ func (s *ProxyServer) forwardToServer(incoming *http.Request) (*http.Response, e
 	return resp, nil
 }
 
-// preserveResponseTrailers 恢复 Connect/SSE 终态所需的 HTTP trailers。
+// isUnaryRPCNeedStreamingForward 判断路径是否需要 streaming forward。
+//
+// 这些 unary RPC 在 backend 内部需要等 BYOK 模型同步返回完整结果，
+// 而 Cursor 客户端对这类请求有较短的等待超时（约 10 秒）。
+// streaming forward 立即返回 HTTP 响应头，让 Cursor 不触发超时，
+// body 通过 io.Pipe 异步回传。
+func isUnaryRPCNeedStreamingForward(path string) bool {
+	if path == "" {
+		return false
+	}
+	// commit message 生成：需要等模型出完整文本，容易超时
+	if strings.HasSuffix(path, "/WriteGitCommitMessage") {
+		return true
+	}
+	return false
+}
+
+// forwardToServerStreaming 对耗时的 unary RPC 做"先返回响应头、body 异步填充"的转发。
+//
+// Cursor 对 WriteGitCommitMessage 这类 unary RPC 有客户端侧短超时（约 10 秒）。
+// 同步转发模式下，如果 backend 在 10 秒内没有返回响应头，Cursor 就会断连。
+// 这里通过 io.Pipe 构造一个"即时响应头 + 延迟 body"的 response：
+//   - response header 立即返回给 Cursor（200 OK + Content-Type）
+//   - goroutine 异步等待 backend 结果，通过 pipe 把 body 流式回传
+//
+// 注意：如果 backend 最终返回错误（非 200），status code 已经发给 Cursor 无法更改，
+// 但 Connect 的错误信息编码在 body trailer 中，Cursor 仍能从 body 解析出错误。
+func (s *ProxyServer) forwardToServerStreaming(incoming *http.Request) (*http.Response, error) {
+	if incoming == nil {
+		return nil, errors.New("nil request")
+	}
+
+	// 先读取并缓存请求 body，goroutine 中原始 body 可能已关闭
+	bodyBytes, err := io.ReadAll(incoming.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read request body: %w", err)
+	}
+	incoming.Body.Close()
+	incoming.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
+	incoming.ContentLength = int64(len(bodyBytes))
+
+	rawURL, err := rawURLForRelay(incoming)
+	if err != nil {
+		return nil, err
+	}
+	endpoint := s.currentBaseEndpoint()
+	if endpoint == nil {
+		return nil, errors.New("server endpoint is not configured")
+	}
+
+	// 从请求的 Content-Type 推断响应的 Content-Type
+	respContentType := "application/proto"
+	reqContentType := strings.TrimSpace(strings.ToLower(incoming.Header.Get("Content-Type")))
+	if strings.HasPrefix(reqContentType, "application/json") {
+		respContentType = "application/json"
+	}
+
+	pr, pw := io.Pipe()
+
+	// 立即构造 response：header 部分确定，body 从 pipe 读取
+	resp := &http.Response{
+		StatusCode:    http.StatusOK,
+		ProtoMajor:    1,
+		ProtoMinor:    1,
+		Header:        http.Header{},
+		Body:          pr,
+		ContentLength: -1, // chunked transfer encoding
+	}
+	resp.Header.Set("Content-Type", respContentType)
+
+	// 异步转发到 backend，body 结果写入 pipe
+	go func() {
+		defer pr.Close()
+
+		forwardURL := *endpoint
+		if incoming.URL != nil {
+			forwardURL.Path = incoming.URL.Path
+			forwardURL.RawPath = incoming.URL.RawPath
+			forwardURL.RawQuery = incoming.URL.RawQuery
+		}
+
+		serverReq, err := http.NewRequestWithContext(context.Background(), incoming.Method, forwardURL.String(), strings.NewReader(string(bodyBytes)))
+		if err != nil {
+			pw.CloseWithError(fmt.Errorf("build forward request: %w", err))
+			return
+		}
+		serverReq.ContentLength = int64(len(bodyBytes))
+		copyHeaders(serverReq.Header, incoming.Header)
+		serverReq.Header.Set(HeaderServerUpstreamURL, rawURL)
+		removeHopByHop(serverReq.Header)
+
+		backendResp, err := s.upstreamClient.Do(serverReq)
+		if err != nil {
+			logger.Errorf("streaming forward backend error: path=%s error=%v", incoming.URL.Path, err)
+			pw.CloseWithError(err)
+			return
+		}
+		defer backendResp.Body.Close()
+
+		removeHopByHop(backendResp.Header)
+		preserveResponseTrailers(backendResp)
+
+		if _, err := io.Copy(pw, backendResp.Body); err != nil {
+			pw.CloseWithError(err)
+			return
+		}
+		pw.Close()
+	}()
+
+	return resp, nil
+}
 //
 // MITM 转发会先移除 hop-by-hop 头。对普通请求这没问题，但 Connect 流的
 // 结构化错误和结束状态可能通过 trailers 传递；如果这里丢掉 Trailer 头，

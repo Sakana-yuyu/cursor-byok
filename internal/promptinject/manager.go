@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"cursor/internal/appdata"
+	"cursor/internal/logger"
 )
 
 const (
@@ -471,6 +472,19 @@ func (m *Manager) Apply(base string) string {
 	if !m.cfg.Enabled && !m.cfg.SoftwareChineseEnabled && !m.cfg.CustomEnabled {
 		return base
 	}
+
+	// 记录哪些注入开关处于激活状态，便于用户在日志中确认生效
+	activeSwitches := make([]string, 0, 3)
+	if m.cfg.Enabled {
+		activeSwitches = append(activeSwitches, "codex-x")
+	}
+	if m.cfg.CustomEnabled {
+		activeSwitches = append(activeSwitches, "custom")
+	}
+	if m.cfg.SoftwareChineseEnabled {
+		activeSwitches = append(activeSwitches, "chinese")
+	}
+	logger.Infof("prompt injection applied switches=%s mode=%s base_len=%d", strings.Join(activeSwitches, ","), m.cfg.Mode, len(base))
 
 	result := base
 	if m.cfg.Enabled {

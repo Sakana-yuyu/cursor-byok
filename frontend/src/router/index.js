@@ -5,6 +5,7 @@ import ModelConfig from "@/views/ModelConfig.vue";
 import ModelEditor from "@/views/ModelEditor.vue";
 import ModelGroups from "@/views/ModelGroups.vue";
 import RequestMetrics from "@/views/RequestMetrics.vue";
+import SupplierDetail from "@/views/SupplierDetail.vue";
 
 const router = createRouter({
   history: isBrowserPreview ? createWebHistory() : createWebHashHistory(),
@@ -28,6 +29,11 @@ const router = createRouter({
       path: "/model-groups",
       component: ModelGroups,
       meta: { showIcon: false, title: "模型分组", directlyClose: true },
+    },
+    {
+      path: "/supplier",
+      component: SupplierDetail,
+      meta: { showIcon: false, title: "供应商详情", directlyClose: true },
     },
     {
       path: "/request-metrics",

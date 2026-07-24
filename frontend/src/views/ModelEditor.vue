@@ -585,11 +585,30 @@ onMounted(async () => {
           </label>
           <Button
             variant="primary"
-            :disabled="catalogLoading || catalogSaving || !draft.baseURL || !draft.apiKey"
-            @click="handleQuickFetchAndAdd"
+            :disabled="catalogLoading || !draft.baseURL || !draft.apiKey"
+            @click="handleFetchModels"
           >
-            {{ catalogLoading ? "拉取中..." : catalogSaving ? "添加中..." : "拉取并添加全部" }}
+            {{ catalogLoading ? "拉取中..." : "拉取模型" }}
           </Button>
+          <div v-if="catalogGroups.length > 0" class="space-y-2">
+            <div v-for="group in catalogGroups" :key="group.key" class="rounded-[8px] border border-[#343434] bg-[#252525] p-2">
+              <div class="mb-2 flex items-center gap-2">
+                <span class="text-xs text-[#a3a3a3]">模型 URL 分组</span>
+                <input v-model="group.name" type="text" placeholder="请输入分组名称" class="h-8 min-w-0 flex-1 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-xs text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
+              </div>
+              <div class="mb-2 flex items-center justify-between text-xs text-[#a3a3a3]">
+                <span>{{ group.baseURL }} · 已选 {{ group.models.filter((model) => isCatalogModelSelected(group.key, model.id)).length }}/{{ group.models.length }}</span>
+                <button type="button" class="text-[#6ee7a5]" @click="toggleAllCatalogModels(group)">{{ group.models.every((model) => isCatalogModelSelected(group.key, model.id)) ? "取消全选" : "全选" }}</button>
+              </div>
+              <div class="max-h-40 overflow-y-auto">
+                <label v-for="model in group.models" :key="model.id" class="flex items-center gap-2 py-1 text-xs text-[#d4d4d4]">
+                  <input type="checkbox" class="size-4 accent-[#10AD5D]" :checked="isCatalogModelSelected(group.key, model.id)" @change="toggleCatalogModel(group.key, model.id)" />
+                  <span class="truncate">{{ model.id }}</span>
+                </label>
+              </div>
+            </div>
+            <Button class="w-full" variant="primary" :disabled="catalogSaving" @click="handleBatchAddModels">{{ catalogSaving ? "添加中..." : "添加已选模型" }}</Button>
+          </div>
           <div v-if="catalogError" class="rounded-[8px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-sm text-[#fca5a5]">
             {{ catalogError }}
           </div>
