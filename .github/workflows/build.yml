@@ -112,7 +112,7 @@ jobs:
           mkdir -p "$INSTALL_DIR"
           URL="https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/${ASSET}"
           echo "Downloading $URL"
-          curl -fsSL -o "$INSTALL_DIR/protoc.zip" "$URL"
+          curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors -o "$INSTALL_DIR/protoc.zip" "$URL"
           if command -v unzip >/dev/null 2>&1; then
             (cd "$INSTALL_DIR" && unzip -o protoc.zip >/dev/null)
           else
