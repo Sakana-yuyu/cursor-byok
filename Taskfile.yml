@@ -282,6 +282,18 @@ tasks:
           ZIP_NAME: 'release/{{.APP_VERSION}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-amd64.zip'
           SCAN: '{{.SCAN}}'
 
+  release:build:windows:installer:
+    summary: 构建 Windows amd64 NSIS 安装包并以 ASCII 命名复制到 release 目录
+    cmds:
+      - task: windows:create:nsis:installer
+        vars:
+          ARCH: amd64
+          SCAN: '{{.SCAN}}'
+      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.RELEASE_DIR}}' | Out-Null; Copy-Item -Force '{{.BIN_DIR}}/{{.APP_NAME}}-amd64-installer.exe' '{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-amd64-installer.exe'"
+        platforms: [windows]
+      - cmd: mkdir -p '{{.RELEASE_DIR}}' && cp -f '{{.BIN_DIR}}/{{.APP_NAME}}-amd64-installer.exe' '{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-amd64-installer.exe'
+        platforms: [darwin, linux]
+
   release:build:linux:amd64:
     cmds:
       - task: linux:package:archive
@@ -323,6 +335,7 @@ tasks:
       - task: release:build:macos:arm64
       - task: release:build:macos:amd64
       - task: release:build:windows:amd64
+      - task: release:build:windows:installer
       - task: release:build:linux:amd64
 
   release:prepare:linux:
@@ -349,6 +362,8 @@ tasks:
         msg: "缺少 macOS amd64 发布资产。"
       - sh: test -f "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-amd64.zip"
         msg: "缺少 Windows amd64 发布资产。"
+      - sh: test -f "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-amd64-installer.exe"
+        msg: "缺少 Windows amd64 NSIS 安装包发布资产。"
       - sh: test -f "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-linux-amd64.tar.gz"
         msg: "缺少 Linux amd64 发布资产。"
     cmds:
@@ -494,6 +509,7 @@ tasks:
             pathlib.Path("{{.RELEASE_DIR}}/update.json"),
             *pathlib.Path("{{.RELEASE_DIR}}").glob("*.tar.gz"),
             *pathlib.Path("{{.RELEASE_DIR}}").glob("*.zip"),
+            *pathlib.Path("{{.RELEASE_DIR}}").glob("*-installer.exe"),
         ])
 
         get_cmd = [

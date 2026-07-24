@@ -237,6 +237,20 @@ onMounted(() => {
     />
 
     <Card>
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <h2 class="text-base font-medium text-white">本地配置</h2>
+          <div class="text-sm text-[#a3a3a3]">打开设置目录，或单独管理模型配置</div>
+        </div>
+        <div class="center-row gap-2">
+          <Button variant="default" @click="handleOpenConfig">设置文件夹</Button>
+          <Button variant="default" @click="handleOpenRequestMetrics">请求明细</Button>
+          <Button variant="primary" @click="handleOpenModelConfig">模型配置</Button>
+        </div>
+      </div>
+    </Card>
+
+    <Card>
       <div class="flex flex-col gap-4">
         <div class="flex items-start justify-between gap-4">
           <div class="flex flex-col gap-1">
@@ -425,19 +439,5 @@ onMounted(() => {
       :content="promptPreview?.content || ''"
       @close="closePromptPreview"
     />
-
-    <Card>
-      <div class="flex items-center justify-between gap-4">
-        <div>
-          <h2 class="text-base font-medium text-white">本地配置</h2>
-          <div class="text-sm text-[#a3a3a3]">打开设置目录，或单独管理模型配置</div>
-        </div>
-        <div class="center-row gap-2">
-          <Button variant="default" @click="handleOpenConfig">设置文件夹</Button>
-          <Button variant="default" @click="handleOpenRequestMetrics">请求明细</Button>
-          <Button variant="primary" @click="handleOpenModelConfig">模型配置</Button>
-        </div>
-      </div>
-    </Card>
   </div>
 </template>

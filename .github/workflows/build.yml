@@ -347,6 +347,7 @@ jobs:
           publish = Path("publish")
           wanted = {
               "windows-64.zip": f"cursor-byok-{version}-windows-amd64.zip",
+              "Cursor助手-amd64-installer.exe": f"cursor-byok-{version}-windows-amd64-installer.exe",
               "linux-amd64.tar.gz": f"cursor-byok-{version}-linux-amd64.tar.gz",
               f"cursor-byok-{version}-macos-arm64.tar.gz": f"cursor-byok-{version}-macos-arm64.tar.gz",
               f"cursor-byok-{version}-macos-amd64.tar.gz": f"cursor-byok-{version}-macos-amd64.tar.gz",

@@ -35,7 +35,7 @@ const localizedAuthorInfo = computed(() => {
   }
   if (locale.value === "ja-JP") {
     return {
-      buttonText: "著者 Sakana",
+      buttonText: "著者",
       dialogTitle: "著者からのメッセージ",
       dialogContent: "このソフトウェアは完全に無料です。もし料金を請求された場合は、詐欺の可能性が高いです。\n著者のホームページ https://space.bilibili.com/311706663/upload/video にアクセスして、更新情報や利用方法などを確認してください。",
       dialogConfirmText: "ホームページへ",
@@ -43,7 +43,7 @@ const localizedAuthorInfo = computed(() => {
     };
   }
   return {
-    buttonText: "Author Sakana",
+    buttonText: "Author",
     dialogTitle: "Author's Message",
     dialogContent: "This software is completely free. If you were charged, you were likely scammed.\nWelcome to visit the author's homepage at https://space.bilibili.com/311706663/upload/video\nto see more updates, sharing guides, and future content.",
     dialogConfirmText: "Visit Homepage",
