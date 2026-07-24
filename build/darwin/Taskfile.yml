@@ -244,6 +244,7 @@ tasks:
       APP_BUNDLE: '{{.APP_BUNDLE | default (printf "%s.app" .APP_NAME)}}'
       ARCHIVE_PATH: '{{.ARCHIVE_PATH | default (printf "%s/%s.tar.gz" .BIN_DIR .APP_NAME)}}'
     cmds:
+      - mkdir -p "$(dirname "{{.ARCHIVE_PATH}}")"
       - rm -f "{{.ARCHIVE_PATH}}"
       - env LC_ALL=C tar -C "{{.BIN_DIR}}" -czf "{{.ARCHIVE_PATH}}" "{{.APP_BUNDLE}}"
 

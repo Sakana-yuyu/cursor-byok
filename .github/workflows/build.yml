@@ -118,6 +118,12 @@ jobs:
           else
             powershell -NoProfile -Command "Expand-Archive -LiteralPath '$INSTALL_DIR/protoc.zip' -DestinationPath '$INSTALL_DIR' -Force"
           fi
+          # macOS Gatekeeper 会阻止 curl 下载并解压出的二进制（com.apple.quarantine）
+          # 即使二进制本身签名正常，属性存在时执行会被拒绝。统一递归清除。
+          if [ "${RUNNER_OS:-}" = "macOS" ] && command -v xattr >/dev/null 2>&1; then
+            xattr -dr com.apple.quarantine "$INSTALL_DIR" 2>/dev/null || true
+            echo "cleared com.apple.quarantine on $INSTALL_DIR"
+          fi
           PROTOC_PATH="$INSTALL_DIR/bin"
           if [ "${RUNNER_OS:-}" = "Windows" ] && command -v cygpath >/dev/null 2>&1; then
             PROTOC_PATH="$(cygpath -w "$PROTOC_PATH")"
@@ -216,12 +222,64 @@ jobs:
         if: startsWith(matrix.target, 'macos-')
         shell: bash
         run: |
+          # 关闭 set -e：失败时仍要打印诊断信息再退出。
+          set -uo pipefail
+
           ARCH_NAME="${{ endsWith(matrix.target, 'arm64') && 'arm64' || 'amd64' }}"
+          echo "==> target=${{ matrix.target }} ARCH_NAME=${ARCH_NAME} RUNNER_OS=${RUNNER_OS:-}"
+
+          echo "--- toolchain ---"
+          go version
+          go env GOOS GOARCH CGO_ENABLED
+          task --version
+          wails3 version
+          command -v protoc && protoc --version
+          command -v protoc-gen-go && protoc-gen-go --version
+          command -v protoc-gen-connect-go && protoc-gen-connect-go --version
+          command -v yarn && yarn --version
+
           VERSION="$(go run ./scripts/release version -config ./build/config.yml)"
+          echo "==> VERSION=${VERSION}"
+          if [ -z "${VERSION}" ]; then
+            echo "!!! failed to resolve VERSION from build/config.yml"
+            exit 1
+          fi
+
+          echo "--- build:darwin:${ARCH_NAME} ---"
           task "build:darwin:${ARCH_NAME}"
-          test -f "bin/${{ endsWith(matrix.target, 'arm64') && 'macos-arm64.dmg' || 'macos-intel.dmg' }}"
+          BUILD_STATUS=$?
+          echo "==> task build:darwin:${ARCH_NAME} exit=${BUILD_STATUS}"
+          ls -la bin/ || true
+          if [ "${BUILD_STATUS}" -ne 0 ]; then
+            echo "!!! task build:darwin:${ARCH_NAME} failed with exit code ${BUILD_STATUS}"
+            exit "${BUILD_STATUS}"
+          fi
+
+          DMG_PATH="bin/${{ endsWith(matrix.target, 'arm64') && 'macos-arm64.dmg' || 'macos-intel.dmg' }}"
+          if [ ! -f "${DMG_PATH}" ]; then
+            echo "!!! expected DMG not found: ${DMG_PATH}"
+            ls -la bin/
+            exit 1
+          fi
+          echo "==> produced ${DMG_PATH}"
+
+          echo "--- release:build:macos:${ARCH_NAME} ---"
           task "release:build:macos:${ARCH_NAME}"
-          test -f "bin/release/${VERSION}/cursor-byok-${VERSION}-macos-${ARCH_NAME}.tar.gz"
+          RELEASE_STATUS=$?
+          echo "==> task release:build:macos:${ARCH_NAME} exit=${RELEASE_STATUS}"
+          ls -la "bin/release/${VERSION}/" || true
+          if [ "${RELEASE_STATUS}" -ne 0 ]; then
+            echo "!!! task release:build:macos:${ARCH_NAME} failed with exit code ${RELEASE_STATUS}"
+            exit "${RELEASE_STATUS}"
+          fi
+
+          ARCHIVE_PATH="bin/release/${VERSION}/cursor-byok-${VERSION}-macos-${ARCH_NAME}.tar.gz"
+          if [ ! -f "${ARCHIVE_PATH}" ]; then
+            echo "!!! expected archive not found: ${ARCHIVE_PATH}"
+            ls -la "bin/release/${VERSION}/"
+            exit 1
+          fi
+          echo "==> produced ${ARCHIVE_PATH}"
 
       - name: Upload Windows artifacts
         if: matrix.target == 'windows'
