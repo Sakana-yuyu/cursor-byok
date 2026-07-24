@@ -49,7 +49,7 @@ tasks:
       - sh: protoc-gen-connect-go --version >/dev/null 2>&1 || which protoc-gen-connect-go
         msg: "未检测到 protoc-gen-connect-go，请先安装。"
     cmds:
-      - cmd: powershell -NoProfile -Command "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue @('gen/agentv1','gen/aiserverv1')"
+      - cmd: powershell -NoProfile -Command "if (Test-Path 'gen/agentv1') { Remove-Item -Recurse -Force 'gen/agentv1' }; if (Test-Path 'gen/aiserverv1') { Remove-Item -Recurse -Force 'gen/aiserverv1' }"
         platforms: [windows]
       - cmd: rm -rf ./gen/agentv1 ./gen/aiserverv1
         platforms: [darwin, linux]
