@@ -14,6 +14,7 @@ import (
 	"cursor/gen/agentv1"
 	"cursor/gen/aiserverv1"
 	modeladapter "cursor/internal/backend/agent/model"
+	"cursor/internal/logger"
 	promptassets "cursor/prompt"
 )
 
@@ -33,6 +34,10 @@ func (service *Service) WriteGitCommitMessage(ctx context.Context, req *connect.
 	if service == nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("forwarder service is nil"))
 	}
+	logger.Infof("WriteGitCommitMessage called diffs=%d previous_commits=%d",
+		func() int { if req != nil && req.Msg != nil { return len(req.Msg.GetDiffs()) }; return 0 }(),
+		func() int { if req != nil && req.Msg != nil { return len(req.Msg.GetPreviousCommitMessages()) }; return 0 }(),
+	)
 	requestID := commitMessageGeneratedRequestIDPrefix + uuid.NewString()
 	recorder, err := newCommitMessageLogRecorder(service.commitMessageHistoryRoot(), requestID)
 	if err != nil {
@@ -57,6 +62,7 @@ func (service *Service) WriteGitCommitMessage(ctx context.Context, req *connect.
 	}
 	modelCallID := requestID + "-model"
 	modelID, modelSource, lastAgentModelHash := service.resolveCommitMessageModelID(ctx)
+	logger.Infof("WriteGitCommitMessage model resolved model_id=%q model_source=%s last_agent_model_hash=%s", modelID, modelSource, lastAgentModelHash)
 	accumulated := ""
 	artifactPaths := &modeladapter.LLMArtifactPaths{}
 	err = service.provider.StartStream(ctx, ProviderRequest{
@@ -65,6 +71,7 @@ func (service *Service) WriteGitCommitMessage(ctx context.Context, req *connect.
 		ModelCallID:    modelCallID,
 		ModelID:        modelID,
 		Mode:           agentv1.AgentMode_AGENT_MODE_AGENT,
+		ThinkingEffort: "disabled",
 		Messages:       messages,
 		Tools:          nil,
 		MaxTokens:      commitMessageMaxOutputTokens,
@@ -90,12 +97,14 @@ func (service *Service) WriteGitCommitMessage(ctx context.Context, req *connect.
 		}
 	})
 	if err != nil {
+		logger.Infof("WriteGitCommitMessage StartStream failed error=%v", err)
 		if errors.Is(err, errCommitMessageToolInvocation) {
 			return nil, commitMessageConnectError(recorder, connect.CodeInternal, errCommitMessageToolInvocation)
 		}
 		return nil, commitMessageConnectError(recorder, connect.CodeUnknown, err)
 	}
 	commitMessage := cleanGeneratedCommitMessage(accumulated)
+	logger.Infof("WriteGitCommitMessage generated message_len=%d", len(commitMessage))
 	if firstCommitMessageLine(commitMessage) == "" {
 		return nil, commitMessageConnectError(recorder, connect.CodeInternal, fmt.Errorf("generated commit message is empty"))
 	}

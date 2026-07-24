@@ -11,6 +11,7 @@ import (
 
 	"cursor/gen/aiserverv1"
 	"cursor/gen/aiserverv1/aiserverv1connect"
+	"cursor/internal/logger"
 )
 
 type usageLookupRecord struct {
@@ -26,6 +27,10 @@ const (
 
 func newAIHandler(service *Service) http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		logger.Infof("newAIHandler unmapped path=%s method=%s", r.URL.Path, r.Method)
+		http.NotFound(w, r)
+	})
 	mux.Handle(
 		dashboardServiceGetTokenUsageProcedure,
 		connect.NewUnaryHandler(dashboardServiceGetTokenUsageProcedure, service.GetTokenUsage),
@@ -98,7 +103,6 @@ func newAIHandler(service *Service) http.Handler {
 		aiserverv1connect.AiServiceFetchRelevantKnowledgeForConversationProcedure,
 		connect.NewUnaryHandler(aiserverv1connect.AiServiceFetchRelevantKnowledgeForConversationProcedure, service.FetchRelevantKnowledgeForConversation),
 	)
-	mux.Handle("/", http.NotFoundHandler())
 	return mux
 }
 

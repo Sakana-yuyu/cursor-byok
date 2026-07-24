@@ -197,7 +197,7 @@ func NewProxyServer(addr, baseURL, _ string, _ string, certManager *certs.Manage
 				IdleConnTimeout:       90 * time.Second,
 				TLSHandshakeTimeout:   10 * time.Second,
 				ExpectContinueTimeout: 1 * time.Second,
-				ResponseHeaderTimeout: 60 * time.Second,
+				ResponseHeaderTimeout: 5 * time.Minute,
 			},
 		},
 	}
@@ -798,6 +798,14 @@ func (l *goproxyLogAdapter) Printf(format string, args ...interface{}) {
 	}
 	if strings.Contains(lower, "broken pipe") || strings.Contains(lower, "connection reset by peer") {
 		// logger.Infof("goproxy transient network error: %s", msg)
+		return
+	}
+	// Windows wsarecv: connection forcibly closed — 等价于 TCP RST，属于正常的 keep-alive 连接回收
+	if strings.Contains(lower, "forcibly closed by the remote host") || strings.Contains(lower, "connection was forcibly closed") {
+		return
+	}
+	// Cursor/客户端在 MITM 解密后主动关闭 TLS 连接（超时、重试、keep-alive 到期）
+	if strings.Contains(lower, "cannot read tls request from mitm'd client") || strings.Contains(lower, "cannot write tls response") {
 		return
 	}
 	if suppressed, ok := proxyLogLimiter.ShouldLog("goproxy|" + goproxyMessageRateLimitKey(msg)); ok {
