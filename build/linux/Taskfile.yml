@@ -168,6 +168,7 @@ tasks:
       - mkdir -p "{{.STAGING_DIR}}"
       - cp "{{.BINARY_PATH}}" "{{.STAGING_DIR}}/{{.ARCHIVE_BINARY_NAME}}"
       - chmod +x "{{.STAGING_DIR}}/{{.ARCHIVE_BINARY_NAME}}"
+      - mkdir -p "$(dirname "{{.ARCHIVE_PATH}}")"
       - rm -f "{{.ARCHIVE_PATH}}"
       - env LC_ALL=C tar -C "{{.STAGING_DIR}}" -czf "{{.ARCHIVE_PATH}}" "{{.ARCHIVE_BINARY_NAME}}"
       - rm -rf "{{.STAGING_DIR}}"
