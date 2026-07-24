@@ -184,6 +184,14 @@ jobs:
           where.exe protoc
           where.exe yarn
 
+      - name: Install Windows frontend dependencies
+        if: matrix.target == 'windows'
+        shell: pwsh
+        working-directory: frontend
+        run: |
+          yarn install --frozen-lockfile --network-concurrency 1 --mutex file
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Build Windows amd64 packages
         if: matrix.target == 'windows'
         shell: pwsh
