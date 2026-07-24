@@ -61,21 +61,18 @@ jobs:
       - name: Enable Yarn classic and reset registry
         shell: bash
         run: |
-          # CI 环境使用官方 npm registry，避免 npmmirror 镜像缓存损坏
-          printf 'registry "https://registry.npmjs.org/"\nnetwork-timeout 300000\n' > frontend/.yarnrc
+          # CI 环境使用官方 npm registry，避免 npmmirror 镜像缓存损坏。
+          # 降低 Yarn 并发，规避 Windows runner 上大包缓存解压的偶发 ENOENT/ENOTEMPTY。
+          printf 'registry "https://registry.npmjs.org/"\nnetwork-timeout 300000\nnetwork-concurrency 1\nchild-concurrency 1\n' > frontend/.yarnrc
           # yarn.lock 中残留的 npmmirror resolved URL 会绕过 registry 配置，统一改写
           if [ -f frontend/yarn.lock ]; then
             sed -i.bak 's|registry.npmmirror.com|registry.npmjs.org|g' frontend/yarn.lock || true
             rm -f frontend/yarn.lock.bak
           fi
-          # Yarn 缓存可能已存损坏 tarball，指向当前 runner 的原生临时目录强制重新下载。
-          # Windows 后续步骤在 PowerShell 中执行，不能把 MSYS 的 /c/Users 路径写入 GITHUB_ENV。
-          if [ "${RUNNER_OS:-}" = "Windows" ]; then
-            YARN_CACHE_FOLDER="${RUNNER_TEMP}\\yarn-cache-fresh"
-          else
-            YARN_CACHE_FOLDER="${RUNNER_TEMP:-$HOME}/yarn-cache-fresh"
+          # Yarn 缓存可能已存损坏 tarball，指向当前 runner 的临时目录强制重新下载。
+          if [ "${RUNNER_OS:-}" != "Windows" ]; then
+            echo "YARN_CACHE_FOLDER=${RUNNER_TEMP:-$HOME}/yarn-cache-fresh" >> "$GITHUB_ENV"
           fi
-          echo "YARN_CACHE_FOLDER=$YARN_CACHE_FOLDER" >> "$GITHUB_ENV"
           npm install -g yarn@1.22.22
           NPM_BIN="$(npm config get prefix)"
           if [ -d "$NPM_BIN/bin" ]; then NPM_BIN="$NPM_BIN/bin"; fi
@@ -85,6 +82,17 @@ jobs:
           echo "$NPM_BIN" >> "$GITHUB_PATH"
           yarn --version
           yarn config get registry
+
+      - name: Configure Windows Yarn cache
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $cacheDirectory = Join-Path $env:RUNNER_TEMP 'yarn-cache-fresh'
+          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $cacheDirectory
+          New-Item -ItemType Directory -Force -Path $cacheDirectory | Out-Null
+          "YARN_CACHE_FOLDER=$cacheDirectory" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          yarn config set cache-folder $cacheDirectory
+          yarn config get cache-folder
 
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
