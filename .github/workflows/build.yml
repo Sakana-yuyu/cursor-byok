@@ -74,7 +74,20 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            pkg-config gcc libgtk-3-dev libwebkit2gtk-4.1-dev
+            pkg-config gcc libgtk-3-dev libwebkit2gtk-4.1-dev protobuf-compiler
+
+      - name: Install macOS build dependencies
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          brew install protobuf
+          protoc --version
+
+      - name: Install protoc Go plugins
+        shell: bash
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install connectrpc.com/connect/cmd/protoc-gen-connect-go@latest
 
       - name: Install Windows NSIS
         if: runner.os == 'Windows'
