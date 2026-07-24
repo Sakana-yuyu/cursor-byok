@@ -71,6 +71,12 @@ jobs:
           # Yarn 缓存可能已存损坏 tarball，指向全新缓存目录强制重新下载
           echo "YARN_CACHE_FOLDER=$HOME/.yarn-cache-fresh" >> "$GITHUB_ENV"
           npm install -g yarn@1.22.22
+          NPM_BIN="$(npm config get prefix)"
+          if [ -d "$NPM_BIN/bin" ]; then NPM_BIN="$NPM_BIN/bin"; fi
+          if [ "${RUNNER_OS:-}" = "Windows" ] && command -v cygpath >/dev/null 2>&1; then
+            NPM_BIN="$(cygpath -w "$NPM_BIN")"
+          fi
+          echo "$NPM_BIN" >> "$GITHUB_PATH"
           yarn --version
           yarn config get registry
 
@@ -98,7 +104,11 @@ jobs:
           else
             powershell -NoProfile -Command "Expand-Archive -LiteralPath '$INSTALL_DIR/protoc.zip' -DestinationPath '$INSTALL_DIR' -Force"
           fi
-          echo "$INSTALL_DIR/bin" >> "$GITHUB_PATH"
+          PROTOC_PATH="$INSTALL_DIR/bin"
+          if [ "${RUNNER_OS:-}" = "Windows" ] && command -v cygpath >/dev/null 2>&1; then
+            PROTOC_PATH="$(cygpath -w "$PROTOC_PATH")"
+          fi
+          echo "$PROTOC_PATH" >> "$GITHUB_PATH"
           # 验证 well-known types 可被发现（protoc 相对 bin/../include 自动搜索）
           if [ -f "$INSTALL_DIR/include/google/protobuf/struct.proto" ]; then
             echo "well-known types OK: struct.proto present"
@@ -146,6 +156,19 @@ jobs:
           $nsisDirectory = Split-Path -Parent $makensis
           $nsisDirectory | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           & $makensis /VERSION
+
+      - name: Verify Windows build toolchain
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          protoc --version
+          protoc-gen-go --version
+          protoc-gen-connect-go --version
+          yarn --version
+          task --version
+          wails3 version
+          where.exe protoc
+          where.exe yarn
 
       - name: Build Windows amd64 packages
         if: matrix.target == 'windows'
