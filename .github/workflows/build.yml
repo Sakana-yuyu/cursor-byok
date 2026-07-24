@@ -231,21 +231,36 @@ jobs:
           Export-PfxCertificate -Cert $cert -FilePath $pfxPath -Password $pwd | Out-Null
           Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation "Cert:\LocalMachine\Root" -Password $pwd | Out-Null
 
-          # 签名主 exe
-          $exe = Resolve-Path "bin/Cursor助手.exe"
-          & signtool sign /fd SHA256 /a /f $pfxPath /p "temp-signing-key" $exe.Path
-          if ($LASTEXITCODE -ne 0) { throw "signtool failed to sign exe" }
-          Write-Host "Signed $($exe.Path)"
+          # 动态查找 signtool（Windows SDK 不在 PATH 中）
+          $signtoolExe = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $signtoolExe) {
+            $signtoolExe = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\x64\signtool.exe" -ErrorAction SilentlyContinue
+          }
+          if (-not $signtoolExe) {
+            Write-Host "::warning::signtool not found in Windows SDK, skipping code signing"
+          } else {
+            Write-Host "Using signtool: $($signtoolExe.FullName)"
+            $st = $signtoolExe.FullName
 
-          # 签名 installer
-          $installer = Get-ChildItem 'bin/*-amd64-installer.exe' -File | Select-Object -First 1
-          & signtool sign /fd SHA256 /a /f $pfxPath /p "temp-signing-key" $installer.FullName
-          if ($LASTEXITCODE -ne 0) { throw "signtool failed to sign installer" }
-          Write-Host "Signed $($installer.FullName)"
+            # 签名主 exe
+            $exe = Resolve-Path "bin/Cursor助手.exe"
+            & $st sign /fd SHA256 /a /f $pfxPath /p "temp-signing-key" $exe.Path
+            if ($LASTEXITCODE -ne 0) { throw "signtool failed to sign exe" }
+            Write-Host "Signed $($exe.Path)"
+
+            # 签名 installer
+            $installer = Get-ChildItem 'bin/*-amd64-installer.exe' -File | Select-Object -First 1
+            if ($installer) {
+              & $st sign /fd SHA256 /a /f $pfxPath /p "temp-signing-key" $installer.FullName
+              if ($LASTEXITCODE -ne 0) { throw "signtool failed to sign installer" }
+              Write-Host "Signed $($installer.FullName)"
+            }
+          }
 
           # 清理证书
-          Remove-Item $pfxPath -Force
-          Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force
+          Remove-Item $pfxPath -Force -ErrorAction SilentlyContinue
+          Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
 
       - name: Build Linux amd64 package
         if: matrix.target == 'linux'
