@@ -11,8 +11,11 @@ import (
 )
 
 const (
-	// defaultExecTimeout 是非 shell exec（如 Task 子代理）的默认超时。
+	// defaultExecTimeout 是非 shell exec 的默认超时。
 	defaultExecTimeout = 10 * time.Minute
+	// subagentExecTimeout 是子代理（Task）exec 的超时。
+	// 子代理可能需要很长时间完成复杂任务，设置 2 小时兜底防止无限等待。
+	subagentExecTimeout = 2 * time.Hour
 	// execWatchdogTick 是 watchdog 扫描间隔。
 	execWatchdogTick = 30 * time.Second
 )
@@ -36,7 +39,12 @@ func (service *Service) scheduleExecWatchdog(requestID string, pending runtimeco
 	if deadline.IsZero() {
 		deadline = time.Now().UTC()
 	}
-	deadline = deadline.Add(defaultExecTimeout)
+	// 子代理可能需要很长时间完成复杂任务，使用更长的超时。
+	timeout := defaultExecTimeout
+	if strings.TrimSpace(pending.ExecKind) == "subagent" {
+		timeout = subagentExecTimeout
+	}
+	deadline = deadline.Add(timeout)
 	service.scheduleStreamTimer(
 		stream,
 		providerTimerKey(streamTimerExecWatchdog, pending.ExecID),
