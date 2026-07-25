@@ -944,6 +944,8 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 		}
 	}
 	if !result.IsTerminal {
+		// 心跳续期：子代理仍在活动（发送 delta/progress），重置 watchdog timer。
+		service.rescheduleExecWatchdog(intent.RequestID, pending)
 		return nil
 	}
 	markExecCompleted(stream, pending)
