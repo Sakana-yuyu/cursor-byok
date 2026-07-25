@@ -641,6 +641,7 @@ func (service *Service) decodeInboundIntent(requestID string, message *agentv1.A
 					intent.ModelID = strings.TrimSpace(stream.ModelID)
 					intent.ModelName = strings.TrimSpace(stream.ModelName)
 					intent.ThinkingEffort = strings.TrimSpace(stream.ThinkingEffort)
+					intent.SubagentModelOverrides = cloneSubagentModelOverrides(stream.SubagentModelOverrides)
 					if !intent.HasExplicitMode && stream.Mode != agentv1.AgentMode_AGENT_MODE_UNSPECIFIED {
 						intent.Mode = stream.Mode
 					}
