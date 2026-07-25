@@ -5,8 +5,10 @@ import Tooltip from "@/components/ui/Tooltip.vue";
 import { appState, saveIncludeCacheWriteInHitRate } from "@/state/appState";
 import { formatCompactInteger, formatInteger } from "@/utils/numberFormat";
 import { computed, ref } from "vue";
+import { useRouter } from "vue-router";
 
 const emit = defineEmits(["refresh", "open-ad"]);
+const router = useRouter();
 
 const TOKEN_PRICE_PER_MILLION = {
   input: 5,
@@ -270,6 +272,15 @@ const hasHomeAd = computed(() => false);
         <div
           class="flex-1 center-row justify-end shrink-0 gap-2 text-xs text-[#6f6f6f] pr-4 w-[200px]"
         >
+          <button
+            type="button"
+            class="center-row justify-center h-[24px] px-2 rounded-[6px] border border-[#3b3b3b] bg-[#242424] text-[#9d9d9d] transition-colors duration-150 hover:border-[#4c4c4c] hover:text-white"
+            title="会话分析"
+            @click="router.push('/metrics-detail')"
+          >
+            <span class="icon-[mdi--chart-line] text-[14px]"></span>
+            <span class="ml-1 text-xs">详情</span>
+          </button>
           <span>刷新统计</span>
           <button
             type="button"
