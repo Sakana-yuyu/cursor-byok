@@ -19,14 +19,15 @@ const (
 
 const streamTimerExecWatchdog = "exec_watchdog"
 
-// scheduleExecWatchdog 为所有类型的 pending exec 注册超时监管。
-// shell 类型已有自己的 foreground recovery，这里只补非 shell 的兜底。
+// scheduleExecWatchdog 为非 shell、非 subagent 的 pending exec 注册超时监管。
+// shell 有自己的 foreground recovery；subagent 由 Cursor 客户端管理生命周期，跳过。
 func (service *Service) scheduleExecWatchdog(requestID string, pending runtimecore.PendingExec) {
 	if service == nil || strings.TrimSpace(requestID) == "" || strings.TrimSpace(pending.ExecID) == "" {
 		return
 	}
-	if strings.TrimSpace(pending.ExecKind) == "shell" {
-		return // shell 有自己的 recovery 机制
+	kind := strings.TrimSpace(pending.ExecKind)
+	if kind == "shell" || kind == "subagent" {
+		return // shell 有自己的 recovery；subagent 由 Cursor 客户端管理
 	}
 	stream, ok := service.broker.Get(requestID)
 	if !ok || stream == nil {
