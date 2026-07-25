@@ -15,7 +15,6 @@ import {
   openLocalLogsDirectory,
   exportLogsAction,
   saveRoutingMode,
-  syncHomeMetrics,
   syncServiceState,
   toUserError,
   toggleService,
@@ -55,15 +54,10 @@ async function handleToggleService() {
 async function handleRefreshState() {
   const [serviceStateResult] = await Promise.allSettled([
     syncServiceState(),
-    syncHomeMetrics(),
   ]);
   if (serviceStateResult.status === "rejected") {
     await showActionError("刷新失败", toUserError(serviceStateResult.reason));
   }
-}
-
-async function handleRefreshMetrics() {
-  await syncHomeMetrics().catch(() => {});
 }
 
 async function handleOpenConfig() {
@@ -249,7 +243,6 @@ async function handleDirectModeChange(enabled) {
 
 onMounted(() => {
   void syncServiceState().catch(() => {});
-  void syncHomeMetrics().catch(() => {});
   void loadPromptInjection();
 });
 
@@ -258,10 +251,6 @@ onMounted(() => {
 <template>
   <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-4 pt-0 text-[#e5e5e5]">
     <HomeMetricsCard
-      :metrics="appState.homeMetrics"
-      :loading="appState.homeMetricsLoading"
-      :error="appState.homeMetricsError"
-      @refresh="handleRefreshMetrics"
     />
 
     <Card>

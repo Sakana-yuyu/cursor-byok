@@ -722,10 +722,11 @@ function asNullableRate(value) {
 function normalizeHomeMetrics(source) {
   const raw = source && typeof source === "object" ? source : {};
   const providerCallsTotal = asPositiveInteger(raw.providerCallsTotal ?? raw.turnsTotal);
+  const invalidTurns = asPositiveInteger(raw.invalidTurnsTotal);
   return {
     turnsTotal: providerCallsTotal,
-    validTurnsTotal: providerCallsTotal,
-    invalidTurnsTotal: 0,
+    validTurnsTotal: providerCallsTotal - invalidTurns,
+    invalidTurnsTotal: invalidTurns,
     requestTokensTotal: asPositiveInteger(raw.requestTokensTotal),
     promptTokensTotal: asPositiveInteger(raw.promptTokensTotal),
     cacheReadTokens: asPositiveInteger(raw.cacheReadTokens),

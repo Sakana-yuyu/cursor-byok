@@ -2,9 +2,10 @@
 import CacheHitRateChart from "@/components/charts/CacheHitRateChart.vue";
 import Switch from "@/components/ui/Switch.vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
+import { fetchRecentRequestMetrics } from "@/services/clientApi";
 import { appState, saveIncludeCacheWriteInHitRate } from "@/state/appState";
 import { formatCompactInteger, formatInteger } from "@/utils/numberFormat";
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
 const emit = defineEmits(["refresh", "open-ad"]);
@@ -18,10 +19,6 @@ const TOKEN_PRICE_PER_MILLION = {
 };
 
 const props = defineProps({
-  metrics: {
-    type: Object,
-    required: true,
-  },
   loading: {
     type: Boolean,
     default: false,
@@ -40,14 +37,129 @@ const props = defineProps({
   },
 });
 
+// --- 时间范围 ---
+const timeRanges = [
+  { key: "today", label: "当日" },
+  { key: "24h", label: "24小时" },
+  { key: "3d", label: "3天" },
+  { key: "7d", label: "一周" },
+  { key: "30d", label: "一月" },
+  { key: "all", label: "全部" },
+  { key: "custom", label: "自定义" },
+];
+const selectedRange = ref("today");
+const customStart = ref("");
+const customEnd = ref("");
+
+const chipBaseClass = "rounded-[6px] px-2.5 py-1 text-xs transition-colors border";
+const chipActiveClass = "border-[#10AD5D] bg-[#10AD5D] text-white";
+const chipIdleClass = "border-[#3f3f3f] bg-[#232323] text-[#a0a0a0] hover:border-[#4a4a4a] hover:text-white";
+
+const rangeStart = computed(() => {
+  const now = new Date();
+  switch (selectedRange.value) {
+    case "today": {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      return d.getTime();
+    }
+    case "24h":
+      return now.getTime() - 24 * 3600_000;
+    case "3d":
+      return now.getTime() - 3 * 86400_000;
+    case "7d":
+      return now.getTime() - 7 * 86400_000;
+    case "30d":
+      return now.getTime() - 30 * 86400_000;
+    case "all":
+      return 0;
+    case "custom":
+      return customStart.value ? new Date(customStart.value).getTime() : 0;
+    default:
+      return 0;
+  }
+});
+
+const rangeEnd = computed(() => {
+  if (selectedRange.value === "custom" && customEnd.value) {
+    return new Date(customEnd.value).getTime() + 86400_000;
+  }
+  return Date.now();
+});
+
+// --- 数据加载 ---
+const allEvents = ref([]);
+const eventsLoading = ref(false);
+const eventsError = ref("");
+
+async function loadEvents() {
+  eventsLoading.value = true;
+  eventsError.value = "";
+  try {
+    const data = await fetchRecentRequestMetrics(0);
+    allEvents.value = Array.isArray(data) ? data : [];
+  } catch (e) {
+    eventsError.value = String(e?.message || e || "加载失败");
+    allEvents.value = [];
+  } finally {
+    eventsLoading.value = false;
+  }
+}
+
+// --- 事件过滤 ---
+const filteredEvents = computed(() => {
+  const start = rangeStart.value;
+  const end = rangeEnd.value;
+  return allEvents.value.filter((ev) => {
+    const ts = new Date(ev.at).getTime();
+    if (!Number.isFinite(ts)) return false;
+    if (start > 0 && ts < start) return false;
+    if (ts >= end) return false;
+    return true;
+  });
+});
+
+// --- 聚合 ---
+const summary = computed(() => {
+  let turnsTotal = 0, validTurnsTotal = 0, invalidTurnsTotal = 0;
+  let requestTokensTotal = 0, promptTokensTotal = 0;
+  let cacheReadTokens = 0, cacheWriteTokens = 0;
+
+  for (const ev of filteredEvents.value) {
+    const kind = String(ev.kind || "").trim();
+    if (kind === "turn_finalized") {
+      turnsTotal++;
+      if (String(ev.status || "").trim() === "completed") {
+        validTurnsTotal++;
+      } else {
+        invalidTurnsTotal++;
+      }
+    } else {
+      // provider_call
+      requestTokensTotal += Number(ev.totalTokens || 0);
+      promptTokensTotal += Number(ev.inputTokens || 0) + Number(ev.cacheReadTokens || 0) + Number(ev.cacheWriteTokens || 0);
+      cacheReadTokens += Number(ev.cacheReadTokens || 0);
+      cacheWriteTokens += Number(ev.cacheWriteTokens || 0);
+    }
+  }
+
+  return {
+    turnsTotal,
+    validTurnsTotal,
+    invalidTurnsTotal,
+    requestTokensTotal,
+    promptTokensTotal,
+    cacheReadTokens,
+    cacheWriteTokens,
+  };
+});
+
+// --- 派生指标 ---
 const homeMetricsConfigSaving = ref(false);
 const homeMetricsConfigError = ref("");
 
 function normalizeNumber(value) {
   const number = Number(value);
-  if (!Number.isFinite(number)) {
-    return 0;
-  }
+  if (!Number.isFinite(number)) return 0;
   return Math.round(number);
 }
 
@@ -59,18 +171,14 @@ function formatMetricValue(value) {
 
 function formatRateLabel(value) {
   const rate = Number(value);
-  if (!Number.isFinite(rate)) {
-    return "暂无数据";
-  }
+  if (!Number.isFinite(rate)) return "暂无数据";
   return `${(Math.max(0, Math.min(1, rate)) * 100).toFixed(2)}%`;
 }
 
 function calculateRate(numerator, denominator) {
   const top = normalizeNumber(numerator);
   const bottom = normalizeNumber(denominator);
-  if (bottom <= 0) {
-    return null;
-  }
+  if (bottom <= 0) return null;
   return top / bottom;
 }
 
@@ -80,20 +188,16 @@ function priceTokens(tokens, pricePerMillion) {
 
 function formatUSD(value) {
   const amount = Number(value);
-  if (!Number.isFinite(amount)) {
-    return "$0.00";
-  }
-  if (amount > 0 && amount < 0.01) {
-    return "<$0.01";
-  }
+  if (!Number.isFinite(amount)) return "$0.00";
+  if (amount > 0 && amount < 0.01) return "<$0.01";
   return `$${amount.toFixed(2)}`;
 }
 
-const cacheReadTokensTotal = computed(() => normalizeNumber(props.metrics?.cacheReadTokens));
-const cacheWriteTokensTotal = computed(() => normalizeNumber(props.metrics?.cacheWriteTokens));
+const cacheReadTokensTotal = computed(() => normalizeNumber(summary.value.cacheReadTokens));
+const cacheWriteTokensTotal = computed(() => normalizeNumber(summary.value.cacheWriteTokens));
 
 const inputTokensTotal = computed(() => {
-  const promptTokensTotal = normalizeNumber(props.metrics?.promptTokensTotal);
+  const promptTokensTotal = normalizeNumber(summary.value.promptTokensTotal);
   return Math.max(0, promptTokensTotal - cacheReadTokensTotal.value - cacheWriteTokensTotal.value);
 });
 
@@ -119,16 +223,14 @@ const selectedCacheRateModeLabel = computed(() =>
 );
 
 const validTurnsRate = computed(() => {
-  const turnsTotal = normalizeNumber(props.metrics?.turnsTotal);
-  if (turnsTotal <= 0) {
-    return null;
-  }
-  return normalizeNumber(props.metrics?.validTurnsTotal) / turnsTotal;
+  const turnsTotal = normalizeNumber(summary.value.turnsTotal);
+  if (turnsTotal <= 0) return null;
+  return normalizeNumber(summary.value.validTurnsTotal) / turnsTotal;
 });
 
 const completionTokensTotal = computed(() => {
-  const requestTokensTotal = normalizeNumber(props.metrics?.requestTokensTotal);
-  const promptTokensTotal = normalizeNumber(props.metrics?.promptTokensTotal);
+  const requestTokensTotal = normalizeNumber(summary.value.requestTokensTotal);
+  const promptTokensTotal = normalizeNumber(summary.value.promptTokensTotal);
   return Math.max(0, requestTokensTotal - promptTokensTotal);
 });
 
@@ -137,13 +239,7 @@ const estimatedTokenCost = computed(() => {
   const output = priceTokens(completionTokensTotal.value, TOKEN_PRICE_PER_MILLION.output);
   const cacheRead = priceTokens(cacheReadTokensTotal.value, TOKEN_PRICE_PER_MILLION.cacheRead);
   const cacheWrite = priceTokens(cacheWriteTokensTotal.value, TOKEN_PRICE_PER_MILLION.cacheWrite);
-  return {
-    input,
-    output,
-    cacheRead,
-    cacheWrite,
-    total: input + output + cacheRead + cacheWrite,
-  };
+  return { input, output, cacheRead, cacheWrite, total: input + output + cacheRead + cacheWrite };
 });
 
 const cacheTooltipContent = computed(() => {
@@ -159,11 +255,11 @@ const cacheTooltipContent = computed(() => {
 
 const turnsTooltipContent = computed(() =>
   [
-    "按历史记录里扫描到的回合 summary 汇总。",
+    "按会话回合统计，区分有效与异常。",
     "",
-    `总轮次：${formatMetricValue(props.metrics?.turnsTotal)}`,
-    `有效轮次：${formatMetricValue(props.metrics?.validTurnsTotal)}`,
-    `异常轮次：${formatMetricValue(props.metrics?.invalidTurnsTotal)}`,
+    `总轮次：${formatMetricValue(summary.value.turnsTotal)}`,
+    `有效轮次：${formatMetricValue(summary.value.validTurnsTotal)}`,
+    `异常轮次：${formatMetricValue(summary.value.invalidTurnsTotal)}`,
     `有效占比：${formatRateLabel(validTurnsRate.value)}`,
   ].join("\n"),
 );
@@ -172,8 +268,8 @@ const tokensTooltipContent = computed(() =>
   [
     "总请求 Token 包含 Prompt 和模型输出。",
     "",
-    `总请求：${formatMetricValue(props.metrics?.requestTokensTotal)}`,
-    `Prompt：${formatMetricValue(props.metrics?.promptTokensTotal)}`,
+    `总请求：${formatMetricValue(summary.value.requestTokensTotal)}`,
+    `Prompt：${formatMetricValue(summary.value.promptTokensTotal)}`,
     `输出推算：${formatMetricValue(completionTokensTotal.value)}`,
     `非缓存输入：${formatMetricValue(inputTokensTotal.value)}`,
     `缓存读取：${formatMetricValue(cacheReadTokensTotal.value)}`,
@@ -197,19 +293,6 @@ const costTooltipContent = computed(() =>
   ].join("\n"),
 );
 
-function normalizeHomeAd(item, index) {
-  const source = item && typeof item === "object" ? item : {};
-  const title = typeof source.title === "string" ? source.title.trim() : "";
-  if (!title) {
-    return null;
-  }
-  return {
-    id: typeof source.id === "string" && source.id.trim() ? source.id.trim() : String(index + 1),
-    title,
-    subtitle: typeof source.subtitle === "string" ? source.subtitle.trim() : "",
-  };
-}
-
 async function toggleIncludeCacheWriteInHitRate(value) {
   const nextValue = Boolean(value);
   homeMetricsConfigSaving.value = true;
@@ -226,52 +309,25 @@ async function toggleIncludeCacheWriteInHitRate(value) {
   }
 }
 
-const normalizedHomeAds = computed(() => []);
+async function handleRefresh() {
+  await loadEvents();
+  emit("refresh");
+}
 
-const hasHomeAd = computed(() => false);
+onMounted(() => {
+  void loadEvents();
+});
 </script>
 
 <template>
   <div>
     <div class="flex flex-col gap-4">
+      <!-- 标题行 + 刷新/详情按钮 -->
       <div class="flex items-center justify-between gap-4 h-[42px]">
-        <div v-if="!hasHomeAd" class="flex flex-col gap-1 w-[200px] shrink-0">
+        <div class="flex flex-col gap-1 w-[200px] shrink-0">
           <h2 class="text-[14px] font-medium text-white/80">会话统计</h2>
         </div>
-        <div v-else class="grid min-w-0  grid-cols-3 gap-2 shrink-0">
-          <div
-            v-for="ad in normalizedHomeAds"
-            :key="ad.id"
-            style="font-family: var(--font-num)"
-            class="center-row h-[42px] min-w-0 cursor-pointer gap-[8px] rounded-[6px] border border-[#343434] bg-[#242424] px-[8px] pr-[10px] text-left transition-colors duration-150 hover:border-[#4a4a4a] hover:bg-[#2a2a2a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50"
-            role="button"
-            tabindex="0"
-            :title="ad.subtitle ? `${ad.title}\n${ad.subtitle}` : ad.title"
-            @click="emit('open-ad', ad.id)"
-            @keydown.enter.prevent="emit('open-ad', ad.id)"
-            @keydown.space.prevent="emit('open-ad', ad.id)"
-          >
-            <div
-              class="center-row h-[20px] w-[20px] shrink-0 justify-center text-[20px] text-amber-400"
-            >
-              <span class="icon-[cil--badge]"></span>
-            </div>
-            <div class="min-w-0 flex-1">
-              <div class="truncate text-[13px] font-medium leading-[16px] text-white">
-                {{ ad.title }}
-              </div>
-              <div
-                v-if="ad.subtitle"
-                class="mt-[2px] center-row min-w-0 gap-[2px] text-[11px] leading-[12px] text-[#8A8A8A]"
-              >
-                <span class="truncate">{{ ad.subtitle }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div
-          class="flex-1 center-row justify-end shrink-0 gap-2 text-xs text-[#6f6f6f] pr-4 w-[200px]"
-        >
+        <div class="flex-1 center-row justify-end shrink-0 gap-2 text-xs text-[#6f6f6f] pr-4 w-[200px]">
           <button
             type="button"
             class="center-row justify-center h-[24px] px-2 rounded-[6px] border border-[#3b3b3b] bg-[#242424] text-[#9d9d9d] transition-colors duration-150 hover:border-[#4c4c4c] hover:text-white"
@@ -285,21 +341,40 @@ const hasHomeAd = computed(() => false);
           <button
             type="button"
             class="center-row justify-center h-[24px] w-[24px] rounded-[6px] border border-[#3b3b3b] bg-[#242424] text-[#9d9d9d] transition-colors duration-150 hover:border-[#4c4c4c] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-            :disabled="loading"
-            :title="loading ? '刷新中' : '刷新统计'"
-            @click="emit('refresh')"
+            :disabled="eventsLoading"
+            :title="eventsLoading ? '刷新中' : '刷新统计'"
+            @click="handleRefresh"
           >
-            <span
-              class="icon-[mdi--refresh] text-[14px]"
-              :class="{ '!animate-spin': loading }"
-            ></span>
+            <span class="icon-[mdi--refresh] text-[14px]" :class="{ '!animate-spin': eventsLoading }"></span>
           </button>
         </div>
       </div>
 
+      <!-- 时间范围选择器 -->
+      <div class="flex flex-wrap items-center gap-1.5 -mt-2">
+        <button
+          v-for="r in timeRanges"
+          :key="r.key"
+          type="button"
+          :class="[chipBaseClass, selectedRange === r.key ? chipActiveClass : chipIdleClass]"
+          @click="selectedRange = r.key"
+        >
+          {{ r.label }}
+        </button>
+        <div v-if="selectedRange === 'custom'" class="flex items-center gap-1 text-xs text-[#a0a0a0] ml-1">
+          <input v-model="customStart" type="date" class="h-7 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-xs text-white outline-none focus:border-[#10AD5D]" />
+          <span>~</span>
+          <input v-model="customEnd" type="date" class="h-7 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-xs text-white outline-none focus:border-[#10AD5D]" />
+        </div>
+      </div>
+
+      <div v-if="eventsError" class="text-xs text-[#f87171]">{{ eventsError }}</div>
+
+      <!-- 4 个指标卡片 -->
       <div
         class="mt-[-4px] grid grid-cols-4 gap-0 overflow-hidden rounded-[8px] border border-[#343434] bg-[#242424] h-[130px]"
       >
+        <!-- 缓存命中率 -->
         <div class="min-w-0 px-4 py-4 flex flex-col justify-between">
           <div class="center-row justify-start gap-1 text-xs text-[#7f7f7f]">
             <span>缓存命中率</span>
@@ -328,9 +403,8 @@ const hasHomeAd = computed(() => false);
           <CacheHitRateChart :rate="selectedCacheHitRate" />
         </div>
 
-        <div
-          class="min-w-0 border-l border-[#343434] px-4 py-4 flex flex-col justify-between"
-        >
+        <!-- 对话轮次 -->
+        <div class="min-w-0 border-l border-[#343434] px-4 py-4 flex flex-col justify-between">
           <div class="center-row justify-start gap-1 text-xs text-[#7f7f7f]">
             <span>对话轮次</span>
             <Tooltip :content="turnsTooltipContent" />
@@ -339,26 +413,25 @@ const hasHomeAd = computed(() => false);
             <div
               class="text-[30px] leading-none text-white"
               style="font-family: var(--font-num)"
-              :title="formatInteger(metrics.turnsTotal)"
+              :title="formatInteger(summary.turnsTotal)"
             >
-              {{ formatCompactInteger(metrics.turnsTotal) }}
+              {{ formatCompactInteger(summary.turnsTotal) }}
             </div>
             <div class="mt-3 text-xs leading-5 text-[#8c8c8c]">
               有效
-              <span :title="formatInteger(metrics.validTurnsTotal)">
-                {{ formatCompactInteger(metrics.validTurnsTotal) }}
+              <span :title="formatInteger(summary.validTurnsTotal)">
+                {{ formatCompactInteger(summary.validTurnsTotal) }}
               </span>
               / 异常
-              <span :title="formatInteger(metrics.invalidTurnsTotal)">
-                {{ formatCompactInteger(metrics.invalidTurnsTotal) }}
+              <span :title="formatInteger(summary.invalidTurnsTotal)">
+                {{ formatCompactInteger(summary.invalidTurnsTotal) }}
               </span>
             </div>
           </div>
         </div>
 
-        <div
-          class="min-w-0 border-l border-[#343434] px-4 py-4 flex flex-col justify-between"
-        >
+        <!-- Token 消耗 -->
+        <div class="min-w-0 border-l border-[#343434] px-4 py-4 flex flex-col justify-between">
           <div class="center-row justify-start gap-1 text-xs text-[#7f7f7f]">
             <span>Token 消耗</span>
             <Tooltip :content="tokensTooltipContent" />
@@ -367,22 +440,21 @@ const hasHomeAd = computed(() => false);
             <div
               class="truncate text-[30px] leading-none text-white"
               style="font-family: var(--font-num)"
-              :title="formatInteger(metrics.requestTokensTotal)"
+              :title="formatInteger(summary.requestTokensTotal)"
             >
-              {{ formatCompactInteger(metrics.requestTokensTotal) }}
+              {{ formatCompactInteger(summary.requestTokensTotal) }}
             </div>
             <div class="mt-3 text-xs leading-5 text-[#8c8c8c]">
               Prompt
-              <span :title="formatInteger(metrics.promptTokensTotal)">
-                {{ formatCompactInteger(metrics.promptTokensTotal) }}
+              <span :title="formatInteger(summary.promptTokensTotal)">
+                {{ formatCompactInteger(summary.promptTokensTotal) }}
               </span>
             </div>
           </div>
         </div>
 
-        <div
-          class="min-w-0 border-l border-[#343434] px-4 py-4 flex flex-col justify-between"
-        >
+        <!-- 价值估算 -->
+        <div class="min-w-0 border-l border-[#343434] px-4 py-4 flex flex-col justify-between">
           <div class="center-row justify-start gap-1 text-xs text-[#7f7f7f]">
             <span>价值估算</span>
             <Tooltip :content="costTooltipContent" />
