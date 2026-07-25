@@ -140,6 +140,14 @@ func (service *Service) dispatchInboundIntent(intent InboundIntent) error {
 	if err != nil {
 		return err
 	}
+	// "run" 类型 intent 使用异步发送，避免 BidiAppend 阻塞等待模型调用完成。
+	// 主进程可以在模型生成期间继续接收新消息，实现 Multitask Mode 的并发对话。
+	if commandKind == streamCommandRun {
+		return service.postStreamCommandAsync(stream, streamCommand{
+			Kind:   commandKind,
+			Intent: intent,
+		})
+	}
 	return service.postStreamCommandWait(stream, streamCommand{
 		Kind:   commandKind,
 		Intent: intent,
