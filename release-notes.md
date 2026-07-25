@@ -1,8 +1,9 @@
-## v0.0.47
+## v0.0.48
 
 ### 修复
-- **commit message 生成闪退**：修复 MITM streaming 转发中 `http.Response.Request` 为 nil 导致 goproxy MITM TLS 路径 panic 的问题。Cursor 客户端在请求生成 commit message 时不再报 `[aborted] socket hang up`。
-- 移除有缺陷的 `forwardToServerStreaming` chunked encoding 路径，commit message 请求改用同步转发，确保 Connect RPC 响应格式正确。
+- **Multitask Mode 请求排队**：`BidiAppend` 中 `streamCommandRun` 改用异步发送（`postStreamCommandAsync`），不再阻塞等待模型调用完成。主进程可以在模型生成期间继续接收新消息，实现 Multitask Mode 的并发对话。
+- **Use Multiple Models 不生效**：`conversation_action` 处理器从现有 stream 复制字段时遗漏了 `SubagentModelOverrides`，导致 ExecutePlanAction 等场景下子代理全部使用父进程模型。现已修复，确保所有 run 路径都保留用户选择的模型覆盖。
+- **commit message 生成闪退**：修复 MITM streaming 转发中 `http.Response.Request` 为 nil 导致 goproxy panic。
 
 ### 新功能
 - **会话分析详情页**：首页统计卡片「详情」按钮，支持时间范围 / 模型筛选、ECharts 折线图。
