@@ -59,6 +59,7 @@ const timeRanges = [
   { key: "3d", label: "近3天" },
   { key: "7d", label: "近7天" },
   { key: "30d", label: "近30天" },
+  { key: "all", label: "全部" },
   { key: "custom", label: "自定义" },
 ];
 const selectedRange = ref("24h");
@@ -86,6 +87,8 @@ const rangeStart = computed(() => {
       return now.getTime() - 7 * 86400_000;
     case "30d":
       return now.getTime() - 30 * 86400_000;
+    case "all":
+      return 0;
     case "custom":
       return customStart.value ? new Date(customStart.value).getTime() : 0;
     default:
@@ -355,6 +358,18 @@ function formatRate(v) {
         <!-- ECharts 折线图 -->
         <div class="rounded-[8px] border border-[#343434] bg-[#1a1a1a] p-3">
           <div ref="chartContainer" class="h-[380px] w-full"></div>
+        </div>
+
+        <div class="rounded-[8px] border border-[#343434] bg-[#1a1a1a] px-4 py-3">
+          <div class="mb-2 text-xs text-[#8f8f8f]">图例说明</div>
+          <div class="grid grid-cols-2 gap-2 text-xs text-[#d4d4d4] md:grid-cols-3">
+            <span class="center-row gap-1.5"><i class="size-2.5 rounded-full bg-[#60a5fa]" />输入 Token（用户发送的内容）</span>
+            <span class="center-row gap-1.5"><i class="size-2.5 rounded-full bg-[#34d399]" />输出 Token（模型生成的内容）</span>
+            <span class="center-row gap-1.5"><i class="size-2.5 rounded-full bg-[#fbbf24]" />缓存读取（从缓存复用的内容）</span>
+            <span class="center-row gap-1.5"><i class="size-2.5 rounded-full bg-[#f87171]" />缓存写入（写入缓存的内容）</span>
+            <span class="center-row gap-1.5"><i class="size-2.5 rounded-full bg-[#a78bfa]" />总消耗（以上四项之和）</span>
+            <span class="center-row gap-1.5"><i class="size-2.5 rounded-full bg-[#22d3ee]" />缓存率（缓存读取占输入比例）</span>
+          </div>
         </div>
 
         <!-- 请求明细数 -->

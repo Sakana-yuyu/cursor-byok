@@ -437,17 +437,6 @@ func (s *ProxyServer) newGoproxyHandler() *goproxy.ProxyHttpServer {
 				raw = parsedRaw
 			}
 
-			// 对 commit message 等 unary RPC 使用 streaming forward：
-			// 立即返回 HTTP 响应头，body 异步填充，避免 Cursor 客户端短超时断连。
-			if req.URL != nil && isUnaryRPCNeedStreamingForward(req.URL.Path) {
-				resp, err := s.forwardToServerStreaming(req)
-				if err != nil {
-					logger.Errorf("streaming 转发失败： %s %s %v", req.Method, raw, err)
-					return req, goproxy.NewResponse(req, goproxy.ContentTypeText, http.StatusBadGateway, "bad gateway")
-				}
-				return req, resp
-			}
-
 			resp, err := s.forwardToServer(req)
 			if err != nil {
 				logger.Errorf("转发失败： %s %s %v", req.Method, raw, err)
@@ -560,13 +549,18 @@ func (s *ProxyServer) forwardToServerStreaming(incoming *http.Request) (*http.Re
 	pr, pw := io.Pipe()
 
 	// 立即构造 response：header 部分确定，body 从 pipe 读取
+	// Request 和 Status 必须设置：goproxy MITM TLS 路径在写入 response 时
+	// 会访问 resp.Request.Method（https.go:393），nil 会触发 panic 导致连接被
+	// defer rawClientTls.Close() 关闭，客户端表现为 [aborted] socket hang up。
 	resp := &http.Response{
 		StatusCode:    http.StatusOK,
+		Status:        "200 OK",
 		ProtoMajor:    1,
 		ProtoMinor:    1,
 		Header:        http.Header{},
 		Body:          pr,
 		ContentLength: -1, // chunked transfer encoding
+		Request:       incoming,
 	}
 	resp.Header.Set("Content-Type", respContentType)
 
