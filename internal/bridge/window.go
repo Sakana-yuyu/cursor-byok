@@ -1,15 +1,19 @@
 package bridge
 
 import (
+	"archive/zip"
 	"cursor/internal/buildinfo"
 	"cursor/internal/client"
 	"cursor/internal/i18n"
 	"cursor/internal/updater"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	goruntime "runtime"
 	"sync"
+	"time"
 
 	"github.com/leaanthony/u"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -249,6 +253,61 @@ func (s *WindowService) GetModelEditorContext() map[string]any {
 func (s *WindowService) OpenHistoryWindow() {
 	_ = os.MkdirAll(client.ResolveLogsRootPath(), 0o755)
 	openDirectory(client.ResolveLogsRootPath())
+}
+
+// ExportLogs 将日志目录打包为 zip 文件，返回 zip 文件路径。
+// zip 文件保存在日志目录内，命名为 export-YYYYMMDD-HHMMSS.zip。
+func (s *WindowService) ExportLogs() (string, error) {
+	logsDir := client.ResolveLogsRootPath()
+	if err := os.MkdirAll(logsDir, 0o755); err != nil {
+		return "", fmt.Errorf("创建日志目录失败: %w", err)
+	}
+
+	zipName := fmt.Sprintf("export-%s.zip", time.Now().Format("20060102-150405"))
+	zipPath := filepath.Join(logsDir, zipName)
+
+	zipFile, err := os.Create(zipPath)
+	if err != nil {
+		return "", fmt.Errorf("创建导出文件失败: %w", err)
+	}
+	defer func() { _ = zipFile.Close() }()
+
+	zipWriter := zip.NewWriter(zipFile)
+
+	walkErr := filepath.Walk(logsDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || path == zipPath {
+			return nil
+		}
+		relPath, relErr := filepath.Rel(logsDir, path)
+		if relErr != nil {
+			return relErr
+		}
+		writer, createErr := zipWriter.Create(relPath)
+		if createErr != nil {
+			return createErr
+		}
+		file, openErr := os.Open(path)
+		if openErr != nil {
+			return openErr
+		}
+		defer func() { _ = file.Close() }()
+		_, copyErr := io.Copy(writer, file)
+		return copyErr
+	})
+
+	closeErr := zipWriter.Close()
+	if walkErr != nil {
+		_ = os.Remove(zipPath)
+		return "", fmt.Errorf("打包日志失败: %w", walkErr)
+	}
+	if closeErr != nil {
+		return "", fmt.Errorf("完成打包失败: %w", closeErr)
+	}
+
+	return zipPath, nil
 }
 
 // openDirectory 用于处理与 openDirectory 相关的逻辑。

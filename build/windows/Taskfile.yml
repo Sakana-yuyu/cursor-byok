@@ -93,6 +93,28 @@ tasks:
       ARCH: '{{.ARCH | default ARCH}}'
       ARG_FLAG: '{{if eq .ARCH "amd64"}}AMD64{{else}}ARM64{{end}}'
 
+  create:nsis:installer:386:
+    summary: 生成 Windows 386 NSIS 安装包（使用独立脚本，不依赖 wails_tools.nsh）
+    internal: true
+    dir: '{{.TASKFILE_DIR}}/nsis'
+    deps:
+      - task: build
+        vars:
+          ARCH: 386
+          SCAN:
+            ref: .SCAN
+    cmds:
+      - wails3 generate webview2bootstrapper -dir "{{.PROJECT_ROOT}}/build/windows/nsis"
+      - |
+        {{if eq OS "windows"}}
+        makensis -DARG_WAILS_386_BINARY="{{.PROJECT_ROOT}}\{{.BIN_DIR}}\{{.APP_NAME}}.exe" project-386.nsi
+        {{else}}
+        makensis -DARG_WAILS_386_BINARY="{{.PROJECT_ROOT}}/{{.BIN_DIR}}/{{.APP_NAME}}.exe" project-386.nsi
+        {{end}}
+    vars:
+      PROJECT_ROOT: '{{.TASKFILE_DIR}}/../..'
+      ARCH: 386
+
   create:msix:package:
     summary: 生成 MSIX 安装包
     internal: true

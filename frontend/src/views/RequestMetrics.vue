@@ -1,8 +1,10 @@
 <script setup>
 import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
+import { usePagination } from "@/composables/usePagination";
 import { fetchRecentRequestMetrics } from "@/services/clientApi";
 import { appState, reloadUserConfig } from "@/state/appState";
+import { providerIcon, providerLabel } from "@/utils/providerMeta";
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
@@ -10,18 +12,73 @@ const router = useRouter();
 const rows = ref([]);
 const loading = ref(false);
 const error = ref("");
-const formatTime = (value) => value ? new Date(value).toLocaleString() : "-";
-const formatRate = (value) => value == null ? "-" : `${(Number(value) * 100).toFixed(1)}%`;
+
+const formatTime = (value) => (value ? new Date(value).toLocaleString() : "-");
+const formatRate = (value) => (value == null ? "-" : `${(Number(value) * 100).toFixed(1)}%`);
 const formatNumber = (value) => Number(value || 0).toLocaleString();
+
+// turn_finalized 只用于轮次，不在请求明细展示
 const visibleRows = computed(() => rows.value.filter((row) => row.kind !== "turn_finalized"));
+
+// 异常请求：provider 没有返回 usage 或明确报错，通常是流中断/取消/provider 错误
+function isAbnormalRow(row) {
+  const status = String(row?.status || "").trim();
+  if (status === "provider_error" || status === "no_usage") return true;
+  if (!row?.usagePresent) {
+    const total =
+      Number(row?.inputTokens || 0) +
+      Number(row?.outputTokens || 0) +
+      Number(row?.cacheReadTokens || 0) +
+      Number(row?.cacheWriteTokens || 0);
+    return total === 0;
+  }
+  return false;
+}
+
+const abnormalCount = computed(() => visibleRows.value.filter(isAbnormalRow).length);
+
+function statusTone(row) {
+  if (isAbnormalRow(row)) {
+    const status = String(row?.status || "").trim();
+    if (status === "provider_error") return { bg: "#3a1414", text: "#fca5a5", label: "错误" };
+    return { bg: "#3a2a14", text: "#fbbf24", label: "无 usage" };
+  }
+  return { bg: "#143524", text: "#86efac", label: row?.status || "已完成" };
+}
+
+const {
+  page,
+  pageSize,
+  pageSizeOptions,
+  totalCount,
+  totalPages,
+  pagedItems,
+  pageRangeLabel,
+  pageNumbers,
+  goToPage,
+  resetPage,
+} = usePagination(visibleRows, { defaultPageSize: 50 });
+
+const hasUsageRows = computed(() => visibleRows.value.some((row) => row.usagePresent));
+
+// 预构建 model+provider → pricing 的 Map，避免每行都线性扫描 appState.modelAdapters
+const pricingLookup = computed(() => {
+  const map = new Map();
+  for (const adapter of appState.modelAdapters) {
+    const model = String(adapter.modelID || "").trim();
+    if (!model) continue;
+    const provider = String(adapter.type || "").trim().toLowerCase();
+    const key = `${model}\n${provider}`;
+    if (!map.has(key) && adapter.pricing) map.set(key, adapter.pricing);
+  }
+  return map;
+});
 
 function pricingForRow(row) {
   if (row?.pricing?.known) return row.pricing;
   const model = String(row?.model || "").trim();
   const provider = String(row?.provider || "").trim().toLowerCase();
-  return appState.modelAdapters.find((adapter) =>
-    adapter.modelID === model && (!provider || adapter.type === provider),
-  )?.pricing || null;
+  return pricingLookup.value.get(`${model}\n${provider}`) || null;
 }
 
 function formatCost(row) {
@@ -29,21 +86,39 @@ function formatCost(row) {
   if (!pricing?.known) return "未配置";
   const rates = [pricing.input, pricing.output, pricing.cacheRead, pricing.cacheWrite];
   if (rates.some((rate) => rate == null)) return "未配置";
-  const cost = (
-    Number(row.inputTokens || 0) * pricing.input
-    + Number(row.outputTokens || 0) * pricing.output
-    + Number(row.cacheReadTokens || 0) * pricing.cacheRead
-    + Number(row.cacheWriteTokens || 0) * pricing.cacheWrite
-  ) / 1_000_000;
+  const cost =
+    (Number(row.inputTokens || 0) * pricing.input +
+      Number(row.outputTokens || 0) * pricing.output +
+      Number(row.cacheReadTokens || 0) * pricing.cacheRead +
+      Number(row.cacheWriteTokens || 0) * pricing.cacheWrite) /
+    1_000_000;
   const currency = pricing.currency || "USD";
   return `${currency} ${cost.toFixed(6)}`;
+}
+
+// 预计算当前页每行的展示元数据（tone/cost），避免模板内每行重复调用 statusTone/formatCost
+const displayRows = computed(() =>
+  pagedItems.value.map((row) => ({
+    row,
+    tone: statusTone(row),
+    cost: formatCost(row),
+  })),
+);
+
+function rateTone(rate) {
+  const value = Number(rate);
+  if (!Number.isFinite(value)) return "text-[#a3a3a3]";
+  if (value >= 0.5) return "text-[#6ee7a5]";
+  if (value >= 0.2) return "text-[#fbbf24]";
+  return "text-[#d4d4d4]";
 }
 
 async function refresh() {
   loading.value = true;
   error.value = "";
   try {
-    rows.value = await fetchRecentRequestMetrics(200);
+    rows.value = await fetchRecentRequestMetrics(0);
+    resetPage();
   } catch (cause) {
     error.value = String(cause?.message || cause || "读取请求明细失败");
   } finally {
@@ -59,62 +134,158 @@ onMounted(async () => {
 <template>
   <div class="flex h-full min-h-0 flex-col gap-4 overflow-hidden p-4 pt-0 text-[#e5e5e5]">
     <div class="flex shrink-0 items-center justify-between gap-4">
-      <div>
-        <h1 class="text-lg font-semibold text-white">缓存上下文</h1>
-        <p class="text-sm text-[#8f8f8f]">按请求查看 token 分类、缓存命中率与计费信息。</p>
+      <div class="min-w-0">
+        <div class="center-row gap-2">
+          <h1 class="text-lg font-semibold text-white">缓存上下文</h1>
+          <span class="rounded-full border border-[#3a3a3a] bg-[#1f1f1f] px-2 py-0.5 text-[11px] text-[#8f8f8f]">
+            最多 10000 条
+          </span>
+        </div>
+        <p class="mt-1 text-sm text-[#8f8f8f]">
+          按请求查看 token 分类、缓存命中率与计费信息。
+          <span v-if="abnormalCount > 0" class="text-[#fbbf24]">异常 {{ abnormalCount }} 条</span>
+          <span v-else-if="hasUsageRows" class="text-[#6ee7a5]">已记录 usage</span>
+        </p>
       </div>
       <div class="center-row gap-2">
-        <Button variant="default" :disabled="loading" @click="refresh">{{ loading ? "读取中..." : "刷新" }}</Button>
+        <Button variant="default" :disabled="loading" @click="refresh">
+          {{ loading ? "读取中..." : "刷新" }}
+        </Button>
         <Button variant="primary" @click="router.push('/')">返回首页</Button>
       </div>
     </div>
 
     <Card>
-      <div class="flex flex-wrap items-center gap-4 text-xs text-[#a3a3a3]">
+      <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-[#a3a3a3]">
         <span class="center-row gap-1.5"><i class="size-2 rounded-full bg-[#60a5fa]" />输入</span>
         <span class="center-row gap-1.5"><i class="size-2 rounded-full bg-[#f59e0b]" />输出</span>
         <span class="center-row gap-1.5"><i class="size-2 rounded-full bg-[#34d399]" />缓存读取</span>
         <span class="center-row gap-1.5"><i class="size-2 rounded-full bg-[#c084fc]" />缓存写入</span>
-        <span class="text-[#777]">缓存率 = 缓存读取 ÷ (输入 + 缓存读取)</span>
+        <span class="text-[#666]">缓存率 = 缓存读取 ÷ (输入 + 缓存读取)</span>
       </div>
     </Card>
 
-    <Card v-if="error"><div class="text-sm text-[#fca5a5]">{{ error }}</div></Card>
+    <div
+      v-if="error"
+      class="shrink-0 rounded-[8px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-sm text-[#fca5a5]"
+    >
+      {{ error }}
+    </div>
 
-    <div class="min-h-0 flex-1 overflow-auto rounded-[8px] border border-[#343434] bg-[#232323]">
-      <table class="w-full min-w-[1260px] border-collapse text-left text-sm">
-        <thead class="sticky top-0 bg-[#292929] text-xs text-[#8f8f8f]">
-          <tr>
-            <th class="p-3">状态</th>
-            <th class="p-3">时间</th>
-            <th class="p-3">模型</th>
-            <th class="p-3 text-[#60a5fa]">输入</th>
-            <th class="p-3 text-[#f59e0b]">输出</th>
-            <th class="p-3 text-[#34d399]">缓存读取</th>
-            <th class="p-3 text-[#c084fc]">缓存写入</th>
-            <th class="p-3">总 tokens</th>
-            <th class="p-3">缓存率</th>
-            <th class="p-3">请求费用</th>
+    <div class="min-h-0 flex-1 overflow-auto rounded-[10px] border border-[#343434] bg-[#1e1e1e] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+      <table class="w-full min-w-[1360px] border-collapse text-left text-sm">
+        <thead class="sticky top-0 z-10 bg-[#262626]/95 text-xs text-[#8f8f8f] backdrop-blur-sm">
+          <tr class="border-b border-[#343434]">
+            <th class="p-3 font-medium">状态</th>
+            <th class="p-3 font-medium">时间</th>
+            <th class="p-3 font-medium">供应商</th>
+            <th class="p-3 font-medium">模型</th>
+            <th class="p-3 font-medium text-[#60a5fa]">输入</th>
+            <th class="p-3 font-medium text-[#f59e0b]">输出</th>
+            <th class="p-3 font-medium text-[#34d399]">缓存读取</th>
+            <th class="p-3 font-medium text-[#c084fc]">缓存写入</th>
+            <th class="p-3 font-medium">总 tokens</th>
+            <th class="p-3 font-medium">缓存率</th>
+            <th class="p-3 font-medium">请求费用</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-if="!loading && visibleRows.length === 0">
-            <td colspan="10" class="p-8 text-center text-[#777]">暂无已记录请求</td>
+          <tr v-if="loading && totalCount === 0">
+            <td colspan="11" class="p-10 text-center text-[#777]">正在读取请求明细…</td>
           </tr>
-          <tr v-for="row in visibleRows" :key="row.eventId" class="border-t border-[#343434] text-[#d4d4d4]">
-            <td class="p-3"><span :class="row.usagePresent ? 'text-[#86efac]' : 'text-[#a3a3a3]'">{{ row.status || '已记录' }}</span></td>
-            <td class="p-3 text-[#a3a3a3]">{{ formatTime(row.at) }}</td>
-            <td class="max-w-[220px] truncate p-3" :title="row.model">{{ row.model || '-' }}</td>
-            <td class="p-3 font-medium text-[#60a5fa]">{{ formatNumber(row.inputTokens) }}</td>
-            <td class="p-3 font-medium text-[#f59e0b]">{{ formatNumber(row.outputTokens) }}</td>
-            <td class="p-3 font-medium text-[#34d399]">{{ formatNumber(row.cacheReadTokens) }}</td>
-            <td class="p-3 font-medium text-[#c084fc]">{{ formatNumber(row.cacheWriteTokens) }}</td>
-            <td class="p-3">{{ formatNumber(row.totalTokens) }}</td>
-            <td class="p-3">{{ formatRate(row.cacheRate) }}</td>
-            <td class="p-3">{{ formatCost(row) }}</td>
+          <tr v-else-if="!loading && totalCount === 0">
+            <td colspan="11" class="p-10 text-center text-[#777]">暂无已记录请求</td>
+          </tr>
+          <tr
+            v-for="item in displayRows"
+            :key="item.row.eventId"
+            class="border-t border-[#2f2f2f] text-[#d4d4d4] transition-colors hover:bg-[#262626]/80"
+          >
+            <td class="p-3">
+              <span
+                class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px]"
+                :style="{ backgroundColor: item.tone.bg, color: item.tone.text }"
+              >
+                {{ item.tone.label }}
+              </span>
+            </td>
+            <td class="whitespace-nowrap p-3 text-[#a3a3a3]" style="font-family: var(--font-num)">
+              {{ formatTime(item.row.at) }}
+            </td>
+            <td class="p-3">
+              <span class="inline-flex items-center gap-1.5 rounded-[6px] border border-[#3a3a3a] bg-[#252525] px-2 py-1 text-xs text-[#e5e5e5]">
+                <span v-if="providerIcon(item.row.provider)" :class="[providerIcon(item.row.provider), 'text-[14px]']" />
+                {{ providerLabel(item.row.provider) }}
+              </span>
+            </td>
+            <td class="max-w-[240px] truncate p-3" :title="item.row.model">{{ item.row.model || "-" }}</td>
+            <td class="p-3 font-medium text-[#60a5fa]" style="font-family: var(--font-num)">
+              {{ formatNumber(item.row.inputTokens) }}
+            </td>
+            <td class="p-3 font-medium text-[#f59e0b]" style="font-family: var(--font-num)">
+              {{ formatNumber(item.row.outputTokens) }}
+            </td>
+            <td class="p-3 font-medium text-[#34d399]" style="font-family: var(--font-num)">
+              {{ formatNumber(item.row.cacheReadTokens) }}
+            </td>
+            <td class="p-3 font-medium text-[#c084fc]" style="font-family: var(--font-num)">
+              {{ formatNumber(item.row.cacheWriteTokens) }}
+            </td>
+            <td class="p-3" style="font-family: var(--font-num)">{{ formatNumber(item.row.totalTokens) }}</td>
+            <td class="p-3 font-medium" :class="rateTone(item.row.cacheRate)" style="font-family: var(--font-num)">
+              {{ formatRate(item.row.cacheRate) }}
+            </td>
+            <td class="p-3 text-[#cfcfcf]" style="font-family: var(--font-num)">{{ item.cost }}</td>
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <div class="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-[8px] border border-[#343434] bg-[#202020] px-3 py-2 text-xs text-[#a3a3a3]">
+      <div class="center-row gap-2">
+        <span>每页</span>
+        <select
+          v-model.number="pageSize"
+          class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-xs text-white outline-none transition-colors focus:border-[#10AD5D]"
+        >
+          <option v-for="size in pageSizeOptions" :key="size" :value="size">{{ size }}</option>
+        </select>
+        <span>条 · 显示 {{ pageRangeLabel }}</span>
+      </div>
+      <div class="center-row gap-1">
+        <button
+          type="button"
+          class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2.5 text-white transition-colors hover:border-[#4a4a4a] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="page <= 1 || loading"
+          @click="goToPage(page - 1)"
+        >
+          上一页
+        </button>
+        <template v-for="(num, index) in pageNumbers" :key="num">
+          <span v-if="index > 0 && num - pageNumbers[index - 1] > 1" class="px-1 text-[#666]">…</span>
+          <button
+            type="button"
+            class="h-8 min-w-[32px] rounded-[6px] border px-2 transition-colors"
+            :class="
+              num === page
+                ? 'border-[#10AD5D] bg-[#10AD5D] text-white shadow-[0_0_0_1px_rgba(16,173,93,0.35)]'
+                : 'border-[#3f3f3f] bg-[#232323] text-white hover:border-[#4a4a4a]'
+            "
+            :disabled="loading"
+            @click="goToPage(num)"
+          >
+            {{ num }}
+          </button>
+        </template>
+        <button
+          type="button"
+          class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2.5 text-white transition-colors hover:border-[#4a4a4a] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="page >= totalPages || loading"
+          @click="goToPage(page + 1)"
+        >
+          下一页
+        </button>
+      </div>
     </div>
   </div>
 </template>

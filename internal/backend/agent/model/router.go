@@ -59,6 +59,8 @@ func (router *Router) streamAttempt(ctx context.Context, req StreamRequest, sink
 
 	resolved := req
 	resolved.Provider = strings.TrimSpace(channel.Provider)
+	resolved.ProtocolMode = strings.TrimSpace(channel.ProtocolMode)
+	resolved.ProtocolGroup = strings.TrimSpace(channel.ProtocolGroup)
 	resolved.BaseURL = strings.TrimSpace(channel.BaseURL)
 	resolved.APIKey = strings.TrimSpace(channel.APIKey)
 	resolved.ProviderModelID = strings.TrimSpace(channel.Model)
@@ -67,6 +69,7 @@ func (router *Router) streamAttempt(ctx context.Context, req StreamRequest, sink
 	resolved.ResolvedContextWindowTokens = channel.ContextWindowTokens
 	resolved.ReasoningEffort = openAIReasoningEffortFromRuntime(channel.ReasoningEffort)
 	resolved.OpenAIEndpoint = strings.TrimSpace(channel.OpenAIEndpoint)
+	resolved.OpenAIRequestGroup = strings.TrimSpace(channel.OpenAIRequestGroup)
 	resolved.OpenAIExtraParamsEnabled = channel.OpenAIExtraParamsEnabled
 	resolved.OpenAIExtraParamsJSON = strings.TrimSpace(channel.OpenAIExtraParamsJSON)
 	resolved.FastMode = channel.FastMode
@@ -107,6 +110,8 @@ func (router *Router) streamAttempt(ctx context.Context, req StreamRequest, sink
 	resolved.Messages = sanitizeProviderMessages(req.Messages)
 	if resolved.RequestKnobs != nil {
 		resolved.RequestKnobs["max_tokens"] = resolved.MaxTokens
+		resolved.RequestKnobs["protocol_mode"] = resolved.ProtocolMode
+		resolved.RequestKnobs["protocol_group"] = resolved.ProtocolGroup
 		if runtimeThinkingEffort != "" {
 			resolved.RequestKnobs["runtime_thinking_effort"] = runtimeThinkingEffort
 		} else {
@@ -119,6 +124,7 @@ func (router *Router) streamAttempt(ctx context.Context, req StreamRequest, sink
 				delete(resolved.RequestKnobs, "reasoning_effort")
 			}
 			resolved.RequestKnobs["openai_endpoint"] = resolved.OpenAIEndpoint
+			resolved.RequestKnobs["openai_request_group"] = resolved.OpenAIRequestGroup
 			resolved.RequestKnobs["openai_extra_params_enabled"] = resolved.OpenAIExtraParamsEnabled
 			resolved.RequestKnobs["openai_fast_mode"] = resolved.FastMode
 			if resolved.FastMode {

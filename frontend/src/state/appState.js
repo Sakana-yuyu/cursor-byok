@@ -13,6 +13,7 @@ import {
   openConfigWindow as openConfig,
   loadUserConfig,
   openLogsDirectory,
+  exportLogs,
   openModelConfig,
   openModelEditor,
   saveUserConfig,
@@ -30,6 +31,12 @@ export const ANTHROPIC_THINKING_EFFORT_DEFAULT = "xhigh";
 export const OPENAI_ENDPOINT_RESPONSES = "/v1/responses";
 export const OPENAI_ENDPOINT_CHAT_COMPLETIONS = "/v1/chat/completions";
 export const OPENAI_ENDPOINT_CUSTOM = "/custom";
+export const OPENAI_REQUEST_GROUP_RESPONSES = "responses";
+export const OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS = "chat_completions";
+export const OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS_COMPAT = "chat_completions_compat";
+export const PROTOCOL_MODE_AUTO = "auto";
+export const PROTOCOL_MODE_FIXED = "fixed";
+export const PROTOCOL_GROUP_ANTHROPIC_MESSAGES = "messages";
 export const OPENAI_EXTRA_PARAMS_DEFAULT_JSON = `{
 }`;
 export const EXTRA_PARAMS_DEFAULT_JSON = `{
@@ -37,6 +44,12 @@ export const EXTRA_PARAMS_DEFAULT_JSON = `{
 export const CUSTOM_HEADERS_DEFAULT_JSON = `{
 }`;
 const SUPPORTED_OPENAI_ENDPOINTS = new Set([OPENAI_ENDPOINT_RESPONSES, OPENAI_ENDPOINT_CHAT_COMPLETIONS, OPENAI_ENDPOINT_CUSTOM]);
+const SUPPORTED_OPENAI_REQUEST_GROUPS = new Set([
+  OPENAI_REQUEST_GROUP_RESPONSES,
+  OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS,
+  OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS_COMPAT,
+]);
+const SUPPORTED_PROTOCOL_MODES = new Set([PROTOCOL_MODE_AUTO, PROTOCOL_MODE_FIXED]);
 const SUPPORTED_ROUTE_MODES = new Set(["local", "upstream"]);
 const PROXY_STATE_EVENT = "proxy:state";
 const USER_CONFIG_CHANGED_EVENT = "user-config:changed";
@@ -180,6 +193,8 @@ export function buildModelAdapterTestRequestHash(source) {
     normalizeBaseURL(adapter.baseURL),
     asString(adapter.apiKey),
     asString(adapter.modelID),
+    asString(adapter.protocolMode),
+    asString(adapter.protocolGroup),
     adapter.type === "openai" ? asString(adapter.reasoningEffort || "medium") : "",
     adapter.type === "openai" ? normalizeOpenAIEndpoint(adapter.openAIEndpoint) : "",
     adapter.type === "openai" ? String(Boolean(adapter.openAIExtraParamsEnabled)) : "false",
@@ -265,12 +280,15 @@ export function createEmptyModelAdapter() {
     displayName: "",
     groupName: "",
     type: "openai",
+    protocolMode: PROTOCOL_MODE_AUTO,
+    protocolGroup: OPENAI_REQUEST_GROUP_RESPONSES,
     baseURL: "",
     apiKey: "",
     tooltipData: "备注",
     modelID: "",
     reasoningEffort: "medium",
     openAIEndpoint: OPENAI_ENDPOINT_RESPONSES,
+    openAIRequestGroup: OPENAI_REQUEST_GROUP_RESPONSES,
     openAIExtraParamsEnabled: false,
     openAIExtraParamsJSON: OPENAI_EXTRA_PARAMS_DEFAULT_JSON,
     customHeadersEnabled: false,
@@ -301,6 +319,73 @@ function normalizeOpenAIEndpoint(value) {
 
 function isValidOpenAIEndpoint(value) {
   return normalizeOpenAIEndpoint(value) !== "";
+}
+
+// normalizeOpenAIRequestGroup 归一化 OpenAI 请求分组/协议形态。
+// 与后端 modelchannel.NormalizeOpenAIRequestGroup 行为一致：
+// - 非 openai 类型返回空串；
+// - group 为空时按 endpoint 推导默认值（responses 端点 → responses，其余 → chat_completions）；
+// - group 命中三选一返回原值；其余返回空串（视为非法）。
+function normalizeOpenAIRequestGroup(type, endpoint, group) {
+  if (asString(type).toLowerCase() !== "openai") {
+    return "";
+  }
+  const normalized = asString(group).trim();
+  if (!normalized) {
+    return normalizeOpenAIEndpoint(endpoint) === OPENAI_ENDPOINT_RESPONSES
+      ? OPENAI_REQUEST_GROUP_RESPONSES
+      : OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS;
+  }
+  return SUPPORTED_OPENAI_REQUEST_GROUPS.has(normalized) ? normalized : "";
+}
+
+function isValidOpenAIRequestGroup(type, endpoint, group) {
+  return normalizeOpenAIRequestGroup(type, endpoint, group) !== "";
+}
+
+export function normalizeProtocolMode(value) {
+  const normalized = asString(value).toLowerCase();
+  if (!normalized) return PROTOCOL_MODE_AUTO;
+  return SUPPORTED_PROTOCOL_MODES.has(normalized) ? normalized : "";
+}
+
+export function classifyModelProtocol(type, modelID, baseURL, endpoint, configuredGroup = "") {
+  const provider = asString(type).toLowerCase();
+  if (provider === "anthropic") return PROTOCOL_GROUP_ANTHROPIC_MESSAGES;
+  if (provider !== "openai") return "";
+  const configured = asString(configuredGroup).toLowerCase();
+  if (SUPPORTED_OPENAI_REQUEST_GROUPS.has(configured)) return configured;
+  const normalizedEndpoint = normalizeOpenAIEndpoint(endpoint);
+  const normalizedBaseURL = asString(baseURL).toLowerCase();
+  const model = asString(modelID).toLowerCase();
+  if (normalizedBaseURL.endsWith("/responses")) {
+    return OPENAI_REQUEST_GROUP_RESPONSES;
+  }
+  if (normalizedBaseURL.endsWith("/chat/completions")) {
+    return OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS;
+  }
+  if (normalizedBaseURL.includes("api.openai.com") || /^(gpt-|o1|o3|o4)/.test(model)) {
+    return OPENAI_REQUEST_GROUP_RESPONSES;
+  }
+  if (model) return OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS;
+  return normalizedEndpoint === OPENAI_ENDPOINT_RESPONSES
+    ? OPENAI_REQUEST_GROUP_RESPONSES
+    : OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS;
+}
+
+function normalizeProtocolGroup(mode, type, modelID, baseURL, endpoint, configuredGroup) {
+  const provider = asString(type).toLowerCase();
+  const normalizedMode = normalizeProtocolMode(mode);
+  const configured = asString(configuredGroup).toLowerCase();
+  if (!normalizedMode) return "";
+  if (provider === "anthropic") return configured && configured !== PROTOCOL_GROUP_ANTHROPIC_MESSAGES
+    ? ""
+    : PROTOCOL_GROUP_ANTHROPIC_MESSAGES;
+  if (provider !== "openai") return "";
+  if (normalizedMode === PROTOCOL_MODE_FIXED) {
+    return SUPPORTED_OPENAI_REQUEST_GROUPS.has(configured) ? configured : "";
+  }
+  return classifyModelProtocol(provider, modelID, baseURL, endpoint, configured);
 }
 
 function validateJSONObject(value, label) {
@@ -376,6 +461,20 @@ export function normalizeModelAdapter(source) {
   const normalizedOpenAIEndpoint = normalizeOpenAIEndpoint(
     raw.openAIEndpoint ?? raw.openaiEndpoint ?? raw.open_ai_endpoint ?? raw.endpoint,
   );
+  const normalizedOpenAIRequestGroup = normalizeOpenAIRequestGroup(
+    normalizedType,
+    normalizedOpenAIEndpoint,
+    raw.openAIRequestGroup ?? raw.openaiRequestGroup ?? raw.open_ai_request_group,
+  );
+  const protocolMode = normalizeProtocolMode(raw.protocolMode ?? raw.protocol_mode);
+  const protocolGroup = normalizeProtocolGroup(
+    protocolMode,
+    normalizedType,
+    raw.modelID,
+    raw.baseURL || raw.url,
+    normalizedOpenAIEndpoint,
+    raw.protocolGroup ?? raw.protocol_group ?? normalizedOpenAIRequestGroup,
+  );
   const openAIExtraParamsEnabled = normalizedType === "openai"
     ? asBoolean(raw.openAIExtraParamsEnabled ?? raw.openaiExtraParamsEnabled ?? raw.open_ai_extra_params_enabled)
     : false;
@@ -395,6 +494,8 @@ export function normalizeModelAdapter(source) {
     displayName: asString(raw.displayName || raw.name),
     groupName: asString(raw.groupName || raw.group_name),
     type: SUPPORTED_MODEL_ADAPTER_TYPES.has(normalizedType) ? normalizedType : "",
+    protocolMode,
+    protocolGroup,
     baseURL: normalizeBaseURL(raw.baseURL || raw.url),
     apiKey: asString(raw.apiKey || raw.key),
     tooltipData: asString(raw.tooltipData),
@@ -403,6 +504,7 @@ export function normalizeModelAdapter(source) {
       ? normalizedReasoningEffort
       : "medium",
     openAIEndpoint: normalizedType === "openai" ? normalizedOpenAIEndpoint : "",
+    openAIRequestGroup: normalizedType === "openai" ? protocolGroup : "",
     openAIExtraParamsEnabled,
     openAIExtraParamsJSON,
     customHeadersEnabled,
@@ -488,11 +590,20 @@ export function validateModelAdapters(source) {
     if (!adapter.modelID) {
       return `${prefix} 的模型标识不能为空`;
     }
+    if (!SUPPORTED_PROTOCOL_MODES.has(adapter.protocolMode)) {
+      return `${prefix} 的协议模式仅支持 auto 或 fixed`;
+    }
+    if (!adapter.protocolGroup) {
+      return `${prefix} 的协议分组与模型类型不匹配`;
+    }
     if (adapter.type === "openai" && !SUPPORTED_REASONING_EFFORTS.has(adapter.reasoningEffort)) {
       return `${prefix} 的推理强度仅支持 low、medium、high、xhigh、max`;
     }
     if (adapter.type === "openai" && !isValidOpenAIEndpoint(adapter.openAIEndpoint)) {
       return `${prefix} 的 OpenAI 端点仅支持 /v1/responses、/v1/chat/completions 或以 / 开头的自定义路径`;
+    }
+    if (adapter.type === "openai" && !isValidOpenAIRequestGroup(adapter.type, adapter.openAIEndpoint, adapter.openAIRequestGroup)) {
+      return `${prefix} 的请求分组仅支持 responses、chat_completions、chat_completions_compat`;
     }
     if (adapter.type === "openai" && adapter.openAIExtraParamsEnabled) {
       const extraParamsError = validateOpenAIExtraParamsJSON(adapter.openAIExtraParamsJSON);
@@ -1193,10 +1304,15 @@ export function startModelAdapterTest(adapter) {
   return testModelAdapter(normalized).then((rawResult) => {
     const result = normalizeModelAdapterTestResult(rawResult);
     if (result.adapterID) {
-      appState.modelAdapterTestResults = {
-        ...appState.modelAdapterTestResults,
-        [result.adapterID]: result,
-      };
+      const existing = appState.modelAdapterTestResults[result.adapterID];
+      // "running" 状态由后端事件负责推送；Promise 回调只合并终态结果，
+      // 避免去重路径返回的陈旧 "running" 覆盖事件已送达的 success/error。
+      if (result.status !== "running" || !existing || existing.status === "running") {
+        appState.modelAdapterTestResults = {
+          ...appState.modelAdapterTestResults,
+          [result.adapterID]: result,
+        };
+      }
     }
     return result;
   });
@@ -1358,6 +1474,35 @@ export async function deleteModelAdapterAt(index) {
   );
 }
 
+export async function deleteAllModelAdapters() {
+  const currentConfig = await loadPersistedUserConfig();
+  return persistConfigPayload(
+    {
+      ...currentConfig,
+      modelAdapters: [],
+    },
+    { modelAdaptersOnly: true },
+  );
+}
+
+export async function deleteModelAdaptersBySupplier(baseURL, groupName) {
+  const currentConfig = await loadPersistedUserConfig();
+  const normalizedBaseURL = normalizeBaseURL(baseURL);
+  const normalizedGroupName = asString(groupName).trim();
+  const remaining = normalizeModelAdapters(currentConfig.modelAdapters).filter((adapter) => {
+    const matchBaseURL = normalizeBaseURL(adapter.baseURL) === normalizedBaseURL;
+    const matchGroup = asString(adapter.groupName).trim() === normalizedGroupName;
+    return !(matchBaseURL && matchGroup);
+  });
+  return persistConfigPayload(
+    {
+      ...currentConfig,
+      modelAdapters: remaining,
+    },
+    { modelAdaptersOnly: true },
+  );
+}
+
 function splitDisplayNameSeed(value) {
   const text = asString(value);
   const match = text.match(/^(.*?)(?:\s*[-+](\d+))?$/);
@@ -1491,6 +1636,15 @@ export async function toggleService() {
 
 export async function openLocalLogsDirectory() {
   await openLogsDirectory();
+}
+
+export async function exportLogsAction() {
+  try {
+    const path = await exportLogs();
+    return { ok: true, path: String(path || ""), error: "" };
+  } catch (error) {
+    return { ok: false, path: "", error: toUserError(error) };
+  }
 }
 
 export async function openConfigWindow() {

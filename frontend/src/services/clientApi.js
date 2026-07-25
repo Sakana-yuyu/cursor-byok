@@ -4,11 +4,16 @@ import {
   SavePromptInjectionSettings, RefreshPromptInjection, RefreshPromptInjectionCatalog,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
 import { GetAdRuntime, OpenExternalURL } from "@bindings/cursor/internal/bridge/adservice.js";
-import { GetHomeMetricsSummary, GetRecentRequestMetrics } from "@bindings/cursor/internal/bridge/metricsservice.js";
+import {
+  GetHomeMetricsSummary,
+  GetMetricsRangeSummary,
+  GetMetricsTokenBuckets,
+  GetRecentRequestMetrics,
+} from "@bindings/cursor/internal/bridge/metricsservice.js";
 import {
   CheckForUpdates, GetAppVersion, GetFooterAuthorInfo, InstallReadyUpdate,
   GetModelEditorContext, OpenConfigWindow, OpenFooterAuthorHome, OpenHistoryWindow,
-  OpenModelConfigWindow, OpenModelEditorWindow,
+  OpenModelConfigWindow, OpenModelEditorWindow, ExportLogs,
 } from "@bindings/cursor/internal/bridge/windowservice.js";
 import { isBrowserPreview, browserPreviewMockMetrics, browserPreviewMockProxyState } from "@/services/runtimeAdapter";
 
@@ -17,8 +22,9 @@ const desktopMethods = {
   StartProxy, StopProxy, OpenHistoryWindow, OpenConfigWindow, GetAppVersion, GetFooterAuthorInfo,
   CheckForUpdates, InstallReadyUpdate, OpenFooterAuthorHome, OpenModelConfigWindow, OpenModelEditorWindow,
   GetModelEditorContext, TestModelAdapter, GetModelAdapterTestResults, GetRecentRequestMetrics,
+  GetMetricsRangeSummary, GetMetricsTokenBuckets,
   FetchModelCatalog, GetPromptInjectionSettings, SavePromptInjectionSettings, RefreshPromptInjection,
-  RefreshPromptInjectionCatalog,
+  RefreshPromptInjectionCatalog, ExportLogs,
 };
 
 const API_LOG_PREFIX = "[clientApi]";
@@ -84,6 +90,7 @@ export function stopProxyService() {
 }
 
 export function openLogsDirectory() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "OpenHistoryWindow"); }
+export function exportLogs() { return desktopOrMock("", "@bindings/cursor/internal/bridge/windowservice.js", "ExportLogs"); }
 export function openConfigWindow() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "OpenConfigWindow"); }
 export function getAppVersion() { return desktopOrMock("Browser Preview", "@bindings/cursor/internal/bridge/windowservice.js", "GetAppVersion"); }
 export function getFooterAuthorInfo() { return desktopOrMock(null, "@bindings/cursor/internal/bridge/windowservice.js", "GetFooterAuthorInfo"); }
@@ -118,6 +125,32 @@ export function getModelAdapterTestResults() {
 
 export function fetchRecentRequestMetrics(limit = 200) {
   return desktopOrMock([], "@bindings/cursor/internal/bridge/metricsservice.js", "GetRecentRequestMetrics", [limit]);
+}
+
+export function fetchMetricsRangeSummary(startUnixMs = 0, endUnixMs = 0, model = "") {
+  return desktopOrMock(
+    {
+      requestCount: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      totalTokens: 0,
+      cacheRate: null,
+    },
+    "@bindings/cursor/internal/bridge/metricsservice.js",
+    "GetMetricsRangeSummary",
+    [startUnixMs, endUnixMs, model],
+  );
+}
+
+export function fetchMetricsTokenBuckets(startUnixMs = 0, endUnixMs = 0, model = "", bucketHours = 1) {
+  return desktopOrMock(
+    [],
+    "@bindings/cursor/internal/bridge/metricsservice.js",
+    "GetMetricsTokenBuckets",
+    [startUnixMs, endUnixMs, model, bucketHours],
+  );
 }
 
 export function fetchModelCatalog(request) {

@@ -13,7 +13,7 @@ import (
 const (
 	usageFileName          = "usage.json"
 	usageFileSchemaVersion = 2
-	usageRecentEventLimit  = 500
+	usageRecentEventLimit  = 10_000
 
 	usageEventKindProvider = "provider_call"
 	usageEventKindTurn     = "turn_finalized"
@@ -30,7 +30,7 @@ type usageFileDocument struct {
 	Totals        usageFileTotals           `json:"totals"`
 	Daily         []usageFileDaily          `json:"daily"`
 	RecentEvents  []usageFileEvent          `json:"recent_events"`
-	EventIndex    map[string]usageFileEvent `json:"event_index,omitempty"`
+	EventIndex    map[string]usageFileEvent `json:"-"`
 }
 
 type usageFileTotals struct {
@@ -132,8 +132,14 @@ func (store *UsageFileStore) UpsertEvent(event usageFileEvent) error {
 	}
 	applyUsageFileDelta(&doc, event.At, usageFileEventDelta(event))
 	doc.RecentEvents = upsertRecentUsageEvent(doc.RecentEvents, event)
-	doc.RecentEvents = trimRecentUsageEvents(doc.RecentEvents, usageRecentEventLimit)
-	doc.EventIndex = buildUsageEventIndex(doc.RecentEvents)
+	if len(doc.RecentEvents) > usageRecentEventLimit {
+		dropped := doc.RecentEvents[usageRecentEventLimit:]
+		for _, item := range dropped {
+			delete(doc.EventIndex, strings.TrimSpace(item.EventID))
+		}
+		doc.RecentEvents = doc.RecentEvents[:usageRecentEventLimit]
+	}
+	doc.EventIndex[event.EventID] = event
 	doc.SchemaVersion = usageFileSchemaVersion
 	doc.UpdatedAt = time.Now().UTC()
 	return writeJSONFileAtomic(store.path, doc)

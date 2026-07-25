@@ -140,12 +140,27 @@ func (s *ProxyService) TestModelAdapter(adapter serverconfig.ModelAdapterConfig)
 	}
 	s.storeAndEmitModelAdapterTestResult(running)
 
-	result, testErr := s.runModelAdapterTest(normalized, requestHash)
+	// 即使测试过程中发生 panic，也必须把结果从 "running" 推进到终态，
+	// 否则 getRunningModelAdapterTestResult 会永久阻止该 adapter 的后续重试。
+	result, testErr := s.safeRunModelAdapterTest(normalized, requestHash)
 	s.storeAndEmitModelAdapterTestResult(result)
 	if testErr != nil {
 		return result, testErr
 	}
 	return result, nil
+}
+
+// safeRunModelAdapterTest 包装 runModelAdapterTest，在 panic 时返回 error 结果而非让
+// "running" 状态永久滞留。
+func (s *ProxyService) safeRunModelAdapterTest(adapter serverconfig.ModelAdapterConfig, requestHash string) (result ModelAdapterTestResult, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			panicErr := fmt.Errorf("model adapter test panicked: %v", r)
+			result = buildErroredModelAdapterTestResult(adapter.ID, requestHash, panicErr)
+			err = panicErr
+		}
+	}()
+	return s.runModelAdapterTest(adapter, requestHash)
 }
 
 func normalizeSingleModelAdapterConfig(adapter serverconfig.ModelAdapterConfig) (serverconfig.ModelAdapterConfig, error) {
@@ -166,6 +181,10 @@ func (s *ProxyService) runModelAdapterTest(adapter serverconfig.ModelAdapterConf
 	startedAt := time.Now().UTC()
 	metrics, requestErr := s.executeModelAdapterNonStreamingTest(ctx, adapter)
 	if requestErr != nil {
+		// endpoint 不支持时自动探测备选 endpoint，成功后静默保存
+		if fallbackResult, ok := s.tryOpenAIEndpointFallback(ctx, adapter, requestHash, startedAt, requestErr); ok {
+			return fallbackResult, nil
+		}
 		result := buildErroredModelAdapterTestResult(adapter.ID, requestHash, requestErr)
 		return result, requestErr
 	}
@@ -240,6 +259,8 @@ func (s *ProxyService) executeOpenAIStreamingTest(ctx context.Context, adapter s
 		ModelCallID:                 requestID,
 		ModelID:                     strings.TrimSpace(adapter.ID),
 		Provider:                    "openai",
+		ProtocolMode:                strings.TrimSpace(adapter.ProtocolMode),
+		ProtocolGroup:               strings.TrimSpace(adapter.ProtocolGroup),
 		BaseURL:                     strings.TrimSpace(adapter.BaseURL),
 		APIKey:                      strings.TrimSpace(adapter.APIKey),
 		ProviderModelID:             strings.TrimSpace(adapter.ModelID),
@@ -248,6 +269,7 @@ func (s *ProxyService) executeOpenAIStreamingTest(ctx context.Context, adapter s
 		ResolvedContextWindowTokens: adapter.ContextWindowTokens,
 		ReasoningEffort:             strings.TrimSpace(adapter.ReasoningEffort),
 		OpenAIEndpoint:              strings.TrimSpace(adapter.OpenAIEndpoint),
+		OpenAIRequestGroup:          strings.TrimSpace(adapter.OpenAIRequestGroup),
 		OpenAIExtraParamsEnabled:    adapter.OpenAIExtraParamsEnabled,
 		OpenAIExtraParamsJSON:       strings.TrimSpace(adapter.OpenAIExtraParamsJSON),
 		CustomHeadersEnabled:        adapter.CustomHeadersEnabled,
@@ -307,6 +329,8 @@ func (s *ProxyService) executeAnthropicStreamingTest(ctx context.Context, adapte
 		ModelCallID:                 requestID,
 		ModelID:                     strings.TrimSpace(adapter.ID),
 		Provider:                    "anthropic",
+		ProtocolMode:                strings.TrimSpace(adapter.ProtocolMode),
+		ProtocolGroup:               strings.TrimSpace(adapter.ProtocolGroup),
 		BaseURL:                     strings.TrimSpace(adapter.BaseURL),
 		APIKey:                      strings.TrimSpace(adapter.APIKey),
 		ProviderModelID:             strings.TrimSpace(adapter.ModelID),
@@ -592,8 +616,11 @@ func buildModelAdapterTestRequestHash(adapter serverconfig.ModelAdapterConfig) s
 		source.BaseURL,
 		source.APIKey,
 		source.ModelID,
+		source.ProtocolMode,
+		source.ProtocolGroup,
 		source.ReasoningEffort,
 		source.OpenAIEndpoint,
+		source.OpenAIRequestGroup,
 		strconv.Itoa(source.OpenAIExtraParamsEnabled),
 		source.OpenAIExtraParamsJSON,
 		strconv.Itoa(source.CustomHeadersEnabled),
@@ -616,8 +643,11 @@ type modelAdapterTestHashSource struct {
 	BaseURL                     string
 	APIKey                      string
 	ModelID                     string
+	ProtocolMode                string
+	ProtocolGroup               string
 	ReasoningEffort             string
 	OpenAIEndpoint              string
+	OpenAIRequestGroup          string
 	OpenAIExtraParamsEnabled    int
 	OpenAIExtraParamsJSON       string
 	CustomHeadersEnabled        int
@@ -640,8 +670,11 @@ func normalizeModelAdapterTestHashSource(adapter serverconfig.ModelAdapterConfig
 		BaseURL:                     baseURL,
 		APIKey:                      strings.TrimSpace(adapter.APIKey),
 		ModelID:                     strings.TrimSpace(adapter.ModelID),
+		ProtocolMode:                modelchannel.NormalizeProtocolMode(adapter.ProtocolMode),
+		ProtocolGroup:               modelchannel.ResolveProtocolGroup(adapter.ProtocolMode, adapter.Type, adapter.ModelID, adapter.BaseURL, adapter.OpenAIEndpoint, firstNonEmptyTrimmed(adapter.ProtocolGroup, adapter.OpenAIRequestGroup)),
 		ReasoningEffort:             normalizeModelAdapterTestProviderReasoning(adapter),
 		OpenAIEndpoint:              modelchannel.NormalizeOpenAIEndpoint(adapter.Type, adapter.OpenAIEndpoint),
+		OpenAIRequestGroup:          modelchannel.NormalizeOpenAIRequestGroup(adapter.Type, adapter.OpenAIEndpoint, adapter.OpenAIRequestGroup),
 		OpenAIExtraParamsEnabled:    normalizeModelAdapterTestBool(adapter.Type == "openai" && adapter.OpenAIExtraParamsEnabled),
 		OpenAIExtraParamsJSON:       normalizeModelAdapterTestOpenAIExtraParamsJSON(adapter),
 		CustomHeadersEnabled:        normalizeModelAdapterTestBool(adapter.CustomHeadersEnabled),
@@ -768,4 +801,191 @@ func firstNonEmptyTrimmed(values ...string) string {
 		}
 	}
 	return ""
+}
+
+type openAIProbeCandidate struct {
+	Endpoint     string
+	RequestGroup string
+}
+
+// shouldTryEndpointFallback 判断错误是否属于 endpoint / 协议形态不支持的典型特征。
+func shouldTryEndpointFallback(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	if msg == "" {
+		return false
+	}
+	return strings.Contains(msg, "convert_request_failed") ||
+		strings.Contains(msg, "not implemented") ||
+		strings.Contains(msg, "endpoint_not_supported") ||
+		strings.Contains(msg, "status=404") ||
+		strings.Contains(msg, "status=501")
+}
+
+func buildOpenAIProbeCandidates(adapter serverconfig.ModelAdapterConfig) []openAIProbeCandidate {
+	currentEndpoint := modelchannel.NormalizeOpenAIEndpoint("openai", adapter.OpenAIEndpoint)
+	currentGroup := modelchannel.ResolveProtocolGroup(adapter.ProtocolMode, "openai", adapter.ModelID, adapter.BaseURL, currentEndpoint, firstNonEmptyTrimmed(adapter.ProtocolGroup, adapter.OpenAIRequestGroup))
+	candidates := make([]openAIProbeCandidate, 0, 4)
+	seen := map[string]struct{}{}
+	appendCandidate := func(endpoint string, group string) {
+		normalizedEndpoint := modelchannel.NormalizeOpenAIEndpoint("openai", endpoint)
+		normalizedGroup := modelchannel.NormalizeOpenAIRequestGroup("openai", normalizedEndpoint, group)
+		if normalizedEndpoint == "" || normalizedGroup == "" {
+			return
+		}
+		key := normalizedEndpoint + "\n" + normalizedGroup
+		if _, exists := seen[key]; exists {
+			return
+		}
+		seen[key] = struct{}{}
+		candidates = append(candidates, openAIProbeCandidate{Endpoint: normalizedEndpoint, RequestGroup: normalizedGroup})
+	}
+
+	appendCandidate(currentEndpoint, currentGroup)
+	if currentGroup == modelchannel.OpenAIRequestGroupChatCompletions {
+		appendCandidate(currentEndpoint, modelchannel.OpenAIRequestGroupChatCompletionsCompat)
+	}
+	if currentEndpoint == modelchannel.OpenAIEndpointCustom {
+		return candidates
+	}
+	if currentEndpoint != modelchannel.OpenAIEndpointChatCompletions {
+		appendCandidate(modelchannel.OpenAIEndpointChatCompletions, modelchannel.OpenAIRequestGroupChatCompletions)
+	}
+	appendCandidate(modelchannel.OpenAIEndpointChatCompletions, modelchannel.OpenAIRequestGroupChatCompletionsCompat)
+	if currentEndpoint != modelchannel.OpenAIEndpointResponses {
+		appendCandidate(modelchannel.OpenAIEndpointResponses, modelchannel.OpenAIRequestGroupResponses)
+	}
+	return candidates
+}
+
+func buildSuccessfulModelAdapterTestResult(adapterID string, requestHash string, startedAt time.Time, metrics *modelAdapterTestMetrics) (ModelAdapterTestResult, bool) {
+	if metrics == nil {
+		return ModelAdapterTestResult{}, false
+	}
+	if metrics.finishedAt.IsZero() {
+		metrics.finishedAt = time.Now().UTC()
+	}
+	if metrics.firstTextTokenAt.IsZero() {
+		return ModelAdapterTestResult{}, false
+	}
+	outputTokens := metrics.outputTokens
+	tokensEstimated := false
+	if !metrics.outputProvided || outputTokens <= 0 {
+		outputTokens = estimateBenchmarkTextTokens(metrics.text.String())
+		tokensEstimated = true
+	}
+	firstTextTokenMS := metrics.firstTextTokenAt.Sub(startedAt).Milliseconds()
+	if firstTextTokenMS < 0 {
+		firstTextTokenMS = 0
+	}
+	totalDurationMS := metrics.finishedAt.Sub(startedAt).Milliseconds()
+	if totalDurationMS < 0 {
+		totalDurationMS = 0
+	}
+	tokensPerSecond := 0.0
+	totalDuration := metrics.finishedAt.Sub(startedAt)
+	if outputTokens > 0 && totalDuration > 0 {
+		tokensPerSecond = float64(outputTokens) / totalDuration.Seconds()
+	}
+	result := ModelAdapterTestResult{
+		AdapterID:        adapterID,
+		RequestHash:      requestHash,
+		Status:           string(ModelAdapterTestStatusSuccess),
+		TokensPerSecond:  tokensPerSecond,
+		FirstTextTokenMS: firstTextTokenMS,
+		TotalDurationMS:  totalDurationMS,
+		OutputTokens:     outputTokens,
+		TokensEstimated:  tokensEstimated,
+		TestedAt:         time.Now().UTC().Format(time.RFC3339Nano),
+		RawResponse:      strings.TrimSpace(metrics.rawResponse),
+	}
+	result.SummaryText = buildModelAdapterTestSummaryText(result)
+	return result, true
+}
+
+// tryOpenAIEndpointFallback 在当前 endpoint/请求分组失败且错误符合"不支持"特征时，
+// 依次探测候选协议组合。成功后静默保存新的 endpoint + request group 到用户配置。
+func (s *ProxyService) tryOpenAIEndpointFallback(
+	ctx context.Context,
+	adapter serverconfig.ModelAdapterConfig,
+	requestHash string,
+	startedAt time.Time,
+	originalErr error,
+) (ModelAdapterTestResult, bool) {
+	if strings.TrimSpace(adapter.Type) != "openai" {
+		return ModelAdapterTestResult{}, false
+	}
+	if modelchannel.NormalizeProtocolMode(adapter.ProtocolMode) == modelchannel.ProtocolModeFixed {
+		return ModelAdapterTestResult{}, false
+	}
+	if !shouldTryEndpointFallback(originalErr) {
+		return ModelAdapterTestResult{}, false
+	}
+	candidates := buildOpenAIProbeCandidates(adapter)
+	if len(candidates) <= 1 {
+		return ModelAdapterTestResult{}, false
+	}
+	for _, candidate := range candidates[1:] {
+		fallbackCtx, cancel := context.WithTimeout(context.Background(), modelAdapterTestTimeout)
+		fallbackAdapter := adapter
+		fallbackAdapter.OpenAIEndpoint = candidate.Endpoint
+		fallbackAdapter.OpenAIRequestGroup = candidate.RequestGroup
+		fallbackAdapter.ProtocolGroup = candidate.RequestGroup
+		metrics, retryErr := s.executeModelAdapterNonStreamingTest(fallbackCtx, fallbackAdapter)
+		cancel()
+		if retryErr != nil {
+			continue
+		}
+		result, ok := buildSuccessfulModelAdapterTestResult(adapter.ID, requestHash, startedAt, metrics)
+		if !ok {
+			continue
+		}
+		s.persistOpenAITransportOverride(adapter.ID, candidate.Endpoint, candidate.RequestGroup)
+		return result, true
+	}
+	return ModelAdapterTestResult{}, false
+}
+
+// persistOpenAITransportOverride 把单个 adapter 的 endpoint / request group 静默写回配置文件。
+func (s *ProxyService) persistOpenAITransportOverride(adapterID string, endpoint string, requestGroup string) {
+	if s == nil || strings.TrimSpace(adapterID) == "" || strings.TrimSpace(endpoint) == "" {
+		return
+	}
+	cfg, err := s.LoadUserConfig()
+	if err != nil || len(cfg.ModelAdapters) == 0 {
+		return
+	}
+	changed := false
+	for index := range cfg.ModelAdapters {
+		item := &cfg.ModelAdapters[index]
+		if strings.TrimSpace(item.ID) != strings.TrimSpace(adapterID) {
+			continue
+		}
+		if modelchannel.NormalizeProtocolMode(item.ProtocolMode) == modelchannel.ProtocolModeFixed ||
+			strings.TrimSpace(item.OpenAIEndpoint) == modelchannel.OpenAIEndpointCustom {
+			return
+		}
+		if strings.TrimSpace(item.OpenAIEndpoint) != strings.TrimSpace(endpoint) {
+			item.OpenAIEndpoint = endpoint
+			changed = true
+		}
+		normalizedGroup := modelchannel.NormalizeOpenAIRequestGroup("openai", endpoint, requestGroup)
+		if normalizedGroup != "" && strings.TrimSpace(item.OpenAIRequestGroup) != normalizedGroup {
+			item.OpenAIRequestGroup = normalizedGroup
+			changed = true
+		}
+		if normalizedGroup != "" && strings.TrimSpace(item.ProtocolGroup) != normalizedGroup {
+			item.ProtocolGroup = normalizedGroup
+			changed = true
+		}
+		break
+	}
+	if !changed {
+		return
+	}
+	if err := s.SaveUserConfig(cfg); err != nil {
+		fmt.Printf("model adapter transport fallback persist failed adapter=%s endpoint=%s group=%s err=%v\n", adapterID, endpoint, requestGroup, err)
+	}
 }

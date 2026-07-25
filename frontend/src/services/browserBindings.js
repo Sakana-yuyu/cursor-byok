@@ -66,6 +66,7 @@ export const GetModelEditorContext = () => Promise.resolve(clone(editorContext))
 export const OpenConfigWindow = () => Promise.resolve();
 export const OpenFooterAuthorHome = () => Promise.resolve();
 export const OpenHistoryWindow = () => Promise.resolve();
+export const ExportLogs = () => Promise.resolve("");
 export const OpenModelConfigWindow = () => Promise.resolve();
 export const OpenModelEditorWindow = (index, adapterJSON) => {
   editorContext = { index: Number.isInteger(index) ? index : -1, adapterJSON: String(adapterJSON || "{}") };
@@ -75,6 +76,16 @@ export const TestModelAdapter = (adapter) => Promise.resolve({ status: "success"
 export const GetModelAdapterTestResults = () => Promise.resolve([]);
 export const FetchModelCatalog = () => Promise.resolve({ models: [] });
 export const GetRecentRequestMetrics = () => Promise.resolve([]);
+export const GetMetricsRangeSummary = () => Promise.resolve({
+  requestCount: 0,
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheReadTokens: 0,
+  cacheWriteTokens: 0,
+  totalTokens: 0,
+  cacheRate: null,
+});
+export const GetMetricsTokenBuckets = () => Promise.resolve([]);
 export const GetPromptInjectionSettings = () => Promise.resolve({});
 export const SavePromptInjectionSettings = (value) => Promise.resolve(value);
 export const RefreshPromptInjection = () => Promise.resolve();

@@ -3,7 +3,6 @@ package modeladapter
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -302,22 +301,16 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 	streamCtx, streamIdle := newProviderStreamIdleWatchdog(ctx, req.ProviderStreamIdleTimeout)
 	defer streamIdle.Stop()
 
-	buildHTTPRequest := func(requestContext context.Context) (*http.Request, error) {
-		httpReq, err := http.NewRequestWithContext(requestContext, http.MethodPost, requestURL, bytes.NewReader(payload))
-		if err != nil {
-			return nil, err
-		}
+	resp, err := doProviderRequestWithGzipFallback(streamCtx, adapter.client, "anthropic", req.RequestID, req.ModelCallID, payload, requestURL, func(httpReq *http.Request) error {
 		ApplyAnthropicCompatibleAuthHeaders(httpReq, apiKey)
 		httpReq.Header.Set("anthropic-version", "2023-06-01")
 		httpReq.Header.Set("content-type", "application/json")
 		httpReq.Header.Set("User-Agent", AnthropicClaudeCodeUserAgent)
 		if err := ApplyCustomHeaders(httpReq, req.CustomHeadersEnabled, req.CustomHeadersJSON); err != nil {
-			return nil, err
+			return err
 		}
-		return httpReq, nil
-	}
-
-	resp, err := doProviderRequestWithRetry(streamCtx, adapter.client, "anthropic", req.RequestID, req.ModelCallID, buildHTTPRequest)
+		return nil
+	})
 	if err != nil {
 		if idleErr := streamIdle.Err(); idleErr != nil {
 			err = idleErr

@@ -14,6 +14,10 @@ const (
 	OpenAIEndpointResponses       = "/v1/responses"
 	OpenAIEndpointChatCompletions = "/v1/chat/completions"
 	OpenAIEndpointCustom          = "/custom"
+
+	OpenAIRequestGroupResponses             = "responses"
+	OpenAIRequestGroupChatCompletions       = "chat_completions"
+	OpenAIRequestGroupChatCompletionsCompat = "chat_completions_compat"
 )
 
 func NormalizeBaseURL(raw string) (string, error) {
@@ -58,6 +62,35 @@ func NormalizeOpenAIEndpoint(providerType string, endpoint string) string {
 	}
 }
 
+func NormalizeOpenAIRequestGroup(providerType string, endpoint string, group string) string {
+	if strings.TrimSpace(strings.ToLower(providerType)) != "openai" {
+		return ""
+	}
+	normalized := strings.TrimSpace(group)
+	switch normalized {
+	case "":
+		switch OpenAIEndpointShape(NormalizeOpenAIEndpoint(providerType, endpoint)) {
+		case OpenAIRequestGroupResponses:
+			return OpenAIRequestGroupResponses
+		default:
+			return OpenAIRequestGroupChatCompletions
+		}
+	case OpenAIRequestGroupResponses, OpenAIRequestGroupChatCompletions, OpenAIRequestGroupChatCompletionsCompat:
+		return normalized
+	default:
+		return ""
+	}
+}
+
+func OpenAIRequestGroupSupportsAdvancedFields(group string) bool {
+	switch strings.TrimSpace(group) {
+	case OpenAIRequestGroupChatCompletionsCompat:
+		return false
+	default:
+		return true
+	}
+}
+
 // OpenAIEndpointShape 根据 endpoint 路径末段推断协议形态。
 // 返回 "responses"（Responses API）或 "chat/completions"（Chat Completions API）。
 // 这样 /v1/chat/completions、/v4/chat/completions、/chat/completions 都走同一协议分支。
@@ -65,7 +98,7 @@ func OpenAIEndpointShape(endpoint string) string {
 	lower := strings.ToLower(strings.TrimSpace(endpoint))
 	switch {
 	case strings.HasSuffix(lower, "/responses"):
-		return "responses"
+		return OpenAIRequestGroupResponses
 	default:
 		return "chat/completions"
 	}

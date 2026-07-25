@@ -17,12 +17,12 @@ const (
 )
 
 func initializePendingExecForTracking(pending runtimecore.PendingExec) runtimecore.PendingExec {
-	if strings.TrimSpace(pending.ExecKind) != "shell" {
-		return pending
-	}
 	now := time.Now().UTC()
 	if pending.OpenedAt.IsZero() {
 		pending.OpenedAt = now
+	}
+	if strings.TrimSpace(pending.ExecKind) != "shell" {
+		return pending
 	}
 	if pending.LastShellActivityAt.IsZero() {
 		pending.LastShellActivityAt = pending.OpenedAt

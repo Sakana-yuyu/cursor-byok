@@ -103,7 +103,7 @@ tasks:
           SCAN: '{{.SCAN}}'
 
   build:windows:386:
-    internal: true
+    summary: 构建 Windows 386 (x86) ZIP 绿色版
     cmds:
       - task: windows:create:zip
         vars:
@@ -127,6 +127,14 @@ tasks:
       - task: windows:create:nsis:installer
         vars:
           ARCH: amd64
+          SCAN: '{{.SCAN}}'
+
+  build:windows:installer:386:
+    summary: 构建 Windows 386 NSIS 安装程序
+    cmds:
+      - task: windows:create:nsis:installer:386
+        vars:
+          ARCH: 386
           SCAN: '{{.SCAN}}'
 
   build:linux:current:

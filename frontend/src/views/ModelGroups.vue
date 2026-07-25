@@ -3,6 +3,7 @@ import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
 import { useRouter } from "vue-router";
 import { appState, openModelEditorWindow, reloadUserConfig } from "@/state/appState";
+import { providerLabel } from "@/utils/providerMeta";
 import { computed, onMounted } from "vue";
 
 const router = useRouter();
@@ -19,7 +20,7 @@ const groups = computed(() => {
 });
 
 function types(group) {
-  return [...new Set(group.adapters.map(({ adapter }) => adapter.type === "anthropic" ? "Anthropic" : "OpenAI"))].join(" / ");
+  return [...new Set(group.adapters.map(({ adapter }) => providerLabel(adapter.type)))].join(" / ");
 }
 
 async function openGroup(group) {
