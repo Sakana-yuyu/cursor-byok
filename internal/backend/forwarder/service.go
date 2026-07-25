@@ -884,6 +884,8 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 			Message: buildExecAbortMessage(pending),
 		})
 	}
+	// 清除所有 pending exec，防止 stream 永远卡在 running
+	cleanupAllPendingExecs(stream)
 	if hasCheckpoint {
 		if err := service.publishCheckpoint(stream.RequestID, stream.ConversationID); err != nil {
 			return err
@@ -1783,6 +1785,7 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 		stream.PendingExecs[pendingExec.ExecID] = pendingExec
 		stream.mu.Unlock()
 		service.scheduleShellForegroundRecovery(stream.RequestID, pendingExec)
+		service.scheduleExecWatchdog(stream.RequestID, pendingExec)
 		removePendingExec := func() {
 			stream.mu.Lock()
 			delete(stream.PendingExecs, pendingExec.ExecID)

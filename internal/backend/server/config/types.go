@@ -29,12 +29,15 @@ type ModelAdapterConfig struct {
 	DisplayName                 string        `json:"displayName" yaml:"displayName"`
 	GroupName                   string        `json:"groupName,omitempty" yaml:"groupName,omitempty"`
 	Type                        string        `json:"type" yaml:"type"`
+	ProtocolMode                string        `json:"protocolMode,omitempty" yaml:"protocolMode,omitempty"`
+	ProtocolGroup               string        `json:"protocolGroup,omitempty" yaml:"protocolGroup,omitempty"`
 	BaseURL                     string        `json:"baseURL" yaml:"baseURL"`
 	APIKey                      string        `json:"apiKey" yaml:"apiKey"`
 	TooltipData                 string        `json:"tooltipData" yaml:"tooltipData"`
 	ModelID                     string        `json:"modelID" yaml:"modelID"`
 	ReasoningEffort             string        `json:"reasoningEffort" yaml:"reasoningEffort"`
 	OpenAIEndpoint              string        `json:"openAIEndpoint" yaml:"openAIEndpoint"`
+	OpenAIRequestGroup          string        `json:"openAIRequestGroup,omitempty" yaml:"openAIRequestGroup,omitempty"`
 	OpenAIExtraParamsEnabled    bool          `json:"openAIExtraParamsEnabled" yaml:"openAIExtraParamsEnabled"`
 	OpenAIExtraParamsJSON       string        `json:"openAIExtraParamsJSON" yaml:"openAIExtraParamsJSON"`
 	CustomHeadersEnabled        bool          `json:"customHeadersEnabled" yaml:"customHeadersEnabled"`
@@ -124,16 +127,25 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			return nil, err
 		}
 		nextType := normalizeModelAdapterType(item.Type)
+		protocolMode := modelchannel.NormalizeProtocolMode(item.ProtocolMode)
+		protocolGroup := modelchannel.ResolveProtocolGroup(protocolMode, nextType, item.ModelID, baseURL, item.OpenAIEndpoint, firstNonEmptyProtocolGroup(item.ProtocolGroup, item.OpenAIRequestGroup))
+		openAIEndpoint := modelchannel.NormalizeOpenAIEndpoint(nextType, item.OpenAIEndpoint)
+		if nextType == "openai" && openAIEndpoint != modelchannel.OpenAIEndpointCustom {
+			openAIEndpoint = modelchannel.OpenAIEndpointForProtocolGroup(protocolGroup, openAIEndpoint)
+		}
 		next := ModelAdapterConfig{
 			DisplayName:          strings.TrimSpace(item.DisplayName),
 			GroupName:            strings.TrimSpace(item.GroupName),
 			Type:                 nextType,
+			ProtocolMode:         protocolMode,
+			ProtocolGroup:        protocolGroup,
 			BaseURL:              baseURL,
 			APIKey:               strings.TrimSpace(item.APIKey),
 			TooltipData:          strings.TrimSpace(item.TooltipData),
 			ModelID:              strings.TrimSpace(item.ModelID),
 			ReasoningEffort:      normalizeReasoningEffort(item.ReasoningEffort),
-			OpenAIEndpoint:       modelchannel.NormalizeOpenAIEndpoint(item.Type, item.OpenAIEndpoint),
+			OpenAIEndpoint:       openAIEndpoint,
+			OpenAIRequestGroup:   modelchannel.NormalizeOpenAIRequestGroup(nextType, openAIEndpoint, protocolGroup),
 			ContextWindowTokens:  modelcontext.Resolve(item.ModelID, normalizeMaxCompletionTokens(item.ContextWindowTokens)),
 			MaxCompletionTokens:  normalizeMaxCompletionTokens(item.MaxCompletionTokens),
 			AnthropicMaxTokens:   normalizeMaxCompletionTokens(item.AnthropicMaxTokens),
@@ -163,10 +175,16 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			return nil, i18n.NewError("error.model_adapter.tooltip_required", i18n.CodeInvalidModelAdapter, "模型适配器 tooltipData 不能为空")
 		case next.ModelID == "":
 			return nil, i18n.NewError("error.model_adapter.model_id_required", i18n.CodeInvalidModelAdapter, "模型适配器 modelID 不能为空")
+		case next.ProtocolMode == "":
+			return nil, i18n.NewError("error.model_adapter.protocol_mode_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 protocolMode 仅支持 auto 或 fixed")
+		case next.ProtocolGroup == "":
+			return nil, i18n.NewError("error.model_adapter.protocol_group_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 protocolGroup 与 provider 不匹配")
 		case next.Type == "openai" && next.ReasoningEffort == "":
 			return nil, i18n.NewError("error.model_adapter.reasoning_effort_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 reasoningEffort 仅支持 low、medium、high、xhigh、max")
 		case next.Type == "openai" && next.OpenAIEndpoint == "":
 			return nil, i18n.NewError("error.model_adapter.endpoint_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 openAIEndpoint 仅支持 /v1/responses、/v1/chat/completions 或 /custom（自定义路径）")
+		case next.Type == "openai" && next.OpenAIRequestGroup == "":
+			return nil, i18n.NewError("error.model_adapter.request_group_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 openAIRequestGroup 仅支持 responses、chat_completions、chat_completions_compat")
 		case next.Type == "openai" && next.OpenAIExtraParamsEnabled:
 			if err := validateJSONMap(next.OpenAIExtraParamsJSON, "openAIExtraParamsJSON"); err != nil {
 				return nil, err
@@ -204,6 +222,15 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 		normalized = append(normalized, next)
 	}
 	return normalized, nil
+}
+
+func firstNonEmptyProtocolGroup(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func validateJSONMap(value string, fieldName string) error {

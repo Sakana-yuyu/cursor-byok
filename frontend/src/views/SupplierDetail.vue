@@ -15,8 +15,12 @@ import {
   toUserError,
 } from "@/state/appState";
 import { fetchModelCatalog } from "@/services/clientApi";
+import { providerIcon } from "@/utils/providerMeta";
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+
+const OPENAI_ENDPOINT_RESPONSES = "/v1/responses";
+const OPENAI_ENDPOINT_CHAT = "/v1/chat/completions";
 
 const route = useRoute();
 const router = useRouter();
@@ -27,17 +31,6 @@ const queryGroupName = computed(() => String(route.query.groupName || "").trim()
 const title = computed(() => queryGroupName.value || "默认分组");
 const subtitle = computed(() => queryBaseURL.value);
 
-const providers = [
-  { value: "openai", label: "OpenAI / OAI", icon: "icon-[bxl--openai]" },
-  { value: "anthropic", label: "Anthropic / A社", icon: "icon-[logos--claude-icon]" },
-];
-
-function providerIcon(type) {
-  return providers.find((p) => p.value === type)?.icon || "";
-}
-function providerLabel(type) {
-  return providers.find((p) => p.value === type)?.label || type;
-}
 function formatHost(value) {
   const text = String(value || "").trim();
   if (!text) return "-";
@@ -48,6 +41,31 @@ function maskSecret(value) {
   if (!text) return "-";
   if (text.length <= 8) return `${"*".repeat(Math.max(text.length - 2, 0))}${text.slice(-2)}`;
   return `${text.slice(0, 4)}****${text.slice(-4)}`;
+}
+
+function formatOpenAIRequestGroup(group, endpoint) {
+  const normalizedGroup = String(group || "").trim();
+  if (normalizedGroup === "responses") return "Responses";
+  if (normalizedGroup === "chat_completions") return "Chat Completions";
+  if (normalizedGroup === "chat_completions_compat") return "Chat Completions / Compat";
+  return String(endpoint || "").trim() === OPENAI_ENDPOINT_RESPONSES ? "Responses" : "Chat Completions";
+}
+
+function defaultOpenAIRequestGroup(endpoint) {
+  return String(endpoint || "").trim() === OPENAI_ENDPOINT_RESPONSES ? "responses" : "chat_completions";
+}
+
+function resolvedOpenAIEndpoint(adapter) {
+  return String(adapter?.openAIEndpoint || "").trim() || OPENAI_ENDPOINT_RESPONSES;
+}
+
+function resolvedOpenAIRequestGroup(adapter) {
+  return String(adapter?.protocolGroup || adapter?.openAIRequestGroup || "").trim() || defaultOpenAIRequestGroup(resolvedOpenAIEndpoint(adapter));
+}
+
+function transportBadgeText(adapter) {
+  if (adapter?.type !== "openai") return "";
+  return `${resolvedOpenAIEndpoint(adapter)} · ${formatOpenAIRequestGroup(resolvedOpenAIRequestGroup(adapter), resolvedOpenAIEndpoint(adapter))}`;
 }
 
 // 该供应商下的模型（匹配 baseURL + groupName）
@@ -81,8 +99,15 @@ function toggleCatalogModel(modelID) {
   if (next.has(key)) next.delete(key); else next.add(key);
   selectedCatalogModels.value = next;
 }
+const selectedCatalogCount = computed(() =>
+  catalogModels.value.reduce((acc, m) => acc + (isCatalogModelSelected(m.id) ? 1 : 0), 0),
+);
+const allCatalogSelected = computed(
+  () => catalogModels.value.length > 0 && catalogModels.value.every((m) => isCatalogModelSelected(m.id)),
+);
+
 function toggleAllCatalogModels() {
-  if (catalogModels.value.every((m) => isCatalogModelSelected(m.id))) {
+  if (allCatalogSelected.value) {
     selectedCatalogModels.value = new Set();
   } else {
     selectedCatalogModels.value = new Set(catalogModels.value.map((m) => catalogSelectionKey(m.id)));
@@ -123,8 +148,10 @@ async function handleFetchModels() {
 function createEmptyModelAdapter() {
   return {
     id: "", displayName: "", groupName: "", type: "openai",
+    protocolMode: "auto", protocolGroup: "responses",
     baseURL: "", apiKey: "", tooltipData: "", modelID: "",
     reasoningEffort: "medium", openAIEndpoint: "/v1/responses",
+    openAIRequestGroup: "responses",
     openAIExtraParamsEnabled: false, openAIExtraParamsJSON: "{\n}",
     customHeadersEnabled: false, customHeadersJSON: "{\n}",
     anthropicExtraParamsEnabled: false, anthropicExtraParamsJSON: "{\n}",
@@ -157,7 +184,10 @@ async function handleBatchAddModels() {
       tooltipData: `来自 ${formatHost(queryBaseURL.value)}`,
       contextWindowTokens: model.contextWindowTokens || 0,
       pricing: model.pricing || null,
-      openAIEndpoint: supplierMeta.value.type === "openai" ? "/v1/responses" : "",
+      protocolMode: "auto",
+      protocolGroup: supplierMeta.value.type === "anthropic" ? "messages" : "",
+      openAIEndpoint: supplierMeta.value.type === "openai" ? OPENAI_ENDPOINT_RESPONSES : "",
+      openAIRequestGroup: "",
       anthropicThinkingEffort: supplierMeta.value.type === "anthropic" ? "xhigh" : "",
     }));
     const result = await saveModelAdaptersBatch(adapters);
@@ -221,7 +251,50 @@ async function duplicateAdapter(adapter) {
 function testResult(adapter) { return getModelAdapterTestResultByID(adapter?.id); }
 function isTesting(adapter) { return testResult(adapter)?.status === "running"; }
 async function testAdapter(adapter) {
-  try { await runModelAdapterTest(adapter); } catch (_e) { /* card shows result */ }
+  try {
+    await runModelAdapterTest(adapter);
+    await reloadUserConfig({ modelAdaptersOnly: true });
+  } catch (_e) {
+    /* card shows result */
+  }
+}
+
+// 批量测试进度
+const batchTesting = ref(false);
+const batchProgress = computed(() => {
+  const total = supplierAdapters.value.length;
+  if (total === 0) return { total: 0, done: 0, pct: 0 };
+  const done = supplierAdapters.value.filter((a) => {
+    const r = testResult(a);
+    return r && r.status !== "running";
+  }).length;
+  return { total, done, pct: Math.round((done / total) * 100) };
+});
+
+async function testAllAdapters() {
+  if (batchTesting.value || supplierAdapters.value.length === 0) return;
+  batchTesting.value = true;
+  try {
+    // 并发上限 3，避免打满上游
+    const queue = [...supplierAdapters.value];
+    const concurrency = 3;
+    const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+      while (queue.length > 0) {
+        const adapter = queue.shift();
+        if (!adapter) break;
+        try { await runModelAdapterTest(adapter); } catch (_e) { /* ignore */ }
+      }
+    });
+    await Promise.allSettled(workers);
+    await reloadUserConfig({ modelAdaptersOnly: true });
+  } finally {
+    batchTesting.value = false;
+  }
+}
+
+function cancelBatchTest() {
+  // 目前测试是 fire-and-forget，无法真正取消；仅标记 UI 停止
+  batchTesting.value = false;
 }
 
 onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }).catch(() => {}); });
@@ -241,6 +314,15 @@ onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }).catch(() =>
             </div>
           </div>
           <div class="center-row gap-2">
+            <Button
+              variant="default"
+              :disabled="batchTesting || supplierAdapters.length === 0"
+              @click="testAllAdapters"
+            >
+              {{ batchTesting
+                ? `测试中 ${batchProgress.done}/${batchProgress.total}`
+                : `一键测试 (${supplierAdapters.length})` }}
+            </Button>
             <Button variant="default" :disabled="catalogLoading || !supplierMeta" @click="handleFetchModels">
               {{ catalogLoading ? "拉取中..." : "拉取模型" }}
             </Button>
@@ -251,9 +333,9 @@ onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }).catch(() =>
         <!-- 远程拉取的模型选择列表 -->
         <div v-if="catalogModels.length > 0" class="rounded-[8px] border border-[#343434] bg-[#252525] p-3">
           <div class="mb-2 flex items-center justify-between text-xs text-[#a3a3a3]">
-            <span>已选 {{ catalogModels.filter((m) => isCatalogModelSelected(m.id)).length }}/{{ catalogModels.length }}</span>
+            <span>已选 {{ selectedCatalogCount }}/{{ catalogModels.length }}</span>
             <button type="button" class="text-[#6ee7a5]" @click="toggleAllCatalogModels">
-              {{ catalogModels.every((m) => isCatalogModelSelected(m.id)) ? "取消全选" : "全选" }}
+              {{ allCatalogSelected ? "取消全选" : "全选" }}
             </button>
           </div>
           <div class="max-h-48 overflow-y-auto">
@@ -284,7 +366,14 @@ onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }).catch(() =>
                   <div class="min-w-0 flex-1">
                     <div class="truncate text-base font-medium text-white">{{ adapter.displayName }}</div>
                     <div class="mt-1 truncate text-sm text-[#8f8f8f]">{{ adapter.modelID }}</div>
-                    <div v-if="adapter.type === 'openai'" class="mt-0.5 truncate text-xs text-[#737373]">{{ adapter.openAIEndpoint || "/v1/responses" }}</div>
+                    <div v-if="adapter.type === 'openai'" class="mt-1 flex flex-wrap gap-1.5 text-xs text-[#737373]">
+                      <span class="rounded-full border border-[#3a3a3a] bg-[#232323] px-2 py-0.5">
+                        {{ resolvedOpenAIEndpoint(adapter) }}
+                      </span>
+                      <span class="rounded-full border border-[#24553c] bg-[#173524] px-2 py-0.5 text-[#86efac]">
+                        {{ formatOpenAIRequestGroup(resolvedOpenAIRequestGroup(adapter), resolvedOpenAIEndpoint(adapter)) }}
+                      </span>
+                    </div>
                   </div>
                   <span :class="[providerIcon(adapter.type), 'text-[20px] shrink-0']"></span>
                 </div>

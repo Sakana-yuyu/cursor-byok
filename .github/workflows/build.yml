@@ -25,6 +25,11 @@ jobs:
             target: windows
             artifact: windows-amd64
             protoc_asset: protoc-29.3-win64.zip
+          - name: Windows 386
+            runner: windows-latest
+            target: windows-386
+            artifact: windows-386
+            protoc_asset: protoc-29.3-win64.zip
           - name: Linux amd64
             runner: ubuntu-24.04
             target: linux
@@ -191,7 +196,7 @@ jobs:
           where.exe yarn
 
       - name: Install Windows frontend dependencies
-        if: matrix.target == 'windows'
+        if: startsWith(matrix.target, 'windows')
         shell: pwsh
         working-directory: frontend
         run: |
@@ -210,6 +215,20 @@ jobs:
           $installer = Get-ChildItem 'bin/*-amd64-installer.exe' -File | Select-Object -First 1
           if (-not $installer) { throw 'Windows NSIS installer was not produced' }
           Write-Host "Produced $($installer.FullName)"
+
+      - name: Build Windows 386 package
+        if: matrix.target == 'windows-386'
+        shell: pwsh
+        run: |
+          task build:windows:386
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path 'bin/windows-32.zip')) { throw 'Windows 386 ZIP was not produced' }
+          Write-Host "Produced bin/windows-32.zip"
+          task build:windows:installer:386
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $installer386 = Get-ChildItem 'bin/*-386-installer.exe' -File | Select-Object -First 1
+          if (-not $installer386) { throw 'Windows 386 NSIS installer was not produced' }
+          Write-Host "Produced $($installer386.FullName)"
 
       - name: Self-sign Windows binaries
         if: matrix.target == 'windows'
@@ -342,6 +361,16 @@ jobs:
             bin/windows-64.zip
             bin/*-amd64-installer.exe
 
+      - name: Upload Windows 386 artifact
+        if: matrix.target == 'windows-386'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          if-no-files-found: error
+          path: |
+            bin/windows-32.zip
+            bin/*-386-installer.exe
+
       - name: Upload Linux artifact
         if: matrix.target == 'linux'
         uses: actions/upload-artifact@v4
@@ -399,6 +428,8 @@ jobs:
           wanted = {
               "windows-64.zip": f"cursor-byok-{version}-windows-amd64.zip",
               "Cursor助手-amd64-installer.exe": f"cursor-byok-{version}-windows-amd64-installer.exe",
+              "windows-32.zip": f"cursor-byok-{version}-windows-386.zip",
+              "Cursor助手-386-installer.exe": f"cursor-byok-{version}-windows-386-installer.exe",
               "linux-amd64.tar.gz": f"cursor-byok-{version}-linux-amd64.tar.gz",
               f"cursor-byok-{version}-macos-arm64.tar.gz": f"cursor-byok-{version}-macos-arm64.tar.gz",
               f"cursor-byok-{version}-macos-amd64.tar.gz": f"cursor-byok-{version}-macos-amd64.tar.gz",
@@ -413,6 +444,7 @@ jobs:
               "macos-arm64": ".tar.gz",
               "macos-amd64": ".tar.gz",
               "windows-amd64": ".zip",
+              "windows-386": ".zip",
               "linux-amd64": ".tar.gz",
           }.items():
               filename = f"cursor-byok-{version}-{platform}{suffix}"

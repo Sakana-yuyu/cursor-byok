@@ -78,6 +78,10 @@ type StreamRequest struct {
 	ThinkingEffort string
 	// Provider 表示目标 provider 类型，例如 openai 或 anthropic。
 	Provider string
+	// ProtocolMode 表示协议选择模式：auto 或 fixed。
+	ProtocolMode string
+	// ProtocolGroup 表示最终模型请求协议分组。
+	ProtocolGroup string
 	// BaseURL 表示请求应发送到的 provider 基础地址。
 	BaseURL string
 	// APIKey 表示 provider 鉴权凭据。
@@ -94,6 +98,8 @@ type StreamRequest struct {
 	ReasoningEffort string
 	// OpenAIEndpoint 表示 OpenAI 兼容 provider 使用的 API 端点。
 	OpenAIEndpoint string
+	// OpenAIRequestGroup 表示 OpenAI 兼容 provider 采用的请求分组/协议模板。
+	OpenAIRequestGroup string
 	// OpenAIExtraParamsEnabled 表示是否启用 OpenAI 额外请求参数。
 	OpenAIExtraParamsEnabled bool
 	// OpenAIExtraParamsJSON 表示 OpenAI 额外请求参数 JSON 对象。

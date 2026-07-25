@@ -53,6 +53,10 @@ type ModelAdapterConfig struct {
 	GroupName string `json:"groupName,omitempty"`
 	// Type 表示当前声明中的 Type。
 	Type string `json:"type"`
+	// ProtocolMode 表示协议选择模式：auto 或 fixed。
+	ProtocolMode string `json:"protocolMode,omitempty"`
+	// ProtocolGroup 表示最终模型请求协议分组。
+	ProtocolGroup string `json:"protocolGroup,omitempty"`
 	// BaseURL 表示当前声明中的 BaseURL。
 	BaseURL string `json:"baseURL"`
 	// APIKey 表示当前声明中的 APIKey。
@@ -65,6 +69,8 @@ type ModelAdapterConfig struct {
 	ReasoningEffort string `json:"reasoningEffort"`
 	// OpenAIEndpoint 表示 OpenAI 兼容适配器使用的 API 端点。
 	OpenAIEndpoint string `json:"openAIEndpoint"`
+	// OpenAIRequestGroup 表示 OpenAI 兼容适配器使用的请求分组。
+	OpenAIRequestGroup string `json:"openAIRequestGroup,omitempty"`
 	// OpenAIExtraParamsEnabled 表示是否启用 OpenAI 额外请求参数。
 	OpenAIExtraParamsEnabled bool `json:"openAIExtraParamsEnabled"`
 	// OpenAIExtraParamsJSON 表示 OpenAI 额外请求参数 JSON 对象。
@@ -121,16 +127,26 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 		if err != nil {
 			return nil, err
 		}
+		nextType := normalizeModelAdapterType(item.Type)
+		protocolMode := modelchannel.NormalizeProtocolMode(item.ProtocolMode)
+		protocolGroup := modelchannel.ResolveProtocolGroup(protocolMode, nextType, item.ModelID, baseURL, item.OpenAIEndpoint, firstNonEmptyProtocolGroup(item.ProtocolGroup, item.OpenAIRequestGroup))
+		openAIEndpoint := modelchannel.NormalizeOpenAIEndpoint(nextType, item.OpenAIEndpoint)
+		if nextType == "openai" && openAIEndpoint != modelchannel.OpenAIEndpointCustom {
+			openAIEndpoint = modelchannel.OpenAIEndpointForProtocolGroup(protocolGroup, openAIEndpoint)
+		}
 		next := ModelAdapterConfig{
 			DisplayName:          strings.TrimSpace(item.DisplayName),
 			GroupName:            strings.TrimSpace(item.GroupName),
-			Type:                 normalizeModelAdapterType(item.Type),
+			Type:                 nextType,
+			ProtocolMode:         protocolMode,
+			ProtocolGroup:        protocolGroup,
 			BaseURL:              baseURL,
 			APIKey:               strings.TrimSpace(item.APIKey),
 			TooltipData:          strings.TrimSpace(item.TooltipData),
 			ModelID:              strings.TrimSpace(item.ModelID),
 			ReasoningEffort:      normalizeReasoningEffort(item.ReasoningEffort),
-			OpenAIEndpoint:       modelchannel.NormalizeOpenAIEndpoint(item.Type, item.OpenAIEndpoint),
+			OpenAIEndpoint:       openAIEndpoint,
+			OpenAIRequestGroup:   modelchannel.NormalizeOpenAIRequestGroup(nextType, openAIEndpoint, protocolGroup),
 			ContextWindowTokens:  modelcontext.Resolve(item.ModelID, normalizeMaxCompletionTokens(item.ContextWindowTokens)),
 			MaxCompletionTokens:  normalizeMaxCompletionTokens(item.MaxCompletionTokens),
 			AnthropicMaxTokens:   normalizeMaxCompletionTokens(item.AnthropicMaxTokens),
@@ -160,10 +176,16 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			return nil, errors.New("模型适配器 tooltipData 不能为空")
 		case next.ModelID == "":
 			return nil, errors.New("模型适配器 modelID 不能为空")
+		case next.ProtocolMode == "":
+			return nil, errors.New("模型适配器 protocolMode 仅支持 auto 或 fixed")
+		case next.ProtocolGroup == "":
+			return nil, errors.New("模型适配器 protocolGroup 与 provider 不匹配")
 		case next.Type == "openai" && next.ReasoningEffort == "":
 			return nil, errors.New("模型适配器 reasoningEffort 仅支持 low、medium、high、xhigh、max")
 		case next.Type == "openai" && next.OpenAIEndpoint == "":
 			return nil, errors.New("模型适配器 openAIEndpoint 仅支持 /v1/responses 或 /v1/chat/completions")
+		case next.Type == "openai" && next.OpenAIRequestGroup == "":
+			return nil, errors.New("模型适配器 openAIRequestGroup 仅支持 responses、chat_completions、chat_completions_compat")
 		case next.Type == "openai" && next.OpenAIExtraParamsEnabled:
 			if err := validateJSONMap(next.OpenAIExtraParamsJSON, "openAIExtraParamsJSON"); err != nil {
 				return nil, err
@@ -201,6 +223,15 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 		normalized = append(normalized, next)
 	}
 	return normalized, nil
+}
+
+func firstNonEmptyProtocolGroup(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func validateJSONMap(value string, fieldName string) error {
@@ -288,6 +319,10 @@ type ResolvedChannel struct {
 	Code string
 	// Provider 表示当前声明中的 Provider。
 	Provider string
+	// ProtocolMode 表示协议选择模式。
+	ProtocolMode string
+	// ProtocolGroup 表示最终模型请求协议分组。
+	ProtocolGroup string
 	// BaseURL 表示当前声明中的 BaseURL。
 	BaseURL string
 	// APIKey 表示当前声明中的 APIKey。
@@ -304,6 +339,8 @@ type ResolvedChannel struct {
 	ReasoningEffort string
 	// OpenAIEndpoint 表示 OpenAI 兼容适配器使用的 API 端点。
 	OpenAIEndpoint string
+	// OpenAIRequestGroup 表示 OpenAI 兼容适配器使用的请求分组。
+	OpenAIRequestGroup string
 	// OpenAIExtraParamsEnabled 表示是否启用 OpenAI 额外请求参数。
 	OpenAIExtraParamsEnabled bool
 	// OpenAIExtraParamsJSON 表示 OpenAI 额外请求参数 JSON 对象。
@@ -434,6 +471,8 @@ func (s *FixedChannelService) SelectChannelForModel(ctx context.Context, modelID
 			GroupName:                   strings.TrimSpace(adapter.GroupName),
 			Code:                        strings.TrimSpace(adapter.ID),
 			Provider:                    strings.TrimSpace(adapter.Type),
+			ProtocolMode:                strings.TrimSpace(adapter.ProtocolMode),
+			ProtocolGroup:               strings.TrimSpace(adapter.ProtocolGroup),
 			BaseURL:                     strings.TrimSpace(adapter.BaseURL),
 			APIKey:                      strings.TrimSpace(adapter.APIKey),
 			Model:                       strings.TrimSpace(adapter.ModelID),
@@ -442,6 +481,7 @@ func (s *FixedChannelService) SelectChannelForModel(ctx context.Context, modelID
 			MaxTokens:                   configurableChannelMaxTokens,
 			ReasoningEffort:             strings.TrimSpace(adapter.ReasoningEffort),
 			OpenAIEndpoint:              strings.TrimSpace(adapter.OpenAIEndpoint),
+			OpenAIRequestGroup:          strings.TrimSpace(adapter.OpenAIRequestGroup),
 			OpenAIExtraParamsEnabled:    adapter.OpenAIExtraParamsEnabled,
 			OpenAIExtraParamsJSON:       strings.TrimSpace(adapter.OpenAIExtraParamsJSON),
 			CustomHeadersEnabled:        adapter.CustomHeadersEnabled,

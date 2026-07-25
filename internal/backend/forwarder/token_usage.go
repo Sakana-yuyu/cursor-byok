@@ -341,10 +341,12 @@ func (service *Service) recordTurnUsageSnapshot(stream *ActiveStream, conversati
 		modelName = strings.TrimSpace(usage.Model)
 	}
 	effectiveModelCallID := firstNonEmpty(strings.TrimSpace(modelCallID), strings.TrimSpace(requestID))
+	normalizedStatus := normalizeUsageProviderStatus(status, usage.UsagePresent)
 	if service.usageStore != nil {
 		if err := service.usageStore.UpsertEvent(usageFileEvent{
 			EventID:          usageEventID(requestID, effectiveModelCallID),
 			Kind:             usageEventKindProvider,
+			Status:           normalizedStatus,
 			At:               lastEventAt,
 			Model:            modelName,
 			Provider:         provider,
@@ -413,6 +415,25 @@ func normalizeUsageTurnStatus(status string) string {
 		return usageTurnStatusDone
 	}
 	return strings.TrimSpace(status)
+}
+
+// normalizeUsageProviderStatus 把 provider_call 事件的 status 规整为前端可识别的值。
+//   - "completed" / "provider_error" 来自上游调用方
+//   - 当 status 为空但 provider 明确返回了 usage → 视为 completed
+//   - 当 status 为空且没有 usage → 视为 "no_usage"（通常是流被中断/取消）
+func normalizeUsageProviderStatus(status string, usagePresent bool) string {
+	trimmed := strings.TrimSpace(status)
+	switch trimmed {
+	case "completed", "provider_error":
+		return trimmed
+	case "":
+		if usagePresent {
+			return "completed"
+		}
+		return "no_usage"
+	default:
+		return trimmed
+	}
 }
 
 func turnUsageEventID(conversationID string, turnSeq int64, requestID string) string {

@@ -12,6 +12,8 @@ import {
   appViewState,
   openConfigWindow,
   openModelConfigWindow,
+  openLocalLogsDirectory,
+  exportLogsAction,
   saveRoutingMode,
   syncHomeMetrics,
   syncServiceState,
@@ -85,6 +87,31 @@ async function handleOpenModelConfig() {
     await openModelConfigWindow();
   } catch (error) {
     await showActionError("打开失败", toUserError(error));
+  }
+}
+
+const exportingLogs = ref(false);
+
+async function handleExportLogs() {
+  if (exportingLogs.value) return;
+  exportingLogs.value = true;
+  try {
+    const result = await exportLogsAction();
+    if (!result.ok) {
+      await showActionError("导出失败", result.error);
+      return;
+    }
+    const confirmed = await showModal({
+      title: "导出成功",
+      content: `日志已导出到：${result.path}`,
+      confirmText: "打开目录",
+      cancelText: "关闭",
+    });
+    if (confirmed) {
+      await openLocalLogsDirectory();
+    }
+  } finally {
+    exportingLogs.value = false;
   }
 }
 
@@ -245,6 +272,9 @@ onMounted(() => {
         </div>
         <div class="center-row gap-2">
           <Button variant="default" @click="handleOpenConfig">设置文件夹</Button>
+          <Button variant="default" :disabled="exportingLogs" @click="handleExportLogs">
+            {{ exportingLogs ? "导出中..." : "导出日志" }}
+          </Button>
           <Button variant="default" @click="handleOpenRequestMetrics">请求明细</Button>
           <Button variant="primary" @click="handleOpenModelConfig">模型配置</Button>
         </div>

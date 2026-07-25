@@ -742,6 +742,19 @@ func observeBackgroundTaskCompletionAction(stream *ActiveStream, message *agentv
 }
 
 func observeBackgroundTaskCompletionLocked(stream *ActiveStream, completion *agentv1.BackgroundTaskCompletion, now time.Time) bool {
+	if stream == nil || completion == nil {
+		return false
+	}
+	// 不再只处理 shell 类型；子代理/Task 的完成通知也需要处理
+	if completion.GetKind() == agentv1.BackgroundTaskKind_BACKGROUND_TASK_KIND_SHELL {
+		return observeShellBackgroundTaskCompletionLocked(stream, completion, now)
+	}
+	// 非 shell 类型（如 Task 子代理）：记录 metadata 但不阻塞
+	// 真正的终态通过 exec result / exec control 路径完成
+	return false
+}
+
+func observeShellBackgroundTaskCompletionLocked(stream *ActiveStream, completion *agentv1.BackgroundTaskCompletion, now time.Time) bool {
 	if stream == nil || completion == nil || completion.GetKind() != agentv1.BackgroundTaskKind_BACKGROUND_TASK_KIND_SHELL {
 		return false
 	}

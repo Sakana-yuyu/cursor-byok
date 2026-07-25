@@ -1,8 +1,8 @@
 <script setup>
 import Button from "@/components/ui/Button.vue";
 import { fetchRecentRequestMetrics } from "@/services/clientApi";
-import { formatCompactInteger, formatInteger } from "@/utils/numberFormat";
-import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
+import { formatCompactInteger } from "@/utils/numberFormat";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import * as echarts from "echarts/core";
 import { LineChart } from "echarts/charts";
@@ -27,6 +27,12 @@ echarts.use([
 
 const router = useRouter();
 
+// turn_finalized 会携带与 provider_call 重复的 token，只能用于轮次，不能进入 token 图
+function isProviderCallEvent(ev) {
+  const kind = String(ev?.kind || "").trim();
+  return !kind || kind === "provider_call";
+}
+
 // --- 数据加载 ---
 const allEvents = ref([]);
 const loading = ref(false);
@@ -37,7 +43,8 @@ async function loadEvents() {
   error.value = "";
   try {
     const data = await fetchRecentRequestMetrics(0);
-    allEvents.value = Array.isArray(data) ? data : [];
+    const rows = Array.isArray(data) ? data : [];
+    allEvents.value = rows.filter(isProviderCallEvent);
   } catch (e) {
     error.value = String(e?.message || e || "加载失败");
   } finally {
@@ -57,6 +64,12 @@ const timeRanges = [
 const selectedRange = ref("24h");
 const customStart = ref("");
 const customEnd = ref("");
+
+const chipBaseClass =
+  "rounded-[6px] px-3 py-1.5 text-xs transition-colors border";
+const chipActiveClass = "border-[#10AD5D] bg-[#10AD5D] text-white";
+const chipIdleClass =
+  "border-[#3f3f3f] bg-[#232323] text-[#a0a0a0] hover:border-[#4a4a4a] hover:text-white";
 
 const rangeStart = computed(() => {
   const now = new Date();
@@ -97,14 +110,15 @@ const modelList = computed(() => {
   return Array.from(set).sort();
 });
 
-// --- 过滤后的事件 ---
+// --- 过滤后的事件（已在加载时去掉 turn_finalized） ---
 const filteredEvents = computed(() => {
   const start = rangeStart.value;
   const end = rangeEnd.value;
+  const model = selectedModel.value;
   return allEvents.value.filter((ev) => {
     const ts = new Date(ev.at).getTime();
-    if (ts < start || ts >= end) return false;
-    if (selectedModel.value && ev.model !== selectedModel.value) return false;
+    if (!Number.isFinite(ts) || ts < start || ts >= end) return false;
+    if (model && String(ev.model || "").trim() !== model) return false;
     return true;
   });
 });
@@ -254,7 +268,7 @@ function resizeChart() {
 
 watch([chartData, selectedModel, selectedRange], () => {
   renderChart();
-}, { deep: true });
+});
 
 onMounted(async () => {
   await loadEvents();
@@ -290,24 +304,21 @@ function formatRate(v) {
 
         <!-- 时间范围选择 + 模型筛选 -->
         <div class="flex flex-wrap items-center gap-3">
-          <div class="flex gap-1">
+          <div class="flex flex-wrap gap-1">
             <button
               v-for="r in timeRanges"
               :key="r.key"
               type="button"
-              class="rounded-[6px] px-3 py-1.5 text-xs transition-colors"
-              :class="selectedRange === r.key
-                ? 'bg-[#10AD5D] text-white'
-                : 'border border-[#3f3f3f] bg-[#232323] text-[#a0a0a0] hover:border-[#4a4a4a] hover:text-white'"
+              :class="[chipBaseClass, selectedRange === r.key ? chipActiveClass : chipIdleClass]"
               @click="selectedRange = r.key"
             >{{ r.label }}</button>
           </div>
           <div v-if="selectedRange === 'custom'" class="flex items-center gap-1 text-xs text-[#a0a0a0]">
-            <input v-model="customStart" type="date" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-xs text-white outline-none" />
+            <input v-model="customStart" type="date" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-xs text-white outline-none focus:border-[#10AD5D]" />
             <span>~</span>
-            <input v-model="customEnd" type="date" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-xs text-white outline-none" />
+            <input v-model="customEnd" type="date" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-xs text-white outline-none focus:border-[#10AD5D]" />
           </div>
-          <select v-model="selectedModel" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-xs text-white outline-none">
+          <select v-model="selectedModel" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-xs text-white outline-none focus:border-[#10AD5D]">
             <option value="">全部模型</option>
             <option v-for="m in modelList" :key="m" :value="m">{{ m }}</option>
           </select>
@@ -315,27 +326,27 @@ function formatRate(v) {
 
         <!-- 汇总卡片 -->
         <div class="grid grid-cols-3 gap-3 md:grid-cols-6">
-          <div class="rounded-[8px] border border-[#343434] bg-[#202020] px-3 py-2.5">
+          <div class="rounded-[8px] border border-[#343434] bg-gradient-to-b from-[#242424] to-[#1d1d1d] px-3 py-2.5">
             <div class="text-[11px] uppercase tracking-wider text-[#666]">输入</div>
             <div class="mt-1 text-lg text-white" style="font-family: var(--font-num)">{{ formatCompactInteger(summary.input) }}</div>
           </div>
-          <div class="rounded-[8px] border border-[#343434] bg-[#202020] px-3 py-2.5">
+          <div class="rounded-[8px] border border-[#343434] bg-gradient-to-b from-[#242424] to-[#1d1d1d] px-3 py-2.5">
             <div class="text-[11px] uppercase tracking-wider text-[#666]">输出</div>
             <div class="mt-1 text-lg text-white" style="font-family: var(--font-num)">{{ formatCompactInteger(summary.output) }}</div>
           </div>
-          <div class="rounded-[8px] border border-[#343434] bg-[#202020] px-3 py-2.5">
+          <div class="rounded-[8px] border border-[#343434] bg-gradient-to-b from-[#242424] to-[#1d1d1d] px-3 py-2.5">
             <div class="text-[11px] uppercase tracking-wider text-[#666]">缓存读取</div>
             <div class="mt-1 text-lg text-white" style="font-family: var(--font-num)">{{ formatCompactInteger(summary.cacheRead) }}</div>
           </div>
-          <div class="rounded-[8px] border border-[#343434] bg-[#202020] px-3 py-2.5">
+          <div class="rounded-[8px] border border-[#343434] bg-gradient-to-b from-[#242424] to-[#1d1d1d] px-3 py-2.5">
             <div class="text-[11px] uppercase tracking-wider text-[#666]">缓存写入</div>
             <div class="mt-1 text-lg text-white" style="font-family: var(--font-num)">{{ formatCompactInteger(summary.cacheWrite) }}</div>
           </div>
-          <div class="rounded-[8px] border border-[#343434] bg-[#202020] px-3 py-2.5">
+          <div class="rounded-[8px] border border-[#343434] bg-gradient-to-b from-[#242424] to-[#1d1d1d] px-3 py-2.5">
             <div class="text-[11px] uppercase tracking-wider text-[#666]">总消耗</div>
             <div class="mt-1 text-lg text-white" style="font-family: var(--font-num)">{{ formatCompactInteger(summary.total) }}</div>
           </div>
-          <div class="rounded-[8px] border border-[#343434] bg-[#202020] px-3 py-2.5">
+          <div class="rounded-[8px] border border-[#343434] bg-gradient-to-b from-[#242424] to-[#1d1d1d] px-3 py-2.5">
             <div class="text-[11px] uppercase tracking-wider text-[#666]">缓存率</div>
             <div class="mt-1 text-lg" :class="summary.cacheRate != null && summary.cacheRate > 0.3 ? 'text-[#6ee7a5]' : 'text-white'" style="font-family: var(--font-num)">{{ formatRate(summary.cacheRate) }}</div>
           </div>

@@ -6,10 +6,12 @@ import Select from "@/components/ui/Select.vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
 import { getModelEditorContext, fetchModelCatalog } from "@/services/clientApi";
 import { resolveModelContextWindow } from "@/utils/modelContext";
+import { providerLabel, providerSelectOptions } from "@/utils/providerMeta";
 import {
   ANTHROPIC_THINKING_EFFORT_DEFAULT,
   appState,
   buildModelAdapterTestRequestHash,
+  classifyModelProtocol,
   CUSTOM_HEADERS_DEFAULT_JSON,
   EXTRA_PARAMS_DEFAULT_JSON,
   getModelAdapterTestResult,
@@ -20,6 +22,12 @@ import {
   OPENAI_ENDPOINT_CUSTOM,
   OPENAI_ENDPOINT_RESPONSES,
   OPENAI_EXTRA_PARAMS_DEFAULT_JSON,
+  OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS,
+  OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS_COMPAT,
+  OPENAI_REQUEST_GROUP_RESPONSES,
+  PROTOCOL_GROUP_ANTHROPIC_MESSAGES,
+  PROTOCOL_MODE_AUTO,
+  PROTOCOL_MODE_FIXED,
   runModelAdapterTest,
   saveModelAdapterAt,
   saveModelAdaptersBatch,
@@ -52,12 +60,15 @@ const createEmptyModelAdapter = () => ({
   displayName: "",
   groupName: "",
   type: "openai",
+  protocolMode: PROTOCOL_MODE_AUTO,
+  protocolGroup: OPENAI_REQUEST_GROUP_RESPONSES,
   baseURL: "",
   apiKey: "",
   tooltipData: "",
   modelID: "",
   reasoningEffort: "medium",
   openAIEndpoint: OPENAI_ENDPOINT_RESPONSES,
+  openAIRequestGroup: OPENAI_REQUEST_GROUP_RESPONSES,
   openAIExtraParamsEnabled: false,
   openAIExtraParamsJSON: OPENAI_EXTRA_PARAMS_DEFAULT_JSON,
   customHeadersEnabled: false,
@@ -80,10 +91,18 @@ const openAIEndpointOptions = [
   { label: "自定义路径(请输入完整请求地址)", value: OPENAI_ENDPOINT_CUSTOM, icon: "icon-[mdi--pencil-outline]" },
 ];
 
-const providerTypeOptions = [
-  { label: "OpenAI / OAI", value: "openai" },
-  { label: "Anthropic / A社", value: "anthropic" },
+const protocolModeOptions = [
+  { label: "自动识别", value: PROTOCOL_MODE_AUTO, icon: "icon-[mdi--auto-fix]" },
+  { label: "固定协议", value: PROTOCOL_MODE_FIXED, icon: "icon-[mdi--lock-outline]" },
 ];
+
+const openAIRequestGroupOptions = [
+  { label: "Responses（responses）", value: OPENAI_REQUEST_GROUP_RESPONSES, icon: "icon-[mdi--api]" },
+  { label: "Chat Completions（chat_completions）", value: OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS, icon: "icon-[mdi--message-text-outline]" },
+  { label: "Chat Completions 兼容模式（chat_completions_compat）", value: OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS_COMPAT, icon: "icon-[mdi--swap-horizontal]" },
+];
+
+const providerTypeOptions = providerSelectOptions();
 
 const editorIndex = ref(-1);
 const router = useRouter();
@@ -92,6 +111,7 @@ const errorMessage = ref("");
 const loading = ref(true);
 const lastTestAdapterID = ref("");
 const localTestFailure = ref("");
+const manualAddMode = ref(false);
 const catalogModels = ref([]);
 const catalogGroups = ref([]);
 const catalogLoading = ref(false);
@@ -118,6 +138,16 @@ const detectedContextWindow = computed(() => resolveModelContextWindow(draft.mod
 const interfacePlaceholder = computed(() =>
   draft.type === "anthropic" ? "例如：https://api.anthropic.com" : "例如：https://api.openai.com/v1",
 );
+const autoProtocolGroup = computed(() => classifyModelProtocol(
+  draft.type,
+  draft.modelID,
+  draft.baseURL,
+  draft.openAIEndpoint,
+  "",
+));
+const effectiveProtocolGroup = computed(() => draft.protocolMode === PROTOCOL_MODE_FIXED
+  ? draft.protocolGroup
+  : autoProtocolGroup.value);
 const currentRequestHash = computed(() => buildModelAdapterTestRequestHash(draft));
 const directModelTestResult = computed(() => getModelAdapterTestResult(draft));
 const rememberedModelTestResult = computed(() =>
@@ -136,7 +166,10 @@ const modelTestSummary = computed(() => {
 });
 
 const isQuickMode = computed(() => editorIndex.value < 0);
-const title = computed(() => (isQuickMode.value ? "快速添加模型" : "编辑模型配置"));
+const title = computed(() => {
+  if (manualAddMode.value) return "手动添加模型";
+  return isQuickMode.value ? "快速添加模型" : "编辑模型配置";
+});
 
 function ensureOpenAIExtraParamsJSON() {
   if (!String(draft.openAIExtraParamsJSON || "").trim()) {
@@ -162,6 +195,14 @@ function ensureAnthropicThinkingEffort() {
   }
 }
 
+function ensureOpenAIRequestGroup() {
+  if (!String(draft.openAIRequestGroup || "").trim()) {
+    draft.openAIRequestGroup = draft.openAIEndpoint === OPENAI_ENDPOINT_RESPONSES
+      ? OPENAI_REQUEST_GROUP_RESPONSES
+      : OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS;
+  }
+}
+
 const fieldTips = {
   displayName: "仅用于界面展示，便于你区分不同模型。",
   modelID: "请求实际发送给服务端的模型名称，例如 gpt-4.1 或 claude-sonnet。",
@@ -171,6 +212,8 @@ const fieldTips = {
   reasoningEffort: "推理强度仅对部分支持 reasoning_effort 的模型生效，并不是所有模型都支持。越高通常越稳，但也可能更慢。",
   maxCompletionTokens: "单次回复允许生成的最大 Token 数。留空时使用默认值。",
   openAIEndpoint: "选择接口协议端点。选“自定义路径”时，请在接口地址栏填写完整请求地址（含 /chat/completions 或 /responses 路径后缀），系统会根据末段自动判断协议形态。",
+  protocolMode: "自动识别会根据供应商、模型名称和接口地址选择协议；固定协议会严格使用你指定的协议，测速不会自动覆盖。",
+  openAIRequestGroup: "请求分组决定请求体协议形态，括号内为发送给服务端的技术值。Responses 适用于新版 /v1/responses 接口；Chat Completions 适用于标准对话补全接口；Chat Completions 兼容模式用于部分字段不完全兼容的第三方网关（会跳过高级字段）。一般与接口端点保持对应。",
   openAIExtraParams: "开启后会把 JSON 对象覆盖到 OpenAI 请求体。同名字段以这里为准。OpenAI service_tier 支持 auto、default、flex、scale、priority。",
   customHeaders: "开启后会把 JSON 对象覆盖到最终请求头。同名请求头以这里为准，值必须是字符串。",
   anthropicExtraParams: "开启后会把 JSON 对象覆盖到 Anthropic 请求体。同名字段以这里为准。",
@@ -197,6 +240,15 @@ async function loadContext() {
 }
 
 async function persistDraft() {
+  if (draft.protocolMode !== PROTOCOL_MODE_FIXED) {
+    draft.protocolMode = PROTOCOL_MODE_AUTO;
+    draft.protocolGroup = autoProtocolGroup.value;
+  }
+  if (draft.type === "openai") {
+    draft.openAIRequestGroup = draft.protocolGroup;
+  } else if (draft.type === "anthropic") {
+    draft.protocolGroup = PROTOCOL_GROUP_ANTHROPIC_MESSAGES;
+  }
   const adapter = normalizeModelAdapter(draft);
 
   const singleCheck = validateModelAdapters([adapter]);
@@ -247,9 +299,17 @@ async function handleCancel() {
 
 function handleModelTypeChange(type) {
   draft.type = type;
-  if (type === "openai" && !draft.openAIEndpoint) {
-    draft.openAIEndpoint = OPENAI_ENDPOINT_RESPONSES;
+  draft.protocolMode = draft.protocolMode || PROTOCOL_MODE_AUTO;
+  if (type === "openai") {
+    if (!draft.openAIEndpoint) {
+      draft.openAIEndpoint = OPENAI_ENDPOINT_RESPONSES;
+    }
+    ensureOpenAIRequestGroup();
+    draft.protocolGroup = draft.protocolMode === PROTOCOL_MODE_FIXED
+      ? (draft.protocolGroup || draft.openAIRequestGroup)
+      : classifyModelProtocol(type, draft.modelID, draft.baseURL, draft.openAIEndpoint, "");
   } else if (type === "anthropic") {
+    draft.protocolGroup = PROTOCOL_GROUP_ANTHROPIC_MESSAGES;
     ensureAnthropicThinkingEffort();
   }
 }
@@ -343,6 +403,11 @@ async function handleBatchAddModels() {
       customHeadersJSON: group.customHeadersJSON,
       displayName: model.id,
       modelID: model.id,
+      protocolMode: PROTOCOL_MODE_AUTO,
+      protocolGroup: classifyModelProtocol(group.type, model.id, group.baseURL, "", ""),
+      openAIRequestGroup: group.type === "openai"
+        ? classifyModelProtocol(group.type, model.id, group.baseURL, "", "")
+        : "",
       groupName: group.name || group.baseURL,
       tooltipData: String(draft.tooltipData || "").trim() || `来自 ${group.baseURL}`,
       contextWindowTokens: model.contextWindowTokens || 0,
@@ -481,6 +546,39 @@ watch(currentRequestHash, () => {
 });
 
 watch(
+  () => [draft.type, draft.modelID, draft.baseURL, draft.openAIEndpoint, draft.protocolMode],
+  () => {
+    if (draft.type === "anthropic") {
+      draft.protocolGroup = PROTOCOL_GROUP_ANTHROPIC_MESSAGES;
+      return;
+    }
+    if (draft.type !== "openai") return;
+    if (draft.protocolMode === PROTOCOL_MODE_FIXED) {
+      ensureOpenAIRequestGroup();
+      draft.protocolGroup = draft.openAIRequestGroup;
+      return;
+    }
+    draft.protocolMode = PROTOCOL_MODE_AUTO;
+    draft.protocolGroup = autoProtocolGroup.value;
+    draft.openAIRequestGroup = draft.protocolGroup;
+  },
+);
+
+watch(
+  () => draft.openAIRequestGroup,
+  (group) => {
+    if (draft.type === "openai" && draft.protocolMode === PROTOCOL_MODE_FIXED) {
+      draft.protocolGroup = group;
+      if (draft.openAIEndpoint !== OPENAI_ENDPOINT_CUSTOM) {
+        draft.openAIEndpoint = group === OPENAI_REQUEST_GROUP_RESPONSES
+          ? OPENAI_ENDPOINT_RESPONSES
+          : OPENAI_ENDPOINT_CHAT_COMPLETIONS;
+      }
+    }
+  },
+);
+
+watch(
   () => draft.openAIExtraParamsEnabled,
   (enabled) => {
     if (enabled) {
@@ -518,7 +616,7 @@ onMounted(async () => {
       <h2 class="text-base font-medium text-white">{{ title }}</h2>
       <div class="flex items-center gap-2">
         <Button variant="default" @click="handleCancel">取消</Button>
-        <template v-if="!isQuickMode">
+        <template v-if="manualAddMode || !isQuickMode">
           <Button variant="default" :disabled="isCurrentConfigTesting || appState.configSaving" @click="handleTest">
             {{ isCurrentConfigTesting ? "测试中..." : "保存并测试" }}
           </Button>
@@ -535,7 +633,14 @@ onMounted(async () => {
 
     <div v-else class="flex-1 overflow-y-auto min-h-0 px-4 pb-4">
       <div class="flex flex-col gap-4">
-        <div v-if="isQuickMode" class="flex flex-col gap-4">
+        <div v-if="isQuickMode && !manualAddMode" class="flex flex-col gap-4">
+          <div class="flex items-center justify-between rounded-[8px] border border-[#343434] bg-[#252525] px-3 py-2.5">
+            <div>
+              <div class="text-sm text-[#d4d4d4]">没有模型列表？手动添加单个模型</div>
+              <div class="mt-0.5 text-xs text-[#8f8f8f]">适用于不提供 /models 接口的供应商</div>
+            </div>
+            <Button variant="default" @click="manualAddMode = true">手动添加</Button>
+          </div>
           <label class="flex flex-col gap-1">
             <span class="text-sm text-[#d4d4d4]">模型类型</span>
             <Select
@@ -616,8 +721,20 @@ onMounted(async () => {
 
         <template v-else>
         <div class="rounded-[8px] border border-[#343434] bg-[#252525] px-3 py-2 text-sm text-[#d4d4d4]">
-          供应商：<span class="font-medium text-white">{{ draft.type === "anthropic" ? "Anthropic / A社" : "OpenAI / OAI" }}</span>
-          <span class="ml-2 text-xs text-[#8f8f8f]">新增模型的供应商归属由模型配置分组决定</span>
+          <template v-if="manualAddMode">
+            <label class="flex flex-col gap-1">
+              <span class="text-sm text-[#d4d4d4]">供应商类型</span>
+              <Select
+                :model-value="draft.type"
+                :options="providerTypeOptions"
+                button-class="h-9 text-sm"
+                @update:model-value="handleModelTypeChange"
+              />
+            </label>
+          </template>
+          <template v-else>
+              供应商：<span class="font-medium text-white">{{ providerLabel(draft.type) }}</span>
+          </template>
         </div>
 
         <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -656,6 +773,7 @@ onMounted(async () => {
                 class="h-9 min-w-0 flex-1 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
               />
               <Button
+                v-if="!manualAddMode"
                 variant="default"
                 :disabled="catalogLoading || !draft.baseURL || !draft.apiKey"
                 @click="handleFetchModels"
@@ -788,6 +906,23 @@ onMounted(async () => {
 
         </div>
 
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <label class="flex flex-col gap-1">
+            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
+              <Tooltip :content="fieldTips.protocolMode" />
+              <span>协议选择</span>
+            </span>
+            <Select v-model="draft.protocolMode" :options="protocolModeOptions" />
+          </label>
+          <div class="rounded-[8px] border border-[#343434] bg-[#252525] px-3 py-2">
+            <div class="text-xs text-[#737373]">当前协议分组</div>
+            <div class="mt-1 text-sm text-[#86efac]">{{ effectiveProtocolGroup || "未识别" }}</div>
+            <div v-if="draft.protocolMode === PROTOCOL_MODE_AUTO" class="mt-1 text-xs text-[#8f8f8f]">
+              根据模型类型、模型名称和接口地址自动归类
+            </div>
+          </div>
+        </div>
+
         <div v-if="draft.type === 'openai'" class="grid grid-cols-1 gap-3 md:grid-cols-2">
           <label class="flex flex-col gap-1">
             <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
@@ -811,6 +946,17 @@ onMounted(async () => {
             <Select
               v-model="draft.openAIEndpoint"
               :options="openAIEndpointOptions"
+            />
+          </label>
+
+          <label v-if="draft.protocolMode === PROTOCOL_MODE_FIXED" class="flex flex-col gap-1">
+            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
+              <Tooltip :content="fieldTips.openAIRequestGroup" />
+              <span>固定请求协议</span>
+            </span>
+            <Select
+              v-model="draft.openAIRequestGroup"
+              :options="openAIRequestGroupOptions"
             />
           </label>
         </div>

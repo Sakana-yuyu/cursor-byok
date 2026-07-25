@@ -4,19 +4,18 @@ import Card from "@/components/ui/Card.vue";
 import { showModal } from "@/composables/useModal";
 import {
   appState,
+  deleteModelAdaptersBySupplier,
   openModelEditorWindow,
   reloadUserConfig,
+  OPENAI_REQUEST_GROUP_RESPONSES,
+  PROTOCOL_MODE_AUTO,
   toUserError,
 } from "@/state/appState";
-import { computed, onMounted } from "vue";
+import { providerIcon, providerLabel } from "@/utils/providerMeta";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
 const router = useRouter();
-
-const providers = [
-  { value: "openai", label: "OpenAI / OAI", icon: "icon-[bxl--openai]" },
-  { value: "anthropic", label: "Anthropic / A社", icon: "icon-[logos--claude-icon]" },
-];
 
 // 按 baseURL + groupName 组合提取供应商列表
 const suppliers = computed(() => {
@@ -41,14 +40,6 @@ const suppliers = computed(() => {
   }
   return Array.from(map.values());
 });
-
-function providerIcon(type) {
-  return providers.find((p) => p.value === type)?.icon || "";
-}
-
-function providerLabel(type) {
-  return providers.find((p) => p.value === type)?.label || type;
-}
 
 function formatHost(value) {
   const text = String(value || "").trim();
@@ -83,12 +74,15 @@ function createEmptyModelAdapter() {
     displayName: "",
     groupName: "",
     type: "openai",
+    protocolMode: PROTOCOL_MODE_AUTO,
+    protocolGroup: OPENAI_REQUEST_GROUP_RESPONSES,
     baseURL: "",
     apiKey: "",
     tooltipData: "",
     modelID: "",
     reasoningEffort: "medium",
     openAIEndpoint: "/v1/responses",
+    openAIRequestGroup: OPENAI_REQUEST_GROUP_RESPONSES,
     openAIExtraParamsEnabled: false,
     openAIExtraParamsJSON: "{\n}",
     customHeadersEnabled: false,
@@ -111,6 +105,31 @@ async function openEditor() {
     await openModelEditorWindow(-1, { ...createEmptyModelAdapter(), type: "openai" });
   } catch (error) {
     await showActionError("打开失败", toUserError(error));
+  }
+}
+
+const deletingSupplierKey = ref("");
+
+async function handleDeleteSupplier(supplier) {
+  if (deletingSupplierKey.value) return;
+  const confirmed = await showModal({
+    title: "删除供应商",
+    content: `确定删除「${supplier.groupName}」下的全部 ${supplier.models.length} 个模型吗？此操作不可撤销。`,
+    confirmText: "删除",
+    cancelText: "取消",
+  });
+  if (!confirmed) return;
+  deletingSupplierKey.value = supplier.key;
+  try {
+    const result = await deleteModelAdaptersBySupplier(
+      supplier.baseURL,
+      supplier.groupName === "默认分组" ? "" : supplier.groupName,
+    );
+    if (!result.ok) {
+      await showActionError("删除失败", result.error);
+    }
+  } finally {
+    deletingSupplierKey.value = "";
   }
 }
 
@@ -164,7 +183,17 @@ onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }).catch(() =>
               </div>
               <div class="center-row justify-between border-t border-[#343434] pt-3">
                 <span class="rounded-[8px] border border-[#3f3f3f] px-2 py-1 text-[12px] text-[#cfcfcf]">{{ providerLabel(supplier.type) }}</span>
-                <span class="text-xs text-[#6ee7a5]">点击进入 →</span>
+                <div class="center-row gap-2">
+                  <Button
+                    variant="text"
+                    class="text-[#f87171] hover:text-[#fca5a5]"
+                    :disabled="appState.configSaving || deletingSupplierKey === supplier.key"
+                    @click.stop="handleDeleteSupplier(supplier)"
+                  >
+                    {{ deletingSupplierKey === supplier.key ? "删除中..." : "删除" }}
+                  </Button>
+                  <span class="text-xs text-[#6ee7a5]">点击进入 -></span>
+                </div>
               </div>
             </div>
           </Card>

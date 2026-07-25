@@ -1003,6 +1003,8 @@ func (service *Service) handleTimerEvent(stream *ActiveStream, payload *streamTi
 			return nil
 		}
 		return service.recoverShellWithoutTerminal(stream, current, shellRecoveryReasonTransportClosed)
+	case streamTimerExecWatchdog:
+		return service.recoverStaleExecWithoutTerminal(stream, payload.ExecID, payload.MessageID, payload.Reason)
 	case streamTimerOrphanCancel:
 		stream.mu.Lock()
 		subscriberCount := len(stream.Subscribers)

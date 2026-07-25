@@ -3,7 +3,6 @@ package modeladapter
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -181,14 +180,18 @@ func NewOpenAIAdapter() *OpenAIAdapter {
 	}
 }
 
+// openAIModelSupportsPromptCacheKey 判断当前模型是否应携带 prompt_cache_key。
+//
+// 大多数 OpenAI 兼容服务（OpenAI 官方、xAI Grok、智谱 GLM、通义 Qwen、月之暗面 Kimi、
+// DeepSeek 等）要么原生支持 prompt_cache_key，要么会忽略未知字段，因此默认对所有模型
+// 发送。这样 provider 可以按 conversation 复用前缀，显著提升缓存命中率。
+//
+// 仅对极少数已知会因未知字段报错的 provider 关闭。
 func openAIModelSupportsPromptCacheKey(modelID string) bool {
-	return strings.Contains(strings.ToLower(strings.TrimSpace(modelID)), "gpt")
+	return true
 }
 
 func openAIPromptCacheKey(req StreamRequest, modelID string) string {
-	if !openAIModelSupportsPromptCacheKey(modelID) {
-		return ""
-	}
 	conversationID := strings.TrimSpace(req.ConversationID)
 	if conversationID == "" {
 		return ""
@@ -198,10 +201,6 @@ func openAIPromptCacheKey(req StreamRequest, modelID string) string {
 
 func applyOpenAIPromptCacheKeyOverride(body map[string]any, req StreamRequest, modelID string) {
 	if len(body) == 0 {
-		return
-	}
-	if !openAIModelSupportsPromptCacheKey(modelID) {
-		delete(body, "prompt_cache_key")
 		return
 	}
 	if _, ok := body["prompt_cache_key"]; ok {
@@ -428,17 +427,57 @@ func (adapter *OpenAIAdapter) Stream(ctx context.Context, req StreamRequest, sin
 	if endpoint == "" {
 		return fmt.Errorf("openai endpoint is unsupported: %s", strings.TrimSpace(req.OpenAIEndpoint))
 	}
+	configuredGroup := strings.TrimSpace(req.ProtocolGroup)
+	if configuredGroup == "" {
+		configuredGroup = req.OpenAIRequestGroup
+	}
+	requestGroup := modelchannel.ResolveProtocolGroup(req.ProtocolMode, "openai", modelID, baseURL, endpoint, configuredGroup)
+	if requestGroup == "" {
+		return fmt.Errorf("openai request group is unsupported: %s", configuredGroup)
+	}
+	if endpoint != modelchannel.OpenAIEndpointCustom {
+		endpoint = modelchannel.OpenAIEndpointForProtocolGroup(requestGroup, endpoint)
+	}
 	req.OpenAIEndpoint = endpoint
+	req.OpenAIRequestGroup = requestGroup
+	req.ProtocolGroup = requestGroup
 	if req.RequestKnobs != nil {
 		req.RequestKnobs["openai_endpoint"] = endpoint
+		req.RequestKnobs["openai_request_group"] = requestGroup
 		if modelchannel.OpenAIEndpointShape(endpoint) == "responses" {
 			req.RequestKnobs["max_output_tokens"] = req.MaxTokens
 		}
 	}
-	if modelchannel.OpenAIEndpointShape(endpoint) == "responses" {
+	if requestGroup == modelchannel.OpenAIRequestGroupResponses {
 		return adapter.streamResponses(ctx, req, baseURL, apiKey, modelID, sink)
 	}
 	return adapter.streamChatCompletions(ctx, req, baseURL, apiKey, modelID, sink)
+}
+
+func openAIChatRequestGroupUsesCompatShape(group string) bool {
+	return strings.TrimSpace(group) == modelchannel.OpenAIRequestGroupChatCompletionsCompat
+}
+
+func openAIChatRequestBody(req StreamRequest, modelID string) openAIRequestBody {
+	requestBody := openAIRequestBody{
+		Model:    modelID,
+		Stream:   true,
+		Messages: []map[string]any{},
+	}
+	if shouldSendOpenAIMaxOutputTokens(modelID) {
+		requestBody.MaxTokens = req.MaxTokens
+	}
+	if openAIChatRequestGroupUsesCompatShape(req.OpenAIRequestGroup) {
+		return requestBody
+	}
+	requestBody.StreamOptions = map[string]any{"include_usage": true}
+	if key := openAIPromptCacheKey(req, modelID); key != "" {
+		requestBody.PromptCacheKey = key
+	}
+	if strings.TrimSpace(req.ReasoningEffort) != "" {
+		requestBody.ReasoningEffort = req.ReasoningEffort
+	}
+	return requestBody
 }
 
 func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req StreamRequest, baseURL string, apiKey string, modelID string, sink func(ModelEvent) error) error {
@@ -453,27 +492,16 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 			recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))
 			return err
 		}
-		requestBody := openAIRequestBody{
-			Model:         modelID,
-			Messages:      normalizedMessages,
-			Stream:        true,
-			StreamOptions: map[string]any{"include_usage": true},
-		}
-		if shouldSendOpenAIMaxOutputTokens(modelID) {
-			requestBody.MaxTokens = req.MaxTokens
-		}
-		if key := openAIPromptCacheKey(req, modelID); key != "" {
-			requestBody.PromptCacheKey = key
-		}
+		requestBody := openAIChatRequestBody(req, modelID)
+		requestBody.Messages = normalizedMessages
 		if len(req.Tools) > 0 {
 			requestBody.Tools = req.Tools
 		}
-		if strings.TrimSpace(req.ReasoningEffort) != "" {
-			requestBody.ReasoningEffort = req.ReasoningEffort
-		}
 		body = requestBody
 	} else {
-		applyOpenAIPromptCacheKeyOverride(overrideBody, req, modelID)
+		if !openAIChatRequestGroupUsesCompatShape(req.OpenAIRequestGroup) {
+			applyOpenAIPromptCacheKeyOverride(overrideBody, req, modelID)
+		}
 	}
 	bodyMap, err := requestBodyToMap(body)
 	if err != nil {
@@ -487,7 +515,9 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))
 		return err
 	}
-	applyOpenAIServiceTier(bodyMap, req)
+	if modelchannel.OpenAIRequestGroupSupportsAdvancedFields(req.OpenAIRequestGroup) {
+		applyOpenAIServiceTier(bodyMap, req)
+	}
 	body = bodyMap
 	requestURL := OpenAIEndpointURL(baseURL, req.OpenAIEndpoint)
 	recordLLMRequestArtifact(req, "openai", modelID, "POST", requestURL, body)
@@ -502,21 +532,15 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 	streamCtx, streamIdle := newProviderStreamIdleWatchdog(ctx, req.ProviderStreamIdleTimeout)
 	defer streamIdle.Stop()
 
-	buildHTTPRequest := func(requestContext context.Context) (*http.Request, error) {
-		httpReq, err := http.NewRequestWithContext(requestContext, http.MethodPost, requestURL, bytes.NewReader(payload))
-		if err != nil {
-			return nil, err
-		}
+	resp, err := doProviderRequestWithGzipFallback(streamCtx, adapter.client, "openai", req.RequestID, req.ModelCallID, payload, requestURL, func(httpReq *http.Request) error {
 		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
 		httpReq.Header.Set("Content-Type", "application/json")
 		httpReq.Header.Set("User-Agent", ClaudeCodeUserAgent)
 		if err := ApplyCustomHeaders(httpReq, req.CustomHeadersEnabled, req.CustomHeadersJSON); err != nil {
-			return nil, err
+			return err
 		}
-		return httpReq, nil
-	}
-
-	resp, err := doProviderRequestWithRetry(streamCtx, adapter.client, "openai", req.RequestID, req.ModelCallID, buildHTTPRequest)
+		return nil
+	})
 	if err != nil {
 		if idleErr := streamIdle.Err(); idleErr != nil {
 			err = idleErr
@@ -987,21 +1011,15 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 	streamCtx, streamIdle := newProviderStreamIdleWatchdog(ctx, req.ProviderStreamIdleTimeout)
 	defer streamIdle.Stop()
 
-	buildHTTPRequest := func(requestContext context.Context) (*http.Request, error) {
-		httpReq, err := http.NewRequestWithContext(requestContext, http.MethodPost, requestURL, bytes.NewReader(payload))
-		if err != nil {
-			return nil, err
-		}
+	resp, err := doProviderRequestWithGzipFallback(streamCtx, adapter.client, "openai", req.RequestID, req.ModelCallID, payload, requestURL, func(httpReq *http.Request) error {
 		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
 		httpReq.Header.Set("Content-Type", "application/json")
 		httpReq.Header.Set("User-Agent", ClaudeCodeUserAgent)
 		if err := ApplyCustomHeaders(httpReq, req.CustomHeadersEnabled, req.CustomHeadersJSON); err != nil {
-			return nil, err
+			return err
 		}
-		return httpReq, nil
-	}
-
-	resp, err := doProviderRequestWithRetry(streamCtx, adapter.client, "openai", req.RequestID, req.ModelCallID, buildHTTPRequest)
+		return nil
+	})
 	if err != nil {
 		if idleErr := streamIdle.Err(); idleErr != nil {
 			err = idleErr
