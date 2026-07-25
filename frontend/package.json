@@ -17,6 +17,7 @@
     "chart.js": "^4.5.1",
     "copy-text-to-clipboard": "^3.2.2",
     "dayjs": "^1.11.20",
+    "echarts": "^6.1.0",
     "resize-observer-polyfill": "^1.5.1",
     "vue": "^3.5.22",
     "vue-chartjs": "^5.3.3",
