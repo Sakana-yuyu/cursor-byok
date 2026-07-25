@@ -1,18 +1,13 @@
-## v0.0.46
-
-### 优化
-- **缓存命中率大幅提升**：`prompt_cache_key` 现在对所有 OpenAI 兼容模型生效（此前仅限 `gpt*`）。grok / glm / qwen 等模型在同一会话内可稳定复用前缀缓存。
-- **请求明细异常标记**：provider 未返回 usage 的请求（流中断 / 取消 / 错误）现在会显示为黄色「无 usage」或红色「错误」状态，不再混在正常请求里。
-- **供应商展示名统一**：界面统一显示为 `OpenAI` / `Anthropic`（不再使用 OAI / A社 别名）。
-- **请求明细分页**：缓存上下文页支持分页浏览（20/50/100 条每页）。
-- **存储上限提升**：`usage.json` 最近事件上限从 500 提升至 10000 条。
-
-### 新功能
-- **会话分析详情页**：首页统计卡片右上角「详情」按钮，支持时间范围 / 模型筛选、ECharts 折线图。
-- **统计聚合 API**：后端新增按时间范围汇总与按小时分桶接口。
+## v0.0.47
 
 ### 修复
-- 会话分析详情页排除 `turn_finalized` 事件，防止 token 被重复累计。
-- `recordTurnUsageSnapshot` 写入 `usage.json` 时补上 `Status` 字段（此前所有 provider_call 事件的 status 都为空）。
+- **commit message 生成闪退**：修复 MITM streaming 转发中 `http.Response.Request` 为 nil 导致 goproxy MITM TLS 路径 panic 的问题。Cursor 客户端在请求生成 commit message 时不再报 `[aborted] socket hang up`。
+- 移除有缺陷的 `forwardToServerStreaming` chunked encoding 路径，commit message 请求改用同步转发，确保 Connect RPC 响应格式正确。
 
-> **Windows 用户注意**：安装时若被 SmartScreen 拦截，点击「更多信息」→「仍要运行」即可。这是 Windows 对未购买代码签名证书的应用的标准行为，程序本身安全。
+### 新功能
+- **会话分析详情页**：首页统计卡片「详情」按钮，支持时间范围 / 模型筛选、ECharts 折线图。
+
+### 优化
+- **首页指标卡片**：改为前端自主聚合，不再依赖后端全量汇总。
+
+> **Windows 用户注意**：安装时若被 SmartScreen 拦截，点击「更多信息」->「仍要运行」即可。这是 Windows 对未购买代码签名证书的应用的标准行为，程序本身安全。
