@@ -78,7 +78,9 @@ func estimateTextTokens(text string) int64 {
 	if runeCount <= 0 {
 		return 0
 	}
-	estimated := int64((runeCount + 3) / 4)
+	// 对混合中英文文本，runeCount/4 严重低估中文 token 数。
+	// 使用 /3 更保守，接近实际 tokenizer 行为。
+	estimated := int64((runeCount + 2) / 3)
 	estimated += int64(strings.Count(trimmed, "\n"))
 	if estimated < 1 {
 		return 1

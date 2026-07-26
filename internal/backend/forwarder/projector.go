@@ -14,7 +14,7 @@ import (
 	promptengine "cursor/internal/backend/agent/prompt"
 )
 
-const projectedConversationMaxTokens = 130000
+const projectedConversationMaxTokens = 64000
 
 type HistoryProjector struct {
 }

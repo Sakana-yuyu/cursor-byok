@@ -154,7 +154,8 @@ func (service *Service) buildAutoCompactionPlan(stream *ActiveStream, conversati
 	if reserveTokens <= 0 {
 		reserveTokens = compactionAutoReserveTokens
 	}
-	budgetTokens := contextWindowSize - reserveTokens
+	// 使用 80% 的上下文窗口作为预算，留出安全余量防止估算偏差导致 context_length_exceeded。
+	budgetTokens := int64(float64(contextWindowSize)*0.8) - reserveTokens
 	preflightExceeded := estimatedCompiledTokens > 0 && estimatedCompiledTokens > budgetTokens
 	contextTokens := maxPositiveInt64(
 		conversation.AutoCompactionPromptTokens,
