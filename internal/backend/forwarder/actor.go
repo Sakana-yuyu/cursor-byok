@@ -681,7 +681,8 @@ func effectiveTaskDisplayModelID(subagentType string, parentModelID string, over
 			return ""
 		}
 	}
-	return ""
+	// 没有 override 时 fallback 到父进程模型，与 openTask 的行为保持一致。
+	return strings.TrimSpace(parentModelID)
 }
 
 func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *streamProviderEvent) error {

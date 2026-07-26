@@ -298,12 +298,13 @@ func (service *Service) beginPendingCompaction(stream *ActiveStream, plan *compa
 	stream.Phase = TurnPhaseCompacting
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
+	// 先发 checkpoint 让前端获得会话上下文，再发 SummaryStarted 触发 summarize UI。
+	if err := service.publishCheckpoint(stream.RequestID, stream.ConversationID); err != nil {
+		return err
+	}
 	if err := service.broker.Publish(stream.RequestID, StreamEvent{
 		Message: buildSummaryStartedMessage(),
 	}); err != nil {
-		return err
-	}
-	if err := service.publishCheckpoint(stream.RequestID, stream.ConversationID); err != nil {
 		return err
 	}
 	return service.broker.Publish(stream.RequestID, StreamEvent{Message: serverMessage})

@@ -904,6 +904,10 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
 	service.setTurnPhase(stream, TurnPhaseCanceled)
+	// 发送 TurnEndedUpdate 让前端退出活跃状态（否则一直显示 "planning next moves"）
+	_ = service.broker.Publish(intent.RequestID, StreamEvent{
+		Message: buildTurnEndedMessage(0, 0, 0, 0),
+	})
 	return service.broker.Cancel(intent.RequestID, firstNonEmpty(intent.CancelReason, "[canceled] User aborted request"))
 }
 
