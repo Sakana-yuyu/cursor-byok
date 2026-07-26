@@ -4,19 +4,41 @@ import Card from "@/components/ui/Card.vue";
 import { useRouter } from "vue-router";
 import { appState, openModelEditorWindow, reloadUserConfig } from "@/state/appState";
 import { providerLabel } from "@/utils/providerMeta";
+import {
+  SUPPLIER_GROUP_MODE_NAME,
+  groupModelAdaptersAsSuppliers,
+  loadSupplierGroupMode,
+} from "@/utils/supplierGrouping";
 import { computed, onMounted } from "vue";
 
 const router = useRouter();
+
+// 与模型配置页一致的分组偏好（名称 / 连接）
 const groups = computed(() => {
-  const buckets = new Map();
-  appState.modelAdapters.forEach((adapter, index) => {
-    let host = adapter.baseURL || "未设置 URL";
-    try { host = new URL(host).host || host; } catch { host = host.replace(/^https?:\/\//, ""); }
-    const key = adapter.groupName || host || "未命名分组";
-    if (!buckets.has(key)) buckets.set(key, { key, name: adapter.groupName || host, host, adapters: [] });
-    buckets.get(key).adapters.push({ adapter, index });
+  const mode = loadSupplierGroupMode();
+  return groupModelAdaptersAsSuppliers(appState.modelAdapters, mode).map((supplier) => {
+    let host = supplier.baseURL || "未设置 URL";
+    try { host = new URL(host).host || host; } catch { host = String(host).replace(/^https?:\/\//, ""); }
+    if (mode === SUPPLIER_GROUP_MODE_NAME) {
+      const hosts = [
+        ...new Set(
+          (supplier.models || []).map((a) => {
+            try { return new URL(String(a.baseURL || "").trim()).host; } catch { return String(a.baseURL || "").trim(); }
+          }).filter(Boolean),
+        ),
+      ];
+      host = hosts.length <= 1 ? (hosts[0] || host) : `${hosts.length} 个连接`;
+    }
+    return {
+      key: supplier.key,
+      name: supplier.groupName || host,
+      host,
+      adapters: (supplier.models || []).map((adapter) => ({
+        adapter,
+        index: appState.modelAdapters.indexOf(adapter),
+      })),
+    };
   });
-  return Array.from(buckets.values());
 });
 
 function types(group) {

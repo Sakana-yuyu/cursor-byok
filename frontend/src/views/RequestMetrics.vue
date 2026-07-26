@@ -5,7 +5,7 @@ import { usePagination } from "@/composables/usePagination";
 import { fetchRecentRequestMetrics } from "@/services/clientApi";
 import { appState, reloadUserConfig } from "@/state/appState";
 import { providerIcon, providerLabel } from "@/utils/providerMeta";
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
 const router = useRouter();
@@ -41,9 +41,9 @@ function statusTone(row) {
   if (isAbnormalRow(row)) {
     const status = String(row?.status || "").trim();
     if (status === "provider_error") return { bg: "#3a1414", text: "#fca5a5", label: "错误" };
-    return { bg: "#3a2a14", text: "#fbbf24", label: "无 usage" };
+    return { bg: "#3a2a14", text: "#fbbf24", label: "无用量" };
   }
-  return { bg: "#143524", text: "#86efac", label: row?.status || "已完成" };
+  return { bg: "#143524", text: "#86efac", label: normalizeUsageStatusLabel(row?.status) };
 }
 
 const {
@@ -74,6 +74,48 @@ const pricingLookup = computed(() => {
   return map;
 });
 
+// 反查请求实际命中的模型渠道（中转供应商），用 groupName 优先、否则展示 host；
+// 同一 model+provider 命中多个渠道时合并提示，避免笼统只显示协议品牌。
+const supplierLookup = computed(() => {
+  const map = new Map();
+  for (const adapter of appState.modelAdapters) {
+    const model = String(adapter.modelID || "").trim();
+    if (!model) continue;
+    const provider = String(adapter.type || "").trim().toLowerCase();
+    const key = `${model}\n${provider}`;
+    const label = String(adapter.groupName || "").trim() || formatHost(adapter.baseURL);
+    if (!label) continue;
+    if (map.has(key)) {
+      map.get(key).labels.add(label);
+    } else {
+      map.set(key, { labels: new Set([label]) });
+    }
+  }
+  return map;
+});
+
+function supplierMetaForRow(row) {
+  const model = String(row?.model || "").trim();
+  const provider = String(row?.provider || "").trim().toLowerCase();
+  const entry = supplierLookup.value.get(`${model}\n${provider}`);
+  if (!entry) return { label: "", title: "" };
+  const list = [...entry.labels].filter(Boolean);
+  if (list.length === 0) return { label: "", title: "" };
+  if (list.length === 1) return { label: list[0], title: list[0] };
+  return { label: `${list[0]} 等 ${list.length} 个`, title: list.join("、") };
+}
+
+// usage 事件状态 -> 中文展示
+const USAGE_STATUS_LABELS = {
+  completed: "已完成",
+  provider_error: "错误",
+  no_usage: "无用量",
+};
+function normalizeUsageStatusLabel(status) {
+  const key = String(status || "").trim();
+  return USAGE_STATUS_LABELS[key] || key || "已完成";
+}
+
 function pricingForRow(row) {
   if (row?.pricing?.known) return row.pricing;
   const model = String(row?.model || "").trim();
@@ -102,6 +144,7 @@ const displayRows = computed(() =>
     row,
     tone: statusTone(row),
     cost: formatCost(row),
+    supplier: supplierMetaForRow(row),
   })),
 );
 
@@ -126,8 +169,40 @@ async function refresh() {
   }
 }
 
+// 自动刷新：页面可见时定时同步使用信息，避免手动点刷新
+const AUTO_REFRESH_INTERVAL_MS = 5000;
+let autoRefreshTimer = null;
+
+function autoRefresh() {
+  if (document.hidden || loading.value) return;
+  void refresh();
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  autoRefreshTimer = setInterval(autoRefresh, AUTO_REFRESH_INTERVAL_MS);
+}
+
+function stopAutoRefresh() {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+}
+
+function handleVisibilityChange() {
+  if (!document.hidden) autoRefresh();
+}
+
 onMounted(async () => {
   await Promise.allSettled([refresh(), reloadUserConfig({ modelAdaptersOnly: true })]);
+  startAutoRefresh();
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+});
+
+onUnmounted(() => {
+  stopAutoRefresh();
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
 </script>
 
@@ -213,9 +288,12 @@ onMounted(async () => {
               {{ formatTime(item.row.at) }}
             </td>
             <td class="p-3">
-              <span class="inline-flex items-center gap-1.5 rounded-[6px] border border-[#3a3a3a] bg-[#252525] px-2 py-1 text-xs text-[#e5e5e5]">
+              <span
+                class="inline-flex items-center gap-1.5 rounded-[6px] border border-[#3a3a3a] bg-[#252525] px-2 py-1 text-xs text-[#e5e5e5]"
+                :title="item.supplier.title || providerLabel(item.row.provider)"
+              >
                 <span v-if="providerIcon(item.row.provider)" :class="[providerIcon(item.row.provider), 'text-[14px]']" />
-                {{ providerLabel(item.row.provider) }}
+                {{ item.supplier.label || providerLabel(item.row.provider) }}
               </span>
             </td>
             <td class="max-w-[240px] truncate p-3" :title="item.row.model">{{ item.row.model || "-" }}</td>

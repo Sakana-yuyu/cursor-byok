@@ -1486,14 +1486,44 @@ export async function deleteAllModelAdapters() {
   );
 }
 
-export async function deleteModelAdaptersBySupplier(baseURL, groupName) {
+/**
+ * 按供应商身份删除模型。
+ * - 旧签名：deleteModelAdaptersBySupplier(baseURL, groupName) → 等同 legacy（baseURL+分组名）
+ * - 新签名：deleteModelAdaptersBySupplier({ mode, baseURL?, groupName? })
+ * mode: 'name' | 'connection' | 'legacy'
+ */
+export async function deleteModelAdaptersBySupplier(baseURLOrIdentity, groupName) {
   const currentConfig = await loadPersistedUserConfig();
-  const normalizedBaseURL = normalizeBaseURL(baseURL);
-  const normalizedGroupName = asString(groupName).trim();
+  let identity;
+  if (baseURLOrIdentity && typeof baseURLOrIdentity === "object" && !Array.isArray(baseURLOrIdentity)) {
+    identity = {
+      mode: asString(baseURLOrIdentity.mode || "legacy").trim() || "legacy",
+      baseURL: baseURLOrIdentity.baseURL,
+      groupName: baseURLOrIdentity.groupName,
+    };
+  } else {
+    identity = {
+      mode: "legacy",
+      baseURL: baseURLOrIdentity,
+      groupName,
+    };
+  }
+
+  const mode = asString(identity.mode).trim().toLowerCase() || "legacy";
+  const normalizedBaseURL = normalizeBaseURL(identity.baseURL);
+  const normalizedGroupName = asString(identity.groupName).trim();
+
   const remaining = normalizeModelAdapters(currentConfig.modelAdapters).filter((adapter) => {
-    const matchBaseURL = normalizeBaseURL(adapter.baseURL) === normalizedBaseURL;
-    const matchGroup = asString(adapter.groupName).trim() === normalizedGroupName;
-    return !(matchBaseURL && matchGroup);
+    const adapterBase = normalizeBaseURL(adapter.baseURL);
+    const adapterGroup = asString(adapter.groupName).trim();
+    if (mode === "name") {
+      return adapterGroup !== normalizedGroupName;
+    }
+    if (mode === "connection") {
+      return adapterBase !== normalizedBaseURL;
+    }
+    // legacy: baseURL + groupName
+    return !(adapterBase === normalizedBaseURL && adapterGroup === normalizedGroupName);
   });
   return persistConfigPayload(
     {
