@@ -860,6 +860,108 @@ func (service *Service) snapshotVisibleTurns(conversation *ConversationFile) ([]
 	return cloneByteSlices(state.GetTurns()), nil
 }
 
+// Shutdown 在服务退出前主动取消所有未终态活动流。
+// 这样 RunSSE 能先发出 TurnEnded + canceled endstream，避免 Cursor 只看到连接被硬断后报 RetriableError: Canceled。
+func (service *Service) Shutdown(ctx context.Context) error {
+	if service == nil || service.broker == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	requestIDs := service.broker.ActiveRequestIDs()
+	if len(requestIDs) == 0 {
+		return nil
+	}
+	log.Printf("forwarder shutdown canceling active streams count=%d", len(requestIDs))
+	var firstErr error
+	for _, requestID := range requestIDs {
+		if err := ctx.Err(); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			break
+		}
+		stream, ok := service.broker.Get(requestID)
+		if !ok || stream == nil {
+			continue
+		}
+		// 单个流取消不能无限占用关闭预算：actor 可能卡在 compile/provider 准备阶段。
+		cancelCtx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
+		errCh := make(chan error, 1)
+		go func(requestID string, stream *ActiveStream) {
+			errCh <- service.postStreamCommandWait(stream, streamCommand{
+				Kind: streamCommandCancel,
+				Intent: InboundIntent{
+					Kind:         "cancel",
+					RequestID:    requestID,
+					CancelReason: "[canceled] Local assistant service shutting down",
+				},
+			})
+		}(requestID, stream)
+		var err error
+		select {
+		case err = <-errCh:
+		case <-cancelCtx.Done():
+			err = cancelCtx.Err()
+		}
+		cancel()
+		if err != nil && !errors.Is(err, errProviderLoopInterrupted) {
+			log.Printf("forwarder shutdown cancel failed request_id=%s err=%v", strings.TrimSpace(requestID), err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+		// actor 未及时终态时，补发 TurnEnded 并强制 canceled endstream，让 RunSSE 能退出。
+		if streamStillActive(stream) {
+			_ = service.broker.Publish(requestID, StreamEvent{
+				Message: buildTurnEndedMessage(0, 0, 0, 0),
+			})
+			if cancelErr := service.broker.Cancel(requestID, "[canceled] Local assistant service shutting down"); cancelErr != nil {
+				log.Printf("forwarder shutdown force cancel failed request_id=%s err=%v", strings.TrimSpace(requestID), cancelErr)
+				if firstErr == nil {
+					firstErr = cancelErr
+				}
+			}
+		}
+	}
+	// 给已连接的 RunSSE 一点时间读走 TurnEnded/endstream，再进入 HTTP Shutdown。
+	drainDeadline := time.Now().Add(750 * time.Millisecond)
+	for time.Now().Before(drainDeadline) {
+		if err := ctx.Err(); err != nil {
+			break
+		}
+		if len(service.broker.ActiveRequestIDs()) == 0 {
+			break
+		}
+		timer := time.NewTimer(50 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return firstErr
+		case <-timer.C:
+		}
+	}
+	return firstErr
+}
+
+func streamStillActive(stream *ActiveStream) bool {
+	if stream == nil {
+		return false
+	}
+	stream.mu.Lock()
+	defer stream.mu.Unlock()
+	if isTerminalStreamStatus(stream.Status) {
+		return false
+	}
+	switch stream.Phase {
+	case TurnPhaseCanceled, TurnPhaseCompleted, TurnPhaseFailed:
+		return false
+	default:
+		return true
+	}
+}
+
 // handleCancelIntent 处理取消请求，并向客户端发送执行桥 abort。
 func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	stream, ok := service.broker.Get(intent.RequestID)

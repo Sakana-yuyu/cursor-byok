@@ -43,6 +43,8 @@ export const EXTRA_PARAMS_DEFAULT_JSON = `{
 }`;
 export const CUSTOM_HEADERS_DEFAULT_JSON = `{
 }`;
+export const BALANCE_QUERY_HEADERS_DEFAULT_JSON = `{
+}`;
 const SUPPORTED_OPENAI_ENDPOINTS = new Set([OPENAI_ENDPOINT_RESPONSES, OPENAI_ENDPOINT_CHAT_COMPLETIONS, OPENAI_ENDPOINT_CUSTOM]);
 const SUPPORTED_OPENAI_REQUEST_GROUPS = new Set([
   OPENAI_REQUEST_GROUP_RESPONSES,
@@ -303,6 +305,10 @@ export function createEmptyModelAdapter() {
     pricing: null,
     fastMode: false,
     openAIServiceTier: "",
+    balanceQueryURL: "",
+    balanceQueryField: "",
+    balanceQueryHeaders: {},
+    balanceQueryHeadersJSON: BALANCE_QUERY_HEADERS_DEFAULT_JSON,
   };
 }
 
@@ -421,6 +427,74 @@ function validateHeadersJSON(value) {
   return "";
 }
 
+// parseBalanceQueryHeaders 把 map 或 JSON 字符串收成 map[string]string（对齐后端 BalanceQueryHeaders）。
+function parseBalanceQueryHeaders(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const out = {};
+    for (const [key, item] of Object.entries(value)) {
+      const name = asString(key).trim();
+      if (!name) continue;
+      out[name] = typeof item === "string" ? item : String(item ?? "");
+    }
+    return out;
+  }
+  const text = asString(value).trim();
+  if (!text) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    const out = {};
+    for (const [key, item] of Object.entries(parsed)) {
+      const name = asString(key).trim();
+      if (!name) continue;
+      out[name] = typeof item === "string" ? item : String(item ?? "");
+    }
+    return out;
+  } catch (_error) {
+    return {};
+  }
+}
+
+function balanceQueryHeadersToJSON(headers) {
+  if (!headers || typeof headers !== "object" || Array.isArray(headers) || Object.keys(headers).length === 0) {
+    return BALANCE_QUERY_HEADERS_DEFAULT_JSON;
+  }
+  try {
+    return JSON.stringify(headers, null, 2);
+  } catch (_error) {
+    return BALANCE_QUERY_HEADERS_DEFAULT_JSON;
+  }
+}
+
+function validateBalanceQueryHeadersJSON(value) {
+  const text = asString(value).trim();
+  if (!text) {
+    return "";
+  }
+  const objectError = validateJSONObject(text, "余额查询请求头 JSON");
+  if (objectError) {
+    return objectError;
+  }
+  const parsed = JSON.parse(text);
+  for (const [key, item] of Object.entries(parsed)) {
+    if (!asString(key)) {
+      return "余额查询请求头名称不能为空";
+    }
+    if (typeof item !== "string") {
+      return `余额查询请求头 ${key} 的值必须是字符串`;
+    }
+  }
+  return "";
+}
+
+function hasBalanceQueryHeadersJSON(value) {
+  return asString(value).trim() !== "";
+}
+
 function validateOpenAIExtraParamsJSON(value) {
   return validateJSONObject(value, "额外参数 JSON");
 }
@@ -489,6 +563,18 @@ export function normalizeModelAdapter(source) {
   const anthropicExtraParamsJSON = normalizedType === "anthropic"
     ? asString(raw.anthropicExtraParamsJSON ?? raw.anthropic_extra_params_json) || EXTRA_PARAMS_DEFAULT_JSON
     : "";
+  const balanceQueryURL = asString(raw.balanceQueryURL ?? raw.balance_query_url).trim();
+  const balanceQueryField = asString(raw.balanceQueryField ?? raw.balance_query_field).trim();
+  const balanceQueryHeadersJSONRaw = asString(
+    raw.balanceQueryHeadersJSON ?? raw.balance_query_headers_json,
+  );
+  // 编辑态优先保留用户输入的 JSON 字符串；落盘/后端只有 map 时再反序列化成字符串。
+  const balanceQueryHeaders = balanceQueryHeadersJSONRaw.trim()
+    ? parseBalanceQueryHeaders(balanceQueryHeadersJSONRaw)
+    : parseBalanceQueryHeaders(raw.balanceQueryHeaders ?? raw.balance_query_headers);
+  const balanceQueryHeadersJSON = balanceQueryHeadersJSONRaw.trim()
+    ? balanceQueryHeadersJSONRaw
+    : balanceQueryHeadersToJSON(balanceQueryHeaders);
   return {
     id: asString(raw.id),
     displayName: asString(raw.displayName || raw.name),
@@ -532,6 +618,10 @@ export function normalizeModelAdapter(source) {
     pricing: normalizePricing(raw.pricing),
     fastMode: normalizedType === "openai" ? asBoolean(raw.fastMode ?? raw.fast_mode) : false,
     openAIServiceTier: normalizedType === "openai" ? asString(raw.openAIServiceTier ?? raw.openai_service_tier) : "",
+    balanceQueryURL,
+    balanceQueryField,
+    balanceQueryHeaders,
+    balanceQueryHeadersJSON,
   };
 }
 
@@ -540,6 +630,8 @@ export function normalizeModelAdapters(source) {
 }
 
 function mergeDuplicateModelAdapter(existing, incoming) {
+  const existingHasBalanceHeaders = Object.keys(existing.balanceQueryHeaders || {}).length > 0;
+  const incomingBalanceHeadersJSON = incoming.balanceQueryHeadersJSON || balanceQueryHeadersToJSON(incoming.balanceQueryHeaders);
   return {
     ...existing,
     displayName: existing.displayName || incoming.displayName,
@@ -549,6 +641,10 @@ function mergeDuplicateModelAdapter(existing, incoming) {
       ? existing.contextWindowTokens
       : incoming.contextWindowTokens,
     pricing: existing.pricing || incoming.pricing,
+    balanceQueryURL: existing.balanceQueryURL || incoming.balanceQueryURL,
+    balanceQueryField: existing.balanceQueryField || incoming.balanceQueryField,
+    balanceQueryHeaders: existingHasBalanceHeaders ? existing.balanceQueryHeaders : incoming.balanceQueryHeaders,
+    balanceQueryHeadersJSON: existingHasBalanceHeaders ? existing.balanceQueryHeadersJSON : incomingBalanceHeadersJSON,
   };
 }
 
@@ -615,6 +711,12 @@ export function validateModelAdapters(source) {
       const customHeadersError = validateHeadersJSON(adapter.customHeadersJSON);
       if (customHeadersError) {
         return `${prefix} 的 ${customHeadersError}`;
+      }
+    }
+    if (hasBalanceQueryHeadersJSON(adapter.balanceQueryHeadersJSON)) {
+      const balanceHeadersError = validateBalanceQueryHeadersJSON(adapter.balanceQueryHeadersJSON);
+      if (balanceHeadersError) {
+        return `${prefix} 的 ${balanceHeadersError}`;
       }
     }
     if (adapter.type === "anthropic" && adapter.anthropicExtraParamsEnabled) {
@@ -758,7 +860,8 @@ function buildConfigPayload(source = appState) {
     providerStreamIdleTimeout: normalized.providerStreamIdleTimeout,
     backendListenAddr: normalized.backendListenAddr,
     proxyListenAddr: normalized.proxyListenAddr,
-    modelAdapters: normalized.modelAdapters.map(({ id, ...adapter }) => adapter),
+    // balanceQueryHeadersJSON 仅前端编辑态使用，落盘只保留 map 形态的 balanceQueryHeaders。
+    modelAdapters: normalized.modelAdapters.map(({ id, balanceQueryHeadersJSON, ...adapter }) => adapter),
     routing: normalized.routing,
     homeMetrics: normalized.homeMetrics,
     localResponseCache: normalized.localResponseCache,
@@ -786,7 +889,12 @@ async function loadPersistedUserConfig() {
 }
 
 async function persistConfigPayload(config, { modelAdaptersOnly = false } = {}) {
-  const payload = buildConfigPayload(config);
+  const normalizedForValidation = normalizeConfig(config);
+  const prePayloadValidationError = validateModelAdapters(normalizedForValidation.modelAdapters);
+  if (prePayloadValidationError) {
+    return { ok: false, error: prePayloadValidationError };
+  }
+  const payload = buildConfigPayload(normalizedForValidation);
   const configValidationError = validateConfigPayload(payload);
   if (configValidationError) {
     return {
@@ -1440,13 +1548,7 @@ export async function saveModelAdaptersBatch(adapters) {
     }
 
     const existing = nextAdapters[existingIndex];
-    const merged = { ...existing };
-    if ((!existing.contextWindowTokens || existing.contextWindowTokens <= 0) && adapter.contextWindowTokens > 0) {
-      merged.contextWindowTokens = adapter.contextWindowTokens;
-    }
-    if (!existing.pricing && adapter.pricing) {
-      merged.pricing = adapter.pricing;
-    }
+    const merged = mergeDuplicateModelAdapter(existing, adapter);
     if (JSON.stringify(merged) !== JSON.stringify(existing)) {
       nextAdapters[existingIndex] = merged;
       updated += 1;

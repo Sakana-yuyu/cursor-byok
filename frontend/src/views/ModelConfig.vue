@@ -157,7 +157,14 @@ function formatMoney(value, currency) {
 
 function balanceSourceLabel(source) {
   if (source === "openai_billing") return "openai billing";
+  if (source === "sub2api_usage") return "sub2api usage";
   if (source === "newapi") return "newapi";
+  if (source === "configured") return "自定义查询";
+  if (source === "deepseek") return "DeepSeek";
+  if (source === "stepfun") return "阶跃星辰";
+  if (source === "siliconflow") return "SiliconFlow";
+  if (source === "openrouter") return "OpenRouter";
+  if (source === "novita") return "Novita";
   return String(source || "").trim();
 }
 
@@ -165,8 +172,14 @@ function balanceTooltip(key) {
   const data = balanceEntry(key)?.data;
   if (!data || !data.supported) return "";
   const source = balanceSourceLabel(data.source);
-  let text = `已用 ${formatMoney(data.used, data.currency)} / 总额 ${formatMoney(data.total, data.currency)}`;
-  if (source) text += ` · 来源: ${source}`;
+  const hasUsedTotal =
+    (data.used != null && Number.isFinite(Number(data.used))) ||
+    (data.total != null && Number.isFinite(Number(data.total)));
+  let text = "";
+  if (hasUsedTotal) {
+    text = `已用 ${formatMoney(data.used, data.currency)} / 总额 ${formatMoney(data.total, data.currency)}`;
+  }
+  if (source) text += `${text ? " · " : ""}来源: ${source}`;
   return text;
 }
 
@@ -175,7 +188,7 @@ function balanceMessage(key) {
   return (data && data.message) || "余额不可用";
 }
 
-async function loadSupplierBalance(supplier) {
+async function loadSupplierBalance(supplier, forceRefresh = false) {
   const key = supplier.key;
   const existing = balanceBySupplier.value[key];
   if (existing && existing.loading) return;
@@ -184,19 +197,28 @@ async function loadSupplierBalance(supplier) {
     [key]: { loading: true, loaded: false, data: existing?.data || null },
   };
   const rep = (supplier.models && supplier.models[0]) || supplier;
+  const prevData = existing?.data || null;
+  const hasLastGood = Boolean(prevData && prevData.supported);
   let data = null;
   try {
-    data = await queryProviderBalance({
+    const request = {
       type: supplier.type,
       baseURL: rep.baseURL || supplier.baseURL,
       apiKey: rep.apiKey || supplier.apiKey,
-    });
+    };
+    if (forceRefresh) request.forceRefresh = true;
+    data = await queryProviderBalance(request);
   } catch (_e) {
-    data = { supported: false, message: "查询失败" };
+    // invoke 层异常按瞬时处理：有上次成功值则保留（keep-last-good），否则置不可用。
+    data = hasLastGood ? prevData : { supported: false, message: "查询失败" };
   }
+  const normalized = data || { supported: false, message: "无返回结果" };
+  // 瞬时失败且已有上次成功值：保留旧值（keep-last-good），不透出「余额不可用」。
+  const nextData =
+    !normalized.supported && normalized.transient && hasLastGood ? prevData : normalized;
   balanceBySupplier.value = {
     ...balanceBySupplier.value,
-    [key]: { loading: false, loaded: true, data: data || { supported: false, message: "无返回结果" } },
+    [key]: { loading: false, loaded: true, data: nextData },
   };
 }
 
@@ -372,14 +394,14 @@ onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }).catch(() =>
                       <span class="icon-[mdi--loading] animate-spin text-[12px]"></span>查询余额…
                     </span>
                     <template v-else-if="balanceEntry(supplier.key).data && balanceEntry(supplier.key).data.supported">
-                      <span class="text-[#6ee7a5]" :title="balanceTooltip(supplier.key)">
-                        余额 {{ formatMoney(balanceEntry(supplier.key).data.remaining, balanceEntry(supplier.key).data.currency) }}
+                      <span class="text-[#6ee7a5]" :title="balanceEntry(supplier.key).data.unlimited ? '该账户额度不限' : balanceTooltip(supplier.key)">
+                        {{ balanceEntry(supplier.key).data.unlimited ? "余额 不限额" : `余额 ${formatMoney(balanceEntry(supplier.key).data.remaining, balanceEntry(supplier.key).data.currency)}` }}
                       </span>
                       <button
                         type="button"
                         class="center-row text-[#737373] transition-colors hover:text-white"
                         title="刷新余额"
-                        @click.stop="loadSupplierBalance(supplier)"
+                        @click.stop="loadSupplierBalance(supplier, true)"
                       >
                         <span class="icon-[mdi--refresh] text-[12px]"></span>
                       </button>
@@ -390,7 +412,7 @@ onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }).catch(() =>
                         type="button"
                         class="center-row text-[#737373] transition-colors hover:text-white"
                         title="重试"
-                        @click.stop="loadSupplierBalance(supplier)"
+                        @click.stop="loadSupplierBalance(supplier, true)"
                       >
                         <span class="icon-[mdi--refresh] text-[12px]"></span>
                       </button>

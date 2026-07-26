@@ -206,7 +206,9 @@ const visibleAdapters = computed(() => {
 const supplierMeta = computed(() => supplierAdapters.value[0] || null);
 
 // 余额/额度查询（非阻塞，失败不影响页面）
-const balanceState = reactive({ loading: false, loaded: false, data: null });
+// data：当前用于展示的余额（成功值，或瞬时失败时保留的上次成功值）。
+// stale：为 true 表示 data 是被保留的上次成功值，当前查询是瞬时失败（数据可能过期）。
+const balanceState = reactive({ loading: false, loaded: false, data: null, stale: false });
 
 function currencySymbol(currency) {
   const code = String(currency || "").toUpperCase();
@@ -225,19 +227,46 @@ function formatMoney(value, currency) {
 
 function balanceSourceLabel(source) {
   if (source === "openai_billing") return "openai billing";
+  if (source === "sub2api_usage") return "sub2api usage";
   if (source === "newapi") return "newapi";
+  if (source === "configured") return "自定义查询";
+  if (source === "deepseek") return "DeepSeek";
+  if (source === "stepfun") return "阶跃星辰";
+  if (source === "siliconflow") return "SiliconFlow";
+  if (source === "openrouter") return "OpenRouter";
+  if (source === "novita") return "Novita";
   return String(source || "").trim();
 }
 
 const balanceSecondary = computed(() => {
   const data = balanceState.data;
   if (!data || !data.supported) return "";
-  const used = formatMoney(data.used, data.currency);
-  const total = formatMoney(data.total, data.currency);
   const source = balanceSourceLabel(data.source);
-  let text = `已用 ${used} / 总额 ${total}`;
-  if (source) text += ` · 来源: ${source}`;
+  const hasUsedTotal =
+    (data.used != null && Number.isFinite(Number(data.used))) ||
+    (data.total != null && Number.isFinite(Number(data.total)));
+  let text = "";
+  if (hasUsedTotal) {
+    text = `已用 ${formatMoney(data.used, data.currency)} / 总额 ${formatMoney(data.total, data.currency)}`;
+  }
+  if (source) text += `${text ? " · " : ""}来源: ${source}`;
+  if (balanceState.stale) text += `${text ? " · " : ""}数据可能过期`;
   return text;
+});
+
+// 主展示文案：有 total/used 时形如「余额 R / 总额 T / 已用 U」，否则回退「余额 R」。
+const balancePrimary = computed(() => {
+  const data = balanceState.data;
+  if (!data || !data.supported) return "";
+  if (data.unlimited) return "余额 不限额";
+  const parts = [`余额 ${formatMoney(data.remaining, data.currency)}`];
+  if (data.total != null && Number.isFinite(Number(data.total))) {
+    parts.push(`总额 ${formatMoney(data.total, data.currency)}`);
+  }
+  if (data.used != null && Number.isFinite(Number(data.used))) {
+    parts.push(`已用 ${formatMoney(data.used, data.currency)}`);
+  }
+  return parts.join(" / ");
 });
 
 async function loadBalance(forceRefresh = false) {
@@ -252,9 +281,27 @@ async function loadBalance(forceRefresh = false) {
     };
     if (forceRefresh) request.forceRefresh = true;
     const result = await queryProviderBalance(request);
-    balanceState.data = result || { supported: false, message: "无返回结果" };
+    const normalized = result || { supported: false, message: "无返回结果" };
+    if (normalized.supported) {
+      // 成功：更新展示值，清除过期标记。
+      balanceState.data = normalized;
+      balanceState.stale = false;
+    } else if (normalized.transient && balanceState.data && balanceState.data.supported) {
+      // 瞬时失败且已有上次成功值：保留旧值（keep-last-good），仅标记数据可能过期。
+      balanceState.stale = true;
+    } else {
+      // 确定性失败（或从未成功过）：清空为不可用。
+      balanceState.data = normalized;
+      balanceState.stale = false;
+    }
   } catch (_e) {
-    balanceState.data = { supported: false, message: "查询失败" };
+    // invoke 层异常按瞬时处理：有上次成功值则保留，否则置不可用。
+    if (balanceState.data && balanceState.data.supported) {
+      balanceState.stale = true;
+    } else {
+      balanceState.data = { supported: false, message: "查询失败" };
+      balanceState.stale = false;
+    }
   } finally {
     balanceState.loading = false;
     balanceState.loaded = true;
@@ -640,10 +687,11 @@ onMounted(async () => {
                 </span>
                 <template v-else-if="balanceState.data && balanceState.data.supported">
                   <span
-                    class="center-row gap-1 rounded-full bg-[#10AD5D]/15 px-2 py-0.5 text-[#6ee7a5]"
-                    :title="balanceSecondary"
-                  >余额 {{ formatMoney(balanceState.data.remaining, balanceState.data.currency) }}</span>
-                  <span v-if="balanceSecondary" class="hidden text-[#666] sm:inline">{{ balanceSecondary }}</span>
+                    class="center-row gap-1 rounded-full px-2 py-0.5"
+                    :class="balanceState.stale ? 'bg-[#a3a3a3]/15 text-[#c9c9c9]' : 'bg-[#10AD5D]/15 text-[#6ee7a5]'"
+                    :title="balanceState.data.unlimited ? '该账户额度不限' : balanceSecondary"
+                  >{{ balancePrimary }}<span v-if="balanceState.stale" class="text-[11px] text-[#8f8f8f]">（可能过期）</span></span>
+                  <span v-if="!balanceState.data.unlimited && balanceSecondary" class="hidden text-[#666] sm:inline">{{ balanceSecondary }}</span>
                 </template>
                 <span
                   v-else-if="balanceState.loaded"
