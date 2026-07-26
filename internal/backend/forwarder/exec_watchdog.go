@@ -26,8 +26,8 @@ func (service *Service) scheduleExecWatchdog(requestID string, pending runtimeco
 		return
 	}
 	kind := strings.TrimSpace(pending.ExecKind)
-	if kind == "shell" || kind == "subagent" {
-		return // shell 有自己的 recovery；subagent 由 Cursor 客户端管理
+	if kind == "shell" {
+		return // shell 有自己的 recovery 机制
 	}
 	stream, ok := service.broker.Get(requestID)
 	if !ok || stream == nil {
@@ -37,7 +37,12 @@ func (service *Service) scheduleExecWatchdog(requestID string, pending runtimeco
 	if deadline.IsZero() {
 		deadline = time.Now().UTC()
 	}
-	deadline = deadline.Add(defaultExecTimeout)
+	// subagent 可能需要很长时间，使用 30 分钟兜底防止客户端漏发终态时无限等待。
+	timeout := defaultExecTimeout
+	if kind == "subagent" {
+		timeout = 30 * time.Minute
+	}
+	deadline = deadline.Add(timeout)
 	service.scheduleStreamTimer(
 		stream,
 		providerTimerKey(streamTimerExecWatchdog, pending.ExecID),
