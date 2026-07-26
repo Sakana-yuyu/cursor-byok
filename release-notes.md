@@ -1,9 +1,11 @@
-## v0.0.49
+## v0.0.50
 
-### 修复
-- **子代理运行期间主进程提前关闭**：跳过 subagent 类型的 exec watchdog，主进程不再因 10 分钟超时强制结束 turn。子代理生命周期由 Cursor 客户端管理，主进程会等待子代理完成后继续。
-- **Multitask Mode 请求排队**：`run` intent 改用异步发送，主进程可在模型生成期间接收新消息。
-- **Use Multiple Models 不生效**：`conversation_action` 路径保留 `SubagentModelOverrides`。
-- **commit message 生成闪退**：修复 MITM streaming 转发 panic。
+### 新功能
+- **模型配置供应商分组**：新增「名称分组 / 连接分组」切换。名称分组按 groupName 展示，连接分组按 baseURL 合并；详情、删除等操作随分组模式联动，避免不同中转/分组被笼统合并。
+
+### 优化
+- **缓存上下文供应商显示**：供应商列不再只显示协议品牌，改为反查实际命中的中转渠道（groupName 优先，否则 host），命中多个时合并提示。
+- **缓存上下文状态中文化**：completed / provider_error / no_usage 等状态改为中文展示。
+- **缓存上下文自动刷新**：页面可见时每 5 秒同步使用信息，切回前台立即刷新。
 
 > **Windows 用户注意**：安装时若被 SmartScreen 拦截，点击「更多信息」->「仍要运行」即可。
