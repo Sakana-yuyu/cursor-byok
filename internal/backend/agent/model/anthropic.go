@@ -152,7 +152,31 @@ func anthropicEndpointURL(baseURL string) string {
 	if ProviderURLHasEndpoint(base, "/v1/messages", "/messages") {
 		return base
 	}
+	// baseURL 已含版本前缀（如 https://api.example.com/v1）时，
+	// 只追加 /messages，避免拼出 /v1/v1/messages 导致 404。
+	if anthropicBaseURLHasVersionSuffix(base) {
+		return base + "/messages"
+	}
 	return base + "/v1/messages"
+}
+
+// anthropicBaseURLHasVersionSuffix 判断 URL path 末段是否为 /v1、/v2 等版本前缀。
+func anthropicBaseURLHasVersionSuffix(base string) bool {
+	lower := strings.ToLower(strings.TrimSpace(base))
+	idx := strings.LastIndex(lower, "/")
+	if idx < 0 || idx >= len(lower)-1 {
+		return false
+	}
+	segment := lower[idx+1:]
+	if len(segment) < 2 || segment[0] != 'v' {
+		return false
+	}
+	for i := 1; i < len(segment); i++ {
+		if segment[i] < '0' || segment[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // shouldRelocateAnthropicImages 判断是否需要把图片块搬运到末条 user 消息。

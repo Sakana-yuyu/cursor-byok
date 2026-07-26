@@ -2,7 +2,7 @@
 import CacheHitRateChart from "@/components/charts/CacheHitRateChart.vue";
 import Switch from "@/components/ui/Switch.vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
-import { fetchRecentRequestMetrics } from "@/services/clientApi";
+import { fetchLocalCacheStats, fetchRecentRequestMetrics } from "@/services/clientApi";
 import { appState, saveIncludeCacheWriteInHitRate } from "@/state/appState";
 import { formatCompactInteger, formatInteger } from "@/utils/numberFormat";
 import { computed, onMounted, ref } from "vue";
@@ -10,13 +10,6 @@ import { useRouter } from "vue-router";
 
 const emit = defineEmits(["refresh", "open-ad"]);
 const router = useRouter();
-
-const TOKEN_PRICE_PER_MILLION = {
-  input: 5,
-  output: 25,
-  cacheRead: 0.5,
-  cacheWrite: 6.25,
-};
 
 const props = defineProps({
   loading: {
@@ -91,12 +84,26 @@ const allEvents = ref([]);
 const eventsLoading = ref(false);
 const eventsError = ref("");
 
+// 本地（进程内）响应缓存命中统计，与 provider prompt-cache 分开
+const localCacheStats = ref({ hits: 0, misses: 0, savedInputTokens: 0, savedOutputTokens: 0 });
+
 async function loadEvents() {
   eventsLoading.value = true;
   eventsError.value = "";
   try {
-    const data = await fetchRecentRequestMetrics(0);
+    const [data, cacheStats] = await Promise.all([
+      fetchRecentRequestMetrics(0),
+      fetchLocalCacheStats().catch(() => null),
+    ]);
     allEvents.value = Array.isArray(data) ? data : [];
+    if (cacheStats && typeof cacheStats === "object") {
+      localCacheStats.value = {
+        hits: Number(cacheStats.hits || 0),
+        misses: Number(cacheStats.misses || 0),
+        savedInputTokens: Number(cacheStats.savedInputTokens || 0),
+        savedOutputTokens: Number(cacheStats.savedOutputTokens || 0),
+      };
+    }
   } catch (e) {
     eventsError.value = String(e?.message || e || "加载失败");
     allEvents.value = [];
@@ -182,10 +189,6 @@ function calculateRate(numerator, denominator) {
   return top / bottom;
 }
 
-function priceTokens(tokens, pricePerMillion) {
-  return (normalizeNumber(tokens) / 1_000_000) * pricePerMillion;
-}
-
 function formatUSD(value) {
   const amount = Number(value);
   if (!Number.isFinite(amount)) return "$0.00";
@@ -234,13 +237,32 @@ const completionTokensTotal = computed(() => {
   return Math.max(0, requestTokensTotal - promptTokensTotal);
 });
 
-const estimatedTokenCost = computed(() => {
-  const input = priceTokens(inputTokensTotal.value, TOKEN_PRICE_PER_MILLION.input);
-  const output = priceTokens(completionTokensTotal.value, TOKEN_PRICE_PER_MILLION.output);
-  const cacheRead = priceTokens(cacheReadTokensTotal.value, TOKEN_PRICE_PER_MILLION.cacheRead);
-  const cacheWrite = priceTokens(cacheWriteTokensTotal.value, TOKEN_PRICE_PER_MILLION.cacheWrite);
-  return { input, output, cacheRead, cacheWrite, total: input + output + cacheRead + cacheWrite };
+// 价值估算改用后端逐请求成本（costUsd），仅统计区间内已配置价格的 provider_call。
+const rangeCostSummary = computed(() => {
+  let total = 0;
+  let pricedRows = 0;
+  let unpricedRows = 0;
+  let currency = "USD";
+  for (const ev of filteredEvents.value) {
+    if (String(ev.kind || "").trim() === "turn_finalized") continue;
+    if (ev.pricingKnown === true && ev.costUsd != null) {
+      const amount = Number(ev.costUsd);
+      if (Number.isFinite(amount)) {
+        total += amount;
+        pricedRows++;
+        if (ev.currency) currency = String(ev.currency);
+        continue;
+      }
+    }
+    unpricedRows++;
+  }
+  return { total, pricedRows, unpricedRows, currency, hasPriced: pricedRows > 0 };
 });
+
+// 展示值：无任何已计价请求时显示占位符，避免伪造数字
+const estimatedCostDisplay = computed(() =>
+  rangeCostSummary.value.hasPriced ? formatUSD(rangeCostSummary.value.total) : "—",
+);
 
 const cacheTooltipContent = computed(() => {
   const formula = includeCacheWriteInHitRate.value
@@ -279,19 +301,55 @@ const tokensTooltipContent = computed(() =>
   ].join("\n"),
 );
 
-const costTooltipContent = computed(() =>
-  [
-    "按 Claude Opus 4.7 价格估算。",
-    `缓存统计策略：${selectedCacheRateModeLabel.value}（${formatRateLabel(selectedCacheHitRate.value)}）`,
+const costTooltipContent = computed(() => {
+  const { pricedRows, unpricedRows, hasPriced } = rangeCostSummary.value;
+  const lines = [
+    "估算 = 该区间内已配置价格模型的美元花费合计；未配置价格的请求不计入。",
     "",
-    `普通输入：${formatMetricValue(inputTokensTotal.value)} × $${TOKEN_PRICE_PER_MILLION.input}/1M = ${formatUSD(estimatedTokenCost.value.input)}`,
-    `模型输出：${formatMetricValue(completionTokensTotal.value)} × $${TOKEN_PRICE_PER_MILLION.output}/1M = ${formatUSD(estimatedTokenCost.value.output)}`,
-    `缓存读取：${formatMetricValue(cacheReadTokensTotal.value)} × $${TOKEN_PRICE_PER_MILLION.cacheRead}/1M = ${formatUSD(estimatedTokenCost.value.cacheRead)}`,
-    `缓存写入：${formatMetricValue(cacheWriteTokensTotal.value)} × $${TOKEN_PRICE_PER_MILLION.cacheWrite}/1M = ${formatUSD(estimatedTokenCost.value.cacheWrite)}`,
-    "",
-    `合计：${formatUSD(estimatedTokenCost.value.total)}`,
-  ].join("\n"),
+    hasPriced
+      ? `合计：${formatUSD(rangeCostSummary.value.total)}（已计价 ${formatMetricValue(pricedRows)} 条）`
+      : "区间内暂无已配置价格的请求，无法估算花费。",
+  ];
+  if (unpricedRows > 0) {
+    lines.push(`${formatMetricValue(unpricedRows)} 条未计价（未配置模型价格）`);
+  }
+  return lines.join("\n");
+});
+
+// 本地响应缓存命中：与 provider 缓存命中率区分展示
+const localCacheHitRate = computed(() =>
+  calculateRate(localCacheStats.value.hits, localCacheStats.value.hits + localCacheStats.value.misses),
 );
+
+const localCacheHasData = computed(
+  () => normalizeNumber(localCacheStats.value.hits) + normalizeNumber(localCacheStats.value.misses) > 0,
+);
+
+const localCacheLine = computed(() => {
+  if (!localCacheHasData.value) return "本地缓存：未启用/无命中";
+  return `本地缓存命中 ${formatCompactInteger(localCacheStats.value.hits)} · ${formatRateLabel(localCacheHitRate.value)}`;
+});
+
+const localCacheTooltipContent = computed(() => {
+  if (!localCacheHasData.value) {
+    return [
+      "本地缓存命中（应用自身的精确匹配响应缓存）",
+      "",
+      "尚未启用或暂无命中记录。",
+      "与上方“缓存命中率”（provider 提示词缓存）不同。",
+    ].join("\n");
+  }
+  return [
+    "本地缓存命中（应用自身的精确匹配响应缓存，可直接省下 token 花费）",
+    "与上方“缓存命中率”（provider 提示词缓存）是两回事。",
+    "",
+    `命中：${formatMetricValue(localCacheStats.value.hits)}`,
+    `未命中：${formatMetricValue(localCacheStats.value.misses)}`,
+    `命中率：${formatRateLabel(localCacheHitRate.value)}`,
+    `已省输入：${formatMetricValue(localCacheStats.value.savedInputTokens)}`,
+    `已省输出：${formatMetricValue(localCacheStats.value.savedOutputTokens)}`,
+  ].join("\n");
+});
 
 async function toggleIncludeCacheWriteInHitRate(value) {
   const nextValue = Boolean(value);
@@ -401,6 +459,12 @@ onMounted(() => {
             </Tooltip>
           </div>
           <CacheHitRateChart :rate="selectedCacheHitRate" />
+          <div class="center-row justify-start gap-1 text-[11px] leading-4 text-[#6f6f6f]">
+            <span class="truncate" :class="{ 'text-[#7f7f7f]': localCacheHasData }" :title="localCacheLine">
+              {{ localCacheLine }}
+            </span>
+            <Tooltip :content="localCacheTooltipContent" />
+          </div>
         </div>
 
         <!-- 对话轮次 -->
@@ -463,15 +527,18 @@ onMounted(() => {
             <div
               class="truncate text-[30px] leading-none text-white"
               style="font-family: var(--font-num)"
-              :title="formatUSD(estimatedTokenCost.total)"
+              :title="estimatedCostDisplay"
             >
-              {{ formatUSD(estimatedTokenCost.total) }}
+              {{ estimatedCostDisplay }}
             </div>
             <div class="mt-3 text-xs leading-5 text-[#8c8c8c]">
-              缓存读写
-              <span :title="formatUSD(estimatedTokenCost.cacheRead + estimatedTokenCost.cacheWrite)">
-                {{ formatUSD(estimatedTokenCost.cacheRead + estimatedTokenCost.cacheWrite) }}
+              <span v-if="rangeCostSummary.unpricedRows > 0" class="text-[#c99a4a]">
+                {{ formatCompactInteger(rangeCostSummary.unpricedRows) }} 条未计价
               </span>
+              <span v-else-if="rangeCostSummary.hasPriced">
+                已计价 {{ formatCompactInteger(rangeCostSummary.pricedRows) }} 条
+              </span>
+              <span v-else>未配置模型价格</span>
             </div>
           </div>
         </div>

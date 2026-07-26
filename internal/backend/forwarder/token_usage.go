@@ -15,6 +15,8 @@ import (
 type turnUsageSnapshot struct {
 	Provider          string
 	Model             string
+	BaseURL           string
+	GroupName         string
 	InputTokens       int64
 	OutputTokens      int64
 	CacheReadTokens   int64
@@ -340,6 +342,8 @@ func (service *Service) recordTurnUsageSnapshot(stream *ActiveStream, conversati
 	if strings.TrimSpace(usage.Model) != "" {
 		modelName = strings.TrimSpace(usage.Model)
 	}
+	channelBaseURL := strings.TrimSpace(usage.BaseURL)
+	channelGroupName := strings.TrimSpace(usage.GroupName)
 	effectiveModelCallID := firstNonEmpty(strings.TrimSpace(modelCallID), strings.TrimSpace(requestID))
 	normalizedStatus := normalizeUsageProviderStatus(status, usage.UsagePresent)
 	if service.usageStore != nil {
@@ -350,6 +354,8 @@ func (service *Service) recordTurnUsageSnapshot(stream *ActiveStream, conversati
 			At:               lastEventAt,
 			Model:            modelName,
 			Provider:         provider,
+			BaseURL:          channelBaseURL,
+			GroupName:        channelGroupName,
 			InputTokens:      usage.InputTokens,
 			OutputTokens:     usage.OutputTokens,
 			CacheReadTokens:  usage.CacheReadTokens,

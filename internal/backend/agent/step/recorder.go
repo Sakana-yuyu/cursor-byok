@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"cursor/internal/backend/agent/core"
+	"cursor/internal/logger"
 )
 
 const (
@@ -90,6 +91,11 @@ func (recorder *Recorder) ParsePendingAssistantOutput(raw string) runtimecore.Pe
 
 	var message assistantMessage
 	if err := json.Unmarshal([]byte(output.RawMessage), &message); err != nil {
+		// 解析失败时仍降级为纯文本预览，但记录告警以便观测 role/tool 元数据的丢失。
+		logger.Error("assistant record JSON parse failed; degrading to text preview",
+			"error", err.Error(),
+			"preview", truncateText(output.RawMessage, defaultTextPreviewLimit),
+		)
 		output.TextPreview = truncateText(output.RawMessage, defaultTextPreviewLimit)
 		return output
 	}

@@ -1,6 +1,8 @@
 package historymetrics
 
 import (
+	"net/url"
+	"sort"
 	"strings"
 	"time"
 )
@@ -65,7 +67,7 @@ func FilterProviderEvents(events []RequestMetric, start, end time.Time, model st
 }
 
 // SummarizeEvents 汇总 provider 事件的 token。
-func SummarizeEvents(events []RequestMetric) RangeSummary {
+func SummarizeEvents(events []RequestMetric, includeCacheWrite bool) RangeSummary {
 	var summary RangeSummary
 	for _, event := range events {
 		summary.RequestCount++
@@ -75,13 +77,13 @@ func SummarizeEvents(events []RequestMetric) RangeSummary {
 		summary.CacheWriteTokens += event.CacheWriteTokens
 		summary.TotalTokens += event.TotalTokens
 	}
-	summary.CacheRate = cacheRate(summary.InputTokens, summary.CacheReadTokens, summary.CacheWriteTokens)
+	summary.CacheRate = cacheRate(summary.InputTokens, summary.CacheReadTokens, summary.CacheWriteTokens, includeCacheWrite)
 	return summary
 }
 
 // BucketEvents 将事件按 bucketHours 小时粒度分桶；bucketHours <= 0 时按 1 小时。
 // 返回从 start 对齐到 end 的完整时间轴（空桶保留，便于图表连续展示）。
-func BucketEvents(events []RequestMetric, start, end time.Time, bucketHours int) []TokenBucket {
+func BucketEvents(events []RequestMetric, start, end time.Time, bucketHours int, includeCacheWrite bool) []TokenBucket {
 	if bucketHours <= 0 {
 		bucketHours = 1
 	}
@@ -140,10 +142,103 @@ func BucketEvents(events []RequestMetric, start, end time.Time, bucketHours int)
 			CacheWriteTokens: item.cacheWrite,
 			TotalTokens:      item.total,
 			RequestCount:     item.count,
-			CacheRate:        cacheRate(item.input, item.cacheRead, item.cacheWrite),
+			CacheRate:        cacheRate(item.input, item.cacheRead, item.cacheWrite, includeCacheWrite),
 		})
 	}
 	return result
+}
+
+// ProviderSpend 表示按中转站（relay station）聚合后的用量与花费。
+// 分组标签优先取 GroupName，其次 baseURL 主机名，最后 provider 类型。
+type ProviderSpend struct {
+	Station          string   `json:"station"`
+	Provider         string   `json:"provider"`
+	ProviderCalls    int      `json:"providerCalls"`
+	InputTokens      int64    `json:"inputTokens"`
+	OutputTokens     int64    `json:"outputTokens"`
+	CacheReadTokens  int64    `json:"cacheReadTokens"`
+	CacheWriteTokens int64    `json:"cacheWriteTokens"`
+	TotalTokens      int64    `json:"totalTokens"`
+	EstimatedCostUSD *float64 `json:"estimatedCostUsd"`
+	Currency         string   `json:"currency,omitempty"`
+}
+
+// SummarizeProviderSpend 按中转站聚合 provider_call 事件的 token 与花费。
+// 花费仅累加价格已知（CostUSD 非空）的事件；某分组内全部未知则花费为 nil。
+func SummarizeProviderSpend(events []RequestMetric) []ProviderSpend {
+	type acc struct {
+		spend    ProviderSpend
+		cost     float64
+		costKnwn bool
+	}
+	order := make([]string, 0)
+	byKey := make(map[string]*acc)
+	for _, event := range events {
+		if !IsProviderCall(event.Kind) {
+			continue
+		}
+		station := stationLabel(event.GroupName, event.BaseURL, event.Provider)
+		provider := strings.TrimSpace(event.Provider)
+		key := station + "\x00" + provider
+		item, ok := byKey[key]
+		if !ok {
+			item = &acc{spend: ProviderSpend{Station: station, Provider: provider}}
+			byKey[key] = item
+			order = append(order, key)
+		}
+		item.spend.ProviderCalls++
+		item.spend.InputTokens += event.InputTokens
+		item.spend.OutputTokens += event.OutputTokens
+		item.spend.CacheReadTokens += event.CacheReadTokens
+		item.spend.CacheWriteTokens += event.CacheWriteTokens
+		item.spend.TotalTokens += event.TotalTokens
+		if event.CostUSD != nil {
+			item.cost += *event.CostUSD
+			item.costKnwn = true
+			if item.spend.Currency == "" {
+				item.spend.Currency = strings.TrimSpace(event.Currency)
+			}
+		}
+	}
+	result := make([]ProviderSpend, 0, len(order))
+	for _, key := range order {
+		item := byKey[key]
+		if item.costKnwn {
+			cost := item.cost
+			item.spend.EstimatedCostUSD = &cost
+		}
+		result = append(result, item.spend)
+	}
+	sort.SliceStable(result, func(i, j int) bool {
+		return result[i].TotalTokens > result[j].TotalTokens
+	})
+	return result
+}
+
+// stationLabel 解析中转站标签：GroupName -> baseURL 主机名 -> provider 类型。
+func stationLabel(groupName, baseURL, provider string) string {
+	if name := strings.TrimSpace(groupName); name != "" {
+		return name
+	}
+	if host := hostFromBaseURL(baseURL); host != "" {
+		return host
+	}
+	if p := strings.TrimSpace(provider); p != "" {
+		return p
+	}
+	return "unknown"
+}
+
+// hostFromBaseURL 从 baseURL 中提取主机名（含端口），无法解析时返回空串。
+func hostFromBaseURL(baseURL string) string {
+	trimmed := strings.TrimSpace(baseURL)
+	if trimmed == "" {
+		return ""
+	}
+	if parsed, err := url.Parse(trimmed); err == nil && parsed.Host != "" {
+		return parsed.Host
+	}
+	return trimmed
 }
 
 // ListModels 返回事件中出现过的模型名（去重排序前由调用方处理排序）。

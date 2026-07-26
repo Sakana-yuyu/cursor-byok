@@ -16,6 +16,10 @@ export const runtimeEvents = isBrowserPreview ? noopEvent : WailsEvents;
 
 const noopWindow = {
   Minimise: () => Promise.resolve(),
+  Maximise: () => Promise.resolve(),
+  UnMaximise: () => Promise.resolve(),
+  ToggleMaximise: () => Promise.resolve(),
+  IsMaximised: () => Promise.resolve(false),
   Close: () => Promise.resolve(),
   Hide: () => Promise.resolve(),
 };

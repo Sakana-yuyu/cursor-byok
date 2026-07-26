@@ -65,6 +65,11 @@ type ProxyService struct {
 	modelTestMu sync.RWMutex
 	// modelTestResults 保存当前进程内的模型测速结果。
 	modelTestResults map[string]ModelAdapterTestResult
+
+	// modelCatalogCache 缓存模型列表结果，减少重复网络调用。
+	modelCatalogCache *metadataCache[ModelCatalogResult]
+	// providerBalanceCache 缓存余额查询结果，减少重复网络调用。
+	providerBalanceCache *metadataCache[ProviderBalance]
 }
 
 // NewProxyService 用于处理与 NewProxyService 相关的逻辑。
@@ -83,6 +88,9 @@ func NewProxyService(proxy *mitm.ProxyServer, certManager *certs.Manager, caCert
 		caCertPEM:        copiedCert,
 		publicClient:     netproxy.NewHTTPClient(publicAPITimeout),
 		modelTestResults: make(map[string]ModelAdapterTestResult),
+
+		modelCatalogCache:    newMetadataCache[ModelCatalogResult](modelCatalogCacheTTL),
+		providerBalanceCache: newMetadataCache[ProviderBalance](providerBalanceCacheTTL),
 	}
 	service.store = serverconfig.NewStore(service.configPath, service.logsRoot)
 	host, err := backend.NewHost(service.store)

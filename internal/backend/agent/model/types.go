@@ -192,6 +192,10 @@ type ModelEvent struct {
 	Provider string
 	// Model 表示当前事件所属模型标识。
 	Model string
+	// BaseURL 表示本次请求实际命中的中转站基础地址。
+	BaseURL string
+	// GroupName 表示本次请求实际命中的中转站分组名。
+	GroupName string
 	// Text 表示文本增量。
 	Text string
 	// ThinkingStyle 表示思考样式。

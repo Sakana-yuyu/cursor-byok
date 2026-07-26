@@ -124,6 +124,14 @@ function pricingForRow(row) {
 }
 
 function formatCost(row) {
+  // 优先使用后端计算的成本（后端已按命中的实际渠道定价核算）
+  if (row?.pricingKnown === true && row?.costUsd != null) {
+    const amount = Number(row.costUsd);
+    if (Number.isFinite(amount)) {
+      return `${row.currency || "USD"} ${amount.toFixed(6)}`;
+    }
+  }
+  // 后端未知时回退到本地配置价格计算，避免已配置价格却无法展示
   const pricing = pricingForRow(row);
   if (!pricing?.known) return "未配置";
   const rates = [pricing.input, pricing.output, pricing.cacheRead, pricing.cacheWrite];
@@ -156,12 +164,13 @@ function rateTone(rate) {
   return "text-[#d4d4d4]";
 }
 
-async function refresh() {
+// keepPage: 自动刷新时保留当前分页位置，避免用户翻页被打回第 1 页
+async function refresh({ keepPage = false } = {}) {
   loading.value = true;
   error.value = "";
   try {
     rows.value = await fetchRecentRequestMetrics(0);
-    resetPage();
+    if (!keepPage) resetPage();
   } catch (cause) {
     error.value = String(cause?.message || cause || "读取请求明细失败");
   } finally {
@@ -175,7 +184,7 @@ let autoRefreshTimer = null;
 
 function autoRefresh() {
   if (document.hidden || loading.value) return;
-  void refresh();
+  void refresh({ keepPage: true });
 }
 
 function startAutoRefresh() {
@@ -211,7 +220,7 @@ onUnmounted(() => {
     <div class="flex shrink-0 items-center justify-between gap-4">
       <div class="min-w-0">
         <div class="center-row gap-2">
-          <h1 class="text-lg font-semibold text-white">缓存上下文</h1>
+          <h1 class="text-lg font-semibold text-white">请求明细</h1>
           <span class="rounded-full border border-[#3a3a3a] bg-[#1f1f1f] px-2 py-0.5 text-[11px] text-[#8f8f8f]">
             最多 10000 条
           </span>

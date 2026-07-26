@@ -5,7 +5,9 @@ import ModelAdapterTestCard from "@/components/ModelAdapterTestCard.vue";
 import { showModal } from "@/composables/useModal";
 import {
   appState,
+  createEmptyModelAdapter,
   deleteModelAdapterAt,
+  deleteModelAdaptersBatch,
   getModelAdapterTestResultByID,
   openModelEditorWindow,
   reloadUserConfig,
@@ -14,7 +16,8 @@ import {
   startModelAdapterTest,
   toUserError,
 } from "@/state/appState";
-import { fetchModelCatalog } from "@/services/clientApi";
+import { fetchModelCatalog, queryProviderBalance } from "@/services/clientApi";
+import { useModelProbe } from "@/composables/useModelProbe";
 import { providerIcon } from "@/utils/providerMeta";
 import {
   SUPPLIER_GROUP_MODE_CONNECTION,
@@ -24,7 +27,7 @@ import {
   normalizeSupplierBaseURL,
   supplierIdentityFromRouteQuery,
 } from "@/utils/supplierGrouping";
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 const OPENAI_ENDPOINT_RESPONSES = "/v1/responses";
@@ -126,8 +129,142 @@ const supplierAdapters = computed(() =>
   ),
 );
 
+// 搜索 / 过滤 / 排序
+const modelSearch = ref("");
+const statusFilter = ref("all"); // all | ok | fail | untested
+const sortMode = ref("name"); // name | speed | recent
+
+const statusFilterOptions = [
+  { value: "all", label: "全部" },
+  { value: "ok", label: "可用" },
+  { value: "fail", label: "失败" },
+  { value: "untested", label: "未测" },
+];
+const sortModeOptions = [
+  { value: "name", label: "名称" },
+  { value: "speed", label: "速度 t/s" },
+  { value: "recent", label: "最近测试" },
+];
+
+function adapterHealth(adapter) {
+  const result = getModelAdapterTestResultByID(adapter?.id);
+  if (!result || !result.status) return "untested";
+  if (result.status === "success") return "ok";
+  if (result.status === "error") return "fail";
+  return "untested"; // running 等归为未测
+}
+
+function adapterSpeed(adapter) {
+  const result = getModelAdapterTestResultByID(adapter?.id);
+  const val = Number(result?.tokensPerSecond ?? 0);
+  return Number.isFinite(val) ? val : 0;
+}
+
+function adapterTestedAt(adapter) {
+  const result = getModelAdapterTestResultByID(adapter?.id);
+  const t = Date.parse(result?.testedAt || "");
+  return Number.isFinite(t) ? t : 0;
+}
+
+const healthStats = computed(() => {
+  let ok = 0;
+  let fail = 0;
+  let untested = 0;
+  for (const adapter of supplierAdapters.value) {
+    const h = adapterHealth(adapter);
+    if (h === "ok") ok += 1;
+    else if (h === "fail") fail += 1;
+    else untested += 1;
+  }
+  return { ok, fail, untested, total: supplierAdapters.value.length };
+});
+
+const visibleAdapters = computed(() => {
+  const q = modelSearch.value.trim().toLowerCase();
+  let list = supplierAdapters.value.filter((adapter) => {
+    if (statusFilter.value !== "all" && adapterHealth(adapter) !== statusFilter.value) {
+      return false;
+    }
+    if (!q) return true;
+    const hay = `${adapter.displayName || ""} ${adapter.modelID || ""} ${adapter.baseURL || ""}`.toLowerCase();
+    return hay.includes(q);
+  });
+  list = [...list];
+  if (sortMode.value === "name") {
+    list.sort((a, b) =>
+      String(a.displayName || a.modelID || "").localeCompare(String(b.displayName || b.modelID || ""), "zh-CN"),
+    );
+  } else if (sortMode.value === "speed") {
+    list.sort((a, b) => adapterSpeed(b) - adapterSpeed(a));
+  } else if (sortMode.value === "recent") {
+    list.sort((a, b) => adapterTestedAt(b) - adapterTestedAt(a));
+  }
+  return list;
+});
+
 // 第一个模型的 type/apiKey/customHeaders，用于拉取新模型
 const supplierMeta = computed(() => supplierAdapters.value[0] || null);
+
+// 余额/额度查询（非阻塞，失败不影响页面）
+const balanceState = reactive({ loading: false, loaded: false, data: null });
+
+function currencySymbol(currency) {
+  const code = String(currency || "").toUpperCase();
+  if (code === "USD") return "$";
+  if (code === "CNY" || code === "RMB") return "¥";
+  if (code === "EUR") return "€";
+  return "";
+}
+
+function formatMoney(value, currency) {
+  if (value == null || !Number.isFinite(Number(value))) return "—";
+  const symbol = currencySymbol(currency);
+  const num = Number(value).toFixed(2);
+  return symbol ? `${symbol}${num}` : `${num} ${String(currency || "").toUpperCase()}`.trim();
+}
+
+function balanceSourceLabel(source) {
+  if (source === "openai_billing") return "openai billing";
+  if (source === "newapi") return "newapi";
+  return String(source || "").trim();
+}
+
+const balanceSecondary = computed(() => {
+  const data = balanceState.data;
+  if (!data || !data.supported) return "";
+  const used = formatMoney(data.used, data.currency);
+  const total = formatMoney(data.total, data.currency);
+  const source = balanceSourceLabel(data.source);
+  let text = `已用 ${used} / 总额 ${total}`;
+  if (source) text += ` · 来源: ${source}`;
+  return text;
+});
+
+async function loadBalance(forceRefresh = false) {
+  const meta = supplierMeta.value;
+  if (!meta || balanceState.loading) return;
+  balanceState.loading = true;
+  try {
+    const request = {
+      type: meta.type,
+      baseURL: meta.baseURL || queryBaseURL.value,
+      apiKey: meta.apiKey,
+    };
+    if (forceRefresh) request.forceRefresh = true;
+    const result = await queryProviderBalance(request);
+    balanceState.data = result || { supported: false, message: "无返回结果" };
+  } catch (_e) {
+    balanceState.data = { supported: false, message: "查询失败" };
+  } finally {
+    balanceState.loading = false;
+    balanceState.loaded = true;
+  }
+}
+
+// 供应商元信息就绪后自动查询一次（首挂载时 appState 可能尚未填充）
+watch(supplierMeta, (meta, prev) => {
+  if (meta && !prev && !balanceState.loaded && !balanceState.loading) void loadBalance();
+});
 
 // catalog 状态（拉取远程模型列表）
 const catalogLoading = ref(false);
@@ -135,6 +272,41 @@ const catalogSaving = ref(false);
 const catalogError = ref("");
 const catalogModels = ref([]); // [{ id, contextWindowTokens, pricing }]
 const selectedCatalogModels = ref(new Set());
+
+// 可用性探测
+const catalogProbe = useModelProbe();
+
+function buildProbeAdapter(model) {
+  if (!supplierMeta.value) return { ...createEmptyModelAdapter(), modelID: model.id, tooltipData: `探测 ${model.id}` };
+  return {
+    ...createEmptyModelAdapter(),
+    type: supplierMeta.value.type,
+    baseURL: supplierMeta.value.baseURL || queryBaseURL.value,
+    apiKey: supplierMeta.value.apiKey,
+    customHeadersEnabled: Boolean(supplierMeta.value.customHeadersEnabled),
+    customHeadersJSON: supplierMeta.value.customHeadersJSON || "",
+    displayName: model.id,
+    modelID: model.id,
+    tooltipData: `探测 ${model.id}`,
+    protocolMode: "auto",
+    protocolGroup: supplierMeta.value.type === "anthropic" ? "messages" : "",
+    openAIEndpoint: supplierMeta.value.type === "openai" ? OPENAI_ENDPOINT_RESPONSES : "",
+    anthropicThinkingEffort: supplierMeta.value.type === "anthropic" ? "xhigh" : "",
+  };
+}
+
+async function handleProbeCatalog() {
+  if (!catalogModels.value.length) return;
+  await catalogProbe.probeAll(catalogModels.value, buildProbeAdapter, { concurrency: 3 });
+  // 探测完成后仅保留可用模型的勾选
+  const next = new Set();
+  for (const model of catalogModels.value) {
+    if (catalogProbe.statusOf(model.id) === "ok") {
+      next.add(catalogSelectionKey(model.id));
+    }
+  }
+  selectedCatalogModels.value = next;
+}
 
 function catalogSelectionKey(modelID) {
   const base =
@@ -174,6 +346,7 @@ async function handleFetchModels() {
     return;
   }
   catalogLoading.value = true;
+  catalogProbe.reset();
   try {
     const result = await fetchModelCatalog({
       type: supplierMeta.value.type,
@@ -196,22 +369,6 @@ async function handleFetchModels() {
   } finally {
     catalogLoading.value = false;
   }
-}
-
-function createEmptyModelAdapter() {
-  return {
-    id: "", displayName: "", groupName: "", type: "openai",
-    protocolMode: "auto", protocolGroup: "responses",
-    baseURL: "", apiKey: "", tooltipData: "", modelID: "",
-    reasoningEffort: "medium", openAIEndpoint: "/v1/responses",
-    openAIRequestGroup: "responses",
-    openAIExtraParamsEnabled: false, openAIExtraParamsJSON: "{\n}",
-    customHeadersEnabled: false, customHeadersJSON: "{\n}",
-    anthropicExtraParamsEnabled: false, anthropicExtraParamsJSON: "{\n}",
-    contextWindowTokens: 0, maxCompletionTokens: 0,
-    anthropicMaxTokens: 0, anthropicThinkingEffort: "xhigh",
-    thinkingBudgetTokens: 0, pricing: null, fastMode: false, openAIServiceTier: "",
-  };
 }
 
 async function handleBatchAddModels() {
@@ -256,6 +413,7 @@ async function handleBatchAddModels() {
     // 清空选择列表
     catalogModels.value = [];
     selectedCatalogModels.value = new Set();
+    catalogProbe.reset();
     await reloadUserConfig({ modelAdaptersOnly: true });
   } catch (error) {
     catalogError.value = toUserError(error);
@@ -319,6 +477,8 @@ async function testAdapter(adapter) {
 
 // 批量测试进度
 const batchTesting = ref(false);
+// 取消标志：worker 每轮循环检查，置位后不再从队列取新任务（已在途的请求会自然结束）
+const batchCancelled = ref(false);
 const batchProgress = computed(() => {
   const total = supplierAdapters.value.length;
   if (total === 0) return { total: 0, done: 0, pct: 0 };
@@ -332,12 +492,14 @@ const batchProgress = computed(() => {
 async function testAllAdapters() {
   if (batchTesting.value || supplierAdapters.value.length === 0) return;
   batchTesting.value = true;
+  batchCancelled.value = false;
   try {
     // 并发上限 3，避免打满上游
     const queue = [...supplierAdapters.value];
     const concurrency = 3;
     const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
       while (queue.length > 0) {
+        if (batchCancelled.value) break;
         const adapter = queue.shift();
         if (!adapter) break;
         try { await runModelAdapterTest(adapter); } catch (_e) { /* ignore */ }
@@ -351,11 +513,110 @@ async function testAllAdapters() {
 }
 
 function cancelBatchTest() {
-  // 目前测试是 fire-and-forget，无法真正取消；仅标记 UI 停止
+  // 置位取消标志：worker 不再从队列领取新任务，已在途请求完成后整体停止
+  batchCancelled.value = true;
   batchTesting.value = false;
 }
 
-onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }).catch(() => {}); });
+// 多选批量操作
+const selectionMode = ref(false);
+const selectedAdapterIDs = ref(new Set());
+
+function adapterSelectionKey(adapter) {
+  return adapter?.id || `${adapter?.baseURL}-${adapter?.modelID}`;
+}
+function isAdapterSelected(adapter) {
+  return selectedAdapterIDs.value.has(adapterSelectionKey(adapter));
+}
+function toggleAdapterSelection(adapter) {
+  const key = adapterSelectionKey(adapter);
+  const next = new Set(selectedAdapterIDs.value);
+  if (next.has(key)) next.delete(key); else next.add(key);
+  selectedAdapterIDs.value = next;
+}
+const allVisibleSelected = computed(
+  () => visibleAdapters.value.length > 0 && visibleAdapters.value.every((a) => isAdapterSelected(a)),
+);
+function toggleSelectAllVisible() {
+  if (allVisibleSelected.value) {
+    selectedAdapterIDs.value = new Set();
+  } else {
+    selectedAdapterIDs.value = new Set(visibleAdapters.value.map((a) => adapterSelectionKey(a)));
+  }
+}
+const selectedAdapters = computed(() =>
+  supplierAdapters.value.filter((a) => isAdapterSelected(a)),
+);
+function toggleSelectionMode() {
+  selectionMode.value = !selectionMode.value;
+  if (!selectionMode.value) selectedAdapterIDs.value = new Set();
+}
+
+async function testSelectedAdapters() {
+  const targets = selectedAdapters.value;
+  if (batchTesting.value || targets.length === 0) return;
+  batchTesting.value = true;
+  batchCancelled.value = false;
+  try {
+    const queue = [...targets];
+    const concurrency = 3;
+    const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+      while (queue.length > 0) {
+        if (batchCancelled.value) break;
+        const adapter = queue.shift();
+        if (!adapter) break;
+        try { await runModelAdapterTest(adapter); } catch (_e) { /* ignore */ }
+      }
+    });
+    await Promise.allSettled(workers);
+    await reloadUserConfig({ modelAdaptersOnly: true });
+  } finally {
+    batchTesting.value = false;
+  }
+}
+
+async function deleteSelectedAdapters() {
+  const targets = selectedAdapters.value;
+  if (targets.length === 0) return;
+  const confirmed = await showModal({
+    title: "删除选中模型",
+    content: `确定删除选中的 ${targets.length} 个模型吗？此操作不可撤销。`,
+    confirmText: "删除",
+    cancelText: "取消",
+  });
+  if (!confirmed) return;
+  await removeAdapters(targets);
+  selectedAdapterIDs.value = new Set();
+}
+
+async function deleteFailedAdapters() {
+  const targets = supplierAdapters.value.filter((a) => adapterHealth(a) === "fail");
+  if (targets.length === 0) return;
+  const confirmed = await showModal({
+    title: "删除失败模型",
+    content: `确定删除 ${targets.length} 个测试失败的模型吗？此操作不可撤销。`,
+    confirmText: "删除",
+    cancelText: "取消",
+  });
+  if (!confirmed) return;
+  await removeAdapters(targets);
+}
+
+async function removeAdapters(targets) {
+  const list = Array.isArray(targets) ? targets.filter(Boolean) : [];
+  if (list.length === 0) return;
+  // 一次性原子删除，避免逐个删除的多次落盘与中途失败的半删状态
+  const result = await deleteModelAdaptersBatch(list);
+  if (!result.ok) {
+    await showModal({ title: "删除失败", content: String(result.error || "操作失败").trim() });
+  }
+  await reloadUserConfig({ modelAdaptersOnly: true });
+}
+
+onMounted(async () => {
+  await reloadUserConfig({ modelAdaptersOnly: true }).catch(() => {});
+  if (supplierMeta.value && !balanceState.loaded && !balanceState.loading) void loadBalance();
+});
 </script>
 
 <template>
@@ -368,7 +629,37 @@ onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }).catch(() =>
             <button type="button" class="text-[#8f8f8f] hover:text-white" @click="router.back()">← 返回</button>
             <div>
               <h2 class="text-base font-medium text-white">{{ title }}</h2>
-              <div class="text-xs text-[#8f8f8f]">{{ formatHost(subtitle) }} · {{ supplierAdapters.length }} 个模型</div>
+              <div class="center-row flex-wrap gap-2 text-xs text-[#8f8f8f]">
+                <span>{{ formatHost(subtitle) }} · {{ supplierAdapters.length }} 个模型</span>
+                <span v-if="healthStats.ok > 0" class="rounded-full bg-[#10AD5D]/15 px-2 py-0.5 text-[#6ee7a5]">可用 {{ healthStats.ok }}</span>
+                <span v-if="healthStats.fail > 0" class="rounded-full bg-[#f87171]/15 px-2 py-0.5 text-[#fca5a5]">失败 {{ healthStats.fail }}</span>
+                <span v-if="healthStats.untested > 0" class="rounded-full bg-[#3f3f3f]/60 px-2 py-0.5 text-[#a3a3a3]">未测 {{ healthStats.untested }}</span>
+                <!-- 余额 / 额度 -->
+                <span v-if="balanceState.loading" class="center-row gap-1 text-[#8f8f8f]">
+                  <span class="icon-[mdi--loading] animate-spin text-[13px]"></span>查询余额…
+                </span>
+                <template v-else-if="balanceState.data && balanceState.data.supported">
+                  <span
+                    class="center-row gap-1 rounded-full bg-[#10AD5D]/15 px-2 py-0.5 text-[#6ee7a5]"
+                    :title="balanceSecondary"
+                  >余额 {{ formatMoney(balanceState.data.remaining, balanceState.data.currency) }}</span>
+                  <span v-if="balanceSecondary" class="hidden text-[#666] sm:inline">{{ balanceSecondary }}</span>
+                </template>
+                <span
+                  v-else-if="balanceState.loaded"
+                  class="text-[#737373]"
+                  :title="(balanceState.data && balanceState.data.message) || '余额不可用'"
+                >余额不可用</span>
+                <button
+                  v-if="supplierMeta && !balanceState.loading"
+                  type="button"
+                  class="center-row text-[#8f8f8f] transition-colors hover:text-white"
+                  title="刷新余额"
+                  @click="loadBalance(true)"
+                >
+                  <span class="icon-[mdi--refresh] text-[13px]"></span>
+                </button>
+              </div>
             </div>
           </div>
           <div class="center-row gap-2">
@@ -381,6 +672,9 @@ onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }).catch(() =>
                 ? `测试中 ${batchProgress.done}/${batchProgress.total}`
                 : `一键测试 (${supplierAdapters.length})` }}
             </Button>
+            <Button variant="default" :disabled="supplierAdapters.length === 0" @click="toggleSelectionMode">
+              {{ selectionMode ? "退出多选" : "多选" }}
+            </Button>
             <Button variant="default" :disabled="catalogLoading || !supplierMeta" @click="handleFetchModels">
               {{ catalogLoading ? "拉取中..." : "拉取模型" }}
             </Button>
@@ -388,18 +682,113 @@ onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }).catch(() =>
           </div>
         </div>
 
+        <!-- 搜索 / 过滤 / 排序 工具条 -->
+        <div v-if="supplierAdapters.length > 0" class="flex flex-wrap items-center gap-2">
+          <div class="relative">
+            <span class="icon-[mdi--magnify] pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[16px] text-[#737373]"></span>
+            <input
+              v-model="modelSearch"
+              type="text"
+              placeholder="搜索模型名 / 标识"
+              class="h-8 w-52 rounded-[8px] border border-[#3f3f3f] bg-[#232323] pl-7 pr-7 text-[12px] text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+            />
+            <button
+              v-if="modelSearch"
+              type="button"
+              class="absolute right-2 top-1/2 -translate-y-1/2 text-[#737373] hover:text-white"
+              @click="modelSearch = ''"
+            >
+              <span class="icon-[mdi--close-circle] text-[14px]"></span>
+            </button>
+          </div>
+          <div class="inline-flex rounded-[8px] border border-[#3f3f3f] bg-[#232323] p-0.5 text-[12px]" role="group" aria-label="状态过滤">
+            <button
+              v-for="opt in statusFilterOptions"
+              :key="opt.value"
+              type="button"
+              class="rounded-[6px] px-2.5 py-1 transition-colors"
+              :class="statusFilter === opt.value ? 'bg-[#10AD5D]/25 text-[#6ee7a5]' : 'text-[#a3a3a3] hover:text-white'"
+              @click="statusFilter = opt.value"
+            >
+              {{ opt.label }}
+            </button>
+          </div>
+          <div class="inline-flex rounded-[8px] border border-[#3f3f3f] bg-[#232323] p-0.5 text-[12px]" role="group" aria-label="排序方式">
+            <button
+              v-for="opt in sortModeOptions"
+              :key="opt.value"
+              type="button"
+              class="rounded-[6px] px-2.5 py-1 transition-colors"
+              :class="sortMode === opt.value ? 'bg-[#10AD5D]/25 text-[#6ee7a5]' : 'text-[#a3a3a3] hover:text-white'"
+              @click="sortMode = opt.value"
+            >
+              {{ opt.label }}
+            </button>
+          </div>
+          <span class="text-[12px] text-[#737373]">显示 {{ visibleAdapters.length }}/{{ supplierAdapters.length }}</span>
+          <Button
+            v-if="healthStats.fail > 0"
+            variant="text"
+            class="ml-auto text-[#f87171] hover:text-[#fca5a5]"
+            @click="deleteFailedAdapters"
+          >
+            <span class="icon-[mdi--trash-can-outline] mr-1 text-[14px]"></span>删除失败模型 ({{ healthStats.fail }})
+          </Button>
+        </div>
+
+        <!-- 多选批量操作条 -->
+        <div v-if="selectionMode" class="center-row flex-wrap justify-between gap-2 rounded-[8px] border border-[#10AD5D]/30 bg-[#10AD5D]/5 px-3 py-2">
+          <div class="center-row gap-3 text-xs text-[#d4d4d4]">
+            <button type="button" class="text-[#6ee7a5]" @click="toggleSelectAllVisible">
+              {{ allVisibleSelected ? "取消全选" : "全选当前" }}
+            </button>
+            <span>已选 {{ selectedAdapters.length }} 个</span>
+          </div>
+          <div class="center-row gap-2">
+            <Button variant="default" :disabled="batchTesting || selectedAdapters.length === 0" @click="testSelectedAdapters">
+              {{ batchTesting ? "测试中..." : "测试选中" }}
+            </Button>
+            <Button variant="text" class="text-[#f87171] hover:text-[#fca5a5]" :disabled="selectedAdapters.length === 0" @click="deleteSelectedAdapters">
+              删除选中
+            </Button>
+          </div>
+        </div>
+
         <!-- 远程拉取的模型选择列表 -->
         <div v-if="catalogModels.length > 0" class="rounded-[8px] border border-[#343434] bg-[#252525] p-3">
-          <div class="mb-2 flex items-center justify-between text-xs text-[#a3a3a3]">
+          <div class="mb-2 flex items-center justify-between gap-2 text-xs text-[#a3a3a3]">
             <span>已选 {{ selectedCatalogCount }}/{{ catalogModels.length }}</span>
-            <button type="button" class="text-[#6ee7a5]" @click="toggleAllCatalogModels">
-              {{ allCatalogSelected ? "取消全选" : "全选" }}
-            </button>
+            <div class="center-row gap-3">
+              <button
+                type="button"
+                class="text-[#67e8f9] disabled:opacity-50"
+                :disabled="catalogProbe.probing.value"
+                @click="handleProbeCatalog"
+              >
+                {{ catalogProbe.probing.value ? "检测中..." : "检测可用性" }}
+              </button>
+              <button type="button" class="text-[#6ee7a5]" @click="toggleAllCatalogModels">
+                {{ allCatalogSelected ? "取消全选" : "全选" }}
+              </button>
+            </div>
           </div>
           <div class="max-h-48 overflow-y-auto">
             <label v-for="model in catalogModels" :key="model.id" class="flex items-center gap-2 py-1 text-xs text-[#d4d4d4]">
               <input type="checkbox" class="size-4 accent-[#10AD5D]" :checked="isCatalogModelSelected(model.id)" @change="toggleCatalogModel(model.id)" />
               <span class="truncate">{{ model.id }}</span>
+              <span
+                v-if="catalogProbe.statusOf(model.id) === 'checking'"
+                class="ml-auto shrink-0 rounded-full border border-[#164e63] bg-[#0b2530] px-1.5 py-0.5 text-[10px] text-[#67e8f9]"
+              >检测中</span>
+              <span
+                v-else-if="catalogProbe.statusOf(model.id) === 'ok'"
+                class="ml-auto shrink-0 rounded-full border border-[#14532d] bg-[#102418] px-1.5 py-0.5 text-[10px] text-[#86efac]"
+              >✓ 可用</span>
+              <span
+                v-else-if="catalogProbe.statusOf(model.id) === 'fail'"
+                :title="catalogProbe.messageOf(model.id)"
+                class="ml-auto shrink-0 rounded-full border border-[#4b1d1d] bg-[#2a1313] px-1.5 py-0.5 text-[10px] text-[#fca5a5]"
+              >✗ {{ catalogProbe.messageOf(model.id) || '不可用' }}</span>
             </label>
           </div>
           <Button class="mt-2 w-full" variant="primary" :disabled="catalogSaving" @click="handleBatchAddModels">
@@ -416,13 +805,34 @@ onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }).catch(() =>
           该供应商下暂无模型。点击上方"拉取模型"从远程获取，或"新增模型"手动添加。
         </div>
 
+        <div v-else-if="!visibleAdapters.length" class="rounded-[8px] border border-dashed border-[#3a3a3a] bg-[#232323] px-4 py-8 text-center text-sm text-[#a3a3a3]">
+          没有符合当前搜索/过滤条件的模型。
+        </div>
+
         <div v-else class="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(250px,1fr))]">
-          <Card v-for="adapter in supplierAdapters" :key="adapter.id || `${adapter.baseURL}-${adapter.modelID}`">
+          <Card
+            v-for="adapter in visibleAdapters"
+            :key="adapter.id || `${adapter.baseURL}-${adapter.modelID}`"
+            :class="selectionMode && isAdapterSelected(adapter) ? 'border-[#10AD5D]/50' : ''"
+          >
             <div class="flex h-full min-h-[154px] flex-col justify-between gap-3">
               <div class="flex flex-col gap-2.5">
                 <div class="flex items-start justify-between gap-3">
+                  <label v-if="selectionMode" class="mt-1 shrink-0 cursor-pointer">
+                    <input type="checkbox" class="size-4 accent-[#10AD5D]" :checked="isAdapterSelected(adapter)" @change="toggleAdapterSelection(adapter)" />
+                  </label>
                   <div class="min-w-0 flex-1">
-                    <div class="truncate text-base font-medium text-white">{{ adapter.displayName }}</div>
+                    <div class="center-row gap-1.5">
+                      <span class="truncate text-base font-medium text-white">{{ adapter.displayName }}</span>
+                      <span
+                        v-if="adapterHealth(adapter) === 'ok'"
+                        class="shrink-0 rounded-full bg-[#10AD5D]/15 px-1.5 py-0.5 text-[10px] text-[#6ee7a5]"
+                      >可用</span>
+                      <span
+                        v-else-if="adapterHealth(adapter) === 'fail'"
+                        class="shrink-0 rounded-full bg-[#f87171]/15 px-1.5 py-0.5 text-[10px] text-[#fca5a5]"
+                      >失败</span>
+                    </div>
                     <div class="mt-1 truncate text-sm text-[#8f8f8f]">{{ adapter.modelID }}</div>
                     <div v-if="adapter.type === 'openai'" class="mt-1 flex flex-wrap gap-1.5 text-xs text-[#737373]">
                       <span class="rounded-full border border-[#3a3a3a] bg-[#232323] px-2 py-0.5">

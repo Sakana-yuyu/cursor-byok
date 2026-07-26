@@ -86,6 +86,10 @@ export const GetMetricsRangeSummary = () => Promise.resolve({
   cacheRate: null,
 });
 export const GetMetricsTokenBuckets = () => Promise.resolve([]);
+export const GetProviderSpendSummary = () => Promise.resolve([]);
+export const GetLocalCacheStats = () => Promise.resolve({ hits: 0, misses: 0, savedInputTokens: 0, savedOutputTokens: 0 });
+export const QueryProviderBalance = () => Promise.resolve({ supported: false, source: "", currency: "USD", total: null, used: null, remaining: null, message: "浏览器预览模式：未查询余额" });
+export const ProbeModelAdapter = (adapter) => Promise.resolve({ id: adapter?.id || "", modelID: adapter?.modelID || "", ok: true, status: 200, message: "", rawResponse: "" });
 export const GetPromptInjectionSettings = () => Promise.resolve({});
 export const SavePromptInjectionSettings = (value) => Promise.resolve(value);
 export const RefreshPromptInjection = () => Promise.resolve();

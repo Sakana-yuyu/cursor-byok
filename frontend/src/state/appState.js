@@ -692,6 +692,15 @@ function loadCachedState() {
   }
 }
 
+function normalizeLocalResponseCache(source) {
+  const raw = source && typeof source === "object" ? source : {};
+  return {
+    enabled: asBoolean(raw.enabled),
+    ttlSeconds: asPositiveInteger(raw.ttlSeconds),
+    maxEntries: asPositiveInteger(raw.maxEntries),
+  };
+}
+
 function normalizeConfig(source) {
   const raw = source && typeof source === "object" ? source : {};
   const routing = raw.routing && typeof raw.routing === "object" ? raw.routing : {};
@@ -708,6 +717,8 @@ function normalizeConfig(source) {
     homeMetrics: {
       includeCacheWriteInHitRate: asBoolean(homeMetrics.includeCacheWriteInHitRate),
     },
+    // 本地响应缓存配置：保留在归一化白名单中，避免任何一次配置保存把它清空回默认值
+    localResponseCache: normalizeLocalResponseCache(raw.localResponseCache),
     lastAgentModelHash: asString(raw.lastAgentModelHash),
   };
 }
@@ -750,6 +761,7 @@ function buildConfigPayload(source = appState) {
     modelAdapters: normalized.modelAdapters.map(({ id, ...adapter }) => adapter),
     routing: normalized.routing,
     homeMetrics: normalized.homeMetrics,
+    localResponseCache: normalized.localResponseCache,
     lastAgentModelHash: normalized.lastAgentModelHash,
   };
 }
@@ -765,6 +777,7 @@ function applyConfigToState(config, { modelAdaptersOnly = false } = {}) {
   appState.configProxyListenAddr = normalized.proxyListenAddr;
   appState.routingMode = normalized.routing.mode;
   appState.includeCacheWriteInHitRate = normalized.homeMetrics.includeCacheWriteInHitRate;
+  appState.localResponseCache = normalized.localResponseCache;
   return normalized;
 }
 
@@ -996,6 +1009,7 @@ export const appState = reactive({
   configProxyListenAddr: cachedConfig.proxyListenAddr,
   routingMode: cachedConfig.routing.mode,
   includeCacheWriteInHitRate: cachedConfig.homeMetrics.includeCacheWriteInHitRate,
+  localResponseCache: cachedConfig.localResponseCache,
 
   serviceRunning: asBoolean(cachedState.serviceRunning),
   backendRunning: asBoolean(cachedState.backendRunning),
@@ -1473,6 +1487,31 @@ export async function deleteModelAdapterAt(index) {
     },
     { modelAdaptersOnly: true },
   );
+}
+
+// 原子批量删除：一次性过滤掉目标渠道并只保存一次，避免逐个删除时多次落盘、
+// 中途失败留下半删状态。targets 为待删除的适配器对象列表。
+export async function deleteModelAdaptersBatch(targets) {
+  const list = Array.isArray(targets) ? targets : [];
+  if (list.length === 0) return { ok: true, error: "", removed: 0 };
+  const currentConfig = await loadPersistedUserConfig();
+  const existingAdapters = normalizeModelAdapters(currentConfig.modelAdapters);
+  const removeKeys = new Set(
+    list.map((adapter) => buildModelAdapterIdentityKey(normalizeModelAdapter(adapter))),
+  );
+  const nextAdapters = existingAdapters.filter(
+    (adapter) => !removeKeys.has(buildModelAdapterIdentityKey(adapter)),
+  );
+  const removed = existingAdapters.length - nextAdapters.length;
+  if (removed === 0) return { ok: true, error: "", removed: 0 };
+  const result = await persistConfigPayload(
+    {
+      ...currentConfig,
+      modelAdapters: nextAdapters,
+    },
+    { modelAdaptersOnly: true },
+  );
+  return result.ok ? { ...result, removed } : result;
 }
 
 export async function deleteAllModelAdapters() {

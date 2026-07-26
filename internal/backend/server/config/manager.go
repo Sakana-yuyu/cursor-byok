@@ -118,6 +118,24 @@ func (manager *Manager) ProviderStreamIdleTimeout(ctx context.Context) time.Dura
 	return time.Duration(seconds) * time.Second
 }
 
+// LocalResponseCacheSettings 返回本地响应缓存的当前配置：是否启用、TTL 与最大条目数。
+// 该方法读取热加载后的最新配置，供 provider 网关按调用即时判断。
+func (manager *Manager) LocalResponseCacheSettings() (enabled bool, ttl time.Duration, maxEntries int) {
+	if manager == nil {
+		return false, time.Duration(DefaultLocalResponseCacheTTLSeconds) * time.Second, DefaultLocalResponseCacheMaxEntries
+	}
+	cfg := manager.Current().LocalResponseCache
+	ttlSeconds := cfg.TTLSeconds
+	if ttlSeconds <= 0 {
+		ttlSeconds = DefaultLocalResponseCacheTTLSeconds
+	}
+	entries := cfg.MaxEntries
+	if entries <= 0 {
+		entries = DefaultLocalResponseCacheMaxEntries
+	}
+	return cfg.Enabled, time.Duration(ttlSeconds) * time.Second, entries
+}
+
 func (manager *Manager) IsObservabilityLogEnabled(ctx context.Context) bool {
 	if manager == nil {
 		return false

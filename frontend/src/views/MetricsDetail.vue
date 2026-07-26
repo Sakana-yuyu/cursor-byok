@@ -1,6 +1,6 @@
 <script setup>
 import Button from "@/components/ui/Button.vue";
-import { fetchRecentRequestMetrics } from "@/services/clientApi";
+import { fetchProviderSpendSummary, fetchRecentRequestMetrics } from "@/services/clientApi";
 import { formatCompactInteger } from "@/utils/numberFormat";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
@@ -50,6 +50,34 @@ async function loadEvents() {
   } finally {
     loading.value = false;
   }
+}
+
+// --- 站点消耗（按中转站聚合的用量与花费） ---
+const spendRows = ref([]);
+const spendLoading = ref(false);
+const spendError = ref("");
+
+async function loadSpend() {
+  spendLoading.value = true;
+  spendError.value = "";
+  try {
+    const data = await fetchProviderSpendSummary(rangeStart.value, rangeEnd.value);
+    spendRows.value = Array.isArray(data) ? data : [];
+  } catch (e) {
+    spendError.value = String(e?.message || e || "加载失败");
+    spendRows.value = [];
+  } finally {
+    spendLoading.value = false;
+  }
+}
+
+function formatSpend(row) {
+  const cost = row?.estimatedCostUsd;
+  if (cost == null || !Number.isFinite(Number(cost))) return "未计价";
+  const value = Number(cost);
+  const currency = String(row?.currency || "USD").trim() || "USD";
+  const decimals = value !== 0 && Math.abs(value) < 0.01 ? 4 : 2;
+  return `${currency} ${value.toFixed(decimals)}`;
 }
 
 // --- 时间范围 ---
@@ -273,8 +301,13 @@ watch([chartData, selectedModel, selectedRange], () => {
   renderChart();
 });
 
+// 站点消耗复用图表的时间范围，范围变化时同步刷新
+watch([rangeStart, rangeEnd], () => {
+  loadSpend();
+});
+
 onMounted(async () => {
-  await loadEvents();
+  await Promise.all([loadEvents(), loadSpend()]);
   renderChart();
   window.addEventListener("resize", resizeChart);
 });
@@ -300,7 +333,7 @@ function formatRate(v) {
             <button type="button" class="text-[#8f8f8f] hover:text-white" @click="router.back()">← 返回</button>
             <h2 class="text-base font-medium text-white">会话分析</h2>
           </div>
-          <Button variant="default" :disabled="loading" @click="loadEvents">{{ loading ? "刷新中..." : "刷新数据" }}</Button>
+          <Button variant="default" :disabled="loading" @click="() => { loadEvents(); loadSpend(); }">{{ loading ? "刷新中..." : "刷新数据" }}</Button>
         </div>
 
         <div v-if="error" class="rounded-[8px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-sm text-[#fca5a5]">{{ error }}</div>
@@ -370,6 +403,36 @@ function formatRate(v) {
             <span class="center-row gap-1.5"><i class="size-2.5 rounded-full bg-[#a78bfa]" />总消耗（以上四项之和）</span>
             <span class="center-row gap-1.5"><i class="size-2.5 rounded-full bg-[#22d3ee]" />缓存率（缓存读取占输入比例）</span>
           </div>
+        </div>
+
+        <!-- 站点消耗（按中转站聚合） -->
+        <div class="rounded-[8px] border border-[#343434] bg-[#1a1a1a] px-4 py-3">
+          <div class="mb-3 flex items-center justify-between">
+            <div class="text-sm font-medium text-white">站点消耗</div>
+            <div v-if="spendLoading" class="text-xs text-[#8f8f8f]">加载中...</div>
+          </div>
+          <div v-if="spendError" class="rounded-[8px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-sm text-[#fca5a5]">{{ spendError }}</div>
+          <div v-else-if="spendRows.length === 0" class="py-6 text-center text-xs text-[#8f8f8f]">暂无站点消耗数据</div>
+          <table v-else class="w-full text-xs">
+            <thead>
+              <tr class="border-b border-[#2f2f2f] text-left text-[11px] uppercase tracking-wider text-[#666]">
+                <th class="py-2 pr-3 font-normal">站点</th>
+                <th class="py-2 pr-3 font-normal">渠道</th>
+                <th class="py-2 pr-3 text-right font-normal">请求数</th>
+                <th class="py-2 pr-3 text-right font-normal">总 tokens</th>
+                <th class="py-2 text-right font-normal">花费</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, i) in spendRows" :key="i" class="border-b border-[#262626] text-[#d4d4d4] last:border-0">
+                <td class="py-2 pr-3 text-white">{{ row.station || "-" }}</td>
+                <td class="py-2 pr-3 text-[#a0a0a0]">{{ row.provider || "-" }}</td>
+                <td class="py-2 pr-3 text-right" style="font-family: var(--font-num)">{{ formatCompactInteger(row.providerCalls || 0) }}</td>
+                <td class="py-2 pr-3 text-right" style="font-family: var(--font-num)">{{ formatCompactInteger(row.totalTokens || 0) }}</td>
+                <td class="py-2 text-right" :class="row.estimatedCostUsd == null ? 'text-[#8f8f8f]' : 'text-[#6ee7a5]'" style="font-family: var(--font-num)">{{ formatSpend(row) }}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
         <!-- 请求明细数 -->

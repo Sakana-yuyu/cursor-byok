@@ -78,6 +78,10 @@ export const Events = {
 
 export const Window = {
   Minimise: resolved,
+  Maximise: resolved,
+  UnMaximise: resolved,
+  ToggleMaximise: resolved,
+  IsMaximised: () => Promise.resolve(false),
   Close: resolved,
   Hide: resolved,
 };

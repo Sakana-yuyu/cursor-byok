@@ -86,7 +86,19 @@ func Run(resources EmbeddedResources) error {
 	if cfg, err := proxyService.LoadUserConfig(); err == nil {
 		adAssetBaseURL = browserReachableLoopbackBaseURL(cfg.BackendListenAddr)
 	}
-	metricsService := bridge.NewMetricsService()
+	metricsService := bridge.NewMetricsService(func() bool {
+		cfg, err := proxyService.LoadUserConfig()
+		if err != nil {
+			return false
+		}
+		return cfg.HomeMetrics.IncludeCacheWriteInHitRate
+	}, func() []historymetrics.PriceRate {
+		cfg, err := proxyService.LoadUserConfig()
+		if err != nil {
+			return nil
+		}
+		return priceRatesFromAdapters(cfg.ModelAdapters)
+	})
 	windowService := bridge.NewWindowService()
 	adCore := ads.NewService(ads.Options{
 		StoreRoot:    appdata.AdsRootPath(),
@@ -98,7 +110,7 @@ func Run(resources EmbeddedResources) error {
 			if err := appdata.EnsureAssistantHome(); err != nil {
 				return ads.MetricsSnapshot{}, err
 			}
-			summary, err := historymetrics.LoadUsageSummary(appdata.UsageFilePath())
+			summary, err := historymetrics.LoadUsageSummary(appdata.UsageFilePath(), false, nil)
 			if err != nil {
 				return ads.MetricsSnapshot{}, err
 			}
@@ -394,6 +406,30 @@ func browserReachableLoopbackBaseURL(listenAddr string) string {
 		host = "127.0.0.1"
 	}
 	return "http://" + net.JoinHostPort(host, port)
+}
+
+// priceRatesFromAdapters 将当前配置的模型渠道价格映射为 historymetrics 价格条目快照。
+// 仅纳入声明了 Pricing 的渠道，供读取时按 (model, provider, baseURL) 联结计算花费。
+func priceRatesFromAdapters(adapters []serverconfig.ModelAdapterConfig) []historymetrics.PriceRate {
+	rates := make([]historymetrics.PriceRate, 0, len(adapters))
+	for _, adapter := range adapters {
+		pricing := adapter.Pricing
+		if pricing == nil {
+			continue
+		}
+		rates = append(rates, historymetrics.PriceRate{
+			Model:      adapter.ModelID,
+			Provider:   adapter.Type,
+			BaseURL:    adapter.BaseURL,
+			Input:      pricing.Input,
+			Output:     pricing.Output,
+			CacheRead:  pricing.CacheRead,
+			CacheWrite: pricing.CacheWrite,
+			Currency:   pricing.Currency,
+			Known:      pricing.Known,
+		})
+	}
+	return rates
 }
 
 // logEmbeddedCAInfo 用于处理与 logEmbeddedCAInfo 相关的逻辑。

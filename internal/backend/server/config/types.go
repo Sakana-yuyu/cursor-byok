@@ -20,6 +20,10 @@ const (
 	DefaultRoutingMode                      = "local"
 	DefaultProviderStreamIdleTimeoutSeconds = 240
 	MinProviderStreamIdleTimeoutSeconds     = 30
+	// DefaultLocalResponseCacheTTLSeconds 表示本地响应缓存条目的默认存活时长。
+	DefaultLocalResponseCacheTTLSeconds = 900
+	// DefaultLocalResponseCacheMaxEntries 表示本地响应缓存的默认最大条目数。
+	DefaultLocalResponseCacheMaxEntries = 256
 )
 
 type ModelPricing = legacyruntime.ModelPricing
@@ -62,15 +66,27 @@ type HomeMetricsConfig struct {
 	IncludeCacheWriteInHitRate bool `json:"includeCacheWriteInHitRate" yaml:"includeCacheWriteInHitRate"`
 }
 
+// LocalResponseCacheConfig 控制本地（进程内）精确匹配 LLM 响应缓存。
+// 默认（零值）为关闭：Enabled 为 false 时 provider 链路与今日完全一致。
+type LocalResponseCacheConfig struct {
+	// Enabled 表示是否启用本地响应缓存；默认 false（关闭）。
+	Enabled bool `json:"enabled" yaml:"enabled"`
+	// TTLSeconds 表示缓存条目的存活秒数；<=0 时回退默认值。
+	TTLSeconds int `json:"ttlSeconds,omitempty" yaml:"ttlSeconds,omitempty"`
+	// MaxEntries 表示缓存最大条目数；<=0 时回退默认值。
+	MaxEntries int `json:"maxEntries,omitempty" yaml:"maxEntries,omitempty"`
+}
+
 type Config struct {
-	Log                       bool                 `json:"log" yaml:"log"`
-	ProviderStreamIdleTimeout int                  `json:"providerStreamIdleTimeout" yaml:"providerStreamIdleTimeout"`
-	BackendListenAddr         string               `json:"backendListenAddr" yaml:"backendListenAddr"`
-	ProxyListenAddr           string               `json:"proxyListenAddr" yaml:"proxyListenAddr"`
-	ModelAdapters             []ModelAdapterConfig `json:"modelAdapters" yaml:"modelAdapters"`
-	Routing                   RoutingConfig        `json:"routing" yaml:"routing"`
-	HomeMetrics               HomeMetricsConfig    `json:"homeMetrics" yaml:"homeMetrics"`
-	LastAgentModelHash        string               `json:"lastAgentModelHash" yaml:"lastAgentModelHash"`
+	Log                       bool                     `json:"log" yaml:"log"`
+	ProviderStreamIdleTimeout int                      `json:"providerStreamIdleTimeout" yaml:"providerStreamIdleTimeout"`
+	BackendListenAddr         string                   `json:"backendListenAddr" yaml:"backendListenAddr"`
+	ProxyListenAddr           string                   `json:"proxyListenAddr" yaml:"proxyListenAddr"`
+	ModelAdapters             []ModelAdapterConfig     `json:"modelAdapters" yaml:"modelAdapters"`
+	Routing                   RoutingConfig            `json:"routing" yaml:"routing"`
+	HomeMetrics               HomeMetricsConfig        `json:"homeMetrics" yaml:"homeMetrics"`
+	LocalResponseCache        LocalResponseCacheConfig `json:"localResponseCache" yaml:"localResponseCache"`
+	LastAgentModelHash        string                   `json:"lastAgentModelHash" yaml:"lastAgentModelHash"`
 }
 
 func DefaultConfig() Config {
@@ -101,6 +117,7 @@ func NormalizeConfig(input Config) (Config, error) {
 	output.BackendListenAddr = backendListenAddr
 	output.ProxyListenAddr = proxyListenAddr
 	output.HomeMetrics.IncludeCacheWriteInHitRate = input.HomeMetrics.IncludeCacheWriteInHitRate
+	output.LocalResponseCache = normalizeLocalResponseCache(input.LocalResponseCache)
 	output.LastAgentModelHash = strings.TrimSpace(input.LastAgentModelHash)
 	output.Routing.Mode = normalizeRoutingMode(input.Routing.Mode)
 	if output.Routing.Mode == "" {
@@ -304,6 +321,19 @@ func normalizeListenAddr(value string, defaultValue string, fieldName string) (s
 		return "", fmt.Errorf("%s port 必须在 1-65535 之间", fieldName)
 	}
 	return net.JoinHostPort(host, strconv.Itoa(parsedPort)), nil
+}
+
+// normalizeLocalResponseCache 归一化本地响应缓存配置：保留 Enabled（默认 false），
+// 对无效的 TTL/MaxEntries 回退到默认值。
+func normalizeLocalResponseCache(input LocalResponseCacheConfig) LocalResponseCacheConfig {
+	output := input
+	if output.TTLSeconds <= 0 {
+		output.TTLSeconds = DefaultLocalResponseCacheTTLSeconds
+	}
+	if output.MaxEntries <= 0 {
+		output.MaxEntries = DefaultLocalResponseCacheMaxEntries
+	}
+	return output
 }
 
 func normalizeProviderStreamIdleTimeout(value int) int {
