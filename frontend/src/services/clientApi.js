@@ -1,13 +1,16 @@
 import {
   GetState, LoadUserConfig, SaveUserConfig, StartProxy, StopProxy, TestModelAdapter,
-  GetModelAdapterTestResults, FetchModelCatalog, GetPromptInjectionSettings,
+  GetModelAdapterTestResults, FetchModelCatalog, ProbeModelAdapter, QueryProviderBalance,
+  GetPromptInjectionSettings,
   SavePromptInjectionSettings, RefreshPromptInjection, RefreshPromptInjectionCatalog,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
 import { GetAdRuntime, OpenExternalURL } from "@bindings/cursor/internal/bridge/adservice.js";
 import {
   GetHomeMetricsSummary,
+  GetLocalCacheStats,
   GetMetricsRangeSummary,
   GetMetricsTokenBuckets,
+  GetProviderSpendSummary,
   GetRecentRequestMetrics,
 } from "@bindings/cursor/internal/bridge/metricsservice.js";
 import {
@@ -22,8 +25,9 @@ const desktopMethods = {
   StartProxy, StopProxy, OpenHistoryWindow, OpenConfigWindow, GetAppVersion, GetFooterAuthorInfo,
   CheckForUpdates, InstallReadyUpdate, OpenFooterAuthorHome, OpenModelConfigWindow, OpenModelEditorWindow,
   GetModelEditorContext, TestModelAdapter, GetModelAdapterTestResults, GetRecentRequestMetrics,
-  GetMetricsRangeSummary, GetMetricsTokenBuckets,
-  FetchModelCatalog, GetPromptInjectionSettings, SavePromptInjectionSettings, RefreshPromptInjection,
+  GetMetricsRangeSummary, GetMetricsTokenBuckets, GetProviderSpendSummary, GetLocalCacheStats,
+  FetchModelCatalog, ProbeModelAdapter, QueryProviderBalance, GetPromptInjectionSettings,
+  SavePromptInjectionSettings, RefreshPromptInjection,
   RefreshPromptInjectionCatalog, ExportLogs,
 };
 
@@ -123,6 +127,13 @@ export function getModelAdapterTestResults() {
   return desktopOrMock([], "@bindings/cursor/internal/bridge/proxyservice.js", "GetModelAdapterTestResults");
 }
 
+export function probeModelAdapter(adapter) {
+  if (isBrowserPreview) {
+    return Promise.resolve({ id: adapter?.id || adapter?.modelID || "", modelID: adapter?.modelID || "", ok: true, status: 200, message: "", rawResponse: "" });
+  }
+  return withApiLogging("ProbeModelAdapter", adapter, () => invoke("@bindings/cursor/internal/bridge/proxyservice.js", "ProbeModelAdapter", [adapter]));
+}
+
 export function fetchRecentRequestMetrics(limit = 200) {
   return desktopOrMock([], "@bindings/cursor/internal/bridge/metricsservice.js", "GetRecentRequestMetrics", [limit]);
 }
@@ -156,6 +167,33 @@ export function fetchMetricsTokenBuckets(startUnixMs = 0, endUnixMs = 0, model =
 export function fetchModelCatalog(request) {
   if (isBrowserPreview) return Promise.resolve({ models: [] });
   return withApiLogging("FetchModelCatalog", request, () => invoke("@bindings/cursor/internal/bridge/proxyservice.js", "FetchModelCatalog", [request]));
+}
+
+// 查询中转站余额/额度；失败时后端返回结构化的 { supported:false, message } 结果。
+export function queryProviderBalance(request) {
+  if (isBrowserPreview) {
+    return Promise.resolve({ supported: false, source: "", currency: "USD", total: null, used: null, remaining: null, message: "浏览器预览模式：未查询余额" });
+  }
+  return withApiLogging("QueryProviderBalance", request, () => invoke("@bindings/cursor/internal/bridge/proxyservice.js", "QueryProviderBalance", [request]));
+}
+
+// 按中转站聚合区间内的用量与美元花费（GroupName → baseURL host → provider 类型）。
+export function fetchProviderSpendSummary(startUnixMs = 0, endUnixMs = 0) {
+  return desktopOrMock(
+    [],
+    "@bindings/cursor/internal/bridge/metricsservice.js",
+    "GetProviderSpendSummary",
+    [startUnixMs, endUnixMs],
+  );
+}
+
+// 本地（进程内）响应缓存命中统计，与 provider prompt-cache 分开展示。
+export function fetchLocalCacheStats() {
+  return desktopOrMock(
+    { hits: 0, misses: 0, savedInputTokens: 0, savedOutputTokens: 0 },
+    "@bindings/cursor/internal/bridge/metricsservice.js",
+    "GetLocalCacheStats",
+  );
 }
 
 export function getPromptInjectionSettings() {

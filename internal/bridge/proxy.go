@@ -36,6 +36,15 @@ type ModelCatalogItem = client.ModelCatalogItem
 // ModelCatalogResult 定义模型列表结果。
 type ModelCatalogResult = client.ModelCatalogResult
 
+// ModelAdapterProbeResult 定义一次轻量模型可用性探测结果。
+type ModelAdapterProbeResult = client.ModelAdapterProbeResult
+
+// ProviderBalanceRequest 定义中转站余额查询请求。
+type ProviderBalanceRequest = client.ProviderBalanceRequest
+
+// ProviderBalance 定义中转站余额查询结果。
+type ProviderBalance = client.ProviderBalance
+
 // PromptInjectionConfig 定义提示词注入设置。不会包含模型 API key。
 type PromptInjectionConfig = promptinject.Config
 
@@ -125,6 +134,16 @@ func (s *ProxyService) TestModelAdapter(adapter ModelAdapterConfig) (ModelAdapte
 // FetchModelCatalog 用于处理与 FetchModelCatalog 相关的逻辑。
 func (s *ProxyService) FetchModelCatalog(request ModelCatalogRequest) (ModelCatalogResult, error) {
 	return s.core.FetchModelCatalog(request)
+}
+
+// ProbeModelAdapter 轻量探测单个模型是否可用，用于批量拉取后的可用性体检。
+func (s *ProxyService) ProbeModelAdapter(adapter ModelAdapterConfig) ModelAdapterProbeResult {
+	return s.core.ProbeModelAdapter(adapter)
+}
+
+// QueryProviderBalance 查询中转站余额/额度，失败时返回结构化的 unsupported 结果。
+func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) ProviderBalance {
+	return s.core.QueryProviderBalance(request)
 }
 
 // GetModelAdapterTestResults 用于处理与 GetModelAdapterTestResults 相关的逻辑。

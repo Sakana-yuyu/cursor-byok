@@ -28,6 +28,8 @@ type ModelCatalogRequest struct {
 	APIKey               string `json:"apiKey"`
 	CustomHeadersEnabled bool   `json:"customHeadersEnabled"`
 	CustomHeadersJSON    string `json:"customHeadersJSON"`
+	// ForceRefresh 为 true 时绕过进程内 TTL 缓存，强制重新拉取（供 UI 显式刷新使用）。
+	ForceRefresh bool `json:"forceRefresh,omitempty"`
 }
 
 type ModelPricing struct {
@@ -69,6 +71,13 @@ func (s *ProxyService) FetchModelCatalog(request ModelCatalogRequest) (ModelCata
 	apiKey := strings.TrimSpace(request.APIKey)
 	if apiKey == "" {
 		return ModelCatalogResult{}, i18n.NewError("error.model_adapter.api_key_required", i18n.CodeInvalidModelAdapter, "模型适配器 apiKey 不能为空")
+	}
+
+	cacheKey := metadataCacheKey(typeName, request.BaseURL, apiKey)
+	if request.ForceRefresh {
+		s.modelCatalogCache.invalidate(cacheKey)
+	} else if cached, ok := s.modelCatalogCache.get(cacheKey); ok {
+		return cached, nil
 	}
 
 	headers, err := parseModelCatalogHeaders(request)
@@ -115,7 +124,35 @@ func (s *ProxyService) FetchModelCatalog(request ModelCatalogRequest) (ModelCata
 	if err != nil {
 		return ModelCatalogResult{}, err
 	}
-	return ModelCatalogResult{Models: models}, nil
+	models = filterModelCatalogByType(models, typeName)
+	result := ModelCatalogResult{Models: models}
+	// 仅缓存成功结果；错误路径在上方已直接返回，绝不缓存错误。
+	s.modelCatalogCache.set(cacheKey, result)
+	return result, nil
+}
+
+// filterModelCatalogByType 剔除与适配器类型不匹配的占位/水印模型。
+//
+// 部分中转站在收到 Anthropic 版本请求（x-api-key + anthropic-version）时，
+// 会把非 Anthropic 模型伪装成 claude-* 前缀的占位条目（如 claude-fable-5-dd-<反转名>），
+// 但其 owned_by 仍为 openai/xai 等真实厂商。这类模型无法在 /v1/messages 调用，
+// 因此对 anthropic 适配器仅保留 owned_by 为空或等于 anthropic 的模型。
+func filterModelCatalogByType(models []ModelCatalogItem, typeName string) []ModelCatalogItem {
+	if strings.ToLower(strings.TrimSpace(typeName)) != "anthropic" {
+		return models
+	}
+	filtered := make([]ModelCatalogItem, 0, len(models))
+	for _, model := range models {
+		owner := strings.ToLower(strings.TrimSpace(model.OwnedBy))
+		if owner == "" || owner == "anthropic" {
+			filtered = append(filtered, model)
+		}
+	}
+	// 全部被过滤掉时说明该服务未按 owned_by 标注厂商，回退为不过滤，避免误伤合法中转站。
+	if len(filtered) == 0 {
+		return models
+	}
+	return filtered
 }
 
 func buildModelCatalogURL(rawBaseURL string) (string, error) {

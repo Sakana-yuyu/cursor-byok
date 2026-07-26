@@ -21,7 +21,7 @@ func main() {
 		exitf("positional history scan targets are no longer supported; usage totals come from history/usage.json")
 	}
 
-	summary, err := historymetrics.LoadUsageSummary(*usagePath)
+	summary, err := historymetrics.LoadUsageSummary(*usagePath, false, nil)
 	if err != nil {
 		exitf(err.Error())
 	}

@@ -4,6 +4,8 @@ package modeladapter
 import (
 	"context"
 	"fmt"
+	"math/rand"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,29 +36,81 @@ func NewRouter(resolver ChannelResolver) *Router {
 	}
 }
 
-type streamAttemptKey struct{}
+const (
+	// routerMaxStreamAttempts 是跨渠道故障切换的尝试上限。
+	routerMaxStreamAttempts = 8
+	// routerRetryBaseDelay 是渠道切换/重试之间的基准退避间隔。
+	routerRetryBaseDelay = 150 * time.Millisecond
+	// routerRetryMaxDelay 是渠道切换/重试之间的最大退避间隔。
+	routerRetryMaxDelay = 2 * time.Second
+)
 
-// Stream 根据模型标识选择具体 provider，并在 provider 失败时切换到下一渠道。
+// Stream 根据模型标识选择具体 provider，并在 provider 失败时按需切换渠道或退避重试。
+//
+// 故障切换策略：
+//   - 多渠道时，轮询游标会在每次失败后切到下一个渠道，优先尝试不同端点；
+//   - 单渠道（游标重新回到已尝试过的渠道）且错误为永久错误（4xx，429 除外）时立即返回，
+//     不再对同一端点做无意义的重试；
+//   - 瞬时错误在下一次尝试前施加小幅退避；
+//   - routerMaxStreamAttempts 仍作为尝试次数上限。
 func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(ModelEvent) error) error {
-	attempts, _ := ctx.Value(streamAttemptKey{}).(int)
-	if attempts >= 8 {
-		return fmt.Errorf("all model channels failed")
-	}
-	return router.streamAttempt(context.WithValue(ctx, streamAttemptKey{}, attempts+1), req, sink)
-}
-
-func (router *Router) streamAttempt(ctx context.Context, req StreamRequest, sink func(ModelEvent) error) error {
 	if router == nil || router.resolver == nil {
 		return fmt.Errorf("model adapter resolver is unavailable")
 	}
-	channel, err := router.resolver.SelectChannelForModel(ctx, req.ModelID)
-	if err != nil {
-		return err
-	}
-	if channel == nil {
-		return fmt.Errorf("no available channel for model %q", req.ModelID)
+
+	tried := make(map[string]struct{})
+	var firstErr error
+	var lastErrPermanent bool
+
+	for attempt := 0; attempt < routerMaxStreamAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			if firstErr != nil {
+				return firstErr
+			}
+			return err
+		}
+
+		channel, err := router.resolver.SelectChannelForModel(ctx, req.ModelID)
+		if err != nil {
+			return err
+		}
+		if channel == nil {
+			return fmt.Errorf("no available channel for model %q", req.ModelID)
+		}
+		channelID := strings.TrimSpace(channel.ID)
+
+		if attempt > 0 {
+			// 游标回到已尝试过的渠道，说明没有其它可用端点。
+			if _, seen := tried[channelID]; seen && lastErrPermanent {
+				return firstErr
+			}
+			if err := sleepWithContext(ctx, routerRetryBackoff(attempt)); err != nil {
+				if firstErr != nil {
+					return firstErr
+				}
+				return err
+			}
+		}
+
+		streamErr := router.streamChannel(ctx, req, channel, sink)
+		if streamErr == nil || ctx.Err() != nil {
+			return streamErr
+		}
+		if firstErr == nil {
+			firstErr = streamErr
+		}
+		tried[channelID] = struct{}{}
+		lastErrPermanent = isPermanentProviderError(streamErr)
 	}
 
+	if firstErr != nil {
+		return firstErr
+	}
+	return fmt.Errorf("all model channels failed")
+}
+
+// streamChannel 使用已解析的渠道构造请求并驱动对应 provider 适配器。此函数不改变模型可见的请求内容。
+func (router *Router) streamChannel(ctx context.Context, req StreamRequest, channel *legacyruntime.ResolvedChannel, sink func(ModelEvent) error) error {
 	resolved := req
 	resolved.Provider = strings.TrimSpace(channel.Provider)
 	resolved.ProtocolMode = strings.TrimSpace(channel.ProtocolMode)
@@ -151,23 +205,71 @@ func (router *Router) streamAttempt(ctx context.Context, req StreamRequest, sink
 	}
 
 	var streamErr error
+	channelBaseURL := strings.TrimSpace(channel.BaseURL)
+	channelGroupName := strings.TrimSpace(channel.GroupName)
+	identitySink := func(event ModelEvent) error {
+		if event.BaseURL == "" {
+			event.BaseURL = channelBaseURL
+		}
+		if event.GroupName == "" {
+			event.GroupName = channelGroupName
+		}
+		return sink(event)
+	}
 	switch resolved.Provider {
 	case "anthropic":
-		streamErr = router.anthropic.Stream(ctx, resolved, sink)
+		streamErr = router.anthropic.Stream(ctx, resolved, identitySink)
 	case "openai":
-		streamErr = router.openai.Stream(ctx, resolved, sink)
+		streamErr = router.openai.Stream(ctx, resolved, identitySink)
 	default:
 		streamErr = fmt.Errorf("unsupported provider %q", resolved.Provider)
 	}
-	if streamErr == nil || ctx.Err() != nil {
-		return streamErr
-	}
-	// 重新进入路由器会推进线程安全轮询游标；旧配置只有一个渠道时最多再尝试有限次数，最终返回原始错误。
-	nextErr := router.Stream(ctx, req, sink)
-	if nextErr == nil {
-		return nil
-	}
 	return streamErr
+}
+
+// isPermanentProviderError 判断 provider 错误是否为永久错误（4xx，429 除外）。
+// 适配器错误由 buildHTTPStatusError 生成，形如 "... status=<code> ..."。
+func isPermanentProviderError(err error) bool {
+	if err == nil {
+		return false
+	}
+	status := parseProviderErrorStatus(err.Error())
+	if status < 400 || status >= 500 {
+		return false
+	}
+	return status != 429
+}
+
+// parseProviderErrorStatus 从错误文本中解析 "status=<code>" 的状态码；解析失败返回 0。
+func parseProviderErrorStatus(message string) int {
+	const marker = "status="
+	index := strings.Index(message, marker)
+	if index < 0 {
+		return 0
+	}
+	rest := message[index+len(marker):]
+	end := 0
+	for end < len(rest) && rest[end] >= '0' && rest[end] <= '9' {
+		end++
+	}
+	if end == 0 {
+		return 0
+	}
+	status, err := strconv.Atoi(rest[:end])
+	if err != nil {
+		return 0
+	}
+	return status
+}
+
+// routerRetryBackoff 计算渠道切换/重试之间的退避时长（指数加抖动，带上限）。
+func routerRetryBackoff(attempt int) time.Duration {
+	backoff := routerRetryBaseDelay << attempt
+	if backoff <= 0 || backoff > routerRetryMaxDelay {
+		backoff = routerRetryMaxDelay
+	}
+	jitter := time.Duration(rand.Int63n(int64(backoff)/2 + 1))
+	return backoff/2 + jitter
 }
 
 // sanitizeProviderMessages removes replay-only placeholders and trims trailing

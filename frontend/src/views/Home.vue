@@ -51,15 +51,6 @@ async function handleToggleService() {
   }
 }
 
-async function handleRefreshState() {
-  const [serviceStateResult] = await Promise.allSettled([
-    syncServiceState(),
-  ]);
-  if (serviceStateResult.status === "rejected") {
-    await showActionError("刷新失败", toUserError(serviceStateResult.reason));
-  }
-}
-
 async function handleOpenConfig() {
   try {
     await openConfigWindow();
@@ -128,7 +119,16 @@ const promptInjection = reactive({
 const promptInjectionBusy = ref(false);
 const promptInjectionLoaded = ref(false);
 const promptInjectionExpanded = ref(false);
+const homeAdvancedExpanded = ref(false);
 const promptPreview = ref(null);
+
+const promptInjectionSummary = computed(() => {
+  const enabled = [];
+  if (promptInjection.enabled) enabled.push("Codex-X");
+  if (promptInjection.customEnabled) enabled.push("自定义");
+  if (promptInjection.softwareChineseEnabled) enabled.push("中文化");
+  return enabled.length ? `已启用：${enabled.join(" / ")}` : "未启用";
+});
 
 function openPromptPreview(template) {
   const content = template?.content || promptInjection.localContent || promptInjection.cacheContent || "";
@@ -233,6 +233,15 @@ async function togglePromptTemplate(template, enabled) {
 }
 
 async function handleDirectModeChange(enabled) {
+  if (enabled) {
+    const confirmed = await showModal({
+      title: "开启直连模式",
+      content: "直连模式会绕过本地代理服务，Cursor 将直接连接官方服务，可能产生官方账号计费。确定开启吗？",
+      confirmText: "开启直连",
+      cancelText: "取消",
+    });
+    if (!confirmed) return;
+  }
   const result = await saveRoutingMode(enabled ? "upstream" : "local");
   if (!result.ok) {
     await showActionError("切换失败", result.error);
@@ -250,35 +259,24 @@ onMounted(() => {
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-4 pt-0 text-[#e5e5e5]">
-    <HomeMetricsCard
-    />
-
-    <Card>
-      <div class="flex items-center justify-between gap-4">
-        <div>
-          <h2 class="text-base font-medium text-white">本地配置</h2>
-          <div class="text-sm text-[#a3a3a3]">打开设置目录，或单独管理模型配置</div>
-        </div>
-        <div class="center-row gap-2">
-          <Button variant="default" @click="handleOpenConfig">设置文件夹</Button>
-          <Button variant="default" :disabled="exportingLogs" @click="handleExportLogs">
-            {{ exportingLogs ? "导出中..." : "导出日志" }}
-          </Button>
-          <Button variant="default" @click="handleOpenRequestMetrics">请求明细</Button>
-          <Button variant="primary" @click="handleOpenModelConfig">模型配置</Button>
-        </div>
-      </div>
-    </Card>
-
     <Card>
       <div class="flex flex-col gap-4">
-        <div class="flex items-start justify-between gap-4">
-          <div class="flex flex-col gap-1">
-            <div class="text-sm" :class="appViewState.serviceStatusClass">
-              {{ appViewState.serviceStatusText }}
-            </div>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="center-row min-w-0 flex-wrap gap-2">
+            <span class="size-2.5 shrink-0 rounded-full" :class="appState.serviceRunning ? 'bg-[#22c55e]' : 'bg-[#737373]'"></span>
+            <h2 class="text-base font-semibold text-white">{{ appViewState.serviceStatusText }}</h2>
+            <span class="rounded-full border border-[#3f3f3f] px-2 py-0.5 text-xs text-[#a3a3a3]">{{ directModeEnabled ? "直连 Cursor" : "本地服务" }}</span>
+            <span v-if="appState.serviceRunning && appState.proxyListenAddr" class="center-row gap-1 text-xs text-[#737373]">
+              <span class="icon-[mdi--lan-connect] text-[13px]"></span>{{ appState.proxyListenAddr }}
+            </span>
           </div>
-          <div class="center-row gap-2">
+          <div class="center-row flex-wrap justify-end gap-2">
+            <Button variant="default" @click="handleOpenConfig">设置文件夹</Button>
+            <Button variant="default" :disabled="exportingLogs" @click="handleExportLogs">
+              {{ exportingLogs ? "导出中..." : "导出日志" }}
+            </Button>
+            <Button variant="default" @click="handleOpenRequestMetrics">请求明细</Button>
+            <Button variant="default" @click="handleOpenModelConfig">模型配置</Button>
             <Button variant="primary" :disabled="appState.serviceBusy" @click="handleToggleService">
               <span class="icon-[mdi--pause] text-[16px]" v-if="appState.serviceRunning"></span>
               <span class="icon-[mdi--play] text-[16px]" v-else></span>
@@ -286,15 +284,29 @@ onMounted(() => {
             </Button>
           </div>
         </div>
-
-        <div v-if="appState.serviceLastError"
-          class="rounded-[8px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-sm text-[#fca5a5]">
+        <div v-if="appState.serviceLastError" class="rounded-[8px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-sm text-[#fca5a5]">
           {{ appState.serviceLastError }}
         </div>
 
+        <div class="border-t border-[#343434] pt-4">
+          <HomeMetricsCard />
+        </div>
+      </div>
+    </Card>
+
+    <Card>
+      <div class="flex flex-col gap-3">
+        <button type="button" class="flex items-center justify-between gap-3 text-left" @click="homeAdvancedExpanded = !homeAdvancedExpanded">
+          <div>
+            <h2 class="text-base font-medium text-white">高级连接</h2>
+            <div class="text-xs text-[#a3a3a3]">{{ directModeEnabled ? "直连模式已开启" : "使用本地代理服务" }}</div>
+          </div>
+          <span class="icon-[mdi--chevron-right] text-[18px] text-[#737373] transition-transform" :class="{ 'rotate-90': homeAdvancedExpanded }"></span>
+        </button>
         <Switch
+          v-if="homeAdvancedExpanded"
           label="直连模式"
-          description="开启后，Cursor将直接接通官方，请勿开启"
+          description="绕过本地服务并直接连接官方，可能产生官方账号计费。"
           enabled-text="当前为直连模式"
           disabled-text="当前为本地服务模式"
           :enabled="directModeEnabled"
@@ -314,11 +326,10 @@ onMounted(() => {
           @click="promptInjectionExpanded = !promptInjectionExpanded"
         >
           <div>
-            <h2 class="text-base font-medium text-white">提示词注入</h2>
-            <div class="text-xs text-[#a3a3a3]">
-              Codex-X · 自定义 · 中文化 · 默认关闭
-              <span v-if="promptInjection.enabled || promptInjection.customEnabled || promptInjection.softwareChineseEnabled" class="text-green-400"> · 已启用</span>
-            </div>
+              <h2 class="text-base font-medium text-white">提示词与本地化</h2>
+              <div class="text-xs text-[#a3a3a3]">
+                Codex-X · 自定义 · 中文化 · {{ promptInjectionSummary }}
+              </div>
           </div>
           <div class="flex items-center gap-2">
             <Switch

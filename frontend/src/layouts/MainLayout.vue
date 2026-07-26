@@ -23,6 +23,12 @@ const route = useRoute();
 const message = useMessage();
 const showIcon = computed(() => route.meta.showIcon !== false);
 const title = computed(() => route.meta.title ?? "Cursor助手｜永久免费｜自定义API");
+const titleParts = computed(() =>
+  String(title.value)
+    .split(/[｜|]/)
+    .map((part) => part.trim())
+    .filter(Boolean),
+);
 const directlyClose = computed(() => route.meta.directlyClose === true);
 const showFooter = computed(() => route.path === "/");
 const footerAuthorInfo = ref(null);
@@ -79,8 +85,23 @@ const proxyBadgeTitle = computed(() => {
   return "当前出站请求未使用系统代理";
 });
 
+const isMaximised = ref(false);
+
+async function syncMaximiseState() {
+  try {
+    isMaximised.value = Boolean(await runtimeWindow.IsMaximised());
+  } catch {
+    // ignore
+  }
+}
+
 async function minimizeWindow() {
   await runtimeWindow.Minimise();
+}
+
+async function toggleMaximiseWindow() {
+  await runtimeWindow.ToggleMaximise();
+  await syncMaximiseState();
 }
 
 async function closeWindow() {
@@ -161,6 +182,7 @@ async function handleOpenUsageDocs() {
 
 onMounted(() => {
   void loadFooterAuthorInfo();
+  void syncMaximiseState();
   proxyStateTimer = window.setInterval(() => {
     if (showFooter.value) {
       void syncServiceState().catch(() => {});
@@ -184,29 +206,67 @@ onUnmounted(() => {
     ></div>
 
     <header
-      class="flex h-[40px] center-row px-[20px] w-full min-h-0 shrink-0 justify-between relative"
+      class="relative flex h-[40px] min-h-0 w-full shrink-0 items-center justify-between px-[20px]"
       style="--wails-draggable: drag"
       :class="{ '!justify-center': !isWindows }"
     >
-      <div class="center-row gap-2" style="font-family: var(--font-num);">
-        <img v-if="showIcon" :src="Logo" class="w-[18px] h-[18px]" />
-        <div>{{ title }}</div>
+      <div class="center-row min-w-0 gap-2 pr-[124px]" style="font-family: var(--font-num);">
+        <img v-if="showIcon" :src="Logo" class="h-[16px] w-[16px] shrink-0 opacity-90" />
+        <div class="center-row min-w-0 gap-[7px]">
+          <template v-for="(part, index) in titleParts" :key="index">
+            <span
+              aria-hidden="true"
+              v-if="index > 0"
+              class="h-[10px] w-px shrink-0 bg-[#333]"
+            ></span>
+            <span
+              class="truncate text-[12px] leading-none"
+              :class="index === 0 ? 'font-medium text-[#b0b0b0]' : 'text-[#6f6f6f]'"
+            >{{ part }}</span>
+          </template>
+        </div>
       </div>
       <div
         v-if="isWindows"
-        class="absolute right-[10px] top-[8px] z-99999 center-row gap-[1px]"
+        class="absolute right-[10px] top-[7px] z-99999 flex items-center gap-[1px] rounded-full border border-[#333] bg-[#242424]/90 px-[3px] py-[3px] shadow-[0_1px_4px_rgba(0,0,0,0.35)] backdrop-blur-sm"
+        style="--wails-draggable: no-drag"
       >
         <button
-          class="text-[20px] center-row justify-center w-[30px] h-[23px] rounded-[4px] text-[#777] hover:bg-[#333] hover:text-[#ddd] cursor-pointer"
+          type="button"
+          aria-label="最小化窗口"
+          title="最小化"
+          class="flex h-[20px] w-[26px] cursor-pointer items-center justify-center rounded-full text-[#9a9a9a] transition-colors duration-150 hover:bg-[#3a3a3a] hover:text-[#f0f0f0]"
           @click="minimizeWindow"
         >
-          <span class="icon-[ic--round-minus]"></span>
+          <svg class="h-[14px] w-[14px]" viewBox="0 0 16 16" aria-hidden="true" fill="none">
+            <path d="M3.5 8H12.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+          </svg>
         </button>
         <button
-          class="text-[20px] center-row justify-center w-[30px] h-[23px] rounded-[4px] text-[#777] hover:bg-[#333] hover:text-[#ddd] cursor-pointer"
+          type="button"
+          aria-label="最大化窗口"
+          :title="isMaximised ? '还原' : '最大化'"
+          class="flex h-[20px] w-[26px] cursor-pointer items-center justify-center rounded-full text-[#9a9a9a] transition-colors duration-150 hover:bg-[#3a3a3a] hover:text-[#f0f0f0]"
+          @click="toggleMaximiseWindow"
+        >
+          <svg v-if="!isMaximised" class="h-[13px] w-[13px]" viewBox="0 0 16 16" aria-hidden="true" fill="none">
+            <rect x="3.5" y="3.5" width="9" height="9" rx="1.6" stroke="currentColor" stroke-width="1.4" />
+          </svg>
+          <svg v-else class="h-[13px] w-[13px]" viewBox="0 0 16 16" aria-hidden="true" fill="none">
+            <rect x="5" y="5" width="7.5" height="7.5" rx="1.4" stroke="currentColor" stroke-width="1.4" />
+            <path d="M4 10.5V4.5C4 3.95 4.45 3.5 5 3.5H11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          aria-label="关闭窗口"
+          :title="directlyClose ? '关闭' : '隐藏到托盘'"
+          class="flex h-[20px] w-[26px] cursor-pointer items-center justify-center rounded-full text-[#9a9a9a] transition-colors duration-150 hover:bg-[#b23b3b] hover:text-white"
           @click="closeWindow"
         >
-          <span class="icon-[ic--round-close]"></span>
+          <svg class="h-[14px] w-[14px]" viewBox="0 0 16 16" aria-hidden="true" fill="none">
+            <path d="M4 4L12 12M12 4L4 12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+          </svg>
         </button>
       </div>
     </header>

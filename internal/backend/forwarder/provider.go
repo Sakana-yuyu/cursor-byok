@@ -14,10 +14,17 @@ type DefaultProviderGateway struct {
 }
 
 // NewProviderGateway 创建默认 provider 网关。
-func NewProviderGateway(resolver modeladapter.ChannelResolver) *DefaultProviderGateway {
-	return &DefaultProviderGateway{
+//
+// 当 resolver 能提供本地响应缓存配置时，返回一个精确匹配响应缓存包装网关；
+// 该缓存默认关闭，关闭时 StartStream 直接透传底层网关，行为与今日完全一致。
+func NewProviderGateway(resolver modeladapter.ChannelResolver) ProviderGateway {
+	base := &DefaultProviderGateway{
 		router: modeladapter.NewRouter(resolver),
 	}
+	if settingsProvider, ok := resolver.(localResponseCacheSettingsProvider); ok {
+		return newCachingProviderGateway(base, settingsProvider.LocalResponseCacheSettings)
+	}
+	return base
 }
 
 // StartStream 把 forwarder 的 provider 请求翻译成 modeladapter.StreamRequest 并发起流式调用。

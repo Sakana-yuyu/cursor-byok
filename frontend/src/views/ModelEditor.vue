@@ -5,8 +5,9 @@ import ModelAdapterTestCard from "@/components/ModelAdapterTestCard.vue";
 import Select from "@/components/ui/Select.vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
 import { getModelEditorContext, fetchModelCatalog } from "@/services/clientApi";
+import { useModelProbe } from "@/composables/useModelProbe";
 import { resolveModelContextWindow } from "@/utils/modelContext";
-import { providerLabel, providerSelectOptions } from "@/utils/providerMeta";
+import { providerIcon, providerLabel, providerSelectOptions } from "@/utils/providerMeta";
 import {
   ANTHROPIC_THINKING_EFFORT_DEFAULT,
   appState,
@@ -119,6 +120,48 @@ const catalogError = ref("");
 const selectedCatalogModels = ref(new Set());
 const catalogSaving = ref(false);
 
+// 可用性探测
+const catalogProbe = useModelProbe();
+
+function buildProbeAdapter({ group, model }) {
+  return normalizeModelAdapter({
+    ...createEmptyModelAdapter(),
+    type: group.type,
+    baseURL: group.baseURL,
+    apiKey: group.apiKey,
+    customHeadersEnabled: group.customHeadersEnabled,
+    customHeadersJSON: group.customHeadersJSON,
+    displayName: model.id,
+    modelID: model.id,
+    tooltipData: `探测 ${model.id}`,
+    protocolMode: PROTOCOL_MODE_AUTO,
+    protocolGroup: classifyModelProtocol(group.type, model.id, group.baseURL, "", ""),
+    openAIRequestGroup: group.type === "openai"
+      ? classifyModelProtocol(group.type, model.id, group.baseURL, "", "")
+      : "",
+  });
+}
+
+async function handleProbeCatalog() {
+  const items = catalogGroups.value.flatMap((group) =>
+    group.models.map((model) => ({
+      id: catalogSelectionKey(group.key, model.id),
+      group,
+      model,
+    })),
+  );
+  if (!items.length) return;
+  await catalogProbe.probeAll(items, buildProbeAdapter, { concurrency: 3 });
+  // 探测完成后仅保留可用模型的勾选
+  const next = new Set();
+  for (const item of items) {
+    if (catalogProbe.statusOf(item.id) === "ok") {
+      next.add(item.id);
+    }
+  }
+  selectedCatalogModels.value = next;
+}
+
 function createOptionalPositiveIntegerModel(key) {
   return computed({
     get() {
@@ -169,6 +212,21 @@ const isQuickMode = computed(() => editorIndex.value < 0);
 const title = computed(() => {
   if (manualAddMode.value) return "手动添加模型";
   return isQuickMode.value ? "快速添加模型" : "编辑模型配置";
+});
+
+// 高级设置分区：默认收起，存量非默认配置自动展开
+const advancedExpanded = ref(false);
+const hasAdvancedOverrides = computed(() => {
+  if (draft.protocolMode === PROTOCOL_MODE_FIXED) return true;
+  if (draft.openAIExtraParamsEnabled) return true;
+  if (draft.anthropicExtraParamsEnabled) return true;
+  if (draft.customHeadersEnabled) return true;
+  if (draft.fastMode) return true;
+  if (draft.type === "openai") {
+    if (String(draft.openAIEndpoint || "") !== OPENAI_ENDPOINT_RESPONSES) return true;
+    if (Number(draft.maxCompletionTokens) > 0) return true;
+  }
+  return false;
 });
 
 function ensureOpenAIExtraParamsJSON() {
@@ -236,6 +294,9 @@ async function loadContext() {
     draft.type = "openai";
   } finally {
     loading.value = false;
+    if (hasAdvancedOverrides.value) {
+      advancedExpanded.value = true;
+    }
   }
 }
 
@@ -324,6 +385,7 @@ async function handleFetchModels() {
   }
 
   catalogLoading.value = true;
+  catalogProbe.reset();
   try {
     const result = await fetchModelCatalog({
       type: draft.type,
@@ -633,68 +695,76 @@ onMounted(async () => {
 
     <div v-else class="flex-1 overflow-y-auto min-h-0 px-4 pb-4">
       <div class="flex flex-col gap-4">
-        <div v-if="isQuickMode && !manualAddMode" class="flex flex-col gap-4">
-          <div class="flex items-center justify-between rounded-[8px] border border-[#343434] bg-[#252525] px-3 py-2.5">
-            <div>
-              <div class="text-sm text-[#d4d4d4]">没有模型列表？手动添加单个模型</div>
-              <div class="mt-0.5 text-xs text-[#8f8f8f]">适用于不提供 /models 接口的供应商</div>
+        <div v-if="isQuickMode && !manualAddMode" class="flex flex-col gap-3">
+          <div class="center-row justify-between gap-3 rounded-[8px] border border-[#343434] bg-[#252525] px-3 py-2">
+            <div class="center-row min-w-0 gap-2">
+              <span class="icon-[mdi--information-outline] shrink-0 text-[16px] text-[#8f8f8f]"></span>
+              <div class="min-w-0">
+                <div class="truncate text-sm text-[#d4d4d4]">没有模型列表？手动添加单个模型</div>
+                <div class="truncate text-xs text-[#8f8f8f]">适用于不提供 /models 接口的供应商</div>
+              </div>
             </div>
             <Button variant="default" @click="manualAddMode = true">手动添加</Button>
           </div>
-          <label class="flex flex-col gap-1">
-            <span class="text-sm text-[#d4d4d4]">模型类型</span>
-            <Select
-              :model-value="draft.type"
-              :options="providerTypeOptions"
-              button-class="h-9 text-sm"
-              @update:model-value="handleModelTypeChange"
-            />
-          </label>
-          <label class="flex flex-col gap-1">
-            <span class="text-sm text-[#d4d4d4]">接口地址（自动补 /v1）</span>
-            <input
-              v-model="draft.baseURL"
-              type="text"
-              placeholder="例如：https://api.openai.com"
-              class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
-              @blur="ensureV1Suffix"
-            />
-          </label>
-          <label class="flex flex-col gap-1">
-            <span class="text-sm text-[#d4d4d4]">访问密钥</span>
-            <Input
-              v-model="draft.apiKey"
-              type="password"
-              allow-visibility-toggle
-              placeholder="例如：sk-xxxxxx"
-              autocomplete="off"
-            />
-          </label>
-          <label class="flex flex-col gap-1">
-            <span class="text-sm text-[#d4d4d4]">用户分组名称</span>
-            <input
-              v-model="draft.groupName"
-              type="text"
-              placeholder="按 URL 或渠道归类"
-              class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
-            />
-          </label>
-          <label class="flex flex-col gap-1">
-            <span class="text-sm text-[#d4d4d4]">备注</span>
-            <textarea
-              v-model="draft.tooltipData"
-              rows="2"
-              placeholder="可选，例如：用于日常代码补全"
-              class="resize-none rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 py-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
-            ></textarea>
-          </label>
-          <Button
-            variant="primary"
-            :disabled="catalogLoading || !draft.baseURL || !draft.apiKey"
-            @click="handleFetchModels"
-          >
-            {{ catalogLoading ? "拉取中..." : "拉取模型" }}
-          </Button>
+
+          <div class="flex flex-col gap-3 rounded-[8px] border border-[#343434] bg-[#252525] p-3">
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label class="flex flex-col gap-1">
+                <span class="text-sm text-[#d4d4d4]">模型类型</span>
+                <Select
+                  :model-value="draft.type"
+                  :options="providerTypeOptions"
+                  button-class="h-9 text-sm"
+                  @update:model-value="handleModelTypeChange"
+                />
+              </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-sm text-[#d4d4d4]">用户分组名称</span>
+                <input
+                  v-model="draft.groupName"
+                  type="text"
+                  placeholder="按 URL 或渠道归类"
+                  class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+                />
+              </label>
+            </div>
+            <label class="flex flex-col gap-1">
+              <span class="text-sm text-[#d4d4d4]">接口地址（自动补 /v1）</span>
+              <input
+                v-model="draft.baseURL"
+                type="text"
+                placeholder="例如：https://api.openai.com"
+                class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+                @blur="ensureV1Suffix"
+              />
+            </label>
+            <label class="flex flex-col gap-1">
+              <span class="text-sm text-[#d4d4d4]">访问密钥</span>
+              <Input
+                v-model="draft.apiKey"
+                type="password"
+                allow-visibility-toggle
+                placeholder="例如：sk-xxxxxx"
+                autocomplete="off"
+              />
+            </label>
+            <label class="flex flex-col gap-1">
+              <span class="text-sm text-[#d4d4d4]">备注</span>
+              <textarea
+                v-model="draft.tooltipData"
+                rows="2"
+                placeholder="可选，例如：用于日常代码补全"
+                class="resize-none rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 py-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+              ></textarea>
+            </label>
+            <Button
+              variant="primary"
+              :disabled="catalogLoading || !draft.baseURL || !draft.apiKey"
+              @click="handleFetchModels"
+            >
+              {{ catalogLoading ? "拉取中..." : "拉取模型" }}
+            </Button>
+          </div>
           <div v-if="catalogGroups.length > 0" class="space-y-2">
             <div v-for="group in catalogGroups" :key="group.key" class="rounded-[8px] border border-[#343434] bg-[#252525] p-2">
               <div class="mb-2 flex items-center gap-2">
@@ -709,10 +779,16 @@ onMounted(async () => {
                 <label v-for="model in group.models" :key="model.id" class="flex items-center gap-2 py-1 text-xs text-[#d4d4d4]">
                   <input type="checkbox" class="size-4 accent-[#10AD5D]" :checked="isCatalogModelSelected(group.key, model.id)" @change="toggleCatalogModel(group.key, model.id)" />
                   <span class="truncate">{{ model.id }}</span>
+                  <span v-if="catalogProbe.statusOf(catalogSelectionKey(group.key, model.id)) === 'checking'" class="ml-auto shrink-0 rounded-full border border-[#164e63] bg-[#0b2530] px-1.5 py-0.5 text-[10px] text-[#67e8f9]">检测中</span>
+                  <span v-else-if="catalogProbe.statusOf(catalogSelectionKey(group.key, model.id)) === 'ok'" class="ml-auto shrink-0 rounded-full border border-[#14532d] bg-[#102418] px-1.5 py-0.5 text-[10px] text-[#86efac]">✓ 可用</span>
+                  <span v-else-if="catalogProbe.statusOf(catalogSelectionKey(group.key, model.id)) === 'fail'" :title="catalogProbe.messageOf(catalogSelectionKey(group.key, model.id))" class="ml-auto shrink-0 rounded-full border border-[#4b1d1d] bg-[#2a1313] px-1.5 py-0.5 text-[10px] text-[#fca5a5]">✗ 不可用</span>
                 </label>
               </div>
             </div>
-            <Button class="w-full" variant="primary" :disabled="catalogSaving" @click="handleBatchAddModels">{{ catalogSaving ? "添加中..." : "添加已选模型" }}</Button>
+            <div class="flex gap-2">
+              <Button class="flex-1" variant="default" :disabled="catalogProbe.probing.value || catalogSaving" @click="handleProbeCatalog">{{ catalogProbe.probing.value ? "检测中..." : "检测可用性" }}</Button>
+              <Button class="flex-1" variant="primary" :disabled="catalogSaving" @click="handleBatchAddModels">{{ catalogSaving ? "添加中..." : "添加已选模型" }}</Button>
+            </div>
           </div>
           <div v-if="catalogError" class="rounded-[8px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-sm text-[#fca5a5]">
             {{ catalogError }}
@@ -720,7 +796,7 @@ onMounted(async () => {
         </div>
 
         <template v-else>
-        <div class="rounded-[8px] border border-[#343434] bg-[#252525] px-3 py-2 text-sm text-[#d4d4d4]">
+        <div class="rounded-[8px] border border-[#343434] bg-[#252525] px-3 py-2.5 text-sm text-[#d4d4d4]">
           <template v-if="manualAddMode">
             <label class="flex flex-col gap-1">
               <span class="text-sm text-[#d4d4d4]">供应商类型</span>
@@ -733,9 +809,17 @@ onMounted(async () => {
             </label>
           </template>
           <template v-else>
-              供应商：<span class="font-medium text-white">{{ providerLabel(draft.type) }}</span>
+            <div class="center-row justify-start gap-2">
+              <span class="center-row size-7 shrink-0 justify-center rounded-[6px] bg-[#232323]">
+                <span :class="[providerIcon(draft.type), 'text-[16px]']"></span>
+              </span>
+              <span class="text-xs text-[#8f8f8f]">供应商</span>
+              <span class="font-medium text-white">{{ providerLabel(draft.type) }}</span>
+            </div>
           </template>
         </div>
+
+        <div class="text-xs font-medium uppercase tracking-[0.08em] text-[#737373]">基础信息</div>
 
         <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
           <label class="flex flex-col gap-1">
@@ -807,12 +891,20 @@ onMounted(async () => {
                       @change="toggleCatalogModel(group.key, model.id)"
                     />
                     <span class="truncate">{{ model.id }}</span>
+                    <span v-if="catalogProbe.statusOf(catalogSelectionKey(group.key, model.id)) === 'checking'" class="ml-auto shrink-0 rounded-full border border-[#164e63] bg-[#0b2530] px-1.5 py-0.5 text-[10px] text-[#67e8f9]">检测中</span>
+                    <span v-else-if="catalogProbe.statusOf(catalogSelectionKey(group.key, model.id)) === 'ok'" class="ml-auto shrink-0 rounded-full border border-[#14532d] bg-[#102418] px-1.5 py-0.5 text-[10px] text-[#86efac]">✓ 可用</span>
+                    <span v-else-if="catalogProbe.statusOf(catalogSelectionKey(group.key, model.id)) === 'fail'" :title="catalogProbe.messageOf(catalogSelectionKey(group.key, model.id))" class="ml-auto shrink-0 rounded-full border border-[#4b1d1d] bg-[#2a1313] px-1.5 py-0.5 text-[10px] text-[#fca5a5]">✗ 不可用</span>
                   </label>
                 </div>
               </div>
-              <Button class="w-full" variant="primary" :disabled="catalogSaving" @click="handleBatchAddModels">
-                {{ catalogSaving ? "添加中..." : "添加已选模型" }}
-              </Button>
+              <div class="flex gap-2">
+                <Button class="flex-1" variant="default" :disabled="catalogProbe.probing.value || catalogSaving" @click="handleProbeCatalog">
+                  {{ catalogProbe.probing.value ? "检测中..." : "检测可用性" }}
+                </Button>
+                <Button class="flex-1" variant="primary" :disabled="catalogSaving" @click="handleBatchAddModels">
+                  {{ catalogSaving ? "添加中..." : "添加已选模型" }}
+                </Button>
+              </div>
             </div>
             <div v-if="catalogError" class="mt-1 text-xs text-[#fca5a5]">
               {{ catalogError }}
@@ -874,25 +966,6 @@ onMounted(async () => {
             />
           </label>
 
-          <label v-if="draft.type === 'openai' && /gpt/i.test(draft.modelID || '')" class="center-row justify-between gap-3 rounded-[8px] border border-[#343434] bg-[#252525] px-3 py-2 text-sm text-[#d4d4d4]">
-            <span>Fast 模式（priority）</span>
-            <input v-model="draft.fastMode" type="checkbox" class="size-4 accent-[#10AD5D]" />
-          </label>
-
-          <label v-if="draft.type === 'anthropic'" class="flex flex-col gap-1">
-            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
-              <Tooltip :content="fieldTips.anthropicMaxTokens" />
-              <span>最大输出 Token</span>
-            </span>
-            <input
-              v-model="anthropicMaxTokensInput"
-              type="text"
-              inputmode="numeric"
-              placeholder="例如：65536（留空用默认值）"
-              class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
-            />
-          </label>
-
           <label v-if="draft.type === 'anthropic'" class="flex flex-col gap-1">
             <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
               <Tooltip :content="fieldTips.anthropicThinkingEffort" />
@@ -906,24 +979,41 @@ onMounted(async () => {
 
         </div>
 
-        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <label class="flex flex-col gap-1">
-            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
-              <Tooltip :content="fieldTips.protocolMode" />
-              <span>协议选择</span>
-            </span>
-            <Select v-model="draft.protocolMode" :options="protocolModeOptions" />
-          </label>
-          <div class="rounded-[8px] border border-[#343434] bg-[#252525] px-3 py-2">
-            <div class="text-xs text-[#737373]">当前协议分组</div>
-            <div class="mt-1 text-sm text-[#86efac]">{{ effectiveProtocolGroup || "未识别" }}</div>
-            <div v-if="draft.protocolMode === PROTOCOL_MODE_AUTO" class="mt-1 text-xs text-[#8f8f8f]">
-              根据模型类型、模型名称和接口地址自动归类
+        <button
+          type="button"
+          class="center-row w-full justify-between gap-3 rounded-[8px] border border-[#343434] bg-[#252525] px-3 py-2 text-left transition-colors hover:border-[#4a4a4a]"
+          @click="advancedExpanded = !advancedExpanded"
+        >
+          <div class="center-row min-w-0 gap-2 text-xs">
+            <span class="icon-[mdi--tune-variant] shrink-0 text-[15px] text-[#8f8f8f]"></span>
+            <span class="text-[#a3a3a3]">协议</span>
+            <span class="truncate text-[#86efac]">{{ draft.protocolMode === PROTOCOL_MODE_FIXED ? '固定' : '自动' }} · {{ effectiveProtocolGroup || "未识别" }}</span>
+          </div>
+          <span class="center-row shrink-0 gap-1 text-xs text-[#8f8f8f]">
+            <span>{{ advancedExpanded ? "收起" : "高级设置" }}</span>
+            <span class="icon-[mdi--chevron-right] text-[16px] transition-transform" :class="{ 'rotate-90': advancedExpanded }"></span>
+          </span>
+        </button>
+
+        <div v-if="advancedExpanded" class="flex flex-col gap-3 rounded-[8px] border border-[#343434] bg-[#252525] p-3">
+          <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <label class="flex flex-col gap-1">
+              <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
+                <Tooltip :content="fieldTips.protocolMode" />
+                <span>协议选择</span>
+              </span>
+              <Select v-model="draft.protocolMode" :options="protocolModeOptions" />
+            </label>
+            <div class="rounded-[8px] border border-[#343434] bg-[#232323] px-3 py-2">
+              <div class="text-xs text-[#737373]">当前协议分组</div>
+              <div class="mt-1 text-sm text-[#86efac]">{{ effectiveProtocolGroup || "未识别" }}</div>
+              <div v-if="draft.protocolMode === PROTOCOL_MODE_AUTO" class="mt-1 text-xs text-[#8f8f8f]">
+                根据模型类型、模型名称和接口地址自动归类
+              </div>
             </div>
           </div>
-        </div>
 
-        <div v-if="draft.type === 'openai'" class="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div v-if="draft.type === 'openai'" class="grid grid-cols-1 gap-3 md:grid-cols-2">
           <label class="flex flex-col gap-1">
             <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
               <Tooltip :content="fieldTips.maxCompletionTokens" />
@@ -936,6 +1026,11 @@ onMounted(async () => {
               placeholder="例如：65536（留空用默认值）"
               class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
             />
+          </label>
+
+          <label v-if="/gpt/i.test(draft.modelID || '')" class="center-row justify-between gap-3 rounded-[8px] border border-[#343434] bg-[#232323] px-3 py-2 text-sm text-[#d4d4d4]">
+            <span>Fast 模式（priority）</span>
+            <input v-model="draft.fastMode" type="checkbox" class="size-4 accent-[#10AD5D]" />
           </label>
 
           <label class="flex flex-col gap-1">
@@ -985,7 +1080,21 @@ onMounted(async () => {
           />
         </div>
 
-        <div v-if="draft.type === 'anthropic'" class="rounded-[8px] border border-[#343434] bg-[#252525] p-3">
+        <label v-if="draft.type === 'anthropic'" class="flex flex-col gap-1">
+          <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
+            <Tooltip :content="fieldTips.anthropicMaxTokens" />
+            <span>最大输出 Token</span>
+          </span>
+          <input
+            v-model="anthropicMaxTokensInput"
+            type="text"
+            inputmode="numeric"
+            placeholder="例如：65536（留空用默认值）"
+            class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+          />
+        </label>
+
+        <div v-if="draft.type === 'anthropic'" class="rounded-[8px] border border-[#343434] bg-[#232323] p-3">
           <div class="flex items-center justify-between gap-3">
             <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
               <Tooltip :content="fieldTips.anthropicExtraParams" />
@@ -1032,6 +1141,7 @@ onMounted(async () => {
             class="mt-3 min-h-[120px] w-full resize-none rounded-[6px] border border-[#3f3f3f] bg-[#1f1f1f] px-3 py-2 font-mono text-xs text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
           />
         </div>
+        </div>
 
         <label class="flex flex-col gap-1">
           <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
@@ -1050,6 +1160,7 @@ onMounted(async () => {
           :result="localTestFailure ? { status: 'error', error: '测试失败', summaryText: '测试失败', rawResponse: modelTestSummary } : activeModelTestResult"
           :stale="modelTestResultStale"
           :show-metrics="true"
+          empty-text="尚未测试 — 点击右上角「保存并测试」检测该模型是否可用"
         />
 
         <div

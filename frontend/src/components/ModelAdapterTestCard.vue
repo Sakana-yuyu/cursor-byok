@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
 import { formatDuration } from "@/state/appState";
+import { humanizeProviderError } from "@/utils/errorHumanizer";
 
 const props = defineProps({
   result: {
@@ -36,15 +37,16 @@ const normalizedStatus = computed(() => {
 });
 
 const summaryText = computed(() => {
+  if (normalizedStatus.value === "error") {
+    const source = props.result?.error || props.result?.summaryText || props.result?.rawResponse;
+    return humanizeProviderError(source) || "测试失败";
+  }
   const text = String(props.result?.summaryText || "").trim();
   if (text) {
     return text;
   }
   if (normalizedStatus.value === "running") {
     return "测试中...";
-  }
-  if (normalizedStatus.value === "error") {
-    return "测试失败";
   }
   return props.emptyText;
 });

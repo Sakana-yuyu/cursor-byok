@@ -65,6 +65,35 @@ type openAIToolAccumulator struct {
 	ProviderStatus         string
 }
 
+// completedOpenAIToolArgsJSON 校验累积的工具调用参数：必须是空或合法的 JSON 对象。
+// 与 anthropic.go 的 completedAnthropicToolArgsJSON 对称：空参数归一化为 "{}"，
+// 对残缺/畸形/非对象输入尽早产生可归因的错误，避免下游 dispatch 阶段才失败。
+func completedOpenAIToolArgsJSON(accumulator *openAIToolAccumulator) ([]byte, error) {
+	if accumulator == nil {
+		return []byte("{}"), nil
+	}
+	trimmed := strings.TrimSpace(accumulator.Args.String())
+	if trimmed == "" {
+		return []byte("{}"), nil
+	}
+	var value map[string]any
+	if err := json.Unmarshal([]byte(trimmed), &value); err != nil {
+		toolName := strings.TrimSpace(accumulator.Name)
+		if toolName == "" {
+			toolName = "tool"
+		}
+		return nil, fmt.Errorf("openai returned incomplete or malformed tool input for %s: %w", toolName, err)
+	}
+	if value == nil {
+		toolName := strings.TrimSpace(accumulator.Name)
+		if toolName == "" {
+			toolName = "tool"
+		}
+		return nil, fmt.Errorf("openai returned non-object tool input for %s", toolName)
+	}
+	return []byte(trimmed), nil
+}
+
 type openAIImageGenerationAccumulator struct {
 	CallID         string
 	ImageData      string
@@ -877,6 +906,10 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 				return fail(err)
 			}
 			for _, accumulator := range tools {
+				argsJSON, argsErr := completedOpenAIToolArgsJSON(accumulator)
+				if argsErr != nil {
+					return fail(argsErr)
+				}
 				if err := sink(ModelEvent{
 					Kind:       ModelEventKindToolLikeCompleted,
 					OccurredAt: time.Now().UTC(),
@@ -885,7 +918,7 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 					ToolInvocation: &runtimecore.ToolInvocation{
 						CallID:   strings.TrimSpace(accumulator.CallID),
 						ToolName: strings.TrimSpace(accumulator.Name),
-						ArgsJSON: []byte(accumulator.Args.String()),
+						ArgsJSON: argsJSON,
 					},
 				}); err != nil {
 					return fail(err)
@@ -898,6 +931,10 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		}
 	}
 	for _, accumulator := range tools {
+		argsJSON, argsErr := completedOpenAIToolArgsJSON(accumulator)
+		if argsErr != nil {
+			return fail(argsErr)
+		}
 		if err := sink(ModelEvent{
 			Kind:       ModelEventKindToolLikeCompleted,
 			OccurredAt: time.Now().UTC(),
@@ -906,7 +943,7 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 			ToolInvocation: &runtimecore.ToolInvocation{
 				CallID:   strings.TrimSpace(accumulator.CallID),
 				ToolName: strings.TrimSpace(accumulator.Name),
-				ArgsJSON: []byte(accumulator.Args.String()),
+				ArgsJSON: argsJSON,
 			},
 		}); err != nil {
 			return fail(err)
@@ -1273,6 +1310,10 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		if strings.TrimSpace(accumulator.CallID) != "" {
 			completedTools[strings.TrimSpace(accumulator.CallID)] = struct{}{}
 		}
+		argsJSON, argsErr := completedOpenAIToolArgsJSON(accumulator)
+		if argsErr != nil {
+			return argsErr
+		}
 		emittedToolInvocation = true
 		if err := sink(ModelEvent{
 			Kind:       ModelEventKindToolLikeCompleted,
@@ -1282,7 +1323,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			ToolInvocation: &runtimecore.ToolInvocation{
 				CallID:         strings.TrimSpace(accumulator.CallID),
 				ToolName:       strings.TrimSpace(accumulator.Name),
-				ArgsJSON:       []byte(accumulator.Args.String()),
+				ArgsJSON:       argsJSON,
 				ProviderItemID: strings.TrimSpace(accumulator.ProviderItemID),
 				ProviderCallID: strings.TrimSpace(accumulator.ProviderCallID),
 				ProviderStatus: strings.TrimSpace(accumulator.ProviderStatus),
