@@ -704,6 +704,12 @@ func (service *Service) shouldReuseActiveRun(intent InboundIntent) bool {
 	case TurnPhaseCanceled, TurnPhaseCompleted, TurnPhaseFailed:
 		return false
 	}
+	// 用户切换模型后发送新 run_request 时，不应复用旧 stream（旧模型）。
+	if requestedModel := strings.TrimSpace(intent.ModelID); requestedModel != "" {
+		if currentModel := strings.TrimSpace(stream.ModelID); currentModel != "" && requestedModel != currentModel {
+			return false
+		}
+	}
 	// RunSSE 重连会重复提交同一个 run_request；只要该 request 仍处于活动回合，
 	// 就不能重新初始化 checkpoint、pending exec 或 provider pass。
 	return stream.TurnSeq > 0 || stream.ProviderActive || len(stream.PendingExecs) > 0 || len(stream.PendingInteractions) > 0
@@ -2768,7 +2774,12 @@ func extractRequestedModelIDFromRequestedModel(model *agentv1.RequestedModel) st
 	}
 	if model.GetIsVariantStringRepresentation() {
 		modelID, _ := splitRuntimeThinkingEffortVariantString(model.GetModelId())
-		return modelID
+		if modelID != "" {
+			return modelID
+		}
+		// variant 拆分失败（如 hash 格式的 channel ID 无冒号）时，
+		// 回退到原始 model_id，避免丢失用户选择的模型
+		return strings.TrimSpace(model.GetModelId())
 	}
 	return strings.TrimSpace(model.GetModelId())
 }
