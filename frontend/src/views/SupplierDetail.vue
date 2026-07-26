@@ -16,6 +16,14 @@ import {
 } from "@/state/appState";
 import { fetchModelCatalog } from "@/services/clientApi";
 import { providerIcon } from "@/utils/providerMeta";
+import {
+  SUPPLIER_GROUP_MODE_CONNECTION,
+  SUPPLIER_GROUP_MODE_NAME,
+  adapterMatchesSupplierIdentity,
+  displayGroupName,
+  normalizeSupplierBaseURL,
+  supplierIdentityFromRouteQuery,
+} from "@/utils/supplierGrouping";
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
@@ -25,11 +33,54 @@ const OPENAI_ENDPOINT_CHAT = "/v1/chat/completions";
 const route = useRoute();
 const router = useRouter();
 
+const supplierIdentity = computed(() => supplierIdentityFromRouteQuery(route.query));
 const queryBaseURL = computed(() => String(route.query.baseURL || "").trim());
 const queryGroupName = computed(() => String(route.query.groupName || "").trim());
 
-const title = computed(() => queryGroupName.value || "默认分组");
-const subtitle = computed(() => queryBaseURL.value);
+const title = computed(() => {
+  const mode = supplierIdentity.value.mode;
+  if (mode === SUPPLIER_GROUP_MODE_CONNECTION) {
+    try {
+      const host = new URL(normalizeSupplierBaseURL(queryBaseURL.value) || queryBaseURL.value).host;
+      return host || queryBaseURL.value || "连接";
+    } catch {
+      return queryBaseURL.value || "连接";
+    }
+  }
+  if (mode === SUPPLIER_GROUP_MODE_NAME) {
+    return displayGroupName(queryGroupName.value);
+  }
+  return displayGroupName(queryGroupName.value);
+});
+const subtitle = computed(() => {
+  const mode = supplierIdentity.value.mode;
+  if (mode === SUPPLIER_GROUP_MODE_NAME) {
+    const hosts = [
+      ...new Set(
+        supplierAdapters.value.map((a) => {
+          try {
+            return new URL(String(a.baseURL || "").trim()).host;
+          } catch {
+            return String(a.baseURL || "").trim();
+          }
+        }).filter(Boolean),
+      ),
+    ];
+    if (hosts.length === 0) return "-";
+    if (hosts.length === 1) return hosts[0];
+    return `${hosts.length} 个连接`;
+  }
+  if (mode === SUPPLIER_GROUP_MODE_CONNECTION) {
+    const names = [
+      ...new Set(
+        supplierAdapters.value.map((a) => displayGroupName(a.groupName)),
+      ),
+    ];
+    if (names.length <= 1) return names[0] || "默认分组";
+    return `${names.length} 个名称`;
+  }
+  return queryBaseURL.value;
+});
 
 function formatHost(value) {
   const text = String(value || "").trim();
@@ -68,13 +119,11 @@ function transportBadgeText(adapter) {
   return `${resolvedOpenAIEndpoint(adapter)} · ${formatOpenAIRequestGroup(resolvedOpenAIRequestGroup(adapter), resolvedOpenAIEndpoint(adapter))}`;
 }
 
-// 该供应商下的模型（匹配 baseURL + groupName）
+// 该供应商下的模型（按路由 mode：name / connection / legacy）
 const supplierAdapters = computed(() =>
-  appState.modelAdapters.filter((adapter) => {
-    const baseURL = String(adapter.baseURL || "").trim();
-    const groupName = String(adapter.groupName || "").trim();
-    return baseURL === queryBaseURL.value && groupName === queryGroupName.value;
-  })
+  appState.modelAdapters.filter((adapter) =>
+    adapterMatchesSupplierIdentity(adapter, supplierIdentity.value),
+  ),
 );
 
 // 第一个模型的 type/apiKey/customHeaders，用于拉取新模型
@@ -88,7 +137,11 @@ const catalogModels = ref([]); // [{ id, contextWindowTokens, pricing }]
 const selectedCatalogModels = ref(new Set());
 
 function catalogSelectionKey(modelID) {
-  return `${queryBaseURL.value}::${modelID}`;
+  const base =
+    supplierMeta.value?.baseURL ||
+    queryBaseURL.value ||
+    "";
+  return `${base}::${modelID}`;
 }
 function isCatalogModelSelected(modelID) {
   return selectedCatalogModels.value.has(catalogSelectionKey(modelID));
@@ -124,7 +177,7 @@ async function handleFetchModels() {
   try {
     const result = await fetchModelCatalog({
       type: supplierMeta.value.type,
-      baseURL: queryBaseURL.value,
+      baseURL: supplierMeta.value.baseURL || queryBaseURL.value,
       apiKey: supplierMeta.value.apiKey,
       customHeadersEnabled: Boolean(supplierMeta.value.customHeadersEnabled),
       customHeadersJSON: supplierMeta.value.customHeadersJSON || "",
@@ -171,17 +224,22 @@ async function handleBatchAddModels() {
   }
   catalogSaving.value = true;
   try {
+    const seedBaseURL = supplierMeta.value.baseURL || queryBaseURL.value;
+    const seedGroupName =
+      supplierIdentity.value.mode === SUPPLIER_GROUP_MODE_NAME
+        ? queryGroupName.value
+        : String(supplierMeta.value.groupName || queryGroupName.value || "").trim();
     const adapters = selected.map((model) => ({
       ...createEmptyModelAdapter(),
       type: supplierMeta.value.type,
-      baseURL: queryBaseURL.value,
+      baseURL: seedBaseURL,
       apiKey: supplierMeta.value.apiKey,
       customHeadersEnabled: Boolean(supplierMeta.value.customHeadersEnabled),
       customHeadersJSON: supplierMeta.value.customHeadersJSON || "",
       displayName: model.id,
       modelID: model.id,
-      groupName: queryGroupName.value,
-      tooltipData: `来自 ${formatHost(queryBaseURL.value)}`,
+      groupName: seedGroupName,
+      tooltipData: `来自 ${formatHost(seedBaseURL)}`,
       contextWindowTokens: model.contextWindowTokens || 0,
       pricing: model.pricing || null,
       protocolMode: "auto",
