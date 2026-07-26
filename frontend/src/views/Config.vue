@@ -5,7 +5,6 @@ import Switch from "@/components/ui/Switch.vue";
 import LocaleSelect from "@/components/LocaleSelect.vue";
 import Select from "@/components/ui/Select.vue";
 import { showModal } from "@/composables/useModal";
-import { loadUserConfig, saveUserConfig } from "@/services/clientApi";
 import {
   appState,
   openModelConfigWindow,
@@ -14,69 +13,13 @@ import {
   ROUTE_MODE_OPTIONS,
   toUserError,
 } from "@/state/appState";
-import { onMounted, reactive } from "vue";
+import { onMounted } from "vue";
 
 const routeModeOptions = ROUTE_MODE_OPTIONS;
 
-// 本地响应缓存开关：appState 的 normalizeConfig 不覆盖该字段，
-// 因此这里直接读写原始用户配置，保存时透传其余字段避免被清空。
-const localResponseCache = reactive({
-  enabled: false,
-  ttlSeconds: 0,
-  maxEntries: 0,
-});
-
-function readLocalResponseCache(rawConfig) {
-  const raw = rawConfig && typeof rawConfig === "object" ? rawConfig : {};
-  const cache = raw.localResponseCache && typeof raw.localResponseCache === "object"
-    ? raw.localResponseCache
-    : {};
-  const toPositive = (value) => {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-  };
-  return {
-    enabled: Boolean(cache.enabled),
-    ttlSeconds: toPositive(cache.ttlSeconds),
-    maxEntries: toPositive(cache.maxEntries),
-  };
-}
-
-async function loadLocalResponseCache() {
-  try {
-    const raw = await loadUserConfig();
-    const parsed = readLocalResponseCache(raw);
-    localResponseCache.enabled = parsed.enabled;
-    localResponseCache.ttlSeconds = parsed.ttlSeconds;
-    localResponseCache.maxEntries = parsed.maxEntries;
-  } catch (_error) {
-    // 读取失败时保留默认（关闭）
-  }
-}
-
-// 直接透传原始配置，仅覆盖 localResponseCache.enabled，
-// 保留 ttl/maxEntries 及后端其余字段，避免 saveUserConfig 整体替换时丢失。
-async function saveLocalResponseCache() {
-  try {
-    const raw = await loadUserConfig();
-    const base = raw && typeof raw === "object" ? raw : {};
-    const existing = base.localResponseCache && typeof base.localResponseCache === "object"
-      ? base.localResponseCache
-      : {};
-    const payload = {
-      ...base,
-      localResponseCache: {
-        ...existing,
-        enabled: Boolean(localResponseCache.enabled),
-      },
-    };
-    await saveUserConfig(payload);
-    return { ok: true, error: "" };
-  } catch (error) {
-    return { ok: false, error: toUserError(error) };
-  }
-}
-
+// 本地响应缓存配置：已纳入 appState 归一化白名单（normalizeConfig/buildConfigPayload），
+// 因此直接绑定 appState.localResponseCache，随 persistUserConfig 一并持久化，
+// 不再需要单独的透传保存，避免与 appState 状态不同步导致被后续保存清空。
 async function showActionError(title, error) {
   await showModal({
     title,
@@ -88,13 +31,6 @@ async function handleSaveConfig() {
   const result = await persistUserConfig();
   if (!result.ok) {
     await showActionError("保存失败", result.error);
-    return;
-  }
-  // persistUserConfig 走 appState 归一化路径，不含 localResponseCache，
-  // 因此紧接着单独持久化缓存开关（透传其余字段）。
-  const cacheResult = await saveLocalResponseCache();
-  if (!cacheResult.ok) {
-    await showActionError("保存失败", cacheResult.error);
     return;
   }
   await showModal({
@@ -113,7 +49,6 @@ async function handleOpenModelConfig() {
 
 onMounted(async () => {
   await reloadUserConfig().catch(() => {});
-  await loadLocalResponseCache();
 });
 </script>
 
@@ -153,11 +88,36 @@ onMounted(async () => {
 
     <Card>
       <Switch
-        :enabled="localResponseCache.enabled"
+        :enabled="appState.localResponseCache.enabled"
         label="本地响应缓存"
         description="对完全相同的请求复用上次响应，减少 token 支出。默认关闭；仅精确匹配命中，不影响 agent 正确性。"
-        @change="(value) => (localResponseCache.enabled = value)"
+        @change="(value) => (appState.localResponseCache.enabled = value)"
       />
+      <div
+        v-if="appState.localResponseCache.enabled"
+        class="mt-3 grid grid-cols-1 gap-3 border-t border-[#343434] pt-3 sm:grid-cols-2"
+      >
+        <label class="flex flex-col gap-1">
+          <span class="text-xs text-[#a3a3a3]">缓存有效期（秒）</span>
+          <input
+            v-model.number="appState.localResponseCache.ttlSeconds"
+            type="number"
+            min="0"
+            placeholder="留空/0 = 默认 900"
+            class="h-9 rounded-[8px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-white outline-none focus:border-[#10AD5D]"
+          />
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="text-xs text-[#a3a3a3]">最多缓存条数</span>
+          <input
+            v-model.number="appState.localResponseCache.maxEntries"
+            type="number"
+            min="0"
+            placeholder="留空/0 = 默认 256"
+            class="h-9 rounded-[8px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-white outline-none focus:border-[#10AD5D]"
+          />
+        </label>
+      </div>
     </Card>
 
     <Card>
