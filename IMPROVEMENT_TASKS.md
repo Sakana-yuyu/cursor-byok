@@ -69,3 +69,11 @@
 - **阶段4** 后端 `internal/backend/agent/model/{retry,router,openai}.go`、`internal/backend/agent/step/recorder.go`。
 - **绑定** `wails3 generate bindings` 重新生成（47 methods）；`clientApi.js` 新增 queryProviderBalance/fetchProviderSpendSummary/fetchLocalCacheStats。
 - 最终验证：`go build ./...` ✅ · `npm run build` ✅
+
+## 深化（实测验证 + 增强）
+- **本地实测**：GUI 受限（无显示 + 实例占用端口），改用 `go build -o` 链接 75MB 完整 app 二进制成功（证明全量接线编译/可生产）；审查余额单位换算(cents/100、quota/500000)、站点身份贯通(channel→identitySink→actor→usage.json)、缓存隔离(禁用零成本直通)。
+- **sub2api/cpa 覆盖**：经 WebSearch 核对，此类中转站模拟 OpenAI `/v1/dashboard/billing/{subscription,usage}` —— 正是 OpenAI-billing 策略所调；`billingAPIRoot` 剥离 `/models|/chat/completions|/responses|/messages|/completions` 保留 `/v1`，已覆盖。
+- **增强1 · Config 高级缓存设置**：`Config.vue` 绑定 `appState.localResponseCache`（开关 + TTL + maxEntries 输入，0=后端默认 900/256），随 `persistUserConfig` 单一路径保存。
+- **增强2 · appState 配置白名单**：`localResponseCache` 纳入 `normalizeConfig`/`buildConfigPayload`/`applyConfigToState`/`appState`，杜绝任何一次配置保存把它清空回默认值（修掉 FE-C 子代理标记的隐藏回归风险）。
+- **增强3 · Home 站点消耗卡片**：新增 `components/StationSpendCard.vue`，首页一眼可见「哪个中转站用了多少额度」(Top6 + 合计花费 + 未计价降级)，每分钟刷新；`Home.vue` 挂载于 HomeMetricsCard 下。
+- 最终验证（深化后）：`go build ./...` ✅ · `npm run build` ✅

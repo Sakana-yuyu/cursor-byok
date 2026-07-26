@@ -4,6 +4,7 @@ import Card from "@/components/ui/Card.vue";
 import Switch from "@/components/ui/Switch.vue";
 import Select from "@/components/ui/Select.vue";
 import HomeMetricsCard from "@/components/HomeMetricsCard.vue";
+import StationSpendCard from "@/components/StationSpendCard.vue";
 import PromptPreviewModal from "@/components/PromptPreviewModal.vue";
 import { useMessage } from "@/composables/useMessage";
 import { showModal } from "@/composables/useModal";
@@ -290,6 +291,9 @@ onMounted(() => {
 
         <div class="border-t border-[#343434] pt-4">
           <HomeMetricsCard />
+          <div class="mt-4">
+            <StationSpendCard />
+          </div>
         </div>
       </div>
     </Card>
