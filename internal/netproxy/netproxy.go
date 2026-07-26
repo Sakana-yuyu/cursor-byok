@@ -318,12 +318,7 @@ func closeIdleProxyConnections() {
 }
 
 func cloneDefaultTransport() *http.Transport {
-	if transport, ok := http.DefaultTransport.(*http.Transport); ok {
-		clone := transport.Clone()
-		clone.Proxy = nil
-		return clone
-	}
-	return &http.Transport{
+	transport := &http.Transport{
 		DialContext:           (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          100,
@@ -331,6 +326,34 @@ func cloneDefaultTransport() *http.Transport {
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
+	if base, ok := http.DefaultTransport.(*http.Transport); ok {
+		transport = base.Clone()
+		transport.Proxy = nil
+	}
+	// 首字优化：agent 会对同一中转站高频重复请求，Go 默认 MaxIdleConnsPerHost=2
+	// 会导致并发请求频繁重建 TCP/TLS 连接、拖慢首字。提高每主机空闲连接复用上限，
+	// 让后续请求命中已建立的 keep-alive 连接，减少握手延迟。
+	tuneConnectionPool(transport)
+	return transport
+}
+
+// tuneConnectionPool 调优连接池以复用同一中转站的 keep-alive 连接，降低首字延迟。
+func tuneConnectionPool(transport *http.Transport) {
+	if transport == nil {
+		return
+	}
+	if transport.MaxIdleConns < 256 {
+		transport.MaxIdleConns = 256
+	}
+	// 每主机空闲连接上限：默认仅 2，提升到 32 以覆盖 agent 的并发/连续调用。
+	transport.MaxIdleConnsPerHost = 32
+	if transport.IdleConnTimeout <= 0 {
+		transport.IdleConnTimeout = 90 * time.Second
+	}
+	if transport.TLSHandshakeTimeout <= 0 {
+		transport.TLSHandshakeTimeout = 10 * time.Second
+	}
+	transport.ForceAttemptHTTP2 = true
 }
 
 func joinNoProxy(parts ...string) string {

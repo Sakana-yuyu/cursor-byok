@@ -172,7 +172,7 @@ export function fetchModelCatalog(request) {
 // 查询中转站余额/额度；失败时后端返回结构化的 { supported:false, message } 结果。
 export function queryProviderBalance(request) {
   if (isBrowserPreview) {
-    return Promise.resolve({ supported: false, source: "", currency: "USD", total: null, used: null, remaining: null, message: "浏览器预览模式：未查询余额" });
+    return Promise.resolve({ supported: false, source: "", currency: "USD", total: null, used: null, remaining: null, message: "浏览器预览模式：未查询余额", transient: false });
   }
   return withApiLogging("QueryProviderBalance", request, () => invoke("@bindings/cursor/internal/bridge/proxyservice.js", "QueryProviderBalance", [request]));
 }

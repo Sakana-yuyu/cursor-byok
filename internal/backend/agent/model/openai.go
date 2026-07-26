@@ -524,11 +524,18 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		requestBody := openAIChatRequestBody(req, modelID)
 		requestBody.Messages = normalizedMessages
 		if len(req.Tools) > 0 {
-			requestBody.Tools = req.Tools
+			tools, err := normalizeOpenAIChatTools(req.Tools)
+			if err != nil {
+				finishedAt = time.Now().UTC()
+				recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))
+				return err
+			}
+			requestBody.Tools = tools
 		}
 		body = requestBody
 	} else {
 		if !openAIChatRequestGroupUsesCompatShape(req.OpenAIRequestGroup) {
+
 			applyOpenAIPromptCacheKeyOverride(overrideBody, req, modelID)
 		}
 	}
@@ -737,6 +744,7 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 	}
 	fail := func(streamErr error) error {
 		finishedAt = time.Now().UTC()
+		logProviderStreamTiming("openai", currentModel, req, startedAt, firstEventAt, finishedAt, finishReason, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, streamErr)
 		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", currentModel, startedAt, firstEventAt, finishedAt, finishReason, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, streamErr))
 		return streamErr
 	}
@@ -969,6 +977,7 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		return fail(err)
 	}
 	finishedAt = time.Now().UTC()
+	logProviderStreamTiming("openai", currentModel, req, startedAt, firstEventAt, finishedAt, finishReason, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, nil)
 	recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", currentModel, startedAt, firstEventAt, finishedAt, finishReason, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, nil))
 	return nil
 }
@@ -1267,6 +1276,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 	}
 	fail := func(streamErr error) error {
 		finishedAt = time.Now().UTC()
+		logProviderStreamTiming("openai", currentModel, req, startedAt, firstEventAt, finishedAt, finishReason, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, streamErr)
 		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", currentModel, startedAt, firstEventAt, finishedAt, finishReason, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, streamErr))
 		return streamErr
 	}
@@ -1745,6 +1755,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		return fail(err)
 	}
 	finishedAt = time.Now().UTC()
+	logProviderStreamTiming("openai", currentModel, req, startedAt, firstEventAt, finishedAt, effectiveFinishReason(), inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, nil)
 	recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", currentModel, startedAt, firstEventAt, finishedAt, effectiveFinishReason(), inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, nil))
 	return nil
 }
@@ -2320,10 +2331,12 @@ func normalizeOpenAIResponsesTools(items []json.RawMessage) ([]map[string]any, e
 			tool["description"] = description
 		}
 		if parameters, ok := source["parameters"]; ok && parameters != nil {
+			normalizeOpenAIToolSchemaRequired(parameters)
 			tool["parameters"] = parameters
 		} else {
 			tool["parameters"] = map[string]any{"type": "object", "properties": map[string]any{}}
 		}
+
 		if strict, ok := source["strict"]; ok {
 			tool["strict"] = strict
 		} else if strict, ok := raw["strict"]; ok {
@@ -2332,6 +2345,42 @@ func normalizeOpenAIResponsesTools(items []json.RawMessage) ([]map[string]any, e
 		tools = append(tools, tool)
 	}
 	return tools, nil
+}
+
+func normalizeOpenAIChatTools(items []json.RawMessage) ([]json.RawMessage, error) {
+	if len(items) == 0 {
+		return nil, nil
+	}
+	tools := make([]json.RawMessage, 0, len(items))
+	for _, item := range items {
+		var value any
+		if err := json.Unmarshal(item, &value); err != nil {
+			return nil, fmt.Errorf("decode openai chat tool descriptor failed: %w", err)
+		}
+		normalizeOpenAIToolSchemaRequired(value)
+		payload, err := json.Marshal(value)
+		if err != nil {
+			return nil, fmt.Errorf("encode openai chat tool descriptor failed: %w", err)
+		}
+		tools = append(tools, payload)
+	}
+	return tools, nil
+}
+
+func normalizeOpenAIToolSchemaRequired(value any) {
+	switch typed := value.(type) {
+	case map[string]any:
+		if required, ok := typed["required"]; ok && required == nil {
+			typed["required"] = []any{}
+		}
+		for _, child := range typed {
+			normalizeOpenAIToolSchemaRequired(child)
+		}
+	case []any:
+		for _, child := range typed {
+			normalizeOpenAIToolSchemaRequired(child)
+		}
+	}
 }
 
 func asStringMapValue(source map[string]any, key string) string {

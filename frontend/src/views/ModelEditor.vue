@@ -11,6 +11,7 @@ import { providerIcon, providerLabel, providerSelectOptions } from "@/utils/prov
 import {
   ANTHROPIC_THINKING_EFFORT_DEFAULT,
   appState,
+  BALANCE_QUERY_HEADERS_DEFAULT_JSON,
   buildModelAdapterTestRequestHash,
   classifyModelProtocol,
   CUSTOM_HEADERS_DEFAULT_JSON,
@@ -84,6 +85,10 @@ const createEmptyModelAdapter = () => ({
   pricing: null,
   fastMode: false,
   openAIServiceTier: "",
+  balanceQueryURL: "",
+  balanceQueryField: "",
+  balanceQueryHeaders: {},
+  balanceQueryHeadersJSON: BALANCE_QUERY_HEADERS_DEFAULT_JSON,
 });
 
 const openAIEndpointOptions = [
@@ -216,11 +221,27 @@ const title = computed(() => {
 
 // 高级设置分区：默认收起，存量非默认配置自动展开
 const advancedExpanded = ref(false);
+
+function hasBalanceQueryHeadersOverride(value) {
+  const text = String(value || "").trim();
+  if (!text || text === "{}") return false;
+  try {
+    const parsed = JSON.parse(text);
+    return Boolean(parsed && typeof parsed === "object" && !Array.isArray(parsed) && Object.keys(parsed).length > 0);
+  } catch (_error) {
+    // 非法 JSON 也算覆盖，方便用户看到并修正
+    return true;
+  }
+}
+
 const hasAdvancedOverrides = computed(() => {
   if (draft.protocolMode === PROTOCOL_MODE_FIXED) return true;
   if (draft.openAIExtraParamsEnabled) return true;
   if (draft.anthropicExtraParamsEnabled) return true;
   if (draft.customHeadersEnabled) return true;
+  if (String(draft.balanceQueryURL || "").trim()) return true;
+  if (String(draft.balanceQueryField || "").trim()) return true;
+  if (hasBalanceQueryHeadersOverride(draft.balanceQueryHeadersJSON)) return true;
   if (draft.fastMode) return true;
   if (draft.type === "openai") {
     if (String(draft.openAIEndpoint || "") !== OPENAI_ENDPOINT_RESPONSES) return true;
@@ -278,6 +299,9 @@ const fieldTips = {
   anthropicMaxTokens: "Anthropic 模型单次回复允许生成的最大 Token 数。留空时使用默认值。",
   anthropicThinkingEffort: "Anthropic adaptive thinking 的思考强度。请求会固定使用新版 thinking.type=adaptive。",
   tooltipData: "模型列表 hover 时显示的备注说明。",
+  balanceQueryURL: "余额查询接口的完整 URL。支持 {{apiKey}}、{{baseUrl}} 占位符。官方与常见中转会自动查询，仅在自动失败时才需要填写；与取值字段同时非空才生效。",
+  balanceQueryField: "从 JSON 响应中取值的点分路径，例如 data.0.total_balance 或 balance_infos.0.total_balance。字段值必须是数值。",
+  balanceQueryHeaders: "余额查询请求头 JSON 对象，值必须是字符串，可使用 {{apiKey}}、{{baseUrl}}。未写 Authorization 时后端会自动补 Bearer。留空则不额外加头。",
 };
 
 async function loadContext() {
@@ -1140,6 +1164,52 @@ onMounted(async () => {
             spellcheck="false"
             class="mt-3 min-h-[120px] w-full resize-none rounded-[6px] border border-[#3f3f3f] bg-[#1f1f1f] px-3 py-2 font-mono text-xs text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
           />
+        </div>
+
+        <div class="rounded-[8px] border border-[#343434] bg-[#252525] p-3">
+          <div class="mb-2 text-sm text-[#d4d4d4]">余额查询（可选兜底）</div>
+          <p class="mb-3 text-xs leading-5 text-[#8f8f8f]">
+            官方与常见中转会自动查余额；仅在自动失败时才需要填写。查询 URL 与取值字段都填才生效。
+          </p>
+          <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <label class="flex flex-col gap-1">
+              <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
+                <Tooltip :content="fieldTips.balanceQueryURL" />
+                <span>查询 URL</span>
+              </span>
+              <input
+                v-model="draft.balanceQueryURL"
+                type="text"
+                placeholder="例如：{{baseUrl}}/api/user/self"
+                class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+              />
+            </label>
+            <label class="flex flex-col gap-1">
+              <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
+                <Tooltip :content="fieldTips.balanceQueryField" />
+                <span>取值字段</span>
+              </span>
+              <input
+                v-model="draft.balanceQueryField"
+                type="text"
+                placeholder="例如：data.0.total_balance"
+                class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+              />
+            </label>
+          </div>
+          <label class="mt-3 flex flex-col gap-1">
+            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
+              <Tooltip :content="fieldTips.balanceQueryHeaders" />
+              <span>请求头 JSON（可选）</span>
+            </span>
+            <textarea
+              v-model="draft.balanceQueryHeadersJSON"
+              rows="4"
+              spellcheck="false"
+              placeholder='{ "New-API-User": "1" }'
+              class="min-h-[96px] w-full resize-none rounded-[6px] border border-[#3f3f3f] bg-[#1f1f1f] px-3 py-2 font-mono text-xs text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+            />
+          </label>
         </div>
         </div>
 

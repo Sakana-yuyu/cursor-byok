@@ -35,7 +35,7 @@ func TestSummarizeAndBucketEvents(t *testing.T) {
 		{Kind: KindTurnFinalized, At: start.Add(30 * time.Minute), InputTokens: 100, TotalTokens: 170},
 	}
 	providerOnly := FilterProviderEvents(events, start, start.Add(3*time.Hour), "")
-	summary := SummarizeEvents(providerOnly)
+	summary := SummarizeEvents(providerOnly, false)
 	if summary.RequestCount != 2 {
 		t.Fatalf("request count = %d", summary.RequestCount)
 	}
@@ -46,7 +46,7 @@ func TestSummarizeAndBucketEvents(t *testing.T) {
 		t.Fatal("expected cache rate")
 	}
 
-	buckets := BucketEvents(providerOnly, start, start.Add(3*time.Hour), 1)
+	buckets := BucketEvents(providerOnly, start, start.Add(3*time.Hour), 1, false)
 	if len(buckets) != 3 {
 		t.Fatalf("expected 3 hourly buckets, got %d", len(buckets))
 	}

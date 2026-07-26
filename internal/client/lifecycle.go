@@ -134,23 +134,27 @@ func (s *ProxyService) StopProxy() (ProxyState, error) {
 		s.emitState()
 		return s.GetState(), err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// 关闭顺序：
+	// 1) 先收口 backend 活动流（TurnEnded/canceled），避免 Cursor 只看到硬断连接；
+	// 2) 再停 MITM；
+	// 3) 最后清理 Cursor 代理设置。
+	// 原先先清代理再关 backend，会在 stop_backend 卡住时让 Cursor 立刻变成 unauthenticated。
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
+	if s.backendHost != nil {
+		logger.Infof("stopping embedded backend listen_addr=%s", s.backendHost.ListenAddr())
+		if err := s.backendHost.Stop(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			return fail("stop_backend", err)
+		}
+	}
 	if s.proxy != nil && s.proxy.IsRunning() {
 		logger.Infof("stopping mitm proxy listen_addr=%s", s.proxy.Snapshot().ListenAddr)
 		if err := s.proxy.Stop(ctx); err != nil {
 			return fail("stop_mitm_proxy", err)
 		}
 	}
-
 	if err := s.ClearCursorSettings(); err != nil {
 		return fail("clear_cursor_settings", err)
-	}
-	if s.backendHost != nil {
-		logger.Infof("stopping embedded backend listen_addr=%s", s.backendHost.ListenAddr())
-		if err := s.backendHost.Stop(ctx); err != nil && !errors.Is(err, context.Canceled) {
-			return fail("stop_backend", err)
-		}
 	}
 
 	s.setLastError(nil)
@@ -248,22 +252,23 @@ func (s *ProxyService) emitState() {
 
 // ShutdownForQuit 用于处理与 ShutdownForQuit 相关的逻辑。
 func (s *ProxyService) ShutdownForQuit() {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	var finalErr error
 
+	// 与 StopProxy 保持同一关闭顺序：先 backend 收口，再停代理，最后清设置。
+	if s.backendHost != nil {
+		if err := s.backendHost.Stop(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			finalErr = err
+		}
+	}
 	if s.proxy != nil {
 		if err := s.proxy.Stop(ctx); err != nil && !errors.Is(err, context.Canceled) {
-			finalErr = err
+			finalErr = errors.Join(finalErr, err)
 		}
 	}
 	if err := s.ClearCursorSettings(); err != nil {
 		finalErr = errors.Join(finalErr, err)
-	}
-	if s.backendHost != nil {
-		if err := s.backendHost.Stop(ctx); err != nil && !errors.Is(err, context.Canceled) {
-			finalErr = errors.Join(finalErr, err)
-		}
 	}
 	if finalErr != nil {
 		s.setLastError(finalErr)

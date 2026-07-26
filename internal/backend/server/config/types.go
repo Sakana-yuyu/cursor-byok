@@ -56,6 +56,12 @@ type ModelAdapterConfig struct {
 	Pricing                     *ModelPricing `json:"pricing,omitempty" yaml:"pricing,omitempty"`
 	FastMode                    bool          `json:"fastMode,omitempty" yaml:"fastMode,omitempty"`
 	OpenAIServiceTier           string        `json:"openAIServiceTier,omitempty" yaml:"openAIServiceTier,omitempty"`
+	// 余额查询（可配置兜底）：全部可选，零值即「未启用」。
+	// 具名 provider 未命中时，若 BalanceQueryURL 非空，则用它发一次 GET 并按点分路径取值。
+	// URL/Headers 支持 {{apiKey}}、{{baseUrl}} 占位符替换。
+	BalanceQueryURL     string            `json:"balanceQueryURL,omitempty" yaml:"balanceQueryURL,omitempty"`
+	BalanceQueryField   string            `json:"balanceQueryField,omitempty" yaml:"balanceQueryField,omitempty"`
+	BalanceQueryHeaders map[string]string `json:"balanceQueryHeaders,omitempty" yaml:"balanceQueryHeaders,omitempty"`
 }
 
 type RoutingConfig struct {
@@ -170,6 +176,9 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			Pricing:              item.Pricing,
 			FastMode:             item.FastMode,
 			OpenAIServiceTier:    strings.TrimSpace(item.OpenAIServiceTier),
+			BalanceQueryURL:      strings.TrimSpace(item.BalanceQueryURL),
+			BalanceQueryField:    strings.TrimSpace(item.BalanceQueryField),
+			BalanceQueryHeaders:  item.BalanceQueryHeaders,
 		}
 		if next.Type == "openai" {
 			next.OpenAIExtraParamsEnabled = item.OpenAIExtraParamsEnabled
@@ -231,6 +240,15 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			}
 			if existing.Pricing == nil {
 				existing.Pricing = next.Pricing
+			}
+			if existing.BalanceQueryURL == "" {
+				existing.BalanceQueryURL = next.BalanceQueryURL
+			}
+			if existing.BalanceQueryField == "" {
+				existing.BalanceQueryField = next.BalanceQueryField
+			}
+			if len(existing.BalanceQueryHeaders) == 0 {
+				existing.BalanceQueryHeaders = next.BalanceQueryHeaders
 			}
 			normalized[existingIndex] = existing
 			continue

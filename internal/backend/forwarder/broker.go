@@ -214,6 +214,43 @@ func (broker *StreamBroker) OtherConversationRequestIDs(conversationID string, k
 	return requestIDs
 }
 
+// ActiveRequestIDs 返回当前仍未进入终态的 request_id 列表，用于服务关闭前的主动收口。
+func (broker *StreamBroker) ActiveRequestIDs() []string {
+	if broker == nil {
+		return nil
+	}
+	type requestStream struct {
+		requestID string
+		stream    *ActiveStream
+	}
+	candidates := make([]requestStream, 0)
+	broker.mu.RLock()
+	for requestID, stream := range broker.streams {
+		if stream == nil || strings.TrimSpace(requestID) == "" {
+			continue
+		}
+		candidates = append(candidates, requestStream{
+			requestID: requestID,
+			stream:    stream,
+		})
+	}
+	broker.mu.RUnlock()
+	requestIDs := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		stream := candidate.stream
+		stream.mu.Lock()
+		status := stream.Status
+		phase := stream.Phase
+		stream.mu.Unlock()
+		terminalPhase := phase == TurnPhaseCanceled || phase == TurnPhaseCompleted || phase == TurnPhaseFailed
+		if isTerminalStreamStatus(status) || terminalPhase {
+			continue
+		}
+		requestIDs = append(requestIDs, candidate.requestID)
+	}
+	return requestIDs
+}
+
 func (broker *StreamBroker) scheduleTerminalCleanup(requestID string) bool {
 	stream, ok := broker.Get(requestID)
 	if !ok || stream == nil {

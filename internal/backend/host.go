@@ -34,6 +34,8 @@ type Host struct {
 
 	runMu      sync.RWMutex
 	httpServer *http.Server
+	// agentModule 持有当前已挂载的 forwarder 服务，关闭时需要先主动收口活动流。
+	agentModule *forwarder.Module
 
 	lastRunErr error
 
@@ -176,6 +178,21 @@ func (host *Host) Stop(ctx context.Context) error {
 	if host == nil {
 		return nil
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	// 先取消活动 agent 流，让 RunSSE 有机会发出 TurnEnded/canceled，
+	// 再进入 HTTP Shutdown；否则长连接会一直拖到 deadline 并让 Cursor 看到 Canceled。
+	host.runMu.RLock()
+	agentModule := host.agentModule
+	host.runMu.RUnlock()
+	if agentModule != nil && agentModule.Service != nil {
+		if err := agentModule.Service.Shutdown(ctx); err != nil {
+			logger.Errorf("forwarder shutdown before backend stop failed err=%v", err)
+		}
+	}
+
 	host.runMu.Lock()
 	serverInstance := host.httpServer
 	host.httpServer = nil
@@ -183,8 +200,7 @@ func (host *Host) Stop(ctx context.Context) error {
 	if serverInstance == nil {
 		return nil
 	}
-	err := serverInstance.Shutdown(ctx)
-	return err
+	return serverInstance.Shutdown(ctx)
 }
 
 func (host *Host) HealthCheck(ctx context.Context) error {
@@ -268,6 +284,7 @@ func (host *Host) rebuild(cfg serverconfig.Config) error {
 func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 	host.listenAddr = cfg.BackendListenAddr
 	agentModule := forwarder.NewModule(appdata.HistoryRootPath(), host.configs)
+	host.agentModule = agentModule
 	legacyBidiAppendProcedure := "/aiserver.v1.BidiService/BidiAppend"
 	legacyRunSSEProcedure := "/agent.v1.AgentService/RunSSE"
 	routeDeps := upstream.Dependencies{
