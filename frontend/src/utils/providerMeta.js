@@ -12,6 +12,12 @@ export const PROVIDERS = [
     icon: "icon-[logos--claude-icon]",
     accent: "#d97757",
   },
+  {
+    value: "gemini",
+    label: "Gemini",
+    icon: "icon-[logos--google-gemini]",
+    accent: "#4285f4",
+  },
 ];
 
 const providerByValue = Object.fromEntries(PROVIDERS.map((item) => [item.value, item]));
@@ -23,6 +29,7 @@ export function normalizeProviderType(type) {
   if (raw === "anthropic" || raw.includes("anthropic") || raw.includes("claude")) {
     return "anthropic";
   }
+  if (raw === "gemini" || raw.includes("gemini") || raw.includes("google")) return "gemini";
   return raw;
 }
 

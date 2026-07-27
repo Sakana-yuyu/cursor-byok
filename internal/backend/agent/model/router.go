@@ -18,6 +18,8 @@ type Router struct {
 	openai ModelAdapter
 	// anthropic 负责 Anthropic 兼容流式请求。
 	anthropic ModelAdapter
+	// gemini 负责 Gemini native 流式请求。
+	gemini ModelAdapter
 	// resolver 负责从本地配置中解析实际模型通道。
 	resolver ChannelResolver
 }
@@ -32,6 +34,7 @@ func NewRouter(resolver ChannelResolver) *Router {
 	return &Router{
 		openai:    NewOpenAIAdapter(),
 		anthropic: NewAnthropicAdapter(),
+		gemini:    NewGeminiAdapter(),
 		resolver:  resolver,
 	}
 }
@@ -171,7 +174,7 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 		} else {
 			delete(resolved.RequestKnobs, "runtime_thinking_effort")
 		}
-		if resolved.Provider == "openai" {
+		if resolved.Provider == "openai" || resolved.Provider == "gemini" {
 			if strings.TrimSpace(resolved.ReasoningEffort) != "" {
 				resolved.RequestKnobs["reasoning_effort"] = strings.TrimSpace(resolved.ReasoningEffort)
 			} else {
@@ -221,6 +224,8 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 		streamErr = router.anthropic.Stream(ctx, resolved, identitySink)
 	case "openai":
 		streamErr = router.openai.Stream(ctx, resolved, identitySink)
+	case "gemini":
+		streamErr = router.gemini.Stream(ctx, resolved, identitySink)
 	default:
 		streamErr = fmt.Errorf("unsupported provider %q", resolved.Provider)
 	}

@@ -170,8 +170,10 @@ func (manager *Manager) LegacyRuntimeSnapshot(_ context.Context) (legacyruntime.
 			ID:                          item.ID,
 			DisplayName:                 item.DisplayName,
 			GroupName:                   item.GroupName,
-			Type:                        item.Type,
-			ProtocolMode:                item.ProtocolMode,
+				Type:                        item.Type,
+				SupplierID:                  item.SupplierID,
+				ProtocolMode:                item.ProtocolMode,
+
 			ProtocolGroup:               item.ProtocolGroup,
 			BaseURL:                     item.BaseURL,
 			APIKey:                      item.APIKey,

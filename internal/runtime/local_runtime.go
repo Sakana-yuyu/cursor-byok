@@ -53,6 +53,8 @@ type ModelAdapterConfig struct {
 	GroupName string `json:"groupName,omitempty"`
 	// Type 表示当前声明中的 Type。
 	Type string `json:"type"`
+	// SupplierID 表示品牌供应商标识，仅用于模板和展示。
+	SupplierID string `json:"supplierID,omitempty"`
 	// ProtocolMode 表示协议选择模式：auto 或 fixed。
 	ProtocolMode string `json:"protocolMode,omitempty"`
 	// ProtocolGroup 表示最终模型请求协议分组。
@@ -135,10 +137,12 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			openAIEndpoint = modelchannel.OpenAIEndpointForProtocolGroup(protocolGroup, openAIEndpoint)
 		}
 		next := ModelAdapterConfig{
-			DisplayName:          strings.TrimSpace(item.DisplayName),
-			GroupName:            strings.TrimSpace(item.GroupName),
-			Type:                 nextType,
-			ProtocolMode:         protocolMode,
+			DisplayName:  strings.TrimSpace(item.DisplayName),
+			GroupName:    strings.TrimSpace(item.GroupName),
+			Type:         nextType,
+			SupplierID:   strings.TrimSpace(item.SupplierID),
+			ProtocolMode: protocolMode,
+
 			ProtocolGroup:        protocolGroup,
 			BaseURL:              baseURL,
 			APIKey:               strings.TrimSpace(item.APIKey),
@@ -169,7 +173,7 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 		case next.DisplayName == "":
 			return nil, errors.New("模型适配器 displayName 不能为空")
 		case next.Type == "":
-			return nil, errors.New("模型适配器 type 仅支持 openai 或 anthropic")
+			return nil, errors.New("模型适配器 type 仅支持 openai、anthropic 或 gemini")
 		case next.APIKey == "":
 			return nil, errors.New("模型适配器 apiKey 不能为空")
 		case next.TooltipData == "":
@@ -181,6 +185,8 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 		case next.ProtocolGroup == "":
 			return nil, errors.New("模型适配器 protocolGroup 与 provider 不匹配")
 		case next.Type == "openai" && next.ReasoningEffort == "":
+			return nil, errors.New("模型适配器 reasoningEffort 仅支持 low、medium、high、xhigh、max")
+		case next.Type == "gemini" && next.ReasoningEffort == "":
 			return nil, errors.New("模型适配器 reasoningEffort 仅支持 low、medium、high、xhigh、max")
 		case next.Type == "openai" && next.OpenAIEndpoint == "":
 			return nil, errors.New("模型适配器 openAIEndpoint 仅支持 /v1/responses 或 /v1/chat/completions")
@@ -302,6 +308,8 @@ func normalizeModelAdapterType(value string) string {
 		return "openai"
 	case "anthropic":
 		return "anthropic"
+	case "gemini":
+		return "gemini"
 	default:
 		return ""
 	}
@@ -319,6 +327,8 @@ type ResolvedChannel struct {
 	Code string
 	// Provider 表示当前声明中的 Provider。
 	Provider string
+	// SupplierID 表示品牌供应商标识，仅用于展示和供应商专用能力。
+	SupplierID string
 	// ProtocolMode 表示协议选择模式。
 	ProtocolMode string
 	// ProtocolGroup 表示最终模型请求协议分组。
@@ -471,6 +481,7 @@ func (s *FixedChannelService) SelectChannelForModel(ctx context.Context, modelID
 			GroupName:                   strings.TrimSpace(adapter.GroupName),
 			Code:                        strings.TrimSpace(adapter.ID),
 			Provider:                    strings.TrimSpace(adapter.Type),
+			SupplierID:                  strings.TrimSpace(adapter.SupplierID),
 			ProtocolMode:                strings.TrimSpace(adapter.ProtocolMode),
 			ProtocolGroup:               strings.TrimSpace(adapter.ProtocolGroup),
 			BaseURL:                     strings.TrimSpace(adapter.BaseURL),

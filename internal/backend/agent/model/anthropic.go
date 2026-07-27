@@ -313,6 +313,8 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "anthropic", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))
 		return err
 	}
+	applyAnthropicProviderCompatibility(body, req, baseURL, modelID)
+	applyProviderCompatibilitySanitization(body, baseURL, modelID)
 	recordLLMRequestArtifact(req, "anthropic", modelID, "POST", requestURL, body)
 
 	payload, err := json.Marshal(body)
@@ -1447,6 +1449,65 @@ func completedAnthropicToolArgsJSON(accumulator *anthropicToolAccumulator) ([]by
 		return nil, fmt.Errorf("anthropic returned non-object tool input for %s", toolName)
 	}
 	return []byte(trimmed), nil
+}
+
+func applyAnthropicProviderCompatibility(body map[string]any, req StreamRequest, baseURL string, modelID string) {
+	if len(body) == 0 {
+		return
+	}
+	base := strings.ToLower(strings.TrimSpace(baseURL))
+	model := strings.ToLower(strings.TrimSpace(modelID))
+	if strings.Contains(base, "deepseek") || strings.Contains(model, "deepseek") {
+		if normalizeRuntimeThinkingEffort(req.ThinkingEffort) == "disabled" || anthropicThinkingType(body) == "disabled" {
+			delete(body, "output_config")
+			delete(body, "reasoning_effort")
+		}
+	}
+	if strings.Contains(base, "githubcopilot.com") || strings.Contains(base, "githubcopilot") {
+		if cleaned, ok := stripAnthropicThinkingBlocks(body).(map[string]any); ok {
+			for key := range body {
+				delete(body, key)
+			}
+			for key, value := range cleaned {
+				body[key] = value
+			}
+		}
+	}
+}
+
+func anthropicThinkingType(body map[string]any) string {
+	thinking, ok := body["thinking"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	return strings.ToLower(strings.TrimSpace(fmt.Sprint(thinking["type"])))
+}
+
+func stripAnthropicThinkingBlocks(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		if blockType := strings.ToLower(strings.TrimSpace(fmt.Sprint(typed["type"]))); blockType == "thinking" || blockType == "redacted_thinking" {
+			return nil
+		}
+		for key, child := range typed {
+			if stripped := stripAnthropicThinkingBlocks(child); stripped == nil {
+				delete(typed, key)
+			} else {
+				typed[key] = stripped
+			}
+		}
+		return typed
+	case []any:
+		filtered := make([]any, 0, len(typed))
+		for _, child := range typed {
+			if stripped := stripAnthropicThinkingBlocks(child); stripped != nil {
+				filtered = append(filtered, stripped)
+			}
+		}
+		return filtered
+	default:
+		return value
+	}
 }
 
 func buildAnthropicThinkingConfig(req StreamRequest) map[string]any {

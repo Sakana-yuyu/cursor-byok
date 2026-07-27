@@ -29,10 +29,12 @@ const (
 type ModelPricing = legacyruntime.ModelPricing
 
 type ModelAdapterConfig struct {
-	ID                          string        `json:"id,omitempty" yaml:"-"`
-	DisplayName                 string        `json:"displayName" yaml:"displayName"`
-	GroupName                   string        `json:"groupName,omitempty" yaml:"groupName,omitempty"`
-	Type                        string        `json:"type" yaml:"type"`
+	ID          string `json:"id,omitempty" yaml:"-"`
+	DisplayName string `json:"displayName" yaml:"displayName"`
+	GroupName   string `json:"groupName,omitempty" yaml:"groupName,omitempty"`
+	Type        string `json:"type" yaml:"type"`
+	// SupplierID 是品牌供应商标识，仅用于模板、展示和供应商专用能力；协议仍由 Type 决定。
+	SupplierID                  string        `json:"supplierID,omitempty" yaml:"supplierID,omitempty"`
 	ProtocolMode                string        `json:"protocolMode,omitempty" yaml:"protocolMode,omitempty"`
 	ProtocolGroup               string        `json:"protocolGroup,omitempty" yaml:"protocolGroup,omitempty"`
 	BaseURL                     string        `json:"baseURL" yaml:"baseURL"`
@@ -157,11 +159,13 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			openAIEndpoint = modelchannel.OpenAIEndpointForProtocolGroup(protocolGroup, openAIEndpoint)
 		}
 		next := ModelAdapterConfig{
-			DisplayName:          strings.TrimSpace(item.DisplayName),
-			GroupName:            strings.TrimSpace(item.GroupName),
-			Type:                 nextType,
-			ProtocolMode:         protocolMode,
-			ProtocolGroup:        protocolGroup,
+			DisplayName:   strings.TrimSpace(item.DisplayName),
+			GroupName:     strings.TrimSpace(item.GroupName),
+			Type:          nextType,
+			SupplierID:    strings.TrimSpace(item.SupplierID),
+			ProtocolMode:  protocolMode,
+			ProtocolGroup: protocolGroup,
+
 			BaseURL:              baseURL,
 			APIKey:               strings.TrimSpace(item.APIKey),
 			TooltipData:          strings.TrimSpace(item.TooltipData),
@@ -194,7 +198,7 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 		case next.DisplayName == "":
 			return nil, i18n.NewError("error.model_adapter.display_name_required", i18n.CodeInvalidModelAdapter, "模型适配器 displayName 不能为空")
 		case next.Type == "":
-			return nil, i18n.NewError("error.model_adapter.type_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 type 仅支持 openai 或 anthropic")
+			return nil, i18n.NewError("error.model_adapter.type_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 type 仅支持 openai、anthropic 或 gemini")
 		case next.APIKey == "":
 			return nil, i18n.NewError("error.model_adapter.api_key_required", i18n.CodeInvalidModelAdapter, "模型适配器 apiKey 不能为空")
 		case next.TooltipData == "":
@@ -206,6 +210,8 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 		case next.ProtocolGroup == "":
 			return nil, i18n.NewError("error.model_adapter.protocol_group_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 protocolGroup 与 provider 不匹配")
 		case next.Type == "openai" && next.ReasoningEffort == "":
+			return nil, i18n.NewError("error.model_adapter.reasoning_effort_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 reasoningEffort 仅支持 low、medium、high、xhigh、max")
+		case next.Type == "gemini" && next.ReasoningEffort == "":
 			return nil, i18n.NewError("error.model_adapter.reasoning_effort_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 reasoningEffort 仅支持 low、medium、high、xhigh、max")
 		case next.Type == "openai" && next.OpenAIEndpoint == "":
 			return nil, i18n.NewError("error.model_adapter.endpoint_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 openAIEndpoint 仅支持 /v1/responses、/v1/chat/completions 或 /custom（自定义路径）")
@@ -240,6 +246,9 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			}
 			if existing.Pricing == nil {
 				existing.Pricing = next.Pricing
+			}
+			if existing.SupplierID == "" {
+				existing.SupplierID = next.SupplierID
 			}
 			if existing.BalanceQueryURL == "" {
 				existing.BalanceQueryURL = next.BalanceQueryURL
@@ -377,6 +386,8 @@ func normalizeModelAdapterType(value string) string {
 		return "openai"
 	case "anthropic":
 		return "anthropic"
+	case "gemini":
+		return "gemini"
 	default:
 		return ""
 	}

@@ -1,32 +1,63 @@
 import { browserPreviewMockMetrics, browserPreviewMockProxyState } from "@/services/runtimeAdapter";
 
 const previewConfig = {
-  modelAdapters: [{
-    id: "preview-demo-openai",
-    displayName: "Demo GPT",
-    groupName: "浏览器预览示例",
-    type: "openai",
-    baseURL: "https://api.openai.com/v1",
-    apiKey: "sk-browser-preview-demo",
-    tooltipData: "浏览器预览示例模型",
-    modelID: "gpt-4.1-mini",
-    reasoningEffort: "medium",
-    openAIEndpoint: "/v1/responses",
-    openAIExtraParamsEnabled: false,
-    openAIExtraParamsJSON: "{\n}",
-    customHeadersEnabled: false,
-    customHeadersJSON: "{\n}",
-    anthropicExtraParamsEnabled: false,
-    anthropicExtraParamsJSON: "{\n}",
-    contextWindowTokens: 0,
-    maxCompletionTokens: 0,
-    anthropicMaxTokens: 0,
-    anthropicThinkingEffort: "xhigh",
-    thinkingBudgetTokens: 0,
-    pricing: null,
-    fastMode: false,
-    openAIServiceTier: "",
-  }],
+  modelAdapters: [
+    {
+      id: "preview-demo-openai",
+      displayName: "Demo GPT",
+      groupName: "浏览器预览示例",
+      type: "openai",
+      baseURL: "https://api.openai.com/v1",
+      apiKey: "sk-browser-preview-demo",
+      tooltipData: "浏览器预览示例模型",
+      modelID: "gpt-4.1-mini",
+      reasoningEffort: "medium",
+      openAIEndpoint: "/v1/responses",
+      openAIExtraParamsEnabled: false,
+      openAIExtraParamsJSON: "{\n}",
+      customHeadersEnabled: false,
+      customHeadersJSON: "{\n}",
+      anthropicExtraParamsEnabled: false,
+      anthropicExtraParamsJSON: "{\n}",
+      contextWindowTokens: 0,
+      maxCompletionTokens: 0,
+      anthropicMaxTokens: 0,
+      anthropicThinkingEffort: "xhigh",
+      thinkingBudgetTokens: 0,
+      pricing: null,
+      fastMode: false,
+      openAIServiceTier: "",
+    },
+    {
+      id: "preview-demo-gemini",
+      displayName: "Demo Gemini",
+      groupName: "浏览器预览示例",
+      type: "gemini",
+      supplierID: "gemini",
+      protocolMode: "auto",
+      protocolGroup: "gemini_native",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta",
+      apiKey: "AIza-browser-preview-demo",
+      tooltipData: "浏览器预览 Gemini 示例模型",
+      modelID: "gemini-2.5-pro",
+      reasoningEffort: "medium",
+      openAIEndpoint: "",
+      openAIExtraParamsEnabled: false,
+      openAIExtraParamsJSON: "",
+      customHeadersEnabled: false,
+      customHeadersJSON: "{\n}",
+      anthropicExtraParamsEnabled: false,
+      anthropicExtraParamsJSON: "",
+      contextWindowTokens: 1048576,
+      maxCompletionTokens: 0,
+      anthropicMaxTokens: 0,
+      anthropicThinkingEffort: "",
+      thinkingBudgetTokens: 0,
+      pricing: null,
+      fastMode: false,
+      openAIServiceTier: "",
+    },
+  ],
   backendListenAddr: "127.0.0.1:8787",
   proxyListenAddr: "127.0.0.1:8788",
   routing: { mode: "local" },
@@ -74,7 +105,31 @@ export const OpenModelEditorWindow = (index, adapterJSON) => {
 };
 export const TestModelAdapter = (adapter) => Promise.resolve({ status: "success", adapterID: adapter?.id || "preview", summaryText: "浏览器预览模式：未发起请求" });
 export const GetModelAdapterTestResults = () => Promise.resolve([]);
-export const FetchModelCatalog = () => Promise.resolve({ models: [] });
+export const FetchModelCatalog = (request) => {
+  const type = String(request?.type || "").toLowerCase();
+  if (type === "gemini") {
+    return Promise.resolve({
+      models: [
+        { id: "gemini-2.5-pro", contextWindowTokens: 1048576 },
+        { id: "gemini-2.5-flash", contextWindowTokens: 1048576 },
+      ],
+    });
+  }
+  if (type === "anthropic") {
+    return Promise.resolve({
+      models: [
+        { id: "claude-sonnet-4-5", contextWindowTokens: 200000 },
+        { id: "claude-haiku-4-5", contextWindowTokens: 200000 },
+      ],
+    });
+  }
+  return Promise.resolve({
+    models: [
+      { id: "gpt-4.1-mini", contextWindowTokens: 1047576 },
+      { id: "gpt-5-mini", contextWindowTokens: 400000 },
+    ],
+  });
+};
 export const GetRecentRequestMetrics = () => Promise.resolve([]);
 export const GetMetricsRangeSummary = () => Promise.resolve({
   requestCount: 0,

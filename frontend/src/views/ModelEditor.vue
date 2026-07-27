@@ -8,6 +8,7 @@ import { getModelEditorContext, fetchModelCatalog } from "@/services/clientApi";
 import { useModelProbe } from "@/composables/useModelProbe";
 import { resolveModelContextWindow } from "@/utils/modelContext";
 import { providerIcon, providerLabel, providerSelectOptions } from "@/utils/providerMeta";
+import { supplierSelectOptions, supplierTemplate } from "@/utils/supplierCatalog";
 import {
   ANTHROPIC_THINKING_EFFORT_DEFAULT,
   appState,
@@ -28,6 +29,7 @@ import {
   OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS_COMPAT,
   OPENAI_REQUEST_GROUP_RESPONSES,
   PROTOCOL_GROUP_ANTHROPIC_MESSAGES,
+  PROTOCOL_GROUP_GEMINI_NATIVE,
   PROTOCOL_MODE_AUTO,
   PROTOCOL_MODE_FIXED,
   runModelAdapterTest,
@@ -85,6 +87,7 @@ const createEmptyModelAdapter = () => ({
   pricing: null,
   fastMode: false,
   openAIServiceTier: "",
+  supplierID: "custom",
   balanceQueryURL: "",
   balanceQueryField: "",
   balanceQueryHeaders: {},
@@ -109,6 +112,17 @@ const openAIRequestGroupOptions = [
 ];
 
 const providerTypeOptions = providerSelectOptions();
+const supplierOptions = supplierSelectOptions();
+const supplierModelOptions = computed(() => {
+  const template = supplierTemplate(draft.supplierID);
+  const models = new Set(template.models || []);
+  for (const preset of template.presets || []) {
+    if (preset.model) models.add(preset.model);
+  }
+  return Array.from(models).map((model) => ({ label: model, value: model }));
+});
+const supplierPresetOptions = computed(() => (supplierTemplate(draft.supplierID).presets || []).map((item) => ({ label: item.label, value: item.model })));
+const supplierHasPresets = computed(() => supplierPresetOptions.value.length > 0);
 
 const editorIndex = ref(-1);
 const router = useRouter();
@@ -183,8 +197,13 @@ const maxCompletionTokensInput = createOptionalPositiveIntegerModel("maxCompleti
 const anthropicMaxTokensInput = createOptionalPositiveIntegerModel("anthropicMaxTokens");
 const contextWindowTokensInput = createOptionalPositiveIntegerModel("contextWindowTokens");
 const detectedContextWindow = computed(() => resolveModelContextWindow(draft.modelID));
-const interfacePlaceholder = computed(() =>
-  draft.type === "anthropic" ? "例如：https://api.anthropic.com" : "例如：https://api.openai.com/v1",
+const interfacePlaceholder = computed(() => {
+  if (draft.type === "anthropic") return "例如：https://api.anthropic.com";
+  if (draft.type === "gemini") return "例如：https://generativelanguage.googleapis.com/v1beta";
+  return "例如：https://api.openai.com/v1";
+});
+const quickBaseURLLabel = computed(() =>
+  draft.type === "gemini" ? "接口地址" : "接口地址（自动补 /v1）",
 );
 const autoProtocolGroup = computed(() => classifyModelProtocol(
   draft.type,
@@ -333,6 +352,8 @@ async function persistDraft() {
     draft.openAIRequestGroup = draft.protocolGroup;
   } else if (draft.type === "anthropic") {
     draft.protocolGroup = PROTOCOL_GROUP_ANTHROPIC_MESSAGES;
+  } else if (draft.type === "gemini") {
+    draft.protocolGroup = PROTOCOL_GROUP_GEMINI_NATIVE;
   }
   const adapter = normalizeModelAdapter(draft);
 
@@ -382,8 +403,37 @@ async function handleCancel() {
   await closeEditor();
 }
 
+function applySupplierTemplate(id, { force = false } = {}) {
+  const template = supplierTemplate(id);
+  draft.supplierID = template.id;
+  if (template.baseURL && (force || !draft.baseURL)) draft.baseURL = template.baseURL;
+  if (template.type !== draft.type) {
+    draft.type = template.type;
+  }
+  if (template.type === "openai") {
+    if (force || !draft.openAIEndpoint) draft.openAIEndpoint = template.endpoint || OPENAI_ENDPOINT_CHAT_COMPLETIONS;
+    if (force || !draft.openAIRequestGroup) draft.openAIRequestGroup = template.requestGroup || OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS;
+    draft.protocolGroup = draft.openAIRequestGroup;
+  } else if (template.type === "anthropic") {
+    draft.protocolGroup = PROTOCOL_GROUP_ANTHROPIC_MESSAGES;
+  } else if (template.type === "gemini") {
+    draft.protocolGroup = PROTOCOL_GROUP_GEMINI_NATIVE;
+  }
+  const defaultModel = template.models[0] || template.presets?.[0]?.model || "";
+  if (force && defaultModel) {
+    draft.modelID = defaultModel;
+  }
+}
+
+function handleSupplierChange(id) {
+  applySupplierTemplate(id, { force: true });
+}
+
 function handleModelTypeChange(type) {
   draft.type = type;
+  if (type === "anthropic" && draft.supplierID === "custom") draft.supplierID = "anthropic";
+  if (type === "gemini" && draft.supplierID === "custom") draft.supplierID = "gemini";
+  if (type === "openai" && (draft.supplierID === "anthropic" || draft.supplierID === "gemini")) draft.supplierID = "custom";
   draft.protocolMode = draft.protocolMode || PROTOCOL_MODE_AUTO;
   if (type === "openai") {
     if (!draft.openAIEndpoint) {
@@ -396,6 +446,8 @@ function handleModelTypeChange(type) {
   } else if (type === "anthropic") {
     draft.protocolGroup = PROTOCOL_GROUP_ANTHROPIC_MESSAGES;
     ensureAnthropicThinkingEffort();
+  } else if (type === "gemini") {
+    draft.protocolGroup = PROTOCOL_GROUP_GEMINI_NATIVE;
   }
 }
 
@@ -516,6 +568,7 @@ async function handleBatchAddModels() {
   }
 }
 function ensureV1Suffix() {
+  if (draft.type === "gemini") return;
   let url = String(draft.baseURL || "").trim();
   if (!url) return;
   url = url.replace(/\/+$/, "");
@@ -638,6 +691,10 @@ watch(
       draft.protocolGroup = PROTOCOL_GROUP_ANTHROPIC_MESSAGES;
       return;
     }
+    if (draft.type === "gemini") {
+      draft.protocolGroup = PROTOCOL_GROUP_GEMINI_NATIVE;
+      return;
+    }
     if (draft.type !== "openai") return;
     if (draft.protocolMode === PROTOCOL_MODE_FIXED) {
       ensureOpenAIRequestGroup();
@@ -753,11 +810,11 @@ onMounted(async () => {
               </label>
             </div>
             <label class="flex flex-col gap-1">
-              <span class="text-sm text-[#d4d4d4]">接口地址（自动补 /v1）</span>
+              <span class="text-sm text-[#d4d4d4]">{{ quickBaseURLLabel }}</span>
               <input
                 v-model="draft.baseURL"
                 type="text"
-                placeholder="例如：https://api.openai.com"
+                :placeholder="interfacePlaceholder"
                 class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
                 @blur="ensureV1Suffix"
               />
@@ -846,6 +903,12 @@ onMounted(async () => {
         <div class="text-xs font-medium uppercase tracking-[0.08em] text-[#737373]">基础信息</div>
 
         <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <label class="flex flex-col gap-1 md:col-span-2">
+            <span class="text-sm text-[#d4d4d4]">供应商模板</span>
+            <Select :model-value="draft.supplierID" :options="supplierOptions" @update:model-value="handleSupplierChange" />
+            <span class="text-xs text-[#8f8f8f]">选择固定供应商会自动填充接口地址、协议和常用模型；仍可在下方覆盖。</span>
+          </label>
+
           <label class="flex flex-col gap-1">
             <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
               <Tooltip :content="fieldTips.displayName" />
@@ -879,6 +942,20 @@ onMounted(async () => {
                 type="text"
                 placeholder="例如：gpt-4.1"
                 class="h-9 min-w-0 flex-1 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+              />
+              <Select
+                v-if="supplierModelOptions.length"
+                class="w-48 shrink-0"
+                :model-value="draft.modelID"
+                :options="supplierModelOptions"
+                @update:model-value="draft.modelID = $event"
+              />
+              <Select
+                v-if="supplierHasPresets"
+                class="w-36 shrink-0"
+                :model-value="draft.modelID"
+                :options="supplierPresetOptions"
+                @update:model-value="draft.modelID = $event"
               />
               <Button
                 v-if="!manualAddMode"
@@ -979,7 +1056,7 @@ onMounted(async () => {
             </div>
           </label>
 
-          <label v-if="draft.type === 'openai'" class="flex flex-col gap-1">
+          <label v-if="draft.type === 'openai' || draft.type === 'gemini'" class="flex flex-col gap-1">
             <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
               <Tooltip :content="fieldTips.reasoningEffort" />
               <span>推理强度</span>
@@ -1037,7 +1114,7 @@ onMounted(async () => {
             </div>
           </div>
 
-          <div v-if="draft.type === 'openai'" class="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div v-if="draft.type === 'openai' || draft.type === 'gemini'" class="grid grid-cols-1 gap-3 md:grid-cols-2">
           <label class="flex flex-col gap-1">
             <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
               <Tooltip :content="fieldTips.maxCompletionTokens" />
@@ -1052,12 +1129,12 @@ onMounted(async () => {
             />
           </label>
 
-          <label v-if="/gpt/i.test(draft.modelID || '')" class="center-row justify-between gap-3 rounded-[8px] border border-[#343434] bg-[#232323] px-3 py-2 text-sm text-[#d4d4d4]">
+          <label v-if="draft.type === 'openai' && /gpt/i.test(draft.modelID || '')" class="center-row justify-between gap-3 rounded-[8px] border border-[#343434] bg-[#232323] px-3 py-2 text-sm text-[#d4d4d4]">
             <span>Fast 模式（priority）</span>
             <input v-model="draft.fastMode" type="checkbox" class="size-4 accent-[#10AD5D]" />
           </label>
 
-          <label class="flex flex-col gap-1">
+          <label v-if="draft.type === 'openai'" class="flex flex-col gap-1">
             <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
               <Tooltip :content="fieldTips.openAIEndpoint" />
               <span>接口端点</span>
@@ -1068,7 +1145,7 @@ onMounted(async () => {
             />
           </label>
 
-          <label v-if="draft.protocolMode === PROTOCOL_MODE_FIXED" class="flex flex-col gap-1">
+          <label v-if="draft.type === 'openai' && draft.protocolMode === PROTOCOL_MODE_FIXED" class="flex flex-col gap-1">
             <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
               <Tooltip :content="fieldTips.openAIRequestGroup" />
               <span>固定请求协议</span>

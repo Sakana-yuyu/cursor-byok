@@ -57,6 +57,7 @@ const localizedAuthorInfo = computed(() => {
   };
 });
 const usageDocsURL = "https://docs.leokun.cn";
+const githubRepoURL = "https://github.com/Sakana-yuyu/cursor-byok";
 let proxyStateTimer = null;
 const proxyStatePollIntervalMs = 10000;
 const netProxyEndpoint = computed(
@@ -177,6 +178,14 @@ async function handleOpenUsageDocs() {
     await runtimeBrowser.OpenURL(usageDocsURL);
   } catch (error) {
     await showActionError("打开使用教程失败", error);
+  }
+}
+
+async function handleOpenGitHubRepo() {
+  try {
+    await runtimeBrowser.OpenURL(githubRepoURL);
+  } catch (error) {
+    await showActionError("打开 GitHub 失败", error);
   }
 }
 
@@ -313,6 +322,15 @@ onUnmounted(() => {
       >
         <span class="icon-[ant-design--bilibili-outlined] text-[14px]"></span>
         <span>{{ localizedAuthorInfo.buttonText }}</span>
+      </button>
+      <button
+        type="button"
+        title="GitHub"
+        class="center-row shrink-0 gap-[6px] cursor-pointer rounded-[6px] px-[6px] py-[3px] transition-colors duration-150 hover:bg-[#1f1f1f] hover:text-[#e5e5e5]"
+        @click="handleOpenGitHubRepo"
+      >
+        <span class="icon-[mdi--github] text-[15px]"></span>
+        <span>GitHub</span>
       </button>
       <div
         v-if="updateViewState.footerDownloading"
