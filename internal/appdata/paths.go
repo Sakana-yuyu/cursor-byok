@@ -37,6 +37,11 @@ func DataRootPath() string {
 	return filepath.Join(RootDir(), "data")
 }
 
+// ModelAdapterTestResultsFilePath 返回模型测速/可用性结果快照路径（进程外持久化，不进 config.yaml）。
+func ModelAdapterTestResultsFilePath() string {
+	return filepath.Join(DataRootPath(), "model-adapter-test-results.json")
+}
+
 func HistoryRootPath() string {
 	return filepath.Join(RootDir(), "history")
 }

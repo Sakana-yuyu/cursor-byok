@@ -67,6 +67,7 @@ type usageFileEvent struct {
 	Provider         string    `json:"provider,omitempty"`
 	BaseURL          string    `json:"base_url,omitempty"`
 	GroupName        string    `json:"group_name,omitempty"`
+	ErrorCode        string    `json:"error_code,omitempty"`
 	InputTokens      int64     `json:"input_tokens"`
 	OutputTokens     int64     `json:"output_tokens"`
 	CacheReadTokens  int64     `json:"cache_read_tokens"`

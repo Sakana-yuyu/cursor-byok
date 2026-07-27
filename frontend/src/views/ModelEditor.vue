@@ -556,11 +556,9 @@ async function handleBatchAddModels() {
       catalogError.value = result.error || "批量添加失败";
       return;
     }
-    const added = Number(result.added || 0);
-    const skipped = Number(result.skipped || 0);
-    const updated = Number(result.updated || 0);
-    catalogError.value = `新增 ${added} 个，跳过 ${skipped} 个重复项，更新 ${updated} 个`;
     selectedCatalogModels.value = new Set();
+    // 与「快速添加」一致：批量添加成功后关闭当前编辑窗口/页。
+    await closeEditor();
   } catch (error) {
     catalogError.value = toUserError(error);
   } finally {

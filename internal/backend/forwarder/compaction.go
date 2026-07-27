@@ -1662,6 +1662,15 @@ func (service *Service) generateCompactionSummary(ctx context.Context, stream *A
 			requestID := stream.RequestID
 			turnSeq := stream.TurnSeq
 			stream.mu.Unlock()
+			if strings.TrimSpace(usage.ErrorCode) == "" {
+				if code := extractUsageErrorCodeFromCause(err); code != "" {
+					usage.ErrorCode = code
+				} else if code := extractUsageErrorCode(err.Error()); code != "" {
+					usage.ErrorCode = code
+				} else {
+					usage.ErrorCode = "provider_error"
+				}
+			}
 			if usageErr := service.recordTurnUsageSnapshot(stream, conversationID, turnSeq, requestID, modelCallID, "provider_error", usage, err.Error(), false); usageErr != nil {
 				return "", fmt.Errorf("record compaction provider error usage: %w", usageErr)
 			}

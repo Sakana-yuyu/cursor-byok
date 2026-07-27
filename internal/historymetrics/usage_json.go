@@ -32,6 +32,7 @@ type usageFileEvent struct {
 	Provider         string    `json:"provider"`
 	BaseURL          string    `json:"base_url"`
 	GroupName        string    `json:"group_name"`
+	ErrorCode        string    `json:"error_code"`
 	InputTokens      int64     `json:"input_tokens"`
 	OutputTokens     int64     `json:"output_tokens"`
 	CacheReadTokens  int64     `json:"cache_read_tokens"`
@@ -72,6 +73,7 @@ func LoadRecentRequestMetrics(path string, limit int, includeCacheWrite bool, lo
 			Provider:         provider,
 			BaseURL:          baseURL,
 			GroupName:        strings.TrimSpace(event.GroupName),
+			ErrorCode:        strings.TrimSpace(event.ErrorCode),
 			InputTokens:      event.InputTokens,
 			OutputTokens:     event.OutputTokens,
 			CacheReadTokens:  event.CacheReadTokens,

@@ -10,6 +10,8 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,8 +19,10 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"cursor/internal/appdata"
 	modeladapter "cursor/internal/backend/agent/model"
 	serverconfig "cursor/internal/backend/server/config"
+	"cursor/internal/logger"
 	"cursor/internal/modelchannel"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -417,8 +421,87 @@ func (s *ProxyService) storeAndEmitModelAdapterTestResult(result ModelAdapterTes
 	}
 	s.modelTestResults[result.AdapterID] = result
 	snapshot := snapshotModelAdapterTestResultsLocked(s.modelTestResults)
+	shouldPersist := strings.TrimSpace(result.Status) == string(ModelAdapterTestStatusSuccess) ||
+		strings.TrimSpace(result.Status) == string(ModelAdapterTestStatusError)
 	s.modelTestMu.Unlock()
 	s.emitModelAdapterTestResults(snapshot)
+	if shouldPersist {
+		s.persistModelAdapterTestResultsAsync(snapshot)
+	}
+}
+
+// loadPersistedModelAdapterTestResults 从 appdata 恢复上次进程结束前的终态测速结果。
+func (s *ProxyService) loadPersistedModelAdapterTestResults() {
+	if s == nil {
+		return
+	}
+	path := appdata.ModelAdapterTestResultsFilePath()
+	raw, err := os.ReadFile(path)
+	if err != nil || len(raw) == 0 {
+		return
+	}
+	var payload ModelAdapterTestResultsPayload
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		logger.Errorf("load model adapter test results failed path=%s err=%v", path, err)
+		return
+	}
+	s.modelTestMu.Lock()
+	defer s.modelTestMu.Unlock()
+	if s.modelTestResults == nil {
+		s.modelTestResults = make(map[string]ModelAdapterTestResult)
+	}
+	for _, item := range payload.Results {
+		id := strings.TrimSpace(item.AdapterID)
+		if id == "" {
+			continue
+		}
+		status := strings.TrimSpace(item.Status)
+		if status != string(ModelAdapterTestStatusSuccess) && status != string(ModelAdapterTestStatusError) {
+			continue
+		}
+		// 落盘不保留大段 rawResponse，启动后仍可展示 status/summary。
+		item.RawResponse = ""
+		s.modelTestResults[id] = item
+	}
+}
+
+func (s *ProxyService) persistModelAdapterTestResultsAsync(snapshot []ModelAdapterTestResult) {
+	if s == nil {
+		return
+	}
+	// 仅写终态，并去掉 raw 响应体，避免磁盘膨胀与密钥回显风险。
+	toWrite := make([]ModelAdapterTestResult, 0, len(snapshot))
+	for _, item := range snapshot {
+		status := strings.TrimSpace(item.Status)
+		if status != string(ModelAdapterTestStatusSuccess) && status != string(ModelAdapterTestStatusError) {
+			continue
+		}
+		item.RawResponse = ""
+		toWrite = append(toWrite, item)
+	}
+	go func() {
+		path := appdata.ModelAdapterTestResultsFilePath()
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			logger.Errorf("persist model adapter test results mkdir failed path=%s err=%v", path, err)
+			return
+		}
+		payload, err := json.MarshalIndent(ModelAdapterTestResultsPayload{Results: toWrite}, "", "  ")
+		if err != nil {
+			logger.Errorf("persist model adapter test results marshal failed err=%v", err)
+			return
+		}
+		tmp := path + ".tmp"
+		if err := os.WriteFile(tmp, payload, 0o600); err != nil {
+			logger.Errorf("persist model adapter test results write failed path=%s err=%v", tmp, err)
+			return
+		}
+		if err := os.Rename(tmp, path); err != nil {
+			_ = os.Remove(path)
+			if err2 := os.Rename(tmp, path); err2 != nil {
+				logger.Errorf("persist model adapter test results rename failed path=%s err=%v", path, err2)
+			}
+		}
+	}()
 }
 
 func (s *ProxyService) snapshotModelAdapterTestResults() []ModelAdapterTestResult {
