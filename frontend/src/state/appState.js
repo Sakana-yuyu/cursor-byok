@@ -24,7 +24,7 @@ import {
 
 const APP_STATE_STORAGE_KEY = "cursor-client:runtime-state:v2";
 const GENERIC_SERVICE_ERROR = "服务错误";
-const SUPPORTED_MODEL_ADAPTER_TYPES = new Set(["openai", "anthropic"]);
+const SUPPORTED_MODEL_ADAPTER_TYPES = new Set(["openai", "anthropic", "gemini"]);
 const SUPPORTED_REASONING_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 const SUPPORTED_ANTHROPIC_THINKING_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 export const ANTHROPIC_THINKING_EFFORT_DEFAULT = "xhigh";
@@ -37,6 +37,7 @@ export const OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS_COMPAT = "chat_completions_co
 export const PROTOCOL_MODE_AUTO = "auto";
 export const PROTOCOL_MODE_FIXED = "fixed";
 export const PROTOCOL_GROUP_ANTHROPIC_MESSAGES = "messages";
+export const PROTOCOL_GROUP_GEMINI_NATIVE = "gemini_native";
 export const OPENAI_EXTRA_PARAMS_DEFAULT_JSON = `{
 }`;
 export const EXTRA_PARAMS_DEFAULT_JSON = `{
@@ -197,7 +198,7 @@ export function buildModelAdapterTestRequestHash(source) {
     asString(adapter.modelID),
     asString(adapter.protocolMode),
     asString(adapter.protocolGroup),
-    adapter.type === "openai" ? asString(adapter.reasoningEffort || "medium") : "",
+    adapter.type === "openai" || adapter.type === "gemini" ? asString(adapter.reasoningEffort || "medium") : "",
     adapter.type === "openai" ? normalizeOpenAIEndpoint(adapter.openAIEndpoint) : "",
     adapter.type === "openai" ? String(Boolean(adapter.openAIExtraParamsEnabled)) : "false",
     adapter.type === "openai" && adapter.openAIExtraParamsEnabled ? asString(adapter.openAIExtraParamsJSON) : "",
@@ -282,6 +283,7 @@ export function createEmptyModelAdapter() {
     displayName: "",
     groupName: "",
     type: "openai",
+    supplierID: "custom",
     protocolMode: PROTOCOL_MODE_AUTO,
     protocolGroup: OPENAI_REQUEST_GROUP_RESPONSES,
     baseURL: "",
@@ -358,6 +360,7 @@ export function normalizeProtocolMode(value) {
 export function classifyModelProtocol(type, modelID, baseURL, endpoint, configuredGroup = "") {
   const provider = asString(type).toLowerCase();
   if (provider === "anthropic") return PROTOCOL_GROUP_ANTHROPIC_MESSAGES;
+  if (provider === "gemini") return PROTOCOL_GROUP_GEMINI_NATIVE;
   if (provider !== "openai") return "";
   const configured = asString(configuredGroup).toLowerCase();
   if (SUPPORTED_OPENAI_REQUEST_GROUPS.has(configured)) return configured;
@@ -387,6 +390,9 @@ function normalizeProtocolGroup(mode, type, modelID, baseURL, endpoint, configur
   if (provider === "anthropic") return configured && configured !== PROTOCOL_GROUP_ANTHROPIC_MESSAGES
     ? ""
     : PROTOCOL_GROUP_ANTHROPIC_MESSAGES;
+  if (provider === "gemini") return configured && configured !== PROTOCOL_GROUP_GEMINI_NATIVE
+    ? ""
+    : PROTOCOL_GROUP_GEMINI_NATIVE;
   if (provider !== "openai") return "";
   if (normalizedMode === PROTOCOL_MODE_FIXED) {
     return SUPPORTED_OPENAI_REQUEST_GROUPS.has(configured) ? configured : "";
@@ -580,6 +586,7 @@ export function normalizeModelAdapter(source) {
     displayName: asString(raw.displayName || raw.name),
     groupName: asString(raw.groupName || raw.group_name),
     type: SUPPORTED_MODEL_ADAPTER_TYPES.has(normalizedType) ? normalizedType : "",
+    supplierID: asString(raw.supplierID ?? raw.supplierId ?? raw.vendor).trim() || "custom",
     protocolMode,
     protocolGroup,
     baseURL: normalizeBaseURL(raw.baseURL || raw.url),
@@ -635,6 +642,7 @@ function mergeDuplicateModelAdapter(existing, incoming) {
   return {
     ...existing,
     displayName: existing.displayName || incoming.displayName,
+    supplierID: existing.supplierID || incoming.supplierID,
     groupName: existing.groupName || incoming.groupName,
     tooltipData: existing.tooltipData || incoming.tooltipData,
     contextWindowTokens: existing.contextWindowTokens > 0
@@ -672,7 +680,7 @@ export function validateModelAdapters(source) {
       return `${prefix} 的显示名称不能为空`;
     }
     if (!SUPPORTED_MODEL_ADAPTER_TYPES.has(adapter.type)) {
-      return `${prefix} 的类型仅支持 OpenAI 或 Anthropic`;
+      return `${prefix} 的类型仅支持 OpenAI、Anthropic 或 Gemini`;
     }
     if (!adapter.baseURL) {
       return `${prefix} 的接口地址不能为空`;
@@ -692,7 +700,7 @@ export function validateModelAdapters(source) {
     if (!adapter.protocolGroup) {
       return `${prefix} 的协议分组与模型类型不匹配`;
     }
-    if (adapter.type === "openai" && !SUPPORTED_REASONING_EFFORTS.has(adapter.reasoningEffort)) {
+    if ((adapter.type === "openai" || adapter.type === "gemini") && !SUPPORTED_REASONING_EFFORTS.has(adapter.reasoningEffort)) {
       return `${prefix} 的推理强度仅支持 low、medium、high、xhigh、max`;
     }
     if (adapter.type === "openai" && !isValidOpenAIEndpoint(adapter.openAIEndpoint)) {
@@ -834,12 +842,13 @@ function asNullableRate(value) {
 
 function normalizeHomeMetrics(source) {
   const raw = source && typeof source === "object" ? source : {};
-  const providerCallsTotal = asPositiveInteger(raw.providerCallsTotal ?? raw.turnsTotal);
-  const invalidTurns = asPositiveInteger(raw.invalidTurnsTotal);
+  const turnsTotal = asPositiveInteger(raw.turnsTotal);
+  const validTurnsTotal = asPositiveInteger(raw.validTurnsTotal);
+  const invalidTurnsTotal = asPositiveInteger(raw.invalidTurnsTotal);
   return {
-    turnsTotal: providerCallsTotal,
-    validTurnsTotal: providerCallsTotal - invalidTurns,
-    invalidTurnsTotal: invalidTurns,
+    turnsTotal,
+    validTurnsTotal,
+    invalidTurnsTotal,
     requestTokensTotal: asPositiveInteger(raw.requestTokensTotal),
     promptTokensTotal: asPositiveInteger(raw.promptTokensTotal),
     cacheReadTokens: asPositiveInteger(raw.cacheReadTokens),

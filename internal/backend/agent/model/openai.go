@@ -515,7 +515,7 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 	overrideBody := cloneRequestBodyOverride(req.RequestBodyOverride)
 	var body any = overrideBody
 	if len(overrideBody) == 0 {
-		normalizedMessages, err := normalizeOpenAIProviderMessages(req.Messages, strings.TrimSpace(req.ReasoningEffort) != "")
+		normalizedMessages, err := normalizeOpenAIProviderMessages(req.Messages, strings.TrimSpace(req.ReasoningEffort) != "", isKimiOpenAIRequest(baseURL, modelID))
 		if err != nil {
 			finishedAt = time.Now().UTC()
 			recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))
@@ -551,9 +551,12 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))
 		return err
 	}
+	normalizeOpenAIRequestToolSchemas(bodyMap)
+	applyOpenAIChatCompletionsCompatibility(bodyMap, baseURL, modelID, openAIExtraParamsHasKey(req, "prompt_cache_key"))
 	if modelchannel.OpenAIRequestGroupSupportsAdvancedFields(req.OpenAIRequestGroup) {
 		applyOpenAIServiceTier(bodyMap, req)
 	}
+
 	body = bodyMap
 	requestURL := OpenAIEndpointURL(baseURL, req.OpenAIEndpoint)
 	recordLLMRequestArtifact(req, "openai", modelID, "POST", requestURL, body)
@@ -615,8 +618,11 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 			Delta struct {
 				Content          string                `json:"content"`
 				ReasoningContent string                `json:"reasoning_content"`
+				Reasoning        json.RawMessage       `json:"reasoning"`
+				ReasoningDetails json.RawMessage       `json:"reasoning_details"`
 				ToolCalls        []openAIToolCallDelta `json:"tool_calls"`
 			} `json:"delta"`
+
 			FinishReason *string `json:"finish_reason"`
 		} `json:"choices"`
 		Model string `json:"model"`
@@ -691,9 +697,6 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 			return nil
 		}
 		streamIdle.MarkEffectiveContent()
-		if err := flushThinkingCompleted(); err != nil {
-			return err
-		}
 		return sink(ModelEvent{
 			Kind:       ModelEventKindTextDelta,
 			OccurredAt: time.Now().UTC(),
@@ -702,6 +705,7 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 			Text:       text,
 		})
 	}
+
 	emitThinkingDelta := func(reasoning string) error {
 		if reasoning == "" {
 			return nil
@@ -861,13 +865,13 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		}
 		applyUsage(chunk.Usage)
 
-		if text := choice.Delta.Content; text != "" {
-			if err := emitTaggedContentParts(thinkParser.Consume(text)); err != nil {
+		if reasoning := openAIChatDeltaReasoningText(choice.Delta.ReasoningContent, choice.Delta.Reasoning, choice.Delta.ReasoningDetails); reasoning != "" {
+			if err := emitThinkingDelta(reasoning); err != nil {
 				return fail(err)
 			}
 		}
-		if reasoning := choice.Delta.ReasoningContent; reasoning != "" {
-			if err := emitThinkingDelta(reasoning); err != nil {
+		if text := choice.Delta.Content; text != "" {
+			if err := emitTaggedContentParts(thinkParser.Consume(text)); err != nil {
 				return fail(err)
 			}
 		}
@@ -1042,6 +1046,9 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))
 		return err
 	}
+	normalizeOpenAIResponsesRequestToolSchemas(bodyMap)
+	applyOpenAIResponsesCompatibility(bodyMap, baseURL, modelID, openAIExtraParamsHasKey(req, "prompt_cache_key"))
+
 	body = bodyMap
 
 	requestURL := OpenAIEndpointURL(baseURL, req.OpenAIEndpoint)
@@ -1936,7 +1943,7 @@ func emitOpenAIToolProgress(
 	})
 }
 
-func normalizeOpenAIProviderMessages(messages []Message, thinkingEnabled bool) ([]map[string]any, error) {
+func normalizeOpenAIProviderMessages(messages []Message, thinkingEnabled bool, kimiReasoningReplay bool) ([]map[string]any, error) {
 	if len(messages) == 0 {
 		return nil, nil
 	}
@@ -1950,9 +1957,12 @@ func normalizeOpenAIProviderMessages(messages []Message, thinkingEnabled bool) (
 			"role":    strings.TrimSpace(message.Role),
 			"content": content,
 		}
-		// 开启 thinking 时，tool_calls 对应的 assistant message 也要显式携带空 reasoning_content。
-		if shouldIncludeOpenAIReasoningContent(message, thinkingEnabled) {
-			item["reasoning_content"] = message.ReasoningContent
+		if shouldIncludeOpenAIReasoningContent(message, thinkingEnabled, kimiReasoningReplay) {
+			reasoningContent := message.ReasoningContent
+			if kimiReasoningReplay && strings.TrimSpace(reasoningContent) == "" && len(message.ToolCalls) > 0 {
+				reasoningContent = "tool call"
+			}
+			item["reasoning_content"] = reasoningContent
 		}
 		if len(message.ToolCalls) > 0 {
 			item["tool_calls"] = normalizeToolCallDescriptors(message.ToolCalls)
@@ -1984,15 +1994,285 @@ func applyOpenAIServiceTier(body map[string]any, req StreamRequest) {
 	}
 }
 
+func openAIExtraParamsHasKey(req StreamRequest, key string) bool {
+	if !req.OpenAIExtraParamsEnabled {
+		return false
+	}
+	params, err := parseJSONMap(req.OpenAIExtraParamsJSON, "openai extra params json")
+	if err != nil {
+		return false
+	}
+	_, ok := params[strings.TrimSpace(key)]
+	return ok
+}
+
+func applyOpenAIResponsesCompatibility(body map[string]any, baseURL string, modelID string, preservePromptCacheKey bool) {
+	if len(body) == 0 {
+		return
+	}
+	policy := classifyProviderCompatibility(baseURL, modelID)
+	applyProviderCompatibilitySanitization(body, baseURL, modelID)
+	if !policy.PromptCacheKey && !preservePromptCacheKey {
+		delete(body, "prompt_cache_key")
+	}
+	if policy.Kind != "xai" {
+		return
+	}
+	delete(body, "prompt_cache_retention")
+	delete(body, "safety_identifier")
+	deleteOpenAIRequestKeyRecursive(body, "external_web_access")
+	if policy.DropGrok45Sampling {
+		delete(body, "presence_penalty")
+		delete(body, "frequency_penalty")
+		delete(body, "stop")
+	}
+	filterOpenAIResponsesTools(body)
+}
+
+func isXAIResponsesRequest(baseURL string, modelID string) bool {
+	base := strings.ToLower(strings.TrimSpace(baseURL))
+	model := strings.ToLower(strings.TrimSpace(modelID))
+	return strings.Contains(base, "api.x.ai") || strings.Contains(model, "grok")
+}
+
+func isGrok45Model(modelID string) bool {
+	model := strings.ToLower(strings.TrimSpace(modelID))
+	return strings.Contains(model, "grok-4.5")
+}
+
+func deleteOpenAIRequestKeyRecursive(value any, key string) {
+	switch typed := value.(type) {
+	case map[string]any:
+		delete(typed, key)
+		for _, child := range typed {
+			deleteOpenAIRequestKeyRecursive(child, key)
+		}
+	case []any:
+		for _, child := range typed {
+			deleteOpenAIRequestKeyRecursive(child, key)
+		}
+	}
+}
+
+func filterOpenAIResponsesTools(body map[string]any) {
+	items, ok := body["tools"].([]any)
+	if !ok {
+		return
+	}
+	filtered := make([]any, 0, len(items))
+	for _, item := range items {
+		tool, ok := item.(map[string]any)
+		if !ok || !openAIResponsesToolTypeAllowed(strings.TrimSpace(fmt.Sprint(tool["type"]))) {
+			continue
+		}
+		filtered = append(filtered, tool)
+	}
+	if len(filtered) == 0 {
+		delete(body, "tools")
+		delete(body, "tool_choice")
+		return
+	}
+	body["tools"] = filtered
+	if !openAIResponsesToolChoiceValid(body["tool_choice"], filtered) {
+		delete(body, "tool_choice")
+	}
+}
+
+func openAIResponsesToolTypeAllowed(toolType string) bool {
+	switch toolType {
+	case "function", "web_search", "x_search", "image_generation", "collections_search", "file_search", "code_execution", "code_interpreter", "mcp", "shell":
+		return true
+	default:
+		return false
+	}
+}
+
+func openAIResponsesToolChoiceValid(choice any, tools []any) bool {
+	if choice == nil {
+		return true
+	}
+	if text, ok := choice.(string); ok {
+		switch strings.TrimSpace(text) {
+		case "", "auto", "none", "required":
+			return true
+		default:
+			return false
+		}
+	}
+	choiceMap, ok := choice.(map[string]any)
+	if !ok {
+		return false
+	}
+	if strings.TrimSpace(fmt.Sprint(choiceMap["type"])) != "function" {
+		return false
+	}
+	name := strings.TrimSpace(asStringMapValue(choiceMap, "name"))
+	if functionShape, ok := choiceMap["function"].(map[string]any); ok {
+		name = strings.TrimSpace(asStringMapValue(functionShape, "name"))
+	}
+	if name == "" {
+		return false
+	}
+	for _, item := range tools {
+		tool, ok := item.(map[string]any)
+		if ok && strings.TrimSpace(asStringMapValue(tool, "name")) == name {
+			return true
+		}
+	}
+	return false
+}
+
+func applyOpenAIChatCompletionsCompatibility(body map[string]any, baseURL string, modelID string, preservePromptCacheKey bool) {
+	if len(body) == 0 {
+		return
+	}
+	policy := classifyProviderCompatibility(baseURL, modelID)
+	applyProviderCompatibilitySanitization(body, baseURL, modelID)
+	kind := policy.Kind
+	if !policy.PromptCacheKey && !preservePromptCacheKey {
+		delete(body, "prompt_cache_key")
+	}
+	if kind == "" {
+		return
+	}
+	if isKimiK27CodeModel(modelID) {
+		body["thinking"] = map[string]any{"type": "enabled"}
+	}
+	effort, hasReasoningEffort := body["reasoning_effort"]
+	if !hasReasoningEffort {
+		return
+	}
+	switch kind {
+	case "kimi":
+		if isKimiK3Model(modelID) {
+			body["reasoning_effort"] = kimiK3ReasoningEffort(effort)
+		} else {
+			delete(body, "reasoning_effort")
+			ensureOpenAIThinkingEnabled(body)
+		}
+	case "openrouter":
+		delete(body, "reasoning_effort")
+		body["reasoning"] = map[string]any{"effort": openAIReasoningEffortString(effort)}
+	case "siliconflow", "qwen":
+		delete(body, "reasoning_effort")
+		body["enable_thinking"] = true
+	case "deepseek":
+		ensureOpenAIThinkingEnabled(body)
+	case "zhipu", "mimo", "minimax":
+		delete(body, "reasoning_effort")
+		ensureOpenAIThinkingEnabled(body)
+	case "stepfun":
+		if !stepFunModelSupportsReasoningEffort(modelID) {
+			delete(body, "reasoning_effort")
+			ensureOpenAIThinkingEnabled(body)
+		} else {
+			body["reasoning_effort"] = stepFunReasoningEffort(effort)
+		}
+	}
+}
+
+func ensureOpenAIThinkingEnabled(body map[string]any) {
+	if len(body) == 0 {
+		return
+	}
+	if _, ok := body["thinking"]; !ok {
+		body["thinking"] = map[string]any{"type": "enabled"}
+	}
+}
+
+func openAIChatCompatibilityKind(baseURL string, modelID string) string {
+	base := strings.ToLower(strings.TrimSpace(baseURL))
+	model := strings.ToLower(strings.TrimSpace(modelID))
+	signal := base + " " + model
+	switch {
+	case strings.Contains(signal, "kimi") || strings.Contains(signal, "moonshot"):
+		return "kimi"
+	case strings.Contains(signal, "openrouter"):
+		return "openrouter"
+	case strings.Contains(signal, "siliconflow"):
+		return "siliconflow"
+	case strings.Contains(signal, "deepseek"):
+		return "deepseek"
+	case strings.Contains(signal, "bigmodel") || strings.Contains(signal, "z.ai") || strings.Contains(signal, "zhipu") || strings.Contains(model, "glm"):
+		return "zhipu"
+	case strings.Contains(signal, "dashscope") || strings.Contains(signal, "qwen") || strings.Contains(signal, "aliyun") || strings.Contains(signal, "bailian"):
+		return "qwen"
+	case strings.Contains(signal, "xiaomimimo") || strings.Contains(signal, "mimo"):
+		return "mimo"
+	case strings.Contains(signal, "minimax"):
+		return "minimax"
+	case strings.Contains(signal, "stepfun") || strings.Contains(signal, "step-"):
+		return "stepfun"
+	default:
+		return ""
+	}
+}
+
+func shouldSendOpenAIChatPromptCacheKey(baseURL string, modelID string) bool {
+	return providerPromptCacheKeyAllowed(baseURL, modelID)
+}
+
+func isKimiOpenAIRequest(baseURL string, modelID string) bool {
+	return openAIChatCompatibilityKind(baseURL, modelID) == "kimi"
+}
+
+func isKimiK27CodeModel(modelID string) bool {
+	model := strings.ToLower(strings.TrimSpace(modelID))
+	return strings.Contains(model, "kimi-k2.7-code")
+}
+
+func isKimiK3Model(modelID string) bool {
+	model := strings.ToLower(strings.TrimSpace(modelID))
+	return strings.Contains(model, "kimi-k3")
+}
+
+func openAIReasoningEffortString(value any) string {
+	switch strings.ToLower(strings.TrimSpace(fmt.Sprint(value))) {
+	case "low", "medium", "high", "xhigh", "max":
+		return strings.ToLower(strings.TrimSpace(fmt.Sprint(value)))
+	default:
+		return "high"
+	}
+}
+
+func kimiK3ReasoningEffort(value any) string {
+	switch strings.ToLower(strings.TrimSpace(fmt.Sprint(value))) {
+	case "low":
+		return "low"
+	case "high", "medium", "xhigh":
+		return "high"
+	case "max":
+		return "max"
+	default:
+		return "max"
+	}
+}
+
+func stepFunModelSupportsReasoningEffort(modelID string) bool {
+	model := strings.ToLower(strings.TrimSpace(modelID))
+	return strings.Contains(model, "2603")
+}
+
+func stepFunReasoningEffort(value any) string {
+	switch strings.ToLower(strings.TrimSpace(fmt.Sprint(value))) {
+	case "low":
+		return "low"
+	case "high", "medium", "xhigh", "max":
+		return "high"
+	default:
+		return "high"
+	}
+}
+
 func shouldSendOpenAIMaxOutputTokens(modelID string) bool {
 	return !strings.Contains(strings.ToLower(strings.TrimSpace(modelID)), "gpt")
 }
 
-func shouldIncludeOpenAIReasoningContent(message Message, thinkingEnabled bool) bool {
+func shouldIncludeOpenAIReasoningContent(message Message, thinkingEnabled bool, kimiReasoningReplay bool) bool {
 	if strings.TrimSpace(message.ReasoningContent) != "" {
 		return true
 	}
-	if !thinkingEnabled {
+	if !thinkingEnabled && !kimiReasoningReplay {
 		return false
 	}
 	if strings.TrimSpace(message.Role) != "assistant" {
@@ -2014,6 +2294,10 @@ func applyOpenAIThinkingDisable(body map[string]any, req StreamRequest, baseURL 
 		body["enable_thinking"] = false
 		delete(body, "reasoning_effort")
 		setRequestKnob(req, "thinking_disabled_provider_param", "enable_thinking")
+	case "reasoning_object_none":
+		body["reasoning"] = map[string]any{"effort": "none"}
+		delete(body, "reasoning_effort")
+		setRequestKnob(req, "thinking_disabled_provider_param", "reasoning.effort")
 	case "reasoning_none":
 		if modelchannel.OpenAIEndpointShape(endpoint) == "responses" {
 			body["reasoning"] = map[string]any{"effort": "none"}
@@ -2021,35 +2305,13 @@ func applyOpenAIThinkingDisable(body map[string]any, req StreamRequest, baseURL 
 			body["reasoning_effort"] = "none"
 		}
 		setRequestKnob(req, "thinking_disabled_provider_param", "reasoning.effort")
+
 	}
 }
 
 func openAIThinkingDisableKind(baseURL string, modelID string, endpoint string) string {
-	base := strings.ToLower(strings.TrimSpace(baseURL))
-	model := strings.ToLower(strings.TrimSpace(modelID))
-	switch {
-	case strings.Contains(base, "dashscope") ||
-		strings.Contains(base, "qwen") ||
-		strings.Contains(base, "aliyun") ||
-		strings.Contains(model, "qwen"):
-		return "enable_thinking"
-	case strings.Contains(base, "deepseek") ||
-		strings.Contains(base, "bigmodel") ||
-		strings.Contains(base, "z.ai") ||
-		strings.Contains(base, "zhipu") ||
-		strings.Contains(base, "xiaomimimo") ||
-		strings.Contains(base, "mimo") ||
-		strings.Contains(model, "deepseek") ||
-		strings.Contains(model, "glm") ||
-		strings.Contains(model, "zai") ||
-		strings.Contains(model, "zhipu") ||
-		strings.Contains(model, "mimo"):
-		return "thinking_type"
-	case openAIModelSupportsReasoningNone(model):
-		return "reasoning_none"
-	default:
-		return ""
-	}
+	_ = endpoint
+	return classifyProviderCompatibility(baseURL, modelID).ThinkingDisableKind
 }
 
 func openAIModelSupportsReasoningNone(model string) bool {
@@ -2331,7 +2593,7 @@ func normalizeOpenAIResponsesTools(items []json.RawMessage) ([]map[string]any, e
 			tool["description"] = description
 		}
 		if parameters, ok := source["parameters"]; ok && parameters != nil {
-			normalizeOpenAIToolSchemaRequired(parameters)
+			normalizeOpenAIToolParameterSchema(parameters)
 			tool["parameters"] = parameters
 		} else {
 			tool["parameters"] = map[string]any{"type": "object", "properties": map[string]any{}}
@@ -2351,13 +2613,25 @@ func normalizeOpenAIChatTools(items []json.RawMessage) ([]json.RawMessage, error
 	if len(items) == 0 {
 		return nil, nil
 	}
+	seen := make(map[string]struct{}, len(items))
 	tools := make([]json.RawMessage, 0, len(items))
 	for _, item := range items {
-		var value any
+		var value map[string]any
 		if err := json.Unmarshal(item, &value); err != nil {
 			return nil, fmt.Errorf("decode openai chat tool descriptor failed: %w", err)
 		}
-		normalizeOpenAIToolSchemaRequired(value)
+		if !normalizeOpenAIToolDescriptor(value) {
+			continue
+		}
+		name := openAIToolDescriptorName(value)
+		if name == "" {
+			continue
+		}
+		if _, exists := seen[name]; exists {
+			continue
+		}
+		seen[name] = struct{}{}
+
 		payload, err := json.Marshal(value)
 		if err != nil {
 			return nil, fmt.Errorf("encode openai chat tool descriptor failed: %w", err)
@@ -2367,9 +2641,179 @@ func normalizeOpenAIChatTools(items []json.RawMessage) ([]json.RawMessage, error
 	return tools, nil
 }
 
+func normalizeOpenAIResponsesRequestToolSchemas(body map[string]any) {
+	if len(body) == 0 {
+		return
+	}
+	items, ok := body["tools"].([]any)
+	if !ok {
+		return
+	}
+	for _, item := range items {
+		tool, ok := item.(map[string]any)
+		if !ok || strings.TrimSpace(fmt.Sprint(tool["type"])) != "function" {
+			continue
+		}
+		normalizeOpenAIToolParameters(tool)
+	}
+}
+
+func normalizeOpenAIRequestToolSchemas(body map[string]any) {
+	if len(body) == 0 {
+		return
+	}
+	tools, ok := body["tools"]
+	if !ok {
+		return
+	}
+	filtered := normalizeOpenAIToolDescriptorList(tools)
+	if len(filtered) == 0 {
+		delete(body, "tools")
+		delete(body, "tool_choice")
+		delete(body, "parallel_tool_calls")
+		return
+	}
+	body["tools"] = filtered
+	if !openAIToolChoiceValid(body["tool_choice"], filtered) {
+		delete(body, "tool_choice")
+	}
+}
+
+func openAIToolChoiceValid(choice any, tools []any) bool {
+	if choice == nil {
+		return true
+	}
+	text := strings.TrimSpace(fmt.Sprint(choice))
+	switch text {
+	case "", "auto", "none", "required":
+		return true
+	}
+	choiceMap, ok := choice.(map[string]any)
+	if !ok {
+		return false
+	}
+	if strings.TrimSpace(fmt.Sprint(choiceMap["type"])) != "function" {
+		return false
+	}
+	name := strings.TrimSpace(asStringMapValue(choiceMap, "name"))
+	if functionShape, ok := choiceMap["function"].(map[string]any); ok {
+		name = strings.TrimSpace(asStringMapValue(functionShape, "name"))
+	}
+	if name == "" {
+		return false
+	}
+	for _, item := range tools {
+		tool, ok := item.(map[string]any)
+		if ok && openAIToolDescriptorName(tool) == name {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeOpenAIToolDescriptorList(value any) []any {
+	items, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(items))
+	filtered := make([]any, 0, len(items))
+	for _, item := range items {
+		tool, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if !normalizeOpenAIToolDescriptor(tool) {
+			continue
+		}
+		name := openAIToolDescriptorName(tool)
+		if name == "" {
+			continue
+		}
+		if _, exists := seen[name]; exists {
+			continue
+		}
+		seen[name] = struct{}{}
+		filtered = append(filtered, tool)
+	}
+	return filtered
+}
+
+func normalizeOpenAIToolDescriptor(tool map[string]any) bool {
+	if len(tool) == 0 {
+		return false
+	}
+	toolType := strings.TrimSpace(fmt.Sprint(tool["type"]))
+	if toolType == "" {
+		tool["type"] = "function"
+		toolType = "function"
+	}
+	if toolType != "function" {
+		return false
+	}
+	if functionShape, ok := tool["function"].(map[string]any); ok {
+		if strings.TrimSpace(asStringMapValue(functionShape, "name")) == "" {
+			return false
+		}
+		normalizeOpenAIToolParameters(functionShape)
+		return true
+	}
+	if strings.TrimSpace(asStringMapValue(tool, "name")) == "" {
+		return false
+	}
+	normalizeOpenAIToolParameters(tool)
+	return true
+}
+
+func openAIToolDescriptorName(tool map[string]any) string {
+	if len(tool) == 0 {
+		return ""
+	}
+	if functionShape, ok := tool["function"].(map[string]any); ok {
+		return strings.TrimSpace(asStringMapValue(functionShape, "name"))
+	}
+	return strings.TrimSpace(asStringMapValue(tool, "name"))
+}
+
+func normalizeOpenAIToolParameters(tool map[string]any) {
+	if len(tool) == 0 {
+		return
+	}
+	parameters, ok := tool["parameters"]
+	if !ok || parameters == nil {
+		tool["parameters"] = map[string]any{"type": "object", "properties": map[string]any{}}
+		return
+	}
+	if _, ok := parameters.(map[string]any); !ok {
+		tool["parameters"] = map[string]any{"type": "object", "properties": map[string]any{}}
+		return
+	}
+	normalizeOpenAIToolParameterSchema(parameters)
+}
+
+func normalizeOpenAIToolParameterSchema(value any) {
+	switch typed := value.(type) {
+	case map[string]any:
+		if _, ok := typed["type"]; !ok {
+			typed["type"] = "object"
+		}
+		if _, ok := typed["properties"]; !ok {
+			typed["properties"] = map[string]any{}
+		}
+		normalizeOpenAIToolSchemaRequired(typed)
+	case []any:
+		for _, child := range typed {
+			normalizeOpenAIToolParameterSchema(child)
+		}
+	}
+}
+
 func normalizeOpenAIToolSchemaRequired(value any) {
 	switch typed := value.(type) {
 	case map[string]any:
+		if strings.TrimSpace(fmt.Sprint(typed["format"])) == "uri" {
+			delete(typed, "format")
+		}
 		if required, ok := typed["required"]; ok && required == nil {
 			typed["required"] = []any{}
 		}
@@ -2395,6 +2839,53 @@ func asStringMapValue(source map[string]any, key string) string {
 	default:
 		return ""
 	}
+}
+
+func openAIChatDeltaReasoningText(reasoningContent string, reasoning json.RawMessage, reasoningDetails json.RawMessage) string {
+	parts := make([]string, 0, 3)
+	if reasoningContent != "" {
+		parts = append(parts, reasoningContent)
+	}
+	if text := openAIReasoningRawText(reasoning); text != "" {
+		parts = append(parts, text)
+	}
+	if text := openAIReasoningRawText(reasoningDetails); text != "" {
+		parts = append(parts, text)
+	}
+	return strings.Join(parts, "")
+}
+
+func openAIReasoningRawText(raw json.RawMessage) string {
+	if len(raw) == 0 || strings.TrimSpace(string(raw)) == "null" {
+		return ""
+	}
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return ""
+	}
+	return openAIReasoningValueText(value)
+}
+
+func openAIReasoningValueText(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case []any:
+		parts := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if text := openAIReasoningValueText(item); text != "" {
+				parts = append(parts, text)
+			}
+		}
+		return strings.Join(parts, "")
+	case map[string]any:
+		for _, key := range []string{"reasoning_content", "content", "text", "summary"} {
+			if text := openAIReasoningValueText(typed[key]); text != "" {
+				return text
+			}
+		}
+	}
+	return ""
 }
 
 func openAIStreamErrorDetails(errorType string, code string, requestID string) string {

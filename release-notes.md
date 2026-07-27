@@ -1,18 +1,18 @@
-## v0.0.52
+## v0.0.53
 
 ### 修复
-- **修复 daoxe/Kimi 工具 schema 报错**：OpenAI 兼容适配器会将工具参数 schema 中非法的 `required: null` 归一化为 `required: []`，避免 `kimi-k2.7-code` 等严格校验服务返回 400。
-- **服务退出更平滑**：本地服务关闭前会主动取消未终态流并发送结束事件，减少 Cursor 侧因连接硬断产生的取消错误。
-- **余额查询失败保留上次成功值**：供应商详情页在瞬时失败时保留已查询到的余额并标记可能过期，避免 UI 直接清空。
+- **修复 Kimi 思考内容流式截断**：reasoning 内容会先于正文处理，并只在 reasoning 真正结束或轮次结束时关闭思考状态，避免思考链路被正文 delta 提前打断。
+- **修复 Kimi/兼容供应商工具 schema 报错**：统一清理 Chat Completions 与 Responses 请求中的工具参数 schema，修复 `required: null`、空 parameters、重复/非法 tool 等严格校验问题。
+- **修复兼容网关不支持的缓存字段**：仅在明确支持或用户显式配置时发送 `prompt_cache_key`，减少 OpenRouter、Kimi 等网关因 OpenAI/Codex 字段返回 400。
 
 ### 新功能
-- **余额查询可配置兜底**：模型适配器新增自定义余额查询 URL、取值字段和请求头配置，支持 `{{apiKey}}`、`{{baseUrl}}` 占位符，用于自动识别之外的中转站。
-- **更多供应商余额识别**：新增 DeepSeek、阶跃星辰、SiliconFlow、OpenRouter、Novita、sub2api usage 等余额来源识别与展示。
-- **Provider 流式耗时日志**：记录 OpenAI/Anthropic 首 token、总耗时、token 与缓存读写信息，便于排查慢请求和中转站响应问题。
+- **新增 Gemini 原生模型适配**：支持 `gemini_native` 协议组、Gemini 请求构造、流式文本/思考/工具调用/usage 事件桥接。
+- **新增 Gemini 前端配置入口**：模型编辑器、供应商模板、供应商详情批量拉取与探测流程均可选择 Gemini，并自动使用 Gemini 官方模型列表接口。
+- **扩展 provider 兼容层**：补充 Kimi、OpenRouter、DeepSeek、Qwen/DashScope、GLM、MiniMax、StepFun、xAI/Grok、GitHub Copilot 等常见兼容规则。
 
 ### 优化
-- **代理连接更稳健**：网络代理连接路径补充超时与回退处理，减少代理异常导致的卡顿。
-- **模型配置保存更严格**：保存前统一归一化和校验模型适配器配置，避免编辑态字段污染落盘配置。
-- **供应商余额展示更清晰**：余额卡片按可用余额、总额、已用额度分层展示，并标注来源与过期状态。
+- **供应商余额查询更稳健**：自定义余额查询与命名供应商识别更好地协同，避免 relay baseURL 误匹配到内置供应商。
+- **浏览器预览覆盖 Gemini**：browser-preview mock 增加 Gemini 示例模型和模型目录返回，便于无 Wails 环境下验证新入口。
+- **模型配置校验更完整**：前后端配置白名单、协议归类、运行时归一化和模型目录拉取均覆盖 OpenAI、Anthropic、Gemini。
 
 > **Windows 用户注意**：安装时若被 SmartScreen 拦截，点击「更多信息」->「仍要运行」即可。

@@ -39,9 +39,10 @@ const (
 
 // ProviderBalanceRequest 是查询余额所需的临时连接参数，镜像 ModelCatalogRequest。
 type ProviderBalanceRequest struct {
-	Type    string `json:"type"`
-	BaseURL string `json:"baseURL"`
-	APIKey  string `json:"apiKey"`
+	Type       string `json:"type"`
+	SupplierID string `json:"supplierID,omitempty"`
+	BaseURL    string `json:"baseURL"`
+	APIKey     string `json:"apiKey"`
 	// ForceRefresh 为 true 时绕过进程内 TTL 缓存，强制重新查询（供 UI 显式刷新使用）。
 	ForceRefresh bool `json:"forceRefresh,omitempty"`
 }
@@ -80,9 +81,12 @@ func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) Prov
 	}
 
 	cacheKey := metadataCacheKey(request.Type, request.BaseURL, apiKey)
-	configuredAdapter, hasConfiguredAdapter := s.findAdapterForBalance(request.Type, normalized, apiKey)
-	// 具名 provider 优先级高于配置化兜底；非具名且命中配置时，cache identity 必须包含配置 hash。
-	if hasConfiguredAdapter && detectBalanceProvider(normalized) == balanceProviderNone {
+	if supplierID := strings.ToLower(strings.TrimSpace(request.SupplierID)); supplierID != "" && supplierID != "custom" {
+		cacheKey += "|supplier=" + supplierID
+	}
+	configuredAdapter, hasConfiguredAdapter := s.findAdapterForBalance(request.Type, request.SupplierID, normalized, apiKey)
+	// 显式配置的余额接口优先，cache identity 必须包含配置 hash，避免和具名/通用策略串用缓存。
+	if hasConfiguredAdapter {
 		cacheKey = configuredBalanceCacheKey(cacheKey, configuredAdapter)
 	}
 	if request.ForceRefresh {
@@ -99,17 +103,7 @@ func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) Prov
 		httpClient = http.DefaultClient
 	}
 
-	// 策略 0：具名 provider 路由（DeepSeek/OpenRouter/SiliconFlow/StepFun/Novita 等，硬编码端点/字段/单位）。
-	// 命中域名即认为该 provider「负责本次查询」，其成功/确定性失败都直接返回，不再走后续通用试探链；
-	// 仅当为瞬时失败时透传 Transient，交给前端 keep-last-good。
-	if named, matched := s.queryNamedProviderBalance(ctx, httpClient, normalized, apiKey); matched {
-		if named.Supported {
-			s.providerBalanceCache.set(cacheKey, named)
-		}
-		return named
-	}
-
-	// 策略 0.5：可配置查询兜底（both 的配置侧）。provider 若配置了 BalanceQueryURL，按模板发一次 GET 并按点分路径取值。
+	// 策略 0：显式配置查询。provider 若配置了 BalanceQueryURL，按模板发一次 GET 并按点分路径取值。
 	if hasConfiguredAdapter {
 		if configured, matched := s.queryConfiguredBalanceWithAdapter(ctx, httpClient, configuredAdapter, normalized, apiKey); matched {
 			if configured.Supported {
@@ -119,28 +113,38 @@ func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) Prov
 		}
 	}
 
+	// 策略 1：具名 provider 路由（DeepSeek/OpenRouter/SiliconFlow/StepFun/Novita 等，硬编码端点/字段/单位）。
+	// 命中官方域名即认为该 provider「负责本次查询」，其成功/确定性失败都直接返回，不再走后续通用试探链；
+	// 仅当为瞬时失败时透传 Transient，交给前端 keep-last-good。
+	if named, matched := s.queryNamedProviderBalance(ctx, httpClient, normalized, apiKey, request.SupplierID); matched {
+		if named.Supported {
+			s.providerBalanceCache.set(cacheKey, named)
+		}
+		return named
+	}
+
 	tracker := &transientTracker{}
 
-	// 策略 1：OpenAI 计费端点（one-api/new-api 系中转站，返回 total+used）。
+	// 策略 2：OpenAI 计费端点（one-api/new-api 系中转站，返回 total+used）。
 	if balance, ok := queryOpenAIBillingBalance(ctx, httpClient, normalized, apiKey, tracker); ok {
 		// 仅缓存查询成功（Supported）的结果，不支持/失败结果不进缓存。
 		s.providerBalanceCache.set(cacheKey, balance)
 		return balance
 	}
 
-	// 策略 2：sub2api 风格 /v1/usage 端点（返回 remaining/unit/is_active）。
+	// 策略 3：sub2api 风格 /v1/usage 端点（返回 remaining/unit/is_active）。
 	if balance, ok := querySub2APIUsageBalance(ctx, httpClient, normalized, apiKey, tracker); ok {
 		s.providerBalanceCache.set(cacheKey, balance)
 		return balance
 	}
 
-	// 策略 3：NewAPI / OneAPI 风格用户信息端点。
+	// 策略 4：NewAPI / OneAPI 风格用户信息端点。
 	if balance, ok := queryNewAPIBalance(ctx, httpClient, normalized, apiKey, tracker); ok {
 		s.providerBalanceCache.set(cacheKey, balance)
 		return balance
 	}
 
-	// 策略 4：均不支持。不缓存，便于后续重试直接命中网络。
+	// 策略 5：均不支持。不缓存，便于后续重试直接命中网络。
 	// 若试探过程中发生过瞬时传输失败，标记 Transient=true，让前端保留上次成功值。
 	return ProviderBalance{Supported: false, Transient: tracker.hit, Message: "该中转站不支持已知的余额查询接口"}
 }

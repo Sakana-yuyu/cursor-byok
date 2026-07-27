@@ -2,10 +2,10 @@
 import CacheHitRateChart from "@/components/charts/CacheHitRateChart.vue";
 import Switch from "@/components/ui/Switch.vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
-import { fetchLocalCacheStats, fetchRecentRequestMetrics } from "@/services/clientApi";
+import { fetchLocalCacheStats, fetchMetricsRangeSummary, fetchRecentRequestMetrics } from "@/services/clientApi";
 import { appState, saveIncludeCacheWriteInHitRate } from "@/state/appState";
 import { formatCompactInteger, formatInteger } from "@/utils/numberFormat";
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
 const emit = defineEmits(["refresh", "open-ad"]);
@@ -40,29 +40,30 @@ const timeRanges = [
   { key: "all", label: "全部" },
   { key: "custom", label: "自定义" },
 ];
-const selectedRange = ref("today");
+const selectedRange = ref("24h");
 const customStart = ref("");
 const customEnd = ref("");
+const rangeNow = ref(Date.now());
 
 const chipBaseClass = "rounded-[6px] px-2.5 py-1 text-xs transition-colors border";
 const chipActiveClass = "border-[#10AD5D] bg-[#10AD5D] text-white";
 const chipIdleClass = "border-[#3f3f3f] bg-[#232323] text-[#a0a0a0] hover:border-[#4a4a4a] hover:text-white";
 
 const rangeStart = computed(() => {
-  const now = new Date();
+  const now = new Date(rangeNow.value);
   switch (selectedRange.value) {
     case "today": {
       const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       return d.getTime();
     }
     case "24h":
-      return now.getTime() - 24 * 3600_000;
+      return rangeNow.value - 24 * 3600_000;
     case "3d":
-      return now.getTime() - 3 * 86400_000;
+      return rangeNow.value - 3 * 86400_000;
     case "7d":
-      return now.getTime() - 7 * 86400_000;
+      return rangeNow.value - 7 * 86400_000;
     case "30d":
-      return now.getTime() - 30 * 86400_000;
+      return rangeNow.value - 30 * 86400_000;
     case "all":
       return 0;
     case "custom":
@@ -76,26 +77,35 @@ const rangeEnd = computed(() => {
   if (selectedRange.value === "custom" && customEnd.value) {
     return new Date(customEnd.value).getTime() + 86400_000;
   }
-  return Date.now();
+  return rangeNow.value;
 });
 
 // --- 数据加载 ---
 const allEvents = ref([]);
+const rangeSummary = ref(null);
 const eventsLoading = ref(false);
 const eventsError = ref("");
+let loadEventsSeq = 0;
 
 // 本地（进程内）响应缓存命中统计，与 provider prompt-cache 分开
 const localCacheStats = ref({ hits: 0, misses: 0, savedInputTokens: 0, savedOutputTokens: 0 });
 
 async function loadEvents() {
+  const seq = ++loadEventsSeq;
+  rangeNow.value = Date.now();
+  const start = rangeStart.value;
+  const end = rangeEnd.value;
   eventsLoading.value = true;
   eventsError.value = "";
   try {
-    const [data, cacheStats] = await Promise.all([
+    const [data, summaryData, cacheStats] = await Promise.all([
       fetchRecentRequestMetrics(0),
+      fetchMetricsRangeSummary(start, end).catch(() => null),
       fetchLocalCacheStats().catch(() => null),
     ]);
+    if (seq !== loadEventsSeq) return;
     allEvents.value = Array.isArray(data) ? data : [];
+    rangeSummary.value = summaryData && typeof summaryData === "object" ? summaryData : null;
     if (cacheStats && typeof cacheStats === "object") {
       localCacheStats.value = {
         hits: Number(cacheStats.hits || 0),
@@ -105,10 +115,13 @@ async function loadEvents() {
       };
     }
   } catch (e) {
+    if (seq !== loadEventsSeq) return;
     eventsError.value = String(e?.message || e || "加载失败");
     allEvents.value = [];
   } finally {
-    eventsLoading.value = false;
+    if (seq === loadEventsSeq) {
+      eventsLoading.value = false;
+    }
   }
 }
 
@@ -127,36 +140,38 @@ const filteredEvents = computed(() => {
 
 // --- 聚合 ---
 const summary = computed(() => {
-  let turnsTotal = 0, validTurnsTotal = 0, invalidTurnsTotal = 0;
-  let requestTokensTotal = 0, promptTokensTotal = 0;
-  let cacheReadTokens = 0, cacheWriteTokens = 0;
-
+  let turnsTotal = 0;
+  let validTurnsTotal = 0;
+  let invalidTurnsTotal = 0;
+  let requestTokensTotal = 0;
+  let promptTokensTotal = 0;
+  let cacheReadTokens = 0;
+  let cacheWriteTokens = 0;
   for (const ev of filteredEvents.value) {
     const kind = String(ev.kind || "").trim();
     if (kind === "turn_finalized") {
       turnsTotal++;
-      if (String(ev.status || "").trim() === "completed") {
-        validTurnsTotal++;
-      } else {
-        invalidTurnsTotal++;
-      }
-    } else {
-      // provider_call
-      requestTokensTotal += Number(ev.totalTokens || 0);
-      promptTokensTotal += Number(ev.inputTokens || 0) + Number(ev.cacheReadTokens || 0) + Number(ev.cacheWriteTokens || 0);
-      cacheReadTokens += Number(ev.cacheReadTokens || 0);
-      cacheWriteTokens += Number(ev.cacheWriteTokens || 0);
+      if (String(ev.status || "").trim() === "completed") validTurnsTotal++;
+      else invalidTurnsTotal++;
+      continue;
     }
+    if (kind !== "provider_call" && kind !== "") continue;
+    requestTokensTotal += Number(ev.totalTokens || 0);
+    promptTokensTotal += Number(ev.inputTokens || 0) + Number(ev.cacheReadTokens || 0) + Number(ev.cacheWriteTokens || 0);
+    cacheReadTokens += Number(ev.cacheReadTokens || 0);
+    cacheWriteTokens += Number(ev.cacheWriteTokens || 0);
   }
-
+  const provider = rangeSummary.value;
   return {
     turnsTotal,
     validTurnsTotal,
     invalidTurnsTotal,
-    requestTokensTotal,
-    promptTokensTotal,
-    cacheReadTokens,
-    cacheWriteTokens,
+    requestTokensTotal: provider ? Number(provider.totalTokens || 0) : requestTokensTotal,
+    promptTokensTotal: provider
+      ? Number(provider.inputTokens || 0) + Number(provider.cacheReadTokens || 0) + Number(provider.cacheWriteTokens || 0)
+      : promptTokensTotal,
+    cacheReadTokens: provider ? Number(provider.cacheReadTokens || 0) : cacheReadTokens,
+    cacheWriteTokens: provider ? Number(provider.cacheWriteTokens || 0) : cacheWriteTokens,
   };
 });
 
@@ -244,7 +259,7 @@ const rangeCostSummary = computed(() => {
   let unpricedRows = 0;
   let currency = "USD";
   for (const ev of filteredEvents.value) {
-    if (String(ev.kind || "").trim() === "turn_finalized") continue;
+    if (String(ev.kind || "").trim() !== "provider_call" && String(ev.kind || "").trim() !== "") continue;
     if (ev.pricingKnown === true && ev.costUsd != null) {
       const amount = Number(ev.costUsd);
       if (Number.isFinite(amount)) {
@@ -371,6 +386,10 @@ async function handleRefresh() {
   await loadEvents();
   emit("refresh");
 }
+
+watch([selectedRange, customStart, customEnd], () => {
+  void loadEvents();
+});
 
 onMounted(() => {
   void loadEvents();

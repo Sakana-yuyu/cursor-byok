@@ -65,8 +65,8 @@ func (s *ProxyService) FetchModelCatalog(request ModelCatalogRequest) (ModelCata
 	}
 
 	typeName := strings.ToLower(strings.TrimSpace(request.Type))
-	if typeName != "openai" && typeName != "anthropic" {
-		return ModelCatalogResult{}, i18n.NewError("error.model_adapter.type_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 type 仅支持 openai 或 anthropic")
+	if typeName != "openai" && typeName != "anthropic" && typeName != "gemini" {
+		return ModelCatalogResult{}, i18n.NewError("error.model_adapter.type_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 type 仅支持 openai、anthropic 或 gemini")
 	}
 	apiKey := strings.TrimSpace(request.APIKey)
 	if apiKey == "" {
@@ -87,6 +87,8 @@ func (s *ProxyService) FetchModelCatalog(request ModelCatalogRequest) (ModelCata
 	if typeName == "anthropic" {
 		headers.Set("x-api-key", apiKey)
 		headers.Set("anthropic-version", "2023-06-01")
+	} else if typeName == "gemini" {
+		headers.Set("x-goog-api-key", apiKey)
 	} else {
 		headers.Set("Authorization", "Bearer "+apiKey)
 	}
@@ -255,7 +257,8 @@ func modelCatalogItemFromValue(value any) (ModelCatalogItem, bool) {
 		if id == "" {
 			return ModelCatalogItem{}, false
 		}
-		contextWindowTokens := firstInt(item, "contextWindowTokens", "context_window", "context_window_tokens", "contextLength", "context_length")
+		id = strings.TrimPrefix(id, "models/")
+		contextWindowTokens := firstInt(item, "contextWindowTokens", "context_window", "context_window_tokens", "contextLength", "context_length", "inputTokenLimit", "input_token_limit")
 		return ModelCatalogItem{
 			ID:                  id,
 			Object:              firstString(item, "object", "type"),

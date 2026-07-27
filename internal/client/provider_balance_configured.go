@@ -1,6 +1,6 @@
-// provider_balance_configured.go 提供「可配置查询兜底」（策略 0.5，both 的配置侧）。
+// provider_balance_configured.go 提供「可配置查询」能力（显式配置优先）。
 //
-// 当具名 provider 未命中、又想在无 JS 运行时的情况下支持任意 provider 时，
+// 当用户想在无 JS 运行时的情况下支持任意 provider 时，
 // 用户可在 ModelAdapterConfig 上配置 BalanceQueryURL/BalanceQueryField/BalanceQueryHeaders：
 // 本文件按配置发一次 GET，并按点分路径（dot-path）从 JSON 响应取值。
 //
@@ -26,7 +26,7 @@ import (
 // queryConfiguredBalance 是策略 0.5 入口：查找匹配的 adapter 配置，若配置了 BalanceQueryURL 则执行。
 // 返回 (balance, matched)；matched=false 表示未配置或未找到匹配 adapter，调用方继续后续策略。
 func (s *ProxyService) queryConfiguredBalance(ctx context.Context, httpClient *http.Client, request ProviderBalanceRequest, normalizedBaseURL, apiKey string) (ProviderBalance, bool) {
-	adapter, ok := s.findAdapterForBalance(request.Type, normalizedBaseURL, apiKey)
+	adapter, ok := s.findAdapterForBalance(request.Type, request.SupplierID, normalizedBaseURL, apiKey)
 	if !ok {
 		return ProviderBalance{}, false
 	}
@@ -74,19 +74,25 @@ func (s *ProxyService) queryConfiguredBalanceWithAdapter(ctx context.Context, ht
 	}, true
 }
 
-// findAdapterForBalance 从持久化配置里找出 type + baseURL + apiKey 匹配的 adapter。
-func (s *ProxyService) findAdapterForBalance(reqType, normalizedBaseURL, apiKey string) (serverconfig.ModelAdapterConfig, bool) {
+// findAdapterForBalance 从持久化配置里找出 supplierID + type + baseURL + apiKey 匹配的 adapter。
+// supplierID 为空或 custom 时兼容旧调用方；具名 supplier 只接受同名配置，避免同一连接参数下串用余额接口。
+func (s *ProxyService) findAdapterForBalance(reqType, supplierID, normalizedBaseURL, apiKey string) (serverconfig.ModelAdapterConfig, bool) {
 	cfg, err := s.LoadUserConfig()
 	if err != nil {
 		return serverconfig.ModelAdapterConfig{}, false
 	}
 	wantType := strings.TrimSpace(strings.ToLower(reqType))
+	wantSupplier := strings.TrimSpace(strings.ToLower(supplierID))
 	wantKey := strings.TrimSpace(apiKey)
 	for _, adapter := range cfg.ModelAdapters {
 		if strings.TrimSpace(adapter.BalanceQueryURL) == "" || strings.TrimSpace(adapter.BalanceQueryField) == "" {
 			continue
 		}
 		if wantType != "" && strings.TrimSpace(strings.ToLower(adapter.Type)) != wantType {
+			continue
+		}
+		adapterSupplier := strings.TrimSpace(strings.ToLower(adapter.SupplierID))
+		if wantSupplier != "" && wantSupplier != "custom" && adapterSupplier != wantSupplier {
 			continue
 		}
 		if wantKey != "" && strings.TrimSpace(adapter.APIKey) != wantKey {

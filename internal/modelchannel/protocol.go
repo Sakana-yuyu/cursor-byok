@@ -10,6 +10,7 @@ const (
 	ProtocolGroupChatCompletions       = OpenAIRequestGroupChatCompletions
 	ProtocolGroupChatCompletionsCompat = OpenAIRequestGroupChatCompletionsCompat
 	ProtocolGroupAnthropicMessages     = "messages"
+	ProtocolGroupGeminiNative          = "gemini_native"
 )
 
 func NormalizeProtocolMode(value string) string {
@@ -36,6 +37,10 @@ func NormalizeProtocolGroup(providerType string, value string) string {
 		if group == "" || group == ProtocolGroupAnthropicMessages {
 			return ProtocolGroupAnthropicMessages
 		}
+	case "gemini":
+		if group == "" || group == ProtocolGroupGeminiNative {
+			return ProtocolGroupGeminiNative
+		}
 	}
 	return ""
 }
@@ -46,6 +51,9 @@ func ClassifyProtocolGroup(providerType string, modelID string, baseURL string, 
 	provider := strings.ToLower(strings.TrimSpace(providerType))
 	if provider == "anthropic" {
 		return ProtocolGroupAnthropicMessages
+	}
+	if provider == "gemini" {
+		return ProtocolGroupGeminiNative
 	}
 	if provider != "openai" {
 		return ""

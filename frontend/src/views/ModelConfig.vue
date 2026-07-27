@@ -165,6 +165,7 @@ function balanceSourceLabel(source) {
   if (source === "siliconflow") return "SiliconFlow";
   if (source === "openrouter") return "OpenRouter";
   if (source === "novita") return "Novita";
+  if (source === "moonshot") return "Moonshot / Kimi";
   return String(source || "").trim();
 }
 
@@ -203,6 +204,7 @@ async function loadSupplierBalance(supplier, forceRefresh = false) {
   try {
     const request = {
       type: supplier.type,
+      supplierID: rep.supplierID || supplier.supplierID,
       baseURL: rep.baseURL || supplier.baseURL,
       apiKey: rep.apiKey || supplier.apiKey,
     };

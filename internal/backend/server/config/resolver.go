@@ -86,6 +86,7 @@ func resolveModelAdapterChannel(adapters []ModelAdapterConfig, requestedModel st
 		GroupName:                   strings.TrimSpace(matched.GroupName),
 		Code:                        strings.TrimSpace(matched.ID),
 		Provider:                    strings.TrimSpace(matched.Type),
+		SupplierID:                  strings.TrimSpace(matched.SupplierID),
 		ProtocolMode:                strings.TrimSpace(matched.ProtocolMode),
 		ProtocolGroup:               strings.TrimSpace(matched.ProtocolGroup),
 		BaseURL:                     strings.TrimSpace(matched.BaseURL),

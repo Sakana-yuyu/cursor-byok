@@ -33,10 +33,30 @@ const (
 	balanceProviderSiliconFlowEN
 	balanceProviderOpenRouter
 	balanceProviderNovita
+	balanceProviderMoonshot
 )
 
 // detectBalanceProvider 按 baseURL 域名匹配具名 provider（对照 cc-switch detect_provider）。
 // 返回 balanceProviderNone 表示未命中，交由后续策略处理。
+func namedBalanceProviderForSupplier(supplierID string) namedBalanceProvider {
+	switch strings.ToLower(strings.TrimSpace(supplierID)) {
+	case "deepseek":
+		return balanceProviderDeepSeek
+	case "moonshot", "kimi":
+		return balanceProviderMoonshot
+	case "stepfun":
+		return balanceProviderStepFun
+	case "siliconflow":
+		return balanceProviderSiliconFlowCN
+	case "openrouter":
+		return balanceProviderOpenRouter
+	case "novita":
+		return balanceProviderNovita
+	default:
+		return balanceProviderNone
+	}
+}
+
 func detectBalanceProvider(baseURL string) namedBalanceProvider {
 	url := strings.ToLower(baseURL)
 	switch {
@@ -52,15 +72,24 @@ func detectBalanceProvider(baseURL string) namedBalanceProvider {
 		return balanceProviderOpenRouter
 	case strings.Contains(url, "api.novita.ai"):
 		return balanceProviderNovita
+	case strings.Contains(url, "api.moonshot.cn") || strings.Contains(url, "platform.moonshot.cn"):
+		return balanceProviderMoonshot
 	default:
 		return balanceProviderNone
 	}
 }
 
-// queryNamedProviderBalance 是策略 0 的入口：先按域名检测，命中则调对应查询函数。
+// queryNamedProviderBalance 是具名 provider 入口：先按域名检测，命中则调对应查询函数。
 // 返回 (balance, matched)；matched=false 表示未命中具名 provider，调用方继续后续策略。
-func (s *ProxyService) queryNamedProviderBalance(ctx context.Context, httpClient *http.Client, normalizedBaseURL, apiKey string) (ProviderBalance, bool) {
-	switch detectBalanceProvider(normalizedBaseURL) {
+func (s *ProxyService) queryNamedProviderBalance(ctx context.Context, httpClient *http.Client, normalizedBaseURL, apiKey, supplierID string) (ProviderBalance, bool) {
+	provider := detectBalanceProvider(normalizedBaseURL)
+	if provider == balanceProviderNone {
+		return ProviderBalance{}, false
+	}
+	if configured := namedBalanceProviderForSupplier(supplierID); configured != balanceProviderNone && configured != provider {
+		return ProviderBalance{}, false
+	}
+	switch provider {
 	case balanceProviderDeepSeek:
 		return queryDeepSeekBalance(ctx, httpClient, apiKey), true
 	case balanceProviderStepFun:
@@ -73,6 +102,8 @@ func (s *ProxyService) queryNamedProviderBalance(ctx context.Context, httpClient
 		return queryOpenRouterBalance(ctx, httpClient, apiKey), true
 	case balanceProviderNovita:
 		return queryNovitaBalance(ctx, httpClient, apiKey), true
+	case balanceProviderMoonshot:
+		return queryMoonshotBalance(ctx, httpClient, apiKey), true
 	default:
 		return ProviderBalance{}, false
 	}
@@ -199,6 +230,57 @@ func queryDeepSeekBalance(ctx context.Context, httpClient *http.Client, apiKey s
 		Remaining: &rv,
 		Message:   message,
 	}
+}
+
+// ── Moonshot / Kimi ─────────────────────────────────────────
+// Moonshot exposes the account quota at /v1/users/me/balance. The response
+// uses a USD amount in the current API; retain the generic parser fallback for
+// deployments that return balance or available_balance instead.
+func queryMoonshotBalance(ctx context.Context, httpClient *http.Client, apiKey string) ProviderBalance {
+	const source = "moonshot"
+	body, status, transient, err := namedBalanceGET(ctx, httpClient, "https://api.moonshot.cn/v1/users/me/balance", apiKey)
+	if err != nil {
+		return namedBalanceFail(source, "网络错误："+err.Error(), transient)
+	}
+	if status == http.StatusUnauthorized || status == http.StatusForbidden {
+		return namedBalanceFail(source, fmt.Sprintf("鉴权失败（HTTP %d）", status), false)
+	}
+	if status < http.StatusOK || status >= http.StatusMultipleChoices {
+		return namedBalanceFail(source, fmt.Sprintf("接口错误（HTTP %d）", status), false)
+	}
+	var payload map[string]any
+	if jsonErr := json.Unmarshal(body, &payload); jsonErr != nil {
+		return namedBalanceFail(source, "响应解析失败："+jsonErr.Error(), false)
+	}
+	remaining, ok := firstJSONNumber(payload, "balance", "available_balance", "availableBalance", "remaining")
+	if !ok {
+		if data, nested := payload["data"].(map[string]any); nested {
+			remaining, ok = firstJSONNumber(data, "balance", "available_balance", "availableBalance", "remaining")
+		}
+	}
+	if !ok {
+		return namedBalanceFail(source, "响应缺少可解析的余额字段", false)
+	}
+	message := "查询成功"
+	if remaining <= 0 {
+		message = "No balance remaining"
+	}
+	return ProviderBalance{
+		Supported: true,
+		Source:    source,
+		Currency:  "USD",
+		Remaining: &remaining,
+		Message:   message,
+	}
+}
+
+func firstJSONNumber(payload map[string]any, keys ...string) (float64, bool) {
+	for _, key := range keys {
+		if value, ok := jsonNumberToFloat(payload[key]); ok {
+			return value, true
+		}
+	}
+	return 0, false
 }
 
 // ── StepFun ─────────────────────────────────────────────────

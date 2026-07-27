@@ -32,6 +32,8 @@ import { useRoute, useRouter } from "vue-router";
 
 const OPENAI_ENDPOINT_RESPONSES = "/v1/responses";
 const OPENAI_ENDPOINT_CHAT = "/v1/chat/completions";
+const PROTOCOL_GROUP_ANTHROPIC_MESSAGES = "messages";
+const PROTOCOL_GROUP_GEMINI_NATIVE = "gemini_native";
 
 const route = useRoute();
 const router = useRouter();
@@ -202,8 +204,19 @@ const visibleAdapters = computed(() => {
   return list;
 });
 
-// 第一个模型的 type/apiKey/customHeaders，用于拉取新模型
-const supplierMeta = computed(() => supplierAdapters.value[0] || null);
+// 第一个模型的 type/apiKey/customHeaders，用于拉取新模型；混合供应商分组不传具名 supplierID，避免误触发官方专用接口。
+const supplierMeta = computed(() => {
+  const first = supplierAdapters.value[0];
+  if (!first) return null;
+  const supplierIDs = new Set(
+    supplierAdapters.value
+      .map((adapter) => String(adapter.supplierID || "custom").trim().toLowerCase() || "custom"),
+  );
+  return {
+    ...first,
+    supplierID: supplierIDs.size === 1 ? first.supplierID : "custom",
+  };
+});
 
 // 余额/额度查询（非阻塞，失败不影响页面）
 // data：当前用于展示的余额（成功值，或瞬时失败时保留的上次成功值）。
@@ -235,6 +248,7 @@ function balanceSourceLabel(source) {
   if (source === "siliconflow") return "SiliconFlow";
   if (source === "openrouter") return "OpenRouter";
   if (source === "novita") return "Novita";
+  if (source === "moonshot") return "Moonshot / Kimi";
   return String(source || "").trim();
 }
 
@@ -276,6 +290,7 @@ async function loadBalance(forceRefresh = false) {
   try {
     const request = {
       type: meta.type,
+      supplierID: meta.supplierID,
       baseURL: meta.baseURL || queryBaseURL.value,
       apiKey: meta.apiKey,
     };
@@ -323,11 +338,18 @@ const selectedCatalogModels = ref(new Set());
 // 可用性探测
 const catalogProbe = useModelProbe();
 
+function protocolGroupForType(type) {
+  if (type === "anthropic") return PROTOCOL_GROUP_ANTHROPIC_MESSAGES;
+  if (type === "gemini") return PROTOCOL_GROUP_GEMINI_NATIVE;
+  return "";
+}
+
 function buildProbeAdapter(model) {
   if (!supplierMeta.value) return { ...createEmptyModelAdapter(), modelID: model.id, tooltipData: `探测 ${model.id}` };
   return {
     ...createEmptyModelAdapter(),
     type: supplierMeta.value.type,
+    supplierID: supplierMeta.value.supplierID,
     baseURL: supplierMeta.value.baseURL || queryBaseURL.value,
     apiKey: supplierMeta.value.apiKey,
     customHeadersEnabled: Boolean(supplierMeta.value.customHeadersEnabled),
@@ -336,7 +358,7 @@ function buildProbeAdapter(model) {
     modelID: model.id,
     tooltipData: `探测 ${model.id}`,
     protocolMode: "auto",
-    protocolGroup: supplierMeta.value.type === "anthropic" ? "messages" : "",
+    protocolGroup: protocolGroupForType(supplierMeta.value.type),
     openAIEndpoint: supplierMeta.value.type === "openai" ? OPENAI_ENDPOINT_RESPONSES : "",
     anthropicThinkingEffort: supplierMeta.value.type === "anthropic" ? "xhigh" : "",
   };
@@ -397,6 +419,7 @@ async function handleFetchModels() {
   try {
     const result = await fetchModelCatalog({
       type: supplierMeta.value.type,
+      supplierID: supplierMeta.value.supplierID,
       baseURL: supplierMeta.value.baseURL || queryBaseURL.value,
       apiKey: supplierMeta.value.apiKey,
       customHeadersEnabled: Boolean(supplierMeta.value.customHeadersEnabled),
@@ -436,6 +459,7 @@ async function handleBatchAddModels() {
     const adapters = selected.map((model) => ({
       ...createEmptyModelAdapter(),
       type: supplierMeta.value.type,
+      supplierID: supplierMeta.value.supplierID,
       baseURL: seedBaseURL,
       apiKey: supplierMeta.value.apiKey,
       customHeadersEnabled: Boolean(supplierMeta.value.customHeadersEnabled),
@@ -447,7 +471,7 @@ async function handleBatchAddModels() {
       contextWindowTokens: model.contextWindowTokens || 0,
       pricing: model.pricing || null,
       protocolMode: "auto",
-      protocolGroup: supplierMeta.value.type === "anthropic" ? "messages" : "",
+      protocolGroup: protocolGroupForType(supplierMeta.value.type),
       openAIEndpoint: supplierMeta.value.type === "openai" ? OPENAI_ENDPOINT_RESPONSES : "",
       openAIRequestGroup: "",
       anthropicThinkingEffort: supplierMeta.value.type === "anthropic" ? "xhigh" : "",

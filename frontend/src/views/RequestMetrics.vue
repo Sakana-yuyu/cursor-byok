@@ -17,8 +17,11 @@ const formatTime = (value) => (value ? new Date(value).toLocaleString() : "-");
 const formatRate = (value) => (value == null ? "-" : `${(Number(value) * 100).toFixed(1)}%`);
 const formatNumber = (value) => Number(value || 0).toLocaleString();
 
-// turn_finalized 只用于轮次，不在请求明细展示
-const visibleRows = computed(() => rows.value.filter((row) => row.kind !== "turn_finalized"));
+// 请求明细只展示 provider_call；兼容旧数据中缺少 kind 的记录。
+const visibleRows = computed(() => rows.value.filter((row) => {
+  const kind = String(row?.kind || "").trim();
+  return kind === "provider_call" || kind === "";
+}));
 
 // 异常请求：provider 没有返回 usage 或明确报错，通常是流中断/取消/provider 错误
 function isAbnormalRow(row) {
