@@ -1,8 +1,11 @@
 package forwarder
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,6 +20,7 @@ type turnUsageSnapshot struct {
 	Model             string
 	BaseURL           string
 	GroupName         string
+	ErrorCode         string
 	InputTokens       int64
 	OutputTokens      int64
 	CacheReadTokens   int64
@@ -344,6 +348,27 @@ func (service *Service) recordTurnUsageSnapshot(stream *ActiveStream, conversati
 	}
 	channelBaseURL := strings.TrimSpace(usage.BaseURL)
 	channelGroupName := strings.TrimSpace(usage.GroupName)
+	// 失败时常没有 TurnFinished，usage 里可能缺 provider/渠道信息；用当前模型渠道补齐，避免明细空白。
+	if (provider == "" || channelBaseURL == "" || channelGroupName == "") && strings.TrimSpace(modelID) != "" && service.resolver != nil {
+		if channel, err := service.resolver.SelectChannelForModel(context.Background(), modelID); err == nil && channel != nil {
+			if provider == "" {
+				provider = strings.TrimSpace(channel.Provider)
+			}
+			if channelBaseURL == "" {
+				channelBaseURL = strings.TrimSpace(channel.BaseURL)
+			}
+			if channelGroupName == "" {
+				channelGroupName = strings.TrimSpace(channel.GroupName)
+			}
+			if strings.TrimSpace(usage.Model) == "" && strings.TrimSpace(channel.Model) != "" {
+				modelName = strings.TrimSpace(channel.Model)
+			}
+		}
+	}
+	errorCode := strings.TrimSpace(usage.ErrorCode)
+	if errorCode == "" {
+		errorCode = extractUsageErrorCode(errorText)
+	}
 	effectiveModelCallID := firstNonEmpty(strings.TrimSpace(modelCallID), strings.TrimSpace(requestID))
 	normalizedStatus := normalizeUsageProviderStatus(status, usage.UsagePresent)
 	if service.usageStore != nil {
@@ -356,6 +381,7 @@ func (service *Service) recordTurnUsageSnapshot(stream *ActiveStream, conversati
 			Provider:         provider,
 			BaseURL:          channelBaseURL,
 			GroupName:        channelGroupName,
+			ErrorCode:        errorCode,
 			InputTokens:      usage.InputTokens,
 			OutputTokens:     usage.OutputTokens,
 			CacheReadTokens:  usage.CacheReadTokens,
@@ -440,6 +466,60 @@ func normalizeUsageProviderStatus(status string, usagePresent bool) string {
 	default:
 		return trimmed
 	}
+}
+
+// extractUsageErrorCode 从错误文本提取请求明细可展示的错误码（message 中的 status=N）。
+func extractUsageErrorCode(errorText string) string {
+	trimmed := strings.TrimSpace(errorText)
+	if trimmed == "" {
+		return ""
+	}
+	if code := parseUsageErrorStatusFromText(trimmed); code > 0 {
+		return strconv.Itoa(code)
+	}
+	return ""
+}
+
+// extractUsageErrorCodeFromCause 从真实 error 链提取错误码（HTTP 状态或 terminal code）。
+func extractUsageErrorCodeFromCause(cause error) string {
+	if cause == nil {
+		return ""
+	}
+	var httpErr *modeladapter.HTTPStatusError
+	if errors.As(cause, &httpErr) && httpErr != nil && httpErr.Status() > 0 {
+		return strconv.Itoa(httpErr.Status())
+	}
+	if code := parseUsageErrorStatusFromText(cause.Error()); code > 0 {
+		return strconv.Itoa(code)
+	}
+	var coded interface{ TerminalCode() string }
+	if errors.As(cause, &coded) {
+		if text := strings.TrimSpace(coded.TerminalCode()); text != "" {
+			return text
+		}
+	}
+	return ""
+}
+
+func parseUsageErrorStatusFromText(message string) int {
+	const marker = "status="
+	index := strings.Index(message, marker)
+	if index < 0 {
+		return 0
+	}
+	rest := message[index+len(marker):]
+	end := 0
+	for end < len(rest) && rest[end] >= '0' && rest[end] <= '9' {
+		end++
+	}
+	if end == 0 {
+		return 0
+	}
+	status, err := strconv.Atoi(rest[:end])
+	if err != nil {
+		return 0
+	}
+	return status
 }
 
 func turnUsageEventID(conversationID string, turnSeq int64, requestID string) string {

@@ -2157,6 +2157,15 @@ func (service *Service) closeStreamWithProviderError(
 	if errorText == "" {
 		errorText = "provider error"
 	}
+	if strings.TrimSpace(usage.ErrorCode) == "" {
+		if code := extractUsageErrorCodeFromCause(providerErr); code != "" {
+			usage.ErrorCode = code
+		} else if code := extractUsageErrorCode(errorText); code != "" {
+			usage.ErrorCode = code
+		} else {
+			usage.ErrorCode = "provider_error"
+		}
+	}
 	modelCallID := strings.TrimSpace(stream.CurrentModelCallID)
 	if err := service.flushAssistantText(stream, conversationID, turnSeq, requestID, accumulatedText, accumulatedReasoning, accumulatedReasoningSignature, accumulatedReasoningSignatureSource, accumulatedReasoningItemID, accumulatedReasoningStatus, accumulatedReasoningSummary, allowReasoningOnly); err != nil {
 		return fmt.Errorf("flush provider error assistant output: %w", err)

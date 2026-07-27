@@ -97,7 +97,24 @@ const supplierLookup = computed(() => {
   return map;
 });
 
+function formatHost(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  try {
+    return new URL(text).host || text;
+  } catch {
+    return text.replace(/^https?:\/\//, "");
+  }
+}
+
 function supplierMetaForRow(row) {
+  // 优先事件自带 groupName / baseUrl（失败写入也会带上），再回退本地 model+provider 反查
+  const direct =
+    String(row?.groupName || "").trim() ||
+    formatHost(row?.baseUrl) ||
+    formatHost(row?.baseURL);
+  if (direct) return { label: direct, title: direct };
+
   const model = String(row?.model || "").trim();
   const provider = String(row?.provider || "").trim().toLowerCase();
   const entry = supplierLookup.value.get(`${model}\n${provider}`);
@@ -106,6 +123,15 @@ function supplierMetaForRow(row) {
   if (list.length === 0) return { label: "", title: "" };
   if (list.length === 1) return { label: list[0], title: list[0] };
   return { label: `${list[0]} 等 ${list.length} 个`, title: list.join("、") };
+}
+
+function errorCodeForRow(row) {
+  const code = String(row?.errorCode || "").trim();
+  if (code) return code;
+  // 旧数据无 errorCode：错误态用 status 作兜底展示
+  const status = String(row?.status || "").trim();
+  if (status === "provider_error" || status === "no_usage") return status;
+  return "";
 }
 
 // usage 事件状态 -> 中文展示
@@ -156,6 +182,7 @@ const displayRows = computed(() =>
     tone: statusTone(row),
     cost: formatCost(row),
     supplier: supplierMetaForRow(row),
+    errorCode: errorCodeForRow(row),
   })),
 );
 
@@ -266,6 +293,7 @@ onUnmounted(() => {
             <th class="p-3 font-medium">状态</th>
             <th class="p-3 font-medium">时间</th>
             <th class="p-3 font-medium">供应商</th>
+            <th class="p-3 font-medium">错误码</th>
             <th class="p-3 font-medium">模型</th>
             <th class="p-3 font-medium text-[#60a5fa]">输入</th>
             <th class="p-3 font-medium text-[#f59e0b]">输出</th>
@@ -278,10 +306,10 @@ onUnmounted(() => {
         </thead>
         <tbody>
           <tr v-if="loading && totalCount === 0">
-            <td colspan="11" class="p-10 text-center text-[#777]">正在读取请求明细…</td>
+            <td colspan="12" class="p-10 text-center text-[#777]">正在读取请求明细…</td>
           </tr>
           <tr v-else-if="!loading && totalCount === 0">
-            <td colspan="11" class="p-10 text-center text-[#777]">暂无已记录请求</td>
+            <td colspan="12" class="p-10 text-center text-[#777]">暂无已记录请求</td>
           </tr>
           <tr
             v-for="item in displayRows"
@@ -305,8 +333,18 @@ onUnmounted(() => {
                 :title="item.supplier.title || providerLabel(item.row.provider)"
               >
                 <span v-if="providerIcon(item.row.provider)" :class="[providerIcon(item.row.provider), 'text-[14px]']" />
-                {{ item.supplier.label || providerLabel(item.row.provider) }}
+                {{ item.supplier.label || providerLabel(item.row.provider) || "-" }}
               </span>
+            </td>
+            <td class="p-3">
+              <span
+                v-if="item.errorCode"
+                class="inline-flex max-w-[160px] truncate rounded-[6px] border border-[#4b1d1d] bg-[#2a1313] px-2 py-0.5 text-[11px] text-[#fca5a5]"
+                :title="item.errorCode"
+              >
+                {{ item.errorCode }}
+              </span>
+              <span v-else class="text-[#666]">-</span>
             </td>
             <td class="max-w-[240px] truncate p-3" :title="item.row.model">{{ item.row.model || "-" }}</td>
             <td class="p-3 font-medium text-[#60a5fa]" style="font-family: var(--font-num)">

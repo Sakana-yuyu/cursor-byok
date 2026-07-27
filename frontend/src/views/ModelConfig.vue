@@ -133,6 +133,26 @@ function healthSummary(supplier) {
   return { ok, fail, tested, total: models.length, untested: models.length - tested };
 }
 
+/** 供应商卡片备注：同组模型上出现次数最多的非空 tooltipData（表单「备注」字段）。 */
+function remarkSummary(supplier) {
+  const counts = new Map();
+  for (const model of supplier.models || []) {
+    const text = String(model?.tooltipData || "").trim();
+    if (!text) continue;
+    counts.set(text, (counts.get(text) || 0) + 1);
+  }
+  if (counts.size === 0) return "";
+  let best = "";
+  let bestCount = 0;
+  for (const [text, count] of counts) {
+    if (count > bestCount || (count === bestCount && text.localeCompare(best) < 0)) {
+      best = text;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
 // 按供应商懒加载余额（点击查询，结果缓存于组件状态，避免重复请求）
 const balanceBySupplier = ref({}); // key -> { loading, loaded, data }
 
@@ -387,6 +407,11 @@ onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }).catch(() =>
                     :class="healthSummary(supplier).fail > 0 ? 'bg-[#f87171]/15 text-[#fca5a5]' : 'bg-[#10AD5D]/15 text-[#6ee7a5]'"
                     :title="`已测 ${healthSummary(supplier).tested}/${healthSummary(supplier).total}，可用 ${healthSummary(supplier).ok}，失败 ${healthSummary(supplier).fail}`"
                   >{{ healthSummary(supplier).ok }}/{{ healthSummary(supplier).total }} 可用</span>
+                  <span
+                    v-if="remarkSummary(supplier)"
+                    class="min-w-0 flex-1 truncate text-[11px] text-[#8f8f8f]"
+                    :title="remarkSummary(supplier)"
+                  >{{ remarkSummary(supplier) }}</span>
                 </div>
                 <div class="truncate text-[#737373]">Key {{ maskSecret(supplier.apiKey) }}</div>
                 <!-- 余额（懒加载：点击查询，结果缓存） -->

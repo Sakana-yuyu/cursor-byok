@@ -92,6 +92,7 @@ func NewProxyService(proxy *mitm.ProxyServer, certManager *certs.Manager, caCert
 		modelCatalogCache:    newMetadataCache[ModelCatalogResult](modelCatalogCacheTTL),
 		providerBalanceCache: newMetadataCache[ProviderBalance](providerBalanceCacheTTL),
 	}
+	service.loadPersistedModelAdapterTestResults()
 	service.store = serverconfig.NewStore(service.configPath, service.logsRoot)
 	host, err := backend.NewHost(service.store)
 	if err != nil {

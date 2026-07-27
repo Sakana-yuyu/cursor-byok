@@ -25,6 +25,7 @@ type RequestMetric struct {
 	Provider         string    `json:"provider"`
 	BaseURL          string    `json:"baseUrl"`
 	GroupName        string    `json:"groupName"`
+	ErrorCode        string    `json:"errorCode"`
 	InputTokens      int64     `json:"inputTokens"`
 	OutputTokens     int64     `json:"outputTokens"`
 	CacheReadTokens  int64     `json:"cacheReadTokens"`
