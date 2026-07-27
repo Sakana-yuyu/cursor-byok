@@ -581,6 +581,7 @@ func (service *Service) decodeInboundIntent(requestID string, message *agentv1.A
 		}
 		intent.ModelID = extractRequestedModelID(message)
 		intent.ThinkingEffort = extractRuntimeThinkingEffort(message)
+		intent.MaxMode = extractRequestedMaxMode(message)
 		intent.SubagentTypeName = strings.TrimSpace(runRequest.GetSubagentTypeName())
 		parsedOverrides := parseSubagentModelOverrides(runRequest.GetSubagentModelOverrides())
 		intent.SubagentModelOverrides = parsedOverrides.Overrides
@@ -616,6 +617,7 @@ func (service *Service) decodeInboundIntent(requestID string, message *agentv1.A
 		}
 		intent.ModelID = firstNonEmpty(extractRequestedModelID(message), "default")
 		intent.ThinkingEffort = extractRuntimeThinkingEffort(message)
+		intent.MaxMode = extractRequestedMaxMode(message)
 		intent.ModelName = service.resolveRequestedModelName(message, intent.ModelID)
 	case "conversation_action":
 		action := message.GetConversationAction()
@@ -641,6 +643,7 @@ func (service *Service) decodeInboundIntent(requestID string, message *agentv1.A
 					intent.ModelID = strings.TrimSpace(stream.ModelID)
 					intent.ModelName = strings.TrimSpace(stream.ModelName)
 					intent.ThinkingEffort = strings.TrimSpace(stream.ThinkingEffort)
+					intent.MaxMode = stream.MaxMode
 					intent.SubagentModelOverrides = cloneSubagentModelOverrides(stream.SubagentModelOverrides)
 					if !intent.HasExplicitMode && stream.Mode != agentv1.AgentMode_AGENT_MODE_UNSPECIFIED {
 						intent.Mode = stream.Mode
@@ -794,6 +797,7 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 	clearPendingProviderCompletion(stream)
 	stream.mu.Lock()
 	stream.ThinkingEffort = strings.TrimSpace(intent.ThinkingEffort)
+	stream.MaxMode = intent.MaxMode
 	stream.SubagentModelOverrides = cloneSubagentModelOverrides(intent.SubagentModelOverrides)
 	stream.PendingProviderAction = providerActionNone
 	stream.PendingCompaction = nil
@@ -1453,6 +1457,7 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	modelID := stream.ModelID
 	modelName := stream.ModelName
 	thinkingEffort := stream.ThinkingEffort
+	maxMode := stream.MaxMode
 	mode := stream.Mode
 	latestUserText := stream.LatestUserText
 	stream.UpdatedAt = time.Now().UTC()
@@ -1530,6 +1535,7 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 		ModelID:            modelID,
 		Mode:               compiled.Mode,
 		ThinkingEffort:     compiled.Mode.String(),
+		MaxMode:            maxMode,
 		Messages:           compiled.Messages,
 		StableMessageCount: compiled.StableMessageCount,
 		Tools:              compiled.Tools,
@@ -2931,6 +2937,24 @@ func extractRuntimeThinkingEffortFromRequestedModel(model *agentv1.RequestedMode
 		return normalizeRuntimeThinkingEffort(model.GetModelId())
 	}
 	return ""
+}
+
+// extractRequestedMaxMode 提取本轮请求的 max_mode 开关。
+func extractRequestedMaxMode(message *agentv1.AgentClientMessage) bool {
+	if message == nil {
+		return false
+	}
+	if runRequest := message.GetRunRequest(); runRequest != nil {
+		if model := runRequest.GetRequestedModel(); model != nil {
+			return model.GetMaxMode()
+		}
+	}
+	if prewarm := message.GetPrewarmRequest(); prewarm != nil {
+		if model := prewarm.GetRequestedModel(); model != nil {
+			return model.GetMaxMode()
+		}
+	}
+	return false
 }
 
 func isRuntimeThinkingEffortParameterID(raw string) bool {

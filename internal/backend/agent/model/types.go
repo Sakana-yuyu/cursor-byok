@@ -76,6 +76,8 @@ type StreamRequest struct {
 	ModelID string
 	// ThinkingEffort 表示客户端在本轮运行时选择的思考强度覆盖。
 	ThinkingEffort string
+	// MaxMode 表示是否使用模型最大上下文窗口（true=目录最大值, false=配置值）。
+	MaxMode bool
 	// Provider 表示目标 provider 类型，例如 openai 或 anthropic。
 	Provider string
 	// ProtocolMode 表示协议选择模式：auto 或 fixed。

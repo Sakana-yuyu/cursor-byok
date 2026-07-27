@@ -6,7 +6,7 @@ import Select from "@/components/ui/Select.vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
 import { getModelEditorContext, fetchModelCatalog } from "@/services/clientApi";
 import { useModelProbe } from "@/composables/useModelProbe";
-import { resolveModelContextWindow } from "@/utils/modelContext";
+import { resolveModelContextWindow, resolveModelCapabilities } from "@/utils/modelContext";
 import { providerIcon, providerLabel, providerSelectOptions } from "@/utils/providerMeta";
 import { supplierSelectOptions, supplierTemplate } from "@/utils/supplierCatalog";
 import {
@@ -197,6 +197,29 @@ const maxCompletionTokensInput = createOptionalPositiveIntegerModel("maxCompleti
 const anthropicMaxTokensInput = createOptionalPositiveIntegerModel("anthropicMaxTokens");
 const contextWindowTokensInput = createOptionalPositiveIntegerModel("contextWindowTokens");
 const detectedContextWindow = computed(() => resolveModelContextWindow(draft.modelID));
+const detectedCapabilities = computed(() => resolveModelCapabilities(draft.modelID));
+
+// 上下文窗口快捷档位
+const CONTEXT_TIERS = [
+  { label: "128K", tokens: 128_000 },
+  { label: "200K", tokens: 200_000 },
+  { label: "256K", tokens: 256_000 },
+  { label: "500K", tokens: 500_000 },
+  { label: "1M", tokens: 1_000_000 },
+];
+const activeContextTier = computed(() => {
+  const current = draft.contextWindowTokens;
+  return CONTEXT_TIERS.find(t => t.tokens === current) || null;
+});
+const recommendedContextTier = computed(() => {
+  const cap = detectedCapabilities.value;
+  if (!cap) return null;
+  return CONTEXT_TIERS.find(t => t.tokens === cap.contextWindowTokens) || null;
+});
+function selectContextTier(tier) {
+  draft.contextWindowTokens = tier.tokens;
+}
+
 const interfacePlaceholder = computed(() => {
   if (draft.type === "anthropic") return "例如：https://api.anthropic.com";
   if (draft.type === "gemini") return "例如：https://generativelanguage.googleapis.com/v1beta";
@@ -1042,6 +1065,56 @@ onMounted(async () => {
               <Tooltip :content="fieldTips.contextWindowTokens" />
               <span>上下文窗口</span>
             </span>
+
+            <!-- 模型能力徽章 -->
+            <div v-if="detectedCapabilities" class="flex flex-wrap items-center gap-1.5">
+              <span v-if="detectedCapabilities.supportsVision" class="inline-flex items-center gap-0.5 rounded-full border border-[#3f3f3f] bg-[#2a2a2a] px-2 py-0.5 text-[11px] text-[#86efac]">
+                <span class="icon-[mdi--eye-outline] text-[12px]"></span>视觉
+              </span>
+              <span v-if="detectedCapabilities.supportsThinking" class="inline-flex items-center gap-0.5 rounded-full border border-[#3f3f3f] bg-[#2a2a2a] px-2 py-0.5 text-[11px] text-[#93c5fd]">
+                <span class="icon-[mdi--brain] text-[12px]"></span>思考
+              </span>
+              <span v-if="detectedCapabilities.supportsTools" class="inline-flex items-center gap-0.5 rounded-full border border-[#3f3f3f] bg-[#2a2a2a] px-2 py-0.5 text-[11px] text-[#fcd34d]">
+                <span class="icon-[mdi--tools] text-[12px]"></span>工具
+              </span>
+              <span v-if="detectedCapabilities.supportsAudio" class="inline-flex items-center gap-0.5 rounded-full border border-[#3f3f3f] bg-[#2a2a2a] px-2 py-0.5 text-[11px] text-[#c4b5fd]">
+                <span class="icon-[mdi--microphone-outline] text-[12px]"></span>音频
+              </span>
+              <span class="inline-flex items-center gap-0.5 rounded-full border border-[#3f3f3f] bg-[#2a2a2a] px-2 py-0.5 text-[11px] text-[#a3a3a3]">
+                上下文 {{ (detectedCapabilities.contextWindowTokens / 1000).toFixed(0) }}K
+              </span>
+              <span class="inline-flex items-center gap-0.5 rounded-full border border-[#3f3f3f] bg-[#2a2a2a] px-2 py-0.5 text-[11px] text-[#a3a3a3]">
+                最大输出 {{ (detectedCapabilities.maxOutputTokens / 1000).toFixed(0) }}K
+              </span>
+            </div>
+
+            <!-- 图片不支持警告 -->
+            <div v-if="detectedCapabilities && detectedCapabilities.supportsVision === false" class="rounded-[6px] border border-yellow-800/40 bg-yellow-900/20 px-3 py-1.5 text-[11px] text-yellow-200">
+              ⚠️ 此模型不支持图片输入。发送图片时，后端会自动将图片替换为文字占位说明。
+            </div>
+
+            <!-- 快捷档位按钮 -->
+            <div class="inline-flex flex-wrap rounded-[8px] border border-[#3f3f3f] bg-[#232323] p-0.5 text-[12px]" role="group" aria-label="上下文窗口档位">
+              <button
+                v-for="tier in CONTEXT_TIERS"
+                :key="tier.tokens"
+                type="button"
+                class="relative rounded-[6px] px-2.5 py-1 font-medium transition-colors"
+                :class="[
+                  activeContextTier?.tokens === tier.tokens
+                    ? 'bg-[#10AD5D]/25 text-[#6ee7a5]'
+                    : 'text-[#a3a3a3] hover:text-white',
+                ]"
+                @click="selectContextTier(tier)"
+              >
+                {{ tier.label }}
+                <span
+                  v-if="recommendedContextTier?.tokens === tier.tokens && activeContextTier?.tokens !== tier.tokens"
+                  class="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[#10AD5D]"
+                ></span>
+              </button>
+            </div>
+
             <input
               v-model="contextWindowTokensInput"
               type="text"

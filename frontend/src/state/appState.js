@@ -3,6 +3,7 @@ import { runtimeEvents } from "@/services/runtimeAdapter";
 import dayjs from "dayjs";
 import { getLocale } from "@/i18n/runtime";
 import { contextWindowTokensForModel } from "@/utils/modelContext";
+import { adapterMatchesSupplierIdentity } from "@/utils/supplierGrouping";
 import {
   checkForUpdates,
   getAppVersion,
@@ -1578,6 +1579,89 @@ export async function saveModelAdaptersBatch(adapters) {
   );
   return result.ok ? { ...result, added, skipped, updated, total: added + skipped + updated } : result;
 }
+
+/**
+ * updateModelAdaptersBySupplier — 批量更新同一供应商下所有模型的共享（供应商级）配置。
+ *
+ * @param {object} supplierIdentity  — { mode, baseURL?, groupName? }，与路由 query 中的供应商标识一致。
+ * @param {object} providerPatch     — 要覆盖的供应商级字段（见 PROVIDER_LEVEL_FIELDS）。
+ * @returns {{ ok, error, updated, conflicts }}
+ */
+
+// 允许批量覆盖的供应商级字段；模型级字段不在此列表中，永远不会被覆盖。
+const PROVIDER_LEVEL_FIELDS = new Set([
+  "type", "supplierID", "baseURL", "apiKey", "groupName", "tooltipData",
+  "protocolMode", "protocolGroup", "openAIEndpoint", "openAIRequestGroup",
+  "customHeadersEnabled", "customHeadersJSON",
+  "balanceQueryURL", "balanceQueryField", "balanceQueryHeadersJSON",
+  "openAIExtraParamsEnabled", "openAIExtraParamsJSON",
+  "anthropicExtraParamsEnabled", "anthropicExtraParamsJSON",
+]);
+
+export async function updateModelAdaptersBySupplier(supplierIdentity, providerPatch, options = {}) {
+  const currentConfig = await loadPersistedUserConfig();
+  const allAdapters = normalizeModelAdapters(currentConfig.modelAdapters);
+
+  // 找出属于本供应商的 adapter 及其下标
+  const targetIndices = [];
+  for (let i = 0; i < allAdapters.length; i++) {
+    if (adapterMatchesSupplierIdentity(allAdapters[i], supplierIdentity)) {
+      targetIndices.push(i);
+    }
+  }
+  if (targetIndices.length === 0) {
+    return { ok: false, error: "未找到属于该供应商的模型配置", updated: 0, conflicts: [] };
+  }
+
+  // 只取允许覆盖的字段
+  const patch = {};
+  for (const key of Object.keys(providerPatch || {})) {
+    if (PROVIDER_LEVEL_FIELDS.has(key)) {
+      patch[key] = providerPatch[key];
+    }
+  }
+  if (Object.keys(patch).length === 0) {
+    return { ok: true, error: "", updated: 0, conflicts: [] };
+  }
+
+  // 应用 patch，保留模型级字段不变
+  const nextAdapters = allAdapters.slice();
+  for (const idx of targetIndices) {
+    nextAdapters[idx] = normalizeModelAdapter({ ...allAdapters[idx], ...patch });
+  }
+
+  // 冲突检测：检查 patch 后的 adapter 是否与非目标 adapter 的 identity 碰撞
+  const targetSet = new Set(targetIndices);
+  const nonTargetIdentities = new Map();
+  for (let i = 0; i < nextAdapters.length; i++) {
+    if (!targetSet.has(i)) {
+      nonTargetIdentities.set(buildModelAdapterIdentityKey(nextAdapters[i]), i);
+    }
+  }
+  const conflicts = [];
+  for (const idx of targetIndices) {
+    const key = buildModelAdapterIdentityKey(nextAdapters[idx]);
+    if (nonTargetIdentities.has(key)) {
+      conflicts.push({
+        targetIndex: idx,
+        conflictIndex: nonTargetIdentities.get(key),
+        modelID: nextAdapters[idx].modelID,
+      });
+    }
+  }
+  if (conflicts.length > 0 && !options.forceOverwrite) {
+    return { ok: false, error: "存在重复模型冲突，请确认后重试", updated: 0, conflicts };
+  }
+
+  const result = await persistConfigPayload(
+    { ...currentConfig, modelAdapters: nextAdapters },
+    { modelAdaptersOnly: true },
+  );
+  return result.ok
+    ? { ...result, updated: targetIndices.length, conflicts }
+    : result;
+}
+
 export async function deleteModelAdapterAt(index) {
   const currentConfig = await loadPersistedUserConfig();
   const nextAdapters = normalizeModelAdapters(currentConfig.modelAdapters);

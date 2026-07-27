@@ -128,6 +128,7 @@ type ActiveStream struct {
 	LatestUserText         string
 	Status                 StreamStatus
 	ThinkingEffort         string
+	MaxMode                bool
 	SubagentModelOverrides map[string]runtimecore.SubagentModelOverrideSelection
 
 	CurrentModelCallID                          string
@@ -243,6 +244,7 @@ type ProviderRequest struct {
 	ModelID             string
 	Mode                agentv1.AgentMode
 	ThinkingEffort      string
+	MaxMode             bool
 	Messages            []modeladapter.Message
 	StableMessageCount  int
 	Tools               []json.RawMessage
@@ -403,6 +405,7 @@ type InboundIntent struct {
 	ModelID                  string
 	ModelName                string
 	ThinkingEffort           string
+	MaxMode                  bool
 	Mode                     agentv1.AgentMode
 	HasExplicitMode          bool
 	ModeSource               ModeSource

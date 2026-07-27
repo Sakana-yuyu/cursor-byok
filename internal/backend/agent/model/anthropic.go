@@ -280,10 +280,17 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 				recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "anthropic", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))
 				return err
 			}
+			schema := descriptor.Function.Parameters
+			if schema == nil {
+				schema = map[string]any{"type": "object", "properties": map[string]any{}}
+			}
+			// 与 OpenAI 路径一致：修复 required:null → required:[]，避免 Anthropic
+			// schema 校验返回 [standard_violation] /required: null is not of type "array"
+			normalizeOpenAIToolSchemaRequired(schema)
 			tools = append(tools, anthropicTool{
 				Name:        strings.TrimSpace(descriptor.Function.Name),
 				Description: strings.TrimSpace(descriptor.Function.Description),
-				InputSchema: descriptor.Function.Parameters,
+				InputSchema: schema,
 			})
 		}
 
