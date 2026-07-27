@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"cursor/internal/modelcontext"
 	legacyruntime "cursor/internal/runtime"
 )
 
@@ -124,6 +125,12 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 	resolved.ResolvedChannelID = strings.TrimSpace(channel.ID)
 	resolved.ResolvedChannelName = strings.TrimSpace(channel.Name)
 	resolved.ResolvedContextWindowTokens = channel.ContextWindowTokens
+	// Max Mode: 使用目录中该模型的理论最大上下文窗口。
+	if req.MaxMode {
+		if catalogMax := modelcontext.WindowTokens(req.ModelID); catalogMax > 0 {
+			resolved.ResolvedContextWindowTokens = catalogMax
+		}
+	}
 	resolved.ReasoningEffort = openAIReasoningEffortFromRuntime(channel.ReasoningEffort)
 	resolved.OpenAIEndpoint = strings.TrimSpace(channel.OpenAIEndpoint)
 	resolved.OpenAIRequestGroup = strings.TrimSpace(channel.OpenAIRequestGroup)
@@ -165,6 +172,8 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 		resolved.ProviderModelID = strings.TrimSpace(req.ModelID)
 	}
 	resolved.Messages = sanitizeProviderMessages(req.Messages)
+	// 对明确不支持视觉的模型，将图片内容块替换为文字占位说明。
+	resolved.Messages = stripImagesFromMessages(resolved.Messages, resolved.ProviderModelID)
 	if resolved.RequestKnobs != nil {
 		resolved.RequestKnobs["max_tokens"] = resolved.MaxTokens
 		resolved.RequestKnobs["protocol_mode"] = resolved.ProtocolMode
@@ -238,11 +247,21 @@ func isPermanentProviderError(err error) bool {
 	if err == nil {
 		return false
 	}
-	status := parseProviderErrorStatus(err.Error())
+	msg := err.Error()
+	status := parseProviderErrorStatus(msg)
 	if status < 400 || status >= 500 {
 		return false
 	}
-	return status != 429
+	if status == 429 {
+		return false
+	}
+	// 某些中转网关（如 daoxe.com）对同一合法请求偶发返回
+	// 400 "Invalid request for the selected model"，属于服务端瞬时故障。
+	// 将该特定消息视为非永久错误，允许路由器在退避后重试同一渠道。
+	if status == 400 && strings.Contains(msg, "Invalid request for the selected model") {
+		return false
+	}
+	return true
 }
 
 // parseProviderErrorStatus 从错误文本中解析 "status=<code>" 的状态码；解析失败返回 0。
@@ -313,9 +332,11 @@ func isAssistantPlaceholderMessage(message Message) bool {
 	if strings.TrimSpace(message.ToolCallID) != "" || strings.TrimSpace(message.Name) != "" {
 		return false
 	}
-	if strings.TrimSpace(message.ReasoningContent) != "" {
-		return false
-	}
+	// 注意：不再因 ReasoningContent 非空而保留消息。
+	// Kimi 等模型可能产出"仅思考、无正文、无工具调用"的残缺回合（finish=stop），
+	// 这类消息只有 reasoning_content 而没有实质输出。将其回放给上游没有意义，
+	// 反而会污染上下文、并让部分严格网关（如 daoxe 转发的 Kimi）返回 400。
+	// 因此当消息没有正文/工具调用/工具结果时，即视为占位消息予以过滤。
 	if strings.TrimSpace(message.ReasoningSignature) != "" {
 		return false
 	}

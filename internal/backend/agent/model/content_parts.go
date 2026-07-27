@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"cursor/internal/modelcontext"
 )
 
 const (
@@ -210,4 +212,37 @@ func normalizeImageMIMEType(mimeType string, path string, payload []byte) string
 	default:
 		return "image/png"
 	}
+}
+
+// stripImagesFromMessages 对明确不支持图片输入的模型，将所有图片 ContentPart
+// 替换为文字占位说明；文字内容不受影响。未知模型保守保留图片。
+func stripImagesFromMessages(messages []Message, modelID string) []Message {
+	vision := modelcontext.SupportsVision(modelID)
+	// 未知模型（nil）或支持视觉的模型 → 原样返回
+	if vision == nil || *vision {
+		return messages
+	}
+	result := make([]Message, len(messages))
+	for i, msg := range messages {
+		if !hasImageContentParts(msg.ContentParts) {
+			result[i] = msg
+			continue
+		}
+		// 替换图片块
+		replaced := make([]ContentPart, 0, len(msg.ContentParts))
+		for _, part := range msg.ContentParts {
+			if normalizeContentPartType(part.Type) == contentPartTypeImage {
+				replaced = append(replaced, ContentPart{
+					Type: contentPartTypeText,
+					Text: "[图片已省略：当前模型不支持图片输入]",
+				})
+			} else {
+				replaced = append(replaced, part)
+			}
+		}
+		newMsg := msg
+		newMsg.ContentParts = replaced
+		result[i] = newMsg
+	}
+	return result
 }

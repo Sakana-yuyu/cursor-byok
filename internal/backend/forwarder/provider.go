@@ -51,6 +51,7 @@ func (gateway *DefaultProviderGateway) StartStream(ctx context.Context, req Prov
 		Mode:                req.Mode,
 		ModelID:             req.ModelID,
 		ThinkingEffort:      req.ThinkingEffort,
+		MaxMode:             req.MaxMode,
 		Messages:            req.Messages,
 		StableMessageCount:  req.StableMessageCount,
 		Tools:               append([]json.RawMessage(nil), req.Tools...),

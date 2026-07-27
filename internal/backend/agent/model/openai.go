@@ -865,12 +865,17 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		}
 		applyUsage(chunk.Usage)
 
-		if reasoning := openAIChatDeltaReasoningText(choice.Delta.ReasoningContent, choice.Delta.Reasoning, choice.Delta.ReasoningDetails); reasoning != "" {
+		// Kimi K2 系列在思考阶段会把同一片段同时放进 content 与 reasoning_content，
+		// 导致思考内容被当作正常文本重复输出。此处识别这种重复并跳过 content。
+		reasoning := openAIChatDeltaReasoningText(choice.Delta.ReasoningContent, choice.Delta.Reasoning, choice.Delta.ReasoningDetails)
+		if reasoning != "" {
 			if err := emitThinkingDelta(reasoning); err != nil {
 				return fail(err)
 			}
 		}
-		if text := choice.Delta.Content; text != "" {
+		// 当本片段同时携带 reasoning 与 content，且二者相同时，视为思考阶段的重复输出，跳过 content。
+		skipContent := reasoning != "" && choice.Delta.Content == choice.Delta.ReasoningContent && choice.Delta.ReasoningContent != ""
+		if text := choice.Delta.Content; text != "" && !skipContent {
 			if err := emitTaggedContentParts(thinkParser.Consume(text)); err != nil {
 				return fail(err)
 			}
@@ -2020,6 +2025,7 @@ func applyOpenAIResponsesCompatibility(body map[string]any, baseURL string, mode
 	}
 	delete(body, "prompt_cache_retention")
 	delete(body, "safety_identifier")
+	delete(body, "reasoning_effort") // Grok/xAI Responses 端点同样不支持
 	deleteOpenAIRequestKeyRecursive(body, "external_web_access")
 	if policy.DropGrok45Sampling {
 		delete(body, "presence_penalty")
@@ -2143,6 +2149,10 @@ func applyOpenAIChatCompletionsCompatibility(body map[string]any, baseURL string
 		return
 	}
 	switch kind {
+	case "xai":
+		// Grok/xAI 不使用 reasoning_effort 参数，直接删除避免 400
+		// "Model xxx does not support parameter reasoningEffort"
+		delete(body, "reasoning_effort")
 	case "kimi":
 		if isKimiK3Model(modelID) {
 			body["reasoning_effort"] = kimiK3ReasoningEffort(effort)
@@ -2816,6 +2826,16 @@ func normalizeOpenAIToolSchemaRequired(value any) {
 		}
 		if required, ok := typed["required"]; ok && required == nil {
 			typed["required"] = []any{}
+		}
+		// 对 type:object 的 schema，若完全缺失 required 字段，主动补空数组。
+		// 省略 required 本是合法 JSON Schema，但部分中转网关（如 daoxe）转发给
+		// 上游（xAI 等）时会自动补 required:null，触发严格校验的
+		// [standard_violation] /required: null is not of type "array"。
+		// 主动补 [] 可堵住这一转换路径。
+		if strings.TrimSpace(fmt.Sprint(typed["type"])) == "object" {
+			if _, ok := typed["required"]; !ok {
+				typed["required"] = []any{}
+			}
 		}
 		for _, child := range typed {
 			normalizeOpenAIToolSchemaRequired(child)

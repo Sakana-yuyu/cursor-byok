@@ -45,7 +45,7 @@ func classifyProviderCompatibility(baseURL, modelID string) ProviderCompatibilit
 		policy.Kind = "openrouter"
 	case strings.Contains(signal, "siliconflow"):
 		policy.Kind = "siliconflow"
-	case strings.Contains(signal, "bigmodel") || strings.Contains(signal, "z.ai") || strings.Contains(signal, "zhipu") || strings.Contains(model, "glm"):
+	case strings.Contains(signal, "bigmodel") || strings.Contains(signal, "z.ai") || strings.Contains(signal, "zhipu") || (strings.Contains(model, "glm") && isZhipuOfficialBaseURL(base)):
 		policy.Kind = "zhipu"
 	case strings.Contains(signal, "dashscope") || strings.Contains(signal, "qwen") || strings.Contains(signal, "aliyun") || strings.Contains(signal, "bailian"):
 		policy.Kind = "qwen"
@@ -87,6 +87,22 @@ func compatibilityThinkingDisableKind(kind, modelID string) string {
 
 func providerPromptCacheKeyAllowed(baseURL, modelID string) bool {
 	return classifyProviderCompatibility(baseURL, modelID).PromptCacheKey
+}
+
+// isZhipuOfficialBaseURL 判断 baseURL 是否指向智谱官方端点。
+// 仅官方端点确认支持 thinking 字段；第三方中转站（如 daoxe.com）即使转发 glm 模型
+// 也不应注入 thinking 字段，否则上游会返回 400 "Invalid request for the selected model"。
+func isZhipuOfficialBaseURL(base string) bool {
+	switch {
+	case strings.Contains(base, "bigmodel.cn"),
+		strings.Contains(base, "bigmodel.com"),
+		strings.Contains(base, "z.ai"),
+		strings.Contains(base, "zhipuai.ai"),
+		strings.Contains(base, "open.bigmodel"),
+		strings.Contains(base, "api.z.ai"):
+		return true
+	}
+	return false
 }
 
 // sanitizeProviderPrivateFields removes provider-private underscore fields from

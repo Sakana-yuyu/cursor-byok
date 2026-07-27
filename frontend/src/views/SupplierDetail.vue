@@ -15,10 +15,12 @@ import {
   saveModelAdaptersBatch,
   startModelAdapterTest,
   toUserError,
+  updateModelAdaptersBySupplier,
 } from "@/state/appState";
 import { fetchModelCatalog, queryProviderBalance } from "@/services/clientApi";
 import { useModelProbe } from "@/composables/useModelProbe";
-import { providerIcon } from "@/utils/providerMeta";
+import { providerIcon, providerSelectOptions } from "@/utils/providerMeta";
+import { supplierSelectOptions } from "@/utils/supplierCatalog";
 import {
   SUPPLIER_GROUP_MODE_CONNECTION,
   SUPPLIER_GROUP_MODE_NAME,
@@ -688,6 +690,65 @@ onMounted(async () => {
   await reloadUserConfig({ modelAdaptersOnly: true }).catch(() => {});
   if (supplierMeta.value && !balanceState.loaded && !balanceState.loading) void loadBalance();
 });
+
+// ─── 批量编辑供应商配置 ─────────────────────────────────────────────────────
+const bulkEditExpanded = ref(false);
+const bulkEditSaving = ref(false);
+const bulkEditError = ref("");
+const bulkEditConflicts = ref([]);
+
+function createBulkEditDraft() {
+  const first = supplierAdapters.value[0] || {};
+  return {
+    type: first.type || "openai",
+    supplierID: first.supplierID || "",
+    baseURL: first.baseURL || "",
+    apiKey: first.apiKey || "",
+    groupName: first.groupName || "",
+    tooltipData: first.tooltipData || "",
+    protocolMode: first.protocolMode || "auto",
+    openAIEndpoint: first.openAIEndpoint || "",
+    customHeadersEnabled: first.customHeadersEnabled || false,
+    customHeadersJSON: first.customHeadersJSON || "",
+    balanceQueryURL: first.balanceQueryURL || "",
+    balanceQueryField: first.balanceQueryField || "",
+    balanceQueryHeadersJSON: first.balanceQueryHeadersJSON || "",
+  };
+}
+const bulkEditDraft = reactive(createBulkEditDraft());
+
+function toggleBulkEdit() {
+  bulkEditExpanded.value = !bulkEditExpanded.value;
+  if (bulkEditExpanded.value) {
+    Object.assign(bulkEditDraft, createBulkEditDraft());
+    bulkEditError.value = "";
+    bulkEditConflicts.value = [];
+  }
+}
+
+async function saveBulkEdit(force = false) {
+  bulkEditSaving.value = true;
+  bulkEditError.value = "";
+  bulkEditConflicts.value = [];
+  try {
+    const result = await updateModelAdaptersBySupplier(
+      supplierIdentity.value,
+      { ...bulkEditDraft },
+      { forceOverwrite: force },
+    );
+    if (!result.ok) {
+      bulkEditError.value = result.error || "保存失败";
+      bulkEditConflicts.value = result.conflicts || [];
+      return;
+    }
+    bulkEditExpanded.value = false;
+    await reloadUserConfig({ modelAdaptersOnly: true });
+  } catch (err) {
+    bulkEditError.value = toUserError(err);
+  } finally {
+    bulkEditSaving.value = false;
+  }
+}
 </script>
 
 <template>
@@ -747,10 +808,107 @@ onMounted(async () => {
             <Button variant="default" :disabled="supplierAdapters.length === 0" @click="toggleSelectionMode">
               {{ selectionMode ? "退出多选" : "多选" }}
             </Button>
+            <Button variant="default" :disabled="supplierAdapters.length === 0" @click="toggleBulkEdit">
+              {{ bulkEditExpanded ? "收起批量编辑" : "批量编辑" }}
+            </Button>
             <Button variant="default" :disabled="catalogLoading || !supplierMeta" @click="handleFetchModels">
               {{ catalogLoading ? "拉取中..." : "拉取模型" }}
             </Button>
             <Button variant="primary" :disabled="appState.configSaving" @click="openEditor(null)">新增模型</Button>
+          </div>
+
+          <!-- 批量编辑折叠面板 -->
+          <div v-if="bulkEditExpanded" class="flex flex-col gap-3 rounded-[8px] border border-[#343434] bg-[#252525] p-4">
+            <div class="text-xs text-[#a3a3a3]">修改以下字段将覆盖该供应商下全部 {{ supplierAdapters.length }} 个模型的对应配置。模型级配置（模型 ID、上下文、价格等）不受影响。</div>
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label class="flex flex-col gap-1">
+                <span class="text-xs text-[#a3a3a3]">模型类型</span>
+                <select v-model="bulkEditDraft.type" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]">
+                  <option v-for="opt in providerSelectOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                </select>
+              </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-xs text-[#a3a3a3]">供应商模板</span>
+                <select v-model="bulkEditDraft.supplierID" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]">
+                  <option value="">不使用模板</option>
+                  <option v-for="opt in supplierSelectOptions(bulkEditDraft.type)" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                </select>
+              </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-xs text-[#a3a3a3]">接口地址</span>
+                <input v-model="bulkEditDraft.baseURL" type="text" placeholder="https://..." class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
+              </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-xs text-[#a3a3a3]">API Key</span>
+                <input v-model="bulkEditDraft.apiKey" type="password" placeholder="sk-..." class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
+              </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-xs text-[#a3a3a3]">分组名称</span>
+                <input v-model="bulkEditDraft.groupName" type="text" placeholder="可选" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
+              </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-xs text-[#a3a3a3]">备注</span>
+                <input v-model="bulkEditDraft.tooltipData" type="text" placeholder="可选" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
+              </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-xs text-[#a3a3a3]">协议模式</span>
+                <select v-model="bulkEditDraft.protocolMode" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]">
+                  <option value="auto">自动</option>
+                  <option value="fixed">固定</option>
+                </select>
+              </label>
+              <label v-if="bulkEditDraft.type === 'openai' || bulkEditDraft.type === 'gemini'" class="flex flex-col gap-1">
+                <span class="text-xs text-[#a3a3a3]">协议端点</span>
+                <select v-model="bulkEditDraft.openAIEndpoint" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]">
+                  <option value="">/v1/chat/completions</option>
+                  <option value="/v1/responses">/v1/responses</option>
+                </select>
+              </label>
+            </div>
+
+            <!-- 自定义请求头 -->
+            <label class="flex items-center gap-2 text-xs text-[#a3a3a3]">
+              <input v-model="bulkEditDraft.customHeadersEnabled" type="checkbox" class="accent-[#10AD5D]" />
+              <span>自定义请求头</span>
+            </label>
+            <textarea
+              v-if="bulkEditDraft.customHeadersEnabled"
+              v-model="bulkEditDraft.customHeadersJSON"
+              rows="2"
+              placeholder='{"X-Custom": "value"}'
+              class="rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 py-1.5 font-mono text-xs text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+            ></textarea>
+
+            <!-- 余额查询配置 -->
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <label class="flex flex-col gap-1">
+                <span class="text-xs text-[#a3a3a3]">余额查询地址</span>
+                <input v-model="bulkEditDraft.balanceQueryURL" type="text" placeholder="可选" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
+              </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-xs text-[#a3a3a3]">余额字段路径</span>
+                <input v-model="bulkEditDraft.balanceQueryField" type="text" placeholder="可选" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
+              </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-xs text-[#a3a3a3]">查询请求头</span>
+                <input v-model="bulkEditDraft.balanceQueryHeadersJSON" type="text" placeholder="{}" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
+              </label>
+            </div>
+
+            <!-- 冲突提示 -->
+            <div v-if="bulkEditConflicts.length > 0" class="rounded-[6px] border border-yellow-800/40 bg-yellow-900/20 px-3 py-2 text-xs text-yellow-200">
+              ⚠️ 检测到 {{ bulkEditConflicts.length }} 个模型保存后与其他供应商下的配置重复。
+              <button type="button" class="ml-2 underline" @click="saveBulkEdit(true)">强制覆盖</button>
+            </div>
+            <div v-if="bulkEditError && bulkEditConflicts.length === 0" class="text-xs text-red-400">{{ bulkEditError }}</div>
+
+            <!-- 保存 / 取消 -->
+            <div class="center-row gap-2">
+              <Button variant="primary" :disabled="bulkEditSaving" @click="saveBulkEdit(false)">
+                {{ bulkEditSaving ? "保存中..." : `保存（覆盖 ${supplierAdapters.length} 个模型）` }}
+              </Button>
+              <Button variant="default" @click="bulkEditExpanded = false">取消</Button>
+            </div>
           </div>
         </div>
 
