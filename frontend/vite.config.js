@@ -11,21 +11,24 @@ const isDev = process.env.NODE_ENV === "development";
 
 export default defineConfig(({ mode }) => {
   const isBrowserPreview = mode === "browser-preview" || process.env.VITE_BROWSER_PREVIEW === "true";
+  const browserBindings = path.resolve(__dirname, "./src/services/browserBindings.js");
+  // browser 预览时不要挂通用 @bindings，否则会抢在具体 mock 别名之前解析到不存在的 bindings 目录
+  const alias = isBrowserPreview
+    ? [
+        { find: "@wailsio/runtime", replacement: path.resolve(__dirname, "./src/services/browserRuntimeMock.js") },
+        { find: "@bindings/cursor/internal/bridge/proxyservice.js", replacement: browserBindings },
+        { find: "@bindings/cursor/internal/bridge/adservice.js", replacement: browserBindings },
+        { find: "@bindings/cursor/internal/bridge/metricsservice.js", replacement: browserBindings },
+        { find: "@bindings/cursor/internal/bridge/windowservice.js", replacement: browserBindings },
+        { find: "@", replacement: path.resolve(__dirname, "./src") },
+      ]
+    : [
+        { find: "@", replacement: path.resolve(__dirname, "./src") },
+        { find: "@bindings", replacement: path.resolve(__dirname, "./bindings") },
+      ];
   return {
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-      "@bindings": path.resolve(__dirname, "./bindings"),
-      ...(isBrowserPreview
-        ? {
-            "@wailsio/runtime": path.resolve(__dirname, "./src/services/browserRuntimeMock.js"),
-            "@bindings/cursor/internal/bridge/proxyservice.js": path.resolve(__dirname, "./src/services/browserBindings.js"),
-            "@bindings/cursor/internal/bridge/adservice.js": path.resolve(__dirname, "./src/services/browserBindings.js"),
-            "@bindings/cursor/internal/bridge/metricsservice.js": path.resolve(__dirname, "./src/services/browserBindings.js"),
-            "@bindings/cursor/internal/bridge/windowservice.js": path.resolve(__dirname, "./src/services/browserBindings.js"),
-          }
-        : {}),
-    },
+    alias,
   },
   build: {
     target: ["es2019", "safari13"],

@@ -178,7 +178,8 @@ function formatMoney(value, currency) {
 function balanceSourceLabel(source) {
   if (source === "openai_billing") return "openai billing";
   if (source === "sub2api_usage") return "sub2api usage";
-  if (source === "newapi") return "newapi";
+  if (source === "newapi") return "New API";
+  if (source === "token_plan") return "Token Plan";
   if (source === "configured") return "自定义查询";
   if (source === "deepseek") return "DeepSeek";
   if (source === "stepfun") return "阶跃星辰";
@@ -422,7 +423,14 @@ onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }).catch(() =>
                     </span>
                     <template v-else-if="balanceEntry(supplier.key).data && balanceEntry(supplier.key).data.supported">
                       <span class="text-[#6ee7a5]" :title="balanceEntry(supplier.key).data.unlimited ? '该账户额度不限' : balanceTooltip(supplier.key)">
-                        {{ balanceEntry(supplier.key).data.unlimited ? "余额 不限额" : `余额 ${formatMoney(balanceEntry(supplier.key).data.remaining, balanceEntry(supplier.key).data.currency)}` }}
+                        <template v-if="balanceEntry(supplier.key).data.unlimited">余额 不限额</template>
+                        <template v-else-if="balanceEntry(supplier.key).data.source === 'token_plan' || balanceEntry(supplier.key).data.currency === '%'">
+                          {{ balanceEntry(supplier.key).data.planName ? `${balanceEntry(supplier.key).data.planName} · ` : '' }}已用 {{ Number(balanceEntry(supplier.key).data.used || 0).toFixed(0) }}%
+                        </template>
+                        <template v-else>
+                          余额 {{ formatMoney(balanceEntry(supplier.key).data.remaining, balanceEntry(supplier.key).data.currency) }}
+                          <span v-if="balanceEntry(supplier.key).data.planName" class="text-[#a3a3a3]"> · {{ balanceEntry(supplier.key).data.planName }}</span>
+                        </template>
                       </span>
                       <button
                         type="button"

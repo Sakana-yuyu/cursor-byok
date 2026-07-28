@@ -60,10 +60,20 @@ type ModelAdapterConfig struct {
 	OpenAIServiceTier           string        `json:"openAIServiceTier,omitempty" yaml:"openAIServiceTier,omitempty"`
 	// 余额查询（可配置兜底）：全部可选，零值即「未启用」。
 	// 具名 provider 未命中时，若 BalanceQueryURL 非空，则用它发一次 GET 并按点分路径取值。
-	// URL/Headers 支持 {{apiKey}}、{{baseUrl}} 占位符替换。
+	// URL/Headers 支持 {{apiKey}}、{{baseUrl}}、{{accessToken}}、{{userId}} 占位符替换。
 	BalanceQueryURL     string            `json:"balanceQueryURL,omitempty" yaml:"balanceQueryURL,omitempty"`
 	BalanceQueryField   string            `json:"balanceQueryField,omitempty" yaml:"balanceQueryField,omitempty"`
 	BalanceQueryHeaders map[string]string `json:"balanceQueryHeaders,omitempty" yaml:"balanceQueryHeaders,omitempty"`
+	// BalanceProfile 对齐 cc-switch 用量模板：auto | newapi | token_plan | custom。
+	// auto：后端按 baseURL / 字段推断；newapi 使用访问令牌+用户 ID；token_plan 走 Coding Plan 额度。
+	BalanceProfile string `json:"balanceProfile,omitempty" yaml:"balanceProfile,omitempty"`
+	// New API 等站点的 Web 访问令牌（与渠道 sk 不同）。
+	BalanceAccessToken string `json:"balanceAccessToken,omitempty" yaml:"balanceAccessToken,omitempty"`
+	// New API 的 New-Api-User 用户 ID。
+	BalanceUserID string `json:"balanceUserID,omitempty" yaml:"balanceUserID,omitempty"`
+	// Token Plan 显式供应商：kimi | zhipu | zhipu_team | minimax | zenmux | volcengine。
+	// 空则按 baseURL 自动检测（zhipu_team 无法自动区分，须显式指定）。
+	BalanceCodingPlanProvider string `json:"balanceCodingPlanProvider,omitempty" yaml:"balanceCodingPlanProvider,omitempty"`
 }
 
 type RoutingConfig struct {
@@ -180,9 +190,13 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			Pricing:              item.Pricing,
 			FastMode:             item.FastMode,
 			OpenAIServiceTier:    strings.TrimSpace(item.OpenAIServiceTier),
-			BalanceQueryURL:      strings.TrimSpace(item.BalanceQueryURL),
-			BalanceQueryField:    strings.TrimSpace(item.BalanceQueryField),
-			BalanceQueryHeaders:  item.BalanceQueryHeaders,
+			BalanceQueryURL:           strings.TrimSpace(item.BalanceQueryURL),
+			BalanceQueryField:         strings.TrimSpace(item.BalanceQueryField),
+			BalanceQueryHeaders:       item.BalanceQueryHeaders,
+			BalanceProfile:            strings.ToLower(strings.TrimSpace(item.BalanceProfile)),
+			BalanceAccessToken:        strings.TrimSpace(item.BalanceAccessToken),
+			BalanceUserID:             strings.TrimSpace(item.BalanceUserID),
+			BalanceCodingPlanProvider: strings.ToLower(strings.TrimSpace(item.BalanceCodingPlanProvider)),
 		}
 		if next.Type == "openai" {
 			next.OpenAIExtraParamsEnabled = item.OpenAIExtraParamsEnabled
@@ -258,6 +272,18 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			}
 			if len(existing.BalanceQueryHeaders) == 0 {
 				existing.BalanceQueryHeaders = next.BalanceQueryHeaders
+			}
+			if existing.BalanceProfile == "" {
+				existing.BalanceProfile = next.BalanceProfile
+			}
+			if existing.BalanceAccessToken == "" {
+				existing.BalanceAccessToken = next.BalanceAccessToken
+			}
+			if existing.BalanceUserID == "" {
+				existing.BalanceUserID = next.BalanceUserID
+			}
+			if existing.BalanceCodingPlanProvider == "" {
+				existing.BalanceCodingPlanProvider = next.BalanceCodingPlanProvider
 			}
 			normalized[existingIndex] = existing
 			continue
