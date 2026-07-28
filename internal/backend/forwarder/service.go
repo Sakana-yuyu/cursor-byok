@@ -262,6 +262,7 @@ type Service struct {
 	execBridge         execbridge.ExecBridge
 	interactionBridge  interactionbridge.InteractionBridge
 	appendSeq          *appendSequenceTracker
+	runQueue           *runQueue
 }
 
 type agentModelMemory interface {
@@ -275,6 +276,7 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 	store := NewConversationFileStore(historyRoot)
 	broker := NewStreamBroker()
 	rules := NewUserRuleStore(appdata.RulesRootPath())
+	skills := NewSkillStore(appdata.SkillsRootPath())
 	promptInjection := promptinject.New()
 	if _, err := promptInjection.Load(); err != nil {
 		// A malformed optional prompt config must not prevent normal BYOK startup.
@@ -296,7 +298,7 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 		docsIndexStore:     NewDocsIndexStore(appdata.DocsIndexRootPath()),
 		rules:              rules,
 		projector:          projector,
-		compiler:           NewPromptCompiler(projector, NewToolCatalog(), NewReminderInjector(), rules, promptInjection),
+		compiler:           NewPromptCompiler(projector, NewToolCatalog(), NewReminderInjector(), rules, skills, promptInjection),
 		promptInjection:    promptInjection,
 		provider:           NewProviderGateway(resolver),
 		resolver:           resolver,
@@ -307,6 +309,7 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 		execBridge:         execbridge.NewBridge(),
 		interactionBridge:  interactionbridge.NewBridge(),
 		appendSeq:          newAppendSequenceTracker(),
+		runQueue:           newRunQueue(),
 	}
 	service.startHistoryMaintenance()
 	return service
@@ -334,6 +337,7 @@ func newServiceWithDependencies(store *ConversationFileStore, projector *History
 		execBridge:         execbridge.NewBridge(),
 		interactionBridge:  interactionbridge.NewBridge(),
 		appendSeq:          newAppendSequenceTracker(),
+		runQueue:           newRunQueue(),
 	}
 }
 
@@ -1014,7 +1018,10 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	_ = service.broker.Publish(intent.RequestID, StreamEvent{
 		Message: buildTurnEndedMessage(0, 0, 0, 0),
 	})
-	return service.broker.Cancel(intent.RequestID, firstNonEmpty(intent.CancelReason, "[canceled] User aborted request"))
+	cancelErr := service.broker.Cancel(intent.RequestID, firstNonEmpty(intent.CancelReason, "[canceled] User aborted request"))
+	// 当前 turn 终态后，排空该会话因「子代理运行期间」排队的新消息。
+	service.drainRunQueue(stream.ConversationID)
+	return cancelErr
 }
 
 // handleExecResult 处理客户端返回的执行桥结果，并在终态时把 tool_result 写回 history。
@@ -2294,6 +2301,8 @@ func (service *Service) completeSuccessfulTurn(stream *ActiveStream, completion 
 		return err
 	}
 	service.setTurnPhase(stream, TurnPhaseCompleted)
+	// 当前 turn 终态后，排空该会话因「子代理运行期间」排队的新消息。
+	service.drainRunQueue(conversationID)
 	return nil
 }
 
@@ -2479,6 +2488,8 @@ func (service *Service) failActiveStream(stream *ActiveStream, conversationID st
 	if err := service.broker.Fail(requestID, terminalCode, terminalMessage); err != nil && firstErr == nil {
 		firstErr = err
 	}
+	// 当前 turn 终态后，排空该会话因「子代理运行期间」排队的新消息。
+	service.drainRunQueue(conversationID)
 	return firstErr
 }
 

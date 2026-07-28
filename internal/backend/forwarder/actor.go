@@ -130,6 +130,14 @@ func (service *Service) dispatchInboundIntent(intent InboundIntent) error {
 	if service == nil {
 		return fmt.Errorf("forwarder service is nil")
 	}
+	// 子代理运行期间的新消息不中断旧 stream：若该会话有运行中的子代理，把 run intent 入队等待，
+	// 等当前 turn 终态后再排空。必须在 streamForIntent 之前拦截，避免提前 OpenStream 新 requestID。
+	if strings.TrimSpace(intent.Kind) == "run" && service.activeConversationHasSubagents(intent.ConversationID) {
+		service.runQueue.Enqueue(intent.ConversationID, intent)
+		log.Printf("forwarder run queued behind subagent request_id=%s conversation_id=%s queue_len=%d",
+			strings.TrimSpace(intent.RequestID), strings.TrimSpace(intent.ConversationID), service.runQueue.Len(intent.ConversationID))
+		return nil
+	}
 	stream, err := service.streamForIntent(intent)
 	if err != nil {
 		return err

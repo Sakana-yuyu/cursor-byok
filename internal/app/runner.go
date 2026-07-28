@@ -20,6 +20,7 @@ import (
 	"cursor/internal/cursor"
 	"cursor/internal/historymetrics"
 	"cursor/internal/i18n"
+	"cursor/internal/skills"
 
 	"github.com/leaanthony/u"
 
@@ -43,6 +44,9 @@ const (
 
 // autoMatchOnce 保证「启动时自动配对上下文窗口」在同一进程内只执行一次。
 var autoMatchOnce sync.Once
+
+// syncSkillsOnce 保证「启动时释放内置技能」在同一进程内只执行一次。
+var syncSkillsOnce sync.Once
 
 // EmbeddedResources 定义了当前模块中的 EmbeddedResources 类型。
 type EmbeddedResources struct {
@@ -356,6 +360,17 @@ func Run(resources EmbeddedResources) error {
 		startAdRefreshLoop(adRefreshCtx)
 		go func() {
 			logger.Infof("application started, begin auto start service in background")
+			// 释放内置技能（find-skills + superpowers）到 ~/.cursor/skills/，
+			// 让 Cursor 客户端在所有项目的 / 菜单里列出。仅写入缺失/变化的文件，不删用户自加技能。
+			// 失败仅记日志、不阻断启动。
+			syncSkillsOnce.Do(func() {
+				if syncResult, syncErr := skills.SyncToCursorSkillsDir(""); syncErr != nil {
+					logger.Errorf("释放内置技能失败: %v", syncErr)
+				} else if syncResult.Written > 0 {
+					logger.Infof("内置技能已释放: total=%d written=%d skipped=%d failed=%d",
+						syncResult.Total, syncResult.Written, syncResult.Skipped, syncResult.Failed)
+				}
+			})
 			// 启动时自动配对上下文窗口（受 autoMatchContextWindow 开关控制）：
 			// 目录命中则覆盖为真实窗口，目录未命中则探测 provider /models 回填。
 			// 失败仅记日志、不阻断启动。

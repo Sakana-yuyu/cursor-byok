@@ -21,13 +21,14 @@ type DefaultPromptCompiler struct {
 	catalog   ToolCatalog
 	reminders ReminderInjector
 	rules     *UserRuleStore
+	skills    *SkillStore
 	// injection is the single optional Codex-X-compatible system prompt decision point.
 	// A nil manager preserves the historical prompt byte-for-byte.
 	injection *promptinject.Manager
 }
 
 // NewPromptCompiler 创建默认 prompt 编译器。可选注入 manager 保持旧调用兼容。
-func NewPromptCompiler(projector *HistoryProjector, catalog ToolCatalog, reminders ReminderInjector, rules *UserRuleStore, injection ...*promptinject.Manager) *DefaultPromptCompiler {
+func NewPromptCompiler(projector *HistoryProjector, catalog ToolCatalog, reminders ReminderInjector, rules *UserRuleStore, skills *SkillStore, injection ...*promptinject.Manager) *DefaultPromptCompiler {
 	var manager *promptinject.Manager
 	if len(injection) > 0 {
 		manager = injection[0]
@@ -37,6 +38,7 @@ func NewPromptCompiler(projector *HistoryProjector, catalog ToolCatalog, reminde
 		catalog:   catalog,
 		reminders: reminders,
 		rules:     rules,
+		skills:    skills,
 		injection: manager,
 	}
 }
@@ -79,10 +81,21 @@ func (compiler *DefaultPromptCompiler) Compile(conversation *ConversationFile, m
 			return CompiledConversation{}, err
 		}
 	}
+	globalSkillsPrompt := ""
+	globalSkillsCount := 0
+	if compiler.skills != nil && normalizedMode != agentv1.AgentMode_AGENT_MODE_DEBUG {
+		globalSkillsPrompt, globalSkillsCount, err = compiler.skills.BuildAgentSkillsPromptSection()
+		if err != nil {
+			return CompiledConversation{}, err
+		}
+	}
 	messages := make([]modeladapter.Message, 0, len(replayMessages)+1)
 	systemParts := []string{sanitizePromptAsset(systemPrompt, modelName)}
 	if strings.TrimSpace(sharedRulesPrompt) != "" {
 		systemParts = append(systemParts, sharedRulesPrompt)
+	}
+	if strings.TrimSpace(globalSkillsPrompt) != "" {
+		systemParts = append(systemParts, globalSkillsPrompt)
 	}
 	systemText := strings.TrimSpace(strings.Join(filterNonEmpty(systemParts), "\n\n"))
 	if compiler.injection != nil {
@@ -106,7 +119,7 @@ func (compiler *DefaultPromptCompiler) Compile(conversation *ConversationFile, m
 		Messages:           messages,
 		StableMessageCount: stableReplayCount,
 		Tools:              tools,
-		CompileSummary:     fmt.Sprintf("mode=%s asset_mode=%s child=%t messages=%d tools=%d shared_rules_total=%d shared_rules_deduped=%d", normalizedMode.String(), string(assetMode), isChildConversationSubagentTypeName(subagentTypeName), len(messages), len(tools), sharedRuleTotal, sharedRuleCount),
+		CompileSummary:     fmt.Sprintf("mode=%s asset_mode=%s child=%t messages=%d tools=%d shared_rules_total=%d shared_rules_deduped=%d global_skills=%d", normalizedMode.String(), string(assetMode), isChildConversationSubagentTypeName(subagentTypeName), len(messages), len(tools), sharedRuleTotal, sharedRuleCount, globalSkillsCount),
 	}, nil
 }
 
