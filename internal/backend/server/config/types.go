@@ -20,10 +20,20 @@ const (
 	DefaultRoutingMode                      = "local"
 	DefaultProviderStreamIdleTimeoutSeconds = 240
 	MinProviderStreamIdleTimeoutSeconds     = 30
+	// DefaultTurnStaleTimeoutSeconds 表示一轮回合进入「等待外部（工具/交互结果）」后，
+	// 在无任何进展时由 turn-staleness 看门狗触发自救的默认阈值，单位秒。
+	DefaultTurnStaleTimeoutSeconds = 120
+	// MinTurnStaleTimeoutSeconds 表示 turn-staleness 看门狗允许的最小阈值，单位秒。
+	MinTurnStaleTimeoutSeconds = 30
+	// TurnStaleGraceSeconds 表示阶段一（重对齐 append 序列）后给真实工具结果的宽限期，单位秒。
+	TurnStaleGraceSeconds = 60
 	// DefaultLocalResponseCacheTTLSeconds 表示本地响应缓存条目的默认存活时长。
 	DefaultLocalResponseCacheTTLSeconds = 900
 	// DefaultLocalResponseCacheMaxEntries 表示本地响应缓存的默认最大条目数。
 	DefaultLocalResponseCacheMaxEntries = 256
+	// DefaultAutoMatchContextWindow 表示是否在启动时/手动触发时自动为所有模型适配器
+	// 配对正确的上下文窗口（目录命中则覆盖，目录无则探测 provider /models 回填）。
+	DefaultAutoMatchContextWindow = true
 )
 
 type ModelPricing = legacyruntime.ModelPricing
@@ -64,8 +74,8 @@ type ModelAdapterConfig struct {
 	BalanceQueryURL     string            `json:"balanceQueryURL,omitempty" yaml:"balanceQueryURL,omitempty"`
 	BalanceQueryField   string            `json:"balanceQueryField,omitempty" yaml:"balanceQueryField,omitempty"`
 	BalanceQueryHeaders map[string]string `json:"balanceQueryHeaders,omitempty" yaml:"balanceQueryHeaders,omitempty"`
-	// BalanceProfile 对齐 cc-switch 用量模板：auto | newapi | token_plan | custom。
-	// auto：后端按 baseURL / 字段推断；newapi 使用访问令牌+用户 ID；token_plan 走 Coding Plan 额度。
+	// BalanceProfile 对齐 cc-switch 用量模板：general | newapi | token_plan | custom | official。
+	// auto 仅为旧配置兼容值：后端按 baseURL / 字段推断；official 走具名官方余额接口。
 	BalanceProfile string `json:"balanceProfile,omitempty" yaml:"balanceProfile,omitempty"`
 	// New API 等站点的 Web 访问令牌（与渠道 sk 不同）。
 	BalanceAccessToken string `json:"balanceAccessToken,omitempty" yaml:"balanceAccessToken,omitempty"`
@@ -98,6 +108,8 @@ type LocalResponseCacheConfig struct {
 type Config struct {
 	Log                       bool                     `json:"log" yaml:"log"`
 	ProviderStreamIdleTimeout int                      `json:"providerStreamIdleTimeout" yaml:"providerStreamIdleTimeout"`
+	TurnStaleTimeout          int                      `json:"turnStaleTimeout" yaml:"turnStaleTimeout"`
+	AutoMatchContextWindow    bool                     `json:"autoMatchContextWindow" yaml:"autoMatchContextWindow"`
 	BackendListenAddr         string                   `json:"backendListenAddr" yaml:"backendListenAddr"`
 	ProxyListenAddr           string                   `json:"proxyListenAddr" yaml:"proxyListenAddr"`
 	ModelAdapters             []ModelAdapterConfig     `json:"modelAdapters" yaml:"modelAdapters"`
@@ -111,6 +123,8 @@ func DefaultConfig() Config {
 	return Config{
 		Log:                       false,
 		ProviderStreamIdleTimeout: DefaultProviderStreamIdleTimeoutSeconds,
+		TurnStaleTimeout:          DefaultTurnStaleTimeoutSeconds,
+		AutoMatchContextWindow:    DefaultAutoMatchContextWindow,
 		BackendListenAddr:         DefaultBackendListenAddr,
 		ProxyListenAddr:           DefaultProxyListenAddr,
 		ModelAdapters:             []ModelAdapterConfig{},
@@ -124,6 +138,8 @@ func NormalizeConfig(input Config) (Config, error) {
 	output := DefaultConfig()
 	output.Log = input.Log
 	output.ProviderStreamIdleTimeout = normalizeProviderStreamIdleTimeout(input.ProviderStreamIdleTimeout)
+	output.TurnStaleTimeout = normalizeTurnStaleTimeout(input.TurnStaleTimeout)
+	output.AutoMatchContextWindow = normalizeAutoMatchContextWindow(input.AutoMatchContextWindow)
 	backendListenAddr, err := normalizeListenAddr(input.BackendListenAddr, DefaultBackendListenAddr, "backendListenAddr")
 	if err != nil {
 		return Config{}, err
@@ -176,20 +192,20 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			ProtocolMode:  protocolMode,
 			ProtocolGroup: protocolGroup,
 
-			BaseURL:              baseURL,
-			APIKey:               strings.TrimSpace(item.APIKey),
-			TooltipData:          strings.TrimSpace(item.TooltipData),
-			ModelID:              strings.TrimSpace(item.ModelID),
-			ReasoningEffort:      normalizeReasoningEffort(item.ReasoningEffort),
-			OpenAIEndpoint:       openAIEndpoint,
-			OpenAIRequestGroup:   modelchannel.NormalizeOpenAIRequestGroup(nextType, openAIEndpoint, protocolGroup),
-			ContextWindowTokens:  modelcontext.Resolve(item.ModelID, normalizeMaxCompletionTokens(item.ContextWindowTokens)),
-			MaxCompletionTokens:  normalizeMaxCompletionTokens(item.MaxCompletionTokens),
-			AnthropicMaxTokens:   normalizeMaxCompletionTokens(item.AnthropicMaxTokens),
-			ThinkingBudgetTokens: normalizeMaxCompletionTokens(item.ThinkingBudgetTokens),
-			Pricing:              item.Pricing,
-			FastMode:             item.FastMode,
-			OpenAIServiceTier:    strings.TrimSpace(item.OpenAIServiceTier),
+			BaseURL:                   baseURL,
+			APIKey:                    strings.TrimSpace(item.APIKey),
+			TooltipData:               strings.TrimSpace(item.TooltipData),
+			ModelID:                   strings.TrimSpace(item.ModelID),
+			ReasoningEffort:           normalizeReasoningEffort(item.ReasoningEffort),
+			OpenAIEndpoint:            openAIEndpoint,
+			OpenAIRequestGroup:        modelchannel.NormalizeOpenAIRequestGroup(nextType, openAIEndpoint, protocolGroup),
+			ContextWindowTokens:       modelcontext.Resolve(item.ModelID, normalizeMaxCompletionTokens(item.ContextWindowTokens)),
+			MaxCompletionTokens:       normalizeMaxCompletionTokens(item.MaxCompletionTokens),
+			AnthropicMaxTokens:        normalizeMaxCompletionTokens(item.AnthropicMaxTokens),
+			ThinkingBudgetTokens:      normalizeMaxCompletionTokens(item.ThinkingBudgetTokens),
+			Pricing:                   item.Pricing,
+			FastMode:                  item.FastMode,
+			OpenAIServiceTier:         strings.TrimSpace(item.OpenAIServiceTier),
 			BalanceQueryURL:           strings.TrimSpace(item.BalanceQueryURL),
 			BalanceQueryField:         strings.TrimSpace(item.BalanceQueryField),
 			BalanceQueryHeaders:       item.BalanceQueryHeaders,
@@ -396,6 +412,26 @@ func normalizeProviderStreamIdleTimeout(value int) int {
 	if value < MinProviderStreamIdleTimeoutSeconds {
 		return MinProviderStreamIdleTimeoutSeconds
 	}
+	return value
+}
+
+// normalizeTurnStaleTimeout 把 turn-staleness 看门狗阈值约束到合法区间（单位秒）。
+// <=0 回退默认值；过小回退最小值，避免过短阈值把正常的长工具调用误判为卡死。
+func normalizeTurnStaleTimeout(value int) int {
+	if value <= 0 {
+		return DefaultTurnStaleTimeoutSeconds
+	}
+	if value < MinTurnStaleTimeoutSeconds {
+		return MinTurnStaleTimeoutSeconds
+	}
+	return value
+}
+
+// normalizeAutoMatchContextWindow 把「自动配对上下文窗口」开关归一为显式 bool。
+// YAML 中未出现该键时，Load 得到的字段为零值 false；但语义上「未配置」应回退到默认开启，
+// 因此这里无法仅凭 false 区分「显式关闭」与「未配置」。当前实现：直接透传用户值；
+// 默认开启由 DefaultConfig 保证（仅全新配置文件会落到默认 true）。
+func normalizeAutoMatchContextWindow(value bool) bool {
 	return value
 }
 

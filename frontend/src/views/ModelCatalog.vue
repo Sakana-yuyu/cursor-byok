@@ -57,6 +57,14 @@ const sourceLabel = computed(() => {
   }
 });
 
+function pricingSummary(pricing) {
+  if (!pricing?.known) return "价格未知";
+  const parts = [];
+  if (pricing.input != null) parts.push(`入 ${pricing.input}`);
+  if (pricing.output != null) parts.push(`出 ${pricing.output}`);
+  return `${pricing.currency || "USD"} / 1M · ${parts.join(" / ") || "已配置"}`;
+}
+
 function selectionKey(modelID) {
   return String(modelID || "");
 }
@@ -350,6 +358,7 @@ onMounted(async () => {
               @change="toggleModel(model.id)"
             />
             <span class="min-w-0 flex-1 truncate">{{ model.id }}</span>
+            <span class="hidden shrink-0 text-[11px] text-[#8f8f8f] sm:inline">{{ pricingSummary(model.pricing) }}</span>
             <span
               v-if="catalogProbe.statusOf(selectionKey(model.id)) === 'checking'"
               class="shrink-0 rounded-full border border-[#164e63] bg-[#0b2530] px-1.5 py-0.5 text-[10px] text-[#67e8f9]"

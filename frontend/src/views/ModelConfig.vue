@@ -256,6 +256,13 @@ function openSupplier(supplier) {
   });
 }
 
+function openSupplierEditor(supplier) {
+  router.push({
+    path: "/supplier",
+    query: { ...supplierToRouteQuery(supplier), edit: "1" },
+  });
+}
+
 async function openEditor() {
   try {
     await openModelEditorWindow(-1, { ...createEmptyModelAdapter(), type: "openai" });
@@ -388,15 +395,15 @@ onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }).catch(() =>
             @click="openSupplier(supplier)"
           >
             <div class="flex h-full flex-col gap-3">
-              <div class="flex items-start gap-3">
-                <span class="center-row size-9 shrink-0 justify-center rounded-[8px] bg-[#232323]">
-                  <span :class="[providerIcon(supplier.type), 'text-[20px]']"></span>
-                </span>
+              <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0 flex-1">
                   <div class="truncate text-sm font-semibold text-white">{{ nameSummary(supplier) }}</div>
                   <div class="mt-0.5 truncate text-xs text-[#8f8f8f]">{{ hostSummary(supplier) }}</div>
                 </div>
-                <span class="shrink-0 rounded-full border border-[#3f3f3f] px-2 py-0.5 text-[11px] text-[#a3a3a3]">{{ providerLabel(supplier.type) }}</span>
+                <span class="center-row shrink-0 gap-1.5 rounded-full border border-[#3f3f3f] px-2 py-0.5 text-[11px] text-[#a3a3a3]">
+                  <span :class="[providerIcon(supplier.type), 'text-[14px]']"></span>
+                  <span>{{ providerLabel(supplier.type) }}</span>
+                </span>
               </div>
 
               <div class="flex flex-col gap-1 text-xs">
@@ -466,6 +473,15 @@ onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }).catch(() =>
               </div>
 
               <div class="center-row mt-auto justify-end gap-3 border-t border-[#343434] pt-2.5">
+                <button
+                  type="button"
+                  class="center-row gap-1 text-xs text-[#a3a3a3] transition-colors hover:text-white"
+                  :disabled="appState.configSaving"
+                  title="编辑供应商及其全部模型的连接配置"
+                  @click.stop="openSupplierEditor(supplier)"
+                >
+                  <span class="icon-[mdi--pencil-outline] text-[15px]"></span>编辑
+                </button>
                 <button
                   type="button"
                   class="center-row justify-center text-[#8f8f8f] transition-colors hover:text-[#f87171] disabled:opacity-50"

@@ -3,6 +3,7 @@ import {
   GetModelAdapterTestResults, FetchModelCatalog, ProbeModelAdapter, QueryProviderBalance,
   GetPromptInjectionSettings,
   SavePromptInjectionSettings, RefreshPromptInjection, RefreshPromptInjectionCatalog,
+  AutoMatchContextWindows,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
 import { GetAdRuntime, OpenExternalURL } from "@bindings/cursor/internal/bridge/adservice.js";
 import {
@@ -28,7 +29,7 @@ const desktopMethods = {
   GetMetricsRangeSummary, GetMetricsTokenBuckets, GetProviderSpendSummary, GetLocalCacheStats,
   FetchModelCatalog, ProbeModelAdapter, QueryProviderBalance, GetPromptInjectionSettings,
   SavePromptInjectionSettings, RefreshPromptInjection,
-  RefreshPromptInjectionCatalog, ExportLogs,
+  RefreshPromptInjectionCatalog, ExportLogs, AutoMatchContextWindows,
 };
 
 const API_LOG_PREFIX = "[clientApi]";
@@ -167,6 +168,14 @@ export function fetchMetricsTokenBuckets(startUnixMs = 0, endUnixMs = 0, model =
 export function fetchModelCatalog(request) {
   if (isBrowserPreview) return Promise.resolve({ models: [] });
   return withApiLogging("FetchModelCatalog", request, () => invoke("@bindings/cursor/internal/bridge/proxyservice.js", "FetchModelCatalog", [request]));
+}
+
+// 一键自动配对所有模型适配器的上下文窗口：目录命中则覆盖，目录未命中则探测 provider /models 回填。
+export function autoMatchContextWindows() {
+  if (isBrowserPreview) {
+    return Promise.resolve({ enabled: false, changed: false, total: 0, fromCatalog: 0, fromProbe: 0, unchanged: 0 });
+  }
+  return withApiLogging("AutoMatchContextWindows", undefined, () => invoke("@bindings/cursor/internal/bridge/proxyservice.js", "AutoMatchContextWindows", []));
 }
 
 // 查询中转站余额/额度；失败时后端返回结构化的 { supported:false, message } 结果。

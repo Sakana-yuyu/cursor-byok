@@ -28,6 +28,9 @@ type Router struct {
 type ChannelResolver interface {
 	SelectChannelForModel(context.Context, string) (*legacyruntime.ResolvedChannel, error)
 	ProviderStreamIdleTimeout(context.Context) time.Duration
+	// TurnStaleTimeout 表示一轮回合进入「等待外部（工具/交互结果）」后，
+	// 在无任何进展时由 turn-staleness 看门狗触发自救的阈值。
+	TurnStaleTimeout(context.Context) time.Duration
 }
 
 // NewRouter 创建模型适配路由器。

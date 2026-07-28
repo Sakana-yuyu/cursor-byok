@@ -501,6 +501,23 @@ func extractUsageErrorCodeFromCause(cause error) string {
 	return ""
 }
 
+// isContextLengthExceededError 判断错误是否为 provider 返回的「输入超出上下文窗口」错误。
+// 兼容 OpenAI 的 code=context_length_exceeded（responses stream 与 chat completions 均会出现），
+// 以及常见的同义文本描述。触发条件：检测到该错误时，转发层会尝试强制压缩上下文并重试。
+func isContextLengthExceededError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	if strings.Contains(message, "context_length_exceeded") {
+		return true
+	}
+	// 兼容其它 provider 的同义表达。
+	return strings.Contains(message, "maximum context length") ||
+		strings.Contains(message, "exceeds the context window") ||
+		strings.Contains(message, "exceeds context window")
+}
+
 func parseUsageErrorStatusFromText(message string) int {
 	const marker = "status="
 	index := strings.Index(message, marker)

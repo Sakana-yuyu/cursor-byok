@@ -39,6 +39,7 @@ import {
   PROTOCOL_MODE_AUTO,
   PROTOCOL_MODE_FIXED,
   runModelAdapterTest,
+  resolveBalanceProfileForAdapter,
   saveModelAdapterAt,
   toUserError,
   validateModelAdapters,
@@ -97,17 +98,18 @@ const createEmptyModelAdapter = () => ({
   balanceQueryField: "",
   balanceQueryHeaders: {},
   balanceQueryHeadersJSON: BALANCE_QUERY_HEADERS_DEFAULT_JSON,
-  balanceProfile: "auto",
+  balanceProfile: "general",
   balanceAccessToken: "",
   balanceUserID: "",
   balanceCodingPlanProvider: "",
 });
 
 const balanceProfileOptions = [
-  { label: "自动识别", value: "auto", icon: "icon-[mdi--auto-fix]" },
-  { label: "New API（访问令牌）", value: "newapi", icon: "icon-[mdi--key-variant]" },
-  { label: "Token Plan（套餐进度）", value: "token_plan", icon: "icon-[mdi--chart-donut]" },
-  { label: "自定义字段映射", value: "custom", icon: "icon-[mdi--code-json]" },
+  { label: "自定义", value: "custom", icon: "icon-[mdi--code-json]" },
+  { label: "通用模板", value: "general", icon: "icon-[mdi--web]" },
+  { label: "New API", value: "newapi", icon: "icon-[mdi--key-variant]" },
+  { label: "Token Plan", value: "token_plan", icon: "icon-[mdi--chart-donut]" },
+  { label: "官方", value: "official", icon: "icon-[mdi--shield-check-outline]" },
 ];
 
 const codingPlanProviderOptions = [
@@ -181,7 +183,49 @@ function createOptionalPositiveIntegerModel(key) {
 const maxCompletionTokensInput = createOptionalPositiveIntegerModel("maxCompletionTokens");
 const anthropicMaxTokensInput = createOptionalPositiveIntegerModel("anthropicMaxTokens");
 const contextWindowTokensInput = createOptionalPositiveIntegerModel("contextWindowTokens");
-const detectedContextWindow = computed(() => resolveModelContextWindow(draft.modelID));
+const pricingInput = computed({
+  get: () => draft.pricing?.input == null ? "" : String(draft.pricing.input),
+  set: (value) => updatePricingRate("input", value),
+});
+const pricingOutput = computed({
+  get: () => draft.pricing?.output == null ? "" : String(draft.pricing.output),
+  set: (value) => updatePricingRate("output", value),
+});
+const pricingCacheRead = computed({
+  get: () => draft.pricing?.cacheRead == null ? "" : String(draft.pricing.cacheRead),
+  set: (value) => updatePricingRate("cacheRead", value),
+});
+const pricingCacheWrite = computed({
+  get: () => draft.pricing?.cacheWrite == null ? "" : String(draft.pricing.cacheWrite),
+  set: (value) => updatePricingRate("cacheWrite", value),
+});
+const pricingCurrency = computed({
+  get: () => String(draft.pricing?.currency || "USD").toUpperCase(),
+  set: (value) => {
+    if (!draft.pricing) draft.pricing = { known: true, source: "manual" };
+    draft.pricing = { ...draft.pricing, currency: String(value || "USD").trim().toUpperCase(), known: true, source: "manual" };
+  },
+});
+const pricingKnown = computed(() => Boolean(draft.pricing?.known));
+
+function updatePricingRate(field, value) {
+  const text = String(value ?? "").trim();
+  const next = { ...(draft.pricing || {}) };
+  if (text === "") {
+    delete next[field];
+  } else if (/^\d+(\.\d+)?$/.test(text) && Number.isFinite(Number(text))) {
+    next[field] = Number(text);
+  }
+  const hasRate = ["input", "output", "cacheRead", "cacheWrite"].some((key) => next[key] != null);
+  draft.pricing = hasRate
+    ? { ...next, currency: String(next.currency || "USD").trim().toUpperCase(), known: true, source: "manual" }
+    : null;
+}
+
+function clearPricing() {
+  draft.pricing = null;
+}
+
 const detectedCapabilities = computed(() => resolveModelCapabilities(draft.modelID));
 
 // 上下文窗口快捷档位
@@ -269,7 +313,7 @@ const hasAdvancedOverrides = computed(() => {
   if (String(draft.balanceQueryURL || "").trim()) return true;
   if (String(draft.balanceQueryField || "").trim()) return true;
   if (hasBalanceQueryHeadersOverride(draft.balanceQueryHeadersJSON)) return true;
-  if (String(draft.balanceProfile || "auto") !== "auto") return true;
+  if (String(draft.balanceProfile || "general") !== "general") return true;
   if (String(draft.balanceAccessToken || "").trim()) return true;
   if (String(draft.balanceUserID || "").trim()) return true;
   if (String(draft.balanceCodingPlanProvider || "").trim()) return true;
@@ -330,10 +374,10 @@ const fieldTips = {
   anthropicMaxTokens: "Anthropic 模型单次回复允许生成的最大 Token 数。留空时使用默认值。",
   anthropicThinkingEffort: "Anthropic adaptive thinking 的思考强度。请求会固定使用新版 thinking.type=adaptive。",
   tooltipData: "模型列表 hover 时显示的备注说明。",
-  balanceQueryURL: "余额查询接口的完整 URL。支持 {{apiKey}}、{{baseUrl}}、{{accessToken}}、{{userId}}。New API 默认可用 {{baseUrl}}/api/user/self。",
-  balanceQueryField: "从 JSON 响应中取值的点分路径，例如 data.quota（New API 剩余 quota 原始值需自行换算时请用模板）。自定义映射模式才需要。",
-  balanceQueryHeaders: "余额查询请求头 JSON。New API 模式会自动带 Authorization 与 New-Api-User；自定义时可覆盖。支持 {{apiKey}}、{{baseUrl}}、{{accessToken}}、{{userId}}。",
-  balanceProfile: "查询模板：自动识别 / New API（访问令牌+用户ID）/ Token Plan（Kimi、智谱、MiniMax 等套餐进度）/ 自定义字段映射。",
+  balanceQueryURL: "自定义余额查询接口的完整 URL。支持 {{apiKey}}、{{baseUrl}}、{{accessToken}}、{{userId}}。",
+  balanceQueryField: "从 JSON 响应中取值的点分路径，例如 data.balance 或 data.0.total_balance。仅自定义模板需要。",
+  balanceQueryHeaders: "自定义余额查询请求头 JSON。支持 {{apiKey}}、{{baseUrl}}、{{accessToken}}、{{userId}}。",
+  balanceProfile: "查询模板：自定义 / 通用模板 / New API / Token Plan / 官方。官方模板按接口地址识别具名供应商，通用模板请求 /user/balance。",
   balanceAccessToken: "New API 个人安全设置中生成的访问令牌（不是渠道 sk）。",
   balanceUserID: "New API 用户 ID，请求头 New-Api-User 使用。",
   balanceCodingPlanProvider: "Token Plan 供应商。智谱团队版与个人版 baseURL 相同，必须显式选择 Team。",
@@ -344,7 +388,9 @@ async function loadContext() {
     const ctx = await getModelEditorContext();
     editorIndex.value = typeof ctx.index === "number" ? ctx.index : -1;
     const parsed = JSON.parse(ctx.adapterJSON || "{}");
-    Object.assign(draft, normalizeModelAdapter(parsed));
+    const normalized = normalizeModelAdapter(parsed);
+    Object.assign(draft, normalized);
+    draft.balanceProfile = resolveBalanceProfileForAdapter(normalized);
     if (!draft.type) {
       draft.type = "openai";
     }
@@ -955,6 +1001,48 @@ onMounted(async () => {
             </div>
           </label>
 
+          <div class="rounded-[8px] border border-[#343434] bg-[#252525] p-3 md:col-span-2">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <div class="text-sm text-[#d4d4d4]">价格（每百万 token）</div>
+                <div class="mt-1 text-xs text-[#8f8f8f]">
+                  用于请求明细和首页成本估算；留空表示未知，不会把成本误报为 0。
+                  <span v-if="draft.pricing?.source" class="text-[#6ee7a5]">来源：{{ draft.pricing.source }}</span>
+                </div>
+              </div>
+              <button
+                v-if="pricingKnown"
+                type="button"
+                class="shrink-0 text-xs text-[#fca5a5] hover:text-white"
+                @click="clearPricing"
+              >
+                清除价格
+              </button>
+            </div>
+            <div class="mt-3 grid grid-cols-2 gap-3 md:grid-cols-5">
+              <label class="flex flex-col gap-1">
+                <span class="text-xs text-[#a3a3a3]">输入</span>
+                <input v-model="pricingInput" type="text" inputmode="decimal" placeholder="0.00" class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
+              </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-xs text-[#a3a3a3]">输出</span>
+                <input v-model="pricingOutput" type="text" inputmode="decimal" placeholder="0.00" class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
+              </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-xs text-[#a3a3a3]">缓存读取</span>
+                <input v-model="pricingCacheRead" type="text" inputmode="decimal" placeholder="0.00" class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
+              </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-xs text-[#a3a3a3]">缓存写入</span>
+                <input v-model="pricingCacheWrite" type="text" inputmode="decimal" placeholder="0.00" class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
+              </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-xs text-[#a3a3a3]">币种</span>
+                <input v-model="pricingCurrency" type="text" maxlength="8" placeholder="USD" class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm uppercase text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
+              </label>
+            </div>
+          </div>
+
           <label v-if="draft.type === 'openai' || draft.type === 'gemini'" class="flex flex-col gap-1">
             <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
               <Tooltip :content="fieldTips.reasoningEffort" />
@@ -1145,7 +1233,7 @@ onMounted(async () => {
         <div class="rounded-[8px] border border-[#343434] bg-[#252525] p-3">
           <div class="mb-2 text-sm text-[#d4d4d4]">余额 / 套餐查询</div>
           <p class="mb-3 text-xs leading-5 text-[#8f8f8f]">
-            对齐 cc-switch：sub2api 等可自动查；New API 需访问令牌 + 用户 ID；Token Plan 覆盖 Kimi / 智谱 / MiniMax / ZenMux 等套餐进度。
+            对齐 cc-switch：自定义、通用模板、New API、Token Plan 与官方余额查询分别使用对应的请求方式。
           </p>
           <label class="mb-3 flex flex-col gap-1">
             <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
@@ -1155,8 +1243,15 @@ onMounted(async () => {
             <Select v-model="draft.balanceProfile" :options="balanceProfileOptions" button-class="h-9 text-sm" />
           </label>
 
+          <div v-if="draft.balanceProfile === 'general'" class="mb-3 text-xs leading-5 text-[#8f8f8f]">
+            通用模板请求接口地址下的 <code>/user/balance</code>，使用当前 API Key 读取 balance/remaining。
+          </div>
+          <div v-if="draft.balanceProfile === 'official'" class="mb-3 text-xs leading-5 text-[#8f8f8f]">
+            官方模板按接口地址识别 DeepSeek、StepFun、SiliconFlow、OpenRouter、Novita 等官方余额接口。
+          </div>
+
           <div
-            v-if="draft.balanceProfile === 'newapi' || draft.balanceProfile === 'auto'"
+            v-if="draft.balanceProfile === 'newapi'"
             class="mb-3 grid grid-cols-1 gap-3 md:grid-cols-2"
           >
             <label class="flex flex-col gap-1">
@@ -1191,7 +1286,7 @@ onMounted(async () => {
           </div>
 
           <div
-            v-if="draft.balanceProfile === 'token_plan' || draft.balanceProfile === 'auto'"
+            v-if="draft.balanceProfile === 'token_plan'"
             class="mb-3 flex flex-col gap-1"
           >
             <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
@@ -1209,13 +1304,13 @@ onMounted(async () => {
           </div>
 
           <div
-            v-if="draft.balanceProfile === 'custom' || draft.balanceProfile === 'auto' || draft.balanceProfile === 'newapi'"
+            v-if="draft.balanceProfile === 'custom'"
             class="grid grid-cols-1 gap-3 md:grid-cols-2"
           >
             <label class="flex flex-col gap-1">
               <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
                 <Tooltip :content="fieldTips.balanceQueryURL" />
-                <span>查询 URL{{ draft.balanceProfile === 'newapi' ? '（可选覆盖）' : '' }}</span>
+                <span>查询 URL</span>
               </span>
               <input
                 v-model="draft.balanceQueryURL"
@@ -1224,7 +1319,7 @@ onMounted(async () => {
                 class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
               />
             </label>
-            <label v-if="draft.balanceProfile === 'custom' || draft.balanceProfile === 'auto'" class="flex flex-col gap-1">
+            <label v-if="draft.balanceProfile === 'custom'" class="flex flex-col gap-1">
               <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
                 <Tooltip :content="fieldTips.balanceQueryField" />
                 <span>取值字段</span>
@@ -1238,7 +1333,7 @@ onMounted(async () => {
             </label>
           </div>
           <label
-            v-if="draft.balanceProfile === 'custom' || draft.balanceProfile === 'auto'"
+            v-if="draft.balanceProfile === 'custom'"
             class="mt-3 flex flex-col gap-1"
           >
             <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">

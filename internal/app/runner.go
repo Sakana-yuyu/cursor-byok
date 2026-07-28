@@ -10,6 +10,7 @@ import (
 	"net"
 	goruntime "runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"cursor/internal/ads"
@@ -39,6 +40,9 @@ const (
 	// adRefreshInterval 表示后台广告拉取间隔。
 	adRefreshInterval = 3 * time.Minute
 )
+
+// autoMatchOnce 保证「启动时自动配对上下文窗口」在同一进程内只执行一次。
+var autoMatchOnce sync.Once
 
 // EmbeddedResources 定义了当前模块中的 EmbeddedResources 类型。
 type EmbeddedResources struct {
@@ -352,6 +356,17 @@ func Run(resources EmbeddedResources) error {
 		startAdRefreshLoop(adRefreshCtx)
 		go func() {
 			logger.Infof("application started, begin auto start service in background")
+			// 启动时自动配对上下文窗口（受 autoMatchContextWindow 开关控制）：
+			// 目录命中则覆盖为真实窗口，目录未命中则探测 provider /models 回填。
+			// 失败仅记日志、不阻断启动。
+			autoMatchOnce.Do(func() {
+				if matchResult, matchErr := proxyService.AutoMatchContextWindows(context.Background()); matchErr != nil {
+					logger.Errorf("自动配对上下文窗口失败: %v", matchErr)
+				} else if matchResult.Enabled {
+					logger.Infof("自动配对上下文窗口完成: total=%d from_catalog=%d from_probe=%d unchanged=%d changed=%t",
+						matchResult.Total, matchResult.FromCatalog, matchResult.FromProbe, matchResult.Unchanged, matchResult.Changed)
+				}
+			})
 			if _, err := proxyService.StartProxy(); err != nil {
 				logger.Errorf("自动启动服务失败: %v", err)
 			} else {

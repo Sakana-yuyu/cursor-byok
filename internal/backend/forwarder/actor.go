@@ -67,6 +67,7 @@ const (
 	streamTimerShellForeground      streamTimerKind = "shell_foreground"
 	streamTimerShellTransportClose  streamTimerKind = "shell_transport_close"
 	streamTimerOrphanCancel         streamTimerKind = "orphan_cancel"
+	streamTimerTurnStale            streamTimerKind = "turn_stale"
 )
 
 type streamProviderEvent struct {
@@ -731,6 +732,15 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 		return nil
 	}
 	if payload.Err != nil {
+		// 优先处理「上下文超限」：尝试强制压缩上下文并重试，而不是直接判失败。
+		// 这能挽救因 contextWindowTokens 配置偏大（或模型真实窗口小于配置）导致的 context_length_exceeded。
+		if isContextLengthExceededError(payload.Err) {
+			if recovered, err := service.recoverFromContextOverflow(stream, conversationID, requestID, accumulatedText, accumulatedReasoning); err != nil {
+				return service.failStreamIfNonTerminal(stream, "unknown", err)
+			} else if recovered {
+				return nil
+			}
+		}
 		var providerErr providerTerminalError
 		if errors.As(payload.Err, &providerErr) {
 			service.setTurnPhase(stream, TurnPhaseFailed)
@@ -1016,6 +1026,8 @@ func (service *Service) handleTimerEvent(stream *ActiveStream, payload *streamTi
 		return service.recoverShellWithoutTerminal(stream, current, shellRecoveryReasonTransportClosed)
 	case streamTimerExecWatchdog:
 		return service.recoverStaleExecWithoutTerminal(stream, payload.ExecID, payload.MessageID, payload.Reason)
+	case streamTimerTurnStale:
+		return service.handleTurnStaleTimeout(stream, payload)
 	case streamTimerOrphanCancel:
 		stream.mu.Lock()
 		subscriberCount := len(stream.Subscribers)
@@ -1091,7 +1103,34 @@ func (service *Service) setTurnPhase(stream *ActiveStream, phase TurnPhase) {
 	stream.mu.Lock()
 	stream.Phase = phase
 	stream.UpdatedAt = time.Now().UTC()
+	// 仅当真正进入「等待外部（工具/交互结果）」阶段时，才挂一个 turn-staleness 看门狗。
+	// 它会通过 handleTurnStaleTimeout 二次校验真实状态，仅在「无进展地卡住」时自救。
+	waitingExternal := phase == TurnPhaseWaitingExternal
 	stream.mu.Unlock()
+	if waitingExternal {
+		service.scheduleTurnStaleWatchdog(stream)
+	} else {
+		clearStreamTimer(stream, providerTimerKey(streamTimerTurnStale, ""))
+		// 离开等待态时清掉宽限标记，下一次重新进入会从阶段一重新开始。
+		stream.mu.Lock()
+		stream.TurnStaleGraceStartedAt = time.Time{}
+		stream.mu.Unlock()
+	}
+}
+
+// scheduleTurnStaleWatchdog 安排一个 turn-staleness 看门狗：若回合停留在「等待外部」阶段
+// 且在阈值内没有任何进展，则触发两段式自救。每次重新调用都会刷新 token、作废旧触发，
+// 因此「有进展」（工具结果到达/provider 重新活跃等会再次走到 setTurnPhase 或 reconcile）
+// 会自然延后触发，只有真正卡死才会到期。
+func (service *Service) scheduleTurnStaleWatchdog(stream *ActiveStream) {
+	if service == nil || stream == nil {
+		return
+	}
+	delay := service.resolveTurnStaleDelay(stream)
+	if delay <= 0 {
+		return
+	}
+	service.scheduleStreamTimer(stream, providerTimerKey(streamTimerTurnStale, ""), delay, streamTimerTurnStale, "", 0, "turn_stale_watchdog")
 }
 
 func rememberPendingProviderCompletion(stream *ActiveStream, completion pendingTurnCompletion) {
