@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "dev:browser": "vite --mode browser-preview --host 0.0.0.0",
-    "build:dev": "node ./scripts/run-vite-build.mjs --minify false --mode development",
-    "build": "node ./scripts/run-vite-build.mjs --mode production",
+    "build:dev": "node ./scripts/run-vite-build.mjs --scan --minify false --mode development",
+    "build": "node ./scripts/run-vite-build.mjs --scan --mode production",
     "preview": "vite preview",
     "i18n:scan": "node --input-type=module -e \"import { syncCatalogFiles } from './plugins/static-i18n-plugin.js'; import path from 'path'; syncCatalogFiles(path.resolve('.')); console.log('i18n catalog synced');\""
   },
