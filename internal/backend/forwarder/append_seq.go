@@ -74,6 +74,39 @@ func (tracker *appendSequenceTracker) state(requestID string) *appendSequenceSta
 	return state
 }
 
+// Reset 把指定 request_id 的 append 序列状态强制重置为初始（next=1, processing=false）。
+// 当 turn-staleness 看门狗检测到「Cursor 工具结果被持续误判为 stale」造成回合卡死时调用，
+// 让 Cursor 后续（可能补发的）真实工具结果能重新被 Acquire 接受。
+// 旧的 ready channel 会被关闭，唤醒任何在 acquire 中阻塞等待的协程，使其基于重置后的状态重试。
+func (tracker *appendSequenceTracker) Reset(requestID string) {
+	if tracker == nil || strings.TrimSpace(requestID) == "" {
+		return
+	}
+	requestID = strings.TrimSpace(requestID)
+	now := time.Now().UTC()
+	tracker.mu.Lock()
+	old := tracker.states[requestID]
+	tracker.states[requestID] = &appendSequenceState{
+		next:      1,
+		ready:     make(chan struct{}),
+		updatedAt: now,
+	}
+	tracker.mu.Unlock()
+	if old != nil {
+		old.mu.Lock()
+		// 唤醒在 acquire 中等待旧 ready 的协程，让它们基于重置后的状态重新判断。
+		old.processing = false
+		select {
+		case <-old.ready:
+			// already closed
+		default:
+			close(old.ready)
+		}
+		old.mu.Unlock()
+	}
+	log.Printf("forwarder reset append sequence on demand request_id=%s", requestID)
+}
+
 func (state *appendSequenceState) acquire(ctx context.Context, requestID string, appendSeq int64) (bool, error) {
 	for {
 		state.mu.Lock()

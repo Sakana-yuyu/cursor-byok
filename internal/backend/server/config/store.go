@@ -142,10 +142,13 @@ func shouldPersistNormalizedConfig(raw []byte, current Config, normalized Config
 	if current.BackendListenAddr != normalized.BackendListenAddr || current.ProxyListenAddr != normalized.ProxyListenAddr {
 		return true
 	}
-	if current.ProviderStreamIdleTimeout == normalized.ProviderStreamIdleTimeout {
-		return false
+	if current.ProviderStreamIdleTimeout != normalized.ProviderStreamIdleTimeout && yamlHasKey(raw, "providerStreamIdleTimeout") {
+		return true
 	}
-	return yamlHasKey(raw, "providerStreamIdleTimeout")
+	if current.TurnStaleTimeout != normalized.TurnStaleTimeout && yamlHasKey(raw, "turnStaleTimeout") {
+		return true
+	}
+	return false
 }
 
 func yamlHasKey(raw []byte, key string) bool {

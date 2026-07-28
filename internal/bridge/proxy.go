@@ -36,6 +36,9 @@ type ModelCatalogItem = client.ModelCatalogItem
 // ModelCatalogResult 定义模型列表结果。
 type ModelCatalogResult = client.ModelCatalogResult
 
+// AutoMatchResult 定义一次「自动配对上下文窗口」的汇总结果。
+type AutoMatchResult = client.AutoMatchResult
+
 // ModelAdapterProbeResult 定义一次轻量模型可用性探测结果。
 type ModelAdapterProbeResult = client.ModelAdapterProbeResult
 
@@ -134,6 +137,12 @@ func (s *ProxyService) TestModelAdapter(adapter ModelAdapterConfig) (ModelAdapte
 // FetchModelCatalog 用于处理与 FetchModelCatalog 相关的逻辑。
 func (s *ProxyService) FetchModelCatalog(request ModelCatalogRequest) (ModelCatalogResult, error) {
 	return s.core.FetchModelCatalog(request)
+}
+
+// AutoMatchContextWindows 自动为所有已存储模型适配器配对正确的上下文窗口：
+// 目录命中则覆盖，目录未命中则探测 provider /models 回填。供前端「一键自动配对」按钮调用。
+func (s *ProxyService) AutoMatchContextWindows(ctx context.Context) (AutoMatchResult, error) {
+	return s.core.AutoMatchContextWindows(ctx)
 }
 
 // ProbeModelAdapter 轻量探测单个模型是否可用，用于批量拉取后的可用性体检。

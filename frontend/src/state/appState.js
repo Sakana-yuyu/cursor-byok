@@ -312,7 +312,7 @@ export function createEmptyModelAdapter() {
     balanceQueryField: "",
     balanceQueryHeaders: {},
     balanceQueryHeadersJSON: BALANCE_QUERY_HEADERS_DEFAULT_JSON,
-    balanceProfile: "auto",
+    balanceProfile: "general",
     balanceAccessToken: "",
     balanceUserID: "",
     balanceCodingPlanProvider: "",
@@ -587,7 +587,7 @@ export function normalizeModelAdapter(source) {
     ? balanceQueryHeadersJSONRaw
     : balanceQueryHeadersToJSON(balanceQueryHeaders);
   const balanceProfileRaw = asString(raw.balanceProfile ?? raw.balance_profile).trim().toLowerCase();
-  const balanceProfile = ["auto", "newapi", "token_plan", "custom"].includes(balanceProfileRaw)
+  const balanceProfile = ["auto", "general", "newapi", "token_plan", "custom", "official"].includes(balanceProfileRaw)
     ? balanceProfileRaw
     : "auto";
   const balanceAccessToken = asString(raw.balanceAccessToken ?? raw.balance_access_token).trim();
@@ -648,6 +648,28 @@ export function normalizeModelAdapter(source) {
     balanceUserID,
     balanceCodingPlanProvider,
   };
+}
+
+export function resolveBalanceProfileForAdapter(source) {
+  const adapter = source && typeof source === "object" ? source : {};
+  const raw = asString(adapter.balanceProfile).toLowerCase();
+  if (["general", "newapi", "token_plan", "custom", "official"].includes(raw)) {
+    return raw;
+  }
+  if (asString(adapter.balanceAccessToken) && asString(adapter.balanceUserID)) {
+    return "newapi";
+  }
+  const identity = `${asString(adapter.supplierID)} ${asString(adapter.baseURL)}`.toLowerCase();
+  if (/deepseek|stepfun|siliconflow|openrouter|novita|moonshot/.test(identity)) {
+    return "official";
+  }
+  if (/api\.kimi\.com\/coding|bigmodel\.cn|api\.z\.ai|minimaxi|minimax\.io|zenmux|volces\.com\/api\/coding/.test(identity)) {
+    return "token_plan";
+  }
+  if (asString(adapter.balanceQueryURL) && asString(adapter.balanceQueryField)) {
+    return "custom";
+  }
+  return "general";
 }
 
 export function normalizeModelAdapters(source) {
@@ -842,6 +864,8 @@ function normalizeConfig(source) {
   return {
     log: asBoolean(raw.log),
     providerStreamIdleTimeout: asPositiveInteger(raw.providerStreamIdleTimeout),
+    turnStaleTimeout: asPositiveInteger(raw.turnStaleTimeout),
+    autoMatchContextWindow: asBoolean(raw.autoMatchContextWindow),
     backendListenAddr: asString(raw.configBackendListenAddr) || asString(raw.backendListenAddr),
     proxyListenAddr: asString(raw.configProxyListenAddr) || asString(raw.proxyListenAddr),
     modelAdapters: dedupeModelAdapters(raw.modelAdapters),
@@ -891,6 +915,8 @@ function buildConfigPayload(source = appState) {
   return {
     log: normalized.log,
     providerStreamIdleTimeout: normalized.providerStreamIdleTimeout,
+    turnStaleTimeout: normalized.turnStaleTimeout,
+    autoMatchContextWindow: normalized.autoMatchContextWindow,
     backendListenAddr: normalized.backendListenAddr,
     proxyListenAddr: normalized.proxyListenAddr,
     // balanceQueryHeadersJSON 仅前端编辑态使用，落盘只保留 map 形态的 balanceQueryHeaders。
@@ -914,6 +940,8 @@ function applyConfigToState(config, { modelAdaptersOnly = false } = {}) {
   appState.routingMode = normalized.routing.mode;
   appState.includeCacheWriteInHitRate = normalized.homeMetrics.includeCacheWriteInHitRate;
   appState.localResponseCache = normalized.localResponseCache;
+  appState.turnStaleTimeout = normalized.turnStaleTimeout;
+  appState.autoMatchContextWindow = normalized.autoMatchContextWindow;
   return normalized;
 }
 
@@ -1151,6 +1179,8 @@ export const appState = reactive({
   routingMode: cachedConfig.routing.mode,
   includeCacheWriteInHitRate: cachedConfig.homeMetrics.includeCacheWriteInHitRate,
   localResponseCache: cachedConfig.localResponseCache,
+  turnStaleTimeout: cachedConfig.turnStaleTimeout,
+  autoMatchContextWindow: cachedConfig.autoMatchContextWindow,
 
   serviceRunning: asBoolean(cachedState.serviceRunning),
   backendRunning: asBoolean(cachedState.backendRunning),

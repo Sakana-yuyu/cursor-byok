@@ -118,6 +118,18 @@ func (manager *Manager) ProviderStreamIdleTimeout(ctx context.Context) time.Dura
 	return time.Duration(seconds) * time.Second
 }
 
+// TurnStaleTimeout 返回 turn-staleness 看门狗的触发阈值：
+// 一轮回合进入「等待外部（工具/交互结果）」后，若在此时长内无任何进展，则触发两段式自救
+// （先重对齐 append 序列 + 宽限，再强制收口并自动继续 provider）。读取热加载后的最新配置。
+func (manager *Manager) TurnStaleTimeout(ctx context.Context) time.Duration {
+	if manager == nil {
+		return time.Duration(DefaultTurnStaleTimeoutSeconds) * time.Second
+	}
+	manager.reloadIfChanged(ctx)
+	seconds := normalizeTurnStaleTimeout(manager.currentConfig().TurnStaleTimeout)
+	return time.Duration(seconds) * time.Second
+}
+
 // LocalResponseCacheSettings 返回本地响应缓存的当前配置：是否启用、TTL 与最大条目数。
 // 该方法读取热加载后的最新配置，供 provider 网关按调用即时判断。
 func (manager *Manager) LocalResponseCacheSettings() (enabled bool, ttl time.Duration, maxEntries int) {
@@ -167,12 +179,12 @@ func (manager *Manager) LegacyRuntimeSnapshot(_ context.Context) (legacyruntime.
 	adapters := make([]legacyruntime.ModelAdapterConfig, 0, len(cfg.ModelAdapters))
 	for _, item := range cfg.ModelAdapters {
 		adapters = append(adapters, legacyruntime.ModelAdapterConfig{
-			ID:                          item.ID,
-			DisplayName:                 item.DisplayName,
-			GroupName:                   item.GroupName,
-				Type:                        item.Type,
-				SupplierID:                  item.SupplierID,
-				ProtocolMode:                item.ProtocolMode,
+			ID:           item.ID,
+			DisplayName:  item.DisplayName,
+			GroupName:    item.GroupName,
+			Type:         item.Type,
+			SupplierID:   item.SupplierID,
+			ProtocolMode: item.ProtocolMode,
 
 			ProtocolGroup:               item.ProtocolGroup,
 			BaseURL:                     item.BaseURL,

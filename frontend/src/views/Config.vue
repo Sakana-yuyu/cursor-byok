@@ -13,7 +13,8 @@ import {
   ROUTE_MODE_OPTIONS,
   toUserError,
 } from "@/state/appState";
-import { onMounted } from "vue";
+import { autoMatchContextWindows } from "@/services/clientApi";
+import { onMounted, ref } from "vue";
 
 const routeModeOptions = ROUTE_MODE_OPTIONS;
 
@@ -44,6 +45,28 @@ async function handleOpenModelConfig() {
     await openModelConfigWindow();
   } catch (error) {
     await showActionError("打开失败", toUserError(error));
+  }
+}
+
+const autoMatchBusy = ref(false);
+
+async function handleAutoMatchContextWindows() {
+  if (autoMatchBusy.value) return;
+  autoMatchBusy.value = true;
+  try {
+    const result = await autoMatchContextWindows();
+    if (!result || !result.enabled) {
+      await showModal({ title: "提示", content: "自动配对上下文窗口开关已关闭，可在下方「上下文配对」中开启。" });
+      return;
+    }
+    // 配对可能改写了已存储的适配器，重新拉取一份配置刷新本地状态。
+    await reloadUserConfig().catch(() => {});
+    const detail = `共 ${result.total} 个：目录命中 ${result.fromCatalog}，探测命中 ${result.fromProbe}，未变 ${result.unchanged}。${result.changed ? "已更新。" : "无需更新。"}`;
+    await showModal({ title: "自动配对完成", content: detail });
+  } catch (error) {
+    await showActionError("自动配对失败", toUserError(error));
+  } finally {
+    autoMatchBusy.value = false;
   }
 }
 
@@ -133,15 +156,31 @@ onMounted(async () => {
     </Card>
 
     <Card>
-      <div class="flex items-center justify-between gap-4">
-        <div>
-          <h2 class="text-base font-medium text-white">模型配置</h2>
-          <div class="text-sm text-[#a3a3a3]">
-            已配置 {{ appState.modelAdapters.length }} 个模型适配器
+      <div class="flex flex-col gap-3">
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <h2 class="text-base font-medium text-white">模型配置</h2>
+            <div class="text-sm text-[#a3a3a3]">
+              已配置 {{ appState.modelAdapters.length }} 个模型适配器
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <Button variant="default" :disabled="autoMatchBusy" @click="handleAutoMatchContextWindows">
+              {{ autoMatchBusy ? "配对中..." : "一键配对上下文" }}
+            </Button>
+            <Button variant="primary" @click="handleOpenModelConfig">打开模型配置</Button>
           </div>
         </div>
-        <Button variant="primary" @click="handleOpenModelConfig">打开模型配置</Button>
       </div>
+    </Card>
+
+    <Card>
+      <Switch
+        :enabled="appState.autoMatchContextWindow"
+        label="自动配对上下文窗口"
+        description="开启后，启动时与点击「一键配对上下文」时，自动按内置目录为模型配对正确的上下文窗口（目录命中则覆盖，目录未命中则探测供应商 /models 回填）。可避免误填过大窗口导致 context_length_exceeded。"
+        @change="(value) => (appState.autoMatchContextWindow = value)"
+      />
     </Card>
   </div>
 </template>

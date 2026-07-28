@@ -14,6 +14,7 @@ import {
   runModelAdapterTest,
   saveModelAdaptersBatch,
   startModelAdapterTest,
+  resolveBalanceProfileForAdapter,
   toUserError,
   updateModelAdaptersBySupplier,
 } from "@/state/appState";
@@ -698,6 +699,9 @@ async function removeAdapters(targets) {
 
 onMounted(async () => {
   await reloadUserConfig({ modelAdaptersOnly: true }).catch(() => {});
+  if (route.query.edit === "1" && !bulkEditExpanded.value) {
+    toggleBulkEdit();
+  }
   if (supplierMeta.value && !balanceState.loaded && !balanceState.loading) void loadBalance();
 });
 
@@ -723,7 +727,7 @@ function createBulkEditDraft() {
     balanceQueryURL: first.balanceQueryURL || "",
     balanceQueryField: first.balanceQueryField || "",
     balanceQueryHeadersJSON: first.balanceQueryHeadersJSON || "",
-    balanceProfile: first.balanceProfile || "auto",
+    balanceProfile: resolveBalanceProfileForAdapter(first),
     balanceAccessToken: first.balanceAccessToken || "",
     balanceUserID: first.balanceUserID || "",
     balanceCodingPlanProvider: first.balanceCodingPlanProvider || "",
@@ -823,7 +827,7 @@ async function saveBulkEdit(force = false) {
               {{ selectionMode ? "退出多选" : "多选" }}
             </Button>
             <Button variant="default" :disabled="supplierAdapters.length === 0" @click="toggleBulkEdit">
-              {{ bulkEditExpanded ? "收起批量编辑" : "批量编辑" }}
+              编辑供应商
             </Button>
             <Button variant="default" :disabled="catalogLoading || !supplierMeta" @click="handleFetchModels">
               {{ catalogLoading ? "拉取中..." : "拉取模型" }}
@@ -831,14 +835,41 @@ async function saveBulkEdit(force = false) {
             <Button variant="primary" :disabled="appState.configSaving" @click="openEditor(null)">新增模型</Button>
           </div>
 
-          <!-- 批量编辑折叠面板 -->
-          <div v-if="bulkEditExpanded" class="flex flex-col gap-3 rounded-[8px] border border-[#343434] bg-[#252525] p-4">
+          <Teleport to="body">
+            <div
+              v-if="bulkEditExpanded"
+              class="fixed inset-0 z-999 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+              @click.self="!bulkEditSaving && (bulkEditExpanded = false)"
+            >
+              <div
+                class="flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[10px] border border-[#4a4a4a] bg-[#252525] shadow-2xl"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="supplier-bulk-edit-title"
+              >
+                <div class="flex items-center justify-between border-b border-[#343434] px-5 py-4">
+                  <div>
+                    <h3 id="supplier-bulk-edit-title" class="text-base font-medium text-white">编辑供应商</h3>
+                    <p class="mt-1 text-xs text-[#a3a3a3]">保存后同步更新该供应商下的全部模型连接配置。</p>
+                  </div>
+                  <button
+                    type="button"
+                    class="center-row size-8 justify-center rounded-[6px] text-[#8f8f8f] transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
+                    :disabled="bulkEditSaving"
+                    title="关闭"
+                    @click="bulkEditExpanded = false"
+                  >
+                    <span class="icon-[mdi--close] text-[18px]"></span>
+                  </button>
+                </div>
+                <div class="overflow-y-auto p-5">
+                  <div class="flex flex-col gap-3">
             <div class="text-xs text-[#a3a3a3]">修改以下字段将覆盖该供应商下全部 {{ supplierAdapters.length }} 个模型的对应配置。模型级配置（模型 ID、上下文、价格等）不受影响。</div>
             <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
               <label class="flex flex-col gap-1">
                 <span class="text-xs text-[#a3a3a3]">模型类型</span>
                 <select v-model="bulkEditDraft.type" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]">
-                  <option v-for="opt in providerSelectOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                  <option v-for="opt in providerSelectOptions()" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
                 </select>
               </label>
               <label class="flex flex-col gap-1">
@@ -898,13 +929,20 @@ async function saveBulkEdit(force = false) {
               <label class="flex flex-col gap-1">
                 <span class="text-xs text-[#a3a3a3]">查询模板</span>
                 <select v-model="bulkEditDraft.balanceProfile" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]">
-                  <option value="auto">自动识别</option>
+                  <option value="custom">自定义</option>
+                  <option value="general">通用模板</option>
                   <option value="newapi">New API</option>
                   <option value="token_plan">Token Plan</option>
-                  <option value="custom">自定义字段</option>
+                  <option value="official">官方</option>
                 </select>
               </label>
-              <label class="flex flex-col gap-1">
+              <div v-if="bulkEditDraft.balanceProfile === 'general'" class="text-xs leading-5 text-[#737373] md:col-span-2">
+                通用模板将请求接口地址下的 <code>/user/balance</code>，使用当前 API Key 查询 balance。
+              </div>
+              <div v-if="bulkEditDraft.balanceProfile === 'official'" class="text-xs leading-5 text-[#737373] md:col-span-2">
+                官方模板按接口地址识别 DeepSeek、StepFun、SiliconFlow、OpenRouter、Novita 等官方余额接口。
+              </div>
+              <label v-if="bulkEditDraft.balanceProfile === 'token_plan'" class="flex flex-col gap-1">
                 <span class="text-xs text-[#a3a3a3]">Token Plan 供应商</span>
                 <select v-model="bulkEditDraft.balanceCodingPlanProvider" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]">
                   <option value="">自动检测</option>
@@ -916,23 +954,23 @@ async function saveBulkEdit(force = false) {
                   <option value="volcengine">火山方舟</option>
                 </select>
               </label>
-              <label class="flex flex-col gap-1">
+              <label v-if="bulkEditDraft.balanceProfile === 'newapi'" class="flex flex-col gap-1">
                 <span class="text-xs text-[#a3a3a3]">访问令牌（New API）</span>
                 <input v-model="bulkEditDraft.balanceAccessToken" type="text" placeholder="安全设置生成" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
               </label>
-              <label class="flex flex-col gap-1">
+              <label v-if="bulkEditDraft.balanceProfile === 'newapi'" class="flex flex-col gap-1">
                 <span class="text-xs text-[#a3a3a3]">用户 ID（New API）</span>
                 <input v-model="bulkEditDraft.balanceUserID" type="text" placeholder="例如 114514" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
               </label>
-              <label class="flex flex-col gap-1">
+              <label v-if="bulkEditDraft.balanceProfile === 'custom'" class="flex flex-col gap-1">
                 <span class="text-xs text-[#a3a3a3]">余额查询地址</span>
                 <input v-model="bulkEditDraft.balanceQueryURL" type="text" placeholder="可选" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
               </label>
-              <label class="flex flex-col gap-1">
+              <label v-if="bulkEditDraft.balanceProfile === 'custom'" class="flex flex-col gap-1">
                 <span class="text-xs text-[#a3a3a3]">余额字段路径</span>
                 <input v-model="bulkEditDraft.balanceQueryField" type="text" placeholder="可选" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
               </label>
-              <label class="flex flex-col gap-1 md:col-span-2">
+              <label v-if="bulkEditDraft.balanceProfile === 'custom'" class="flex flex-col gap-1 md:col-span-2">
                 <span class="text-xs text-[#a3a3a3]">查询请求头</span>
                 <input v-model="bulkEditDraft.balanceQueryHeadersJSON" type="text" placeholder="{}" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
               </label>
@@ -952,7 +990,11 @@ async function saveBulkEdit(force = false) {
               </Button>
               <Button variant="default" @click="bulkEditExpanded = false">取消</Button>
             </div>
-          </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Teleport>
         </div>
 
         <!-- 搜索 / 过滤 / 排序 工具条 -->

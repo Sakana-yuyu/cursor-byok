@@ -201,6 +201,57 @@ func (service *Service) buildAutoCompactionPlan(stream *ActiveStream, conversati
 	return plan, nil
 }
 
+// buildForcedCompactionPlan 构造一个「强制触发」的压缩计划，用于 provider 已返回
+// context_length_exceeded 后的自救：跳过常规的阈值判断（因为阈值基于可能偏大的 contextWindowTokens），
+// 只要还有可压缩的历史轮次就生成计划。返回 nil 表示无可压缩内容（已是最简状态）。
+func (service *Service) buildForcedCompactionPlan(stream *ActiveStream, conversation *ConversationFile, compiled CompiledConversation) (*compactionPlan, error) {
+	if stream == nil || conversation == nil {
+		return nil, nil
+	}
+	contextWindowSize := compactionContextWindowSize(conversation)
+	if contextWindowSize <= 0 {
+		return nil, nil
+	}
+	contextTokens, err := service.resolveCompactionBaselineTokens(stream.ConversationID, compiled, conversation)
+	if err != nil {
+		return nil, err
+	}
+	reserveTokens := service.resolveCompactionReserveTokens(stream.ModelID)
+	if reserveTokens <= 0 {
+		reserveTokens = conversation.AutoCompactionReserveTokens
+	}
+	if reserveTokens <= 0 {
+		reserveTokens = compactionAutoReserveTokens
+	}
+	usagePercent := 0.0
+	if contextWindowSize > 0 && contextTokens > 0 {
+		usagePercent = float64(contextTokens) / float64(contextWindowSize)
+	}
+	base := &compactionPlan{
+		Trigger:                   "context_overflow",
+		ContextTokens:             contextTokens,
+		ContextWindowSize:         contextWindowSize,
+		ContextUsagePercent:       usagePercent,
+		ReserveTokens:             reserveTokens,
+		MessageCount:              clampInt64ToInt32(int64(len(compiled.Messages))),
+		IsFirstCompaction:         len(compactionSummaryTexts(conversation)) == 0,
+		ExistingSummary:           existingConversationSummaryText(conversation),
+		CurrentTurnSeq:            stream.TurnSeq,
+		CurrentRequestID:          strings.TrimSpace(stream.RequestID),
+		CurrentUserText:           strings.TrimSpace(stream.LatestUserText),
+		PreserveCurrentTurnInputs: false,
+	}
+	// 强制压缩优先走历史轮次压缩；若历史无可压缩内容，回退到 legacy 提示资产压缩。
+	plan, err := service.buildAutoCompactionPlanFromHistory(base, conversation)
+	if err != nil {
+		return nil, err
+	}
+	if plan != nil {
+		return plan, nil
+	}
+	return service.buildLegacyCompactionPlan(base, conversation, false, 0)
+}
+
 func (service *Service) resolveCompactionBaselineTokens(conversationID string, compiled CompiledConversation, conversation *ConversationFile) (int64, error) {
 	contextTokens := estimateCompiledPromptTokens(compiled)
 	if contextTokens > 0 {

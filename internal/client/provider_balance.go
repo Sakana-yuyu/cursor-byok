@@ -58,14 +58,14 @@ type ProviderBalanceRequest struct {
 // ProviderBalance 是统一的余额/额度查询结果，带 JSON 标签供 Wails 前端使用。
 type ProviderBalance struct {
 	Supported bool     `json:"supported"`
-	Source    string   `json:"source"`    // "openai_billing" | "newapi" | "token_plan" | ...
-	Currency  string   `json:"currency"`  // "USD" | "CNY" | "%"
-	Unlimited bool     `json:"unlimited"` // true 表示不限额度（One/NewAPI 无限令牌哨兵值）
-	Total     *float64 `json:"total"`     // 总额度，未知为 nil；不限额时为 nil
-	Used      *float64 `json:"used"`      // 已用金额，未知为 nil
-	Remaining *float64 `json:"remaining"` // 剩余额度，未知为 nil；不限额时为 nil
+	Source    string   `json:"source"`             // "openai_billing" | "newapi" | "token_plan" | ...
+	Currency  string   `json:"currency"`           // "USD" | "CNY" | "%"
+	Unlimited bool     `json:"unlimited"`          // true 表示不限额度（One/NewAPI 无限令牌哨兵值）
+	Total     *float64 `json:"total"`              // 总额度，未知为 nil；不限额时为 nil
+	Used      *float64 `json:"used"`               // 已用金额，未知为 nil
+	Remaining *float64 `json:"remaining"`          // 剩余额度，未知为 nil；不限额时为 nil
 	PlanName  string   `json:"planName,omitempty"` // 套餐名 / Token Plan 窗口摘要
-	Message   string   `json:"message"`           // 人类可读状态 / 错误信息
+	Message   string   `json:"message"`            // 人类可读状态 / 错误信息
 	// Transient 标记本次失败是否为瞬时传输失败（网络不可达/超时/读体中断）。
 	// true：前端可保留并继续展示上一次成功值（keep-last-good）。
 	// false：确定性失败（空 key/鉴权失败/非 2xx/非法 JSON/不支持），前端应清空为不可用。
@@ -115,6 +115,35 @@ func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) Prov
 	httpClient := s.publicClient
 	if httpClient == nil {
 		httpClient = http.DefaultClient
+	}
+
+	// 策略 0：通用模板。对齐 cc-switch 的 GENERAL 模板：
+	// GET {{baseUrl}}/user/balance，Bearer {{apiKey}}，读取 balance/remaining。
+	if profile == balanceProfileGeneral {
+		if apiKey == "" {
+			return ProviderBalance{Supported: false, Source: "general", Message: "通用模板需要 API Key"}
+		}
+		if balance, matched := queryGeneralBalance(ctx, httpClient, normalized, apiKey); matched {
+			if balance.Supported {
+				s.providerBalanceCache.set(cacheKey, balance)
+			}
+			return balance
+		}
+		return ProviderBalance{Supported: false, Source: "general", Message: "通用余额模板未返回可识别的 balance 字段"}
+	}
+
+	// 官方模板只使用具名 provider 的固定接口，不回退到通用试探链。
+	if profile == balanceProfileOfficial {
+		if apiKey == "" {
+			return ProviderBalance{Supported: false, Source: "official", Message: "官方模板需要 API Key"}
+		}
+		if named, matched := s.queryNamedProviderBalance(ctx, httpClient, normalized, apiKey, request.SupplierID); matched {
+			if named.Supported {
+				s.providerBalanceCache.set(cacheKey, named)
+			}
+			return named
+		}
+		return ProviderBalance{Supported: false, Source: "official", Message: "当前接口地址未识别为官方余额查询供应商"}
 	}
 
 	// 策略 0a：Token Plan（Kimi / 智谱 / MiniMax / ZenMux 等 Coding Plan 套餐进度）。
@@ -200,6 +229,8 @@ func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) Prov
 
 const (
 	balanceProfileAuto      = "auto"
+	balanceProfileGeneral   = "general"
+	balanceProfileOfficial  = "official"
 	balanceProfileNewAPI    = "newapi"
 	balanceProfileTokenPlan = "token_plan"
 	balanceProfileCustom    = "custom"
@@ -258,7 +289,7 @@ func resolveBalanceCredentials(request ProviderBalanceRequest, adapter servercon
 
 func resolveBalanceProfile(creds balanceCredentials, baseURL string) string {
 	switch strings.ToLower(strings.TrimSpace(creds.Profile)) {
-	case balanceProfileNewAPI, balanceProfileTokenPlan, balanceProfileCustom:
+	case balanceProfileGeneral, balanceProfileOfficial, balanceProfileNewAPI, balanceProfileTokenPlan, balanceProfileCustom:
 		return strings.ToLower(strings.TrimSpace(creds.Profile))
 	}
 	if detectCodingPlanProvider(baseURL, creds.CodingPlanProvider) != codingPlanNone {
@@ -292,6 +323,59 @@ func mergeBalanceAdapterIdentity(adapter serverconfig.ModelAdapterConfig, creds 
 	}
 	out.BalanceProfile = profile
 	return out
+}
+
+// queryGeneralBalance 对齐 cc-switch 的 GENERAL 模板：
+// GET {{baseUrl}}/user/balance，Bearer {{apiKey}}，读取 balance（兼容 remaining/data.balance）。
+func queryGeneralBalance(ctx context.Context, httpClient *http.Client, normalizedBaseURL, apiKey string) (ProviderBalance, bool) {
+	endpoint := strings.TrimRight(billingAPIRoot(normalizedBaseURL), "/") + "/user/balance"
+	body, ok := doProviderBalanceGET(ctx, httpClient, endpoint, apiKey, nil)
+	if !ok {
+		return ProviderBalance{}, false
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return ProviderBalance{}, false
+	}
+	if active, exists := payload["is_active"].(bool); exists && !active {
+		return ProviderBalance{Supported: false, Source: "general", Message: "账户不可用"}, true
+	}
+
+	value, found := jsonNumberToFloat(payload["balance"])
+	unit, _ := payload["unit"].(string)
+	if !found {
+		value, found = jsonNumberToFloat(payload["remaining"])
+	}
+	if data, isObject := payload["data"].(map[string]any); isObject {
+		if !found {
+			value, found = jsonNumberToFloat(data["balance"])
+		}
+		if !found {
+			value, found = jsonNumberToFloat(data["remaining"])
+		}
+		if unit == "" {
+			unit, _ = data["unit"].(string)
+		}
+	}
+	if !found {
+		return ProviderBalance{}, false
+	}
+	unit = strings.TrimSpace(unit)
+	if unit == "" {
+		unit = "USD"
+	}
+	if value >= providerBalanceUnlimitedThreshold {
+		return ProviderBalance{Supported: true, Source: "general", Currency: unit, Unlimited: true, Message: "额度不限"}, true
+	}
+	remaining := value
+	return ProviderBalance{
+		Supported: true,
+		Source:    "general",
+		Currency:  unit,
+		Remaining: &remaining,
+		Message:   "查询成功",
+	}, true
 }
 
 // queryOpenAIBillingBalance 查询 OpenAI 计费端点，成功时返回额度信息。

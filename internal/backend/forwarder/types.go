@@ -157,6 +157,12 @@ type ActiveStream struct {
 	ProviderUsage                               turnUsageSnapshot
 	ProviderTerminalToolInvocation              bool
 	PendingCompaction                           *PendingCompaction
+	// TurnStaleGraceStartedAt 记录 turn-staleness 看门狗「阶段一（重对齐 append 序列）」的触发时刻。
+	// 零值表示尚未进入宽限期；非零值表示已重对齐过序列并进入宽限，再次触发即走「阶段二强制收口」。
+	TurnStaleGraceStartedAt time.Time
+	// ContextOverflowCompactionAttempts 记录本回合因 context_length_exceeded 触发「强制压缩+重试」的次数，
+	// 用于限制每轮最多重试若干次，避免压不动时无限循环。
+	ContextOverflowCompactionAttempts int
 
 	Backlog                     []StreamEvent
 	Subscribers                 map[string]*StreamSubscriber
