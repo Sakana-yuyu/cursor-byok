@@ -26,9 +26,12 @@ func BuildUserMessageReplayMessage(userMessage *agentv1.UserMessage) (Message, b
 
 func buildUserReplayMessage(text string, selectedContext *agentv1.SelectedContext) (Message, bool) {
 	images := buildSelectedImageContentParts(selectedContext)
-	sections := make([]string, 0, 4)
+	sections := make([]string, 0, 5)
 	if text != "" {
 		sections = append(sections, formatMessageText(fmt.Sprintf("<user_query>\n%s\n</user_query>", text)))
+	}
+	if cursorCommands := buildSelectedCursorCommandsPromptSection(selectedContext); cursorCommands != "" {
+		sections = append(sections, cursorCommands)
 	}
 	if ideState := buildSelectedIDEStatePromptSection(selectedContext); ideState != "" {
 		sections = append(sections, ideState)
@@ -60,6 +63,32 @@ func buildUserReplayMessage(text string, selectedContext *agentv1.SelectedContex
 		Content:      content,
 		ContentParts: parts,
 	}, true
+}
+
+func buildSelectedCursorCommandsPromptSection(selectedContext *agentv1.SelectedContext) string {
+	if selectedContext == nil || len(selectedContext.GetCursorCommands()) == 0 {
+		return ""
+	}
+	entries := make([]string, 0, len(selectedContext.GetCursorCommands()))
+	for _, command := range selectedContext.GetCursorCommands() {
+		if command == nil {
+			continue
+		}
+		content := strings.TrimSpace(command.GetContent())
+		if content == "" {
+			continue
+		}
+		name := strings.TrimSpace(command.GetName())
+		if name == "" {
+			entries = append(entries, "<cursor_command>\n"+content+"\n</cursor_command>")
+			continue
+		}
+		entries = append(entries, fmt.Sprintf("<cursor_command name=\"%s\">\n%s\n</cursor_command>", escapePromptXML(name), content))
+	}
+	if len(entries) == 0 {
+		return ""
+	}
+	return "<cursor_commands>\n" + strings.Join(entries, "\n\n") + "\n</cursor_commands>"
 }
 
 func buildSelectedIDEStatePromptSection(selectedContext *agentv1.SelectedContext) string {
