@@ -84,6 +84,18 @@ export const SaveUserConfig = (value) => {
   Object.assign(previewConfig, next, { modelAdapters: previewConfig.modelAdapters });
   return Promise.resolve(clone(previewConfig));
 };
+export const AutoMatchContextWindows = () => {
+  const total = previewConfig.modelAdapters.length;
+  return Promise.resolve({
+    enabled: true,
+    changed: false,
+    total,
+    fromCatalog: 0,
+    fromProbe: 0,
+    unchanged: total,
+    details: [],
+  });
+};
 export const StartProxy = () => Promise.resolve(browserPreviewMockProxyState());
 export const StopProxy = () => Promise.resolve(browserPreviewMockProxyState());
 export const GetAdRuntime = () => Promise.resolve({ available: false, slots: [], window: {} });

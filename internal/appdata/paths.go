@@ -66,6 +66,12 @@ func RulesRootPath() string {
 	return filepath.Join(RootDir(), "rules")
 }
 
+// SkillsRootPath 返回全局技能目录路径（每个子目录为一个技能，含 SKILL.md）。
+// 该目录用于向每个 agent 对话的系统 prompt 注入全局技能。
+func SkillsRootPath() string {
+	return filepath.Join(RootDir(), "skills")
+}
+
 // LogsRootPath 返回统一日志根目录路径。
 func LogsRootPath() string {
 	return filepath.Join(RootDir(), "logs")

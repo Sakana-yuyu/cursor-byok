@@ -118,6 +118,17 @@ function nameSummary(supplier) {
   return supplier.groupName;
 }
 
+function modelHeader(supplier) {
+  const first = supplier?.models?.[0] || {};
+  const displayName = String(first.displayName || first.modelID || "").trim();
+  const modelID = String(first.modelID || "").trim();
+  return {
+    displayName: displayName || nameSummary(supplier),
+    modelID: modelID || hostSummary(supplier),
+    hasMore: (supplier?.models || []).length > 1,
+  };
+}
+
 function healthSummary(supplier) {
   const models = supplier.models || [];
   let ok = 0;
@@ -397,16 +408,24 @@ onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }).catch(() =>
             <div class="flex h-full flex-col gap-3">
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0 flex-1">
-                  <div class="truncate text-sm font-semibold text-white">{{ nameSummary(supplier) }}</div>
-                  <div class="mt-0.5 truncate text-xs text-[#8f8f8f]">{{ hostSummary(supplier) }}</div>
+                  <div class="truncate text-sm font-semibold text-white">{{ modelHeader(supplier).displayName }}</div>
+                  <div class="mt-0.5 truncate text-xs text-[#8f8f8f]">
+                    {{ modelHeader(supplier).modelID }}
+                    <span v-if="modelHeader(supplier).hasMore" class="text-[#737373]"> · 等 {{ supplier.models.length }} 个模型</span>
+                  </div>
                 </div>
-                <span class="center-row shrink-0 gap-1.5 rounded-full border border-[#3f3f3f] px-2 py-0.5 text-[11px] text-[#a3a3a3]">
-                  <span :class="[providerIcon(supplier.type), 'text-[14px]']"></span>
-                  <span>{{ providerLabel(supplier.type) }}</span>
+                <span
+                  class="center-row size-7 shrink-0 justify-center rounded-full border border-[#3f3f3f] text-[#a3a3a3]"
+                  :title="providerLabel(supplier.type)"
+                >
+                  <span :class="[providerIcon(supplier.type), 'text-[16px]']"></span>
                 </span>
               </div>
 
               <div class="flex flex-col gap-1 text-xs">
+                <div class="truncate text-[11px] text-[#737373]" :title="`${nameSummary(supplier)} · ${hostSummary(supplier)}`">
+                  {{ nameSummary(supplier) }} · {{ hostSummary(supplier) }}
+                </div>
                 <div class="center-row justify-start gap-1.5 text-[#a3a3a3]">
                   <span class="text-[#d4d4d4]">{{ supplier.models.length }} 个模型</span>
                   <span

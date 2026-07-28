@@ -88,10 +88,12 @@ func (service *Service) handleTurnStaleTimeout(stream *ActiveStream, payload *st
 	}
 
 	if !inGrace {
-		// 阶段一：重对齐 append 序列 + 进入宽限期。
-		if service.appendSeq != nil {
-			service.appendSeq.Reset(requestID)
-		}
+		// 阶段一：进入宽限期，给真实工具结果一次机会。
+		// 注意：不再调用 appendSeq.Reset()。旧实现把 next 强制重置为 1，
+		// 但 Cursor 客户端不会重置自己的 seqno，导致 seqno>1 的工具结果在
+		// acquire() 里永远阻塞等待 seqno=1，反而让工具执行彻底卡死形成死循环。
+		// acquire() 内置了 appendSeq==1 && state.next>1 的分支，已能处理
+		// 真实的客户端 seqno 重置场景；这里不需要额外干预。
 		stream.mu.Lock()
 		stream.TurnStaleGraceStartedAt = time.Now().UTC()
 		stream.mu.Unlock()
