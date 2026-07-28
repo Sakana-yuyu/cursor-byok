@@ -3,6 +3,7 @@ import { isBrowserPreview } from "@/services/runtimeAdapter";
 import Home from "@/views/Home.vue";
 import ModelConfig from "@/views/ModelConfig.vue";
 import ModelEditor from "@/views/ModelEditor.vue";
+import ModelCatalog from "@/views/ModelCatalog.vue";
 import ModelGroups from "@/views/ModelGroups.vue";
 import RequestMetrics from "@/views/RequestMetrics.vue";
 import SupplierDetail from "@/views/SupplierDetail.vue";
@@ -25,6 +26,11 @@ const router = createRouter({
       path: "/model-editor",
       component: ModelEditor,
       meta: { showIcon: false, title: "模型配置", directlyClose: true },
+    },
+    {
+      path: "/model-catalog",
+      component: ModelCatalog,
+      meta: { showIcon: false, title: "拉取模型", directlyClose: true },
     },
     {
       path: "/model-groups",

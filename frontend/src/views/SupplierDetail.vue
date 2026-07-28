@@ -243,7 +243,8 @@ function formatMoney(value, currency) {
 function balanceSourceLabel(source) {
   if (source === "openai_billing") return "openai billing";
   if (source === "sub2api_usage") return "sub2api usage";
-  if (source === "newapi") return "newapi";
+  if (source === "newapi") return "New API";
+  if (source === "token_plan") return "Token Plan";
   if (source === "configured") return "自定义查询";
   if (source === "deepseek") return "DeepSeek";
   if (source === "stepfun") return "阶跃星辰";
@@ -275,6 +276,14 @@ const balancePrimary = computed(() => {
   const data = balanceState.data;
   if (!data || !data.supported) return "";
   if (data.unlimited) return "余额 不限额";
+  if (data.source === "token_plan" || data.currency === "%") {
+    const used = data.used != null && Number.isFinite(Number(data.used)) ? Number(data.used) : null;
+    const remaining = data.remaining != null && Number.isFinite(Number(data.remaining)) ? Number(data.remaining) : null;
+    const plan = String(data.planName || "").trim();
+    const head = plan ? `${plan} · ` : "";
+    if (used != null) return `${head}已用 ${used.toFixed(0)}%` + (remaining != null ? ` / 剩余 ${remaining.toFixed(0)}%` : "");
+    if (remaining != null) return `${head}剩余 ${remaining.toFixed(0)}%`;
+  }
   const parts = [`余额 ${formatMoney(data.remaining, data.currency)}`];
   if (data.total != null && Number.isFinite(Number(data.total))) {
     parts.push(`总额 ${formatMoney(data.total, data.currency)}`);
@@ -282,6 +291,7 @@ const balancePrimary = computed(() => {
   if (data.used != null && Number.isFinite(Number(data.used))) {
     parts.push(`已用 ${formatMoney(data.used, data.currency)}`);
   }
+  if (data.planName) parts.unshift(String(data.planName));
   return parts.join(" / ");
 });
 
@@ -713,6 +723,10 @@ function createBulkEditDraft() {
     balanceQueryURL: first.balanceQueryURL || "",
     balanceQueryField: first.balanceQueryField || "",
     balanceQueryHeadersJSON: first.balanceQueryHeadersJSON || "",
+    balanceProfile: first.balanceProfile || "auto",
+    balanceAccessToken: first.balanceAccessToken || "",
+    balanceUserID: first.balanceUserID || "",
+    balanceCodingPlanProvider: first.balanceCodingPlanProvider || "",
   };
 }
 const bulkEditDraft = reactive(createBulkEditDraft());
@@ -880,7 +894,36 @@ async function saveBulkEdit(force = false) {
             ></textarea>
 
             <!-- 余额查询配置 -->
-            <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label class="flex flex-col gap-1">
+                <span class="text-xs text-[#a3a3a3]">查询模板</span>
+                <select v-model="bulkEditDraft.balanceProfile" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]">
+                  <option value="auto">自动识别</option>
+                  <option value="newapi">New API</option>
+                  <option value="token_plan">Token Plan</option>
+                  <option value="custom">自定义字段</option>
+                </select>
+              </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-xs text-[#a3a3a3]">Token Plan 供应商</span>
+                <select v-model="bulkEditDraft.balanceCodingPlanProvider" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]">
+                  <option value="">自动检测</option>
+                  <option value="kimi">Kimi For Coding</option>
+                  <option value="zhipu">Zhipu GLM</option>
+                  <option value="zhipu_team">Zhipu GLM Team</option>
+                  <option value="minimax">MiniMax</option>
+                  <option value="zenmux">ZenMux</option>
+                  <option value="volcengine">火山方舟</option>
+                </select>
+              </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-xs text-[#a3a3a3]">访问令牌（New API）</span>
+                <input v-model="bulkEditDraft.balanceAccessToken" type="text" placeholder="安全设置生成" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
+              </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-xs text-[#a3a3a3]">用户 ID（New API）</span>
+                <input v-model="bulkEditDraft.balanceUserID" type="text" placeholder="例如 114514" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
+              </label>
               <label class="flex flex-col gap-1">
                 <span class="text-xs text-[#a3a3a3]">余额查询地址</span>
                 <input v-model="bulkEditDraft.balanceQueryURL" type="text" placeholder="可选" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
@@ -889,7 +932,7 @@ async function saveBulkEdit(force = false) {
                 <span class="text-xs text-[#a3a3a3]">余额字段路径</span>
                 <input v-model="bulkEditDraft.balanceQueryField" type="text" placeholder="可选" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
               </label>
-              <label class="flex flex-col gap-1">
+              <label class="flex flex-col gap-1 md:col-span-2">
                 <span class="text-xs text-[#a3a3a3]">查询请求头</span>
                 <input v-model="bulkEditDraft.balanceQueryHeadersJSON" type="text" placeholder="{}" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
               </label>

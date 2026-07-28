@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	serverconfig "cursor/internal/backend/server/config"
 	"cursor/internal/modelchannel"
 )
 
@@ -45,18 +46,26 @@ type ProviderBalanceRequest struct {
 	APIKey     string `json:"apiKey"`
 	// ForceRefresh 为 true 时绕过进程内 TTL 缓存，强制重新查询（供 UI 显式刷新使用）。
 	ForceRefresh bool `json:"forceRefresh,omitempty"`
+	// 以下字段可覆盖 adapter 持久化配置（同一次查询内优先用请求值）。
+	BalanceProfile            string `json:"balanceProfile,omitempty"`
+	BalanceAccessToken        string `json:"balanceAccessToken,omitempty"`
+	BalanceUserID             string `json:"balanceUserID,omitempty"`
+	BalanceCodingPlanProvider string `json:"balanceCodingPlanProvider,omitempty"`
+	BalanceQueryURL           string `json:"balanceQueryURL,omitempty"`
+	BalanceQueryField         string `json:"balanceQueryField,omitempty"`
 }
 
 // ProviderBalance 是统一的余额/额度查询结果，带 JSON 标签供 Wails 前端使用。
 type ProviderBalance struct {
 	Supported bool     `json:"supported"`
-	Source    string   `json:"source"`    // "openai_billing" | "newapi" | ""
-	Currency  string   `json:"currency"`  // "USD"
+	Source    string   `json:"source"`    // "openai_billing" | "newapi" | "token_plan" | ...
+	Currency  string   `json:"currency"`  // "USD" | "CNY" | "%"
 	Unlimited bool     `json:"unlimited"` // true 表示不限额度（One/NewAPI 无限令牌哨兵值）
 	Total     *float64 `json:"total"`     // 总额度，未知为 nil；不限额时为 nil
 	Used      *float64 `json:"used"`      // 已用金额，未知为 nil
 	Remaining *float64 `json:"remaining"` // 剩余额度，未知为 nil；不限额时为 nil
-	Message   string   `json:"message"`   // 人类可读状态 / 错误信息
+	PlanName  string   `json:"planName,omitempty"` // 套餐名 / Token Plan 窗口摘要
+	Message   string   `json:"message"`           // 人类可读状态 / 错误信息
 	// Transient 标记本次失败是否为瞬时传输失败（网络不可达/超时/读体中断）。
 	// true：前端可保留并继续展示上一次成功值（keep-last-good）。
 	// false：确定性失败（空 key/鉴权失败/非 2xx/非法 JSON/不支持），前端应清空为不可用。
@@ -72,22 +81,27 @@ type transientTracker struct{ hit bool }
 // QueryProviderBalance 依次尝试各余额查询策略，返回第一个成功结果。
 func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) ProviderBalance {
 	apiKey := strings.TrimSpace(request.APIKey)
-	if apiKey == "" {
-		return ProviderBalance{Supported: false, Transient: false, Message: "缺少 apiKey，无法查询余额"}
-	}
 	normalized, err := modelchannel.NormalizeBaseURL(request.BaseURL)
 	if err != nil {
 		return ProviderBalance{Supported: false, Transient: false, Message: fmt.Sprintf("baseURL 无效：%v", err)}
 	}
 
-	cacheKey := metadataCacheKey(request.Type, request.BaseURL, apiKey)
+	configuredAdapter, hasConfiguredAdapter := s.findAdapterForBalance(request.Type, request.SupplierID, normalized, apiKey)
+	creds := resolveBalanceCredentials(request, configuredAdapter, hasConfiguredAdapter)
+	profile := resolveBalanceProfile(creds, normalized)
+
+	// New API 可用 accessToken 代替渠道 sk；其它策略仍需要 apiKey。
+	if apiKey == "" && strings.TrimSpace(creds.AccessToken) == "" {
+		return ProviderBalance{Supported: false, Transient: false, Message: "缺少 apiKey / 访问令牌，无法查询余额"}
+	}
+
+	cacheKey := metadataCacheKey(request.Type, request.BaseURL, firstNonEmpty(apiKey, creds.AccessToken))
 	if supplierID := strings.ToLower(strings.TrimSpace(request.SupplierID)); supplierID != "" && supplierID != "custom" {
 		cacheKey += "|supplier=" + supplierID
 	}
-	configuredAdapter, hasConfiguredAdapter := s.findAdapterForBalance(request.Type, request.SupplierID, normalized, apiKey)
-	// 显式配置的余额接口优先，cache identity 必须包含配置 hash，避免和具名/通用策略串用缓存。
-	if hasConfiguredAdapter {
-		cacheKey = configuredBalanceCacheKey(cacheKey, configuredAdapter)
+	cacheKey += "|profile=" + profile
+	if hasConfiguredAdapter || strings.TrimSpace(creds.AccessToken) != "" || strings.TrimSpace(creds.UserID) != "" {
+		cacheKey = configuredBalanceCacheKey(cacheKey, mergeBalanceAdapterIdentity(configuredAdapter, creds, profile))
 	}
 	if request.ForceRefresh {
 		s.providerBalanceCache.invalidate(cacheKey)
@@ -103,14 +117,49 @@ func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) Prov
 		httpClient = http.DefaultClient
 	}
 
-	// 策略 0：显式配置查询。provider 若配置了 BalanceQueryURL，按模板发一次 GET 并按点分路径取值。
-	if hasConfiguredAdapter {
-		if configured, matched := s.queryConfiguredBalanceWithAdapter(ctx, httpClient, configuredAdapter, normalized, apiKey); matched {
+	// 策略 0a：Token Plan（Kimi / 智谱 / MiniMax / ZenMux 等 Coding Plan 套餐进度）。
+	if profile == balanceProfileTokenPlan || profile == balanceProfileAuto {
+		if balance, matched := queryCodingPlanBalance(ctx, httpClient, normalized, apiKey, creds.CodingPlanProvider); matched {
+			if balance.Supported {
+				s.providerBalanceCache.set(cacheKey, balance)
+			}
+			// token_plan 显式模式：无论成功失败都终结；auto 仅成功时终结。
+			if profile == balanceProfileTokenPlan || balance.Supported {
+				return balance
+			}
+		} else if profile == balanceProfileTokenPlan {
+			return ProviderBalance{Supported: false, Transient: false, Message: "当前接口地址未识别为 Token Plan 供应商"}
+		}
+	}
+
+	// 策略 0b：New API 专用（访问令牌 + 用户 ID → /api/user/self）。
+	if profile == balanceProfileNewAPI || (profile == balanceProfileAuto && strings.TrimSpace(creds.AccessToken) != "" && strings.TrimSpace(creds.UserID) != "") {
+		if balance, matched := queryNewAPICredentialBalance(ctx, httpClient, normalized, creds); matched {
+			if balance.Supported {
+				s.providerBalanceCache.set(cacheKey, balance)
+			}
+			return balance
+		}
+		if profile == balanceProfileNewAPI {
+			return ProviderBalance{Supported: false, Transient: false, Message: "New API 余额查询失败：请检查请求地址、访问令牌与用户 ID"}
+		}
+	}
+
+	// 策略 0c：显式配置查询。provider 若配置了 BalanceQueryURL，按模板发一次 GET 并按点分路径取值。
+	if hasConfiguredAdapter && (profile == balanceProfileCustom || profile == balanceProfileAuto) {
+		if configured, matched := s.queryConfiguredBalanceWithAdapter(ctx, httpClient, configuredAdapter, normalized, apiKey, creds); matched {
 			if configured.Supported {
 				s.providerBalanceCache.set(cacheKey, configured)
 			}
 			return configured
 		}
+		if profile == balanceProfileCustom {
+			return ProviderBalance{Supported: false, Transient: false, Message: "自定义余额查询未生效：请同时填写查询 URL 与取值字段"}
+		}
+	}
+
+	if apiKey == "" {
+		return ProviderBalance{Supported: false, Transient: false, Message: "缺少 apiKey，无法查询余额"}
 	}
 
 	// 策略 1：具名 provider 路由（DeepSeek/OpenRouter/SiliconFlow/StepFun/Novita 等，硬编码端点/字段/单位）。
@@ -138,7 +187,7 @@ func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) Prov
 		return balance
 	}
 
-	// 策略 4：NewAPI / OneAPI 风格用户信息端点。
+	// 策略 4：NewAPI / OneAPI 风格用户信息端点（仅渠道 sk 兜底；多数部署需要 Web 令牌）。
 	if balance, ok := queryNewAPIBalance(ctx, httpClient, normalized, apiKey, tracker); ok {
 		s.providerBalanceCache.set(cacheKey, balance)
 		return balance
@@ -147,6 +196,102 @@ func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) Prov
 	// 策略 5：均不支持。不缓存，便于后续重试直接命中网络。
 	// 若试探过程中发生过瞬时传输失败，标记 Transient=true，让前端保留上次成功值。
 	return ProviderBalance{Supported: false, Transient: tracker.hit, Message: "该中转站不支持已知的余额查询接口"}
+}
+
+const (
+	balanceProfileAuto      = "auto"
+	balanceProfileNewAPI    = "newapi"
+	balanceProfileTokenPlan = "token_plan"
+	balanceProfileCustom    = "custom"
+)
+
+type balanceCredentials struct {
+	AccessToken        string
+	UserID             string
+	CodingPlanProvider string
+	QueryURL           string
+	QueryField         string
+	Profile            string
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if s := strings.TrimSpace(v); s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+func resolveBalanceCredentials(request ProviderBalanceRequest, adapter serverconfig.ModelAdapterConfig, hasAdapter bool) balanceCredentials {
+	creds := balanceCredentials{
+		AccessToken:        strings.TrimSpace(request.BalanceAccessToken),
+		UserID:             strings.TrimSpace(request.BalanceUserID),
+		CodingPlanProvider: strings.ToLower(strings.TrimSpace(request.BalanceCodingPlanProvider)),
+		QueryURL:           strings.TrimSpace(request.BalanceQueryURL),
+		QueryField:         strings.TrimSpace(request.BalanceQueryField),
+		Profile:            strings.ToLower(strings.TrimSpace(request.BalanceProfile)),
+	}
+	if !hasAdapter {
+		return creds
+	}
+	if creds.AccessToken == "" {
+		creds.AccessToken = strings.TrimSpace(adapter.BalanceAccessToken)
+	}
+	if creds.UserID == "" {
+		creds.UserID = strings.TrimSpace(adapter.BalanceUserID)
+	}
+	if creds.CodingPlanProvider == "" {
+		creds.CodingPlanProvider = strings.ToLower(strings.TrimSpace(adapter.BalanceCodingPlanProvider))
+	}
+	if creds.QueryURL == "" {
+		creds.QueryURL = strings.TrimSpace(adapter.BalanceQueryURL)
+	}
+	if creds.QueryField == "" {
+		creds.QueryField = strings.TrimSpace(adapter.BalanceQueryField)
+	}
+	if creds.Profile == "" {
+		creds.Profile = strings.ToLower(strings.TrimSpace(adapter.BalanceProfile))
+	}
+	return creds
+}
+
+func resolveBalanceProfile(creds balanceCredentials, baseURL string) string {
+	switch strings.ToLower(strings.TrimSpace(creds.Profile)) {
+	case balanceProfileNewAPI, balanceProfileTokenPlan, balanceProfileCustom:
+		return strings.ToLower(strings.TrimSpace(creds.Profile))
+	}
+	if detectCodingPlanProvider(baseURL, creds.CodingPlanProvider) != codingPlanNone {
+		return balanceProfileTokenPlan
+	}
+	if creds.AccessToken != "" && creds.UserID != "" {
+		return balanceProfileNewAPI
+	}
+	if creds.QueryURL != "" && creds.QueryField != "" {
+		return balanceProfileCustom
+	}
+	return balanceProfileAuto
+}
+
+func mergeBalanceAdapterIdentity(adapter serverconfig.ModelAdapterConfig, creds balanceCredentials, profile string) serverconfig.ModelAdapterConfig {
+	out := adapter
+	if strings.TrimSpace(out.BalanceAccessToken) == "" {
+		out.BalanceAccessToken = creds.AccessToken
+	}
+	if strings.TrimSpace(out.BalanceUserID) == "" {
+		out.BalanceUserID = creds.UserID
+	}
+	if strings.TrimSpace(out.BalanceCodingPlanProvider) == "" {
+		out.BalanceCodingPlanProvider = creds.CodingPlanProvider
+	}
+	if strings.TrimSpace(out.BalanceQueryURL) == "" {
+		out.BalanceQueryURL = creds.QueryURL
+	}
+	if strings.TrimSpace(out.BalanceQueryField) == "" {
+		out.BalanceQueryField = creds.QueryField
+	}
+	out.BalanceProfile = profile
+	return out
 }
 
 // queryOpenAIBillingBalance 查询 OpenAI 计费端点，成功时返回额度信息。

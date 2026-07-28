@@ -312,6 +312,10 @@ export function createEmptyModelAdapter() {
     balanceQueryField: "",
     balanceQueryHeaders: {},
     balanceQueryHeadersJSON: BALANCE_QUERY_HEADERS_DEFAULT_JSON,
+    balanceProfile: "auto",
+    balanceAccessToken: "",
+    balanceUserID: "",
+    balanceCodingPlanProvider: "",
   };
 }
 
@@ -582,6 +586,15 @@ export function normalizeModelAdapter(source) {
   const balanceQueryHeadersJSON = balanceQueryHeadersJSONRaw.trim()
     ? balanceQueryHeadersJSONRaw
     : balanceQueryHeadersToJSON(balanceQueryHeaders);
+  const balanceProfileRaw = asString(raw.balanceProfile ?? raw.balance_profile).trim().toLowerCase();
+  const balanceProfile = ["auto", "newapi", "token_plan", "custom"].includes(balanceProfileRaw)
+    ? balanceProfileRaw
+    : "auto";
+  const balanceAccessToken = asString(raw.balanceAccessToken ?? raw.balance_access_token).trim();
+  const balanceUserID = asString(raw.balanceUserID ?? raw.balance_user_id).trim();
+  const balanceCodingPlanProvider = asString(
+    raw.balanceCodingPlanProvider ?? raw.balance_coding_plan_provider,
+  ).trim().toLowerCase();
   return {
     id: asString(raw.id),
     displayName: asString(raw.displayName || raw.name),
@@ -630,6 +643,10 @@ export function normalizeModelAdapter(source) {
     balanceQueryField,
     balanceQueryHeaders,
     balanceQueryHeadersJSON,
+    balanceProfile,
+    balanceAccessToken,
+    balanceUserID,
+    balanceCodingPlanProvider,
   };
 }
 
@@ -654,6 +671,12 @@ function mergeDuplicateModelAdapter(existing, incoming) {
     balanceQueryField: existing.balanceQueryField || incoming.balanceQueryField,
     balanceQueryHeaders: existingHasBalanceHeaders ? existing.balanceQueryHeaders : incoming.balanceQueryHeaders,
     balanceQueryHeadersJSON: existingHasBalanceHeaders ? existing.balanceQueryHeadersJSON : incomingBalanceHeadersJSON,
+    balanceProfile: existing.balanceProfile && existing.balanceProfile !== "auto"
+      ? existing.balanceProfile
+      : (incoming.balanceProfile || existing.balanceProfile || "auto"),
+    balanceAccessToken: existing.balanceAccessToken || incoming.balanceAccessToken,
+    balanceUserID: existing.balanceUserID || incoming.balanceUserID,
+    balanceCodingPlanProvider: existing.balanceCodingPlanProvider || incoming.balanceCodingPlanProvider,
   };
 }
 
@@ -1594,6 +1617,7 @@ const PROVIDER_LEVEL_FIELDS = new Set([
   "protocolMode", "protocolGroup", "openAIEndpoint", "openAIRequestGroup",
   "customHeadersEnabled", "customHeadersJSON",
   "balanceQueryURL", "balanceQueryField", "balanceQueryHeadersJSON",
+  "balanceProfile", "balanceAccessToken", "balanceUserID", "balanceCodingPlanProvider",
   "openAIExtraParamsEnabled", "openAIExtraParamsJSON",
   "anthropicExtraParamsEnabled", "anthropicExtraParamsJSON",
 ]);

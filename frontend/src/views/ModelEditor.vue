@@ -4,11 +4,17 @@ import Input from "@/components/ui/Input.vue";
 import ModelAdapterTestCard from "@/components/ModelAdapterTestCard.vue";
 import Select from "@/components/ui/Select.vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
-import { getModelEditorContext, fetchModelCatalog } from "@/services/clientApi";
-import { useModelProbe } from "@/composables/useModelProbe";
+import { getModelEditorContext } from "@/services/clientApi";
 import { resolveModelContextWindow, resolveModelCapabilities } from "@/utils/modelContext";
 import { providerIcon, providerLabel, providerSelectOptions } from "@/utils/providerMeta";
 import { supplierSelectOptions, supplierTemplate } from "@/utils/supplierCatalog";
+import {
+  SUPPLIER_GROUP_MODE_CONNECTION,
+  SUPPLIER_GROUP_MODE_NAME,
+  loadSupplierGroupMode,
+  saveSupplierGroupMode,
+} from "@/utils/supplierGrouping";
+import { MODEL_CATALOG_DRAFT_KEY } from "@/utils/modelCatalogDraft";
 import {
   ANTHROPIC_THINKING_EFFORT_DEFAULT,
   appState,
@@ -34,7 +40,6 @@ import {
   PROTOCOL_MODE_FIXED,
   runModelAdapterTest,
   saveModelAdapterAt,
-  saveModelAdaptersBatch,
   toUserError,
   validateModelAdapters,
 } from "@/state/appState";
@@ -92,7 +97,28 @@ const createEmptyModelAdapter = () => ({
   balanceQueryField: "",
   balanceQueryHeaders: {},
   balanceQueryHeadersJSON: BALANCE_QUERY_HEADERS_DEFAULT_JSON,
+  balanceProfile: "auto",
+  balanceAccessToken: "",
+  balanceUserID: "",
+  balanceCodingPlanProvider: "",
 });
+
+const balanceProfileOptions = [
+  { label: "自动识别", value: "auto", icon: "icon-[mdi--auto-fix]" },
+  { label: "New API（访问令牌）", value: "newapi", icon: "icon-[mdi--key-variant]" },
+  { label: "Token Plan（套餐进度）", value: "token_plan", icon: "icon-[mdi--chart-donut]" },
+  { label: "自定义字段映射", value: "custom", icon: "icon-[mdi--code-json]" },
+];
+
+const codingPlanProviderOptions = [
+  { label: "自动检测（按接口地址）", value: "", icon: "icon-[mdi--auto-fix]" },
+  { label: "Kimi For Coding", value: "kimi", icon: "icon-[mdi--moon-waning-crescent]" },
+  { label: "Zhipu GLM (智谱)", value: "zhipu", icon: "icon-[mdi--brain]" },
+  { label: "Zhipu GLM Team (智谱团队)", value: "zhipu_team", icon: "icon-[mdi--account-group]" },
+  { label: "MiniMax", value: "minimax", icon: "icon-[mdi--lightning-bolt]" },
+  { label: "ZenMux", value: "zenmux", icon: "icon-[mdi--swap-horizontal]" },
+  { label: "火山方舟 (Volcengine)", value: "volcengine", icon: "icon-[mdi--volcano]" },
+];
 
 const openAIEndpointOptions = [
   { label: "/v1/responses", value: OPENAI_ENDPOINT_RESPONSES, icon: "icon-[mdi--api]" },
@@ -132,54 +158,13 @@ const loading = ref(true);
 const lastTestAdapterID = ref("");
 const localTestFailure = ref("");
 const manualAddMode = ref(false);
-const catalogModels = ref([]);
-const catalogGroups = ref([]);
-const catalogLoading = ref(false);
 const catalogError = ref("");
-const selectedCatalogModels = ref(new Set());
-const catalogSaving = ref(false);
-
-// 可用性探测
-const catalogProbe = useModelProbe();
-
-function buildProbeAdapter({ group, model }) {
-  return normalizeModelAdapter({
-    ...createEmptyModelAdapter(),
-    type: group.type,
-    baseURL: group.baseURL,
-    apiKey: group.apiKey,
-    customHeadersEnabled: group.customHeadersEnabled,
-    customHeadersJSON: group.customHeadersJSON,
-    displayName: model.id,
-    modelID: model.id,
-    tooltipData: `探测 ${model.id}`,
-    protocolMode: PROTOCOL_MODE_AUTO,
-    protocolGroup: classifyModelProtocol(group.type, model.id, group.baseURL, "", ""),
-    openAIRequestGroup: group.type === "openai"
-      ? classifyModelProtocol(group.type, model.id, group.baseURL, "", "")
-      : "",
-  });
-}
-
-async function handleProbeCatalog() {
-  const items = catalogGroups.value.flatMap((group) =>
-    group.models.map((model) => ({
-      id: catalogSelectionKey(group.key, model.id),
-      group,
-      model,
-    })),
-  );
-  if (!items.length) return;
-  await catalogProbe.probeAll(items, buildProbeAdapter, { concurrency: 3 });
-  // 探测完成后仅保留可用模型的勾选
-  const next = new Set();
-  for (const item of items) {
-    if (catalogProbe.statusOf(item.id) === "ok") {
-      next.add(item.id);
-    }
-  }
-  selectedCatalogModels.value = next;
-}
+// 快速添加：归类方式（与模型配置页「名称/连接」一致），不再在此页手填 groupName
+const quickGroupMode = ref(loadSupplierGroupMode());
+const quickGroupModeOptions = [
+  { label: "按 URL 归类", value: SUPPLIER_GROUP_MODE_CONNECTION, icon: "icon-[mdi--link-variant]" },
+  { label: "按渠道归类", value: SUPPLIER_GROUP_MODE_NAME, icon: "icon-[mdi--tag-outline]" },
+];
 
 function createOptionalPositiveIntegerModel(key) {
   return computed({
@@ -284,6 +269,10 @@ const hasAdvancedOverrides = computed(() => {
   if (String(draft.balanceQueryURL || "").trim()) return true;
   if (String(draft.balanceQueryField || "").trim()) return true;
   if (hasBalanceQueryHeadersOverride(draft.balanceQueryHeadersJSON)) return true;
+  if (String(draft.balanceProfile || "auto") !== "auto") return true;
+  if (String(draft.balanceAccessToken || "").trim()) return true;
+  if (String(draft.balanceUserID || "").trim()) return true;
+  if (String(draft.balanceCodingPlanProvider || "").trim()) return true;
   if (draft.fastMode) return true;
   if (draft.type === "openai") {
     if (String(draft.openAIEndpoint || "") !== OPENAI_ENDPOINT_RESPONSES) return true;
@@ -341,9 +330,13 @@ const fieldTips = {
   anthropicMaxTokens: "Anthropic 模型单次回复允许生成的最大 Token 数。留空时使用默认值。",
   anthropicThinkingEffort: "Anthropic adaptive thinking 的思考强度。请求会固定使用新版 thinking.type=adaptive。",
   tooltipData: "模型列表 hover 时显示的备注说明。",
-  balanceQueryURL: "余额查询接口的完整 URL。支持 {{apiKey}}、{{baseUrl}} 占位符。官方与常见中转会自动查询，仅在自动失败时才需要填写；与取值字段同时非空才生效。",
-  balanceQueryField: "从 JSON 响应中取值的点分路径，例如 data.0.total_balance 或 balance_infos.0.total_balance。字段值必须是数值。",
-  balanceQueryHeaders: "余额查询请求头 JSON 对象，值必须是字符串，可使用 {{apiKey}}、{{baseUrl}}。未写 Authorization 时后端会自动补 Bearer。留空则不额外加头。",
+  balanceQueryURL: "余额查询接口的完整 URL。支持 {{apiKey}}、{{baseUrl}}、{{accessToken}}、{{userId}}。New API 默认可用 {{baseUrl}}/api/user/self。",
+  balanceQueryField: "从 JSON 响应中取值的点分路径，例如 data.quota（New API 剩余 quota 原始值需自行换算时请用模板）。自定义映射模式才需要。",
+  balanceQueryHeaders: "余额查询请求头 JSON。New API 模式会自动带 Authorization 与 New-Api-User；自定义时可覆盖。支持 {{apiKey}}、{{baseUrl}}、{{accessToken}}、{{userId}}。",
+  balanceProfile: "查询模板：自动识别 / New API（访问令牌+用户ID）/ Token Plan（Kimi、智谱、MiniMax 等套餐进度）/ 自定义字段映射。",
+  balanceAccessToken: "New API 个人安全设置中生成的访问令牌（不是渠道 sk）。",
+  balanceUserID: "New API 用户 ID，请求头 New-Api-User 使用。",
+  balanceCodingPlanProvider: "Token Plan 供应商。智谱团队版与个人版 baseURL 相同，必须显式选择 Team。",
 };
 
 async function loadContext() {
@@ -446,10 +439,39 @@ function applySupplierTemplate(id, { force = false } = {}) {
   if (force && defaultModel) {
     draft.modelID = defaultModel;
   }
+  // Token Plan 供应商：默认切到 token_plan 模板并写入 codingPlanProvider（对齐 cc-switch 自动注入）
+  if (force) {
+    const planMap = {
+      kimi_coding: "kimi",
+      zhipu: "zhipu",
+      zhipu_team: "zhipu_team",
+      minimax: "minimax",
+      zenmux: "zenmux",
+      volcengine: "",
+    };
+    if (Object.prototype.hasOwnProperty.call(planMap, template.id)) {
+      draft.balanceProfile = "token_plan";
+      draft.balanceCodingPlanProvider = planMap[template.id];
+    }
+  }
 }
 
 function handleSupplierChange(id) {
   applySupplierTemplate(id, { force: true });
+}
+
+function handleSupplierPreset(modelID) {
+  draft.modelID = modelID;
+  const template = supplierTemplate(draft.supplierID);
+  const preset = (template.presets || []).find((item) => item.model === modelID);
+  if (preset?.baseURL) {
+    draft.baseURL = preset.baseURL;
+  }
+  // 火山 Coding Plan 入口：便于 Token Plan 自动识别
+  if (draft.supplierID === "volcengine" && String(preset?.baseURL || "").includes("/api/coding")) {
+    draft.balanceProfile = "token_plan";
+    draft.balanceCodingPlanProvider = "volcengine";
+  }
 }
 
 function handleModelTypeChange(type) {
@@ -474,120 +496,6 @@ function handleModelTypeChange(type) {
   }
 }
 
-async function handleFetchModels() {
-  catalogError.value = "";
-  const baseURL = String(draft.baseURL || "").trim();
-  const apiKey = String(draft.apiKey || "").trim();
-  if (!baseURL || !apiKey) {
-    catalogError.value = "请先填写接口地址和访问密钥";
-    return;
-  }
-
-  catalogLoading.value = true;
-  catalogProbe.reset();
-  try {
-    const result = await fetchModelCatalog({
-      type: draft.type,
-      baseURL,
-      apiKey,
-      customHeadersEnabled: Boolean(draft.customHeadersEnabled),
-      customHeadersJSON: draft.customHeadersJSON || "",
-    });
-    const fetchedModels = Array.isArray(result?.models) ? result.models : [];
-    const sourceURL = String(baseURL).trim();
-    const group = {
-      key: sourceURL,
-      name: catalogGroups.value.find((item) => item.key === sourceURL)?.name || sourceURL,
-      baseURL: sourceURL,
-      type: draft.type,
-      apiKey: draft.apiKey,
-      customHeadersEnabled: Boolean(draft.customHeadersEnabled),
-      customHeadersJSON: draft.customHeadersJSON || "",
-      models: fetchedModels,
-    };
-    const existing = catalogGroups.value.filter((item) => item.key !== sourceURL);
-    catalogGroups.value = [...existing, group];
-    catalogModels.value = catalogGroups.value.flatMap((item) => item.models);
-    selectedCatalogModels.value = new Set(
-      fetchedModels.map((model) => catalogSelectionKey(sourceURL, model.id)),
-    );
-    if (fetchedModels.length === 0) {
-      catalogError.value = "服务未返回可用模型";
-    }
-  } catch (error) {
-    catalogModels.value = [];
-    catalogError.value = toUserError(error);
-  } finally {
-    catalogLoading.value = false;
-  }
-}
-
-function catalogSelectionKey(groupKey, modelID) {
-  return `${groupKey}::${modelID}`;
-}
-
-function isCatalogModelSelected(groupKey, modelID) {
-  return selectedCatalogModels.value.has(catalogSelectionKey(groupKey, modelID));
-}
-
-function toggleCatalogModel(groupKey, modelID) {
-  const key = catalogSelectionKey(groupKey, modelID);
-  const next = new Set(selectedCatalogModels.value);
-  if (next.has(key)) next.delete(key); else next.add(key);
-  selectedCatalogModels.value = next;
-}
-
-function toggleAllCatalogModels(group) {
-  const keys = group.models.map((model) => catalogSelectionKey(group.key, model.id));
-  const allSelected = keys.every((key) => selectedCatalogModels.value.has(key));
-  const next = new Set(selectedCatalogModels.value);
-  keys.forEach((key) => (allSelected ? next.delete(key) : next.add(key)));
-  selectedCatalogModels.value = next;
-}
-
-async function handleBatchAddModels() {
-  const selected = catalogGroups.value.flatMap((group) => group.models
-    .filter((model) => selectedCatalogModels.value.has(catalogSelectionKey(group.key, model.id)))
-    .map((model) => ({ group, model })));
-  if (selected.length === 0) {
-    catalogError.value = "请至少选择一个模型";
-    return;
-  }
-  catalogSaving.value = true;
-  try {
-    const adapters = selected.map(({ group, model }) => normalizeModelAdapter({
-      ...createEmptyModelAdapter(),
-      type: group.type,
-      baseURL: group.baseURL,
-      apiKey: group.apiKey,
-      customHeadersEnabled: group.customHeadersEnabled,
-      customHeadersJSON: group.customHeadersJSON,
-      displayName: model.id,
-      modelID: model.id,
-      protocolMode: PROTOCOL_MODE_AUTO,
-      protocolGroup: classifyModelProtocol(group.type, model.id, group.baseURL, "", ""),
-      openAIRequestGroup: group.type === "openai"
-        ? classifyModelProtocol(group.type, model.id, group.baseURL, "", "")
-        : "",
-      groupName: group.name || group.baseURL,
-      tooltipData: String(draft.tooltipData || "").trim() || `来自 ${group.baseURL}`,
-      contextWindowTokens: model.contextWindowTokens || 0,
-      pricing: model.pricing || null,
-    }));
-    const result = await saveModelAdaptersBatch(adapters);
-    if (!result.ok) {
-      catalogError.value = result.error || "批量添加失败";
-      return;
-    }
-    selectedCatalogModels.value = new Set();
-    // 与「快速添加」一致：批量添加成功后关闭当前编辑窗口/页。
-    await closeEditor();
-  } catch (error) {
-    catalogError.value = toUserError(error);
-  } finally {
-    catalogSaving.value = false;
-  }
-}
 function ensureV1Suffix() {
   if (draft.type === "gemini") return;
   let url = String(draft.baseURL || "").trim();
@@ -600,7 +508,12 @@ function ensureV1Suffix() {
   }
 }
 
-async function handleQuickFetchAndAdd() {
+function handleQuickGroupModeChange(mode) {
+  quickGroupMode.value = saveSupplierGroupMode(mode);
+}
+
+/** 进入独立「拉取模型」页；连接参数走 sessionStorage，避免密钥进 URL */
+async function openCatalogPage() {
   catalogError.value = "";
   ensureV1Suffix();
   const baseURL = String(draft.baseURL || "").trim();
@@ -609,52 +522,27 @@ async function handleQuickFetchAndAdd() {
     catalogError.value = "请先填写接口地址和访问密钥";
     return;
   }
-  catalogLoading.value = true;
+  const mode = saveSupplierGroupMode(quickGroupMode.value);
   try {
-    const result = await fetchModelCatalog({
-      type: draft.type,
-      baseURL,
-      apiKey,
-      customHeadersEnabled: Boolean(draft.customHeadersEnabled),
-      customHeadersJSON: draft.customHeadersJSON || "",
-    });
-    const fetchedModels = Array.isArray(result?.models) ? result.models : [];
-    if (fetchedModels.length === 0) {
-      catalogError.value = "服务未返回可用模型";
-      return;
-    }
-    const groupName = String(draft.groupName || "").trim() || baseURL;
-    catalogSaving.value = true;
-    try {
-      const adapters = fetchedModels.map((model) =>
-        normalizeModelAdapter({
-          ...createEmptyModelAdapter(),
-          type: draft.type,
-          baseURL,
-          apiKey: draft.apiKey,
-          customHeadersEnabled: Boolean(draft.customHeadersEnabled),
-          customHeadersJSON: draft.customHeadersJSON || "",
-          displayName: model.id,
-          modelID: model.id,
-          groupName,
-          tooltipData: String(draft.tooltipData || "").trim() || `来自 ${baseURL}`,
-          contextWindowTokens: model.contextWindowTokens || 0,
-          pricing: model.pricing || null,
-        }));
-      const saveResult = await saveModelAdaptersBatch(adapters);
-      if (!saveResult.ok) {
-        catalogError.value = saveResult.error || "批量添加失败";
-        return;
-      }
-      await closeEditor();
-    } finally {
-      catalogSaving.value = false;
-    }
+    sessionStorage.setItem(
+      MODEL_CATALOG_DRAFT_KEY,
+      JSON.stringify({
+        type: draft.type,
+        baseURL,
+        apiKey,
+        customHeadersEnabled: Boolean(draft.customHeadersEnabled),
+        customHeadersJSON: draft.customHeadersJSON || "",
+        tooltipData: String(draft.tooltipData || "").trim(),
+        groupMode: mode,
+        // 渠道名只在拉取页填写，避免与本页重复
+        channelName: "",
+      }),
+    );
   } catch (error) {
-    catalogError.value = toUserError(error);
-  } finally {
-    catalogLoading.value = false;
+    catalogError.value = toUserError(error) || "无法写入临时连接参数";
+    return;
   }
+  await router.push({ path: "/model-catalog" });
 }
 
 async function handleTest() {
@@ -821,13 +709,18 @@ onMounted(async () => {
                 />
               </label>
               <label class="flex flex-col gap-1">
-                <span class="text-sm text-[#d4d4d4]">用户分组名称</span>
-                <input
-                  v-model="draft.groupName"
-                  type="text"
-                  placeholder="按 URL 或渠道归类"
-                  class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+                <span class="text-sm text-[#d4d4d4]">归类方式</span>
+                <Select
+                  :model-value="quickGroupMode"
+                  :options="quickGroupModeOptions"
+                  button-class="h-9 text-sm"
+                  @update:model-value="handleQuickGroupModeChange"
                 />
+                <span class="text-xs text-[#8f8f8f]">
+                  {{ quickGroupMode === SUPPLIER_GROUP_MODE_NAME
+                    ? "按渠道：拉取页填写一次渠道名"
+                    : "按 URL：按接口地址自动汇总" }}
+                </span>
               </label>
             </div>
             <label class="flex flex-col gap-1">
@@ -861,36 +754,11 @@ onMounted(async () => {
             </label>
             <Button
               variant="primary"
-              :disabled="catalogLoading || !draft.baseURL || !draft.apiKey"
-              @click="handleFetchModels"
+              :disabled="!draft.baseURL || !draft.apiKey"
+              @click="openCatalogPage"
             >
-              {{ catalogLoading ? "拉取中..." : "拉取模型" }}
+              拉取模型
             </Button>
-          </div>
-          <div v-if="catalogGroups.length > 0" class="space-y-2">
-            <div v-for="group in catalogGroups" :key="group.key" class="rounded-[8px] border border-[#343434] bg-[#252525] p-2">
-              <div class="mb-2 flex items-center gap-2">
-                <span class="text-xs text-[#a3a3a3]">模型 URL 分组</span>
-                <input v-model="group.name" type="text" placeholder="请输入分组名称" class="h-8 min-w-0 flex-1 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-xs text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
-              </div>
-              <div class="mb-2 flex items-center justify-between text-xs text-[#a3a3a3]">
-                <span>{{ group.baseURL }} · 已选 {{ group.models.filter((model) => isCatalogModelSelected(group.key, model.id)).length }}/{{ group.models.length }}</span>
-                <button type="button" class="text-[#6ee7a5]" @click="toggleAllCatalogModels(group)">{{ group.models.every((model) => isCatalogModelSelected(group.key, model.id)) ? "取消全选" : "全选" }}</button>
-              </div>
-              <div class="max-h-40 overflow-y-auto">
-                <label v-for="model in group.models" :key="model.id" class="flex items-center gap-2 py-1 text-xs text-[#d4d4d4]">
-                  <input type="checkbox" class="size-4 accent-[#10AD5D]" :checked="isCatalogModelSelected(group.key, model.id)" @change="toggleCatalogModel(group.key, model.id)" />
-                  <span class="truncate">{{ model.id }}</span>
-                  <span v-if="catalogProbe.statusOf(catalogSelectionKey(group.key, model.id)) === 'checking'" class="ml-auto shrink-0 rounded-full border border-[#164e63] bg-[#0b2530] px-1.5 py-0.5 text-[10px] text-[#67e8f9]">检测中</span>
-                  <span v-else-if="catalogProbe.statusOf(catalogSelectionKey(group.key, model.id)) === 'ok'" class="ml-auto shrink-0 rounded-full border border-[#14532d] bg-[#102418] px-1.5 py-0.5 text-[10px] text-[#86efac]">✓ 可用</span>
-                  <span v-else-if="catalogProbe.statusOf(catalogSelectionKey(group.key, model.id)) === 'fail'" :title="catalogProbe.messageOf(catalogSelectionKey(group.key, model.id))" class="ml-auto shrink-0 rounded-full border border-[#4b1d1d] bg-[#2a1313] px-1.5 py-0.5 text-[10px] text-[#fca5a5]">✗ 不可用</span>
-                </label>
-              </div>
-            </div>
-            <div class="flex gap-2">
-              <Button class="flex-1" variant="default" :disabled="catalogProbe.probing.value || catalogSaving" @click="handleProbeCatalog">{{ catalogProbe.probing.value ? "检测中..." : "检测可用性" }}</Button>
-              <Button class="flex-1" variant="primary" :disabled="catalogSaving" @click="handleBatchAddModels">{{ catalogSaving ? "添加中..." : "添加已选模型" }}</Button>
-            </div>
           </div>
           <div v-if="catalogError" class="rounded-[8px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-sm text-[#fca5a5]">
             {{ catalogError }}
@@ -947,9 +815,10 @@ onMounted(async () => {
             <input
               v-model="draft.groupName"
               type="text"
-              placeholder="按 URL 或渠道归类"
+              placeholder="可选，用于「按渠道」列表汇总"
               class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
             />
+            <span class="text-xs text-[#8f8f8f]">留空时列表里显示为「默认分组」；与模型配置页的名称分组对应。</span>
           </label>
 
           <label class="flex flex-col gap-1">
@@ -976,57 +845,16 @@ onMounted(async () => {
                 class="w-36 shrink-0"
                 :model-value="draft.modelID"
                 :options="supplierPresetOptions"
-                @update:model-value="draft.modelID = $event"
+                @update:model-value="handleSupplierPreset"
               />
               <Button
-                v-if="!manualAddMode"
+                v-if="!manualAddMode && isQuickMode"
                 variant="default"
-                :disabled="catalogLoading || !draft.baseURL || !draft.apiKey"
-                @click="handleFetchModels"
+                :disabled="!draft.baseURL || !draft.apiKey"
+                @click="openCatalogPage"
               >
-                {{ catalogLoading ? "拉取中..." : "拉取模型" }}
+                拉取模型
               </Button>
-            </div>
-            <div v-if="catalogGroups.length > 0" class="mt-2 space-y-2">
-              <div v-for="group in catalogGroups" :key="group.key" class="rounded-[8px] border border-[#343434] bg-[#252525] p-2">
-                <div class="mb-2 flex items-center gap-2">
-                  <span class="text-xs text-[#a3a3a3]">模型 URL 分组</span>
-                  <input
-                    v-model="group.name"
-                    type="text"
-                    placeholder="请输入分组名称"
-                    class="h-8 min-w-0 flex-1 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-xs text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
-                  />
-                </div>
-                <div class="mb-2 flex items-center justify-between text-xs text-[#a3a3a3]">
-                  <span>{{ group.baseURL }} · 已选 {{ group.models.filter((model) => isCatalogModelSelected(group.key, model.id)).length }}/{{ group.models.length }}</span>
-                  <button type="button" class="text-[#6ee7a5]" @click="toggleAllCatalogModels(group)">
-                    {{ group.models.every((model) => isCatalogModelSelected(group.key, model.id)) ? "取消全选" : "全选" }}
-                  </button>
-                </div>
-                <div class="max-h-40 overflow-y-auto">
-                  <label v-for="model in group.models" :key="model.id" class="flex items-center gap-2 py-1 text-xs text-[#d4d4d4]">
-                    <input
-                      type="checkbox"
-                      class="size-4 accent-[#10AD5D]"
-                      :checked="isCatalogModelSelected(group.key, model.id)"
-                      @change="toggleCatalogModel(group.key, model.id)"
-                    />
-                    <span class="truncate">{{ model.id }}</span>
-                    <span v-if="catalogProbe.statusOf(catalogSelectionKey(group.key, model.id)) === 'checking'" class="ml-auto shrink-0 rounded-full border border-[#164e63] bg-[#0b2530] px-1.5 py-0.5 text-[10px] text-[#67e8f9]">检测中</span>
-                    <span v-else-if="catalogProbe.statusOf(catalogSelectionKey(group.key, model.id)) === 'ok'" class="ml-auto shrink-0 rounded-full border border-[#14532d] bg-[#102418] px-1.5 py-0.5 text-[10px] text-[#86efac]">✓ 可用</span>
-                    <span v-else-if="catalogProbe.statusOf(catalogSelectionKey(group.key, model.id)) === 'fail'" :title="catalogProbe.messageOf(catalogSelectionKey(group.key, model.id))" class="ml-auto shrink-0 rounded-full border border-[#4b1d1d] bg-[#2a1313] px-1.5 py-0.5 text-[10px] text-[#fca5a5]">✗ 不可用</span>
-                  </label>
-                </div>
-              </div>
-              <div class="flex gap-2">
-                <Button class="flex-1" variant="default" :disabled="catalogProbe.probing.value || catalogSaving" @click="handleProbeCatalog">
-                  {{ catalogProbe.probing.value ? "检测中..." : "检测可用性" }}
-                </Button>
-                <Button class="flex-1" variant="primary" :disabled="catalogSaving" @click="handleBatchAddModels">
-                  {{ catalogSaving ? "添加中..." : "添加已选模型" }}
-                </Button>
-              </div>
             </div>
             <div v-if="catalogError" class="mt-1 text-xs text-[#fca5a5]">
               {{ catalogError }}
@@ -1315,15 +1143,79 @@ onMounted(async () => {
         </div>
 
         <div class="rounded-[8px] border border-[#343434] bg-[#252525] p-3">
-          <div class="mb-2 text-sm text-[#d4d4d4]">余额查询（可选兜底）</div>
+          <div class="mb-2 text-sm text-[#d4d4d4]">余额 / 套餐查询</div>
           <p class="mb-3 text-xs leading-5 text-[#8f8f8f]">
-            官方与常见中转会自动查余额；仅在自动失败时才需要填写。查询 URL 与取值字段都填才生效。
+            对齐 cc-switch：sub2api 等可自动查；New API 需访问令牌 + 用户 ID；Token Plan 覆盖 Kimi / 智谱 / MiniMax / ZenMux 等套餐进度。
           </p>
-          <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <label class="mb-3 flex flex-col gap-1">
+            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
+              <Tooltip :content="fieldTips.balanceProfile" />
+              <span>查询模板</span>
+            </span>
+            <Select v-model="draft.balanceProfile" :options="balanceProfileOptions" button-class="h-9 text-sm" />
+          </label>
+
+          <div
+            v-if="draft.balanceProfile === 'newapi' || draft.balanceProfile === 'auto'"
+            class="mb-3 grid grid-cols-1 gap-3 md:grid-cols-2"
+          >
+            <label class="flex flex-col gap-1">
+              <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
+                <Tooltip :content="fieldTips.balanceAccessToken" />
+                <span>访问令牌（New API）</span>
+              </span>
+              <Input
+                v-model="draft.balanceAccessToken"
+                type="password"
+                allow-visibility-toggle
+                placeholder="在个人安全设置里生成"
+                autocomplete="off"
+              />
+            </label>
+            <label class="flex flex-col gap-1">
+              <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
+                <Tooltip :content="fieldTips.balanceUserID" />
+                <span>用户 ID（New API）</span>
+              </span>
+              <input
+                v-model="draft.balanceUserID"
+                type="text"
+                placeholder="例如：114514"
+                class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+              />
+            </label>
+            <p class="md:col-span-2 text-xs text-[#8f8f8f]">
+              New API 请求：GET 站点根 /api/user/self，Header 带 Bearer 访问令牌与 New-Api-User。
+              额度按 quota÷500000 换算为 USD（与 cc-switch 一致）。
+            </p>
+          </div>
+
+          <div
+            v-if="draft.balanceProfile === 'token_plan' || draft.balanceProfile === 'auto'"
+            class="mb-3 flex flex-col gap-1"
+          >
+            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
+              <Tooltip :content="fieldTips.balanceCodingPlanProvider" />
+              <span>Token Plan 供应商</span>
+            </span>
+            <Select
+              v-model="draft.balanceCodingPlanProvider"
+              :options="codingPlanProviderOptions"
+              button-class="h-9 text-sm"
+            />
+            <span class="text-xs text-[#8f8f8f]">
+              自动检测：Kimi For Coding、智谱、MiniMax、ZenMux、火山方舟 Coding 入口。智谱团队版须手动选择。
+            </span>
+          </div>
+
+          <div
+            v-if="draft.balanceProfile === 'custom' || draft.balanceProfile === 'auto' || draft.balanceProfile === 'newapi'"
+            class="grid grid-cols-1 gap-3 md:grid-cols-2"
+          >
             <label class="flex flex-col gap-1">
               <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
                 <Tooltip :content="fieldTips.balanceQueryURL" />
-                <span>查询 URL</span>
+                <span>查询 URL{{ draft.balanceProfile === 'newapi' ? '（可选覆盖）' : '' }}</span>
               </span>
               <input
                 v-model="draft.balanceQueryURL"
@@ -1332,7 +1224,7 @@ onMounted(async () => {
                 class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
               />
             </label>
-            <label class="flex flex-col gap-1">
+            <label v-if="draft.balanceProfile === 'custom' || draft.balanceProfile === 'auto'" class="flex flex-col gap-1">
               <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
                 <Tooltip :content="fieldTips.balanceQueryField" />
                 <span>取值字段</span>
@@ -1345,7 +1237,10 @@ onMounted(async () => {
               />
             </label>
           </div>
-          <label class="mt-3 flex flex-col gap-1">
+          <label
+            v-if="draft.balanceProfile === 'custom' || draft.balanceProfile === 'auto'"
+            class="mt-3 flex flex-col gap-1"
+          >
             <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
               <Tooltip :content="fieldTips.balanceQueryHeaders" />
               <span>请求头 JSON（可选）</span>
@@ -1354,7 +1249,7 @@ onMounted(async () => {
               v-model="draft.balanceQueryHeadersJSON"
               rows="4"
               spellcheck="false"
-              placeholder='{ "New-API-User": "1" }'
+              placeholder='{ "New-Api-User": "{{userId}}" }'
               class="min-h-[96px] w-full resize-none rounded-[6px] border border-[#3f3f3f] bg-[#1f1f1f] px-3 py-2 font-mono text-xs text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
             />
           </label>

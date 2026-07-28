@@ -30,19 +30,26 @@ func (s *ProxyService) queryConfiguredBalance(ctx context.Context, httpClient *h
 	if !ok {
 		return ProviderBalance{}, false
 	}
-	return s.queryConfiguredBalanceWithAdapter(ctx, httpClient, adapter, normalizedBaseURL, apiKey)
+	creds := resolveBalanceCredentials(request, adapter, true)
+	return s.queryConfiguredBalanceWithAdapter(ctx, httpClient, adapter, normalizedBaseURL, apiKey, creds)
 }
 
-func (s *ProxyService) queryConfiguredBalanceWithAdapter(ctx context.Context, httpClient *http.Client, adapter serverconfig.ModelAdapterConfig, normalizedBaseURL, apiKey string) (ProviderBalance, bool) {
+func (s *ProxyService) queryConfiguredBalanceWithAdapter(ctx context.Context, httpClient *http.Client, adapter serverconfig.ModelAdapterConfig, normalizedBaseURL, apiKey string, creds balanceCredentials) (ProviderBalance, bool) {
 	queryURL := strings.TrimSpace(adapter.BalanceQueryURL)
 	field := strings.TrimSpace(adapter.BalanceQueryField)
+	if queryURL == "" {
+		queryURL = strings.TrimSpace(creds.QueryURL)
+	}
+	if field == "" {
+		field = strings.TrimSpace(creds.QueryField)
+	}
 	if queryURL == "" || field == "" {
 		return ProviderBalance{}, false
 	}
 
 	const source = "configured"
-	endpoint := applyBalanceTemplate(queryURL, apiKey, normalizedBaseURL)
-	body, status, transient, err := namedBalanceGETWithHeaders(ctx, httpClient, endpoint, apiKey, adapter.BalanceQueryHeaders, normalizedBaseURL)
+	endpoint := applyBalanceTemplate(queryURL, apiKey, normalizedBaseURL, creds.AccessToken, creds.UserID)
+	body, status, transient, err := namedBalanceGETWithHeaders(ctx, httpClient, endpoint, apiKey, adapter.BalanceQueryHeaders, normalizedBaseURL, creds.AccessToken, creds.UserID)
 	if err != nil {
 		return namedBalanceFail(source, "网络错误："+err.Error(), transient), true
 	}
@@ -85,7 +92,10 @@ func (s *ProxyService) findAdapterForBalance(reqType, supplierID, normalizedBase
 	wantSupplier := strings.TrimSpace(strings.ToLower(supplierID))
 	wantKey := strings.TrimSpace(apiKey)
 	for _, adapter := range cfg.ModelAdapters {
-		if strings.TrimSpace(adapter.BalanceQueryURL) == "" || strings.TrimSpace(adapter.BalanceQueryField) == "" {
+		hasBalanceConfig := strings.TrimSpace(adapter.BalanceQueryURL) != "" && strings.TrimSpace(adapter.BalanceQueryField) != ""
+		hasNewAPICreds := strings.TrimSpace(adapter.BalanceAccessToken) != "" && strings.TrimSpace(adapter.BalanceUserID) != ""
+		hasProfile := strings.TrimSpace(adapter.BalanceProfile) != "" || strings.TrimSpace(adapter.BalanceCodingPlanProvider) != ""
+		if !hasBalanceConfig && !hasNewAPICreds && !hasProfile {
 			continue
 		}
 		if wantType != "" && strings.TrimSpace(strings.ToLower(adapter.Type)) != wantType {
@@ -110,6 +120,10 @@ func configuredBalanceCacheKey(baseKey string, adapter serverconfig.ModelAdapter
 	parts := []string{
 		strings.TrimSpace(adapter.BalanceQueryURL),
 		strings.TrimSpace(adapter.BalanceQueryField),
+		strings.TrimSpace(adapter.BalanceProfile),
+		strings.TrimSpace(adapter.BalanceAccessToken),
+		strings.TrimSpace(adapter.BalanceUserID),
+		strings.TrimSpace(adapter.BalanceCodingPlanProvider),
 	}
 	keys := make([]string, 0, len(adapter.BalanceQueryHeaders))
 	for key := range adapter.BalanceQueryHeaders {
@@ -123,19 +137,21 @@ func configuredBalanceCacheKey(baseKey string, adapter serverconfig.ModelAdapter
 	return baseKey + "|balance_config=" + hex.EncodeToString(sum[:])
 }
 
-// applyBalanceTemplate 替换 {{apiKey}}、{{baseUrl}} 占位符。
-func applyBalanceTemplate(tmpl, apiKey, baseURL string) string {
+// applyBalanceTemplate 替换 {{apiKey}}、{{baseUrl}}、{{accessToken}}、{{userId}} 占位符。
+func applyBalanceTemplate(tmpl, apiKey, baseURL, accessToken, userID string) string {
 	replacer := strings.NewReplacer(
 		"{{apiKey}}", apiKey,
 		"{{baseUrl}}", baseURL,
 		"{{baseURL}}", baseURL,
+		"{{accessToken}}", accessToken,
+		"{{userId}}", userID,
 	)
 	return replacer.Replace(tmpl)
 }
 
 // namedBalanceGETWithHeaders 与 namedBalanceGET 类似，但用配置的 headers（占位符替换后）。
 // 若未显式提供 Authorization，则默认补 Bearer；始终补 Accept。
-func namedBalanceGETWithHeaders(ctx context.Context, httpClient *http.Client, endpoint, apiKey string, headers map[string]string, baseURL string) (body []byte, status int, transient bool, err error) {
+func namedBalanceGETWithHeaders(ctx context.Context, httpClient *http.Client, endpoint, apiKey string, headers map[string]string, baseURL, accessToken, userID string) (body []byte, status int, transient bool, err error) {
 	reqCtx, cancel := context.WithTimeout(ctx, providerBalancePerRequestTimeout)
 	defer cancel()
 	req, reqErr := http.NewRequestWithContext(reqCtx, http.MethodGet, endpoint, nil)
@@ -147,10 +163,14 @@ func namedBalanceGETWithHeaders(ctx context.Context, httpClient *http.Client, en
 		if strings.EqualFold(strings.TrimSpace(k), "Authorization") {
 			hasAuth = true
 		}
-		req.Header.Set(k, applyBalanceTemplate(v, apiKey, baseURL))
+		req.Header.Set(k, applyBalanceTemplate(v, apiKey, baseURL, accessToken, userID))
 	}
 	if !hasAuth {
-		req.Header.Set("Authorization", "Bearer "+apiKey)
+		token := strings.TrimSpace(accessToken)
+		if token == "" {
+			token = apiKey
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	if req.Header.Get("Accept") == "" {
 		req.Header.Set("Accept", "application/json")
