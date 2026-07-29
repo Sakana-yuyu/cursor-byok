@@ -6,11 +6,17 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 const (
 	// maxErrorBodyBytes 表示错误响应体最多读取的字节数。
 	maxErrorBodyBytes = 8192
+	// errorBodyReadTimeout 是读取错误响应体的最大等待时间。
+	// 在 502/524 网关风暴中，上游可能先发送 HTTP 头然后半开连接卡住 body，
+	// 此时 http.Client.Timeout 和 ResponseHeaderTimeout 都已不再生效
+	// （它们只管到头到达为止）。用定时器在超时后关闭 body 解除阻塞。
+	errorBodyReadTimeout = 10 * time.Second
 )
 
 // HTTPStatusError 表示上游返回的非 2xx 响应，携带真实 HTTP 状态码，
@@ -39,12 +45,32 @@ func (e *HTTPStatusError) Status() int {
 }
 
 // buildHTTPStatusError 读取响应体摘要并生成带状态码的错误。
+// 读取错误响应体时使用 errorBodyReadTimeout 超时保护，防止半开连接
+// 导致 io.ReadAll 永久阻塞（移植自 Reasonix errorBodyReadTimeout 模式）。
 func buildHTTPStatusError(prefix string, resp *http.Response) error {
 	if resp == nil {
 		return fmt.Errorf("%s response is nil", strings.TrimSpace(prefix))
 	}
 
+	// 在独立 goroutine 里设置超时关闭 body 的定时器。
+	// 如果 ReadAll 在超时内完成，停止定时器；否则定时器关闭 body 解除阻塞。
+	bodyClosed := false
+	timer := time.AfterFunc(errorBodyReadTimeout, func() {
+		bodyClosed = true
+		_ = resp.Body.Close()
+	})
+
 	limitedBody, err := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
+	timer.Stop()
+
+	if bodyClosed {
+		// 超时关闭的 body：io.ReadAll 返回的错误通常是 "read on closed body" 之类，
+		// 我们用明确的超时错误替换，让日志可诊断。
+		if retrySummary := ProviderRetryAttemptSummary(resp); retrySummary != "" {
+			return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d %s body_read_timeout=%v", strings.TrimSpace(prefix), resp.StatusCode, retrySummary, err)}
+		}
+		return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d body_read_timeout=%v", strings.TrimSpace(prefix), resp.StatusCode, err)}
+	}
 	if err != nil {
 		if retrySummary := ProviderRetryAttemptSummary(resp); retrySummary != "" {
 			return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d %s body_read_error=%v", strings.TrimSpace(prefix), resp.StatusCode, retrySummary, err)}

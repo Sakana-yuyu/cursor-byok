@@ -328,11 +328,7 @@ function formatRate(v) {
     <div class="min-h-0 flex-1 overflow-y-auto pr-1">
       <div class="flex flex-col gap-4 pb-2">
         <!-- 顶部：返回 + 标题 -->
-        <div class="flex items-center justify-between gap-3 border-b border-[#343434] pb-3">
-          <div class="flex items-center gap-3">
-            <button type="button" class="text-[#8f8f8f] hover:text-white" @click="router.back()">← 返回</button>
-            <h2 class="text-base font-medium text-white">会话分析</h2>
-          </div>
+        <div class="flex items-center justify-end gap-3 border-b border-[#343434] pb-3">
           <Button variant="default" :disabled="loading" @click="() => { loadEvents(); loadSpend(); }">{{ loading ? "刷新中..." : "刷新数据" }}</Button>
         </div>
 

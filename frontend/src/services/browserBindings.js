@@ -111,6 +111,11 @@ export const OpenFooterAuthorHome = () => Promise.resolve();
 export const OpenHistoryWindow = () => Promise.resolve();
 export const ExportLogs = () => Promise.resolve("");
 export const OpenModelConfigWindow = () => Promise.resolve();
+export const OpenMetricsDetailWindow = () => Promise.resolve();
+export const OpenRequestMetricsWindow = () => Promise.resolve();
+export const OpenStatsOverlayWindow = () => Promise.resolve();
+export const UpdateStatsOverlayWindow = (_style, _alwaysOnTop) => Promise.resolve();
+export const CloseStatsOverlayWindow = () => Promise.resolve();
 export const OpenModelEditorWindow = (index, adapterJSON) => {
   editorContext = { index: Number.isInteger(index) ? index : -1, adapterJSON: String(adapterJSON || "{}") };
   return Promise.resolve();
@@ -143,6 +148,8 @@ export const FetchModelCatalog = (request) => {
   });
 };
 export const GetRecentRequestMetrics = () => Promise.resolve([]);
+export const GetRecentRequestMetricsCount = () => Promise.resolve(0);
+export const ResetUsageMetrics = () => Promise.resolve();
 export const GetMetricsRangeSummary = () => Promise.resolve({
   requestCount: 0,
   inputTokens: 0,

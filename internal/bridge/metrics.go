@@ -63,12 +63,21 @@ func (service *MetricsService) GetLocalCacheStats() LocalCacheStats {
 	return localcache.Snapshot()
 }
 
-// GetRecentRequestMetrics 返回 usage.json 中已记录的最近请求明细。
-func (service *MetricsService) GetRecentRequestMetrics(limit int) ([]historymetrics.RequestMetric, error) {
+// GetRecentRequestMetrics 返回 usage.json 中已记录的最近请求明细（服务端分页）。
+// limit <= 0 表示不限制条数；offset 表示跳过最新的 offset 条。
+func (service *MetricsService) GetRecentRequestMetrics(limit int, offset int) ([]historymetrics.RequestMetric, error) {
 	if err := appdata.EnsureAssistantHome(); err != nil {
 		return nil, err
 	}
-	return historymetrics.LoadRecentRequestMetrics(appdata.UsageFilePath(), limit, service.includeCacheWrite(), service.priceLookup())
+	return historymetrics.LoadRecentRequestMetrics(appdata.UsageFilePath(), limit, offset, service.includeCacheWrite(), service.priceLookup())
+}
+
+// GetRecentRequestMetricsCount 返回 usage.json 中 recent_events 的总数，供前端分页使用。
+func (service *MetricsService) GetRecentRequestMetricsCount() (int, error) {
+	if err := appdata.EnsureAssistantHome(); err != nil {
+		return 0, err
+	}
+	return historymetrics.LoadRecentRequestCount(appdata.UsageFilePath())
 }
 
 // GetMetricsRangeSummary 按时间范围与模型过滤后汇总 token（仅 provider_call）。
@@ -87,7 +96,7 @@ func (service *MetricsService) GetMetricsTokenBuckets(startUnixMs, endUnixMs int
 	if err := appdata.EnsureAssistantHome(); err != nil {
 		return nil, err
 	}
-	all, err := historymetrics.LoadRecentRequestMetrics(appdata.UsageFilePath(), 0, service.includeCacheWrite(), service.priceLookup())
+	all, err := historymetrics.LoadRecentRequestMetrics(appdata.UsageFilePath(), 0, 0, service.includeCacheWrite(), service.priceLookup())
 	if err != nil {
 		return nil, err
 	}
@@ -119,6 +128,15 @@ func (service *MetricsService) GetHomeMetricsSummary() (HomeMetricsSummary, erro
 	}, nil
 }
 
+// ResetUsageMetrics 清空所有会话统计：Totals、Daily、RecentEvents 全部归零。
+// 该操作不可恢复。forwarder 进程内的 UsageFileStore 在下次写入时会重新读取已清空的文件。
+func (service *MetricsService) ResetUsageMetrics() error {
+	if err := appdata.EnsureAssistantHome(); err != nil {
+		return err
+	}
+	return historymetrics.ResetUsageFile(appdata.UsageFilePath())
+}
+
 // GetProviderSpendSummary 按中转站（GroupName -> baseURL 主机名 -> provider 类型）聚合区间内的用量与美元花费。
 // startUnixMs/endUnixMs 为毫秒时间戳；<=0 表示不限制该端。
 func (service *MetricsService) GetProviderSpendSummary(startUnixMs, endUnixMs int64) ([]historymetrics.ProviderSpend, error) {
@@ -133,7 +151,7 @@ func (service *MetricsService) loadProviderEvents(startUnixMs, endUnixMs int64, 
 	if err := appdata.EnsureAssistantHome(); err != nil {
 		return nil, err
 	}
-	all, err := historymetrics.LoadRecentRequestMetrics(appdata.UsageFilePath(), 0, service.includeCacheWrite(), service.priceLookup())
+	all, err := historymetrics.LoadRecentRequestMetrics(appdata.UsageFilePath(), 0, 0, service.includeCacheWrite(), service.priceLookup())
 	if err != nil {
 		return nil, err
 	}

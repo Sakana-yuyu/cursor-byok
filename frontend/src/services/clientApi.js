@@ -13,11 +13,14 @@ import {
   GetMetricsTokenBuckets,
   GetProviderSpendSummary,
   GetRecentRequestMetrics,
+  GetRecentRequestMetricsCount,
+  ResetUsageMetrics,
 } from "@bindings/cursor/internal/bridge/metricsservice.js";
 import {
   CheckForUpdates, GetAppVersion, GetFooterAuthorInfo, InstallReadyUpdate,
   GetModelEditorContext, OpenConfigWindow, OpenFooterAuthorHome, OpenHistoryWindow,
-  OpenModelConfigWindow, OpenModelEditorWindow, ExportLogs,
+  OpenMetricsDetailWindow, OpenRequestMetricsWindow, OpenStatsOverlayWindow, UpdateStatsOverlayWindow,
+  CloseStatsOverlayWindow, OpenModelConfigWindow, OpenModelEditorWindow, ExportLogs,
 } from "@bindings/cursor/internal/bridge/windowservice.js";
 import { isBrowserPreview, browserPreviewMockMetrics, browserPreviewMockProxyState } from "@/services/runtimeAdapter";
 
@@ -25,8 +28,10 @@ const desktopMethods = {
   LoadUserConfig, SaveUserConfig, GetState, GetHomeMetricsSummary, GetAdRuntime, OpenExternalURL,
   StartProxy, StopProxy, OpenHistoryWindow, OpenConfigWindow, GetAppVersion, GetFooterAuthorInfo,
   CheckForUpdates, InstallReadyUpdate, OpenFooterAuthorHome, OpenModelConfigWindow, OpenModelEditorWindow,
-  GetModelEditorContext, TestModelAdapter, GetModelAdapterTestResults, GetRecentRequestMetrics,
+  OpenMetricsDetailWindow, OpenRequestMetricsWindow, OpenStatsOverlayWindow, UpdateStatsOverlayWindow,
+  CloseStatsOverlayWindow, GetModelEditorContext, TestModelAdapter, GetModelAdapterTestResults, GetRecentRequestMetrics,
   GetMetricsRangeSummary, GetMetricsTokenBuckets, GetProviderSpendSummary, GetLocalCacheStats,
+  ResetUsageMetrics,
   FetchModelCatalog, ProbeModelAdapter, QueryProviderBalance, GetPromptInjectionSettings,
   SavePromptInjectionSettings, RefreshPromptInjection,
   RefreshPromptInjectionCatalog, ExportLogs, AutoMatchContextWindows,
@@ -78,6 +83,10 @@ export function getHomeMetricsSummary() {
   return withApiLogging("GetHomeMetricsSummary", undefined, () => desktopOrMock(browserPreviewMockMetrics(), "@bindings/cursor/internal/bridge/metricsservice.js", "GetHomeMetricsSummary"));
 }
 
+export function resetUsageMetrics() {
+  return withApiLogging("ResetUsageMetrics", undefined, () => desktopOrMock(undefined, "@bindings/cursor/internal/bridge/metricsservice.js", "ResetUsageMetrics"));
+}
+
 export function getAdRuntime() {
   return desktopOrMock({ available: false, slots: [], window: {} }, "@bindings/cursor/internal/bridge/adservice.js", "GetAdRuntime");
 }
@@ -103,6 +112,13 @@ export function checkForUpdates() { return desktopOrMock(undefined, "@bindings/c
 export function installReadyUpdate() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "InstallReadyUpdate"); }
 export function openFooterAuthorHome() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "OpenFooterAuthorHome"); }
 export function openModelConfig() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "OpenModelConfigWindow"); }
+export function openMetricsDetailWindow() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "OpenMetricsDetailWindow"); }
+export function openRequestMetricsWindow() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "OpenRequestMetricsWindow"); }
+export function openStatsOverlayWindow() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "OpenStatsOverlayWindow"); }
+export function updateStatsOverlayWindow(style, alwaysOnTop) {
+  return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "UpdateStatsOverlayWindow", [style, alwaysOnTop]);
+}
+export function closeStatsOverlayWindow() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "CloseStatsOverlayWindow"); }
 export function openModelEditor(index, adapterJSON) {
   return desktopOrMock(
     () => OpenModelEditorWindow(index, adapterJSON),
@@ -135,8 +151,12 @@ export function probeModelAdapter(adapter) {
   return withApiLogging("ProbeModelAdapter", adapter, () => invoke("@bindings/cursor/internal/bridge/proxyservice.js", "ProbeModelAdapter", [adapter]));
 }
 
-export function fetchRecentRequestMetrics(limit = 200) {
-  return desktopOrMock([], "@bindings/cursor/internal/bridge/metricsservice.js", "GetRecentRequestMetrics", [limit]);
+export function fetchRecentRequestMetrics(limit = 0, offset = 0) {
+  return desktopOrMock([], "@bindings/cursor/internal/bridge/metricsservice.js", "GetRecentRequestMetrics", [limit, offset]);
+}
+
+export function fetchRecentRequestMetricsCount() {
+  return desktopOrMock(0, "@bindings/cursor/internal/bridge/metricsservice.js", "GetRecentRequestMetricsCount");
 }
 
 export function fetchMetricsRangeSummary(startUnixMs = 0, endUnixMs = 0, model = "") {

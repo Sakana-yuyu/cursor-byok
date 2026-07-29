@@ -28,13 +28,16 @@ type modelEditorContext struct {
 
 // WindowService 定义了当前模块中的 WindowService 类型。
 type WindowService struct {
-	app               *application.App
-	updater           *updater.Manager
-	modelConfigWindow *application.WebviewWindow
-	modelEditorWindow *application.WebviewWindow
-	editorCtx         *modelEditorContext
-	locale            string
-	mu                sync.RWMutex
+	app                  *application.App
+	updater              *updater.Manager
+	modelConfigWindow    *application.WebviewWindow
+	modelEditorWindow    *application.WebviewWindow
+	metricsDetailWindow  *application.WebviewWindow
+	requestMetricsWindow *application.WebviewWindow
+	statsOverlayWindow   *application.WebviewWindow
+	editorCtx            *modelEditorContext
+	locale               string
+	mu                   sync.RWMutex
 }
 
 // NewWindowService 用于处理与 NewWindowService 相关的逻辑。
@@ -158,7 +161,241 @@ func (s *WindowService) OpenModelConfigWindow() {
 	s.modelConfigWindow = win
 }
 
+// OpenMetricsDetailWindow 打开会话分析独立窗口。如果窗口已存在则聚焦。
+func (s *WindowService) OpenMetricsDetailWindow() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.app == nil {
+		return
+	}
+
+	if s.metricsDetailWindow != nil {
+		s.metricsDetailWindow.Show()
+		s.metricsDetailWindow.Focus()
+		return
+	}
+
+	win := s.app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title:               "会话分析",
+		Width:               1100,
+		Height:              760,
+		MinWidth:            900,
+		MinHeight:           600,
+		DisableResize:       false,
+		Frameless:           goruntime.GOOS == "windows",
+		URL:                 "/#/metrics-detail",
+		Hidden:              false,
+		HideOnEscape:        false,
+		MinimiseButtonState: application.ButtonEnabled,
+		MaximiseButtonState: application.ButtonEnabled,
+		CloseButtonState:    application.ButtonEnabled,
+		BackgroundColour:    application.RGBA{Red: 25, Green: 25, Blue: 25, Alpha: 255},
+		Mac: application.MacWindow{
+			Backdrop:      application.MacBackdropLiquidGlass,
+			DisableShadow: false,
+			TitleBar: application.MacTitleBar{
+				AppearsTransparent:   true,
+				Hide:                 false,
+				HideTitle:            true,
+				FullSizeContent:      true,
+				UseToolbar:           false,
+				HideToolbarSeparator: true,
+			},
+			WebviewPreferences: application.MacWebviewPreferences{
+				FullscreenEnabled:                   u.True,
+				TextInteractionEnabled:              u.True,
+				AllowsBackForwardNavigationGestures: u.False,
+			},
+		},
+		Windows: application.WindowsWindow{
+			HiddenOnTaskbar: false,
+		},
+	})
+
+	win.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.metricsDetailWindow = nil
+	})
+
+	s.metricsDetailWindow = win
+}
+
+// OpenRequestMetricsWindow 打开请求明细独立窗口。如果窗口已存在则聚焦。
+func (s *WindowService) OpenRequestMetricsWindow() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.app == nil {
+		return
+	}
+
+	if s.requestMetricsWindow != nil {
+		s.requestMetricsWindow.Show()
+		s.requestMetricsWindow.Focus()
+		return
+	}
+
+	win := s.app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title:               "请求明细",
+		Width:               1100,
+		Height:              760,
+		MinWidth:            900,
+		MinHeight:           600,
+		DisableResize:       false,
+		Frameless:           goruntime.GOOS == "windows",
+		URL:                 "/#/request-metrics",
+		Hidden:              false,
+		HideOnEscape:        false,
+		MinimiseButtonState: application.ButtonEnabled,
+		MaximiseButtonState: application.ButtonEnabled,
+		CloseButtonState:    application.ButtonEnabled,
+		BackgroundColour:    application.RGBA{Red: 25, Green: 25, Blue: 25, Alpha: 255},
+		Mac: application.MacWindow{
+			Backdrop:      application.MacBackdropLiquidGlass,
+			DisableShadow: false,
+			TitleBar: application.MacTitleBar{
+				AppearsTransparent:   true,
+				Hide:                 false,
+				HideTitle:            true,
+				FullSizeContent:      true,
+				UseToolbar:           false,
+				HideToolbarSeparator: true,
+			},
+			WebviewPreferences: application.MacWebviewPreferences{
+				FullscreenEnabled:                   u.True,
+				TextInteractionEnabled:              u.True,
+				AllowsBackForwardNavigationGestures: u.False,
+			},
+		},
+		Windows: application.WindowsWindow{
+			HiddenOnTaskbar: false,
+		},
+	})
+
+	win.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.requestMetricsWindow = nil
+	})
+
+	s.requestMetricsWindow = win
+}
+
+const (
+	statsOverlayStyleCard   = "card"
+	statsOverlayStyleEngine = "engine"
+	statsOverlayStyleOrb    = "orb"
+)
+
+func statsOverlayWindowSize(style string) (width, height int) {
+	switch style {
+	case statsOverlayStyleEngine:
+		return 240, 104
+	case statsOverlayStyleOrb:
+		return 196, 196
+	default:
+		return 240, 112
+	}
+}
+
+// OpenStatsOverlayWindow 打开统计浮窗（置顶、无边框、小尺寸）。
+// 用于在任意应用上方常驻显示缓存命中率、Token 消耗、对话轮次、价值估算。
+// 如果窗口已存在则确保它处于显示状态。
+func (s *WindowService) OpenStatsOverlayWindow() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.app == nil {
+		return
+	}
+
+	// 已存在 -> 确保显示，不执行 toggle，避免设置开关与窗口状态竞争。
+	if s.statsOverlayWindow != nil {
+		if !s.statsOverlayWindow.IsVisible() {
+			s.statsOverlayWindow.Show()
+		}
+		s.statsOverlayWindow.Focus()
+		return
+	}
+
+	width, height := statsOverlayWindowSize(statsOverlayStyleCard)
+	win := s.app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title:               "统计浮窗",
+		Width:               width,
+		Height:              height,
+		DisableResize:       true,
+		Frameless:           true,
+		AlwaysOnTop:         true,
+		BackgroundType:      application.BackgroundTypeTransparent,
+		URL:                 "/#/stats-overlay",
+		Hidden:              false,
+		HideOnEscape:        false,
+		MinimiseButtonState: application.ButtonDisabled,
+		MaximiseButtonState: application.ButtonDisabled,
+		CloseButtonState:    application.ButtonDisabled,
+		BackgroundColour:    application.RGBA{Alpha: 0},
+		Mac: application.MacWindow{
+			Backdrop:      application.MacBackdropTransparent,
+			DisableShadow: true,
+			TitleBar: application.MacTitleBar{
+				AppearsTransparent: true,
+				Hide:               true,
+				HideTitle:          true,
+				FullSizeContent:    true,
+				UseToolbar:         false,
+			},
+			WebviewPreferences: application.MacWebviewPreferences{
+				FullscreenEnabled:                   u.True,
+				TextInteractionEnabled:              u.True,
+				AllowsBackForwardNavigationGestures: u.False,
+			},
+		},
+		Windows: application.WindowsWindow{
+			HiddenOnTaskbar:                   true,
+			DisableFramelessWindowDecorations: true,
+		},
+	})
+
+	win.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.statsOverlayWindow = nil
+	})
+
+	s.statsOverlayWindow = win
+}
+
+// UpdateStatsOverlayWindow 更新现有统计浮窗的样式尺寸和置顶状态。
+// 浮窗不存在时直接返回，不创建新窗口。
+func (s *WindowService) UpdateStatsOverlayWindow(style string, alwaysOnTop bool) {
+	width, height := statsOverlayWindowSize(style)
+
+	s.mu.RLock()
+	win := s.statsOverlayWindow
+	s.mu.RUnlock()
+	if win == nil {
+		return
+	}
+
+	win.SetSize(width, height)
+	win.SetAlwaysOnTop(alwaysOnTop)
+}
+
+// CloseStatsOverlayWindow 关闭统计浮窗。
+func (s *WindowService) CloseStatsOverlayWindow() {
+	s.mu.Lock()
+	win := s.statsOverlayWindow
+	s.statsOverlayWindow = nil
+	s.mu.Unlock()
+	if win != nil {
+		win.Close()
+	}
+}
+
 // OpenModelEditorWindow 打开模型编辑器独立窗口。
+// index < 0 表示新增，>= 0 表示编辑对应索引的适配器。
 // index < 0 表示新增，>= 0 表示编辑对应索引的适配器。
 // adapterJSON 为编辑器初始数据的 JSON 字符串。
 func (s *WindowService) OpenModelEditorWindow(index int, adapterJSON string) {

@@ -15,6 +15,7 @@ import {
   saveModelAdaptersBatch,
   startModelAdapterTest,
   resolveBalanceProfileForAdapter,
+  syncBalanceConfigToSameURL,
   toUserError,
   updateModelAdaptersBySupplier,
 } from "@/state/appState";
@@ -710,6 +711,8 @@ const bulkEditExpanded = ref(false);
 const bulkEditSaving = ref(false);
 const bulkEditError = ref("");
 const bulkEditConflicts = ref([]);
+const balanceTestState = reactive({ loading: false, data: null });
+const balanceSyncState = reactive({ loading: false, message: "", ok: false });
 
 function createBulkEditDraft() {
   const first = supplierAdapters.value[0] || {};
@@ -741,6 +744,100 @@ function toggleBulkEdit() {
     Object.assign(bulkEditDraft, createBulkEditDraft());
     bulkEditError.value = "";
     bulkEditConflicts.value = [];
+    balanceTestState.data = null;
+    balanceSyncState.message = "";
+    balanceSyncState.ok = false;
+  }
+}
+
+function parseBalanceHeaders(value) {
+  const text = String(value || "").trim();
+  if (!text) return undefined;
+  try {
+    const parsed = JSON.parse(text);
+    if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
+      throw new Error("请求头必须是 JSON 对象");
+    }
+    return parsed;
+  } catch (error) {
+    throw new Error(`查询请求头格式错误：${error?.message || "请输入 JSON 对象"}`);
+  }
+}
+
+async function testBulkEditBalance() {
+  if (balanceTestState.loading) return;
+  balanceTestState.loading = true;
+  balanceTestState.data = null;
+  try {
+    const request = {
+      type: String(bulkEditDraft.type || "").trim(),
+      supplierID: String(bulkEditDraft.supplierID || "").trim(),
+      baseURL: String(bulkEditDraft.baseURL || "").trim(),
+      apiKey: String(bulkEditDraft.apiKey || "").trim(),
+      forceRefresh: true,
+      balanceProfile: String(bulkEditDraft.balanceProfile || "").trim(),
+      balanceAccessToken: String(bulkEditDraft.balanceAccessToken || "").trim(),
+      balanceUserID: String(bulkEditDraft.balanceUserID || "").trim(),
+      balanceCodingPlanProvider: String(bulkEditDraft.balanceCodingPlanProvider || "").trim(),
+      balanceQueryURL: String(bulkEditDraft.balanceQueryURL || "").trim(),
+      balanceQueryField: String(bulkEditDraft.balanceQueryField || "").trim(),
+    };
+    const headers = parseBalanceHeaders(bulkEditDraft.balanceQueryHeadersJSON);
+    if (headers) request.balanceQueryHeaders = headers;
+    const result = await queryProviderBalance(request);
+    balanceTestState.data = result || { supported: false, message: "无返回结果" };
+  } catch (error) {
+    balanceTestState.data = { supported: false, message: toUserError(error) };
+  } finally {
+    balanceTestState.loading = false;
+  }
+}
+
+// 同 URL 下分组数：用于判断同步按钮是否有意义（多分组时才有价值）。
+const sameURLGroupCount = computed(() => {
+  const targetBase = String(bulkEditDraft.baseURL || "").trim();
+  if (!targetBase) return 0;
+  return new Set(
+    appState.modelAdapters
+      .filter((a) => String(a.baseURL || "").trim() === targetBase)
+      .map((a) => String(a.groupName || "").trim() || "__default__"),
+  ).size;
+});
+
+async function syncBalanceToSameURL() {
+  if (balanceSyncState.loading) return;
+  const baseURL = String(bulkEditDraft.baseURL || "").trim();
+  if (!baseURL) {
+    balanceSyncState.ok = false;
+    balanceSyncState.message = "请先填写接口地址";
+    return;
+  }
+  balanceSyncState.loading = true;
+  balanceSyncState.message = "";
+  try {
+    const patch = {
+      balanceProfile: String(bulkEditDraft.balanceProfile || "").trim(),
+      balanceQueryURL: String(bulkEditDraft.balanceQueryURL || "").trim(),
+      balanceQueryField: String(bulkEditDraft.balanceQueryField || "").trim(),
+      balanceQueryHeadersJSON: String(bulkEditDraft.balanceQueryHeadersJSON || "").trim(),
+      balanceAccessToken: String(bulkEditDraft.balanceAccessToken || "").trim(),
+      balanceUserID: String(bulkEditDraft.balanceUserID || "").trim(),
+      balanceCodingPlanProvider: String(bulkEditDraft.balanceCodingPlanProvider || "").trim(),
+    };
+    const result = await syncBalanceConfigToSameURL(baseURL, patch);
+    if (!result.ok) {
+      balanceSyncState.ok = false;
+      balanceSyncState.message = String(result.error || "同步失败").trim();
+      return;
+    }
+    await reloadUserConfig({ modelAdaptersOnly: true });
+    balanceSyncState.ok = true;
+    balanceSyncState.message = `已同步到 ${result.updated} 个模型（保留各自 API Key 与分组）`;
+  } catch (error) {
+    balanceSyncState.ok = false;
+    balanceSyncState.message = toUserError(error);
+  } finally {
+    balanceSyncState.loading = false;
   }
 }
 
@@ -974,6 +1071,43 @@ async function saveBulkEdit(force = false) {
                 <span class="text-xs text-[#a3a3a3]">查询请求头</span>
                 <input v-model="bulkEditDraft.balanceQueryHeadersJSON" type="text" placeholder="{}" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
               </label>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2 rounded-[7px] border border-[#3f3f3f] bg-[#202020] px-3 py-2">
+              <Button variant="default" :disabled="balanceTestState.loading || bulkEditSaving" @click="testBulkEditBalance">
+                <span v-if="balanceTestState.loading" class="icon-[mdi--loading] mr-1 animate-spin text-[14px]"></span>
+                {{ balanceTestState.loading ? "测试中…" : "测试余额" }}
+              </Button>
+              <span class="text-xs text-[#737373]">使用当前未保存的连接与余额配置，不会保存修改。</span>
+              <div v-if="balanceTestState.data" class="basis-full text-xs" :class="balanceTestState.data.supported ? 'text-[#6ee7a5]' : 'text-[#fca5a5]'">
+                <template v-if="balanceTestState.data.supported">
+                  <span class="font-medium">{{ balanceTestState.data.unlimited ? "余额不限额" : `余额 ${formatMoney(balanceTestState.data.remaining, balanceTestState.data.currency)}` }}</span>
+                  <span v-if="balanceTestState.data.total != null"> · 总额 {{ formatMoney(balanceTestState.data.total, balanceTestState.data.currency) }}</span>
+                  <span v-if="balanceTestState.data.used != null"> · 已用 {{ formatMoney(balanceTestState.data.used, balanceTestState.data.currency) }}</span>
+                  <span v-if="balanceTestState.data.currency"> · 币种 {{ balanceTestState.data.currency }}</span>
+                  <span v-if="balanceTestState.data.source"> · 来源 {{ balanceSourceLabel(balanceTestState.data.source) }}</span>
+                  <span v-if="balanceTestState.data.planName"> · {{ balanceTestState.data.planName }}</span>
+                </template>
+                <span v-else>{{ balanceTestState.data.message || "余额查询失败" }}</span>
+              </div>
+              <Button
+                variant="default"
+                :disabled="balanceSyncState.loading || bulkEditSaving"
+                :title="sameURLGroupCount > 1 ? `将余额配置同步到同 URL 下的 ${sameURLGroupCount} 个分组（保留各自 API Key 与分组名）` : '同一中转站下暂无其他分组'"
+                @click="syncBalanceToSameURL"
+              >
+                <span v-if="balanceSyncState.loading" class="icon-[mdi--sync] mr-1 animate-spin text-[14px]"></span>
+                <span v-else class="icon-[mdi--sync] mr-1 text-[14px]"></span>
+                {{ balanceSyncState.loading ? "同步中…" : "同步到同 URL 分组" }}
+              </Button>
+              <span class="text-xs text-[#737373]">
+                仅同步余额查询配置，保留各分组 API Key{{ sameURLGroupCount > 1 ? `（当前 ${sameURLGroupCount} 个分组）` : "" }}
+              </span>
+              <div
+                v-if="balanceSyncState.message"
+                class="basis-full text-xs"
+                :class="balanceSyncState.ok ? 'text-[#6ee7a5]' : 'text-[#fca5a5]'"
+              >{{ balanceSyncState.message }}</div>
             </div>
 
             <!-- 冲突提示 -->

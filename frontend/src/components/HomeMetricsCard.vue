@@ -2,14 +2,23 @@
 import CacheHitRateChart from "@/components/charts/CacheHitRateChart.vue";
 import Switch from "@/components/ui/Switch.vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
-import { fetchLocalCacheStats, fetchMetricsRangeSummary, fetchRecentRequestMetrics } from "@/services/clientApi";
-import { appState, saveIncludeCacheWriteInHitRate } from "@/state/appState";
+import { fetchLocalCacheStats, fetchMetricsRangeSummary, fetchRecentRequestMetrics, resetUsageMetrics } from "@/services/clientApi";
+import { appState, saveIncludeCacheWriteInHitRate, saveLocalResponseCacheEnabled, openMetricsDetailWindow } from "@/state/appState";
 import { formatCompactInteger, formatInteger } from "@/utils/numberFormat";
+import { isBrowserPreview } from "@/services/runtimeAdapter";
 import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
 const emit = defineEmits(["refresh", "open-ad"]);
 const router = useRouter();
+
+async function handleOpenDetail() {
+  if (isBrowserPreview) {
+    await router.push("/metrics-detail");
+    return;
+  }
+  await openMetricsDetailWindow();
+}
 
 const props = defineProps({
   loading: {
@@ -319,14 +328,15 @@ const tokensTooltipContent = computed(() =>
 const costTooltipContent = computed(() => {
   const { pricedRows, unpricedRows, hasPriced } = rangeCostSummary.value;
   const lines = [
-    "估算 = 该区间内已配置价格模型的美元花费合计；未配置价格的请求不计入。",
+    "估算 = 该区间内已知价格模型的美元花费合计。",
+    "价格优先级：手动配价 > 中转站探测 > 内置官方价。",
     "",
     hasPriced
       ? `合计：${formatUSD(rangeCostSummary.value.total)}（已计价 ${formatMetricValue(pricedRows)} 条）`
-      : "区间内暂无已配置价格的请求，无法估算花费。",
+      : "区间内暂无可计价请求。",
   ];
   if (unpricedRows > 0) {
-    lines.push(`${formatMetricValue(unpricedRows)} 条未计价（未配置模型价格）`);
+    lines.push(`${formatMetricValue(unpricedRows)} 条未计价（未知模型）`);
   }
   return lines.join("\n");
 });
@@ -341,7 +351,10 @@ const localCacheHasData = computed(
 );
 
 const localCacheLine = computed(() => {
-  if (!localCacheHasData.value) return "本地缓存：未启用/无命中";
+  const enabled = appState.localResponseCache && appState.localResponseCache.enabled;
+  if (!localCacheHasData.value) {
+    return enabled ? "本地缓存：已启用（等待命中）" : "本地缓存：未启用";
+  }
   return `本地缓存命中 ${formatCompactInteger(localCacheStats.value.hits)} · ${formatRateLabel(localCacheHitRate.value)}`;
 });
 
@@ -382,9 +395,45 @@ async function toggleIncludeCacheWriteInHitRate(value) {
   }
 }
 
+const localCacheToggleSaving = ref(false);
+const localCacheToggleError = ref("");
+async function toggleLocalResponseCache(value) {
+  const nextValue = Boolean(value);
+  localCacheToggleSaving.value = true;
+  localCacheToggleError.value = "";
+  try {
+    const result = await saveLocalResponseCacheEnabled(nextValue);
+    if (!result?.ok) {
+      localCacheToggleError.value = result?.error || "保存失败";
+    }
+  } catch (error) {
+    localCacheToggleError.value = error?.message || "保存失败";
+  } finally {
+    localCacheToggleSaving.value = false;
+  }
+}
+
 async function handleRefresh() {
   await loadEvents();
   emit("refresh");
+}
+
+const clearing = ref(false);
+async function handleClear() {
+  if (clearing.value) return;
+  if (!window.confirm("确定清空所有会话统计？此操作不可恢复，将重置 Token 消耗、对话轮次、缓存命中率等全部历史数据。")) {
+    return;
+  }
+  clearing.value = true;
+  try {
+    await resetUsageMetrics();
+    await loadEvents();
+    emit("refresh");
+  } catch (e) {
+    console.error("[HomeMetricsCard] clear usage metrics failed", e);
+  } finally {
+    clearing.value = false;
+  }
 }
 
 watch([selectedRange, customStart, customEnd], () => {
@@ -400,7 +449,7 @@ onMounted(() => {
   <div>
     <div class="flex flex-col gap-4">
       <!-- 标题行 + 刷新/详情按钮 -->
-      <div class="flex items-center justify-between gap-4 h-[42px]">
+      <div class="flex items-center justify-between gap-4 h-[36px]">
         <div class="flex flex-col gap-1 w-[200px] shrink-0">
           <h2 class="text-[14px] font-medium text-white/80">会话统计</h2>
         </div>
@@ -409,10 +458,20 @@ onMounted(() => {
             type="button"
             class="center-row justify-center h-[24px] px-2 rounded-[6px] border border-[#3b3b3b] bg-[#242424] text-[#9d9d9d] transition-colors duration-150 hover:border-[#4c4c4c] hover:text-white"
             title="会话分析"
-            @click="router.push('/metrics-detail')"
+            @click="handleOpenDetail"
           >
             <span class="icon-[mdi--chart-line] text-[14px]"></span>
             <span class="ml-1 text-xs">详情</span>
+          </button>
+          <button
+            type="button"
+            class="center-row justify-center h-[24px] px-2 rounded-[6px] border border-[#3b3b3b] bg-[#242424] text-[#9d9d9d] transition-colors duration-150 hover:border-[#6b3b3b] hover:text-[#f87171] disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="clearing"
+            :title="clearing ? '清空中...' : '清空所有会话统计（不可恢复）'"
+            @click="handleClear"
+          >
+            <span class="icon-[mdi--trash-can-outline] text-[14px]" :class="{ '!animate-spin': clearing }"></span>
+            <span class="ml-1 text-xs">清空</span>
           </button>
           <span>刷新统计</span>
           <button
@@ -449,10 +508,10 @@ onMounted(() => {
 
       <!-- 4 个指标卡片 -->
       <div
-        class="mt-[-4px] grid grid-cols-4 gap-0 overflow-hidden rounded-[8px] border border-[#343434] bg-[#242424] h-[130px]"
+        class="mt-[-4px] grid grid-cols-4 gap-0 rounded-[8px] border border-[#343434] bg-[#242424] min-h-[110px]"
       >
         <!-- 缓存命中率 -->
-        <div class="min-w-0 px-4 py-4 flex flex-col justify-between">
+        <div class="min-w-0 px-3 py-2.5 flex flex-col justify-between">
           <div class="center-row justify-start gap-1 text-xs text-[#7f7f7f]">
             <span>缓存命中率</span>
             <Tooltip>
@@ -479,22 +538,37 @@ onMounted(() => {
           </div>
           <CacheHitRateChart :rate="selectedCacheHitRate" />
           <div class="center-row justify-start gap-1 text-[11px] leading-4 text-[#6f6f6f]">
-            <span class="truncate" :class="{ 'text-[#7f7f7f]': localCacheHasData }" :title="localCacheLine">
+            <span class="whitespace-nowrap" :class="{ 'text-[#7f7f7f]': localCacheHasData }" :title="localCacheLine">
               {{ localCacheLine }}
             </span>
             <Tooltip :content="localCacheTooltipContent" />
+            <button
+              type="button"
+              role="switch"
+              :aria-checked="!!appState.localResponseCache?.enabled"
+              :disabled="localCacheToggleSaving"
+              class="ml-auto relative inline-flex h-[16px] w-[28px] shrink-0 cursor-pointer rounded-full outline-none transition-all duration-200 ease-out disabled:cursor-not-allowed disabled:opacity-55"
+              :class="appState.localResponseCache?.enabled ? 'bg-[#10AD5D]' : 'bg-[rgba(255,255,255,0.22)]'"
+              :title="appState.localResponseCache?.enabled ? '本地缓存已启用 · 点击关闭' : '本地缓存未启用 · 点击启用'"
+              @click="toggleLocalResponseCache(!appState.localResponseCache?.enabled)"
+            >
+              <span
+                class="absolute left-[2px] top-[2px] inline-flex h-[12px] w-[12px] rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.3)] transition-all duration-200 ease-out"
+                :class="appState.localResponseCache?.enabled ? 'translate-x-[12px]' : 'translate-x-0'"
+              />
+            </button>
           </div>
         </div>
 
         <!-- 对话轮次 -->
-        <div class="min-w-0 border-l border-[#343434] px-4 py-4 flex flex-col justify-between">
+        <div class="min-w-0 border-l border-[#343434] px-3 py-2.5 flex flex-col justify-between">
           <div class="center-row justify-start gap-1 text-xs text-[#7f7f7f]">
             <span>对话轮次</span>
             <Tooltip :content="turnsTooltipContent" />
           </div>
           <div>
             <div
-              class="text-[30px] leading-none text-white"
+              class="text-[24px] leading-none text-white"
               style="font-family: var(--font-num)"
               :title="formatInteger(summary.turnsTotal)"
             >
@@ -514,14 +588,14 @@ onMounted(() => {
         </div>
 
         <!-- Token 消耗 -->
-        <div class="min-w-0 border-l border-[#343434] px-4 py-4 flex flex-col justify-between">
+        <div class="min-w-0 border-l border-[#343434] px-3 py-2.5 flex flex-col justify-between">
           <div class="center-row justify-start gap-1 text-xs text-[#7f7f7f]">
             <span>Token 消耗</span>
             <Tooltip :content="tokensTooltipContent" />
           </div>
           <div>
             <div
-              class="truncate text-[30px] leading-none text-white"
+              class="truncate text-[24px] leading-none text-white"
               style="font-family: var(--font-num)"
               :title="formatInteger(summary.requestTokensTotal)"
             >
@@ -537,14 +611,14 @@ onMounted(() => {
         </div>
 
         <!-- 价值估算 -->
-        <div class="min-w-0 border-l border-[#343434] px-4 py-4 flex flex-col justify-between">
+        <div class="min-w-0 border-l border-[#343434] px-3 py-2.5 flex flex-col justify-between">
           <div class="center-row justify-start gap-1 text-xs text-[#7f7f7f]">
             <span>价值估算</span>
             <Tooltip :content="costTooltipContent" />
           </div>
           <div>
             <div
-              class="truncate text-[30px] leading-none text-white"
+              class="truncate text-[24px] leading-none text-white"
               style="font-family: var(--font-num)"
               :title="estimatedCostDisplay"
             >
@@ -557,7 +631,7 @@ onMounted(() => {
               <span v-else-if="rangeCostSummary.hasPriced">
                 已计价 {{ formatCompactInteger(rangeCostSummary.pricedRows) }} 条
               </span>
-              <span v-else>未配置模型价格</span>
+              <span v-else>未知模型不计价</span>
             </div>
           </div>
         </div>

@@ -148,6 +148,27 @@ func (store *UsageFileStore) UpsertEvent(event usageFileEvent) error {
 	return writeJSONFileAtomic(store.path, doc)
 }
 
+// Reset 清空所有用量统计：Totals、Daily、RecentEvents 全部归零。
+// 在文件锁保护下原子写入空文档，确保与并发的 UpsertEvent 不冲突。
+func (store *UsageFileStore) Reset() error {
+	if store == nil || strings.TrimSpace(store.path) == "" {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(store.path), 0o755); err != nil {
+		return fmt.Errorf("create usage directory: %w", err)
+	}
+	release, err := acquireConversationLock(store.path + ".lock")
+	if err != nil {
+		return err
+	}
+	defer release()
+	doc := usageFileDocument{
+		SchemaVersion: usageFileSchemaVersion,
+		UpdatedAt:     time.Now().UTC(),
+	}
+	return writeJSONFileAtomic(store.path, doc)
+}
+
 func (store *UsageFileStore) LookupEvent(needle string) (usageFileEvent, bool, error) {
 	if store == nil || strings.TrimSpace(store.path) == "" {
 		return usageFileEvent{}, false, nil

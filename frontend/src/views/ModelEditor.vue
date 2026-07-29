@@ -1006,8 +1006,11 @@ onMounted(async () => {
               <div>
                 <div class="text-sm text-[#d4d4d4]">价格（每百万 token）</div>
                 <div class="mt-1 text-xs text-[#8f8f8f]">
-                  用于请求明细和首页成本估算；留空表示未知，不会把成本误报为 0。
-                  <span v-if="draft.pricing?.source" class="text-[#6ee7a5]">来源：{{ draft.pricing.source }}</span>
+                  用于请求明细和首页成本估算；留空时自动使用内置官方价。
+                  <span v-if="draft.pricing?.source === 'manual'" class="text-[#6ee7a5]">· 手动配价</span>
+                  <span v-else-if="draft.pricing?.source === 'catalog'" class="text-[#6ee7a5]">· 中转站探测价</span>
+                  <span v-else-if="draft.pricing?.source" class="text-[#6ee7a5]">· {{ draft.pricing.source }}</span>
+                  <span v-else class="text-[#8f8f8f]">· 未配置（将使用内置官方价）</span>
                 </div>
               </div>
               <button
