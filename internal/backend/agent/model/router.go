@@ -3,6 +3,7 @@ package modeladapter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"strconv"
@@ -178,57 +179,13 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 	// claude 的前缀缓存依赖 cache_control 断点（Anthropic /v1/messages 协议），OpenAI 的
 	// prompt_cache_key 对 claude 无效。升级须在下面的 knobs 填充之前完成，使 max_tokens /
 	// thinking 等 knobs 按 anthropic 分支处理。AnthropicAdapter 会把请求发往 {baseURL}/messages。
-	if isOpenAIChannelClaudeModel(resolved.Provider, resolved.ProviderModelID) {
-		resolved.Provider = "anthropic"
-		resolved.ProtocolGroup = "messages"
-		// OpenAI 专属字段不再适用，避免残留导致误解。
-		resolved.OpenAIEndpoint = ""
-		resolved.OpenAIRequestGroup = ""
-	}
+	// 若 anthropic 协议请求失败（如中转商不支持 /v1/messages），streamChannel 会降级回 openai。
+	// protocolMode=fixed 表示用户明确锁定协议，跳过自动升级（逃生口）。
+	upgraded := upgradeOpenAIClaudeToAnthropic(&resolved)
 	resolved.Messages = sanitizeProviderMessages(req.Messages)
 	// 对明确不支持视觉的模型，将图片内容块替换为文字占位说明。
 	resolved.Messages = stripImagesFromMessages(resolved.Messages, resolved.ProviderModelID)
-	if resolved.RequestKnobs != nil {
-		resolved.RequestKnobs["max_tokens"] = resolved.MaxTokens
-		resolved.RequestKnobs["protocol_mode"] = resolved.ProtocolMode
-		resolved.RequestKnobs["protocol_group"] = resolved.ProtocolGroup
-		if runtimeThinkingEffort != "" {
-			resolved.RequestKnobs["runtime_thinking_effort"] = runtimeThinkingEffort
-		} else {
-			delete(resolved.RequestKnobs, "runtime_thinking_effort")
-		}
-		if resolved.Provider == "openai" || resolved.Provider == "gemini" {
-			if strings.TrimSpace(resolved.ReasoningEffort) != "" {
-				resolved.RequestKnobs["reasoning_effort"] = strings.TrimSpace(resolved.ReasoningEffort)
-			} else {
-				delete(resolved.RequestKnobs, "reasoning_effort")
-			}
-			resolved.RequestKnobs["openai_endpoint"] = resolved.OpenAIEndpoint
-			resolved.RequestKnobs["openai_request_group"] = resolved.OpenAIRequestGroup
-			resolved.RequestKnobs["openai_extra_params_enabled"] = resolved.OpenAIExtraParamsEnabled
-			resolved.RequestKnobs["openai_fast_mode"] = resolved.FastMode
-			if resolved.FastMode {
-				resolved.RequestKnobs["openai_service_tier"] = "priority"
-			} else if strings.TrimSpace(resolved.OpenAIServiceTier) != "" {
-				resolved.RequestKnobs["openai_service_tier"] = strings.TrimSpace(resolved.OpenAIServiceTier)
-			} else {
-				delete(resolved.RequestKnobs, "openai_service_tier")
-			}
-			resolved.RequestKnobs["custom_headers_enabled"] = resolved.CustomHeadersEnabled
-		} else if resolved.Provider == "anthropic" {
-			delete(resolved.RequestKnobs, "reasoning_effort")
-			resolved.RequestKnobs["custom_headers_enabled"] = resolved.CustomHeadersEnabled
-			resolved.RequestKnobs["anthropic_extra_params_enabled"] = resolved.AnthropicExtraParamsEnabled
-			anthropicMaxTokens := maxAnthropicTokens(resolved)
-			resolved.RequestKnobs["max_tokens"] = anthropicMaxTokens
-			resolved.RequestKnobs["anthropic_max_tokens"] = anthropicMaxTokens
-			if strings.TrimSpace(resolved.AnthropicThinkingEffort) != "" {
-				resolved.RequestKnobs["anthropic_thinking_effort"] = anthropicThinkingEffort(resolved)
-			} else {
-				delete(resolved.RequestKnobs, "anthropic_thinking_effort")
-			}
-		}
-	}
+	applyStreamKnobs(&resolved, runtimeThinkingEffort)
 
 	var streamErr error
 	channelBaseURL := strings.TrimSpace(channel.BaseURL)
@@ -242,15 +199,15 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 		}
 		return sink(event)
 	}
-	switch resolved.Provider {
-	case "anthropic":
-		streamErr = router.anthropic.Stream(ctx, resolved, identitySink)
-	case "openai":
-		streamErr = router.openai.Stream(ctx, resolved, identitySink)
-	case "gemini":
-		streamErr = router.gemini.Stream(ctx, resolved, identitySink)
-	default:
-		streamErr = fmt.Errorf("unsupported provider %q", resolved.Provider)
+	streamErr = router.dispatchByProvider(ctx, resolved, identitySink)
+	// 失败回退：claude-on-openai 升级到 anthropic 后，若错误表明中转商不支持 /v1/messages
+	// 端点（404/405/400），降级回 openai 协议重试一次，避免渠道因升级而不可用。
+	if streamErr != nil && upgraded && shouldFallbackToOpenAI(streamErr) {
+		downgraded := downgradeAnthropicBackToOpenAI(&resolved, channel)
+		if downgraded {
+			applyStreamKnobs(&resolved, runtimeThinkingEffort)
+			streamErr = router.dispatchByProvider(ctx, resolved, identitySink)
+		}
 	}
 	// 把命中渠道的身份信息附在错误上，供转发层在错误处理时定位具体渠道
 	//（如 max_tokens 超限时只持久化修正该渠道配置，而非全局）。
@@ -268,6 +225,101 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 		}
 	}
 	return streamErr
+}
+
+// dispatchByProvider 按 resolved.Provider 选择对应适配器执行流式请求。
+func (router *Router) dispatchByProvider(ctx context.Context, resolved StreamRequest, sink func(ModelEvent) error) error {
+	switch resolved.Provider {
+	case "anthropic":
+		return router.anthropic.Stream(ctx, resolved, sink)
+	case "openai":
+		return router.openai.Stream(ctx, resolved, sink)
+	case "gemini":
+		return router.gemini.Stream(ctx, resolved, sink)
+	default:
+		return fmt.Errorf("unsupported provider %q", resolved.Provider)
+	}
+}
+
+// applyStreamKnobs 把 provider 相关运行参数写入 RequestKnobs，按 resolved.Provider 分支处理。
+// 升级/降级导致 Provider 变化后需重新调用，使 knobs 与当前协议一致。
+func applyStreamKnobs(resolved *StreamRequest, runtimeThinkingEffort string) {
+	if resolved.RequestKnobs == nil {
+		return
+	}
+	resolved.RequestKnobs["max_tokens"] = resolved.MaxTokens
+	resolved.RequestKnobs["protocol_mode"] = resolved.ProtocolMode
+	resolved.RequestKnobs["protocol_group"] = resolved.ProtocolGroup
+	if runtimeThinkingEffort != "" {
+		resolved.RequestKnobs["runtime_thinking_effort"] = runtimeThinkingEffort
+	} else {
+		delete(resolved.RequestKnobs, "runtime_thinking_effort")
+	}
+	if resolved.Provider == "openai" || resolved.Provider == "gemini" {
+		if strings.TrimSpace(resolved.ReasoningEffort) != "" {
+			resolved.RequestKnobs["reasoning_effort"] = strings.TrimSpace(resolved.ReasoningEffort)
+		} else {
+			delete(resolved.RequestKnobs, "reasoning_effort")
+		}
+		resolved.RequestKnobs["openai_endpoint"] = resolved.OpenAIEndpoint
+		resolved.RequestKnobs["openai_request_group"] = resolved.OpenAIRequestGroup
+		resolved.RequestKnobs["openai_extra_params_enabled"] = resolved.OpenAIExtraParamsEnabled
+		resolved.RequestKnobs["openai_fast_mode"] = resolved.FastMode
+		if resolved.FastMode {
+			resolved.RequestKnobs["openai_service_tier"] = "priority"
+		} else if strings.TrimSpace(resolved.OpenAIServiceTier) != "" {
+			resolved.RequestKnobs["openai_service_tier"] = strings.TrimSpace(resolved.OpenAIServiceTier)
+		} else {
+			delete(resolved.RequestKnobs, "openai_service_tier")
+		}
+		resolved.RequestKnobs["custom_headers_enabled"] = resolved.CustomHeadersEnabled
+	} else if resolved.Provider == "anthropic" {
+		delete(resolved.RequestKnobs, "reasoning_effort")
+		resolved.RequestKnobs["custom_headers_enabled"] = resolved.CustomHeadersEnabled
+		resolved.RequestKnobs["anthropic_extra_params_enabled"] = resolved.AnthropicExtraParamsEnabled
+		anthropicMaxTokens := maxAnthropicTokens(*resolved)
+		resolved.RequestKnobs["max_tokens"] = anthropicMaxTokens
+		resolved.RequestKnobs["anthropic_max_tokens"] = anthropicMaxTokens
+		if strings.TrimSpace(resolved.AnthropicThinkingEffort) != "" {
+			resolved.RequestKnobs["anthropic_thinking_effort"] = anthropicThinkingEffort(*resolved)
+		} else {
+			delete(resolved.RequestKnobs, "anthropic_thinking_effort")
+		}
+	}
+}
+
+// shouldFallbackToOpenAI 判断一次 anthropic 协议请求失败后是否应降级回 openai 协议。
+// 仅当错误表明 messages 端点不存在/不支持（404/405/400）时才回退；5xx/429/网络错误不属于
+// 「协议不支持」，交给外层正常重试，避免误回退掩盖真实错误。
+func shouldFallbackToOpenAI(err error) bool {
+	if err == nil {
+		return false
+	}
+	var statusErr *HTTPStatusError
+	if !errors.As(err, &statusErr) {
+		return false
+	}
+	switch statusErr.StatusCode {
+	case 400, 404, 405:
+		return true
+	}
+	return false
+}
+
+// downgradeAnthropicBackToOpenAI 把已升级到 anthropic 的 resolved 降级回 openai 协议。
+// 从渠道配置重读 openai endpoint/group，返回 true 表示降级成功。
+func downgradeAnthropicBackToOpenAI(resolved *StreamRequest, channel *legacyruntime.ResolvedChannel) bool {
+	if resolved.Provider != "anthropic" {
+		return false
+	}
+	resolved.Provider = "openai"
+	resolved.ProtocolGroup = strings.TrimSpace(channel.ProtocolGroup)
+	if resolved.ProtocolGroup == "" {
+		resolved.ProtocolGroup = "chat_completions"
+	}
+	resolved.OpenAIEndpoint = strings.TrimSpace(channel.OpenAIEndpoint)
+	resolved.OpenAIRequestGroup = strings.TrimSpace(channel.OpenAIRequestGroup)
+	return true
 }
 
 // isPermanentProviderError 判断 provider 错误是否为永久错误（4xx，429 除外）。

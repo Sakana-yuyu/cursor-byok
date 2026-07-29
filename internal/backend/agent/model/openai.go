@@ -685,6 +685,9 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 			PromptTokensDetails *struct {
 				// OpenAI / MiMo 在嵌套结构里返回 cached_tokens。
 				CachedTokens int64 `json:"cached_tokens"`
+				// 部分中转（如包装 claude 的 OpenAI 兼容接口）在嵌套结构里返回 cache_creation_tokens，
+				// 表示写入缓存的 token 数。对齐 anthropic.go 的语义记入 cacheWriteTokens。
+				CacheCreationTokens int64 `json:"cache_creation_tokens"`
 			} `json:"prompt_tokens_details,omitempty"`
 		} `json:"usage,omitempty"`
 	}
@@ -837,7 +840,8 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		PromptCacheHitTokens  int64 `json:"prompt_cache_hit_tokens"`
 		PromptCacheMissTokens int64 `json:"prompt_cache_miss_tokens"`
 		PromptTokensDetails *struct {
-			CachedTokens int64 `json:"cached_tokens"`
+			CachedTokens        int64 `json:"cached_tokens"`
+			CacheCreationTokens int64 `json:"cache_creation_tokens"`
 		} `json:"prompt_tokens_details,omitempty"`
 	}) {
 		if usage == nil {
@@ -882,11 +886,14 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		}
 		outputTokens = maxInt64(usage.CompletionTokens, 0)
 		cacheReadTokens = cachedTokens
-		// DeepSeek 的 cache miss 不等同于 cache write（它是"未命中"而非"写入缓存"），
-		// 但为了在首页缓存命中率统计中正确体现，把 miss 记为 cacheWrite 不合适。
-		// 保持 cacheWrite=0，因为 OpenAI 协议没有 cache write 概念。
-		// 缓存命中率 = cacheRead / (input + cacheRead) 已能正确反映。
-		cacheWriteTokens = 0
+		// cache write：原生 OpenAI 协议无此概念（保持 0）；但包装 claude 的 OpenAI 兼容中转
+		// 会在 prompt_tokens_details.cache_creation_tokens 返回缓存写入量，对齐 anthropic.go
+		// 的语义（cache_creation → cacheWrite）记入 cacheWriteTokens，让统计准确。
+		if usage.PromptTokensDetails != nil && usage.PromptTokensDetails.CacheCreationTokens > 0 {
+			cacheWriteTokens = maxInt64(usage.PromptTokensDetails.CacheCreationTokens, 0)
+		} else {
+			cacheWriteTokens = 0
+		}
 		cacheWritePresent = true
 	}
 	scanner := bufio.NewScanner(resp.Body)
