@@ -94,6 +94,18 @@ func providerPromptCacheKeyAllowed(baseURL, modelID string) bool {
 	return classifyProviderCompatibility(baseURL, modelID).PromptCacheKey
 }
 
+// isOpenAIChannelClaudeModel 判断一个 type=openai 的渠道是否实际承载 claude 模型。
+//
+// 用于运行时把 claude 模型从 OpenAI 协议自动升级到 Anthropic 原生协议：claude 的前缀
+// 缓存依赖 cache_control 断点（Anthropic /v1/messages 协议），而 OpenAI 的 prompt_cache_key
+// 对 claude 无效。升级后走 AnthropicAdapter，请求发往 {baseURL}/messages 并带 cache_control 断点。
+func isOpenAIChannelClaudeModel(providerType, modelID string) bool {
+	if strings.ToLower(strings.TrimSpace(providerType)) != "openai" {
+		return false
+	}
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(modelID)), "claude")
+}
+
 // isZhipuOfficialBaseURL 判断 baseURL 是否指向智谱官方端点。
 // 仅官方端点确认支持 thinking 字段；第三方中转站（如 daoxe.com）即使转发 glm 模型
 // 也不应注入 thinking 字段，否则上游会返回 400 "Invalid request for the selected model"。

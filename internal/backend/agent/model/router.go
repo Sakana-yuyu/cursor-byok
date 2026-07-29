@@ -174,6 +174,17 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 	if resolved.ProviderModelID == "" {
 		resolved.ProviderModelID = strings.TrimSpace(req.ModelID)
 	}
+	// 智能优化：type=openai 的渠道若实际承载 claude 模型，运行时自动升级到 Anthropic 原生协议。
+	// claude 的前缀缓存依赖 cache_control 断点（Anthropic /v1/messages 协议），OpenAI 的
+	// prompt_cache_key 对 claude 无效。升级须在下面的 knobs 填充之前完成，使 max_tokens /
+	// thinking 等 knobs 按 anthropic 分支处理。AnthropicAdapter 会把请求发往 {baseURL}/messages。
+	if isOpenAIChannelClaudeModel(resolved.Provider, resolved.ProviderModelID) {
+		resolved.Provider = "anthropic"
+		resolved.ProtocolGroup = "messages"
+		// OpenAI 专属字段不再适用，避免残留导致误解。
+		resolved.OpenAIEndpoint = ""
+		resolved.OpenAIRequestGroup = ""
+	}
 	resolved.Messages = sanitizeProviderMessages(req.Messages)
 	// 对明确不支持视觉的模型，将图片内容块替换为文字占位说明。
 	resolved.Messages = stripImagesFromMessages(resolved.Messages, resolved.ProviderModelID)
