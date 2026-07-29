@@ -110,3 +110,42 @@ func OpenAIEndpointForProtocolGroup(group string, currentEndpoint string) string
 		return ""
 	}
 }
+
+// InferProviderType 根据模型名推断最合适的 provider 协议族。
+//
+// 用于导入/拉取模型时，避免把本应走原生协议的模型（claude、gemini）错误地套用渠道级
+// openai 协议——这正是 claude 缓存失效的根源。规则：
+//   - claude-* → anthropic（前缀缓存依赖 cache_control 断点）
+//   - gemini-* → gemini（原生协议）
+//   - 其余     → fallback（通常为 openai，走 OpenAI 兼容协议）
+//
+// fallback 作为兜底：导入路径传入渠道当前 type，未识别的模型沿用它。
+func InferProviderType(modelID string, fallback string) string {
+	model := strings.ToLower(strings.TrimSpace(modelID))
+	if strings.HasPrefix(model, "claude") {
+		return "anthropic"
+	}
+	if strings.HasPrefix(model, "gemini") {
+		return "gemini"
+	}
+	fallback = strings.ToLower(strings.TrimSpace(fallback))
+	if fallback == "anthropic" || fallback == "gemini" || fallback == "openai" {
+		return fallback
+	}
+	return "openai"
+}
+
+// InferProtocolGroupByModel 根据模型名推断协议组，绕过渠道级 type。
+// 当用户在一个 openai 渠道里拉取到 claude/gemini 模型时，用模型名纠正协议组，
+// 让请求走正确的原生协议（messages / gemini_native）而非 chat_completions。
+// 返回 ("", false) 表示模型未命中原生协议族，应沿用渠道级 type 推断。
+func InferProtocolGroupByModel(modelID string) (string, bool) {
+	model := strings.ToLower(strings.TrimSpace(modelID))
+	if strings.HasPrefix(model, "claude") {
+		return ProtocolGroupAnthropicMessages, true
+	}
+	if strings.HasPrefix(model, "gemini") {
+		return ProtocolGroupGeminiNative, true
+	}
+	return "", false
+}

@@ -367,6 +367,19 @@ export function normalizeProtocolMode(value) {
   return SUPPORTED_PROTOCOL_MODES.has(normalized) ? normalized : "";
 }
 
+// inferProviderType 根据模型名推断最合适的 provider 协议族，避免把本应走原生协议的模型
+// （claude、gemini）错误套用渠道级 openai 协议（导致 claude 缓存失效）。
+// 规则：claude-* → anthropic、gemini-* → gemini、其余 → fallback（通常为渠道当前 type）。
+// 与后端 modelchannel.InferProviderType 镜像，务必保持一致。
+export function inferProviderType(modelID, fallback = "openai") {
+  const model = asString(modelID).toLowerCase().trim();
+  if (model.startsWith("claude")) return "anthropic";
+  if (model.startsWith("gemini")) return "gemini";
+  const fb = asString(fallback).toLowerCase().trim();
+  if (fb === "anthropic" || fb === "gemini" || fb === "openai") return fb;
+  return "openai";
+}
+
 export function classifyModelProtocol(type, modelID, baseURL, endpoint, configuredGroup = "") {
   const provider = asString(type).toLowerCase();
   if (provider === "anthropic") return PROTOCOL_GROUP_ANTHROPIC_MESSAGES;
