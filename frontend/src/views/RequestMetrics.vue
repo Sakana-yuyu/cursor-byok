@@ -1,17 +1,48 @@
 <script setup>
 import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
-import { usePagination } from "@/composables/usePagination";
-import { fetchRecentRequestMetrics } from "@/services/clientApi";
+import { fetchRecentRequestMetrics, fetchRecentRequestMetricsCount } from "@/services/clientApi";
 import { appState, reloadUserConfig } from "@/state/appState";
 import { providerIcon, providerLabel } from "@/utils/providerMeta";
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
 const router = useRouter();
 const rows = ref([]);
 const loading = ref(false);
 const error = ref("");
+
+// 服务端分页
+const page = ref(1);
+const pageSize = ref(50);
+const pageSizeOptions = [20, 50, 100];
+const totalCount = ref(0);
+const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / pageSize.value)));
+const pageRangeLabel = computed(() => {
+  const start = totalCount.value === 0 ? 0 : (page.value - 1) * pageSize.value + 1;
+  const end = Math.min(page.value * pageSize.value, totalCount.value);
+  return `${start} / ${totalCount.value}`;
+});
+const pageNumbers = computed(() => {
+  const result = [];
+  const tp = totalPages.value;
+  const cur = page.value;
+  if (tp <= 7) {
+    for (let i = 1; i <= tp; i++) result.push(i);
+  } else {
+    result.push(1);
+    if (cur > 3) result.push("...");
+    for (let i = Math.max(2, cur - 1); i <= Math.min(tp - 1, cur + 1); i++) result.push(i);
+    if (cur < tp - 2) result.push("...");
+    result.push(tp);
+  }
+  return result;
+});
+function goToPage(p) {
+  if (p < 1 || p > totalPages.value || p === page.value) return;
+  page.value = p;
+}
+const pagedItems = computed(() => rows.value);
 
 const formatTime = (value) => (value ? new Date(value).toLocaleString() : "-");
 const formatRate = (value) => (value == null ? "-" : `${(Number(value) * 100).toFixed(1)}%`);
@@ -48,19 +79,6 @@ function statusTone(row) {
   }
   return { bg: "#143524", text: "#86efac", label: normalizeUsageStatusLabel(row?.status) };
 }
-
-const {
-  page,
-  pageSize,
-  pageSizeOptions,
-  totalCount,
-  totalPages,
-  pagedItems,
-  pageRangeLabel,
-  pageNumbers,
-  goToPage,
-  resetPage,
-} = usePagination(visibleRows, { defaultPageSize: 50 });
 
 const hasUsageRows = computed(() => visibleRows.value.some((row) => row.usagePresent));
 
@@ -194,19 +212,28 @@ function rateTone(rate) {
   return "text-[#d4d4d4]";
 }
 
-// keepPage: 自动刷新时保留当前分页位置，避免用户翻页被打回第 1 页
+// 服务端分页加载：只拉当前页的数据
 async function refresh({ keepPage = false } = {}) {
   loading.value = true;
   error.value = "";
   try {
-    rows.value = await fetchRecentRequestMetrics(0);
-    if (!keepPage) resetPage();
+    const count = await fetchRecentRequestMetricsCount();
+    totalCount.value = count;
+    if (!keepPage) page.value = 1;
+    if (page.value > totalPages.value) page.value = totalPages.value;
+    const offset = (page.value - 1) * pageSize.value;
+    rows.value = await fetchRecentRequestMetrics(pageSize.value, offset);
   } catch (cause) {
     error.value = String(cause?.message || cause || "读取请求明细失败");
   } finally {
     loading.value = false;
   }
 }
+
+// 翻页或改 pageSize 时重新加载
+watch([page, pageSize], () => {
+  void refresh({ keepPage: true });
+});
 
 // 自动刷新：页面可见时定时同步使用信息，避免手动点刷新
 const AUTO_REFRESH_INTERVAL_MS = 5000;
@@ -252,7 +279,7 @@ onUnmounted(() => {
         <div class="center-row gap-2">
           <h1 class="text-lg font-semibold text-white">请求明细</h1>
           <span class="rounded-full border border-[#3a3a3a] bg-[#1f1f1f] px-2 py-0.5 text-[11px] text-[#8f8f8f]">
-            最多 10000 条
+            共 {{ totalCount }} 条
           </span>
         </div>
         <p class="mt-1 text-sm text-[#8f8f8f]">
@@ -265,7 +292,6 @@ onUnmounted(() => {
         <Button variant="default" :disabled="loading" @click="refresh">
           {{ loading ? "读取中..." : "刷新" }}
         </Button>
-        <Button variant="primary" @click="router.push('/')">返回首页</Button>
       </div>
     </div>
 

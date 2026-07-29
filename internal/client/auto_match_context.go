@@ -122,26 +122,40 @@ func (s *ProxyService) AutoMatchContextWindows(ctx context.Context) (AutoMatchRe
 			log.Printf("auto match context window: probe failed group_key=%s error=%v", key, err)
 			continue
 		}
-		// 建立模型 ID → contextWindowTokens 的快速查找（大小写不敏感、去 models/ 前缀）。
+		// 建立模型 ID → contextWindowTokens / pricing 的快速查找（大小写不敏感、去 models/ 前缀）。
 		windowByID := make(map[string]int, len(catalog.Models))
+		pricingByID := make(map[string]*ModelPricing, len(catalog.Models))
 		for _, item := range catalog.Models {
 			id := normalizeModelIDForMatch(item.ID)
-			if id != "" && item.ContextWindowTokens > 0 {
+			if id == "" {
+				continue
+			}
+			if item.ContextWindowTokens > 0 {
 				if _, exists := windowByID[id]; !exists {
 					windowByID[id] = item.ContextWindowTokens
+				}
+			}
+			if item.Pricing != nil {
+				if _, exists := pricingByID[id]; !exists {
+					pricingByID[id] = item.Pricing
 				}
 			}
 		}
 		for _, idx := range bucket.indices {
 			normalizedID := normalizeModelIDForMatch(adapters[idx].ModelID)
 			window, ok := windowByID[normalizedID]
-			if !ok || window <= 0 {
-				continue
+			if ok && window > 0 {
+				adapters[idx].ContextWindowTokens = window
+				result.Details[idx].After = window
+				result.Details[idx].Source = "probe"
+				result.FromProbe++
 			}
-			adapters[idx].ContextWindowTokens = window
-			result.Details[idx].After = window
-			result.Details[idx].Source = "probe"
-			result.FromProbe++
+			// 中转站探测到价格且 adapter 当前无手动价格 → 回填。
+			if adapters[idx].Pricing == nil {
+				if probed, found := pricingByID[normalizedID]; found && probed != nil {
+					adapters[idx].Pricing = convertClientPricingToConfig(probed)
+				}
+			}
 		}
 	}
 
@@ -189,6 +203,27 @@ func (s *ProxyService) fetchCatalogForAutoMatch(ctx context.Context, adapter con
 		CustomHeadersEnabled: adapter.CustomHeadersEnabled,
 		CustomHeadersJSON:    adapter.CustomHeadersJSON,
 	})
+}
+
+// convertClientPricingToConfig 把 client.ModelPricing（探测结果）转为 config.ModelPricing（持久化结构）。
+// 标记 Source="catalog"、Known=true，让 priceRatesFromAdapters 能识别为探测价格。
+func convertClientPricingToConfig(src *ModelPricing) *config.ModelPricing {
+	if src == nil {
+		return nil
+	}
+	dst := &config.ModelPricing{
+		Input:      src.Input,
+		Output:     src.Output,
+		CacheRead:  src.CacheRead,
+		CacheWrite: src.CacheWrite,
+		Currency:   src.Currency,
+		Known:      true,
+		Source:     "catalog",
+	}
+	if strings.TrimSpace(dst.Currency) == "" {
+		dst.Currency = "USD"
+	}
+	return dst
 }
 
 // normalizeModelIDForMatch 把模型 ID 归一为用于精确匹配的形式：

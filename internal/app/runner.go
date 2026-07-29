@@ -20,6 +20,7 @@ import (
 	"cursor/internal/cursor"
 	"cursor/internal/historymetrics"
 	"cursor/internal/i18n"
+	"cursor/internal/modelcontext"
 	"cursor/internal/skills"
 
 	"github.com/leaanthony/u"
@@ -439,24 +440,41 @@ func browserReachableLoopbackBaseURL(listenAddr string) string {
 }
 
 // priceRatesFromAdapters 将当前配置的模型渠道价格映射为 historymetrics 价格条目快照。
-// 仅纳入声明了 Pricing 的渠道，供读取时按 (model, provider, baseURL) 联结计算花费。
+// 价格优先级：手动配价 / catalog 探测价（adapter.Pricing）> 内置官方价（modelcontext.BuiltinPricingFor）。
+// 内置价格仅运行时注入，不写入 config.yaml。
 func priceRatesFromAdapters(adapters []serverconfig.ModelAdapterConfig) []historymetrics.PriceRate {
 	rates := make([]historymetrics.PriceRate, 0, len(adapters))
 	for _, adapter := range adapters {
 		pricing := adapter.Pricing
-		if pricing == nil {
+		if pricing != nil {
+			rates = append(rates, historymetrics.PriceRate{
+				Model:      adapter.ModelID,
+				Provider:   adapter.Type,
+				BaseURL:    adapter.BaseURL,
+				Input:      pricing.Input,
+				Output:     pricing.Output,
+				CacheRead:  pricing.CacheRead,
+				CacheWrite: pricing.CacheWrite,
+				Currency:   pricing.Currency,
+				Known:      pricing.Known,
+			})
+			continue
+		}
+		// adapter 未配置价格 → 尝试内置官方价兜底。
+		builtin := modelcontext.BuiltinPricingFor(adapter.ModelID)
+		if builtin == nil {
 			continue
 		}
 		rates = append(rates, historymetrics.PriceRate{
-			Model:      adapter.ModelID,
-			Provider:   adapter.Type,
-			BaseURL:    adapter.BaseURL,
-			Input:      pricing.Input,
-			Output:     pricing.Output,
-			CacheRead:  pricing.CacheRead,
-			CacheWrite: pricing.CacheWrite,
-			Currency:   pricing.Currency,
-			Known:      pricing.Known,
+			Model:     adapter.ModelID,
+			Provider:  adapter.Type,
+			BaseURL:   adapter.BaseURL,
+			Input:     builtin.Input,
+			Output:    builtin.Output,
+			CacheRead: builtin.CacheRead,
+			CacheWrite: builtin.CacheWrite,
+			Currency:  "USD",
+			Known:     true, // 内置价视为已知，让花费估算能显示数值
 		})
 	}
 	return rates

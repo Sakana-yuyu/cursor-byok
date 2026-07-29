@@ -108,16 +108,16 @@ const chartOptions = {
 </script>
 
 <template>
-  <div class="flex flex-col items-center gap-3">
+  <div class="flex flex-col items-center gap-2">
     <div
-      class="relative h-[82px] w-[132px] shrink-0"
+      class="relative h-[64px] w-[100px] shrink-0"
       role="img"
       :aria-label="`缓存命中率 ${label}`"
     >
       <Doughnut class="h-full w-full" :data="chartData" :options="chartOptions" />
-      <div class="pointer-events-none absolute inset-x-0 bottom-[10px] flex justify-center">
+      <div class="pointer-events-none absolute inset-x-0 bottom-[8px] flex justify-center">
         <div
-          class="text-[20px] leading-none text-white"
+          class="text-[16px] leading-none text-white"
           style="font-family: var(--font-num)"
         >
           {{ label }}

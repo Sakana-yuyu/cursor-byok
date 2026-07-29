@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>浮窗样式方向</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#111;color:#e8e8e8;font-family:Inter,"Microsoft YaHei",sans-serif;letter-spacing:0}.page{max-width:1120px;margin:0 auto;padding:28px}.eyebrow{color:#63d99b;font-size:12px;font-weight:700}.title{margin:6px 0 4px;font-size:24px}.sub{margin:0 0 22px;color:#888;font-size:13px}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.choice{border:1px solid #303030;background:#181818;padding:16px;cursor:pointer;transition:.15s}.choice:hover{border-color:#555}.choice.selected{border-color:#54d793;box-shadow:0 0 0 1px #54d793 inset}.label{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px}.label strong{font-size:14px}.label span{color:#777;font-size:11px}.stage{height:255px;display:flex;align-items:center;justify-content:center;border:1px solid #292929;background:#0b0c0c;overflow:hidden}.note{margin:12px 0 0;color:#8b8b8b;font-size:12px;line-height:1.55}.panel{width:240px;height:112px;padding:7px;border-radius:8px;background:transparent}.panel-shell{height:100%;padding:6px;border:1px solid rgba(82,82,82,.85);border-radius:7px;background:rgba(28,28,28,.9)}.top{height:14px;display:flex;justify-content:space-between;color:#777;font-size:9px}.dot{width:6px;height:6px;border-radius:50%;background:#18b968}.metrics{display:grid;grid-template-columns:1fr 1fr;gap:5px}.metric{height:36px;padding:4px 7px;border:1px solid #373737;border-radius:5px;background:#242424}.mname{color:#737373;font-size:8px}.mval{margin-top:1px;color:#fff;font-size:14px;line-height:1}.green{color:#65e4a3}.engine{position:relative;width:240px;height:104px;padding:8px;border-radius:10px;background:rgba(16,18,18,.88);border:1px solid #343938;overflow:hidden}.engine:before{content:"";position:absolute;inset:6px;border:1px solid rgba(89,236,163,.18);border-radius:7px}.engine-head{position:relative;display:flex;justify-content:space-between;align-items:center}.engine-title{font-size:9px;color:#7a8581}.engine-status{display:flex;align-items:center;gap:4px;color:#56d998;font-size:8px}.engine-body{position:relative;display:grid;grid-template-columns:76px 1fr;gap:8px;margin-top:5px}.dial{width:70px;height:70px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(#62e3a1 0 71%,#27312d 71% 100%);box-shadow:0 0 18px rgba(65,215,145,.15)}.dial:after{content:"";position:absolute;width:56px;height:56px;border-radius:50%;background:#181b1a}.dial-text{position:relative;z-index:1;text-align:center}.dial-value{font-size:16px;color:#71ecad}.dial-name{font-size:7px;color:#69736f}.engine-list{display:grid;grid-template-columns:1fr 1fr;gap:4px}.engine-item{padding:5px 6px;border-left:2px solid #3d4c46;background:rgba(35,39,37,.72)}.engine-item b{display:block;font-size:12px}.engine-item small{color:#707975;font-size:7px}.orb-stage{background:radial-gradient(circle at center,#131817 0,#0b0c0c 62%)}.orb{position:relative;width:150px;height:150px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 36% 28%,rgba(95,255,180,.25),rgba(23,35,31,.95) 38%,rgba(10,12,12,.97) 72%);border:1px solid rgba(101,228,163,.5);box-shadow:inset 0 0 28px rgba(74,228,154,.15),0 0 24px rgba(48,190,126,.14)}.orb-ring{position:absolute;inset:9px;border-radius:50%;border:1px solid rgba(103,224,165,.2)}.orb-core{text-align:center}.orb-core small{display:block;color:#71817a;font-size:8px}.orb-core b{display:block;margin-top:2px;color:#71ecad;font-size:25px}.sat{position:absolute;width:43px;height:30px;padding-top:5px;text-align:center;border-radius:15px;background:rgba(30,35,33,.96);border:1px solid #38413e;font-size:9px}.sat small{display:block;color:#6e7774;font-size:6px}.sat.a{left:-20px;top:35px}.sat.b{right:-20px;top:35px}.sat.c{left:4px;bottom:-8px}.sat.d{right:4px;bottom:-8px}.footer{margin-top:18px;padding:12px 14px;border-left:2px solid #4bce8d;background:#181c1a;color:#9baaa3;font-size:12px}.submit{margin-top:16px;width:100%;height:38px;border:0;background:#2c9f69;color:#fff;font-weight:700;cursor:pointer}.submit:hover{background:#35b779}@media(max-width:850px){.grid{grid-template-columns:1fr}.stage{height:220px}}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="eyebrow">统计浮窗 · 样式比较</div>
+  <h1 class="title">选择要保留的两种形态</h1>
+  <p class="sub">点击两项。A 已补足窗口外缘留白；B 是引擎仪表；C 是独立球形挂件。</p>
+  <div class="grid" id="choices">
+    <div class="choice" data-choice="compact" onclick="toggle(this)">
+      <div class="label"><strong>A · 紧凑卡片</strong><span>240 × 112</span></div>
+      <div class="stage">
+        <div class="panel"><div class="panel-shell"><div class="top"><span>实时统计</span><i class="dot"></i></div><div class="metrics"><div class="metric"><div class="mname">缓存命中</div><div class="mval green">71.1%</div></div><div class="metric"><div class="mname">Token 消耗</div><div class="mval">147.6K</div></div><div class="metric"><div class="mname">对话轮次</div><div class="mval">4</div></div><div class="metric"><div class="mname">价值估算</div><div class="mval green">—</div></div></div></div></div>
+      </div>
+      <p class="note">保留现有信息布局，在透明窗口四周增加 6–8px 安全留白，并给整体面板增加一层细外框。</p>
+    </div>
+    <div class="choice" data-choice="engine" onclick="toggle(this)">
+      <div class="label"><strong>B · 引擎仪表</strong><span>240 × 104</span></div>
+      <div class="stage">
+        <div class="engine"><div class="engine-head"><span class="engine-title">METRICS ENGINE</span><span class="engine-status"><i class="dot"></i>ONLINE</span></div><div class="engine-body"><div class="dial"><div class="dial-text"><div class="dial-value">71%</div><div class="dial-name">CACHE RATE</div></div></div><div class="engine-list"><div class="engine-item"><small>TOKENS</small><b>147.6K</b></div><div class="engine-item"><small>TURNS</small><b>4</b></div><div class="engine-item"><small>VALUE</small><b class="green">—</b></div><div class="engine-item"><small>LOCAL</small><b>READY</b></div></div></div></div>
+      </div>
+      <p class="note">命中率作为主仪表，其他数据像引擎遥测一样排列。科技感更强，但视觉更活跃。</p>
+    </div>
+    <div class="choice" data-choice="orb" onclick="toggle(this)">
+      <div class="label"><strong>C · 球形挂件</strong><span>180 × 180</span></div>
+      <div class="stage orb-stage">
+        <div class="orb"><div class="orb-ring"></div><div class="orb-core"><small>CACHE</small><b>71%</b></div><div class="sat a"><small>TOKEN</small>147.6K</div><div class="sat b"><small>TURNS</small>4</div><div class="sat c"><small>VALUE</small>—</div><div class="sat d"><small>STATE</small>LIVE</div></div>
+      </div>
+      <p class="note">核心指标放进半透明球体，次要数据环绕。桌面宠物感最强，但占用面积更大。</p>
+    </div>
+  </div>
+  <div class="footer">我的建议：保留 A 作为高密度工作模式，再从 B / C 中选择一个表现型模式。样式选择保存到本地，首页浮窗按钮旁提供切换菜单。</div>
+  <button class="submit" onclick="submitChoice()">确认选择</button>
+</div>
+<script>
+const selected=new Set();
+function toggle(el){const k=el.dataset.choice;if(selected.has(k)){selected.delete(k);el.classList.remove('selected')}else if(selected.size<2){selected.add(k);el.classList.add('selected')}}
+function submitChoice(){if(selected.size!==2){alert('请选择两种样式');return}fetch('/event',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'choice',choice:[...selected].join('+'),text:'浮窗样式：'+[...selected].join(' + ')})}).catch(()=>{});document.querySelector('.submit').textContent='已记录：'+[...selected].join(' + ')}
+</script>
+</body>
+</html>

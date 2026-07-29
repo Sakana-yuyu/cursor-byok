@@ -1,6 +1,7 @@
 <script setup>
-import { runtimeBrowser, runtimeWindow } from "@/services/runtimeAdapter";
+import { isBrowserPreview, runtimeBrowser, runtimeWindow } from "@/services/runtimeAdapter";
 import LocaleSelect from "@/components/LocaleSelect.vue";
+import SettingsDrawer from "@/components/SettingsDrawer.vue";
 import { useMessage } from "@/composables/useMessage";
 import { showModal } from "@/composables/useModal";
 import {
@@ -87,6 +88,7 @@ const proxyBadgeTitle = computed(() => {
 });
 
 const isMaximised = ref(false);
+const settingsDrawerVisible = ref(false);
 
 async function syncMaximiseState() {
   try {
@@ -236,10 +238,19 @@ onUnmounted(() => {
         </div>
       </div>
       <div
-        v-if="isWindows"
+        v-if="isWindows || isBrowserPreview"
         class="absolute right-[10px] top-[7px] z-99999 flex items-center gap-[1px] rounded-full border border-[#333] bg-[#242424]/90 px-[3px] py-[3px] shadow-[0_1px_4px_rgba(0,0,0,0.35)] backdrop-blur-sm"
         style="--wails-draggable: no-drag"
       >
+        <button
+          type="button"
+          aria-label="打开设置"
+          title="设置"
+          class="flex h-[20px] w-[26px] cursor-pointer items-center justify-center rounded-full text-[#9a9a9a] transition-colors duration-150 hover:bg-[#3a3a3a] hover:text-[#f0f0f0]"
+          @click="settingsDrawerVisible = true"
+        >
+          <span class="icon-[mdi--menu] text-[15px]" aria-hidden="true"></span>
+        </button>
         <button
           type="button"
           aria-label="最小化窗口"
@@ -283,6 +294,8 @@ onUnmounted(() => {
     <main class="flex-1 min-h-0 overflow-hidden flex flex-col w-full">
       <router-view />
     </main>
+
+    <SettingsDrawer v-if="settingsDrawerVisible" @close="settingsDrawerVisible = false" />
 
     <footer
       v-if="showFooter"

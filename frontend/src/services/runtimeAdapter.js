@@ -1,9 +1,15 @@
 import { Browser as WailsBrowser, Events as WailsEvents, Window as WailsWindow } from "@wailsio/runtime";
 
 const browserPreviewFlag = String(import.meta.env?.VITE_BROWSER_PREVIEW || "").toLowerCase();
-export const isBrowserPreview = import.meta.env?.MODE === "browser-preview"
-  || browserPreviewFlag === "true"
-  || browserPreviewFlag === "1";
+
+// 浏览器 mock 必须由构建模式显式开启。Wails v3 不保证暴露
+// window.runtime，使用它探测会把真实桌面包误判为浏览器预览。
+function detectBrowserPreview() {
+  if (import.meta.env?.MODE === "browser-preview") return true;
+  return browserPreviewFlag === "true" || browserPreviewFlag === "1";
+}
+
+export const isBrowserPreview = detectBrowserPreview();
 
 const noopUnsubscribe = () => {};
 const noopEvent = {

@@ -17,6 +17,11 @@ import {
   exportLogs,
   openModelConfig,
   openModelEditor,
+  openMetricsDetailWindow as openMetricsDetail,
+  openRequestMetricsWindow as openRequestMetrics,
+  openStatsOverlayWindow,
+  updateStatsOverlayWindow,
+  closeStatsOverlayWindow,
   saveUserConfig,
   startProxyService,
   stopProxyService,
@@ -1179,6 +1184,10 @@ export const appState = reactive({
   routingMode: cachedConfig.routing.mode,
   includeCacheWriteInHitRate: cachedConfig.homeMetrics.includeCacheWriteInHitRate,
   localResponseCache: cachedConfig.localResponseCache,
+  // 浮窗偏好是纯前端 UX 状态：localStorage 持久化 + 跨窗口 storage 事件广播。
+  // 不进后端 config（后端 config 不含 overlay 字段）。初始给默认值，真实值由
+  // getStatsOverlayPreferences() 在首次读取时从 localStorage 填充，避免模块求值顺序依赖。
+  statsOverlayPreferences: { style: "card", alwaysOnTop: true, visible: false },
   turnStaleTimeout: cachedConfig.turnStaleTimeout,
   autoMatchContextWindow: cachedConfig.autoMatchContextWindow,
 
@@ -1541,6 +1550,102 @@ export async function saveIncludeCacheWriteInHitRate(value) {
   return result;
 }
 
+export async function saveLocalResponseCacheEnabled(enabled) {
+  const currentConfig = await loadPersistedUserConfig();
+  const nextValue = asBoolean(enabled);
+  const previous = appState.localResponseCache;
+  appState.localResponseCache = { ...previous, enabled: nextValue };
+  const result = await persistConfigPayload({
+    ...currentConfig,
+    localResponseCache: {
+      ...currentConfig.localResponseCache,
+      enabled: nextValue,
+    },
+  });
+  if (!result.ok) {
+    appState.localResponseCache = previous;
+  }
+  return result;
+}
+
+// ─── 浮窗偏好（stats overlay）──────────────────────────────────────────────
+// 偏好对象：{ style: "card"|"engine"|"orb", alwaysOnTop: boolean, visible: boolean }
+// 仅前端 localStorage 持久化；浮窗是独立 webview 窗口，靠 storage 事件 + 自定义事件
+// 跨窗口同步。后端 WindowService 已提供 open/update/close 三个 binding（window.go）。
+
+const STATS_OVERLAY_PREFERENCES_KEY = "cursor-byok.stats-overlay.preferences";
+const STATS_OVERLAY_CHANGED_EVENT = "stats-overlay-preferences-changed";
+const STATS_OVERLAY_STYLES = new Set(["card", "engine", "orb"]);
+
+function normalizeStatsOverlayPreferences(input) {
+  const raw = input && typeof input === "object" ? input : {};
+  const style = STATS_OVERLAY_STYLES.has(raw.style) ? raw.style : "card";
+  return {
+    style,
+    alwaysOnTop: asBoolean(raw.alwaysOnTop ?? true),
+    visible: asBoolean(raw.visible ?? false),
+  };
+}
+
+function loadStatsOverlayPreferences() {
+  try {
+    const stored = localStorage.getItem(STATS_OVERLAY_PREFERENCES_KEY);
+    return normalizeStatsOverlayPreferences(stored ? JSON.parse(stored) : {});
+  } catch {
+    return normalizeStatsOverlayPreferences({});
+  }
+}
+
+function persistStatsOverlayPreferences(next) {
+  const normalized = normalizeStatsOverlayPreferences(next);
+  try {
+    localStorage.setItem(STATS_OVERLAY_PREFERENCES_KEY, JSON.stringify(normalized));
+  } catch { /* localStorage 不可用时仅内存生效 */ }
+  appState.statsOverlayPreferences = normalized;
+  // storage 事件只在其它窗口触发；同窗口内派发自定义事件补刀（StatsOverlay 已注册监听）。
+  window.dispatchEvent(new Event(STATS_OVERLAY_CHANGED_EVENT));
+  return normalized;
+}
+
+export function getStatsOverlayPreferences() {
+  // 同步读取：调用方（SettingsDrawer/StatsOverlay 的 onMounted）均未 await。
+  const stored = loadStatsOverlayPreferences();
+  appState.statsOverlayPreferences = stored;
+  return stored;
+}
+
+export async function setStatsOverlayPreferences(partial) {
+  const next = { ...loadStatsOverlayPreferences(), ...(partial || {}) };
+  const persisted = persistStatsOverlayPreferences(next);
+  // 样式/置顶变化需同步到原生窗口尺寸与层级（窗口不存在时后端静默返回）。
+  if (partial && ("style" in partial || "alwaysOnTop" in partial)) {
+    await updateStatsOverlayWindow(persisted.style, persisted.alwaysOnTop);
+  }
+  return persisted;
+}
+
+export async function showStatsOverlay() {
+  const persisted = persistStatsOverlayPreferences({ ...loadStatsOverlayPreferences(), visible: true });
+  await openStatsOverlayWindow();
+  // 首次打开后端按 card/置顶创建；按当前偏好对齐一次尺寸与层级。
+  await updateStatsOverlayWindow(persisted.style, persisted.alwaysOnTop);
+  return persisted;
+}
+
+export async function hideStatsOverlay() {
+  const persisted = persistStatsOverlayPreferences({ ...loadStatsOverlayPreferences(), visible: false });
+  await closeStatsOverlayWindow();
+  return persisted;
+}
+
+export async function openMetricsDetailWindow() {
+  await openMetricsDetail();
+}
+
+export async function openRequestMetricsWindow() {
+  await openRequestMetrics();
+}
+
 export async function saveRoutingMode(mode) {
   const currentConfig = await loadPersistedUserConfig();
   return persistConfigPayload({
@@ -1713,6 +1818,68 @@ export async function updateModelAdaptersBySupplier(supplierIdentity, providerPa
   );
   return result.ok
     ? { ...result, updated: targetIndices.length, conflicts }
+    : result;
+}
+
+// 余额查询可同步的字段（不含连接字段，保留各分组自身的 apiKey/groupName 等）。
+const BALANCE_SYNC_FIELDS = new Set([
+  "balanceQueryURL",
+  "balanceQueryField",
+  "balanceQueryHeadersJSON",
+  "balanceProfile",
+  "balanceAccessToken",
+  "balanceUserID",
+  "balanceCodingPlanProvider",
+]);
+
+/**
+ * syncBalanceConfigToSameURL — 把余额查询配置同步到同一 baseURL 下的所有分组。
+ *
+ * 同一中转站下用户常有多个 key（各对应一个分组），但余额查询配置基本相同。
+ * 本函数只覆盖余额字段，保留各分组自身的 apiKey / groupName / type / 连接配置，
+ * 避免逐个分组手动配置余额查询。
+ *
+ * @param {string} baseURL              — 目标中转站 baseURL（按 normalizeBaseURL 归一化匹配）。
+ * @param {object} balancePatch         — 余额查询配置草稿（只取 BALANCE_SYNC_FIELDS 中的字段）。
+ * @returns {{ ok, error, updated }}
+ */
+export async function syncBalanceConfigToSameURL(baseURL, balancePatch) {
+  const targetBase = normalizeBaseURL(baseURL);
+  if (!targetBase) {
+    return { ok: false, error: "缺少 baseURL，无法同步余额配置", updated: 0 };
+  }
+  const patch = {};
+  for (const key of Object.keys(balancePatch || {})) {
+    if (BALANCE_SYNC_FIELDS.has(key)) patch[key] = balancePatch[key];
+  }
+  if (Object.keys(patch).length === 0) {
+    return { ok: true, error: "", updated: 0 };
+  }
+
+  const currentConfig = await loadPersistedUserConfig();
+  const allAdapters = normalizeModelAdapters(currentConfig.modelAdapters);
+  const targetIndices = [];
+  for (let i = 0; i < allAdapters.length; i++) {
+    if (normalizeBaseURL(allAdapters[i].baseURL) === targetBase) {
+      targetIndices.push(i);
+    }
+  }
+  if (targetIndices.length === 0) {
+    return { ok: false, error: "未找到该 URL 下的模型配置", updated: 0 };
+  }
+
+  const nextAdapters = allAdapters.slice();
+  for (const idx of targetIndices) {
+    // 只覆盖余额字段；apiKey / groupName / 连接配置保持各 adapter 原值不变。
+    nextAdapters[idx] = normalizeModelAdapter({ ...allAdapters[idx], ...patch });
+  }
+
+  const result = await persistConfigPayload(
+    { ...currentConfig, modelAdapters: nextAdapters },
+    { modelAdaptersOnly: true },
+  );
+  return result.ok
+    ? { ...result, updated: targetIndices.length }
     : result;
 }
 

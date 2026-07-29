@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -480,7 +481,51 @@ func (adapter *OpenAIAdapter) Stream(ctx context.Context, req StreamRequest, sin
 	if requestGroup == modelchannel.OpenAIRequestGroupResponses {
 		return adapter.streamResponses(ctx, req, baseURL, apiKey, modelID, sink)
 	}
-	return adapter.streamChatCompletions(ctx, req, baseURL, apiKey, modelID, sink)
+	return adapter.streamChatCompletionsWithReconnect(ctx, req, baseURL, apiKey, modelID, sink)
+}
+
+// streamChatCompletionsWithReconnect 包装 streamChatCompletions，实现 pre-output 透明重连。
+// 当流式连接在转发任何有效内容给客户端之前断开（连接重置/EOF），
+// 透明重试整个请求，客户端不会感知到中断。
+// 一旦任何 ModelEvent 被转发给 sink，不再重连（避免重复输出）。
+// 移植自 Reasonix streamWithReconnect 的 emitted 标记策略。
+func (adapter *OpenAIAdapter) streamChatCompletionsWithReconnect(ctx context.Context, req StreamRequest, baseURL string, apiKey string, modelID string, sink func(ModelEvent) error) error {
+	var attempt int
+	for {
+		emitted := false
+		// 包装 sink：首次调用时标记 emitted=true，之后透传。
+		wrappedSink := func(event ModelEvent) error {
+			emitted = true
+			return sink(event)
+		}
+		err := adapter.streamChatCompletions(ctx, req, baseURL, apiKey, modelID, wrappedSink)
+		if err == nil {
+			return nil
+		}
+		// 已经转发过内容 -> 不能重连（会导致客户端收到重复输出）
+		if emitted {
+			return err
+		}
+		// 未转发任何内容且错误是连接重置类 -> 透明重连
+		if !IsStreamConnectionReset(err) {
+			return err
+		}
+		if ctx.Err() != nil {
+			return err
+		}
+		attempt++
+		if attempt > maxStreamReconnects {
+			return fmt.Errorf("openai stream reconnect exhausted after %d attempts: %w", maxStreamReconnects, err)
+		}
+		// 短暂退避后重试
+		backoff := providerRetryBaseDelay << (attempt - 1)
+		if backoff > providerRetryMaxDelay {
+			backoff = providerRetryMaxDelay
+		}
+		if sleepErr := sleepWithContext(ctx, backoff); sleepErr != nil {
+			return sleepErr
+		}
+	}
 }
 
 func openAIChatRequestGroupUsesCompatShape(group string) bool {
@@ -629,7 +674,11 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		Usage *struct {
 			PromptTokens        int64 `json:"prompt_tokens"`
 			CompletionTokens    int64 `json:"completion_tokens"`
+			// DeepSeek 在顶层返回 prompt_cache_hit_tokens / prompt_cache_miss_tokens。
+			PromptCacheHitTokens  int64 `json:"prompt_cache_hit_tokens"`
+			PromptCacheMissTokens int64 `json:"prompt_cache_miss_tokens"`
 			PromptTokensDetails *struct {
+				// OpenAI / MiMo 在嵌套结构里返回 cached_tokens。
 				CachedTokens int64 `json:"cached_tokens"`
 			} `json:"prompt_tokens_details,omitempty"`
 		} `json:"usage,omitempty"`
@@ -780,6 +829,8 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 	applyUsage := func(usage *struct {
 		PromptTokens        int64 `json:"prompt_tokens"`
 		CompletionTokens    int64 `json:"completion_tokens"`
+		PromptCacheHitTokens  int64 `json:"prompt_cache_hit_tokens"`
+		PromptCacheMissTokens int64 `json:"prompt_cache_miss_tokens"`
 		PromptTokensDetails *struct {
 			CachedTokens int64 `json:"cached_tokens"`
 		} `json:"prompt_tokens_details,omitempty"`
@@ -789,11 +840,28 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		}
 		usagePresent = true
 		promptTokens := usage.PromptTokens
+
+		// 合并 DeepSeek 顶层格式和 OpenAI/MiMo 嵌套格式（参照 Reasonix normaliseUsage）。
+		// DeepSeek: prompt_cache_hit_tokens / prompt_cache_miss_tokens（顶层）
+		// OpenAI/MiMo: prompt_tokens_details.cached_tokens（嵌套）
+		// 哪边非零用哪边。
 		cachedTokens := int64(0)
-		if usage.PromptTokensDetails != nil {
+		if usage.PromptCacheHitTokens > 0 {
+			cacheReadPresent = true
+			cachedTokens = usage.PromptCacheHitTokens
+		} else if usage.PromptTokensDetails != nil {
 			cacheReadPresent = true
 			cachedTokens = usage.PromptTokensDetails.CachedTokens
 		}
+
+		// cache miss：DeepSeek 显式返回；OpenAI 无此字段时从 prompt-hit 推导。
+		missTokens := int64(0)
+		if usage.PromptCacheMissTokens > 0 {
+			missTokens = usage.PromptCacheMissTokens
+		} else if cachedTokens > 0 && promptTokens > cachedTokens {
+			missTokens = promptTokens - cachedTokens
+		}
+
 		if promptTokens < 0 {
 			promptTokens = 0
 		}
@@ -803,9 +871,16 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		if cachedTokens > promptTokens {
 			cachedTokens = promptTokens
 		}
-		inputTokens = promptTokens - cachedTokens
+		inputTokens = missTokens
+		if inputTokens <= 0 {
+			inputTokens = promptTokens - cachedTokens
+		}
 		outputTokens = maxInt64(usage.CompletionTokens, 0)
 		cacheReadTokens = cachedTokens
+		// DeepSeek 的 cache miss 不等同于 cache write（它是"未命中"而非"写入缓存"），
+		// 但为了在首页缓存命中率统计中正确体现，把 miss 记为 cacheWrite 不合适。
+		// 保持 cacheWrite=0，因为 OpenAI 协议没有 cache write 概念。
+		// 缓存命中率 = cacheRead / (input + cacheRead) 已能正确反映。
 		cacheWriteTokens = 0
 		cacheWritePresent = true
 	}
@@ -2837,6 +2912,10 @@ func normalizeOpenAIToolSchemaRequired(value any) {
 				typed["required"] = []any{}
 			}
 		}
+		// 对 required 数组排序，使序列化后的字节表示稳定。
+		// required 的顺序在语义上无意义，但不同的顺序会产生不同的 JSON 字节，
+		// 导致 provider 侧 prefix cache 失效（移植自 Reasonix schema_canonicalize）。
+		sortOpenAISchemaRequiredArray(typed)
 		for _, child := range typed {
 			normalizeOpenAIToolSchemaRequired(child)
 		}
@@ -2845,6 +2924,29 @@ func normalizeOpenAIToolSchemaRequired(value any) {
 			normalizeOpenAIToolSchemaRequired(child)
 		}
 	}
+}
+
+// sortOpenAISchemaRequiredArray 对 schema map 的 required 数组做确定性排序。
+// 只在数组长度 > 1 时排序（单个元素无需排序）。
+func sortOpenAISchemaRequiredArray(schema map[string]any) {
+	raw, ok := schema["required"]
+	if !ok {
+		return
+	}
+	arr, ok := raw.([]any)
+	if !ok || len(arr) <= 1 {
+		return
+	}
+	strs := make([]string, 0, len(arr))
+	for _, item := range arr {
+		strs = append(strs, fmt.Sprint(item))
+	}
+	sort.Strings(strs)
+	sorted := make([]any, len(strs))
+	for i, s := range strs {
+		sorted[i] = s
+	}
+	schema["required"] = sorted
 }
 
 func asStringMapValue(source map[string]any, key string) string {

@@ -41,7 +41,9 @@ type usageFileEvent struct {
 	UsagePresent     bool      `json:"usage_present"`
 }
 
-func LoadRecentRequestMetrics(path string, limit int, includeCacheWrite bool, lookup *PriceLookup) ([]RequestMetric, error) {
+// LoadRecentRequestMetrics 返回 usage.json 中已记录的最近请求明细。
+// limit <= 0 表示不限制条数。offset 表示跳过前 offset 条（按时间倒序，即跳过最新的 offset 条）。
+func LoadRecentRequestMetrics(path string, limit int, offset int, includeCacheWrite bool, lookup *PriceLookup) ([]RequestMetric, error) {
 	body, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -55,11 +57,19 @@ func LoadRecentRequestMetrics(path string, limit int, includeCacheWrite bool, lo
 	if err := json.Unmarshal(body, &doc); err != nil {
 		return nil, fmt.Errorf("decode usage file: %w", err)
 	}
-	if limit <= 0 || limit > len(doc.RecentEvents) {
-		limit = len(doc.RecentEvents)
+	total := len(doc.RecentEvents)
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= total {
+		return []RequestMetric{}, nil
+	}
+	available := total - offset
+	if limit <= 0 || limit > available {
+		limit = available
 	}
 	result := make([]RequestMetric, 0, limit)
-	for _, event := range doc.RecentEvents[:limit] {
+	for _, event := range doc.RecentEvents[offset : offset+limit] {
 		model := strings.TrimSpace(event.Model)
 		provider := strings.TrimSpace(event.Provider)
 		baseURL := strings.TrimSpace(event.BaseURL)
@@ -88,6 +98,25 @@ func LoadRecentRequestMetrics(path string, limit int, includeCacheWrite bool, lo
 	}
 	return result, nil
 }
+
+// LoadRecentRequestCount 返回 usage.json 中 recent_events 的总数（不做解析，只计数）。
+func LoadRecentRequestCount(path string) (int, error) {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("read usage file: %w", err)
+	}
+	var doc struct {
+		RecentEvents []json.RawMessage `json:"recent_events"`
+	}
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return 0, fmt.Errorf("decode usage file: %w", err)
+	}
+	return len(doc.RecentEvents), nil
+}
+
 func LoadUsageSummary(path string, includeCacheWrite bool, lookup *PriceLookup) (Summary, error) {
 	body, err := os.ReadFile(path)
 	if err != nil {
@@ -120,7 +149,7 @@ func LoadUsageSummary(path string, includeCacheWrite bool, lookup *PriceLookup) 
 		CacheHitRate:       cacheHitRateFromTotals(totals, includeCacheWrite),
 	}
 	if lookup != nil {
-		if events, err := LoadRecentRequestMetrics(path, 0, includeCacheWrite, lookup); err == nil {
+		if events, err := LoadRecentRequestMetrics(path, 0, 0, includeCacheWrite, lookup); err == nil {
 			cost, currency := sumEventCost(events)
 			summary.EstimatedCostUSD = cost
 			summary.Currency = currency
@@ -151,4 +180,52 @@ func sumEventCost(events []RequestMetric) (*float64, string) {
 		return nil, ""
 	}
 	return &total, currency
+}
+
+// ResetUsageFile 把指定路径的 usage.json 重置为空文档（Totals、Daily、RecentEvents 全部归零）。
+// 通过原子写入实现，确保与 forwarder 进程内 UsageFileStore 的并发写入不冲突。
+func ResetUsageFile(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return errors.New("usage file path is empty")
+	}
+	if err := os.MkdirAll(filepathDir(path), 0o755); err != nil {
+		return fmt.Errorf("create usage directory: %w", err)
+	}
+	empty := struct {
+		SchemaVersion int             `json:"schema_version"`
+		UpdatedAt     time.Time       `json:"updated_at"`
+		Totals        json.RawMessage `json:"totals"`
+		Daily         json.RawMessage `json:"daily"`
+		RecentEvents  json.RawMessage `json:"recent_events"`
+	}{
+		SchemaVersion: 2,
+		UpdatedAt:     time.Now().UTC(),
+		Totals:        json.RawMessage(`{}`),
+		Daily:         json.RawMessage(`[]`),
+		RecentEvents:  json.RawMessage(`[]`),
+	}
+	body, err := json.MarshalIndent(empty, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode empty usage document: %w", err)
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, body, 0o644); err != nil {
+		return fmt.Errorf("write temp usage file: %w", err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return fmt.Errorf("rename usage file: %w", err)
+	}
+	return nil
+}
+
+// filepathDir 返回 path 的目录部分，path 为空时返回 ".".
+func filepathDir(path string) string {
+	idx := strings.LastIndexByte(path, os.PathSeparator)
+	if idx < 0 {
+		return "."
+	}
+	if idx == 0 {
+		return string(os.PathSeparator)
+	}
+	return path[:idx]
 }

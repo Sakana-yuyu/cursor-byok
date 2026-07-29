@@ -3,11 +3,15 @@ package modeladapter
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"math/rand"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -193,4 +197,41 @@ func ProviderRetryAttemptSummary(resp *http.Response) string {
 		return ""
 	}
 	return strings.TrimSpace(resp.Header.Get(providerRetrySummaryHeader))
+}
+
+// maxStreamReconnects 表示流式阶段（已建连但尚未转发有效内容给客户端时）
+// 因连接重置/EOF 等原因断开后的最大透明重连次数。
+const maxStreamReconnects = 2
+
+// IsStreamConnectionReset 判断流式读取阶段的错误是否属于连接级断开
+// （可安全重连，因为尚未向客户端转发任何有效内容）。
+// 排除 context.Canceled / DeadlineExceeded（用户主动取消不应重连）。
+// 移植自 Reasonix IsConnReset。
+func IsStreamConnectionReset(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	// io.EOF / io.ErrUnexpectedEOF：连接在 SSE 流中途关闭
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+	// 连接重置 / 中止
+	if errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.ECONNABORTED) {
+		return true
+	}
+	// net.Error 超时
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return true
+	}
+	// "body closed" / "connection reset" 等文本匹配（http 层包装的错误）
+	lower := strings.ToLower(msg)
+	if strings.Contains(lower, "connection reset") ||
+		strings.Contains(lower, "broken pipe") ||
+		strings.Contains(lower, "body closed") ||
+		strings.Contains(lower, "use of closed") {
+		return true
+	}
+	return false
 }

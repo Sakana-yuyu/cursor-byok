@@ -24,6 +24,7 @@ import (
 	runtimecore "cursor/internal/backend/agent/core"
 	modeladapter "cursor/internal/backend/agent/model"
 	protocol "cursor/internal/backend/agent/protocol"
+	"cursor/internal/modelcontext"
 	"cursor/internal/promptinject"
 )
 
@@ -1582,6 +1583,12 @@ func (service *Service) resolveProviderOutputBudget(modelID string, conversation
 	if requestMaxTokens <= 0 {
 		requestMaxTokens = providerDefaultMaxOutputTokens
 	}
+	// catalog 记录了每个模型 provider 侧允许的最大输出 token 数。
+	// 某些 provider（如 Neurons 代理的 k2.7）会对超出的 max_tokens 直接返回 400，
+	// 因此这里必须把它当作硬上限：无论 channel 配了多大的值，都不能超过模型上限。
+	if catalogMax := int64(modelcontext.MaxOutputTokens(modelID)); catalogMax > 0 && catalogMax < requestMaxTokens {
+		requestMaxTokens = catalogMax
+	}
 	if contextWindowTokens > 0 && estimatedPromptTokens > 0 {
 		remainingTokens = contextWindowTokens - estimatedPromptTokens
 		allowedTokens := remainingTokens - providerOutputSafetyTokens
@@ -1599,6 +1606,7 @@ func (service *Service) resolveProviderOutputBudget(modelID string, conversation
 	requestKnobs := map[string]any{
 		"configured_max_tokens":             configuredMaxTokens,
 		"dynamic_max_tokens":                maxTokens,
+		"catalog_max_output_tokens":         modelcontext.MaxOutputTokens(modelID),
 		"compiled_prompt_tokens_estimate":   estimatedPromptTokens,
 		"context_window_tokens":             contextWindowTokens,
 		"remaining_context_tokens_estimate": remainingTokens,
