@@ -139,11 +139,13 @@ onUnmounted(() => {
     </section>
 
     <section v-else class="orb-panel" aria-label="实时统计球体">
-      <div class="orb-satellite orb-satellite--top"><span>命中率</span><strong>{{ formatRate(displayRate) }}</strong></div>
-      <div class="orb-satellite orb-satellite--right"><span>Tokens</span><strong>{{ formatCompact(totalTokens) }}</strong></div>
-      <div class="orb-satellite orb-satellite--bottom"><span>Turns</span><strong>{{ formatCompact(turnsTotal) }}</strong></div>
-      <div class="orb-satellite orb-satellite--left"><span>Local</span><strong>{{ formatCompact(localCacheHits) }}</strong></div>
-      <div class="orb-core"><div class="orb-glow"></div><div class="orb-sphere"></div></div>
+      <div class="orb-orbit">
+        <div class="orb-satellite orb-satellite--top"><span>命中率</span><strong>{{ formatRate(displayRate) }}</strong></div>
+        <div class="orb-satellite orb-satellite--right"><span>Tokens</span><strong>{{ formatCompact(totalTokens) }}</strong></div>
+        <div class="orb-satellite orb-satellite--bottom"><span>Turns</span><strong>{{ formatCompact(turnsTotal) }}</strong></div>
+        <div class="orb-satellite orb-satellite--left"><span>Local</span><strong>{{ formatCompact(localCacheHits) }}</strong></div>
+      </div>
+      <div class="orb-core"><div class="orb-glow"></div><div class="orb-sphere"><div class="orb-sphere-highlight"></div></div><div class="orb-ring"></div></div>
     </section>
 
     <!-- 极简实时数据条：仅在卡片式与引擎仪表下方显示，球形不显示。每次刷新跳动一次。 -->
@@ -164,12 +166,12 @@ onUnmounted(() => {
 .overlay-kicker { color: #858585; font-size: 10px; font-weight: 600; letter-spacing: .04em; }
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #10ad5d; animation: breathe 3.8s ease-in-out infinite; }
 .status-dot.is-loading { background: #fbbf24; }
-.card-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; padding: 5px; border: 1px solid #343434; border-radius: 8px; background: rgba(24,24,24,.84); }
-.metric-card { min-width: 0; padding: 4px 6px; border: 1px solid rgba(62,62,62,.75); border-radius: 5px; background: rgba(36,36,36,.9); }
+.card-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid #343434; border-radius: 8px; background: rgba(24,24,24,.84); }
+.metric-card { min-width: 0; padding: 3px 6px; border: 1px solid rgba(62,62,62,.75); border-radius: 5px; background: rgba(36,36,36,.9); }
 .metric-label { color: #777; font-size: 9px; white-space: nowrap; }
-.metric-value { color: #fff; font-family: var(--font-num, ui-monospace, monospace); font-size: 15px; line-height: 1.15; transition: color .35s ease, text-shadow .35s ease; }
+.metric-value { color: #fff; font-family: var(--font-num, ui-monospace, monospace); font-size: 14px; line-height: 1.15; transition: color .35s ease, text-shadow .35s ease; }
 .metric-value.is-good, .metric-value--good { color: var(--accent); }
-.is-updated .metric-value { text-shadow: 0 0 10px rgba(110,231,165,.7); }
+.is-updated .metric-value { text-shadow: 0 0 6px rgba(110,231,165,.7); }
 .engine-panel { position: relative; display: flex; align-items: center; gap: 8px; min-height: calc(100vh - 27px); padding: 5px 7px; border: 1px solid rgba(71,112,112,.55); border-radius: 9px; background: linear-gradient(135deg, rgba(18,39,40,.92), rgba(18,24,28,.85)); overflow: hidden; }
 .engine-panel::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent 0 11px, rgba(110,231,165,.07) 12px); animation: scan 8s linear infinite; pointer-events: none; }
 .engine-gauge { position: relative; flex: 0 0 74px; height: 74px; }
@@ -184,15 +186,26 @@ onUnmounted(() => {
 .telemetry-grid div { padding: 3px 5px; border-left: 2px solid rgba(110,231,165,.6); background: rgba(5,15,17,.36); }
 .telemetry-grid span { display: block; color: #77918e; font-size: 8px; white-space: nowrap; }
 .telemetry-grid strong { color: #d8eee8; font: 12px var(--font-num, ui-monospace, monospace); }
-.orb-panel { position: relative; width: 100%; height: calc(100vh - 27px); min-height: 80px; overflow: visible; }
-.orb-core { position: absolute; inset: 18% 27%; display: grid; place-items: center; animation: float 5s ease-in-out infinite; }
-.orb-sphere { width: 44px; height: 44px; border-radius: 50%; background: radial-gradient(circle at 30% 25%, #eafff4 0 5%, #86eabb 18%, #168f76 52%, #0a3235 100%); box-shadow: inset -8px -8px 13px rgba(0,0,0,.45), 0 0 18px rgba(79,220,185,.6); }
-.orb-glow { position: absolute; width: 62px; height: 62px; border-radius: 50%; background: rgba(58,206,171,.2); filter: blur(10px); animation: pulse 3.5s ease-in-out infinite; }
-.orb-satellite { position: absolute; z-index: 2; display: flex; flex-direction: column; align-items: center; min-width: 47px; padding: 2px 4px; border: 1px solid rgba(93,180,160,.42); border-radius: 5px; background: rgba(14,28,29,.88); line-height: 1.1; }
-.orb-satellite span { color: #7ea39b; font-size: 8px; white-space: nowrap; }.orb-satellite strong { color: #e7fff3; font: 11px var(--font-num, ui-monospace, monospace); }.orb-satellite--top { top: 0; left: 50%; transform: translateX(-50%); }.orb-satellite--right { top: 50%; right: 0; transform: translateY(-50%); }.orb-satellite--bottom { bottom: 0; left: 50%; transform: translateX(-50%); }.orb-satellite--left { top: 50%; left: 0; transform: translateY(-50%); }
+.orb-panel { position: relative; width: 100%; height: calc(100vh - 27px); min-height: 80px; overflow: visible; display: grid; place-items: center; }
+.orb-core { position: relative; display: grid; place-items: center; animation: orbFloat 6s ease-in-out infinite; }
+.orb-sphere { position: relative; width: 64px; height: 64px; border-radius: 50%; background: radial-gradient(circle at 32% 28%, #eafff4 0%, #a7f0cc 14%, #4fdcb9 38%, #168f76 66%, #0a3235 100%); box-shadow: inset -10px -10px 18px rgba(0,0,0,.5), inset 6px 6px 12px rgba(255,255,255,.12), 0 0 22px rgba(79,220,185,.55); }
+.orb-sphere-highlight { position: absolute; top: 14%; left: 24%; width: 26%; height: 22%; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.85) 0%, rgba(255,255,255,0) 70%); filter: blur(1px); }
+.orb-glow { position: absolute; width: 92px; height: 92px; border-radius: 50%; background: radial-gradient(circle, rgba(58,206,171,.32) 0%, rgba(58,206,171,0) 70%); filter: blur(8px); animation: pulse 3.5s ease-in-out infinite; }
+.orb-ring { position: absolute; width: 96px; height: 96px; border-radius: 50%; border: 1px solid rgba(110,231,165,.28); box-shadow: 0 0 12px rgba(110,231,165,.18); animation: orbSpin 14s linear infinite; }
+.orb-orbit { position: absolute; inset: 0; pointer-events: none; }
+.orb-satellite { position: absolute; z-index: 2; display: flex; flex-direction: column; align-items: center; min-width: 47px; padding: 2px 5px; border: 1px solid rgba(93,180,160,.42); border-radius: 6px; background: rgba(14,28,29,.22); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); line-height: 1.1; box-shadow: 0 2px 10px rgba(0,0,0,.35); }
+.orb-satellite span { color: #9fcfc5; font-size: 8px; white-space: nowrap; }.orb-satellite strong { color: #eafff4; font: 11px var(--font-num, ui-monospace, monospace); }
+/* 四个数据卡各自在原位轻微漂浮（不旋转，保持文字可读），错开相位营造环绕呼吸感。 */
+.orb-satellite--top { top: 4px; left: 50%; transform: translateX(-50%); animation: orbDriftV 5s ease-in-out infinite; }
+.orb-satellite--bottom { bottom: 4px; left: 50%; transform: translateX(-50%); animation: orbDriftV 5s ease-in-out infinite -2.5s; }
+.orb-satellite--left { top: 50%; left: 4px; transform: translateY(-50%); animation: orbDriftH 5.5s ease-in-out infinite -1.4s; }
+.orb-satellite--right { top: 50%; right: 4px; transform: translateY(-50%); animation: orbDriftH 5.5s ease-in-out infinite -4s; }
 @keyframes breathe { 0%,100% { opacity: .55; box-shadow: 0 0 0 transparent; } 50% { opacity: 1; box-shadow: 0 0 7px currentColor; } }
 @keyframes scan { from { transform: translateY(-12px); } to { transform: translateY(12px); } }
-@keyframes float { 0%,100% { transform: translateY(-1px); } 50% { transform: translateY(2px); } }
+@keyframes orbFloat { 0%,100% { transform: translateY(-3px); } 50% { transform: translateY(3px); } }
+@keyframes orbDriftV { 0%,100% { transform: translateX(-50%) translateY(-2px); } 50% { transform: translateX(-50%) translateY(2px); } }
+@keyframes orbDriftH { 0%,100% { transform: translateY(-50%) translateX(-2px); } 50% { transform: translateY(-50%) translateX(2px); } }
+@keyframes orbSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @keyframes pulse { 0%,100% { opacity: .55; transform: scale(.92); } 50% { opacity: .9; transform: scale(1.06); } }
 
 /* 极简实时数据条：仅 card/engine 底部，一行紧凑数字 + 刷新跳动指示。 */

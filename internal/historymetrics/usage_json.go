@@ -134,6 +134,80 @@ func LoadRecentRequestCount(path string) (int, error) {
 	return count, nil
 }
 
+// LoadRecentTurnEvents 返回 usage.json 中 recent_events 的 turn_finalized 事件，
+// 供按时间范围聚合轮次计数使用。turn_finalized 不进请求明细列表，与 provider_call 分离。
+func LoadRecentTurnEvents(path string) ([]RequestMetric, error) {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return []RequestMetric{}, nil
+		}
+		return nil, fmt.Errorf("read usage file: %w", err)
+	}
+	var doc struct {
+		RecentEvents []usageFileEvent `json:"recent_events"`
+	}
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return nil, fmt.Errorf("decode usage file: %w", err)
+	}
+	result := make([]RequestMetric, 0, len(doc.RecentEvents))
+	for _, event := range doc.RecentEvents {
+		if !IsTurnFinalized(event.Kind) {
+			continue
+		}
+		result = append(result, RequestMetric{
+			EventID:     strings.TrimSpace(event.EventID),
+			Kind:        strings.TrimSpace(event.Kind),
+			Status:      strings.TrimSpace(event.Status),
+			At:          event.At,
+			UsagePresent: event.UsagePresent,
+		})
+	}
+	return result, nil
+}
+
+// LoadRecentRequestAbnormalCount 返回 usage.json 中 provider_call 事件的全量异常数，
+// 供「请求明细」页展示跨分页的异常总数。异常口径与前端 isAbnormalRow 一致：
+// status 为 provider_error / no_usage，或无 usage 且 token 全 0。
+func LoadRecentRequestAbnormalCount(path string) (int, error) {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("read usage file: %w", err)
+	}
+	var doc struct {
+		RecentEvents []usageFileEvent `json:"recent_events"`
+	}
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return 0, fmt.Errorf("decode usage file: %w", err)
+	}
+	count := 0
+	for _, event := range doc.RecentEvents {
+		if !IsProviderCall(event.Kind) {
+			continue
+		}
+		if isAbnormalUsageEvent(event) {
+			count++
+		}
+	}
+	return count, nil
+}
+
+// isAbnormalUsageEvent 判断单个 provider_call 事件是否异常，与前端 isAbnormalRow 口径一致。
+func isAbnormalUsageEvent(event usageFileEvent) bool {
+	status := strings.TrimSpace(event.Status)
+	if status == "provider_error" || status == "no_usage" {
+		return true
+	}
+	if !event.UsagePresent {
+		total := event.InputTokens + event.OutputTokens + event.CacheReadTokens + event.CacheWriteTokens
+		return total == 0
+	}
+	return false
+}
+
 func LoadUsageSummary(path string, includeCacheWrite bool, lookup *PriceLookup) (Summary, error) {
 	body, err := os.ReadFile(path)
 	if err != nil {

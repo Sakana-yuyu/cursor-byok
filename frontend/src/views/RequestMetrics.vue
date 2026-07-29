@@ -1,7 +1,7 @@
 <script setup>
 import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
-import { fetchRecentRequestMetrics, fetchRecentRequestMetricsCount } from "@/services/clientApi";
+import { fetchRecentRequestMetrics, fetchRecentRequestMetricsCount, fetchRecentRequestMetricsAbnormalCount } from "@/services/clientApi";
 import { appState, reloadUserConfig } from "@/state/appState";
 import { providerIcon, providerLabel } from "@/utils/providerMeta";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
@@ -69,7 +69,7 @@ function isAbnormalRow(row) {
   return false;
 }
 
-const abnormalCount = computed(() => visibleRows.value.filter(isAbnormalRow).length);
+const abnormalCount = ref(0);
 
 function statusTone(row) {
   if (isAbnormalRow(row)) {
@@ -217,8 +217,12 @@ async function refresh({ keepPage = false } = {}) {
   loading.value = true;
   error.value = "";
   try {
-    const count = await fetchRecentRequestMetricsCount();
+    const [count, abnormal] = await Promise.all([
+      fetchRecentRequestMetricsCount(),
+      fetchRecentRequestMetricsAbnormalCount(),
+    ]);
     totalCount.value = count;
+    abnormalCount.value = abnormal;
     if (!keepPage) page.value = 1;
     if (page.value > totalPages.value) page.value = totalPages.value;
     const offset = (page.value - 1) * pageSize.value;

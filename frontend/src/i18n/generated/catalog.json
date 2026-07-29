@@ -65,7 +65,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 321,
+          "line": 325,
           "column": 41
         }
       ]
@@ -880,7 +880,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 304,
+          "line": 308,
           "column": 35
         }
       ]
@@ -1056,12 +1056,12 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 302,
+          "line": 306,
           "column": 88
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 326,
+          "line": 330,
           "column": 56
         }
       ]
@@ -1163,12 +1163,12 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 300,
+          "line": 304,
           "column": 88
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 324,
+          "line": 328,
           "column": 56
         }
       ]
@@ -1697,7 +1697,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 329,
+          "line": 333,
           "column": 41
         }
       ]
@@ -2624,7 +2624,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 287,
+          "line": 291,
           "column": 65
         }
       ]
@@ -3200,7 +3200,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 204,
+          "line": 209,
           "column": 128
         }
       ]
@@ -3715,12 +3715,12 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 303,
+          "line": 307,
           "column": 88
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 327,
+          "line": 331,
           "column": 56
         }
       ]
@@ -3870,7 +3870,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 319,
+          "line": 323,
           "column": 41
         }
       ]
@@ -4099,7 +4099,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 293,
+          "line": 297,
           "column": 14
         }
       ]
@@ -4567,7 +4567,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 281,
+          "line": 285,
           "column": 115
         }
       ]
@@ -5315,7 +5315,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 439,
+          "line": 443,
           "column": 11
         }
       ]
@@ -5351,7 +5351,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 320,
+          "line": 324,
           "column": 41
         }
       ]
@@ -5375,7 +5375,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 400,
+          "line": 404,
           "column": 15
         }
       ]
@@ -5667,7 +5667,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 227,
+          "line": 231,
           "column": 53
         }
       ]
@@ -5691,7 +5691,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 335,
+          "line": 339,
           "column": 67
         }
       ]
@@ -5993,7 +5993,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 322,
+          "line": 326,
           "column": 41
         }
       ]
@@ -6017,7 +6017,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 338,
+          "line": 342,
           "column": 67
         }
       ]
@@ -6661,7 +6661,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 293,
+          "line": 297,
           "column": 14
         }
       ]
@@ -7015,7 +7015,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 285,
+          "line": 289,
           "column": 49
         }
       ]
@@ -7434,7 +7434,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 330,
+          "line": 334,
           "column": 41
         }
       ]
@@ -7494,7 +7494,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 288,
+          "line": 292,
           "column": 65
         }
       ]
@@ -7639,7 +7639,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 323,
+          "line": 327,
           "column": 41
         }
       ]
@@ -7663,7 +7663,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 415,
+          "line": 419,
           "column": 11
         }
       ]
@@ -7800,7 +7800,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 328,
+          "line": 332,
           "column": 41
         }
       ]
@@ -8280,8 +8280,8 @@
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 142,
-          "column": 59
+          "line": 143,
+          "column": 61
         }
       ]
     },
@@ -8565,7 +8565,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 280,
+          "line": 284,
           "column": 56
         }
       ]
@@ -9052,12 +9052,12 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 282,
+          "line": 286,
           "column": 32
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 287,
+          "line": 291,
           "column": 88
         }
       ]
@@ -9406,7 +9406,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 407,
+          "line": 411,
           "column": 15
         }
       ]
@@ -9610,12 +9610,12 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 301,
+          "line": 305,
           "column": 88
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 325,
+          "line": 329,
           "column": 56
         }
       ]

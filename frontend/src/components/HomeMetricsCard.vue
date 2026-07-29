@@ -172,9 +172,9 @@ const summary = computed(() => {
   }
   const provider = rangeSummary.value;
   return {
-    turnsTotal,
-    validTurnsTotal,
-    invalidTurnsTotal,
+    turnsTotal: provider ? Number(provider.turnsTotal || 0) : turnsTotal,
+    validTurnsTotal: provider ? Number(provider.validTurnsTotal || 0) : validTurnsTotal,
+    invalidTurnsTotal: provider ? Number(provider.invalidTurnsTotal || 0) : invalidTurnsTotal,
     requestTokensTotal: provider ? Number(provider.totalTokens || 0) : requestTokensTotal,
     promptTokensTotal: provider
       ? Number(provider.inputTokens || 0) + Number(provider.cacheReadTokens || 0) + Number(provider.cacheWriteTokens || 0)

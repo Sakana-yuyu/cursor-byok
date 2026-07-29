@@ -159,6 +159,11 @@ export function fetchRecentRequestMetricsCount() {
   return desktopOrMock(0, "@bindings/cursor/internal/bridge/metricsservice.js", "GetRecentRequestMetricsCount");
 }
 
+// 全量异常请求数（跨分页），用于「请求明细」页异常总数展示。
+export function fetchRecentRequestMetricsAbnormalCount() {
+  return desktopOrMock(0, "@bindings/cursor/internal/bridge/metricsservice.js", "GetRecentRequestMetricsAbnormalCount");
+}
+
 export function fetchMetricsRangeSummary(startUnixMs = 0, endUnixMs = 0, model = "") {
   return desktopOrMock(
     {

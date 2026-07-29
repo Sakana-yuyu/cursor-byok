@@ -80,14 +80,33 @@ func (service *MetricsService) GetRecentRequestMetricsCount() (int, error) {
 	return historymetrics.LoadRecentRequestCount(appdata.UsageFilePath())
 }
 
+// GetRecentRequestMetricsAbnormalCount 返回 provider_call 事件的全量异常数，
+// 供「请求明细」页展示跨分页的异常总数（不再只统计当前页）。
+func (service *MetricsService) GetRecentRequestMetricsAbnormalCount() (int, error) {
+	if err := appdata.EnsureAssistantHome(); err != nil {
+		return 0, err
+	}
+	return historymetrics.LoadRecentRequestAbnormalCount(appdata.UsageFilePath())
+}
+
 // GetMetricsRangeSummary 按时间范围与模型过滤后汇总 token（仅 provider_call）。
 // startUnixMs/endUnixMs 为毫秒时间戳；<=0 表示不限制该端。model 为空表示全部模型。
+// 轮次计数来自 turn_finalized 事件（与 token 分离），按相同时间范围聚合。
 func (service *MetricsService) GetMetricsRangeSummary(startUnixMs, endUnixMs int64, model string) (historymetrics.RangeSummary, error) {
 	events, err := service.loadProviderEvents(startUnixMs, endUnixMs, model)
 	if err != nil {
 		return historymetrics.RangeSummary{}, err
 	}
-	return historymetrics.SummarizeEvents(events, service.includeCacheWrite()), nil
+	summary := historymetrics.SummarizeEvents(events, service.includeCacheWrite())
+	// 轮次独立聚合：turn_finalized 与 provider_call 分离，不重复计入 token。
+	start, end := unixMsRange(startUnixMs, endUnixMs)
+	if turnEvents, terr := service.loadTurnEvents(start, end); terr == nil {
+		turns, valid, invalid := historymetrics.SummarizeTurns(turnEvents)
+		summary.TurnsTotal = turns
+		summary.ValidTurnsTotal = valid
+		summary.InvalidTurnsTotal = invalid
+	}
+	return summary, nil
 }
 
 // GetMetricsTokenBuckets 按时间范围、模型与小时粒度分桶统计 token（仅 provider_call）。
@@ -157,6 +176,18 @@ func (service *MetricsService) loadProviderEvents(startUnixMs, endUnixMs int64, 
 	}
 	start, end := unixMsRange(startUnixMs, endUnixMs)
 	return historymetrics.FilterProviderEvents(all, start, end, strings.TrimSpace(model)), nil
+}
+
+// loadTurnEvents 加载 turn_finalized 事件并按时间范围过滤，供轮次聚合使用。
+func (service *MetricsService) loadTurnEvents(start, end time.Time) ([]historymetrics.RequestMetric, error) {
+	if err := appdata.EnsureAssistantHome(); err != nil {
+		return nil, err
+	}
+	all, err := historymetrics.LoadRecentTurnEvents(appdata.UsageFilePath())
+	if err != nil {
+		return nil, err
+	}
+	return historymetrics.FilterTurnEvents(all, start, end), nil
 }
 
 func unixMsRange(startUnixMs, endUnixMs int64) (time.Time, time.Time) {
