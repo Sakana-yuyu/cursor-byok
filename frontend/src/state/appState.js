@@ -1599,6 +1599,7 @@ function normalizeStatsOverlayPreferences(input) {
     visible: asBoolean(raw.visible ?? false),
     x: typeof raw.x === "number" ? Math.round(raw.x) : null,
     y: typeof raw.y === "number" ? Math.round(raw.y) : null,
+    snapCollapse: asBoolean(raw.snapCollapse ?? true),
   };
 }
 

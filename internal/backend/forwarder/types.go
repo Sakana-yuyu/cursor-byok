@@ -39,15 +39,15 @@ type ConversationFile struct {
 	CurrentPlans                    map[string]*agentv1.PlanRegistryEntry `json:"current_plans,omitempty"`
 	// LastActivatedSkills 记录该会话最近一次稀疏激活注入的技能名列表，
 	// 供子代理会话读取作保底候选（调用链传递）。不进 model-visible history，不影响 replay prefix。
-	LastActivatedSkills []string                              `json:"last_activated_skills,omitempty"`
-	CurrentTodos                    []*agentv1.TodoItem                   `json:"current_todos,omitempty"`
-	LatestRequestPrefix             *ConversationRequestPrefix            `json:"latest_request_prefix,omitempty"`
-	LastProviderCall                *ConversationProviderCall             `json:"last_provider_call,omitempty"`
-	CreatedAt                       time.Time                             `json:"created_at"`
-	UpdatedAt                       time.Time                             `json:"updated_at"`
-	NextTurnSeq                     int64                                 `json:"next_turn_seq"`
-	NextEntrySeq                    int64                                 `json:"next_entry_seq"`
-	Entries                         []HistoryEntry                        `json:"entries,omitempty"`
+	LastActivatedSkills []string                   `json:"last_activated_skills,omitempty"`
+	CurrentTodos        []*agentv1.TodoItem        `json:"current_todos,omitempty"`
+	LatestRequestPrefix *ConversationRequestPrefix `json:"latest_request_prefix,omitempty"`
+	LastProviderCall    *ConversationProviderCall  `json:"last_provider_call,omitempty"`
+	CreatedAt           time.Time                  `json:"created_at"`
+	UpdatedAt           time.Time                  `json:"updated_at"`
+	NextTurnSeq         int64                      `json:"next_turn_seq"`
+	NextEntrySeq        int64                      `json:"next_entry_seq"`
+	Entries             []HistoryEntry             `json:"entries,omitempty"`
 }
 
 type ConversationRequestPrefix struct {
@@ -173,6 +173,10 @@ type ActiveStream struct {
 	// MaxTokensRecoveryAttempts 记录本回合因 max_tokens 超限触发降级重试的次数，
 	// 用于限制重试次数避免无限循环。
 	MaxTokensRecoveryAttempts int
+	// StaleToolResultSnipApplied 标记本 provider pass 在压缩评估阶段已对陈旧工具结果做过持久化 snip/prune。
+	// driveProvider 据此在 maybeCompactBeforeProvider 返回「不压缩」后重新快照+编译一次，
+	// 让后续 provider 请求用上 snip 后的新鲜历史（参考 tool_result_snip.go）。
+	StaleToolResultSnipApplied bool
 
 	Backlog                     []StreamEvent
 	Subscribers                 map[string]*StreamSubscriber

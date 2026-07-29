@@ -166,6 +166,12 @@ func (service *Service) buildAutoCompactionPlan(stream *ActiveStream, conversati
 	if !pendingExceeded && !preflightExceeded {
 		return nil, nil
 	}
+	// 缓存优先的上下文维护（移植自 Reasonix）：在昂贵的 LLM 摘要压缩（会让 prompt cache 归零）
+	// 之前，先尝试持久化 snip/prune 陈旧的大工具结果。若仅靠缩短工具结果就能把上下文压回预算线下，
+	// 则跳过摘要压缩、直接保留部分缓存命中（两害相权取其轻）。详见 tool_result_snip.go。
+	if service.recoverBudgetBySnippingStaleToolResults(stream, conversation, contextTokens, budgetTokens) {
+		return nil, nil
+	}
 	usagePercent := 0.0
 	if contextWindowSize > 0 && contextTokens > 0 {
 		usagePercent = float64(contextTokens) / float64(contextWindowSize)
