@@ -21,7 +21,7 @@ const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / pageS
 const pageRangeLabel = computed(() => {
   const start = totalCount.value === 0 ? 0 : (page.value - 1) * pageSize.value + 1;
   const end = Math.min(page.value * pageSize.value, totalCount.value);
-  return `${start} / ${totalCount.value}`;
+  return `${start}-${end} / ${totalCount.value}`;
 });
 const pageNumbers = computed(() => {
   const result = [];
@@ -31,9 +31,9 @@ const pageNumbers = computed(() => {
     for (let i = 1; i <= tp; i++) result.push(i);
   } else {
     result.push(1);
-    if (cur > 3) result.push("...");
-    for (let i = Math.max(2, cur - 1); i <= Math.min(tp - 1, cur + 1); i++) result.push(i);
-    if (cur < tp - 2) result.push("...");
+    for (let i = Math.max(2, cur - 1); i <= Math.min(tp - 1, cur + 1); i++) {
+      result.push(i);
+    }
     result.push(tp);
   }
   return result;

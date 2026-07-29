@@ -14,6 +14,7 @@ import {
   GetProviderSpendSummary,
   GetRecentRequestMetrics,
   GetRecentRequestMetricsCount,
+  GetRecentRequestMetricsAbnormalCount,
   ResetUsageMetrics,
 } from "@bindings/cursor/internal/bridge/metricsservice.js";
 import {
@@ -21,6 +22,7 @@ import {
   GetModelEditorContext, OpenConfigWindow, OpenFooterAuthorHome, OpenHistoryWindow,
   OpenMetricsDetailWindow, OpenRequestMetricsWindow, OpenStatsOverlayWindow, UpdateStatsOverlayWindow,
   CloseStatsOverlayWindow, OpenModelConfigWindow, OpenModelEditorWindow, ExportLogs,
+  DetectCursorPath, LaunchCursor,
 } from "@bindings/cursor/internal/bridge/windowservice.js";
 import { isBrowserPreview, browserPreviewMockMetrics, browserPreviewMockProxyState } from "@/services/runtimeAdapter";
 
@@ -31,10 +33,12 @@ const desktopMethods = {
   OpenMetricsDetailWindow, OpenRequestMetricsWindow, OpenStatsOverlayWindow, UpdateStatsOverlayWindow,
   CloseStatsOverlayWindow, GetModelEditorContext, TestModelAdapter, GetModelAdapterTestResults, GetRecentRequestMetrics,
   GetMetricsRangeSummary, GetMetricsTokenBuckets, GetProviderSpendSummary, GetLocalCacheStats,
+  GetRecentRequestMetricsCount, GetRecentRequestMetricsAbnormalCount,
   ResetUsageMetrics,
   FetchModelCatalog, ProbeModelAdapter, QueryProviderBalance, GetPromptInjectionSettings,
   SavePromptInjectionSettings, RefreshPromptInjection,
   RefreshPromptInjectionCatalog, ExportLogs, AutoMatchContextWindows,
+  DetectCursorPath, LaunchCursor,
 };
 
 const API_LOG_PREFIX = "[clientApi]";
@@ -114,7 +118,7 @@ export function openFooterAuthorHome() { return desktopOrMock(undefined, "@bindi
 export function openModelConfig() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "OpenModelConfigWindow"); }
 export function openMetricsDetailWindow() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "OpenMetricsDetailWindow"); }
 export function openRequestMetricsWindow() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "OpenRequestMetricsWindow"); }
-export function openStatsOverlayWindow() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "OpenStatsOverlayWindow"); }
+export function openStatsOverlayWindow(x, y) { return desktopOrMock([x || 0, y || 0], "@bindings/cursor/internal/bridge/windowservice.js", "OpenStatsOverlayWindow"); }
 export function updateStatsOverlayWindow(style, alwaysOnTop) {
   return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "UpdateStatsOverlayWindow", [style, alwaysOnTop]);
 }
@@ -236,3 +240,6 @@ export function getPromptInjectionSettings() {
 export function savePromptInjectionSettings(config) { return desktopOrMock(config, "@bindings/cursor/internal/bridge/proxyservice.js", "SavePromptInjectionSettings", [config]); }
 export function refreshPromptInjection() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/proxyservice.js", "RefreshPromptInjection"); }
 export function refreshPromptInjectionCatalog() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/proxyservice.js", "RefreshPromptInjectionCatalog"); }
+
+export function detectCursorPath() { return desktopOrMock("", "@bindings/cursor/internal/bridge/windowservice.js", "DetectCursorPath"); }
+export function launchCursor(workspaceDir) { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "LaunchCursor", [workspaceDir || ""]); }

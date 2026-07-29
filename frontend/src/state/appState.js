@@ -1584,6 +1584,8 @@ function normalizeStatsOverlayPreferences(input) {
     style,
     alwaysOnTop: asBoolean(raw.alwaysOnTop ?? true),
     visible: asBoolean(raw.visible ?? false),
+    x: typeof raw.x === "number" ? Math.round(raw.x) : null,
+    y: typeof raw.y === "number" ? Math.round(raw.y) : null,
   };
 }
 
@@ -1624,9 +1626,17 @@ export async function setStatsOverlayPreferences(partial) {
   return persisted;
 }
 
-export async function showStatsOverlay() {
-  const persisted = persistStatsOverlayPreferences({ ...loadStatsOverlayPreferences(), visible: true });
-  await openStatsOverlayWindow();
+export async function showStatsOverlay(position) {
+  const current = loadStatsOverlayPreferences();
+  const next = { ...current, visible: true };
+  // 如果传入了位置参数，保存到偏好中
+  if (position && typeof position === "object") {
+    if (typeof position.x === "number") next.x = position.x;
+    if (typeof position.y === "number") next.y = position.y;
+  }
+  const persisted = persistStatsOverlayPreferences(next);
+  // 传入位置参数到后端
+  await openStatsOverlayWindow(persisted.x, persisted.y);
   // 首次打开后端按 card/置顶创建；按当前偏好对齐一次尺寸与层级。
   await updateStatsOverlayWindow(persisted.style, persisted.alwaysOnTop);
   return persisted;
@@ -2193,4 +2203,13 @@ export async function bootstrapAppState() {
   }
   await syncServiceState().catch(() => {});
   await syncHomeMetrics().catch(() => {});
+  
+  // 根据用户偏好自动打开悬浮窗
+  const overlayPrefs = loadStatsOverlayPreferences();
+  if (overlayPrefs.visible) {
+    // 延迟打开，避免阻塞主窗口启动
+    setTimeout(() => {
+      showStatsOverlay({ x: overlayPrefs.x, y: overlayPrefs.y }).catch(() => {});
+    }, 500);
+  }
 }

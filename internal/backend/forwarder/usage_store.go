@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -18,10 +19,19 @@ const (
 	usageEventKindProvider = "provider_call"
 	usageEventKindTurn     = "turn_finalized"
 	usageTurnStatusDone    = "completed"
+	
+	// 防抖批量写入配置
+	usageWriteDebounceMs = 2000 // 2秒内的写入合并为一次
+	usageWriteMaxBatch   = 50   // 或累积50个事件立即写入
 )
 
 type UsageFileStore struct {
 	path string
+	
+	// 批量写入优化
+	mu            sync.Mutex
+	pendingEvents []usageFileEvent
+	debounceTimer *time.Timer
 }
 
 type usageFileDocument struct {
@@ -113,6 +123,39 @@ func (store *UsageFileStore) UpsertEvent(event usageFileEvent) error {
 	event.CacheWriteTokens = nonNegativeInt64(event.CacheWriteTokens)
 	event.TotalTokens = event.InputTokens + event.OutputTokens + event.CacheReadTokens + event.CacheWriteTokens
 
+	// 批量写入优化：将事件加入 pending 队列，防抖后统一写入
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	
+	store.pendingEvents = append(store.pendingEvents, event)
+	
+	// 达到批量上限立即写入
+	if len(store.pendingEvents) >= usageWriteMaxBatch {
+		return store.flushPendingEventsLocked()
+	}
+	
+	// 否则启动/重置防抖定时器
+	if store.debounceTimer != nil {
+		store.debounceTimer.Stop()
+	}
+	store.debounceTimer = time.AfterFunc(time.Duration(usageWriteDebounceMs)*time.Millisecond, func() {
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		_ = store.flushPendingEventsLocked()
+	})
+	
+	return nil
+}
+
+// flushPendingEventsLocked 批量写入所有 pending 事件（调用方必须已持有 store.mu）
+func (store *UsageFileStore) flushPendingEventsLocked() error {
+	if len(store.pendingEvents) == 0 {
+		return nil
+	}
+	
+	events := store.pendingEvents
+	store.pendingEvents = nil
+	
 	if err := os.MkdirAll(filepath.Dir(store.path), 0o755); err != nil {
 		return fmt.Errorf("create usage directory: %w", err)
 	}
@@ -129,21 +172,25 @@ func (store *UsageFileStore) UpsertEvent(event usageFileEvent) error {
 	if doc.EventIndex == nil {
 		doc.EventIndex = make(map[string]usageFileEvent)
 	}
-	oldEvent, found := doc.EventIndex[event.EventID]
-	if found {
-		applyUsageFileDelta(&doc, oldEvent.At, negateUsageFileDelta(usageFileEventDelta(oldEvent)))
-	}
-	applyUsageFileDelta(&doc, event.At, usageFileEventDelta(event))
-	doc.RecentEvents = upsertRecentUsageEvent(doc.RecentEvents, event)
-	if len(doc.RecentEvents) > usageRecentEventLimit {
-		dropped := doc.RecentEvents[usageRecentEventLimit:]
-		for _, item := range dropped {
-			delete(doc.EventIndex, strings.TrimSpace(item.EventID))
+	
+	// 批量应用所有事件
+	for _, event := range events {
+		oldEvent, found := doc.EventIndex[event.EventID]
+		if found {
+			applyUsageFileDelta(&doc, oldEvent.At, negateUsageFileDelta(usageFileEventDelta(oldEvent)))
 		}
-		doc.RecentEvents = doc.RecentEvents[:usageRecentEventLimit]
+		applyUsageFileDelta(&doc, event.At, usageFileEventDelta(event))
+		doc.RecentEvents = upsertRecentUsageEvent(doc.RecentEvents, event)
+		if len(doc.RecentEvents) > usageRecentEventLimit {
+			dropped := doc.RecentEvents[usageRecentEventLimit:]
+			for _, item := range dropped {
+				delete(doc.EventIndex, strings.TrimSpace(item.EventID))
+			}
+			doc.RecentEvents = doc.RecentEvents[:usageRecentEventLimit]
+		}
+		doc.EventIndex[event.EventID] = event
 	}
-	doc.EventIndex[event.EventID] = event
-	doc.SchemaVersion = usageFileSchemaVersion
+	
 	doc.UpdatedAt = time.Now().UTC()
 	return writeJSONFileAtomic(store.path, doc)
 }

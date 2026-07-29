@@ -302,8 +302,9 @@ func statsOverlayWindowSize(style string) (width, height int) {
 
 // OpenStatsOverlayWindow 打开统计浮窗（置顶、无边框、小尺寸）。
 // 用于在任意应用上方常驻显示缓存命中率、Token 消耗、对话轮次、价值估算。
+// x, y 为窗口位置；传入 0 时后端不设置位置（由系统决定）。
 // 如果窗口已存在则确保它处于显示状态。
-func (s *WindowService) OpenStatsOverlayWindow() {
+func (s *WindowService) OpenStatsOverlayWindow(x, y int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -321,7 +322,7 @@ func (s *WindowService) OpenStatsOverlayWindow() {
 	}
 
 	width, height := statsOverlayWindowSize(statsOverlayStyleCard)
-	win := s.app.Window.NewWithOptions(application.WebviewWindowOptions{
+	opts := application.WebviewWindowOptions{
 		Title:               "统计浮窗",
 		Width:               width,
 		Height:              height,
@@ -366,7 +367,13 @@ func (s *WindowService) OpenStatsOverlayWindow() {
 			// 以确保点击命中浮窗本身而非穿透。
 			ExStyle: 0x00000080 | 0x00000008 | 0x00080000 | 0x00010000,
 		},
-	})
+	}
+	win := s.app.Window.NewWithOptions(opts)
+
+	// 如果提供了保存的位置，在窗口创建后恢复
+	if x != 0 || y != 0 {
+		win.SetRelativePosition(x, y)
+	}
 
 	win.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 		s.mu.Lock()
@@ -570,4 +577,66 @@ func openDirectory(path string) {
 	default:
 		_ = exec.Command("xdg-open", path).Start()
 	}
+}
+
+// DetectCursorPath 检测 Cursor 编辑器的安装路径。
+// 返回可执行文件的完整路径，如果未检测到则返回空字符串。
+func (s *WindowService) DetectCursorPath() string {
+	switch goruntime.GOOS {
+	case "windows":
+		// Windows: 检查常见安装位置
+		candidates := []string{
+			filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "cursor", "Cursor.exe"),
+			filepath.Join(os.Getenv("PROGRAMFILES"), "Cursor", "Cursor.exe"),
+			filepath.Join(os.Getenv("PROGRAMFILES(X86)"), "Cursor", "Cursor.exe"),
+		}
+		for _, path := range candidates {
+			if _, err := os.Stat(path); err == nil {
+				return path
+			}
+		}
+	case "darwin":
+		// macOS: 检查 Applications 目录
+		path := "/Applications/Cursor.app/Contents/MacOS/Cursor"
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	case "linux":
+		// Linux: 检查 PATH 和常见位置
+		if path, err := exec.LookPath("cursor"); err == nil {
+			return path
+		}
+		candidates := []string{
+			filepath.Join(os.Getenv("HOME"), ".local", "bin", "cursor"),
+			"/usr/bin/cursor",
+			"/usr/local/bin/cursor",
+		}
+		for _, path := range candidates {
+			if _, err := os.Stat(path); err == nil {
+				return path
+			}
+		}
+	}
+	return ""
+}
+
+// LaunchCursor 启动 Cursor 编辑器。如果提供了 workspaceDir，则在该目录中打开。
+func (s *WindowService) LaunchCursor(workspaceDir string) error {
+	cursorPath := s.DetectCursorPath()
+	if cursorPath == "" {
+		return fmt.Errorf("未检测到 Cursor 安装路径，请手动安装或指定路径")
+	}
+
+	var cmd *exec.Cmd
+	if workspaceDir != "" {
+		cmd = exec.Command(cursorPath, workspaceDir)
+	} else {
+		cmd = exec.Command(cursorPath)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("启动 Cursor 失败: %w", err)
+	}
+
+	return nil
 }

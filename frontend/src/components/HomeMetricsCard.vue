@@ -6,11 +6,12 @@ import { fetchLocalCacheStats, fetchMetricsRangeSummary, fetchRecentRequestMetri
 import { appState, saveIncludeCacheWriteInHitRate, saveLocalResponseCacheEnabled, openMetricsDetailWindow } from "@/state/appState";
 import { formatCompactInteger, formatInteger } from "@/utils/numberFormat";
 import { isBrowserPreview } from "@/services/runtimeAdapter";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
 const emit = defineEmits(["refresh", "open-ad"]);
 const router = useRouter();
+const AUTO_REFRESH_INTERVAL_MS = 5000; // 5秒自动刷新
 
 async function handleOpenDetail() {
   if (isBrowserPreview) {
@@ -440,8 +441,29 @@ watch([selectedRange, customStart, customEnd], () => {
   void loadEvents();
 });
 
+let autoRefreshTimer = null;
+
+function startAutoRefresh() {
+  if (autoRefreshTimer) return;
+  autoRefreshTimer = setInterval(() => {
+    void loadEvents();
+  }, AUTO_REFRESH_INTERVAL_MS);
+}
+
+function stopAutoRefresh() {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+}
+
 onMounted(() => {
   void loadEvents();
+  startAutoRefresh();
+});
+
+onUnmounted(() => {
+  stopAutoRefresh();
 });
 </script>
 

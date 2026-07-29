@@ -1,6 +1,6 @@
 <script setup>
 import { getHomeMetricsSummary, fetchLocalCacheStats } from "@/services/clientApi";
-import { getStatsOverlayPreferences, appState } from "@/state/appState";
+import { getStatsOverlayPreferences, setStatsOverlayPreferences, appState } from "@/state/appState";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 
 const summary = ref({});
@@ -8,11 +8,88 @@ const localCache = ref({});
 const loading = ref(false);
 const preferences = ref({ style: "card" });
 const updated = ref(false);
+const isCollapsed = ref(false); // 收缩状态
+const isHovering = ref(false); // 鼠标悬停状态
+const snapEdge = ref(null); // 吸附边缘: 'left' | 'right' | 'top' | 'bottom' | null
 let timer = null;
 let updatedTimer = null;
+let positionTimer = null;
+let lastSavedX = null;
+let lastSavedY = null;
 
 const REFRESH_MS = 10000;
+const POSITION_CHECK_MS = 1000;
 const STORAGE_KEY = "cursor-byok.stats-overlay.preferences";
+const SNAP_THRESHOLD = 20; // 距离边缘多少像素时吸附
+const COLLAPSED_WIDTH = 8; // 收缩后的宽度
+const COLLAPSED_HEIGHT = 8; // 收缩后的高度
+
+// 监听窗口位置变化并持久化。窗口通过原生拖动移动，
+// window.screenX/screenY 反映窗口在屏幕上的坐标。
+function checkPosition() {
+  const x = window.screenX;
+  const y = window.screenY;
+  if (typeof x !== "number" || typeof y !== "number") return;
+  
+  // 检测吸附边缘
+  const screenWidth = window.screen.availWidth;
+  const screenHeight = window.screen.availHeight;
+  const windowWidth = window.outerWidth;
+  const windowHeight = window.outerHeight;
+  
+  let newSnapEdge = null;
+  
+  // 左边缘
+  if (x <= SNAP_THRESHOLD) {
+    newSnapEdge = "left";
+  }
+  // 右边缘
+  else if (x + windowWidth >= screenWidth - SNAP_THRESHOLD) {
+    newSnapEdge = "right";
+  }
+  // 上边缘
+  else if (y <= SNAP_THRESHOLD) {
+    newSnapEdge = "top";
+  }
+  // 下边缘
+  else if (y + windowHeight >= screenHeight - SNAP_THRESHOLD) {
+    newSnapEdge = "bottom";
+  }
+  
+  // 更新吸附状态
+  if (newSnapEdge !== snapEdge.value) {
+    snapEdge.value = newSnapEdge;
+    // 吸附到边缘时收缩，离开边缘时展开
+    if (newSnapEdge && !isHovering.value) {
+      isCollapsed.value = true;
+    } else if (!newSnapEdge) {
+      isCollapsed.value = false;
+    }
+  }
+  
+  // 位置变化超过阈值才保存，避免频繁写入
+  if (lastSavedX === null || lastSavedY === null || Math.abs(x - lastSavedX) > 2 || Math.abs(y - lastSavedY) > 2) {
+    lastSavedX = x;
+    lastSavedY = y;
+    void setStatsOverlayPreferences({ x, y });
+  }
+}
+
+// 鼠标进入浮窗
+function handleMouseEnter() {
+  isHovering.value = true;
+  if (snapEdge.value) {
+    isCollapsed.value = false;
+  }
+}
+
+// 鼠标离开浮窗
+function handleMouseLeave() {
+  isHovering.value = false;
+  if (snapEdge.value) {
+    isCollapsed.value = true;
+  }
+}
 
 function formatCompact(value) {
   const n = Number(value || 0);
@@ -91,6 +168,8 @@ onMounted(() => {
   syncPreferences();
   void load();
   timer = setInterval(load, REFRESH_MS);
+  // 定期检查窗口位置变化并保存
+  positionTimer = setInterval(checkPosition, POSITION_CHECK_MS);
   window.addEventListener("storage", onStorage);
   window.addEventListener("stats-overlay-preferences-changed", onPreferencesChanged);
 });
@@ -98,13 +177,27 @@ onMounted(() => {
 onUnmounted(() => {
   if (timer) clearInterval(timer);
   if (updatedTimer) clearTimeout(updatedTimer);
+  if (positionTimer) clearInterval(positionTimer);
   window.removeEventListener("storage", onStorage);
   window.removeEventListener("stats-overlay-preferences-changed", onPreferencesChanged);
 });
 </script>
 
 <template>
-  <div class="stats-overlay" :class="[`stats-overlay--${style}`, { 'is-updated': updated }]" style="--wails-draggable: drag">
+  <div 
+    class="stats-overlay" 
+    :class="[
+      `stats-overlay--${style}`, 
+      { 
+        'is-updated': updated,
+        'is-collapsed': isCollapsed,
+        [`is-snap-${snapEdge}`]: snapEdge
+      }
+    ]" 
+    style="--wails-draggable: drag"
+    @mouseenter="handleMouseEnter"
+    @mouseleave="handleMouseLeave"
+  >
     <header class="overlay-header">
       <span class="overlay-kicker">实时统计</span>
       <span class="status-dot" :class="{ 'is-loading': loading }" title="每 10 秒自动刷新"></span>
@@ -161,18 +254,41 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.stats-overlay { --accent: #6ee7a5; --muted: #777; width: 100vw; height: 100vh; padding: 6px 8px; overflow: hidden; background: transparent; color: #e5e5e5; font-family: inherit; }
-.overlay-header { height: 15px; display: flex; align-items: center; justify-content: space-between; padding: 0 2px; }
+.stats-overlay { --accent: #6ee7a5; --muted: #777; width: 100vw; height: 100vh; padding: 6px 8px; overflow: hidden; background: transparent; color: #e5e5e5; font-family: inherit; transition: opacity 0.3s ease, transform 0.3s ease; }
+
+/* 收缩状态 */
+.stats-overlay.is-collapsed { opacity: 0.3; }
+.stats-overlay.is-collapsed .overlay-header,
+.stats-overlay.is-collapsed .card-panel,
+.stats-overlay.is-collapsed .engine-panel,
+.stats-overlay.is-collapsed .orb-panel,
+.stats-overlay.is-collapsed .mini-bar { opacity: 0; pointer-events: none; }
+
+/* 吸附边缘时的视觉提示 */
+.stats-overlay.is-snap-left.is-collapsed { transform: translateX(-85%); }
+.stats-overlay.is-snap-right.is-collapsed { transform: translateX(85%); }
+.stats-overlay.is-snap-top.is-collapsed { transform: translateY(-85%); }
+.stats-overlay.is-snap-bottom.is-collapsed { transform: translateY(85%); }
+
+/* 鼠标悬停时展开 */
+.stats-overlay.is-collapsed:hover { opacity: 1; transform: translate(0, 0); }
+.stats-overlay.is-collapsed:hover .overlay-header,
+.stats-overlay.is-collapsed:hover .card-panel,
+.stats-overlay.is-collapsed:hover .engine-panel,
+.stats-overlay.is-collapsed:hover .orb-panel,
+.stats-overlay.is-collapsed:hover .mini-bar { opacity: 1; pointer-events: auto; }
+
+.overlay-header { height: 15px; display: flex; align-items: center; justify-content: space-between; padding: 0 2px; transition: opacity 0.3s ease; }
 .overlay-kicker { color: #858585; font-size: 10px; font-weight: 600; letter-spacing: .04em; }
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #10ad5d; animation: breathe 3.8s ease-in-out infinite; }
 .status-dot.is-loading { background: #fbbf24; }
-.card-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid #343434; border-radius: 8px; background: rgba(24,24,24,.84); }
+.card-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid #343434; border-radius: 8px; background: rgba(24,24,24,.84); transition: opacity 0.3s ease; }
 .metric-card { min-width: 0; padding: 3px 6px; border: 1px solid rgba(62,62,62,.75); border-radius: 5px; background: rgba(36,36,36,.9); }
 .metric-label { color: #777; font-size: 9px; white-space: nowrap; }
 .metric-value { color: #fff; font-family: var(--font-num, ui-monospace, monospace); font-size: 14px; line-height: 1.15; transition: color .35s ease, text-shadow .35s ease; }
 .metric-value.is-good, .metric-value--good { color: var(--accent); }
 .is-updated .metric-value { text-shadow: 0 0 6px rgba(110,231,165,.7); }
-.engine-panel { position: relative; display: flex; align-items: center; gap: 8px; min-height: calc(100vh - 27px); padding: 5px 7px; border: 1px solid rgba(71,112,112,.55); border-radius: 9px; background: linear-gradient(135deg, rgba(18,39,40,.92), rgba(18,24,28,.85)); overflow: hidden; }
+.engine-panel { position: relative; display: flex; align-items: center; gap: 8px; min-height: calc(100vh - 27px); padding: 5px 7px; border: 1px solid rgba(71,112,112,.55); border-radius: 9px; background: linear-gradient(135deg, rgba(18,39,40,.92), rgba(18,24,28,.85)); overflow: hidden; transition: opacity 0.3s ease; }
 .engine-panel::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent 0 11px, rgba(110,231,165,.07) 12px); animation: scan 8s linear infinite; pointer-events: none; }
 .engine-gauge { position: relative; flex: 0 0 74px; height: 74px; }
 .engine-gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
