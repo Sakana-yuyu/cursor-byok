@@ -5,6 +5,7 @@ import ModelAdapterTestCard from "@/components/ModelAdapterTestCard.vue";
 import { showModal } from "@/composables/useModal";
 import {
   appState,
+  classifyModelProtocol,
   createEmptyModelAdapter,
   deleteModelAdapterAt,
   deleteModelAdaptersBatch,
@@ -353,10 +354,12 @@ const selectedCatalogModels = ref(new Set());
 // 可用性探测
 const catalogProbe = useModelProbe();
 
-function protocolGroupForType(type) {
+function protocolGroupForType(type, modelID = "", baseURL = "") {
   if (type === "anthropic") return PROTOCOL_GROUP_ANTHROPIC_MESSAGES;
   if (type === "gemini") return PROTOCOL_GROUP_GEMINI_NATIVE;
-  return "";
+  // openai 类型按模型名与 baseURL 推断协议分组（responses / chat_completions），
+  // 与 ModelCatalog.vue 保持一致，避免导入后 protocolGroup 为空导致分组丢失。
+  return classifyModelProtocol(type, modelID, baseURL, "", "");
 }
 
 function buildProbeAdapter(model) {
@@ -375,8 +378,9 @@ function buildProbeAdapter(model) {
     modelID: model.id,
     tooltipData: `探测 ${model.id}`,
     protocolMode: "auto",
-    protocolGroup: protocolGroupForType(inferredType),
+    protocolGroup: protocolGroupForType(inferredType, model.id, supplierMeta.value.baseURL || queryBaseURL.value),
     openAIEndpoint: inferredType === "openai" ? OPENAI_ENDPOINT_RESPONSES : "",
+    openAIRequestGroup: inferredType === "openai" ? protocolGroupForType(inferredType, model.id, supplierMeta.value.baseURL || queryBaseURL.value) : "",
     anthropicThinkingEffort: inferredType === "anthropic" ? "xhigh" : "",
   };
 }
@@ -491,9 +495,9 @@ async function handleBatchAddModels() {
         contextWindowTokens: model.contextWindowTokens || 0,
         pricing: model.pricing || null,
         protocolMode: "auto",
-        protocolGroup: protocolGroupForType(inferredType),
+        protocolGroup: protocolGroupForType(inferredType, model.id, seedBaseURL),
         openAIEndpoint: inferredType === "openai" ? OPENAI_ENDPOINT_RESPONSES : "",
-        openAIRequestGroup: "",
+        openAIRequestGroup: inferredType === "openai" ? protocolGroupForType(inferredType, model.id, seedBaseURL) : "",
         anthropicThinkingEffort: inferredType === "anthropic" ? "xhigh" : "",
       };
     });

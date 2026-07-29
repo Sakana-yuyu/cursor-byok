@@ -17,7 +17,10 @@ import (
 
 const (
 	// providerRetryMaxAttempts 表示建连阶段的最大尝试次数（含首次）。
-	providerRetryMaxAttempts = 3
+	// 已降为 1：429/5xx 等瞬时状态码不再在此层自行重试退避，
+	// 而是直接把响应交回 router 外层统一调度，避免内外双层退避叠加放大等待时间。
+	// 总重试上限由 routerMaxStreamAttempts（10）统管。
+	providerRetryMaxAttempts = 1
 	// providerRetryBaseDelay 表示指数退避的基准间隔。
 	providerRetryBaseDelay = 200 * time.Millisecond
 	// providerRetryMaxDelay 表示指数退避的最大间隔。

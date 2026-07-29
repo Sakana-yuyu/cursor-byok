@@ -9,6 +9,7 @@ import RequestMetrics from "@/views/RequestMetrics.vue";
 import SupplierDetail from "@/views/SupplierDetail.vue";
 import MetricsDetail from "@/views/MetricsDetail.vue";
 import StatsOverlay from "@/views/StatsOverlay.vue";
+import Diagnostics from "@/views/Diagnostics.vue";
 
 const router = createRouter({
   history: isBrowserPreview ? createWebHistory() : createWebHashHistory(),
@@ -58,6 +59,11 @@ const router = createRouter({
       path: "/stats-overlay",
       component: StatsOverlay,
       meta: { showIcon: false, title: "实时统计", directlyClose: true },
+    },
+    {
+      path: "/diagnostics",
+      component: Diagnostics,
+      meta: { showIcon: false, title: "模型协议诊断", directlyClose: true },
     },
 
   ],

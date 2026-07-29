@@ -46,7 +46,9 @@ func NewRouter(resolver ChannelResolver) *Router {
 
 const (
 	// routerMaxStreamAttempts 是跨渠道故障切换的尝试上限。
-	routerMaxStreamAttempts = 8
+	// 内层 providerRetryMaxAttempts 已降为 1（不再自行重试 429/5xx），
+	// 因此本值即单次 Stream 调用的总尝试上限；耗尽后直接返回错误。
+	routerMaxStreamAttempts = 10
 	// routerRetryBaseDelay 是渠道切换/重试之间的基准退避间隔。
 	routerRetryBaseDelay = 150 * time.Millisecond
 	// routerRetryMaxDelay 是渠道切换/重试之间的最大退避间隔。
