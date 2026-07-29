@@ -12,6 +12,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -287,7 +289,44 @@ const (
 	statsOverlayStyleCard   = "card"
 	statsOverlayStyleEngine = "engine"
 	statsOverlayStyleOrb    = "orb"
+	statsOverlayDockSize    = 44
 )
+
+type statsOverlayLayout struct {
+	style                   string
+	edge                    string
+	collapsed               bool
+	x, y                    int
+	screenLeft, screenTop   int
+	screenWidth, screenHeight int
+}
+
+// parseStatsOverlayLayout 解析前端发送的内部布局 DSL：
+// layout|collapsed/expanded|edge|style|x|y|screenLeft|screenTop|screenWidth|screenHeight。
+func parseStatsOverlayLayout(value string) (statsOverlayLayout, bool) {
+	parts := strings.Split(value, "|")
+	if len(parts) != 10 || parts[0] != "layout" {
+		return statsOverlayLayout{}, false
+	}
+	parseInt := func(raw string) (int, bool) {
+		parsed, err := strconv.Atoi(raw)
+		return parsed, err == nil
+	}
+	x, okX := parseInt(parts[4])
+	y, okY := parseInt(parts[5])
+	screenLeft, okLeft := parseInt(parts[6])
+	screenTop, okTop := parseInt(parts[7])
+	screenWidth, okWidth := parseInt(parts[8])
+	screenHeight, okHeight := parseInt(parts[9])
+	if !okX || !okY || !okLeft || !okTop || !okWidth || !okHeight || screenWidth <= 0 || screenHeight <= 0 {
+		return statsOverlayLayout{}, false
+	}
+	return statsOverlayLayout{
+		style: parts[3], edge: parts[2], collapsed: parts[1] == "collapsed",
+		x: x, y: y, screenLeft: screenLeft, screenTop: screenTop,
+		screenWidth: screenWidth, screenHeight: screenHeight,
+	}, true
+}
 
 func statsOverlayWindowSize(style string) (width, height int) {
 	switch style {
@@ -384,10 +423,17 @@ func (s *WindowService) OpenStatsOverlayWindow(x, y int) {
 	s.statsOverlayWindow = win
 }
 
-// UpdateStatsOverlayWindow 更新现有统计浮窗的样式尺寸和置顶状态。
-// 浮窗不存在时直接返回，不创建新窗口。
+// UpdateStatsOverlayWindow 更新现有统计浮窗的样式尺寸、贴边布局和置顶状态。
+// style 既可传普通样式，也可传 parseStatsOverlayLayout 支持的内部布局 DSL。
 func (s *WindowService) UpdateStatsOverlayWindow(style string, alwaysOnTop bool) {
+	layout, hasLayout := parseStatsOverlayLayout(style)
+	if hasLayout {
+		style = layout.style
+	}
 	width, height := statsOverlayWindowSize(style)
+	if hasLayout && layout.collapsed {
+		width, height = statsOverlayDockSize, statsOverlayDockSize
+	}
 
 	s.mu.RLock()
 	win := s.statsOverlayWindow
@@ -397,6 +443,26 @@ func (s *WindowService) UpdateStatsOverlayWindow(style string, alwaysOnTop bool)
 	}
 
 	win.SetSize(width, height)
+	if hasLayout {
+		x, y := layout.x, layout.y
+		screenRight := layout.screenLeft + layout.screenWidth
+		screenBottom := layout.screenTop + layout.screenHeight
+		switch layout.edge {
+		case "left":
+			x = layout.screenLeft
+		case "right":
+			x = screenRight - width
+		case "top":
+			y = layout.screenTop
+		case "bottom":
+			y = screenBottom - height
+		}
+		if x < layout.screenLeft { x = layout.screenLeft }
+		if y < layout.screenTop { y = layout.screenTop }
+		if x+width > screenRight { x = screenRight - width }
+		if y+height > screenBottom { y = screenBottom - height }
+		win.SetRelativePosition(x, y)
+	}
 	win.SetAlwaysOnTop(alwaysOnTop)
 }
 
