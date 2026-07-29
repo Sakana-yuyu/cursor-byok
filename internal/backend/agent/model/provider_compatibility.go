@@ -21,12 +21,17 @@ func classifyProviderCompatibility(baseURL, modelID string) ProviderCompatibilit
 	base := strings.ToLower(strings.TrimSpace(baseURL))
 	model := strings.ToLower(strings.TrimSpace(modelID))
 	signal := base + " " + model
-	policy := ProviderCompatibility{}
+	// prompt_cache_key 默认对所有 provider 开启。绝大多数 OpenAI 兼容服务
+	// （OpenAI 官方、xAI Grok、智谱 GLM、通义 Qwen、月之暗面 Kimi、DeepSeek 及各类第三方中转）
+	// 要么原生支持 prompt_cache_key，要么会忽略未知字段，因此默认发送，让 provider 按
+	// conversation 复用前缀缓存，显著提升缓存命中率。仅对已知会因未知字段报错的 provider 显式关闭。
+	policy := ProviderCompatibility{PromptCacheKey: true}
 	switch {
 	case strings.Contains(base, "api.openai.com") || strings.Contains(base, "chatgpt.com/backend-api/codex"):
-		policy.PromptCacheKey = true
+		// OpenAI 官方端点，继承默认 PromptCacheKey=true。
 	case strings.Contains(signal, "githubcopilot") || strings.Contains(signal, "copilot"):
 		policy.Kind = "copilot"
+		// Copilot 会因未知字段报错，显式关闭。
 		policy.PromptCacheKey = false
 		policy.StripPrivateFields = true
 	case strings.Contains(signal, "deepseek"):
@@ -40,7 +45,7 @@ func classifyProviderCompatibility(baseURL, modelID string) ProviderCompatibilit
 		policy.DropGrok45Sampling = strings.Contains(model, "grok-4.5")
 	case strings.Contains(signal, "kimi") || strings.Contains(signal, "moonshot"):
 		policy.Kind = "kimi"
-		policy.PromptCacheKey = strings.Contains(base, "api.kimi.com/coding")
+		// Kimi 继承默认 PromptCacheKey=true；api.kimi.com/coding 端点原生支持。
 	case strings.Contains(signal, "openrouter"):
 		policy.Kind = "openrouter"
 	case strings.Contains(signal, "siliconflow"):
