@@ -156,6 +156,8 @@ github.com/wailsapp/go-webview2 v1.0.23 h1:jmv8qhz1lHibCc79bMM/a/FqOnnzOGEisLav+
 github.com/wailsapp/go-webview2 v1.0.23/go.mod h1:qJmWAmAmaniuKGZPWwne+uor3AHMB5PFhqiK0Bbj8kc=
 github.com/wailsapp/wails/v3 v3.0.0-alpha.74 h1:wRm1EiDQtxDisXk46NtpiBH90STwfKp36NrTDwOEdxw=
 github.com/wailsapp/wails/v3 v3.0.0-alpha.74/go.mod h1:4saK4A4K9970X+X7RkMwP2lyGbLogcUz54wVeq4C/V8=
+github.com/wangbin/jiebago v0.3.2 h1:reQKp0xTXWFK7eQ19L6Ofq5xODSR2hcam55qcdCCNpw=
+github.com/wangbin/jiebago v0.3.2/go.mod h1:PAqQLauF0qAzy/63jBvO7Goh0oYBq1ocr0OXHLlujwQ=
 github.com/xanzy/ssh-agent v0.3.3 h1:+/15pJfg/RsTxqYcX6fHqOXZwwMP+2VyYWJeWM2qQFM=
 github.com/xanzy/ssh-agent v0.3.3/go.mod h1:6dzNDKs0J9rVPHPhaGCukekBHKqfl+L3KghI1Bc68Uw=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=

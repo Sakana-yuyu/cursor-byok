@@ -84,7 +84,9 @@ func (compiler *DefaultPromptCompiler) Compile(conversation *ConversationFile, m
 	globalSkillsPrompt := ""
 	globalSkillsCount := 0
 	if compiler.skills != nil && normalizedMode != agentv1.AgentMode_AGENT_MODE_DEBUG {
-		globalSkillsPrompt, globalSkillsCount, err = compiler.skills.BuildAgentSkillsPromptSection()
+		// 内置技能走「调用链稀疏激活」：按当前请求文本相关性只注入 Top-K 技能，
+		// 不再全量注入。详见 docs/superpowers/specs/2026-07-29-skill-sparse-activation-design.md。
+		globalSkillsPrompt, globalSkillsCount, err = compiler.skills.BuildActivatedSkillsPromptSection(latestUserText, conversation)
 		if err != nil {
 			return CompiledConversation{}, err
 		}
@@ -119,7 +121,7 @@ func (compiler *DefaultPromptCompiler) Compile(conversation *ConversationFile, m
 		Messages:           messages,
 		StableMessageCount: stableReplayCount,
 		Tools:              tools,
-		CompileSummary:     fmt.Sprintf("mode=%s asset_mode=%s child=%t messages=%d tools=%d shared_rules_total=%d shared_rules_deduped=%d global_skills=%d", normalizedMode.String(), string(assetMode), isChildConversationSubagentTypeName(subagentTypeName), len(messages), len(tools), sharedRuleTotal, sharedRuleCount, globalSkillsCount),
+		CompileSummary:     fmt.Sprintf("mode=%s asset_mode=%s child=%t messages=%d tools=%d shared_rules_total=%d shared_rules_deduped=%d activated_skills=%d", normalizedMode.String(), string(assetMode), isChildConversationSubagentTypeName(subagentTypeName), len(messages), len(tools), sharedRuleTotal, sharedRuleCount, globalSkillsCount),
 	}, nil
 }
 
