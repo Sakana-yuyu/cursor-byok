@@ -20,6 +20,12 @@ const (
 	projectedWebFetchReplayLimit   = 32 * projectedReplayKiB
 	projectedWebSearchReplayLimit  = 16 * projectedReplayKiB
 	projectedMcpReplayLimit        = 32 * projectedReplayKiB
+
+	// 陈旧工具结果激进截断阈值（移植自 Reasonix 的「cache-first context maintenance」）。
+	// 投影层不改动历史，只让「陈旧且巨大」的工具结果在模型视图里比当前更短，从而减缓上下文增长、
+	// 推迟昂贵的摘要压缩，并稳态下保持 prompt-cache 命中。这是零缓存风险的 append-only 路径。
+	staleToolResultAggressiveThreshold = 8 * projectedReplayKiB // 仅当陈旧结果 > 8 KiB 才启动激进截断，避免无谓截断已经很小的结果
+	staleToolResultReplayLimit         = 4 * projectedReplayKiB // 陈旧大结果的目标上限，远小于各工具的常规 32-128 KiB 限制
 )
 
 func limitProjectedToolResultReplay(toolName string, content string, resultText string, fromStoredToolCall bool, historical bool) string {
@@ -44,9 +50,29 @@ func limitProjectedToolResultReplay(toolName string, content string, resultText 
 	if !ok {
 		return strings.TrimSpace(content)
 	}
+	// 陈旧（非当前/上一轮）且明显过大的工具结果，把上限下调到 staleToolResultReplayLimit。
+	// 这里只动投影给模型看的内容，不碰持久化历史，因此完全符合 append-only 与 prefix-cache 稳定性。
+	staleAggressive := historical && limit > staleToolResultReplayLimit && len(content) > staleToolResultAggressiveThreshold
+	if staleAggressive {
+		limit = staleToolResultReplayLimit
+	}
 	content = strings.TrimSpace(content)
 	if len(content) <= limit {
 		return content
+	}
+	if staleAggressive {
+		// 陈旧大结果两端都可能携带关键信息（命令在头部、报错/退出码在尾部），故保留头尾。
+		if fromStoredToolCall {
+			fallback := strings.TrimSpace(resultText)
+			notice := fmt.Sprintf("[stale tool result replay shortened: stored ToolCall result exceeded %d bytes]", limit)
+			if fallback == "" {
+				fallback = notice
+			} else {
+				fallback += "\n\n" + notice
+			}
+			return truncateProjectedReplayTextMiddle(toolName, fallback, limit)
+		}
+		return truncateProjectedReplayTextMiddle(toolName, content, limit)
 	}
 	if fromStoredToolCall {
 		fallback := strings.TrimSpace(resultText)

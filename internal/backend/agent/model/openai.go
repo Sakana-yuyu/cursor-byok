@@ -245,7 +245,25 @@ func shouldExposeOpenAIResponsesImageGeneration(req StreamRequest, tools []map[s
 	if !openAIResponsesToolNamePresent(tools, "GenerateImage") {
 		return false
 	}
+	// 若用户最新消息已携带图片附件，说明这是识图请求而非生成请求，
+	// 不应注入 image_generation 工具——否则账户无生成权限时会触发
+	// "Image generation is not enabled for this group" 403 错误。
+	if openAILatestUserMessageHasImageAttachment(req) {
+		return false
+	}
 	return openAITextLooksLikeImageGenerationRequest(openAILatestUserRequestText(req))
+}
+
+// openAILatestUserMessageHasImageAttachment 判断最新用户消息是否携带图片附件。
+func openAILatestUserMessageHasImageAttachment(req StreamRequest) bool {
+	for i := len(req.Messages) - 1; i >= 0; i-- {
+		msg := req.Messages[i]
+		if strings.TrimSpace(strings.ToLower(msg.Role)) != "user" {
+			continue
+		}
+		return hasImageContentParts(msg.ContentParts)
+	}
+	return false
 }
 
 func ensureOpenAIResponsesImageGenerationTool(tools []map[string]any) []map[string]any {
@@ -309,17 +327,38 @@ func textBetweenOpenAITag(text string, tag string) string {
 	return strings.TrimSpace(text[start : start+end])
 }
 
+// openAITextLooksLikeImageGenerationRequest 判断用户请求文本是否像图像生成请求。
+// 原策略只匹配图像名词，会把「分析这张图片」「识别图像」等识图句式也误判为生成请求。
+// 新策略要求同时出现「生成动词」+「图像名词」，大幅降低识图请求的误触发率。
 func openAITextLooksLikeImageGenerationRequest(text string) bool {
 	trimmed := strings.TrimSpace(strings.ToLower(text))
 	if trimmed == "" {
 		return false
 	}
-	imageTerms := []string{
+	generationVerbs := []string{
+		// 中文生成动词
+		"生成", "创建", "创作", "绘制", "画",
+		// 英文生成动词
+		"generate", "create", "draw", "render", "make", "design", "produce",
+	}
+	imageNouns := []string{
+		// 中文图像名词
 		"图片", "图像", "照片", "相片", "人像", "头像", "插画", "海报", "壁纸", "封面", "摄影", "真实摄影",
+		// 英文图像名词
 		"image", "picture", "photo", "portrait", "illustration", "poster", "wallpaper", "cover", "photorealistic",
 	}
-	for _, term := range imageTerms {
-		if strings.Contains(trimmed, term) {
+	hasVerb := false
+	for _, verb := range generationVerbs {
+		if strings.Contains(trimmed, verb) {
+			hasVerb = true
+			break
+		}
+	}
+	if !hasVerb {
+		return false
+	}
+	for _, noun := range imageNouns {
+		if strings.Contains(trimmed, noun) {
 			return true
 		}
 	}

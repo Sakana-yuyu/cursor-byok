@@ -18,11 +18,22 @@ let lastSavedX = null;
 let lastSavedY = null;
 
 const REFRESH_MS = 10000;
-const POSITION_CHECK_MS = 1000;
+const POSITION_CHECK_MS = 300;       // 轮询提速，响应更灵敏
 const STORAGE_KEY = "cursor-byok.stats-overlay.preferences";
-const SNAP_THRESHOLD = 20; // 距离边缘多少像素时吸附
-const COLLAPSED_WIDTH = 8; // 收缩后的宽度
-const COLLAPSED_HEIGHT = 8; // 收缩后的高度
+const SNAP_ENTER_THRESHOLD = 40;     // 进入吸附区的距离（像素）
+const SNAP_LEAVE_THRESHOLD = 80;     // 离开吸附区的距离——比进入阈值大，形成迟滞防抖动
+
+// snapCollapse 是否启用贴边自动收缩（来自 preferences）
+const snapCollapse = computed(() => preferences.value.snapCollapse !== false);
+
+async function toggleSnapCollapse() {
+  const next = !snapCollapse.value;
+  await setStatsOverlayPreferences({ snapCollapse: next });
+  if (!next) {
+    // 关闭贴标收缩时立即展开面板
+    isCollapsed.value = false;
+  }
+}
 
 // 监听窗口位置变化并持久化。窗口通过原生拖动移动，
 // window.screenX/screenY 反映窗口在屏幕上的坐标。
@@ -30,43 +41,36 @@ function checkPosition() {
   const x = window.screenX;
   const y = window.screenY;
   if (typeof x !== "number" || typeof y !== "number") return;
-  
-  // 检测吸附边缘
-  const screenWidth = window.screen.availWidth;
-  const screenHeight = window.screen.availHeight;
-  const windowWidth = window.outerWidth;
+
+  // 使用 availLeft/availTop 修正多屏偏移，防止次级屏幕的左/上边缘误判
+  const screenLeft   = window.screen.availLeft  || 0;
+  const screenTop    = window.screen.availTop   || 0;
+  const screenRight  = screenLeft + (window.screen.availWidth  || window.screen.width);
+  const screenBottom = screenTop  + (window.screen.availHeight || window.screen.height);
+  const windowWidth  = window.outerWidth;
   const windowHeight = window.outerHeight;
-  
+
+  // 迟滞：已吸附到某边时用更大的离开阈值，防止窗口在边缘附近来回闪烁
+  const t = (edge) => snapEdge.value === edge ? SNAP_LEAVE_THRESHOLD : SNAP_ENTER_THRESHOLD;
+
   let newSnapEdge = null;
-  
-  // 左边缘
-  if (x <= SNAP_THRESHOLD) {
-    newSnapEdge = "left";
-  }
-  // 右边缘
-  else if (x + windowWidth >= screenWidth - SNAP_THRESHOLD) {
-    newSnapEdge = "right";
-  }
-  // 上边缘
-  else if (y <= SNAP_THRESHOLD) {
-    newSnapEdge = "top";
-  }
-  // 下边缘
-  else if (y + windowHeight >= screenHeight - SNAP_THRESHOLD) {
-    newSnapEdge = "bottom";
-  }
-  
-  // 更新吸附状态
+  if      (x <= screenLeft + t("left"))                   newSnapEdge = "left";
+  else if (x + windowWidth  >= screenRight  - t("right")) newSnapEdge = "right";
+  else if (y <= screenTop   + t("top"))                   newSnapEdge = "top";
+  else if (y + windowHeight >= screenBottom - t("bottom")) newSnapEdge = "bottom";
+
+  // 更新吸附状态，仅在边缘变化时才操作 isCollapsed
   if (newSnapEdge !== snapEdge.value) {
     snapEdge.value = newSnapEdge;
-    // 吸附到边缘时收缩，离开边缘时展开
-    if (newSnapEdge && !isHovering.value) {
-      isCollapsed.value = true;
-    } else if (!newSnapEdge) {
-      isCollapsed.value = false;
+    if (snapCollapse.value) {
+      if (newSnapEdge && !isHovering.value) {
+        isCollapsed.value = true;
+      } else if (!newSnapEdge) {
+        isCollapsed.value = false;
+      }
     }
   }
-  
+
   // 位置变化超过阈值才保存，避免频繁写入
   if (lastSavedX === null || lastSavedY === null || Math.abs(x - lastSavedX) > 2 || Math.abs(y - lastSavedY) > 2) {
     lastSavedX = x;
@@ -78,7 +82,7 @@ function checkPosition() {
 // 鼠标进入浮窗
 function handleMouseEnter() {
   isHovering.value = true;
-  if (snapEdge.value) {
+  if (snapEdge.value && snapCollapse.value) {
     isCollapsed.value = false;
   }
 }
@@ -86,7 +90,7 @@ function handleMouseEnter() {
 // 鼠标离开浮窗
 function handleMouseLeave() {
   isHovering.value = false;
-  if (snapEdge.value) {
+  if (snapEdge.value && snapCollapse.value) {
     isCollapsed.value = true;
   }
 }
@@ -166,9 +170,12 @@ watch(() => appState.statsOverlayPreferences, (next) => {
 
 onMounted(() => {
   syncPreferences();
+  // 用已保存坐标初始化，防止首次轮询把窗口初始位置（可能是屏幕中心）误覆盖掉已存的正确坐标
+  const saved = getStatsOverlayPreferences();
+  if (typeof saved.x === "number") lastSavedX = saved.x;
+  if (typeof saved.y === "number") lastSavedY = saved.y;
   void load();
   timer = setInterval(load, REFRESH_MS);
-  // 定期检查窗口位置变化并保存
   positionTimer = setInterval(checkPosition, POSITION_CHECK_MS);
   window.addEventListener("storage", onStorage);
   window.addEventListener("stats-overlay-preferences-changed", onPreferencesChanged);
@@ -210,6 +217,13 @@ onUnmounted(() => {
     <div v-show="!isCollapsed" class="overlay-content">
     <header class="overlay-header">
       <span class="overlay-kicker">实时统计</span>
+      <button
+        class="snap-toggle"
+        :class="{ 'is-off': !snapCollapse }"
+        :title="snapCollapse ? '贴边自动收缩：开启（点击关闭）' : '贴边自动收缩：关闭（点击开启）'"
+        style="--wails-draggable: no-drag"
+        @click.stop="toggleSnapCollapse"
+      ></button>
       <span class="status-dot" :class="{ 'is-loading': loading }" title="每 10 秒自动刷新"></span>
     </header>
 
@@ -250,22 +264,23 @@ onUnmounted(() => {
       </div>
       <div class="orb-core"><div class="orb-glow"></div><div class="orb-sphere"><div class="orb-sphere-highlight"></div></div><div class="orb-ring"></div></div>
     </section>
+    </div>
 
-    <!-- 极简实时数据条：仅在卡片式与引擎仪表下方显示，球形不显示。每次刷新跳动一次。 -->
-    <footer v-if="style === 'card' || style === 'engine'" class="mini-bar" :class="{ 'is-tick': updated }">
+    <!-- 极简实时数据条：收起时显示缩略信息，仅卡片式与引擎仪表支持，球形不显示 -->
+    <div v-if="isCollapsed && (style === 'card' || style === 'engine')" class="mini-bar" :class="{ 'is-tick': updated }">
       <span class="mini-rate" :class="{ 'is-good': displayRate != null && displayRate > 0.3 }">{{ formatRate(displayRate) }}</span>
       <span class="mini-sep">·</span>
       <span class="mini-tokens">{{ formatCompact(totalTokens) }}</span>
       <span class="mini-sep">·</span>
       <span class="mini-turns">{{ formatCompact(turnsTotal) }}</span>
       <span class="mini-tick" :class="{ 'is-on': updated }"></span>
-    </footer>
     </div>
   </div>
 </template>
 
 <style scoped>
-.stats-overlay { --accent: #6ee7a5; --muted: #777; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; background: transparent; color: #e5e5e5; font-family: inherit; transition: all 0.3s ease; }
+.stats-overlay { --accent: #6ee7a5; --muted: #777; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; background: transparent; color: #e5e5e5; font-family: inherit; transition: all 0.3s ease; pointer-events: none; }
+.stats-overlay > * { pointer-events: auto; }
 
 /* 悬浮球样式 */
 .float-ball { position: relative; width: 60px; height: 60px; cursor: pointer; }
@@ -281,8 +296,11 @@ onUnmounted(() => {
 /* 完整面板容器 */
 .overlay-content { padding: 6px 8px; }
 
-/* 收缩状态 */
+/* 收缩状态：完整面板隐藏 */
 .stats-overlay.is-collapsed .overlay-content { display: none; }
+
+/* 收缩状态：容器收缩到悬浮球大小，避免大块背景 */
+.stats-overlay.is-collapsed { width: auto; height: auto; }
 
 /* 吸附边缘时的位置调整 */
 .stats-overlay.is-snap-left .float-ball { transform: translateX(-20px); }
@@ -295,6 +313,15 @@ onUnmounted(() => {
 
 .overlay-header { height: 15px; display: flex; align-items: center; justify-content: space-between; padding: 0 2px; transition: opacity 0.3s ease; }
 .overlay-kicker { color: #858585; font-size: 10px; font-weight: 600; letter-spacing: .04em; }
+
+/* 贴标收缩开关按钮 */
+.snap-toggle { width: 10px; height: 10px; border: 1.5px solid rgba(110,231,165,.55); border-radius: 2px; background: none; cursor: pointer; padding: 0; flex-shrink: 0; position: relative; transition: border-color .2s, opacity .2s; }
+.snap-toggle::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 4px; height: 4px; border-radius: 50%; background: rgba(110,231,165,.75); transition: background .2s; }
+.snap-toggle.is-off { border-color: rgba(100,100,100,.45); }
+.snap-toggle.is-off::after { background: rgba(100,100,100,.45); }
+.snap-toggle:hover { border-color: rgba(110,231,165,.9); opacity: 1; }
+.snap-toggle.is-off:hover { border-color: rgba(150,150,150,.7); }
+
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #10ad5d; animation: breathe 3.8s ease-in-out infinite; }
 .status-dot.is-loading { background: #fbbf24; }
 .card-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid #343434; border-radius: 8px; background: rgba(24,24,24,.84); transition: opacity 0.3s ease; }
@@ -339,8 +366,8 @@ onUnmounted(() => {
 @keyframes orbSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @keyframes pulse { 0%,100% { opacity: .55; transform: scale(.92); } 50% { opacity: .9; transform: scale(1.06); } }
 
-/* 极简实时数据条：仅 card/engine 底部，一行紧凑数字 + 刷新跳动指示。 */
-.mini-bar { display: flex; align-items: center; justify-content: center; gap: 4px; height: 16px; margin-top: 4px; padding: 0 6px; border-top: 1px solid rgba(52,52,52,.7); color: #9a9a9a; font: 600 9px var(--font-num, ui-monospace, monospace); letter-spacing: .02em; transition: opacity .3s ease; }
+/* 极简实时数据条：收起时显示的缩略信息 */
+.mini-bar { display: flex; align-items: center; justify-content: center; gap: 4px; height: auto; padding: 4px 8px; border-radius: 12px; background: rgba(24,24,24,.9); border: 1px solid rgba(52,52,52,.7); color: #9a9a9a; font: 600 10px var(--font-num, ui-monospace, monospace); letter-spacing: .02em; transition: opacity .3s ease; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .mini-rate { color: #cfcfcf; }
 .mini-rate.is-good { color: var(--accent); }
 .mini-sep { color: #555; }

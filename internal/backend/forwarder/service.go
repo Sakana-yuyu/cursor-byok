@@ -1474,6 +1474,7 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	stream.ProviderFinishReason = ""
 	stream.ProviderUsage = turnUsageSnapshot{}
 	stream.ToolInvocationCount = 0
+	stream.StaleToolResultSnipApplied = false
 	modelCallID := stream.CurrentModelCallID
 	conversationID := stream.ConversationID
 	requestID := stream.RequestID
@@ -1535,6 +1536,23 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 			service.setTurnPhase(stream, TurnPhaseIdle)
 		}
 		return nil
+	}
+	// 陈旧工具结果 snip/prune 救回：若压缩评估阶段已持久化缩短陈旧工具结果，则前面的
+	// conversation/compiled 是 snip 之前的快照，需基于已更新的 checkpoint 重新快照+编译，
+	// 让后续 provider 请求使用 snip 后的新鲜历史（参考 tool_result_snip.go）。
+	if stream.staleToolResultSnipAppliedLocked() {
+		freshConversation, _, _, freshErr := service.snapshotCheckpointConversation(stream)
+		if freshErr != nil {
+			service.setTurnPhase(stream, TurnPhaseFailed)
+			return service.failStream(stream, "unknown", freshErr)
+		}
+		recompiled, recompileErr := service.compiler.Compile(freshConversation, mode, latestUserText, modelName)
+		if recompileErr != nil {
+			service.setTurnPhase(stream, TurnPhaseFailed)
+			return service.failStream(stream, "unknown", recompileErr)
+		}
+		conversation = freshConversation
+		compiled = guardCompiledConversationForProvider(recompiled)
 	}
 	if err := service.syncSummarySnapshot(stream, conversation, requestID, modelCallID); err != nil {
 		service.setTurnPhase(stream, TurnPhaseFailed)
