@@ -37,6 +37,9 @@ type ConversationFile struct {
 	AutoCompactionSourceModelCallID string                                `json:"auto_compaction_source_model_call_id,omitempty"`
 	CurrentPlanText                 string                                `json:"current_plan_text,omitempty"`
 	CurrentPlans                    map[string]*agentv1.PlanRegistryEntry `json:"current_plans,omitempty"`
+	// LastActivatedSkills 记录该会话最近一次稀疏激活注入的技能名列表，
+	// 供子代理会话读取作保底候选（调用链传递）。不进 model-visible history，不影响 replay prefix。
+	LastActivatedSkills []string                              `json:"last_activated_skills,omitempty"`
 	CurrentTodos                    []*agentv1.TodoItem                   `json:"current_todos,omitempty"`
 	LatestRequestPrefix             *ConversationRequestPrefix            `json:"latest_request_prefix,omitempty"`
 	LastProviderCall                *ConversationProviderCall             `json:"last_provider_call,omitempty"`

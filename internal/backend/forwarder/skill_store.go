@@ -30,11 +30,28 @@ type GlobalSkill struct {
 type SkillStore struct {
 	root string
 	mu   sync.Mutex
+	// activator 实现调用链稀疏激活；为 nil 时退化为全量注入（保持旧行为）。
+	activator *SkillActivator
+	// convStore 可选，用于读写会话父子激活集；为 nil 时父子传递降级。
+	convStore *ConversationFileStore
 }
 
 // NewSkillStore 创建 SkillStore。root 为空时 Scan 始终返回空。
 func NewSkillStore(root string) *SkillStore {
-	return &SkillStore{root: strings.TrimSpace(root)}
+	store := &SkillStore{root: strings.TrimSpace(root)}
+	store.activator = NewSkillActivator(store)
+	return store
+}
+
+// SetConversationStore 注入会话存储，启用调用链父子激活集传递。
+// 必须在 NewSkillStore 之后、首次编译之前调用。传 nil 关闭父子传递。
+func (s *SkillStore) SetConversationStore(convStore *ConversationFileStore) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.convStore = convStore
+	s.mu.Unlock()
 }
 
 // Scan 扫描 root/<skillName>/SKILL.md，返回所有有效技能（按 name 排序）。
@@ -103,6 +120,105 @@ func (s *SkillStore) BuildAgentSkillsPromptSection() (string, int, error) {
 	}
 	lines = append(lines, `</agent_skills>`)
 	return strings.Join(lines, "\n"), len(skills), nil
+}
+
+// BuildActivatedSkillsPromptSection 按「调用链稀疏激活」选取技能并构建 <agent_skills> 片段。
+//
+// 激活规则（见 docs/superpowers/specs/2026-07-29-skill-sparse-activation-design.md）：
+//   - 用 BM25 对 queryText 与各技能 description 打分，取 Top-3（≥阈值）。
+//   - 元技能 find-skills 始终常驻（不占 Top-3 名额）。
+//   - conversation 为子代理会话时，重打分并以父会话 LastActivatedSkills 作保底候选。
+//   - 非子代理会话时，best-effort 把本轮激活技能名写回 conversation.LastActivatedSkills。
+//
+// 返回 (片段文本, 激活技能数, error)；无激活技能时返回 ("", 0, nil)。
+// activator 为 nil 时退化为全量注入（调用 BuildAgentSkillsPromptSection）。
+func (s *SkillStore) BuildActivatedSkillsPromptSection(queryText string, conversation *ConversationFile) (string, int, error) {
+	if s == nil {
+		return "", 0, nil
+	}
+	if s.activator == nil {
+		return s.BuildAgentSkillsPromptSection()
+	}
+
+	var parentActivated []string
+	isChild := conversation != nil && strings.TrimSpace(conversation.SubagentTypeName) != ""
+	if isChild {
+		parentActivated = s.readParentActivatedSkills(conversation)
+	}
+
+	activated := s.activator.Activate(queryText, parentActivated)
+	if len(activated) == 0 {
+		return "", 0, nil
+	}
+
+	// 非子代理会话：best-effort 写回本轮激活集，供后续子代理读取。
+	if !isChild && conversation != nil && strings.TrimSpace(conversation.ConversationID) != "" {
+		names := make([]string, 0, len(activated))
+		for _, sk := range activated {
+			names = append(names, sk.Name)
+		}
+		s.writeActivatedSkillsToConversation(conversation, names)
+	}
+
+	prompt, count := buildAgentSkillsSectionFromList(activated)
+	return prompt, count, nil
+}
+
+// buildAgentSkillsSectionFromList 把已激活技能列表构建为 <agent_skills> 片段。
+func buildAgentSkillsSectionFromList(skills []GlobalSkill) (string, int) {
+	if len(skills) == 0 {
+		return "", 0
+	}
+	lines := make([]string, 0, len(skills)+2)
+	lines = append(lines, `<agent_skills>`)
+	for _, sk := range skills {
+		desc := strings.TrimSpace(sk.Description)
+		if desc == "" {
+			desc = sk.Name
+		}
+		lines = append(lines,
+			fmt.Sprintf(`<agent_skill fullPath=%q>%s</agent_skill>`,
+				sk.FullPath, escapeSharedRulePromptText(desc)),
+		)
+	}
+	lines = append(lines, `</agent_skills>`)
+	return strings.Join(lines, "\n"), len(skills)
+}
+
+// readParentActivatedSkills 读取父会话最近一次激活的技能名列表。
+// 父会话缺失/读取失败/convStore 未注入时返回 nil（降级为纯重打分）。
+func (s *SkillStore) readParentActivatedSkills(conversation *ConversationFile) []string {
+	if s == nil || s.convStore == nil || conversation == nil {
+		return nil
+	}
+	parentID := strings.TrimSpace(conversation.ParentConversationID)
+	if parentID == "" {
+		return nil
+	}
+	parent, err := s.convStore.LoadConversation(parentID)
+	if err != nil || parent == nil {
+		return nil
+	}
+	return parent.LastActivatedSkills
+}
+
+// writeActivatedSkillsToConversation 把本轮激活技能名 best-effort 写回当前会话。
+// 仅更新内存对象与持久化元数据；失败仅记日志，不阻断编译（见 prefix-cache-stability：
+// 该字段不进 model-visible history，不影响 replay prefix）。
+func (s *SkillStore) writeActivatedSkillsToConversation(conversation *ConversationFile, names []string) {
+	if s == nil || s.convStore == nil || conversation == nil {
+		return
+	}
+	convID := strings.TrimSpace(conversation.ConversationID)
+	if convID == "" {
+		return
+	}
+	conversation.LastActivatedSkills = names
+	snapshot := append([]string(nil), names...)
+	_, _ = s.convStore.UpdateConversationMeta(convID, func(c *ConversationFile) error {
+		c.LastActivatedSkills = snapshot
+		return nil
+	})
 }
 
 // readSkillFile 读取 SKILL.md 并解析 frontmatter，返回 GlobalSkill 及是否有效。

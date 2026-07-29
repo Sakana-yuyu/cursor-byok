@@ -278,6 +278,8 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 	broker := NewStreamBroker()
 	rules := NewUserRuleStore(appdata.RulesRootPath())
 	skills := NewSkillStore(appdata.SkillsRootPath())
+	// 注入会话存储，启用技能稀疏激活的调用链父子传递（子代理读父激活集）。
+	skills.SetConversationStore(store)
 	promptInjection := promptinject.New()
 	if _, err := promptInjection.Load(); err != nil {
 		// A malformed optional prompt config must not prevent normal BYOK startup.
