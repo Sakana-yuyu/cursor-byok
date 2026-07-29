@@ -95,6 +95,39 @@ func (manager *Manager) LastAgentModelHash() string {
 	return strings.TrimSpace(manager.Current().LastAgentModelHash)
 }
 
+// PersistChannelMaxTokensCap 将 provider 反馈的 max_tokens 上限持久化到指定渠道。
+// 只更新命中 channelID 的配置，并且不会把已有更小的限制放大。
+func (manager *Manager) PersistChannelMaxTokensCap(ctx context.Context, channelID string, maxTokens int) error {
+	if manager == nil {
+		return fmt.Errorf("config manager is not initialized")
+	}
+	channelID = strings.TrimSpace(channelID)
+	if channelID == "" || maxTokens <= 0 {
+		return nil
+	}
+	current := manager.Current()
+	matched := false
+	for i := range current.ModelAdapters {
+		item := &current.ModelAdapters[i]
+		if strings.TrimSpace(item.ID) != channelID {
+			continue
+		}
+		matched = true
+		if item.MaxCompletionTokens <= 0 || maxTokens < item.MaxCompletionTokens {
+			item.MaxCompletionTokens = maxTokens
+		}
+		if item.AnthropicMaxTokens <= 0 || maxTokens < item.AnthropicMaxTokens {
+			item.AnthropicMaxTokens = maxTokens
+		}
+		break
+	}
+	if !matched {
+		return nil
+	}
+	_, err := manager.Save(ctx, current)
+	return err
+}
+
 func (manager *Manager) SaveLastAgentModelHash(ctx context.Context, value string) error {
 	if manager == nil {
 		return fmt.Errorf("config manager is not initialized")

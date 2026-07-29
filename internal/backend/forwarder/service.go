@@ -257,6 +257,7 @@ type Service struct {
 	provider           ProviderGateway
 	resolver           modeladapter.ChannelResolver
 	modelMemory        agentModelMemory
+	maxTokensPersister maxTokensConfigPersister
 	broker             *StreamBroker
 	recorder           *artifactRecorder
 	debug              *debugRecorder
@@ -269,6 +270,13 @@ type Service struct {
 type agentModelMemory interface {
 	LastAgentModelHash() string
 	SaveLastAgentModelHash(context.Context, string) error
+}
+
+// maxTokensConfigPersister 允许转发层把解析到的中转站 max_tokens 限制
+// 持久化到命中的具体渠道配置（按 channelID 匹配），实现「只修正该渠道」而非全局修改。
+// 由 *serverconfig.Manager 实现（在 NewService 中通过类型断言注入）。
+type maxTokensConfigPersister interface {
+	PersistChannelMaxTokensCap(ctx context.Context, channelID string, maxTokens int) error
 }
 
 // NewService 使用默认依赖创建 forwarder 服务。
@@ -293,6 +301,10 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 	if candidate, ok := resolver.(debugLogConfig); ok {
 		debugConfig = candidate
 	}
+	var maxTokensPersister maxTokensConfigPersister
+	if candidate, ok := resolver.(maxTokensConfigPersister); ok {
+		maxTokensPersister = candidate
+	}
 	debug := newDebugRecorder(historyRoot, broker, debugConfig)
 	service := &Service{
 		store:              store,
@@ -306,6 +318,7 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 		provider:           NewProviderGateway(resolver),
 		resolver:           resolver,
 		modelMemory:        modelMemory,
+		maxTokensPersister: maxTokensPersister,
 		broker:             broker,
 		recorder:           newArtifactRecorder(store, broker, debug),
 		debug:              debug,
@@ -1528,6 +1541,18 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 		return service.failStream(stream, "unknown", err)
 	}
 	maxTokens, requestKnobs := service.resolveProviderOutputBudget(modelID, modelName, conversation, compiled)
+	// max_tokens 超限恢复：若本回合因中转站 400 触发过降级重试，用恢复上限覆盖预算，
+	// 确保重试请求的 max_tokens 不超过中转站真实限制。
+	stream.mu.Lock()
+	recoveryCap := stream.MaxTokensRecoveryCap
+	stream.mu.Unlock()
+	if recoveryCap > 0 && recoveryCap < maxTokens {
+		maxTokens = recoveryCap
+		if requestKnobs == nil {
+			requestKnobs = map[string]any{}
+		}
+		requestKnobs["max_tokens_recovery_cap"] = recoveryCap
+	}
 	service.maybeSaveLastAgentModelHash(conversation, modelID, mode, currentPass)
 	ctx, cancel := context.WithCancel(context.Background())
 	stream.mu.Lock()

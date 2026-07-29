@@ -18,7 +18,7 @@ const (
 	DefaultProxyListenAddr                  = "127.0.0.1:18080"
 	DefaultFrontendBaseURL                  = "http://127.0.0.1"
 	DefaultRoutingMode                      = "local"
-	DefaultProviderStreamIdleTimeoutSeconds = 240
+	DefaultProviderStreamIdleTimeoutSeconds = 90
 	MinProviderStreamIdleTimeoutSeconds     = 30
 	// DefaultTurnStaleTimeoutSeconds 表示一轮回合进入「等待外部（工具/交互结果）」后，
 	// 在无任何进展时由 turn-staleness 看门狗触发自救的默认阈值，单位秒。

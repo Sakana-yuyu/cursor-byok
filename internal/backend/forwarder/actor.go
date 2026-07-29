@@ -749,6 +749,16 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 				return nil
 			}
 		}
+		// max_tokens 超过中转站限制（400）：catalog 静态上限可能高于中转站实际限制，
+		// 从错误文本解析真实限制、降级 max_tokens 后重试。仅在尚未输出内容时重试
+		//（max_tokens 400 在首个 chunk 前返回，accumulatedText 必为空）。
+		if accumulatedText == "" && isMaxTokensExceededError(payload.Err) {
+			if recovered, err := service.recoverFromMaxTokensExceeded(stream, requestID, payload.Err); err != nil {
+				return service.failStreamIfNonTerminal(stream, "unknown", err)
+			} else if recovered {
+				return nil
+			}
+		}
 		var providerErr providerTerminalError
 		if errors.As(payload.Err, &providerErr) {
 			service.setTurnPhase(stream, TurnPhaseFailed)

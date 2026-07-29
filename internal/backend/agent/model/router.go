@@ -241,6 +241,21 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 	default:
 		streamErr = fmt.Errorf("unsupported provider %q", resolved.Provider)
 	}
+	// 把命中渠道的身份信息附在错误上，供转发层在错误处理时定位具体渠道
+	//（如 max_tokens 超限时只持久化修正该渠道配置，而非全局）。
+	// 仅包装非空错误；通过 Unwrap 保留底层错误链，errors.As 仍可提取 *HTTPStatusError。
+	if streamErr != nil {
+		if _, ok := streamErr.(*ChannelError); !ok {
+			streamErr = &ChannelError{
+				Cause:     streamErr,
+				ChannelID: strings.TrimSpace(channel.ID),
+				BaseURL:   channelBaseURL,
+				GroupName: channelGroupName,
+				Provider:  strings.TrimSpace(channel.Provider),
+				Model:     strings.TrimSpace(req.ModelID),
+			}
+		}
+	}
 	return streamErr
 }
 
