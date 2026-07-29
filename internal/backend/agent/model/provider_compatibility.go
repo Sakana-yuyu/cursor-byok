@@ -99,11 +99,37 @@ func providerPromptCacheKeyAllowed(baseURL, modelID string) bool {
 // 用于运行时把 claude 模型从 OpenAI 协议自动升级到 Anthropic 原生协议：claude 的前缀
 // 缓存依赖 cache_control 断点（Anthropic /v1/messages 协议），而 OpenAI 的 prompt_cache_key
 // 对 claude 无效。升级后走 AnthropicAdapter，请求发往 {baseURL}/messages 并带 cache_control 断点。
+//
+// 边界：modelID 为 meta alias（如 "auto"）的渠道不在请求时确定真实模型（由中转路由），
+// 无法可靠判断是否是 claude，因此不升级——漏判是安全的（继续走 openai 协议不会出错）。
+// 若希望这类渠道也走 anthropic 协议，应把 modelID 显式设为 claude-* 前缀。
 func isOpenAIChannelClaudeModel(providerType, modelID string) bool {
 	if strings.ToLower(strings.TrimSpace(providerType)) != "openai" {
 		return false
 	}
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(modelID)), "claude")
+}
+
+// upgradeOpenAIClaudeToAnthropic 把 type=openai 且承载 claude 模型的渠道运行时升级到
+// Anthropic 原生协议（修改 resolved 的 Provider/ProtocolGroup 等）。返回 true 表示发生了升级。
+// protocolMode=fixed 表示用户明确锁定协议（逃生口），此时跳过升级。
+// 升级失败（如中转商不支持 /v1/messages）时，router.streamChannel 会降级回 openai。
+func upgradeOpenAIClaudeToAnthropic(resolved *StreamRequest) bool {
+	if resolved == nil {
+		return false
+	}
+	if !isOpenAIChannelClaudeModel(resolved.Provider, resolved.ProviderModelID) {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(resolved.ProtocolMode), "fixed") {
+		return false
+	}
+	resolved.Provider = "anthropic"
+	resolved.ProtocolGroup = "messages"
+	// OpenAI 专属字段不再适用，避免残留导致误解。
+	resolved.OpenAIEndpoint = ""
+	resolved.OpenAIRequestGroup = ""
+	return true
 }
 
 // isZhipuOfficialBaseURL 判断 baseURL 是否指向智谱官方端点。
