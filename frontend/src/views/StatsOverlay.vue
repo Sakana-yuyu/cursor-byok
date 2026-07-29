@@ -198,6 +198,16 @@ onUnmounted(() => {
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
   >
+    <!-- 收缩时的悬浮球 -->
+    <div v-if="isCollapsed" class="float-ball">
+      <div class="ball-glow"></div>
+      <div class="ball-core">
+        <div class="ball-icon">📊</div>
+      </div>
+    </div>
+
+    <!-- 完整面板 -->
+    <div v-show="!isCollapsed" class="overlay-content">
     <header class="overlay-header">
       <span class="overlay-kicker">实时统计</span>
       <span class="status-dot" :class="{ 'is-loading': loading }" title="每 10 秒自动刷新"></span>
@@ -250,33 +260,38 @@ onUnmounted(() => {
       <span class="mini-turns">{{ formatCompact(turnsTotal) }}</span>
       <span class="mini-tick" :class="{ 'is-on': updated }"></span>
     </footer>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.stats-overlay { --accent: #6ee7a5; --muted: #777; width: 100vw; height: 100vh; padding: 6px 8px; overflow: hidden; background: transparent; color: #e5e5e5; font-family: inherit; transition: opacity 0.3s ease, transform 0.3s ease; }
+.stats-overlay { --accent: #6ee7a5; --muted: #777; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; background: transparent; color: #e5e5e5; font-family: inherit; transition: all 0.3s ease; }
+
+/* 悬浮球样式 */
+.float-ball { position: relative; width: 60px; height: 60px; cursor: pointer; }
+.ball-glow { position: absolute; inset: -8px; border-radius: 50%; background: radial-gradient(circle, rgba(110,231,165,0.3), transparent 70%); animation: ballPulse 2s ease-in-out infinite; }
+.ball-core { position: absolute; inset: 0; border-radius: 50%; background: linear-gradient(135deg, rgba(110,231,165,0.25), rgba(42,42,42,0.95)); border: 2px solid rgba(110,231,165,0.6); box-shadow: 0 4px 16px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; }
+.ball-icon { font-size: 24px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); }
+
+@keyframes ballPulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+/* 完整面板容器 */
+.overlay-content { padding: 6px 8px; }
 
 /* 收缩状态 */
-.stats-overlay.is-collapsed { opacity: 0.3; }
-.stats-overlay.is-collapsed .overlay-header,
-.stats-overlay.is-collapsed .card-panel,
-.stats-overlay.is-collapsed .engine-panel,
-.stats-overlay.is-collapsed .orb-panel,
-.stats-overlay.is-collapsed .mini-bar { opacity: 0; pointer-events: none; }
+.stats-overlay.is-collapsed .overlay-content { display: none; }
 
-/* 吸附边缘时的视觉提示 */
-.stats-overlay.is-snap-left.is-collapsed { transform: translateX(-85%); }
-.stats-overlay.is-snap-right.is-collapsed { transform: translateX(85%); }
-.stats-overlay.is-snap-top.is-collapsed { transform: translateY(-85%); }
-.stats-overlay.is-snap-bottom.is-collapsed { transform: translateY(85%); }
+/* 吸附边缘时的位置调整 */
+.stats-overlay.is-snap-left .float-ball { transform: translateX(-20px); }
+.stats-overlay.is-snap-right .float-ball { transform: translateX(20px); }
+.stats-overlay.is-snap-top .float-ball { transform: translateY(-20px); }
+.stats-overlay.is-snap-bottom .float-ball { transform: translateY(20px); }
 
 /* 鼠标悬停时展开 */
-.stats-overlay.is-collapsed:hover { opacity: 1; transform: translate(0, 0); }
-.stats-overlay.is-collapsed:hover .overlay-header,
-.stats-overlay.is-collapsed:hover .card-panel,
-.stats-overlay.is-collapsed:hover .engine-panel,
-.stats-overlay.is-collapsed:hover .orb-panel,
-.stats-overlay.is-collapsed:hover .mini-bar { opacity: 1; pointer-events: auto; }
+.stats-overlay.is-collapsed:hover .float-ball { transform: translate(0, 0); }
 
 .overlay-header { height: 15px; display: flex; align-items: center; justify-content: space-between; padding: 0 2px; transition: opacity 0.3s ease; }
 .overlay-kicker { color: #858585; font-size: 10px; font-weight: 600; letter-spacing: .04em; }

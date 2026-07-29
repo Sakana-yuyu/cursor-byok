@@ -39,6 +39,9 @@ type ModelCatalogResult = client.ModelCatalogResult
 // AutoMatchResult 定义一次「自动配对上下文窗口」的汇总结果。
 type AutoMatchResult = client.AutoMatchResult
 
+// DiagnosticResult 定义模型适配器诊断结果。
+type DiagnosticResult = serverconfig.DiagnosticResult
+
 // ModelAdapterProbeResult 定义一次轻量模型可用性探测结果。
 type ModelAdapterProbeResult = client.ModelAdapterProbeResult
 
@@ -143,6 +146,16 @@ func (s *ProxyService) FetchModelCatalog(request ModelCatalogRequest) (ModelCata
 // 目录命中则覆盖，目录未命中则探测 provider /models 回填。供前端「一键自动配对」按钮调用。
 func (s *ProxyService) AutoMatchContextWindows(ctx context.Context) (AutoMatchResult, error) {
 	return s.core.AutoMatchContextWindows(ctx)
+}
+
+// DiagnoseModelAdapters 扫描已导入模型的 provider 协议配置。
+func (s *ProxyService) DiagnoseModelAdapters() (DiagnosticResult, error) {
+	return s.core.DiagnoseModelAdapters()
+}
+
+// ApplyDiagnosticFixes 修正用户选中的模型协议配置。
+func (s *ProxyService) ApplyDiagnosticFixes(channelIDs []string) (DiagnosticResult, error) {
+	return s.core.ApplyDiagnosticFixes(channelIDs)
 }
 
 // ProbeModelAdapter 轻量探测单个模型是否可用，用于批量拉取后的可用性体检。

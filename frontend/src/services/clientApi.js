@@ -3,7 +3,7 @@ import {
   GetModelAdapterTestResults, FetchModelCatalog, ProbeModelAdapter, QueryProviderBalance,
   GetPromptInjectionSettings,
   SavePromptInjectionSettings, RefreshPromptInjection, RefreshPromptInjectionCatalog,
-  AutoMatchContextWindows,
+  AutoMatchContextWindows, DiagnoseModelAdapters, ApplyDiagnosticFixes,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
 import { GetAdRuntime, OpenExternalURL } from "@bindings/cursor/internal/bridge/adservice.js";
 import {
@@ -37,7 +37,7 @@ const desktopMethods = {
   ResetUsageMetrics,
   FetchModelCatalog, ProbeModelAdapter, QueryProviderBalance, GetPromptInjectionSettings,
   SavePromptInjectionSettings, RefreshPromptInjection,
-  RefreshPromptInjectionCatalog, ExportLogs, AutoMatchContextWindows,
+  RefreshPromptInjectionCatalog, ExportLogs, AutoMatchContextWindows, DiagnoseModelAdapters, ApplyDiagnosticFixes,
   DetectCursorPath, LaunchCursor,
 };
 
@@ -205,6 +205,16 @@ export function autoMatchContextWindows() {
     return Promise.resolve({ enabled: false, changed: false, total: 0, fromCatalog: 0, fromProbe: 0, unchanged: 0 });
   }
   return withApiLogging("AutoMatchContextWindows", undefined, () => invoke("@bindings/cursor/internal/bridge/proxyservice.js", "AutoMatchContextWindows", []));
+}
+
+export function diagnoseModelAdapters() {
+  if (isBrowserPreview) return Promise.resolve({ total: 0, issues: [] });
+  return withApiLogging("DiagnoseModelAdapters", undefined, () => invoke("@bindings/cursor/internal/bridge/proxyservice.js", "DiagnoseModelAdapters", []));
+}
+
+export function applyDiagnosticFixes(channelIDs) {
+  if (isBrowserPreview) return Promise.resolve({ total: 0, issues: [] });
+  return withApiLogging("ApplyDiagnosticFixes", channelIDs, () => invoke("@bindings/cursor/internal/bridge/proxyservice.js", "ApplyDiagnosticFixes", [channelIDs]));
 }
 
 // 查询中转站余额/额度；失败时后端返回结构化的 { supported:false, message } 结果。

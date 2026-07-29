@@ -12,7 +12,7 @@ import {
 } from "@/state/appState";
 import { providerIcon, providerLabel } from "@/utils/providerMeta";
 import { getModelAdapterTestResultByID } from "@/state/appState";
-import { queryProviderBalance } from "@/services/clientApi";
+import { queryProviderBalance, diagnoseModelAdapters, applyDiagnosticFixes } from "@/services/clientApi";
 import {
   SUPPLIER_GROUP_MODE_CONNECTION,
   SUPPLIER_GROUP_MODE_NAME,
@@ -294,6 +294,38 @@ async function openEditor() {
   }
 }
 
+const diagnosing = ref(false);
+
+// 一键诊断优化：扫描已导入模型的协议配置，发现 claude/gemini 被误配为 openai
+// 等问题后，弹窗确认并一键修正为原生协议（anthropic/gemini），修正后刷新配置。
+async function handleDiagnose() {
+  if (diagnosing.value) return;
+  diagnosing.value = true;
+  try {
+    const result = await diagnoseModelAdapters();
+    if (!result.issues || result.issues.length === 0) {
+      await showModal({ title: "诊断完成", content: `已检查 ${result.total} 个模型，未发现协议配置问题。` });
+      return;
+    }
+    const sample = result.issues.slice(0, 5).map((i) => `· ${i.modelID}：${i.currentValue} → ${i.suggestedValue}`);
+    const more = result.issues.length > 5 ? `\n……等共 ${result.issues.length} 个问题` : "";
+    const confirmed = await showModal({
+      title: "发现协议配置问题",
+      content: `检测到 ${result.issues.length} 个模型的协议配置可能不匹配（如 Claude/Gemini 被配为 OpenAI 协议，导致缓存失效）：\n\n${sample.join("\n")}${more}\n\n是否一键修正为原生协议？`,
+      confirmText: "一键修正",
+      cancelText: "取消",
+    });
+    if (!confirmed) return;
+    await applyDiagnosticFixes(result.issues.map((i) => i.channelId));
+    await reloadUserConfig({ modelAdaptersOnly: true });
+    await showModal({ title: "修正完成", content: `已修正 ${result.issues.length} 个模型的协议配置。` });
+  } catch (error) {
+    await showActionError("诊断失败", toUserError(error));
+  } finally {
+    diagnosing.value = false;
+  }
+}
+
 const deletingSupplierKey = ref("");
 
 async function handleDeleteSupplier(supplier) {
@@ -381,6 +413,7 @@ onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }).catch(() =>
                 连接分组
               </button>
             </div>
+            <Button variant="default" :disabled="diagnosing" @click="handleDiagnose">{{ diagnosing ? "诊断中..." : "一键诊断优化" }}</Button>
             <Button variant="primary" :disabled="appState.configSaving" @click="openEditor">新增模型</Button>
           </div>
         </div>
