@@ -1773,6 +1773,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 				}
 			}
 		case "response.reasoning_summary_text.delta", "response.reasoning_text.delta":
+			streamIdle.MarkEffectiveContent()
 			if err := emitThinkingDelta(event.Delta); err != nil {
 				return fail(err)
 			}
@@ -2499,7 +2500,7 @@ func normalizeOpenAIResponsesInput(messages []Message) (string, []map[string]any
 				toolItem := map[string]any{
 					"type":      "function_call",
 					"call_id":   callID,
-					"name":      name,
+					"name":      sanitizeOpenAIResponsesToolName(name),
 					"arguments": toolCall.Function.Arguments,
 				}
 				if itemID := strings.TrimSpace(toolCall.OpenAIResponsesID); itemID != "" {
@@ -2675,9 +2676,11 @@ func normalizeOpenAIResponsesTools(items []json.RawMessage) ([]map[string]any, e
 		if name == "" {
 			return nil, fmt.Errorf("openai responses tool descriptor name is required")
 		}
+		// OpenAI Responses API 要求工具名称只能包含 a-zA-Z0-9_-
+		sanitizedName := sanitizeOpenAIResponsesToolName(name)
 		tool := map[string]any{
 			"type": "function",
-			"name": name,
+			"name": sanitizedName,
 		}
 		if description := strings.TrimSpace(asStringMapValue(source, "description")); description != "" {
 			tool["description"] = description
@@ -2863,6 +2866,32 @@ func openAIToolDescriptorName(tool map[string]any) string {
 		return strings.TrimSpace(asStringMapValue(functionShape, "name"))
 	}
 	return strings.TrimSpace(asStringMapValue(tool, "name"))
+}
+
+// sanitizeOpenAIResponsesToolName 规范化工具名称以符合 OpenAI Responses API 的要求：
+// 只允许 a-zA-Z0-9_- 字符。非法字符替换为下划线，首尾非法字符删除。
+func sanitizeOpenAIResponsesToolName(name string) string {
+	if name == "" {
+		return ""
+	}
+	var result strings.Builder
+	result.Grow(len(name))
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
+			result.WriteRune(r)
+		} else if result.Len() > 0 {
+			// 非法字符替换为下划线，但避免连续下划线和开头下划线
+			if lastChar := result.String()[result.Len()-1]; lastChar != '_' {
+				result.WriteRune('_')
+			}
+		}
+	}
+	// 删除尾部下划线
+	sanitized := strings.TrimRight(result.String(), "_")
+	if sanitized == "" {
+		return "tool"
+	}
+	return sanitized
 }
 
 func normalizeOpenAIToolParameters(tool map[string]any) {

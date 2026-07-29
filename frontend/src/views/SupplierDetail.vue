@@ -856,6 +856,12 @@ async function saveBulkEdit(force = false) {
       bulkEditConflicts.value = result.conflicts || [];
       return;
     }
+    // 保存成功：提示用户并关闭弹窗
+    await showModal({
+      title: "保存成功",
+      content: `已更新 ${supplierAdapters.value.length} 个模型的供应商配置。`,
+      confirmText: "确定",
+    });
     bulkEditExpanded.value = false;
     await reloadUserConfig({ modelAdaptersOnly: true });
   } catch (err) {

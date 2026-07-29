@@ -31,7 +31,7 @@ const groups = computed(() => {
     }
     return {
       key: supplier.key,
-      name: supplier.groupName || host,
+      name: mode === SUPPLIER_GROUP_MODE_NAME ? (supplier.groupName || "默认分组") : (supplier.groupName || host),
       host,
       adapters: (supplier.models || []).map((adapter) => ({
         adapter,

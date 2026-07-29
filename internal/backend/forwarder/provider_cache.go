@@ -20,6 +20,85 @@ import (
 	"cursor/internal/localcache"
 )
 
+// cacheKeyCache 缓存请求 → 缓存 key 的映射，避免对相同请求重复 JSON 序列化 + SHA256。
+// 使用轻量级指纹作为 lookup key，在大多数情况下可跳过昂贵的 json.Marshal 调用。
+type cacheKeyCache struct {
+	mu      sync.RWMutex
+	entries map[string]string // fingerprint → hex key
+	order   []string          // FIFO 队列
+	maxSize int
+}
+
+func newCacheKeyCache(maxSize int) *cacheKeyCache {
+	return &cacheKeyCache{
+		entries: make(map[string]string, maxSize),
+		order:   make([]string, 0, maxSize),
+		maxSize: maxSize,
+	}
+}
+
+// fingerprint 生成请求的轻量级指纹，避免对 Messages 做全量序列化。
+// 格式: modelID:mode:thinkingEffort:stableCount:maxTokens:msgCount:len0:len1:...
+func (c *cacheKeyCache) fingerprint(req ProviderRequest) string {
+	// 预估长度避免多次扩容
+	buf := make([]byte, 0, 128)
+	buf = append(buf, req.ModelID...)
+	buf = append(buf, ':')
+	buf = append(buf, byte('0'+req.Mode))
+	buf = append(buf, ':')
+	buf = append(buf, req.ThinkingEffort...)
+	buf = append(buf, ':')
+	buf = append(buf, byte('0'+req.StableMessageCount/10), byte('0'+req.StableMessageCount%10))
+	buf = append(buf, ':')
+	// MaxTokens, Tools count, Messages count
+	buf = append(buf, byte('0'+req.MaxTokens/100), byte('0'+(req.MaxTokens/10)%10), byte('0'+req.MaxTokens%10))
+	buf = append(buf, ':')
+	buf = append(buf, byte('0'+len(req.Tools)/10), byte('0'+len(req.Tools)%10))
+	buf = append(buf, ':')
+	buf = append(buf, byte('0'+len(req.Messages)/10), byte('0'+len(req.Messages)%10))
+	// 各消息的内容长度作为快速指纹
+	for _, msg := range req.Messages {
+		buf = append(buf, ':')
+		contentLen := len(msg.Content)
+		if contentLen > 9999 {
+			contentLen = 9999
+		}
+		buf = append(buf, byte('0'+contentLen/1000), byte('0'+(contentLen/100)%10), byte('0'+(contentLen/10)%10), byte('0'+contentLen%10))
+	}
+	return string(buf)
+}
+
+func (c *cacheKeyCache) get(req ProviderRequest) string {
+	fp := c.fingerprint(req)
+	c.mu.RLock()
+	key, ok := c.entries[fp]
+	c.mu.RUnlock()
+	if ok {
+		return key
+	}
+	return ""
+}
+
+func (c *cacheKeyCache) put(req ProviderRequest, key string) {
+	fp := c.fingerprint(req)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	
+	if _, exists := c.entries[fp]; exists {
+		return // 已存在，无需更新
+	}
+	
+	// FIFO 淘汰
+	if len(c.entries) >= c.maxSize {
+		oldest := c.order[0]
+		delete(c.entries, oldest)
+		c.order = c.order[1:]
+	}
+	
+	c.entries[fp] = key
+	c.order = append(c.order, fp)
+}
+
 // localResponseCacheSettingsProvider 由 resolver（配置管理器）实现，用于按调用即时读取
 // 本地响应缓存的启用状态、TTL 与最大条目数（支持配置热加载）。
 type localResponseCacheSettingsProvider interface {
@@ -31,6 +110,7 @@ type cachingProviderGateway struct {
 	inner    ProviderGateway
 	settings func() (enabled bool, ttl time.Duration, maxEntries int)
 	store    *responseCacheStore
+	keyCache *cacheKeyCache // 缓存 key 哈希计算结果
 }
 
 // newCachingProviderGateway 构造响应缓存网关。
@@ -39,6 +119,7 @@ func newCachingProviderGateway(inner ProviderGateway, settings func() (bool, tim
 		inner:    inner,
 		settings: settings,
 		store:    newResponseCacheStore(),
+		keyCache: newCacheKeyCache(1024), // 缓存最近 1024 个请求的 key
 	}
 }
 
@@ -50,7 +131,13 @@ func (gateway *cachingProviderGateway) StartStream(ctx context.Context, req Prov
 		return gateway.inner.StartStream(ctx, req, sink)
 	}
 
-	key := providerCacheKey(req)
+	key := gateway.keyCache.get(req)
+	if key == "" {
+		key = providerCacheKey(req)
+		if key != "" {
+			gateway.keyCache.put(req, key)
+		}
+	}
 	if key != "" {
 		if entry, ok := gateway.store.get(key, time.Now()); ok {
 			// 命中：直接把缓存事件序列回放给 sink，等价于底层 provider 成功流。
@@ -191,8 +278,9 @@ type providerCacheKeyShape struct {
 	StableMessageCount  int                    `json:"stable_message_count"`
 	Tools               []json.RawMessage      `json:"tools"`
 	MaxTokens           int                    `json:"max_tokens"`
-	RequestKnobs        map[string]any         `json:"request_knobs"`
-	CompileSummary      string                 `json:"compile_summary"`
+	// RequestKnobs 包含动态估算字段（compiled_prompt_tokens_estimate 等），导致每次请求 key 不同
+	// CompileSummary 每次 compile 可能变化
+	// 移除这两个字段以提高缓存命中率
 	RequestBodyOverride map[string]any         `json:"request_body_override"`
 }
 
@@ -206,8 +294,7 @@ func providerCacheKey(req ProviderRequest) string {
 		StableMessageCount:  req.StableMessageCount,
 		Tools:               req.Tools,
 		MaxTokens:           req.MaxTokens,
-		RequestKnobs:        req.RequestKnobs,
-		CompileSummary:      req.CompileSummary,
+		// 移除 RequestKnobs 和 CompileSummary 以避免动态字段污染缓存 key
 		RequestBodyOverride: req.RequestBodyOverride,
 	}
 	encoded, err := json.Marshal(shape)

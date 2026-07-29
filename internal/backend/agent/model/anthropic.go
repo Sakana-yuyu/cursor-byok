@@ -604,11 +604,13 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 			}
 		case "content_block_delta":
 			if event.Delta.Type == "text_delta" && event.Delta.Text != "" {
+				streamIdle.MarkEffectiveContent()
 				if err := emitTaggedTextParts(thinkParser.Consume(event.Delta.Text)); err != nil {
 					return err
 				}
 			}
 			if event.Delta.Type == "thinking_delta" && event.Delta.Thinking != "" {
+				streamIdle.MarkEffectiveContent()
 				if err := emitThinkingDelta(event.Delta.Thinking); err != nil {
 					return err
 				}

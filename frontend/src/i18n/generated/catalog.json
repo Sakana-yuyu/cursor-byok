@@ -7,7 +7,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 919,
+          "line": 925,
           "column": 18
         }
       ]
@@ -53,6 +53,18 @@
         }
       ]
     },
+    "02a559bbd0cfb569": {
+      "source": "已更新 {0} 个模型的供应商配置。",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/views/SupplierDetail.vue",
+          "line": 862,
+          "column": 16
+        }
+      ]
+    },
     "033ed59452549c51": {
       "source": "供应商",
       "kind": "text",
@@ -87,7 +99,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 980,
+          "line": 986,
           "column": 54
         }
       ]
@@ -128,7 +140,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1055,
+          "line": 1061,
           "column": 54
         }
       ]
@@ -198,7 +210,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1311,
+          "line": 1317,
           "column": 106
         }
       ]
@@ -275,8 +287,20 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 356,
+          "line": 357,
           "column": 41
+        }
+      ]
+    },
+    "06d3ccbe94a602a3": {
+      "source": "Cursor 启动成功",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 34,
+          "column": 21
         }
       ]
     },
@@ -292,7 +316,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 24,
+          "line": 28,
           "column": 111
         }
       ]
@@ -321,7 +345,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1307,
+          "line": 1313,
           "column": 58
         }
       ]
@@ -333,7 +357,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 332,
+          "line": 333,
           "column": 5
         }
       ]
@@ -345,12 +369,12 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 616,
+          "line": 638,
           "column": 19
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 124,
+          "line": 217,
           "column": 35
         }
       ]
@@ -445,6 +469,18 @@
         }
       ]
     },
+    "0cf642cf998c86ac": {
+      "source": "启动失败",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 36,
+          "column": 27
+        }
+      ]
+    },
     "0dae682eddacfae3": {
       "source": "添加中...",
       "kind": "text",
@@ -457,7 +493,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1244,
+          "line": 1250,
           "column": 16
         }
       ]
@@ -529,7 +565,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 45,
+          "line": 46,
           "column": 24
         }
       ]
@@ -565,7 +601,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1079,
+          "line": 1085,
           "column": 20
         }
       ]
@@ -577,7 +613,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 324,
+          "line": 325,
           "column": 5
         }
       ]
@@ -601,7 +637,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 577,
+          "line": 599,
           "column": 65
         }
       ]
@@ -613,12 +649,12 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 593,
+          "line": 615,
           "column": 19
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 118,
+          "line": 211,
           "column": 35
         }
       ]
@@ -654,7 +690,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 516,
+          "line": 538,
           "column": 19
         }
       ]
@@ -683,7 +719,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 30,
+          "line": 54,
           "column": 1033
         }
       ]
@@ -707,7 +743,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 113,
+          "line": 206,
           "column": 57
         }
       ]
@@ -976,7 +1012,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1772,
+          "line": 1782,
           "column": 32
         }
       ]
@@ -1000,7 +1036,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1165,
+          "line": 1171,
           "column": 118
         }
       ]
@@ -1119,7 +1155,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 474,
+          "line": 496,
           "column": 40
         }
       ]
@@ -1221,7 +1257,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1231,
+          "line": 1237,
           "column": 16
         }
       ]
@@ -1233,7 +1269,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 141,
+          "line": 234,
           "column": 39
         }
       ]
@@ -1267,7 +1303,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1141,
+          "line": 1147,
           "column": 15
         }
       ]
@@ -1284,7 +1320,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 24,
+          "line": 28,
           "column": 92
         }
       ]
@@ -1308,7 +1344,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1153,
+          "line": 1159,
           "column": 118
         }
       ]
@@ -1320,7 +1356,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1003,
+          "line": 1009,
           "column": 54
         }
       ]
@@ -1337,7 +1373,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1217,
+          "line": 1223,
           "column": 20
         }
       ]
@@ -1366,17 +1402,17 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 20,
+          "line": 24,
           "column": 184
         },
         {
           "file": "src/views/Home.vue",
-          "line": 21,
+          "line": 25,
           "column": 187
         },
         {
           "file": "src/views/Home.vue",
-          "line": 22,
+          "line": 26,
           "column": 178
         },
         {
@@ -1403,7 +1439,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1067,
+          "line": 1073,
           "column": 54
         }
       ]
@@ -1415,7 +1451,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 376,
+          "line": 377,
           "column": 5
         }
       ]
@@ -1427,7 +1463,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1103,
+          "line": 1109,
           "column": 53
         }
       ]
@@ -1439,7 +1475,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 322,
+          "line": 323,
           "column": 5
         }
       ]
@@ -1451,7 +1487,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 304,
+          "line": 305,
           "column": 5
         }
       ]
@@ -1533,7 +1569,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1114,
+          "line": 1120,
           "column": 156
         }
       ]
@@ -1550,7 +1586,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 24,
+          "line": 28,
           "column": 176
         }
       ]
@@ -1562,7 +1598,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1115,
+          "line": 1121,
           "column": 53
         }
       ]
@@ -1603,12 +1639,12 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 882,
+          "line": 888,
           "column": 115
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1283,
+          "line": 1289,
           "column": 24
         }
       ]
@@ -1620,7 +1656,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1096,
+          "line": 1102,
           "column": 25
         }
       ]
@@ -1780,7 +1816,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 24,
+          "line": 28,
           "column": 196
         },
         {
@@ -1810,7 +1846,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1125,
+          "line": 1131,
           "column": 75
         }
       ]
@@ -1863,7 +1899,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1043,
+          "line": 1049,
           "column": 54
         }
       ]
@@ -1912,7 +1948,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1313,
+          "line": 1319,
           "column": 106
         }
       ]
@@ -1924,7 +1960,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 30,
+          "line": 54,
           "column": 446
         }
       ]
@@ -1941,7 +1977,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1084,
+          "line": 1090,
           "column": 48
         }
       ]
@@ -2052,7 +2088,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1104,
+          "line": 1110,
           "column": 43
         }
       ]
@@ -2088,7 +2124,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1071,
+          "line": 1077,
           "column": 54
         }
       ]
@@ -2105,7 +2141,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 139,
+          "line": 143,
           "column": 119
         }
       ]
@@ -2117,8 +2153,20 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 552,
+          "line": 574,
           "column": 23
+        }
+      ]
+    },
+    "34e42aa8d47e88e2": {
+      "source": "启动 Cursor",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 54,
+          "column": 1743
         }
       ]
     },
@@ -2141,7 +2189,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 48,
+          "line": 49,
           "column": 24
         }
       ]
@@ -2153,7 +2201,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1253,
+          "line": 1259,
           "column": 165
         }
       ]
@@ -2189,12 +2237,12 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 926,
+          "line": 932,
           "column": 106
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 949,
+          "line": 955,
           "column": 96
         }
       ]
@@ -2281,7 +2329,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1194,
+          "line": 1200,
           "column": 52
         }
       ]
@@ -2293,7 +2341,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 876,
+          "line": 882,
           "column": 98
         }
       ]
@@ -2310,7 +2358,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1220,
+          "line": 1226,
           "column": 20
         }
       ]
@@ -2322,7 +2370,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 481,
+          "line": 503,
           "column": 21
         }
       ]
@@ -2334,7 +2382,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1086,
+          "line": 1092,
           "column": 68
         }
       ]
@@ -2346,7 +2394,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1045,
+          "line": 1051,
           "column": 36
         }
       ]
@@ -2387,7 +2435,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1039,
+          "line": 1045,
           "column": 127
         }
       ]
@@ -2571,12 +2619,12 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 23,
+          "line": 27,
           "column": 322
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 956,
+          "line": 962,
           "column": 21
         }
       ]
@@ -2600,7 +2648,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1123,
+          "line": 1129,
           "column": 20
         }
       ]
@@ -2672,7 +2720,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1257,
+          "line": 1263,
           "column": 169
         }
       ]
@@ -2696,7 +2744,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1060,
+          "line": 1066,
           "column": 74
         }
       ]
@@ -2720,7 +2768,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 524,
+          "line": 546,
           "column": 21
         }
       ]
@@ -2732,7 +2780,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1240,
+          "line": 1246,
           "column": 21
         }
       ]
@@ -2744,7 +2792,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 924,
+          "line": 930,
           "column": 18
         }
       ]
@@ -2780,7 +2828,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1200,
+          "line": 1206,
           "column": 155
         }
       ]
@@ -2792,7 +2840,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 297,
+          "line": 298,
           "column": 5
         }
       ]
@@ -2816,7 +2864,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 205,
+          "line": 206,
           "column": 38
         }
       ]
@@ -2881,7 +2929,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1235,
+          "line": 1241,
           "column": 16
         }
       ]
@@ -2905,7 +2953,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 296,
+          "line": 297,
           "column": 5
         }
       ]
@@ -2917,7 +2965,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 367,
+          "line": 368,
           "column": 7
         }
       ]
@@ -2951,12 +2999,12 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 881,
+          "line": 887,
           "column": 113
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1279,
+          "line": 1285,
           "column": 24
         }
       ]
@@ -2980,7 +3028,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1177,
+          "line": 1183,
           "column": 52
         }
       ]
@@ -2992,7 +3040,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1101,
+          "line": 1107,
           "column": 20
         }
       ]
@@ -3021,7 +3069,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 50,
+          "line": 51,
           "column": 27
         },
         {
@@ -3041,7 +3089,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1029,
+          "line": 1035,
           "column": 42
         }
       ]
@@ -3070,7 +3118,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1030,
+          "line": 1036,
           "column": 43
         }
       ]
@@ -3082,7 +3130,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 378,
+          "line": 379,
           "column": 5
         }
       ]
@@ -3094,7 +3142,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 924,
+          "line": 930,
           "column": 18
         }
       ]
@@ -3171,7 +3219,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 336,
+          "line": 337,
           "column": 9
         }
       ]
@@ -3200,7 +3248,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 209,
+          "line": 213,
           "column": 128
         }
       ]
@@ -3229,22 +3277,22 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 989,
+          "line": 995,
           "column": 70
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 993,
+          "line": 999,
           "column": 72
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1064,
+          "line": 1070,
           "column": 76
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1068,
+          "line": 1074,
           "column": 78
         }
       ]
@@ -3268,7 +3316,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1091,
+          "line": 1097,
           "column": 33
         }
       ]
@@ -3345,7 +3393,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 23,
+          "line": 27,
           "column": 247
         }
       ]
@@ -3415,7 +3463,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1217,
+          "line": 1223,
           "column": 20
         }
       ]
@@ -3451,7 +3499,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1244,
+          "line": 1250,
           "column": 16
         }
       ]
@@ -3492,7 +3540,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 320,
+          "line": 321,
           "column": 5
         }
       ]
@@ -3528,7 +3576,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 49,
+          "line": 50,
           "column": 24
         },
         {
@@ -3574,7 +3622,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 470,
+          "line": 492,
           "column": 21
         }
       ]
@@ -3613,7 +3661,7 @@
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 109,
+          "line": 202,
           "column": 36
         }
       ]
@@ -3821,7 +3869,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 454,
+          "line": 476,
           "column": 61
         }
       ]
@@ -3833,22 +3881,22 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 389,
+          "line": 390,
           "column": 55
         },
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 392,
+          "line": 393,
           "column": 54
         },
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 407,
+          "line": 408,
           "column": 54
         },
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 410,
+          "line": 411,
           "column": 53
         },
         {
@@ -3906,7 +3954,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1312,
+          "line": 1318,
           "column": 112
         }
       ]
@@ -3950,7 +3998,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 930,
+          "line": 936,
           "column": 18
         }
       ]
@@ -3986,7 +4034,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1849,
+          "line": 1859,
           "column": 32
         }
       ]
@@ -4111,7 +4159,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 115,
+          "line": 208,
           "column": 35
         }
       ]
@@ -4128,7 +4176,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 30,
+          "line": 54,
           "column": 1000
         }
       ]
@@ -4193,7 +4241,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 905,
+          "line": 911,
           "column": 19
         }
       ]
@@ -4222,12 +4270,12 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1307,
+          "line": 1313,
           "column": 47
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1310,
+          "line": 1316,
           "column": 132
         }
       ]
@@ -4254,12 +4302,12 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 18,
+          "line": 22,
           "column": 98
         },
         {
           "file": "src/views/Home.vue",
-          "line": 18,
+          "line": 22,
           "column": 116
         },
         {
@@ -4322,7 +4370,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1088,
+          "line": 1094,
           "column": 62
         }
       ]
@@ -4334,7 +4382,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 23,
+          "line": 27,
           "column": 185
         }
       ]
@@ -4411,7 +4459,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 298,
+          "line": 299,
           "column": 5
         }
       ]
@@ -4459,7 +4507,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1081,
+          "line": 1087,
           "column": 52
         }
       ]
@@ -4507,7 +4555,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1101,
+          "line": 1107,
           "column": 20
         }
       ]
@@ -4519,7 +4567,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 523,
+          "line": 545,
           "column": 21
         }
       ]
@@ -4531,7 +4579,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 319,
+          "line": 320,
           "column": 5
         }
       ]
@@ -4555,7 +4603,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 374,
+          "line": 375,
           "column": 5
         }
       ]
@@ -4579,7 +4627,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 249,
+          "line": 250,
           "column": 49
         }
       ]
@@ -4637,7 +4685,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 460,
+          "line": 482,
           "column": 13
         },
         {
@@ -4710,7 +4758,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 880,
+          "line": 886,
           "column": 82
         }
       ]
@@ -4737,12 +4785,12 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1198,
+          "line": 1204,
           "column": 18
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1310,
+          "line": 1316,
           "column": 132
         }
       ]
@@ -4754,7 +4802,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 631,
+          "line": 653,
           "column": 61
         }
       ]
@@ -4766,7 +4814,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1084,
+          "line": 1090,
           "column": 48
         }
       ]
@@ -4814,7 +4862,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 23,
+          "line": 27,
           "column": 302
         }
       ]
@@ -4850,7 +4898,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1198,
+          "line": 1204,
           "column": 18
         }
       ]
@@ -4862,7 +4910,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 293,
+          "line": 294,
           "column": 7
         }
       ]
@@ -4874,7 +4922,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 975,
+          "line": 981,
           "column": 36
         }
       ]
@@ -4898,7 +4946,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 19,
+          "line": 23,
           "column": 116
         }
       ]
@@ -4915,7 +4963,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 998,
+          "line": 1004,
           "column": 40
         }
       ]
@@ -4932,12 +4980,12 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1194,
+          "line": 1200,
           "column": 19
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1209,
+          "line": 1215,
           "column": 19
         }
       ]
@@ -4949,7 +4997,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 950,
+          "line": 956,
           "column": 60
         }
       ]
@@ -5144,7 +5192,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 964,
+          "line": 970,
           "column": 96
         }
       ]
@@ -5185,7 +5233,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1059,
+          "line": 1065,
           "column": 54
         }
       ]
@@ -5267,7 +5315,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1037,
+          "line": 1043,
           "column": 57
         }
       ]
@@ -5407,8 +5455,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 30,
-          "column": 1829
+          "line": 54,
+          "column": 2051
         },
         {
           "file": "src/views/ModelGroups.vue",
@@ -5436,7 +5484,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1051,
+          "line": 1057,
           "column": 46
         }
       ]
@@ -5448,7 +5496,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 309,
+          "line": 310,
           "column": 5
         }
       ]
@@ -5571,7 +5619,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1123,
+          "line": 1129,
           "column": 20
         }
       ]
@@ -5583,7 +5631,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 581,
+          "line": 603,
           "column": 23
         }
       ]
@@ -5607,7 +5655,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1812,
+          "line": 1822,
           "column": 32
         }
       ]
@@ -5739,7 +5787,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 44,
+          "line": 45,
           "column": 26
         },
         {
@@ -5785,6 +5833,11 @@
           "column": 67
         },
         {
+          "file": "src/views/ModelGroups.vue",
+          "line": 34,
+          "column": 72
+        },
+        {
           "file": "src/views/SupplierDetail.vue",
           "line": 88,
           "column": 47
@@ -5822,7 +5875,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 464,
+          "line": 486,
           "column": 40
         }
       ]
@@ -5834,12 +5887,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2080,
+          "line": 2090,
           "column": 32
         },
         {
           "file": "src/state/appState.js",
-          "line": 2101,
+          "line": 2111,
           "column": 32
         }
       ]
@@ -5904,7 +5957,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 525,
+          "line": 547,
           "column": 21
         }
       ]
@@ -5916,7 +5969,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 366,
+          "line": 367,
           "column": 7
         }
       ]
@@ -5928,7 +5981,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 307,
+          "line": 308,
           "column": 5
         }
       ]
@@ -5969,7 +6022,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 24,
+          "line": 28,
           "column": 383
         }
       ]
@@ -6121,7 +6174,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1079,
+          "line": 1085,
           "column": 20
         }
       ]
@@ -6145,7 +6198,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 46,
+          "line": 47,
           "column": 23
         }
       ]
@@ -6239,7 +6292,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2025,
+          "line": 2035,
           "column": 14
         }
       ]
@@ -6251,7 +6304,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1085,
+          "line": 1091,
           "column": 69
         }
       ]
@@ -6287,7 +6340,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 552,
+          "line": 574,
           "column": 23
         }
       ]
@@ -6403,7 +6456,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1036,
+          "line": 1042,
           "column": 126
         }
       ]
@@ -6427,7 +6480,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1087,
+          "line": 1093,
           "column": 64
         }
       ]
@@ -6603,7 +6656,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1192,
+          "line": 1198,
           "column": 18
         }
       ]
@@ -6697,7 +6750,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 30,
+          "line": 54,
           "column": 1053
         }
       ]
@@ -6806,7 +6859,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 24,
+          "line": 28,
           "column": 404
         }
       ]
@@ -6842,7 +6895,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 315,
+          "line": 316,
           "column": 5
         }
       ]
@@ -6931,7 +6984,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 930,
+          "line": 936,
           "column": 18
         }
       ]
@@ -6943,8 +6996,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 30,
-          "column": 1654
+          "line": 54,
+          "column": 1876
         }
       ]
     },
@@ -6979,7 +7032,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 375,
+          "line": 376,
           "column": 5
         }
       ]
@@ -7063,7 +7116,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 23,
+          "line": 27,
           "column": 264
         }
       ]
@@ -7087,12 +7140,12 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 476,
+          "line": 498,
           "column": 17
         },
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 481,
+          "line": 503,
           "column": 21
         }
       ]
@@ -7128,7 +7181,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1063,
+          "line": 1069,
           "column": 54
         }
       ]
@@ -7140,7 +7193,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 306,
+          "line": 307,
           "column": 5
         }
       ]
@@ -7164,7 +7217,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 358,
+          "line": 359,
           "column": 10
         }
       ]
@@ -7200,7 +7253,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1096,
+          "line": 1102,
           "column": 25
         }
       ]
@@ -7212,12 +7265,12 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 566,
+          "line": 588,
           "column": 19
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 121,
+          "line": 214,
           "column": 35
         }
       ]
@@ -7374,7 +7427,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 883,
+          "line": 889,
           "column": 119
         }
       ]
@@ -7386,7 +7439,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 335,
+          "line": 336,
           "column": 9
         }
       ]
@@ -7398,7 +7451,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1868,
+          "line": 1878,
           "column": 32
         }
       ]
@@ -7410,7 +7463,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 110,
+          "line": 203,
           "column": 67
         }
       ]
@@ -7535,7 +7588,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 893,
+          "line": 899,
           "column": 107
         }
       ]
@@ -7612,7 +7665,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 886,
+          "line": 892,
           "column": 85
         }
       ]
@@ -7624,17 +7677,17 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1996,
+          "line": 2006,
           "column": 28
         },
         {
           "file": "src/state/appState.js",
-          "line": 1998,
+          "line": 2008,
           "column": 38
         },
         {
           "file": "src/state/appState.js",
-          "line": 2033,
+          "line": 2043,
           "column": 93
         },
         {
@@ -7675,7 +7728,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 294,
+          "line": 295,
           "column": 7
         }
       ]
@@ -7689,6 +7742,11 @@
           "file": "src/state/appState.js",
           "line": 1350,
           "column": 51
+        },
+        {
+          "file": "src/views/Home.vue",
+          "line": 54,
+          "column": 1743
         }
       ]
     },
@@ -7699,7 +7757,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 308,
+          "line": 309,
           "column": 5
         }
       ]
@@ -7747,7 +7805,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 470,
+          "line": 492,
           "column": 21
         }
       ]
@@ -7836,7 +7894,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 331,
+          "line": 332,
           "column": 5
         }
       ]
@@ -7853,7 +7911,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 24,
+          "line": 28,
           "column": 324
         }
       ]
@@ -7870,7 +7928,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1027,
+          "line": 1033,
           "column": 54
         }
       ]
@@ -7882,7 +7940,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 372,
+          "line": 373,
           "column": 5
         }
       ]
@@ -7906,7 +7964,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 128,
+          "line": 129,
           "column": 51
         },
         {
@@ -7969,7 +8027,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1116,
+          "line": 1122,
           "column": 88
         }
       ]
@@ -7986,7 +8044,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 973,
+          "line": 979,
           "column": 54
         }
       ]
@@ -7998,7 +8056,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1893,
+          "line": 1903,
           "column": 14
         }
       ]
@@ -8010,7 +8068,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 30,
+          "line": 54,
           "column": 446
         }
       ]
@@ -8068,7 +8126,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 999,
+          "line": 1005,
           "column": 41
         }
       ]
@@ -8092,7 +8150,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 424,
+          "line": 425,
           "column": 23
         }
       ]
@@ -8186,7 +8244,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 988,
+          "line": 994,
           "column": 54
         }
       ]
@@ -8210,7 +8268,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 47,
+          "line": 48,
           "column": 23
         }
       ]
@@ -8222,12 +8280,12 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 249,
+          "line": 250,
           "column": 38
         },
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 522,
+          "line": 544,
           "column": 21
         }
       ]
@@ -8275,12 +8333,12 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 131,
+          "line": 224,
           "column": 87
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 143,
+          "line": 236,
           "column": 61
         }
       ]
@@ -8307,7 +8365,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 992,
+          "line": 998,
           "column": 54
         }
       ]
@@ -8367,8 +8425,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 30,
-          "column": 1654
+          "line": 54,
+          "column": 1876
         }
       ]
     },
@@ -8512,6 +8570,18 @@
         }
       ]
     },
+    "e05ddf992cc50896": {
+      "source": "保存成功",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/SupplierDetail.vue",
+          "line": 861,
+          "column": 14
+        }
+      ]
+    },
     "e07f860f5d93e1e1": {
       "source": "确定删除「{0}」下的全部 {1} 个模型吗？此操作不可撤销。",
       "kind": "template",
@@ -8543,7 +8613,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 317,
+          "line": 318,
           "column": 5
         }
       ]
@@ -8560,8 +8630,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 30,
-          "column": 1759
+          "line": 54,
+          "column": 1981
         },
         {
           "file": "src/views/RequestMetrics.vue",
@@ -8618,7 +8688,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 634,
+          "line": 656,
           "column": 28
         }
       ]
@@ -8666,7 +8736,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 128,
+          "line": 221,
           "column": 66
         }
       ]
@@ -8678,7 +8748,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 356,
+          "line": 357,
           "column": 22
         }
       ]
@@ -8702,7 +8772,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 371,
+          "line": 372,
           "column": 5
         }
       ]
@@ -8736,7 +8806,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 932,
+          "line": 938,
           "column": 99
         }
       ]
@@ -8748,7 +8818,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 321,
+          "line": 322,
           "column": 5
         }
       ]
@@ -8760,7 +8830,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 123,
+          "line": 216,
           "column": 32
         }
       ]
@@ -8777,7 +8847,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1033,
+          "line": 1039,
           "column": 44
         }
       ]
@@ -8806,7 +8876,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 364,
+          "line": 365,
           "column": 7
         }
       ]
@@ -8835,7 +8905,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 967,
+          "line": 973,
           "column": 54
         }
       ]
@@ -8859,7 +8929,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1184,
+          "line": 1190,
           "column": 81
         }
       ]
@@ -8871,7 +8941,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 629,
+          "line": 651,
           "column": 75
         }
       ]
@@ -8946,7 +9016,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 996,
+          "line": 1002,
           "column": 54
         }
       ]
@@ -9047,7 +9117,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 632,
+          "line": 654,
           "column": 77
         },
         {
@@ -9146,7 +9216,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 377,
+          "line": 378,
           "column": 5
         }
       ]
@@ -9170,7 +9240,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1014,
+          "line": 1020,
           "column": 21
         }
       ]
@@ -9223,12 +9293,12 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1192,
+          "line": 1198,
           "column": 18
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1220,
+          "line": 1226,
           "column": 20
         }
       ]
@@ -9314,7 +9384,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1056,
+          "line": 1062,
           "column": 79
         }
       ]
@@ -9389,12 +9459,12 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 899,
+          "line": 905,
           "column": 27
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 900,
+          "line": 906,
           "column": 18
         }
       ]
@@ -9423,7 +9493,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 892,
+          "line": 898,
           "column": 29
         }
       ]
@@ -9580,6 +9650,11 @@
           "file": "src/state/appState.js",
           "line": 1447,
           "column": 12
+        },
+        {
+          "file": "src/views/SupplierDetail.vue",
+          "line": 863,
+          "column": 20
         }
       ]
     },
@@ -9651,7 +9726,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 339,
+          "line": 340,
           "column": 16
         }
       ]
@@ -9711,7 +9786,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 964,
+          "line": 970,
           "column": 49
         }
       ]
@@ -9723,7 +9798,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 919,
+          "line": 925,
           "column": 18
         }
       ]

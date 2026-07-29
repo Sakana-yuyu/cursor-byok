@@ -392,10 +392,14 @@ func normalizeListenAddr(value string, defaultValue string, fieldName string) (s
 	return net.JoinHostPort(host, strconv.Itoa(parsedPort)), nil
 }
 
-// normalizeLocalResponseCache 归一化本地响应缓存配置：保留 Enabled（默认 false），
+// normalizeLocalResponseCache 归一化本地响应缓存配置：默认启用（Enabled=true），
 // 对无效的 TTL/MaxEntries 回退到默认值。
 func normalizeLocalResponseCache(input LocalResponseCacheConfig) LocalResponseCacheConfig {
 	output := input
+	// 默认启用缓存（零值配置时 Enabled 为 false，需要显式设置为 true）
+	if !input.Enabled && input.TTLSeconds == 0 && input.MaxEntries == 0 {
+		output.Enabled = true
+	}
 	if output.TTLSeconds <= 0 {
 		output.TTLSeconds = DefaultLocalResponseCacheTTLSeconds
 	}

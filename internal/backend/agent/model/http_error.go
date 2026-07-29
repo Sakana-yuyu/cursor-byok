@@ -1,7 +1,7 @@
-// http_error.go 负责把非 2xx HTTP 响应整理成带响应体摘要的错误。
 package modeladapter
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -79,6 +79,13 @@ func buildHTTPStatusError(prefix string, resp *http.Response) error {
 	}
 	retrySummary := ProviderRetryAttemptSummary(resp)
 	bodyText := strings.TrimSpace(string(limitedBody))
+	
+	// 尝试提取并美化 JSON 错误体中的关键信息
+	friendlyError := extractFriendlyErrorMessage(bodyText)
+	if friendlyError != "" {
+		bodyText = friendlyError
+	}
+	
 	if bodyText == "" {
 		if retrySummary != "" {
 			return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d %s", strings.TrimSpace(prefix), resp.StatusCode, retrySummary)}
@@ -118,4 +125,41 @@ func (e *ChannelError) Unwrap() error {
 		return nil
 	}
 	return e.Cause
+}
+
+// extractFriendlyErrorMessage 尝试从 JSON 错误体中提取关键信息并转换为友好的错误消息。
+func extractFriendlyErrorMessage(bodyText string) string {
+	if bodyText == "" || !strings.HasPrefix(strings.TrimSpace(bodyText), "{") {
+		return ""
+	}
+	
+	var errorBody map[string]any
+	if err := json.Unmarshal([]byte(bodyText), &errorBody); err != nil {
+		return ""
+	}
+	
+	// 提取嵌套的 error.message
+	var message string
+	if errorObj, ok := errorBody["error"].(map[string]any); ok {
+		if msg, ok := errorObj["message"].(string); ok {
+			message = strings.TrimSpace(msg)
+		}
+	}
+	
+	if message == "" {
+		return ""
+	}
+	
+	// 识别常见错误模式并提供友好的中文提示
+	if strings.Contains(message, "Upstream returned HTTP 400") {
+		return "上游服务器返回 400 错误，可能是请求参数不符合要求。请检查模型配置或联系中转站运营者"
+	}
+	
+	if strings.Contains(message, "Upstream returned HTTP") {
+		// 提取状态码
+		return fmt.Sprintf("上游服务器错误: %s", message)
+	}
+	
+	// 其他情况返回原始 message（比完整 JSON 更清晰）
+	return message
 }
