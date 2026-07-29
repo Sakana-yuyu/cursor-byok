@@ -44,6 +44,14 @@ const displayRate = computed(() => cacheHitRate.value ?? localCacheRate.value);
 const gaugeDash = computed(() => `${Math.max(0, Math.min(1, Number(displayRate.value || 0))) * 100} 100`);
 const style = computed(() => preferences.value.style || "card");
 
+// 动态 title（国际化）：tooltip 文案由 $ls 在模板渲染，这里只拼装数值部分。
+const localCacheTitle = computed(() => {
+  const rate = localCacheRate.value != null ? ` · ${(localCacheRate.value * 100).toFixed(1)}%` : "";
+  return `${localCacheHits.value} · ${localCacheMisses.value}${rate}`;
+});
+const promptTitle = computed(() => promptTokens.value.toLocaleString());
+const turnsTitle = computed(() => `${validTurns.value} / ${invalidTurns.value}`);
+
 function markUpdated() {
   updated.value = true;
   if (updatedTimer) clearTimeout(updatedTimer);
@@ -103,13 +111,13 @@ onUnmounted(() => {
     </header>
 
     <section v-if="style === 'card'" class="card-panel" aria-label="实时统计指标">
-      <div class="metric-card" :title="`本地缓存命中 ${localCacheHits} · 未命中 ${localCacheMisses}` + (localCacheRate != null ? ` · 命中率 ${(localCacheRate * 100).toFixed(1)}%` : '')">
+      <div class="metric-card" :title="localCacheTitle">
         <div class="metric-label">缓存命中</div><div class="metric-value" :class="{ 'is-good': cacheHitRate != null && cacheHitRate > 0.3 }">{{ formatRate(cacheHitRate) }}</div>
       </div>
-      <div class="metric-card" :title="`Prompt: ${promptTokens.toLocaleString()}`">
+      <div class="metric-card" :title="promptTitle">
         <div class="metric-label">Token 消耗</div><div class="metric-value">{{ formatCompact(totalTokens) }}</div>
       </div>
-      <div class="metric-card" :title="`有效 ${validTurns} / 异常 ${invalidTurns}`">
+      <div class="metric-card" :title="turnsTitle">
         <div class="metric-label">对话轮次</div><div class="metric-value">{{ formatCompact(turnsTotal) }}</div>
       </div>
       <div class="metric-card" title="基于内置官方价格估算">
@@ -137,6 +145,16 @@ onUnmounted(() => {
       <div class="orb-satellite orb-satellite--left"><span>Local</span><strong>{{ formatCompact(localCacheHits) }}</strong></div>
       <div class="orb-core"><div class="orb-glow"></div><div class="orb-sphere"></div></div>
     </section>
+
+    <!-- 极简实时数据条：仅在卡片式与引擎仪表下方显示，球形不显示。每次刷新跳动一次。 -->
+    <footer v-if="style === 'card' || style === 'engine'" class="mini-bar" :class="{ 'is-tick': updated }">
+      <span class="mini-rate" :class="{ 'is-good': displayRate != null && displayRate > 0.3 }">{{ formatRate(displayRate) }}</span>
+      <span class="mini-sep">·</span>
+      <span class="mini-tokens">{{ formatCompact(totalTokens) }}</span>
+      <span class="mini-sep">·</span>
+      <span class="mini-turns">{{ formatCompact(turnsTotal) }}</span>
+      <span class="mini-tick" :class="{ 'is-on': updated }"></span>
+    </footer>
   </div>
 </template>
 
@@ -176,5 +194,16 @@ onUnmounted(() => {
 @keyframes scan { from { transform: translateY(-12px); } to { transform: translateY(12px); } }
 @keyframes float { 0%,100% { transform: translateY(-1px); } 50% { transform: translateY(2px); } }
 @keyframes pulse { 0%,100% { opacity: .55; transform: scale(.92); } 50% { opacity: .9; transform: scale(1.06); } }
+
+/* 极简实时数据条：仅 card/engine 底部，一行紧凑数字 + 刷新跳动指示。 */
+.mini-bar { display: flex; align-items: center; justify-content: center; gap: 4px; height: 16px; margin-top: 4px; padding: 0 6px; border-top: 1px solid rgba(52,52,52,.7); color: #9a9a9a; font: 600 9px var(--font-num, ui-monospace, monospace); letter-spacing: .02em; transition: opacity .3s ease; }
+.mini-rate { color: #cfcfcf; }
+.mini-rate.is-good { color: var(--accent); }
+.mini-sep { color: #555; }
+.mini-tick { width: 5px; height: 5px; border-radius: 50%; background: #444; margin-left: 3px; transition: background .25s ease, box-shadow .25s ease; }
+.mini-tick.is-on { background: var(--accent); box-shadow: 0 0 6px rgba(110,231,165,.8); }
+.mini-bar.is-tick { animation: miniTick .5s ease; }
+@keyframes miniTick { 0% { opacity: .5; } 50% { opacity: 1; } 100% { opacity: .82; } }
+
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; } }
 </style>

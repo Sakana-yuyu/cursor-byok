@@ -108,11 +108,8 @@ export function groupModelAdaptersAsSuppliers(adapters, mode = SUPPLIER_GROUP_MO
     }
     const bucket = map.get(key);
     bucket.models.push(adapter);
-    // 连接分组：展示用名称取首条非空分组名；多名称时仍以首条为主
-    if (resolved === SUPPLIER_GROUP_MODE_CONNECTION && !bucket.groupNameRaw && groupNameRaw) {
-      bucket.groupNameRaw = groupNameRaw;
-      bucket.groupName = groupNameDisplay;
-    }
+    // 连接分组：bucket.groupName 保持为首条 adapter 的分组名（稳定、可路由）。
+    // 不再用"首条非空"覆盖，否则会丢弃首条"默认分组"信息；多名称聚合交给展示层 nameSummary。
   }
 
   return Array.from(map.values());

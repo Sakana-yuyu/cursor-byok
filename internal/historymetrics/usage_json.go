@@ -43,6 +43,8 @@ type usageFileEvent struct {
 
 // LoadRecentRequestMetrics 返回 usage.json 中已记录的最近请求明细。
 // limit <= 0 表示不限制条数。offset 表示跳过前 offset 条（按时间倒序，即跳过最新的 offset 条）。
+// 请求明细只展示 provider_call 事件；turn_finalized 仅用于轮次聚合统计，不进明细列表，
+// 否则同一轮会同时出现 provider_call + turn_finalized 两条记录（"两条明细" bug）。
 func LoadRecentRequestMetrics(path string, limit int, offset int, includeCacheWrite bool, lookup *PriceLookup) ([]RequestMetric, error) {
 	body, err := os.ReadFile(path)
 	if err != nil {
@@ -57,7 +59,15 @@ func LoadRecentRequestMetrics(path string, limit int, offset int, includeCacheWr
 	if err := json.Unmarshal(body, &doc); err != nil {
 		return nil, fmt.Errorf("decode usage file: %w", err)
 	}
-	total := len(doc.RecentEvents)
+	// 先过滤出 provider_call，再做分页，保证 count 与列表口径一致。
+	providerEvents := make([]usageFileEvent, 0, len(doc.RecentEvents))
+	for _, event := range doc.RecentEvents {
+		if !IsProviderCall(event.Kind) {
+			continue
+		}
+		providerEvents = append(providerEvents, event)
+	}
+	total := len(providerEvents)
 	if offset < 0 {
 		offset = 0
 	}
@@ -69,7 +79,7 @@ func LoadRecentRequestMetrics(path string, limit int, offset int, includeCacheWr
 		limit = available
 	}
 	result := make([]RequestMetric, 0, limit)
-	for _, event := range doc.RecentEvents[offset : offset+limit] {
+	for _, event := range providerEvents[offset : offset+limit] {
 		model := strings.TrimSpace(event.Model)
 		provider := strings.TrimSpace(event.Provider)
 		baseURL := strings.TrimSpace(event.BaseURL)
@@ -99,7 +109,8 @@ func LoadRecentRequestMetrics(path string, limit int, offset int, includeCacheWr
 	return result, nil
 }
 
-// LoadRecentRequestCount 返回 usage.json 中 recent_events 的总数（不做解析，只计数）。
+// LoadRecentRequestCount 返回 usage.json 中 recent_events 的 provider_call 事件数，
+// 与 LoadRecentRequestMetrics 口径一致（turn_finalized 不计入明细总数，避免分页错乱）。
 func LoadRecentRequestCount(path string) (int, error) {
 	body, err := os.ReadFile(path)
 	if err != nil {
@@ -109,12 +120,18 @@ func LoadRecentRequestCount(path string) (int, error) {
 		return 0, fmt.Errorf("read usage file: %w", err)
 	}
 	var doc struct {
-		RecentEvents []json.RawMessage `json:"recent_events"`
+		RecentEvents []usageFileEvent `json:"recent_events"`
 	}
 	if err := json.Unmarshal(body, &doc); err != nil {
 		return 0, fmt.Errorf("decode usage file: %w", err)
 	}
-	return len(doc.RecentEvents), nil
+	count := 0
+	for _, event := range doc.RecentEvents {
+		if IsProviderCall(event.Kind) {
+			count++
+		}
+	}
+	return count, nil
 }
 
 func LoadUsageSummary(path string, includeCacheWrite bool, lookup *PriceLookup) (Summary, error) {

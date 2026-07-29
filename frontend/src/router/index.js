@@ -8,6 +8,7 @@ import ModelGroups from "@/views/ModelGroups.vue";
 import RequestMetrics from "@/views/RequestMetrics.vue";
 import SupplierDetail from "@/views/SupplierDetail.vue";
 import MetricsDetail from "@/views/MetricsDetail.vue";
+import StatsOverlay from "@/views/StatsOverlay.vue";
 
 const router = createRouter({
   history: isBrowserPreview ? createWebHistory() : createWebHashHistory(),
@@ -51,6 +52,12 @@ const router = createRouter({
       path: "/request-metrics",
       component: RequestMetrics,
       meta: { showIcon: false, title: "请求明细", directlyClose: true },
+    },
+    {
+      // 统计浮窗：独立小窗口，App.vue 按 path 分流为纯 router-view（不带 MainLayout）。
+      path: "/stats-overlay",
+      component: StatsOverlay,
+      meta: { showIcon: false, title: "实时统计", directlyClose: true },
     },
 
   ],
