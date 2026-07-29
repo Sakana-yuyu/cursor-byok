@@ -90,3 +90,32 @@ func buildHTTPStatusError(prefix string, resp *http.Response) error {
 	}
 	return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d body=%s", strings.TrimSpace(prefix), resp.StatusCode, bodyText)}
 }
+
+// ChannelError 包装底层 provider 错误并携带命中渠道的身份信息，
+// 供转发层在错误处理时定位「是哪个渠道/中转站」返回了该错误（如 max_tokens 超限），
+// 从而能针对性地持久化该渠道的配置修正，而非全局修改。
+// 通过 Unwrap 保留底层错误链，errors.As 仍可提取 *HTTPStatusError。
+type ChannelError struct {
+	Cause     error
+	ChannelID string
+	BaseURL   string
+	GroupName string
+	Provider  string
+	Model     string
+}
+
+// Error 返回底层错误的字符串形式，保持与原错误一致以兼容既有解析逻辑。
+func (e *ChannelError) Error() string {
+	if e == nil || e.Cause == nil {
+		return "channel error"
+	}
+	return e.Cause.Error()
+}
+
+// Unwrap 暴露底层错误，使 errors.As 能穿透到 *HTTPStatusError。
+func (e *ChannelError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Cause
+}

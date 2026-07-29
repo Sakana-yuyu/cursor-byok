@@ -502,8 +502,13 @@ func (adapter *OpenAIAdapter) streamChatCompletionsWithReconnect(ctx context.Con
 		if err == nil {
 			return nil
 		}
-		// 已经转发过内容 -> 不能重连（会导致客户端收到重复输出）
+		// 已经转发过内容 -> 不能重连（会导致客户端收到重复输出）。
+		// 若是连接级中断（EOF/重置/断管），包装成可识别的「上游中断」错误，
+		// 便于用户/日志区分是上游连接断开而非程序 bug。
 		if emitted {
+			if IsStreamConnectionReset(err) {
+				return fmt.Errorf("upstream stream interrupted mid-response (already forwarded partial content, will not reconnect to avoid duplicates): %w", err)
+			}
 			return err
 		}
 		// 未转发任何内容且错误是连接重置类 -> 透明重连

@@ -9,7 +9,10 @@ import (
 )
 
 const (
-	defaultProviderStreamIdleTimeout = 4 * time.Minute
+	// defaultProviderStreamIdleTimeout 是流式请求无有效内容时的默认静默超时。
+	// 取 90s：上游半开连接/静默卡死时，用户体感从 4 分钟「卡死」缩短为 90 秒后明确报错。
+	// 用户可在配置中调大（最高无上限）或调小（最低 minProviderStreamIdleTimeout）。
+	defaultProviderStreamIdleTimeout = 90 * time.Second
 	minProviderStreamIdleTimeout     = 30 * time.Second
 )
 
