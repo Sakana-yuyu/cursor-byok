@@ -1527,7 +1527,7 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 		service.setTurnPhase(stream, TurnPhaseFailed)
 		return service.failStream(stream, "unknown", err)
 	}
-	maxTokens, requestKnobs := service.resolveProviderOutputBudget(modelID, conversation, compiled)
+	maxTokens, requestKnobs := service.resolveProviderOutputBudget(modelID, modelName, conversation, compiled)
 	service.maybeSaveLastAgentModelHash(conversation, modelID, mode, currentPass)
 	ctx, cancel := context.WithCancel(context.Background())
 	stream.mu.Lock()
@@ -1573,7 +1573,7 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	return nil
 }
 
-func (service *Service) resolveProviderOutputBudget(modelID string, conversation *ConversationFile, compiled CompiledConversation) (int, map[string]any) {
+func (service *Service) resolveProviderOutputBudget(modelID string, modelName string, conversation *ConversationFile, compiled CompiledConversation) (int, map[string]any) {
 	configuredMaxTokens := service.resolveConfiguredProviderMaxOutputTokens(modelID)
 	contextWindowTokens := compactionContextWindowSize(conversation)
 	estimatedPromptTokens := estimateCompiledPromptTokens(compiled)
@@ -1588,7 +1588,20 @@ func (service *Service) resolveProviderOutputBudget(modelID string, conversation
 	// catalog 记录了每个模型 provider 侧允许的最大输出 token 数。
 	// 某些 provider（如 Neurons 代理的 k2.7）会对超出的 max_tokens 直接返回 400，
 	// 因此这里必须把它当作硬上限：无论 channel 配了多大的值，都不能超过模型上限。
-	if catalogMax := int64(modelcontext.MaxOutputTokens(modelID)); catalogMax > 0 && catalogMax < requestMaxTokens {
+	//
+	// 注意：modelID 可能是客户端内部哈希 ID（如 "4fd90578ea9510b1"），catalog 无法匹配；
+	// 必须优先用显示名 modelName（如 "kimi-k2.7-code"）查 catalog，否则会返回 0 导致 cap 失效、
+	// 发出默认 65536 触发中转站 400。modelID 仅作兜底。
+	catalogModelKey := strings.TrimSpace(modelName)
+	if catalogModelKey == "" {
+		catalogModelKey = strings.TrimSpace(modelID)
+	}
+	catalogMax := int64(modelcontext.MaxOutputTokens(catalogModelKey))
+	if catalogMax <= 0 {
+		// 显示名未命中时再用 modelID 兜底（少数场景 modelID 即真实模型名）。
+		catalogMax = int64(modelcontext.MaxOutputTokens(modelID))
+	}
+	if catalogMax > 0 && catalogMax < requestMaxTokens {
 		requestMaxTokens = catalogMax
 	}
 	if contextWindowTokens > 0 && estimatedPromptTokens > 0 {
@@ -1608,7 +1621,8 @@ func (service *Service) resolveProviderOutputBudget(modelID string, conversation
 	requestKnobs := map[string]any{
 		"configured_max_tokens":             configuredMaxTokens,
 		"dynamic_max_tokens":                maxTokens,
-		"catalog_max_output_tokens":         modelcontext.MaxOutputTokens(modelID),
+		"catalog_model_key":                 catalogModelKey,
+		"catalog_max_output_tokens":         modelcontext.MaxOutputTokens(catalogModelKey),
 		"compiled_prompt_tokens_estimate":   estimatedPromptTokens,
 		"context_window_tokens":             contextWindowTokens,
 		"remaining_context_tokens_estimate": remainingTokens,
