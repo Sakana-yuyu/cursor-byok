@@ -12,6 +12,7 @@ import { isBrowserPreview, runtimeWindow } from "@/services/runtimeAdapter";
 import {
   classifyModelProtocol,
   createEmptyModelAdapter,
+  inferProviderType,
   normalizeModelAdapter,
   PROTOCOL_MODE_AUTO,
   saveModelAdaptersBatch,
@@ -91,9 +92,11 @@ function toggleAll() {
 
 function buildProbeAdapter(model) {
   const d = draft.value || {};
+  // 按模型名推断 provider type，避免 claude/gemini 被套用 openai 协议探测导致结果失真。
+  const inferredType = inferProviderType(model.id, d.type || "openai");
   return normalizeModelAdapter({
     ...createEmptyModelAdapter(),
-    type: d.type || "openai",
+    type: inferredType,
     baseURL: d.baseURL || "",
     apiKey: d.apiKey || "",
     customHeadersEnabled: Boolean(d.customHeadersEnabled),
@@ -102,10 +105,10 @@ function buildProbeAdapter(model) {
     modelID: model.id,
     tooltipData: `探测 ${model.id}`,
     protocolMode: PROTOCOL_MODE_AUTO,
-    protocolGroup: classifyModelProtocol(d.type || "openai", model.id, d.baseURL || "", "", ""),
+    protocolGroup: classifyModelProtocol(inferredType, model.id, d.baseURL || "", "", ""),
     openAIRequestGroup:
-      (d.type || "openai") === "openai"
-        ? classifyModelProtocol(d.type || "openai", model.id, d.baseURL || "", "", "")
+      inferredType === "openai"
+        ? classifyModelProtocol(inferredType, model.id, d.baseURL || "", "", "")
         : "",
   });
 }
@@ -191,10 +194,13 @@ async function handleBatchAdd() {
   catalogSaving.value = true;
   try {
     const baseURL = String(d.baseURL || "").trim();
-    const adapters = picked.map((model) =>
-      normalizeModelAdapter({
+    const adapters = picked.map((model) => {
+      // 按模型名推断 provider type，让 claude→anthropic、gemini→gemini 走原生协议，
+        // 避免错误套用渠道级 openai 协议导致缓存失效。
+      const inferredType = inferProviderType(model.id, d.type || "openai");
+      return normalizeModelAdapter({
         ...createEmptyModelAdapter(),
-        type: d.type || "openai",
+        type: inferredType,
         baseURL,
         apiKey: d.apiKey || "",
         customHeadersEnabled: Boolean(d.customHeadersEnabled),
@@ -202,17 +208,17 @@ async function handleBatchAdd() {
         displayName: model.id,
         modelID: model.id,
         protocolMode: PROTOCOL_MODE_AUTO,
-        protocolGroup: classifyModelProtocol(d.type || "openai", model.id, baseURL, "", ""),
+        protocolGroup: classifyModelProtocol(inferredType, model.id, baseURL, "", ""),
         openAIRequestGroup:
-          (d.type || "openai") === "openai"
-            ? classifyModelProtocol(d.type || "openai", model.id, baseURL, "", "")
+          inferredType === "openai"
+            ? classifyModelProtocol(inferredType, model.id, baseURL, "", "")
             : "",
         groupName,
         tooltipData: String(d.tooltipData || "").trim() || `来自 ${baseURL}`,
         contextWindowTokens: model.contextWindowTokens || 0,
         pricing: model.pricing || null,
-      }),
-    );
+      });
+    });
     const result = await saveModelAdaptersBatch(adapters);
     if (!result.ok) {
       catalogError.value = result.error || "批量添加失败";

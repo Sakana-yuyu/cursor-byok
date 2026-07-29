@@ -21,6 +21,7 @@ import {
   BALANCE_QUERY_HEADERS_DEFAULT_JSON,
   buildModelAdapterTestRequestHash,
   classifyModelProtocol,
+  inferProviderType,
   CUSTOM_HEADERS_DEFAULT_JSON,
   EXTRA_PARAMS_DEFAULT_JSON,
   getModelAdapterTestResult,
@@ -638,6 +639,20 @@ watch(
 watch(currentRequestHash, () => {
   localTestFailure.value = "";
 });
+
+// 快速添加（新建）模式下，根据 modelID 自动推断 provider type：
+// 填入 claude-* 自动切到 anthropic、gemini-* 切到 gemini，避免误配成 openai 导致缓存失效。
+// 仅在新建（isQuickMode）时生效；编辑已有渠道时不自动改 type，尊重用户已有配置。
+watch(
+  () => draft.modelID,
+  (modelID) => {
+    if (!isQuickMode.value) return;
+    const inferred = inferProviderType(modelID, draft.type);
+    if (inferred !== draft.type) {
+      handleModelTypeChange(inferred);
+    }
+  },
+);
 
 watch(
   () => [draft.type, draft.modelID, draft.baseURL, draft.openAIEndpoint, draft.protocolMode],

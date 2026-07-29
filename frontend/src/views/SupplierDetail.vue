@@ -9,6 +9,7 @@ import {
   deleteModelAdapterAt,
   deleteModelAdaptersBatch,
   getModelAdapterTestResultByID,
+  inferProviderType,
   openModelEditorWindow,
   reloadUserConfig,
   runModelAdapterTest,
@@ -360,9 +361,11 @@ function protocolGroupForType(type) {
 
 function buildProbeAdapter(model) {
   if (!supplierMeta.value) return { ...createEmptyModelAdapter(), modelID: model.id, tooltipData: `探测 ${model.id}` };
+  // 按模型名推断 type，避免 claude/gemini 用 openai 协议探测导致结果失真。
+  const inferredType = inferProviderType(model.id, supplierMeta.value.type);
   return {
     ...createEmptyModelAdapter(),
-    type: supplierMeta.value.type,
+    type: inferredType,
     supplierID: supplierMeta.value.supplierID,
     baseURL: supplierMeta.value.baseURL || queryBaseURL.value,
     apiKey: supplierMeta.value.apiKey,
@@ -372,9 +375,9 @@ function buildProbeAdapter(model) {
     modelID: model.id,
     tooltipData: `探测 ${model.id}`,
     protocolMode: "auto",
-    protocolGroup: protocolGroupForType(supplierMeta.value.type),
-    openAIEndpoint: supplierMeta.value.type === "openai" ? OPENAI_ENDPOINT_RESPONSES : "",
-    anthropicThinkingEffort: supplierMeta.value.type === "anthropic" ? "xhigh" : "",
+    protocolGroup: protocolGroupForType(inferredType),
+    openAIEndpoint: inferredType === "openai" ? OPENAI_ENDPOINT_RESPONSES : "",
+    anthropicThinkingEffort: inferredType === "anthropic" ? "xhigh" : "",
   };
 }
 
@@ -470,26 +473,30 @@ async function handleBatchAddModels() {
       supplierIdentity.value.mode === SUPPLIER_GROUP_MODE_NAME
         ? queryGroupName.value
         : String(supplierMeta.value.groupName || queryGroupName.value || "").trim();
-    const adapters = selected.map((model) => ({
-      ...createEmptyModelAdapter(),
-      type: supplierMeta.value.type,
-      supplierID: supplierMeta.value.supplierID,
-      baseURL: seedBaseURL,
-      apiKey: supplierMeta.value.apiKey,
-      customHeadersEnabled: Boolean(supplierMeta.value.customHeadersEnabled),
-      customHeadersJSON: supplierMeta.value.customHeadersJSON || "",
-      displayName: model.id,
-      modelID: model.id,
-      groupName: seedGroupName,
-      tooltipData: `来自 ${formatHost(seedBaseURL)}`,
-      contextWindowTokens: model.contextWindowTokens || 0,
-      pricing: model.pricing || null,
-      protocolMode: "auto",
-      protocolGroup: protocolGroupForType(supplierMeta.value.type),
-      openAIEndpoint: supplierMeta.value.type === "openai" ? OPENAI_ENDPOINT_RESPONSES : "",
-      openAIRequestGroup: "",
-      anthropicThinkingEffort: supplierMeta.value.type === "anthropic" ? "xhigh" : "",
-    }));
+    const adapters = selected.map((model) => {
+      // 按模型名推断 type，让 claude→anthropic、gemini→gemini 走原生协议，避免缓存失效。
+      const inferredType = inferProviderType(model.id, supplierMeta.value.type);
+      return {
+        ...createEmptyModelAdapter(),
+        type: inferredType,
+        supplierID: supplierMeta.value.supplierID,
+        baseURL: seedBaseURL,
+        apiKey: supplierMeta.value.apiKey,
+        customHeadersEnabled: Boolean(supplierMeta.value.customHeadersEnabled),
+        customHeadersJSON: supplierMeta.value.customHeadersJSON || "",
+        displayName: model.id,
+        modelID: model.id,
+        groupName: seedGroupName,
+        tooltipData: `来自 ${formatHost(seedBaseURL)}`,
+        contextWindowTokens: model.contextWindowTokens || 0,
+        pricing: model.pricing || null,
+        protocolMode: "auto",
+        protocolGroup: protocolGroupForType(inferredType),
+        openAIEndpoint: inferredType === "openai" ? OPENAI_ENDPOINT_RESPONSES : "",
+        openAIRequestGroup: "",
+        anthropicThinkingEffort: inferredType === "anthropic" ? "xhigh" : "",
+      };
+    });
     const result = await saveModelAdaptersBatch(adapters);
     if (!result.ok) {
       catalogError.value = result.error || "批量添加失败";
