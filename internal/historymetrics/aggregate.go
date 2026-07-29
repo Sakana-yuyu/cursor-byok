@@ -23,6 +23,11 @@ type RangeSummary struct {
 	CacheWriteTokens int64    `json:"cacheWriteTokens"`
 	TotalTokens      int64    `json:"totalTokens"`
 	CacheRate        *float64 `json:"cacheRate"`
+	// TurnsTotal/ValidTurnsTotal/InvalidTurnsTotal 来自 turn_finalized 事件聚合，
+	// 与 provider_call 的 token 统计分离，避免重复计入 token。
+	TurnsTotal        int `json:"turnsTotal"`
+	ValidTurnsTotal   int `json:"validTurnsTotal"`
+	InvalidTurnsTotal int `json:"invalidTurnsTotal"`
 }
 
 // TokenBucket 表示按固定时间粒度分桶后的 token 统计。
@@ -66,6 +71,25 @@ func FilterProviderEvents(events []RequestMetric, start, end time.Time, model st
 	return result
 }
 
+// FilterTurnEvents 过滤出指定时间范围内的 turn_finalized 事件，供轮次聚合使用。
+// turn_finalized 不带 model/provider，故不按 model 过滤；start/end 为零值表示不限制。
+func FilterTurnEvents(events []RequestMetric, start, end time.Time) []RequestMetric {
+	result := make([]RequestMetric, 0, len(events))
+	for _, event := range events {
+		if !IsTurnFinalized(event.Kind) {
+			continue
+		}
+		if !start.IsZero() && event.At.Before(start) {
+			continue
+		}
+		if !end.IsZero() && !event.At.Before(end) {
+			continue
+		}
+		result = append(result, event)
+	}
+	return result
+}
+
 // SummarizeEvents 汇总 provider 事件的 token。
 func SummarizeEvents(events []RequestMetric, includeCacheWrite bool) RangeSummary {
 	var summary RangeSummary
@@ -79,6 +103,29 @@ func SummarizeEvents(events []RequestMetric, includeCacheWrite bool) RangeSummar
 	}
 	summary.CacheRate = cacheRate(summary.InputTokens, summary.CacheReadTokens, summary.CacheWriteTokens, includeCacheWrite)
 	return summary
+}
+
+// SummarizeTurns 聚合 turn_finalized 事件的轮次计数，与 token 统计分离。
+// status=="completed" 计入有效轮次，其余计入异常轮次。
+// 仅统计 kind=="turn_finalized" 事件；provider_call 不参与轮次计数。
+func SummarizeTurns(events []RequestMetric) (turnsTotal, validTurnsTotal, invalidTurnsTotal int) {
+	for _, event := range events {
+		if !IsTurnFinalized(event.Kind) {
+			continue
+		}
+		turnsTotal++
+		if strings.TrimSpace(event.Status) == "completed" {
+			validTurnsTotal++
+		} else {
+			invalidTurnsTotal++
+		}
+	}
+	return turnsTotal, validTurnsTotal, invalidTurnsTotal
+}
+
+// IsTurnFinalized 判断事件是否为会话回合结束事件（用于轮次聚合，不参与 token 汇总）。
+func IsTurnFinalized(kind string) bool {
+	return strings.TrimSpace(kind) == KindTurnFinalized
 }
 
 // BucketEvents 将事件按 bucketHours 小时粒度分桶；bucketHours <= 0 时按 1 小时。

@@ -296,7 +296,7 @@ func statsOverlayWindowSize(style string) (width, height int) {
 	case statsOverlayStyleOrb:
 		return 196, 196
 	default:
-		return 240, 132
+		return 240, 144
 	}
 }
 
@@ -355,6 +355,16 @@ func (s *WindowService) OpenStatsOverlayWindow() {
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar:                   true,
 			DisableFramelessWindowDecorations: true,
+			// 显式指定扩展窗口样式，覆盖 Wails 默认为 HiddenOnTaskbar 设置的
+			// WS_EX_NOACTIVATE(0x08000000)。NOACTIVATE 会使浮窗永远无法成为前台窗口，
+			// 导致主窗口隐藏后线程失去前台、浮窗无法接管 -> startDrag 的 capture 握手失败，
+			// 运行时 drag.js 的 dragging 标志卡死并吞掉所有点击，界面整体不可点击
+			// （需 Alt-Tab 强制重分配前台才能恢复）。
+			// 改用 WS_EX_TOOLWINDOW(0x00000080) 实现任务栏隐藏但允许激活；保留
+			// WS_EX_TOPMOST(0x00000008) 置顶、WS_EX_LAYERED(0x00080000) 透明分层、
+			// WS_EX_CONTROLPARENT(0x00010000) 与 Wails 默认一致；不含 WS_EX_TRANSPARENT
+			// 以确保点击命中浮窗本身而非穿透。
+			ExStyle: 0x00000080 | 0x00000008 | 0x00080000 | 0x00010000,
 		},
 	})
 
