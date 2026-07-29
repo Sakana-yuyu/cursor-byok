@@ -292,11 +292,11 @@ const (
 func statsOverlayWindowSize(style string) (width, height int) {
 	switch style {
 	case statsOverlayStyleEngine:
-		return 240, 104
+		return 240, 124
 	case statsOverlayStyleOrb:
 		return 196, 196
 	default:
-		return 240, 112
+		return 240, 132
 	}
 }
 

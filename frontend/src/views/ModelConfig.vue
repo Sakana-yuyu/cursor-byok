@@ -43,6 +43,14 @@ function clearGroupFocus() {
 
 watch(groupMode, (mode) => {
   saveSupplierGroupMode(mode);
+  // 切换分组模式后，旧模式的分组 key（带 name::/connection:: 前缀）在新模式下不再匹配，
+  // 必须清掉聚焦，否则 suppliers 过滤会把列表滤空（表现为不显示名称/分组消失）。
+  if (focusedGroupKey.value) {
+    focusedGroupKey.value = "";
+    if (route.query.group != null) {
+      router.replace({ path: "/model-config", query: {} });
+    }
+  }
 });
 
 const allSuppliers = computed(() =>
@@ -54,8 +62,10 @@ const searchQuery = ref("");
 const suppliers = computed(() => {
   let list = allSuppliers.value;
   if (focusedGroupKey.value) {
+    // 仅在当前模式下确实命中时才聚焦；命中为空（如刚切换了模式）则回退全量，避免列表被滤空。
     const matched = list.filter((supplier) => supplier.key === focusedGroupKey.value);
     if (matched.length) list = matched;
+    else focusedGroupKey.value = "";
   }
   const q = searchQuery.value.trim().toLowerCase();
   if (!q) return list;
@@ -106,16 +116,18 @@ function hostSummary(supplier) {
 
 function nameSummary(supplier) {
   if (groupMode.value === SUPPLIER_GROUP_MODE_CONNECTION) {
+    // 连接分组：聚合该连接下所有分组名，统一基于 models 现算，避免与 bucket.groupName 数据源不一致。
     const names = [
       ...new Set(
         (supplier.models || [])
           .map((m) => String(m.groupName || "").trim() || "默认分组"),
       ),
     ];
-    if (names.length <= 1) return supplier.groupName;
+    if (names.length === 0) return "默认分组";
+    if (names.length === 1) return names[0];
     return `${names[0]} 等 ${names.length} 个名称`;
   }
-  return supplier.groupName;
+  return supplier.groupName || "默认分组";
 }
 
 function modelHeader(supplier) {
