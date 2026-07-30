@@ -877,6 +877,32 @@ function normalizeLocalResponseCache(source) {
   };
 }
 
+function normalizeDelegation(source) {
+  const raw = source && typeof source === "object" ? source : {};
+  const groups = asArray(raw.groups).map((item, index) => {
+    const group = item && typeof item === "object" ? item : {};
+    const modelIDs = [...new Set(asArray(group.modelIDs || group.modelIds).map((value) => asString(value)).filter(Boolean))];
+    const defaultModelID = asString(group.defaultModelID || group.defaultModelId);
+    return {
+      id: asString(group.id) || `delegation-group-${index + 1}`,
+      name: asString(group.name) || `委派模型组 ${index + 1}`,
+      enabled: asBoolean(group.enabled, true),
+      modelIDs,
+      defaultModelID: modelIDs.includes(defaultModelID) ? defaultModelID : (modelIDs[0] || ""),
+      executionMode: ["auto", "cursor", "local"].includes(asString(group.executionMode).toLowerCase())
+        ? asString(group.executionMode).toLowerCase()
+        : "auto",
+      toolPermissions: group.toolPermissions && typeof group.toolPermissions === "object" ? { ...group.toolPermissions } : {},
+    };
+  });
+  const maxConcurrency = asPositiveInteger(raw.maxConcurrency);
+  return {
+    enabled: asBoolean(raw.enabled, true),
+    maxConcurrency: maxConcurrency > 0 ? maxConcurrency : 4,
+    groups,
+  };
+}
+
 function normalizeConfig(source) {
   const raw = source && typeof source === "object" ? source : {};
   const routing = raw.routing && typeof raw.routing === "object" ? raw.routing : {};
@@ -897,6 +923,7 @@ function normalizeConfig(source) {
     },
     // 本地响应缓存配置：保留在归一化白名单中，避免任何一次配置保存把它清空回默认值
     localResponseCache: normalizeLocalResponseCache(raw.localResponseCache),
+    delegation: normalizeDelegation(raw.delegation),
     lastAgentModelHash: asString(raw.lastAgentModelHash),
   };
 }
@@ -944,6 +971,7 @@ function buildConfigPayload(source = appState) {
     routing: normalized.routing,
     homeMetrics: normalized.homeMetrics,
     localResponseCache: normalized.localResponseCache,
+    delegation: normalized.delegation,
     lastAgentModelHash: normalized.lastAgentModelHash,
   };
 }
@@ -960,6 +988,7 @@ function applyConfigToState(config, { modelAdaptersOnly = false } = {}) {
   appState.routingMode = normalized.routing.mode;
   appState.includeCacheWriteInHitRate = normalized.homeMetrics.includeCacheWriteInHitRate;
   appState.localResponseCache = normalized.localResponseCache;
+  appState.delegation = normalized.delegation;
   appState.turnStaleTimeout = normalized.turnStaleTimeout;
   appState.autoMatchContextWindow = normalized.autoMatchContextWindow;
   return normalized;
@@ -1199,6 +1228,7 @@ export const appState = reactive({
   routingMode: cachedConfig.routing.mode,
   includeCacheWriteInHitRate: cachedConfig.homeMetrics.includeCacheWriteInHitRate,
   localResponseCache: cachedConfig.localResponseCache,
+  delegation: cachedConfig.delegation,
   // 浮窗偏好是纯前端 UX 状态：localStorage 持久化 + 跨窗口 storage 事件广播。
   // 不进后端 config（后端 config 不含 overlay 字段）。初始给默认值，真实值由
   // getStatsOverlayPreferences() 在首次读取时从 localStorage 填充，避免模块求值顺序依赖。
@@ -1544,6 +1574,7 @@ export async function persistUserConfig() {
       ...currentConfig.homeMetrics,
       includeCacheWriteInHitRate: appState.includeCacheWriteInHitRate,
     },
+    delegation: appState.delegation,
   });
 }
 
