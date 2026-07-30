@@ -16,8 +16,8 @@
 
 ## 阶段清单
 
-- [ ] Task 1：审查并完善按钮交互。
-- [ ] Task 2：抽离统一 Tool Registry 和执行收口。
+- [x] Task 1：审查并完善按钮交互（静态扫描确认事件处理器完整；无未定义按钮动作）。
+- [x] Task 2：抽离统一 Tool Registry 和执行收口（工具 canonical kind 注册表已接入）。
 - [x] Task 3：完善 Skills 注册、中文简介、开关和调用链（内置 skill 与现有扫描开关已接入）。
 - [x] Task 4：完成 MCP 运行时发现、schema 注入和执行闭环（stdio tools/list 已接入，HTTP/SSE 仍由 Cursor 客户端执行）。
 - [ ] Task 5：稳定 Agent 模式、provider pass、resume 和 checkpoint 调用链。
