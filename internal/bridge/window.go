@@ -293,11 +293,11 @@ const (
 )
 
 type statsOverlayLayout struct {
-	style                   string
-	edge                    string
-	collapsed               bool
-	x, y                    int
-	screenLeft, screenTop   int
+	style                     string
+	edge                      string
+	collapsed                 bool
+	x, y                      int
+	screenLeft, screenTop     int
 	screenWidth, screenHeight int
 }
 
@@ -432,7 +432,13 @@ func (s *WindowService) UpdateStatsOverlayWindow(style string, alwaysOnTop bool)
 	}
 	width, height := statsOverlayWindowSize(style)
 	if hasLayout && layout.collapsed {
-		width, height = statsOverlayDockSize, statsOverlayDockSize
+		// 收缩胶囊尺寸随朝向变化：贴左/右边时竖向（窄高），其余横向（宽矮）。
+		// 让原生窗口矩形紧贴胶囊内容，避免大块透明区域阻挡下方页面点击。
+		if layout.edge == "left" || layout.edge == "right" {
+			width, height = statsOverlayDockSize, statsOverlayDockSize+16
+		} else {
+			width, height = statsOverlayDockSize+52, statsOverlayDockSize-8
+		}
 	}
 
 	s.mu.RLock()
@@ -457,10 +463,18 @@ func (s *WindowService) UpdateStatsOverlayWindow(style string, alwaysOnTop bool)
 		case "bottom":
 			y = screenBottom - height
 		}
-		if x < layout.screenLeft { x = layout.screenLeft }
-		if y < layout.screenTop { y = layout.screenTop }
-		if x+width > screenRight { x = screenRight - width }
-		if y+height > screenBottom { y = screenBottom - height }
+		if x < layout.screenLeft {
+			x = layout.screenLeft
+		}
+		if y < layout.screenTop {
+			y = layout.screenTop
+		}
+		if x+width > screenRight {
+			x = screenRight - width
+		}
+		if y+height > screenBottom {
+			y = screenBottom - height
+		}
 		win.SetRelativePosition(x, y)
 	}
 	win.SetAlwaysOnTop(alwaysOnTop)

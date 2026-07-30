@@ -1,5 +1,5 @@
 <script setup>
-import { getHomeMetricsSummary, fetchLocalCacheStats } from "@/services/clientApi";
+import { getHomeMetricsSummary, fetchLocalCacheStats, updateStatsOverlayWindow } from "@/services/clientApi";
 import { getStatsOverlayPreferences, setStatsOverlayPreferences, appState } from "@/state/appState";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 
@@ -118,6 +118,30 @@ function handleMouseLeave() {
   }
 }
 
+// syncNativeWindowSize 把当前折叠/贴边/样式状态同步到原生窗口尺寸。
+//
+// 关键：原生 Wails 窗口本身有固定矩形，即使 Vue 层用 pointer-events:none 让空白穿透，
+// 窗口矩形仍会阻挡下方页面的点击。必须让窗口尺寸紧贴实际内容：
+//   - 收缩胶囊时缩到 dockSize（44px），只挡住胶囊那一小块；
+//   - 展开面板时恢复到对应样式的面板尺寸。
+//
+// 通过布局 DSL（layout|collapsed/expanded|edge|style|x|y|screen...）传给后端，
+// parseStatsOverlayLayout 解析后按 collapsed 切换 dockSize / 面板尺寸并重定位贴边。
+function syncNativeWindowSize() {
+  const currentStyle = style.value || "card";
+  const collapsed = isCollapsed.value ? "collapsed" : "expanded";
+  const edge = snapEdge.value || "none";
+  const x = typeof window.screenX === "number" ? Math.round(window.screenX) : 0;
+  const y = typeof window.screenY === "number" ? Math.round(window.screenY) : 0;
+  const screenLeft = Math.round(window.screen.availLeft || 0);
+  const screenTop = Math.round(window.screen.availTop || 0);
+  const screenWidth = Math.round(window.screen.availWidth || window.screen.width || 0);
+  const screenHeight = Math.round(window.screen.availHeight || window.screen.height || 0);
+  // layout|collapsed/expanded|edge|style|x|y|screenLeft|screenTop|screenWidth|screenHeight
+  const dsl = `layout|${collapsed}|${edge}|${currentStyle}|${x}|${y}|${screenLeft}|${screenTop}|${screenWidth}|${screenHeight}`;
+  void updateStatsOverlayWindow(dsl, true);
+}
+
 function formatCompact(value) {
   const n = Number(value || 0);
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
@@ -234,6 +258,11 @@ watch(() => appState.statsOverlayPreferences, (next) => {
   if (next) preferences.value = { ...next };
 }, { deep: true });
 
+// 折叠/展开、贴边、样式变化时同步原生窗口尺寸，使窗口矩形紧贴内容、不阻挡下方页面。
+watch(isCollapsed, () => syncNativeWindowSize());
+watch(snapEdge, () => syncNativeWindowSize());
+watch(style, () => syncNativeWindowSize());
+
 onMounted(() => {
   syncPreferences();
   // 用已保存坐标初始化，防止首次轮询把窗口初始位置（可能是屏幕中心）误覆盖掉已存的正确坐标
@@ -247,6 +276,8 @@ onMounted(() => {
   startPillCycle();
   window.addEventListener("storage", onStorage);
   window.addEventListener("stats-overlay-preferences-changed", onPreferencesChanged);
+  // 初始同步一次原生窗口尺寸，确保窗口矩形紧贴实际内容
+  syncNativeWindowSize();
 });
 
 onUnmounted(() => {
