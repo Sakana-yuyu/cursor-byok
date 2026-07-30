@@ -402,7 +402,7 @@ func buildRequestContextAgentSkillsSection(requestContext *agentv1.RequestContex
 			return
 		}
 		seen[fullPath] = struct{}{}
-		lines = append(lines, fmt.Sprintf(`<agent_skill fullPath="%s">%s</agent_skill>`, fullPath, description))
+		lines = append(lines, fmt.Sprintf(`<agent_skill fullPath="%s">%s</agent_skill>`, escapePromptXML(fullPath), escapePromptXML(description)))
 	}
 	for _, skill := range requestContext.GetAgentSkills() {
 		if skill == nil {

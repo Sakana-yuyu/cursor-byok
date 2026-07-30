@@ -36,14 +36,29 @@ type SkillStore struct {
 	convStore *ConversationFileStore
 	// workspaceRoot 可选，用于多源扫描时纳入项目级技能目录（<ws>/.cursor/skills 等）。
 	// 为空时仅扫描用户级目录。SetWorkspaceRoot 可在每次 run 时刷新。
-	workspaceRoot string
+	workspaceRoot  string
+	scanEnabled    bool
+	skillSources   map[string]bool
+	disabledSkills map[string]bool
 }
 
 // NewSkillStore 创建 SkillStore。root 为空时 Scan 始终返回空。
 func NewSkillStore(root string) *SkillStore {
-	store := &SkillStore{root: strings.TrimSpace(root)}
+	store := &SkillStore{root: strings.TrimSpace(root), scanEnabled: true}
 	store.activator = NewSkillActivator(store)
 	return store
+}
+
+// SetScanSettings keeps system-prompt skill activation aligned with the settings UI.
+func (s *SkillStore) SetScanSettings(enabled bool, sources map[string]bool, disabled map[string]bool) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.scanEnabled = enabled
+	s.skillSources = cloneSkillSettingMap(sources)
+	s.disabledSkills = cloneSkillSettingMap(disabled)
+	s.mu.Unlock()
 }
 
 // SetConversationStore 注入会话存储，启用调用链父子激活集传递。
@@ -87,7 +102,15 @@ func (s *SkillStore) Scan() ([]GlobalSkill, error) {
 // 在其基础上补齐 root（旧 BYOK 目录）里多源扫描未覆盖的技能，保证向后兼容。
 // 结果按 name 去重、排序，交给激活器做 BM25 Top-K 稀疏激活。
 func (s *SkillStore) scanLocked() ([]GlobalSkill, error) {
-	merged := ScanAllSkills(s.workspaceRoot)
+	if !s.scanEnabled {
+		return nil, nil
+	}
+	settings := SkillMCPScanSettings{
+		Enabled:        true,
+		SkillSources:   s.skillSources,
+		DisabledSkills: s.disabledSkills,
+	}
+	merged := filterScannedSkills(ScanAllSkills(s.workspaceRoot), settings)
 	seen := make(map[string]struct{}, len(merged))
 	skills := make([]GlobalSkill, 0, len(merged))
 	for _, sk := range merged {
@@ -102,11 +125,14 @@ func (s *SkillStore) scanLocked() ([]GlobalSkill, error) {
 		skills = append(skills, sk.GlobalSkill)
 	}
 	// 旧 BYOK root 作为保底补充（兼容历史：可能有多源扫描未纳入的目录布局）。
-	if strings.TrimSpace(s.root) != "" {
+	if strings.TrimSpace(s.root) != "" && sourceEnabled(s.skillSources, string(SkillSourceBYOK)) {
 		if legacy, err := scanLegacySkillRoot(s.root); err == nil {
 			for _, sk := range legacy {
 				key := strings.ToLower(strings.TrimSpace(sk.Name))
 				if key == "" {
+					continue
+				}
+				if s.disabledSkills != nil && s.disabledSkills[key] {
 					continue
 				}
 				if _, exists := seen[key]; exists {
@@ -124,6 +150,20 @@ func (s *SkillStore) scanLocked() ([]GlobalSkill, error) {
 		return skills[i].Name < skills[j].Name
 	})
 	return skills, nil
+}
+
+func cloneSkillSettingMap(source map[string]bool) map[string]bool {
+	if len(source) == 0 {
+		return nil
+	}
+	cloned := make(map[string]bool, len(source))
+	for key, value := range source {
+		key = strings.ToLower(strings.TrimSpace(key))
+		if key != "" {
+			cloned[key] = value
+		}
+	}
+	return cloned
 }
 
 // scanLegacySkillRoot 扫描单个旧式技能根目录（<root>/<name>/SKILL.md）。

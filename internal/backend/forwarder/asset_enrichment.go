@@ -60,22 +60,22 @@ func (service *Service) enrichRequestContextWithScannedAssets(intent *InboundInt
 		return
 	}
 	settings := readSkillMCPScanSettings(service.scanConfig)
+	workspaceRoot := resolveWorkspaceRootFromIntent(intent)
+
+	// Keep the compiler-side sparse skill store synchronized even when scanning is disabled.
+	if service.skillsStore() != nil {
+		service.skillsStore().SetWorkspaceRoot(workspaceRoot)
+		service.skillsStore().SetScanSettings(settings.Enabled, settings.SkillSources, settings.DisabledSkills)
+	}
 	if !settings.Enabled {
 		return
 	}
-	workspaceRoot := resolveWorkspaceRootFromIntent(intent)
-
-	// 同步给 SkillStore，使其 scanLocked 能纳入项目级技能目录。
-	if service.skillsStore() != nil {
-		service.skillsStore().SetWorkspaceRoot(workspaceRoot)
-	}
 
 	skills := ScanAllSkills(workspaceRoot)
-	mcpServers := ScanAllMCPServers(workspaceRoot)
+	mcpServers := scanMCPServers(workspaceRoot, settings.MCPSources, settings.DisabledMCPServers)
 
 	// 应用配置过滤：按分类来源 + 逐项禁用。
 	skills = filterScannedSkills(skills, settings)
-	mcpServers = filterScannedMCPServers(mcpServers, settings)
 
 	if len(skills) == 0 && len(mcpServers) == 0 {
 		return
@@ -111,28 +111,6 @@ func filterScannedSkills(skills []SourcedGlobalSkill, settings SkillMCPScanSetti
 			continue
 		}
 		out = append(out, sk)
-	}
-	return out
-}
-
-// filterScannedMCPServers 按逐项禁用列表过滤 MCP server。
-func filterScannedMCPServers(servers []*agentv1.McpDescriptor, settings SkillMCPScanSettings) []*agentv1.McpDescriptor {
-	if len(servers) == 0 {
-		return servers
-	}
-	out := make([]*agentv1.McpDescriptor, 0, len(servers))
-	for _, srv := range servers {
-		if srv == nil {
-			continue
-		}
-		identifier := strings.ToLower(strings.TrimSpace(srv.GetServerIdentifier()))
-		if identifier == "" {
-			identifier = strings.ToLower(strings.TrimSpace(srv.GetServerName()))
-		}
-		if settings.DisabledMCPServers != nil && settings.DisabledMCPServers[identifier] {
-			continue
-		}
-		out = append(out, srv)
 	}
 	return out
 }

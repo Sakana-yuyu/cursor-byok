@@ -12,8 +12,8 @@
 package forwarder
 
 import (
-	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -38,6 +38,7 @@ const (
 // mcpScanCache 缓存一次 MCP 扫描结果（同 skill 扫描，按 mtime 失效）。
 var (
 	mcpScanCacheMu sync.RWMutex
+	mcpScanRunMu   sync.Mutex
 	mcpScanCache   []*agentv1.McpDescriptor
 	mcpScanCacheFp string
 )
@@ -61,6 +62,7 @@ type normalizedMCPServer struct {
 	URL              string
 	Headers          map[string]string
 	Cwd              string
+	Enabled          bool
 	// RawJSON 保留原始 server 块，供调试/未来扩展（如手动 tool schema）。
 	RawJSON map[string]any
 }
@@ -68,8 +70,17 @@ type normalizedMCPServer struct {
 // ScanAllMCPServers 扫描所有工具的 MCP 配置，按 ServerIdentifier 去重（先到先得），
 // 返回 *agentv1.McpDescriptor 列表。workspaceRoot 为空时仅扫描用户级配置。
 func ScanAllMCPServers(workspaceRoot string) []*agentv1.McpDescriptor {
+	return scanMCPServers(workspaceRoot, nil, nil)
+}
+
+func scanMCPServers(workspaceRoot string, enabledSources map[string]bool, disabledServers map[string]bool) []*agentv1.McpDescriptor {
 	files := orderedMCPConfigFiles(workspaceRoot)
-	fingerprint := mcpScanFingerprint(files)
+	fingerprint := mcpScanFingerprint(files, enabledSources, disabledServers)
+	if cached, ok := loadCachedMCPServers(fingerprint); ok {
+		return cached
+	}
+	mcpScanRunMu.Lock()
+	defer mcpScanRunMu.Unlock()
 	if cached, ok := loadCachedMCPServers(fingerprint); ok {
 		return cached
 	}
@@ -77,6 +88,9 @@ func ScanAllMCPServers(workspaceRoot string) []*agentv1.McpDescriptor {
 	seen := make(map[string]struct{}, 16)
 	merged := make([]*agentv1.McpDescriptor, 0, 16)
 	for _, f := range files {
+		if !sourceEnabled(enabledSources, string(f.Source)) {
+			continue
+		}
 		data, err := os.ReadFile(f.Path)
 		if err != nil {
 			continue
@@ -93,21 +107,22 @@ func ScanAllMCPServers(workspaceRoot string) []*agentv1.McpDescriptor {
 		sort.Strings(names)
 		for _, name := range names {
 			srv := servers[name]
+			if !srv.Enabled {
+				continue
+			}
 			identifier := firstNonEmpty(srv.ServerIdentifier, srv.ServerName, name)
 			if identifier == "" {
 				continue
 			}
 			key := strings.ToLower(identifier)
+			if disabledServers != nil && disabledServers[key] {
+				continue
+			}
 			if _, exists := seen[key]; exists {
 				continue
 			}
 			seen[key] = struct{}{}
 			descriptor := buildMcpDescriptor(srv, identifier)
-			if strings.EqualFold(strings.TrimSpace(srv.Transport), "stdio") || strings.TrimSpace(srv.Transport) == "" {
-				if tools, discoverErr := discoverMCPTools(context.Background(), srv); discoverErr == nil {
-					descriptor.Tools = tools
-				}
-			}
 			merged = append(merged, descriptor)
 		}
 	}
@@ -287,6 +302,7 @@ func normalizeOneMCPServer(name string, raw map[string]any) normalizedMCPServer 
 	srv := normalizedMCPServer{
 		ServerName:       name,
 		ServerIdentifier: name,
+		Enabled:          true,
 		RawJSON:          raw,
 	}
 	// transport / type
@@ -320,10 +336,10 @@ func normalizeOneMCPServer(name string, raw map[string]any) normalizedMCPServer 
 	}
 	// enabled 开关（默认 true）
 	if enabled, ok := raw["enabled"].(bool); ok && !enabled {
-		srv.Transport = "" // 标记禁用：transport 置空，调用方按此跳过
+		srv.Enabled = false
 	}
 	if e, ok := raw["enable"].(bool); ok && !e {
-		srv.Transport = ""
+		srv.Enabled = false
 	}
 	return srv
 }
@@ -539,7 +555,7 @@ func clineMCPSettingsPath() string {
 }
 
 // mcpScanFingerprint 把各配置文件的 mtime 拼成指纹。
-func mcpScanFingerprint(files []mcpConfigFile) string {
+func mcpScanFingerprint(files []mcpConfigFile, enabledSources map[string]bool, disabledServers map[string]bool) string {
 	var b strings.Builder
 	for _, f := range files {
 		b.WriteString(string(f.Source))
@@ -549,11 +565,43 @@ func mcpScanFingerprint(files []mcpConfigFile) string {
 		if err != nil {
 			b.WriteString("missing")
 		} else {
-			b.WriteString(info.ModTime().Format("20060102T150405"))
+			b.WriteString(fmt.Sprintf("%d:%d", info.ModTime().UnixNano(), info.Size()))
 		}
 		b.WriteByte('\n')
 	}
+	appendBoolMapFingerprint(&b, "source", enabledSources)
+	appendBoolMapFingerprint(&b, "disabled", disabledServers)
 	return b.String()
+}
+
+func appendBoolMapFingerprint(builder *strings.Builder, prefix string, values map[string]bool) {
+	if len(values) == 0 {
+		return
+	}
+	normalized := make(map[string]bool, len(values))
+	for key, value := range values {
+		key = strings.ToLower(strings.TrimSpace(key))
+		if key != "" {
+			normalized[key] = value
+		}
+	}
+	keys := make([]string, 0, len(normalized))
+	for key := range normalized {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		builder.WriteString(prefix)
+		builder.WriteByte('|')
+		builder.WriteString(key)
+		builder.WriteByte('|')
+		if normalized[key] {
+			builder.WriteString("true")
+		} else {
+			builder.WriteString("false")
+		}
+		builder.WriteByte('\n')
+	}
 }
 
 func loadCachedMCPServers(fingerprint string) ([]*agentv1.McpDescriptor, bool) {

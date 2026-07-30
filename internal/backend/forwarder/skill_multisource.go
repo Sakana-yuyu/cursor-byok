@@ -9,6 +9,7 @@
 package forwarder
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -211,7 +212,7 @@ func scanOneSkillRoot(root string, source SkillSource) []SourcedGlobalSkill {
 	return skills
 }
 
-// skillScanFingerprint 把各目录的 mtime 拼成指纹，任一变化即让缓存失效。
+// skillScanFingerprint includes each SKILL.md metadata so in-place edits invalidate the cache.
 func skillScanFingerprint(roots []skillScanRoot) string {
 	var b strings.Builder
 	for _, root := range roots {
@@ -222,9 +223,21 @@ func skillScanFingerprint(roots []skillScanRoot) string {
 		if err != nil {
 			b.WriteString("missing")
 		} else {
-			b.WriteString(info.ModTime().Format("20060102T150405"))
+			b.WriteString(fmt.Sprintf("%d:%d", info.ModTime().UnixNano(), info.Size()))
 		}
 		b.WriteByte('\n')
+		entries, _ := os.ReadDir(root.Path)
+		for _, entry := range entries {
+			skillPath := filepath.Join(root.Path, entry.Name(), "SKILL.md")
+			info, statErr := os.Stat(skillPath)
+			if statErr != nil || info.IsDir() {
+				continue
+			}
+			b.WriteString(skillPath)
+			b.WriteByte('|')
+			b.WriteString(fmt.Sprintf("%d:%d", info.ModTime().UnixNano(), info.Size()))
+			b.WriteByte('\n')
+		}
 	}
 	b.WriteString("os=")
 	b.WriteString(runtime.GOOS)
