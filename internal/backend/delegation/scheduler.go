@@ -74,15 +74,22 @@ type TaskResult struct {
 
 // TaskSnapshot 是 UI 和主代理读取的稳定状态快照。
 type TaskSnapshot struct {
-	ID            string
-	Request       TaskRequest
-	Status        TaskStatus
-	Output        string
-	Error         string
-	ToolCallCount int
-	QueuedAt      time.Time
-	StartedAt     time.Time
-	FinishedAt    time.Time
+	ID              string
+	Request         TaskRequest
+	Status          TaskStatus
+	Output          string
+	Error           string
+	ToolCallCount   int
+	EventID         string
+	Sequence        uint64
+	EventType       string
+	ParentRequestID string
+	ParentExecID    string
+	GroupID         string
+	QueuedAt        time.Time
+	StartedAt       time.Time
+	FinishedAt      time.Time
+	UpdatedAt       time.Time
 }
 
 type Executor func(context.Context, TaskRequest) TaskResult
@@ -102,7 +109,9 @@ type Scheduler struct {
 	closed           bool
 	events           chan TaskSnapshot
 	eventsClosed     bool
-	sequence         atomic.Uint64
+	stateChanged     chan struct{}
+	taskSequence     atomic.Uint64
+	eventSequence    atomic.Uint64
 	closeOnce        sync.Once
 }
 
@@ -153,6 +162,7 @@ func NewScheduler(cfg Config, executor Executor) *Scheduler {
 		tasks:            make(map[string]*taskState),
 		activeExecutions: make(map[string]struct{}),
 		events:           make(chan TaskSnapshot, eventBuffer),
+		stateChanged:     make(chan struct{}),
 	}
 }
 
@@ -166,7 +176,7 @@ func (s *Scheduler) Submit(request TaskRequest) (string, error) {
 	}
 	request.ID = strings.TrimSpace(request.ID)
 	if request.ID == "" {
-		request.ID = fmt.Sprintf("delegated-%d", s.sequence.Add(1))
+		request.ID = fmt.Sprintf("delegated-%d", s.taskSequence.Add(1))
 	}
 	request = cloneTaskRequest(request)
 	now := time.Now().UTC()
@@ -193,7 +203,7 @@ func (s *Scheduler) Submit(request TaskRequest) (string, error) {
 	s.tasks[request.ID] = state
 	s.activeExecutions[request.ID] = struct{}{}
 	s.pruneTerminalTasksLocked()
-	s.publishLocked(state.snapshot)
+	s.publishLocked(&state.snapshot)
 	s.mu.Unlock()
 	go s.run(state)
 	return request.ID, nil
@@ -227,9 +237,8 @@ func (s *Scheduler) run(state *taskState) {
 	}
 	state.snapshot.Status = TaskRunning
 	state.snapshot.StartedAt = time.Now().UTC()
-	runningSnapshot := cloneTaskSnapshot(state.snapshot)
 	request := cloneTaskRequest(state.snapshot.Request)
-	s.publishLocked(runningSnapshot)
+	s.publishLocked(&state.snapshot)
 	s.mu.Unlock()
 
 	executionCtx := state.ctx
@@ -276,8 +285,7 @@ func (s *Scheduler) run(state *taskState) {
 	} else {
 		state.snapshot.Status = TaskCompleted
 	}
-	snapshot := cloneTaskSnapshot(state.snapshot)
-	s.publishLocked(snapshot)
+	s.publishLocked(&state.snapshot)
 	s.mu.Unlock()
 }
 
@@ -299,8 +307,7 @@ func (s *Scheduler) Cancel(taskID string) error {
 	state.snapshot.Status = TaskCanceled
 	state.snapshot.FinishedAt = time.Now().UTC()
 	state.cancel()
-	snapshot := cloneTaskSnapshot(state.snapshot)
-	s.publishLocked(snapshot)
+	s.publishLocked(&state.snapshot)
 	s.mu.Unlock()
 	return nil
 }
@@ -320,8 +327,7 @@ func (s *Scheduler) CancelIfActive(taskID string) bool {
 	state.snapshot.Status = TaskCanceled
 	state.snapshot.FinishedAt = time.Now().UTC()
 	state.cancel()
-	snapshot := cloneTaskSnapshot(state.snapshot)
-	s.publishLocked(snapshot)
+	s.publishLocked(&state.snapshot)
 	s.mu.Unlock()
 	return true
 }
@@ -378,6 +384,50 @@ func (s *Scheduler) Events() <-chan TaskSnapshot {
 	return s.events
 }
 
+func (s *Scheduler) WaitForTerminal(ctx context.Context, taskIDs []string) error {
+	if s == nil {
+		return fmt.Errorf("delegation scheduler is nil")
+	}
+	if ctx == nil {
+		return fmt.Errorf("delegation wait context is nil")
+	}
+	if len(taskIDs) == 0 {
+		return fmt.Errorf("delegation wait task ids are required")
+	}
+	trimmedIDs := make([]string, 0, len(taskIDs))
+	for _, taskID := range taskIDs {
+		taskID = strings.TrimSpace(taskID)
+		if taskID == "" {
+			return fmt.Errorf("delegation wait task ids must not be blank")
+		}
+		trimmedIDs = append(trimmedIDs, taskID)
+	}
+	for {
+		s.mu.RLock()
+		waitCh := s.stateChanged
+		allTerminal := true
+		for _, taskID := range trimmedIDs {
+			state, ok := s.tasks[taskID]
+			if !ok {
+				s.mu.RUnlock()
+				return fmt.Errorf("delegated task %q not found", taskID)
+			}
+			if !isTerminalStatus(state.snapshot.Status) {
+				allTerminal = false
+			}
+		}
+		s.mu.RUnlock()
+		if allTerminal {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-waitCh:
+		}
+	}
+}
+
 // EnsureRetentionLimit only raises the retained task ceiling. Active aggregates
 // can therefore keep every worker snapshot until fan-in has consumed it.
 func (s *Scheduler) EnsureRetentionLimit(limit int) {
@@ -406,7 +456,7 @@ func (s *Scheduler) Close() {
 			state.snapshot.Status = TaskCanceled
 			state.snapshot.FinishedAt = now
 			state.cancel()
-			s.publishLocked(state.snapshot)
+			s.publishLocked(&state.snapshot)
 		}
 		s.pruneTerminalTasksLocked()
 		s.purgeBufferedEventsLocked()
@@ -417,15 +467,20 @@ func (s *Scheduler) Close() {
 	})
 }
 
-func (s *Scheduler) publishLocked(snapshot TaskSnapshot) {
+func (s *Scheduler) publishLocked(snapshot *TaskSnapshot) {
+	if snapshot == nil {
+		return
+	}
+	s.decorateSnapshotLocked(snapshot)
+	s.notifyStateChangedLocked()
 	if s.eventsClosed {
 		return
 	}
-	snapshot = cloneTaskSnapshot(snapshot)
+	event := cloneTaskSnapshot(*snapshot)
 	select {
-	case s.events <- snapshot:
+	case s.events <- event:
 	default:
-		if !isTerminalStatus(snapshot.Status) {
+		if !isTerminalStatus(event.Status) {
 			return
 		}
 		s.purgeBufferedEventsLocked()
@@ -433,7 +488,7 @@ func (s *Scheduler) publishLocked(snapshot TaskSnapshot) {
 			s.evictOldestNonTerminalEventLocked()
 		}
 		select {
-		case s.events <- snapshot:
+		case s.events <- event:
 		default:
 		}
 	}
@@ -452,12 +507,12 @@ func (s *Scheduler) finishFromContext(state *taskState, cause error) {
 	} else {
 		state.snapshot.Status = TaskCanceled
 	}
-	snapshot := cloneTaskSnapshot(state.snapshot)
-	s.publishLocked(snapshot)
+	s.publishLocked(&state.snapshot)
 	s.mu.Unlock()
 }
 
 func (s *Scheduler) pruneTerminalTasksLocked() {
+	pruned := false
 	cutoff := time.Now().UTC().Add(-s.retentionAge)
 	for len(s.tasks) > s.retentionLimit {
 		var oldestID string
@@ -472,9 +527,13 @@ func (s *Scheduler) pruneTerminalTasksLocked() {
 			}
 		}
 		if oldestID == "" {
-			return
+			break
 		}
 		delete(s.tasks, oldestID)
+		pruned = true
+	}
+	if pruned {
+		s.notifyStateChangedLocked()
 	}
 }
 
@@ -528,6 +587,28 @@ func isTerminalStatus(status TaskStatus) bool {
 	default:
 		return false
 	}
+}
+
+func (s *Scheduler) decorateSnapshotLocked(snapshot *TaskSnapshot) {
+	if snapshot == nil {
+		return
+	}
+	now := time.Now().UTC()
+	snapshot.Sequence = s.eventSequence.Add(1)
+	snapshot.EventID = fmt.Sprintf("delegation-event-%d", snapshot.Sequence)
+	snapshot.EventType = string(snapshot.Status)
+	snapshot.ParentRequestID = strings.TrimSpace(snapshot.Request.ParentRequest)
+	snapshot.ParentExecID = strings.TrimSpace(snapshot.Request.ParentExecID)
+	snapshot.GroupID = snapshot.ParentExecID
+	snapshot.UpdatedAt = now
+}
+
+func (s *Scheduler) notifyStateChangedLocked() {
+	if s.stateChanged == nil {
+		s.stateChanged = make(chan struct{})
+	}
+	close(s.stateChanged)
+	s.stateChanged = make(chan struct{})
 }
 
 func cloneTaskRequest(request TaskRequest) TaskRequest {

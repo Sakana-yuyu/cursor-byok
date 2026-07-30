@@ -19,9 +19,16 @@ type DelegationTaskSnapshot struct {
 	Status           delegation.TaskStatus `json:"status"`
 	ToolCallCount    int                   `json:"toolCallCount"`
 	Error            string                `json:"error,omitempty"`
+	EventID          string                `json:"eventId"`
+	Sequence         uint64                `json:"sequence"`
+	EventType        string                `json:"eventType"`
+	ParentRequestID  string                `json:"parentRequestId"`
+	ParentExecID     string                `json:"parentExecId"`
+	GroupID          string                `json:"groupId"`
 	QueuedAtUnixMS   int64                 `json:"queuedAtUnixMs"`
 	StartedAtUnixMS  int64                 `json:"startedAtUnixMs"`
 	FinishedAtUnixMS int64                 `json:"finishedAtUnixMs"`
+	UpdatedAtUnixMS  int64                 `json:"updatedAtUnixMs"`
 	DurationMS       int64                 `json:"durationMs"`
 	Cancelable       bool                  `json:"cancelable"`
 }
@@ -59,9 +66,16 @@ func (service *Service) DelegationTaskSnapshots() []DelegationTaskSnapshot {
 			Status:           snapshot.Status,
 			ToolCallCount:    snapshot.ToolCallCount,
 			Error:            strings.TrimSpace(snapshot.Error),
+			EventID:          strings.TrimSpace(snapshot.EventID),
+			Sequence:         snapshot.Sequence,
+			EventType:        strings.TrimSpace(snapshot.EventType),
+			ParentRequestID:  strings.TrimSpace(snapshot.ParentRequestID),
+			ParentExecID:     strings.TrimSpace(snapshot.ParentExecID),
+			GroupID:          strings.TrimSpace(snapshot.GroupID),
 			QueuedAtUnixMS:   unixMilliseconds(snapshot.QueuedAt),
 			StartedAtUnixMS:  unixMilliseconds(snapshot.StartedAt),
 			FinishedAtUnixMS: unixMilliseconds(finishedAt),
+			UpdatedAtUnixMS:  unixMilliseconds(snapshot.UpdatedAt),
 			DurationMS:       duration,
 			Cancelable:       !delegatedStatusTerminal(snapshot.Status),
 		})
