@@ -126,6 +126,7 @@ func firstSubagentOverrides(values ...map[string]runtimecore.SubagentModelOverri
 
 func buildDelegatedCursorTaskRequest(stream *ActiveStream, pending runtimecore.PendingExec, invocation runtimecore.ToolInvocation, executionMode string, modelGroupID string) delegation.TaskRequest {
 	openContext := buildExecOpenContextForStream(stream, nil)
+	args, _ := runtimecore.DecodeArgsMap(invocation.ArgsJSON)
 	return delegation.TaskRequest{
 		ParentRequest:                activeStreamRequestID(stream),
 		ParentExecID:                 strings.TrimSpace(pending.ExecID),
@@ -134,7 +135,11 @@ func buildDelegatedCursorTaskRequest(stream *ActiveStream, pending runtimecore.P
 		RootConversationID:           openContext.RootConversationID,
 		ArgsJSON:                     append([]byte(nil), invocation.ArgsJSON...),
 		SubagentType:                 delegatedTaskSubagentType(invocation.ArgsJSON),
-		ModelID:                      openContext.ModelID,
+		Prompt:                       strings.TrimSpace(runtimecore.ReadStringArg(args, "prompt")),
+		Description:                  strings.TrimSpace(runtimecore.ReadStringArg(args, "description")),
+		Readonly:                     runtimecore.ReadBoolArg(args, "readonly", "readOnly"),
+		RunInBackground:              runtimecore.ReadBoolArg(args, "run_in_background", "runInBackground"),
+		ModelID:                      firstNonEmpty(runtimecore.ReadStringArg(args, "model", "model_id", "modelId"), openContext.ModelID),
 		SubagentModelOverrides:       cloneSubagentModelOverrides(openContext.SubagentModelOverrides),
 		SelectedSubagentModels:       cloneSelectedSubagentModels(openContext.SelectedSubagentModels),
 		SelectedSubagentModelDetails: cloneSelectedSubagentModelDetails(openContext.SelectedSubagentModelDetails),
