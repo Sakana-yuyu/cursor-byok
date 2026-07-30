@@ -70,6 +70,34 @@ func (host *Host) ConfigManager() *serverconfig.Manager {
 	return host.configs
 }
 
+// DelegationTaskSnapshots returns the active forwarder's retained worker state.
+func (host *Host) DelegationTaskSnapshots() []forwarder.DelegationTaskSnapshot {
+	if host == nil {
+		return nil
+	}
+	host.runMu.RLock()
+	module := host.agentModule
+	host.runMu.RUnlock()
+	if module == nil || module.Service == nil {
+		return nil
+	}
+	return module.Service.DelegationTaskSnapshots()
+}
+
+// CancelDelegationTask cancels one delegated worker by its stable task ID.
+func (host *Host) CancelDelegationTask(taskID string) bool {
+	if host == nil {
+		return false
+	}
+	host.runMu.RLock()
+	module := host.agentModule
+	host.runMu.RUnlock()
+	if module == nil || module.Service == nil {
+		return false
+	}
+	return module.Service.CancelDelegationTask(taskID)
+}
+
 func (host *Host) LoadConfig(ctx context.Context) (serverconfig.Config, error) {
 	if host == nil || host.configs == nil {
 		return serverconfig.DefaultConfig(), nil

@@ -63,6 +63,9 @@ type PromptInjectionStatus = promptinject.Status
 // PromptInjectionTemplate 定义单个可独立开关的提示词模板。
 type PromptInjectionTemplate = promptinject.PromptTemplate
 
+// DelegationTaskSnapshot is the desktop-safe Multitask worker state.
+type DelegationTaskSnapshot = forwarder.DelegationTaskSnapshot
+
 // LicenseActionRequest 定义了当前模块中的 LicenseActionRequest 类型。
 type LicenseActionRequest = client.LicenseActionRequest
 
@@ -119,6 +122,16 @@ func (s *ProxyService) StartProxy() (ProxyState, error) {
 // StopProxy 用于处理与 StopProxy 相关的逻辑。
 func (s *ProxyService) StopProxy() (ProxyState, error) {
 	return s.core.StopProxy()
+}
+
+// GetDelegationTaskSnapshots returns retained Multitask worker state.
+func (s *ProxyService) GetDelegationTaskSnapshots() []DelegationTaskSnapshot {
+	return s.core.GetDelegationTaskSnapshots()
+}
+
+// CancelDelegationTask cancels one Multitask worker without stopping siblings.
+func (s *ProxyService) CancelDelegationTask(taskID string) bool {
+	return s.core.CancelDelegationTask(taskID)
 }
 
 // GetState 用于处理与 GetState 相关的逻辑。
@@ -311,7 +324,11 @@ func (s *ProxyService) ConnectMCPServer(workspaceRoot string, identifier string,
 	settings := skillMCPScanSettings(cfg.SkillMCPScan)
 	configs := forwarder.ScanMCPServerConfigs(workspaceRoot, settings)
 	registry := forwarder.SharedMCPRuntimeRegistry()
-	registry.Sync(enabledMCPConfigs(configs))
+	syncMCPRegistryForWorkspace(registry, workspaceRoot, configs)
+	target, ok := findEnabledMCPServerConfig(configs, identifier)
+	if !ok {
+		return forwarder.MCPServerSnapshotItem{}, fmt.Errorf("enabled mcp server %q not found in current scan", identifier)
+	}
 	connectCtx, cancel := context.WithCancel(context.Background())
 	key := strings.ToLower(strings.TrimSpace(identifier))
 	attemptKey := strings.TrimSpace(attemptID)
@@ -334,7 +351,7 @@ func (s *ProxyService) ConnectMCPServer(workspaceRoot string, identifier string,
 		delete(s.mcpConnects, attemptKey)
 		s.mcpConnectMu.Unlock()
 	}()
-	if err := registry.Connect(connectCtx, identifier); err != nil {
+	if err := registry.Connect(connectCtx, target.Identifier); err != nil {
 		return forwarder.MCPServerSnapshotItem{}, err
 	}
 	return findMCPServerSnapshot(forwarder.SnapshotMCPServersWithSettings(workspaceRoot, settings), identifier)
@@ -408,6 +425,27 @@ func enabledMCPConfigs(configs []forwarder.MCPServerConfig) []forwarder.MCPServe
 		}
 	}
 	return result
+}
+
+func syncMCPRegistryForWorkspace(registry *forwarder.MCPRuntimeRegistry, workspaceRoot string, configs []forwarder.MCPServerConfig) {
+	if registry == nil {
+		return
+	}
+	enabled := enabledMCPConfigs(configs)
+	if strings.TrimSpace(workspaceRoot) == "" {
+		registry.ReplaceScopes(enabled, forwarder.MCPConfigScopeUser)
+		return
+	}
+	registry.Replace(enabled)
+}
+
+func findEnabledMCPServerConfig(configs []forwarder.MCPServerConfig, identifier string) (forwarder.MCPServerConfig, bool) {
+	for _, config := range configs {
+		if config.Enabled && strings.EqualFold(strings.TrimSpace(config.Identifier), strings.TrimSpace(identifier)) {
+			return config, true
+		}
+	}
+	return forwarder.MCPServerConfig{}, false
 }
 
 func findMCPServerSnapshot(items []forwarder.MCPServerSnapshotItem, identifier string) (forwarder.MCPServerSnapshotItem, error) {

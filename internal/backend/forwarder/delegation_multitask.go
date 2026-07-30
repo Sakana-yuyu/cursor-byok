@@ -446,10 +446,33 @@ func (coordinator *multitaskDelegationCoordinator) CancelStream(stream *ActiveSt
 }
 
 func (coordinator *multitaskDelegationCoordinator) Snapshots() []delegation.TaskSnapshot {
-	if coordinator == nil || coordinator.scheduler == nil {
+	if coordinator == nil {
 		return nil
 	}
-	return coordinator.scheduler.Snapshots()
+	coordinator.mu.RLock()
+	scheduler := coordinator.scheduler
+	coordinator.mu.RUnlock()
+	if scheduler == nil {
+		return nil
+	}
+	return scheduler.Snapshots()
+}
+
+func (coordinator *multitaskDelegationCoordinator) CancelTask(taskID string) bool {
+	if coordinator == nil {
+		return false
+	}
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" {
+		return false
+	}
+	coordinator.mu.RLock()
+	scheduler := coordinator.scheduler
+	coordinator.mu.RUnlock()
+	if scheduler == nil {
+		return false
+	}
+	return scheduler.CancelIfActive(taskID)
 }
 
 func (coordinator *multitaskDelegationCoordinator) removeAggregate(aggregateID string) {
