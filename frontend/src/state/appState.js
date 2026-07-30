@@ -1644,7 +1644,9 @@ export async function saveLocalResponseCacheEnabled(enabled) {
 
 const STATS_OVERLAY_PREFERENCES_KEY = "cursor-byok.stats-overlay.preferences";
 const STATS_OVERLAY_CHANGED_EVENT = "stats-overlay-preferences-changed";
+const STATS_OVERLAY_SHOW_REQUESTED_EVENT = "stats-overlay-show-requested";
 const STATS_OVERLAY_STYLES = new Set(["card", "engine", "orb"]);
+let statsOverlayShowRequestBound = false;
 
 function normalizeStatsOverlayPreferences(input) {
   const raw = input && typeof input === "object" ? input : {};
@@ -1721,6 +1723,16 @@ export async function showStatsOverlay(position) {
   await updateStatsOverlayWindow(persisted.style, persisted.alwaysOnTop);
   return loadStatsOverlayPreferences();
 }
+
+function bindStatsOverlayShowRequest() {
+  if (statsOverlayShowRequestBound || typeof window === "undefined") return;
+  window.addEventListener(STATS_OVERLAY_SHOW_REQUESTED_EVENT, () => {
+    void showStatsOverlay();
+  });
+  statsOverlayShowRequestBound = true;
+}
+
+bindStatsOverlayShowRequest();
 
 export async function hideStatsOverlay() {
   const persisted = persistStatsOverlayPreferences({ ...loadStatsOverlayPreferences(), visible: false });

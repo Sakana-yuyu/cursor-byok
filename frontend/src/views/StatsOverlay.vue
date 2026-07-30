@@ -43,21 +43,11 @@ const draggable = computed(() => (dockLocked.value ? "no-drag" : "drag"));
 async function toggleDockLock() {
   const next = !dockLocked.value;
   await setStatsOverlayPreferences({ dockLocked: next });
-  if (next) {
-    // 锁定后强制收缩，并立即生效
-    finishMorph();
-    isCollapsed.value = true;
-  }
 }
 
 async function toggleSnapCollapse() {
   const next = !snapCollapse.value;
   await setStatsOverlayPreferences({ snapCollapse: next });
-  if (!next) {
-    // 关闭贴标收缩时立即展开面板
-    finishMorph();
-    isCollapsed.value = false;
-  }
 }
 
 async function handleHideOverlay() {
@@ -74,6 +64,13 @@ function clearMorphTimer() {
   if (morphTimer) {
     clearTimeout(morphTimer);
     morphTimer = null;
+  }
+}
+
+function clearHoverCollapseTimer() {
+  if (hoverCollapseTimer) {
+    clearTimeout(hoverCollapseTimer);
+    hoverCollapseTimer = null;
   }
 }
 
@@ -177,10 +174,7 @@ function handleMouseEnter(event) {
   isHovering.value = true;
   hoverAnchorScreenX = Number.isFinite(event?.screenX) ? event.screenX : null;
   hoverAnchorScreenY = Number.isFinite(event?.screenY) ? event.screenY : null;
-  if (hoverCollapseTimer) {
-    clearTimeout(hoverCollapseTimer);
-    hoverCollapseTimer = null;
-  }
+  clearHoverCollapseTimer();
   // 锁定胶囊时，悬停不展开
   if (dockLocked.value) return;
   if (snapEdge.value && snapCollapse.value) {
@@ -205,7 +199,7 @@ function handleMouseLeave(event) {
       return;
     }
     isHovering.value = false;
-    if (hoverCollapseTimer) clearTimeout(hoverCollapseTimer);
+    clearHoverCollapseTimer();
     hoverCollapseTimer = setTimeout(() => {
       hoverCollapseTimer = null;
       if (!isHovering.value && !dockLocked.value && snapEdge.value && snapCollapse.value) {
@@ -239,7 +233,7 @@ function syncNativeWindowSize() {
   const screenHeight = Math.round(window.screen.availHeight || window.screen.height || 0);
   // layout|collapsed/expanded|edge|style|x|y|screenLeft|screenTop|screenWidth|screenHeight
   const dsl = `layout|${collapsed}|${edge}|${currentStyle}|${x}|${y}|${screenLeft}|${screenTop}|${screenWidth}|${screenHeight}`;
-  void updateStatsOverlayWindow(dsl, true);
+  void updateStatsOverlayWindow(dsl, preferences.value.alwaysOnTop !== false);
 }
 
 function formatCompact(value) {
@@ -355,6 +349,33 @@ watch(() => appState.statsOverlayPreferences, (next) => {
   if (next) preferences.value = { ...next };
 }, { deep: true });
 
+// 偏好可能来自主窗口或浮窗自身；统一在这里立即协调胶囊状态，避免两条交互路径漂移。
+watch([snapCollapse, dockLocked], ([collapseEnabled, locked], [wasCollapseEnabled, wasLocked]) => {
+  clearHoverCollapseTimer();
+
+  if (locked) {
+    finishMorph();
+    isCollapsed.value = true;
+    return;
+  }
+
+  if ((wasCollapseEnabled && !collapseEnabled)
+    || (wasLocked && !locked && (!snapEdge.value || !collapseEnabled))) {
+    finishMorph();
+    isCollapsed.value = false;
+    return;
+  }
+
+  if (wasLocked && !locked && snapEdge.value && collapseEnabled && isHovering.value) {
+    startExpandMorph();
+    return;
+  }
+
+  if (!wasCollapseEnabled && collapseEnabled && snapEdge.value && !isHovering.value) {
+    startCollapseMorph();
+  }
+}, { flush: "sync" });
+
 // 折叠/展开、贴边、样式变化时同步原生窗口尺寸，使窗口矩形紧贴内容、不阻挡下方页面。
 watch(isCollapsed, () => syncNativeWindowSize());
 watch(isMorphing, () => syncNativeWindowSize());
@@ -383,7 +404,7 @@ onUnmounted(() => {
   if (timer) clearInterval(timer);
   if (updatedTimer) clearTimeout(updatedTimer);
   if (positionTimer) clearInterval(positionTimer);
-  if (hoverCollapseTimer) clearTimeout(hoverCollapseTimer);
+  clearHoverCollapseTimer();
   clearMorphTimer();
   hoverAnchorScreenX = null;
   hoverAnchorScreenY = null;
