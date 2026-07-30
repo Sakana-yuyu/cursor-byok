@@ -1,27 +1,22 @@
-# v0.0.68 发布说明
+# v0.0.69 发布说明
 
-## 🐛 Skills 扫描失败修复
+## 🪟 统计浮窗尺寸跟随内容 + 不阻挡下方页面
 
 ### 根因
-v0.0.67 引入的跨工具 Skills 扫描无法发现任何技能，根因有两个：
-
-1. **frontmatter 解析器格式不兼容**：`parseSKILLFrontmatter` 假设 SKILL.md 以 `key: value` 行开头、到第一个 `---` 结束（旧式格式）。但实际 SKILL.md 使用标准 YAML frontmatter，以 `---` 开头：
-   ```
-   ---           <- frontmatter 开始（解析器误判为结束，立即 break）
-   name: find-skills
-   description: ...
-   ---           <- frontmatter 结束
-   ```
-   导致 `name`/`description` 永远为空，所有技能被静默丢弃。
-
-2. **符号链接目录被跳过**：ZCode/Claude 等工具用 symlink 指向共享 `.agents/skills` 下的技能目录。`os.ReadDir` 的 `entry.IsDir()` 对 symlink 返回 `false`（基于 Lstat），导致 symlink 技能目录被跳过。
+浮窗原生 Wails 窗口有固定矩形尺寸（如 240×144），无论内容是收缩胶囊还是完整面板。
+即使 Vue 层用 `pointer-events: none` 让空白区域穿透点击，**原生窗口矩形本身仍阻挡下方页面的交互**——
+收缩成胶囊时，窗口仍占 240×144 的不可见区域，挡住下方应用。
 
 ### 修复
-- **`parseSKILLFrontmatter`**：支持标准 YAML frontmatter（`---` 开头 + 第二个 `---` 结束）和旧式格式（无前置 `---`）两种；值支持引号去除（`"..."` / `'...'`）
-- **`scanOneSkillRoot` + `scanLegacySkillRoot`**：对 `IsDir()` 返回 false 的条目，用 `os.Stat` 跟踪符号链接判断目标是否目录
+- **前端 `StatsOverlay.vue`**：新增 `syncNativeWindowSize()`，在折叠/展开、贴边、样式变化时
+  构建布局 DSL（`layout|collapsed/expanded|edge|style|x|y|screen...`）调用 `UpdateStatsOverlayWindow`，
+  让原生窗口尺寸紧贴实际内容
+- **后端 `window.go`**：收缩胶囊尺寸随朝向变化——贴左/右边竖向（44×60），其余横向（96×36），
+  避免大块透明区域阻挡下方页面；展开时恢复对应样式的面板尺寸
 
-### 验证
-- 修复前：所有 17 个技能 `[empty name]` -> 全部丢弃 -> `<agent_skills>` 为空
-- 修复后：17 个技能全部正确解析 name/description，经 BM25 Top-K 稀疏激活注入
+### 效果
+- 收缩胶囊：原生窗口缩到胶囊大小，下方页面可正常点击
+- 展开面板：窗口恢复面板尺寸，内容完整显示
+- 贴边自动收缩/悬停展开时窗口尺寸实时跟随
 
 > **Windows 用户注意**：安装时若被 SmartScreen 拦截，点击「更多信息」->「仍要运行」即可。
