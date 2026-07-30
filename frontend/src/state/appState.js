@@ -22,6 +22,8 @@ import {
   openStatsOverlayWindow,
   updateStatsOverlayWindow,
   closeStatsOverlayWindow,
+  setMainWindowCloseAction,
+  closeApplication as closeApplicationNative,
   saveUserConfig,
   startProxyService,
   stopProxyService,
@@ -1200,7 +1202,7 @@ export const appState = reactive({
   // 浮窗偏好是纯前端 UX 状态：localStorage 持久化 + 跨窗口 storage 事件广播。
   // 不进后端 config（后端 config 不含 overlay 字段）。初始给默认值，真实值由
   // getStatsOverlayPreferences() 在首次读取时从 localStorage 填充，避免模块求值顺序依赖。
-  statsOverlayPreferences: { style: "card", alwaysOnTop: true, visible: false, dockLocked: false },
+  statsOverlayPreferences: { style: "card", alwaysOnTop: true, visible: false, dockLocked: false, closeAction: "tray" },
   turnStaleTimeout: cachedConfig.turnStaleTimeout,
   autoMatchContextWindow: cachedConfig.autoMatchContextWindow,
 
@@ -1593,15 +1595,18 @@ const STATS_OVERLAY_STYLES = new Set(["card", "engine", "orb"]);
 function normalizeStatsOverlayPreferences(input) {
   const raw = input && typeof input === "object" ? input : {};
   const style = STATS_OVERLAY_STYLES.has(raw.style) ? raw.style : "card";
+  const closeAction = raw.closeAction === "quit" ? "quit" : "tray";
+  const normalizeCoordinate = (value) => typeof value === "number" && Number.isFinite(value) ? Math.round(value) : null;
   return {
     style,
     alwaysOnTop: asBoolean(raw.alwaysOnTop ?? true),
     visible: asBoolean(raw.visible ?? false),
-    x: typeof raw.x === "number" ? Math.round(raw.x) : null,
-    y: typeof raw.y === "number" ? Math.round(raw.y) : null,
+    x: normalizeCoordinate(raw.x),
+    y: normalizeCoordinate(raw.y),
     snapCollapse: asBoolean(raw.snapCollapse ?? true),
     // dockLocked：锁定为收缩胶囊（悬停不展开）且窗口不可拖动。由设置开关与浮窗内锁按钮共同控制。
     dockLocked: asBoolean(raw.dockLocked ?? false),
+    closeAction,
   };
 }
 
@@ -1639,6 +1644,9 @@ export async function setStatsOverlayPreferences(partial) {
   if (partial && ("style" in partial || "alwaysOnTop" in partial)) {
     await updateStatsOverlayWindow(persisted.style, persisted.alwaysOnTop);
   }
+  if (partial && "closeAction" in partial) {
+    await setMainWindowCloseAction(persisted.closeAction);
+  }
   // dockLocked 为纯前端 UX 状态（CSS 控制胶囊收缩与拖拽禁用），无需同步后端。
   return persisted;
 }
@@ -1653,7 +1661,8 @@ export async function showStatsOverlay(position) {
   }
   const persisted = persistStatsOverlayPreferences(next);
   // 传入位置参数到后端
-  await openStatsOverlayWindow(persisted.x, persisted.y);
+  const hasPosition = typeof persisted.x === "number" && typeof persisted.y === "number";
+  await openStatsOverlayWindow(persisted.x || 0, persisted.y || 0, hasPosition);
   // 首次打开后端按 card/置顶创建；按当前偏好对齐一次尺寸与层级。
   await updateStatsOverlayWindow(persisted.style, persisted.alwaysOnTop);
   return loadStatsOverlayPreferences();
@@ -1663,6 +1672,36 @@ export async function hideStatsOverlay() {
   const persisted = persistStatsOverlayPreferences({ ...loadStatsOverlayPreferences(), visible: false });
   await closeStatsOverlayWindow();
   return persisted;
+}
+
+export async function closeApplication() {
+  persistStatsOverlayPreferences({ ...loadStatsOverlayPreferences(), visible: false });
+  await closeStatsOverlayWindow();
+  await closeApplicationNative();
+}
+
+const CURSOR_LAUNCH_PREFERENCES_KEY = "cursor-byok.cursor-launch.preferences";
+
+function normalizeCursorManualPath(value) {
+  return asString(value).replace(/^"|"$/g, "").trim();
+}
+
+export function getCursorManualPath() {
+  try {
+    const stored = localStorage.getItem(CURSOR_LAUNCH_PREFERENCES_KEY);
+    const parsed = stored ? JSON.parse(stored) : {};
+    return normalizeCursorManualPath(parsed?.manualPath);
+  } catch {
+    return "";
+  }
+}
+
+export function setCursorManualPath(manualPath) {
+  const normalized = normalizeCursorManualPath(manualPath);
+  try {
+    localStorage.setItem(CURSOR_LAUNCH_PREFERENCES_KEY, JSON.stringify({ manualPath: normalized }));
+  } catch { /* localStorage 不可用时仅保留当前调用结果 */ }
+  return normalized;
 }
 
 export async function openMetricsDetailWindow() {
@@ -2222,7 +2261,8 @@ export async function bootstrapAppState() {
   await syncHomeMetrics().catch(() => {});
   
   // 根据用户偏好自动打开悬浮窗
-  const overlayPrefs = loadStatsOverlayPreferences();
+  const overlayPrefs = getStatsOverlayPreferences();
+  await setMainWindowCloseAction(overlayPrefs.closeAction).catch(() => {});
   if (overlayPrefs.visible) {
     // 延迟打开，避免阻塞主窗口启动
     setTimeout(() => {

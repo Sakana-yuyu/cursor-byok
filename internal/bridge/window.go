@@ -30,21 +30,23 @@ type modelEditorContext struct {
 
 // WindowService 定义了当前模块中的 WindowService 类型。
 type WindowService struct {
-	app                  *application.App
-	updater              *updater.Manager
-	modelConfigWindow    *application.WebviewWindow
-	modelEditorWindow    *application.WebviewWindow
-	metricsDetailWindow  *application.WebviewWindow
-	requestMetricsWindow *application.WebviewWindow
-	statsOverlayWindow   *application.WebviewWindow
-	editorCtx            *modelEditorContext
-	locale               string
-	mu                   sync.RWMutex
+	app                   *application.App
+	updater               *updater.Manager
+	mainWindow            *application.WebviewWindow
+	modelConfigWindow     *application.WebviewWindow
+	modelEditorWindow     *application.WebviewWindow
+	metricsDetailWindow   *application.WebviewWindow
+	requestMetricsWindow  *application.WebviewWindow
+	statsOverlayWindow    *application.WebviewWindow
+	editorCtx             *modelEditorContext
+	locale                string
+	mainWindowCloseAction string
+	mu                    sync.RWMutex
 }
 
 // NewWindowService 用于处理与 NewWindowService 相关的逻辑。
 func NewWindowService() *WindowService {
-	return &WindowService{locale: i18n.DefaultLocale}
+	return &WindowService{locale: i18n.DefaultLocale, mainWindowCloseAction: "tray"}
 }
 
 // SetLocale updates the locale used for subsequently created native windows.
@@ -59,6 +61,51 @@ func (s *WindowService) SetApp(app *application.App) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.app = app
+}
+
+// SetMainWindow 关联主窗口，供浮窗关闭按钮按关闭策略隐藏主窗口或退出应用。
+func (s *WindowService) SetMainWindow(window *application.WebviewWindow) {
+	s.mu.Lock()
+	s.mainWindow = window
+	s.mu.Unlock()
+}
+
+// SetMainWindowCloseAction 设置主窗口关闭时隐藏到托盘或直接退出。
+func (s *WindowService) SetMainWindowCloseAction(action string) {
+	if action != "quit" {
+		action = "tray"
+	}
+	s.mu.Lock()
+	s.mainWindowCloseAction = action
+	s.mu.Unlock()
+}
+
+// GetMainWindowCloseAction 返回主窗口当前的关闭策略。
+func (s *WindowService) GetMainWindowCloseAction() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.mainWindowCloseAction == "quit" {
+		return "quit"
+	}
+	return "tray"
+}
+
+// CloseApplication 请求应用退出，由应用 OnShutdown 统一清理代理和更新服务。
+func (s *WindowService) CloseApplication() {
+	s.mu.RLock()
+	app := s.app
+	mainWindow := s.mainWindow
+	action := s.mainWindowCloseAction
+	s.mu.RUnlock()
+	if action != "quit" {
+		if mainWindow != nil {
+			mainWindow.Hide()
+		}
+		return
+	}
+	if app != nil {
+		app.Quit()
+	}
 }
 
 // SetUpdater 关联更新管理器，供前端手动触发检查更新。
@@ -290,6 +337,7 @@ const (
 	statsOverlayStyleEngine = "engine"
 	statsOverlayStyleOrb    = "orb"
 	statsOverlayDockSize    = 44
+	statsOverlayDockWidth   = 112
 )
 
 type statsOverlayLayout struct {
@@ -341,9 +389,9 @@ func statsOverlayWindowSize(style string) (width, height int) {
 
 // OpenStatsOverlayWindow 打开统计浮窗（置顶、无边框、小尺寸）。
 // 用于在任意应用上方常驻显示缓存命中率、Token 消耗、对话轮次、价值估算。
-// x, y 为窗口位置；传入 0 时后端不设置位置（由系统决定）。
+// x, y 为窗口位置；hasPosition=false 时由系统决定初始位置。
 // 如果窗口已存在则确保它处于显示状态。
-func (s *WindowService) OpenStatsOverlayWindow(x, y int) {
+func (s *WindowService) OpenStatsOverlayWindow(x, y int, hasPosition bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -353,6 +401,9 @@ func (s *WindowService) OpenStatsOverlayWindow(x, y int) {
 
 	// 已存在 -> 确保显示，不执行 toggle，避免设置开关与窗口状态竞争。
 	if s.statsOverlayWindow != nil {
+		if hasPosition {
+			s.statsOverlayWindow.SetRelativePosition(x, y)
+		}
 		if !s.statsOverlayWindow.IsVisible() {
 			s.statsOverlayWindow.Show()
 		}
@@ -410,7 +461,7 @@ func (s *WindowService) OpenStatsOverlayWindow(x, y int) {
 	win := s.app.Window.NewWithOptions(opts)
 
 	// 如果提供了保存的位置，在窗口创建后恢复
-	if x != 0 || y != 0 {
+	if hasPosition {
 		win.SetRelativePosition(x, y)
 	}
 
@@ -432,12 +483,16 @@ func (s *WindowService) UpdateStatsOverlayWindow(style string, alwaysOnTop bool)
 	}
 	width, height := statsOverlayWindowSize(style)
 	if hasLayout && layout.collapsed {
-		// 收缩胶囊尺寸随朝向变化：贴左/右边时竖向（窄高），其余横向（宽矮）。
-		// 让原生窗口矩形紧贴胶囊内容，避免大块透明区域阻挡下方页面点击。
+		// 贴左/右时只收缩宽度，保留恢复态的完整高度；贴上/下时只收缩高度，
+		// 保留恢复态的完整宽度。这样展开/收缩只沿远离贴边的一侧进行，
+		// 鼠标所在的贴边坐标不会因原生窗口换尺寸而漂移。
 		if layout.edge == "left" || layout.edge == "right" {
-			width, height = statsOverlayDockSize, statsOverlayDockSize+16
+			width = statsOverlayDockSize
+		} else if layout.edge == "top" || layout.edge == "bottom" {
+			height = statsOverlayDockSize - 8
 		} else {
-			width, height = statsOverlayDockSize+52, statsOverlayDockSize-8
+			// 锁定但尚未吸附到具体边缘时保留紧凑横向胶囊。
+			width, height = statsOverlayDockWidth, statsOverlayDockSize-8
 		}
 	}
 
@@ -450,21 +505,21 @@ func (s *WindowService) UpdateStatsOverlayWindow(style string, alwaysOnTop bool)
 
 	win.SetSize(width, height)
 	if hasLayout {
-		// CSS 贴边时有 transform 偏移（左/右 translateX(±14px)，上/下 translateY(±14px)），
-		// 在窗口定位时预留此偏移，避免胶囊被裁剪到屏幕边缘外。
-		const snapTransformOffset = 14
+		// 胶囊不再使用 CSS 贴边位移，因此原生窗口直接贴屏幕边缘；
+		// 窗口内的 flex 居中会自然保留胶囊自身的内边距。
+		const snapInset = 0
 		x, y := layout.x, layout.y
 		screenRight := layout.screenLeft + layout.screenWidth
 		screenBottom := layout.screenTop + layout.screenHeight
 		switch layout.edge {
 		case "left":
-			x = layout.screenLeft + snapTransformOffset
+			x = layout.screenLeft + snapInset
 		case "right":
-			x = screenRight - width - snapTransformOffset
+			x = screenRight - width - snapInset
 		case "top":
-			y = layout.screenTop + snapTransformOffset
+			y = layout.screenTop + snapInset
 		case "bottom":
-			y = screenBottom - height - snapTransformOffset
+			y = screenBottom - height - snapInset
 		}
 		if x < layout.screenLeft {
 			x = layout.screenLeft
@@ -662,52 +717,106 @@ func openDirectory(path string) {
 	}
 }
 
-// DetectCursorPath 检测 Cursor 编辑器的安装路径。
-// 返回可执行文件的完整路径，如果未检测到则返回空字符串。
-func (s *WindowService) DetectCursorPath() string {
-	switch goruntime.GOOS {
-	case "windows":
-		// Windows: 检查常见安装位置
-		candidates := []string{
-			filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "cursor", "Cursor.exe"),
-			filepath.Join(os.Getenv("PROGRAMFILES"), "Cursor", "Cursor.exe"),
-			filepath.Join(os.Getenv("PROGRAMFILES(X86)"), "Cursor", "Cursor.exe"),
+func validExecutablePath(rawPath string) string {
+	path := strings.TrimSpace(strings.Trim(rawPath, `"`))
+	path = strings.TrimSuffix(path, ",0")
+	if path == "" {
+		return ""
+	}
+	if info, err := os.Stat(path); err == nil {
+		if info.IsDir() {
+			path = filepath.Join(path, "Cursor.exe")
 		}
-		for _, path := range candidates {
-			if _, err := os.Stat(path); err == nil {
-				return path
+		if info, err = os.Stat(path); err == nil && !info.IsDir() {
+			return path
+		}
+	}
+	return ""
+}
+
+func cursorRegistryCandidates() []string {
+	if goruntime.GOOS != "windows" {
+		return nil
+	}
+	keys := []string{
+		`HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall`,
+		`HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall`,
+		`HKLM\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall`,
+	}
+	var candidates []string
+	for _, key := range keys {
+		output, err := exec.Command("reg", "query", key, "/s", "/v", "InstallLocation").Output()
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(output), "\n") {
+			index := strings.Index(line, "REG_SZ")
+			if index < 0 {
+				continue
+			}
+			location := strings.TrimSpace(line[index+len("REG_SZ"):])
+			if path := validExecutablePath(location); path != "" {
+				candidates = append(candidates, path)
+				continue
+			}
+			if path := validExecutablePath(filepath.Join(location, "Cursor.exe")); path != "" {
+				candidates = append(candidates, path)
 			}
 		}
-	case "darwin":
-		// macOS: 检查 Applications 目录
-		path := "/Applications/Cursor.app/Contents/MacOS/Cursor"
-		if _, err := os.Stat(path); err == nil {
-			return path
-		}
-	case "linux":
-		// Linux: 检查 PATH 和常见位置
+	}
+	return candidates
+}
+
+// DetectCursorPath 检测 Cursor 编辑器的安装路径，manualPath 非空时优先使用。
+// 返回可执行文件的完整路径，如果未检测到则返回空字符串。
+func (s *WindowService) DetectCursorPath(manualPath string) string {
+	if strings.TrimSpace(manualPath) != "" {
+		return validExecutablePath(manualPath)
+	}
+
+	var candidates []string
+	switch goruntime.GOOS {
+	case "windows":
 		if path, err := exec.LookPath("cursor"); err == nil {
-			return path
+			candidates = append(candidates, path)
 		}
-		candidates := []string{
+		candidates = append(candidates,
+			filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "Cursor", "Cursor.exe"),
+			filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "cursor", "Cursor.exe"),
+			filepath.Join(os.Getenv("LOCALAPPDATA"), "Cursor", "Cursor.exe"),
+			filepath.Join(os.Getenv("PROGRAMFILES"), "Cursor", "Cursor.exe"),
+			filepath.Join(os.Getenv("PROGRAMFILES(X86)"), "Cursor", "Cursor.exe"),
+			filepath.Join(os.Getenv("ProgramW6432"), "Cursor", "Cursor.exe"),
+		)
+		candidates = append(candidates, cursorRegistryCandidates()...)
+	case "darwin":
+		candidates = append(candidates, "/Applications/Cursor.app/Contents/MacOS/Cursor")
+	case "linux":
+		if path, err := exec.LookPath("cursor"); err == nil {
+			candidates = append(candidates, path)
+		}
+		candidates = append(candidates,
 			filepath.Join(os.Getenv("HOME"), ".local", "bin", "cursor"),
 			"/usr/bin/cursor",
 			"/usr/local/bin/cursor",
-		}
-		for _, path := range candidates {
-			if _, err := os.Stat(path); err == nil {
-				return path
-			}
+		)
+	}
+	for _, candidate := range candidates {
+		if path := validExecutablePath(candidate); path != "" {
+			return path
 		}
 	}
 	return ""
 }
 
 // LaunchCursor 启动 Cursor 编辑器。如果提供了 workspaceDir，则在该目录中打开。
-func (s *WindowService) LaunchCursor(workspaceDir string) error {
-	cursorPath := s.DetectCursorPath()
+func (s *WindowService) LaunchCursor(workspaceDir, manualPath string) error {
+	cursorPath := s.DetectCursorPath(manualPath)
 	if cursorPath == "" {
-		return fmt.Errorf("未检测到 Cursor 安装路径，请手动安装或指定路径")
+		if strings.TrimSpace(manualPath) != "" {
+			return fmt.Errorf("指定的 Cursor 路径无效：%s", strings.TrimSpace(manualPath))
+		}
+		return fmt.Errorf("未检测到 Cursor 安装路径，请在设置中指定 Cursor.exe")
 	}
 
 	var cmd *exec.Cmd

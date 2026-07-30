@@ -8,10 +8,12 @@ import { useMessage } from "@/composables/useMessage";
 import { showModal } from "@/composables/useModal";
 import {
   appState,
+  getCursorManualPath,
   getStatsOverlayPreferences,
   openConfigWindow,
   saveRoutingMode,
   setStatsOverlayPreferences,
+  setCursorManualPath,
   showStatsOverlay,
   hideStatsOverlay,
   toUserError,
@@ -24,6 +26,7 @@ import {
   getSkillsMCPScanSnapshot,
   refreshSkillsMCPScan,
   saveSkillsMCPScanConfig,
+  detectCursorPath,
 } from "@/services/clientApi";
 import { computed, onMounted, reactive, ref } from "vue";
 
@@ -38,13 +41,18 @@ const overlayStyleOptions = [
   { value: "engine", label: "引擎仪表" },
   { value: "orb", label: "球形" },
 ];
+const closeActionOptions = [
+  { value: "tray", label: "隐藏到托盘" },
+  { value: "quit", label: "直接退出应用" },
+];
 
 const promptInjection = reactive({ enabled: false, softwareChineseEnabled: false, customEnabled: false, customContent: "", mode: "replace", repo: "yynxxxxx/Codex-X", ref: "main", selectedTemplate: "gpt5.5-unrestricted.md", localContent: "", cacheContent: "", cacheAvailable: false, lastUpdated: "", lastError: "", templates: [] });
 const promptInjectionBusy = ref(false);
 const promptInjectionLoaded = ref(false);
 const promptInjectionExpanded = ref(false);
 const promptPreview = ref(null);
-const overlayPreferences = reactive({ style: "card", alwaysOnTop: true, visible: false, dockLocked: false });
+const overlayPreferences = reactive({ style: "card", alwaysOnTop: true, visible: false, snapCollapse: true, dockLocked: false, closeAction: "tray" });
+const cursorLaunch = reactive({ manualPath: "", detectedPath: "", busy: false, error: "" });
 const directModeEnabled = computed(() => appState.routingMode === "upstream");
 const promptInjectionSummary = computed(() => {
   const enabled = [];
@@ -100,6 +108,31 @@ async function updateOverlayVisibility(visible) {
   } catch (error) {
     await showModal({ title: "浮窗设置失败", content: toUserError(error) });
   }
+}
+async function refreshCursorPath() {
+  cursorLaunch.busy = true;
+  cursorLaunch.error = "";
+  try {
+    cursorLaunch.detectedPath = await detectCursorPath(cursorLaunch.manualPath) || "";
+  } catch (error) {
+    cursorLaunch.detectedPath = "";
+    cursorLaunch.error = toUserError(error);
+  } finally {
+    cursorLaunch.busy = false;
+  }
+}
+async function saveCursorPath() {
+  cursorLaunch.manualPath = setCursorManualPath(cursorLaunch.manualPath);
+  await refreshCursorPath();
+  if (cursorLaunch.manualPath && !cursorLaunch.detectedPath) {
+    cursorLaunch.error = "手动指定的 Cursor.exe 路径无效，请检查文件是否存在。";
+    return;
+  }
+  message.success(cursorLaunch.manualPath ? "Cursor 路径已保存" : "已恢复自动检测 Cursor");
+}
+function clearCursorPath() {
+  cursorLaunch.manualPath = setCursorManualPath("");
+  void refreshCursorPath();
 }
 async function handleOpenConfig() { try { await openConfigWindow(); } catch (error) { await showModal({ title: "打开设置文件夹失败", content: toUserError(error) }); } }
 
@@ -165,7 +198,13 @@ function toggleMcpServer(identifier, enabled) {
 function isSkillEnabled(name) { return !skillsMcp.disabledSkills[String(name || "").toLowerCase()]; }
 function isMcpEnabled(identifier) { return !skillsMcp.disabledMcpServers[String(identifier || "").toLowerCase()]; }
 
-onMounted(() => { Object.assign(overlayPreferences, getStatsOverlayPreferences()); void loadPromptInjection(); void loadSkillsMcp(); });
+onMounted(() => {
+  Object.assign(overlayPreferences, getStatsOverlayPreferences());
+  cursorLaunch.manualPath = getCursorManualPath();
+  void refreshCursorPath();
+  void loadPromptInjection();
+  void loadSkillsMcp();
+});
 </script>
 
 <template>
@@ -178,7 +217,8 @@ onMounted(() => { Object.assign(overlayPreferences, getStatsOverlayPreferences()
             <button type="button" aria-label="关闭设置" title="关闭" class="center-row h-8 w-8 cursor-pointer rounded-[6px] text-xl text-[#999] hover:bg-[#333] hover:text-white" @click="emit('close')">×</button>
           </div>
           <div class="min-h-0 min-w-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto p-3">
-            <Card><div class="space-y-3"><h3 class="text-sm font-medium text-white">浮窗偏好</h3><Select v-model="overlayPreferences.style" :options="overlayStyleOptions" aria-label="浮窗样式" @change="(value) => updateOverlay({ style: value })" /><Switch label="显示浮窗" description="在桌面显示请求统计浮窗" :enabled="overlayPreferences.visible" @change="updateOverlayVisibility" /><Switch label="窗口置顶" description="让浮窗保持在其他窗口上方" :enabled="overlayPreferences.alwaysOnTop" @change="(value) => updateOverlay({ alwaysOnTop: value })" /><Switch label="锁定浮窗" description="锁定为收缩胶囊且不可拖动" :enabled="overlayPreferences.dockLocked" @change="(value) => updateOverlay({ dockLocked: value })" /></div></Card>
+            <Card><div class="space-y-3"><h3 class="text-sm font-medium text-white">浮窗偏好</h3><Select v-model="overlayPreferences.style" :options="overlayStyleOptions" aria-label="浮窗样式" @change="(value) => updateOverlay({ style: value })" /><Select v-model="overlayPreferences.closeAction" :options="closeActionOptions" aria-label="主窗口关闭行为" @change="(value) => updateOverlay({ closeAction: value })" /><Switch label="显示浮窗" description="在桌面显示请求统计浮窗" :enabled="overlayPreferences.visible" @change="updateOverlayVisibility" /><Switch label="窗口置顶" description="让浮窗保持在其他窗口上方" :enabled="overlayPreferences.alwaysOnTop" @change="(value) => updateOverlay({ alwaysOnTop: value })" /><Switch label="贴边自动收缩" description="靠近屏幕边缘时收缩为胶囊" :enabled="overlayPreferences.snapCollapse" @change="(value) => updateOverlay({ snapCollapse: value })" /><Switch label="锁定浮窗" description="锁定为收缩胶囊且不可拖动" :enabled="overlayPreferences.dockLocked" @change="(value) => updateOverlay({ dockLocked: value })" /></div></Card>
+            <Card><div class="min-w-0 space-y-3"><h3 class="text-sm font-medium text-white">Cursor 启动</h3><label class="block min-w-0 text-xs text-[#a3a3a3]">手动指定 Cursor.exe 路径<input v-model="cursorLaunch.manualPath" class="mt-1 h-8 w-full min-w-0 rounded border border-white/10 bg-black/20 px-2 text-xs text-white" placeholder="留空则自动检测" /></label><div class="flex flex-wrap items-center gap-2"><Button variant="default" :disabled="cursorLaunch.busy" @click="refreshCursorPath">自动检测</Button><Button variant="default" :disabled="cursorLaunch.busy" @click="saveCursorPath">保存路径</Button><Button variant="default" :disabled="cursorLaunch.busy || !cursorLaunch.manualPath" @click="clearCursorPath">清空手动路径</Button></div><p v-if="cursorLaunch.detectedPath" class="break-all text-xs text-[#6ee7a5]">当前使用：{{ cursorLaunch.detectedPath }}</p><p v-else class="text-xs text-[#858585]">未检测到 Cursor，可填写完整的 Cursor.exe 路径。</p><p v-if="cursorLaunch.error" class="break-words text-xs text-[#fca5a5]">{{ cursorLaunch.error }}</p></div></Card>
             <Card><div class="min-w-0 space-y-3">
               <div class="flex min-w-0 items-center gap-3">
                 <button type="button" class="flex min-w-0 flex-1 items-center gap-3 rounded-[6px] text-left outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35" :aria-expanded="promptInjectionExpanded" @click="promptInjectionExpanded = !promptInjectionExpanded">
