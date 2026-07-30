@@ -258,6 +258,7 @@ type Service struct {
 	resolver           modeladapter.ChannelResolver
 	modelMemory        agentModelMemory
 	maxTokensPersister maxTokensConfigPersister
+	scanConfig         skillMCPScanConfigProvider
 	broker             *StreamBroker
 	recorder           *artifactRecorder
 	debug              *debugRecorder
@@ -305,6 +306,10 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 	if candidate, ok := resolver.(maxTokensConfigPersister); ok {
 		maxTokensPersister = candidate
 	}
+	var scanConfig skillMCPScanConfigProvider
+	if candidate, ok := resolver.(skillMCPScanConfigProvider); ok {
+		scanConfig = candidate
+	}
 	debug := newDebugRecorder(historyRoot, broker, debugConfig)
 	service := &Service{
 		store:              store,
@@ -319,6 +324,7 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 		resolver:           resolver,
 		modelMemory:        modelMemory,
 		maxTokensPersister: maxTokensPersister,
+		scanConfig:         scanConfig,
 		broker:             broker,
 		recorder:           newArtifactRecorder(store, broker, debug),
 		debug:              debug,
@@ -745,6 +751,10 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 		return nil
 	}
 	intent.UserMessage = normalizeUserMessageForStorage(intent.UserMessage)
+	// 在写历史前，把磁盘扫描到的技能/MCP server 合并进 RequestContext。
+	// 仅 turn 1 需要持久化静态上下文（与 normalizeRequestContextForStorageMode 的 turnSeq==1 语义一致），
+	// 复用现有 request_context → projector → engine.go 的原生 user-message 注入链路。
+	service.enrichRequestContextWithScannedAssets(&intent)
 	if !intent.Prewarm {
 		service.cancelOtherConversationActors(
 			intent.ConversationID,
@@ -1074,6 +1084,14 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 	result, err := service.execBridge.ApplyExecClientMessage(intent.ExecClientMessage, pending)
 	if err != nil {
 		return err
+	}
+	// 捕获点：MCP 执行结果（含失败模式），便于后续读取日志针对性修复执行层问题。
+	// 对应已知限制：MCP 执行仍依赖 Cursor 客户端；server_not_found/tool_not_found/超时等需要日志证据。
+	if strings.TrimSpace(pending.ExecKind) == "mcp" && result.IsTerminal {
+		service.captureMCPExecResult(intent, pending, execTerminalResult{
+			ToolCallID:        result.ToolCallID,
+			ToolResultPayload: result.ToolResultPayload,
+		})
 	}
 	if result.ShellOutputDelta != nil {
 		if err := service.broker.Publish(intent.RequestID, StreamEvent{

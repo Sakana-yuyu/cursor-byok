@@ -4,6 +4,7 @@ import {
   GetPromptInjectionSettings,
   SavePromptInjectionSettings, RefreshPromptInjection, RefreshPromptInjectionCatalog,
   AutoMatchContextWindows, DiagnoseModelAdapters, ApplyDiagnosticFixes,
+  GetSkillsMCPScanSnapshot, RefreshSkillsMCPScan, SaveSkillsMCPScanConfig,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
 import { GetAdRuntime, OpenExternalURL } from "@bindings/cursor/internal/bridge/adservice.js";
 import {
@@ -38,7 +39,7 @@ const desktopMethods = {
   FetchModelCatalog, ProbeModelAdapter, QueryProviderBalance, GetPromptInjectionSettings,
   SavePromptInjectionSettings, RefreshPromptInjection,
   RefreshPromptInjectionCatalog, ExportLogs, AutoMatchContextWindows, DiagnoseModelAdapters, ApplyDiagnosticFixes,
-  DetectCursorPath, LaunchCursor,
+  DetectCursorPath, LaunchCursor, GetSkillsMCPScanSnapshot, RefreshSkillsMCPScan, SaveSkillsMCPScanConfig,
 };
 
 const API_LOG_PREFIX = "[clientApi]";
@@ -253,3 +254,15 @@ export function refreshPromptInjectionCatalog() { return desktopOrMock(undefined
 
 export function detectCursorPath() { return desktopOrMock("", "@bindings/cursor/internal/bridge/windowservice.js", "DetectCursorPath"); }
 export function launchCursor(workspaceDir) { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "LaunchCursor", [workspaceDir || ""]); }
+
+// Skills & MCP 跨工具扫描：快照 / 重新扫描 / 保存开关配置。
+// 注意：这些 binding 由 wails 工具链自动生成；新增方法需在下次 wails dev/build 时重新生成 bindings。
+export function getSkillsMCPScanSnapshot(workspaceRoot = "") {
+  return desktopOrMock({ skills: [], mcpServers: [], config: { enabled: true } }, "@bindings/cursor/internal/bridge/proxyservice.js", "GetSkillsMCPScanSnapshot", [workspaceRoot]);
+}
+export function refreshSkillsMCPScan(workspaceRoot = "") {
+  return desktopOrMock({ skills: [], mcpServers: [], config: { enabled: true } }, "@bindings/cursor/internal/bridge/proxyservice.js", "RefreshSkillsMCPScan", [workspaceRoot]);
+}
+export function saveSkillsMCPScanConfig(config) {
+  return desktopOrMock(true, "@bindings/cursor/internal/bridge/proxyservice.js", "SaveSkillsMCPScanConfig", [config]);
+}
