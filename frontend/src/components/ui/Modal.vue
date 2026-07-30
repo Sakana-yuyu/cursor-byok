@@ -1,5 +1,7 @@
 <script setup>
 import Button from "@/components/ui/Button.vue";
+import { computed } from "vue";
+import { marked } from "marked";
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -9,6 +11,12 @@ const props = defineProps({
   cancelText: { type: String, default: "取消" },
   showCancel: { type: Boolean, default: true },
   confirmDisabled: { type: Boolean, default: false },
+  markdown: { type: Boolean, default: false },
+});
+
+const renderedHtml = computed(() => {
+  if (!props.markdown || !props.content) return "";
+  return marked.parse(props.content);
 });
 
 const emit = defineEmits(["update:visible", "confirm", "cancel"]);
@@ -47,7 +55,13 @@ function onMaskClick() {
               <h3 class="mb-3 text-base font-medium text-white">
                 {{ title }}
               </h3>
-              <p class="mb-5 max-h-[55vh] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-[#a3a3a3]">
+              <!-- markdown 模式用 v-html 渲染，普通模式保持 whitespace-pre-wrap -->
+              <div
+                v-if="markdown"
+                class="modal-md mb-5 max-h-[55vh] overflow-y-auto text-sm leading-relaxed text-[#a3a3a3]"
+                v-html="renderedHtml"
+              />
+              <p v-else class="mb-5 max-h-[55vh] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-[#a3a3a3]">
                 {{ content }}
               </p>
               <div class="flex justify-end gap-2">
@@ -82,4 +96,17 @@ function onMaskClick() {
   opacity: 0;
   transform: scale(0.9) translateY(-10px);
 }
+
+/* Markdown 渲染样式 */
+.modal-md { color: #a3a3a3; }
+.modal-md h1, .modal-md h2 { color: #e5e5e5; font-size: 13px; font-weight: 600; margin: 12px 0 6px; padding-bottom: 4px; border-bottom: 1px solid #3a3a3a; }
+.modal-md h3 { color: #d4d4d4; font-size: 12px; font-weight: 600; margin: 10px 0 4px; }
+.modal-md h1:first-child, .modal-md h2:first-child { margin-top: 0; }
+.modal-md ul { margin: 4px 0 8px; padding-left: 16px; list-style: disc; }
+.modal-md li { margin: 3px 0; line-height: 1.5; }
+.modal-md strong { color: #e5e5e5; font-weight: 600; }
+.modal-md code { background: rgba(110,231,165,0.1); color: #6ee7a5; border-radius: 3px; padding: 1px 4px; font-size: 11px; font-family: ui-monospace, monospace; }
+.modal-md blockquote { border-left: 2px solid #444; margin: 8px 0 4px; padding: 4px 10px; color: #777; font-size: 11px; }
+.modal-md hr { border: none; border-top: 1px solid #3a3a3a; margin: 10px 0; }
+.modal-md p { margin: 4px 0; }
 </style>

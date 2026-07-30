@@ -24,6 +24,7 @@
       :cancel-text="updateViewState.promptCancelText"
       :show-cancel="updateViewState.promptShowCancel"
       :confirm-disabled="appState.updatePromptBusy"
+      :markdown="appState.updatePromptKind === 'ready'"
       @confirm="confirmUpdatePrompt"
       @cancel="dismissUpdatePrompt"
     />

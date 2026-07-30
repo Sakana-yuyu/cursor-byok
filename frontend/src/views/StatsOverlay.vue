@@ -324,7 +324,7 @@ onUnmounted(() => {
 
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #10ad5d; animation: breathe 3.8s ease-in-out infinite; }
 .status-dot.is-loading { background: #fbbf24; }
-.card-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid #343434; border-radius: 8px; background: rgba(24,24,24,.84); transition: opacity 0.3s ease; }
+.card-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid rgba(255,255,255,.06); border-radius: 8px; background: rgba(18,18,18,.72); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); transition: opacity 0.3s ease; }
 .metric-card { min-width: 0; padding: 3px 6px; border: 1px solid rgba(62,62,62,.75); border-radius: 5px; background: rgba(36,36,36,.9); }
 .metric-label { color: #777; font-size: 9px; white-space: nowrap; }
 .metric-value { color: #fff; font-family: var(--font-num, ui-monospace, monospace); font-size: 14px; line-height: 1.15; transition: color .35s ease, text-shadow .35s ease; }
