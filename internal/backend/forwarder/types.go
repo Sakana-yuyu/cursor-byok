@@ -122,17 +122,19 @@ type StreamSubscriber struct {
 type ActiveStream struct {
 	mu sync.Mutex
 
-	RequestID              string
-	ConversationID         string
-	TurnSeq                int64
-	ModelID                string
-	ModelName              string
-	Mode                   agentv1.AgentMode
-	LatestUserText         string
-	Status                 StreamStatus
-	ThinkingEffort         string
-	MaxMode                bool
-	SubagentModelOverrides map[string]runtimecore.SubagentModelOverrideSelection
+	RequestID                    string
+	ConversationID               string
+	TurnSeq                      int64
+	ModelID                      string
+	ModelName                    string
+	Mode                         agentv1.AgentMode
+	LatestUserText               string
+	Status                       StreamStatus
+	ThinkingEffort               string
+	MaxMode                      bool
+	SubagentModelOverrides       map[string]runtimecore.SubagentModelOverrideSelection
+	SelectedSubagentModels       []*agentv1.RequestedModel
+	SelectedSubagentModelDetails []*agentv1.ModelDetails
 
 	CurrentModelCallID                          string
 	ProviderActive                              bool
@@ -147,6 +149,7 @@ type ActiveStream struct {
 	CurrentProviderToken                        uint64
 	CurrentCompactionToken                      uint64
 	TimerTokens                                 map[string]uint64
+	StreamTimers                                map[string]*time.Timer
 	ProviderAccumulatedText                     string
 	ProviderAccumulatedReasoning                string
 	ProviderAccumulatedReasoningSignature       string
@@ -190,6 +193,7 @@ type ActiveStream struct {
 	TerminalsFolder             string
 	RequestFileContents         map[string]string
 	RecentCompletedExecs        map[uint32]time.Time
+	RecentCompletedInteractions map[string]time.Time
 	BackgroundShells            map[string]*BackgroundShellState
 	BackgroundShellsByMessageID map[uint32]string
 	BackgroundShellsByExecID    map[string]string
@@ -419,30 +423,32 @@ const (
 )
 
 type InboundIntent struct {
-	Kind                     string
-	RequestID                string
-	ConversationID           string
-	ModelID                  string
-	ModelName                string
-	ThinkingEffort           string
-	MaxMode                  bool
-	Mode                     agentv1.AgentMode
-	HasExplicitMode          bool
-	ModeSource               ModeSource
-	StartsRun                bool
-	SubagentTypeName         string
-	SubagentModelOverrides   map[string]runtimecore.SubagentModelOverrideSelection
-	ConversationState        *agentv1.ConversationStateStructure
-	UserMessage              *agentv1.UserMessage
-	RequestContext           *agentv1.RequestContext
-	ClientMessage            *agentv1.AgentClientMessage
-	ExecClientMessage        *agentv1.ExecClientMessage
-	ExecClientControlMessage *agentv1.ExecClientControlMessage
-	InteractionResponse      *agentv1.InteractionResponse
-	KVClientMessage          *agentv1.KvClientMessage
-	CancelReason             string
-	IgnoredReason            string
-	Prewarm                  bool
+	Kind                         string
+	RequestID                    string
+	ConversationID               string
+	ModelID                      string
+	ModelName                    string
+	ThinkingEffort               string
+	MaxMode                      bool
+	Mode                         agentv1.AgentMode
+	HasExplicitMode              bool
+	ModeSource                   ModeSource
+	StartsRun                    bool
+	SubagentTypeName             string
+	SubagentModelOverrides       map[string]runtimecore.SubagentModelOverrideSelection
+	SelectedSubagentModels       []*agentv1.RequestedModel
+	SelectedSubagentModelDetails []*agentv1.ModelDetails
+	ConversationState            *agentv1.ConversationStateStructure
+	UserMessage                  *agentv1.UserMessage
+	RequestContext               *agentv1.RequestContext
+	ClientMessage                *agentv1.AgentClientMessage
+	ExecClientMessage            *agentv1.ExecClientMessage
+	ExecClientControlMessage     *agentv1.ExecClientControlMessage
+	InteractionResponse          *agentv1.InteractionResponse
+	KVClientMessage              *agentv1.KvClientMessage
+	CancelReason                 string
+	IgnoredReason                string
+	Prewarm                      bool
 }
 
 // normalizeMode 对外部传入的 mode 做最小归一化，但不再静默降级。

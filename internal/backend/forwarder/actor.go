@@ -241,6 +241,9 @@ func (service *Service) ensureStreamActor(stream *ActiveStream) (chan streamComm
 	if stream.TimerTokens == nil {
 		stream.TimerTokens = make(map[string]uint64)
 	}
+	if stream.StreamTimers == nil {
+		stream.StreamTimers = make(map[string]*time.Timer)
+	}
 	if strings.TrimSpace(string(stream.Phase)) == "" {
 		stream.Phase = TurnPhaseIdle
 	}
@@ -962,17 +965,15 @@ func (service *Service) scheduleStreamTimer(stream *ActiveStream, key string, de
 	if stream.TimerTokens == nil {
 		stream.TimerTokens = make(map[string]uint64)
 	}
+	if stream.StreamTimers == nil {
+		stream.StreamTimers = make(map[string]*time.Timer)
+	}
+	if previous := stream.StreamTimers[key]; previous != nil {
+		previous.Stop()
+	}
 	stream.TimerTokens[key]++
 	token := stream.TimerTokens[key]
-	stream.UpdatedAt = time.Now().UTC()
-	stream.mu.Unlock()
-
-	go func() {
-		if delay > 0 {
-			timer := time.NewTimer(delay)
-			defer timer.Stop()
-			<-timer.C
-		}
+	timer := time.AfterFunc(max(delay, 0), func() {
 		if err := service.postStreamCommandAsync(stream, streamCommand{
 			Kind: streamCommandTimerFired,
 			Timer: &streamTimerEvent{
@@ -986,7 +987,10 @@ func (service *Service) scheduleStreamTimer(stream *ActiveStream, key string, de
 		}); err != nil && !errors.Is(err, errProviderLoopInterrupted) {
 			log.Printf("forwarder timer post failed request_id=%s key=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(key), err)
 		}
-	}()
+	})
+	stream.StreamTimers[key] = timer
+	stream.UpdatedAt = time.Now().UTC()
+	stream.mu.Unlock()
 }
 
 func timerEventMatches(stream *ActiveStream, payload *streamTimerEvent) bool {
@@ -1003,9 +1007,26 @@ func clearStreamTimer(stream *ActiveStream, key string) {
 		return
 	}
 	stream.mu.Lock()
+	if timer := stream.StreamTimers[key]; timer != nil {
+		timer.Stop()
+		delete(stream.StreamTimers, key)
+	}
 	delete(stream.TimerTokens, key)
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
+}
+
+func stopAllStreamTimersLocked(stream *ActiveStream) {
+	if stream == nil {
+		return
+	}
+	for key, timer := range stream.StreamTimers {
+		if timer != nil {
+			timer.Stop()
+		}
+		delete(stream.StreamTimers, key)
+	}
+	clear(stream.TimerTokens)
 }
 
 func (service *Service) handleTimerEvent(stream *ActiveStream, payload *streamTimerEvent) error {

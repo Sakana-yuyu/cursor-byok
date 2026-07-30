@@ -209,6 +209,38 @@ func cloneSubagentModelOverrides(overrides map[string]runtimecore.SubagentModelO
 	return cloned
 }
 
+func cloneSelectedSubagentModels(items []*agentv1.RequestedModel) []*agentv1.RequestedModel {
+	if len(items) == 0 {
+		return nil
+	}
+	cloned := make([]*agentv1.RequestedModel, 0, len(items))
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		if copy, ok := proto.Clone(item).(*agentv1.RequestedModel); ok {
+			cloned = append(cloned, copy)
+		}
+	}
+	return cloned
+}
+
+func cloneSelectedSubagentModelDetails(items []*agentv1.ModelDetails) []*agentv1.ModelDetails {
+	if len(items) == 0 {
+		return nil
+	}
+	cloned := make([]*agentv1.ModelDetails, 0, len(items))
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		if copy, ok := proto.Clone(item).(*agentv1.ModelDetails); ok {
+			cloned = append(cloned, copy)
+		}
+	}
+	return cloned
+}
+
 func subagentModelOverrideSummaries(overrides map[string]runtimecore.SubagentModelOverrideSelection) []map[string]any {
 	if len(overrides) == 0 {
 		return nil
@@ -612,6 +644,8 @@ func (service *Service) decodeInboundIntent(requestID string, message *agentv1.A
 		intent.ThinkingEffort = extractRuntimeThinkingEffort(message)
 		intent.MaxMode = extractRequestedMaxMode(message)
 		intent.SubagentTypeName = strings.TrimSpace(runRequest.GetSubagentTypeName())
+		intent.SelectedSubagentModels = cloneSelectedSubagentModels(runRequest.GetSelectedSubagentModels())
+		intent.SelectedSubagentModelDetails = cloneSelectedSubagentModelDetails(runRequest.GetSelectedSubagentModelDetails())
 		parsedOverrides := parseSubagentModelOverrides(runRequest.GetSubagentModelOverrides())
 		intent.SubagentModelOverrides = parsedOverrides.Overrides
 		service.debug.LogRuntime(context.Background(), intent.RequestID, intent.ConversationID, "subagent_model_overrides_parsed", map[string]any{
@@ -639,6 +673,8 @@ func (service *Service) decodeInboundIntent(requestID string, message *agentv1.A
 		intent.StartsRun = true
 		intent.ConversationID = conversationID
 		intent.SubagentTypeName = strings.TrimSpace(prewarmRequest.GetSubagentTypeName())
+		intent.SelectedSubagentModels = cloneSelectedSubagentModels(prewarmRequest.GetSelectedSubagentModels())
+		intent.SelectedSubagentModelDetails = cloneSelectedSubagentModelDetails(prewarmRequest.GetSelectedSubagentModelDetails())
 		intent.ConversationState = prewarmRequest.GetConversationState()
 		intent.Mode, intent.ModeSource, intent.HasExplicitMode, err = extractPrewarmMode(prewarmRequest)
 		if err != nil {
@@ -674,6 +710,8 @@ func (service *Service) decodeInboundIntent(requestID string, message *agentv1.A
 					intent.ThinkingEffort = strings.TrimSpace(stream.ThinkingEffort)
 					intent.MaxMode = stream.MaxMode
 					intent.SubagentModelOverrides = cloneSubagentModelOverrides(stream.SubagentModelOverrides)
+					intent.SelectedSubagentModels = cloneSelectedSubagentModels(stream.SelectedSubagentModels)
+					intent.SelectedSubagentModelDetails = cloneSelectedSubagentModelDetails(stream.SelectedSubagentModelDetails)
 					if !intent.HasExplicitMode && stream.Mode != agentv1.AgentMode_AGENT_MODE_UNSPECIFIED {
 						intent.Mode = stream.Mode
 					}
@@ -832,15 +870,20 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 	stream.ThinkingEffort = strings.TrimSpace(intent.ThinkingEffort)
 	stream.MaxMode = intent.MaxMode
 	stream.SubagentModelOverrides = cloneSubagentModelOverrides(intent.SubagentModelOverrides)
+	stream.SelectedSubagentModels = cloneSelectedSubagentModels(intent.SelectedSubagentModels)
+	stream.SelectedSubagentModelDetails = cloneSelectedSubagentModelDetails(intent.SelectedSubagentModelDetails)
 	stream.PendingProviderAction = providerActionNone
 	stream.PendingCompaction = nil
 	stream.PendingExecs = make(map[string]runtimecore.PendingExec)
 	stream.PendingInteractions = make(map[string]runtimecore.PendingInteraction)
 	stream.RecentCompletedExecs = make(map[uint32]time.Time)
+	stream.RecentCompletedInteractions = make(map[string]time.Time)
 	stream.BackgroundShells = make(map[string]*BackgroundShellState)
 	stream.BackgroundShellsByMessageID = make(map[uint32]string)
 	stream.BackgroundShellsByExecID = make(map[string]string)
+	stopAllStreamTimersLocked(stream)
 	stream.TimerTokens = make(map[string]uint64)
+	stream.StreamTimers = make(map[string]*time.Timer)
 	stream.CurrentProviderToken = 0
 	stream.CurrentCompactionToken = 0
 	stream.ProviderAccumulatedText = ""
@@ -859,16 +902,18 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 	stream.mu.Unlock()
 	service.setTurnPhase(stream, TurnPhaseIdle)
 	service.debug.LogRuntime(context.Background(), intent.RequestID, intent.ConversationID, "stream_state_updated", map[string]any{
-		"turn_seq":                      turnSeq,
-		"model_id":                      strings.TrimSpace(intent.ModelID),
-		"model_name":                    strings.TrimSpace(intent.ModelName),
-		"thinking_effort":               strings.TrimSpace(intent.ThinkingEffort),
-		"mode":                          effectiveMode.String(),
-		"prewarm":                       intent.Prewarm,
-		"subagent_type":                 strings.TrimSpace(intent.SubagentTypeName),
-		"subagent_model_override_count": len(intent.SubagentModelOverrides),
-		"subagent_model_overrides":      subagentModelOverrideSummaries(intent.SubagentModelOverrides),
-		"latest_user_text":              userMessageText(intent.UserMessage),
+		"turn_seq":                             turnSeq,
+		"model_id":                             strings.TrimSpace(intent.ModelID),
+		"model_name":                           strings.TrimSpace(intent.ModelName),
+		"thinking_effort":                      strings.TrimSpace(intent.ThinkingEffort),
+		"mode":                                 effectiveMode.String(),
+		"prewarm":                              intent.Prewarm,
+		"subagent_type":                        strings.TrimSpace(intent.SubagentTypeName),
+		"subagent_model_override_count":        len(intent.SubagentModelOverrides),
+		"subagent_model_overrides":             subagentModelOverrideSummaries(intent.SubagentModelOverrides),
+		"selected_subagent_model_count":        len(intent.SelectedSubagentModels),
+		"selected_subagent_model_detail_count": len(intent.SelectedSubagentModelDetails),
+		"latest_user_text":                     userMessageText(intent.UserMessage),
 	})
 	if err := service.publishCheckpoint(intent.RequestID, intent.ConversationID); err != nil {
 		return err
@@ -1081,6 +1126,9 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 		}
 		return fmt.Errorf("pending exec not found")
 	}
+	if service.ignoreStaleExecProviderPass(stream, pending, "exec_client_message") {
+		return nil
+	}
 	service.observeBackgroundShellExecClientMessage(stream, pending, intent.ExecClientMessage)
 	service.observeShellExecClientMessage(stream, pending, intent.ExecClientMessage)
 	pending = service.applyExecProgress(stream, pending, intent.ExecClientMessage)
@@ -1170,6 +1218,9 @@ func (service *Service) handleExecControl(intent InboundIntent) error {
 			return nil
 		}
 		return fmt.Errorf("pending exec not found for control message")
+	}
+	if service.ignoreStaleExecProviderPass(stream, pending, "exec_client_control") {
+		return nil
 	}
 	pending = service.applyExecControlProgress(stream, pending, intent.ExecClientControlMessage)
 	if isHiddenPatchEditExecKind(pending.ExecKind) {
@@ -1990,9 +2041,11 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 	}
 	if isExecInvocation {
 		serverMessage, pendingExec, err := service.execBridge.OpenExec(execbridge.OpenExecContext{
-			ConversationID:         stream.ConversationID,
-			ModelID:                stream.ModelID,
-			SubagentModelOverrides: subagentOverrides,
+			ConversationID:               stream.ConversationID,
+			ModelID:                      stream.ModelID,
+			SubagentModelOverrides:       subagentOverrides,
+			SelectedSubagentModels:       cloneSelectedSubagentModels(stream.SelectedSubagentModels),
+			SelectedSubagentModelDetails: cloneSelectedSubagentModelDetails(stream.SelectedSubagentModelDetails),
 		}, invocation)
 		if err != nil {
 			return service.completePreDispatchToolError(stream, invocation, startedToolCall, startedToolCall != nil, startedEmitted, err)
@@ -3469,6 +3522,31 @@ func markExecCompleted(stream *ActiveStream, pending runtimecore.PendingExec) {
 	}
 	stream.UpdatedAt = now
 	stream.mu.Unlock()
+}
+
+func (service *Service) ignoreStaleExecProviderPass(stream *ActiveStream, pending runtimecore.PendingExec, source string) bool {
+	if stream == nil || pending.ProviderPass <= 0 {
+		return false
+	}
+	stream.mu.Lock()
+	currentPass := stream.ProviderPassCount
+	stream.mu.Unlock()
+	if currentPass <= 0 || currentPass == pending.ProviderPass {
+		return false
+	}
+	clearStreamTimer(stream, providerTimerKey(streamTimerExecWatchdog, pending.ExecID))
+	markExecCompleted(stream, pending)
+	if service != nil && service.debug != nil {
+		service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "stale_exec_result_ignored", map[string]any{
+			"source":        strings.TrimSpace(source),
+			"exec_id":       strings.TrimSpace(pending.ExecID),
+			"message_id":    pending.MessageID,
+			"provider_pass": pending.ProviderPass,
+			"current_pass":  currentPass,
+			"tool_call_id":  strings.TrimSpace(pending.ToolCallID),
+		})
+	}
+	return true
 }
 
 func recentlyCompletedExecExists(stream *ActiveStream, messageID uint32) bool {

@@ -37,9 +37,11 @@ type ExecApplyResult struct {
 
 // OpenExecContext 表示执行桥打开请求时需要的最小上下文。
 type OpenExecContext struct {
-	ConversationID         string
-	ModelID                string
-	SubagentModelOverrides map[string]runtimecore.SubagentModelOverrideSelection
+	ConversationID               string
+	ModelID                      string
+	SubagentModelOverrides       map[string]runtimecore.SubagentModelOverrideSelection
+	SelectedSubagentModels       []*agentv1.RequestedModel
+	SelectedSubagentModelDetails []*agentv1.ModelDetails
 }
 
 // ExecBridge 定义执行桥接口。
@@ -788,6 +790,14 @@ func (bridge *Bridge) openTask(openContext OpenExecContext, toolCall runtimecore
 		}
 	}
 	if modelID == "" {
+		for _, selected := range openContext.SelectedSubagentModels {
+			if selected != nil && strings.TrimSpace(selected.GetModelId()) != "" {
+				modelID = resolveSelectedSubagentModelID(selected.GetModelId(), openContext.SelectedSubagentModelDetails)
+				break
+			}
+		}
+	}
+	if modelID == "" {
 		modelID = strings.TrimSpace(openContext.ModelID)
 	}
 	serverMessage := &agentv1.AgentServerMessage{
@@ -819,6 +829,30 @@ func (bridge *Bridge) openTask(openContext OpenExecContext, toolCall runtimecore
 		StreamState: "opened",
 		OpenedAt:    now,
 	}, nil
+}
+
+func resolveSelectedSubagentModelID(selectedModelID string, details []*agentv1.ModelDetails) string {
+	selected := strings.TrimSpace(selectedModelID)
+	for _, detail := range details {
+		if detail == nil {
+			continue
+		}
+		modelID := strings.TrimSpace(detail.GetModelId())
+		displayID := strings.TrimSpace(detail.GetDisplayModelId())
+		if selected == modelID || selected == displayID {
+			return firstNonEmptyString(modelID, selected)
+		}
+	}
+	return selected
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 // openGrep 构造 Grep 对应的执行桥请求。
