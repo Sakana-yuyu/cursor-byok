@@ -67,34 +67,34 @@ func NewBridge() *Bridge {
 
 // OpenExec 打开一条执行型工具调用。
 func (bridge *Bridge) OpenExec(openContext OpenExecContext, toolCall runtimecore.ToolInvocation) (*agentv1.AgentServerMessage, runtimecore.PendingExec, error) {
-	switch strings.TrimSpace(toolCall.ToolName) {
-	case "Read":
+	switch canonicalToolKind(toolCall.ToolName) {
+	case "read":
 		return bridge.openRead(toolCall)
-	case "Write":
+	case "write":
 		return bridge.openWrite(toolCall)
-	case "Delete":
+	case "delete":
 		return bridge.openDelete(toolCall)
-	case "Glob":
+	case "glob":
 		return bridge.openGlob(toolCall)
-	case "Grep":
+	case "grep":
 		return bridge.openGrep(toolCall)
-	case "ReadLints":
+	case "diagnostics":
 		return bridge.openReadLints(toolCall)
-	case "Ls":
+	case "ls":
 		return bridge.openLs(toolCall)
-	case "Shell":
+	case "shell":
 		return bridge.openShell(toolCall)
-	case "WriteShellStdin":
+	case "write_shell_stdin":
 		return bridge.openWriteShellStdin(toolCall)
-	case "ForceBackgroundShell":
+	case "force_background_shell":
 		return bridge.openForceBackgroundShell(toolCall)
-	case "Task":
+	case "subagent":
 		return bridge.openTask(openContext, toolCall)
-	case "CallMcpTool":
+	case "mcp":
 		return bridge.openMcp(toolCall)
-	case "ListMcpResources":
+	case "list_mcp_resources":
 		return bridge.openListMcpResources(toolCall)
-	case "FetchMcpResource":
+	case "read_mcp_resource":
 		return bridge.openReadMcpResource(toolCall)
 	default:
 		return nil, runtimecore.PendingExec{}, fmt.Errorf("unsupported exec tool: %s", toolCall.ToolName)
