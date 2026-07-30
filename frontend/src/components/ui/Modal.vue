@@ -3,6 +3,12 @@ import Button from "@/components/ui/Button.vue";
 import { computed } from "vue";
 import { marked } from "marked";
 
+// 配置 marked
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+});
+
 const props = defineProps({
   visible: { type: Boolean, default: false },
   title: { type: String, default: "提示" },
@@ -16,7 +22,13 @@ const props = defineProps({
 
 const renderedHtml = computed(() => {
   if (!props.markdown || !props.content) return "";
-  return marked.parse(props.content);
+  try {
+    // marked() 直接调用，返回 HTML 字符串
+    return marked(props.content);
+  } catch (err) {
+    console.error("Markdown parse error:", err);
+    return props.content;
+  }
 });
 
 const emit = defineEmits(["update:visible", "confirm", "cancel"]);
