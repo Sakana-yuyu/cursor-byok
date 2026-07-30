@@ -11,14 +11,17 @@
 package forwarder
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"cursor/gen/agentv1"
 )
@@ -770,7 +773,17 @@ func redactMCPURL(raw string) string {
 	if trimmed == "" {
 		return ""
 	}
+	if parsed, err := url.Parse(trimmed); err == nil && parsed.Scheme != "" {
+		parsed.User = nil
+		parsed.RawQuery = ""
+		parsed.ForceQuery = false
+		parsed.Fragment = ""
+		return parsed.String()
+	}
 	if index := strings.Index(trimmed, "?"); index >= 0 {
+		trimmed = trimmed[:index]
+	}
+	if index := strings.Index(trimmed, "#"); index >= 0 {
 		trimmed = trimmed[:index]
 	}
 	if scheme := strings.Index(trimmed, "://"); scheme >= 0 {
@@ -780,6 +793,42 @@ func redactMCPURL(raw string) string {
 		}
 	}
 	return trimmed
+}
+
+func mcpConfigFingerprint(config MCPServerConfig) string {
+	transport := strings.ToLower(strings.TrimSpace(config.Transport))
+	if transport == "" {
+		transport = "stdio"
+	}
+	payload, _ := json.Marshal(struct {
+		Version           int            `json:"version"`
+		Identifier        string         `json:"identifier"`
+		Name              string         `json:"name"`
+		Source            MCPSource      `json:"source"`
+		Scope             MCPConfigScope `json:"scope"`
+		Transport         string         `json:"transport"`
+		Command           string         `json:"command,omitempty"`
+		Cwd               string         `json:"cwd,omitempty"`
+		URL               string         `json:"url,omitempty"`
+		ConfiguredEnabled bool           `json:"configuredEnabled"`
+		Enabled           bool           `json:"enabled"`
+		RuntimeScope      string         `json:"runtimeScope"`
+	}{
+		Version:           1,
+		Identifier:        strings.ToLower(strings.TrimSpace(config.Identifier)),
+		Name:              strings.TrimSpace(config.Name),
+		Source:            config.Source,
+		Scope:             config.Scope,
+		Transport:         transport,
+		Command:           strings.TrimSpace(config.Command),
+		Cwd:               strings.TrimSpace(config.Cwd),
+		URL:               redactMCPURL(config.URL),
+		ConfiguredEnabled: config.ConfiguredEnabled,
+		Enabled:           config.Enabled,
+		RuntimeScope:      normalizeMCPRuntimeScope(config.RuntimeScope),
+	})
+	sum := sha256.Sum256(payload)
+	return fmt.Sprintf("sha256:%x", sum)
 }
 
 // MCPServerSnapshotItem is the sanitized management view. It never exposes
@@ -798,7 +847,10 @@ type MCPServerSnapshotItem struct {
 	HasTools          bool             `json:"hasTools"`
 	ToolCount         int              `json:"toolCount"`
 	Status            MCPRuntimeStatus `json:"status"`
+	ConfigFingerprint string           `json:"configFingerprint"`
+	CapabilityStatus  MCPRuntimeStatus `json:"capabilityStatus"`
 	LastError         string           `json:"lastError,omitempty"`
+	LastCheckedAt     time.Time        `json:"lastCheckedAt,omitempty"`
 	SourceLabel       string           `json:"sourceLabel"`
 	RuntimeScope      string           `json:"runtimeScope"`
 }
@@ -820,15 +872,21 @@ func SnapshotMCPServersWithSettings(workspaceRoot string, settings SkillMCPScanS
 	}
 	items := make([]MCPServerSnapshotItem, 0, len(configs))
 	for _, config := range configs {
+		configFingerprint := mcpConfigFingerprint(config)
 		runtimeItem, connected := runtimeByID[mcpRuntimeEntryKey(config.RuntimeScope, config.Identifier)]
-		connected = connected && runtimeItem.Source == string(config.Source) && runtimeItem.Scope == string(config.Scope)
+		connected = connected && runtimeItem.Source == string(config.Source) && runtimeItem.Scope == string(config.Scope) && runtimeItem.ConfigFingerprint == configFingerprint
 		status := MCPRuntimeDisconnected
+		capabilityStatus := MCPRuntimeDisconnected
 		toolCount := 0
 		lastError := ""
+		lastCheckedAt := time.Time{}
 		if connected {
 			status = runtimeItem.Status
+			configFingerprint = runtimeItem.ConfigFingerprint
+			capabilityStatus = runtimeItem.CapabilityStatus
 			toolCount = runtimeItem.ToolCount
 			lastError = runtimeItem.LastError
+			lastCheckedAt = runtimeItem.LastCheckedAt
 		}
 		items = append(items, MCPServerSnapshotItem{
 			Name:              config.Name,
@@ -844,7 +902,10 @@ func SnapshotMCPServersWithSettings(workspaceRoot string, settings SkillMCPScanS
 			HasTools:          toolCount > 0,
 			ToolCount:         toolCount,
 			Status:            status,
+			ConfigFingerprint: configFingerprint,
+			CapabilityStatus:  capabilityStatus,
 			LastError:         lastError,
+			LastCheckedAt:     lastCheckedAt,
 			SourceLabel:       string(config.Source),
 			RuntimeScope:      config.RuntimeScope,
 		})
