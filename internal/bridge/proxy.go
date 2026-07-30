@@ -10,6 +10,8 @@ import (
 	"cursor/internal/promptinject"
 	"fmt"
 	"runtime"
+	"strings"
+	"sync"
 )
 
 // Public DTOs remain in package main for Wails service compatibility.
@@ -87,6 +89,13 @@ type ProxyService struct {
 	// core 表示当前声明中的 core。
 	core            *client.ProxyService
 	promptInjection *promptinject.Manager
+	mcpConnectMu    sync.Mutex
+	mcpConnects     map[string]mcpConnectHandle
+}
+
+type mcpConnectHandle struct {
+	identifier string
+	cancel     context.CancelFunc
 }
 
 // NewProxyService 用于处理与 NewProxyService 相关的逻辑。
@@ -95,7 +104,11 @@ func NewProxyService(proxy *mitm.ProxyServer, certManager *certs.Manager, caCert
 	if _, err := manager.Load(); err != nil {
 		manager = promptinject.New()
 	}
-	return &ProxyService{core: client.NewProxyService(proxy, certManager, caCertPEM), promptInjection: manager}
+	return &ProxyService{
+		core:            client.NewProxyService(proxy, certManager, caCertPEM),
+		promptInjection: manager,
+		mcpConnects:     make(map[string]mcpConnectHandle),
+	}
 }
 
 // StartProxy 用于处理与 StartProxy 相关的逻辑。
@@ -267,7 +280,7 @@ func (s *ProxyService) GetSkillsMCPScanSnapshot(workspaceRoot string) (SkillsMCP
 	}
 	return SkillsMCPScanSnapshot{
 		Skills:     forwarder.SnapshotSourcedSkills(workspaceRoot),
-		MCPServers: forwarder.SnapshotMCPServers(workspaceRoot),
+		MCPServers: forwarder.SnapshotMCPServersWithSettings(workspaceRoot, skillMCPScanSettings(cfg.SkillMCPScan)),
 		Config:     cfg.SkillMCPScan,
 	}, nil
 }
@@ -287,4 +300,121 @@ func (s *ProxyService) SaveSkillsMCPScanConfig(scanCfg serverconfig.SkillMCPScan
 	}
 	cfg.SkillMCPScan = scanCfg
 	return s.core.SaveUserConfig(cfg)
+}
+
+// ConnectMCPServer explicitly trusts and connects one discovered MCP server.
+func (s *ProxyService) ConnectMCPServer(workspaceRoot string, identifier string, attemptID string) (forwarder.MCPServerSnapshotItem, error) {
+	cfg, err := s.core.LoadUserConfig()
+	if err != nil {
+		return forwarder.MCPServerSnapshotItem{}, err
+	}
+	settings := skillMCPScanSettings(cfg.SkillMCPScan)
+	configs := forwarder.ScanMCPServerConfigs(workspaceRoot, settings)
+	registry := forwarder.SharedMCPRuntimeRegistry()
+	registry.Sync(enabledMCPConfigs(configs))
+	connectCtx, cancel := context.WithCancel(context.Background())
+	key := strings.ToLower(strings.TrimSpace(identifier))
+	attemptKey := strings.TrimSpace(attemptID)
+	if attemptKey == "" {
+		cancel()
+		return forwarder.MCPServerSnapshotItem{}, fmt.Errorf("mcp connect attempt id is required")
+	}
+	s.mcpConnectMu.Lock()
+	for existingAttempt, previous := range s.mcpConnects {
+		if previous.identifier == key {
+			previous.cancel()
+			delete(s.mcpConnects, existingAttempt)
+		}
+	}
+	s.mcpConnects[attemptKey] = mcpConnectHandle{identifier: key, cancel: cancel}
+	s.mcpConnectMu.Unlock()
+	defer func() {
+		cancel()
+		s.mcpConnectMu.Lock()
+		delete(s.mcpConnects, attemptKey)
+		s.mcpConnectMu.Unlock()
+	}()
+	if err := registry.Connect(connectCtx, identifier); err != nil {
+		return forwarder.MCPServerSnapshotItem{}, err
+	}
+	return findMCPServerSnapshot(forwarder.SnapshotMCPServersWithSettings(workspaceRoot, settings), identifier)
+}
+
+// DisconnectMCPServer closes one active MCP session without changing its persisted scan setting.
+func (s *ProxyService) DisconnectMCPServer(workspaceRoot string, identifier string) (forwarder.MCPServerSnapshotItem, error) {
+	s.cancelMCPServerConnections(identifier)
+	registry := forwarder.SharedMCPRuntimeRegistry()
+	if err := registry.Disconnect(identifier); err != nil {
+		return forwarder.MCPServerSnapshotItem{}, err
+	}
+	cfg, err := s.core.LoadUserConfig()
+	if err != nil {
+		return forwarder.MCPServerSnapshotItem{}, err
+	}
+	return findMCPServerSnapshot(forwarder.SnapshotMCPServersWithSettings(workspaceRoot, skillMCPScanSettings(cfg.SkillMCPScan)), identifier)
+}
+
+// CancelMCPServerConnection cancels an in-flight explicit connect attempt.
+func (s *ProxyService) CancelMCPServerConnection(identifier string, attemptID string) bool {
+	key := strings.ToLower(strings.TrimSpace(identifier))
+	attemptKey := strings.TrimSpace(attemptID)
+	s.mcpConnectMu.Lock()
+	handle, ok := s.mcpConnects[attemptKey]
+	if ok && handle.identifier == key {
+		delete(s.mcpConnects, attemptKey)
+	} else {
+		ok = false
+	}
+	s.mcpConnectMu.Unlock()
+	if ok && handle.cancel != nil {
+		handle.cancel()
+	}
+	return ok
+}
+
+func (s *ProxyService) cancelMCPServerConnections(identifier string) {
+	key := strings.ToLower(strings.TrimSpace(identifier))
+	var cancels []context.CancelFunc
+	s.mcpConnectMu.Lock()
+	for attemptID, handle := range s.mcpConnects {
+		if handle.identifier == key {
+			cancels = append(cancels, handle.cancel)
+			delete(s.mcpConnects, attemptID)
+		}
+	}
+	s.mcpConnectMu.Unlock()
+	for _, cancel := range cancels {
+		if cancel != nil {
+			cancel()
+		}
+	}
+}
+
+func skillMCPScanSettings(cfg serverconfig.SkillMCPScanConfig) forwarder.SkillMCPScanSettings {
+	return forwarder.SkillMCPScanSettings{
+		Enabled:            cfg.Enabled,
+		SkillSources:       cfg.SkillSources,
+		MCPSources:         cfg.MCPSources,
+		DisabledSkills:     cfg.DisabledSkills,
+		DisabledMCPServers: cfg.DisabledMCPServers,
+	}
+}
+
+func enabledMCPConfigs(configs []forwarder.MCPServerConfig) []forwarder.MCPServerConfig {
+	result := make([]forwarder.MCPServerConfig, 0, len(configs))
+	for _, config := range configs {
+		if config.Enabled {
+			result = append(result, config)
+		}
+	}
+	return result
+}
+
+func findMCPServerSnapshot(items []forwarder.MCPServerSnapshotItem, identifier string) (forwarder.MCPServerSnapshotItem, error) {
+	for _, item := range items {
+		if strings.EqualFold(strings.TrimSpace(item.Identifier), strings.TrimSpace(identifier)) {
+			return item, nil
+		}
+	}
+	return forwarder.MCPServerSnapshotItem{}, fmt.Errorf("mcp server %q not found", identifier)
 }

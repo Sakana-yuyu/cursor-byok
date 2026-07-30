@@ -68,11 +68,18 @@ func (service *Service) enrichRequestContextWithScannedAssets(intent *InboundInt
 		service.skillsStore().SetScanSettings(settings.Enabled, settings.SkillSources, settings.DisabledSkills)
 	}
 	if !settings.Enabled {
+		if service.mcpRuntime != nil {
+			replaceMCPRuntimeForWorkspace(service.mcpRuntime, workspaceRoot, nil)
+		}
 		return
 	}
 
 	skills := ScanAllSkills(workspaceRoot)
-	mcpServers := scanMCPServers(workspaceRoot, settings.MCPSources, settings.DisabledMCPServers)
+	mcpConfigs := ScanMCPServerConfigs(workspaceRoot, settings)
+	if service.mcpRuntime != nil {
+		replaceMCPRuntimeForWorkspace(service.mcpRuntime, workspaceRoot, enabledMCPServerConfigs(mcpConfigs))
+	}
+	mcpServers := mcpDescriptorsWithRuntime(mcpConfigs, service.mcpRuntime)
 
 	// 应用配置过滤：按分类来源 + 逐项禁用。
 	skills = filterScannedSkills(skills, settings)
@@ -95,6 +102,17 @@ func (service *Service) enrichRequestContextWithScannedAssets(intent *InboundInt
 		// 模型仅知 server 名、不知具体工具/参数 -> 调用易失败。记录便于后续针对性补 schema。
 		service.captureMCPSchemaGap(intent.RequestID, intent.ConversationID, mcpServers)
 	}
+}
+
+func replaceMCPRuntimeForWorkspace(registry *MCPRuntimeRegistry, workspaceRoot string, configs []MCPServerConfig) {
+	if registry == nil {
+		return
+	}
+	if strings.TrimSpace(workspaceRoot) == "" {
+		registry.ReplaceScopes(configs, MCPConfigScopeUser)
+		return
+	}
+	registry.Replace(configs)
 }
 
 // filterScannedSkills 按分类来源开关与逐项禁用列表过滤技能。
