@@ -32,8 +32,13 @@ type DelegationConfig struct {
 }
 
 func normalizeDelegationConfig(input DelegationConfig) DelegationConfig {
+	enabled := input.Enabled
+	// 旧配置没有 delegation 字段时使用默认开启；显式配置了任意委派字段则尊重用户值。
+	if !input.Enabled && input.MaxConcurrency == 0 && len(input.Groups) == 0 {
+		enabled = true
+	}
 	output := DelegationConfig{
-		Enabled:        input.Enabled,
+		Enabled:        enabled,
 		MaxConcurrency: input.MaxConcurrency,
 		Groups:         make([]DelegationModelGroup, 0, len(input.Groups)),
 	}
