@@ -213,6 +213,9 @@ func buildManifestAsset(path, repo, version, filename string) (updateManifestAss
 	if err != nil {
 		return updateManifestAsset{}, err
 	}
+	if info.Size() <= 0 {
+		return updateManifestAsset{}, fmt.Errorf("release asset %s is empty", path)
+	}
 
 	checksum, err := sha256File(path)
 	if err != nil {
