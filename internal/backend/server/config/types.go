@@ -137,6 +137,7 @@ type Config struct {
 	HomeMetrics               HomeMetricsConfig        `json:"homeMetrics" yaml:"homeMetrics"`
 	LocalResponseCache        LocalResponseCacheConfig `json:"localResponseCache" yaml:"localResponseCache"`
 	SkillMCPScan              SkillMCPScanConfig       `json:"skillMcpScan" yaml:"skillMcpScan"`
+	Delegation                DelegationConfig         `json:"delegation" yaml:"delegation"`
 	LastAgentModelHash        string                   `json:"lastAgentModelHash" yaml:"lastAgentModelHash"`
 }
 
@@ -154,6 +155,10 @@ func DefaultConfig() Config {
 		},
 		SkillMCPScan: SkillMCPScanConfig{
 			Enabled: DefaultSkillMCPScanEnabled,
+		},
+		Delegation: DelegationConfig{
+			Enabled:        true,
+			MaxConcurrency: DefaultDelegationMaxConcurrency,
 		},
 	}
 }
@@ -176,6 +181,8 @@ func NormalizeConfig(input Config) (Config, error) {
 	output.ProxyListenAddr = proxyListenAddr
 	output.HomeMetrics.IncludeCacheWriteInHitRate = input.HomeMetrics.IncludeCacheWriteInHitRate
 	output.LocalResponseCache = normalizeLocalResponseCache(input.LocalResponseCache)
+	output.SkillMCPScan = input.SkillMCPScan
+	output.Delegation = normalizeDelegationConfig(input.Delegation)
 	output.LastAgentModelHash = strings.TrimSpace(input.LastAgentModelHash)
 	output.Routing.Mode = normalizeRoutingMode(input.Routing.Mode)
 	if output.Routing.Mode == "" {
