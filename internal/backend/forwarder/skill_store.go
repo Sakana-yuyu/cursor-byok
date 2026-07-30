@@ -10,6 +10,8 @@
 package forwarder
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -17,12 +19,31 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"unicode"
+
+	"gopkg.in/yaml.v3"
 )
+
+const (
+	skillManifestMaxMetadataBytes    = 16 * 1024
+	skillManifestMaxNameBytes        = 256
+	skillManifestMaxDescriptionBytes = 8 * 1024
+	skillManifestMaxVersionBytes     = 256
+)
+
+// SkillManifestDiagnostic describes one validation failure for a SKILL.md manifest.
+type SkillManifestDiagnostic struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
 
 // GlobalSkill 是从 app-data 技能目录扫描到的一个技能记录。
 type GlobalSkill struct {
 	Name        string
 	Description string
+	Version     string
+	ContentHash string
+	Diagnostics []SkillManifestDiagnostic
 	FullPath    string // SKILL.md 的绝对路径
 }
 
@@ -33,10 +54,7 @@ type SkillStore struct {
 	// activator 实现调用链稀疏激活；为 nil 时退化为全量注入（保持旧行为）。
 	activator *SkillActivator
 	// convStore 可选，用于读写会话父子激活集；为 nil 时父子传递降级。
-	convStore *ConversationFileStore
-	// workspaceRoot 可选，用于多源扫描时纳入项目级技能目录（<ws>/.cursor/skills 等）。
-	// 为空时仅扫描用户级目录。SetWorkspaceRoot 可在每次 run 时刷新。
-	workspaceRoot  string
+	convStore      *ConversationFileStore
 	scanEnabled    bool
 	skillSources   map[string]bool
 	disabledSkills map[string]bool
@@ -72,45 +90,52 @@ func (s *SkillStore) SetConversationStore(convStore *ConversationFileStore) {
 	s.mu.Unlock()
 }
 
-// SetWorkspaceRoot 设置当前工作区根，用于多源扫描纳入项目级技能目录。
-// 应在每次 run intent 解析出 workspace 后调用。传空则仅扫描用户级目录。
-func (s *SkillStore) SetWorkspaceRoot(workspaceRoot string) {
-	if s == nil {
-		return
-	}
-	ws := strings.TrimSpace(workspaceRoot)
-	s.mu.Lock()
-	if s.workspaceRoot != ws {
-		s.workspaceRoot = ws
-	}
-	s.mu.Unlock()
-}
-
 // Scan 扫描 root/<skillName>/SKILL.md，返回所有有效技能（按 name 排序）。
 func (s *SkillStore) Scan() ([]GlobalSkill, error) {
-	if s == nil || s.root == "" {
+	return s.ScanForWorkspace("")
+}
+
+type skillStoreScanSnapshot struct {
+	root           string
+	scanEnabled    bool
+	skillSources   map[string]bool
+	disabledSkills map[string]bool
+}
+
+// ScanForWorkspace scans skills for the explicit workspace without mutating shared store scope.
+func (s *SkillStore) ScanForWorkspace(workspaceRoot string) ([]GlobalSkill, error) {
+	if s == nil {
 		return nil, nil
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.scanLocked()
+	snapshot := skillStoreScanSnapshot{
+		root:           s.root,
+		scanEnabled:    s.scanEnabled,
+		skillSources:   cloneSkillSettingMap(s.skillSources),
+		disabledSkills: cloneSkillSettingMap(s.disabledSkills),
+	}
+	s.mu.Unlock()
+	if snapshot.root == "" {
+		return nil, nil
+	}
+	return scanSkillsForWorkspace(strings.TrimSpace(workspaceRoot), snapshot)
 }
 
-// scanLocked 返回供激活器筛选的全部候选技能。
+// scanSkillsForWorkspace 返回供激活器筛选的全部候选技能。
 //
 // 主来源是跨工具多源扫描（ScanAllSkills，覆盖 Cursor/Claude/Codex/ZCode/.agents 等），
 // 在其基础上补齐 root（旧 BYOK 目录）里多源扫描未覆盖的技能，保证向后兼容。
 // 结果按 name 去重、排序，交给激活器做 BM25 Top-K 稀疏激活。
-func (s *SkillStore) scanLocked() ([]GlobalSkill, error) {
-	if !s.scanEnabled {
+func scanSkillsForWorkspace(workspaceRoot string, snapshot skillStoreScanSnapshot) ([]GlobalSkill, error) {
+	if !snapshot.scanEnabled {
 		return nil, nil
 	}
 	settings := SkillMCPScanSettings{
 		Enabled:        true,
-		SkillSources:   s.skillSources,
-		DisabledSkills: s.disabledSkills,
+		SkillSources:   snapshot.skillSources,
+		DisabledSkills: snapshot.disabledSkills,
 	}
-	merged := filterScannedSkills(ScanAllSkills(s.workspaceRoot), settings)
+	merged := filterScannedSkills(ScanAllSkills(workspaceRoot), settings)
 	seen := make(map[string]struct{}, len(merged))
 	skills := make([]GlobalSkill, 0, len(merged))
 	for _, sk := range merged {
@@ -125,14 +150,14 @@ func (s *SkillStore) scanLocked() ([]GlobalSkill, error) {
 		skills = append(skills, sk.GlobalSkill)
 	}
 	// 旧 BYOK root 作为保底补充（兼容历史：可能有多源扫描未纳入的目录布局）。
-	if strings.TrimSpace(s.root) != "" && sourceEnabled(s.skillSources, string(SkillSourceBYOK)) {
-		if legacy, err := scanLegacySkillRoot(s.root); err == nil {
+	if strings.TrimSpace(snapshot.root) != "" && sourceEnabled(snapshot.skillSources, string(SkillSourceBYOK)) {
+		if legacy, err := scanLegacySkillRoot(snapshot.root); err == nil {
 			for _, sk := range legacy {
 				key := strings.ToLower(strings.TrimSpace(sk.Name))
 				if key == "" {
 					continue
 				}
-				if s.disabledSkills != nil && s.disabledSkills[key] {
+				if snapshot.disabledSkills != nil && snapshot.disabledSkills[key] {
 					continue
 				}
 				if _, exists := seen[key]; exists {
@@ -202,12 +227,15 @@ func scanLegacySkillRoot(root string) ([]GlobalSkill, error) {
 // 格式与 Cursor 原生的 agent_skills 注入一致（每个技能带 fullPath 属性和描述文字）。
 // 返回 (片段文本, 技能数, error)；无技能时返回 ("", 0, nil)。
 func (s *SkillStore) BuildAgentSkillsPromptSection() (string, int, error) {
+	return s.BuildAgentSkillsPromptSectionForWorkspace("")
+}
+
+// BuildAgentSkillsPromptSectionForWorkspace builds the full skill section for an explicit workspace.
+func (s *SkillStore) BuildAgentSkillsPromptSectionForWorkspace(workspaceRoot string) (string, int, error) {
 	if s == nil {
 		return "", 0, nil
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	skills, err := s.scanLocked()
+	skills, err := s.ScanForWorkspace(workspaceRoot)
 	if err != nil {
 		return "", 0, err
 	}
@@ -241,11 +269,16 @@ func (s *SkillStore) BuildAgentSkillsPromptSection() (string, int, error) {
 // 返回 (片段文本, 激活技能数, error)；无激活技能时返回 ("", 0, nil)。
 // activator 为 nil 时退化为全量注入（调用 BuildAgentSkillsPromptSection）。
 func (s *SkillStore) BuildActivatedSkillsPromptSection(queryText string, conversation *ConversationFile) (string, int, error) {
+	return s.BuildActivatedSkillsPromptSectionForWorkspace("", queryText, conversation)
+}
+
+// BuildActivatedSkillsPromptSectionForWorkspace sparsely activates skills for an explicit workspace.
+func (s *SkillStore) BuildActivatedSkillsPromptSectionForWorkspace(workspaceRoot string, queryText string, conversation *ConversationFile) (string, int, error) {
 	if s == nil {
 		return "", 0, nil
 	}
 	if s.activator == nil {
-		return s.BuildAgentSkillsPromptSection()
+		return s.BuildAgentSkillsPromptSectionForWorkspace(workspaceRoot)
 	}
 
 	var parentActivated []string
@@ -254,7 +287,7 @@ func (s *SkillStore) BuildActivatedSkillsPromptSection(queryText string, convers
 		parentActivated = s.readParentActivatedSkills(conversation)
 	}
 
-	activated := s.activator.Activate(queryText, parentActivated)
+	activated := s.activator.ActivateForWorkspace(workspaceRoot, queryText, parentActivated)
 	if len(activated) == 0 {
 		return "", 0, nil
 	}
@@ -331,23 +364,117 @@ func (s *SkillStore) writeActivatedSkillsToConversation(conversation *Conversati
 
 // readSkillFile 读取 SKILL.md 并解析 frontmatter，返回 GlobalSkill 及是否有效。
 func readSkillFile(path string) (GlobalSkill, bool) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return GlobalSkill{}, false
-	}
-	name, desc := parseSKILLFrontmatter(string(data))
-	if strings.TrimSpace(name) == "" {
-		return GlobalSkill{}, false
-	}
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		absPath = path
 	}
-	return GlobalSkill{
-		Name:        strings.TrimSpace(name),
-		Description: strings.TrimSpace(desc),
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return GlobalSkill{
+			FullPath: absPath,
+			Diagnostics: []SkillManifestDiagnostic{{
+				Code:    "read_error",
+				Message: "skill manifest could not be read",
+			}},
+		}, false
+	}
+	metadata, diagnostics := parseSKILLManifest(data)
+	sum := sha256.Sum256(data)
+	skill := GlobalSkill{
+		Name:        strings.TrimSpace(metadata.Name),
+		Description: strings.TrimSpace(metadata.Description),
+		Version:     strings.TrimSpace(metadata.Version),
+		ContentHash: hex.EncodeToString(sum[:]),
+		Diagnostics: diagnostics,
 		FullPath:    absPath,
-	}, true
+	}
+	return skill, len(diagnostics) == 0
+}
+
+type skillManifestMetadata struct {
+	Name        string `yaml:"name"`
+	Description string `yaml:"description"`
+	Version     string `yaml:"version"`
+}
+
+func parseSKILLManifest(data []byte) (skillManifestMetadata, []SkillManifestDiagnostic) {
+	frontmatter := extractSKILLFrontmatter(string(data))
+	if len(frontmatter) > skillManifestMaxMetadataBytes {
+		return skillManifestMetadata{}, []SkillManifestDiagnostic{{
+			Code:    "metadata_too_large",
+			Message: fmt.Sprintf("skill manifest metadata exceeds %d bytes", skillManifestMaxMetadataBytes),
+		}}
+	}
+	var metadata skillManifestMetadata
+	if err := yaml.Unmarshal([]byte(frontmatter), &metadata); err != nil {
+		return skillManifestMetadata{}, []SkillManifestDiagnostic{{
+			Code:    "invalid_yaml",
+			Message: "skill manifest metadata is not valid YAML",
+		}}
+	}
+	metadata.Name = strings.TrimSpace(metadata.Name)
+	metadata.Description = strings.TrimSpace(metadata.Description)
+	metadata.Version = strings.TrimSpace(metadata.Version)
+	diagnostics := validateSKILLManifest(metadata)
+	return metadata, diagnostics
+}
+
+func validateSKILLManifest(metadata skillManifestMetadata) []SkillManifestDiagnostic {
+	diagnostics := make([]SkillManifestDiagnostic, 0, 6)
+	validateRequiredSkillMetadata := func(field string, value string, maxBytes int, required bool) {
+		if required && value == "" {
+			diagnostics = append(diagnostics, SkillManifestDiagnostic{
+				Code:    field + "_required",
+				Message: "skill manifest " + field + " is required",
+			})
+			return
+		}
+		if len(value) > maxBytes {
+			diagnostics = append(diagnostics, SkillManifestDiagnostic{
+				Code:    field + "_too_large",
+				Message: fmt.Sprintf("skill manifest %s exceeds %d bytes", field, maxBytes),
+			})
+		}
+		if containsControlCharacter(value) {
+			diagnostics = append(diagnostics, SkillManifestDiagnostic{
+				Code:    field + "_control_character",
+				Message: "skill manifest " + field + " contains a control character",
+			})
+		}
+	}
+	validateRequiredSkillMetadata("name", metadata.Name, skillManifestMaxNameBytes, true)
+	validateRequiredSkillMetadata("description", metadata.Description, skillManifestMaxDescriptionBytes, true)
+	validateRequiredSkillMetadata("version", metadata.Version, skillManifestMaxVersionBytes, false)
+	return diagnostics
+}
+
+func containsControlCharacter(value string) bool {
+	for _, r := range value {
+		if unicode.IsControl(r) {
+			return true
+		}
+	}
+	return false
+}
+
+func extractSKILLFrontmatter(content string) string {
+	content = strings.TrimPrefix(strings.ReplaceAll(content, "\r\n", "\n"), "\ufeff")
+	lines := strings.Split(content, "\n")
+	start := 0
+	for start < len(lines) && strings.TrimSpace(lines[start]) == "" {
+		start++
+	}
+	if start < len(lines) && strings.TrimSpace(lines[start]) == "---" {
+		start++
+	}
+	end := len(lines)
+	for i := start; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) == "---" {
+			end = i
+			break
+		}
+	}
+	return strings.Join(lines[start:end], "\n")
 }
 
 // parseSKILLFrontmatter 从 SKILL.md 内容解析 name / description 字段。
@@ -360,36 +487,8 @@ func readSkillFile(path string) (GlobalSkill, bool) {
 //
 // 两种格式下 name/description 的值都允许带引号（"..." 或 '...'）。
 func parseSKILLFrontmatter(content string) (name, description string) {
-	lines := strings.Split(content, "\n")
-	started := false // 是否已进入 YAML frontmatter（遇到过开头的 ---）
-	for _, line := range lines {
-		line = strings.TrimRight(line, "\r")
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "---" {
-			if !started {
-				// 标准 YAML frontmatter 的起始分隔符，进入 frontmatter 区块。
-				started = true
-				continue
-			}
-			// 遇到结束分隔符，frontmatter 结束。
-			break
-		}
-		if !started {
-			// 旧式格式：没有开头的 ---，直接是 key: value 行。
-			// 但若遇到非 key:value 的内容（如空行后的正文），也继续扫描，
-			// 兼容个别文件 frontmatter 前有空行的情况。
-			started = true
-		}
-		if strings.HasPrefix(line, "name:") {
-			name = unquoteFrontmatterValue(strings.TrimSpace(strings.TrimPrefix(line, "name:")))
-			continue
-		}
-		if strings.HasPrefix(line, "description:") {
-			description = unquoteFrontmatterValue(strings.TrimSpace(strings.TrimPrefix(line, "description:")))
-			continue
-		}
-	}
-	return
+	metadata, _ := parseSKILLManifest([]byte(content))
+	return metadata.Name, metadata.Description
 }
 
 // unquoteFrontmatterValue 去掉 frontmatter 值的外层引号（YAML 允许 "..." 或 '...'）。
