@@ -530,20 +530,52 @@ func startTrayStatsRotation(app *application.App, systray *application.SystemTra
 			switch displayIndex % 4 {
 			case 0:
 				// 显示金额
-				label = formatMoney(estimatedCost)
+				if locale == "en-US" {
+					label = fmt.Sprintf("Cost $%.2f", estimatedCost)
+				} else if locale == "ja-JP" {
+					label = fmt.Sprintf("コスト $%.2f", estimatedCost)
+				} else {
+					label = fmt.Sprintf("消费 $%.2f", estimatedCost)
+				}
 			case 1:
 				// 显示缓存命中率
 				if summary.CacheHitRate != nil {
-					label = formatPercent(*summary.CacheHitRate)
+					hitRate := *summary.CacheHitRate * 100
+					if locale == "en-US" {
+						label = fmt.Sprintf("Hit Rate %.1f%%", hitRate)
+					} else if locale == "ja-JP" {
+						label = fmt.Sprintf("命中率 %.1f%%", hitRate)
+					} else {
+						label = fmt.Sprintf("命中率 %.1f%%", hitRate)
+					}
 				} else {
-					label = "📊 --"
+					if locale == "en-US" {
+						label = "Hit Rate --"
+					} else if locale == "ja-JP" {
+						label = "命中率 --"
+					} else {
+						label = "命中率 --"
+					}
 				}
 			case 2:
 				// 显示 Token 消耗
-				label = formatTokens(summary.RequestTokensTotal)
+				tokensLabel := formatTokens(summary.RequestTokensTotal)
+				if locale == "en-US" {
+					label = fmt.Sprintf("Tokens %s", tokensLabel)
+				} else if locale == "ja-JP" {
+					label = fmt.Sprintf("トークン %s", tokensLabel)
+				} else {
+					label = fmt.Sprintf("Token %s", tokensLabel)
+				}
 			case 3:
 				// 显示对话轮次
-				label = formatTurns(summary.TurnsTotal)
+				if locale == "en-US" {
+					label = fmt.Sprintf("Turns %d", summary.TurnsTotal)
+				} else if locale == "ja-JP" {
+					label = fmt.Sprintf("ターン %d", summary.TurnsTotal)
+				} else {
+					label = fmt.Sprintf("轮次 %d", summary.TurnsTotal)
+				}
 			}
 
 			// 更新 Tooltip 显示所有详情
@@ -567,28 +599,28 @@ func startTrayStatsRotation(app *application.App, systray *application.SystemTra
 }
 
 func formatMoney(cost float64) string {
-	return formatValue("💰", cost, "$%.2f")
+	return formatValue(cost, "$%.2f")
 }
 
 func formatPercent(rate float64) string {
-	return formatValue("📊", rate*100, "%.1f%%")
+	return formatValue(rate*100, "%.1f%%")
 }
 
 func formatTokens(tokens int64) string {
 	if tokens >= 1000000 {
-		return formatValue("🔢", float64(tokens)/1000000.0, "%.1fM")
+		return formatValue(float64(tokens)/1000000.0, "%.1fM")
 	}
 	if tokens >= 1000 {
-		return formatValue("🔢", float64(tokens)/1000.0, "%.1fK")
+		return formatValue(float64(tokens)/1000.0, "%.1fK")
 	}
-	return formatValue("🔢", float64(tokens), "%.0f")
+	return formatValue(float64(tokens), "%.0f")
 }
 
 func formatTurns(turns int) string {
-	return formatValue("🔄", float64(turns), "%.0f")
+	return formatValue(float64(turns), "%.0f")
 }
 
-func formatValue(emoji string, value float64, format string) string {
+func formatValue(value float64, format string) string {
 	formatted := ""
 	switch format {
 	case "$%.2f":
@@ -602,7 +634,7 @@ func formatValue(emoji string, value float64, format string) string {
 	case "%.0f":
 		formatted = formatFloat(value, 0)
 	}
-	return emoji + " " + formatted
+	return formatted
 }
 
 func formatFloat(value float64, precision int) string {
