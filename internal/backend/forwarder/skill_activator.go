@@ -23,10 +23,10 @@ import (
 
 // 稀疏激活参数。
 const (
-	activatedSkillsTopK        = 3  // 每次最多激活的打分技能数（不含常驻元技能）
-	activatedSkillsThreshold   = 0.0 // BM25 得分阈值；0 表示只要有共享词即候选
-	activatedSkillsMaxInject   = 4  // 最终注入上限（含常驻元技能）
-	metaSkillAlwaysOnName      = "find-skills"
+	activatedSkillsTopK      = 3   // 每次最多激活的打分技能数（不含常驻元技能）
+	activatedSkillsThreshold = 0.0 // BM25 得分阈值；0 表示只要有共享词即候选
+	activatedSkillsMaxInject = 4   // 最终注入上限（含常驻元技能）
+	metaSkillAlwaysOnName    = "find-skills"
 )
 
 // bm25 经验参数。
@@ -346,19 +346,19 @@ func hasWordChar(w string) bool {
 
 // skillDoc 是一个技能的 BM25 文档表示。
 type skillDoc struct {
-	skill   GlobalSkill
-	terms   []string        // 去停用词后的词项
+	skill    GlobalSkill
+	terms    []string       // 去停用词后的词项
 	termFreq map[string]int // 词项 -> 出现次数
-	docLen  int
+	docLen   int
 }
 
 // skillIndex 是一次构建的 BM25 倒排索引快照。
 type skillIndex struct {
-	docs      []skillDoc
-	termDoc   map[string]int      // 词项 -> 出现该词项的文档数（df）
-	avgDocLen float64
-	nameToDoc map[string]int      // 技能名(小写) -> docs 索引，保证打分时定位正确文档
-	fingerprint string            // 索引对应技能集的内容指纹
+	docs        []skillDoc
+	termDoc     map[string]int // 词项 -> 出现该词项的文档数（df）
+	avgDocLen   float64
+	nameToDoc   map[string]int // 技能名(小写) -> docs 索引，保证打分时定位正确文档
+	fingerprint string         // 索引对应技能集的内容指纹
 }
 
 // SkillActivator 负责按请求文本稀疏激活技能。
@@ -375,14 +375,19 @@ func NewSkillActivator(store *SkillStore) *SkillActivator {
 	return &SkillActivator{store: store}
 }
 
-// Activate 返回应注入的技能列表（顺序：元技能优先，再按相关性降序）。
+// Activate 返回仅含用户级技能来源的激活列表，保持旧调用兼容。
+func (a *SkillActivator) Activate(queryText string, parentActivated []string) []GlobalSkill {
+	return a.ActivateForWorkspace("", queryText, parentActivated)
+}
+
+// ActivateForWorkspace 返回应注入的技能列表（顺序：元技能优先，再按相关性降序）。
 // parentActivated 是父会话最近激活的技能名集合（子代理保底用），可为空。
 // 结果含常驻元技能 find-skills（若存在）+ Top-K 打分技能，去重后截断到 activatedSkillsMaxInject。
-func (a *SkillActivator) Activate(queryText string, parentActivated []string) []GlobalSkill {
+func (a *SkillActivator) ActivateForWorkspace(workspaceRoot string, queryText string, parentActivated []string) []GlobalSkill {
 	if a == nil || a.store == nil {
 		return nil
 	}
-	skills, err := a.store.Scan()
+	skills, err := a.store.ScanForWorkspace(workspaceRoot)
 	if err != nil || len(skills) == 0 {
 		return nil
 	}
@@ -407,8 +412,8 @@ func (a *SkillActivator) Activate(queryText string, parentActivated []string) []
 
 	// 打分（仅对 others）。
 	type scored struct {
-		skill GlobalSkill
-		score float64
+		skill      GlobalSkill
+		score      float64
 		fromParent bool
 	}
 	results := make([]scored, 0, len(others))
@@ -504,7 +509,7 @@ func bm25Score(idx *skillIndex, docIndex int, qTerms []string) float64 {
 		if denom == 0 {
 			continue
 		}
-		score += idf * (float64(tf)*(bm25K1+1)) / denom
+		score += idf * (float64(tf) * (bm25K1 + 1)) / denom
 	}
 	return score
 }
@@ -561,13 +566,13 @@ func buildIndex(skills []GlobalSkill, fp string) *skillIndex {
 	}
 }
 
-// indexFingerprint 用技能名+description 拼接生成指纹，用于检测技能集变化。
+// indexFingerprint uses stable skill content hashes to detect changes deterministically.
 func indexFingerprint(skills []GlobalSkill) string {
 	var sb strings.Builder
 	for _, s := range skills {
 		sb.WriteString(s.Name)
 		sb.WriteByte('|')
-		sb.WriteString(s.Description)
+		sb.WriteString(s.ContentHash)
 		sb.WriteByte('\n')
 	}
 	return sb.String()

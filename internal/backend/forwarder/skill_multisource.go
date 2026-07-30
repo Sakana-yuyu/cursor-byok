@@ -40,24 +40,39 @@ type SourcedGlobalSkill struct {
 // skillScanCache 缓存一次扫描结果，避免每个请求都扫盘（prefix-cache 要求注入稳定）。
 // 用 mtime 失效：任一被扫描目录的 mtime 变化即视为过期。
 var (
-	skillScanCacheMu sync.RWMutex
-	skillScanCache   []SourcedGlobalSkill
-	skillScanCacheFp string // 缓存对应的指纹（各目录 mtime 拼接）
+	skillScanCacheMu          sync.RWMutex
+	skillScanCache            []SourcedGlobalSkill
+	skillScanCacheDiagnostics []SourcedGlobalSkill
+	skillScanCacheFp          string // 缓存对应的指纹（各目录 mtime 拼接）
 )
 
 // ScanAllSkills 扫描所有工具的技能目录，按 name（小写）去重，先到先得（优先级高的在前）。
 // workspaceRoot 为空时仅扫描用户级目录。结果按 name 排序，保证稳定。
 func ScanAllSkills(workspaceRoot string) []SourcedGlobalSkill {
+	skills, _ := scanAllSkillRecords(workspaceRoot)
+	return skills
+}
+
+// ScanAllSkillDiagnostics returns invalid skill records and their validation diagnostics.
+func ScanAllSkillDiagnostics(workspaceRoot string) []SourcedGlobalSkill {
+	_, diagnostics := scanAllSkillRecords(workspaceRoot)
+	return diagnostics
+}
+
+func scanAllSkillRecords(workspaceRoot string) ([]SourcedGlobalSkill, []SourcedGlobalSkill) {
 	roots := orderedSkillScanRoots(workspaceRoot)
 	fingerprint := skillScanFingerprint(roots)
-	if cached, ok := loadCachedSkills(fingerprint); ok {
-		return cached
+	if cached, diagnostics, ok := loadCachedSkillScan(fingerprint); ok {
+		return cached, diagnostics
 	}
 
 	seen := make(map[string]struct{}, 64)
 	merged := make([]SourcedGlobalSkill, 0, 64)
+	diagnostics := make([]SourcedGlobalSkill, 0)
 	for _, root := range roots {
-		for _, sk := range scanOneSkillRoot(root.Path, root.Source) {
+		valid, invalid := scanOneSkillRootWithDiagnostics(root.Path, root.Source)
+		diagnostics = append(diagnostics, invalid...)
+		for _, sk := range valid {
 			key := strings.ToLower(strings.TrimSpace(sk.Name))
 			if key == "" {
 				continue
@@ -75,9 +90,10 @@ func ScanAllSkills(workspaceRoot string) []SourcedGlobalSkill {
 
 	skillScanCacheMu.Lock()
 	skillScanCache = merged
+	skillScanCacheDiagnostics = diagnostics
 	skillScanCacheFp = fingerprint
 	skillScanCacheMu.Unlock()
-	return merged
+	return merged, diagnostics
 }
 
 // skillScanRoot 是一个待扫描目录及其来源标签。
@@ -181,15 +197,21 @@ func globZCodePluginSkillDirs(home string) []string {
 // 处理符号链接：ZCode/Claude 等工具用 symlink 指向共享 .agents/skills 下的技能目录，
 // entry.IsDir() 对 symlink 返回 false（基于 Lstat），因此需用 os.Stat 跟踪链接判断目标是否目录。
 func scanOneSkillRoot(root string, source SkillSource) []SourcedGlobalSkill {
+	skills, _ := scanOneSkillRootWithDiagnostics(root, source)
+	return skills
+}
+
+func scanOneSkillRootWithDiagnostics(root string, source SkillSource) ([]SourcedGlobalSkill, []SourcedGlobalSkill) {
 	root = strings.TrimSpace(root)
 	if root == "" {
-		return nil
+		return nil, nil
 	}
 	entries, err := os.ReadDir(root)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	skills := make([]SourcedGlobalSkill, 0, len(entries))
+	diagnostics := make([]SourcedGlobalSkill, 0)
 	for _, entry := range entries {
 		entryPath := filepath.Join(root, entry.Name())
 		// entry.IsDir() 对符号链接返回 false；用 os.Stat 跟踪链接，判断目标是否目录。
@@ -205,11 +227,14 @@ func scanOneSkillRoot(root string, source SkillSource) []SourcedGlobalSkill {
 		skillPath := filepath.Join(entryPath, "SKILL.md")
 		global, ok := readSkillFile(skillPath)
 		if !ok {
+			if len(global.Diagnostics) > 0 {
+				diagnostics = append(diagnostics, SourcedGlobalSkill{GlobalSkill: global, Source: source})
+			}
 			continue
 		}
 		skills = append(skills, SourcedGlobalSkill{GlobalSkill: global, Source: source})
 	}
-	return skills
+	return skills, diagnostics
 }
 
 // skillScanFingerprint includes each SKILL.md metadata so in-place edits invalidate the cache.
@@ -246,30 +271,41 @@ func skillScanFingerprint(roots []skillScanRoot) string {
 
 // loadCachedSkills 命中缓存时返回缓存结果。
 func loadCachedSkills(fingerprint string) ([]SourcedGlobalSkill, bool) {
+	skills, _, ok := loadCachedSkillScan(fingerprint)
+	return skills, ok
+}
+
+func loadCachedSkillScan(fingerprint string) ([]SourcedGlobalSkill, []SourcedGlobalSkill, bool) {
 	skillScanCacheMu.RLock()
 	defer skillScanCacheMu.RUnlock()
 	if skillScanCacheFp == fingerprint && skillScanCache != nil {
 		out := make([]SourcedGlobalSkill, len(skillScanCache))
 		copy(out, skillScanCache)
-		return out, true
+		diagnostics := make([]SourcedGlobalSkill, len(skillScanCacheDiagnostics))
+		copy(diagnostics, skillScanCacheDiagnostics)
+		return out, diagnostics, true
 	}
-	return nil, false
+	return nil, nil, false
 }
 
 // InvalidateSkillScanCache 清除扫描缓存，供管理界面「重新扫描」按钮调用。
 func InvalidateSkillScanCache() {
 	skillScanCacheMu.Lock()
 	skillScanCache = nil
+	skillScanCacheDiagnostics = nil
 	skillScanCacheFp = ""
 	skillScanCacheMu.Unlock()
 }
 
 // SkillSnapshotItem 是管理界面展示用的单个技能快照（含来源标签）。
 type SkillSnapshotItem struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	FullPath    string `json:"fullPath"`
-	Source      string `json:"source"`
+	Name        string                    `json:"name"`
+	Description string                    `json:"description"`
+	Version     string                    `json:"version,omitempty"`
+	ContentHash string                    `json:"contentHash,omitempty"`
+	Diagnostics []SkillManifestDiagnostic `json:"diagnostics,omitempty"`
+	FullPath    string                    `json:"fullPath"`
+	Source      string                    `json:"source"`
 }
 
 // SnapshotSourcedSkills 返回当前所有已扫描技能的快照（带来源），供管理界面分类展示。
@@ -281,6 +317,26 @@ func SnapshotSourcedSkills(workspaceRoot string) []SkillSnapshotItem {
 		out = append(out, SkillSnapshotItem{
 			Name:        sk.Name,
 			Description: sk.Description,
+			Version:     sk.Version,
+			ContentHash: sk.ContentHash,
+			FullPath:    sk.FullPath,
+			Source:      string(sk.Source),
+		})
+	}
+	return out
+}
+
+// SnapshotSkillDiagnostics returns invalid manifests without exposing them to prompt activation.
+func SnapshotSkillDiagnostics(workspaceRoot string) []SkillSnapshotItem {
+	sourced := ScanAllSkillDiagnostics(workspaceRoot)
+	out := make([]SkillSnapshotItem, 0, len(sourced))
+	for _, sk := range sourced {
+		out = append(out, SkillSnapshotItem{
+			Name:        sk.Name,
+			Description: sk.Description,
+			Version:     sk.Version,
+			ContentHash: sk.ContentHash,
+			Diagnostics: append([]SkillManifestDiagnostic(nil), sk.Diagnostics...),
 			FullPath:    sk.FullPath,
 			Source:      string(sk.Source),
 		})
