@@ -127,6 +127,7 @@ func (s *SkillStore) scanLocked() ([]GlobalSkill, error) {
 }
 
 // scanLegacySkillRoot 扫描单个旧式技能根目录（<root>/<name>/SKILL.md）。
+// 处理符号链接：entry.IsDir() 对 symlink 返回 false，需用 os.Stat 跟踪链接。
 func scanLegacySkillRoot(root string) ([]GlobalSkill, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
@@ -137,10 +138,17 @@ func scanLegacySkillRoot(root string) ([]GlobalSkill, error) {
 	}
 	skills := make([]GlobalSkill, 0, len(entries))
 	for _, entry := range entries {
-		if !entry.IsDir() {
+		entryPath := filepath.Join(root, entry.Name())
+		isDir := entry.IsDir()
+		if !isDir {
+			if info, err := os.Stat(entryPath); err == nil && info.IsDir() {
+				isDir = true
+			}
+		}
+		if !isDir {
 			continue
 		}
-		skillPath := filepath.Join(root, entry.Name(), "SKILL.md")
+		skillPath := filepath.Join(entryPath, "SKILL.md")
 		skill, ok := readSkillFile(skillPath)
 		if !ok {
 			continue
@@ -304,22 +312,53 @@ func readSkillFile(path string) (GlobalSkill, bool) {
 
 // parseSKILLFrontmatter 从 SKILL.md 内容解析 name / description 字段。
 //
-// Cursor SKILL.md 格式：文件以 "key: value" 行开头，到第一个 "---" 行（或文件末）结束
-// frontmatter，不含前置 "---"。
+// 支持两种 frontmatter 格式：
+//  1. 标准 YAML frontmatter：文件以 "---" 开头，到第二个 "---" 行结束：
+//     ---\nname: x\ndescription: y\n---\n正文
+//  2. 旧式（无前置 ---）：文件以 "key: value" 行开头，到第一个 "---" 行结束：
+//     name: x\ndescription: y\n---\n正文
+//
+// 两种格式下 name/description 的值都允许带引号（"..." 或 '...'）。
 func parseSKILLFrontmatter(content string) (name, description string) {
-	for _, line := range strings.Split(content, "\n") {
+	lines := strings.Split(content, "\n")
+	started := false // 是否已进入 YAML frontmatter（遇到过开头的 ---）
+	for _, line := range lines {
 		line = strings.TrimRight(line, "\r")
-		if line == "---" {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "---" {
+			if !started {
+				// 标准 YAML frontmatter 的起始分隔符，进入 frontmatter 区块。
+				started = true
+				continue
+			}
+			// 遇到结束分隔符，frontmatter 结束。
 			break
 		}
+		if !started {
+			// 旧式格式：没有开头的 ---，直接是 key: value 行。
+			// 但若遇到非 key:value 的内容（如空行后的正文），也继续扫描，
+			// 兼容个别文件 frontmatter 前有空行的情况。
+			started = true
+		}
 		if strings.HasPrefix(line, "name:") {
-			name = strings.TrimSpace(strings.TrimPrefix(line, "name:"))
+			name = unquoteFrontmatterValue(strings.TrimSpace(strings.TrimPrefix(line, "name:")))
 			continue
 		}
 		if strings.HasPrefix(line, "description:") {
-			description = strings.TrimSpace(strings.TrimPrefix(line, "description:"))
+			description = unquoteFrontmatterValue(strings.TrimSpace(strings.TrimPrefix(line, "description:")))
 			continue
 		}
 	}
 	return
+}
+
+// unquoteFrontmatterValue 去掉 frontmatter 值的外层引号（YAML 允许 "..." 或 '...'）。
+func unquoteFrontmatterValue(value string) string {
+	if len(value) >= 2 {
+		if (value[0] == '"' && value[len(value)-1] == '"') ||
+			(value[0] == '\'' && value[len(value)-1] == '\'') {
+			return value[1 : len(value)-1]
+		}
+	}
+	return value
 }

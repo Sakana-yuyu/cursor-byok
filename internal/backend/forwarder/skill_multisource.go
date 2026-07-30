@@ -176,6 +176,9 @@ func globZCodePluginSkillDirs(home string) []string {
 
 // scanOneSkillRoot 扫描单个技能根目录，返回其下所有有效技能。
 // 目录结构：<root>/<skillName>/SKILL.md。复用 readSkillFile 解析 frontmatter。
+//
+// 处理符号链接：ZCode/Claude 等工具用 symlink 指向共享 .agents/skills 下的技能目录，
+// entry.IsDir() 对 symlink 返回 false（基于 Lstat），因此需用 os.Stat 跟踪链接判断目标是否目录。
 func scanOneSkillRoot(root string, source SkillSource) []SourcedGlobalSkill {
 	root = strings.TrimSpace(root)
 	if root == "" {
@@ -187,10 +190,18 @@ func scanOneSkillRoot(root string, source SkillSource) []SourcedGlobalSkill {
 	}
 	skills := make([]SourcedGlobalSkill, 0, len(entries))
 	for _, entry := range entries {
-		if !entry.IsDir() {
+		entryPath := filepath.Join(root, entry.Name())
+		// entry.IsDir() 对符号链接返回 false；用 os.Stat 跟踪链接，判断目标是否目录。
+		isDir := entry.IsDir()
+		if !isDir {
+			if info, err := os.Stat(entryPath); err == nil && info.IsDir() {
+				isDir = true
+			}
+		}
+		if !isDir {
 			continue
 		}
-		skillPath := filepath.Join(root, entry.Name(), "SKILL.md")
+		skillPath := filepath.Join(entryPath, "SKILL.md")
 		global, ok := readSkillFile(skillPath)
 		if !ok {
 			continue
