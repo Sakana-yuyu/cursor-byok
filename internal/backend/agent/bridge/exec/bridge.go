@@ -38,7 +38,10 @@ type ExecApplyResult struct {
 // OpenExecContext 表示执行桥打开请求时需要的最小上下文。
 type OpenExecContext struct {
 	ConversationID               string
+	RootConversationID           string
 	ModelID                      string
+	WorkspaceHint                string
+	DirectMetaParentChild        bool
 	SubagentModelOverrides       map[string]runtimecore.SubagentModelOverrideSelection
 	SelectedSubagentModels       []*agentv1.RequestedModel
 	SelectedSubagentModelDetails []*agentv1.ModelDetails
@@ -776,7 +779,11 @@ func (bridge *Bridge) openTask(openContext OpenExecContext, toolCall runtimecore
 	now := time.Now().UTC()
 	execID := fmt.Sprintf("exec-subagent-%d", now.UnixNano())
 	readonly := readBoolArg(args, "readonly", "readOnly")
+	runInBackground := readBoolArg(args, "run_in_background", "runInBackground")
+	interrupt := readBoolArg(args, "interrupt")
 	parentConversationID := strings.TrimSpace(openContext.ConversationID)
+	rootParentConversationID := strings.TrimSpace(openContext.RootConversationID)
+	workspaceHint := strings.TrimSpace(openContext.WorkspaceHint)
 	taskRequestedModelID := strings.TrimSpace(readStringArg(args, "model", "model_id", "modelId"))
 	modelID := taskRequestedModelID
 	if override, _, ok := runtimecore.LookupSubagentModelOverride(openContext.SubagentModelOverrides, subagentType); ok {
@@ -800,6 +807,8 @@ func (bridge *Bridge) openTask(openContext OpenExecContext, toolCall runtimecore
 	if modelID == "" {
 		modelID = strings.TrimSpace(openContext.ModelID)
 	}
+	selectedContext := buildTaskSelectedContext(workspaceHint)
+	directMetaParentChild := openContext.DirectMetaParentChild
 	serverMessage := &agentv1.AgentServerMessage{
 		Message: &agentv1.AgentServerMessage_ExecServerMessage{
 			ExecServerMessage: &agentv1.ExecServerMessage{
@@ -807,14 +816,21 @@ func (bridge *Bridge) openTask(openContext OpenExecContext, toolCall runtimecore
 				ExecId: execID,
 				Message: &agentv1.ExecServerMessage_SubagentArgs{
 					SubagentArgs: &agentv1.SubagentArgs{
-						ToolCallId:           toolCall.CallID,
-						SubagentType:         subagentType,
-						ModelId:              modelID,
-						Prompt:               strings.TrimSpace(readStringArg(args, "prompt")),
-						Readonly:             readonly,
-						ResumeAgentId:        stringPtr(strings.TrimSpace(readStringArg(args, "resume"))),
-						ParentConversationId: stringPtrIfNonEmpty(parentConversationID),
-						Mode:                 taskModeFromReadonly(readonly),
+						ToolCallId:                    toolCall.CallID,
+						SubagentType:                  subagentType,
+						ModelId:                       modelID,
+						Prompt:                        strings.TrimSpace(readStringArg(args, "prompt")),
+						Readonly:                      readonly,
+						ResumeAgentId:                 stringPtr(strings.TrimSpace(readStringArg(args, "resume"))),
+						RunInBackground:               boolPtrIfTrue(runInBackground),
+						ParentConversationId:          stringPtrIfNonEmpty(parentConversationID),
+						Interrupt:                     boolPtrIfTrue(interrupt),
+						ForkAgentId:                   stringPtrIfNonEmpty(strings.TrimSpace(readStringArg(args, "fork_agent_id", "forkAgentId"))),
+						RootParentConversationId:      stringPtrIfNonEmpty(firstNonEmptyString(rootParentConversationID, parentConversationID)),
+						Mode:                          taskModeFromReadonly(readonly),
+						SelectedContext:               selectedContext,
+						DirectMetaParentChildSubagent: boolPtrIfTrue(directMetaParentChild),
+						Environment:                   agentv1.SubagentExecutionEnvironment_SUBAGENT_EXECUTION_ENVIRONMENT_LOCAL,
 					},
 				},
 			},
@@ -844,6 +860,28 @@ func resolveSelectedSubagentModelID(selectedModelID string, details []*agentv1.M
 		}
 	}
 	return selected
+}
+
+func buildTaskSelectedContext(workspaceHint string) *agentv1.SelectedContext {
+	workspaceHint = strings.TrimSpace(workspaceHint)
+	if workspaceHint == "" {
+		return nil
+	}
+	return &agentv1.SelectedContext{
+		Folders: []*agentv1.SelectedFolder{
+			{
+				Path: workspaceHint,
+			},
+		},
+	}
+}
+
+func boolPtrIfTrue(value bool) *bool {
+	if !value {
+		return nil
+	}
+	copy := value
+	return &copy
 }
 
 func firstNonEmptyString(values ...string) string {
