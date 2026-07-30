@@ -26,12 +26,9 @@ func BuildUserMessageReplayMessage(userMessage *agentv1.UserMessage) (Message, b
 
 func buildUserReplayMessage(text string, selectedContext *agentv1.SelectedContext) (Message, bool) {
 	images := buildSelectedImageContentParts(selectedContext)
-	sections := make([]string, 0, 5)
+	sections := make([]string, 0, 4)
 	if text != "" {
 		sections = append(sections, formatMessageText(fmt.Sprintf("<user_query>\n%s\n</user_query>", text)))
-	}
-	if cursorCommands := buildSelectedCursorCommandsPromptSection(selectedContext); cursorCommands != "" {
-		sections = append(sections, cursorCommands)
 	}
 	if ideState := buildSelectedIDEStatePromptSection(selectedContext); ideState != "" {
 		sections = append(sections, ideState)
@@ -63,6 +60,20 @@ func buildUserReplayMessage(text string, selectedContext *agentv1.SelectedContex
 		Content:      content,
 		ContentParts: parts,
 	}, true
+}
+
+// BuildSelectedCursorCommandsReplayMessage renders command content for new history entries.
+// Keeping this separate from BuildUserMessageReplayMessage prevents old user_message entries
+// from changing their model-visible meaning after a backend upgrade.
+func BuildSelectedCursorCommandsReplayMessage(userMessage *agentv1.UserMessage) (Message, bool) {
+	if userMessage == nil {
+		return Message{}, false
+	}
+	content := buildSelectedCursorCommandsPromptSection(userMessage.GetSelectedContext())
+	if content == "" {
+		return Message{}, false
+	}
+	return Message{Role: "user", Content: content}, true
 }
 
 func buildSelectedCursorCommandsPromptSection(selectedContext *agentv1.SelectedContext) string {

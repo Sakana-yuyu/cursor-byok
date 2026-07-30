@@ -2,66 +2,8 @@ package promptengine
 
 import (
 	"reflect"
-	"strings"
 	"testing"
-
-	"cursor/gen/agentv1"
 )
-
-func TestBuildUserMessageReplayMessageIncludesSelectedCursorCommands(t *testing.T) {
-	message, ok := BuildUserMessageReplayMessage(&agentv1.UserMessage{
-		Text: "/init",
-		SelectedContext: &agentv1.SelectedContext{
-			CursorCommands: []*agentv1.SelectedCursorCommand{
-				{Name: "init", Content: "Analyze the repository and create AGENTS.md."},
-				{Name: `review"<&`, Content: "Review the implementation."},
-			},
-		},
-	})
-	if !ok {
-		t.Fatal("BuildUserMessageReplayMessage() returned ok=false")
-	}
-
-	want := strings.Join([]string{
-		"<user_query>\n/init\n</user_query>",
-		"<cursor_commands>\n" +
-			"<cursor_command name=\"init\">\nAnalyze the repository and create AGENTS.md.\n</cursor_command>\n\n" +
-			"<cursor_command name=\"review&quot;&lt;&amp;\">\nReview the implementation.\n</cursor_command>\n" +
-			"</cursor_commands>",
-	}, "\n\n")
-	if message.Role != "user" || message.Content != want {
-		t.Fatalf("message = %#v, want content %q", message, want)
-	}
-}
-
-func TestBuildUserMessageReplayMessageSkipsEmptyCursorCommandsAndKeepsOrder(t *testing.T) {
-	message, ok := BuildUserMessageReplayMessage(&agentv1.UserMessage{
-		Text: "run commands",
-		SelectedContext: &agentv1.SelectedContext{
-			CursorCommands: []*agentv1.SelectedCursorCommand{
-				nil,
-				{Name: "empty", Content: "  "},
-				{Content: "First command."},
-				{Name: "second", Content: "Second command."},
-			},
-		},
-	})
-	if !ok {
-		t.Fatal("BuildUserMessageReplayMessage() returned ok=false")
-	}
-
-	first := strings.Index(message.Content, "First command.")
-	second := strings.Index(message.Content, "Second command.")
-	if first < 0 || second < 0 || first >= second {
-		t.Fatalf("cursor command order was not preserved: %q", message.Content)
-	}
-	if strings.Contains(message.Content, "empty") {
-		t.Fatalf("empty cursor command was not skipped: %q", message.Content)
-	}
-	if !strings.Contains(message.Content, "<cursor_command>\nFirst command.\n</cursor_command>") {
-		t.Fatalf("unnamed cursor command was not rendered safely: %q", message.Content)
-	}
-}
 
 func TestBuildReplayMessagesFromPendingAssistantOutputsKeepsTextAndToolCallInOneAssistantTurn(t *testing.T) {
 	raw := `{

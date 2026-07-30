@@ -23,6 +23,7 @@ import (
 	interactionbridge "cursor/internal/backend/agent/bridge/interaction"
 	runtimecore "cursor/internal/backend/agent/core"
 	modeladapter "cursor/internal/backend/agent/model"
+	promptengine "cursor/internal/backend/agent/prompt"
 	protocol "cursor/internal/backend/agent/protocol"
 )
 
@@ -2335,7 +2336,8 @@ func buildRunEntries(intent InboundIntent, effectiveMode agentv1.AgentMode, turn
 		}
 	}
 	if intent.UserMessage != nil {
-		payload, err := protojson.Marshal(normalizeUserMessageForStorage(intent.UserMessage))
+		normalized := normalizeUserMessageForStorage(intent.UserMessage)
+		payload, err := protojson.Marshal(normalized)
 		if err != nil {
 			return nil, err
 		}
@@ -2346,6 +2348,13 @@ func buildRunEntries(intent InboundIntent, effectiveMode agentv1.AgentMode, turn
 			Kind:      "user_message",
 			Payload:   payload,
 		})
+		if commandMessage, ok := promptengine.BuildSelectedCursorCommandsReplayMessage(normalized); ok {
+			entries = append(entries, newPromptContextEntry(turnSeq, intent.RequestID, newPromptContextMessage(
+				promptContextSourceSelectedCursorCommands,
+				modeladapter.Message{Role: commandMessage.Role, Content: commandMessage.Content},
+				true,
+			)))
+		}
 	}
 	modeEntry, err := newModeMetadataEntry(turnSeq, intent.RequestID, effectiveMode, intent.HasExplicitMode, intent.ModeSource)
 	if err != nil {
