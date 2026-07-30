@@ -281,6 +281,17 @@ tasks:
           ARCHIVE_PATH: '{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-macos-amd64.tar.gz'
           SCAN: '{{.SCAN}}'
 
+  release:copy:macos:dmgs:
+    internal: true
+    preconditions:
+      - sh: test -f "{{.BIN_DIR}}/macos-arm64.dmg"
+        msg: "缺少 macOS arm64 DMG，请先执行 build:darwin:arm64。"
+      - sh: test -f "{{.BIN_DIR}}/macos-intel.dmg"
+        msg: "缺少 macOS amd64 DMG，请先执行 build:darwin:amd64。"
+    cmds:
+      - cp -f "{{.BIN_DIR}}/macos-arm64.dmg" "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-macos-arm64.dmg"
+      - cp -f "{{.BIN_DIR}}/macos-intel.dmg" "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-macos-amd64.dmg"
+
   release:build:windows:amd64:
     cmds:
       - task: windows:create:zip
@@ -288,6 +299,15 @@ tasks:
           ARCH: amd64
           OUTPUT: '{{.BIN_DIR}}/{{.RELEASE_BASE_NAME}}-windows-amd64.exe'
           ZIP_NAME: 'release/{{.APP_VERSION}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-amd64.zip'
+          SCAN: '{{.SCAN}}'
+
+  release:build:windows:386:
+    cmds:
+      - task: windows:create:zip
+        vars:
+          ARCH: 386
+          OUTPUT: '{{.BIN_DIR}}/{{.RELEASE_BASE_NAME}}-windows-386.exe'
+          ZIP_NAME: 'release/{{.APP_VERSION}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-386.zip'
           SCAN: '{{.SCAN}}'
 
   release:build:windows:installer:
@@ -300,6 +320,18 @@ tasks:
       - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.RELEASE_DIR}}' | Out-Null; Copy-Item -Force '{{.BIN_DIR}}/{{.APP_NAME}}-amd64-installer.exe' '{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-amd64-installer.exe'"
         platforms: [windows]
       - cmd: mkdir -p '{{.RELEASE_DIR}}' && cp -f '{{.BIN_DIR}}/{{.APP_NAME}}-amd64-installer.exe' '{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-amd64-installer.exe'
+        platforms: [darwin, linux]
+
+  release:build:windows:installer:386:
+    summary: 构建 Windows 386 NSIS 安装包并以 ASCII 命名复制到 release 目录
+    cmds:
+      - task: windows:create:nsis:installer:386
+        vars:
+          ARCH: 386
+          SCAN: '{{.SCAN}}'
+      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.RELEASE_DIR}}' | Out-Null; Copy-Item -Force '{{.BIN_DIR}}/{{.APP_NAME}}-386-installer.exe' '{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-386-installer.exe'"
+        platforms: [windows]
+      - cmd: mkdir -p '{{.RELEASE_DIR}}' && cp -f '{{.BIN_DIR}}/{{.APP_NAME}}-386-installer.exe' '{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-386-installer.exe'
         platforms: [darwin, linux]
 
   release:build:linux:amd64:
@@ -318,6 +350,7 @@ tasks:
     internal: true
     cmds:
       - go run ./scripts/release manifest -config ./build/config.yml -assets-dir "{{.RELEASE_DIR}}" -out "{{.RELEASE_DIR}}/update.json" -repo "{{.RELEASE_REPO}}" -base-name "{{.RELEASE_BASE_NAME}}" -notes "{{.RELEASE_NOTES_PATH}}"
+      - python3 -m json.tool "{{.RELEASE_DIR}}/update.json" >/dev/null
 
   release:prepare:
     summary: 在当前主机上生成对应的发布资产
@@ -340,10 +373,15 @@ tasks:
       - task: release:clean
       - task: common:update:build-assets
       - task: release:notes
+      - task: build:darwin:arm64
+      - task: build:darwin:amd64
       - task: release:build:macos:arm64
       - task: release:build:macos:amd64
+      - task: release:copy:macos:dmgs
       - task: release:build:windows:amd64
       - task: release:build:windows:installer
+      - task: release:build:windows:386
+      - task: release:build:windows:installer:386
       - task: release:build:linux:amd64
 
   release:prepare:linux:
@@ -368,10 +406,18 @@ tasks:
         msg: "缺少 macOS arm64 发布资产。"
       - sh: test -f "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-macos-amd64.tar.gz"
         msg: "缺少 macOS amd64 发布资产。"
+      - sh: test -f "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-macos-arm64.dmg"
+        msg: "缺少 macOS arm64 DMG 发布资产。"
+      - sh: test -f "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-macos-amd64.dmg"
+        msg: "缺少 macOS amd64 DMG 发布资产。"
       - sh: test -f "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-amd64.zip"
         msg: "缺少 Windows amd64 发布资产。"
       - sh: test -f "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-amd64-installer.exe"
         msg: "缺少 Windows amd64 NSIS 安装包发布资产。"
+      - sh: test -f "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-386.zip"
+        msg: "缺少 Windows 386 发布资产。"
+      - sh: test -f "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-386-installer.exe"
+        msg: "缺少 Windows 386 NSIS 安装包发布资产。"
       - sh: test -f "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-linux-amd64.tar.gz"
         msg: "缺少 Linux amd64 发布资产。"
     cmds:
@@ -517,6 +563,7 @@ tasks:
             pathlib.Path("{{.RELEASE_DIR}}/update.json"),
             *pathlib.Path("{{.RELEASE_DIR}}").glob("*.tar.gz"),
             *pathlib.Path("{{.RELEASE_DIR}}").glob("*.zip"),
+            *pathlib.Path("{{.RELEASE_DIR}}").glob("*.dmg"),
             *pathlib.Path("{{.RELEASE_DIR}}").glob("*-installer.exe"),
         ])
 
