@@ -68,6 +68,10 @@ func (compiler *DefaultPromptCompiler) Compile(conversation *ConversationFile, m
 	if err != nil {
 		return CompiledConversation{}, err
 	}
+	tools, mcpToolCount, err := appendConversationMCPTools(tools, conversation)
+	if err != nil {
+		return CompiledConversation{}, err
+	}
 	replayMessages, err := compiler.projector.ProjectPromptReplay(conversation)
 	if err != nil {
 		return CompiledConversation{}, err
@@ -121,7 +125,7 @@ func (compiler *DefaultPromptCompiler) Compile(conversation *ConversationFile, m
 		Messages:           messages,
 		StableMessageCount: stableReplayCount,
 		Tools:              tools,
-		CompileSummary:     fmt.Sprintf("mode=%s asset_mode=%s child=%t messages=%d tools=%d shared_rules_total=%d shared_rules_deduped=%d activated_skills=%d", normalizedMode.String(), string(assetMode), isChildConversationSubagentTypeName(subagentTypeName), len(messages), len(tools), sharedRuleTotal, sharedRuleCount, globalSkillsCount),
+		CompileSummary:     fmt.Sprintf("mode=%s asset_mode=%s child=%t messages=%d tools=%d mcp_tools=%d shared_rules_total=%d shared_rules_deduped=%d activated_skills=%d", normalizedMode.String(), string(assetMode), isChildConversationSubagentTypeName(subagentTypeName), len(messages), len(tools), mcpToolCount, sharedRuleTotal, sharedRuleCount, globalSkillsCount),
 	}, nil
 }
 

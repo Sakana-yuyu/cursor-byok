@@ -130,10 +130,10 @@ func (broker *StreamBroker) Get(requestID string) (*ActiveStream, bool) {
 }
 
 // Subscribe 为指定 request 注册一个新订阅者，并返回用于唤醒 backlog 消费的信号通道。
-func (broker *StreamBroker) Subscribe(requestID string) (string, <-chan struct{}, error) {
+func (broker *StreamBroker) Subscribe(requestID string) (string, <-chan struct{}, int, error) {
 	normalizedRequestID := strings.TrimSpace(requestID)
 	if normalizedRequestID == "" {
-		return "", nil, fmt.Errorf("request_id is required")
+		return "", nil, 0, fmt.Errorf("request_id is required")
 	}
 	stream, ok := broker.Get(normalizedRequestID)
 	if !ok || stream == nil {
@@ -142,7 +142,7 @@ func (broker *StreamBroker) Subscribe(requestID string) (string, <-chan struct{}
 		var err error
 		stream, err = broker.OpenStream(normalizedRequestID, "", 0, "", "", agentv1.AgentMode_AGENT_MODE_AGENT, "")
 		if err != nil {
-			return "", nil, err
+			return "", nil, 0, err
 		}
 	}
 	subscriberID := fmt.Sprintf("sub-%d", broker.nextID.Add(1))
@@ -151,10 +151,14 @@ func (broker *StreamBroker) Subscribe(requestID string) (string, <-chan struct{}
 	stream.mu.Lock()
 	broker.stopTerminalCleanupTimerLocked(stream)
 	stream.Subscribers[subscriberID] = subscriber
+	startCursor := stream.BacklogStartCursor
+	if startCursor < 0 || startCursor > len(stream.Backlog) {
+		startCursor = 0
+	}
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
 
-	return subscriberID, subscriber.Signal, nil
+	return subscriberID, subscriber.Signal, startCursor, nil
 }
 
 func (broker *StreamBroker) stopTerminalCleanupTimerLocked(stream *ActiveStream) {

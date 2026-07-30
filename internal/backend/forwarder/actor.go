@@ -168,6 +168,14 @@ func (service *Service) dispatchInboundIntent(intent InboundIntent) error {
 func (service *Service) streamForIntent(intent InboundIntent) (*ActiveStream, error) {
 	switch strings.TrimSpace(intent.Kind) {
 	case "run":
+		if intent.ForceNewTurn {
+			if existing, ok := service.broker.Get(intent.RequestID); ok && existing != nil {
+				if err := service.reopenTerminalStreamForNewTurn(existing); err != nil {
+					return nil, err
+				}
+				return existing, nil
+			}
+		}
 		stream, err := service.broker.OpenStream(
 			intent.RequestID,
 			intent.ConversationID,
@@ -206,6 +214,101 @@ func (service *Service) streamForIntent(intent InboundIntent) (*ActiveStream, er
 		}
 		return stream, nil
 	}
+}
+
+func (service *Service) reopenTerminalStreamForNewTurn(stream *ActiveStream) error {
+	if stream == nil {
+		return nil
+	}
+	stream.mu.Lock()
+	terminal := isTerminalStreamStatus(stream.Status)
+	switch stream.Phase {
+	case TurnPhaseCanceled, TurnPhaseCompleted, TurnPhaseFailed:
+		terminal = true
+	}
+	actorDone := stream.ActorDone
+	stream.mu.Unlock()
+	if !terminal {
+		return nil
+	}
+	if actorDone != nil {
+		select {
+		case <-actorDone:
+		case <-time.After(2 * time.Second):
+			return fmt.Errorf("previous request actor did not stop before new conversation action")
+		}
+	}
+
+	stream.mu.Lock()
+	if stream.ProviderCancel != nil {
+		stream.ProviderCancel()
+		stream.ProviderCancel = nil
+	}
+	stopAllStreamTimersLocked(stream)
+	if service != nil && service.broker != nil {
+		service.broker.stopTerminalCleanupTimerLocked(stream)
+	}
+	stream.ProviderActive = false
+	stream.CurrentProviderToken++
+	stream.CurrentCompactionToken++
+	stream.PendingProviderAction = providerActionNone
+	stream.PendingProviderCompletion = nil
+	stream.PendingCompaction = nil
+	stream.Status = StreamStatusCreated
+	stream.Phase = TurnPhaseIdle
+	stream.ActorMailbox = nil
+	stream.ActorDone = nil
+	stream.BacklogStartCursor = len(stream.Backlog)
+	stream.UpdatedAt = time.Now().UTC()
+	stream.mu.Unlock()
+	return nil
+}
+
+func (service *Service) prepareStreamForForcedTurn(intent InboundIntent) error {
+	if service == nil || service.broker == nil || !intent.ForceNewTurn {
+		return nil
+	}
+	stream, ok := service.broker.Get(intent.RequestID)
+	if !ok || stream == nil {
+		return nil
+	}
+	if service.multitaskDelegation != nil {
+		service.multitaskDelegation.CancelStream(stream)
+	}
+
+	stream.mu.Lock()
+	if stream.ProviderCancel != nil {
+		stream.ProviderCancel()
+		stream.ProviderCancel = nil
+	}
+	stream.ProviderActive = false
+	stream.CurrentProviderToken++
+	stream.CurrentCompactionToken++
+	stopAllStreamTimersLocked(stream)
+	stream.PendingProviderAction = providerActionNone
+	stream.PendingProviderCompletion = nil
+	stream.PendingCompaction = nil
+	stream.PendingInteractions = make(map[string]runtimecore.PendingInteraction)
+	stream.PartialToolCallIDs = make(map[string]struct{})
+	stream.PatchEditQueues = make(map[string][]queuedPatchEditOperation)
+	stream.Status = StreamStatusCreated
+	stream.Phase = TurnPhaseIdle
+	stream.UpdatedAt = time.Now().UTC()
+	stream.mu.Unlock()
+
+	for _, pending := range cleanupAllPendingExecs(stream) {
+		if strings.TrimSpace(pending.ExecKind) == "delegation_aggregate" {
+			continue
+		}
+		_ = service.broker.Publish(intent.RequestID, StreamEvent{
+			Message: buildExecAbortMessage(pending),
+		})
+	}
+	stream.mu.Lock()
+	stream.BacklogStartCursor = len(stream.Backlog)
+	stream.UpdatedAt = time.Now().UTC()
+	stream.mu.Unlock()
+	return nil
 }
 
 func isTerminalIntentStream(stream *ActiveStream) bool {
@@ -1030,7 +1133,9 @@ func stopAllStreamTimersLocked(stream *ActiveStream) {
 		}
 		delete(stream.StreamTimers, key)
 	}
-	clear(stream.TimerTokens)
+	for key := range stream.TimerTokens {
+		stream.TimerTokens[key]++
+	}
 }
 
 func (service *Service) handleTimerEvent(stream *ActiveStream, payload *streamTimerEvent) error {

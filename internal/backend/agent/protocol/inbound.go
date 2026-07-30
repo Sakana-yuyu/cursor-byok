@@ -75,7 +75,8 @@ func MapClientMessageToCommandKind(message *agentv1.AgentClientMessage, clientKi
 			*agentv1.ConversationAction_AsyncAskQuestionCompletionAction,
 			*agentv1.ConversationAction_CancelSubagentAction,
 			*agentv1.ConversationAction_BackgroundShellAction,
-			*agentv1.ConversationAction_BackgroundTaskCompletionAction:
+			*agentv1.ConversationAction_BackgroundTaskCompletionAction,
+			*agentv1.ConversationAction_BackgroundSubagentAction:
 			return runtimecore.CommandKindConversationActionRecordOnly, nil
 		default:
 			return "", fmt.Errorf("unsupported conversation_action payload")

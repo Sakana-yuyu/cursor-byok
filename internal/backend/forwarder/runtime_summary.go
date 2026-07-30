@@ -77,6 +77,10 @@ func (service *Service) bootstrapRuntimeConversation(intent InboundIntent) (*Con
 	if strings.TrimSpace(intent.SubagentTypeName) != "" {
 		conversation.SubagentTypeName = strings.TrimSpace(intent.SubagentTypeName)
 	}
+	if intent.MCPToolsProvided {
+		conversation.MCPTools = cloneMCPToolDefinitions(intent.RequestContext.GetTools())
+		conversation.MCPToolsInitialized = true
+	}
 	if contextWindowTokens > 0 {
 		conversation.TokenDetailsMaxTokens = contextWindowTokens
 	} else if conversation.TokenDetailsMaxTokens == 0 {
