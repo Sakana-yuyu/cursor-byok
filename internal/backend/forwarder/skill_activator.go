@@ -384,11 +384,20 @@ func (a *SkillActivator) Activate(queryText string, parentActivated []string) []
 // parentActivated 是父会话最近激活的技能名集合（子代理保底用），可为空。
 // 结果含常驻元技能 find-skills（若存在）+ Top-K 打分技能，去重后截断到 activatedSkillsMaxInject。
 func (a *SkillActivator) ActivateForWorkspace(workspaceRoot string, queryText string, parentActivated []string) []GlobalSkill {
+	return a.activateForWorkspaceExcluding(workspaceRoot, queryText, parentActivated, nil)
+}
+
+// activateForWorkspaceExcluding excludes skills already supplied explicitly by the client.
+func (a *SkillActivator) activateForWorkspaceExcluding(workspaceRoot string, queryText string, parentActivated []string, excludedPaths map[string]struct{}) []GlobalSkill {
 	if a == nil || a.store == nil {
 		return nil
 	}
 	skills, err := a.store.ScanForWorkspace(workspaceRoot)
 	if err != nil || len(skills) == 0 {
+		return nil
+	}
+	skills = filterSkillsExcludingPaths(skills, excludedPaths)
+	if len(skills) == 0 {
 		return nil
 	}
 

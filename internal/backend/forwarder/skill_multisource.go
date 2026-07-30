@@ -228,6 +228,9 @@ func scanOneSkillRootWithDiagnostics(root string, source SkillSource) ([]Sourced
 		global, ok := readSkillFile(skillPath)
 		if !ok {
 			if len(global.Diagnostics) > 0 {
+				if strings.TrimSpace(global.Name) == "" {
+					global.Name = entry.Name()
+				}
 				diagnostics = append(diagnostics, SourcedGlobalSkill{GlobalSkill: global, Source: source})
 			}
 			continue
@@ -304,6 +307,7 @@ type SkillSnapshotItem struct {
 	Version     string                    `json:"version,omitempty"`
 	ContentHash string                    `json:"contentHash,omitempty"`
 	Diagnostics []SkillManifestDiagnostic `json:"diagnostics,omitempty"`
+	Valid       bool                      `json:"valid"`
 	FullPath    string                    `json:"fullPath"`
 	Source      string                    `json:"source"`
 }
@@ -312,16 +316,21 @@ type SkillSnapshotItem struct {
 // workspaceRoot 为空时仅扫描用户级目录。
 func SnapshotSourcedSkills(workspaceRoot string) []SkillSnapshotItem {
 	sourced := ScanAllSkills(workspaceRoot)
-	out := make([]SkillSnapshotItem, 0, len(sourced))
+	diagnostics := ScanAllSkillDiagnostics(workspaceRoot)
+	out := make([]SkillSnapshotItem, 0, len(sourced)+len(diagnostics))
 	for _, sk := range sourced {
 		out = append(out, SkillSnapshotItem{
 			Name:        sk.Name,
 			Description: sk.Description,
 			Version:     sk.Version,
 			ContentHash: sk.ContentHash,
+			Valid:       true,
 			FullPath:    sk.FullPath,
 			Source:      string(sk.Source),
 		})
+	}
+	for _, sk := range diagnostics {
+		out = append(out, skillDiagnosticSnapshotItem(sk))
 	}
 	return out
 }
@@ -331,15 +340,20 @@ func SnapshotSkillDiagnostics(workspaceRoot string) []SkillSnapshotItem {
 	sourced := ScanAllSkillDiagnostics(workspaceRoot)
 	out := make([]SkillSnapshotItem, 0, len(sourced))
 	for _, sk := range sourced {
-		out = append(out, SkillSnapshotItem{
-			Name:        sk.Name,
-			Description: sk.Description,
-			Version:     sk.Version,
-			ContentHash: sk.ContentHash,
-			Diagnostics: append([]SkillManifestDiagnostic(nil), sk.Diagnostics...),
-			FullPath:    sk.FullPath,
-			Source:      string(sk.Source),
-		})
+		out = append(out, skillDiagnosticSnapshotItem(sk))
 	}
 	return out
+}
+
+func skillDiagnosticSnapshotItem(sk SourcedGlobalSkill) SkillSnapshotItem {
+	return SkillSnapshotItem{
+		Name:        sk.Name,
+		Description: sk.Description,
+		Version:     sk.Version,
+		ContentHash: sk.ContentHash,
+		Diagnostics: append([]SkillManifestDiagnostic(nil), sk.Diagnostics...),
+		Valid:       false,
+		FullPath:    sk.FullPath,
+		Source:      string(sk.Source),
+	}
 }
