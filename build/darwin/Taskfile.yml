@@ -229,10 +229,15 @@ tasks:
           chmod +x "{{.STAGING_DIR}}/提示损坏？点我.command"
         fi
       - |
+        # 卸载可能存在的旧挂载点
+        hdiutil detach "/Volumes/{{.APP_NAME}}" 2>/dev/null || true
+        # 等待卸载完成
+        sleep 1
         if command -v create-dmg >/dev/null 2>&1; then
           rm -f "{{.BIN_DIR}}/{{.DMG_NAME}}"
           create-dmg --volname "{{.APP_NAME}}" --window-size 600 400 --icon-size 100 --app-drop-link 450 200 "{{.BIN_DIR}}/{{.DMG_NAME}}" "{{.STAGING_DIR}}"
         else
+          rm -f "{{.BIN_DIR}}/{{.DMG_NAME}}"
           hdiutil create -volname "{{.APP_NAME}}" -srcfolder "{{.STAGING_DIR}}" -ov -format UDZO "{{.BIN_DIR}}/{{.DMG_NAME}}"
         fi
       - rm -rf "{{.STAGING_DIR}}"
