@@ -62,9 +62,8 @@ func (service *Service) enrichRequestContextWithScannedAssets(intent *InboundInt
 	settings := readSkillMCPScanSettings(service.scanConfig)
 	workspaceRoot := resolveWorkspaceRootFromIntent(intent)
 
-	// Keep the compiler-side sparse skill store synchronized even when scanning is disabled.
+	// Keep compiler-side scan settings synchronized even when scanning is disabled.
 	if service.skillsStore() != nil {
-		service.skillsStore().SetWorkspaceRoot(workspaceRoot)
 		service.skillsStore().SetScanSettings(settings.Enabled, settings.SkillSources, settings.DisabledSkills)
 	}
 	if !settings.Enabled {
@@ -151,7 +150,14 @@ func resolveWorkspaceRootFromIntent(intent *InboundIntent) string {
 	if intent == nil || intent.RequestContext == nil {
 		return ""
 	}
-	env := intent.RequestContext.GetEnv()
+	return resolveWorkspaceRootFromRequestContext(intent.RequestContext)
+}
+
+func resolveWorkspaceRootFromRequestContext(requestContext *agentv1.RequestContext) string {
+	if requestContext == nil {
+		return ""
+	}
+	env := requestContext.GetEnv()
 	if env == nil {
 		return ""
 	}
@@ -253,7 +259,7 @@ func mergeScannedMCPDescriptors(rc *agentv1.RequestContext, servers []*agentv1.M
 }
 
 // skillsStore 返回 Service 持有的 SkillStore（若编译器是 DefaultPromptCompiler 则可取到）。
-// 用于在 enrich 时同步 workspaceRoot。取不到时返回 nil，不影响扫描本身。
+// 用于在 enrich 时同步扫描设置。取不到时返回 nil，不影响扫描本身。
 func (service *Service) skillsStore() *SkillStore {
 	if service == nil {
 		return nil

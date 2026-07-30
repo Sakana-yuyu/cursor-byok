@@ -9,6 +9,7 @@ import (
 	modeladapter "cursor/internal/backend/agent/model"
 	"cursor/internal/promptinject"
 	promptassets "cursor/prompt"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type PromptCompiler interface {
@@ -90,7 +91,11 @@ func (compiler *DefaultPromptCompiler) Compile(conversation *ConversationFile, m
 	if compiler.skills != nil && normalizedMode != agentv1.AgentMode_AGENT_MODE_DEBUG {
 		// 内置技能走「调用链稀疏激活」：按当前请求文本相关性只注入 Top-K 技能，
 		// 不再全量注入。详见 docs/superpowers/specs/2026-07-29-skill-sparse-activation-design.md。
-		globalSkillsPrompt, globalSkillsCount, err = compiler.skills.BuildActivatedSkillsPromptSection(latestUserText, conversation)
+		workspaceRoot, workspaceErr := workspaceRootFromConversation(conversation)
+		if workspaceErr != nil {
+			return CompiledConversation{}, workspaceErr
+		}
+		globalSkillsPrompt, globalSkillsCount, err = compiler.skills.BuildActivatedSkillsPromptSectionForWorkspace(workspaceRoot, latestUserText, conversation)
 		if err != nil {
 			return CompiledConversation{}, err
 		}
@@ -127,6 +132,26 @@ func (compiler *DefaultPromptCompiler) Compile(conversation *ConversationFile, m
 		Tools:              tools,
 		CompileSummary:     fmt.Sprintf("mode=%s asset_mode=%s child=%t messages=%d tools=%d mcp_tools=%d shared_rules_total=%d shared_rules_deduped=%d activated_skills=%d", normalizedMode.String(), string(assetMode), isChildConversationSubagentTypeName(subagentTypeName), len(messages), len(tools), mcpToolCount, sharedRuleTotal, sharedRuleCount, globalSkillsCount),
 	}, nil
+}
+
+func workspaceRootFromConversation(conversation *ConversationFile) (string, error) {
+	if conversation == nil {
+		return "", nil
+	}
+	for i := len(conversation.Entries) - 1; i >= 0; i-- {
+		entry := conversation.Entries[i]
+		if strings.TrimSpace(entry.Kind) != "request_context" || len(entry.Payload) == 0 {
+			continue
+		}
+		requestContext := &agentv1.RequestContext{}
+		if err := protojson.Unmarshal(entry.Payload, requestContext); err != nil {
+			return "", fmt.Errorf("decode request context workspace: %w", err)
+		}
+		if workspaceRoot := resolveWorkspaceRootFromRequestContext(requestContext); workspaceRoot != "" {
+			return workspaceRoot, nil
+		}
+	}
+	return "", nil
 }
 
 func (compiler *DefaultPromptCompiler) DerivePromptContexts(conversation *ConversationFile, mode agentv1.AgentMode, latestUserText string) ([]PromptContextMessage, error) {
