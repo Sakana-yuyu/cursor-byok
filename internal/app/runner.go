@@ -266,7 +266,18 @@ func Run(resources EmbeddedResources) error {
 	})
 
 	window := mainWindow
+	windowService.SetMainWindow(window)
+	quitting := false
 	window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+		if quitting {
+			return
+		}
+		if windowService.GetMainWindowCloseAction() == "quit" {
+			quitting = true
+			e.Cancel()
+			windowService.CloseApplication()
+			return
+		}
 		window.Hide()
 		e.Cancel()
 	})
@@ -300,6 +311,9 @@ func Run(resources EmbeddedResources) error {
 	showItem := menu.Add(i18n.T(i18n.DefaultLocale, "tray.show")).OnClick(func(ctx *application.Context) {
 		showMainWindow()
 	})
+	showStatsItem := menu.Add(i18n.T(i18n.DefaultLocale, "tray.show_stats")).OnClick(func(ctx *application.Context) {
+		windowService.OpenStatsOverlayWindow(0, 0, false)
+	})
 	hideItem := menu.Add(i18n.T(i18n.DefaultLocale, "tray.hide")).OnClick(func(ctx *application.Context) {
 		window.Hide()
 	})
@@ -323,6 +337,7 @@ func Run(resources EmbeddedResources) error {
 		stopItem.SetLabel(i18n.T(currentLocale, "tray.stop"))
 		updateItem.SetLabel(i18n.T(currentLocale, "tray.update"))
 		showItem.SetLabel(i18n.T(currentLocale, "tray.show"))
+		showStatsItem.SetLabel(i18n.T(currentLocale, "tray.show_stats"))
 		hideItem.SetLabel(i18n.T(currentLocale, "tray.hide"))
 		quitItem.SetLabel(i18n.T(currentLocale, "tray.quit"))
 		systray.SetTooltip(i18n.T(currentLocale, appNameKey))

@@ -1,19 +1,24 @@
 <script setup>
 import { getHomeMetricsSummary, fetchLocalCacheStats, updateStatsOverlayWindow } from "@/services/clientApi";
-import { getStatsOverlayPreferences, setStatsOverlayPreferences, appState } from "@/state/appState";
+import { getStatsOverlayPreferences, setStatsOverlayPreferences, hideStatsOverlay, closeApplication, appState } from "@/state/appState";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 
 const summary = ref({});
 const localCache = ref({});
-const loading = ref(false);
 const preferences = ref({ style: "card" });
 const updated = ref(false);
 const isCollapsed = ref(false); // 收缩状态
 const isHovering = ref(false); // 鼠标悬停状态
+const isMorphing = ref(false); // 胶囊与面板之间的过渡状态
+const morphDirection = ref(null); // 'in' | 'out'
 const snapEdge = ref(null); // 吸附边缘: 'left' | 'right' | 'top' | 'bottom' | null
 let timer = null;
 let updatedTimer = null;
 let positionTimer = null;
+let hoverCollapseTimer = null;
+let morphTimer = null;
+let hoverAnchorScreenX = null;
+let hoverAnchorScreenY = null;
 let lastSavedX = null;
 let lastSavedY = null;
 
@@ -22,6 +27,10 @@ const POSITION_CHECK_MS = 300;       // 轮询提速，响应更灵敏
 const STORAGE_KEY = "cursor-byok.stats-overlay.preferences";
 const SNAP_ENTER_THRESHOLD = 40;     // 进入吸附区的距离（像素）
 const SNAP_LEAVE_THRESHOLD = 80;     // 离开吸附区的距离——比进入阈值大，形成迟滞防抖动
+const HOVER_COLLAPSE_DELAY_MS = 220;  // 给原生窗口完成展开/定位留出时间，避免悬停反馈循环
+const MORPH_MS = 300;
+const MORPH_OUT_MS = 360;
+const NATIVE_RESIZE_SETTLE_MS = 90;
 
 // snapCollapse 是否启用贴边自动收缩（来自 preferences）
 const snapCollapse = computed(() => preferences.value.snapCollapse !== false);
@@ -36,6 +45,7 @@ async function toggleDockLock() {
   await setStatsOverlayPreferences({ dockLocked: next });
   if (next) {
     // 锁定后强制收缩，并立即生效
+    finishMorph();
     isCollapsed.value = true;
   }
 }
@@ -45,8 +55,70 @@ async function toggleSnapCollapse() {
   await setStatsOverlayPreferences({ snapCollapse: next });
   if (!next) {
     // 关闭贴标收缩时立即展开面板
+    finishMorph();
     isCollapsed.value = false;
   }
+}
+
+async function handleHideOverlay() {
+  finishMorph();
+  await hideStatsOverlay();
+}
+
+async function handleCloseApplication() {
+  finishMorph();
+  await closeApplication();
+}
+
+function clearMorphTimer() {
+  if (morphTimer) {
+    clearTimeout(morphTimer);
+    morphTimer = null;
+  }
+}
+
+function finishMorph() {
+  clearMorphTimer();
+  isMorphing.value = false;
+  morphDirection.value = null;
+}
+
+// 展开前先把原生窗口扩到目标尺寸，动画期间保持胶囊停在贴边位置。
+function startExpandMorph() {
+  if (dockLocked.value || !snapEdge.value || !snapCollapse.value) return;
+  if (!isCollapsed.value && !isMorphing.value) return;
+  if (isMorphing.value && morphDirection.value === "in") return;
+  clearMorphTimer();
+  morphDirection.value = "in";
+  isMorphing.value = true;
+  if (!isCollapsed.value) {
+    morphTimer = setTimeout(finishMorph, MORPH_MS);
+    return;
+  }
+  morphTimer = setTimeout(() => {
+    morphTimer = null;
+    isCollapsed.value = false;
+    morphTimer = setTimeout(finishMorph, MORPH_MS);
+  }, NATIVE_RESIZE_SETTLE_MS);
+}
+
+// 展开态先播放反向动画，动画完成后才缩小原生窗口，避免窗口位置瞬移。
+function startCollapseMorph() {
+  if (dockLocked.value || !snapEdge.value || !snapCollapse.value || isCollapsed.value) return;
+  if (isMorphing.value && morphDirection.value === "out") return;
+  clearMorphTimer();
+  morphDirection.value = "out";
+  isMorphing.value = true;
+  morphTimer = setTimeout(() => {
+    morphTimer = null;
+    isCollapsed.value = true;
+    // 先保持完整原生窗口，让胶囊稳定在最终屏幕坐标，再切换到窄窗口。
+    morphTimer = setTimeout(() => {
+      morphTimer = null;
+      morphDirection.value = null;
+      isMorphing.value = false;
+    }, NATIVE_RESIZE_SETTLE_MS);
+  }, MORPH_OUT_MS);
 }
 
 // 监听窗口位置变化并持久化。窗口通过原生拖动移动，
@@ -84,8 +156,9 @@ function checkPosition() {
     snapEdge.value = newSnapEdge;
     if (snapCollapse.value) {
       if (newSnapEdge && !isHovering.value) {
-        isCollapsed.value = true;
+        if (!isMorphing.value) isCollapsed.value = true;
       } else if (!newSnapEdge) {
+        finishMorph();
         isCollapsed.value = false;
       }
     }
@@ -100,36 +173,63 @@ function checkPosition() {
 }
 
 // 鼠标进入浮窗
-function handleMouseEnter() {
+function handleMouseEnter(event) {
   isHovering.value = true;
+  hoverAnchorScreenX = Number.isFinite(event?.screenX) ? event.screenX : null;
+  hoverAnchorScreenY = Number.isFinite(event?.screenY) ? event.screenY : null;
+  if (hoverCollapseTimer) {
+    clearTimeout(hoverCollapseTimer);
+    hoverCollapseTimer = null;
+  }
   // 锁定胶囊时，悬停不展开
   if (dockLocked.value) return;
   if (snapEdge.value && snapCollapse.value) {
-    isCollapsed.value = false;
+    startExpandMorph();
   }
 }
 
 // 鼠标离开浮窗
-function handleMouseLeave() {
-  isHovering.value = false;
-  if (dockLocked.value) return;
-  if (snapEdge.value && snapCollapse.value) {
-    isCollapsed.value = true;
+function handleMouseLeave(event) {
+  if (dockLocked.value) {
+    isHovering.value = false;
+    return;
   }
+  if (snapEdge.value && snapCollapse.value) {
+    // 原生窗口展开/重定位会改变 WebView 视口，可能产生一次伪 mouseleave。
+    // 屏幕坐标不随视口变化，鼠标没有实际移动时保留展开态，避免展开/收缩闪烁。
+    const hasScreenPoint = Number.isFinite(event?.screenX) && Number.isFinite(event?.screenY)
+      && Number.isFinite(hoverAnchorScreenX) && Number.isFinite(hoverAnchorScreenY);
+    if (hasScreenPoint
+      && Math.abs(event.screenX - hoverAnchorScreenX) <= 3
+      && Math.abs(event.screenY - hoverAnchorScreenY) <= 3) {
+      return;
+    }
+    isHovering.value = false;
+    if (hoverCollapseTimer) clearTimeout(hoverCollapseTimer);
+    hoverCollapseTimer = setTimeout(() => {
+      hoverCollapseTimer = null;
+      if (!isHovering.value && !dockLocked.value && snapEdge.value && snapCollapse.value) {
+        startCollapseMorph();
+      }
+    }, HOVER_COLLAPSE_DELAY_MS);
+    return;
+  }
+  isHovering.value = false;
 }
 
 // syncNativeWindowSize 把当前折叠/贴边/样式状态同步到原生窗口尺寸。
 //
 // 关键：原生 Wails 窗口本身有固定矩形，即使 Vue 层用 pointer-events:none 让空白穿透，
 // 窗口矩形仍会阻挡下方页面的点击。必须让窗口尺寸紧贴实际内容：
-//   - 收缩胶囊时缩到 dockSize（44px），只挡住胶囊那一小块；
+//   - 收缩胶囊时只缩短贴边方向的另一条轴，保持恢复态的轴尺寸不变；
 //   - 展开面板时恢复到对应样式的面板尺寸。
 //
 // 通过布局 DSL（layout|collapsed/expanded|edge|style|x|y|screen...）传给后端，
 // parseStatsOverlayLayout 解析后按 collapsed 切换 dockSize / 面板尺寸并重定位贴边。
 function syncNativeWindowSize() {
   const currentStyle = style.value || "card";
-  const collapsed = isCollapsed.value ? "collapsed" : "expanded";
+  const nativeCollapsed = isCollapsed.value && !isMorphing.value;
+  const collapsed = nativeCollapsed ? "collapsed" : "expanded";
   const edge = snapEdge.value || "none";
   const x = typeof window.screenX === "number" ? Math.round(window.screenX) : 0;
   const y = typeof window.screenY === "number" ? Math.round(window.screenY) : 0;
@@ -230,7 +330,6 @@ function markUpdated() {
 }
 
 async function load() {
-  loading.value = true;
   try {
     const [s, c] = await Promise.allSettled([getHomeMetricsSummary(), fetchLocalCacheStats()]);
     if (s.status === "fulfilled") summary.value = s.value || {};
@@ -238,8 +337,6 @@ async function load() {
     markUpdated();
   } catch (_) {
     // 浮窗静默失败，不弹错误
-  } finally {
-    loading.value = false;
   }
 }
 
@@ -260,11 +357,13 @@ watch(() => appState.statsOverlayPreferences, (next) => {
 
 // 折叠/展开、贴边、样式变化时同步原生窗口尺寸，使窗口矩形紧贴内容、不阻挡下方页面。
 watch(isCollapsed, () => syncNativeWindowSize());
+watch(isMorphing, () => syncNativeWindowSize());
 watch(snapEdge, () => syncNativeWindowSize());
 watch(style, () => syncNativeWindowSize());
 
 onMounted(() => {
   syncPreferences();
+  void setStatsOverlayPreferences({ visible: true });
   // 用已保存坐标初始化，防止首次轮询把窗口初始位置（可能是屏幕中心）误覆盖掉已存的正确坐标
   const saved = getStatsOverlayPreferences();
   if (typeof saved.x === "number") lastSavedX = saved.x;
@@ -284,6 +383,10 @@ onUnmounted(() => {
   if (timer) clearInterval(timer);
   if (updatedTimer) clearTimeout(updatedTimer);
   if (positionTimer) clearInterval(positionTimer);
+  if (hoverCollapseTimer) clearTimeout(hoverCollapseTimer);
+  clearMorphTimer();
+  hoverAnchorScreenX = null;
+  hoverAnchorScreenY = null;
   stopOrbCycle();
   stopPillCycle();
   window.removeEventListener("storage", onStorage);
@@ -299,6 +402,8 @@ onUnmounted(() => {
       { 
         'is-updated': updated,
         'is-collapsed': isCollapsed,
+        'is-morphing': isMorphing,
+        [`is-morphing-${morphDirection}`]: morphDirection,
         [`is-snap-${snapEdge}`]: snapEdge
       }
     ]" 
@@ -308,9 +413,9 @@ onUnmounted(() => {
   >
     <!-- 收缩时的胶囊：默认横向（图标+数据并排），贴左/右边时自动转竖向 -->
     <div
-      v-if="isCollapsed"
+      v-if="isCollapsed || isMorphing"
       class="float-pill"
-      :class="{ 'is-tick': updated, 'is-vertical': snapEdge === 'left' || snapEdge === 'right' }"
+      :class="{ 'is-vertical': snapEdge === 'left' || snapEdge === 'right' }"
       :style="{ '--wails-draggable': draggable }"
     >
       <div class="pill-icon">
@@ -345,15 +450,29 @@ onUnmounted(() => {
     <!-- 完整面板 -->
     <div v-show="!isCollapsed" class="overlay-content">
     <header class="overlay-header">
-      <span class="overlay-kicker">实时统计</span>
       <button
         class="snap-toggle"
         :class="{ 'is-off': !snapCollapse }"
         :title="snapCollapse ? '贴边自动收缩：开启（点击关闭）' : '贴边自动收缩：关闭（点击开启）'"
         style="--wails-draggable: no-drag"
         @click.stop="toggleSnapCollapse"
-      ></button>
-      <span class="status-dot" :class="{ 'is-loading': loading }" title="每 10 秒自动刷新"></span>
+      ><span class="icon-[mdi--dock-window]" aria-hidden="true"></span></button>
+      <button
+        type="button"
+        class="overlay-action"
+        title="隐藏浮窗"
+        aria-label="隐藏浮窗"
+        style="--wails-draggable: no-drag"
+        @click.stop="handleHideOverlay"
+      ><span class="icon-[mdi--eye-off-outline]" aria-hidden="true"></span></button>
+      <button
+        type="button"
+        class="overlay-action overlay-action--danger"
+        title="关闭应用"
+        aria-label="关闭应用"
+        style="--wails-draggable: no-drag"
+        @click.stop="handleCloseApplication"
+      ><span class="icon-[mdi--close]" aria-hidden="true"></span></button>
     </header>
 
     <section v-if="style === 'card'" class="card-panel" aria-label="实时统计指标">
@@ -411,17 +530,17 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.stats-overlay { --accent: #6ee7a5; --muted: #777; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; background: transparent; color: #e5e5e5; font-family: inherit; transition: all 0.3s ease; pointer-events: none; }
+.stats-overlay { --accent: #6ee7a5; --muted: #777; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; background: transparent; color: #e5e5e5; font-family: inherit; pointer-events: none; }
 .stats-overlay > * { pointer-events: auto; }
 
 /* 悬浮球样式 */
 /* 收缩态胶囊：左侧脉冲图标 + 右侧实时数据，一体紧凑。
    背景不透明 + 强边框/投影，确保在任意（含白色）背景下都可读。 */
-.float-pill { position: relative; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 15px; background: linear-gradient(135deg, rgba(26,32,31,.78), rgba(14,18,18,.82)); border: 1px solid rgba(110,231,165,.55); box-shadow: 0 4px 14px rgba(0,0,0,.5), 0 0 0 1px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.08); backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%); cursor: pointer; transition: border-color .3s ease, transform .25s ease; }
-.float-pill:hover { border-color: rgba(110,231,165,.85); transform: translateY(-1px); }
+.float-pill { position: relative; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 15px; background: linear-gradient(135deg, rgba(26,32,31,.78), rgba(14,18,18,.82)); border: 1px solid rgba(110,231,165,.55); box-shadow: 0 4px 14px rgba(0,0,0,.5), 0 0 0 1px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.08); backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%); cursor: pointer; transition: border-color .3s ease; }
+.float-pill:hover { border-color: rgba(110,231,165,.85); }
 /* 竖向贴边：贴左/右边时图标在上、轮换数值在下，竖排不旋转 */
 .float-pill.is-vertical { flex-direction: column; gap: 4px; width: 30px; height: auto; padding: 7px 0; border-radius: 15px; }
-.float-pill.is-vertical .pill-data { line-height: 1.2; animation: pillSwap .4s ease; }
+.float-pill.is-vertical .pill-data { line-height: 1.2; }
 .float-pill.is-vertical .pill-rate { font-size: 10px; }
 .float-pill.is-vertical .pill-tick { margin: 2px 0 0; }
 .pill-icon { position: relative; width: 16px; height: 16px; flex-shrink: 0; display: grid; place-items: center; }
@@ -435,7 +554,6 @@ onUnmounted(() => {
 .pill-tokens, .pill-turns { color: #d2d2d2; }
 .pill-tick { width: 5px; height: 5px; border-radius: 50%; background: #444; margin-left: 2px; flex-shrink: 0; transition: background .25s ease, box-shadow .25s ease; }
 .pill-tick.is-on { background: var(--accent); box-shadow: 0 0 6px rgba(110,231,165,.85); }
-.float-pill.is-tick { animation: pillTick .5s ease; }
 /* 锁定按钮：迷你锁形，融入胶囊；锁定态高亮 */
 .pill-lock { width: 14px; height: 14px; flex-shrink: 0; display: grid; place-items: center; padding: 0; border: none; background: none; cursor: pointer; opacity: .55; transition: opacity .2s ease; }
 .pill-lock:hover { opacity: 1; }
@@ -445,8 +563,22 @@ onUnmounted(() => {
 .pill-lock.is-locked .lock-body { stroke: var(--accent); }
 .pill-lock.is-locked { opacity: .95; }
 
-@keyframes pillTick { 0% { opacity: .55; } 50% { opacity: 1; } 100% { opacity: .92; } }
-@keyframes pillSwap { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pillMorphOut {
+  from { opacity: 1; scale: 1; }
+  to { opacity: 0; scale: 1; }
+}
+@keyframes pillMorphIn {
+  from { opacity: 0; scale: 1; }
+  to { opacity: 1; scale: 1; }
+}
+@keyframes overlayMorphIn {
+  from { opacity: 0; scale: .82; }
+  to { opacity: 1; scale: 1; }
+}
+@keyframes overlayMorphOut {
+  from { opacity: 1; scale: 1; }
+  to { opacity: 0; scale: .72; }
+}
 
 /* 完整面板容器 */
 .overlay-content { padding: 6px 8px; }
@@ -457,17 +589,50 @@ onUnmounted(() => {
 /* 收缩状态：容器收缩到悬浮球大小，避免大块背景 */
 .stats-overlay.is-collapsed { width: auto; height: auto; }
 
-/* 吸附边缘时的位置调整（胶囊贴边时轻微内收，鼠标悬停复位） */
-.stats-overlay.is-snap-left .float-pill { transform: translateX(-14px); }
-.stats-overlay.is-snap-right .float-pill { transform: translateX(14px); }
-.stats-overlay.is-snap-top .float-pill { transform: translateY(-14px); }
-.stats-overlay.is-snap-bottom .float-pill { transform: translateY(14px); }
+/* 吸附态只缩短远离边缘的轴，保持另一轴与恢复态一致。 */
+.stats-overlay.is-collapsed.is-snap-left,
+.stats-overlay.is-collapsed.is-snap-right,
+.stats-overlay.is-collapsed.is-snap-top,
+.stats-overlay.is-collapsed.is-snap-bottom { width: 100vw; height: 100vh; }
 
-/* 鼠标悬停时展开 */
-.stats-overlay.is-collapsed:hover .float-pill { transform: translate(0, 0); }
+/* 收缩完成后仍保持与形变阶段相同的边缘坐标，避免切回 flex 居中造成一帧闪烁。 */
+.stats-overlay.is-collapsed.is-snap-left .float-pill { position: absolute; left: 7px; top: 50%; transform: translateY(-50%); }
+.stats-overlay.is-collapsed.is-snap-right .float-pill { position: absolute; right: 7px; top: 50%; transform: translateY(-50%); }
+.stats-overlay.is-collapsed.is-snap-top .float-pill { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); }
+.stats-overlay.is-collapsed.is-snap-bottom .float-pill { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); }
 
-.overlay-header { height: 15px; display: flex; align-items: center; justify-content: space-between; padding: 0 2px; transition: opacity 0.3s ease; }
-.overlay-kicker { color: #858585; font-size: 10px; font-weight: 600; letter-spacing: .04em; }
+/* 展开态沿贴边方向保持锚定，面板只向屏幕内部扩展，鼠标始终落在面板内。 */
+.stats-overlay:not(.is-collapsed).is-snap-left { justify-content: flex-start; }
+.stats-overlay:not(.is-collapsed).is-snap-right { justify-content: flex-end; }
+.stats-overlay:not(.is-collapsed).is-snap-top { align-items: flex-start; }
+.stats-overlay:not(.is-collapsed).is-snap-bottom { align-items: flex-end; }
+
+/* 原生窗口换尺寸期间保持完整视口，让胶囊和面板在同一坐标系内形变。 */
+.stats-overlay.is-collapsed.is-morphing { width: 100vw; height: 100vh; }
+.stats-overlay.is-morphing .float-pill { position: absolute; z-index: 2; margin: 0; }
+.stats-overlay.is-morphing.is-snap-left .float-pill { left: 7px; top: 50%; transform: translateY(-50%); }
+.stats-overlay.is-morphing.is-snap-right .float-pill { right: 7px; top: 50%; transform: translateY(-50%); }
+.stats-overlay.is-morphing.is-snap-top .float-pill { left: 50%; top: 18px; transform: translateX(-50%); }
+.stats-overlay.is-morphing.is-snap-bottom .float-pill { left: 50%; bottom: 18px; transform: translateX(-50%); }
+.stats-overlay.is-morphing .overlay-content {
+  position: absolute;
+  z-index: 1;
+  margin: 0;
+  opacity: 0;
+  transform-origin: center;
+  will-change: opacity, scale;
+}
+.stats-overlay.is-morphing.is-snap-left .overlay-content { left: 0; top: 50%; transform: translateY(-50%); transform-origin: left center; }
+.stats-overlay.is-morphing.is-snap-right .overlay-content { right: 0; top: 50%; transform: translateY(-50%); transform-origin: right center; }
+.stats-overlay.is-morphing.is-snap-top .overlay-content { left: 50%; top: 0; transform: translateX(-50%); transform-origin: center top; }
+.stats-overlay.is-morphing.is-snap-bottom .overlay-content { left: 50%; bottom: 0; transform: translateX(-50%); transform-origin: center bottom; }
+.stats-overlay.is-morphing .float-pill { will-change: opacity, scale; }
+.stats-overlay.is-morphing-in .overlay-content { animation: overlayMorphIn .3s cubic-bezier(.22,.8,.24,1) both; }
+.stats-overlay.is-morphing-out .overlay-content { animation: overlayMorphOut .36s cubic-bezier(.22,.8,.24,1) both; }
+.stats-overlay.is-morphing-in .float-pill { animation: pillMorphOut .3s cubic-bezier(.22,.8,.24,1) .09s both; }
+.stats-overlay.is-morphing-out .float-pill { animation: pillMorphIn .36s cubic-bezier(.22,.8,.24,1) both; }
+
+.overlay-header { height: 15px; display: flex; align-items: center; justify-content: flex-end; gap: 3px; padding: 0 2px; transition: opacity 0.3s ease; }
 
 /* 贴标收缩开关按钮 */
 .snap-toggle { width: 10px; height: 10px; border: 1.5px solid rgba(110,231,165,.55); border-radius: 2px; background: none; cursor: pointer; padding: 0; flex-shrink: 0; position: relative; transition: border-color .2s, opacity .2s; }
@@ -476,9 +641,12 @@ onUnmounted(() => {
 .snap-toggle.is-off::after { background: rgba(100,100,100,.45); }
 .snap-toggle:hover { border-color: rgba(110,231,165,.9); opacity: 1; }
 .snap-toggle.is-off:hover { border-color: rgba(150,150,150,.7); }
+.snap-toggle > span { font-size: 9px; line-height: 1; color: rgba(190,220,205,.85); }
+.overlay-action { width: 13px; height: 13px; display: grid; place-items: center; border: 0; border-radius: 3px; padding: 0; color: rgba(180,180,180,.75); background: transparent; cursor: pointer; transition: color .2s ease, background .2s ease; }
+.overlay-action span { font-size: 12px; line-height: 1; }
+.overlay-action:hover { color: #fff; background: rgba(255,255,255,.12); }
+.overlay-action--danger:hover { color: #ffb4b4; background: rgba(180,60,60,.2); }
 
-.status-dot { width: 6px; height: 6px; border-radius: 50%; background: #10ad5d; animation: breathe 3.8s ease-in-out infinite; }
-.status-dot.is-loading { background: #fbbf24; }
 .card-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid rgba(110,231,165,.4); border-radius: 8px; background: linear-gradient(135deg, rgba(24,24,24,.74), rgba(16,16,16,.8)); backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%); transition: opacity 0.3s ease; box-shadow: 0 4px 16px rgba(0,0,0,.4), 0 0 0 1px rgba(0,0,0,.2); }
 .metric-card { min-width: 0; padding: 3px 6px; border: 1px solid rgba(110,231,165,.18); border-radius: 5px; background: rgba(36,36,36,.9); transition: border-color .3s ease, transform .3s ease; }
 .is-updated .metric-card { border-color: rgba(110,231,165,.55); }
@@ -546,7 +714,6 @@ onUnmounted(() => {
 .orb-dots { position: absolute; bottom: 22%; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; z-index: 1; }
 .orb-dots i { width: 4px; height: 4px; border-radius: 50%; background: rgba(141,169,164,.45); transition: background .3s ease, box-shadow .3s ease; }
 .orb-dots i.is-active { background: var(--accent); box-shadow: 0 0 5px rgba(110,231,165,.8); }
-@keyframes breathe { 0%,100% { opacity: .55; box-shadow: 0 0 0 transparent; } 50% { opacity: 1; box-shadow: 0 0 7px currentColor; } }
 @keyframes scan { from { transform: translateY(-12px); } to { transform: translateY(12px); } }
 @keyframes orbSatSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @keyframes orbPulse { 0%,100% { opacity: .55; transform: scale(.94); } 50% { opacity: .85; transform: scale(1.04); } }

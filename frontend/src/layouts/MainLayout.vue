@@ -11,9 +11,11 @@ import {
 import {
   appState,
   checkForAppUpdates,
+  getStatsOverlayPreferences,
   syncServiceState,
   updateViewState,
 } from "@/state/appState";
+import { closeApplication as closeApplicationNative } from "@/services/clientApi";
 import { isWindows } from "@/utils/isWindows";
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRoute } from "vue-router";
@@ -31,6 +33,7 @@ const titleParts = computed(() =>
     .filter(Boolean),
 );
 const directlyClose = computed(() => route.meta.directlyClose === true);
+const mainCloseAction = computed(() => appState.statsOverlayPreferences.closeAction === "quit" ? "quit" : "tray");
 const showFooter = computed(() => route.path === "/");
 const footerAuthorInfo = ref(null);
 const { locale } = useLocale();
@@ -112,14 +115,10 @@ async function closeWindow() {
     await runtimeWindow.Close();
     return;
   }
-  // const confirmed = await showModal({
-  //   title: "确认关闭",
-  //   content: "程序将会最小化到托盘，彻底关闭请在托盘退出，关闭后无法使用Cursor",
-  // });
-  // if (!confirmed) {
-  //   return;
-  // }
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  if (mainCloseAction.value === "quit") {
+    await closeApplicationNative();
+    return;
+  }
   await runtimeWindow.Hide();
 }
 
@@ -192,6 +191,7 @@ async function handleOpenGitHubRepo() {
 }
 
 onMounted(() => {
+  Object.assign(appState.statsOverlayPreferences, getStatsOverlayPreferences());
   void loadFooterAuthorInfo();
   void syncMaximiseState();
   proxyStateTimer = window.setInterval(() => {
@@ -280,7 +280,7 @@ onUnmounted(() => {
         <button
           type="button"
           aria-label="关闭窗口"
-          :title="directlyClose ? '关闭' : '隐藏到托盘'"
+          :title="directlyClose || mainCloseAction === 'quit' ? '关闭' : '隐藏到托盘'"
           class="flex h-[20px] w-[26px] cursor-pointer items-center justify-center rounded-full text-[#9a9a9a] transition-colors duration-150 hover:bg-[#b23b3b] hover:text-white"
           @click="closeWindow"
         >

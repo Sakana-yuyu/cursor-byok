@@ -23,7 +23,7 @@ import {
   GetModelEditorContext, OpenConfigWindow, OpenFooterAuthorHome, OpenHistoryWindow,
   OpenMetricsDetailWindow, OpenRequestMetricsWindow, OpenStatsOverlayWindow, UpdateStatsOverlayWindow,
   CloseStatsOverlayWindow, OpenModelConfigWindow, OpenModelEditorWindow, ExportLogs,
-  DetectCursorPath, LaunchCursor,
+  SetMainWindowCloseAction, CloseApplication, DetectCursorPath, LaunchCursor,
 } from "@bindings/cursor/internal/bridge/windowservice.js";
 import { isBrowserPreview, browserPreviewMockMetrics, browserPreviewMockProxyState } from "@/services/runtimeAdapter";
 
@@ -32,7 +32,7 @@ const desktopMethods = {
   StartProxy, StopProxy, OpenHistoryWindow, OpenConfigWindow, GetAppVersion, GetFooterAuthorInfo,
   CheckForUpdates, InstallReadyUpdate, OpenFooterAuthorHome, OpenModelConfigWindow, OpenModelEditorWindow,
   OpenMetricsDetailWindow, OpenRequestMetricsWindow, OpenStatsOverlayWindow, UpdateStatsOverlayWindow,
-  CloseStatsOverlayWindow, GetModelEditorContext, TestModelAdapter, GetModelAdapterTestResults, GetRecentRequestMetrics,
+  CloseStatsOverlayWindow, SetMainWindowCloseAction, CloseApplication, GetModelEditorContext, TestModelAdapter, GetModelAdapterTestResults, GetRecentRequestMetrics,
   GetMetricsRangeSummary, GetMetricsTokenBuckets, GetProviderSpendSummary, GetLocalCacheStats,
   GetRecentRequestMetricsCount, GetRecentRequestMetricsAbnormalCount,
   ResetUsageMetrics,
@@ -119,11 +119,19 @@ export function openFooterAuthorHome() { return desktopOrMock(undefined, "@bindi
 export function openModelConfig() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "OpenModelConfigWindow"); }
 export function openMetricsDetailWindow() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "OpenMetricsDetailWindow"); }
 export function openRequestMetricsWindow() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "OpenRequestMetricsWindow"); }
-export function openStatsOverlayWindow(x, y) { return desktopOrMock([x || 0, y || 0], "@bindings/cursor/internal/bridge/windowservice.js", "OpenStatsOverlayWindow"); }
+export function openStatsOverlayWindow(x, y, hasPosition = false) {
+  return desktopOrMock([x || 0, y || 0, Boolean(hasPosition)], "@bindings/cursor/internal/bridge/windowservice.js", "OpenStatsOverlayWindow", [x || 0, y || 0, Boolean(hasPosition)]);
+}
 export function updateStatsOverlayWindow(style, alwaysOnTop) {
   return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "UpdateStatsOverlayWindow", [style, alwaysOnTop]);
 }
 export function closeStatsOverlayWindow() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "CloseStatsOverlayWindow"); }
+export function setMainWindowCloseAction(action) {
+  return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "SetMainWindowCloseAction", [action]);
+}
+export function closeApplication() {
+  return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "CloseApplication");
+}
 export function openModelEditor(index, adapterJSON) {
   return desktopOrMock(
     () => OpenModelEditorWindow(index, adapterJSON),
@@ -252,8 +260,8 @@ export function savePromptInjectionSettings(config) { return desktopOrMock(confi
 export function refreshPromptInjection() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/proxyservice.js", "RefreshPromptInjection"); }
 export function refreshPromptInjectionCatalog() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/proxyservice.js", "RefreshPromptInjectionCatalog"); }
 
-export function detectCursorPath() { return desktopOrMock("", "@bindings/cursor/internal/bridge/windowservice.js", "DetectCursorPath"); }
-export function launchCursor(workspaceDir) { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "LaunchCursor", [workspaceDir || ""]); }
+export function detectCursorPath(manualPath = "") { return desktopOrMock("", "@bindings/cursor/internal/bridge/windowservice.js", "DetectCursorPath", [manualPath || ""]); }
+export function launchCursor(workspaceDir, manualPath = "") { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "LaunchCursor", [workspaceDir || "", manualPath || ""]); }
 
 // Skills & MCP 跨工具扫描：快照 / 重新扫描 / 保存开关配置。
 // 注意：这些 binding 由 wails 工具链自动生成；新增方法需在下次 wails dev/build 时重新生成 bindings。
