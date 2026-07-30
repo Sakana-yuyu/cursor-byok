@@ -47,6 +47,10 @@ type TaskRequest struct {
 	Readonly                     bool
 	RunInBackground              bool
 	ModelID                      string
+	ModelName                    string
+	Mode                         agentv1.AgentMode
+	ThinkingEffort               string
+	MaxMode                      bool
 	SubagentModelOverrides       map[string]runtimecore.SubagentModelOverrideSelection
 	SelectedSubagentModels       []*agentv1.RequestedModel
 	SelectedSubagentModelDetails []*agentv1.ModelDetails

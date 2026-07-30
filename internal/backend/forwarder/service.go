@@ -300,6 +300,7 @@ type Service struct {
 	appendSeq          *appendSequenceTracker
 	runQueue           *runQueue
 	cursorDelegation   *cursorDelegationBridge
+	localDelegation    *localDelegatedAgentAdapter
 }
 
 type agentModelMemory interface {
@@ -369,6 +370,7 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 		runQueue:           newRunQueue(),
 	}
 	service.cursorDelegation = newCursorDelegationBridge(service)
+	service.localDelegation = newLocalDelegatedAgentAdapter(service)
 	service.startHistoryMaintenance()
 	return service
 }
@@ -399,6 +401,7 @@ func newServiceWithDependencies(store *ConversationFileStore, projector *History
 		runQueue:           newRunQueue(),
 	}
 	service.cursorDelegation = newCursorDelegationBridge(service)
+	service.localDelegation = newLocalDelegatedAgentAdapter(service)
 	return service
 }
 
