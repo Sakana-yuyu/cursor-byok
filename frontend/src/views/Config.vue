@@ -17,6 +17,36 @@ import { autoMatchContextWindows } from "@/services/clientApi";
 import { onMounted, ref } from "vue";
 
 const routeModeOptions = ROUTE_MODE_OPTIONS;
+const delegationModeOptions = [
+  { value: "auto", label: "自动选择" },
+  { value: "cursor", label: "Cursor 子会话" },
+  { value: "local", label: "本地子代理" },
+];
+
+function addDelegationGroup() {
+  const index = appState.delegation.groups.length + 1;
+  appState.delegation.groups.push({
+    id: `delegation-group-${Date.now()}`,
+    name: `委派模型组 ${index}`,
+    enabled: true,
+    modelIDs: [],
+    defaultModelID: "",
+    executionMode: "auto",
+    toolPermissions: {},
+  });
+}
+
+function removeDelegationGroup(index) {
+  appState.delegation.groups.splice(index, 1);
+}
+
+function toggleDelegationModel(group, modelID, enabled) {
+  const next = new Set(group.modelIDs || []);
+  if (enabled) next.add(modelID);
+  else next.delete(modelID);
+  group.modelIDs = [...next];
+  if (!group.modelIDs.includes(group.defaultModelID)) group.defaultModelID = group.modelIDs[0] || "";
+}
 
 // 本地响应缓存配置：已纳入 appState 归一化白名单（normalizeConfig/buildConfigPayload），
 // 因此直接绑定 appState.localResponseCache，随 persistUserConfig 一并持久化，
@@ -181,6 +211,42 @@ onMounted(async () => {
         description="开启后，启动时与点击「一键配对上下文」时，自动按内置目录为模型配对正确的上下文窗口（目录命中则覆盖，目录未命中则探测供应商 /models 回填）。可避免误填过大窗口导致 context_length_exceeded。"
         @change="(value) => (appState.autoMatchContextWindow = value)"
       />
+    </Card>
+
+    <Card>
+      <div class="flex flex-col gap-3">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <h2 class="text-base font-medium text-white">Multitask 委派</h2>
+            <div class="text-sm text-[#a3a3a3]">使用已配置模型并行处理子任务，失败的子任务不会阻塞其他任务。</div>
+          </div>
+          <Switch label="启用" :enabled="appState.delegation.enabled" @change="(value) => (appState.delegation.enabled = value)" />
+        </div>
+        <label class="flex max-w-[220px] flex-col gap-1 text-xs text-[#a3a3a3]">
+          <span>最大并发数</span>
+          <input v-model.number="appState.delegation.maxConcurrency" type="number" min="1" class="h-9 rounded-[8px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-white outline-none focus:border-[#10AD5D]" />
+        </label>
+        <div class="flex items-center justify-between gap-3">
+          <span class="text-xs font-medium text-[#a3a3a3]">模型组</span>
+          <Button variant="default" @click="addDelegationGroup">新增模型组</Button>
+        </div>
+        <div v-if="!appState.delegation.groups.length" class="rounded-[8px] border border-dashed border-[#3f3f3f] px-3 py-4 text-xs text-[#858585]">尚未配置委派模型组，请先在模型配置中添加模型。</div>
+        <div v-for="(group, groupIndex) in appState.delegation.groups" :key="group.id" class="space-y-3 rounded-[8px] border border-white/10 bg-black/15 p-3">
+          <div class="flex items-center gap-2">
+            <input v-model="group.name" class="h-8 min-w-0 flex-1 rounded border border-white/10 bg-black/20 px-2 text-sm text-white" aria-label="委派模型组名称" />
+            <Switch compact label="启用" :enabled="group.enabled" @change="(value) => (group.enabled = value)" />
+            <button type="button" class="shrink-0 text-xs text-[#fca5a5] hover:text-white" title="删除模型组" @click="removeDelegationGroup(groupIndex)">删除</button>
+          </div>
+          <Select v-model="group.executionMode" :options="delegationModeOptions" aria-label="委派执行模式" />
+          <Select v-model="group.defaultModelID" :options="appState.modelAdapters.filter((item) => group.modelIDs.includes(item.id)).map((item) => ({ value: item.id, label: item.displayName || item.modelID }))" aria-label="默认委派模型" :disabled="!group.modelIDs.length" />
+          <div class="grid gap-2 sm:grid-cols-2">
+            <label v-for="adapter in appState.modelAdapters" :key="adapter.id" class="flex min-w-0 items-center gap-2 text-xs text-[#cfcfcf]">
+              <input type="checkbox" :checked="group.modelIDs.includes(adapter.id)" @change="(event) => toggleDelegationModel(group, adapter.id, event.target.checked)" />
+              <span class="min-w-0 truncate" :title="adapter.displayName || adapter.modelID">{{ adapter.displayName || adapter.modelID }}</span>
+            </label>
+          </div>
+        </div>
+      </div>
     </Card>
   </div>
 </template>
