@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
+	"fmt"
 	"io/fs"
 	"net"
 	goruntime "runtime"
@@ -548,10 +549,9 @@ func startTrayStatsRotation(app *application.App, systray *application.SystemTra
 			// 更新 Tooltip 显示所有详情
 			tooltip := formatTooltip(summary, estimatedCost, locale)
 			
-			app.DispatchSync(func() {
-				systray.SetLabel(label)
-				systray.SetTooltip(tooltip)
-			})
+			// 直接更新托盘（系统托盘操作是线程安全的）
+			systray.SetLabel(label)
+			systray.SetTooltip(tooltip)
 
 			displayIndex++
 		}
@@ -617,7 +617,7 @@ func formatFloat(value float64, precision int) string {
 	default:
 		format = "%.2f"
 	}
-	result := u.Sprintf(format, value)
+	result := fmt.Sprintf(format, value)
 	// 移除尾随的零和小数点
 	if precision > 0 && strings.Contains(result, ".") {
 		result = strings.TrimRight(result, "0")
@@ -638,18 +638,18 @@ func formatTooltip(summary bridge.HomeMetricsSummary, cost float64, locale strin
 	}
 
 	if locale == "en-US" {
-		return u.Sprintf(
+		return fmt.Sprintf(
 			"═════════════════\n💰 Cost: $%.2f\n📊 Cache Hit: %s\n🔢 Tokens: %s\n🔄 Turns: %d\n═════════════════\nClick to view details",
 			cost, hitRate, tokensStr, summary.TurnsTotal,
 		)
 	}
 	if locale == "ja-JP" {
-		return u.Sprintf(
+		return fmt.Sprintf(
 			"═════════════════\n💰 コスト: $%.2f\n📊 キャッシュ: %s\n🔢 トークン: %s\n🔄 ターン: %d\n═════════════════\nクリックして詳細を表示",
 			cost, hitRate, tokensStr, summary.TurnsTotal,
 		)
 	}
-	return u.Sprintf(
+	return fmt.Sprintf(
 		"═════════════════\n💰 消费: $%.2f\n📊 缓存命中: %s\n🔢 Token: %s\n🔄 轮次: %d\n═════════════════\n点击查看详情",
 		cost, hitRate, tokensStr, summary.TurnsTotal,
 	)
