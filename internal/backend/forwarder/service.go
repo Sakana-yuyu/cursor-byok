@@ -24,6 +24,7 @@ import (
 	runtimecore "cursor/internal/backend/agent/core"
 	modeladapter "cursor/internal/backend/agent/model"
 	protocol "cursor/internal/backend/agent/protocol"
+	"cursor/internal/backend/delegation"
 	"cursor/internal/modelcontext"
 	"cursor/internal/promptinject"
 )
@@ -278,29 +279,31 @@ func subagentModelOverrideSummaries(overrides map[string]runtimecore.SubagentMod
 }
 
 type Service struct {
-	store              *ConversationFileStore
-	usageStore         *UsageFileStore
-	codebaseIndexStore *CodebaseIndexStore
-	docsIndexStore     *DocsIndexStore
-	rules              *UserRuleStore
-	projector          *HistoryProjector
-	compiler           PromptCompiler
-	promptInjection    *promptinject.Manager
-	provider           ProviderGateway
-	resolver           modeladapter.ChannelResolver
-	modelMemory        agentModelMemory
-	maxTokensPersister maxTokensConfigPersister
-	scanConfig         skillMCPScanConfigProvider
-	mcpRuntime         *MCPRuntimeRegistry
-	broker             *StreamBroker
-	recorder           *artifactRecorder
-	debug              *debugRecorder
-	execBridge         execbridge.ExecBridge
-	interactionBridge  interactionbridge.InteractionBridge
-	appendSeq          *appendSequenceTracker
-	runQueue           *runQueue
-	cursorDelegation   *cursorDelegationBridge
-	localDelegation    *localDelegatedAgentAdapter
+	store               *ConversationFileStore
+	usageStore          *UsageFileStore
+	codebaseIndexStore  *CodebaseIndexStore
+	docsIndexStore      *DocsIndexStore
+	rules               *UserRuleStore
+	projector           *HistoryProjector
+	compiler            PromptCompiler
+	promptInjection     *promptinject.Manager
+	provider            ProviderGateway
+	resolver            modeladapter.ChannelResolver
+	modelMemory         agentModelMemory
+	maxTokensPersister  maxTokensConfigPersister
+	scanConfig          skillMCPScanConfigProvider
+	mcpRuntime          *MCPRuntimeRegistry
+	broker              *StreamBroker
+	recorder            *artifactRecorder
+	debug               *debugRecorder
+	execBridge          execbridge.ExecBridge
+	interactionBridge   interactionbridge.InteractionBridge
+	appendSeq           *appendSequenceTracker
+	runQueue            *runQueue
+	cursorDelegation    *cursorDelegationBridge
+	localDelegation     *localDelegatedAgentAdapter
+	delegationConfig    delegation.RuntimeConfigProvider
+	multitaskDelegation *multitaskDelegationCoordinator
 }
 
 type agentModelMemory interface {
@@ -345,6 +348,10 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 	if candidate, ok := resolver.(skillMCPScanConfigProvider); ok {
 		scanConfig = candidate
 	}
+	var delegationConfig delegation.RuntimeConfigProvider
+	if candidate, ok := resolver.(delegation.RuntimeConfigProvider); ok {
+		delegationConfig = candidate
+	}
 	debug := newDebugRecorder(historyRoot, broker, debugConfig)
 	service := &Service{
 		store:              store,
@@ -360,6 +367,7 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 		modelMemory:        modelMemory,
 		maxTokensPersister: maxTokensPersister,
 		scanConfig:         scanConfig,
+		delegationConfig:   delegationConfig,
 		mcpRuntime:         SharedMCPRuntimeRegistry(),
 		broker:             broker,
 		recorder:           newArtifactRecorder(store, broker, debug),
@@ -371,6 +379,7 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 	}
 	service.cursorDelegation = newCursorDelegationBridge(service)
 	service.localDelegation = newLocalDelegatedAgentAdapter(service)
+	service.multitaskDelegation = newMultitaskDelegationCoordinator(service, delegationConfig)
 	service.startHistoryMaintenance()
 	return service
 }
@@ -402,6 +411,7 @@ func newServiceWithDependencies(store *ConversationFileStore, projector *History
 	}
 	service.cursorDelegation = newCursorDelegationBridge(service)
 	service.localDelegation = newLocalDelegatedAgentAdapter(service)
+	service.multitaskDelegation = newMultitaskDelegationCoordinator(service, nil)
 	return service
 }
 
@@ -961,6 +971,9 @@ func (service *Service) Shutdown(ctx context.Context) error {
 	if service.cursorDelegation != nil {
 		defer service.cursorDelegation.Close()
 	}
+	if service.multitaskDelegation != nil {
+		defer service.multitaskDelegation.Close()
+	}
 	if service.broker == nil {
 		return nil
 	}
@@ -1066,6 +1079,9 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	if !ok || stream == nil {
 		return fmt.Errorf("request is not active: %s", intent.RequestID)
 	}
+	if service.multitaskDelegation != nil {
+		service.multitaskDelegation.CancelStream(stream)
+	}
 	hasCheckpoint := checkpointConversationInitialized(stream)
 	if hasCheckpoint {
 		cancelReason := firstNonEmpty(intent.CancelReason, "user aborted")
@@ -1087,6 +1103,9 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	}
 	stream.mu.Unlock()
 	for _, pending := range pendingExecs {
+		if strings.TrimSpace(pending.ExecKind) == "delegation_aggregate" {
+			continue
+		}
 		_ = service.broker.Publish(intent.RequestID, StreamEvent{
 			Message: buildExecAbortMessage(pending),
 		})
@@ -2056,6 +2075,15 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 		return nil
 	}
 	if isExecInvocation {
+		if trimmedToolName == "Task" {
+			started, err := service.tryStartDelegatedTask(stream, invocation)
+			if err != nil {
+				return service.completePreDispatchToolError(stream, invocation, startedToolCall, startedToolCall != nil, startedEmitted, err)
+			}
+			if started {
+				return nil
+			}
+		}
 		serverMessage, pendingExec, err := service.execBridge.OpenExec(buildExecOpenContextForStream(stream, subagentOverrides), invocation)
 		if err != nil {
 			return service.completePreDispatchToolError(stream, invocation, startedToolCall, startedToolCall != nil, startedEmitted, err)
@@ -3807,6 +3835,8 @@ func deriveToolNameFromPendingExec(pending runtimecore.PendingExec) string {
 	case "force_background_shell":
 		return "ForceBackgroundShell"
 	case "subagent":
+		return "Task"
+	case "delegation_aggregate":
 		return "Task"
 	default:
 		return ""

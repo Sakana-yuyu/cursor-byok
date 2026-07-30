@@ -12,8 +12,7 @@ import (
 )
 
 type cursorDelegationBridge struct {
-	scheduler *delegation.Scheduler
-	cursor    *delegation.CursorAdapter
+	cursor *delegation.CursorAdapter
 }
 
 func newCursorDelegationBridge(service *Service) *cursorDelegationBridge {
@@ -24,34 +23,11 @@ func newCursorDelegationBridge(service *Service) *cursorDelegationBridge {
 		return service.broker.Publish(strings.TrimSpace(requestID), StreamEvent{Message: message})
 	})
 	return &cursorDelegationBridge{
-		scheduler: delegation.NewScheduler(delegation.Config{}, cursor.Execute),
-		cursor:    cursor,
+		cursor: cursor,
 	}
 }
 
 func (bridge *cursorDelegationBridge) Close() {
-	if bridge == nil || bridge.scheduler == nil {
-		return
-	}
-	bridge.scheduler.Close()
-}
-
-func (bridge *cursorDelegationBridge) Submit(ctx context.Context, request delegation.TaskRequest) (string, error) {
-	if bridge == nil || bridge.scheduler == nil {
-		return "", context.Canceled
-	}
-	taskID, err := bridge.scheduler.Submit(request)
-	if err != nil {
-		return "", err
-	}
-	if ctx == nil {
-		return taskID, nil
-	}
-	go func(taskID string) {
-		<-ctx.Done()
-		_ = bridge.scheduler.Cancel(taskID)
-	}(taskID)
-	return taskID, nil
 }
 
 func (bridge *cursorDelegationBridge) ConsumeExecMessage(message *agentv1.ExecClientMessage) bool {

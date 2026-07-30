@@ -20,6 +20,7 @@ const (
 	projectedWebFetchReplayLimit   = 32 * projectedReplayKiB
 	projectedWebSearchReplayLimit  = 16 * projectedReplayKiB
 	projectedMcpReplayLimit        = 32 * projectedReplayKiB
+	projectedTaskReplayLimit       = 64 * projectedReplayKiB
 
 	// 陈旧工具结果激进截断阈值（移植自 Reasonix 的「cache-first context maintenance」）。
 	// 投影层不改动历史，只让「陈旧且巨大」的工具结果在模型视图里比当前更短，从而减缓上下文增长、
@@ -107,6 +108,8 @@ func projectedToolReplayLimit(toolName string) (int, bool) {
 		return projectedWebSearchReplayLimit, true
 	case "CallMcpTool", "FetchMcpResource", "ListMcpResources":
 		return projectedMcpReplayLimit, true
+	case "Task":
+		return projectedTaskReplayLimit, true
 	default:
 		return 0, false
 	}

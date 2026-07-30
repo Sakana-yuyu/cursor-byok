@@ -353,7 +353,14 @@ func (service *Service) executeLocalDelegatedTool(ctx context.Context, request d
 		result, err := service.mcpRuntime.ReadResource(ctx, strings.TrimSpace(args.Server), strings.TrimSpace(args.URI))
 		return marshalDelegatedToolResult(result, err)
 	default:
-		return "", fmt.Errorf("tool %q requires the Cursor delegated exec bridge", strings.TrimSpace(invocation.ToolName))
+		if service.cursorDelegation == nil || service.cursorDelegation.cursor == nil {
+			return "", fmt.Errorf("tool %q requires the Cursor delegated exec bridge", strings.TrimSpace(invocation.ToolName))
+		}
+		result := service.cursorDelegation.cursor.ExecuteTool(ctx, request, invocation)
+		if result.Error != nil {
+			return result.Output, result.Error
+		}
+		return result.Output, nil
 	}
 }
 

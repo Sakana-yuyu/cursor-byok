@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"cursor/internal/backend/delegation"
 	legacyruntime "cursor/internal/runtime"
 )
 
@@ -90,6 +91,45 @@ func (manager *Manager) Save(ctx context.Context, cfg Config) (Config, error) {
 
 func (manager *Manager) LastAgentModelHash() string {
 	return strings.TrimSpace(manager.Current().LastAgentModelHash)
+}
+
+func (manager *Manager) DelegationRuntimeConfig() delegation.RuntimeConfig {
+	config := manager.Current()
+	current := config.Delegation
+	result := delegation.RuntimeConfig{
+		Enabled:        current.Enabled,
+		MaxConcurrency: current.MaxConcurrency,
+		Groups:         make([]delegation.RuntimeModelGroup, 0, len(current.Groups)),
+		ModelNames:     make(map[string]string),
+	}
+	for _, adapter := range config.ModelAdapters {
+		adapterID := strings.TrimSpace(adapter.ID)
+		if adapterID == "" {
+			continue
+		}
+		result.ModelNames[adapterID] = firstNonEmptyConfigValue(adapter.DisplayName, adapter.ModelID, adapterID)
+	}
+	for _, group := range current.Groups {
+		result.Groups = append(result.Groups, delegation.RuntimeModelGroup{
+			ID:              strings.TrimSpace(group.ID),
+			Name:            strings.TrimSpace(group.Name),
+			Enabled:         group.Enabled,
+			ModelIDs:        append([]string(nil), group.ModelIDs...),
+			DefaultModelID:  strings.TrimSpace(group.DefaultModelID),
+			ExecutionMode:   delegation.NormalizeExecutionMode(group.ExecutionMode),
+			ToolPermissions: cloneBoolMap(group.ToolPermissions),
+		})
+	}
+	return result
+}
+
+func firstNonEmptyConfigValue(values ...string) string {
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 // SkillMCPScanEnabled 返回 Skills/MCP 扫描总开关（满足 forwarder.scanConfig 接口）。

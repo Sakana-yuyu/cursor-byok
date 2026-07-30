@@ -19,6 +19,7 @@ import (
 const (
 	DefaultMaxConcurrency = 4
 	DefaultRetentionLimit = 256
+	DefaultRetentionAge   = 10 * time.Minute
 )
 
 type TaskStatus string
@@ -93,6 +94,7 @@ type Scheduler struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
 	retentionLimit int
+	retentionAge   time.Duration
 
 	mu               sync.RWMutex
 	tasks            map[string]*taskState
@@ -116,6 +118,7 @@ type Config struct {
 	MaxConcurrency int
 	EventBuffer    int
 	RetentionLimit int
+	RetentionAge   time.Duration
 }
 
 func NewScheduler(cfg Config, executor Executor) *Scheduler {
@@ -131,6 +134,10 @@ func NewScheduler(cfg Config, executor Executor) *Scheduler {
 	if retentionLimit <= 0 {
 		retentionLimit = DefaultRetentionLimit
 	}
+	retentionAge := cfg.RetentionAge
+	if retentionAge <= 0 {
+		retentionAge = DefaultRetentionAge
+	}
 	if eventBuffer < retentionLimit {
 		eventBuffer = retentionLimit
 	}
@@ -142,6 +149,7 @@ func NewScheduler(cfg Config, executor Executor) *Scheduler {
 		ctx:              ctx,
 		cancel:           cancel,
 		retentionLimit:   retentionLimit,
+		retentionAge:     retentionAge,
 		tasks:            make(map[string]*taskState),
 		activeExecutions: make(map[string]struct{}),
 		events:           make(chan TaskSnapshot, eventBuffer),
@@ -349,6 +357,19 @@ func (s *Scheduler) Events() <-chan TaskSnapshot {
 	return s.events
 }
 
+// EnsureRetentionLimit only raises the retained task ceiling. Active aggregates
+// can therefore keep every worker snapshot until fan-in has consumed it.
+func (s *Scheduler) EnsureRetentionLimit(limit int) {
+	if s == nil || limit <= 0 {
+		return
+	}
+	s.mu.Lock()
+	if limit > s.retentionLimit {
+		s.retentionLimit = limit
+	}
+	s.mu.Unlock()
+}
+
 func (s *Scheduler) Close() {
 	if s == nil {
 		return
@@ -416,11 +437,12 @@ func (s *Scheduler) finishFromContext(state *taskState, cause error) {
 }
 
 func (s *Scheduler) pruneTerminalTasksLocked() {
+	cutoff := time.Now().UTC().Add(-s.retentionAge)
 	for len(s.tasks) > s.retentionLimit {
 		var oldestID string
 		var oldestTime time.Time
 		for taskID, state := range s.tasks {
-			if !state.runnerDone || !isTerminalStatus(state.snapshot.Status) {
+			if !state.runnerDone || !isTerminalStatus(state.snapshot.Status) || state.snapshot.FinishedAt.After(cutoff) {
 				continue
 			}
 			if oldestID == "" || state.snapshot.FinishedAt.Before(oldestTime) {
