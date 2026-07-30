@@ -222,8 +222,8 @@ func (s *SkillStore) BuildAgentSkillsPromptSection() (string, int, error) {
 			desc = sk.Name
 		}
 		lines = append(lines,
-			fmt.Sprintf(`<agent_skill fullPath=%q>%s</agent_skill>`,
-				sk.FullPath, escapeSharedRulePromptText(desc)),
+			fmt.Sprintf(`<agent_skill fullPath="%s">%s</agent_skill>`,
+				escapeSharedRulePromptText(sk.FullPath), escapeSharedRulePromptText(desc)),
 		)
 	}
 	lines = append(lines, `</agent_skills>`)
@@ -285,8 +285,8 @@ func buildAgentSkillsSectionFromList(skills []GlobalSkill) (string, int) {
 			desc = sk.Name
 		}
 		lines = append(lines,
-			fmt.Sprintf(`<agent_skill fullPath=%q>%s</agent_skill>`,
-				sk.FullPath, escapeSharedRulePromptText(desc)),
+			fmt.Sprintf(`<agent_skill fullPath="%s">%s</agent_skill>`,
+				escapeSharedRulePromptText(sk.FullPath), escapeSharedRulePromptText(desc)),
 		)
 	}
 	lines = append(lines, `</agent_skills>`)
