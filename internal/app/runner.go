@@ -312,7 +312,8 @@ func Run(resources EmbeddedResources) error {
 		showMainWindow()
 	})
 	showStatsItem := menu.Add(i18n.T(i18n.DefaultLocale, "tray.show_stats")).OnClick(func(ctx *application.Context) {
-		windowService.OpenStatsOverlayWindow(0, 0, false)
+		// 由主窗口通过现有偏好状态恢复坐标、样式和置顶设置；无有效坐标时沿用默认定位。
+		window.ExecJS(`window.dispatchEvent(new Event("stats-overlay-show-requested"));`)
 	})
 	hideItem := menu.Add(i18n.T(i18n.DefaultLocale, "tray.hide")).OnClick(func(ctx *application.Context) {
 		window.Hide()
@@ -481,15 +482,15 @@ func priceRatesFromAdapters(adapters []serverconfig.ModelAdapterConfig) []histor
 			continue
 		}
 		rates = append(rates, historymetrics.PriceRate{
-			Model:     adapter.ModelID,
-			Provider:  adapter.Type,
-			BaseURL:   adapter.BaseURL,
-			Input:     builtin.Input,
-			Output:    builtin.Output,
-			CacheRead: builtin.CacheRead,
+			Model:      adapter.ModelID,
+			Provider:   adapter.Type,
+			BaseURL:    adapter.BaseURL,
+			Input:      builtin.Input,
+			Output:     builtin.Output,
+			CacheRead:  builtin.CacheRead,
 			CacheWrite: builtin.CacheWrite,
-			Currency:  "USD",
-			Known:     true, // 内置价视为已知，让花费估算能显示数值
+			Currency:   "USD",
+			Known:      true, // 内置价视为已知，让花费估算能显示数值
 		})
 	}
 	return rates
