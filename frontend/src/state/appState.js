@@ -903,6 +903,28 @@ function normalizeDelegation(source) {
   };
 }
 
+function normalizeDelegationForAdapters(source, adapters) {
+  const delegation = normalizeDelegation(source);
+  const availableModelIDs = new Set(
+    asArray(adapters).map((adapter) => asString(adapter?.id)).filter(Boolean),
+  );
+  return {
+    ...delegation,
+    groups: delegation.groups.map((group) => {
+      const modelIDs = group.modelIDs.filter((modelID) => availableModelIDs.has(modelID));
+      const defaultModelID = modelIDs.includes(group.defaultModelID)
+        ? group.defaultModelID
+        : (modelIDs[0] || "");
+      return {
+        ...group,
+        enabled: modelIDs.length > 0 && group.enabled,
+        modelIDs,
+        defaultModelID,
+      };
+    }),
+  };
+}
+
 function normalizeConfig(source) {
   const raw = source && typeof source === "object" ? source : {};
   const routing = raw.routing && typeof raw.routing === "object" ? raw.routing : {};
@@ -959,6 +981,7 @@ function applyHomeMetrics(raw) {
 
 function buildConfigPayload(source = appState) {
   const normalized = normalizeConfig(source);
+  const delegation = normalizeDelegationForAdapters(normalized.delegation, normalized.modelAdapters);
   return {
     log: normalized.log,
     providerStreamIdleTimeout: normalized.providerStreamIdleTimeout,
@@ -967,11 +990,11 @@ function buildConfigPayload(source = appState) {
     backendListenAddr: normalized.backendListenAddr,
     proxyListenAddr: normalized.proxyListenAddr,
     // balanceQueryHeadersJSON 仅前端编辑态使用，落盘只保留 map 形态的 balanceQueryHeaders。
-    modelAdapters: normalized.modelAdapters.map(({ id, balanceQueryHeadersJSON, ...adapter }) => adapter),
+    modelAdapters: normalized.modelAdapters.map(({ balanceQueryHeadersJSON, ...adapter }) => adapter),
     routing: normalized.routing,
     homeMetrics: normalized.homeMetrics,
     localResponseCache: normalized.localResponseCache,
-    delegation: normalized.delegation,
+    delegation,
     lastAgentModelHash: normalized.lastAgentModelHash,
   };
 }

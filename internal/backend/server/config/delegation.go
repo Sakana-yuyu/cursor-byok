@@ -31,14 +31,15 @@ type DelegationConfig struct {
 	Groups         []DelegationModelGroup `json:"groups,omitempty" yaml:"groups,omitempty"`
 }
 
-func normalizeDelegationConfig(input DelegationConfig) DelegationConfig {
-	enabled := input.Enabled
-	// 旧配置没有 delegation 字段时使用默认开启；显式配置了任意委派字段则尊重用户值。
-	if !input.Enabled && input.MaxConcurrency == 0 && len(input.Groups) == 0 {
-		enabled = true
+func normalizeDelegationConfig(input DelegationConfig, adapters []ModelAdapterConfig) DelegationConfig {
+	availableModels := make(map[string]struct{}, len(adapters))
+	for _, adapter := range adapters {
+		if adapterID := strings.TrimSpace(adapter.ID); adapterID != "" {
+			availableModels[adapterID] = struct{}{}
+		}
 	}
 	output := DelegationConfig{
-		Enabled:        enabled,
+		Enabled:        input.Enabled,
 		MaxConcurrency: input.MaxConcurrency,
 		Groups:         make([]DelegationModelGroup, 0, len(input.Groups)),
 	}
@@ -60,15 +61,32 @@ func normalizeDelegationConfig(input DelegationConfig) DelegationConfig {
 			group.Name = group.ID
 		}
 		group.ExecutionMode = normalizeDelegationMode(group.ExecutionMode)
-		group.ModelIDs = normalizeStringList(group.ModelIDs)
+		group.ModelIDs = filterAvailableModelIDs(group.ModelIDs, availableModels)
 		group.DefaultModelID = strings.TrimSpace(group.DefaultModelID)
 		if group.DefaultModelID != "" && !containsString(group.ModelIDs, group.DefaultModelID) {
 			group.DefaultModelID = ""
+		}
+		if group.DefaultModelID == "" && len(group.ModelIDs) > 0 {
+			group.DefaultModelID = group.ModelIDs[0]
+		}
+		if len(group.ModelIDs) == 0 {
+			group.Enabled = false
 		}
 		group.ToolPermissions = cloneBoolMap(group.ToolPermissions)
 		output.Groups = append(output.Groups, group)
 	}
 	return output
+}
+
+func filterAvailableModelIDs(values []string, available map[string]struct{}) []string {
+	normalized := normalizeStringList(values)
+	result := make([]string, 0, len(normalized))
+	for _, value := range normalized {
+		if _, exists := available[value]; exists {
+			result = append(result, value)
+		}
+	}
+	return result
 }
 
 func normalizeDelegationMode(value string) string {

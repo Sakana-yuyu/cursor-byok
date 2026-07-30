@@ -42,7 +42,7 @@ const (
 type ModelPricing = legacyruntime.ModelPricing
 
 type ModelAdapterConfig struct {
-	ID          string `json:"id,omitempty" yaml:"-"`
+	ID          string `json:"id,omitempty" yaml:"id,omitempty"`
 	DisplayName string `json:"displayName" yaml:"displayName"`
 	GroupName   string `json:"groupName,omitempty" yaml:"groupName,omitempty"`
 	Type        string `json:"type" yaml:"type"`
@@ -182,7 +182,6 @@ func NormalizeConfig(input Config) (Config, error) {
 	output.HomeMetrics.IncludeCacheWriteInHitRate = input.HomeMetrics.IncludeCacheWriteInHitRate
 	output.LocalResponseCache = normalizeLocalResponseCache(input.LocalResponseCache)
 	output.SkillMCPScan = input.SkillMCPScan
-	output.Delegation = normalizeDelegationConfig(input.Delegation)
 	output.LastAgentModelHash = strings.TrimSpace(input.LastAgentModelHash)
 	output.Routing.Mode = normalizeRoutingMode(input.Routing.Mode)
 	if output.Routing.Mode == "" {
@@ -193,6 +192,7 @@ func NormalizeConfig(input Config) (Config, error) {
 		return Config{}, err
 	}
 	output.ModelAdapters = adapters
+	output.Delegation = normalizeDelegationConfig(input.Delegation, adapters)
 	return output, nil
 }
 
@@ -202,7 +202,9 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 	}
 
 	normalized := make([]ModelAdapterConfig, 0, len(input))
-	channelIndexByID := make(map[string]int, len(input))
+	channelIndexByIdentity := make(map[string]int, len(input))
+	identityByAdapterID := make(map[string]string, len(input))
+	explicitIDByIdentity := make(map[string]string, len(input))
 	for _, item := range input {
 		baseURL, err := modelchannel.NormalizeBaseURL(item.BaseURL)
 		if err != nil {
@@ -293,9 +295,28 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 		case next.Type == "anthropic" && next.AnthropicThinkingEffort == "":
 			return nil, i18n.NewError("error.model_adapter.thinking_effort_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 anthropicThinkingEffort 仅支持 low、medium、high、xhigh、max")
 		}
-		next.ID = modelchannel.BuildChannelID(next.BaseURL, next.ModelID, next.APIKey, next.DisplayName, next.OpenAIEndpoint)
-		if existingIndex, exists := channelIndexByID[next.ID]; exists {
+		identity := modelchannel.BuildChannelID(next.BaseURL, next.ModelID, next.APIKey, next.DisplayName, next.OpenAIEndpoint)
+		explicitID := strings.TrimSpace(item.ID)
+		next.ID = explicitID
+		if next.ID == "" {
+			next.ID = identity
+		}
+		if ownerIdentity, exists := identityByAdapterID[next.ID]; exists && ownerIdentity != identity {
+			return nil, i18n.NewError("error.model_adapter.id_duplicate", i18n.CodeInvalidModelAdapter, "模型适配器 id 不能被不同模型配置重复使用")
+		}
+		if existingIndex, exists := channelIndexByIdentity[identity]; exists {
 			existing := normalized[existingIndex]
+			if explicitID != "" {
+				if previousExplicitID := explicitIDByIdentity[identity]; previousExplicitID != "" && previousExplicitID != explicitID {
+					return nil, i18n.NewError("error.model_adapter.id_conflict", i18n.CodeInvalidModelAdapter, "相同模型连接不能配置不同的持久化 id")
+				}
+				if existing.ID != explicitID {
+					delete(identityByAdapterID, existing.ID)
+					existing.ID = explicitID
+					identityByAdapterID[explicitID] = identity
+					explicitIDByIdentity[identity] = explicitID
+				}
+			}
 			if existing.GroupName == "" {
 				existing.GroupName = next.GroupName
 			}
@@ -335,7 +356,11 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			normalized[existingIndex] = existing
 			continue
 		}
-		channelIndexByID[next.ID] = len(normalized)
+		channelIndexByIdentity[identity] = len(normalized)
+		identityByAdapterID[next.ID] = identity
+		if explicitID != "" {
+			explicitIDByIdentity[identity] = explicitID
+		}
 		normalized = append(normalized, next)
 	}
 	return normalized, nil

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 
@@ -84,6 +85,14 @@ func (store *Store) Load(_ context.Context) (Config, error) {
 	if err := yaml.Unmarshal(data, &current); err != nil {
 		return DefaultConfig(), fmt.Errorf("解析用户配置失败: %w", err)
 	}
+	hasDelegation := yamlHasKey(data, "delegation")
+	hasDelegationEnabled := yamlHasNestedKey(data, "delegation", "enabled")
+	if !hasDelegation || !hasDelegationEnabled {
+		current.Delegation.Enabled = DefaultConfig().Delegation.Enabled
+	}
+	if hasDelegationEnabled && !yamlHasNestedKey(data, "delegation", "maxConcurrency") {
+		current.Delegation.MaxConcurrency = DefaultDelegationMaxConcurrency
+	}
 	normalized, err := NormalizeConfig(current)
 	if err != nil {
 		return DefaultConfig(), err
@@ -148,18 +157,56 @@ func shouldPersistNormalizedConfig(raw []byte, current Config, normalized Config
 	if current.TurnStaleTimeout != normalized.TurnStaleTimeout && yamlHasKey(raw, "turnStaleTimeout") {
 		return true
 	}
+	if modelAdapterIDsChanged(current.ModelAdapters, normalized.ModelAdapters) {
+		return true
+	}
+	if !reflect.DeepEqual(current.Delegation, normalized.Delegation) {
+		return true
+	}
+	return false
+}
+
+func modelAdapterIDsChanged(current []ModelAdapterConfig, normalized []ModelAdapterConfig) bool {
+	if len(current) != len(normalized) {
+		return true
+	}
+	for index := range current {
+		if strings.TrimSpace(current[index].ID) != strings.TrimSpace(normalized[index].ID) {
+			return true
+		}
+	}
 	return false
 }
 
 func yamlHasKey(raw []byte, key string) bool {
+	return yamlMappingHasKey(yamlRootMapping(raw), key)
+}
+
+func yamlHasNestedKey(raw []byte, parent string, key string) bool {
+	mapping := yamlRootMapping(raw)
+	for index := 0; index+1 < len(mapping.Content); index += 2 {
+		if mapping.Content[index].Value == parent {
+			return yamlMappingHasKey(mapping.Content[index+1], key)
+		}
+	}
+	return false
+}
+
+func yamlRootMapping(raw []byte) *yaml.Node {
 	var root yaml.Node
 	if err := yaml.Unmarshal(raw, &root); err != nil {
-		return false
+		return &yaml.Node{}
 	}
 	if len(root.Content) == 0 || root.Content[0].Kind != yaml.MappingNode {
+		return &yaml.Node{}
+	}
+	return root.Content[0]
+}
+
+func yamlMappingHasKey(mapping *yaml.Node, key string) bool {
+	if mapping == nil || mapping.Kind != yaml.MappingNode {
 		return false
 	}
-	mapping := root.Content[0]
 	for index := 0; index+1 < len(mapping.Content); index += 2 {
 		if mapping.Content[index].Value == key {
 			return true
