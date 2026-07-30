@@ -48,14 +48,44 @@ const mcpStatusLabels = {
   disconnected: "未连接",
   connecting: "连接中...",
   connected: "已连接",
+  degraded: "已降级",
   error: "错误",
+};
+
+const mcpCapabilityLabels = {
+  disconnected: "未检查",
+  connecting: "检查中",
+  connected: "正常",
+  degraded: "降级",
+  error: "异常",
 };
 
 function statusClass(status) {
   if (status === "completed" || status === "connected") return "text-[#6ee7a5]";
   if (status === "failed" || status === "error" || status === "timed_out") return "text-[#fca5a5]";
-  if (status === "running" || status === "connecting") return "text-[#facc15]";
+  if (status === "running" || status === "connecting" || status === "degraded") return "text-[#facc15]";
   return "text-[#a3a3a3]";
+}
+
+function mcpScopeLabel(server) {
+  if (String(server?.runtimeScope || "").startsWith("workspace:") || server?.scope === "workspace") return "工作区范围";
+  return "用户范围";
+}
+
+function formatLastChecked(value) {
+  if (!value) return "未检查";
+  const checkedAt = new Date(value);
+  if (Number.isNaN(checkedAt.getTime()) || checkedAt.getUTCFullYear() <= 1) return "未检查";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(checkedAt);
+}
+
+function shortConfigFingerprint(value) {
+  return String(value || "").replace(/^sha256:/, "").slice(0, 12);
 }
 
 function formatDuration(milliseconds) {
@@ -261,7 +291,13 @@ onUnmounted(() => {
                   <span class="shrink-0" :class="statusClass(server.status)">{{ mcpStatusLabels[server.status] || server.status }}</span>
                 </div>
                 <div class="mt-1 truncate text-[11px] text-[#858585]" :title="server.command || server.url || server.source">{{ server.transport || "stdio" }} · {{ server.sourceLabel || server.source }}</div>
-                <div class="mt-2 text-[11px] text-[#a3a3a3]">{{ server.toolCount || 0 }} 工具</div>
+                <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-[#a3a3a3]">
+                  <span>{{ server.toolCount || 0 }} 工具</span>
+                  <span>{{ mcpScopeLabel(server) }}</span>
+                  <span :class="statusClass(server.capabilityStatus || server.status)">能力：{{ mcpCapabilityLabels[server.capabilityStatus || server.status] || "未检查" }}</span>
+                  <span>检查：{{ formatLastChecked(server.lastCheckedAt) }}</span>
+                  <span v-if="shortConfigFingerprint(server.configFingerprint)" class="font-mono" :title="server.configFingerprint">配置：{{ shortConfigFingerprint(server.configFingerprint) }}</span>
+                </div>
                 <div v-if="server.lastError" class="mt-2 line-clamp-2 break-words text-[11px] text-[#fca5a5]" :title="server.lastError">{{ server.lastError }}</div>
               </div>
               <Button v-if="mcpActions[server.identifier] === 'connecting'" variant="default" :disabled="Boolean(cancelingMCPAttempts[server.identifier])" @click="handleCancelMCP(server)">{{ cancelingMCPAttempts[server.identifier] ? "取消中..." : "取消" }}</Button>

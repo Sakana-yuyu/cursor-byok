@@ -31,7 +31,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1414,
+          "line": 1467,
           "column": 14
         }
       ]
@@ -60,7 +60,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 292,
+          "line": 296,
           "column": 67
         }
       ]
@@ -188,7 +188,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 98,
+          "line": 128,
           "column": 48
         }
       ]
@@ -299,7 +299,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 84,
+          "line": 114,
           "column": 48
         }
       ]
@@ -323,7 +323,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 128,
+          "line": 130,
           "column": 26
         }
       ]
@@ -335,7 +335,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 33,
+          "line": 34,
           "column": 21
         }
       ]
@@ -347,12 +347,12 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 91,
+          "line": 93,
           "column": 64
         },
         {
           "file": "src/views/Home.vue",
-          "line": 27,
+          "line": 28,
           "column": 111
         }
       ]
@@ -469,6 +469,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 52,
+          "column": 10
+        },
+        {
           "file": "src/views/RequestMetrics.vue",
           "line": 77,
           "column": 86
@@ -485,6 +490,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 192,
+          "column": 36
+        },
         {
           "file": "src/layouts/MainLayout.vue",
           "line": 150,
@@ -536,7 +546,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 35,
+          "line": 36,
           "column": 27
         }
       ]
@@ -589,7 +599,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 124,
+          "line": 154,
           "column": 48
         }
       ]
@@ -613,7 +623,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 220,
+          "line": 222,
           "column": 410
         }
       ]
@@ -762,7 +772,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 252,
+          "line": 282,
           "column": 47
         }
       ]
@@ -791,7 +801,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 45,
+          "line": 46,
           "column": 1033
         }
       ]
@@ -827,7 +837,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 331,
+          "line": 335,
           "column": 85
         }
       ]
@@ -875,7 +885,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 232,
+          "line": 236,
           "column": 35
         }
       ]
@@ -887,7 +897,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 220,
+          "line": 222,
           "column": 85
         }
       ]
@@ -947,7 +957,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1468,
+          "line": 1521,
           "column": 38
         }
       ]
@@ -971,7 +981,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1367,
+          "line": 1420,
           "column": 47
         }
       ]
@@ -983,7 +993,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 59,
+          "line": 89,
           "column": 47
         }
       ]
@@ -1108,7 +1118,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1838,
+          "line": 1892,
           "column": 32
         }
       ]
@@ -1120,7 +1130,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 250,
+          "line": 280,
           "column": 52
         }
       ]
@@ -1370,7 +1380,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1431,
+          "line": 1484,
           "column": 40
         }
       ]
@@ -1457,13 +1467,25 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 91,
+          "line": 93,
           "column": 45
         },
         {
           "file": "src/views/Home.vue",
-          "line": 27,
+          "line": 28,
           "column": 92
+        }
+      ]
+    },
+    "21c7eb9aa500271d": {
+      "source": "检查：",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 298,
+          "column": 25
         }
       ]
     },
@@ -1539,22 +1561,22 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 47,
+          "line": 77,
           "column": 27
         },
         {
           "file": "src/views/Home.vue",
-          "line": 23,
+          "line": 24,
           "column": 184
         },
         {
           "file": "src/views/Home.vue",
-          "line": 24,
+          "line": 25,
           "column": 187
         },
         {
           "file": "src/views/Home.vue",
-          "line": 25,
+          "line": 26,
           "column": 178
         },
         {
@@ -1617,7 +1639,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 221,
+          "line": 223,
           "column": 317
         }
       ]
@@ -1699,7 +1721,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1358,
+          "line": 1411,
           "column": 12
         }
       ]
@@ -1752,12 +1774,12 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 91,
+          "line": 93,
           "column": 129
         },
         {
           "file": "src/views/Home.vue",
-          "line": 27,
+          "line": 28,
           "column": 176
         }
       ]
@@ -1804,6 +1826,16 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 42,
+          "column": 11
+        },
+        {
+          "file": "src/components/DelegationTaskStrip.vue",
+          "line": 27,
+          "column": 11
+        },
+        {
           "file": "src/views/SupplierDetail.vue",
           "line": 148,
           "column": 27
@@ -1839,7 +1871,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 150,
+          "line": 180,
           "column": 48
         }
       ]
@@ -1880,6 +1912,18 @@
         }
       ]
     },
+    "296de0e31f8c22d9": {
+      "source": "正常",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 58,
+          "column": 14
+        }
+      ]
+    },
     "29c419f11b743917": {
       "source": "自动配对失败",
       "kind": "text",
@@ -1887,7 +1931,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 67,
+          "line": 97,
           "column": 27
         }
       ]
@@ -1899,7 +1943,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 216,
+          "line": 246,
           "column": 58
         },
         {
@@ -1978,13 +2022,28 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 269,
+          "column": 141
+        },
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 303,
+          "column": 192
+        },
+        {
+          "file": "src/components/DelegationTaskStrip.vue",
+          "line": 95,
+          "column": 134
+        },
+        {
           "file": "src/components/ModelAdapterModal.vue",
           "line": 297,
           "column": 65
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 91,
+          "line": 93,
           "column": 149
         },
         {
@@ -2009,12 +2068,12 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 1473,
+          "line": 1526,
           "column": 12
         },
         {
           "file": "src/views/Home.vue",
-          "line": 27,
+          "line": 28,
           "column": 196
         },
         {
@@ -2085,7 +2144,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 39,
+          "line": 69,
           "column": 14
         }
       ]
@@ -2114,7 +2173,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 220,
+          "line": 222,
           "column": 682
         }
       ]
@@ -2141,6 +2200,16 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 104,
+          "column": 176
+        },
+        {
+          "file": "src/views/Config.vue",
+          "line": 238,
+          "column": 149
+        },
         {
           "file": "src/views/ModelConfig.vue",
           "line": 340,
@@ -2175,7 +2244,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 45,
+          "line": 46,
           "column": 446
         }
       ]
@@ -2252,7 +2321,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 332,
+          "line": 336,
           "column": 171
         }
       ]
@@ -2363,7 +2432,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 123,
+          "line": 192,
           "column": 133
         },
         {
@@ -2392,7 +2461,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 45,
+          "line": 46,
           "column": 1721
         }
       ]
@@ -2493,7 +2562,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1458,
+          "line": 1511,
           "column": 14
         }
       ]
@@ -2505,7 +2574,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 147,
+          "line": 149,
           "column": 10
         }
       ]
@@ -2633,7 +2702,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 221,
+          "line": 223,
           "column": 479
         },
         {
@@ -2662,7 +2731,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 134,
+          "line": 164,
           "column": 48
         }
       ]
@@ -2713,7 +2782,7 @@
         },
         {
           "file": "src/views/Config.vue",
-          "line": 149,
+          "line": 179,
           "column": 56
         }
       ]
@@ -2725,7 +2794,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 86,
+          "line": 88,
           "column": 87
         }
       ]
@@ -2790,7 +2859,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 267,
+          "line": 303,
           "column": 192
         },
         {
@@ -2829,7 +2898,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1412,
+          "line": 1465,
           "column": 5
         }
       ]
@@ -2841,7 +2910,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 164,
+          "line": 194,
           "column": 55
         }
       ]
@@ -2882,7 +2951,7 @@
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 217,
+          "line": 219,
           "column": 53
         },
         {
@@ -2892,7 +2961,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 26,
+          "line": 27,
           "column": 322
         },
         {
@@ -2909,7 +2978,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 181,
+          "line": 211,
           "column": 9
         }
       ]
@@ -2921,7 +2990,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 306,
+          "line": 310,
           "column": 108
         }
       ]
@@ -2955,6 +3024,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 60,
+          "column": 10
+        },
         {
           "file": "src/views/RequestMetrics.vue",
           "line": 291,
@@ -3043,6 +3117,33 @@
           "file": "src/views/ModelEditor.vue",
           "line": 1099,
           "column": 22
+        }
+      ]
+    },
+    "451a805775b5da03": {
+      "source": "未检查",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 56,
+          "column": 17
+        },
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 76,
+          "column": 22
+        },
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 78,
+          "column": 84
+        },
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 297,
+          "column": 94
         }
       ]
     },
@@ -3166,7 +3267,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 143,
+          "line": 145,
           "column": 33
         }
       ]
@@ -3176,6 +3277,16 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 252,
+          "column": 141
+        },
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 284,
+          "column": 146
+        },
         {
           "file": "src/components/HomeMetricsCard.vue",
           "line": 206,
@@ -3226,7 +3337,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 216,
+          "line": 218,
           "column": 115
         }
       ]
@@ -3238,7 +3349,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 143,
+          "line": 173,
           "column": 21
         }
       ]
@@ -3267,7 +3378,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 271,
+          "line": 275,
           "column": 27
         }
       ]
@@ -3342,7 +3453,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 45,
+          "line": 47,
           "column": 27
         },
         {
@@ -3405,7 +3516,7 @@
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 60,
+          "line": 62,
           "column": 51
         },
         {
@@ -3509,7 +3620,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 331,
+          "line": 335,
           "column": 115
         }
       ]
@@ -3574,7 +3685,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 165,
+          "line": 235,
           "column": 159
         },
         {
@@ -3712,7 +3823,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 40,
+          "line": 42,
           "column": 27
         }
       ]
@@ -3753,7 +3864,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 178,
+          "line": 180,
           "column": 21
         }
       ]
@@ -3765,12 +3876,12 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 101,
+          "line": 103,
           "column": 30
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 109,
+          "line": 111,
           "column": 30
         }
       ]
@@ -3782,7 +3893,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 26,
+          "line": 27,
           "column": 247
         }
       ]
@@ -4027,6 +4138,16 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 265,
+          "column": 55
+        },
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 295,
+          "column": 53
+        },
+        {
           "file": "src/views/ModelEditor.vue",
           "line": 967,
           "column": 68
@@ -4110,7 +4231,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1405,
+          "line": 1458,
           "column": 7
         }
       ]
@@ -4122,7 +4243,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 262,
+          "line": 266,
           "column": 56
         }
       ]
@@ -4151,12 +4272,12 @@
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 249,
+          "line": 253,
           "column": 139
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 264,
+          "line": 268,
           "column": 215
         }
       ]
@@ -4168,7 +4289,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 256,
+          "line": 260,
           "column": 65
         }
       ]
@@ -4241,7 +4362,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 62,
+          "line": 64,
           "column": 27
         }
       ]
@@ -4306,7 +4427,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 221,
+          "line": 223,
           "column": 873
         }
       ]
@@ -4329,6 +4450,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 70,
+          "column": 53
+        },
+        {
           "file": "src/components/HomeMetricsCard.vue",
           "line": 390,
           "column": 55
@@ -4350,7 +4476,7 @@
         },
         {
           "file": "src/views/Config.vue",
-          "line": 34,
+          "line": 64,
           "column": 27
         },
         {
@@ -4483,7 +4609,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 282,
+          "line": 286,
           "column": 72
         }
       ]
@@ -4529,7 +4655,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1381,
+          "line": 1434,
           "column": 14
         }
       ]
@@ -4541,7 +4667,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1915,
+          "line": 1969,
           "column": 32
         }
       ]
@@ -4553,7 +4679,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1356,
+          "line": 1409,
           "column": 14
         }
       ]
@@ -4577,7 +4703,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 180,
+          "line": 210,
           "column": 9
         }
       ]
@@ -4666,7 +4792,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 220,
+          "line": 222,
           "column": 320
         }
       ]
@@ -4678,7 +4804,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 268,
+          "line": 304,
           "column": 174
         }
       ]
@@ -4702,7 +4828,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 221,
+          "line": 223,
           "column": 159
         }
       ]
@@ -4726,12 +4852,12 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 331,
+          "line": 335,
           "column": 102
         },
         {
           "file": "src/views/Home.vue",
-          "line": 45,
+          "line": 46,
           "column": 1000
         }
       ]
@@ -4743,7 +4869,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 139,
+          "line": 169,
           "column": 13
         }
       ]
@@ -4847,22 +4973,22 @@
         },
         {
           "file": "src/views/Config.vue",
-          "line": 27,
+          "line": 57,
           "column": 30
         },
         {
           "file": "src/views/Config.vue",
-          "line": 27,
+          "line": 57,
           "column": 48
         },
         {
           "file": "src/views/Home.vue",
-          "line": 21,
+          "line": 22,
           "column": 98
         },
         {
           "file": "src/views/Home.vue",
-          "line": 21,
+          "line": 22,
           "column": 116
         },
         {
@@ -4954,7 +5080,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 26,
+          "line": 27,
           "column": 185
         }
       ]
@@ -4966,7 +5092,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 64,
+          "line": 94,
           "column": 135
         }
       ]
@@ -4977,8 +5103,13 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 126,
+          "column": 71
+        },
+        {
           "file": "src/views/Config.vue",
-          "line": 89,
+          "line": 119,
           "column": 14
         }
       ]
@@ -4990,7 +5121,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1373,
+          "line": 1426,
           "column": 20
         }
       ]
@@ -5151,7 +5282,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 220,
+          "line": 222,
           "column": 850
         }
       ]
@@ -5175,7 +5306,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 220,
+          "line": 222,
           "column": 697
         }
       ]
@@ -5235,7 +5366,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 180,
+          "line": 210,
           "column": 21
         }
       ]
@@ -5271,7 +5402,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 217,
+          "line": 219,
           "column": 35
         }
       ]
@@ -5312,6 +5443,18 @@
           "file": "src/views/Config.vue",
           "line": 241,
           "column": 212
+        }
+      ]
+    },
+    "7813bdcf07a8e888": {
+      "source": "已降级",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 51,
+          "column": 13
         }
       ]
     },
@@ -5456,6 +5599,18 @@
         }
       ]
     },
+    "7baed541ce02866c": {
+      "source": "用户范围",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 72,
+          "column": 10
+        }
+      ]
+    },
     "7c7836ceb2c7e539": {
       "source": "已检查 {0} 个模型，未发现协议配置问题。",
       "kind": "template",
@@ -5475,7 +5630,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 169,
+          "line": 199,
           "column": 18
         }
       ]
@@ -5523,7 +5678,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 26,
+          "line": 27,
           "column": 302
         }
       ]
@@ -5547,7 +5702,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 242,
+          "line": 246,
           "column": 128
         }
       ]
@@ -5607,7 +5762,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1457,
+          "line": 1510,
           "column": 38
         }
       ]
@@ -5619,7 +5774,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 22,
+          "line": 23,
           "column": 116
         }
       ]
@@ -5699,7 +5854,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 1440,
+          "line": 1493,
           "column": 16
         }
       ]
@@ -5711,7 +5866,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 115,
+          "line": 145,
           "column": 9
         }
       ]
@@ -5723,7 +5878,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 262,
+          "line": 266,
           "column": 56
         }
       ]
@@ -5769,7 +5924,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 220,
+          "line": 222,
           "column": 544
         }
       ]
@@ -5793,7 +5948,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 146,
+          "line": 148,
           "column": 50
         }
       ]
@@ -5853,7 +6008,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 220,
+          "line": 222,
           "column": 168
         }
       ]
@@ -5993,7 +6148,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1353,
+          "line": 1406,
           "column": 14
         }
       ]
@@ -6005,7 +6160,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 97,
+          "line": 127,
           "column": 56
         }
       ]
@@ -6029,7 +6184,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 46,
+          "line": 48,
           "column": 27
         }
       ]
@@ -6053,7 +6208,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 257,
+          "line": 261,
           "column": 65
         }
       ]
@@ -6164,12 +6319,12 @@
         },
         {
           "file": "src/views/Config.vue",
-          "line": 162,
+          "line": 192,
           "column": 58
         },
         {
           "file": "src/views/Home.vue",
-          "line": 45,
+          "line": 46,
           "column": 2029
         },
         {
@@ -6222,7 +6377,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 169,
+          "line": 199,
           "column": 18
         }
       ]
@@ -6246,7 +6401,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 85,
+          "line": 87,
           "column": 92
         }
       ]
@@ -6299,7 +6454,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 171,
+          "line": 201,
           "column": 70
         }
       ]
@@ -6339,8 +6494,13 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 126,
+          "column": 71
+        },
+        {
           "file": "src/views/Config.vue",
-          "line": 89,
+          "line": 119,
           "column": 14
         },
         {
@@ -6374,7 +6534,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 221,
+          "line": 223,
           "column": 93
         }
       ]
@@ -6398,7 +6558,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1878,
+          "line": 1932,
           "column": 32
         }
       ]
@@ -6410,7 +6570,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 221,
+          "line": 223,
           "column": 572
         }
       ]
@@ -6434,7 +6594,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 41,
+          "line": 43,
           "column": 29
         }
       ]
@@ -6520,6 +6680,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 755,
           "column": 62
+        }
+      ]
+    },
+    "9654ef3364f3743a": {
+      "source": "工作区范围",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 71,
+          "column": 108
         }
       ]
     },
@@ -6666,12 +6838,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2146,
+          "line": 2200,
           "column": 32
         },
         {
           "file": "src/state/appState.js",
-          "line": 2167,
+          "line": 2221,
           "column": 32
         }
       ]
@@ -6724,7 +6896,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 300,
+          "line": 304,
           "column": 67
         }
       ]
@@ -6736,7 +6908,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 36,
+          "line": 38,
           "column": 30
         }
       ]
@@ -6808,12 +6980,12 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 94,
+          "line": 96,
           "column": 29
         },
         {
           "file": "src/views/Home.vue",
-          "line": 27,
+          "line": 28,
           "column": 383
         }
       ]
@@ -6885,7 +7057,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1469,
+          "line": 1522,
           "column": 14
         }
       ]
@@ -6958,6 +7130,18 @@
         }
       ]
     },
+    "9f22b41cf5d7559a": {
+      "source": "降级",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 59,
+          "column": 13
+        }
+      ]
+    },
     "9fc662e7fd278315": {
       "source": "测试余额",
       "kind": "text",
@@ -7025,12 +7209,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1383,
+          "line": 1436,
           "column": 12
         },
         {
           "file": "src/state/appState.js",
-          "line": 1450,
+          "line": 1503,
           "column": 87
         }
       ]
@@ -7095,7 +7279,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2091,
+          "line": 2145,
           "column": 14
         }
       ]
@@ -7117,6 +7301,31 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 43,
+          "column": 13
+        },
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 152,
+          "column": 21
+        },
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 194,
+          "column": 21
+        },
+        {
+          "file": "src/components/DelegationTaskStrip.vue",
+          "line": 28,
+          "column": 13
+        },
+        {
+          "file": "src/components/DelegationTaskStrip.vue",
+          "line": 62,
+          "column": 21
+        },
         {
           "file": "src/utils/errorHumanizer.js",
           "line": 51,
@@ -7165,6 +7374,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 305,
+          "column": 152
+        },
         {
           "file": "src/views/SupplierDetail.vue",
           "line": 56,
@@ -7269,7 +7483,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 220,
+          "line": 222,
           "column": 837
         }
       ]
@@ -7293,7 +7507,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 220,
+          "line": 222,
           "column": 531
         }
       ]
@@ -7353,7 +7567,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 42,
+          "line": 44,
           "column": 26
         }
       ]
@@ -7365,7 +7579,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 221,
+          "line": 223,
           "column": 694
         }
       ]
@@ -7493,7 +7707,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1432,
+          "line": 1485,
           "column": 16
         }
       ]
@@ -7517,7 +7731,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 328,
+          "line": 332,
           "column": 187
         }
       ]
@@ -7610,6 +7824,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 249,
+          "column": 87
+        },
+        {
           "file": "src/views/RequestMetrics.vue",
           "line": 297,
           "column": 14
@@ -7647,7 +7866,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 45,
+          "line": 46,
           "column": 1053
         }
       ]
@@ -7715,7 +7934,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 220,
+          "line": 222,
           "column": 423
         }
       ]
@@ -7739,7 +7958,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 64,
+          "line": 94,
           "column": 20
         }
       ]
@@ -7751,12 +7970,12 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 94,
+          "line": 96,
           "column": 50
         },
         {
           "file": "src/views/Home.vue",
-          "line": 27,
+          "line": 28,
           "column": 404
         }
       ]
@@ -7768,7 +7987,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 131,
+          "line": 133,
           "column": 62
         }
       ]
@@ -7780,7 +7999,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 233,
+          "line": 263,
           "column": 28
         },
         {
@@ -7802,7 +8021,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 221,
+          "line": 223,
           "column": 792
         }
       ]
@@ -7814,7 +8033,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1439,
+          "line": 1492,
           "column": 40
         }
       ]
@@ -7939,7 +8158,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 45,
+          "line": 46,
           "column": 1854
         }
       ]
@@ -8047,7 +8266,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 272,
+          "line": 276,
           "column": 27
         }
       ]
@@ -8071,7 +8290,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 26,
+          "line": 27,
           "column": 264
         }
       ]
@@ -8136,7 +8355,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 265,
+          "line": 269,
           "column": 143
         }
       ]
@@ -8249,7 +8468,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 269,
+          "line": 273,
           "column": 170
         }
       ]
@@ -8302,7 +8521,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 121,
+          "line": 151,
           "column": 36
         },
         {
@@ -8353,7 +8572,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 64,
+          "line": 94,
           "column": 144
         }
       ]
@@ -8377,7 +8596,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 287,
+          "line": 291,
           "column": 35
         }
       ]
@@ -8406,7 +8625,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 106,
+          "line": 136,
           "column": 13
         }
       ]
@@ -8447,7 +8666,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1934,
+          "line": 1988,
           "column": 32
         }
       ]
@@ -8495,7 +8714,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 332,
+          "line": 336,
           "column": 120
         }
       ]
@@ -8560,7 +8779,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 332,
+          "line": 336,
           "column": 247
         }
       ]
@@ -8660,18 +8879,28 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 258,
+          "column": 108
+        },
+        {
+          "file": "src/components/DelegationTaskStrip.vue",
+          "line": 92,
+          "column": 97
+        },
+        {
           "file": "src/state/appState.js",
-          "line": 2062,
+          "line": 2116,
           "column": 28
         },
         {
           "file": "src/state/appState.js",
-          "line": 2064,
+          "line": 2118,
           "column": 38
         },
         {
           "file": "src/state/appState.js",
-          "line": 2099,
+          "line": 2153,
           "column": 93
         },
         {
@@ -8688,7 +8917,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 227,
+          "line": 231,
           "column": 72
         }
       ]
@@ -8724,12 +8953,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1365,
+          "line": 1418,
           "column": 51
         },
         {
           "file": "src/views/Home.vue",
-          "line": 45,
+          "line": 46,
           "column": 1721
         }
       ]
@@ -8765,7 +8994,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 131,
+          "line": 133,
           "column": 45
         }
       ]
@@ -8777,7 +9006,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 37,
+          "line": 39,
           "column": 29
         }
       ]
@@ -8902,12 +9131,12 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 93,
+          "line": 95,
           "column": 46
         },
         {
           "file": "src/views/Home.vue",
-          "line": 27,
+          "line": 28,
           "column": 324
         }
       ]
@@ -9052,7 +9281,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1959,
+          "line": 2013,
           "column": 14
         }
       ]
@@ -9064,7 +9293,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 45,
+          "line": 46,
           "column": 446
         }
       ]
@@ -9390,7 +9619,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 294,
+          "line": 298,
           "column": 123
         },
         {
@@ -9460,7 +9689,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 129,
+          "line": 159,
           "column": 13
         }
       ]
@@ -9472,7 +9701,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 45,
+          "line": 46,
           "column": 1854
         }
       ]
@@ -9496,7 +9725,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 61,
+          "line": 63,
           "column": 60
         }
       ]
@@ -9508,7 +9737,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1411,
+          "line": 1464,
           "column": 5
         }
       ]
@@ -9532,8 +9761,8 @@
       "refs": [
         {
           "file": "src/components/DelegationSettingsCard.vue",
-          "line": 93,
-          "column": 1
+          "line": 92,
+          "column": 63
         },
         {
           "file": "src/views/Config.vue",
@@ -9573,7 +9802,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 163,
+          "line": 193,
           "column": 50
         },
         {
@@ -9590,18 +9819,30 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 214,
+          "line": 216,
           "column": 241
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 216,
+          "line": 218,
           "column": 65
         },
         {
           "file": "src/layouts/MainLayout.vue",
           "line": 248,
           "column": 11
+        }
+      ]
+    },
+    "df7185704dc24b33": {
+      "source": "配置：",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 299,
+          "column": 133
         }
       ]
     },
@@ -9651,6 +9892,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 71,
+          "column": 21
+        },
         {
           "file": "src/views/SupplierDetail.vue",
           "line": 872,
@@ -9723,7 +9969,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 45,
+          "line": 46,
           "column": 1959
         },
         {
@@ -9829,7 +10075,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 83,
+          "line": 113,
           "column": 56
         }
       ]
@@ -9841,7 +10087,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1435,
+          "line": 1488,
           "column": 40
         }
       ]
@@ -9876,6 +10122,16 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 44,
+          "column": 14
+        },
+        {
+          "file": "src/components/DelegationTaskStrip.vue",
+          "line": 29,
+          "column": 14
+        },
+        {
           "file": "src/utils/errorHumanizer.js",
           "line": 48,
           "column": 81
@@ -9901,12 +10157,12 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 255,
+          "line": 259,
           "column": 65
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 255,
+          "line": 259,
           "column": 147
         }
       ]
@@ -10058,7 +10314,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 217,
+          "line": 247,
           "column": 54
         },
         {
@@ -10179,7 +10435,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1436,
+          "line": 1489,
           "column": 16
         }
       ]
@@ -10220,7 +10476,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 86,
+          "line": 88,
           "column": 149
         }
       ]
@@ -10256,7 +10512,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 233,
+          "line": 263,
           "column": 28
         },
         {
@@ -10324,7 +10580,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 137,
+          "line": 139,
           "column": 112
         }
       ]
@@ -10359,6 +10615,16 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 41,
+          "column": 14
+        },
+        {
+          "file": "src/components/DelegationTaskStrip.vue",
+          "line": 26,
+          "column": 14
+        },
+        {
           "file": "src/views/RequestMetrics.vue",
           "line": 157,
           "column": 14
@@ -10377,7 +10643,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 268,
+          "line": 304,
           "column": 174
         }
       ]
@@ -10449,7 +10715,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 65,
+          "line": 95,
           "column": 30
         }
       ]
@@ -10461,7 +10727,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1367,
+          "line": 1420,
           "column": 38
         }
       ]
@@ -10494,9 +10760,24 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 103,
+          "column": 27
+        },
+        {
           "file": "src/components/ModelAdapterModal.vue",
           "line": 247,
           "column": 27
+        },
+        {
+          "file": "src/views/Config.vue",
+          "line": 223,
+          "column": 19
+        },
+        {
+          "file": "src/views/Config.vue",
+          "line": 237,
+          "column": 29
         },
         {
           "file": "src/views/ModelEditor.vue",
@@ -10552,12 +10833,12 @@
         },
         {
           "file": "src/views/Config.vue",
-          "line": 38,
+          "line": 68,
           "column": 12
         },
         {
           "file": "src/views/Config.vue",
-          "line": 59,
+          "line": 89,
           "column": 32
         }
       ]
@@ -10760,7 +11041,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 62,
+          "line": 64,
           "column": 58
         }
       ]
@@ -10820,7 +11101,7 @@
       "refs": [
         {
           "file": "src/views/Config.vue",
-          "line": 116,
+          "line": 146,
           "column": 9
         }
       ]
@@ -10857,7 +11138,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 1462,
+          "line": 1515,
           "column": 12
         },
         {
@@ -10923,7 +11204,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1365,
+          "line": 1418,
           "column": 40
         }
       ]
@@ -10937,6 +11218,30 @@
           "file": "src/components/HomeMetricsCard.vue",
           "line": 340,
           "column": 16
+        }
+      ]
+    },
+    "fbaf913425bbd2a9": {
+      "source": "能力：",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 297,
+          "column": 88
+        }
+      ]
+    },
+    "fc2db52daaa9955b": {
+      "source": "检查中",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 57,
+          "column": 15
         }
       ]
     },
