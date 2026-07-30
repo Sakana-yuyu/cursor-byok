@@ -4,6 +4,8 @@ import Card from "@/components/ui/Card.vue";
 import Switch from "@/components/ui/Switch.vue";
 import Select from "@/components/ui/Select.vue";
 import PromptPreviewModal from "@/components/PromptPreviewModal.vue";
+import DelegationRuntimePanel from "@/components/DelegationRuntimePanel.vue";
+import DelegationSettingsCard from "@/components/DelegationSettingsCard.vue";
 import { useMessage } from "@/composables/useMessage";
 import { showModal } from "@/composables/useModal";
 import {
@@ -219,6 +221,8 @@ onMounted(() => {
           <div class="min-h-0 min-w-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto p-3">
             <Card><div class="space-y-3"><h3 class="text-sm font-medium text-white">浮窗偏好</h3><Select v-model="overlayPreferences.style" :options="overlayStyleOptions" aria-label="浮窗样式" @change="(value) => updateOverlay({ style: value })" /><Select v-model="overlayPreferences.closeAction" :options="closeActionOptions" aria-label="主窗口关闭行为" @change="(value) => updateOverlay({ closeAction: value })" /><Switch label="显示浮窗" description="在桌面显示请求统计浮窗" :enabled="overlayPreferences.visible" @change="updateOverlayVisibility" /><Switch label="窗口置顶" description="让浮窗保持在其他窗口上方" :enabled="overlayPreferences.alwaysOnTop" @change="(value) => updateOverlay({ alwaysOnTop: value })" /><Switch label="贴边自动收缩" description="靠近屏幕边缘时收缩为胶囊" :enabled="overlayPreferences.snapCollapse" @change="(value) => updateOverlay({ snapCollapse: value })" /><Switch label="锁定浮窗" description="锁定为收缩胶囊且不可拖动" :enabled="overlayPreferences.dockLocked" @change="(value) => updateOverlay({ dockLocked: value })" /></div></Card>
             <Card><div class="min-w-0 space-y-3"><h3 class="text-sm font-medium text-white">Cursor 启动</h3><label class="block min-w-0 text-xs text-[#a3a3a3]">手动指定 Cursor.exe 路径<input v-model="cursorLaunch.manualPath" class="mt-1 h-8 w-full min-w-0 rounded border border-white/10 bg-black/20 px-2 text-xs text-white" placeholder="留空则自动检测" /></label><div class="flex flex-wrap items-center gap-2"><Button variant="default" :disabled="cursorLaunch.busy" @click="refreshCursorPath">自动检测</Button><Button variant="default" :disabled="cursorLaunch.busy" @click="saveCursorPath">保存路径</Button><Button variant="default" :disabled="cursorLaunch.busy || !cursorLaunch.manualPath" @click="clearCursorPath">清空手动路径</Button></div><p v-if="cursorLaunch.detectedPath" class="break-all text-xs text-[#6ee7a5]">当前使用：{{ cursorLaunch.detectedPath }}</p><p v-else class="text-xs text-[#858585]">未检测到 Cursor，可填写完整的 Cursor.exe 路径。</p><p v-if="cursorLaunch.error" class="break-words text-xs text-[#fca5a5]">{{ cursorLaunch.error }}</p></div></Card>
+            <DelegationSettingsCard />
+            <DelegationRuntimePanel compact />
             <Card><div class="min-w-0 space-y-3">
               <div class="flex min-w-0 items-center gap-3">
                 <button type="button" class="flex min-w-0 flex-1 items-center gap-3 rounded-[6px] text-left outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35" :aria-expanded="promptInjectionExpanded" @click="promptInjectionExpanded = !promptInjectionExpanded">

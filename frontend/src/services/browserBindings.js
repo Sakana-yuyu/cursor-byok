@@ -64,6 +64,55 @@ const previewConfig = {
   homeMetrics: { includeCacheWriteInHitRate: false },
 };
 let editorContext = { index: -1, adapterJSON: "{}" };
+let previewDelegationTasks = [
+  {
+    id: "preview-task-running",
+    aggregateId: "preview-aggregate",
+    description: "Review the active workspace changes",
+    modelId: "preview-demo-openai",
+    modelName: "Demo GPT",
+    modelGroupId: "preview-group",
+    executionMode: "local",
+    status: "running",
+    toolCallCount: 2,
+    queuedAtUnixMs: Date.now() - 14000,
+    startedAtUnixMs: Date.now() - 12000,
+    finishedAtUnixMs: 0,
+    durationMs: 12000,
+    cancelable: true,
+  },
+  {
+    id: "preview-task-completed",
+    aggregateId: "preview-aggregate",
+    description: "Summarize implementation notes",
+    modelId: "preview-demo-gemini",
+    modelName: "Demo Gemini",
+    modelGroupId: "preview-group",
+    executionMode: "cursor",
+    status: "completed",
+    toolCallCount: 1,
+    queuedAtUnixMs: Date.now() - 30000,
+    startedAtUnixMs: Date.now() - 28000,
+    finishedAtUnixMs: Date.now() - 8000,
+    durationMs: 20000,
+    cancelable: false,
+  },
+];
+let previewMCPServers = [
+  {
+    name: "Preview filesystem",
+    identifier: "preview:filesystem",
+    transport: "stdio",
+    source: "cursor",
+    sourceLabel: "Cursor",
+    configuredEnabled: true,
+    enabled: true,
+    hasTools: false,
+    toolCount: 0,
+    status: "disconnected",
+    lastError: "",
+  },
+];
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -96,6 +145,8 @@ export const AutoMatchContextWindows = () => {
     details: [],
   });
 };
+export const DiagnoseModelAdapters = () => Promise.resolve({ total: previewConfig.modelAdapters.length, issues: [] });
+export const ApplyDiagnosticFixes = () => Promise.resolve({ total: previewConfig.modelAdapters.length, issues: [] });
 export const StartProxy = () => Promise.resolve(browserPreviewMockProxyState());
 export const StopProxy = () => Promise.resolve(browserPreviewMockProxyState());
 export const GetAdRuntime = () => Promise.resolve({ available: false, slots: [], window: {} });
@@ -116,6 +167,10 @@ export const OpenRequestMetricsWindow = () => Promise.resolve();
 export const OpenStatsOverlayWindow = () => Promise.resolve();
 export const UpdateStatsOverlayWindow = (_style, _alwaysOnTop) => Promise.resolve();
 export const CloseStatsOverlayWindow = () => Promise.resolve();
+export const SetMainWindowCloseAction = () => Promise.resolve();
+export const CloseApplication = () => Promise.resolve();
+export const DetectCursorPath = (manualPath = "") => Promise.resolve(manualPath || "C:\\Program Files\\Cursor\\Cursor.exe");
+export const LaunchCursor = () => Promise.resolve();
 export const OpenModelEditorWindow = (index, adapterJSON) => {
   editorContext = { index: Number.isInteger(index) ? index : -1, adapterJSON: String(adapterJSON || "{}") };
   return Promise.resolve();
@@ -149,6 +204,7 @@ export const FetchModelCatalog = (request) => {
 };
 export const GetRecentRequestMetrics = () => Promise.resolve([]);
 export const GetRecentRequestMetricsCount = () => Promise.resolve(0);
+export const GetRecentRequestMetricsAbnormalCount = () => Promise.resolve(0);
 export const ResetUsageMetrics = () => Promise.resolve();
 export const GetMetricsRangeSummary = () => Promise.resolve({
   requestCount: 0,
@@ -168,3 +224,39 @@ export const GetPromptInjectionSettings = () => Promise.resolve({});
 export const SavePromptInjectionSettings = (value) => Promise.resolve(value);
 export const RefreshPromptInjection = () => Promise.resolve();
 export const RefreshPromptInjectionCatalog = () => Promise.resolve();
+export const GetSkillsMCPScanSnapshot = () => Promise.resolve({
+  skills: [],
+  mcpServers: clone(previewMCPServers),
+  config: { enabled: true, disabledSkills: {}, disabledMcpServers: {} },
+});
+export const RefreshSkillsMCPScan = GetSkillsMCPScanSnapshot;
+export const SaveSkillsMCPScanConfig = () => Promise.resolve();
+export const GetDelegationTaskSnapshots = () => {
+  const now = Date.now();
+  return Promise.resolve(clone(previewDelegationTasks.map((item) => ({
+    ...item,
+    durationMs: item.status === "running" ? Math.max(0, now - item.startedAtUnixMs) : item.durationMs,
+  }))));
+};
+export const CancelDelegationTask = (taskID) => {
+  const task = previewDelegationTasks.find((item) => item.id === taskID && item.cancelable);
+  if (!task) return Promise.resolve(false);
+  task.status = "canceled";
+  task.cancelable = false;
+  task.finishedAtUnixMs = Date.now();
+  task.durationMs = Math.max(0, task.finishedAtUnixMs - task.startedAtUnixMs);
+  return Promise.resolve(true);
+};
+export const ConnectMCPServer = (_workspaceRoot, identifier) => {
+  const server = previewMCPServers.find((item) => item.identifier === identifier);
+  if (!server) return Promise.reject(new Error("MCP server not found"));
+  Object.assign(server, { status: "connected", hasTools: true, toolCount: 3, lastError: "" });
+  return Promise.resolve(clone(server));
+};
+export const DisconnectMCPServer = (_workspaceRoot, identifier) => {
+  const server = previewMCPServers.find((item) => item.identifier === identifier);
+  if (!server) return Promise.reject(new Error("MCP server not found"));
+  Object.assign(server, { status: "disconnected", hasTools: false, toolCount: 0, lastError: "" });
+  return Promise.resolve(clone(server));
+};
+export const CancelMCPServerConnection = () => Promise.resolve(true);

@@ -244,6 +244,18 @@
         }
       ]
     },
+    "05a3ad9bb1daa59c": {
+      "source": "终端命令",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 21,
+          "column": 26
+        }
+      ]
+    },
     "05c8a9238c702efa": {
       "source": "直连 Cursor 模式",
       "kind": "text",
@@ -743,6 +755,18 @@
         }
       ]
     },
+    "13dfcd6a48242adb": {
+      "source": "工作区目录（可选）",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 252,
+          "column": 47
+        }
+      ]
+    },
     "13f4ce9102ea6986": {
       "source": "浏览器预览示例",
       "kind": "text",
@@ -901,6 +925,18 @@
           "file": "src/layouts/MainLayout.vue",
           "line": 267,
           "column": 11
+        }
+      ]
+    },
+    "1822c46217f47f9b": {
+      "source": "继续委派",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 23,
+          "column": 25
         }
       ]
     },
@@ -1077,6 +1113,18 @@
         }
       ]
     },
+    "1be295d69b570ea1": {
+      "source": "状态、工具与连接控制",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 250,
+          "column": 52
+        }
+      ]
+    },
     "1c199ee0c6388658": {
       "source": "请求被拒绝（可能是该模型不支持当前参数）",
       "kind": "text",
@@ -1110,6 +1158,18 @@
           "file": "src/views/ModelConfig.vue",
           "line": 442,
           "column": 163
+        }
+      ]
+    },
+    "1cf71c0300f81a35": {
+      "source": "模型组",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Config.vue",
+          "line": 230,
+          "column": 60
         }
       ]
     },
@@ -1217,6 +1277,28 @@
           "file": "src/components/HomeMetricsCard.vue",
           "line": 496,
           "column": 40
+        }
+      ]
+    },
+    "1f0eb99b7ed094be": {
+      "source": "运行中",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 40,
+          "column": 12
+        },
+        {
+          "file": "src/components/DelegationTaskStrip.vue",
+          "line": 25,
+          "column": 12
+        },
+        {
+          "file": "src/components/DelegationTaskStrip.vue",
+          "line": 85,
+          "column": 64
         }
       ]
     },
@@ -1622,6 +1704,23 @@
         }
       ]
     },
+    "26c8cfcbf763073f": {
+      "source": "等待中",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 39,
+          "column": 11
+        },
+        {
+          "file": "src/components/DelegationTaskStrip.vue",
+          "line": 24,
+          "column": 11
+        }
+      ]
+    },
     "273f941f44e46595": {
       "source": "浏览器预览模式",
       "kind": "text",
@@ -1790,6 +1889,33 @@
           "file": "src/views/Config.vue",
           "line": 67,
           "column": 27
+        }
+      ]
+    },
+    "2a3879c6462aa621": {
+      "source": "Multitask 委派",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 216,
+          "column": 58
+        },
+        {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 85,
+          "column": 54
+        },
+        {
+          "file": "src/components/DelegationTaskStrip.vue",
+          "line": 84,
+          "column": 52
+        },
+        {
+          "file": "src/views/Config.vue",
+          "line": 220,
+          "column": 58
         }
       ]
     },
@@ -2604,6 +2730,18 @@
         }
       ]
     },
+    "3d52574ce1500561": {
+      "source": "未连接",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 48,
+          "column": 17
+        }
+      ]
+    },
     "3d627e9bc0d2ae6d": {
       "source": "出 {0}",
       "kind": "template",
@@ -2642,6 +2780,23 @@
           "file": "src/views/ModelEditor.vue",
           "line": 119,
           "column": 12
+        }
+      ]
+    },
+    "3dee2c79bbd29002": {
+      "source": "取消中...",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 267,
+          "column": 192
+        },
+        {
+          "file": "src/components/DelegationTaskStrip.vue",
+          "line": 95,
+          "column": 134
         }
       ]
     },
@@ -3073,6 +3228,18 @@
           "file": "src/components/SettingsDrawer.vue",
           "line": 216,
           "column": 115
+        }
+      ]
+    },
+    "4a19cb8a31d71f33": {
+      "source": "连接成功",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 143,
+          "column": 21
         }
       ]
     },
@@ -3550,6 +3717,23 @@
         }
       ]
     },
+    "549681f6023d7f6a": {
+      "source": "新增模型组",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 96,
+          "column": 72
+        },
+        {
+          "file": "src/views/Config.vue",
+          "line": 231,
+          "column": 65
+        }
+      ]
+    },
     "551de6374db62124": {
       "source": "用于请求明细和首页成本估算；留空时自动使用内置官方价。",
       "kind": "text",
@@ -3788,6 +3972,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 1116,
           "column": 106
+        }
+      ]
+    },
+    "5be0323e8adcaeae": {
+      "source": "已连接",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 50,
+          "column": 14
         }
       ]
     },
@@ -4292,6 +4488,28 @@
         }
       ]
     },
+    "652f274e2d54d28c": {
+      "source": "委派模型组 {0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 30,
+          "column": 11
+        },
+        {
+          "file": "src/state/appState.js",
+          "line": 888,
+          "column": 37
+        },
+        {
+          "file": "src/views/Config.vue",
+          "line": 30,
+          "column": 11
+        }
+      ]
+    },
     "659718fdba8be8b9": {
       "source": "个模型，发现",
       "kind": "text",
@@ -4450,6 +4668,18 @@
           "file": "src/components/SettingsDrawer.vue",
           "line": 220,
           "column": 320
+        }
+      ]
+    },
+    "68f43f735935f4de": {
+      "source": "断开中...",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 268,
+          "column": 174
         }
       ]
     },
@@ -4685,6 +4915,23 @@
           "file": "src/services/browserBindings.js",
           "line": 41,
           "column": 20
+        }
+      ]
+    },
+    "6dbebe76e2293a37": {
+      "source": "委派模型组名称",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 102,
+          "column": 158
+        },
+        {
+          "file": "src/views/Config.vue",
+          "line": 236,
+          "column": 135
         }
       ]
     },
@@ -4981,6 +5228,18 @@
         }
       ]
     },
+    "7727668c83e96ea6": {
+      "source": "已断开连接",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 180,
+          "column": 21
+        }
+      ]
+    },
     "774d6e1b7cb89751": {
       "source": "默认口径",
       "kind": "text",
@@ -5036,6 +5295,23 @@
           "file": "src/views/ModelEditor.vue",
           "line": 1386,
           "column": 20
+        }
+      ]
+    },
+    "77ddbd22fee1371c": {
+      "source": "默认委派模型",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 108,
+          "column": 212
+        },
+        {
+          "file": "src/views/Config.vue",
+          "line": 241,
+          "column": 212
         }
       ]
     },
@@ -5273,6 +5549,18 @@
           "file": "src/components/SettingsDrawer.vue",
           "line": 242,
           "column": 128
+        }
+      ]
+    },
+    "7d7f913591343652": {
+      "source": "MCP 工具",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 22,
+          "column": 24
         }
       ]
     },
@@ -5959,6 +6247,23 @@
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 85,
+          "column": 92
+        }
+      ]
+    },
+    "8f66eacbdebab6f6": {
+      "source": "删除模型组",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 104,
+          "column": 110
+        },
+        {
+          "file": "src/views/Config.vue",
+          "line": 238,
           "column": 92
         }
       ]
@@ -6742,6 +7047,18 @@
         }
       ]
     },
+    "a2b60a34a75b7a8e": {
+      "source": "工具权限",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 117,
+          "column": 56
+        }
+      ]
+    },
     "a2fa320f212cbd24": {
       "source": "协议选择",
       "kind": "text",
@@ -6913,6 +7230,23 @@
           "file": "src/views/MetricsDetail.vue",
           "line": 415,
           "column": 51
+        }
+      ]
+    },
+    "a5cff6d4a86a139d": {
+      "source": "尚未配置委派模型组，请先在模型配置中添加模型。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 99,
+          "column": 144
+        },
+        {
+          "file": "src/views/Config.vue",
+          "line": 233,
+          "column": 149
         }
       ]
     },
@@ -7439,6 +7773,28 @@
         }
       ]
     },
+    "b4315326a428bf21": {
+      "source": "Cursor 子会话",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 233,
+          "column": 28
+        },
+        {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 15,
+          "column": 29
+        },
+        {
+          "file": "src/views/Config.vue",
+          "line": 22,
+          "column": 29
+        }
+      ]
+    },
     "b4c445e694bdec35": {
       "source": "当前使用：",
       "kind": "text",
@@ -7624,6 +7980,18 @@
         }
       ]
     },
+    "b9a5593003e01fc2": {
+      "source": "连接中...",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 49,
+          "column": 15
+        }
+      ]
+    },
     "ba3c66f90fd11725": {
       "source": "已识别系统代理",
       "kind": "text",
@@ -7705,6 +8073,18 @@
           "file": "src/views/Home.vue",
           "line": 26,
           "column": 264
+        }
+      ]
+    },
+    "bbd9e102a1cb96b0": {
+      "source": "启用 Multitask 委派",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 88,
+          "column": 125
         }
       ]
     },
@@ -7912,6 +8292,23 @@
           "file": "src/views/ModelConfig.vue",
           "line": 369,
           "column": 49
+        }
+      ]
+    },
+    "c10aa47377b8fc58": {
+      "source": "任务已结束或不存在",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 121,
+          "column": 36
+        },
+        {
+          "file": "src/components/DelegationTaskStrip.vue",
+          "line": 61,
+          "column": 36
         }
       ]
     },
@@ -8807,6 +9204,18 @@
         }
       ]
     },
+    "d71ddc74d2faf52f": {
+      "source": "写入与编辑",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 20,
+          "column": 26
+        }
+      ]
+    },
     "d7889896c5b7732a": {
       "source": "Anthropic 额外参数 JSON",
       "kind": "text",
@@ -9003,6 +9412,23 @@
         }
       ]
     },
+    "db9773faa309c257": {
+      "source": "自动选择",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 14,
+          "column": 27
+        },
+        {
+          "file": "src/views/Config.vue",
+          "line": 21,
+          "column": 27
+        }
+      ]
+    },
     "dbb4b5be9b5723dc": {
       "source": "{0} 的推理强度仅支持 low、medium、high、xhigh、max",
       "kind": "template",
@@ -9096,6 +9522,23 @@
           "file": "src/views/ModelConfig.vue",
           "line": 416,
           "column": 89
+        }
+      ]
+    },
+    "dd9fd5ce6780b09a": {
+      "source": "最大并发数",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 93,
+          "column": 1
+        },
+        {
+          "file": "src/views/Config.vue",
+          "line": 226,
+          "column": 17
         }
       ]
     },
@@ -9212,6 +9655,23 @@
           "file": "src/views/SupplierDetail.vue",
           "line": 872,
           "column": 14
+        }
+      ]
+    },
+    "e07e561cf3c412f2": {
+      "source": "委派执行模式",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 107,
+          "column": 72
+        },
+        {
+          "file": "src/views/Config.vue",
+          "line": 240,
+          "column": 82
         }
       ]
     },
@@ -9591,6 +10051,28 @@
         }
       ]
     },
+    "e932d7dda384cc89": {
+      "source": "使用已配置模型并行处理子任务，失败的子任务不会阻塞其他任务。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 217,
+          "column": 54
+        },
+        {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 86,
+          "column": 62
+        },
+        {
+          "file": "src/views/Config.vue",
+          "line": 221,
+          "column": 49
+        }
+      ]
+    },
     "e96e4ce7b66a2dbb": {
       "source": "删除失败模型 (",
       "kind": "text",
@@ -9767,6 +10249,28 @@
         }
       ]
     },
+    "ef5b46f1cece4ac9": {
+      "source": "本地子代理",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 233,
+          "column": 28
+        },
+        {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 16,
+          "column": 28
+        },
+        {
+          "file": "src/views/Config.vue",
+          "line": 23,
+          "column": 28
+        }
+      ]
+    },
     "ef8dd2adf2d8fc50": {
       "source": "」的供应商或模型。",
       "kind": "text",
@@ -9863,6 +10367,18 @@
           "file": "src/views/RequestMetrics.vue",
           "line": 163,
           "column": 45
+        }
+      ]
+    },
+    "f33ac04eece6a6a6": {
+      "source": "断开",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationRuntimePanel.vue",
+          "line": 268,
+          "column": 174
         }
       ]
     },
@@ -10198,6 +10714,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 370,
           "column": 17
+        }
+      ]
+    },
+    "f80f57df57563799": {
+      "source": "读取与搜索",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationSettingsCard.vue",
+          "line": 19,
+          "column": 25
         }
       ]
     },

@@ -305,6 +305,27 @@ func (s *Scheduler) Cancel(taskID string) error {
 	return nil
 }
 
+// CancelIfActive atomically cancels a non-terminal task and reports whether
+// this call changed its state.
+func (s *Scheduler) CancelIfActive(taskID string) bool {
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	state, ok := s.tasks[taskID]
+	if !ok || isTerminalStatus(state.snapshot.Status) {
+		s.mu.Unlock()
+		return false
+	}
+	state.snapshot.Status = TaskCanceled
+	state.snapshot.FinishedAt = time.Now().UTC()
+	state.cancel()
+	snapshot := cloneTaskSnapshot(state.snapshot)
+	s.publishLocked(snapshot)
+	s.mu.Unlock()
+	return true
+}
+
 func (s *Scheduler) Snapshot(taskID string) (TaskSnapshot, bool) {
 	if s == nil {
 		return TaskSnapshot{}, false
