@@ -123,6 +123,11 @@ func normalizeRealtimeRequestContextForStorage(requestContext *agentv1.RequestCo
 	}
 
 	normalized := &agentv1.RequestContext{}
+	if workspaceRoot := strings.TrimSpace(requestContext.GetMcpFileSystemOptions().GetWorkspaceProjectDir()); workspaceRoot != "" {
+		// Preserve only the workspace scope marker. With Enabled=false and no descriptors,
+		// prompt projection emits no MCP section, so this remains non-model-visible state.
+		normalized.McpFileSystemOptions = &agentv1.McpFileSystemOptions{WorkspaceProjectDir: workspaceRoot}
+	}
 	normalized.Rules = guardCursorRules(filterNonSkillRules(requestContext.GetRules()))
 	if fileContents := normalizeRealtimeFileContents(requestContext.GetFileContents()); len(fileContents) > 0 {
 		normalized.FileContents = fileContents
@@ -169,6 +174,7 @@ func hasRealtimeRequestContextContent(requestContext *agentv1.RequestContext) bo
 	}
 	return len(requestContext.GetRules()) > 0 ||
 		len(requestContext.GetFileContents()) > 0 ||
+		strings.TrimSpace(requestContext.GetMcpFileSystemOptions().GetWorkspaceProjectDir()) != "" ||
 		strings.TrimSpace(requestContext.GetUserIntentSummary()) != "" ||
 		strings.TrimSpace(requestContext.GetHooksAdditionalContext()) != "" ||
 		strings.TrimSpace(requestContext.GetCommitAttributionMessage()) != "" ||
