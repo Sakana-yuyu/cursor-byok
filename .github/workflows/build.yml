@@ -400,6 +400,27 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify release tag version
+        id: release-version
+        env:
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONFIG_VERSION="$(go run ./scripts/release version -config ./build/config.yml)"
+          EXPECTED_TAG="v${CONFIG_VERSION}"
+          if [ "$TAG" != "$EXPECTED_TAG" ]; then
+            echo "::error::release tag ${TAG} does not match build/config.yml version ${CONFIG_VERSION}"
+            exit 1
+          fi
+          echo "version=${CONFIG_VERSION}" >> "$GITHUB_OUTPUT"
+
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -408,64 +429,55 @@ jobs:
 
       - name: Prepare release assets and update manifest
         env:
-          TAG: ${{ github.ref_name }}
           REPOSITORY: ${{ github.repository }}
+          VERSION: ${{ steps.release-version.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p publish
-          python3 - <<'PY'
-          import hashlib
-          import json
-          import os
-          import shutil
-          from pathlib import Path
 
-          assets = list(Path("release-assets").rglob("*"))
-          tag = os.environ["TAG"]
-          version = tag.removeprefix("v")
-          publish = Path("publish")
-          wanted = {
-              "windows-64.zip": f"cursor-byok-{version}-windows-amd64.zip",
-              "Cursor助手-amd64-installer.exe": f"cursor-byok-{version}-windows-amd64-installer.exe",
-              "windows-32.zip": f"cursor-byok-{version}-windows-386.zip",
-              "Cursor助手-386-installer.exe": f"cursor-byok-{version}-windows-386-installer.exe",
-              "linux-amd64.tar.gz": f"cursor-byok-{version}-linux-amd64.tar.gz",
-              f"cursor-byok-{version}-macos-arm64.tar.gz": f"cursor-byok-{version}-macos-arm64.tar.gz",
-              f"cursor-byok-{version}-macos-amd64.tar.gz": f"cursor-byok-{version}-macos-amd64.tar.gz",
+          copy_asset() {
+            local source_name="$1"
+            local target_name="$2"
+            local matches=()
+            mapfile -t matches < <(find release-assets -type f -name "$source_name" -print)
+            if [ "${#matches[@]}" -ne 1 ]; then
+              echo "::error::expected exactly one build asset named ${source_name}, found ${#matches[@]}"
+              printf '  %s\n' "${matches[@]}"
+              exit 1
+            fi
+            cp "${matches[0]}" "publish/${target_name}"
           }
-          for source_name, target_name in wanted.items():
-              source = next((path for path in assets if path.name == source_name), None)
-              if source is None:
-                  raise SystemExit(f"missing build asset: {source_name}")
-              shutil.copyfile(source, publish / target_name)
-          platforms = {}
-          for platform, suffix in {
-              "macos-arm64": ".tar.gz",
-              "macos-amd64": ".tar.gz",
-              "windows-amd64": ".zip",
-              "windows-386": ".zip",
-              "linux-amd64": ".tar.gz",
-          }.items():
-              filename = f"cursor-byok-{version}-{platform}{suffix}"
-              path = publish / filename
-              digest = hashlib.sha256(path.read_bytes()).hexdigest()
-              platforms[platform] = {
-                  "url": f"https://github.com/{os.environ['REPOSITORY']}/releases/download/{tag}/{filename}",
-                  "size": path.stat().st_size,
-                  "checksum": f"sha256:{digest}",
-              }
-          (publish / "update.json").write_text(
-              json.dumps({
-                  "version": version,
-                  "release_date": "",
-                  "release_notes": Path("release-notes.md").read_text(encoding="utf-8"),
-                  "platforms": platforms,
-                  "mandatory": False,
-              }, ensure_ascii=False, indent=2) + "\\n",
-              encoding="utf-8",
-          )
-          PY
+
+          copy_asset "windows-64.zip" "cursor-byok-${VERSION}-windows-amd64.zip"
+          copy_asset "Cursor助手-amd64-installer.exe" "cursor-byok-${VERSION}-windows-amd64-installer.exe"
+          copy_asset "windows-32.zip" "cursor-byok-${VERSION}-windows-386.zip"
+          copy_asset "Cursor助手-386-installer.exe" "cursor-byok-${VERSION}-windows-386-installer.exe"
+          copy_asset "linux-amd64.tar.gz" "cursor-byok-${VERSION}-linux-amd64.tar.gz"
+          copy_asset "cursor-byok-${VERSION}-macos-arm64.tar.gz" "cursor-byok-${VERSION}-macos-arm64.tar.gz"
+          copy_asset "cursor-byok-${VERSION}-macos-amd64.tar.gz" "cursor-byok-${VERSION}-macos-amd64.tar.gz"
+          copy_asset "macos-arm64.dmg" "cursor-byok-${VERSION}-macos-arm64.dmg"
+          copy_asset "macos-intel.dmg" "cursor-byok-${VERSION}-macos-amd64.dmg"
+
+          go run ./scripts/release manifest \
+            -config ./build/config.yml \
+            -assets-dir publish \
+            -out publish/update.json \
+            -repo "$REPOSITORY" \
+            -base-name cursor-byok \
+            -notes release-notes.md
+
+          jq -e --arg version "$VERSION" '
+            .version == $version and
+            (.platforms | keys | sort) == [
+              "linux-amd64",
+              "macos-amd64",
+              "macos-arm64",
+              "windows-386",
+              "windows-amd64"
+            ] and
+            ([.platforms[].url | endswith(".dmg")] | any | not)
+          ' publish/update.json >/dev/null
 
       - name: Create or update GitHub Release
         env:
