@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -274,11 +275,20 @@ func (s *SkillStore) BuildActivatedSkillsPromptSection(queryText string, convers
 
 // BuildActivatedSkillsPromptSectionForWorkspace sparsely activates skills for an explicit workspace.
 func (s *SkillStore) BuildActivatedSkillsPromptSectionForWorkspace(workspaceRoot string, queryText string, conversation *ConversationFile) (string, int, error) {
+	return s.buildActivatedSkillsPromptSectionForWorkspaceExcluding(workspaceRoot, queryText, conversation, nil)
+}
+
+func (s *SkillStore) buildActivatedSkillsPromptSectionForWorkspaceExcluding(workspaceRoot string, queryText string, conversation *ConversationFile, excludedPaths map[string]struct{}) (string, int, error) {
 	if s == nil {
 		return "", 0, nil
 	}
 	if s.activator == nil {
-		return s.BuildAgentSkillsPromptSectionForWorkspace(workspaceRoot)
+		skills, err := s.ScanForWorkspace(workspaceRoot)
+		if err != nil {
+			return "", 0, err
+		}
+		prompt, count := buildAgentSkillsSectionFromList(filterSkillsExcludingPaths(skills, excludedPaths))
+		return prompt, count, nil
 	}
 
 	var parentActivated []string
@@ -287,7 +297,7 @@ func (s *SkillStore) BuildActivatedSkillsPromptSectionForWorkspace(workspaceRoot
 		parentActivated = s.readParentActivatedSkills(conversation)
 	}
 
-	activated := s.activator.ActivateForWorkspace(workspaceRoot, queryText, parentActivated)
+	activated := s.activator.activateForWorkspaceExcluding(workspaceRoot, queryText, parentActivated, excludedPaths)
 	if len(activated) == 0 {
 		return "", 0, nil
 	}
@@ -303,6 +313,32 @@ func (s *SkillStore) BuildActivatedSkillsPromptSectionForWorkspace(workspaceRoot
 
 	prompt, count := buildAgentSkillsSectionFromList(activated)
 	return prompt, count, nil
+}
+
+func skillPathKey(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	key := filepath.Clean(path)
+	if runtime.GOOS == "windows" {
+		key = strings.ToLower(key)
+	}
+	return key
+}
+
+func filterSkillsExcludingPaths(skills []GlobalSkill, excludedPaths map[string]struct{}) []GlobalSkill {
+	if len(skills) == 0 || len(excludedPaths) == 0 {
+		return skills
+	}
+	filtered := make([]GlobalSkill, 0, len(skills))
+	for _, skill := range skills {
+		if _, excluded := excludedPaths[skillPathKey(skill.FullPath)]; excluded {
+			continue
+		}
+		filtered = append(filtered, skill)
+	}
+	return filtered
 }
 
 // buildAgentSkillsSectionFromList 把已激活技能列表构建为 <agent_skills> 片段。
@@ -398,7 +434,7 @@ type skillManifestMetadata struct {
 }
 
 func parseSKILLManifest(data []byte) (skillManifestMetadata, []SkillManifestDiagnostic) {
-	frontmatter := extractSKILLFrontmatter(string(data))
+	frontmatter, standardYAML := extractSKILLFrontmatter(string(data))
 	if len(frontmatter) > skillManifestMaxMetadataBytes {
 		return skillManifestMetadata{}, []SkillManifestDiagnostic{{
 			Code:    "metadata_too_large",
@@ -406,11 +442,15 @@ func parseSKILLManifest(data []byte) (skillManifestMetadata, []SkillManifestDiag
 		}}
 	}
 	var metadata skillManifestMetadata
-	if err := yaml.Unmarshal([]byte(frontmatter), &metadata); err != nil {
-		return skillManifestMetadata{}, []SkillManifestDiagnostic{{
-			Code:    "invalid_yaml",
-			Message: "skill manifest metadata is not valid YAML",
-		}}
+	if standardYAML {
+		if err := yaml.Unmarshal([]byte(frontmatter), &metadata); err != nil {
+			return skillManifestMetadata{}, []SkillManifestDiagnostic{{
+				Code:    "invalid_yaml",
+				Message: "skill manifest metadata is not valid YAML",
+			}}
+		}
+	} else {
+		metadata = parseLegacySKILLFrontmatter(frontmatter)
 	}
 	metadata.Name = strings.TrimSpace(metadata.Name)
 	metadata.Description = strings.TrimSpace(metadata.Description)
@@ -457,14 +497,15 @@ func containsControlCharacter(value string) bool {
 	return false
 }
 
-func extractSKILLFrontmatter(content string) string {
+func extractSKILLFrontmatter(content string) (string, bool) {
 	content = strings.TrimPrefix(strings.ReplaceAll(content, "\r\n", "\n"), "\ufeff")
 	lines := strings.Split(content, "\n")
 	start := 0
 	for start < len(lines) && strings.TrimSpace(lines[start]) == "" {
 		start++
 	}
-	if start < len(lines) && strings.TrimSpace(lines[start]) == "---" {
+	standardYAML := start < len(lines) && strings.TrimSpace(lines[start]) == "---"
+	if standardYAML {
 		start++
 	}
 	end := len(lines)
@@ -474,7 +515,23 @@ func extractSKILLFrontmatter(content string) string {
 			break
 		}
 	}
-	return strings.Join(lines[start:end], "\n")
+	return strings.Join(lines[start:end], "\n"), standardYAML
+}
+
+func parseLegacySKILLFrontmatter(content string) skillManifestMetadata {
+	var metadata skillManifestMetadata
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimRight(line, "\r")
+		switch {
+		case strings.HasPrefix(line, "name:"):
+			metadata.Name = unquoteFrontmatterValue(strings.TrimSpace(strings.TrimPrefix(line, "name:")))
+		case strings.HasPrefix(line, "description:"):
+			metadata.Description = unquoteFrontmatterValue(strings.TrimSpace(strings.TrimPrefix(line, "description:")))
+		case strings.HasPrefix(line, "version:"):
+			metadata.Version = unquoteFrontmatterValue(strings.TrimSpace(strings.TrimPrefix(line, "version:")))
+		}
+	}
+	return metadata
 }
 
 // parseSKILLFrontmatter 从 SKILL.md 内容解析 name / description 字段。

@@ -1,10 +1,7 @@
-// asset_enrichment.go 在写历史前，把磁盘扫描到的技能/MCP server 合并进 intent.RequestContext。
+// asset_enrichment.go 在写历史前，把磁盘扫描到的 MCP server 合并进 intent.RequestContext。
 //
-// 这是 BYOK 还原原生用法的核心接入点：原生 Cursor 由客户端在 RequestContext 里带上
-// SkillOptions / McpFileSystemOptions；BYOK 客户端往往不填，导致 <agent_skills> 和
-// <mcp_file_system> 为空、模型无从得知可用技能/MCP。本函数用磁盘扫描结果补齐，
-// 复用现有 request_context → projector → engine.go 的原生 user-message 注入链路，
-// 不在系统提示里另开第二条注入路径（避免与 user-message 注入分叉、破坏 prefix-cache）。
+// 扫描技能只走编译器的稀疏激活系统提示路径；客户端显式传入的 SkillOptions 保留原生
+// request_context 回放。MCP 仍复用 request_context → projector → engine.go 注入链路。
 package forwarder
 
 import (
@@ -47,20 +44,20 @@ func readSkillMCPScanSettings(provider skillMCPScanConfigProvider) SkillMCPScanS
 	}
 }
 
-// enrichRequestContextWithScannedAssets 把扫描到的技能/MCP descriptor 合并进 intent.RequestContext。
+// enrichRequestContextWithScannedAssets 同步技能扫描设置并合并扫描到的 MCP descriptor。
 //
 // 合并语义（不覆盖客户端已发内容）：
-//   - Skills：转成 SkillDescriptor，按 ReadmeFilePath 去重后追加进 SkillOptions.SkillDescriptors。
 //   - MCP：追加进 McpFileSystemOptions.McpDescriptors，按 ServerIdentifier 去重；并标记 Enabled。
 //
 // 幂等：扫描结果有 mtime 缓存，重复调用代价低；非 turn 1 时由 normalizeRealtimeRequestContextForStorage
-// 自动丢弃静态部分，因此无需在此判断 turnSeq。
+// 丢弃 model-visible 静态资产，仅保留 workspace scope marker，因此无需在此判断 turnSeq。
 func (service *Service) enrichRequestContextWithScannedAssets(intent *InboundIntent) {
 	if service == nil || intent == nil {
 		return
 	}
 	settings := readSkillMCPScanSettings(service.scanConfig)
 	workspaceRoot := resolveWorkspaceRootFromIntent(intent)
+	preserveRequestContextWorkspaceRoot(intent, workspaceRoot)
 
 	// Keep compiler-side scan settings synchronized even when scanning is disabled.
 	if service.skillsStore() != nil {
@@ -73,17 +70,13 @@ func (service *Service) enrichRequestContextWithScannedAssets(intent *InboundInt
 		return
 	}
 
-	skills := ScanAllSkills(workspaceRoot)
 	mcpConfigs := ScanMCPServerConfigs(workspaceRoot, settings)
 	if service.mcpRuntime != nil {
 		SyncMCPRuntimeForWorkspace(service.mcpRuntime, workspaceRoot, enabledMCPServerConfigs(mcpConfigs))
 	}
 	mcpServers := mcpDescriptorsWithRuntime(mcpConfigs, service.mcpRuntime)
 
-	// 应用配置过滤：按分类来源 + 逐项禁用。
-	skills = filterScannedSkills(skills, settings)
-
-	if len(skills) == 0 && len(mcpServers) == 0 {
+	if len(mcpServers) == 0 {
 		return
 	}
 
@@ -92,15 +85,24 @@ func (service *Service) enrichRequestContextWithScannedAssets(intent *InboundInt
 	}
 	rc := intent.RequestContext
 
-	if len(skills) > 0 {
-		mergeScannedSkillDescriptors(rc, skills)
+	mergeScannedMCPDescriptors(rc, mcpServers, workspaceRoot)
+	// 捕获点：MCP schema 缺失。扫描注入的 descriptor 不含 tool schema（磁盘配置无 input_schema），
+	// 模型仅知 server 名、不知具体工具/参数 -> 调用易失败。记录便于后续针对性补 schema。
+	service.captureMCPSchemaGap(intent.RequestID, intent.ConversationID, mcpServers)
+}
+
+func preserveRequestContextWorkspaceRoot(intent *InboundIntent, workspaceRoot string) {
+	workspaceRoot = strings.TrimSpace(workspaceRoot)
+	if intent == nil || workspaceRoot == "" {
+		return
 	}
-	if len(mcpServers) > 0 {
-		mergeScannedMCPDescriptors(rc, mcpServers, workspaceRoot)
-		// 捕获点：MCP schema 缺失。扫描注入的 descriptor 不含 tool schema（磁盘配置无 input_schema），
-		// 模型仅知 server 名、不知具体工具/参数 -> 调用易失败。记录便于后续针对性补 schema。
-		service.captureMCPSchemaGap(intent.RequestID, intent.ConversationID, mcpServers)
+	if intent.RequestContext == nil {
+		intent.RequestContext = &agentv1.RequestContext{}
 	}
+	if intent.RequestContext.McpFileSystemOptions == nil {
+		intent.RequestContext.McpFileSystemOptions = &agentv1.McpFileSystemOptions{}
+	}
+	intent.RequestContext.McpFileSystemOptions.WorkspaceProjectDir = workspaceRoot
 }
 
 // filterScannedSkills 按分类来源开关与逐项禁用列表过滤技能。
@@ -139,6 +141,9 @@ func resolveWorkspaceRootFromIntent(intent *InboundIntent) string {
 	if intent == nil || intent.RequestContext == nil {
 		return ""
 	}
+	if workspaceRoot := resolveWorkspaceRootFromEnv(intent.RequestContext.GetEnv()); workspaceRoot != "" {
+		return workspaceRoot
+	}
 	return resolveWorkspaceRootFromRequestContext(intent.RequestContext)
 }
 
@@ -146,7 +151,13 @@ func resolveWorkspaceRootFromRequestContext(requestContext *agentv1.RequestConte
 	if requestContext == nil {
 		return ""
 	}
-	env := requestContext.GetEnv()
+	if workspaceRoot := strings.TrimSpace(requestContext.GetMcpFileSystemOptions().GetWorkspaceProjectDir()); workspaceRoot != "" {
+		return workspaceRoot
+	}
+	return resolveWorkspaceRootFromEnv(requestContext.GetEnv())
+}
+
+func resolveWorkspaceRootFromEnv(env *agentv1.RequestContextEnv) string {
 	if env == nil {
 		return ""
 	}
@@ -159,45 +170,6 @@ func resolveWorkspaceRootFromRequestContext(requestContext *agentv1.RequestConte
 		}
 	}
 	return ""
-}
-
-// mergeScannedSkillDescriptors 把扫描技能追加进 SkillOptions，按 ReadmeFilePath 去重。
-func mergeScannedSkillDescriptors(rc *agentv1.RequestContext, skills []SourcedGlobalSkill) {
-	existing := make(map[string]struct{}, len(rc.GetSkillOptions().GetSkillDescriptors()))
-	for _, d := range rc.GetSkillOptions().GetSkillDescriptors() {
-		if d == nil {
-			continue
-		}
-		key := strings.ToLower(strings.TrimSpace(d.GetReadmeFilePath()))
-		if key != "" {
-			existing[key] = struct{}{}
-		}
-	}
-	appended := make([]*agentv1.SkillDescriptor, 0, len(skills))
-	for _, sk := range skills {
-		fullPath := strings.TrimSpace(sk.FullPath)
-		if fullPath == "" {
-			continue
-		}
-		key := strings.ToLower(fullPath)
-		if _, ok := existing[key]; ok {
-			continue
-		}
-		existing[key] = struct{}{}
-		appended = append(appended, &agentv1.SkillDescriptor{
-			Name:           strings.TrimSpace(sk.Name),
-			Description:    strings.TrimSpace(sk.Description),
-			ReadmeFilePath: fullPath,
-			Enabled:        true,
-		})
-	}
-	if len(appended) == 0 {
-		return
-	}
-	if rc.SkillOptions == nil {
-		rc.SkillOptions = &agentv1.SkillOptions{}
-	}
-	rc.SkillOptions.SkillDescriptors = append(rc.SkillOptions.SkillDescriptors, appended...)
 }
 
 // mergeScannedMCPDescriptors 把扫描到的 MCP server 追加进 McpFileSystemOptions，
