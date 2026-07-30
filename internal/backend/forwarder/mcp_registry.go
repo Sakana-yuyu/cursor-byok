@@ -15,6 +15,7 @@ import (
 
 	"cursor/gen/agentv1"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -542,8 +543,10 @@ func cloneMCPToolDescriptors(input []*agentv1.McpToolDescriptor) []*agentv1.McpT
 		if descriptor == nil {
 			continue
 		}
-		cloned := *descriptor
-		output = append(output, &cloned)
+		cloned, _ := proto.Clone(descriptor).(*agentv1.McpToolDescriptor)
+		if cloned != nil {
+			output = append(output, cloned)
+		}
 	}
 	return output
 }

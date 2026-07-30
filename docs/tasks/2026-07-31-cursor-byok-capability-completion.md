@@ -28,7 +28,7 @@
 - [x] Task 10：完成 Multitask 结果合并、失败隔离和取消。
 - [x] Task 11：完成委派设置、工具权限、运行状态、取消操作与 MCP 连接控制界面。
 - [x] Task 12：完成 Cursor 原生工作流对齐审查。
-- [ ] Task 13：全面构建、静态检查、协议回放和人工流程验收。
+- [x] Task 13：全面构建、静态检查、协议回放和人工流程验收。
 
 ## Task 12 验收记录
 
@@ -38,6 +38,15 @@
 - run/prewarm 顶层 Skills、MCP tools、MCP 文件系统选项已合并到有效请求上下文。
 - MCP schema、显示名路由、内置工具防劫持和本地委派权限链已闭环。
 - `go test -count=1 ./...`、`go build ./...`、`npm --prefix frontend run build` 通过。
+
+## Task 13 验收记录
+
+- MCP runtime tool descriptor 和 interaction bridge protobuf 对象改为深拷贝，`go vet` 不再报告锁值复制。
+- `go test -count=1 ./...`、`go vet ./...`、`go build ./...` 全部通过。
+- `npm --prefix frontend run build` 通过，构建内置 i18n 静态扫描通过。
+- `git diff --check` 通过，`proto/` 与 `gen/` 无未预期差异，本阶段文件通过 `gofmt` 检查。
+- 浏览器预览人工检查通过：委派模型组新增与模型选择、默认模型启用、MCP 连接/断开状态、Skills/MCP 扫描面板和主要设置按钮均可操作，控制台无 error。
+- 全仓 `gofmt -l` 仍会列出大量任务前已存在的未格式化文件；未批量改写这些无关文件。
 
 ## 每阶段验收
 
