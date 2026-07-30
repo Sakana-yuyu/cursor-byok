@@ -19,11 +19,11 @@
 - [x] Task 1：审查并完善按钮交互（静态扫描确认事件处理器完整；无未定义按钮动作）。
 - [x] Task 2：抽离统一 Tool Registry 和执行收口（工具 canonical kind 注册表已接入）。
 - [x] Task 3：完善 Skills 注册、中文简介、开关和调用链（内置 skill 与现有扫描开关已接入）。
-- [x] Task 4：完成 MCP 运行时发现、schema 注入和执行闭环（stdio tools/list 已接入，HTTP/SSE 仍由 Cursor 客户端执行）。
-- [ ] Task 5：稳定 Agent 模式、provider pass、resume 和 checkpoint 调用链。
+- [x] Task 4：完成 MCP 运行时发现、schema 注入和执行闭环（stdio、Streamable HTTP 和 legacy SSE 显式连接均已接入）。
+- [x] Task 5：稳定 Agent 模式、provider pass、resume 和 checkpoint 调用链。
 - [x] Task 6：增加委派模型组配置与持久化。
 - [x] Task 7：增加非阻塞 DelegationScheduler。
-- [ ] Task 8：接入 Cursor 子代理适配器和 workspace hint。
+- [x] Task 8：接入 Cursor 子代理适配器和 workspace hint。
 - [ ] Task 9：接入本地子代理适配器。
 - [ ] Task 10：完成 Multitask 结果合并、失败隔离和取消。
 - [x] Task 11：完成委派设置界面和配置持久化（运行状态面板待 Task 10 接入）。

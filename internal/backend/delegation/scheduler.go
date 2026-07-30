@@ -9,6 +9,11 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"google.golang.org/protobuf/proto"
+
+	"cursor/gen/agentv1"
+	runtimecore "cursor/internal/backend/agent/core"
 )
 
 const (
@@ -29,22 +34,37 @@ const (
 
 // TaskRequest 是调度器与具体子代理适配器之间的最小输入契约。
 type TaskRequest struct {
-	ID             string
-	ParentRequest  string
-	Prompt         string
-	ModelID        string
-	ModelGroupID   string
-	ExecutionMode  string
-	WorkspaceHint  string
-	ToolPermission map[string]bool
-	Timeout        time.Duration
+	ID                           string
+	ParentRequest                string
+	ParentExecID                 string
+	ParentToolCall               string
+	ConversationID               string
+	RootConversationID           string
+	ArgsJSON                     []byte
+	Prompt                       string
+	Description                  string
+	SubagentType                 string
+	Readonly                     bool
+	RunInBackground              bool
+	ModelID                      string
+	SubagentModelOverrides       map[string]runtimecore.SubagentModelOverrideSelection
+	SelectedSubagentModels       []*agentv1.RequestedModel
+	SelectedSubagentModelDetails []*agentv1.ModelDetails
+	ModelGroupID                 string
+	ExecutionMode                string
+	WorkspaceHint                string
+	ToolPermission               map[string]bool
+	ModelParams                  []*agentv1.RequestedModel_ModelParameterValue
+	Timeout                      time.Duration
 }
 
 // TaskResult 是适配器返回给主代理的统一结果。
 type TaskResult struct {
-	Output        string
-	Error         error
-	ToolCallCount int
+	Output         string
+	Error          error
+	ToolCallCount  int
+	SubagentResult *agentv1.SubagentResult
+	Metadata       map[string]string
 }
 
 // TaskSnapshot 是 UI 和主代理读取的稳定状态快照。
@@ -82,6 +102,7 @@ type Scheduler struct {
 
 type taskState struct {
 	snapshot   TaskSnapshot
+	result     TaskResult
 	ctx        context.Context
 	cancel     context.CancelFunc
 	runnerDone bool
@@ -229,6 +250,7 @@ func (s *Scheduler) run(state *taskState) {
 	state.snapshot.Output = result.Output
 	state.snapshot.ToolCallCount = result.ToolCallCount
 	state.snapshot.FinishedAt = finished
+	state.result = cloneTaskResult(result)
 	if executionCtx.Err() != nil {
 		if executionCtx.Err() == context.DeadlineExceeded {
 			state.snapshot.Status = TaskTimedOut
@@ -282,6 +304,19 @@ func (s *Scheduler) Snapshot(taskID string) (TaskSnapshot, bool) {
 		return TaskSnapshot{}, false
 	}
 	return cloneTaskSnapshot(state.snapshot), true
+}
+
+func (s *Scheduler) Result(taskID string) (TaskResult, bool) {
+	if s == nil {
+		return TaskResult{}, false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	state, ok := s.tasks[taskID]
+	if !ok {
+		return TaskResult{}, false
+	}
+	return cloneTaskResult(state.result), true
 }
 
 func (s *Scheduler) Snapshots() []TaskSnapshot {
@@ -449,7 +484,12 @@ func isTerminalStatus(status TaskStatus) bool {
 }
 
 func cloneTaskRequest(request TaskRequest) TaskRequest {
+	request.ArgsJSON = append([]byte(nil), request.ArgsJSON...)
 	request.ToolPermission = cloneToolPermissions(request.ToolPermission)
+	request.SubagentModelOverrides = cloneSubagentModelOverrides(request.SubagentModelOverrides)
+	request.SelectedSubagentModels = cloneRequestedModels(request.SelectedSubagentModels)
+	request.SelectedSubagentModelDetails = cloneModelDetails(request.SelectedSubagentModelDetails)
+	request.ModelParams = cloneModelParams(request.ModelParams)
 	return request
 }
 
@@ -465,6 +505,109 @@ func cloneToolPermissions(source map[string]bool) map[string]bool {
 	cloned := make(map[string]bool, len(source))
 	for name, allowed := range source {
 		cloned[name] = allowed
+	}
+	return cloned
+}
+
+func cloneTaskResult(result TaskResult) TaskResult {
+	result.Metadata = cloneStringMap(result.Metadata)
+	if result.SubagentResult != nil {
+		if cloned, ok := proto.Clone(result.SubagentResult).(*agentv1.SubagentResult); ok {
+			result.SubagentResult = cloned
+		}
+	}
+	return result
+}
+
+func cloneModelParams(source []*agentv1.RequestedModel_ModelParameterValue) []*agentv1.RequestedModel_ModelParameterValue {
+	if len(source) == 0 {
+		return nil
+	}
+	cloned := make([]*agentv1.RequestedModel_ModelParameterValue, 0, len(source))
+	for _, item := range source {
+		if item == nil {
+			continue
+		}
+		if copy, ok := proto.Clone(item).(*agentv1.RequestedModel_ModelParameterValue); ok {
+			cloned = append(cloned, copy)
+		}
+	}
+	if len(cloned) == 0 {
+		return nil
+	}
+	return cloned
+}
+
+func cloneSubagentModelOverrides(source map[string]runtimecore.SubagentModelOverrideSelection) map[string]runtimecore.SubagentModelOverrideSelection {
+	if len(source) == 0 {
+		return nil
+	}
+	cloned := make(map[string]runtimecore.SubagentModelOverrideSelection, len(source))
+	for key, value := range source {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		cloned[key] = value
+	}
+	if len(cloned) == 0 {
+		return nil
+	}
+	return cloned
+}
+
+func cloneRequestedModels(source []*agentv1.RequestedModel) []*agentv1.RequestedModel {
+	if len(source) == 0 {
+		return nil
+	}
+	cloned := make([]*agentv1.RequestedModel, 0, len(source))
+	for _, item := range source {
+		if item == nil {
+			continue
+		}
+		if copy, ok := proto.Clone(item).(*agentv1.RequestedModel); ok {
+			cloned = append(cloned, copy)
+		}
+	}
+	if len(cloned) == 0 {
+		return nil
+	}
+	return cloned
+}
+
+func cloneModelDetails(source []*agentv1.ModelDetails) []*agentv1.ModelDetails {
+	if len(source) == 0 {
+		return nil
+	}
+	cloned := make([]*agentv1.ModelDetails, 0, len(source))
+	for _, item := range source {
+		if item == nil {
+			continue
+		}
+		if copy, ok := proto.Clone(item).(*agentv1.ModelDetails); ok {
+			cloned = append(cloned, copy)
+		}
+	}
+	if len(cloned) == 0 {
+		return nil
+	}
+	return cloned
+}
+
+func cloneStringMap(source map[string]string) map[string]string {
+	if len(source) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(source))
+	for key, value := range source {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		cloned[key] = strings.TrimSpace(value)
+	}
+	if len(cloned) == 0 {
+		return nil
 	}
 	return cloned
 }

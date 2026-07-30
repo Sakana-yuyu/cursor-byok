@@ -299,6 +299,7 @@ type Service struct {
 	interactionBridge  interactionbridge.InteractionBridge
 	appendSeq          *appendSequenceTracker
 	runQueue           *runQueue
+	cursorDelegation   *cursorDelegationBridge
 }
 
 type agentModelMemory interface {
@@ -367,6 +368,7 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 		appendSeq:          newAppendSequenceTracker(),
 		runQueue:           newRunQueue(),
 	}
+	service.cursorDelegation = newCursorDelegationBridge(service)
 	service.startHistoryMaintenance()
 	return service
 }
@@ -378,7 +380,7 @@ func newServiceWithDependencies(store *ConversationFileStore, projector *History
 		historyRoot = store.HistoryDir()
 	}
 	debug := newDebugRecorder(historyRoot, broker, nil)
-	return &Service{
+	service := &Service{
 		store:              store,
 		rules:              NewUserRuleStore(appdata.RulesRootPath()),
 		projector:          projector,
@@ -396,6 +398,8 @@ func newServiceWithDependencies(store *ConversationFileStore, projector *History
 		appendSeq:          newAppendSequenceTracker(),
 		runQueue:           newRunQueue(),
 	}
+	service.cursorDelegation = newCursorDelegationBridge(service)
+	return service
 }
 
 // BidiAppend 处理 legacy Bidi 上行，把用户输入和外部结果归一化后写入 history。
@@ -951,6 +955,9 @@ func (service *Service) Shutdown(ctx context.Context) error {
 	if service.mcpRuntime != nil {
 		defer service.mcpRuntime.Close()
 	}
+	if service.cursorDelegation != nil {
+		defer service.cursorDelegation.Close()
+	}
 	if service.broker == nil {
 		return nil
 	}
@@ -1106,6 +1113,9 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 
 // handleExecResult 处理客户端返回的执行桥结果，并在终态时把 tool_result 写回 history。
 func (service *Service) handleExecResult(intent InboundIntent) error {
+	if intent.ExecClientMessage != nil && service.cursorDelegation != nil && service.cursorDelegation.ConsumeExecMessage(intent.ExecClientMessage) {
+		return nil
+	}
 	stream, ok := service.broker.Get(intent.RequestID)
 	if !ok || stream == nil {
 		return fmt.Errorf("request is not active: %s", intent.RequestID)
@@ -1202,6 +1212,9 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 
 // handleExecControl 处理执行桥控制面结果，例如 stream_close 或 throw。
 func (service *Service) handleExecControl(intent InboundIntent) error {
+	if intent.ExecClientControlMessage != nil && service.cursorDelegation != nil && service.cursorDelegation.ConsumeExecControl(intent.ExecClientControlMessage) {
+		return nil
+	}
 	stream, ok := service.broker.Get(intent.RequestID)
 	if !ok || stream == nil {
 		if shouldIgnoreStaleExecControl(intent.ExecClientControlMessage) {
@@ -2040,13 +2053,7 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 		return nil
 	}
 	if isExecInvocation {
-		serverMessage, pendingExec, err := service.execBridge.OpenExec(execbridge.OpenExecContext{
-			ConversationID:               stream.ConversationID,
-			ModelID:                      stream.ModelID,
-			SubagentModelOverrides:       subagentOverrides,
-			SelectedSubagentModels:       cloneSelectedSubagentModels(stream.SelectedSubagentModels),
-			SelectedSubagentModelDetails: cloneSelectedSubagentModelDetails(stream.SelectedSubagentModelDetails),
-		}, invocation)
+		serverMessage, pendingExec, err := service.execBridge.OpenExec(buildExecOpenContextForStream(stream, subagentOverrides), invocation)
 		if err != nil {
 			return service.completePreDispatchToolError(stream, invocation, startedToolCall, startedToolCall != nil, startedEmitted, err)
 		}
