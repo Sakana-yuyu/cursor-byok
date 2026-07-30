@@ -211,9 +211,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           task build:windows:installer
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if (-not (Test-Path 'bin/windows-64.zip')) { throw 'Windows ZIP was not produced' }
+          $archive = Get-Item 'bin/windows-64.zip' -ErrorAction SilentlyContinue
+          if (-not $archive -or $archive.Length -le 0) { throw 'Windows ZIP was not produced or is empty' }
           $installer = Get-ChildItem 'bin/*-amd64-installer.exe' -File | Select-Object -First 1
-          if (-not $installer) { throw 'Windows NSIS installer was not produced' }
+          if (-not $installer -or $installer.Length -le 0) { throw 'Windows NSIS installer was not produced or is empty' }
           Write-Host "Produced $($installer.FullName)"
 
       - name: Build Windows 386 package
@@ -222,12 +223,13 @@ jobs:
         run: |
           task build:windows:386
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if (-not (Test-Path 'bin/windows-32.zip')) { throw 'Windows 386 ZIP was not produced' }
+          $archive386 = Get-Item 'bin/windows-32.zip' -ErrorAction SilentlyContinue
+          if (-not $archive386 -or $archive386.Length -le 0) { throw 'Windows 386 ZIP was not produced or is empty' }
           Write-Host "Produced bin/windows-32.zip"
           task build:windows:installer:386
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $installer386 = Get-ChildItem 'bin/*-386-installer.exe' -File | Select-Object -First 1
-          if (-not $installer386) { throw 'Windows 386 NSIS installer was not produced' }
+          if (-not $installer386 -or $installer386.Length -le 0) { throw 'Windows 386 NSIS installer was not produced or is empty' }
           Write-Host "Produced $($installer386.FullName)"
 
       - name: Self-sign Windows binaries
@@ -286,7 +288,7 @@ jobs:
         shell: bash
         run: |
           task build:linux:amd64
-          test -f bin/linux-amd64.tar.gz
+          test -s bin/linux-amd64.tar.gz
 
       - name: Build macOS package
         if: startsWith(matrix.target, 'macos-')
@@ -326,8 +328,8 @@ jobs:
           fi
 
           DMG_PATH="bin/${{ endsWith(matrix.target, 'arm64') && 'macos-arm64.dmg' || 'macos-intel.dmg' }}"
-          if [ ! -f "${DMG_PATH}" ]; then
-            echo "!!! expected DMG not found: ${DMG_PATH}"
+          if [ ! -s "${DMG_PATH}" ]; then
+            echo "!!! expected DMG not found or empty: ${DMG_PATH}"
             ls -la bin/
             exit 1
           fi
@@ -344,8 +346,8 @@ jobs:
           fi
 
           ARCHIVE_PATH="bin/release/${VERSION}/cursor-byok-${VERSION}-macos-${ARCH_NAME}.tar.gz"
-          if [ ! -f "${ARCHIVE_PATH}" ]; then
-            echo "!!! expected archive not found: ${ARCHIVE_PATH}"
+          if [ ! -s "${ARCHIVE_PATH}" ]; then
+            echo "!!! expected archive not found or empty: ${ARCHIVE_PATH}"
             ls -la "bin/release/${VERSION}/"
             exit 1
           fi
@@ -446,7 +448,15 @@ jobs:
               printf '  %s\n' "${matches[@]}"
               exit 1
             fi
+            if [ ! -s "${matches[0]}" ]; then
+              echo "::error::build asset is empty: ${matches[0]}"
+              exit 1
+            fi
             cp "${matches[0]}" "publish/${target_name}"
+            if [ ! -s "publish/${target_name}" ]; then
+              echo "::error::published asset is empty: publish/${target_name}"
+              exit 1
+            fi
           }
 
           copy_asset "windows-64.zip" "cursor-byok-${VERSION}-windows-amd64.zip"
@@ -476,6 +486,7 @@ jobs:
               "windows-386",
               "windows-amd64"
             ] and
+            all(.platforms[]; .size > 0) and
             ([.platforms[].url | endswith(".dmg")] | any | not)
           ' publish/update.json >/dev/null
 
