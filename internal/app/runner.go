@@ -510,10 +510,9 @@ func parseEmbeddedCert(data []byte) (*x509.Certificate, error) {
 	return x509.ParseCertificate(data)
 }
 
-// startTrayStatsRotation 启动托盘统计信息轮换显示
+// startTrayStatsRotation 启动托盘统计信息更新（显示图形化缓存命中率图标）
 func startTrayStatsRotation(app *application.App, systray *application.SystemTray, metricsService *bridge.MetricsService, locale string) {
 	go func() {
-		displayIndex := 0
 		ticker := time.NewTicker(3 * time.Second)
 		defer ticker.Stop()
 
@@ -526,72 +525,31 @@ func startTrayStatsRotation(app *application.App, systray *application.SystemTra
 			// 计算金额（简化版，假设 $0.01/1M tokens）
 			estimatedCost := float64(summary.RequestTokensTotal) / 1000000.0 * 0.01
 
-			var label string
-			switch displayIndex % 4 {
-			case 0:
-				// 显示金额
-				if locale == "en-US" {
-					label = fmt.Sprintf("Cost $%.2f", estimatedCost)
-				} else if locale == "ja-JP" {
-					label = fmt.Sprintf("コスト $%.2f", estimatedCost)
-				} else {
-					label = fmt.Sprintf("消费 $%.2f", estimatedCost)
-				}
-			case 1:
-				// 显示缓存命中率
-				if summary.CacheHitRate != nil {
-					hitRate := *summary.CacheHitRate * 100
-					if locale == "en-US" {
-						label = fmt.Sprintf("Hit Rate %.1f%%", hitRate)
-					} else if locale == "ja-JP" {
-						label = fmt.Sprintf("命中率 %.1f%%", hitRate)
-					} else {
-						label = fmt.Sprintf("命中率 %.1f%%", hitRate)
-					}
-				} else {
-					if locale == "en-US" {
-						label = "Hit Rate --"
-					} else if locale == "ja-JP" {
-						label = "命中率 --"
-					} else {
-						label = "命中率 --"
-					}
-				}
-			case 2:
-				// 显示 Token 消耗
-				tokensLabel := formatTokens(summary.RequestTokensTotal)
-				if locale == "en-US" {
-					label = fmt.Sprintf("Tokens %s", tokensLabel)
-				} else if locale == "ja-JP" {
-					label = fmt.Sprintf("トークン %s", tokensLabel)
-				} else {
-					label = fmt.Sprintf("Token %s", tokensLabel)
-				}
-			case 3:
-				// 显示对话轮次
-				if locale == "en-US" {
-					label = fmt.Sprintf("Turns %d", summary.TurnsTotal)
-				} else if locale == "ja-JP" {
-					label = fmt.Sprintf("ターン %d", summary.TurnsTotal)
-				} else {
-					label = fmt.Sprintf("轮次 %d", summary.TurnsTotal)
-				}
+			// 获取缓存命中率
+			hitRate := 0.0
+			if summary.CacheHitRate != nil {
+				hitRate = *summary.CacheHitRate
 			}
+
+			// 生成动态图标
+			iconData, err := generateTrayIcon(hitRate)
+			if err != nil {
+				logger.Errorf("generate tray icon failed: %v", err)
+				return
+			}
+
+			// 更新图标
+			systray.SetIcon(iconData)
 
 			// 更新 Tooltip 显示所有详情
 			tooltip := formatTooltip(summary, estimatedCost, locale)
-			
-			// 直接更新托盘（系统托盘操作是线程安全的）
-			systray.SetLabel(label)
 			systray.SetTooltip(tooltip)
-
-			displayIndex++
 		}
 
 		// 立即更新一次
 		updateTrayStats()
 
-		// 定时轮换
+		// 定时更新
 		for range ticker.C {
 			updateTrayStats()
 		}
