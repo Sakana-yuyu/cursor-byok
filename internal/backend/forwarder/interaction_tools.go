@@ -1,6 +1,7 @@
 package forwarder
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -63,7 +64,13 @@ func (service *Service) handleInteractionResult(intent InboundIntent) error {
 	}
 	pending, found := selectPendingInteraction(intent.InteractionResponse, stream)
 	if !found {
+		if recentlyCompletedInteractionExists(stream, fmt.Sprintf("%d", intent.InteractionResponse.GetId())) {
+			return nil
+		}
 		return fmt.Errorf("pending interaction not found")
+	}
+	if service.ignoreStaleInteractionProviderPass(stream, pending) {
+		return nil
 	}
 	result, err := service.interactionBridge.ApplyInteractionResponse(intent.InteractionResponse, pending)
 	if err != nil {
@@ -122,6 +129,28 @@ func (service *Service) handleInteractionResult(intent InboundIntent) error {
 	return service.reconcileStream(stream)
 }
 
+func (service *Service) ignoreStaleInteractionProviderPass(stream *ActiveStream, pending runtimecore.PendingInteraction) bool {
+	if stream == nil || pending.ProviderPass <= 0 {
+		return false
+	}
+	stream.mu.Lock()
+	currentPass := stream.ProviderPassCount
+	stream.mu.Unlock()
+	if currentPass <= 0 || currentPass == pending.ProviderPass {
+		return false
+	}
+	markInteractionCompleted(stream, pending)
+	if service != nil && service.debug != nil {
+		service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "stale_interaction_result_ignored", map[string]any{
+			"interaction_id": strings.TrimSpace(pending.InteractionID),
+			"provider_pass":  pending.ProviderPass,
+			"current_pass":   currentPass,
+			"tool_call_id":   strings.TrimSpace(pending.ToolCallID),
+		})
+	}
+	return true
+}
+
 func (service *Service) applyApprovedSwitchMode(stream *ActiveStream, conversationID string, toolCall *agentv1.ToolCall) error {
 	switchToolCall := toolCall.GetSwitchModeToolCall()
 	if switchToolCall == nil || switchToolCall.GetResult().GetSuccess() == nil {
@@ -174,10 +203,40 @@ func markInteractionCompleted(stream *ActiveStream, pending runtimecore.PendingI
 	if stream == nil {
 		return
 	}
+	now := time.Now().UTC()
+	cutoff := now.Add(-completedExecRetention)
 	stream.mu.Lock()
 	delete(stream.PendingInteractions, pending.InteractionID)
-	stream.UpdatedAt = time.Now().UTC()
+	if stream.RecentCompletedInteractions == nil {
+		stream.RecentCompletedInteractions = make(map[string]time.Time)
+	}
+	for interactionID, completedAt := range stream.RecentCompletedInteractions {
+		if completedAt.Before(cutoff) {
+			delete(stream.RecentCompletedInteractions, interactionID)
+		}
+	}
+	if strings.TrimSpace(pending.InteractionID) != "" {
+		stream.RecentCompletedInteractions[pending.InteractionID] = now
+	}
+	stream.UpdatedAt = now
 	stream.mu.Unlock()
+}
+
+func recentlyCompletedInteractionExists(stream *ActiveStream, interactionID string) bool {
+	if stream == nil || strings.TrimSpace(interactionID) == "" {
+		return false
+	}
+	now := time.Now().UTC()
+	cutoff := now.Add(-completedExecRetention)
+	stream.mu.Lock()
+	defer stream.mu.Unlock()
+	completedAt, ok := stream.RecentCompletedInteractions[interactionID]
+	for id, timestamp := range stream.RecentCompletedInteractions {
+		if timestamp.Before(cutoff) {
+			delete(stream.RecentCompletedInteractions, id)
+		}
+	}
+	return ok && !completedAt.Before(cutoff)
 }
 
 func deriveToolNameFromPendingInteraction(pending runtimecore.PendingInteraction) string {

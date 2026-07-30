@@ -76,6 +76,12 @@ func (broker *StreamBroker) OpenStream(requestID string, conversationID string, 
 		if existing.BackgroundShellActions == nil {
 			existing.BackgroundShellActions = make(map[string]time.Time)
 		}
+		if existing.RecentCompletedInteractions == nil {
+			existing.RecentCompletedInteractions = make(map[string]time.Time)
+		}
+		if existing.StreamTimers == nil {
+			existing.StreamTimers = make(map[string]*time.Timer)
+		}
 		existing.UpdatedAt = time.Now().UTC()
 		existing.mu.Unlock()
 		return existing, nil
@@ -98,10 +104,13 @@ func (broker *StreamBroker) OpenStream(requestID string, conversationID string, 
 		PatchEditQueues:             make(map[string][]queuedPatchEditOperation),
 		MCPToolServers:              make(map[string]string),
 		RecentCompletedExecs:        make(map[uint32]time.Time),
+		RecentCompletedInteractions: make(map[string]time.Time),
 		BackgroundShells:            make(map[string]*BackgroundShellState),
 		BackgroundShellsByMessageID: make(map[uint32]string),
 		BackgroundShellsByExecID:    make(map[string]string),
 		BackgroundShellActions:      make(map[string]time.Time),
+		TimerTokens:                 make(map[string]uint64),
+		StreamTimers:                make(map[string]*time.Timer),
 		CreatedAt:                   now,
 		UpdatedAt:                   now,
 	}
@@ -396,6 +405,7 @@ func (broker *StreamBroker) Complete(requestID string, terminalCode string, term
 		return nil
 	}
 	broker.stopTerminalCleanupTimerLocked(stream)
+	stopAllStreamTimersLocked(stream)
 	stream.Status = StreamStatusCompleted
 	subscriberCount := len(stream.Subscribers)
 	stream.UpdatedAt = time.Now().UTC()
@@ -421,6 +431,7 @@ func (broker *StreamBroker) Fail(requestID string, terminalCode string, terminal
 	}
 	stream.mu.Lock()
 	broker.stopTerminalCleanupTimerLocked(stream)
+	stopAllStreamTimersLocked(stream)
 	stream.Status = StreamStatusFailed
 	subscriberCount := len(stream.Subscribers)
 	stream.UpdatedAt = time.Now().UTC()
@@ -446,6 +457,7 @@ func (broker *StreamBroker) Cancel(requestID string, terminalMessage string) err
 	}
 	stream.mu.Lock()
 	broker.stopTerminalCleanupTimerLocked(stream)
+	stopAllStreamTimersLocked(stream)
 	if stream.ProviderCancel != nil {
 		stream.ProviderCancel()
 		stream.ProviderCancel = nil
