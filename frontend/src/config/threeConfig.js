@@ -32,9 +32,12 @@ export const ANIMATION_CONFIG = {
 export const COLOR_SCHEME = {
   accent: '#6ee7a5',         // 主题绿色
   muted: '#8b9692',          // 次要灰色
-  gridLine: 'rgba(110, 231, 165, 0.15)',
-  scanLine: 'rgba(110, 231, 165, 0.6)',
-  particle: 'rgba(110, 231, 165, 0.8)',
+  gridLine: 'rgba(110, 231, 165, 0.08)',     // 网格更透明
+  scanLine: 'rgba(110, 231, 165, 0.25)',     // 扫描线更透明
+  particle: 'rgba(110, 231, 165, 0.3)',      // 粒子更透明
+  dataBar: 'rgba(110, 231, 165, 0.15)',      // 数据柱非常透明
+  orb: 'rgba(110, 231, 165, 0.12)',          // Orb 球体极透明
+  ring: 'rgba(110, 231, 165, 0.18)',         // 环形稍透明
 };
 
 export const CAMERA_POSITIONS = {
