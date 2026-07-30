@@ -12,6 +12,7 @@
 package forwarder
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -101,7 +102,13 @@ func ScanAllMCPServers(workspaceRoot string) []*agentv1.McpDescriptor {
 				continue
 			}
 			seen[key] = struct{}{}
-			merged = append(merged, buildMcpDescriptor(srv, identifier))
+			descriptor := buildMcpDescriptor(srv, identifier)
+			if strings.EqualFold(strings.TrimSpace(srv.Transport), "stdio") || strings.TrimSpace(srv.Transport) == "" {
+				if tools, discoverErr := discoverMCPTools(context.Background(), srv); discoverErr == nil {
+					descriptor.Tools = tools
+				}
+			}
+			merged = append(merged, descriptor)
 		}
 	}
 
