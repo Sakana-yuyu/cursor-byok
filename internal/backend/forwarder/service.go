@@ -259,6 +259,7 @@ type Service struct {
 	modelMemory        agentModelMemory
 	maxTokensPersister maxTokensConfigPersister
 	scanConfig         skillMCPScanConfigProvider
+	mcpRuntime         *MCPRuntimeRegistry
 	broker             *StreamBroker
 	recorder           *artifactRecorder
 	debug              *debugRecorder
@@ -325,6 +326,7 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 		modelMemory:        modelMemory,
 		maxTokensPersister: maxTokensPersister,
 		scanConfig:         scanConfig,
+		mcpRuntime:         SharedMCPRuntimeRegistry(),
 		broker:             broker,
 		recorder:           newArtifactRecorder(store, broker, debug),
 		debug:              debug,
@@ -358,6 +360,7 @@ func newServiceWithDependencies(store *ConversationFileStore, projector *History
 		debug:              debug,
 		execBridge:         execbridge.NewBridge(),
 		interactionBridge:  interactionbridge.NewBridge(),
+		mcpRuntime:         SharedMCPRuntimeRegistry(),
 		appendSeq:          newAppendSequenceTracker(),
 		runQueue:           newRunQueue(),
 	}
@@ -897,7 +900,13 @@ func (service *Service) snapshotVisibleTurns(conversation *ConversationFile) ([]
 // Shutdown 在服务退出前主动取消所有未终态活动流。
 // 这样 RunSSE 能先发出 TurnEnded + canceled endstream，避免 Cursor 只看到连接被硬断后报 RetriableError: Canceled。
 func (service *Service) Shutdown(ctx context.Context) error {
-	if service == nil || service.broker == nil {
+	if service == nil {
+		return nil
+	}
+	if service.mcpRuntime != nil {
+		defer service.mcpRuntime.Close()
+	}
+	if service.broker == nil {
 		return nil
 	}
 	if ctx == nil {
