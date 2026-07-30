@@ -39,7 +39,7 @@ const overlayStyleOptions = [
 const promptInjection = reactive({ enabled: false, softwareChineseEnabled: false, customEnabled: false, customContent: "", mode: "replace", repo: "yynxxxxx/Codex-X", ref: "main", selectedTemplate: "gpt5.5-unrestricted.md", localContent: "", cacheContent: "", cacheAvailable: false, lastUpdated: "", lastError: "", templates: [] });
 const promptInjectionBusy = ref(false);
 const promptInjectionLoaded = ref(false);
-const promptInjectionExpanded = ref(true);
+const promptInjectionExpanded = ref(false);
 const promptPreview = ref(null);
 const overlayPreferences = reactive({ style: "card", alwaysOnTop: true, visible: false });
 const directModeEnabled = computed(() => appState.routingMode === "upstream");

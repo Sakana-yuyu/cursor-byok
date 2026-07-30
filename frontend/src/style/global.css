@@ -18,6 +18,12 @@ body,
   font-size: 13px;
 }
 
+html.stats-overlay-page,
+html.stats-overlay-page body,
+html.stats-overlay-page #root {
+  background: transparent;
+}
+
 * {
   box-sizing: border-box;
 }
