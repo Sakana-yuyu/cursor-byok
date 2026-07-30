@@ -94,11 +94,14 @@ type ProxyService struct {
 	promptInjection *promptinject.Manager
 	mcpConnectMu    sync.Mutex
 	mcpConnects     map[string]mcpConnectHandle
+	mcpConnectSeq   uint64
 }
 
 type mcpConnectHandle struct {
-	identifier string
-	cancel     context.CancelFunc
+	identifier   string
+	runtimeScope string
+	generation   uint64
+	cancel       context.CancelFunc
 }
 
 // NewProxyService 用于处理与 NewProxyService 相关的逻辑。
@@ -324,34 +327,44 @@ func (s *ProxyService) ConnectMCPServer(workspaceRoot string, identifier string,
 	settings := skillMCPScanSettings(cfg.SkillMCPScan)
 	configs := forwarder.ScanMCPServerConfigs(workspaceRoot, settings)
 	registry := forwarder.SharedMCPRuntimeRegistry()
-	syncMCPRegistryForWorkspace(registry, workspaceRoot, configs)
-	target, ok := findEnabledMCPServerConfig(configs, identifier)
+	forwarder.SyncMCPRuntimeForWorkspace(registry, workspaceRoot, enabledMCPConfigs(configs))
+	target, ok := findEnabledMCPServerConfig(configs, forwarder.MCPRuntimeScope(workspaceRoot), identifier)
 	if !ok {
 		return forwarder.MCPServerSnapshotItem{}, fmt.Errorf("enabled mcp server %q not found in current scan", identifier)
 	}
 	connectCtx, cancel := context.WithCancel(context.Background())
 	key := strings.ToLower(strings.TrimSpace(identifier))
+	runtimeScope := target.RuntimeScope
 	attemptKey := strings.TrimSpace(attemptID)
 	if attemptKey == "" {
 		cancel()
 		return forwarder.MCPServerSnapshotItem{}, fmt.Errorf("mcp connect attempt id is required")
 	}
 	s.mcpConnectMu.Lock()
+	if _, exists := s.mcpConnects[attemptKey]; exists {
+		s.mcpConnectMu.Unlock()
+		cancel()
+		return forwarder.MCPServerSnapshotItem{}, fmt.Errorf("mcp connect attempt id %q is already active", attemptID)
+	}
 	for existingAttempt, previous := range s.mcpConnects {
-		if previous.identifier == key {
+		if previous.identifier == key && previous.runtimeScope == runtimeScope {
 			previous.cancel()
 			delete(s.mcpConnects, existingAttempt)
 		}
 	}
-	s.mcpConnects[attemptKey] = mcpConnectHandle{identifier: key, cancel: cancel}
+	s.mcpConnectSeq++
+	generation := s.mcpConnectSeq
+	s.mcpConnects[attemptKey] = mcpConnectHandle{identifier: key, runtimeScope: runtimeScope, generation: generation, cancel: cancel}
 	s.mcpConnectMu.Unlock()
 	defer func() {
 		cancel()
 		s.mcpConnectMu.Lock()
-		delete(s.mcpConnects, attemptKey)
+		if current, ok := s.mcpConnects[attemptKey]; ok && current.generation == generation {
+			delete(s.mcpConnects, attemptKey)
+		}
 		s.mcpConnectMu.Unlock()
 	}()
-	if err := registry.Connect(connectCtx, target.Identifier); err != nil {
+	if err := registry.Connect(connectCtx, runtimeScope, target.Identifier); err != nil {
 		return forwarder.MCPServerSnapshotItem{}, err
 	}
 	return findMCPServerSnapshot(forwarder.SnapshotMCPServersWithSettings(workspaceRoot, settings), identifier)
@@ -359,16 +372,26 @@ func (s *ProxyService) ConnectMCPServer(workspaceRoot string, identifier string,
 
 // DisconnectMCPServer closes one active MCP session without changing its persisted scan setting.
 func (s *ProxyService) DisconnectMCPServer(workspaceRoot string, identifier string) (forwarder.MCPServerSnapshotItem, error) {
-	s.cancelMCPServerConnections(identifier)
-	registry := forwarder.SharedMCPRuntimeRegistry()
-	if err := registry.Disconnect(identifier); err != nil {
-		return forwarder.MCPServerSnapshotItem{}, err
-	}
 	cfg, err := s.core.LoadUserConfig()
 	if err != nil {
 		return forwarder.MCPServerSnapshotItem{}, err
 	}
-	return findMCPServerSnapshot(forwarder.SnapshotMCPServersWithSettings(workspaceRoot, skillMCPScanSettings(cfg.SkillMCPScan)), identifier)
+	settings := skillMCPScanSettings(cfg.SkillMCPScan)
+	configs := forwarder.ScanMCPServerConfigs(workspaceRoot, settings)
+	registry := forwarder.SharedMCPRuntimeRegistry()
+	forwarder.SyncMCPRuntimeForWorkspace(registry, workspaceRoot, enabledMCPConfigs(configs))
+	target, ok := findMCPServerConfig(configs, forwarder.MCPRuntimeScope(workspaceRoot), identifier)
+	runtimeScope := forwarder.MCPRuntimeScope(workspaceRoot)
+	if ok {
+		runtimeScope = target.RuntimeScope
+	} else {
+		runtimeScope = registry.ResolveScope(runtimeScope, identifier)
+	}
+	s.cancelMCPServerConnections(runtimeScope, identifier)
+	if err := registry.Disconnect(runtimeScope, identifier); err != nil {
+		return forwarder.MCPServerSnapshotItem{}, err
+	}
+	return findMCPServerSnapshot(forwarder.SnapshotMCPServersWithSettings(workspaceRoot, settings), identifier)
 }
 
 // CancelMCPServerConnection cancels an in-flight explicit connect attempt.
@@ -389,12 +412,13 @@ func (s *ProxyService) CancelMCPServerConnection(identifier string, attemptID st
 	return ok
 }
 
-func (s *ProxyService) cancelMCPServerConnections(identifier string) {
+func (s *ProxyService) cancelMCPServerConnections(runtimeScope string, identifier string) {
 	key := strings.ToLower(strings.TrimSpace(identifier))
+	runtimeScope = strings.TrimSpace(runtimeScope)
 	var cancels []context.CancelFunc
 	s.mcpConnectMu.Lock()
 	for attemptID, handle := range s.mcpConnects {
-		if handle.identifier == key {
+		if handle.identifier == key && handle.runtimeScope == runtimeScope {
 			cancels = append(cancels, handle.cancel)
 			delete(s.mcpConnects, attemptID)
 		}
@@ -427,25 +451,30 @@ func enabledMCPConfigs(configs []forwarder.MCPServerConfig) []forwarder.MCPServe
 	return result
 }
 
-func syncMCPRegistryForWorkspace(registry *forwarder.MCPRuntimeRegistry, workspaceRoot string, configs []forwarder.MCPServerConfig) {
-	if registry == nil {
-		return
-	}
-	enabled := enabledMCPConfigs(configs)
-	if strings.TrimSpace(workspaceRoot) == "" {
-		registry.ReplaceScopes(enabled, forwarder.MCPConfigScopeUser)
-		return
-	}
-	registry.Replace(enabled)
+func findEnabledMCPServerConfig(configs []forwarder.MCPServerConfig, preferredScope string, identifier string) (forwarder.MCPServerConfig, bool) {
+	return findMCPServerConfigMatching(configs, preferredScope, identifier, true)
 }
 
-func findEnabledMCPServerConfig(configs []forwarder.MCPServerConfig, identifier string) (forwarder.MCPServerConfig, bool) {
+func findMCPServerConfig(configs []forwarder.MCPServerConfig, preferredScope string, identifier string) (forwarder.MCPServerConfig, bool) {
+	return findMCPServerConfigMatching(configs, preferredScope, identifier, false)
+}
+
+func findMCPServerConfigMatching(configs []forwarder.MCPServerConfig, preferredScope string, identifier string, enabledOnly bool) (forwarder.MCPServerConfig, bool) {
+	var fallback forwarder.MCPServerConfig
+	foundFallback := false
 	for _, config := range configs {
-		if config.Enabled && strings.EqualFold(strings.TrimSpace(config.Identifier), strings.TrimSpace(identifier)) {
+		if !strings.EqualFold(strings.TrimSpace(config.Identifier), strings.TrimSpace(identifier)) || (enabledOnly && !config.Enabled) {
+			continue
+		}
+		if strings.TrimSpace(config.RuntimeScope) == strings.TrimSpace(preferredScope) {
 			return config, true
 		}
+		if !foundFallback {
+			fallback = config
+			foundFallback = true
+		}
 	}
-	return forwarder.MCPServerConfig{}, false
+	return fallback, foundFallback
 }
 
 func findMCPServerSnapshot(items []forwarder.MCPServerSnapshotItem, identifier string) (forwarder.MCPServerSnapshotItem, error) {

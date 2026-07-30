@@ -278,4 +278,4 @@ export const DisconnectMCPServer = (_workspaceRoot, identifier) => {
   Object.assign(server, { status: "disconnected", hasTools: false, toolCount: 0, lastError: "" });
   return Promise.resolve(clone(server));
 };
-export const CancelMCPServerConnection = () => Promise.resolve(true);
+export const CancelMCPServerConnection = (_identifier, _attemptID) => Promise.resolve(true);

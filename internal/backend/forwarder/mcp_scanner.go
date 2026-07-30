@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -66,6 +67,24 @@ type MCPServerConfig struct {
 	Headers           map[string]string `json:"-"`
 	ConfiguredEnabled bool              `json:"configuredEnabled"`
 	Enabled           bool              `json:"enabled"`
+	RuntimeScope      string            `json:"-"`
+}
+
+// MCPRuntimeScope returns the stable runtime identity for user or workspace MCP sessions.
+func MCPRuntimeScope(workspaceRoot string) string {
+	root := strings.TrimSpace(workspaceRoot)
+	if root == "" {
+		return "user"
+	}
+	if absolute, err := filepath.Abs(root); err == nil {
+		root = absolute
+	}
+	root = filepath.Clean(root)
+	root = filepath.ToSlash(root)
+	if runtime.GOOS == "windows" {
+		root = strings.ToLower(root)
+	}
+	return "workspace:" + root
 }
 
 // mcpConfigFile 是一个待扫描的配置文件及其解析方式。
@@ -112,6 +131,7 @@ func scanMCPServers(workspaceRoot string, enabledSources map[string]bool, disabl
 // ScanMCPServerConfigs performs read-only discovery and returns complete runtime configs.
 func ScanMCPServerConfigs(workspaceRoot string, settings SkillMCPScanSettings) []MCPServerConfig {
 	files := orderedMCPConfigFiles(workspaceRoot)
+	workspaceScope := MCPRuntimeScope(workspaceRoot)
 	fingerprint := mcpScanFingerprint(files, settings.Enabled, settings.MCPSources, settings.DisabledMCPServers)
 	if cached, ok := loadCachedMCPServers(fingerprint); ok {
 		return cached
@@ -148,7 +168,12 @@ func ScanMCPServerConfigs(workspaceRoot string, settings SkillMCPScanSettings) [
 			if identifier == "" {
 				continue
 			}
-			key := strings.ToLower(identifier)
+			runtimeScope := MCPRuntimeScope("")
+			if f.Scope == MCPConfigScopeWorkspace {
+				runtimeScope = workspaceScope
+			}
+			identifierKey := strings.ToLower(identifier)
+			key := mcpRuntimeEntryKey(runtimeScope, identifier)
 			if _, exists := seen[key]; exists {
 				continue
 			}
@@ -167,7 +192,8 @@ func ScanMCPServerConfigs(workspaceRoot string, settings SkillMCPScanSettings) [
 				URL:               srv.URL,
 				Headers:           cloneStringMap(srv.Headers),
 				ConfiguredEnabled: srv.Enabled,
-				Enabled:           settings.Enabled && srv.Enabled && !boolMapContains(settings.DisabledMCPServers, key),
+				Enabled:           settings.Enabled && srv.Enabled && !boolMapContains(settings.DisabledMCPServers, identifierKey),
+				RuntimeScope:      runtimeScope,
 			})
 		}
 	}
@@ -180,6 +206,7 @@ func ScanMCPServerConfigs(workspaceRoot string, settings SkillMCPScanSettings) [
 }
 
 func mcpDescriptorsFromConfigs(configs []MCPServerConfig, tools map[string][]*agentv1.McpToolDescriptor) []*agentv1.McpDescriptor {
+	configs = effectiveMCPServerConfigs(configs)
 	output := make([]*agentv1.McpDescriptor, 0, len(configs))
 	for _, config := range configs {
 		if !config.Enabled {
@@ -773,6 +800,7 @@ type MCPServerSnapshotItem struct {
 	Status            MCPRuntimeStatus `json:"status"`
 	LastError         string           `json:"lastError,omitempty"`
 	SourceLabel       string           `json:"sourceLabel"`
+	RuntimeScope      string           `json:"runtimeScope"`
 }
 
 func SnapshotMCPServers(workspaceRoot string) []MCPServerSnapshotItem {
@@ -782,18 +810,17 @@ func SnapshotMCPServers(workspaceRoot string) []MCPServerSnapshotItem {
 func SnapshotMCPServersWithSettings(workspaceRoot string, settings SkillMCPScanSettings) []MCPServerSnapshotItem {
 	configs := ScanMCPServerConfigs(workspaceRoot, settings)
 	registry := SharedMCPRuntimeRegistry()
-	if strings.TrimSpace(workspaceRoot) == "" {
-		registry.ReplaceScopes(enabledMCPServerConfigs(configs), MCPConfigScopeUser)
-	} else {
-		registry.Replace(enabledMCPServerConfigs(configs))
-	}
+	SyncMCPRuntimeForWorkspace(registry, workspaceRoot, enabledMCPServerConfigs(configs))
+	configs = effectiveMCPServerConfigs(configs)
 	runtimeByID := make(map[string]MCPRuntimeSnapshot)
-	for _, item := range registry.Snapshot() {
-		runtimeByID[strings.ToLower(item.Identifier)] = item
+	for _, scope := range mcpRuntimeTargetScopes(workspaceRoot) {
+		for _, item := range registry.Snapshot(scope) {
+			runtimeByID[mcpRuntimeEntryKey(item.RuntimeScope, item.Identifier)] = item
+		}
 	}
 	items := make([]MCPServerSnapshotItem, 0, len(configs))
 	for _, config := range configs {
-		runtimeItem, connected := runtimeByID[strings.ToLower(config.Identifier)]
+		runtimeItem, connected := runtimeByID[mcpRuntimeEntryKey(config.RuntimeScope, config.Identifier)]
 		connected = connected && runtimeItem.Source == string(config.Source) && runtimeItem.Scope == string(config.Scope)
 		status := MCPRuntimeDisconnected
 		toolCount := 0
@@ -819,6 +846,7 @@ func SnapshotMCPServersWithSettings(workspaceRoot string, settings SkillMCPScanS
 			Status:            status,
 			LastError:         lastError,
 			SourceLabel:       string(config.Source),
+			RuntimeScope:      config.RuntimeScope,
 		})
 	}
 	return items
@@ -835,14 +863,78 @@ func enabledMCPServerConfigs(configs []MCPServerConfig) []MCPServerConfig {
 }
 
 func mcpDescriptorsWithRuntime(configs []MCPServerConfig, registry *MCPRuntimeRegistry) []*agentv1.McpDescriptor {
+	configs = effectiveMCPServerConfigs(configs)
 	tools := make(map[string][]*agentv1.McpToolDescriptor)
 	if registry != nil {
-		for _, descriptor := range registry.Descriptors() {
-			if descriptor == nil {
+		for _, config := range configs {
+			descriptor, ok := registry.Descriptor(config.RuntimeScope, config.Identifier)
+			if !ok || descriptor == nil {
 				continue
 			}
-			tools[strings.ToLower(strings.TrimSpace(descriptor.GetServerIdentifier()))] = descriptor.GetTools()
+			tools[mcpRuntimeEntryKey(config.RuntimeScope, descriptor.GetServerIdentifier())] = descriptor.GetTools()
 		}
 	}
-	return mcpDescriptorsFromConfigs(configs, tools)
+	output := make([]*agentv1.McpDescriptor, 0, len(configs))
+	for _, config := range configs {
+		if !config.Enabled {
+			continue
+		}
+		descriptor := buildMCPDescriptor(config)
+		if serverTools := tools[mcpRuntimeEntryKey(config.RuntimeScope, config.Identifier)]; len(serverTools) > 0 {
+			descriptor.Tools = cloneMCPToolDescriptors(serverTools)
+		}
+		output = append(output, descriptor)
+	}
+	return output
+}
+
+// effectiveMCPServerConfigs keeps one model-visible identifier while allowing
+// user and workspace runtimes with the same identifier to coexist internally.
+// Workspace configuration overrides user configuration for the active request.
+func effectiveMCPServerConfigs(configs []MCPServerConfig) []MCPServerConfig {
+	if len(configs) == 0 {
+		return nil
+	}
+	result := make([]MCPServerConfig, 0, len(configs))
+	indexByIdentifier := make(map[string]int, len(configs))
+	for _, config := range configs {
+		identifier := strings.ToLower(strings.TrimSpace(config.Identifier))
+		if identifier == "" {
+			continue
+		}
+		index, exists := indexByIdentifier[identifier]
+		if !exists {
+			indexByIdentifier[identifier] = len(result)
+			result = append(result, config)
+			continue
+		}
+		if result[index].Scope != MCPConfigScopeWorkspace && config.Scope == MCPConfigScopeWorkspace {
+			result[index] = config
+		}
+	}
+	return result
+}
+
+// SyncMCPRuntimeForWorkspace replaces only the user and current workspace runtime views.
+func SyncMCPRuntimeForWorkspace(registry *MCPRuntimeRegistry, workspaceRoot string, configs []MCPServerConfig) {
+	if registry == nil {
+		return
+	}
+	byScope := make(map[string][]MCPServerConfig)
+	for _, config := range configs {
+		scope := normalizeMCPRuntimeScope(config.RuntimeScope)
+		config.RuntimeScope = scope
+		byScope[scope] = append(byScope[scope], config)
+	}
+	for _, scope := range mcpRuntimeTargetScopes(workspaceRoot) {
+		registry.ReplaceScope(scope, byScope[scope])
+	}
+}
+
+func mcpRuntimeTargetScopes(workspaceRoot string) []string {
+	scopes := []string{MCPRuntimeScope("")}
+	if workspaceScope := MCPRuntimeScope(workspaceRoot); workspaceScope != scopes[0] {
+		scopes = append(scopes, workspaceScope)
+	}
+	return scopes
 }

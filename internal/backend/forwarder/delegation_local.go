@@ -340,6 +340,7 @@ func (service *Service) executeLocalDelegatedTool(ctx context.Context, request d
 	if service == nil || service.mcpRuntime == nil {
 		return "", fmt.Errorf("local delegated tool runtime is unavailable")
 	}
+	preferredRuntimeScope := MCPRuntimeScope(request.WorkspaceHint)
 	switch strings.TrimSpace(invocation.ToolName) {
 	case "CallMcpTool":
 		payload, err := runtimecore.DecodeMCPToolPayload(invocation.ArgsJSON)
@@ -348,7 +349,8 @@ func (service *Service) executeLocalDelegatedTool(ctx context.Context, request d
 		}
 		serverID := firstNonEmpty(payload.Server, payload.ProviderIdentifier, runtimecore.InferMCPServerIdentifier(payload.Name))
 		toolName := firstNonEmpty(payload.ToolName, runtimecore.InferMCPToolName(serverID, payload.Name))
-		result, err := service.mcpRuntime.CallTool(ctx, serverID, toolName, payload.Arguments)
+		runtimeScope := service.mcpRuntime.ResolveScope(preferredRuntimeScope, serverID)
+		result, err := service.mcpRuntime.CallTool(ctx, runtimeScope, serverID, toolName, payload.Arguments)
 		return marshalDelegatedToolResult(result, err)
 	case "ListMcpResources":
 		var args struct {
@@ -357,7 +359,9 @@ func (service *Service) executeLocalDelegatedTool(ctx context.Context, request d
 		if err := json.Unmarshal(invocation.ArgsJSON, &args); err != nil {
 			return "", err
 		}
-		result, err := service.mcpRuntime.ListResources(ctx, strings.TrimSpace(args.Server))
+		serverID := strings.TrimSpace(args.Server)
+		runtimeScope := service.mcpRuntime.ResolveScope(preferredRuntimeScope, serverID)
+		result, err := service.mcpRuntime.ListResources(ctx, runtimeScope, serverID)
 		return marshalDelegatedToolResult(result, err)
 	case "FetchMcpResource":
 		var args struct {
@@ -367,7 +371,9 @@ func (service *Service) executeLocalDelegatedTool(ctx context.Context, request d
 		if err := json.Unmarshal(invocation.ArgsJSON, &args); err != nil {
 			return "", err
 		}
-		result, err := service.mcpRuntime.ReadResource(ctx, strings.TrimSpace(args.Server), strings.TrimSpace(args.URI))
+		serverID := strings.TrimSpace(args.Server)
+		runtimeScope := service.mcpRuntime.ResolveScope(preferredRuntimeScope, serverID)
+		result, err := service.mcpRuntime.ReadResource(ctx, runtimeScope, serverID, strings.TrimSpace(args.URI))
 		return marshalDelegatedToolResult(result, err)
 	default:
 		if service.cursorDelegation == nil || service.cursorDelegation.cursor == nil {
