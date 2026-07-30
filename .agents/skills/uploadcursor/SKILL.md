@@ -52,6 +52,21 @@ info:
 
 ### 4. 提交并创建 tag
 
+**⚠️ 创建 tag 前必须自检版本号一致性**——否则会触发 `missing build asset` 报错（release job 按 tag 算版本号找文件名，build job 按 config.yml 构建文件名，macOS/Linux 产物名含版本号，对不上就失败）：
+
+```bash
+# config.yml 实际版本号必须 == 目标 tag 号（去掉 v 前缀），否则 STOP
+TARGET="0.0.50"
+ACTUAL="$(go run ./scripts/release version -config ./build/config.yml)"
+if [ "$ACTUAL" != "$TARGET" ]; then
+  echo "✗ config.yml=$ACTUAL 但目标 tag=v$TARGET，不一致！请回到步骤 2 改对版本号"
+  exit 1
+fi
+echo "✓ 版本号一致，可以打 tag"
+```
+
+自检通过后，再提交并创建 tag：
+
 ```bash
 git add build/config.yml release-notes.md
 git commit -m "release: v0.0.50"
@@ -88,3 +103,4 @@ git push origin v0.0.50
 - `release-notes.md` 每次完全替换为新版本的内容（不是追加）
 - tag 必须以 `v` 开头（如 `v0.0.50`），否则 GitHub Action 不会触发
 - 推送后无法撤销（GitHub Action 会立即开始构建）
+- **版本号必须与 tag 一致**：macOS/Linux 产物名含版本号（`cursor-byok-X.Y.Z-macos-arm64.tar.gz`），config.yml 与 tag 不一致会导致 `missing build asset` 报错；步骤 4 的自检就是防这个。修复办法：改对 config.yml 版本号，强推 tag（`git tag -f vX && git push origin vX --force`）重新触发构建

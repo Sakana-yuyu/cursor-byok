@@ -1200,7 +1200,7 @@ export const appState = reactive({
   // 浮窗偏好是纯前端 UX 状态：localStorage 持久化 + 跨窗口 storage 事件广播。
   // 不进后端 config（后端 config 不含 overlay 字段）。初始给默认值，真实值由
   // getStatsOverlayPreferences() 在首次读取时从 localStorage 填充，避免模块求值顺序依赖。
-  statsOverlayPreferences: { style: "card", alwaysOnTop: true, visible: false },
+  statsOverlayPreferences: { style: "card", alwaysOnTop: true, visible: false, dockLocked: false },
   turnStaleTimeout: cachedConfig.turnStaleTimeout,
   autoMatchContextWindow: cachedConfig.autoMatchContextWindow,
 
@@ -1600,6 +1600,8 @@ function normalizeStatsOverlayPreferences(input) {
     x: typeof raw.x === "number" ? Math.round(raw.x) : null,
     y: typeof raw.y === "number" ? Math.round(raw.y) : null,
     snapCollapse: asBoolean(raw.snapCollapse ?? true),
+    // dockLocked：锁定为收缩胶囊（悬停不展开）且窗口不可拖动。由设置开关与浮窗内锁按钮共同控制。
+    dockLocked: asBoolean(raw.dockLocked ?? false),
   };
 }
 
@@ -1637,6 +1639,7 @@ export async function setStatsOverlayPreferences(partial) {
   if (partial && ("style" in partial || "alwaysOnTop" in partial)) {
     await updateStatsOverlayWindow(persisted.style, persisted.alwaysOnTop);
   }
+  // dockLocked 为纯前端 UX 状态（CSS 控制胶囊收缩与拖拽禁用），无需同步后端。
   return persisted;
 }
 
@@ -1653,7 +1656,7 @@ export async function showStatsOverlay(position) {
   await openStatsOverlayWindow(persisted.x, persisted.y);
   // 首次打开后端按 card/置顶创建；按当前偏好对齐一次尺寸与层级。
   await updateStatsOverlayWindow(persisted.style, persisted.alwaysOnTop);
-  return persisted;
+  return loadStatsOverlayPreferences();
 }
 
 export async function hideStatsOverlay() {

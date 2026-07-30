@@ -41,7 +41,7 @@ const promptInjectionBusy = ref(false);
 const promptInjectionLoaded = ref(false);
 const promptInjectionExpanded = ref(false);
 const promptPreview = ref(null);
-const overlayPreferences = reactive({ style: "card", alwaysOnTop: true, visible: false });
+const overlayPreferences = reactive({ style: "card", alwaysOnTop: true, visible: false, dockLocked: false });
 const directModeEnabled = computed(() => appState.routingMode === "upstream");
 const promptInjectionSummary = computed(() => {
   const enabled = [];
@@ -113,7 +113,7 @@ onMounted(() => { Object.assign(overlayPreferences, getStatsOverlayPreferences()
             <button type="button" aria-label="关闭设置" title="关闭" class="center-row h-8 w-8 cursor-pointer rounded-[6px] text-xl text-[#999] hover:bg-[#333] hover:text-white" @click="emit('close')">×</button>
           </div>
           <div class="min-h-0 min-w-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto p-3">
-            <Card><div class="space-y-3"><h3 class="text-sm font-medium text-white">浮窗偏好</h3><Select v-model="overlayPreferences.style" :options="overlayStyleOptions" aria-label="浮窗样式" @change="(value) => updateOverlay({ style: value })" /><Switch label="显示浮窗" description="在桌面显示请求统计浮窗" :enabled="overlayPreferences.visible" @change="updateOverlayVisibility" /><Switch label="窗口置顶" description="让浮窗保持在其他窗口上方" :enabled="overlayPreferences.alwaysOnTop" @change="(value) => updateOverlay({ alwaysOnTop: value })" /></div></Card>
+            <Card><div class="space-y-3"><h3 class="text-sm font-medium text-white">浮窗偏好</h3><Select v-model="overlayPreferences.style" :options="overlayStyleOptions" aria-label="浮窗样式" @change="(value) => updateOverlay({ style: value })" /><Switch label="显示浮窗" description="在桌面显示请求统计浮窗" :enabled="overlayPreferences.visible" @change="updateOverlayVisibility" /><Switch label="窗口置顶" description="让浮窗保持在其他窗口上方" :enabled="overlayPreferences.alwaysOnTop" @change="(value) => updateOverlay({ alwaysOnTop: value })" /><Switch label="锁定浮窗" description="锁定为收缩胶囊且不可拖动" :enabled="overlayPreferences.dockLocked" @change="(value) => updateOverlay({ dockLocked: value })" /></div></Card>
             <Card><div class="min-w-0 space-y-3">
               <div class="flex min-w-0 items-center gap-3">
                 <button type="button" class="flex min-w-0 flex-1 items-center gap-3 rounded-[6px] text-left outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35" :aria-expanded="promptInjectionExpanded" @click="promptInjectionExpanded = !promptInjectionExpanded">

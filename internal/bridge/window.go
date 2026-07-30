@@ -333,7 +333,7 @@ func statsOverlayWindowSize(style string) (width, height int) {
 	case statsOverlayStyleEngine:
 		return 240, 124
 	case statsOverlayStyleOrb:
-		return 196, 196
+		return 176, 176
 	default:
 		return 240, 144
 	}

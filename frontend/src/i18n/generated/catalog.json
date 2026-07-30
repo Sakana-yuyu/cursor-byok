@@ -386,7 +386,7 @@
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 258,
+          "line": 339,
           "column": 35
         }
       ]
@@ -678,7 +678,7 @@
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 252,
+          "line": 333,
           "column": 35
         }
       ]
@@ -767,7 +767,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 247,
+          "line": 328,
           "column": 57
         }
       ]
@@ -1048,7 +1048,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1796,
+          "line": 1799,
           "column": 32
         }
       ]
@@ -1305,7 +1305,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 275,
+          "line": 356,
           "column": 39
         }
       ]
@@ -2054,7 +2054,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 240,
+          "line": 321,
           "column": 17
         }
       ]
@@ -2898,6 +2898,23 @@
         }
       ]
     },
+    "4890584bb57540f5": {
+      "source": "轮次",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/StatsOverlay.vue",
+          "line": 159,
+          "column": 12
+        },
+        {
+          "file": "src/views/StatsOverlay.vue",
+          "line": 183,
+          "column": 12
+        }
+      ]
+    },
     "4923eeb7bd75cccd": {
       "source": "{0} 的模型标识不能为空",
       "kind": "template",
@@ -3714,6 +3731,18 @@
         }
       ]
     },
+    "5d14fb84a8de8cf5": {
+      "source": "已锁定为胶囊（点击解锁可展开）",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/StatsOverlay.vue",
+          "line": 301,
+          "column": 17
+        }
+      ]
+    },
     "5e709712ce012f5d": {
       "source": "当前出站请求使用环境变量代理：{0}",
       "kind": "template",
@@ -3772,7 +3801,7 @@
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 236,
+          "line": 317,
           "column": 36
         }
       ]
@@ -4169,7 +4198,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1873,
+          "line": 1876,
           "column": 32
         }
       ]
@@ -4306,7 +4335,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 249,
+          "line": 330,
           "column": 35
         }
       ]
@@ -4719,6 +4748,18 @@
         }
       ]
     },
+    "736c0eb33df72c94": {
+      "source": "锁定为收缩胶囊且不可拖动",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/SettingsDrawer.vue",
+          "line": 116,
+          "column": 534
+        }
+      ]
+    },
     "737225e2904673fc": {
       "source": "输出推算：{0}",
       "kind": "template",
@@ -5033,7 +5074,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 240,
+          "line": 321,
           "column": 17
         }
       ]
@@ -5838,7 +5879,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1836,
+          "line": 1839,
           "column": 32
         }
       ]
@@ -5888,6 +5929,18 @@
           "file": "src/layouts/MainLayout.vue",
           "line": 130,
           "column": 44
+        }
+      ]
+    },
+    "94447bd6763ecb0c": {
+      "source": "锁定为胶囊（悬停不再展开）",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/StatsOverlay.vue",
+          "line": 301,
+          "column": 17
         }
       ]
     },
@@ -6082,12 +6135,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2104,
+          "line": 2107,
           "column": 32
         },
         {
           "file": "src/state/appState.js",
-          "line": 2125,
+          "line": 2128,
           "column": 32
         }
       ]
@@ -6487,7 +6540,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2049,
+          "line": 2052,
           "column": 14
         }
       ]
@@ -6620,6 +6673,18 @@
         }
       ]
     },
+    "a5f38651ddce7961": {
+      "source": "锁定浮窗",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/SettingsDrawer.vue",
+          "line": 116,
+          "column": 521
+        }
+      ]
+    },
     "a607b61c9d45722d": {
       "source": "确定删除「{0}」吗？",
       "kind": "template",
@@ -6665,6 +6730,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 734,
           "column": 16
+        }
+      ]
+    },
+    "a6bf6336ceb337fe": {
+      "source": "本地缓存",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/StatsOverlay.vue",
+          "line": 160,
+          "column": 12
         }
       ]
     },
@@ -7477,7 +7554,7 @@
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 255,
+          "line": 336,
           "column": 35
         }
       ]
@@ -7658,7 +7735,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1892,
+          "line": 1895,
           "column": 32
         }
       ]
@@ -7670,7 +7747,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 244,
+          "line": 325,
           "column": 67
         }
       ]
@@ -7884,17 +7961,17 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2020,
+          "line": 2023,
           "column": 28
         },
         {
           "file": "src/state/appState.js",
-          "line": 2022,
+          "line": 2025,
           "column": 38
         },
         {
           "file": "src/state/appState.js",
-          "line": 2057,
+          "line": 2060,
           "column": 93
         },
         {
@@ -8263,7 +8340,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1917,
+          "line": 1920,
           "column": 14
         }
       ]
@@ -8540,13 +8617,18 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 265,
-          "column": 87
+          "line": 157,
+          "column": 12
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 277,
-          "column": 61
+          "line": 181,
+          "column": 12
+        },
+        {
+          "file": "src/views/StatsOverlay.vue",
+          "line": 346,
+          "column": 87
         }
       ]
     },
@@ -8991,7 +9073,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 262,
+          "line": 343,
           "column": 66
         }
       ]
@@ -9085,7 +9167,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 257,
+          "line": 338,
           "column": 32
         }
       ]
