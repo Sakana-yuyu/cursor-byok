@@ -27,8 +27,17 @@
 - [x] Task 9：接入本地子代理适配器。
 - [x] Task 10：完成 Multitask 结果合并、失败隔离和取消。
 - [x] Task 11：完成委派设置、工具权限、运行状态、取消操作与 MCP 连接控制界面。
-- [ ] Task 12：完成 Cursor 原生工作流对齐审查。
+- [x] Task 12：完成 Cursor 原生工作流对齐审查。
 - [ ] Task 13：全面构建、静态检查、协议回放和人工流程验收。
+
+## Task 12 验收记录
+
+- `StartPlanAction` 固定进入 Plan，`ExecutePlanAction` 未指定模式时进入 Agent/Build。
+- 顶层 `conversation_action` 复用同一 request 时会启动新 turn，不再被 RunSSE 重连复用逻辑吞掉。
+- 新 turn 会重建终态 actor、失效旧 provider/compaction/timer token，并从新的 backlog 游标开始回放。
+- run/prewarm 顶层 Skills、MCP tools、MCP 文件系统选项已合并到有效请求上下文。
+- MCP schema、显示名路由、内置工具防劫持和本地委派权限链已闭环。
+- `go test -count=1 ./...`、`go build ./...`、`npm --prefix frontend run build` 通过。
 
 ## 每阶段验收
 

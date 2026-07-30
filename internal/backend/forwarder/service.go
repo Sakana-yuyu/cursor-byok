@@ -507,7 +507,7 @@ func (service *Service) RunSSE(ctx context.Context, req *connect.Request[aiserve
 	if requestID == "" {
 		return buildRunSSECustomError(connect.CodeInvalidArgument, "请求参数无效", fmt.Errorf("request_id is required"))
 	}
-	subscriberID, signal, err := service.broker.Subscribe(requestID)
+	subscriberID, signal, cursor, err := service.broker.Subscribe(requestID)
 	if err != nil {
 		return buildRunSSECustomError(connect.CodeInvalidArgument, "请求参数无效", err)
 	}
@@ -531,7 +531,6 @@ func (service *Service) RunSSE(ctx context.Context, req *connect.Request[aiserve
 
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
-	cursor := 0
 	for {
 		backlog, err := service.broker.ReadFromCursor(requestID, cursor)
 		if err != nil {
@@ -642,8 +641,10 @@ func (service *Service) decodeInboundIntent(requestID string, message *agentv1.A
 		intent.ConversationID = conversationID
 		intent.ConversationState = runRequest.GetConversationState()
 		intent.UserMessage = extractUserMessage(message)
-		intent.RequestContext = extractRequestContext(message)
-		if service.shouldIgnoreEmptyResumeRunRequest(requestID, runRequest, intent.UserMessage, intent.RequestContext) {
+		actionRequestContext := extractRequestContext(message)
+		intent.RequestContext = extractEffectiveRunRequestContext(message)
+		intent.MCPToolsProvided = runRequest.McpTools != nil || len(actionRequestContext.GetTools()) > 0
+		if service.shouldIgnoreEmptyResumeRunRequest(requestID, runRequest, intent.UserMessage, actionRequestContext) {
 			intent.Kind = "metadata"
 			intent.StartsRun = false
 			intent.HasExplicitMode = false
@@ -692,6 +693,10 @@ func (service *Service) decodeInboundIntent(requestID string, message *agentv1.A
 		intent.SubagentTypeName = strings.TrimSpace(prewarmRequest.GetSubagentTypeName())
 		intent.SelectedSubagentModels = cloneSelectedSubagentModels(prewarmRequest.GetSelectedSubagentModels())
 		intent.SelectedSubagentModelDetails = cloneSelectedSubagentModelDetails(prewarmRequest.GetSelectedSubagentModelDetails())
+		parsedOverrides := parseSubagentModelOverrides(prewarmRequest.GetSubagentModelOverrides())
+		intent.SubagentModelOverrides = parsedOverrides.Overrides
+		intent.RequestContext = extractEffectivePrewarmRequestContext(prewarmRequest)
+		intent.MCPToolsProvided = prewarmRequest.McpTools != nil
 		intent.ConversationState = prewarmRequest.GetConversationState()
 		intent.Mode, intent.ModeSource, intent.HasExplicitMode, err = extractPrewarmMode(prewarmRequest)
 		if err != nil {
@@ -709,6 +714,7 @@ func (service *Service) decodeInboundIntent(requestID string, message *agentv1.A
 		intent.UserMessage = extractConversationActionUserMessage(action)
 		intent.RequestContext = extractConversationActionRequestContext(action)
 		intent.StartsRun = conversationActionStartsRun(action)
+		intent.ForceNewTurn = intent.StartsRun
 		intent.Mode, intent.ModeSource, intent.HasExplicitMode, err = extractConversationActionMode(action)
 		if err != nil {
 			return InboundIntent{}, err
@@ -772,6 +778,9 @@ func (service *Service) decodeInboundIntent(requestID string, message *agentv1.A
 }
 
 func (service *Service) shouldReuseActiveRun(intent InboundIntent) bool {
+	if intent.ForceNewTurn {
+		return false
+	}
 	if service == nil || service.broker == nil || strings.TrimSpace(intent.RequestID) == "" || strings.TrimSpace(intent.ConversationID) == "" {
 		return false
 	}
@@ -804,6 +813,9 @@ func (service *Service) shouldReuseActiveRun(intent InboundIntent) bool {
 
 // handleRunIntent 处理 run/prewarm 类 intent，负责建会话、写 turn 和拉起 provider。
 func (service *Service) handleRunIntent(intent InboundIntent) error {
+	if err := service.prepareStreamForForcedTurn(intent); err != nil {
+		return err
+	}
 	if service.shouldReuseActiveRun(intent) {
 		log.Printf("forwarder duplicate run reused request_id=%s conversation_id=%s", strings.TrimSpace(intent.RequestID), strings.TrimSpace(intent.ConversationID))
 		return nil
@@ -899,10 +911,19 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 	stream.BackgroundShellsByMessageID = make(map[uint32]string)
 	stream.BackgroundShellsByExecID = make(map[string]string)
 	stopAllStreamTimersLocked(stream)
-	stream.TimerTokens = make(map[string]uint64)
-	stream.StreamTimers = make(map[string]*time.Timer)
-	stream.CurrentProviderToken = 0
-	stream.CurrentCompactionToken = 0
+	if intent.ForceNewTurn {
+		if stream.TimerTokens == nil {
+			stream.TimerTokens = make(map[string]uint64)
+		}
+		if stream.StreamTimers == nil {
+			stream.StreamTimers = make(map[string]*time.Timer)
+		}
+	} else {
+		stream.TimerTokens = make(map[string]uint64)
+		stream.StreamTimers = make(map[string]*time.Timer)
+		stream.CurrentProviderToken = 0
+		stream.CurrentCompactionToken = 0
+	}
 	stream.ProviderAccumulatedText = ""
 	stream.ProviderAccumulatedReasoning = ""
 	stream.ProviderAccumulatedReasoningSignature = ""
@@ -3026,15 +3047,20 @@ func conversationActionStartsRun(action *agentv1.ConversationAction) bool {
 
 // extractRunMode 推导本轮应使用的 mode。
 func extractRunMode(message *agentv1.AgentClientMessage) (agentv1.AgentMode, ModeSource, bool, error) {
+	if message != nil && message.GetRunRequest() != nil && message.GetRunRequest().GetAction() != nil {
+		switch item := message.GetRunRequest().GetAction().GetAction().(type) {
+		case *agentv1.ConversationAction_StartPlanAction:
+			return resolveExplicitMode(agentv1.AgentMode_AGENT_MODE_PLAN, ModeSourceStartPlanAction)
+		case *agentv1.ConversationAction_ExecutePlanAction:
+			mode := agentv1.AgentMode_AGENT_MODE_AGENT
+			if item.ExecutePlanAction != nil && item.ExecutePlanAction.GetExecutionMode() != agentv1.AgentMode_AGENT_MODE_UNSPECIFIED {
+				mode = item.ExecutePlanAction.GetExecutionMode()
+			}
+			return resolveExplicitMode(mode, ModeSourceExecutePlanAction)
+		}
+	}
 	if userMessage := extractUserMessage(message); userMessage != nil && userMessage.GetMode() != agentv1.AgentMode_AGENT_MODE_UNSPECIFIED {
 		return resolveExplicitMode(userMessage.GetMode(), ModeSourceUserMessage)
-	}
-	if message != nil && message.GetRunRequest() != nil && message.GetRunRequest().GetAction() != nil {
-		if item, ok := message.GetRunRequest().GetAction().GetAction().(*agentv1.ConversationAction_ExecutePlanAction); ok && item.ExecutePlanAction != nil {
-			if mode := item.ExecutePlanAction.GetExecutionMode(); mode != agentv1.AgentMode_AGENT_MODE_UNSPECIFIED {
-				return resolveExplicitMode(mode, ModeSourceExecutePlanAction)
-			}
-		}
 	}
 	if message != nil && message.GetRunRequest() != nil && message.GetRunRequest().GetConversationState() != nil {
 		if mode := message.GetRunRequest().GetConversationState().GetMode(); mode != agentv1.AgentMode_AGENT_MODE_UNSPECIFIED {
@@ -3056,17 +3082,21 @@ func extractPrewarmMode(request *agentv1.PrewarmRequest) (agentv1.AgentMode, Mod
 }
 
 func extractConversationActionMode(action *agentv1.ConversationAction) (agentv1.AgentMode, ModeSource, bool, error) {
-	if userMessage := extractConversationActionUserMessage(action); userMessage != nil && userMessage.GetMode() != agentv1.AgentMode_AGENT_MODE_UNSPECIFIED {
-		return resolveExplicitMode(userMessage.GetMode(), ModeSourceUserMessage)
-	}
 	if action == nil {
 		return agentv1.AgentMode_AGENT_MODE_AGENT, ModeSourceUnknown, false, nil
 	}
 	switch item := action.GetAction().(type) {
+	case *agentv1.ConversationAction_StartPlanAction:
+		return resolveExplicitMode(agentv1.AgentMode_AGENT_MODE_PLAN, ModeSourceStartPlanAction)
 	case *agentv1.ConversationAction_ExecutePlanAction:
+		mode := agentv1.AgentMode_AGENT_MODE_AGENT
 		if item.ExecutePlanAction != nil && item.ExecutePlanAction.GetExecutionMode() != agentv1.AgentMode_AGENT_MODE_UNSPECIFIED {
-			return resolveExplicitMode(item.ExecutePlanAction.GetExecutionMode(), ModeSourceExecutePlanAction)
+			mode = item.ExecutePlanAction.GetExecutionMode()
 		}
+		return resolveExplicitMode(mode, ModeSourceExecutePlanAction)
+	}
+	if userMessage := extractConversationActionUserMessage(action); userMessage != nil && userMessage.GetMode() != agentv1.AgentMode_AGENT_MODE_UNSPECIFIED {
+		return resolveExplicitMode(userMessage.GetMode(), ModeSourceUserMessage)
 	}
 	return agentv1.AgentMode_AGENT_MODE_AGENT, ModeSourceUnknown, false, nil
 }
@@ -3619,14 +3649,10 @@ func (service *Service) updateStreamMCPToolServers(stream *ActiveStream, request
 	if stream == nil {
 		return
 	}
-	servers := collectMCPToolServers(requestContext)
-	if len(servers) == 0 {
-		return
-	}
+	servers, toolNames := collectMCPToolRoutes(requestContext)
 	stream.mu.Lock()
-	if stream.MCPToolServers == nil {
-		stream.MCPToolServers = make(map[string]string, len(servers))
-	}
+	stream.MCPToolServers = make(map[string]string, len(servers))
+	stream.MCPToolNames = make(map[string]string, len(toolNames))
 	for toolName, serverIdentifier := range servers {
 		trimmedToolName := strings.TrimSpace(toolName)
 		trimmedServerIdentifier := strings.TrimSpace(serverIdentifier)
@@ -3634,6 +3660,9 @@ func (service *Service) updateStreamMCPToolServers(stream *ActiveStream, request
 			continue
 		}
 		stream.MCPToolServers[trimmedToolName] = trimmedServerIdentifier
+		if routedToolName := strings.TrimSpace(toolNames[toolName]); routedToolName != "" {
+			stream.MCPToolNames[trimmedToolName] = routedToolName
+		}
 	}
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
@@ -3641,12 +3670,15 @@ func (service *Service) updateStreamMCPToolServers(stream *ActiveStream, request
 
 func (service *Service) rewriteDirectMCPToolInvocation(stream *ActiveStream, invocation runtimecore.ToolInvocation) runtimecore.ToolInvocation {
 	toolName := strings.TrimSpace(invocation.ToolName)
-	if toolName == "" || isExecTool(toolName) {
+	if toolName == "" || isKnownBuiltInToolName(toolName) {
 		return invocation
 	}
-	serverIdentifier := lookupMCPToolServer(stream, toolName)
+	serverIdentifier, routedToolName := lookupMCPToolRoute(stream, toolName)
 	if serverIdentifier == "" {
 		return invocation
+	}
+	if routedToolName == "" {
+		routedToolName = toolName
 	}
 
 	arguments := make(map[string]any)
@@ -3659,7 +3691,7 @@ func (service *Service) rewriteDirectMCPToolInvocation(stream *ActiveStream, inv
 		Arguments map[string]any `json:"arguments,omitempty"`
 	}{
 		Server:    serverIdentifier,
-		ToolName:  toolName,
+		ToolName:  routedToolName,
 		Arguments: arguments,
 	}
 	encoded, err := json.Marshal(payload)
@@ -3716,19 +3748,25 @@ func (service *Service) normalizeCallMCPToolInvocation(stream *ActiveStream, inv
 }
 
 func lookupMCPToolServer(stream *ActiveStream, toolName string) string {
+	serverIdentifier, _ := lookupMCPToolRoute(stream, toolName)
+	return serverIdentifier
+}
+
+func lookupMCPToolRoute(stream *ActiveStream, toolName string) (string, string) {
 	trimmedToolName := strings.TrimSpace(toolName)
 	if trimmedToolName == "" {
-		return ""
+		return "", ""
 	}
 	if stream != nil {
 		stream.mu.Lock()
 		serverIdentifier := strings.TrimSpace(stream.MCPToolServers[trimmedToolName])
+		routedToolName := strings.TrimSpace(stream.MCPToolNames[trimmedToolName])
 		stream.mu.Unlock()
 		if serverIdentifier != "" {
-			return serverIdentifier
+			return serverIdentifier, routedToolName
 		}
 	}
-	return ""
+	return "", ""
 }
 
 func readStringAny(value any) string {

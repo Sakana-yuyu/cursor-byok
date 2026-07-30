@@ -677,6 +677,8 @@ func mergeConversationMetadata(target *ConversationFile, source *ConversationFil
 	target.AutoCompactionSourceModelCallID = source.AutoCompactionSourceModelCallID
 	target.CurrentPlanText = source.CurrentPlanText
 	target.CurrentPlans = clonePlanRegistryEntries(source.CurrentPlans)
+	target.MCPTools = cloneMCPToolDefinitions(source.MCPTools)
+	target.MCPToolsInitialized = source.MCPToolsInitialized
 	target.CurrentTodos = cloneTodoItems(source.CurrentTodos)
 	target.LatestRequestPrefix = cloneConversationRequestPrefix(source.LatestRequestPrefix)
 	target.LastProviderCall = cloneConversationProviderCall(source.LastProviderCall)
@@ -805,6 +807,7 @@ func cloneConversationFile(conversation *ConversationFile) *ConversationFile {
 	}
 	cloned := *conversation
 	cloned.CurrentPlans = clonePlanRegistryEntries(conversation.CurrentPlans)
+	cloned.MCPTools = cloneMCPToolDefinitions(conversation.MCPTools)
 	cloned.CurrentTodos = cloneTodoItems(conversation.CurrentTodos)
 	cloned.LatestRequestPrefix = cloneConversationRequestPrefix(conversation.LatestRequestPrefix)
 	cloned.LastProviderCall = cloneConversationProviderCall(conversation.LastProviderCall)

@@ -9,6 +9,81 @@ import (
 	"cursor/gen/agentv1"
 )
 
+func extractEffectiveRunRequestContext(message *agentv1.AgentClientMessage) *agentv1.RequestContext {
+	if message == nil || message.GetRunRequest() == nil {
+		return nil
+	}
+	runRequest := message.GetRunRequest()
+	return mergeRequestContextAssets(
+		extractRequestContext(message),
+		runRequest.GetSkillOptions(),
+		runRequest.GetMcpTools(),
+		runRequest.GetMcpFileSystemOptions(),
+	)
+}
+
+func extractEffectivePrewarmRequestContext(request *agentv1.PrewarmRequest) *agentv1.RequestContext {
+	if request == nil {
+		return nil
+	}
+	return mergeRequestContextAssets(nil, nil, request.GetMcpTools(), request.GetMcpFileSystemOptions())
+}
+
+func mergeRequestContextAssets(base *agentv1.RequestContext, skills *agentv1.SkillOptions, mcpTools *agentv1.McpTools, mcpFileSystem *agentv1.McpFileSystemOptions) *agentv1.RequestContext {
+	var merged *agentv1.RequestContext
+	if base != nil {
+		merged, _ = proto.Clone(base).(*agentv1.RequestContext)
+	}
+	if merged == nil {
+		merged = &agentv1.RequestContext{}
+	}
+	mergeTopLevelSkills(merged, skills)
+	mergeTopLevelMCPTools(merged, mcpTools)
+	mergeTopLevelMCPFileSystem(merged, mcpFileSystem)
+	if proto.Size(merged) == 0 {
+		return nil
+	}
+	return merged
+}
+
+func mergeTopLevelSkills(requestContext *agentv1.RequestContext, options *agentv1.SkillOptions) {
+	if requestContext == nil || options == nil {
+		return
+	}
+	requestContext.SkillOptions, _ = proto.Clone(options).(*agentv1.SkillOptions)
+}
+
+func mergeTopLevelMCPTools(requestContext *agentv1.RequestContext, tools *agentv1.McpTools) {
+	if requestContext == nil || tools == nil {
+		return
+	}
+	requestContext.Tools = cloneMCPToolDefinitions(tools.GetMcpTools())
+}
+
+func cloneMCPToolDefinitions(definitions []*agentv1.McpToolDefinition) []*agentv1.McpToolDefinition {
+	if len(definitions) == 0 {
+		return nil
+	}
+	cloned := make([]*agentv1.McpToolDefinition, 0, len(definitions))
+	for _, definition := range definitions {
+		if definition == nil {
+			continue
+		}
+		item, _ := proto.Clone(definition).(*agentv1.McpToolDefinition)
+		if item != nil {
+			cloned = append(cloned, item)
+		}
+	}
+	return cloned
+}
+
+func mergeTopLevelMCPFileSystem(requestContext *agentv1.RequestContext, options *agentv1.McpFileSystemOptions) {
+	if requestContext == nil || options == nil {
+		return
+	}
+	requestContext.McpFileSystemOptions, _ = proto.Clone(options).(*agentv1.McpFileSystemOptions)
+}
+
 func normalizeRequestContextForStorage(requestContext *agentv1.RequestContext) *agentv1.RequestContext {
 	if requestContext == nil {
 		return nil
@@ -281,12 +356,26 @@ func skillDescriptorKey(descriptor *agentv1.SkillDescriptor) string {
 	return strings.TrimSpace(descriptor.GetName())
 }
 
-func collectMCPToolServers(requestContext *agentv1.RequestContext) map[string]string {
+func collectMCPToolRoutes(requestContext *agentv1.RequestContext) (map[string]string, map[string]string) {
 	if requestContext == nil {
-		return nil
+		return nil, nil
 	}
 
 	servers := make(map[string]string)
+	toolNames := make(map[string]string)
+	addRoute := func(name, serverIdentifier, toolName string) {
+		name = strings.TrimSpace(name)
+		serverIdentifier = strings.TrimSpace(serverIdentifier)
+		toolName = strings.TrimSpace(toolName)
+		if name == "" || serverIdentifier == "" || isKnownBuiltInToolName(name) {
+			return
+		}
+		if _, exists := servers[name]; exists {
+			return
+		}
+		servers[name] = serverIdentifier
+		toolNames[name] = firstNonEmpty(toolName, name)
+	}
 	addDescriptors := func(descriptors []*agentv1.McpDescriptor) {
 		for _, descriptor := range descriptors {
 			if descriptor == nil {
@@ -304,20 +393,26 @@ func collectMCPToolServers(requestContext *agentv1.RequestContext) map[string]st
 				if toolName == "" {
 					continue
 				}
-				if _, exists := servers[toolName]; exists {
-					continue
-				}
-				servers[toolName] = strings.TrimSpace(serverIdentifier)
+				addRoute(toolName, serverIdentifier, toolName)
 			}
 		}
 	}
 
+	for _, definition := range requestContext.GetTools() {
+		if definition == nil {
+			continue
+		}
+		serverIdentifier := strings.TrimSpace(definition.GetProviderIdentifier())
+		toolName := firstNonEmpty(definition.GetToolName(), definition.GetName())
+		addRoute(definition.GetName(), serverIdentifier, toolName)
+		addRoute(toolName, serverIdentifier, toolName)
+	}
 	addDescriptors(requestContext.GetMcpFileSystemOptions().GetMcpDescriptors())
 	addDescriptors(requestContext.GetMcpMetaToolOptions().GetMcpDescriptors())
 	if len(servers) == 0 {
-		return nil
+		return nil, nil
 	}
-	return servers
+	return servers, toolNames
 }
 
 func inferSkillName(path string) string {

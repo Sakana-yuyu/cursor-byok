@@ -37,6 +37,8 @@ type ConversationFile struct {
 	AutoCompactionSourceModelCallID string                                `json:"auto_compaction_source_model_call_id,omitempty"`
 	CurrentPlanText                 string                                `json:"current_plan_text,omitempty"`
 	CurrentPlans                    map[string]*agentv1.PlanRegistryEntry `json:"current_plans,omitempty"`
+	MCPTools                        []*agentv1.McpToolDefinition          `json:"mcp_tools,omitempty"`
+	MCPToolsInitialized             bool                                  `json:"mcp_tools_initialized,omitempty"`
 	// LastActivatedSkills 记录该会话最近一次稀疏激活注入的技能名列表，
 	// 供子代理会话读取作保底候选（调用链传递）。不进 model-visible history，不影响 replay prefix。
 	LastActivatedSkills []string                   `json:"last_activated_skills,omitempty"`
@@ -182,6 +184,7 @@ type ActiveStream struct {
 	StaleToolResultSnipApplied bool
 
 	Backlog                     []StreamEvent
+	BacklogStartCursor          int
 	Subscribers                 map[string]*StreamSubscriber
 	CheckpointConversation      *ConversationFile
 	PendingExecs                map[string]runtimecore.PendingExec
@@ -189,6 +192,7 @@ type ActiveStream struct {
 	PartialToolCallIDs          map[string]struct{}
 	PatchEditQueues             map[string][]queuedPatchEditOperation
 	MCPToolServers              map[string]string
+	MCPToolNames                map[string]string
 	WorkspacePaths              []string
 	TerminalsFolder             string
 	RequestFileContents         map[string]string
@@ -417,6 +421,7 @@ type ModeSource string
 const (
 	ModeSourceUnknown           ModeSource = ""
 	ModeSourceUserMessage       ModeSource = "user_message"
+	ModeSourceStartPlanAction   ModeSource = "start_plan_action"
 	ModeSourceExecutePlanAction ModeSource = "execute_plan_action"
 	ModeSourceConversationState ModeSource = "conversation_state"
 	ModeSourceSwitchModeTool    ModeSource = "switch_mode_tool"
@@ -434,6 +439,7 @@ type InboundIntent struct {
 	HasExplicitMode              bool
 	ModeSource                   ModeSource
 	StartsRun                    bool
+	ForceNewTurn                 bool
 	SubagentTypeName             string
 	SubagentModelOverrides       map[string]runtimecore.SubagentModelOverrideSelection
 	SelectedSubagentModels       []*agentv1.RequestedModel
@@ -441,6 +447,7 @@ type InboundIntent struct {
 	ConversationState            *agentv1.ConversationStateStructure
 	UserMessage                  *agentv1.UserMessage
 	RequestContext               *agentv1.RequestContext
+	MCPToolsProvided             bool
 	ClientMessage                *agentv1.AgentClientMessage
 	ExecClientMessage            *agentv1.ExecClientMessage
 	ExecClientControlMessage     *agentv1.ExecClientControlMessage

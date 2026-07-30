@@ -68,7 +68,11 @@ func (adapter *localDelegatedAgentAdapter) Execute(ctx context.Context, request 
 		return delegation.TaskResult{Error: err, Metadata: identity.metadata(0)}
 	}
 	compiled = guardCompiledConversationForProvider(compiled)
-	compiled.Tools, err = filterDelegatedTools(compiled.Tools, request.ToolPermission)
+	mcpToolNames, err := conversationMCPToolNameSet(conversation)
+	if err != nil {
+		return delegation.TaskResult{Error: err, Metadata: identity.metadata(0)}
+	}
+	compiled.Tools, err = filterDelegatedTools(compiled.Tools, request.ToolPermission, mcpToolNames)
 	if err != nil {
 		return delegation.TaskResult{Error: err, Metadata: identity.metadata(0)}
 	}
@@ -97,7 +101,7 @@ func (adapter *localDelegatedAgentAdapter) Execute(ctx context.Context, request 
 		messages = append(messages, buildDelegatedAssistantToolMessage(pass.text, pass.invocations))
 		for _, invocation := range pass.invocations {
 			toolCallCount++
-			resultText := adapter.executeTool(ctx, request, invocation)
+			resultText := adapter.executeTool(ctx, request, conversation, invocation)
 			messages = append(messages, modeladapter.Message{
 				Role:       "tool",
 				Content:    resultText,
@@ -235,21 +239,30 @@ func (adapter *localDelegatedAgentAdapter) runProviderPass(ctx context.Context, 
 	return pass, nil
 }
 
-func (adapter *localDelegatedAgentAdapter) executeTool(ctx context.Context, request delegation.TaskRequest, invocation runtimecore.ToolInvocation) string {
-	if !delegatedToolAllowed(request.ToolPermission, invocation.ToolName) {
+func (adapter *localDelegatedAgentAdapter) executeTool(ctx context.Context, request delegation.TaskRequest, conversation *ConversationFile, invocation runtimecore.ToolInvocation) string {
+	originalToolName := strings.TrimSpace(invocation.ToolName)
+	routedInvocation, routedMCP, err := rewriteConversationMCPToolInvocation(conversation, invocation)
+	if err != nil {
+		return fmt.Sprintf("tool routing failed: %s", err.Error())
+	}
+	permissionToolName := originalToolName
+	if routedMCP {
+		permissionToolName = "CallMcpTool"
+	}
+	if !delegatedToolAllowed(request.ToolPermission, permissionToolName) {
 		return fmt.Sprintf("tool permission denied: %s", strings.TrimSpace(invocation.ToolName))
 	}
 	if adapter.toolExecutor == nil {
 		return fmt.Sprintf("tool executor unavailable: %s", strings.TrimSpace(invocation.ToolName))
 	}
-	output, err := adapter.toolExecutor(ctx, request, invocation)
+	output, err := adapter.toolExecutor(ctx, request, routedInvocation)
 	if err != nil {
 		return fmt.Sprintf("tool execution failed: %s", err.Error())
 	}
 	return limitProjectedToolResultReplay(invocation.ToolName, strings.TrimSpace(output), strings.TrimSpace(output), false, false)
 }
 
-func filterDelegatedTools(tools []json.RawMessage, permissions map[string]bool) ([]json.RawMessage, error) {
+func filterDelegatedTools(tools []json.RawMessage, permissions map[string]bool, mcpToolNames map[string]struct{}) ([]json.RawMessage, error) {
 	if len(tools) == 0 {
 		return nil, nil
 	}
@@ -259,7 +272,11 @@ func filterDelegatedTools(tools []json.RawMessage, permissions map[string]bool) 
 		if err != nil {
 			return nil, err
 		}
-		if !delegatedToolAllowed(permissions, name) {
+		permissionToolName := name
+		if _, isMCPTool := mcpToolNames[name]; isMCPTool {
+			permissionToolName = "CallMcpTool"
+		}
+		if !delegatedToolAllowed(permissions, permissionToolName) {
 			continue
 		}
 		filtered = append(filtered, append(json.RawMessage(nil), raw...))
