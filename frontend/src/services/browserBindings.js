@@ -75,9 +75,16 @@ let previewDelegationTasks = [
     executionMode: "local",
     status: "running",
     toolCallCount: 2,
+    eventId: "delegation-event-2",
+    sequence: 2,
+    eventType: "running",
+    parentRequestId: "preview-request",
+    parentExecId: "preview-aggregate",
+    groupId: "preview-aggregate",
     queuedAtUnixMs: Date.now() - 14000,
     startedAtUnixMs: Date.now() - 12000,
     finishedAtUnixMs: 0,
+    updatedAtUnixMs: Date.now() - 12000,
     durationMs: 12000,
     cancelable: true,
   },
@@ -91,9 +98,16 @@ let previewDelegationTasks = [
     executionMode: "cursor",
     status: "completed",
     toolCallCount: 1,
+    eventId: "delegation-event-3",
+    sequence: 3,
+    eventType: "completed",
+    parentRequestId: "preview-request",
+    parentExecId: "preview-aggregate",
+    groupId: "preview-aggregate",
     queuedAtUnixMs: Date.now() - 30000,
     startedAtUnixMs: Date.now() - 28000,
     finishedAtUnixMs: Date.now() - 8000,
+    updatedAtUnixMs: Date.now() - 8000,
     durationMs: 20000,
     cancelable: false,
   },
@@ -241,9 +255,14 @@ export const GetDelegationTaskSnapshots = () => {
 export const CancelDelegationTask = (taskID) => {
   const task = previewDelegationTasks.find((item) => item.id === taskID && item.cancelable);
   if (!task) return Promise.resolve(false);
+  const sequence = previewDelegationTasks.reduce((highest, item) => Math.max(highest, Number(item.sequence) || 0), 0) + 1;
   task.status = "canceled";
+  task.sequence = sequence;
+  task.eventId = `delegation-event-${sequence}`;
+  task.eventType = "canceled";
   task.cancelable = false;
   task.finishedAtUnixMs = Date.now();
+  task.updatedAtUnixMs = task.finishedAtUnixMs;
   task.durationMs = Math.max(0, task.finishedAtUnixMs - task.startedAtUnixMs);
   return Promise.resolve(true);
 };

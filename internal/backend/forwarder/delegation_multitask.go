@@ -3,6 +3,7 @@ package forwarder
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -285,9 +286,8 @@ func (coordinator *multitaskDelegationCoordinator) Start(stream *ActiveStream, p
 		aggregate.workerIDs = append(aggregate.workerIDs, workerID)
 	}
 	if len(aggregate.workerIDs) == 0 {
-		coordinator.removeAggregate(aggregateID)
-		cancel()
-		return false, fmt.Errorf("no delegated worker could be submitted")
+		go coordinator.awaitAggregate(stream, pending, aggregate)
+		return true, nil
 	}
 	go coordinator.awaitAggregate(stream, pending, aggregate)
 	return true, nil
@@ -326,54 +326,49 @@ func (coordinator *multitaskDelegationCoordinator) awaitAggregate(stream *Active
 	if coordinator == nil || aggregate == nil {
 		return
 	}
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
 	defer coordinator.removeAggregate(aggregate.id)
-	for {
-		select {
-		case <-aggregate.ctx.Done():
-			return
-		case <-ticker.C:
-			if !coordinator.aggregateTerminal(aggregate) {
-				continue
+	if len(aggregate.workerIDs) > 0 {
+		err := coordinator.scheduler.WaitForTerminal(aggregate.ctx, aggregate.workerIDs)
+		if err != nil {
+			if errors.Is(err, context.Canceled) && aggregate.ctx.Err() != nil {
+				return
 			}
-			result := coordinator.collectAggregate(aggregate)
-			payload, err := json.Marshal(result)
-			if err != nil {
-				payload = []byte(fmt.Sprintf(`{"aggregate_id":%q,"status":"failed","error":%q}`, aggregate.id, err.Error()))
-			}
-			postErr := coordinator.service.postStreamCommandAsync(stream, streamCommand{
-				Kind: streamCommandDelegationResult,
-				Delegation: &streamDelegationResult{
-					AggregateID:  aggregate.id,
-					ExecID:       pending.ExecID,
-					ProviderPass: pending.ProviderPass,
-					Payload:      string(payload),
-				},
-			})
-			if postErr != nil {
-				log.Printf(
-					"forwarder delegation aggregate post failed request_id=%s aggregate_id=%s exec_id=%s err=%v",
-					strings.TrimSpace(activeStreamRequestID(stream)),
-					strings.TrimSpace(aggregate.id),
-					strings.TrimSpace(pending.ExecID),
-					postErr,
-				)
-				_ = coordinator.service.failStreamIfNonTerminal(stream, "unknown", postErr)
-			}
+			waitErr := fmt.Errorf("delegation aggregate %q wait failed: %w", strings.TrimSpace(aggregate.id), err)
+			log.Printf(
+				"forwarder delegation aggregate wait failed request_id=%s aggregate_id=%s exec_id=%s err=%v",
+				strings.TrimSpace(activeStreamRequestID(stream)),
+				strings.TrimSpace(aggregate.id),
+				strings.TrimSpace(pending.ExecID),
+				waitErr,
+			)
+			_ = coordinator.service.failStreamIfNonTerminal(stream, "unknown", waitErr)
 			return
 		}
 	}
-}
-
-func (coordinator *multitaskDelegationCoordinator) aggregateTerminal(aggregate *delegatedAggregate) bool {
-	for _, workerID := range aggregate.workerIDs {
-		snapshot, ok := coordinator.scheduler.Snapshot(workerID)
-		if !ok || !delegatedStatusTerminal(snapshot.Status) {
-			return false
-		}
+	result := coordinator.collectAggregate(aggregate)
+	payload, err := json.Marshal(result)
+	if err != nil {
+		payload = []byte(fmt.Sprintf(`{"aggregate_id":%q,"status":"failed","error":%q}`, aggregate.id, err.Error()))
 	}
-	return true
+	postErr := coordinator.service.postStreamCommandAsync(stream, streamCommand{
+		Kind: streamCommandDelegationResult,
+		Delegation: &streamDelegationResult{
+			AggregateID:  aggregate.id,
+			ExecID:       pending.ExecID,
+			ProviderPass: pending.ProviderPass,
+			Payload:      string(payload),
+		},
+	})
+	if postErr != nil {
+		log.Printf(
+			"forwarder delegation aggregate post failed request_id=%s aggregate_id=%s exec_id=%s err=%v",
+			strings.TrimSpace(activeStreamRequestID(stream)),
+			strings.TrimSpace(aggregate.id),
+			strings.TrimSpace(pending.ExecID),
+			postErr,
+		)
+		_ = coordinator.service.failStreamIfNonTerminal(stream, "unknown", postErr)
+	}
 }
 
 func (coordinator *multitaskDelegationCoordinator) collectAggregate(aggregate *delegatedAggregate) delegatedAggregateResult {
