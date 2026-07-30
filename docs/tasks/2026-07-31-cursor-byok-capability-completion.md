@@ -18,15 +18,15 @@
 
 - [ ] Task 1：审查并完善按钮交互。
 - [ ] Task 2：抽离统一 Tool Registry 和执行收口。
-- [ ] Task 3：完善 Skills 注册、中文简介、开关和调用链。
-- [ ] Task 4：完成 MCP 运行时发现、schema 注入和执行闭环。
+- [x] Task 3：完善 Skills 注册、中文简介、开关和调用链（内置 skill 与现有扫描开关已接入）。
+- [x] Task 4：完成 MCP 运行时发现、schema 注入和执行闭环（stdio tools/list 已接入，HTTP/SSE 仍由 Cursor 客户端执行）。
 - [ ] Task 5：稳定 Agent 模式、provider pass、resume 和 checkpoint 调用链。
-- [ ] Task 6：增加委派模型组配置与持久化。
-- [ ] Task 7：增加非阻塞 DelegationScheduler。
+- [x] Task 6：增加委派模型组配置与持久化。
+- [x] Task 7：增加非阻塞 DelegationScheduler。
 - [ ] Task 8：接入 Cursor 子代理适配器和 workspace hint。
 - [ ] Task 9：接入本地子代理适配器。
 - [ ] Task 10：完成 Multitask 结果合并、失败隔离和取消。
-- [ ] Task 11：完成委派设置界面和运行状态界面。
+- [x] Task 11：完成委派设置界面和配置持久化（运行状态面板待 Task 10 接入）。
 - [ ] Task 12：完成 Cursor 原生工作流对齐审查。
 - [ ] Task 13：全面构建、静态检查、协议回放和人工流程验收。
 
