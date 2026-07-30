@@ -89,12 +89,12 @@ export function useThreeCard(scene, camera) {
     const group = new THREE.Group();
     group.position.x = x;
 
-    // 柱体
+    // 柱体 - 大幅降低不透明度，让数据卡片清晰可见
     const geometry = new THREE.BoxGeometry(8, 10, 8);
     const material = new THREE.MeshBasicMaterial({
       color: new THREE.Color(COLOR_SCHEME.accent),
       transparent: true,
-      opacity: 0.7,
+      opacity: 0.15,  // 从 0.7 降到 0.15
     });
     materials.push(material);
 

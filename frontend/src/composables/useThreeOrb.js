@@ -112,7 +112,7 @@ export function useThreeOrb(scene, camera) {
     const material = new THREE.LineBasicMaterial({
       vertexColors: true,
       transparent: true,
-      opacity: 0.5,
+      opacity: 0.25,  // 从 0.5 降到 0.25
     });
     materials.push(material);
 
@@ -122,24 +122,24 @@ export function useThreeOrb(scene, camera) {
   function createCoreSphere() {
     const group = new THREE.Group();
 
-    // 内核
-    const coreGeometry = new THREE.SphereGeometry(15, 32, 32);
+    // 内核 - 大幅缩小尺寸，极度透明
+    const coreGeometry = new THREE.SphereGeometry(8, 32, 32);  // 从 15 降到 8
     const coreMaterial = new THREE.MeshBasicMaterial({
       color: new THREE.Color(COLOR_SCHEME.accent),
       transparent: true,
-      opacity: 0.8,
+      opacity: 0.12,  // 从 0.8 降到 0.12
     });
     materials.push(coreMaterial);
 
     const core = new THREE.Mesh(coreGeometry, coreMaterial);
     group.add(core);
 
-    // 光晕
-    const glowGeometry = new THREE.SphereGeometry(20, 32, 32);
+    // 光晕 - 更透明
+    const glowGeometry = new THREE.SphereGeometry(12, 32, 32);  // 从 20 降到 12
     const glowMaterial = new THREE.MeshBasicMaterial({
       color: new THREE.Color(COLOR_SCHEME.accent),
       transparent: true,
-      opacity: 0.3,
+      opacity: 0.08,  // 从 0.3 降到 0.08
     });
     materials.push(glowMaterial);
 
@@ -164,24 +164,24 @@ export function useThreeOrb(scene, camera) {
     const z = Math.sin(angle) * ORBIT_RADIUS;
     group.position.set(x, 0, z);
 
-    // 卫星球体
+    // 卫星球体 - 大幅降低透明度
     const geometry = new THREE.SphereGeometry(4, 16, 16);
     const material = new THREE.MeshBasicMaterial({
       color: new THREE.Color(COLOR_SCHEME.accent),
       transparent: true,
-      opacity: 0.7,
+      opacity: 0.18,  // 从 0.7 降到 0.18
     });
     materials.push(material);
 
     const mesh = new THREE.Mesh(geometry, material);
     group.add(mesh);
 
-    // 光晕
+    // 光晕 - 更透明
     const glowGeometry = new THREE.SphereGeometry(6, 16, 16);
     const glowMaterial = new THREE.MeshBasicMaterial({
       color: new THREE.Color(COLOR_SCHEME.accent),
       transparent: true,
-      opacity: 0.2,
+      opacity: 0.08,  // 从 0.2 降到 0.08
     });
     materials.push(glowMaterial);
 
@@ -208,7 +208,7 @@ export function useThreeOrb(scene, camera) {
     const material = new THREE.MeshBasicMaterial({
       color: new THREE.Color(COLOR_SCHEME.gridLine),
       transparent: true,
-      opacity: 0.2,
+      opacity: 0.06,  // 从 0.2 降到 0.06
       side: THREE.DoubleSide,
     });
     materials.push(material);
