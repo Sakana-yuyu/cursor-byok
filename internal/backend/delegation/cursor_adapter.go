@@ -45,6 +45,7 @@ type cursorTaskWaiter struct {
 	subagentType        string
 	modelID             string
 	pending             runtimecore.PendingExec
+	expectSubagent      bool
 	done                bool
 	resultCh            chan TaskResult
 }
@@ -64,6 +65,23 @@ func NewCursorAdapter(bridge execbridge.ExecBridge, publish CursorPublisher) *Cu
 }
 
 func (adapter *CursorAdapter) Execute(ctx context.Context, request TaskRequest) TaskResult {
+	argsJSON, err := buildCursorTaskArgs(request)
+	if err != nil {
+		return TaskResult{Error: err}
+	}
+	invocation := runtimecore.ToolInvocation{
+		CallID:   "",
+		ToolName: "Task",
+		ArgsJSON: argsJSON,
+	}
+	return adapter.executeInvocation(ctx, request, invocation, true)
+}
+
+func (adapter *CursorAdapter) ExecuteTool(ctx context.Context, request TaskRequest, invocation runtimecore.ToolInvocation) TaskResult {
+	return adapter.executeInvocation(ctx, request, invocation, strings.TrimSpace(invocation.ToolName) == "Task")
+}
+
+func (adapter *CursorAdapter) executeInvocation(ctx context.Context, request TaskRequest, invocation runtimecore.ToolInvocation, expectSubagent bool) TaskResult {
 	if adapter == nil {
 		return TaskResult{Error: fmt.Errorf("cursor adapter is nil")}
 	}
@@ -73,34 +91,31 @@ func (adapter *CursorAdapter) Execute(ctx context.Context, request TaskRequest) 
 	if adapter.publish == nil {
 		return TaskResult{Error: fmt.Errorf("cursor publisher is unavailable")}
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	parentRequestID := strings.TrimSpace(request.ParentRequest)
 	if parentRequestID == "" {
-		return TaskResult{Error: fmt.Errorf("delegated cursor task requires parent request id")}
+		return TaskResult{Error: fmt.Errorf("delegated cursor exec requires parent request id")}
 	}
 	taskID := strings.TrimSpace(request.ID)
 	if taskID == "" {
-		return TaskResult{Error: fmt.Errorf("delegated cursor task requires task id")}
+		return TaskResult{Error: fmt.Errorf("delegated cursor exec requires task id")}
 	}
-
 	seq := adapter.sequence.Add(1)
 	childConversationID := fmt.Sprintf("%s-child-conversation-%d", taskID, seq)
 	childRequestID := fmt.Sprintf("%s-child-request-%d", taskID, seq)
-	childToolCallID := fmt.Sprintf("%s-child-tool-%d", taskID, seq)
-	argsJSON, err := buildCursorTaskArgs(request)
-	if err != nil {
-		return TaskResult{Error: err}
-	}
-	invocation := runtimecore.ToolInvocation{
-		CallID:   childToolCallID,
-		ToolName: "Task",
-		ArgsJSON: argsJSON,
+	childToolCallID := strings.TrimSpace(invocation.CallID)
+	if childToolCallID == "" {
+		childToolCallID = fmt.Sprintf("%s-child-tool-%d", taskID, seq)
+		invocation.CallID = childToolCallID
 	}
 	serverMessage, pending, err := adapter.execBridge.OpenExec(execbridge.OpenExecContext{
 		ConversationID:               strings.TrimSpace(request.ConversationID),
 		RootConversationID:           firstNonEmpty(strings.TrimSpace(request.RootConversationID), strings.TrimSpace(request.ConversationID)),
 		ModelID:                      strings.TrimSpace(request.ModelID),
 		WorkspaceHint:                strings.TrimSpace(request.WorkspaceHint),
-		DirectMetaParentChild:        true,
+		DirectMetaParentChild:        expectSubagent,
 		SubagentModelOverrides:       cloneSubagentModelOverrides(request.SubagentModelOverrides),
 		SelectedSubagentModels:       cloneRequestedModels(request.SelectedSubagentModels),
 		SelectedSubagentModelDetails: cloneModelDetails(request.SelectedSubagentModelDetails),
@@ -118,6 +133,7 @@ func (adapter *CursorAdapter) Execute(ctx context.Context, request TaskRequest) 
 		subagentType:        strings.TrimSpace(request.SubagentType),
 		modelID:             strings.TrimSpace(request.ModelID),
 		pending:             pending,
+		expectSubagent:      expectSubagent,
 		resultCh:            make(chan TaskResult, 1),
 	}
 	adapter.registerWaiter(waiter)
@@ -145,11 +161,12 @@ func (adapter *CursorAdapter) ConsumeExecMessage(message *agentv1.ExecClientMess
 	if waiter == nil {
 		return false
 	}
-	if message.GetSubagentResult() == nil {
+	if waiter.expectSubagent && message.GetSubagentResult() == nil {
 		err := fmt.Errorf("delegated cursor exec returned unexpected payload")
 		adapter.completeWaiter(waiter, TaskResult{Error: err, Output: err.Error(), Metadata: adapter.waiterMetadata(waiter)})
 		return true
 	}
+	adapter.observeExecProgress(waiter, message)
 	applyResult, err := adapter.execBridge.ApplyExecClientMessage(message, waiter.pending)
 	result := TaskResult{
 		Metadata: adapter.waiterMetadata(waiter),
@@ -160,7 +177,13 @@ func (adapter *CursorAdapter) ConsumeExecMessage(message *agentv1.ExecClientMess
 		adapter.completeWaiter(waiter, result)
 		return true
 	}
+	if !applyResult.IsTerminal {
+		return true
+	}
 	result.Output = strings.TrimSpace(applyResult.ToolResultPayload)
+	if !waiter.expectSubagent {
+		result.ToolCallCount = 1
+	}
 	if subagentResult := message.GetSubagentResult(); subagentResult != nil {
 		result.SubagentResult = cloneSubagentResult(subagentResult)
 		if success := subagentResult.GetSuccess(); success != nil {
@@ -206,7 +229,7 @@ func (adapter *CursorAdapter) ConsumeExecControl(message *agentv1.ExecClientCont
 	}
 	payload := strings.TrimSpace(applyResult.ToolResultPayload)
 	if payload == "" {
-		payload = "subagent exec terminated"
+		payload = "delegated cursor exec terminated"
 	}
 	adapter.completeWaiter(waiter, TaskResult{
 		Error:    errors.New(payload),
@@ -214,6 +237,24 @@ func (adapter *CursorAdapter) ConsumeExecControl(message *agentv1.ExecClientCont
 		Metadata: adapter.waiterMetadata(waiter),
 	})
 	return true
+}
+
+func (adapter *CursorAdapter) observeExecProgress(waiter *cursorTaskWaiter, message *agentv1.ExecClientMessage) {
+	if adapter == nil || waiter == nil || message == nil {
+		return
+	}
+	shellStream := message.GetShellStream()
+	if shellStream == nil {
+		return
+	}
+	adapter.mu.Lock()
+	defer adapter.mu.Unlock()
+	switch event := shellStream.GetEvent().(type) {
+	case *agentv1.ShellStream_Stdout:
+		waiter.pending.StdoutBuffer += execbridge.DecodeShellStdout(event.Stdout)
+	case *agentv1.ShellStream_Stderr:
+		waiter.pending.StderrBuffer += event.Stderr.GetData()
+	}
 }
 
 func (adapter *CursorAdapter) CancelTask(taskID string, cause error) bool {

@@ -25,7 +25,7 @@
 - [x] Task 7：增加非阻塞 DelegationScheduler。
 - [x] Task 8：接入 Cursor 子代理适配器和 workspace hint。
 - [x] Task 9：接入本地子代理适配器。
-- [ ] Task 10：完成 Multitask 结果合并、失败隔离和取消。
+- [x] Task 10：完成 Multitask 结果合并、失败隔离和取消。
 - [x] Task 11：完成委派设置界面和配置持久化（运行状态面板待 Task 10 接入）。
 - [ ] Task 12：完成 Cursor 原生工作流对齐审查。
 - [ ] Task 13：全面构建、静态检查、协议回放和人工流程验收。

@@ -56,6 +56,7 @@ const (
 	streamCommandProviderEvent     streamCommandKind = "provider_event"
 	streamCommandTimerFired        streamCommandKind = "timer_fired"
 	streamCommandCompactionEvent   streamCommandKind = "compaction_event"
+	streamCommandDelegationResult  streamCommandKind = "delegation_result"
 	streamCommandMaybeOrphaned     streamCommandKind = "maybe_orphaned"
 )
 
@@ -99,6 +100,7 @@ type streamCommand struct {
 	Provider   *streamProviderEvent
 	Timer      *streamTimerEvent
 	Compaction *streamCompactionEvent
+	Delegation *streamDelegationResult
 	Reason     string
 }
 
@@ -351,6 +353,8 @@ func (service *Service) handleStreamCommand(stream *ActiveStream, command stream
 		return service.handleTimerEvent(stream, command.Timer)
 	case streamCommandCompactionEvent:
 		return service.handleCompactionEvent(stream, command.Compaction)
+	case streamCommandDelegationResult:
+		return service.handleDelegationResult(stream, command.Delegation)
 	case streamCommandMaybeOrphaned:
 		if stream == nil {
 			return nil

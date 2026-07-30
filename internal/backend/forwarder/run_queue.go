@@ -91,7 +91,7 @@ func (service *Service) activeConversationHasSubagents(conversationID string) bo
 		stream.mu.Lock()
 		hit := false
 		for _, pending := range stream.PendingExecs {
-			if strings.TrimSpace(pending.ExecKind) == "subagent" {
+			if kind := strings.TrimSpace(pending.ExecKind); kind == "subagent" || kind == "delegation_aggregate" {
 				hit = true
 				break
 			}
