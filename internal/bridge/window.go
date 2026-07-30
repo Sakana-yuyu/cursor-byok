@@ -450,18 +450,21 @@ func (s *WindowService) UpdateStatsOverlayWindow(style string, alwaysOnTop bool)
 
 	win.SetSize(width, height)
 	if hasLayout {
+		// CSS 贴边时有 transform 偏移（左/右 translateX(±14px)，上/下 translateY(±14px)），
+		// 在窗口定位时预留此偏移，避免胶囊被裁剪到屏幕边缘外。
+		const snapTransformOffset = 14
 		x, y := layout.x, layout.y
 		screenRight := layout.screenLeft + layout.screenWidth
 		screenBottom := layout.screenTop + layout.screenHeight
 		switch layout.edge {
 		case "left":
-			x = layout.screenLeft
+			x = layout.screenLeft + snapTransformOffset
 		case "right":
-			x = screenRight - width
+			x = screenRight - width - snapTransformOffset
 		case "top":
-			y = layout.screenTop
+			y = layout.screenTop + snapTransformOffset
 		case "bottom":
-			y = screenBottom - height
+			y = screenBottom - height - snapTransformOffset
 		}
 		if x < layout.screenLeft {
 			x = layout.screenLeft

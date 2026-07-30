@@ -1,22 +1,30 @@
-# v0.0.69 发布说明
+# v0.0.70 发布说明
 
-## 🪟 统计浮窗尺寸跟随内容 + 不阻挡下方页面
+## 🐛 修复贴边胶囊被裁剪问题
+
+### 问题
+贴左/右/上/下边时竖向/横向胶囊只显示一半，另一半被裁剪到屏幕边缘外。
 
 ### 根因
-浮窗原生 Wails 窗口有固定矩形尺寸（如 240×144），无论内容是收缩胶囊还是完整面板。
-即使 Vue 层用 `pointer-events: none` 让空白区域穿透点击，**原生窗口矩形本身仍阻挡下方页面的交互**——
-收缩成胶囊时，窗口仍占 240×144 的不可见区域，挡住下方应用。
+两个冲突的定位逻辑：
+- **Go 定位**：左边吸附时窗口 `x = screenLeft`（屏幕边缘）
+- **CSS transform**：左边吸附时 `translateX(-14px)`，将胶囊向屏幕外推 14px
+
+结果：窗口在边缘，CSS 又把内容推出边缘 → 一半被裁剪
 
 ### 修复
-- **前端 `StatsOverlay.vue`**：新增 `syncNativeWindowSize()`，在折叠/展开、贴边、样式变化时
-  构建布局 DSL（`layout|collapsed/expanded|edge|style|x|y|screen...`）调用 `UpdateStatsOverlayWindow`，
-  让原生窗口尺寸紧贴实际内容
-- **后端 `window.go`**：收缩胶囊尺寸随朝向变化——贴左/右边竖向（44×60），其余横向（96×36），
-  避免大块透明区域阻挡下方页面；展开时恢复对应样式的面板尺寸
+在 Go 窗口定位时为 CSS transform 预留 14px 偏移空间：
+
+| 边缘 | 修复前 | 修复后 |
+|---|---|---|
+| 左 | `x = screenLeft` | `x = screenLeft + 14` |
+| 右 | `x = screenRight - width` | `x = screenRight - width - 14` |
+| 上 | `y = screenTop` | `y = screenTop + 14` |
+| 下 | `y = screenBottom - height` | `y = screenBottom - height - 14` |
 
 ### 效果
-- 收缩胶囊：原生窗口缩到胶囊大小，下方页面可正常点击
-- 展开面板：窗口恢复面板尺寸，内容完整显示
-- 贴边自动收缩/悬停展开时窗口尺寸实时跟随
+- 贴边胶囊完整显示，不再被裁剪
+- "轻微内收"视觉效果保留（CSS transform 仍生效，但有了预留空间）
+- 悬停展开时面板位置正确
 
 > **Windows 用户注意**：安装时若被 SmartScreen 拦截，点击「更多信息」->「仍要运行」即可。
