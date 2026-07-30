@@ -34,6 +34,9 @@ const (
 	// DefaultAutoMatchContextWindow 表示是否在启动时/手动触发时自动为所有模型适配器
 	// 配对正确的上下文窗口（目录命中则覆盖，目录无则探测 provider /models 回填）。
 	DefaultAutoMatchContextWindow = true
+	// DefaultSkillMCPScanEnabled 表示是否默认开启跨工具 Skills/MCP 自动扫描与注入。
+	// 开启时扫描主流编码工具的技能/MCP 配置，合并进 RequestContext，还原原生注入。
+	DefaultSkillMCPScanEnabled = true
 )
 
 type ModelPricing = legacyruntime.ModelPricing
@@ -105,6 +108,23 @@ type LocalResponseCacheConfig struct {
 	MaxEntries int `json:"maxEntries,omitempty" yaml:"maxEntries,omitempty"`
 }
 
+// SkillMCPScanConfig 控制跨工具的 Skills / MCP 自动扫描与注入。
+// 默认（Enabled 为 true）开启：扫描主流编码工具（Cursor/Claude/Codex/ZCode/.agents 等）
+// 的技能与 MCP 配置，合并进 RequestContext，还原原生 <agent_skills>/<mcp_file_system> 注入。
+type SkillMCPScanConfig struct {
+	// Enabled 总开关；默认 true。
+	Enabled bool `json:"enabled" yaml:"enabled"`
+	// SkillSources 按工具分类控制技能扫描来源；key 为分类标签，value 为是否启用。
+	// 缺省（nil）表示全部启用。分类：cursor/claude/codex/shared/zcode/zcode-plugin/byok。
+	SkillSources map[string]bool `json:"skillSources,omitempty" yaml:"skillSources,omitempty"`
+	// MCPSources 按工具分类控制 MCP 配置扫描来源；缺省全部启用。
+	MCPSources map[string]bool `json:"mcpSources,omitempty" yaml:"mcpSources,omitempty"`
+	// DisabledSkills 显式禁用的技能名集合（小写匹配），不注入提示。
+	DisabledSkills map[string]bool `json:"disabledSkills,omitempty" yaml:"disabledSkills,omitempty"`
+	// DisabledMCPServers 显式禁用的 MCP server identifier 集合（小写匹配）。
+	DisabledMCPServers map[string]bool `json:"disabledMcpServers,omitempty" yaml:"disabledMcpServers,omitempty"`
+}
+
 type Config struct {
 	Log                       bool                     `json:"log" yaml:"log"`
 	ProviderStreamIdleTimeout int                      `json:"providerStreamIdleTimeout" yaml:"providerStreamIdleTimeout"`
@@ -116,6 +136,7 @@ type Config struct {
 	Routing                   RoutingConfig            `json:"routing" yaml:"routing"`
 	HomeMetrics               HomeMetricsConfig        `json:"homeMetrics" yaml:"homeMetrics"`
 	LocalResponseCache        LocalResponseCacheConfig `json:"localResponseCache" yaml:"localResponseCache"`
+	SkillMCPScan              SkillMCPScanConfig       `json:"skillMcpScan" yaml:"skillMcpScan"`
 	LastAgentModelHash        string                   `json:"lastAgentModelHash" yaml:"lastAgentModelHash"`
 }
 
@@ -130,6 +151,9 @@ func DefaultConfig() Config {
 		ModelAdapters:             []ModelAdapterConfig{},
 		Routing: RoutingConfig{
 			Mode: DefaultRoutingMode,
+		},
+		SkillMCPScan: SkillMCPScanConfig{
+			Enabled: DefaultSkillMCPScanEnabled,
 		},
 	}
 }

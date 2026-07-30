@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"context"
+	"cursor/internal/backend/forwarder"
 	serverconfig "cursor/internal/backend/server/config"
 	"cursor/internal/certs"
 	"cursor/internal/client"
@@ -248,4 +249,42 @@ func (s *ProxyService) RefreshPromptInjectionCatalog() (PromptInjectionStatus, e
 // IsWindows 用于处理与 IsWindows 相关的逻辑。
 func (s *ProxyService) IsWindows() bool {
 	return runtime.GOOS == "windows"
+}
+
+// SkillsMCPScanSnapshot 是管理界面展示用的扫描结果快照（技能 + MCP server）。
+type SkillsMCPScanSnapshot struct {
+	Skills     []forwarder.SkillSnapshotItem     `json:"skills"`
+	MCPServers []forwarder.MCPServerSnapshotItem `json:"mcpServers"`
+	Config     serverconfig.SkillMCPScanConfig   `json:"config"`
+}
+
+// GetSkillsMCPScanSnapshot 扫描各工具的 Skills/MCP 配置，返回去重分类后的快照及当前开关配置。
+// workspaceRoot 为空时仅扫描用户级目录。供管理界面「Skills & MCP」tab 展示。
+func (s *ProxyService) GetSkillsMCPScanSnapshot(workspaceRoot string) (SkillsMCPScanSnapshot, error) {
+	cfg, err := s.core.LoadUserConfig()
+	if err != nil {
+		cfg = serverconfig.DefaultConfig()
+	}
+	return SkillsMCPScanSnapshot{
+		Skills:     forwarder.SnapshotSourcedSkills(workspaceRoot),
+		MCPServers: forwarder.SnapshotMCPServers(workspaceRoot),
+		Config:     cfg.SkillMCPScan,
+	}, nil
+}
+
+// RefreshSkillsMCPScan 清除扫描缓存并重新扫描，返回最新快照。供「重新扫描」按钮调用。
+func (s *ProxyService) RefreshSkillsMCPScan(workspaceRoot string) (SkillsMCPScanSnapshot, error) {
+	forwarder.InvalidateSkillScanCache()
+	forwarder.InvalidateMCPScanCache()
+	return s.GetSkillsMCPScanSnapshot(workspaceRoot)
+}
+
+// SaveSkillsMCPScanConfig 单独保存 Skills/MCP 扫描配置（合并进现有 config 后落盘）。
+func (s *ProxyService) SaveSkillsMCPScanConfig(scanCfg serverconfig.SkillMCPScanConfig) error {
+	cfg, err := s.core.LoadUserConfig()
+	if err != nil {
+		return err
+	}
+	cfg.SkillMCPScan = scanCfg
+	return s.core.SaveUserConfig(cfg)
 }

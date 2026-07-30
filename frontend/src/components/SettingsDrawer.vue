@@ -21,6 +21,9 @@ import {
   refreshPromptInjection,
   refreshPromptInjectionCatalog,
   savePromptInjectionSettings,
+  getSkillsMCPScanSnapshot,
+  refreshSkillsMCPScan,
+  saveSkillsMCPScanConfig,
 } from "@/services/clientApi";
 import { computed, onMounted, reactive, ref } from "vue";
 
@@ -100,7 +103,69 @@ async function updateOverlayVisibility(visible) {
 }
 async function handleOpenConfig() { try { await openConfigWindow(); } catch (error) { await showModal({ title: "打开设置文件夹失败", content: toUserError(error) }); } }
 
-onMounted(() => { Object.assign(overlayPreferences, getStatsOverlayPreferences()); void loadPromptInjection(); });
+// Skills & MCP 跨工具扫描：汇总主流编码工具的技能与 MCP 配置，按工具分类展示并可逐项开关。
+// 注意：依赖 wails 自动生成的 binding，新增方法需在下次 wails dev/build 后才生效。
+const skillsMcp = reactive({ enabled: true, expanded: false, busy: false, loaded: false, skills: [], mcpServers: [], disabledSkills: {}, disabledMcpServers: {}, error: "" });
+const skillsMcpSummary = computed(() => {
+  if (!skillsMcp.loaded) return "加载中…";
+  const skillCount = (skillsMcp.skills || []).length;
+  const mcpCount = (skillsMcp.mcpServers || []).length;
+  if (skillCount === 0 && mcpCount === 0) return "未发现技能或 MCP";
+  return `已发现 ${skillCount} 个技能、${mcpCount} 个 MCP server`;
+});
+function groupSkillsBySource(skills) {
+  const groups = {};
+  for (const skill of skills || []) {
+    const source = skill.source || "other";
+    if (!groups[source]) groups[source] = [];
+    groups[source].push(skill);
+  }
+  return groups;
+}
+async function loadSkillsMcp() {
+  skillsMcp.busy = true; skillsMcp.error = "";
+  try {
+    const snapshot = await getSkillsMCPScanSnapshot("");
+    skillsMcp.skills = Array.isArray(snapshot.skills) ? snapshot.skills : [];
+    skillsMcp.mcpServers = Array.isArray(snapshot.mcpServers) ? snapshot.mcpServers : [];
+    const cfg = snapshot.config || {};
+    skillsMcp.enabled = cfg.enabled !== false;
+    skillsMcp.disabledSkills = cfg.disabledSkills || {};
+    skillsMcp.disabledMcpServers = cfg.disabledMcpServers || {};
+  } catch (error) {
+    skillsMcp.error = toUserError(error);
+  } finally { skillsMcp.busy = false; skillsMcp.loaded = true; }
+}
+async function refreshSkillsMcpList() {
+  skillsMcp.busy = true; skillsMcp.error = "";
+  try {
+    const snapshot = await refreshSkillsMCPScan("");
+    skillsMcp.skills = Array.isArray(snapshot.skills) ? snapshot.skills : [];
+    skillsMcp.mcpServers = Array.isArray(snapshot.mcpServers) ? snapshot.mcpServers : [];
+    message.success("已重新扫描技能与 MCP 配置");
+  } catch (error) { skillsMcp.error = toUserError(error); } finally { skillsMcp.busy = false; }
+}
+async function persistSkillsMcpConfig() {
+  try {
+    await saveSkillsMCPScanConfig({ enabled: skillsMcp.enabled, disabledSkills: skillsMcp.disabledSkills, disabledMcpServers: skillsMcp.disabledMcpServers });
+  } catch (error) { skillsMcp.error = toUserError(error); }
+}
+function toggleSkill(name, enabled) {
+  const key = String(name || "").toLowerCase();
+  if (!key) return;
+  skillsMcp.disabledSkills = { ...skillsMcp.disabledSkills, [key]: !enabled };
+  void persistSkillsMcpConfig();
+}
+function toggleMcpServer(identifier, enabled) {
+  const key = String(identifier || "").toLowerCase();
+  if (!key) return;
+  skillsMcp.disabledMcpServers = { ...skillsMcp.disabledMcpServers, [key]: !enabled };
+  void persistSkillsMcpConfig();
+}
+function isSkillEnabled(name) { return !skillsMcp.disabledSkills[String(name || "").toLowerCase()]; }
+function isMcpEnabled(identifier) { return !skillsMcp.disabledMcpServers[String(identifier || "").toLowerCase()]; }
+
+onMounted(() => { Object.assign(overlayPreferences, getStatsOverlayPreferences()); void loadPromptInjection(); void loadSkillsMcp(); });
 </script>
 
 <template>
@@ -167,6 +232,60 @@ onMounted(() => { Object.assign(overlayPreferences, getStatsOverlayPreferences()
                   <Switch label="软件使用中文化" :enabled="promptInjection.softwareChineseEnabled" :busy="promptInjectionBusy || !promptInjectionLoaded" :disabled="promptInjectionBusy || !promptInjectionLoaded" @change="(value) => { promptInjection.softwareChineseEnabled = value; void savePromptInjection(); }" />
                 </div>
                 <div v-if="promptInjection.lastError" class="break-words rounded border border-[#4b1d1d] bg-[#2a1313] px-2 py-1 text-xs text-[#fca5a5]">{{ promptInjection.lastError }}</div>
+              </template>
+            </div></Card>
+            <Card><div class="min-w-0 space-y-3">
+              <div class="flex min-w-0 items-center gap-3">
+                <button type="button" class="flex min-w-0 flex-1 items-center gap-3 rounded-[6px] text-left outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35" :aria-expanded="skillsMcp.expanded" @click="skillsMcp.expanded = !skillsMcp.expanded">
+                  <span class="icon-[mdi--chevron-right] shrink-0 text-lg text-[#737373] transition-transform" :class="{ 'rotate-90': skillsMcp.expanded }"></span>
+                  <span class="min-w-0 flex-1">
+                    <span class="block text-sm font-medium text-white">技能 &amp; MCP（跨工具扫描）</span>
+                    <span class="mt-1 block truncate text-xs" :class="skillsMcp.enabled ? 'text-[#6ee7a5]' : 'text-[#858585]'">{{ skillsMcpSummary }}</span>
+                  </span>
+                </button>
+                <div class="shrink-0 rounded-[8px] border border-white/10 bg-black/20 px-2.5 py-2">
+                  <Switch compact label="扫描" :enabled="skillsMcp.enabled" :busy="skillsMcp.busy || !skillsMcp.loaded" :disabled="skillsMcp.busy || !skillsMcp.loaded" @change="(value) => { skillsMcp.enabled = value; void persistSkillsMcpConfig(); }" />
+                </div>
+              </div>
+
+              <template v-if="skillsMcp.expanded">
+                <div class="text-[11px] leading-5 text-[#8f8f8f]">自动扫描 Cursor / Claude Code / Codex / ZCode / .agents 等主流工具的技能与 MCP 配置，合并注入到模型上下文，还原原生调用。</div>
+                <div class="flex justify-end">
+                  <Button variant="default" :disabled="skillsMcp.busy || !skillsMcp.loaded" @click="refreshSkillsMcpList">重新扫描</Button>
+                </div>
+
+                <div v-if="skillsMcp.error" class="break-words rounded border border-[#4b1d1d] bg-[#2a1313] px-2 py-1 text-xs text-[#fca5a5]">{{ skillsMcp.error }}</div>
+
+                <div v-if="(skillsMcp.skills || []).length" class="space-y-3">
+                  <div class="text-xs font-medium text-[#a3a3a3]">技能</div>
+                  <div v-for="(skillsInGroup, source) in groupSkillsBySource(skillsMcp.skills)" :key="source" class="space-y-2">
+                    <div class="text-[11px] uppercase tracking-wide text-[#737373]">{{ source }}</div>
+                    <article v-for="skill in skillsInGroup" :key="skill.fullPath || skill.name" class="flex min-w-0 items-start gap-3 rounded-[8px] border border-white/10 bg-black/15 p-3">
+                      <div class="min-w-0 flex-1">
+                        <div class="truncate text-xs font-medium text-white" :title="skill.name">{{ skill.name }}</div>
+                        <div class="mt-1 line-clamp-2 break-words text-[11px] leading-5 text-[#8f8f8f]">{{ skill.description || "暂无描述" }}</div>
+                      </div>
+                      <div class="shrink-0 rounded-[7px] border border-white/10 bg-[#242424] px-2 py-1.5">
+                        <Switch compact label="" :enabled="isSkillEnabled(skill.name)" :busy="skillsMcp.busy" :disabled="skillsMcp.busy" @change="(value) => toggleSkill(skill.name, value)" />
+                      </div>
+                    </article>
+                  </div>
+                </div>
+
+                <div v-if="(skillsMcp.mcpServers || []).length" class="space-y-2">
+                  <div class="text-xs font-medium text-[#a3a3a3]">MCP Servers</div>
+                  <article v-for="server in skillsMcp.mcpServers" :key="server.identifier || server.name" class="flex min-w-0 items-start gap-3 rounded-[8px] border border-white/10 bg-black/15 p-3">
+                    <div class="min-w-0 flex-1">
+                      <div class="truncate text-xs font-medium text-white" :title="server.identifier">{{ server.name || server.identifier }}</div>
+                      <div class="mt-1 text-[11px] leading-5 text-[#8f8f8f]">{{ server.transport || "stdio" }}<span v-if="server.command"> · {{ server.command }}</span><span v-if="server.url"> · {{ server.url }}</span></div>
+                    </div>
+                    <div class="shrink-0 rounded-[7px] border border-white/10 bg-[#242424] px-2 py-1.5">
+                      <Switch compact label="" :enabled="isMcpEnabled(server.identifier || server.name)" :busy="skillsMcp.busy" :disabled="skillsMcp.busy" @change="(value) => toggleMcpServer(server.identifier || server.name, value)" />
+                    </div>
+                  </article>
+                </div>
+
+                <div v-if="skillsMcp.loaded && !(skillsMcp.skills || []).length && !(skillsMcp.mcpServers || []).length && !skillsMcp.error" class="text-[11px] leading-5 text-[#8f8f8f]">未发现任何技能或 MCP 配置。请确认对应工具目录存在（如 ~/.cursor/skills、~/.cursor/mcp.json）。</div>
               </template>
             </div></Card>
             <Card><div class="space-y-3"><h3 class="text-sm font-medium text-white">高级连接</h3><Switch label="直连模式" description="绕过本地服务并直接连接官方，可能产生官方账号计费。" :enabled="directModeEnabled" :busy="appState.configSaving" :disabled="appState.configSaving" @change="handleDirectModeChange" /></div></Card>

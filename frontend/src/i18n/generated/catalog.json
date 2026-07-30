@@ -53,6 +53,18 @@
         }
       ]
     },
+    "0273d14d88b25814": {
+      "source": "自动扫描 Cursor / Claude Code / Codex / ZCode / .agents 等主流工具的技能与 MCP 配置，合并注入到模型上下文，还原原生调用。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/SettingsDrawer.vue",
+          "line": 252,
+          "column": 67
+        }
+      ]
+    },
     "02a559bbd0cfb569": {
       "source": "已更新 {0} 个模型的供应商配置。",
       "kind": "template",
@@ -311,7 +323,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 80,
+          "line": 83,
           "column": 64
         },
         {
@@ -577,7 +589,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 116,
+          "line": 181,
           "column": 249
         }
       ]
@@ -779,7 +791,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 172,
+          "line": 291,
           "column": 85
         }
       ]
@@ -827,7 +839,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 127,
+          "line": 192,
           "column": 35
         }
       ]
@@ -839,7 +851,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 116,
+          "line": 181,
           "column": 85
         }
       ]
@@ -1351,7 +1363,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 80,
+          "line": 83,
           "column": 45
         },
         {
@@ -1617,7 +1629,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 80,
+          "line": 83,
           "column": 129
         },
         {
@@ -1822,7 +1834,7 @@
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 80,
+          "line": 83,
           "column": 149
         },
         {
@@ -2078,7 +2090,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 173,
+          "line": 292,
           "column": 171
         }
       ]
@@ -2194,7 +2206,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 143,
+          "line": 144,
           "column": 119
         }
       ]
@@ -2321,6 +2333,18 @@
           "file": "src/state/appState.js",
           "line": 1456,
           "column": 14
+        }
+      ]
+    },
+    "380280dc086bd266": {
+      "source": "已发现 {0} 个技能、{1} 个 MCP server",
+      "kind": "template",
+      "placeholders": 2,
+      "refs": [
+        {
+          "file": "src/components/SettingsDrawer.vue",
+          "line": 114,
+          "column": 10
         }
       ]
     },
@@ -2534,7 +2558,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 75,
+          "line": 78,
           "column": 87
         }
       ]
@@ -2662,7 +2686,7 @@
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 113,
+          "line": 178,
           "column": 53
         },
         {
@@ -2691,6 +2715,18 @@
           "file": "src/views/Config.vue",
           "line": 181,
           "column": 9
+        }
+      ]
+    },
+    "4172af0cc5ec8526": {
+      "source": "暂无描述",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/SettingsDrawer.vue",
+          "line": 266,
+          "column": 108
         }
       ]
     },
@@ -2927,6 +2963,18 @@
         }
       ]
     },
+    "4927a53bcc886afb": {
+      "source": "加载中…",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/SettingsDrawer.vue",
+          "line": 110,
+          "column": 33
+        }
+      ]
+    },
     "497c85690c4cc0fc": {
       "source": "暂无数据",
       "kind": "text",
@@ -2982,7 +3030,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 112,
+          "line": 177,
           "column": 115
         }
       ]
@@ -3011,7 +3059,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 166,
+          "line": 231,
           "column": 27
         }
       ]
@@ -3144,7 +3192,7 @@
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 49,
+          "line": 52,
           "column": 51
         },
         {
@@ -3248,7 +3296,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 172,
+          "line": 291,
           "column": 115
         }
       ]
@@ -3318,7 +3366,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 223,
+          "line": 224,
           "column": 128
         }
       ]
@@ -3451,7 +3499,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 34,
+          "line": 37,
           "column": 27
         }
       ]
@@ -3468,6 +3516,18 @@
         }
       ]
     },
+    "553d354c77e8cfc3": {
+      "source": "已重新扫描技能与 MCP 配置",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/SettingsDrawer.vue",
+          "line": 145,
+          "column": 21
+        }
+      ]
+    },
     "55f6ed520125ab5e": {
       "source": "浮窗设置失败",
       "kind": "text",
@@ -3475,12 +3535,12 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 90,
+          "line": 93,
           "column": 30
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 98,
+          "line": 101,
           "column": 30
         }
       ]
@@ -3825,7 +3885,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 157,
+          "line": 222,
           "column": 56
         }
       ]
@@ -3854,12 +3914,12 @@
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 144,
+          "line": 209,
           "column": 139
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 159,
+          "line": 224,
           "column": 215
         }
       ]
@@ -3871,7 +3931,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 151,
+          "line": 216,
           "column": 65
         }
       ]
@@ -3944,7 +4004,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 51,
+          "line": 54,
           "column": 27
         }
       ]
@@ -4167,6 +4227,18 @@
         }
       ]
     },
+    "6506d60ac6fd967e": {
+      "source": "技能 & MCP（跨工具扫描）",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/SettingsDrawer.vue",
+          "line": 242,
+          "column": 72
+        }
+      ]
+    },
     "659718fdba8be8b9": {
       "source": "个模型，发现",
       "kind": "text",
@@ -4347,7 +4419,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 172,
+          "line": 291,
           "column": 102
         },
         {
@@ -4755,7 +4827,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 116,
+          "line": 181,
           "column": 534
         }
       ]
@@ -4851,7 +4923,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 113,
+          "line": 178,
           "column": 35
         }
       ]
@@ -5110,7 +5182,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 137,
+          "line": 202,
           "column": 128
         }
       ]
@@ -5274,7 +5346,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 157,
+          "line": 222,
           "column": 56
         }
       ]
@@ -5320,7 +5392,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 116,
+          "line": 181,
           "column": 383
         }
       ]
@@ -5334,6 +5406,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 373,
           "column": 18
+        }
+      ]
+    },
+    "81c713d4050be134": {
+      "source": "未发现技能或 MCP",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/SettingsDrawer.vue",
+          "line": 113,
+          "column": 50
         }
       ]
     },
@@ -5392,7 +5476,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 116,
+          "line": 181,
           "column": 168
         }
       ]
@@ -5563,7 +5647,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 152,
+          "line": 217,
           "column": 65
         }
       ]
@@ -5756,7 +5840,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 74,
+          "line": 77,
           "column": 92
         }
       ]
@@ -5903,7 +5987,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 35,
+          "line": 38,
           "column": 29
         }
       ]
@@ -6186,6 +6270,18 @@
         }
       ]
     },
+    "99aea2f9131ad6da": {
+      "source": "技能",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/SettingsDrawer.vue",
+          "line": 260,
+          "column": 67
+        }
+      ]
+    },
     "9a644d6bf878a837": {
       "source": "替换原提示词",
       "kind": "text",
@@ -6193,7 +6289,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 30,
+          "line": 33,
           "column": 30
         }
       ]
@@ -6265,7 +6361,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 83,
+          "line": 86,
           "column": 29
         },
         {
@@ -6680,7 +6776,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 116,
+          "line": 181,
           "column": 521
         }
       ]
@@ -6704,7 +6800,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 116,
+          "line": 181,
           "column": 370
         }
       ]
@@ -6764,7 +6860,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 36,
+          "line": 39,
           "column": 26
         }
       ]
@@ -6906,6 +7002,18 @@
           "file": "src/layouts/MainLayout.vue",
           "line": 257,
           "column": 11
+        }
+      ]
+    },
+    "ac35a93668d1b75d": {
+      "source": "未发现任何技能或 MCP 配置。请确认对应工具目录存在（如 ~/.cursor/skills、~/.cursor/mcp.json）。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/SettingsDrawer.vue",
+          "line": 288,
+          "column": 187
         }
       ]
     },
@@ -7102,7 +7210,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 116,
+          "line": 181,
           "column": 262
         }
       ]
@@ -7138,7 +7246,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 83,
+          "line": 86,
           "column": 50
         },
         {
@@ -7376,7 +7484,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 167,
+          "line": 232,
           "column": 27
         }
       ]
@@ -7453,7 +7561,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 160,
+          "line": 225,
           "column": 143
         }
       ]
@@ -7566,7 +7674,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 164,
+          "line": 229,
           "column": 170
         }
       ]
@@ -7667,6 +7775,18 @@
           "file": "src/views/ModelConfig.vue",
           "line": 553,
           "column": 27
+        }
+      ]
+    },
+    "c2a291b64f6bfddd": {
+      "source": "扫描",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/SettingsDrawer.vue",
+          "line": 247,
+          "column": 35
         }
       ]
     },
@@ -7795,7 +7915,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 173,
+          "line": 292,
           "column": 120
         }
       ]
@@ -7860,7 +7980,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 173,
+          "line": 292,
           "column": 247
         }
       ]
@@ -7988,7 +8108,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 122,
+          "line": 187,
           "column": 72
         }
       ]
@@ -8065,7 +8185,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 31,
+          "line": 34,
           "column": 29
         }
       ]
@@ -8190,7 +8310,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 82,
+          "line": 85,
           "column": 46
         },
         {
@@ -8665,6 +8785,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/SettingsDrawer.vue",
+          "line": 254,
+          "column": 123
+        },
+        {
           "file": "src/views/Diagnostics.vue",
           "line": 36,
           "column": 69
@@ -8750,7 +8875,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 50,
+          "line": 53,
           "column": 60
         }
       ]
@@ -8827,12 +8952,12 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 110,
+          "line": 175,
           "column": 241
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 112,
+          "line": 177,
           "column": 65
         },
         {
@@ -9121,12 +9246,12 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 150,
+          "line": 215,
           "column": 65
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 150,
+          "line": 215,
           "column": 147
         }
       ]
@@ -9418,7 +9543,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 75,
+          "line": 78,
           "column": 149
         }
       ]
@@ -9500,7 +9625,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 101,
+          "line": 104,
           "column": 112
         }
       ]
@@ -9912,7 +10037,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 51,
+          "line": 54,
           "column": 58
         }
       ]

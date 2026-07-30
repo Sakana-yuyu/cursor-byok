@@ -1,7 +1,6 @@
 package forwarder
 
 import (
-	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -282,36 +281,6 @@ func skillDescriptorKey(descriptor *agentv1.SkillDescriptor) string {
 	return strings.TrimSpace(descriptor.GetName())
 }
 
-func buildSkillDiscoveryMessage(requestContext *agentv1.RequestContext) string {
-	normalized := normalizeRequestContextForStorageMode(requestContext, true)
-	if normalized == nil || normalized.GetSkillOptions() == nil || len(normalized.GetSkillOptions().GetSkillDescriptors()) == 0 {
-		return ""
-	}
-
-	lines := []string{
-		"<agent_skills>",
-		"When users ask you to perform tasks, check if any of the available skills below can help complete the task more effectively. Skills provide specialized capabilities and domain knowledge. To use a skill, read the skill file at the provided absolute path using the Read tool, then follow the instructions within. When a skill is relevant, read and follow it IMMEDIATELY as your first action. NEVER just announce or mention a skill without actually reading and following it. Only use skills listed below.",
-		"",
-		`<available_skills description="Skills the agent can use. Use the Read tool with the provided absolute path to fetch full contents.">`,
-	}
-	for _, descriptor := range normalized.GetSkillOptions().GetSkillDescriptors() {
-		if descriptor == nil {
-			continue
-		}
-		fullPath := strings.TrimSpace(descriptor.GetReadmeFilePath())
-		description := strings.TrimSpace(descriptor.GetDescription())
-		if fullPath == "" || description == "" {
-			continue
-		}
-		lines = append(lines, fmt.Sprintf(`<agent_skill fullPath="%s">%s</agent_skill>`, escapeSkillPromptXML(fullPath), escapeSkillPromptXML(description)))
-	}
-	lines = append(lines, "</available_skills>", "</agent_skills>")
-	if len(lines) == 6 {
-		return ""
-	}
-	return strings.Join(lines, "\n\n")
-}
-
 func collectMCPToolServers(requestContext *agentv1.RequestContext) map[string]string {
 	if requestContext == nil {
 		return nil
@@ -349,16 +318,6 @@ func collectMCPToolServers(requestContext *agentv1.RequestContext) map[string]st
 		return nil
 	}
 	return servers
-}
-
-func escapeSkillPromptXML(value string) string {
-	replacer := strings.NewReplacer(
-		"&", "&amp;",
-		`"`, "&quot;",
-		"<", "&lt;",
-		">", "&gt;",
-	)
-	return replacer.Replace(strings.TrimSpace(value))
 }
 
 func inferSkillName(path string) string {

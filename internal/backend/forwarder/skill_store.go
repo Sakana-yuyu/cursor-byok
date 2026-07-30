@@ -34,6 +34,9 @@ type SkillStore struct {
 	activator *SkillActivator
 	// convStore 可选，用于读写会话父子激活集；为 nil 时父子传递降级。
 	convStore *ConversationFileStore
+	// workspaceRoot 可选，用于多源扫描时纳入项目级技能目录（<ws>/.cursor/skills 等）。
+	// 为空时仅扫描用户级目录。SetWorkspaceRoot 可在每次 run 时刷新。
+	workspaceRoot string
 }
 
 // NewSkillStore 创建 SkillStore。root 为空时 Scan 始终返回空。
@@ -54,6 +57,20 @@ func (s *SkillStore) SetConversationStore(convStore *ConversationFileStore) {
 	s.mu.Unlock()
 }
 
+// SetWorkspaceRoot 设置当前工作区根，用于多源扫描纳入项目级技能目录。
+// 应在每次 run intent 解析出 workspace 后调用。传空则仅扫描用户级目录。
+func (s *SkillStore) SetWorkspaceRoot(workspaceRoot string) {
+	if s == nil {
+		return
+	}
+	ws := strings.TrimSpace(workspaceRoot)
+	s.mu.Lock()
+	if s.workspaceRoot != ws {
+		s.workspaceRoot = ws
+	}
+	s.mu.Unlock()
+}
+
 // Scan 扫描 root/<skillName>/SKILL.md，返回所有有效技能（按 name 排序）。
 func (s *SkillStore) Scan() ([]GlobalSkill, error) {
 	if s == nil || s.root == "" {
@@ -64,8 +81,54 @@ func (s *SkillStore) Scan() ([]GlobalSkill, error) {
 	return s.scanLocked()
 }
 
+// scanLocked 返回供激活器筛选的全部候选技能。
+//
+// 主来源是跨工具多源扫描（ScanAllSkills，覆盖 Cursor/Claude/Codex/ZCode/.agents 等），
+// 在其基础上补齐 root（旧 BYOK 目录）里多源扫描未覆盖的技能，保证向后兼容。
+// 结果按 name 去重、排序，交给激活器做 BM25 Top-K 稀疏激活。
 func (s *SkillStore) scanLocked() ([]GlobalSkill, error) {
-	entries, err := os.ReadDir(s.root)
+	merged := ScanAllSkills(s.workspaceRoot)
+	seen := make(map[string]struct{}, len(merged))
+	skills := make([]GlobalSkill, 0, len(merged))
+	for _, sk := range merged {
+		key := strings.ToLower(strings.TrimSpace(sk.Name))
+		if key == "" {
+			continue
+		}
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		skills = append(skills, sk.GlobalSkill)
+	}
+	// 旧 BYOK root 作为保底补充（兼容历史：可能有多源扫描未纳入的目录布局）。
+	if strings.TrimSpace(s.root) != "" {
+		if legacy, err := scanLegacySkillRoot(s.root); err == nil {
+			for _, sk := range legacy {
+				key := strings.ToLower(strings.TrimSpace(sk.Name))
+				if key == "" {
+					continue
+				}
+				if _, exists := seen[key]; exists {
+					continue
+				}
+				seen[key] = struct{}{}
+				skills = append(skills, sk)
+			}
+		}
+	}
+	if len(skills) == 0 {
+		return nil, nil
+	}
+	sort.SliceStable(skills, func(i, j int) bool {
+		return skills[i].Name < skills[j].Name
+	})
+	return skills, nil
+}
+
+// scanLegacySkillRoot 扫描单个旧式技能根目录（<root>/<name>/SKILL.md）。
+func scanLegacySkillRoot(root string) ([]GlobalSkill, error) {
+	entries, err := os.ReadDir(root)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
@@ -77,16 +140,13 @@ func (s *SkillStore) scanLocked() ([]GlobalSkill, error) {
 		if !entry.IsDir() {
 			continue
 		}
-		skillPath := filepath.Join(s.root, entry.Name(), "SKILL.md")
+		skillPath := filepath.Join(root, entry.Name(), "SKILL.md")
 		skill, ok := readSkillFile(skillPath)
 		if !ok {
 			continue
 		}
 		skills = append(skills, skill)
 	}
-	sort.SliceStable(skills, func(i, j int) bool {
-		return skills[i].Name < skills[j].Name
-	})
 	return skills, nil
 }
 

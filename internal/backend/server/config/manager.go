@@ -89,10 +89,28 @@ func (manager *Manager) Save(ctx context.Context, cfg Config) (Config, error) {
 }
 
 func (manager *Manager) LastAgentModelHash() string {
-	if manager == nil {
-		return ""
-	}
 	return strings.TrimSpace(manager.Current().LastAgentModelHash)
+}
+
+// SkillMCPScanEnabled 返回 Skills/MCP 扫描总开关（满足 forwarder.scanConfig 接口）。
+func (manager *Manager) SkillMCPScanEnabled() bool {
+	return manager.Current().SkillMCPScan.Enabled
+}
+
+func (manager *Manager) SkillMCPScanSkillSources() map[string]bool {
+	return manager.Current().SkillMCPScan.SkillSources
+}
+
+func (manager *Manager) SkillMCPScanMCPSources() map[string]bool {
+	return manager.Current().SkillMCPScan.MCPSources
+}
+
+func (manager *Manager) SkillMCPScanDisabledSkills() map[string]bool {
+	return manager.Current().SkillMCPScan.DisabledSkills
+}
+
+func (manager *Manager) SkillMCPScanDisabledMCPServers() map[string]bool {
+	return manager.Current().SkillMCPScan.DisabledMCPServers
 }
 
 // PersistChannelMaxTokensCap 将 provider 反馈的 max_tokens 上限持久化到指定渠道。
