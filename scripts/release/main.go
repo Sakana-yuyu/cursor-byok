@@ -45,6 +45,7 @@ var releaseAssets = []assetSpec{
 	{platform: "macos-arm64", suffix: ".tar.gz"},
 	{platform: "macos-amd64", suffix: ".tar.gz"},
 	{platform: "windows-amd64", suffix: ".zip"},
+	{platform: "windows-386", suffix: ".zip"},
 	{platform: "linux-amd64", suffix: ".tar.gz"},
 }
 
