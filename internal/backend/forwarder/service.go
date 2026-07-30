@@ -538,7 +538,7 @@ func (service *Service) RunSSE(ctx context.Context, req *connect.Request[aiserve
 				"cursor": cursor,
 				"error":  err.Error(),
 			})
-			return nil
+			return buildRunSSECustomError(connect.CodeInternal, "Server Error", err)
 		}
 		if len(backlog) > 0 {
 			for _, event := range backlog {
@@ -588,6 +588,12 @@ func (service *Service) RunSSE(ctx context.Context, req *connect.Request[aiserve
 						return buildTerminalStreamError(event)
 					}
 				}
+			} else {
+				service.debug.LogRunSSE(context.Background(), requestID, "", "read_error", map[string]any{
+					"cursor": cursor,
+					"error":  err.Error(),
+				})
+				return buildRunSSECustomError(connect.CodeInternal, "Server Error", err)
 			}
 			return nil
 		case <-signal:
@@ -599,7 +605,7 @@ func (service *Service) RunSSE(ctx context.Context, req *connect.Request[aiserve
 				"cursor": cursor,
 				"error":  err.Error(),
 			})
-			return nil
+			return buildRunSSECustomError(connect.CodeInternal, "Server Error", err)
 		} else if len(backlog) > 0 {
 			continue
 		}
@@ -2682,6 +2688,9 @@ func (service *Service) failActiveStream(stream *ActiveStream, conversationID st
 	stream.mu.Unlock()
 	if cancel != nil {
 		cancel()
+	}
+	if service.multitaskDelegation != nil {
+		service.multitaskDelegation.CancelStream(stream)
 	}
 	service.setTurnPhase(stream, TurnPhaseFailed)
 	var firstErr error

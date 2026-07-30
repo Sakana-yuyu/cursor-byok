@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -341,7 +342,7 @@ func (coordinator *multitaskDelegationCoordinator) awaitAggregate(stream *Active
 			if err != nil {
 				payload = []byte(fmt.Sprintf(`{"aggregate_id":%q,"status":"failed","error":%q}`, aggregate.id, err.Error()))
 			}
-			_ = coordinator.service.postStreamCommandAsync(stream, streamCommand{
+			postErr := coordinator.service.postStreamCommandAsync(stream, streamCommand{
 				Kind: streamCommandDelegationResult,
 				Delegation: &streamDelegationResult{
 					AggregateID:  aggregate.id,
@@ -350,6 +351,16 @@ func (coordinator *multitaskDelegationCoordinator) awaitAggregate(stream *Active
 					Payload:      string(payload),
 				},
 			})
+			if postErr != nil {
+				log.Printf(
+					"forwarder delegation aggregate post failed request_id=%s aggregate_id=%s exec_id=%s err=%v",
+					strings.TrimSpace(activeStreamRequestID(stream)),
+					strings.TrimSpace(aggregate.id),
+					strings.TrimSpace(pending.ExecID),
+					postErr,
+				)
+				_ = coordinator.service.failStreamIfNonTerminal(stream, "unknown", postErr)
+			}
 			return
 		}
 	}
