@@ -70,19 +70,21 @@ type Scheduler struct {
 	cancel         context.CancelFunc
 	retentionLimit int
 
-	mu        sync.RWMutex
-	tasks     map[string]*taskState
-	closed    bool
-	events    chan TaskSnapshot
-	sequence  atomic.Uint64
-	wg        sync.WaitGroup
-	closeOnce sync.Once
+	mu               sync.RWMutex
+	tasks            map[string]*taskState
+	activeExecutions map[string]struct{}
+	closed           bool
+	events           chan TaskSnapshot
+	eventsClosed     bool
+	sequence         atomic.Uint64
+	closeOnce        sync.Once
 }
 
 type taskState struct {
-	snapshot TaskSnapshot
-	ctx      context.Context
-	cancel   context.CancelFunc
+	snapshot   TaskSnapshot
+	ctx        context.Context
+	cancel     context.CancelFunc
+	runnerDone bool
 }
 
 type Config struct {
@@ -104,16 +106,20 @@ func NewScheduler(cfg Config, executor Executor) *Scheduler {
 	if retentionLimit <= 0 {
 		retentionLimit = DefaultRetentionLimit
 	}
+	if eventBuffer < retentionLimit {
+		eventBuffer = retentionLimit
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Scheduler{
-		maxConcurrency: maxConcurrency,
-		slots:          make(chan struct{}, maxConcurrency),
-		executor:       executor,
-		ctx:            ctx,
-		cancel:         cancel,
-		retentionLimit: retentionLimit,
-		tasks:          make(map[string]*taskState),
-		events:         make(chan TaskSnapshot, eventBuffer),
+		maxConcurrency:   maxConcurrency,
+		slots:            make(chan struct{}, maxConcurrency),
+		executor:         executor,
+		ctx:              ctx,
+		cancel:           cancel,
+		retentionLimit:   retentionLimit,
+		tasks:            make(map[string]*taskState),
+		activeExecutions: make(map[string]struct{}),
+		events:           make(chan TaskSnapshot, eventBuffer),
 	}
 }
 
@@ -141,24 +147,38 @@ func (s *Scheduler) Submit(request TaskRequest) (string, error) {
 		s.mu.Unlock()
 		return "", fmt.Errorf("delegated task %q already exists", request.ID)
 	}
+	if _, exists := s.activeExecutions[request.ID]; exists {
+		s.mu.Unlock()
+		return "", fmt.Errorf("delegated task %q is still executing", request.ID)
+	}
 	taskCtx, taskCancel := context.WithCancel(s.ctx)
 	state := &taskState{
 		snapshot: TaskSnapshot{ID: request.ID, Request: request, Status: TaskQueued, QueuedAt: now},
 		ctx:      taskCtx,
 		cancel:   taskCancel,
 	}
-	s.pruneTerminalTasksLocked()
 	s.tasks[request.ID] = state
-	s.wg.Add(1)
+	s.activeExecutions[request.ID] = struct{}{}
+	s.pruneTerminalTasksLocked()
+	s.publishLocked(state.snapshot)
 	s.mu.Unlock()
-	s.publish(state.snapshot)
 	go s.run(state)
 	return request.ID, nil
 }
 
 func (s *Scheduler) run(state *taskState) {
-	defer s.wg.Done()
-	defer state.cancel()
+	executorStarted := false
+	defer func() {
+		state.cancel()
+		s.mu.Lock()
+		state.runnerDone = true
+		if !executorStarted {
+			delete(s.activeExecutions, state.snapshot.ID)
+		}
+		s.pruneTerminalTasksLocked()
+		s.purgeBufferedEventsLocked()
+		s.mu.Unlock()
+	}()
 	select {
 	case s.slots <- struct{}{}:
 	case <-state.ctx.Done():
@@ -176,8 +196,8 @@ func (s *Scheduler) run(state *taskState) {
 	state.snapshot.StartedAt = time.Now().UTC()
 	runningSnapshot := cloneTaskSnapshot(state.snapshot)
 	request := cloneTaskRequest(state.snapshot.Request)
+	s.publishLocked(runningSnapshot)
 	s.mu.Unlock()
-	s.publish(runningSnapshot)
 
 	executionCtx := state.ctx
 	cancelTimeout := func() {}
@@ -185,7 +205,21 @@ func (s *Scheduler) run(state *taskState) {
 		executionCtx, cancelTimeout = context.WithTimeout(state.ctx, request.Timeout)
 	}
 	defer cancelTimeout()
-	result := s.executor(executionCtx, request)
+	resultChannel := make(chan TaskResult, 1)
+	executorStarted = true
+	go func(taskID string) {
+		result := s.executor(executionCtx, request)
+		s.mu.Lock()
+		delete(s.activeExecutions, taskID)
+		s.mu.Unlock()
+		resultChannel <- result
+	}(state.snapshot.ID)
+	var result TaskResult
+	select {
+	case result = <-resultChannel:
+	case <-executionCtx.Done():
+		result.Error = executionCtx.Err()
+	}
 	finished := time.Now().UTC()
 	s.mu.Lock()
 	if isTerminalStatus(state.snapshot.Status) {
@@ -209,8 +243,8 @@ func (s *Scheduler) run(state *taskState) {
 		state.snapshot.Status = TaskCompleted
 	}
 	snapshot := cloneTaskSnapshot(state.snapshot)
+	s.publishLocked(snapshot)
 	s.mu.Unlock()
-	s.publish(snapshot)
 }
 
 // Cancel 只取消目标任务，不影响其他委派任务。
@@ -224,7 +258,7 @@ func (s *Scheduler) Cancel(taskID string) error {
 		s.mu.Unlock()
 		return fmt.Errorf("delegated task %q not found", taskID)
 	}
-	if state.snapshot.Status == TaskCompleted || state.snapshot.Status == TaskFailed || state.snapshot.Status == TaskCanceled {
+	if isTerminalStatus(state.snapshot.Status) {
 		s.mu.Unlock()
 		return nil
 	}
@@ -232,8 +266,8 @@ func (s *Scheduler) Cancel(taskID string) error {
 	state.snapshot.FinishedAt = time.Now().UTC()
 	state.cancel()
 	snapshot := cloneTaskSnapshot(state.snapshot)
+	s.publishLocked(snapshot)
 	s.mu.Unlock()
-	s.publish(snapshot)
 	return nil
 }
 
@@ -282,7 +316,6 @@ func (s *Scheduler) Close() {
 	}
 	s.closeOnce.Do(func() {
 		now := time.Now().UTC()
-		var snapshots []TaskSnapshot
 		s.mu.Lock()
 		s.closed = true
 		for _, state := range s.tasks {
@@ -292,26 +325,36 @@ func (s *Scheduler) Close() {
 			state.snapshot.Status = TaskCanceled
 			state.snapshot.FinishedAt = now
 			state.cancel()
-			snapshots = append(snapshots, cloneTaskSnapshot(state.snapshot))
+			s.publishLocked(state.snapshot)
 		}
+		s.pruneTerminalTasksLocked()
+		s.purgeBufferedEventsLocked()
+		s.eventsClosed = true
+		close(s.events)
 		s.mu.Unlock()
 		s.cancel()
-		for _, snapshot := range snapshots {
-			s.publish(snapshot)
-		}
-		go func() {
-			s.wg.Wait()
-			close(s.events)
-		}()
 	})
 }
 
-func (s *Scheduler) publish(snapshot TaskSnapshot) {
+func (s *Scheduler) publishLocked(snapshot TaskSnapshot) {
+	if s.eventsClosed {
+		return
+	}
 	snapshot = cloneTaskSnapshot(snapshot)
 	select {
 	case s.events <- snapshot:
 	default:
-		// 状态快照仍可通过 Snapshots 获取，事件通道不能阻塞执行器。
+		if !isTerminalStatus(snapshot.Status) {
+			return
+		}
+		s.purgeBufferedEventsLocked()
+		if len(s.events) >= cap(s.events) {
+			s.evictOldestNonTerminalEventLocked()
+		}
+		select {
+		case s.events <- snapshot:
+		default:
+		}
 	}
 }
 
@@ -329,16 +372,16 @@ func (s *Scheduler) finishFromContext(state *taskState, cause error) {
 		state.snapshot.Status = TaskCanceled
 	}
 	snapshot := cloneTaskSnapshot(state.snapshot)
+	s.publishLocked(snapshot)
 	s.mu.Unlock()
-	s.publish(snapshot)
 }
 
 func (s *Scheduler) pruneTerminalTasksLocked() {
-	for len(s.tasks) >= s.retentionLimit {
+	for len(s.tasks) > s.retentionLimit {
 		var oldestID string
 		var oldestTime time.Time
 		for taskID, state := range s.tasks {
-			if !isTerminalStatus(state.snapshot.Status) {
+			if !state.runnerDone || !isTerminalStatus(state.snapshot.Status) {
 				continue
 			}
 			if oldestID == "" || state.snapshot.FinishedAt.Before(oldestTime) {
@@ -350,6 +393,49 @@ func (s *Scheduler) pruneTerminalTasksLocked() {
 			return
 		}
 		delete(s.tasks, oldestID)
+	}
+}
+
+func (s *Scheduler) purgeBufferedEventsLocked() {
+	if s.eventsClosed || len(s.events) == 0 {
+		return
+	}
+	buffered := make([]TaskSnapshot, 0, len(s.events))
+	for {
+		select {
+		case event := <-s.events:
+			if _, retained := s.tasks[event.ID]; retained {
+				buffered = append(buffered, event)
+			}
+		default:
+			for _, event := range buffered {
+				s.events <- event
+			}
+			return
+		}
+	}
+}
+
+func (s *Scheduler) evictOldestNonTerminalEventLocked() {
+	if s.eventsClosed || len(s.events) == 0 {
+		return
+	}
+	buffered := make([]TaskSnapshot, 0, len(s.events))
+	dropped := false
+	for {
+		select {
+		case event := <-s.events:
+			if !dropped && !isTerminalStatus(event.Status) {
+				dropped = true
+				continue
+			}
+			buffered = append(buffered, event)
+		default:
+			for _, event := range buffered {
+				s.events <- event
+			}
+			return
+		}
 	}
 }
 
