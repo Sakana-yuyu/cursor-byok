@@ -32,3 +32,4 @@ cursor-tab-server/cursor-tab-server-linux-amd64.tar
 # 临时工作文件
 .zcode/
 .superpowers/
+.worktrees/
