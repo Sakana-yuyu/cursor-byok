@@ -1,4 +1,6 @@
 <script setup>
+import StatsPulseIcon from "@/components/StatsPulseIcon.vue";
+import ThreeOverlay from "@/components/ThreeOverlay.vue";
 import { getHomeMetricsSummary, fetchLocalCacheStats } from "@/services/clientApi";
 import { getStatsOverlayPreferences, setStatsOverlayPreferences, appState } from "@/state/appState";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
@@ -205,11 +207,26 @@ onUnmounted(() => {
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
   >
+    <!-- Three.js 背景层 -->
+    <ThreeOverlay
+      :style="style"
+      :is-collapsed="isCollapsed"
+      :data="{
+        cacheHitRate: displayRate,
+        totalTokens: totalTokens,
+        turnsTotal: turnsTotal,
+        localCacheHits: localCache.hits || 0,
+        promptTokens: promptTokens,
+      }"
+      :loading="loading"
+      :updated="updated"
+    />
+
     <!-- 收缩时的悬浮球 -->
     <div v-if="isCollapsed" class="float-ball">
       <div class="ball-glow"></div>
       <div class="ball-core">
-        <div class="ball-icon">📊</div>
+        <StatsPulseIcon />
       </div>
     </div>
 
@@ -279,14 +296,31 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.stats-overlay { --accent: #6ee7a5; --muted: #777; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; background: transparent; color: #e5e5e5; font-family: inherit; transition: all 0.3s ease; pointer-events: none; }
+.stats-overlay {
+  --accent: #6ee7a5;
+  --muted: #8b9692;
+  --glass-surface: linear-gradient(135deg, rgba(19, 29, 29, .38), rgba(9, 14, 16, .28));
+  --glass-chip: rgba(18, 28, 28, .34);
+  --glass-border: rgba(210, 255, 239, .18);
+  --glass-shadow: 0 10px 28px rgba(0, 0, 0, .24), inset 0 1px 0 rgba(255, 255, 255, .08);
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: transparent;
+  color: #e5e5e5;
+  font-family: inherit;
+  transition: all 0.3s ease;
+  pointer-events: none;
+}
 .stats-overlay > * { pointer-events: auto; }
 
 /* 悬浮球样式 */
 .float-ball { position: relative; width: 60px; height: 60px; cursor: pointer; }
 .ball-glow { position: absolute; inset: -8px; border-radius: 50%; background: radial-gradient(circle, rgba(110,231,165,0.3), transparent 70%); animation: ballPulse 2s ease-in-out infinite; }
-.ball-core { position: absolute; inset: 0; border-radius: 50%; background: linear-gradient(135deg, rgba(110,231,165,0.25), rgba(42,42,42,0.95)); border: 2px solid rgba(110,231,165,0.6); box-shadow: 0 4px 16px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; }
-.ball-icon { font-size: 24px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); }
+.ball-core { position: absolute; inset: 0; border-radius: 50%; background: linear-gradient(135deg, rgba(110,231,165,.24), rgba(12,20,20,.34)); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow); backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%); display: flex; align-items: center; justify-content: center; }
 
 @keyframes ballPulse {
   0%, 100% { opacity: 0.6; transform: scale(1); }
@@ -324,14 +358,14 @@ onUnmounted(() => {
 
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #10ad5d; animation: breathe 3.8s ease-in-out infinite; }
 .status-dot.is-loading { background: #fbbf24; }
-.card-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid rgba(255,255,255,.06); border-radius: 8px; background: rgba(18,18,18,.72); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); transition: opacity 0.3s ease; }
-.metric-card { min-width: 0; padding: 3px 6px; border: 1px solid rgba(62,62,62,.75); border-radius: 5px; background: rgba(36,36,36,.9); }
-.metric-label { color: #777; font-size: 9px; white-space: nowrap; }
+.card-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid var(--glass-border); border-radius: 8px; background: var(--glass-surface); box-shadow: var(--glass-shadow); backdrop-filter: blur(18px) saturate(135%); -webkit-backdrop-filter: blur(18px) saturate(135%); transition: opacity 0.3s ease; }
+.metric-card { min-width: 0; padding: 3px 6px; border: 1px solid rgba(210,255,239,.12); border-radius: 5px; background: var(--glass-chip); box-shadow: inset 0 1px 0 rgba(255,255,255,.04); }
+.metric-label { color: var(--muted); font-size: 9px; white-space: nowrap; }
 .metric-value { color: #fff; font-family: var(--font-num, ui-monospace, monospace); font-size: 14px; line-height: 1.15; transition: color .35s ease, text-shadow .35s ease; }
 .metric-value.is-good, .metric-value--good { color: var(--accent); }
 .is-updated .metric-value { text-shadow: 0 0 6px rgba(110,231,165,.7); }
-.engine-panel { position: relative; display: flex; align-items: center; gap: 8px; min-height: calc(100vh - 27px); padding: 5px 7px; border: 1px solid rgba(71,112,112,.55); border-radius: 9px; background: linear-gradient(135deg, rgba(18,39,40,.92), rgba(18,24,28,.85)); overflow: hidden; transition: opacity 0.3s ease; }
-.engine-panel::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent 0 11px, rgba(110,231,165,.07) 12px); animation: scan 8s linear infinite; pointer-events: none; }
+.engine-panel { position: relative; display: flex; align-items: center; gap: 8px; min-height: calc(100vh - 27px); padding: 5px 7px; border: 1px solid var(--glass-border); border-radius: 9px; background: var(--glass-surface); box-shadow: var(--glass-shadow); backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%); overflow: hidden; transition: opacity 0.3s ease; }
+.engine-panel::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent 0 11px, rgba(110,231,165,.055) 12px); animation: scan 8s linear infinite; pointer-events: none; }
 .engine-gauge { position: relative; flex: 0 0 74px; height: 74px; }
 .engine-gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .gauge-track, .gauge-value { fill: none; stroke-width: 7; }
@@ -341,7 +375,7 @@ onUnmounted(() => {
 .gauge-center strong { color: #f5fff9; font: 600 14px var(--font-num, ui-monospace, monospace); }
 .gauge-center span { color: #8da9a4; font-size: 8px; }
 .telemetry-grid { z-index: 1; display: grid; flex: 1; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 5px; }
-.telemetry-grid div { padding: 3px 5px; border-left: 2px solid rgba(110,231,165,.6); background: rgba(5,15,17,.36); }
+.telemetry-grid div { padding: 3px 5px; border-left: 2px solid rgba(110,231,165,.6); background: var(--glass-chip); }
 .telemetry-grid span { display: block; color: #77918e; font-size: 8px; white-space: nowrap; }
 .telemetry-grid strong { color: #d8eee8; font: 12px var(--font-num, ui-monospace, monospace); }
 .orb-panel { position: relative; width: 100%; height: calc(100vh - 27px); min-height: 80px; overflow: visible; display: grid; place-items: center; }
@@ -351,7 +385,7 @@ onUnmounted(() => {
 .orb-glow { position: absolute; width: 92px; height: 92px; border-radius: 50%; background: radial-gradient(circle, rgba(58,206,171,.32) 0%, rgba(58,206,171,0) 70%); filter: blur(8px); animation: pulse 3.5s ease-in-out infinite; }
 .orb-ring { position: absolute; width: 96px; height: 96px; border-radius: 50%; border: 1px solid rgba(110,231,165,.28); box-shadow: 0 0 12px rgba(110,231,165,.18); animation: orbSpin 14s linear infinite; }
 .orb-orbit { position: absolute; inset: 0; pointer-events: none; }
-.orb-satellite { position: absolute; z-index: 2; display: flex; flex-direction: column; align-items: center; min-width: 47px; padding: 2px 5px; border: 1px solid rgba(93,180,160,.42); border-radius: 6px; background: rgba(14,28,29,.22); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); line-height: 1.1; box-shadow: 0 2px 10px rgba(0,0,0,.35); }
+.orb-satellite { position: absolute; z-index: 2; display: flex; flex-direction: column; align-items: center; min-width: 47px; padding: 2px 5px; border: 1px solid var(--glass-border); border-radius: 6px; background: var(--glass-chip); backdrop-filter: blur(14px) saturate(135%); -webkit-backdrop-filter: blur(14px) saturate(135%); line-height: 1.1; box-shadow: var(--glass-shadow); }
 .orb-satellite span { color: #9fcfc5; font-size: 8px; white-space: nowrap; }.orb-satellite strong { color: #eafff4; font: 11px var(--font-num, ui-monospace, monospace); }
 /* 四个数据卡各自在原位轻微漂浮（不旋转，保持文字可读），错开相位营造环绕呼吸感。 */
 .orb-satellite--top { top: 4px; left: 50%; transform: translateX(-50%); animation: orbDriftV 5s ease-in-out infinite; }
@@ -367,7 +401,7 @@ onUnmounted(() => {
 @keyframes pulse { 0%,100% { opacity: .55; transform: scale(.92); } 50% { opacity: .9; transform: scale(1.06); } }
 
 /* 极简实时数据条：收起时显示的缩略信息 */
-.mini-bar { display: flex; align-items: center; justify-content: center; gap: 4px; height: auto; padding: 4px 8px; border-radius: 12px; background: rgba(24,24,24,.9); border: 1px solid rgba(52,52,52,.7); color: #9a9a9a; font: 600 10px var(--font-num, ui-monospace, monospace); letter-spacing: .02em; transition: opacity .3s ease; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.mini-bar { display: flex; align-items: center; justify-content: center; gap: 4px; height: auto; padding: 4px 8px; border-radius: 12px; background: var(--glass-surface); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow); color: #a8b2ae; font: 600 10px var(--font-num, ui-monospace, monospace); letter-spacing: .02em; transition: opacity .3s ease; backdrop-filter: blur(16px) saturate(135%); -webkit-backdrop-filter: blur(16px) saturate(135%); }
 .mini-rate { color: #cfcfcf; }
 .mini-rate.is-good { color: var(--accent); }
 .mini-sep { color: #555; }

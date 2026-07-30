@@ -58,7 +58,7 @@ const router = createRouter({
       // 统计浮窗：独立小窗口，App.vue 按 path 分流为纯 router-view（不带 MainLayout）。
       path: "/stats-overlay",
       component: StatsOverlay,
-      meta: { showIcon: false, title: "实时统计", directlyClose: true },
+      meta: { showIcon: false, title: "实时统计", directlyClose: true, transparentCanvas: true },
     },
     {
       path: "/diagnostics",
@@ -67,6 +67,10 @@ const router = createRouter({
     },
 
   ],
+});
+
+router.afterEach((to) => {
+  document.documentElement.classList.toggle("stats-overlay-page", to.meta.transparentCanvas === true);
 });
 
 export default router;

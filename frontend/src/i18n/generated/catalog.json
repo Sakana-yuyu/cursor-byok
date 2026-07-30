@@ -386,7 +386,7 @@
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 227,
+          "line": 258,
           "column": 35
         }
       ]
@@ -678,7 +678,7 @@
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 221,
+          "line": 252,
           "column": 35
         }
       ]
@@ -767,7 +767,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 216,
+          "line": 247,
           "column": 57
         }
       ]
@@ -1048,7 +1048,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1795,
+          "line": 1796,
           "column": 32
         }
       ]
@@ -1305,7 +1305,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 244,
+          "line": 275,
           "column": 39
         }
       ]
@@ -1832,7 +1832,7 @@
         },
         {
           "file": "src/components/ui/Modal.vue",
-          "line": 9,
+          "line": 11,
           "column": 40
         },
         {
@@ -2044,6 +2044,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 1380,
           "column": 13
+        }
+      ]
+    },
+    "311a81f5686483f5": {
+      "source": "贴边自动收缩：关闭（点击开启）",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/StatsOverlay.vue",
+          "line": 240,
+          "column": 17
         }
       ]
     },
@@ -3760,7 +3772,7 @@
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 212,
+          "line": 236,
           "column": 36
         }
       ]
@@ -4157,7 +4169,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1872,
+          "line": 1873,
           "column": 32
         }
       ]
@@ -4294,7 +4306,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 218,
+          "line": 249,
           "column": 35
         }
       ]
@@ -5011,6 +5023,18 @@
           "file": "src/views/ModelCatalog.vue",
           "line": 380,
           "column": 14
+        }
+      ]
+    },
+    "7ce4193db2a0ebd0": {
+      "source": "贴边自动收缩：开启（点击关闭）",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/StatsOverlay.vue",
+          "line": 240,
+          "column": 17
         }
       ]
     },
@@ -5814,7 +5838,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1835,
+          "line": 1836,
           "column": 32
         }
       ]
@@ -6058,12 +6082,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2103,
+          "line": 2104,
           "column": 32
         },
         {
           "file": "src/state/appState.js",
-          "line": 2124,
+          "line": 2125,
           "column": 32
         }
       ]
@@ -6463,7 +6487,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2048,
+          "line": 2049,
           "column": 14
         }
       ]
@@ -7453,7 +7477,7 @@
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 224,
+          "line": 255,
           "column": 35
         }
       ]
@@ -7634,7 +7658,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1891,
+          "line": 1892,
           "column": 32
         }
       ]
@@ -7646,7 +7670,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 213,
+          "line": 244,
           "column": 67
         }
       ]
@@ -7860,17 +7884,17 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2019,
+          "line": 2020,
           "column": 28
         },
         {
           "file": "src/state/appState.js",
-          "line": 2021,
+          "line": 2022,
           "column": 38
         },
         {
           "file": "src/state/appState.js",
-          "line": 2056,
+          "line": 2057,
           "column": 93
         },
         {
@@ -8239,7 +8263,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1916,
+          "line": 1917,
           "column": 14
         }
       ]
@@ -8516,12 +8540,12 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 234,
+          "line": 265,
           "column": 87
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 246,
+          "line": 277,
           "column": 61
         }
       ]
@@ -8967,7 +8991,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 231,
+          "line": 262,
           "column": 66
         }
       ]
@@ -9061,7 +9085,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 226,
+          "line": 257,
           "column": 32
         }
       ]
@@ -9585,7 +9609,7 @@
         },
         {
           "file": "src/components/ui/Modal.vue",
-          "line": 6,
+          "line": 8,
           "column": 35
         },
         {
@@ -9883,7 +9907,7 @@
         },
         {
           "file": "src/components/ui/Modal.vue",
-          "line": 8,
+          "line": 10,
           "column": 41
         },
         {
