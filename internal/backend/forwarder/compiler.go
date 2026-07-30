@@ -91,11 +91,11 @@ func (compiler *DefaultPromptCompiler) Compile(conversation *ConversationFile, m
 	if compiler.skills != nil && normalizedMode != agentv1.AgentMode_AGENT_MODE_DEBUG {
 		// 内置技能走「调用链稀疏激活」：按当前请求文本相关性只注入 Top-K 技能，
 		// 不再全量注入。详见 docs/superpowers/specs/2026-07-29-skill-sparse-activation-design.md。
-		workspaceRoot, workspaceErr := workspaceRootFromConversation(conversation)
+		workspaceRoot, explicitSkillPaths, workspaceErr := skillActivationContextFromConversation(conversation)
 		if workspaceErr != nil {
 			return CompiledConversation{}, workspaceErr
 		}
-		globalSkillsPrompt, globalSkillsCount, err = compiler.skills.BuildActivatedSkillsPromptSectionForWorkspace(workspaceRoot, latestUserText, conversation)
+		globalSkillsPrompt, globalSkillsCount, err = compiler.skills.buildActivatedSkillsPromptSectionForWorkspaceExcluding(workspaceRoot, latestUserText, conversation, explicitSkillPaths)
 		if err != nil {
 			return CompiledConversation{}, err
 		}
@@ -135,9 +135,17 @@ func (compiler *DefaultPromptCompiler) Compile(conversation *ConversationFile, m
 }
 
 func workspaceRootFromConversation(conversation *ConversationFile) (string, error) {
+	workspaceRoot, _, err := skillActivationContextFromConversation(conversation)
+	return workspaceRoot, err
+}
+
+func skillActivationContextFromConversation(conversation *ConversationFile) (string, map[string]struct{}, error) {
 	if conversation == nil {
-		return "", nil
+		return "", nil, nil
 	}
+	explicitSkillPaths := make(map[string]struct{})
+	workspaceRoot := ""
+	foundLatestRequestContext := false
 	for i := len(conversation.Entries) - 1; i >= 0; i-- {
 		entry := conversation.Entries[i]
 		if strings.TrimSpace(entry.Kind) != "request_context" || len(entry.Payload) == 0 {
@@ -145,13 +153,25 @@ func workspaceRootFromConversation(conversation *ConversationFile) (string, erro
 		}
 		requestContext := &agentv1.RequestContext{}
 		if err := protojson.Unmarshal(entry.Payload, requestContext); err != nil {
-			return "", fmt.Errorf("decode request context workspace: %w", err)
+			return "", nil, fmt.Errorf("decode request context skill activation: %w", err)
 		}
-		if workspaceRoot := resolveWorkspaceRootFromRequestContext(requestContext); workspaceRoot != "" {
-			return workspaceRoot, nil
+		if !foundLatestRequestContext {
+			workspaceRoot = resolveWorkspaceRootFromRequestContext(requestContext)
+			foundLatestRequestContext = true
+		}
+		for _, descriptor := range collectSkillDescriptors(requestContext) {
+			if descriptor == nil {
+				continue
+			}
+			if key := skillPathKey(descriptor.GetReadmeFilePath()); key != "" {
+				explicitSkillPaths[key] = struct{}{}
+			}
 		}
 	}
-	return "", nil
+	if len(explicitSkillPaths) == 0 {
+		explicitSkillPaths = nil
+	}
+	return workspaceRoot, explicitSkillPaths, nil
 }
 
 func (compiler *DefaultPromptCompiler) DerivePromptContexts(conversation *ConversationFile, mode agentv1.AgentMode, latestUserText string) ([]PromptContextMessage, error) {
