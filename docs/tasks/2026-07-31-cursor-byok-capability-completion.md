@@ -58,3 +58,12 @@
 - 不提交前序浮窗任务遗留改动。
 - 不修改已安装 Cursor 客户端 bundle。
 - 不创建 release、tag 或执行 push。
+
+## 发布前强化续篇
+
+Task 1-13 的首次实现完成后，发布前审查发现了跨 workspace 共享状态、委派失败终态、SSE 错误语义和 Release 资产生成问题。后续强化与 `v0.0.71` 发布按以下文档继续跟踪：
+
+- 设计：`docs/superpowers/specs/2026-07-31-cursor-byok-capability-hardening-and-release-design.md`
+- 计划：`docs/superpowers/plans/2026-07-31-cursor-byok-capability-hardening-and-release.md`
+
+原“不创建 release、tag 或执行 push”约束仅适用于 Task 0-13 的分阶段实现；用户后续明确要求完成强化后使用 `uploadcursor` 发布，因此最终发布任务以续篇计划为准。
