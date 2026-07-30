@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
-	"fmt"
 	"io/fs"
 	"net"
 	goruntime "runtime"
@@ -280,9 +279,12 @@ func Run(resources EmbeddedResources) error {
 		window.SetURL("/#/")
 		window.Show().Focus()
 	}
-	toggleStatsOverlay := func() {
-		// 点击托盘打开统计浮窗（屏幕中心）
-		windowService.OpenStatsOverlayWindow(0, 0)
+	toggleMainWindow := func() {
+		if window.IsVisible() {
+			window.Hide()
+			return
+		}
+		showMainWindow()
 	}
 
 	systray := app.SystemTray.New()
@@ -419,11 +421,8 @@ func Run(resources EmbeddedResources) error {
 		}
 	}
 	systray.SetTooltip(appName)
-	systray.OnClick(toggleStatsOverlay).SetMenu(menu)
+	systray.OnClick(toggleMainWindow).SetMenu(menu)
 	refreshTray()
-
-	// 启动托盘统计轮换显示
-	startTrayStatsRotation(app, systray, metricsService, currentLocale)
 
 	return app.Run()
 }
@@ -508,139 +507,4 @@ func parseEmbeddedCert(data []byte) (*x509.Certificate, error) {
 		return x509.ParseCertificate(block.Bytes)
 	}
 	return x509.ParseCertificate(data)
-}
-
-// startTrayStatsRotation 启动托盘统计信息更新（显示图形化缓存命中率图标）
-func startTrayStatsRotation(app *application.App, systray *application.SystemTray, metricsService *bridge.MetricsService, locale string) {
-	go func() {
-		ticker := time.NewTicker(3 * time.Second)
-		defer ticker.Stop()
-
-		updateTrayStats := func() {
-			summary, err := metricsService.GetHomeMetricsSummary()
-			if err != nil {
-				return
-			}
-
-			// 计算金额（简化版，假设 $0.01/1M tokens）
-			estimatedCost := float64(summary.RequestTokensTotal) / 1000000.0 * 0.01
-
-			// 获取缓存命中率
-			hitRate := 0.0
-			if summary.CacheHitRate != nil {
-				hitRate = *summary.CacheHitRate
-			}
-
-			// 生成动态图标
-			iconData, err := generateTrayIcon(hitRate)
-			if err != nil {
-				logger.Errorf("generate tray icon failed: %v", err)
-				return
-			}
-
-			// 更新图标
-			systray.SetIcon(iconData)
-
-			// 更新 Tooltip 显示所有详情
-			tooltip := formatTooltip(summary, estimatedCost, locale)
-			systray.SetTooltip(tooltip)
-		}
-
-		// 立即更新一次
-		updateTrayStats()
-
-		// 定时更新
-		for range ticker.C {
-			updateTrayStats()
-		}
-	}()
-}
-
-func formatMoney(cost float64) string {
-	return formatValue(cost, "$%.2f")
-}
-
-func formatPercent(rate float64) string {
-	return formatValue(rate*100, "%.1f%%")
-}
-
-func formatTokens(tokens int64) string {
-	if tokens >= 1000000 {
-		return formatValue(float64(tokens)/1000000.0, "%.1fM")
-	}
-	if tokens >= 1000 {
-		return formatValue(float64(tokens)/1000.0, "%.1fK")
-	}
-	return formatValue(float64(tokens), "%.0f")
-}
-
-func formatTurns(turns int) string {
-	return formatValue(float64(turns), "%.0f")
-}
-
-func formatValue(value float64, format string) string {
-	formatted := ""
-	switch format {
-	case "$%.2f":
-		formatted = "$" + formatFloat(value, 2)
-	case "%.1f%%":
-		formatted = formatFloat(value, 1) + "%"
-	case "%.1fM":
-		formatted = formatFloat(value, 1) + "M"
-	case "%.1fK":
-		formatted = formatFloat(value, 1) + "K"
-	case "%.0f":
-		formatted = formatFloat(value, 0)
-	}
-	return formatted
-}
-
-func formatFloat(value float64, precision int) string {
-	var format string
-	switch precision {
-	case 0:
-		format = "%.0f"
-	case 1:
-		format = "%.1f"
-	case 2:
-		format = "%.2f"
-	default:
-		format = "%.2f"
-	}
-	result := fmt.Sprintf(format, value)
-	// 移除尾随的零和小数点
-	if precision > 0 && strings.Contains(result, ".") {
-		result = strings.TrimRight(result, "0")
-		result = strings.TrimRight(result, ".")
-	}
-	return result
-}
-
-func formatTooltip(summary bridge.HomeMetricsSummary, cost float64, locale string) string {
-	hitRate := "--"
-	if summary.CacheHitRate != nil {
-		hitRate = formatFloat(*summary.CacheHitRate*100, 1) + "%"
-	}
-
-	tokensStr := formatFloat(float64(summary.RequestTokensTotal)/1000000.0, 1) + "M"
-	if summary.RequestTokensTotal < 1000000 {
-		tokensStr = formatFloat(float64(summary.RequestTokensTotal)/1000.0, 1) + "K"
-	}
-
-	if locale == "en-US" {
-		return fmt.Sprintf(
-			"═════════════════\n💰 Cost: $%.2f\n📊 Cache Hit: %s\n🔢 Tokens: %s\n🔄 Turns: %d\n═════════════════\nClick to view details",
-			cost, hitRate, tokensStr, summary.TurnsTotal,
-		)
-	}
-	if locale == "ja-JP" {
-		return fmt.Sprintf(
-			"═════════════════\n💰 コスト: $%.2f\n📊 キャッシュ: %s\n🔢 トークン: %s\n🔄 ターン: %d\n═════════════════\nクリックして詳細を表示",
-			cost, hitRate, tokensStr, summary.TurnsTotal,
-		)
-	}
-	return fmt.Sprintf(
-		"═════════════════\n💰 消费: $%.2f\n📊 缓存命中: %s\n🔢 Token: %s\n🔄 轮次: %d\n═════════════════\n点击查看详情",
-		cost, hitRate, tokensStr, summary.TurnsTotal,
-	)
 }
