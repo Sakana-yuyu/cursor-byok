@@ -2105,6 +2105,9 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 		if trimmedToolName == "Task" {
 			started, err := service.tryStartDelegatedTask(stream, invocation)
 			if err != nil {
+				if errors.Is(err, errProviderLoopInterrupted) {
+					return err
+				}
 				return service.completePreDispatchToolError(stream, invocation, startedToolCall, startedToolCall != nil, startedEmitted, err)
 			}
 			if started {
