@@ -2,6 +2,7 @@
 import SettingsPageHeader from "@/components/settings/SettingsPageHeader.vue";
 import AdvancedSettings from "@/components/settings/categories/AdvancedSettings.vue";
 import CursorServiceSettings from "@/components/settings/categories/CursorServiceSettings.vue";
+import DelegationSettings from "@/components/settings/categories/DelegationSettings.vue";
 import GeneralSettings from "@/components/settings/categories/GeneralSettings.vue";
 import OverlaySettings from "@/components/settings/categories/OverlaySettings.vue";
 import SettingsRow from "@/components/settings/SettingsRow.vue";
@@ -36,22 +37,11 @@ const categoryComponents = {
   general: GeneralSettings,
   "cursor-service": CursorServiceSettings,
   overlay: OverlaySettings,
+  delegation: DelegationSettings,
   advanced: AdvancedSettings,
 };
 
 const placeholderCategoryContent = {
-  delegation: [
-    {
-      title: "迁移计划",
-      rows: [
-        {
-          label: "任务委托",
-          description: "这里将承载委托开关、运行时信息和相关说明。",
-          value: "后续任务继续完善",
-        },
-      ],
-    },
-  ],
   "skills-mcp": [
     {
       title: "迁移计划",

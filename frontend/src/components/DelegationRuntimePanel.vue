@@ -1,6 +1,7 @@
 <script setup>
 import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
+import DelegationIconButton from "@/components/settings/delegation/DelegationIconButton.vue";
 import { useMessage } from "@/composables/useMessage";
 import {
   cancelDelegationTask,
@@ -13,7 +14,10 @@ import {
 import { toUserError } from "@/state/appState";
 import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 
-defineProps({ compact: { type: Boolean, default: false } });
+const props = defineProps({
+  compact: { type: Boolean, default: false },
+  framed: { type: Boolean, default: true },
+});
 
 const message = useMessage();
 const taskState = reactive({ busy: false, error: "", items: [] });
@@ -32,6 +36,7 @@ let taskGeneration = 0;
 let mcpWorkspaceGeneration = 0;
 let mcpRefreshSequence = 0;
 let activeMCPWorkspaceRoot = workspaceRoot.value.trim();
+let disposed = false;
 
 const taskItems = computed(() => [...taskState.items].sort((left, right) => {
   return Number(right.queuedAtUnixMs || 0) - Number(left.queuedAtUnixMs || 0);
@@ -134,23 +139,26 @@ function replaceMCPServer(next, expectedKey = "") {
 }
 
 async function refreshTasks(silent = false) {
-  if (taskState.busy) return;
+  if (disposed || taskState.busy) return;
   const generation = taskGeneration;
   taskState.busy = true;
   if (!silent) taskState.error = "";
   try {
     const items = await getDelegationTaskSnapshots();
-    if (generation !== taskGeneration) return;
+    if (disposed || generation !== taskGeneration) return;
     taskState.items = Array.isArray(items) ? items : [];
     taskState.error = "";
   } catch (error) {
+    if (disposed) return;
     taskState.error = toUserError(error);
   } finally {
+    if (disposed) return;
     taskState.busy = false;
   }
 }
 
 async function refreshMCPServers(silent = false) {
+  if (disposed) return;
   const workspaceGeneration = mcpWorkspaceGeneration;
   const requestedWorkspaceRoot = currentMCPWorkspaceRoot();
   const refreshSequence = mcpRefreshSequence += 1;
@@ -158,7 +166,12 @@ async function refreshMCPServers(silent = false) {
   if (!silent) mcpState.error = "";
   try {
     const items = await getMCPRuntimeServers(requestedWorkspaceRoot);
-    if (refreshSequence !== mcpRefreshSequence || workspaceGeneration !== mcpWorkspaceGeneration || requestedWorkspaceRoot !== currentMCPWorkspaceRoot()) return;
+    if (
+      disposed
+      || refreshSequence !== mcpRefreshSequence
+      || workspaceGeneration !== mcpWorkspaceGeneration
+      || requestedWorkspaceRoot !== currentMCPWorkspaceRoot()
+    ) return;
     const current = new Map(mcpState.items.map((item) => [mcpServerStateKey(item), item]));
     mcpState.items = (Array.isArray(items) ? items : []).map((item) => {
       const key = mcpServerStateKey(item);
@@ -166,11 +179,16 @@ async function refreshMCPServers(silent = false) {
     });
     mcpState.error = "";
   } catch (error) {
-    if (refreshSequence === mcpRefreshSequence && workspaceGeneration === mcpWorkspaceGeneration && requestedWorkspaceRoot === currentMCPWorkspaceRoot()) {
+    if (
+      !disposed
+      && refreshSequence === mcpRefreshSequence
+      && workspaceGeneration === mcpWorkspaceGeneration
+      && requestedWorkspaceRoot === currentMCPWorkspaceRoot()
+    ) {
       mcpState.error = toUserError(error);
     }
   } finally {
-    if (refreshSequence === mcpRefreshSequence) mcpState.busy = false;
+    if (!disposed && refreshSequence === mcpRefreshSequence) mcpState.busy = false;
   }
 }
 
@@ -179,6 +197,7 @@ async function refreshRuntime(silent = false) {
 }
 
 async function handleCancelTask(task) {
+  if (disposed) return;
   if (!task?.id || cancelingTasks[task.id]) return;
   cancelingTasks[task.id] = true;
   taskGeneration += 1;
@@ -197,6 +216,7 @@ async function handleCancelTask(task) {
 }
 
 async function handleConnectMCP(server) {
+  if (disposed) return;
   const action = captureMCPAction(server);
   if (!action.identifier || mcpActions[action.key]) return;
   const attemptID = `mcp-connect-${Date.now()}-${attemptSequence += 1}`;
@@ -223,6 +243,7 @@ async function handleConnectMCP(server) {
 }
 
 async function handleCancelMCP(server) {
+  if (disposed) return;
   const key = mcpServerStateKey(server);
   const attempt = mcpAttempts[key];
   if (!attempt?.identifier || !attempt.attemptID || cancelingMCPAttempts[key]) return;
@@ -244,6 +265,7 @@ async function handleCancelMCP(server) {
 }
 
 async function handleDisconnectMCP(server) {
+  if (disposed) return;
   const action = captureMCPAction(server);
   if (!action.identifier || mcpActions[action.key]) return;
   const actionID = `mcp-disconnect-${Date.now()}-${attemptSequence += 1}`;
@@ -265,6 +287,7 @@ async function handleDisconnectMCP(server) {
 }
 
 function handleWorkspaceRootChange() {
+  if (disposed) return;
   activeMCPWorkspaceRoot = workspaceRoot.value.trim();
   workspaceRoot.value = activeMCPWorkspaceRoot;
   window.localStorage.setItem("cursor-byok-mcp-workspace-root", activeMCPWorkspaceRoot);
@@ -284,12 +307,17 @@ function handleWorkspaceRootChange() {
 }
 
 onMounted(() => {
+  disposed = false;
   void refreshRuntime();
   taskRefreshTimer = window.setInterval(() => void refreshTasks(true), 1500);
   mcpRefreshTimer = window.setInterval(() => void refreshMCPServers(true), 5000);
 });
 
 onUnmounted(() => {
+  disposed = true;
+  taskGeneration += 1;
+  mcpWorkspaceGeneration += 1;
+  mcpRefreshSequence += 1;
   window.clearInterval(taskRefreshTimer);
   window.clearInterval(mcpRefreshTimer);
   for (const attempt of Object.values(mcpAttempts)) {
@@ -299,15 +327,21 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="grid gap-4" :class="compact ? 'grid-cols-1' : 'xl:grid-cols-2'">
-    <Card>
+  <div class="grid gap-4" :class="props.compact ? 'grid-cols-1' : 'xl:grid-cols-2'">
+    <component :is="props.framed ? Card : 'section'">
       <div class="flex h-full min-w-0 flex-col gap-3">
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
-            <h2 class="text-base font-medium text-white">Multitask 委派</h2>
-            <div class="mt-1 text-sm text-[#a3a3a3]">使用已配置模型并行处理子任务，失败的子任务不会阻塞其他任务。</div>
+            <h2 class="text-base font-medium text-white">委派任务</h2>
+            <div class="mt-1 text-sm text-[#a3a3a3]">查看当前任务状态，并按任务粒度取消正在运行的委派。</div>
           </div>
-          <Button variant="default" :disabled="refreshBusy" @click="refreshRuntime()">刷新</Button>
+          <DelegationIconButton
+            icon="icon-[mdi--refresh]"
+            label="刷新运行时状态"
+            :disabled="refreshBusy"
+            :spinning="refreshBusy"
+            @click="refreshRuntime()"
+          />
         </div>
         <div v-if="taskState.error" class="break-words rounded-[6px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-xs text-[#fca5a5]">{{ taskState.error }}</div>
         <div v-if="!taskItems.length" class="rounded-[6px] border border-dashed border-[#444] px-3 py-5 text-center text-xs text-[#858585]">暂无数据</div>
@@ -327,18 +361,26 @@ onUnmounted(() => {
                 </div>
                 <div v-if="task.error" class="mt-2 line-clamp-2 break-words text-[11px] text-[#fca5a5]" :title="task.error">{{ task.error }}</div>
               </div>
-              <Button v-if="task.cancelable" variant="default" :disabled="Boolean(cancelingTasks[task.id])" @click="handleCancelTask(task)">取消</Button>
+              <DelegationIconButton
+                v-if="task.cancelable"
+                icon="icon-[mdi--close]"
+                :label="cancelingTasks[task.id] ? '取消任务中' : '取消任务'"
+                :disabled="Boolean(cancelingTasks[task.id])"
+                :spinning="Boolean(cancelingTasks[task.id])"
+                danger
+                @click="handleCancelTask(task)"
+              />
             </div>
           </article>
         </div>
       </div>
-    </Card>
+    </component>
 
-    <Card>
+    <component :is="props.framed ? Card : 'section'">
       <div class="flex h-full min-w-0 flex-col gap-3">
         <div>
-          <h2 class="text-base font-medium text-white">MCP Servers</h2>
-          <div class="mt-1 text-sm text-[#a3a3a3]">状态、工具与连接控制</div>
+          <h2 class="text-base font-medium text-white">MCP 运行时</h2>
+          <div class="mt-1 text-sm text-[#a3a3a3]">状态、能力检查与连接控制。</div>
         </div>
         <label class="text-xs text-[#a3a3a3]">工作区目录（可选）<input v-model="workspaceRoot" class="mt-1 h-8 w-full rounded-[6px] border border-white/10 bg-black/20 px-2 text-xs text-white" placeholder="E:\\workspace" @change="handleWorkspaceRootChange" /></label>
         <div v-if="mcpState.error" class="break-words rounded-[6px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-xs text-[#fca5a5]">{{ mcpState.error }}</div>
@@ -361,13 +403,35 @@ onUnmounted(() => {
                 </div>
                 <div v-if="server.lastError" class="mt-2 line-clamp-2 break-words text-[11px] text-[#fca5a5]" :title="server.lastError">{{ server.lastError }}</div>
               </div>
-              <Button v-if="mcpActions[mcpServerStateKey(server)]?.type === 'connecting'" variant="default" :disabled="Boolean(cancelingMCPAttempts[mcpServerStateKey(server)])" @click="handleCancelMCP(server)">{{ cancelingMCPAttempts[mcpServerStateKey(server)] ? "取消中..." : "取消" }}</Button>
-              <Button v-else-if="server.status === 'connected'" variant="default" :disabled="Boolean(mcpActions[mcpServerStateKey(server)])" @click="handleDisconnectMCP(server)">{{ mcpActions[mcpServerStateKey(server)]?.type === "disconnecting" ? "断开中..." : "断开" }}</Button>
-              <Button v-else variant="default" :disabled="Boolean(mcpActions[mcpServerStateKey(server)]) || !server.enabled" @click="handleConnectMCP(server)">连接</Button>
+              <DelegationIconButton
+                v-if="mcpActions[mcpServerStateKey(server)]?.type === 'connecting'"
+                icon="icon-[mdi--close]"
+                :label="cancelingMCPAttempts[mcpServerStateKey(server)] ? '取消连接中' : '取消连接'"
+                :disabled="Boolean(cancelingMCPAttempts[mcpServerStateKey(server)])"
+                :spinning="Boolean(cancelingMCPAttempts[mcpServerStateKey(server)])"
+                danger
+                @click="handleCancelMCP(server)"
+              />
+              <Button
+                v-else-if="server.status === 'connected'"
+                variant="default"
+                :disabled="Boolean(mcpActions[mcpServerStateKey(server)])"
+                @click="handleDisconnectMCP(server)"
+              >
+                {{ mcpActions[mcpServerStateKey(server)]?.type === "disconnecting" ? "断开中..." : "断开" }}
+              </Button>
+              <Button
+                v-else
+                variant="default"
+                :disabled="Boolean(mcpActions[mcpServerStateKey(server)]) || !server.enabled"
+                @click="handleConnectMCP(server)"
+              >
+                连接
+              </Button>
             </div>
           </article>
         </div>
       </div>
-    </Card>
+    </component>
   </div>
 </template>

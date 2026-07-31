@@ -1,0 +1,253 @@
+<script setup>
+import Input from "@/components/ui/Input.vue";
+import Select from "@/components/ui/Select.vue";
+import Switch from "@/components/ui/Switch.vue";
+import DelegationIconButton from "@/components/settings/delegation/DelegationIconButton.vue";
+import { computed } from "vue";
+
+const props = defineProps({
+  group: {
+    type: Object,
+    required: true,
+  },
+  groupIndex: {
+    type: Number,
+    required: true,
+  },
+  totalGroups: {
+    type: Number,
+    required: true,
+  },
+  modelAdapters: {
+    type: Array,
+    default: () => [],
+  },
+  modeOptions: {
+    type: Array,
+    default: () => [],
+  },
+  permissionGroups: {
+    type: Array,
+    default: () => [],
+  },
+  busy: {
+    type: Boolean,
+    default: false,
+  },
+  queued: {
+    type: Boolean,
+    default: false,
+  },
+  error: {
+    type: String,
+    default: "",
+  },
+});
+
+const emit = defineEmits([
+  "change:default-model",
+  "change:execution-mode",
+  "delete",
+  "flush:name",
+  "move:down",
+  "move:up",
+  "retry",
+  "toggle:enabled",
+  "toggle:model",
+  "toggle:permission",
+  "update:name",
+]);
+
+const defaultModelOptions = computed(() => {
+  return props.modelAdapters
+    .filter((adapter) => props.group.modelIDs.includes(adapter.id))
+    .map((adapter) => ({
+      value: adapter.id,
+      label: adapter.displayName || adapter.modelID,
+    }));
+});
+
+const groupDisplayName = computed(() => {
+  return props.group.name || `模型组 ${props.groupIndex + 1}`;
+});
+
+const saveStatusLabel = computed(() => {
+  if (props.busy) {
+    return "正在保存";
+  }
+  if (props.queued) {
+    return "等待保存";
+  }
+  return "";
+});
+
+function permissionEnabled(permission) {
+  return permission.tools.every((tool) => props.group.toolPermissions?.[tool] !== false);
+}
+
+function handleModelToggle(modelID, event) {
+  emit("toggle:model", {
+    modelID,
+    enabled: Boolean(event?.target?.checked),
+  });
+}
+
+function handlePermissionToggle(permission, enabled) {
+  emit("toggle:permission", {
+    permission,
+    enabled: Boolean(enabled),
+  });
+}
+</script>
+
+<template>
+  <article class="space-y-4 rounded-[8px] border border-white/10 bg-black/15 p-4">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div class="min-w-0 flex-1 space-y-3">
+        <div class="flex min-w-0 items-center justify-between gap-3">
+          <div class="min-w-0">
+            <div class="text-sm font-medium text-white">
+              模型组 {{ groupIndex + 1 }}
+            </div>
+            <div v-if="saveStatusLabel" class="mt-1 text-[11px] text-[#8f8f8f]">
+              {{ saveStatusLabel }}
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <DelegationIconButton
+              icon="icon-[mdi--arrow-up]"
+              :label="`上移 ${groupDisplayName}`"
+              :disabled="busy || groupIndex === 0"
+              @click="emit('move:up')"
+            />
+            <DelegationIconButton
+              icon="icon-[mdi--arrow-down]"
+              :label="`下移 ${groupDisplayName}`"
+              :disabled="busy || groupIndex >= totalGroups - 1"
+              @click="emit('move:down')"
+            />
+            <DelegationIconButton
+              icon="icon-[mdi--trash-can-outline]"
+              :label="`删除 ${groupDisplayName}`"
+              :disabled="busy"
+              danger
+              @click="emit('delete')"
+            />
+          </div>
+        </div>
+
+        <Input
+          :model-value="group.name"
+          :disabled="busy"
+          :aria-label="`模型组 ${groupIndex + 1} 名称`"
+          placeholder="输入模型组名称"
+          @update:model-value="(value) => emit('update:name', value)"
+          @blur="emit('flush:name')"
+          @keydown.enter.prevent="emit('flush:name')"
+        />
+      </div>
+
+      <div class="w-full sm:w-[220px]">
+        <Switch
+          compact
+          label="启用该模型组"
+          enabled-text="已参与委派"
+          disabled-text="已停用"
+          :enabled="group.enabled"
+          :disabled="busy"
+          @change="(value) => emit('toggle:enabled', value)"
+        />
+      </div>
+    </div>
+
+    <div class="grid gap-3 lg:grid-cols-2">
+      <div class="space-y-2">
+        <div class="text-[11px] font-medium text-[#8f8f8f]">
+          执行模式
+        </div>
+        <Select
+          :model-value="group.executionMode"
+          :options="modeOptions"
+          aria-label="委派执行模式"
+          :disabled="busy"
+          @change="(value) => emit('change:execution-mode', value)"
+        />
+      </div>
+
+      <div class="space-y-2">
+        <div class="text-[11px] font-medium text-[#8f8f8f]">
+          默认模型
+        </div>
+        <Select
+          :model-value="group.defaultModelID"
+          :options="defaultModelOptions"
+          aria-label="默认委派模型"
+          :disabled="busy || !defaultModelOptions.length"
+          @change="(value) => emit('change:default-model', value)"
+        />
+      </div>
+    </div>
+
+    <div class="space-y-3 border-t border-white/10 pt-3">
+      <div class="text-[11px] font-medium text-[#8f8f8f]">
+        可用模型
+      </div>
+      <div
+        v-if="!modelAdapters.length"
+        class="rounded-[6px] border border-dashed border-[#444] px-3 py-4 text-xs text-[#858585]"
+      >
+        暂无可用模型，请先在模型配置中添加模型适配器。
+      </div>
+      <div v-else class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        <label
+          v-for="adapter in modelAdapters"
+          :key="adapter.id"
+          class="flex min-w-0 items-center gap-2 rounded-[6px] border border-white/6 bg-black/10 px-2.5 py-2 text-xs text-[#d4d4d4]"
+        >
+          <input
+            type="checkbox"
+            :checked="group.modelIDs.includes(adapter.id)"
+            :disabled="busy"
+            @change="handleModelToggle(adapter.id, $event)"
+          />
+          <span class="min-w-0 truncate" :title="adapter.displayName || adapter.modelID">
+            {{ adapter.displayName || adapter.modelID }}
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <div class="space-y-3 border-t border-white/10 pt-3">
+      <div class="text-[11px] font-medium text-[#8f8f8f]">
+        工具权限
+      </div>
+      <div class="grid gap-2 lg:grid-cols-2">
+        <Switch
+          v-for="permission in permissionGroups"
+          :key="permission.key"
+          compact
+          :label="permission.label"
+          :description="permission.description"
+          :enabled="permissionEnabled(permission)"
+          :disabled="busy"
+          @change="(value) => handlePermissionToggle(permission, value)"
+        />
+      </div>
+    </div>
+
+    <div
+      v-if="error"
+      class="flex min-w-0 items-center gap-3 rounded-[6px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-xs text-[#f2a7a7]"
+    >
+      <span class="min-w-0 flex-1 break-words">{{ error }}</span>
+      <button
+        type="button"
+        class="shrink-0 text-[#10AD5D] transition-colors hover:text-[#33c476]"
+        @click="emit('retry')"
+      >
+        重试
+      </button>
+    </div>
+  </article>
+</template>
