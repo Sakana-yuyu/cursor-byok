@@ -207,7 +207,7 @@ func normalizeWorkerCheckpoint(checkpoint WorkerCheckpoint) WorkerCheckpoint {
 		checkpoint.Step = 0
 	}
 	checkpoint.RecentToolNames = normalizeStringSlice(checkpoint.RecentToolNames)
-	checkpoint.ChangedFileSummaries = normalizeChangedFileSummaries(checkpoint.ChangedFileSummaries, "")
+	checkpoint.ChangedFileSummaries = normalizeStringSlice(checkpoint.ChangedFileSummaries)
 	checkpoint.ProgressSummary = strings.TrimSpace(checkpoint.ProgressSummary)
 	checkpoint.Blocker = strings.TrimSpace(checkpoint.Blocker)
 	if checkpoint.EffectiveProgressAt.IsZero() {
@@ -215,6 +215,14 @@ func normalizeWorkerCheckpoint(checkpoint WorkerCheckpoint) WorkerCheckpoint {
 	} else {
 		checkpoint.EffectiveProgressAt = checkpoint.EffectiveProgressAt.UTC()
 	}
+	return checkpoint
+}
+
+func normalizeSupervisedWorkerCheckpoint(checkpoint WorkerCheckpoint, workspaceHint string) WorkerCheckpoint {
+	checkpoint = normalizeWorkerCheckpoint(checkpoint)
+	checkpoint.ChangedFileSummaries = normalizeChangedFileSummaries(checkpoint.ChangedFileSummaries, workspaceHint)
+	checkpoint.ProgressSummary = sanitizeNarrativeText(checkpoint.ProgressSummary, workspaceHint)
+	checkpoint.Blocker = sanitizeNarrativeText(checkpoint.Blocker, workspaceHint)
 	return checkpoint
 }
 

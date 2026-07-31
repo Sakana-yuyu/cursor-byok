@@ -406,6 +406,7 @@ func (s *Scheduler) PublishCheckpoint(taskID string, checkpoint WorkerCheckpoint
 	if checkpoint.Round <= 0 && contract.Round > 0 {
 		checkpoint.Round = contract.Round
 	}
+	checkpoint = normalizeSupervisedWorkerCheckpoint(checkpoint, contract.WorkspaceHint)
 	state.checkpoint = cloneWorkerCheckpoint(&checkpoint)
 	state.snapshot.Checkpoint = cloneWorkerCheckpoint(&checkpoint)
 	state.counters.Checkpoints++
