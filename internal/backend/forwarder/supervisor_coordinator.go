@@ -57,6 +57,8 @@ type supervisedTaskState struct {
 	lastIssue        *delegation.SupervisionIssue
 	previous         *delegation.WorkerCheckpoint
 	reviewPending    bool
+	reviewCancel     context.CancelFunc
+	canceled         bool
 	completed        bool
 	recentSignatures []string
 }
@@ -155,6 +157,30 @@ func (coordinator *SupervisorCoordinator) Cancel(aggregateID string) {
 		return
 	}
 	aggregate.cancelTasks()
+}
+
+func (coordinator *SupervisorCoordinator) CancelTask(taskID string) bool {
+	if coordinator == nil {
+		return false
+	}
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" {
+		return false
+	}
+	coordinator.mu.RLock()
+	aggregates := make([]*supervisedAggregate, 0, len(coordinator.aggregates))
+	for _, aggregate := range coordinator.aggregates {
+		if aggregate != nil {
+			aggregates = append(aggregates, aggregate)
+		}
+	}
+	coordinator.mu.RUnlock()
+	for _, aggregate := range aggregates {
+		if aggregate.cancelTask(taskID) {
+			return true
+		}
+	}
+	return false
 }
 
 func (coordinator *SupervisorCoordinator) Close() {
@@ -260,7 +286,7 @@ func (aggregate *supervisedAggregate) submitAttempt(task *supervisedTaskState, r
 		request.RuntimeEscalateCount = 0
 	}
 	request.RuntimeSupervisionIssue = issueCodeOrDefault(task.lastIssue, "")
-	request.RuntimeProgressSummary = currentProgressSummary(task.contract, task.lastSnapshot)
+	request.RuntimeProgressSummary = currentProgressSummary(task.lastSnapshot)
 	if extraPrompt = strings.TrimSpace(extraPrompt); extraPrompt != "" {
 		request.Prompt = strings.TrimSpace(request.Prompt + "\n\nSupervisor correction:\n" + extraPrompt)
 	}
@@ -382,13 +408,18 @@ func (aggregate *supervisedAggregate) handleWorkerTerminal(event supervisorAggre
 	task.lastResult = event.result
 	task.lastIssue = issue
 	task.previous = cloneCheckpointPointer(&currentCheckpoint)
+	reviewContext, reviewCancel := context.WithCancel(aggregate.ctx)
+	task.reviewCancel = reviewCancel
 	task.reviewPending = true
-	go aggregate.reviewTask(event.identity, task.contract, event.snapshot, event.result, issue, aggregate.allowedActions(task, event.snapshot))
+	go aggregate.reviewTask(reviewContext, event.identity, task.contract, event.snapshot, event.result, issue, aggregate.allowedActions(task, event.snapshot))
 }
 
-func (aggregate *supervisedAggregate) reviewTask(identity supervisorTaskIdentity, contract delegation.SupervisionTaskContract, snapshot delegation.TaskSnapshot, result delegation.TaskResult, issue *delegation.SupervisionIssue, allowed []delegation.SupervisionDecisionKind) {
+func (aggregate *supervisedAggregate) reviewTask(reviewContext context.Context, identity supervisorTaskIdentity, contract delegation.SupervisionTaskContract, snapshot delegation.TaskSnapshot, result delegation.TaskResult, issue *delegation.SupervisionIssue, allowed []delegation.SupervisionDecisionKind) {
 	if aggregate == nil {
 		return
+	}
+	if reviewContext == nil {
+		reviewContext = aggregate.ctx
 	}
 	if _, ok := aggregate.matchIdentity(identity); !ok || !aggregate.parentExecStillCurrent() {
 		aggregate.postReviewAbandoned(identity)
@@ -401,7 +432,7 @@ func (aggregate *supervisedAggregate) reviewTask(identity supervisorTaskIdentity
 		err = &supervisorReviewError{kind: supervisorReviewErrorUnavailable, message: boundedSupervisorError(errSupervisorUnavailable)}
 	} else {
 		modelID := resolveSupervisorModelID(aggregate.config, aggregate.base)
-		reviewDecision, reviewErr := provider.Review(aggregate.ctx, supervisorReviewInput{
+		reviewDecision, reviewErr := provider.Review(reviewContext, supervisorReviewInput{
 			AggregateID:    aggregate.id,
 			TaskID:         identity.TaskID,
 			ParentExecID:   aggregate.id,
@@ -460,6 +491,7 @@ func (aggregate *supervisedAggregate) handleReviewAbandoned(event supervisorAggr
 	if !ok {
 		return
 	}
+	clearSupervisedReviewCancel(task)
 	task.reviewPending = false
 	if task.completed {
 		return
@@ -476,6 +508,7 @@ func (aggregate *supervisedAggregate) handleReviewResult(event supervisorAggrega
 		aggregate.markTaskAbandoned(task, issueCodeOrDefault(event.issue, delegation.SupervisionIssueReviewFailure), staleEventReason("stale supervisor review ignored after provider pass changed", firstNonEmpty(strings.TrimSpace(event.decision.Reason), boundedSupervisorError(event.err), issueSummary(event.issue))))
 		return
 	}
+	clearSupervisedReviewCancel(task)
 	task.reviewPending = false
 	decision := normalizeDelegationDecision(event.decision)
 	if decision.Kind == "" {
@@ -842,6 +875,58 @@ func (aggregate *supervisedAggregate) cancelTasks() {
 	}
 }
 
+func (aggregate *supervisedAggregate) cancelTask(taskID string) bool {
+	if aggregate == nil {
+		return false
+	}
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" {
+		return false
+	}
+	aggregate.mu.Lock()
+	var target *supervisedTaskState
+	for _, task := range aggregate.tasks {
+		if task != nil && strings.TrimSpace(task.currentTaskID) == taskID {
+			target = task
+			break
+		}
+	}
+	if target == nil || target.canceled || (target.completed && !target.reviewPending) {
+		aggregate.mu.Unlock()
+		return false
+	}
+	target.canceled = true
+	target.completed = true
+	target.reviewPending = false
+	reviewCancel := target.reviewCancel
+	target.reviewCancel = nil
+	target.lastSnapshot.Status = delegation.TaskCanceled
+	target.lastSnapshot.SupervisionStatus = delegation.SupervisionStatusCanceled
+	target.lastSnapshot.Error = "supervised task canceled"
+	if target.lastSnapshot.FinishedAt.IsZero() {
+		target.lastSnapshot.FinishedAt = time.Now().UTC()
+	}
+	applyTaskRuntimeMetadata(target)
+	scheduler := aggregate.coordinator.scheduler
+	aggregate.mu.Unlock()
+	if reviewCancel != nil {
+		reviewCancel()
+	}
+	if scheduler != nil {
+		_ = scheduler.Cancel(taskID)
+	}
+	aggregate.postEvent(supervisorAggregateEvent{kind: "task_canceled"})
+	return true
+}
+
+func clearSupervisedReviewCancel(task *supervisedTaskState) {
+	if task == nil || task.reviewCancel == nil {
+		return
+	}
+	task.reviewCancel()
+	task.reviewCancel = nil
+}
+
 func (aggregate *supervisedAggregate) postEvent(event supervisorAggregateEvent) {
 	if aggregate == nil {
 		return
@@ -883,7 +968,7 @@ func (aggregate *supervisedAggregate) matchIdentity(identity supervisorTaskIdent
 	aggregate.mu.Lock()
 	defer aggregate.mu.Unlock()
 	task, ok := aggregate.tasks[strings.TrimSpace(identity.LogicalID)]
-	if !ok || task == nil {
+	if !ok || task == nil || task.canceled {
 		return nil, false
 	}
 	if strings.TrimSpace(task.currentTaskID) != strings.TrimSpace(identity.TaskID) || task.round != identity.Round {
@@ -1015,7 +1100,7 @@ func applyTaskRuntimeMetadata(task *supervisedTaskState) {
 		task.lastSnapshot.EscalateCount = 0
 	}
 	task.lastSnapshot.SupervisionIssue = issueCodeOrDefault(task.lastIssue, "")
-	task.lastSnapshot.ProgressSummary = currentProgressSummary(task.contract, task.lastSnapshot)
+	task.lastSnapshot.ProgressSummary = currentProgressSummary(task.lastSnapshot)
 }
 
 func buildWorkerSupervisionContract(aggregateID string, base delegation.TaskRequest, worker delegation.TaskRequest, config delegation.RuntimeConfig) delegation.SupervisionTaskContract {
@@ -1071,17 +1156,20 @@ func resolveReviewCheckpoint(contract delegation.SupervisionTaskContract, snapsh
 		Phase:                snapshot.SupervisionStatus,
 		RecentToolNames:      nil,
 		ChangedFileSummaries: nil,
-		ProgressSummary:      truncateProjectedReplayText("Supervisor progress", snapshot.Output, 1024),
+		ProgressSummary:      "",
 		Blocker:              strings.TrimSpace(snapshot.Error),
 		EffectiveProgressAt:  snapshot.FinishedAt,
 	}
 }
 
-func currentProgressSummary(contract delegation.SupervisionTaskContract, snapshot delegation.TaskSnapshot) string {
+func currentProgressSummary(snapshot delegation.TaskSnapshot) string {
 	if value := strings.TrimSpace(snapshot.ProgressSummary); value != "" {
 		return value
 	}
-	return strings.TrimSpace(resolveReviewCheckpoint(contract, snapshot).ProgressSummary)
+	if snapshot.Checkpoint != nil {
+		return strings.TrimSpace(snapshot.Checkpoint.ProgressSummary)
+	}
+	return ""
 }
 
 func detectSupervisionIssue(task *supervisedTaskState, checkpoint delegation.WorkerCheckpoint, snapshot delegation.TaskSnapshot, result delegation.TaskResult, previousCheckpoint *delegation.WorkerCheckpoint, previousSnapshot delegation.TaskSnapshot, previousResult delegation.TaskResult) *delegation.SupervisionIssue {

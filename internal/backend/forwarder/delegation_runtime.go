@@ -82,6 +82,12 @@ func (service *Service) DelegationTaskSnapshots() []DelegationTaskSnapshot {
 				progressSummary = normalizeDelegationRuntimeSummary(snapshot.Checkpoint.ProgressSummary)
 			}
 		}
+		if lastProgressAt.IsZero() {
+			lastProgressAt = snapshot.UpdatedAt
+		}
+		if lastProgressAt.IsZero() {
+			lastProgressAt = snapshot.FinishedAt
+		}
 		items = append(items, DelegationTaskSnapshot{
 			ID:                   strings.TrimSpace(snapshot.ID),
 			AggregateID:          strings.TrimSpace(snapshot.ParentExecID),
