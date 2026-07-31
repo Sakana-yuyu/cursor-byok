@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -795,37 +796,177 @@ func redactMCPURL(raw string) string {
 	return trimmed
 }
 
+type mcpURLFingerprintMetadata struct {
+	Origin              string `json:"origin,omitempty"`
+	Parseable           bool   `json:"parseable"`
+	HasPath             bool   `json:"hasPath"`
+	PathSegmentCount    int    `json:"pathSegmentCount"`
+	HasQuery            bool   `json:"hasQuery"`
+	QueryParameterCount int    `json:"queryParameterCount"`
+	HasFragment         bool   `json:"hasFragment"`
+	HasUserInfo         bool   `json:"hasUserInfo"`
+}
+
+func mcpCommandBasename(command string) string {
+	normalized := strings.ReplaceAll(strings.TrimSpace(command), "\\", "/")
+	if normalized == "" {
+		return ""
+	}
+	basename := path.Base(normalized)
+	if basename == "." || basename == "/" {
+		return ""
+	}
+	return strings.ToLower(basename)
+}
+
+func mcpCommandType(command string) string {
+	basename := mcpCommandBasename(command)
+	if basename == "" {
+		return ""
+	}
+	if extension := strings.TrimPrefix(strings.ToLower(path.Ext(basename)), "."); extension != "" {
+		return extension
+	}
+	return "executable"
+}
+
+func mcpArgumentFlagNames(args []string) []string {
+	if len(args) == 0 {
+		return nil
+	}
+	flags := make([]string, 0, len(args))
+	for _, argument := range args {
+		argument = strings.TrimSpace(argument)
+		switch {
+		case strings.HasPrefix(argument, "--") && len(argument) > 2:
+			name := argument
+			if index := strings.IndexByte(name, '='); index >= 0 {
+				name = name[:index]
+			}
+			if isSafeMCPFlagName(name[2:]) {
+				flags = append(flags, strings.ToLower(name))
+			} else {
+				flags = append(flags, "--option")
+			}
+		case strings.HasPrefix(argument, "-") && len(argument) > 1:
+			if len(argument) == 2 || (len(argument) > 2 && argument[2] == '=') {
+				flags = append(flags, strings.ToLower(argument[:2]))
+			} else {
+				flags = append(flags, "-option")
+			}
+		}
+	}
+	return flags
+}
+
+func isSafeMCPFlagName(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, char := range value {
+		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '-' || char == '_' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func mcpSortedConfigKeys(values map[string]string, lower bool) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		if lower {
+			key = strings.ToLower(key)
+		}
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func mcpURLFingerprint(raw string) mcpURLFingerprintMetadata {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return mcpURLFingerprintMetadata{}
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return mcpURLFingerprintMetadata{Parseable: false}
+	}
+	pathValue := strings.Trim(parsed.EscapedPath(), "/")
+	pathSegmentCount := 0
+	if pathValue != "" {
+		pathSegmentCount = len(strings.Split(pathValue, "/"))
+	}
+	queryParameterCount := len(parsed.Query())
+	if parsed.RawQuery != "" && queryParameterCount == 0 {
+		queryParameterCount = 1
+	}
+	return mcpURLFingerprintMetadata{
+		Origin:              strings.ToLower(parsed.Scheme) + "://" + strings.ToLower(parsed.Host),
+		Parseable:           true,
+		HasPath:             parsed.EscapedPath() != "" && parsed.EscapedPath() != "/",
+		PathSegmentCount:    pathSegmentCount,
+		HasQuery:            parsed.RawQuery != "" || parsed.ForceQuery,
+		QueryParameterCount: queryParameterCount,
+		HasFragment:         parsed.Fragment != "",
+		HasUserInfo:         parsed.User != nil,
+	}
+}
+
+func mcpURLOrigin(raw string) string {
+	return mcpURLFingerprint(raw).Origin
+}
+
+func mcpRuntimeScopeKind(config MCPServerConfig) string {
+	if config.Scope == MCPConfigScopeWorkspace || strings.HasPrefix(normalizeMCPRuntimeScope(config.RuntimeScope), "workspace:") {
+		return "workspace"
+	}
+	return "user"
+}
+
 func mcpConfigFingerprint(config MCPServerConfig) string {
 	transport := strings.ToLower(strings.TrimSpace(config.Transport))
 	if transport == "" {
 		transport = "stdio"
 	}
 	payload, _ := json.Marshal(struct {
-		Version           int            `json:"version"`
-		Identifier        string         `json:"identifier"`
-		Name              string         `json:"name"`
-		Source            MCPSource      `json:"source"`
-		Scope             MCPConfigScope `json:"scope"`
-		Transport         string         `json:"transport"`
-		Command           string         `json:"command,omitempty"`
-		Cwd               string         `json:"cwd,omitempty"`
-		URL               string         `json:"url,omitempty"`
-		ConfiguredEnabled bool           `json:"configuredEnabled"`
-		Enabled           bool           `json:"enabled"`
-		RuntimeScope      string         `json:"runtimeScope"`
+		Version           int                       `json:"version"`
+		Source            MCPSource                 `json:"source"`
+		Scope             MCPConfigScope            `json:"scope"`
+		RuntimeScopeKind  string                    `json:"runtimeScopeKind"`
+		Transport         string                    `json:"transport"`
+		CommandBasename   string                    `json:"commandBasename,omitempty"`
+		CommandType       string                    `json:"commandType,omitempty"`
+		ArgumentCount     int                       `json:"argumentCount"`
+		ArgumentFlagNames []string                  `json:"argumentFlagNames,omitempty"`
+		EnvKeys           []string                  `json:"envKeys,omitempty"`
+		HeaderKeys        []string                  `json:"headerKeys,omitempty"`
+		URL               mcpURLFingerprintMetadata `json:"url"`
+		ConfiguredEnabled bool                      `json:"configuredEnabled"`
+		Enabled           bool                      `json:"enabled"`
 	}{
-		Version:           1,
-		Identifier:        strings.ToLower(strings.TrimSpace(config.Identifier)),
-		Name:              strings.TrimSpace(config.Name),
+		Version:           2,
 		Source:            config.Source,
 		Scope:             config.Scope,
+		RuntimeScopeKind:  mcpRuntimeScopeKind(config),
 		Transport:         transport,
-		Command:           strings.TrimSpace(config.Command),
-		Cwd:               strings.TrimSpace(config.Cwd),
-		URL:               redactMCPURL(config.URL),
+		CommandBasename:   mcpCommandBasename(config.Command),
+		CommandType:       mcpCommandType(config.Command),
+		ArgumentCount:     len(config.Args),
+		ArgumentFlagNames: mcpArgumentFlagNames(config.Args),
+		EnvKeys:           mcpSortedConfigKeys(config.Env, true),
+		HeaderKeys:        mcpSortedConfigKeys(config.Headers, true),
+		URL:               mcpURLFingerprint(config.URL),
 		ConfiguredEnabled: config.ConfiguredEnabled,
 		Enabled:           config.Enabled,
-		RuntimeScope:      normalizeMCPRuntimeScope(config.RuntimeScope),
 	})
 	sum := sha256.Sum256(payload)
 	return fmt.Sprintf("sha256:%x", sum)
@@ -892,8 +1033,8 @@ func SnapshotMCPServersWithSettings(workspaceRoot string, settings SkillMCPScanS
 			Name:              config.Name,
 			Identifier:        config.Identifier,
 			Transport:         config.Transport,
-			Command:           config.Command,
-			URL:               redactMCPURL(config.URL),
+			Command:           mcpCommandBasename(config.Command),
+			URL:               mcpURLOrigin(config.URL),
 			Source:            string(config.Source),
 			Scope:             string(config.Scope),
 			ConfigPath:        config.ConfigPath,

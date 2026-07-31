@@ -29,7 +29,9 @@ let taskRefreshTimer = 0;
 let mcpRefreshTimer = 0;
 let attemptSequence = 0;
 let taskGeneration = 0;
-let mcpGeneration = 0;
+let mcpWorkspaceGeneration = 0;
+let mcpRefreshSequence = 0;
+let activeMCPWorkspaceRoot = workspaceRoot.value.trim();
 
 const taskItems = computed(() => [...taskState.items].sort((left, right) => {
   return Number(right.queuedAtUnixMs || 0) - Number(left.queuedAtUnixMs || 0);
@@ -88,6 +90,33 @@ function shortConfigFingerprint(value) {
   return String(value || "").replace(/^sha256:/, "").slice(0, 12);
 }
 
+function currentMCPWorkspaceRoot() {
+  return activeMCPWorkspaceRoot;
+}
+
+function mcpServerStateKey(server) {
+  const scope = String(server?.runtimeScope || server?.scope || "user").trim();
+  return `${scope}\u0000${String(server?.identifier || "").trim().toLowerCase()}`;
+}
+
+function captureMCPAction(server) {
+  return {
+    identifier: String(server?.identifier || "").trim(),
+    runtimeScope: String(server?.runtimeScope || server?.scope || "user").trim(),
+    workspaceRoot: currentMCPWorkspaceRoot(),
+    workspaceGeneration: mcpWorkspaceGeneration,
+    key: mcpServerStateKey(server),
+  };
+}
+
+function isCurrentMCPAction(action) {
+  return action.workspaceGeneration === mcpWorkspaceGeneration && action.workspaceRoot === currentMCPWorkspaceRoot();
+}
+
+function clearReactiveRecord(record) {
+  for (const key of Object.keys(record)) delete record[key];
+}
+
 function formatDuration(milliseconds) {
   const value = Math.max(0, Number(milliseconds || 0));
   if (value < 1000) return `${value} ms`;
@@ -95,9 +124,11 @@ function formatDuration(milliseconds) {
   return `${Math.floor(value / 60000)} min ${Math.floor((value % 60000) / 1000)} s`;
 }
 
-function replaceMCPServer(next) {
+function replaceMCPServer(next, expectedKey = "") {
   if (!next?.identifier) return;
-  const index = mcpState.items.findIndex((item) => item.identifier === next.identifier);
+  const nextKey = mcpServerStateKey(next);
+  if (expectedKey && nextKey !== expectedKey) return;
+  const index = mcpState.items.findIndex((item) => mcpServerStateKey(item) === nextKey);
   if (index >= 0) mcpState.items.splice(index, 1, next);
   else mcpState.items.push(next);
 }
@@ -120,20 +151,26 @@ async function refreshTasks(silent = false) {
 }
 
 async function refreshMCPServers(silent = false) {
-  if (mcpState.busy) return;
-  const generation = mcpGeneration;
+  const workspaceGeneration = mcpWorkspaceGeneration;
+  const requestedWorkspaceRoot = currentMCPWorkspaceRoot();
+  const refreshSequence = mcpRefreshSequence += 1;
   mcpState.busy = true;
   if (!silent) mcpState.error = "";
   try {
-    const items = await getMCPRuntimeServers(workspaceRoot.value);
-    if (generation !== mcpGeneration) return;
-    const current = new Map(mcpState.items.map((item) => [item.identifier, item]));
-    mcpState.items = (Array.isArray(items) ? items : []).map((item) => mcpActions[item.identifier] ? current.get(item.identifier) || item : item);
+    const items = await getMCPRuntimeServers(requestedWorkspaceRoot);
+    if (refreshSequence !== mcpRefreshSequence || workspaceGeneration !== mcpWorkspaceGeneration || requestedWorkspaceRoot !== currentMCPWorkspaceRoot()) return;
+    const current = new Map(mcpState.items.map((item) => [mcpServerStateKey(item), item]));
+    mcpState.items = (Array.isArray(items) ? items : []).map((item) => {
+      const key = mcpServerStateKey(item);
+      return mcpActions[key] ? current.get(key) || item : item;
+    });
     mcpState.error = "";
   } catch (error) {
-    mcpState.error = toUserError(error);
+    if (refreshSequence === mcpRefreshSequence && workspaceGeneration === mcpWorkspaceGeneration && requestedWorkspaceRoot === currentMCPWorkspaceRoot()) {
+      mcpState.error = toUserError(error);
+    }
   } finally {
-    mcpState.busy = false;
+    if (refreshSequence === mcpRefreshSequence) mcpState.busy = false;
   }
 }
 
@@ -160,65 +197,89 @@ async function handleCancelTask(task) {
 }
 
 async function handleConnectMCP(server) {
-  const identifier = server?.identifier;
-  if (!identifier || mcpActions[identifier]) return;
+  const action = captureMCPAction(server);
+  if (!action.identifier || mcpActions[action.key]) return;
   const attemptID = `mcp-connect-${Date.now()}-${attemptSequence += 1}`;
-  mcpGeneration += 1;
-  mcpActions[identifier] = "connecting";
-  mcpAttempts[identifier] = attemptID;
+  mcpActions[action.key] = { type: "connecting", token: attemptID };
+  mcpAttempts[action.key] = { ...action, attemptID };
   mcpState.error = "";
   try {
-    replaceMCPServer({ ...server, status: "connecting", lastError: "" });
-    replaceMCPServer(await connectMCPRuntimeServer(identifier, attemptID, workspaceRoot.value));
-    message.success("连接成功");
+    replaceMCPServer({ ...server, status: "connecting", capabilityStatus: "connecting", lastError: "" }, action.key);
+    const snapshot = await connectMCPRuntimeServer(action.identifier, attemptID, action.workspaceRoot);
+    if (isCurrentMCPAction(action) && mcpServerStateKey(snapshot) === action.key) {
+      replaceMCPServer(snapshot, action.key);
+      message.success("连接成功");
+    }
   } catch (error) {
-    if (!canceledMCPAttempts[identifier]) mcpState.error = toUserError(error);
-    await refreshMCPServers(true);
+    if (isCurrentMCPAction(action) && canceledMCPAttempts[action.key] !== attemptID) mcpState.error = toUserError(error);
   } finally {
-    mcpGeneration += 1;
-    delete mcpActions[identifier];
-    delete mcpAttempts[identifier];
-    delete canceledMCPAttempts[identifier];
+    const refreshCurrentScope = isCurrentMCPAction(action);
+    if (mcpActions[action.key]?.token === attemptID) delete mcpActions[action.key];
+    if (mcpAttempts[action.key]?.attemptID === attemptID) delete mcpAttempts[action.key];
+    if (cancelingMCPAttempts[action.key] === attemptID) delete cancelingMCPAttempts[action.key];
+    if (canceledMCPAttempts[action.key] === attemptID) delete canceledMCPAttempts[action.key];
+    if (refreshCurrentScope) await refreshMCPServers(true);
   }
 }
 
 async function handleCancelMCP(server) {
-  const identifier = server?.identifier;
-  const attemptID = mcpAttempts[identifier];
-  if (!identifier || !attemptID || cancelingMCPAttempts[identifier]) return;
-  cancelingMCPAttempts[identifier] = true;
+  const key = mcpServerStateKey(server);
+  const attempt = mcpAttempts[key];
+  if (!attempt?.identifier || !attempt.attemptID || cancelingMCPAttempts[key]) return;
+  cancelingMCPAttempts[key] = attempt.attemptID;
   try {
-    const canceled = await cancelMCPRuntimeConnection(identifier, attemptID);
+    const canceled = await cancelMCPRuntimeConnection(attempt.identifier, attempt.attemptID);
     if (!canceled) throw new Error("操作失败");
-    canceledMCPAttempts[identifier] = true;
-    message.success("已取消");
+    canceledMCPAttempts[key] = attempt.attemptID;
+    if (isCurrentMCPAction(attempt)) message.success("已取消");
   } catch (error) {
-    mcpState.error = toUserError(error);
+    if (isCurrentMCPAction(attempt)) mcpState.error = toUserError(error);
   } finally {
-    delete cancelingMCPAttempts[identifier];
+    const refreshCurrentScope = isCurrentMCPAction(attempt);
+    if (cancelingMCPAttempts[key] === attempt.attemptID) delete cancelingMCPAttempts[key];
+    if (mcpActions[key]?.token === attempt.attemptID) delete mcpActions[key];
+    if (mcpAttempts[key]?.attemptID === attempt.attemptID) delete mcpAttempts[key];
+    if (refreshCurrentScope) await refreshMCPServers(true);
   }
 }
 
 async function handleDisconnectMCP(server) {
-  const identifier = server?.identifier;
-  if (!identifier || mcpActions[identifier]) return;
-  mcpGeneration += 1;
-  mcpActions[identifier] = "disconnecting";
+  const action = captureMCPAction(server);
+  if (!action.identifier || mcpActions[action.key]) return;
+  const actionID = `mcp-disconnect-${Date.now()}-${attemptSequence += 1}`;
+  mcpActions[action.key] = { type: "disconnecting", token: actionID };
   mcpState.error = "";
   try {
-    replaceMCPServer(await disconnectMCPRuntimeServer(identifier, workspaceRoot.value));
-    message.success("已断开连接");
+    const snapshot = await disconnectMCPRuntimeServer(action.identifier, action.workspaceRoot);
+    if (isCurrentMCPAction(action) && mcpServerStateKey(snapshot) === action.key) {
+      replaceMCPServer(snapshot, action.key);
+      message.success("已断开连接");
+    }
   } catch (error) {
-    mcpState.error = toUserError(error);
+    if (isCurrentMCPAction(action)) mcpState.error = toUserError(error);
   } finally {
-    mcpGeneration += 1;
-    delete mcpActions[identifier];
+    const refreshCurrentScope = isCurrentMCPAction(action);
+    if (mcpActions[action.key]?.token === actionID) delete mcpActions[action.key];
+    if (refreshCurrentScope) await refreshMCPServers(true);
   }
 }
 
 function handleWorkspaceRootChange() {
-  window.localStorage.setItem("cursor-byok-mcp-workspace-root", workspaceRoot.value.trim());
-  mcpGeneration += 1;
+  activeMCPWorkspaceRoot = workspaceRoot.value.trim();
+  workspaceRoot.value = activeMCPWorkspaceRoot;
+  window.localStorage.setItem("cursor-byok-mcp-workspace-root", activeMCPWorkspaceRoot);
+  mcpWorkspaceGeneration += 1;
+  mcpRefreshSequence += 1;
+  for (const attempt of Object.values(mcpAttempts)) {
+    void cancelMCPRuntimeConnection(attempt.identifier, attempt.attemptID);
+  }
+  clearReactiveRecord(mcpActions);
+  clearReactiveRecord(mcpAttempts);
+  clearReactiveRecord(canceledMCPAttempts);
+  clearReactiveRecord(cancelingMCPAttempts);
+  mcpState.items = [];
+  mcpState.error = "";
+  mcpState.busy = false;
   void refreshMCPServers();
 }
 
@@ -231,8 +292,8 @@ onMounted(() => {
 onUnmounted(() => {
   window.clearInterval(taskRefreshTimer);
   window.clearInterval(mcpRefreshTimer);
-  for (const [identifier, attemptID] of Object.entries(mcpAttempts)) {
-    void cancelMCPRuntimeConnection(identifier, attemptID);
+  for (const attempt of Object.values(mcpAttempts)) {
+    void cancelMCPRuntimeConnection(attempt.identifier, attempt.attemptID);
   }
 });
 </script>
@@ -283,14 +344,14 @@ onUnmounted(() => {
         <div v-if="mcpState.error" class="break-words rounded-[6px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-xs text-[#fca5a5]">{{ mcpState.error }}</div>
         <div v-if="!mcpState.items.length" class="rounded-[6px] border border-dashed border-[#444] px-3 py-5 text-center text-xs text-[#858585]">暂无数据</div>
         <div v-else class="max-h-[320px] space-y-2 overflow-y-auto pr-1">
-          <article v-for="server in mcpState.items" :key="server.identifier" class="min-w-0 rounded-[6px] border border-white/10 bg-black/15 p-3">
+          <article v-for="server in mcpState.items" :key="mcpServerStateKey(server)" class="min-w-0 rounded-[6px] border border-white/10 bg-black/15 p-3">
             <div class="flex min-w-0 items-start gap-3">
               <div class="min-w-0 flex-1">
                 <div class="flex min-w-0 items-center gap-2 text-xs">
                   <span class="truncate font-medium text-white" :title="server.identifier">{{ server.name || server.identifier }}</span>
                   <span class="shrink-0" :class="statusClass(server.status)">{{ mcpStatusLabels[server.status] || server.status }}</span>
                 </div>
-                <div class="mt-1 truncate text-[11px] text-[#858585]" :title="server.command || server.url || server.source">{{ server.transport || "stdio" }} · {{ server.sourceLabel || server.source }}</div>
+                <div class="mt-1 truncate text-[11px] text-[#858585]">{{ server.transport || "stdio" }} · {{ server.sourceLabel || server.source }}</div>
                 <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-[#a3a3a3]">
                   <span>{{ server.toolCount || 0 }} 工具</span>
                   <span>{{ mcpScopeLabel(server) }}</span>
@@ -300,9 +361,9 @@ onUnmounted(() => {
                 </div>
                 <div v-if="server.lastError" class="mt-2 line-clamp-2 break-words text-[11px] text-[#fca5a5]" :title="server.lastError">{{ server.lastError }}</div>
               </div>
-              <Button v-if="mcpActions[server.identifier] === 'connecting'" variant="default" :disabled="Boolean(cancelingMCPAttempts[server.identifier])" @click="handleCancelMCP(server)">{{ cancelingMCPAttempts[server.identifier] ? "取消中..." : "取消" }}</Button>
-              <Button v-else-if="server.status === 'connected'" variant="default" :disabled="Boolean(mcpActions[server.identifier])" @click="handleDisconnectMCP(server)">{{ mcpActions[server.identifier] === "disconnecting" ? "断开中..." : "断开" }}</Button>
-              <Button v-else variant="default" :disabled="Boolean(mcpActions[server.identifier]) || !server.enabled" @click="handleConnectMCP(server)">连接</Button>
+              <Button v-if="mcpActions[mcpServerStateKey(server)]?.type === 'connecting'" variant="default" :disabled="Boolean(cancelingMCPAttempts[mcpServerStateKey(server)])" @click="handleCancelMCP(server)">{{ cancelingMCPAttempts[mcpServerStateKey(server)] ? "取消中..." : "取消" }}</Button>
+              <Button v-else-if="server.status === 'connected'" variant="default" :disabled="Boolean(mcpActions[mcpServerStateKey(server)])" @click="handleDisconnectMCP(server)">{{ mcpActions[mcpServerStateKey(server)]?.type === "disconnecting" ? "断开中..." : "断开" }}</Button>
+              <Button v-else variant="default" :disabled="Boolean(mcpActions[mcpServerStateKey(server)]) || !server.enabled" @click="handleConnectMCP(server)">连接</Button>
             </div>
           </article>
         </div>

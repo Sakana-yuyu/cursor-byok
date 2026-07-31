@@ -8,8 +8,11 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -25,7 +28,10 @@ const (
 	mcpMaxDiscoveredTools   = 128
 	mcpMaxSchemaBytes       = 256 << 10
 	mcpProcessCloseDuration = 2 * time.Second
+	mcpMaxRuntimeErrorRunes = 512
 )
+
+var mcpRuntimeURLPattern = regexp.MustCompile(`[A-Za-z][A-Za-z0-9+.-]*://[^\s"'<>]+`)
 
 type MCPRuntimeStatus string
 
@@ -57,20 +63,24 @@ type MCPRuntimeSnapshot struct {
 }
 
 type mcpRuntimeEntry struct {
-	config           MCPServerConfig
-	status           MCPRuntimeStatus
-	capabilityStatus MCPRuntimeStatus
-	session          *mcp.ClientSession
-	tools            []*agentv1.McpToolDescriptor
-	lastError        string
-	connectedAt      time.Time
-	lastCheckedAt    time.Time
-	updatedAt        time.Time
-	generation       uint64
+	config                     MCPServerConfig
+	status                     MCPRuntimeStatus
+	capabilityStatus           MCPRuntimeStatus
+	session                    *mcp.ClientSession
+	tools                      []*agentv1.McpToolDescriptor
+	lastError                  string
+	connectedAt                time.Time
+	lastCheckedAt              time.Time
+	updatedAt                  time.Time
+	generation                 uint64
+	activeCapabilityOperations int
+	capabilityBatchFailed      bool
+	capabilityBatchError       string
 }
 
 type mcpCapabilityOperation struct {
 	key        string
+	owner      *mcpRuntimeEntry
 	generation uint64
 	session    *mcp.ClientSession
 	config     MCPServerConfig
@@ -79,9 +89,10 @@ type mcpCapabilityOperation struct {
 // MCPRuntimeRegistry owns explicitly connected MCP sessions. Sync is read-only:
 // only Connect may start a process or perform network I/O.
 type MCPRuntimeRegistry struct {
-	mu      sync.RWMutex
-	entries map[string]*mcpRuntimeEntry
-	closed  bool
+	mu             sync.RWMutex
+	entries        map[string]*mcpRuntimeEntry
+	closed         bool
+	nextGeneration uint64
 }
 
 func NewMCPRuntimeRegistry() *MCPRuntimeRegistry {
@@ -92,6 +103,14 @@ var sharedMCPRuntimeRegistry = NewMCPRuntimeRegistry()
 
 func SharedMCPRuntimeRegistry() *MCPRuntimeRegistry {
 	return sharedMCPRuntimeRegistry
+}
+
+func (registry *MCPRuntimeRegistry) nextGenerationLocked() uint64 {
+	registry.nextGeneration++
+	if registry.nextGeneration == 0 {
+		registry.nextGeneration++
+	}
+	return registry.nextGeneration
 }
 
 // ReplaceScope synchronizes one authoritative runtime scope without touching other workspaces.
@@ -124,6 +143,10 @@ func (registry *MCPRuntimeRegistry) ReplaceScope(scope string, configs []MCPServ
 		id := strings.ToLower(strings.TrimSpace(entry.config.Identifier))
 		config, ok := next[id]
 		if !ok || !sameMCPRuntimeConfig(entry.config, config) {
+			entry.generation = registry.nextGenerationLocked()
+			entry.activeCapabilityOperations = 0
+			entry.capabilityBatchFailed = false
+			entry.capabilityBatchError = ""
 			if entry.session != nil {
 				stale = append(stale, entry.session)
 			}
@@ -140,6 +163,7 @@ func (registry *MCPRuntimeRegistry) ReplaceScope(scope string, configs []MCPServ
 			status:           MCPRuntimeDisconnected,
 			capabilityStatus: MCPRuntimeDisconnected,
 			updatedAt:        now,
+			generation:       registry.nextGenerationLocked(),
 		}
 	}
 	registry.mu.Unlock()
@@ -168,10 +192,14 @@ func (registry *MCPRuntimeRegistry) Connect(ctx context.Context, scope string, i
 		registry.mu.Unlock()
 		return nil
 	}
-	entry.generation++
+	entry.generation = registry.nextGenerationLocked()
 	generation := entry.generation
+	owner := entry
 	entry.status = MCPRuntimeConnecting
 	entry.capabilityStatus = MCPRuntimeConnecting
+	entry.activeCapabilityOperations = 0
+	entry.capabilityBatchFailed = false
+	entry.capabilityBatchError = ""
 	entry.lastError = ""
 	now := time.Now().UTC()
 	entry.lastCheckedAt = now
@@ -185,13 +213,13 @@ func (registry *MCPRuntimeRegistry) Connect(ctx context.Context, scope string, i
 	now = time.Now().UTC()
 	registry.mu.Lock()
 	entry, ok = registry.entries[key]
-	if !ok || entry.generation != generation || registry.closed {
+	if !ok || entry != owner || entry.generation != generation || !sameMCPRuntimeConfig(entry.config, config) || registry.closed {
 		registry.mu.Unlock()
 		if session != nil {
 			_ = session.Close()
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("%s", sanitizeMCPRuntimeError(err, config))
 		}
 		return fmt.Errorf("mcp server %q changed while connecting in runtime scope %q", identifier, scope)
 	}
@@ -212,6 +240,9 @@ func (registry *MCPRuntimeRegistry) Connect(ctx context.Context, scope string, i
 	entry.tools = cloneMCPToolDescriptors(tools)
 	entry.status = MCPRuntimeConnected
 	entry.capabilityStatus = MCPRuntimeConnected
+	entry.activeCapabilityOperations = 0
+	entry.capabilityBatchFailed = false
+	entry.capabilityBatchError = ""
 	entry.lastError = ""
 	entry.connectedAt = now
 	entry.lastCheckedAt = now
@@ -234,8 +265,9 @@ func (registry *MCPRuntimeRegistry) Disconnect(scope string, identifier string) 
 		registry.mu.Unlock()
 		return fmt.Errorf("mcp server %q not found in runtime scope %q", identifier, scope)
 	}
-	entry.generation++
+	entry.generation = registry.nextGenerationLocked()
 	generation := entry.generation
+	owner := entry
 	key := mcpRuntimeEntryKey(scope, id)
 	config := cloneMCPServerConfig(entry.config)
 	session := entry.session
@@ -243,6 +275,9 @@ func (registry *MCPRuntimeRegistry) Disconnect(scope string, identifier string) 
 	entry.tools = nil
 	entry.status = MCPRuntimeDisconnected
 	entry.capabilityStatus = MCPRuntimeDisconnected
+	entry.activeCapabilityOperations = 0
+	entry.capabilityBatchFailed = false
+	entry.capabilityBatchError = ""
 	entry.lastError = ""
 	entry.connectedAt = time.Time{}
 	now := time.Now().UTC()
@@ -254,7 +289,7 @@ func (registry *MCPRuntimeRegistry) Disconnect(scope string, identifier string) 
 			sanitizedError := sanitizeMCPRuntimeError(err, config)
 			registry.mu.Lock()
 			entry, ok := registry.entries[key]
-			if ok && entry.generation == generation && entry.session == nil {
+			if ok && entry == owner && entry.generation == generation && sameMCPRuntimeConfig(entry.config, config) && entry.session == nil {
 				now = time.Now().UTC()
 				entry.status = MCPRuntimeError
 				entry.capabilityStatus = MCPRuntimeError
@@ -268,7 +303,7 @@ func (registry *MCPRuntimeRegistry) Disconnect(scope string, identifier string) 
 		now = time.Now().UTC()
 		registry.mu.Lock()
 		entry, ok := registry.entries[key]
-		if ok && entry.generation == generation && entry.session == nil && entry.status == MCPRuntimeDisconnected {
+		if ok && entry == owner && entry.generation == generation && sameMCPRuntimeConfig(entry.config, config) && entry.session == nil && entry.status == MCPRuntimeDisconnected {
 			entry.lastCheckedAt = now
 			entry.updatedAt = now
 		}
@@ -417,7 +452,7 @@ func (registry *MCPRuntimeRegistry) Close() {
 	now := time.Now().UTC()
 	var sessions []*mcp.ClientSession
 	for _, entry := range registry.entries {
-		entry.generation++
+		entry.generation = registry.nextGenerationLocked()
 		if entry.session != nil {
 			sessions = append(sessions, entry.session)
 		}
@@ -425,6 +460,9 @@ func (registry *MCPRuntimeRegistry) Close() {
 		entry.tools = nil
 		entry.status = MCPRuntimeDisconnected
 		entry.capabilityStatus = MCPRuntimeDisconnected
+		entry.activeCapabilityOperations = 0
+		entry.capabilityBatchFailed = false
+		entry.capabilityBatchError = ""
 		entry.lastError = ""
 		entry.connectedAt = time.Time{}
 		entry.lastCheckedAt = now
@@ -463,14 +501,19 @@ func (registry *MCPRuntimeRegistry) beginCapabilityOperation(scope string, ident
 	}
 	operation := mcpCapabilityOperation{
 		key:        key,
+		owner:      entry,
 		generation: entry.generation,
 		session:    entry.session,
 		config:     cloneMCPServerConfig(entry.config),
 	}
+	if entry.activeCapabilityOperations == 0 {
+		entry.capabilityBatchFailed = false
+		entry.capabilityBatchError = ""
+		entry.lastError = ""
+	}
+	entry.activeCapabilityOperations++
 	now := time.Now().UTC()
 	entry.capabilityStatus = MCPRuntimeConnecting
-	entry.lastError = ""
-	entry.lastCheckedAt = now
 	entry.updatedAt = now
 	registry.mu.Unlock()
 	return operation, nil
@@ -483,15 +526,27 @@ func (registry *MCPRuntimeRegistry) finishCapabilityOperation(operation mcpCapab
 	now := time.Now().UTC()
 	registry.mu.Lock()
 	entry, ok := registry.entries[operation.key]
-	if !ok || entry.generation != operation.generation || entry.session != operation.session || entry.status != MCPRuntimeConnected {
+	if !ok || entry != operation.owner || entry.generation != operation.generation || entry.session != operation.session || !sameMCPRuntimeConfig(entry.config, operation.config) || entry.status != MCPRuntimeConnected {
 		registry.mu.Unlock()
 		return
 	}
+	if entry.activeCapabilityOperations <= 0 {
+		registry.mu.Unlock()
+		return
+	}
+	entry.activeCapabilityOperations--
 	entry.lastCheckedAt = now
 	entry.updatedAt = now
 	if err != nil {
+		entry.capabilityBatchFailed = true
+		entry.capabilityBatchError = appendMCPRuntimeCapabilityError(entry.capabilityBatchError, sanitizeMCPRuntimeError(err, operation.config))
+	}
+	if entry.activeCapabilityOperations > 0 {
+		entry.capabilityStatus = MCPRuntimeConnecting
+		entry.lastError = entry.capabilityBatchError
+	} else if entry.capabilityBatchFailed {
 		entry.capabilityStatus = MCPRuntimeDegraded
-		entry.lastError = sanitizeMCPRuntimeError(err, operation.config)
+		entry.lastError = entry.capabilityBatchError
 	} else {
 		entry.capabilityStatus = MCPRuntimeConnected
 		entry.lastError = ""
@@ -623,8 +678,8 @@ func snapshotMCPRuntimeEntry(entry *mcpRuntimeEntry) MCPRuntimeSnapshot {
 		Source:            string(entry.config.Source),
 		Scope:             string(entry.config.Scope),
 		Transport:         entry.config.Transport,
-		Command:           entry.config.Command,
-		URL:               redactMCPURL(entry.config.URL),
+		Command:           mcpCommandBasename(entry.config.Command),
+		URL:               mcpURLOrigin(entry.config.URL),
 		Status:            entry.status,
 		ConfigFingerprint: mcpConfigFingerprint(entry.config),
 		CapabilityStatus:  entry.capabilityStatus,
@@ -655,45 +710,112 @@ func sameMCPRuntimeConfig(left MCPServerConfig, right MCPServerConfig) bool {
 	return reflect.DeepEqual(left, right)
 }
 
+func appendMCPRuntimeCapabilityError(current string, next string) string {
+	current = strings.TrimSpace(current)
+	next = strings.TrimSpace(next)
+	if next == "" || current == next {
+		return current
+	}
+	if current == "" {
+		return truncateMCPRuntimeError(next)
+	}
+	return truncateMCPRuntimeError(current + "; " + next)
+}
+
 func sanitizeMCPRuntimeError(err error, config MCPServerConfig) string {
 	if err == nil {
 		return ""
 	}
-	message := err.Error()
-	redactions := make([]string, 0, len(config.Env)+len(config.Headers)+len(config.Args)+8)
+	message := mcpRuntimeURLPattern.ReplaceAllString(err.Error(), "[redacted-url]")
+	redactions := make([]string, 0, len(config.Env)+len(config.Headers)+len(config.Args)+20)
+	appendRedaction := func(values ...string) {
+		for _, value := range values {
+			value = strings.TrimSpace(value)
+			if value == "" || value == "." || value == "/" || value == "\\" {
+				continue
+			}
+			redactions = append(redactions, value)
+		}
+	}
+	appendSecretRedaction := func(values ...string) {
+		for _, value := range values {
+			quoted := strconv.Quote(value)
+			quotedASCII := strconv.QuoteToASCII(value)
+			if len(quoted) >= 2 {
+				quoted = quoted[1 : len(quoted)-1]
+			}
+			if len(quotedASCII) >= 2 {
+				quotedASCII = quotedASCII[1 : len(quotedASCII)-1]
+			}
+			appendRedaction(value, url.QueryEscape(value), url.PathEscape(value), quoted, quotedASCII)
+		}
+	}
 	rawURL := strings.TrimSpace(config.URL)
-	redactions = append(redactions, rawURL)
+	appendSecretRedaction(rawURL)
 	if parsed, parseErr := url.Parse(rawURL); parseErr == nil {
-		redactions = append(redactions, parsed.RawQuery)
+		appendSecretRedaction(parsed.Path, parsed.RawPath, parsed.EscapedPath(), parsed.RawQuery, parsed.Fragment)
 		if parsed.User != nil {
-			redactions = append(redactions, parsed.User.String(), parsed.User.Username())
+			appendSecretRedaction(parsed.User.String(), parsed.User.Username())
 			if password, ok := parsed.User.Password(); ok {
-				redactions = append(redactions, password)
+				appendSecretRedaction(password)
 			}
 		}
 		for _, values := range parsed.Query() {
-			redactions = append(redactions, values...)
+			appendSecretRedaction(values...)
 		}
 	}
+	appendSecretRedaction(
+		config.Command,
+		mcpCommandBasename(config.Command),
+		config.Cwd,
+		filepath.Clean(config.Cwd),
+		filepath.ToSlash(config.Cwd),
+		config.ConfigPath,
+		normalizeMCPRuntimeScope(config.RuntimeScope),
+	)
 	for _, value := range config.Env {
-		redactions = append(redactions, strings.TrimSpace(value))
+		appendSecretRedaction(value)
 	}
 	for _, value := range config.Headers {
-		redactions = append(redactions, strings.TrimSpace(value))
+		appendSecretRedaction(value)
 	}
 	for _, value := range config.Args {
-		redactions = append(redactions, strings.TrimSpace(value))
+		appendSecretRedaction(value)
 	}
+	redactions = uniqueMCPRuntimeRedactions(redactions)
 	sort.Slice(redactions, func(i, j int) bool { return len(redactions[i]) > len(redactions[j]) })
 	for _, value := range redactions {
-		if value != "" {
-			message = strings.ReplaceAll(message, value, "[redacted]")
+		pattern, compileErr := regexp.Compile(`(?i)` + regexp.QuoteMeta(value))
+		if compileErr == nil {
+			message = pattern.ReplaceAllString(message, "[redacted]")
 		}
 	}
-	if len(message) > 512 {
-		message = message[:512] + "..."
+	return truncateMCPRuntimeError(message)
+}
+
+func uniqueMCPRuntimeRedactions(values []string) []string {
+	if len(values) == 0 {
+		return nil
 	}
-	return message
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		key := strings.ToLower(value)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, value)
+	}
+	return result
+}
+
+func truncateMCPRuntimeError(message string) string {
+	runes := []rune(message)
+	if len(runes) <= mcpMaxRuntimeErrorRunes {
+		return message
+	}
+	return string(runes[:mcpMaxRuntimeErrorRunes]) + "..."
 }
 
 func cloneMCPToolDescriptors(input []*agentv1.McpToolDescriptor) []*agentv1.McpToolDescriptor {

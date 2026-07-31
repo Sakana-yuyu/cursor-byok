@@ -470,7 +470,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 52,
+          "line": 54,
           "column": 10
         },
         {
@@ -492,7 +492,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 192,
+          "line": 232,
           "column": 36
         },
         {
@@ -772,7 +772,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 282,
+          "line": 343,
           "column": 47
         }
       ]
@@ -1130,7 +1130,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 280,
+          "line": 341,
           "column": 52
         }
       ]
@@ -1297,7 +1297,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 40,
+          "line": 42,
           "column": 12
         },
         {
@@ -1484,7 +1484,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 298,
+          "line": 359,
           "column": 25
         }
       ]
@@ -1733,7 +1733,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 39,
+          "line": 41,
           "column": 11
         },
         {
@@ -1827,7 +1827,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 42,
+          "line": 44,
           "column": 11
         },
         {
@@ -1919,7 +1919,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 58,
+          "line": 60,
           "column": 14
         }
       ]
@@ -1943,7 +1943,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 246,
+          "line": 307,
           "column": 58
         },
         {
@@ -2023,13 +2023,13 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 269,
+          "line": 330,
           "column": 141
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 303,
-          "column": 192
+          "line": 364,
+          "column": 214
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
@@ -2806,7 +2806,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 48,
+          "line": 50,
           "column": 17
         }
       ]
@@ -2859,8 +2859,8 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 303,
-          "column": 192
+          "line": 364,
+          "column": 214
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
@@ -3026,7 +3026,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 60,
+          "line": 62,
           "column": 10
         },
         {
@@ -3127,22 +3127,22 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 56,
+          "line": 58,
           "column": 17
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 76,
+          "line": 78,
           "column": 22
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 78,
+          "line": 80,
           "column": 84
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 297,
+          "line": 358,
           "column": 94
         }
       ]
@@ -3279,12 +3279,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 252,
+          "line": 313,
           "column": 141
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 284,
+          "line": 345,
           "column": 146
         },
         {
@@ -3349,8 +3349,8 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 173,
-          "column": 21
+          "line": 211,
+          "column": 23
         }
       ]
     },
@@ -4093,7 +4093,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 50,
+          "line": 52,
           "column": 14
         }
       ]
@@ -4139,12 +4139,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 265,
+          "line": 326,
           "column": 55
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 295,
+          "line": 356,
           "column": 53
         },
         {
@@ -4804,8 +4804,8 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 304,
-          "column": 174
+          "line": 365,
+          "column": 182
         }
       ]
     },
@@ -5366,8 +5366,8 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 210,
-          "column": 21
+          "line": 256,
+          "column": 23
         }
       ]
     },
@@ -5453,7 +5453,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 51,
+          "line": 53,
           "column": 13
         }
       ]
@@ -5606,7 +5606,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 72,
+          "line": 74,
           "column": 10
         }
       ]
@@ -6690,7 +6690,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 71,
+          "line": 73,
           "column": 108
         }
       ]
@@ -7137,7 +7137,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 59,
+          "line": 61,
           "column": 13
         }
       ]
@@ -7303,18 +7303,18 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 43,
+          "line": 45,
           "column": 13
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 152,
+          "line": 189,
           "column": 21
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 194,
-          "column": 21
+          "line": 234,
+          "column": 54
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
@@ -7376,8 +7376,8 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 305,
-          "column": 152
+          "line": 366,
+          "column": 160
         },
         {
           "file": "src/views/SupplierDetail.vue",
@@ -7825,7 +7825,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 249,
+          "line": 310,
           "column": 87
         },
         {
@@ -7999,7 +7999,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 263,
+          "line": 324,
           "column": 28
         },
         {
@@ -8206,7 +8206,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 49,
+          "line": 51,
           "column": 15
         }
       ]
@@ -8521,7 +8521,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 151,
+          "line": 188,
           "column": 36
         },
         {
@@ -8880,7 +8880,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 258,
+          "line": 319,
           "column": 108
         },
         {
@@ -9841,7 +9841,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 299,
+          "line": 360,
           "column": 133
         }
       ]
@@ -10123,7 +10123,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 44,
+          "line": 46,
           "column": 14
         },
         {
@@ -10314,7 +10314,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 247,
+          "line": 308,
           "column": 54
         },
         {
@@ -10512,7 +10512,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 263,
+          "line": 324,
           "column": 28
         },
         {
@@ -10616,7 +10616,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 41,
+          "line": 43,
           "column": 14
         },
         {
@@ -10643,8 +10643,8 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 304,
-          "column": 174
+          "line": 365,
+          "column": 182
         }
       ]
     },
@@ -11228,7 +11228,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 297,
+          "line": 358,
           "column": 88
         }
       ]
@@ -11240,7 +11240,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 57,
+          "line": 59,
           "column": 15
         }
       ]
