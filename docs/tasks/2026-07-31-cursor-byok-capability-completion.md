@@ -79,3 +79,13 @@ Task 1-13 的首次实现完成后，发布前审查发现了跨 workspace 共�
 - 最终 scoped review 的两个 Important finding 均已修复，复审无 Critical/Important 遗留。
 - 最终树验证通过：`go test -count=1 ./...`、`go vet ./...`、`go build ./...`、targeted `go test -race`、`npm --prefix frontend run build` 和 `git diff --check`。
 - 仓库规则要求不新增测试文件，本轮沿用现有测试、race、静态检查、发布 fixture 和人工端到端验收。
+
+## v0.0.71 发布验收
+
+- `main`、综合能力分支和三个独立 task 分支已全部收口到主分支；旧 task 分支使用 `ours` merge 记录整合关系，避免覆盖后续审查修正。
+- GitHub Actions tag run `30597118345` 与 main run `30597117421` 均成功。
+- GitHub Release 已发布：`https://github.com/Sakana-yuyu/cursor-byok/releases/tag/v0.0.71`。
+- Release 包含 10 个非空资产：五个平台 updater 包、Windows 双架构 installer、`update.json` 和 macOS 双架构 DMG。
+- `update.json` 可解析，版本为 `0.0.71`，五个平台的 size、URL 和 `sha256:` checksum 均有效，updater URL 不引用 DMG。
+- Apple Silicon DMG：`cursor-byok-0.0.71-macos-arm64.dmg`，24,324,708 bytes。
+- Intel DMG：`cursor-byok-0.0.71-macos-amd64.dmg`，25,555,859 bytes。

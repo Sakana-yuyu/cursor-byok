@@ -184,10 +184,19 @@
 - Modify: `build/config.yml`
 - Modify: `release-notes.md`
 
-- [ ] Confirm branch is `main`, worktree is clean, `v0.0.71` does not exist, and local commits are ready to push.
-- [ ] Set version to `0.0.71` and replace release notes.
-- [ ] Verify config version equals tag version.
-- [ ] Commit `release: v0.0.71` and create tag `v0.0.71`.
-- [ ] Push `main` and tag.
-- [ ] Verify GitHub Actions completes successfully.
-- [ ] Verify Release assets, valid `update.json`, non-zero checksums, and both versioned DMG files through GitHub API/public URLs.
+- [x] Confirm branch is `main`, worktree is clean, `v0.0.71` does not exist, and local commits are ready to push.
+- [x] Set version to `0.0.71` and replace release notes.
+- [x] Verify config version equals tag version.
+- [x] Commit `release: v0.0.71` and create tag `v0.0.71`.
+- [x] Push `main` and tag.
+- [x] Verify GitHub Actions completes successfully.
+- [x] Verify Release assets, valid `update.json`, non-zero checksums, and both versioned DMG files through GitHub API/public URLs.
+
+Release evidence:
+
+- Tag run `30597118345` completed successfully, including all five platform builds and `Publish GitHub Release`.
+- Main run `30597117421` completed successfully; its release job was correctly skipped because the ref was not a tag.
+- Release: `https://github.com/Sakana-yuyu/cursor-byok/releases/tag/v0.0.71`.
+- `update.json` contains version `0.0.71`, five updater platforms, valid SHA-256 checksums and only ZIP/tar.gz updater URLs.
+- `cursor-byok-0.0.71-macos-arm64.dmg` is 24,324,708 bytes.
+- `cursor-byok-0.0.71-macos-amd64.dmg` is 25,555,859 bytes.
