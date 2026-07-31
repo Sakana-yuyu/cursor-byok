@@ -847,6 +847,10 @@
               "type": "string"
             },
             "description": "Optional labels to add."
+          },
+          "repo_url": {
+            "type": "string",
+            "description": "Repository URL (e.g. https://github.com/owner/repo). Used to disambiguate in multi-repo contexts."
           }
         },
         "required": [
@@ -894,6 +898,10 @@
             "items": {
               "type": "string"
             }
+          },
+          "repo_url": {
+            "type": "string",
+            "description": "Repository URL (e.g. https://github.com/owner/repo). Used to disambiguate in multi-repo contexts."
           }
         },
         "required": [
