@@ -60,6 +60,13 @@ type TaskRequest struct {
 	ExecutionMode                string
 	WorkspaceHint                string
 	ToolPermission               map[string]bool
+	RuntimeSupervisionRound      int
+	RuntimeCorrectionCount       int
+	RuntimeRetryCount            int
+	RuntimeReassignCount         int
+	RuntimeEscalateCount         int
+	RuntimeSupervisionIssue      SupervisionIssueCode
+	RuntimeProgressSummary       string
 	ModelParams                  []*agentv1.RequestedModel_ModelParameterValue
 	Timeout                      time.Duration
 }
@@ -80,6 +87,7 @@ type TaskSnapshot struct {
 	ModelID           string
 	ModelName         string
 	ModelGroupID      string
+	WorkerRole        string
 	ExecutionMode     string
 	ParentRequestID   string
 	ParentExecID      string
@@ -87,6 +95,13 @@ type TaskSnapshot struct {
 	Checkpoint        *WorkerCheckpoint
 	SupervisionStatus SupervisionStatus
 	Counters          SupervisionCounters
+	SupervisionRound  int
+	CorrectionCount   int
+	RetryCount        int
+	ReassignCount     int
+	EscalateCount     int
+	SupervisionIssue  SupervisionIssueCode
+	ProgressSummary   string
 	Status            TaskStatus
 	Output            string
 	Error             string
@@ -416,6 +431,8 @@ func (s *Scheduler) PublishCheckpoint(taskID string, checkpoint WorkerCheckpoint
 	}
 	state.snapshot.Counters = cloneSupervisionCounters(state.counters)
 	state.snapshot.SupervisionStatus = checkpoint.Phase
+	state.snapshot.SupervisionRound = checkpoint.Round
+	state.snapshot.ProgressSummary = checkpoint.ProgressSummary
 	s.publishLocked(&state.snapshot)
 	s.mu.Unlock()
 	return true
@@ -747,16 +764,32 @@ func cloneTaskSnapshot(snapshot TaskSnapshot) TaskSnapshot {
 }
 
 func buildTaskSnapshot(request TaskRequest, queuedAt time.Time) TaskSnapshot {
+	workerRole := ""
+	supervisionRound := request.RuntimeSupervisionRound
+	if request.Contract != nil {
+		workerRole = firstNonEmpty(strings.TrimSpace(request.SubagentType), "generalPurpose")
+		if supervisionRound <= 0 {
+			supervisionRound = request.Contract.Round
+		}
+	}
 	return TaskSnapshot{
 		ID:              request.ID,
 		Description:     strings.TrimSpace(request.Description),
 		ModelID:         strings.TrimSpace(request.ModelID),
 		ModelName:       strings.TrimSpace(request.ModelName),
 		ModelGroupID:    strings.TrimSpace(request.ModelGroupID),
+		WorkerRole:      workerRole,
 		ExecutionMode:   strings.TrimSpace(request.ExecutionMode),
 		ParentRequestID: strings.TrimSpace(request.ParentRequest),
 		ParentExecID:    strings.TrimSpace(request.ParentExecID),
 		GroupID:         strings.TrimSpace(firstNonEmpty(request.ParentExecID, request.ParentRequest)),
+		SupervisionRound: supervisionRound,
+		CorrectionCount:  request.RuntimeCorrectionCount,
+		RetryCount:       request.RuntimeRetryCount,
+		ReassignCount:    request.RuntimeReassignCount,
+		EscalateCount:    request.RuntimeEscalateCount,
+		SupervisionIssue: request.RuntimeSupervisionIssue,
+		ProgressSummary:  strings.TrimSpace(request.RuntimeProgressSummary),
 		Status:          TaskQueued,
 		QueuedAt:        queuedAt,
 	}
