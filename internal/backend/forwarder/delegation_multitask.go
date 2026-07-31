@@ -634,6 +634,9 @@ func (coordinator *multitaskDelegationCoordinator) CancelTask(taskID string) boo
 	if taskID == "" {
 		return false
 	}
+	if coordinator.supervisor != nil && coordinator.supervisor.CancelTask(taskID) {
+		return true
+	}
 	coordinator.mu.RLock()
 	scheduler := coordinator.scheduler
 	coordinator.mu.RUnlock()
