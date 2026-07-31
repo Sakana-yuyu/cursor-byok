@@ -48,6 +48,26 @@ type DelegationConfig struct {
 	Supervision    DelegationSupervisionConfig `json:"supervision,omitempty" yaml:"supervision,omitempty"`
 }
 
+func cloneDelegationConfig(input DelegationConfig) DelegationConfig {
+	output := input
+	if len(input.Groups) == 0 {
+		output.Groups = nil
+		return output
+	}
+	output.Groups = make([]DelegationModelGroup, 0, len(input.Groups))
+	for _, group := range input.Groups {
+		output.Groups = append(output.Groups, cloneDelegationGroup(group))
+	}
+	return output
+}
+
+func cloneDelegationGroup(input DelegationModelGroup) DelegationModelGroup {
+	output := input
+	output.ModelIDs = append([]string(nil), input.ModelIDs...)
+	output.ToolPermissions = cloneBoolMap(input.ToolPermissions)
+	return output
+}
+
 func normalizeDelegationConfig(input DelegationConfig, adapters []ModelAdapterConfig) DelegationConfig {
 	availableModels := make(map[string]struct{}, len(adapters))
 	for _, adapter := range adapters {

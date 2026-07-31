@@ -93,6 +93,33 @@ func (manager *Manager) LastAgentModelHash() string {
 	return strings.TrimSpace(manager.Current().LastAgentModelHash)
 }
 
+func (manager *Manager) GetDelegationConfig(ctx context.Context) (DelegationConfig, error) {
+	if manager == nil {
+		return cloneDelegationConfig(DefaultConfig().Delegation), nil
+	}
+	cfg, err := manager.Load(ctx)
+	if err != nil {
+		return cloneDelegationConfig(DefaultConfig().Delegation), err
+	}
+	return cloneDelegationConfig(cfg.Delegation), nil
+}
+
+func (manager *Manager) SaveDelegationConfig(ctx context.Context, cfg DelegationConfig) (DelegationConfig, error) {
+	if manager == nil {
+		return DelegationConfig{}, fmt.Errorf("config manager is not initialized")
+	}
+	current, err := manager.Load(ctx)
+	if err != nil {
+		return cloneDelegationConfig(DefaultConfig().Delegation), err
+	}
+	current.Delegation = cloneDelegationConfig(cfg)
+	normalized, err := manager.Save(ctx, current)
+	if err != nil {
+		return cloneDelegationConfig(DefaultConfig().Delegation), err
+	}
+	return cloneDelegationConfig(normalized.Delegation), nil
+}
+
 func (manager *Manager) DelegationRuntimeConfig() delegation.RuntimeConfig {
 	config := manager.Current()
 	current := config.Delegation
