@@ -275,10 +275,7 @@ func (detector LoopDetector) detectNoProgress(input DetectCheckpointIssueInput) 
 	if hasMeaningfulProgress(input) {
 		return nil
 	}
-	lastProgressAt := input.Previous.EffectiveProgressAt
-	if lastProgressAt.IsZero() {
-		lastProgressAt = input.Current.EffectiveProgressAt
-	}
+	lastProgressAt := latestEffectiveProgressAt(input.Previous.EffectiveProgressAt, input.Current.EffectiveProgressAt)
 	if lastProgressAt.IsZero() || input.Now.Sub(lastProgressAt) < detector.NoProgressWindow {
 		return nil
 	}
@@ -289,6 +286,16 @@ func (detector LoopDetector) detectNoProgress(input DetectCheckpointIssueInput) 
 		currentChangedFiles(input),
 		input,
 	)
+}
+
+func latestEffectiveProgressAt(previous time.Time, current time.Time) time.Time {
+	if previous.IsZero() {
+		return current
+	}
+	if current.After(previous) {
+		return current
+	}
+	return previous
 }
 
 func (detector LoopDetector) detectScopeDrift(input DetectCheckpointIssueInput) *SupervisionIssue {
