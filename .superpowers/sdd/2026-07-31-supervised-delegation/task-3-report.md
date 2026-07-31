@@ -63,3 +63,21 @@ Ran successfully on July 31, 2026:
 
 - I did not find reusable existing delegation debug-log evidence in the local history/log roots to replay a real canceled aggregate or stale worker event end-to-end, so the stale-event/canceled-parent guarantees here are verified by code-path inspection plus `go build`/`go vet`, not by a fresh runtime replay trace.
 - Task 4 still needs persisted supervision config fields and runtime snapshot exposure before this path can be configured from the normal settings/binding surface.
+
+## Revision after review
+
+- Closed the supervised startup race by keeping `multitaskDelegationCoordinator.Start` in its `startMu` critical section until the supervised coordinator has registered the aggregate and launched bounded background startup, while `SupervisorCoordinator.Start` and `dispatchInitialWorkers` now re-check `parentExecStillCurrent` before registration and before every scheduler submission.
+- Tightened review handling so `reviewTask` re-validates aggregate/task/provider-pass identity immediately before `provider.Review`, and stale/canceled/malformed review callbacks can no longer trigger another provider pass; non-optional review failures now route to `circuit_open`/failed task outcomes.
+- Made supervisor decisions strict end to end: `decodeSupervisorDecision` rejects unknown kinds and kinds outside the dynamically computed `AllowedActions`, and the review prompt now reflects that same bounded action set.
+- Added persisted delegation supervision config mapping in `internal/backend/server/config/{delegation.go,types.go,manager.go}` with JSON/YAML fields, safe normalization, and runtime defaults of disabled, main-model fallback, corrections `2`, retries `1`, rounds `8`, and concurrency `4`, without persisting API keys into delegation config.
+- Preserved `modelID`, `groupID`, and `executionMode` as separate follow-up routing fields so reassignment sets `request.ExecutionMode` directly instead of overloading `ModelGroupID`.
+- Represented circuit-open, correction-limit, retry-limit, round-limit, and strict review failures in task results via `circuit_open`/failed supervision state plus retained issue code/reason, while keeping the aggregate payload sanitized.
+
+### Revision verification
+
+Re-ran successfully on July 31, 2026:
+
+- `gofmt -w internal/backend/delegation/supervision.go internal/backend/server/config/delegation.go internal/backend/server/config/types.go internal/backend/server/config/manager.go internal/backend/forwarder/supervisor_provider.go internal/backend/forwarder/supervisor_coordinator.go internal/backend/forwarder/delegation_multitask.go`
+- `go build ./...`
+- `go vet ./...`
+- `git diff --check`

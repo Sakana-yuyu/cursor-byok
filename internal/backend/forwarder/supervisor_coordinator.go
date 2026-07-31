@@ -100,6 +100,9 @@ func (coordinator *SupervisorCoordinator) Start(stream *ActiveStream, pending ru
 	if aggregateID == "" {
 		return "", fmt.Errorf("delegation aggregate exec id is required")
 	}
+	if !supervisedParentExecStillCurrent(stream, pending) {
+		return "", fmt.Errorf("delegation aggregate startup canceled for provider pass %d: %w", pending.ProviderPass, errProviderLoopInterrupted)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	aggregate := &supervisedAggregate{
 		coordinator: coordinator,
@@ -113,12 +116,21 @@ func (coordinator *SupervisorCoordinator) Start(stream *ActiveStream, pending ru
 		eventCh:     make(chan supervisorAggregateEvent, max(16, len(workers)*4)),
 		tasks:       make(map[string]*supervisedTaskState, len(workers)),
 	}
+	for _, worker := range workers {
+		state := aggregate.newTaskState(worker)
+		aggregate.tasks[state.logicalID] = state
+	}
 
 	coordinator.mu.Lock()
 	if coordinator.closed {
 		coordinator.mu.Unlock()
 		cancel()
 		return "", fmt.Errorf("supervisor coordinator is closed")
+	}
+	if !supervisedParentExecStillCurrent(stream, pending) {
+		coordinator.mu.Unlock()
+		cancel()
+		return "", fmt.Errorf("delegation aggregate startup canceled for provider pass %d: %w", pending.ProviderPass, errProviderLoopInterrupted)
 	}
 	if _, exists := coordinator.aggregates[aggregateID]; exists {
 		coordinator.mu.Unlock()
@@ -127,28 +139,8 @@ func (coordinator *SupervisorCoordinator) Start(stream *ActiveStream, pending ru
 	}
 	coordinator.aggregates[aggregateID] = aggregate
 	coordinator.mu.Unlock()
-
-	for _, worker := range workers {
-		state := aggregate.newTaskState(worker)
-		if err := aggregate.submitAttempt(state, "initial", ""); err != nil {
-			aggregate.recordSubmissionError(worker, err)
-			state.completed = true
-			state.lastSnapshot = delegation.TaskSnapshot{
-				ID:            worker.ID,
-				ModelID:       worker.ModelID,
-				ModelName:     worker.ModelName,
-				ModelGroupID:  worker.ModelGroupID,
-				ExecutionMode: worker.ExecutionMode,
-				Status:        delegation.TaskFailed,
-				Error:         err.Error(),
-			}
-			aggregate.tasks[state.logicalID] = state
-			continue
-		}
-		aggregate.tasks[state.logicalID] = state
-	}
-
 	go aggregate.run()
+	go aggregate.dispatchInitialWorkers()
 	return aggregateID, nil
 }
 
@@ -218,9 +210,40 @@ func (aggregate *supervisedAggregate) newTaskState(worker delegation.TaskRequest
 	}
 }
 
+func (aggregate *supervisedAggregate) dispatchInitialWorkers() {
+	if aggregate == nil {
+		return
+	}
+	aggregate.mu.Lock()
+	tasks := make([]*supervisedTaskState, 0, len(aggregate.tasks))
+	for _, task := range aggregate.tasks {
+		tasks = append(tasks, task)
+	}
+	aggregate.mu.Unlock()
+	for _, task := range tasks {
+		if aggregate.ctx.Err() != nil || !aggregate.parentExecStillCurrent() {
+			aggregate.cancelTasks()
+			return
+		}
+		if err := aggregate.submitAttempt(task, "initial", ""); err != nil {
+			if errors.Is(err, errProviderLoopInterrupted) || !aggregate.parentExecStillCurrent() {
+				aggregate.cancelTasks()
+				return
+			}
+			aggregate.markTaskFailed(task, delegation.SupervisionIssueModelFailure, err.Error(), false)
+		}
+	}
+	if aggregate.allTasksCompleted() {
+		aggregate.postEvent(supervisorAggregateEvent{kind: "startup_complete"})
+	}
+}
+
 func (aggregate *supervisedAggregate) submitAttempt(task *supervisedTaskState, reason string, extraPrompt string) error {
 	if aggregate == nil || task == nil || aggregate.coordinator == nil || aggregate.coordinator.scheduler == nil {
 		return fmt.Errorf("supervised delegation scheduler is unavailable")
+	}
+	if aggregate.ctx.Err() != nil || !aggregate.parentExecStillCurrent() {
+		return fmt.Errorf("delegation aggregate startup canceled for provider pass %d: %w", aggregate.pending.ProviderPass, errProviderLoopInterrupted)
 	}
 	request := task.currentRequest
 	request.ParentRequest = strings.TrimSpace(aggregate.base.ParentRequest)
@@ -312,6 +335,8 @@ func (aggregate *supervisedAggregate) handleEvent(event supervisorAggregateEvent
 		aggregate.handleWorkerTerminal(event)
 	case "review_result":
 		aggregate.handleReviewResult(event)
+	case "startup_complete":
+		return
 	}
 }
 
@@ -321,9 +346,7 @@ func (aggregate *supervisedAggregate) handleWorkerTerminal(event supervisorAggre
 		return
 	}
 	if event.err != nil {
-		task.completed = true
-		task.lastSnapshot.Status = delegation.TaskFailed
-		task.lastSnapshot.Error = event.err.Error()
+		aggregate.markTaskFailed(task, delegation.SupervisionIssueModelFailure, event.err.Error(), false)
 		return
 	}
 	if !aggregate.resultIdentityMatches(task, event.identity, event.snapshot, event.result) {
@@ -339,25 +362,21 @@ func (aggregate *supervisedAggregate) handleWorkerTerminal(event supervisorAggre
 	task.lastIssue = issue
 	task.previous = cloneCheckpointPointer(&currentCheckpoint)
 	task.reviewPending = true
-	go aggregate.reviewTask(event.identity, task.contract, event.snapshot, event.result, issue)
+	go aggregate.reviewTask(event.identity, task.contract, event.snapshot, event.result, issue, aggregate.allowedActions(task, event.snapshot))
 }
 
-func (aggregate *supervisedAggregate) reviewTask(identity supervisorTaskIdentity, contract delegation.SupervisionTaskContract, snapshot delegation.TaskSnapshot, result delegation.TaskResult, issue *delegation.SupervisionIssue) {
+func (aggregate *supervisedAggregate) reviewTask(identity supervisorTaskIdentity, contract delegation.SupervisionTaskContract, snapshot delegation.TaskSnapshot, result delegation.TaskResult, issue *delegation.SupervisionIssue, allowed []delegation.SupervisionDecisionKind) {
 	if aggregate == nil {
 		return
 	}
-	decision := delegation.SupervisionDecision{
-		Kind:   delegation.SupervisionDecisionAccept,
-		Reason: "supervision unavailable; preserving legacy behavior",
-		At:     time.Now().UTC(),
+	if _, ok := aggregate.matchIdentity(identity); !ok || !aggregate.parentExecStillCurrent() {
+		return
 	}
-	err := error(nil)
 	provider := aggregate.coordinator.provider
+	decision := delegation.SupervisionDecision{}
+	var err error
 	if provider == nil {
-		if aggregate.config.StrictUnavailable {
-			decision.Kind = delegation.SupervisionDecisionCircuitOpen
-			decision.Reason = "supervisor provider is unavailable"
-		}
+		err = &supervisorReviewError{kind: supervisorReviewErrorUnavailable, message: boundedSupervisorError(errSupervisorUnavailable)}
 	} else {
 		modelID := resolveSupervisorModelID(aggregate.config, aggregate.base)
 		reviewDecision, reviewErr := provider.Review(aggregate.ctx, supervisorReviewInput{
@@ -370,7 +389,7 @@ func (aggregate *supervisedAggregate) reviewTask(identity supervisorTaskIdentity
 			Result:         result,
 			Snapshot:       snapshot,
 			Issue:          issue,
-			AllowedActions: aggregate.allowedActions(contract, snapshot),
+			AllowedActions: append([]delegation.SupervisionDecisionKind(nil), allowed...),
 			ModelID:        modelID,
 			ModelName:      firstNonEmpty(aggregate.config.ModelNames[modelID], modelID),
 			ThinkingEffort: strings.TrimSpace(aggregate.base.ThinkingEffort),
@@ -378,12 +397,29 @@ func (aggregate *supervisedAggregate) reviewTask(identity supervisorTaskIdentity
 		})
 		if reviewErr != nil {
 			err = reviewErr
-			if aggregate.config.StrictUnavailable {
-				decision.Kind = delegation.SupervisionDecisionCircuitOpen
-				decision.Reason = reviewErr.Error()
-			}
 		} else {
 			decision = reviewDecision
+		}
+	}
+	if aggregate.ctx.Err() != nil || !aggregate.parentExecStillCurrent() {
+		return
+	}
+	if _, ok := aggregate.matchIdentity(identity); !ok {
+		return
+	}
+	if err != nil {
+		if unavailable, ok := err.(*supervisorReviewError); ok && unavailable.kind == supervisorReviewErrorUnavailable && !aggregate.config.StrictUnavailable {
+			decision = delegation.SupervisionDecision{
+				Kind:   delegation.SupervisionDecisionAccept,
+				Reason: "supervisor provider unavailable; preserving legacy behavior",
+				At:     time.Now().UTC(),
+			}
+		} else {
+			decision = delegation.SupervisionDecision{
+				Kind:   delegation.SupervisionDecisionCircuitOpen,
+				Reason: boundedSupervisorError(err),
+				At:     time.Now().UTC(),
+			}
 		}
 	}
 	aggregate.postEvent(supervisorAggregateEvent{
@@ -403,18 +439,18 @@ func (aggregate *supervisedAggregate) handleReviewResult(event supervisorAggrega
 	task.reviewPending = false
 	decision := normalizeDelegationDecision(event.decision)
 	if decision.Kind == "" {
-		decision.Kind = delegation.SupervisionDecisionAccept
-		decision.Reason = "supervisor decision was empty; preserving worker result"
+		aggregate.markTaskFailed(task, delegation.SupervisionIssueReviewFailure, firstNonEmpty(boundedSupervisorError(event.err), "supervisor decision was empty"), true)
+		return
 	}
 	switch decision.Kind {
 	case delegation.SupervisionDecisionAccept:
-		task.completed = true
+		aggregate.settleCurrentTask(task)
 	case delegation.SupervisionDecisionContinue:
 		if delegatedStatusTerminal(task.lastSnapshot.Status) && task.lastSnapshot.Status != delegation.TaskCompleted {
 			aggregate.retryTask(task, "continue_after_terminal", "")
 			return
 		}
-		task.completed = true
+		aggregate.settleCurrentTask(task)
 	case delegation.SupervisionDecisionCorrect:
 		aggregate.correctTask(task, decision)
 	case delegation.SupervisionDecisionRetry:
@@ -424,9 +460,9 @@ func (aggregate *supervisedAggregate) handleReviewResult(event supervisorAggrega
 	case delegation.SupervisionDecisionEscalate:
 		aggregate.escalateTask(task, decision)
 	case delegation.SupervisionDecisionCircuitOpen:
-		task.completed = true
+		aggregate.markTaskFailed(task, issueCodeOrDefault(event.issue, delegation.SupervisionIssueReviewFailure), decision.Reason, true)
 	default:
-		task.completed = true
+		aggregate.markTaskFailed(task, delegation.SupervisionIssueReviewFailure, firstNonEmpty(decision.Reason, "supervisor returned an unsupported decision"), true)
 	}
 }
 
@@ -434,56 +470,76 @@ func (aggregate *supervisedAggregate) correctTask(task *supervisedTaskState, dec
 	if task == nil {
 		return
 	}
-	if task.corrections >= task.contract.MaxCorrections || task.round >= task.contract.MaxRounds {
-		task.completed = true
+	if task.corrections >= task.contract.MaxCorrections {
+		aggregate.markTaskFailed(task, delegation.SupervisionIssueCorrectionLimit, "supervisor correction limit exceeded", true)
+		return
+	}
+	if task.round >= task.contract.MaxRounds {
+		aggregate.markTaskFailed(task, delegation.SupervisionIssueRoundLimit, "supervision round limit exceeded", true)
 		return
 	}
 	task.corrections++
-	aggregate.spawnFollowup(task, "correct", decision.Summary, "", "")
+	aggregate.spawnFollowup(task, "correct", decision.Summary, "", "", "")
 }
 
 func (aggregate *supervisedAggregate) retryTask(task *supervisedTaskState, reason string, prompt string) {
 	if task == nil {
 		return
 	}
-	if task.retries >= task.contract.MaxRetries || task.round >= task.contract.MaxRounds {
-		task.completed = true
+	if task.retries >= task.contract.MaxRetries {
+		aggregate.markTaskFailed(task, delegation.SupervisionIssueRetryLimit, "supervisor retry limit exceeded", true)
+		return
+	}
+	if task.round >= task.contract.MaxRounds {
+		aggregate.markTaskFailed(task, delegation.SupervisionIssueRoundLimit, "supervision round limit exceeded", true)
 		return
 	}
 	task.retries++
-	aggregate.spawnFollowup(task, reason, prompt, "", "")
+	aggregate.spawnFollowup(task, reason, prompt, "", "", "")
 }
 
 func (aggregate *supervisedAggregate) reassignTask(task *supervisedTaskState, decision delegation.SupervisionDecision) {
-	if task == nil || !aggregate.config.AllowReassign || task.round >= task.contract.MaxRounds {
-		task.completed = true
+	if task == nil || !aggregate.config.AllowReassign {
+		aggregate.markTaskFailed(task, delegation.SupervisionIssueReviewFailure, "supervisor reassignment is disabled", true)
+		return
+	}
+	if task.round >= task.contract.MaxRounds {
+		aggregate.markTaskFailed(task, delegation.SupervisionIssueRoundLimit, "supervision round limit exceeded", true)
 		return
 	}
 	modelID, groupID, executionMode := aggregate.nextReassignedModel(task)
 	if modelID == "" {
-		task.completed = true
+		aggregate.markTaskFailed(task, delegation.SupervisionIssueModelFailure, "no reassignment target is available", true)
 		return
 	}
 	task.reassignments++
-	aggregate.spawnFollowup(task, "reassign", decision.Summary, modelID, firstNonEmpty(groupID, executionMode))
+	aggregate.spawnFollowup(task, "reassign", decision.Summary, modelID, groupID, executionMode)
 }
 
 func (aggregate *supervisedAggregate) escalateTask(task *supervisedTaskState, decision delegation.SupervisionDecision) {
-	if task == nil || !aggregate.config.AllowEscalate || task.escalationUsed || task.round >= task.contract.MaxRounds {
-		task.completed = true
+	if task == nil || !aggregate.config.AllowEscalate {
+		aggregate.markTaskFailed(task, delegation.SupervisionIssueReviewFailure, "supervisor escalation is disabled", true)
+		return
+	}
+	if task.escalationUsed {
+		aggregate.markTaskFailed(task, delegation.SupervisionIssueReviewFailure, "supervisor escalation already used", true)
+		return
+	}
+	if task.round >= task.contract.MaxRounds {
+		aggregate.markTaskFailed(task, delegation.SupervisionIssueRoundLimit, "supervision round limit exceeded", true)
 		return
 	}
 	modelID := firstNonEmpty(strings.TrimSpace(aggregate.config.ReviewerModelID), strings.TrimSpace(aggregate.config.SupervisorModelID), strings.TrimSpace(aggregate.base.ModelID))
 	if modelID == "" {
-		task.completed = true
+		aggregate.markTaskFailed(task, delegation.SupervisionIssueModelFailure, "no escalation model is available", true)
 		return
 	}
 	task.escalationUsed = true
 	task.escalated = true
-	aggregate.spawnFollowup(task, "escalate", decision.Summary, modelID, "")
+	aggregate.spawnFollowup(task, "escalate", decision.Summary, modelID, "", "")
 }
 
-func (aggregate *supervisedAggregate) spawnFollowup(task *supervisedTaskState, reason string, prompt string, modelID string, groupOverride string) {
+func (aggregate *supervisedAggregate) spawnFollowup(task *supervisedTaskState, reason string, prompt string, modelID string, groupOverride string, executionMode string) {
 	if task == nil {
 		return
 	}
@@ -499,12 +555,17 @@ func (aggregate *supervisedAggregate) spawnFollowup(task *supervisedTaskState, r
 	if strings.TrimSpace(groupOverride) != "" {
 		request.ModelGroupID = strings.TrimSpace(groupOverride)
 	}
+	if strings.TrimSpace(executionMode) != "" {
+		request.ExecutionMode = delegation.NormalizeExecutionMode(executionMode)
+	}
 	task.currentTaskID = request.ID
 	task.currentRequest = request
 	if err := aggregate.submitAttempt(task, reason, prompt); err != nil {
-		task.completed = true
-		task.lastSnapshot.Status = delegation.TaskFailed
-		task.lastSnapshot.Error = err.Error()
+		if errors.Is(err, errProviderLoopInterrupted) || !aggregate.parentExecStillCurrent() {
+			aggregate.cancelTasks()
+			return
+		}
+		aggregate.markTaskFailed(task, delegation.SupervisionIssueModelFailure, err.Error(), false)
 	}
 }
 
@@ -542,22 +603,43 @@ func (aggregate *supervisedAggregate) nextReassignedModel(task *supervisedTaskSt
 	return "", "", ""
 }
 
-func (aggregate *supervisedAggregate) allowedActions(contract delegation.SupervisionTaskContract, snapshot delegation.TaskSnapshot) []delegation.SupervisionDecisionKind {
+func (aggregate *supervisedAggregate) allowedActions(task *supervisedTaskState, snapshot delegation.TaskSnapshot) []delegation.SupervisionDecisionKind {
+	if aggregate == nil || task == nil {
+		return []delegation.SupervisionDecisionKind{
+			delegation.SupervisionDecisionAccept,
+			delegation.SupervisionDecisionCircuitOpen,
+		}
+	}
 	actions := []delegation.SupervisionDecisionKind{
 		delegation.SupervisionDecisionAccept,
-		delegation.SupervisionDecisionContinue,
-		delegation.SupervisionDecisionCorrect,
-		delegation.SupervisionDecisionRetry,
 		delegation.SupervisionDecisionCircuitOpen,
 	}
-	if aggregate.config.AllowReassign {
-		actions = append(actions, delegation.SupervisionDecisionReassign)
+	canContinueWithoutNewPass := !delegatedStatusTerminal(snapshot.Status) || snapshot.Status == delegation.TaskCompleted
+	canSpawnFollowup := task.round < task.contract.MaxRounds
+	canRetry := canSpawnFollowup && task.retries < task.contract.MaxRetries
+	canCorrect := canSpawnFollowup && task.corrections < task.contract.MaxCorrections
+	if canContinueWithoutNewPass || canRetry {
+		actions = append(actions, delegation.SupervisionDecisionContinue)
 	}
-	if aggregate.config.AllowEscalate {
-		actions = append(actions, delegation.SupervisionDecisionEscalate)
+	if canCorrect {
+		actions = append(actions, delegation.SupervisionDecisionCorrect)
 	}
-	if contract.Round >= contract.MaxRounds || delegatedStatusTerminal(snapshot.Status) && snapshot.Status == delegation.TaskCompleted {
-		return actions
+	if canRetry {
+		actions = append(actions, delegation.SupervisionDecisionRetry)
+	}
+	if aggregate.config.AllowReassign && canSpawnFollowup {
+		if modelID, _, _ := aggregate.nextReassignedModel(task); modelID != "" {
+			actions = append(actions, delegation.SupervisionDecisionReassign)
+		}
+	}
+	if aggregate.config.AllowEscalate && canSpawnFollowup && !task.escalationUsed {
+		modelID := firstNonEmpty(strings.TrimSpace(aggregate.config.ReviewerModelID), strings.TrimSpace(aggregate.config.SupervisorModelID), strings.TrimSpace(aggregate.base.ModelID))
+		if modelID != "" {
+			actions = append(actions, delegation.SupervisionDecisionEscalate)
+		}
+	}
+	if len(actions) == 0 {
+		actions = append(actions, delegation.SupervisionDecisionCircuitOpen)
 	}
 	return actions
 }
@@ -645,6 +727,7 @@ func (aggregate *supervisedAggregate) collectResult() delegatedAggregateResult {
 			ReassignCount:        task.reassignments,
 			Escalated:            task.escalated,
 			SupervisionIssueCode: supervisionIssueCode(task.lastIssue),
+			SupervisionReason:    truncateProjectedReplayText("Supervisor reason", firstNonEmpty(strings.TrimSpace(snapshot.Error), issueSummary(task.lastIssue)), 512),
 		}
 		result.Tasks = append(result.Tasks, item)
 	}
@@ -706,27 +789,10 @@ func (aggregate *supervisedAggregate) postEvent(event supervisorAggregateEvent) 
 }
 
 func (aggregate *supervisedAggregate) parentExecStillCurrent() bool {
-	if aggregate == nil || aggregate.stream == nil {
+	if aggregate == nil {
 		return false
 	}
-	stream := aggregate.stream
-	stream.mu.Lock()
-	defer stream.mu.Unlock()
-	if isTerminalStreamStatus(stream.Status) {
-		return false
-	}
-	switch stream.Phase {
-	case TurnPhaseCanceled, TurnPhaseCompleted, TurnPhaseFailed:
-		return false
-	}
-	pending, ok := stream.PendingExecs[strings.TrimSpace(aggregate.pending.ExecID)]
-	if !ok {
-		return false
-	}
-	if pending.ProviderPass != aggregate.pending.ProviderPass {
-		return false
-	}
-	return stream.ProviderPassCount == aggregate.pending.ProviderPass
+	return supervisedParentExecStillCurrent(aggregate.stream, aggregate.pending)
 }
 
 func (aggregate *supervisedAggregate) matchIdentity(identity supervisorTaskIdentity) (*supervisedTaskState, bool) {
@@ -782,8 +848,55 @@ func (aggregate *supervisedAggregate) recordSubmissionError(worker delegation.Ta
 		SupervisionStatus:    string(delegation.SupervisionStatusFailed),
 		SupervisionRound:     1,
 		SupervisionIssueCode: string(delegation.SupervisionIssueModelFailure),
+		SupervisionReason:    truncateProjectedReplayText("Supervisor reason", err.Error(), 512),
 	})
 	aggregate.mu.Unlock()
+}
+
+func (aggregate *supervisedAggregate) settleCurrentTask(task *supervisedTaskState) {
+	if task == nil {
+		return
+	}
+	task.completed = true
+	task.lastSnapshot.ID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ID), strings.TrimSpace(task.currentTaskID))
+	task.lastSnapshot.ModelID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelID), strings.TrimSpace(task.currentRequest.ModelID))
+	task.lastSnapshot.ModelName = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelName), strings.TrimSpace(task.currentRequest.ModelName))
+	task.lastSnapshot.ModelGroupID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelGroupID), strings.TrimSpace(task.currentRequest.ModelGroupID))
+	task.lastSnapshot.ExecutionMode = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ExecutionMode), strings.TrimSpace(task.currentRequest.ExecutionMode))
+	if task.lastSnapshot.SupervisionStatus == "" {
+		task.lastSnapshot.SupervisionStatus = supervisionStatusFromTaskStatus(task.lastSnapshot.Status)
+	}
+}
+
+func (aggregate *supervisedAggregate) markTaskFailed(task *supervisedTaskState, code delegation.SupervisionIssueCode, reason string, circuitOpen bool) {
+	if task == nil {
+		return
+	}
+	task.completed = true
+	task.lastSnapshot.ID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ID), strings.TrimSpace(task.currentTaskID))
+	task.lastSnapshot.ModelID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelID), strings.TrimSpace(task.currentRequest.ModelID))
+	task.lastSnapshot.ModelName = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelName), strings.TrimSpace(task.currentRequest.ModelName))
+	task.lastSnapshot.ModelGroupID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelGroupID), strings.TrimSpace(task.currentRequest.ModelGroupID))
+	task.lastSnapshot.ExecutionMode = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ExecutionMode), strings.TrimSpace(task.currentRequest.ExecutionMode))
+	task.lastSnapshot.Status = delegation.TaskFailed
+	if circuitOpen {
+		task.lastSnapshot.SupervisionStatus = delegation.SupervisionStatusCircuitOpen
+	} else {
+		task.lastSnapshot.SupervisionStatus = delegation.SupervisionStatusFailed
+	}
+	task.lastSnapshot.Error = truncateProjectedReplayText("Supervisor reason", firstNonEmpty(strings.TrimSpace(reason), "supervision failed"), 512)
+	now := time.Now().UTC()
+	if task.lastSnapshot.FinishedAt.IsZero() {
+		task.lastSnapshot.FinishedAt = now
+	}
+	if task.lastIssue == nil || code != "" || strings.TrimSpace(reason) != "" {
+		task.lastIssue = &delegation.SupervisionIssue{
+			Code:       code,
+			Summary:    task.lastSnapshot.Error,
+			Round:      task.round,
+			DetectedAt: now,
+		}
+	}
 }
 
 func buildWorkerSupervisionContract(aggregateID string, base delegation.TaskRequest, worker delegation.TaskRequest, config delegation.RuntimeConfig) delegation.SupervisionTaskContract {
@@ -920,4 +1033,56 @@ func cloneCheckpointPointer(checkpoint *delegation.WorkerCheckpoint) *delegation
 	}
 	cloned := delegationCheckpointClone(*checkpoint)
 	return &cloned
+}
+
+func issueCodeOrDefault(issue *delegation.SupervisionIssue, fallback delegation.SupervisionIssueCode) delegation.SupervisionIssueCode {
+	if issue == nil || strings.TrimSpace(string(issue.Code)) == "" {
+		return fallback
+	}
+	return issue.Code
+}
+
+func issueSummary(issue *delegation.SupervisionIssue) string {
+	if issue == nil {
+		return ""
+	}
+	return strings.TrimSpace(issue.Summary)
+}
+
+func supervisionStatusFromTaskStatus(status delegation.TaskStatus) delegation.SupervisionStatus {
+	switch status {
+	case delegation.TaskCompleted:
+		return delegation.SupervisionStatusCompleted
+	case delegation.TaskFailed, delegation.TaskTimedOut:
+		return delegation.SupervisionStatusFailed
+	case delegation.TaskCanceled:
+		return delegation.SupervisionStatusCanceled
+	case delegation.TaskRunning:
+		return delegation.SupervisionStatusRunning
+	default:
+		return delegation.SupervisionStatusCompleted
+	}
+}
+
+func supervisedParentExecStillCurrent(stream *ActiveStream, pending runtimecore.PendingExec) bool {
+	if stream == nil {
+		return false
+	}
+	stream.mu.Lock()
+	defer stream.mu.Unlock()
+	if isTerminalStreamStatus(stream.Status) {
+		return false
+	}
+	switch stream.Phase {
+	case TurnPhaseCanceled, TurnPhaseCompleted, TurnPhaseFailed:
+		return false
+	}
+	current, ok := stream.PendingExecs[strings.TrimSpace(pending.ExecID)]
+	if !ok || strings.TrimSpace(current.ExecKind) != "delegation_aggregate" {
+		return false
+	}
+	if current.ProviderPass != pending.ProviderPass {
+		return false
+	}
+	return stream.ProviderPassCount == pending.ProviderPass
 }

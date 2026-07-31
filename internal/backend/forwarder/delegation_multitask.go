@@ -60,6 +60,7 @@ type delegatedWorkerResult struct {
 	ReassignCount        int                   `json:"reassign_count,omitempty"`
 	Escalated            bool                  `json:"escalated,omitempty"`
 	SupervisionIssueCode string                `json:"supervision_issue_code,omitempty"`
+	SupervisionReason    string                `json:"supervision_reason,omitempty"`
 }
 
 type delegatedAggregateResult struct {
@@ -281,6 +282,11 @@ func (coordinator *multitaskDelegationCoordinator) Start(stream *ActiveStream, p
 	}
 	config := coordinator.runtimeConfig()
 	coordinator.ensureScheduler(config.MaxConcurrency)
+	useSupervision, supervisionErr := coordinator.shouldUseSupervision(base, config)
+	if supervisionErr != nil {
+		coordinator.startMu.Unlock()
+		return false, supervisionErr
+	}
 	workers := coordinator.enabledWorkers(base, config)
 	if len(workers) == 0 {
 		coordinator.startMu.Unlock()
@@ -294,6 +300,30 @@ func (coordinator *multitaskDelegationCoordinator) Start(stream *ActiveStream, p
 		return false, fmt.Errorf("delegation scheduler is nil")
 	}
 	scheduler.EnsureRetentionLimit(len(scheduler.Snapshots()) + len(workers) + delegation.DefaultRetentionLimit)
+	if useSupervision {
+		if coordinator.supervisor == nil {
+			coordinator.startMu.Unlock()
+			return false, fmt.Errorf("supervisor coordinator is unavailable")
+		}
+		stream.mu.Lock()
+		if delegatedStartupCanceledLocked(stream, pending.ProviderPass) {
+			stream.mu.Unlock()
+			coordinator.startMu.Unlock()
+			return false, fmt.Errorf("delegation aggregate startup canceled for provider pass %d: %w", pending.ProviderPass, errProviderLoopInterrupted)
+		}
+		stream.PendingExecs[pending.ExecID] = pending
+		stream.UpdatedAt = time.Now().UTC()
+		stream.mu.Unlock()
+		_, err := coordinator.supervisor.Start(stream, pending, base, workers, config)
+		coordinator.startMu.Unlock()
+		if err != nil {
+			coordinator.CancelAggregate(pending.ExecID)
+			markExecCompleted(stream, pending)
+			return false, err
+		}
+		return true, nil
+	}
+
 	aggregateID := strings.TrimSpace(pending.ExecID)
 	ctx, cancel := context.WithCancel(context.Background())
 	aggregate := &delegatedAggregate{
@@ -324,24 +354,6 @@ func (coordinator *multitaskDelegationCoordinator) Start(stream *ActiveStream, p
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
 	coordinator.startMu.Unlock()
-
-	if useSupervision, supervisionErr := coordinator.shouldUseSupervision(base, config); supervisionErr != nil {
-		coordinator.CancelAggregate(pending.ExecID)
-		markExecCompleted(stream, pending)
-		return false, supervisionErr
-	} else if useSupervision {
-		if coordinator.supervisor == nil {
-			coordinator.CancelAggregate(pending.ExecID)
-			markExecCompleted(stream, pending)
-			return false, fmt.Errorf("supervisor coordinator is unavailable")
-		}
-		if _, err := coordinator.supervisor.Start(stream, pending, base, workers, config); err != nil {
-			coordinator.CancelAggregate(pending.ExecID)
-			markExecCompleted(stream, pending)
-			return false, err
-		}
-		return true, nil
-	}
 
 	for _, worker := range workers {
 		stream.mu.Lock()

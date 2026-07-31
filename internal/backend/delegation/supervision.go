@@ -45,6 +45,10 @@ const (
 	SupervisionIssueMissingEvidence SupervisionIssueCode = "missing_evidence"
 	SupervisionIssueTimeout         SupervisionIssueCode = "timeout"
 	SupervisionIssueModelFailure    SupervisionIssueCode = "model_failure"
+	SupervisionIssueReviewFailure   SupervisionIssueCode = "review_failure"
+	SupervisionIssueCorrectionLimit SupervisionIssueCode = "correction_limit"
+	SupervisionIssueRetryLimit      SupervisionIssueCode = "retry_limit"
+	SupervisionIssueRoundLimit      SupervisionIssueCode = "round_limit"
 )
 
 const (
@@ -360,6 +364,14 @@ func normalizeSupervisionIssueCode(value string) SupervisionIssueCode {
 		return SupervisionIssueTimeout
 	case string(SupervisionIssueModelFailure):
 		return SupervisionIssueModelFailure
+	case string(SupervisionIssueReviewFailure):
+		return SupervisionIssueReviewFailure
+	case string(SupervisionIssueCorrectionLimit):
+		return SupervisionIssueCorrectionLimit
+	case string(SupervisionIssueRetryLimit):
+		return SupervisionIssueRetryLimit
+	case string(SupervisionIssueRoundLimit):
+		return SupervisionIssueRoundLimit
 	default:
 		return ""
 	}

@@ -3,6 +3,7 @@ package forwarder
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync/atomic"
@@ -18,7 +19,30 @@ const (
 	supervisorMaxDecisionBytes      = 16 * 1024
 	supervisorMaxCorrectionBytes    = 4 * 1024
 	supervisorReviewMaxOutputTokens = 2048
+	supervisorMaxErrorBytes         = 512
 )
+
+var errSupervisorUnavailable = errors.New("supervisor provider is unavailable")
+
+type supervisorReviewErrorKind string
+
+const (
+	supervisorReviewErrorUnavailable supervisorReviewErrorKind = "unavailable"
+	supervisorReviewErrorRejected    supervisorReviewErrorKind = "rejected"
+	supervisorReviewErrorFailed      supervisorReviewErrorKind = "failed"
+)
+
+type supervisorReviewError struct {
+	kind    supervisorReviewErrorKind
+	message string
+}
+
+func (err *supervisorReviewError) Error() string {
+	if err == nil {
+		return ""
+	}
+	return strings.TrimSpace(err.message)
+}
 
 type supervisorProviderAdapter struct {
 	provider  ProviderGateway
@@ -59,11 +83,11 @@ func newSupervisorProviderAdapter(service *Service) *supervisorProviderAdapter {
 
 func (adapter *supervisorProviderAdapter) Review(ctx context.Context, input supervisorReviewInput) (delegation.SupervisionDecision, error) {
 	if adapter == nil || adapter.provider == nil {
-		return delegation.SupervisionDecision{}, fmt.Errorf("supervisor provider is unavailable")
+		return delegation.SupervisionDecision{}, &supervisorReviewError{kind: supervisorReviewErrorUnavailable, message: boundedSupervisorError(errSupervisorUnavailable)}
 	}
 	modelID := strings.TrimSpace(input.ModelID)
 	if modelID == "" {
-		return delegation.SupervisionDecision{}, fmt.Errorf("supervisor model is required")
+		return delegation.SupervisionDecision{}, &supervisorReviewError{kind: supervisorReviewErrorUnavailable, message: boundedSupervisorError(fmt.Errorf("supervisor model is required"))}
 	}
 	if ctx == nil {
 		ctx = context.Background()
@@ -116,11 +140,14 @@ func (adapter *supervisorProviderAdapter) Review(ctx context.Context, input supe
 		return nil
 	})
 	if err != nil {
-		return delegation.SupervisionDecision{}, err
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return delegation.SupervisionDecision{}, err
+		}
+		return delegation.SupervisionDecision{}, &supervisorReviewError{kind: supervisorReviewErrorFailed, message: boundedSupervisorError(err)}
 	}
-	decision, decodeErr := decodeSupervisorDecision(textBuilder.String())
+	decision, decodeErr := decodeSupervisorDecision(textBuilder.String(), input.AllowedActions)
 	if decodeErr != nil {
-		return delegation.SupervisionDecision{}, decodeErr
+		return delegation.SupervisionDecision{}, &supervisorReviewError{kind: supervisorReviewErrorRejected, message: boundedSupervisorError(decodeErr)}
 	}
 	decision.Round = input.Contract.Round
 	decision.Step = input.Checkpoint.Step
@@ -153,10 +180,19 @@ func buildSupervisorReviewPrompt(input supervisorReviewInput) string {
 			issueSummary = code + ": " + issueSummary
 		}
 	}
+	allowed := make([]string, 0, len(input.AllowedActions))
+	for _, item := range input.AllowedActions {
+		if value := strings.TrimSpace(string(item)); value != "" {
+			allowed = append(allowed, value)
+		}
+	}
+	if len(allowed) == 0 {
+		allowed = append(allowed, string(delegation.SupervisionDecisionAccept))
+	}
 	outputSummary := truncateProjectedReplayText("Supervisor", strings.TrimSpace(input.Result.Output), 3072)
 	errorSummary := truncateProjectedReplayText("Supervisor error", strings.TrimSpace(input.Snapshot.Error), 2048)
 	return fmt.Sprintf(
-		"Aggregate ID: %s\nTask ID: %s\nParent exec ID: %s\nProvider pass: %d\nWorker model: %s\nWorker group: %s\nWorker status: %s\nRound: %d\nGoal: %s\nScope: %s\nRole: %s\nExpected output: %s\nDone criteria: %s\nCheckpoint phase: %s\nCheckpoint progress: %s\nCheckpoint blocker: %s\nRecent tools: %s\nChanged files: %s\nDetected issue: %s\nWorker output summary:\n%s\nWorker error summary:\n%s\nDecide whether to accept, continue, correct, retry, reassign, escalate, or circuit_open.",
+		"Aggregate ID: %s\nTask ID: %s\nParent exec ID: %s\nProvider pass: %d\nWorker model: %s\nWorker group: %s\nWorker status: %s\nRound: %d\nGoal: %s\nScope: %s\nRole: %s\nExpected output: %s\nDone criteria: %s\nCheckpoint phase: %s\nCheckpoint progress: %s\nCheckpoint blocker: %s\nRecent tools: %s\nChanged files: %s\nDetected issue: %s\nWorker output summary:\n%s\nWorker error summary:\n%s\nAllowed decisions: %s.",
 		strings.TrimSpace(input.AggregateID),
 		strings.TrimSpace(input.TaskID),
 		strings.TrimSpace(input.ParentExecID),
@@ -178,10 +214,11 @@ func buildSupervisorReviewPrompt(input supervisorReviewInput) string {
 		issueSummary,
 		outputSummary,
 		errorSummary,
+		strings.Join(allowed, ", "),
 	)
 }
 
-func decodeSupervisorDecision(raw string) (delegation.SupervisionDecision, error) {
+func decodeSupervisorDecision(raw string, allowed []delegation.SupervisionDecisionKind) (delegation.SupervisionDecision, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return delegation.SupervisionDecision{}, fmt.Errorf("supervisor returned empty output")
@@ -212,6 +249,9 @@ func decodeSupervisorDecision(raw string) (delegation.SupervisionDecision, error
 	decision = normalizeDelegationDecision(decision)
 	if decision.Kind == "" {
 		return delegation.SupervisionDecision{}, fmt.Errorf("supervisor decision kind is invalid")
+	}
+	if !supervisionActionAllowed(decision.Kind, allowed) {
+		return delegation.SupervisionDecision{}, fmt.Errorf("supervisor decision kind %q is not allowed", decision.Kind)
 	}
 	if decision.Reason == "" {
 		return delegation.SupervisionDecision{}, fmt.Errorf("supervisor decision reason is required")
@@ -251,4 +291,26 @@ func delegationCheckpointClone(checkpoint delegation.WorkerCheckpoint) delegatio
 	cloned.RecentToolNames = append([]string(nil), checkpoint.RecentToolNames...)
 	cloned.ChangedFileSummaries = append([]string(nil), checkpoint.ChangedFileSummaries...)
 	return cloned
+}
+
+func supervisionActionAllowed(kind delegation.SupervisionDecisionKind, allowed []delegation.SupervisionDecisionKind) bool {
+	if kind == "" {
+		return false
+	}
+	if len(allowed) == 0 {
+		return true
+	}
+	for _, candidate := range allowed {
+		if strings.TrimSpace(string(candidate)) == strings.TrimSpace(string(kind)) {
+			return true
+		}
+	}
+	return false
+}
+
+func boundedSupervisorError(err error) string {
+	if err == nil {
+		return ""
+	}
+	return truncateProjectedReplayText("Supervisor review error", strings.TrimSpace(err.Error()), supervisorMaxErrorBytes)
 }

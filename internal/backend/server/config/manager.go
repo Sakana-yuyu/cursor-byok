@@ -97,10 +97,20 @@ func (manager *Manager) DelegationRuntimeConfig() delegation.RuntimeConfig {
 	config := manager.Current()
 	current := config.Delegation
 	result := delegation.RuntimeConfig{
-		Enabled:        current.Enabled,
-		MaxConcurrency: current.MaxConcurrency,
-		Groups:         make([]delegation.RuntimeModelGroup, 0, len(current.Groups)),
-		ModelNames:     make(map[string]string),
+		Enabled:            current.Enabled,
+		MaxConcurrency:     current.MaxConcurrency,
+		Groups:             make([]delegation.RuntimeModelGroup, 0, len(current.Groups)),
+		ModelNames:         make(map[string]string),
+		SupervisionEnabled: current.Supervision.Enabled,
+		SupervisorModelID:  strings.TrimSpace(current.Supervision.SupervisorModelID),
+		ReviewerModelID:    strings.TrimSpace(current.Supervision.ReviewerModelID),
+		WorkerGroupID:      strings.TrimSpace(current.Supervision.WorkerGroupID),
+		MaxCorrections:     current.Supervision.MaxCorrections,
+		MaxRetries:         current.Supervision.MaxRetries,
+		MaxRounds:          current.Supervision.MaxRounds,
+		AllowReassign:      current.Supervision.AllowReassign,
+		AllowEscalate:      current.Supervision.AllowEscalate,
+		StrictUnavailable:  current.Supervision.StrictUnavailable,
 	}
 	for _, adapter := range config.ModelAdapters {
 		adapterID := strings.TrimSpace(adapter.ID)
