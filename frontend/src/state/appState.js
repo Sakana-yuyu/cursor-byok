@@ -1726,7 +1726,7 @@ function persistStatsOverlayPreferences(next) {
 }
 
 export function getStatsOverlayPreferences() {
-  // 同步读取：调用方（SettingsDrawer/StatsOverlay 的 onMounted）均未 await。
+  // 同步读取：StatsOverlay 的 onMounted 调用方未 await。
   const stored = loadStatsOverlayPreferences();
   appState.statsOverlayPreferences = stored;
   return stored;
