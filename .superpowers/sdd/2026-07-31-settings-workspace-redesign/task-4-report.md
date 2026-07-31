@@ -38,6 +38,16 @@
 - Immediate controls (switches, selects, template toggles) save through the same queue immediately.
 - Explicit refresh first flushes pending autosaves, then refreshes the catalog, and falls back to single-prompt refresh on failure while keeping errors inline.
 
+## Review Fixes
+
+- Prompt refresh now disables prompt editing, flushes the debounce timer, and waits for the full serialized save tail before starting either refresh API call.
+- Refresh advances the prompt revision before applying refreshed state, and save responses remain revision-gated, so an older save cannot overwrite a newer refresh result.
+- Prompt save failures now retain the exact failed payload and install a real inline retry callback that replays it through the shared autosave coordinator.
+- Immediate controls and template toggles keep their intended draft visible only alongside an explicit save-failed state and retry; newer edits invalidate stale failure callbacks.
+- Save failures continue to throw through `autosave.run` / scheduled callbacks so the page header remains in the failed state until the prompt save succeeds.
+- Skills/MCP refresh now runs inside the same serialized mutation queue as config saves, while row and scan switches are disabled for the explicit refresh window. Pending optimistic changes therefore settle before the refreshed snapshot is applied.
+- Skills/MCP tabs now use stable tab and panel IDs with `aria-controls` and `aria-labelledby` wiring.
+
 ## Generated Scanner Output Handling
 
 - Ran `npm --prefix frontend run build`, which also ran the static i18n scanner.

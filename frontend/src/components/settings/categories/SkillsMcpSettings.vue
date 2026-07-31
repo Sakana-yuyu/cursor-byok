@@ -34,6 +34,8 @@ const STATUS_FILTER_OPTIONS = [
 ];
 
 const WORKSPACE_ROOT = "";
+const TAB_ID_PREFIX = "skills-mcp-tab";
+const TAB_PANEL_ID_PREFIX = "skills-mcp-panel";
 
 const snapshotState = reactive({
   loaded: false,
@@ -76,6 +78,14 @@ function setTabRef(element, index) {
 
 function focusTab(index) {
   tabRefs.value[index]?.focus();
+}
+
+function tabID(tabID) {
+  return `${TAB_ID_PREFIX}-${tabID}`;
+}
+
+function tabPanelID(tabID) {
+  return `${TAB_PANEL_ID_PREFIX}-${tabID}`;
 }
 
 function handleTabKeydown(event, index) {
@@ -177,10 +187,17 @@ async function loadSnapshot({ refresh = false } = {}) {
   }
 
   try {
-    const snapshot = refresh
-      ? await refreshSkillsMCPScan(WORKSPACE_ROOT)
-      : await getSkillsMCPScanSnapshot(WORKSPACE_ROOT);
-    applySnapshot(snapshot);
+    const load = async () => {
+      const snapshot = refresh
+        ? await refreshSkillsMCPScan(WORKSPACE_ROOT)
+        : await getSkillsMCPScanSnapshot(WORKSPACE_ROOT);
+      applySnapshot(snapshot);
+    };
+    if (refresh) {
+      await runConfigMutation(load);
+    } else {
+      await load();
+    }
     if (refresh) {
       message.success("已重新扫描技能与 MCP 配置");
     }
@@ -380,17 +397,20 @@ onMounted(() => {
             <div
               class="inline-flex rounded-[8px] border border-[#343434] bg-[#202020] p-1"
               role="tablist"
+              aria-orientation="horizontal"
               aria-label="Skills 与 MCP 标签"
             >
               <button
                 v-for="(tab, index) in TAB_OPTIONS"
                 :key="tab.id"
                 :ref="(element) => setTabRef(element, index)"
+                :id="tabID(tab.id)"
                 type="button"
                 role="tab"
                 class="min-w-[88px] rounded-[6px] px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35"
                 :class="state.activeTab === tab.id ? 'bg-[#10AD5D]/15 text-[#8ddcb3]' : 'text-[#a3a3a3] hover:text-white'"
                 :aria-selected="state.activeTab === tab.id"
+                :aria-controls="tabPanelID(tab.id)"
                 :tabindex="state.activeTab === tab.id ? 0 : -1"
                 @click="state.activeTab = tab.id"
                 @keydown="handleTabKeydown($event, index)"
@@ -408,7 +428,7 @@ onMounted(() => {
                   disabled-text="已停用"
                   :enabled="state.enabled"
                   :busy="scanEnabledState.busy"
-                  :disabled="scanEnabledState.busy"
+                  :disabled="scanEnabledState.busy || snapshotState.refreshing"
                   aria-label="启用扫描"
                   @change="handleScanEnabledChange"
                 />
@@ -493,8 +513,9 @@ onMounted(() => {
 
           <div
             v-else-if="state.activeTab === 'skills'"
-            id="skills-tab-panel"
+            :id="tabPanelID('skills')"
             role="tabpanel"
+            :aria-labelledby="tabID('skills')"
             tabindex="0"
             class="divide-y divide-[#343434]"
           >
@@ -542,7 +563,7 @@ onMounted(() => {
                   label=""
                   :enabled="isSkillEnabled(skill.name)"
                   :busy="ensureSkillState(normalizeConfigKey(skill.name)).busy"
-                  :disabled="ensureSkillState(normalizeConfigKey(skill.name)).busy"
+                  :disabled="ensureSkillState(normalizeConfigKey(skill.name)).busy || snapshotState.refreshing"
                   :aria-label="`切换技能 ${skill.name}`"
                   @change="(value) => handleSkillToggle(skill, value)"
                 />
@@ -552,8 +573,9 @@ onMounted(() => {
 
           <div
             v-else
-            id="mcp-tab-panel"
+            :id="tabPanelID('mcp')"
             role="tabpanel"
+            :aria-labelledby="tabID('mcp')"
             tabindex="0"
             class="divide-y divide-[#343434]"
           >
@@ -605,7 +627,7 @@ onMounted(() => {
                   label=""
                   :enabled="isMcpEnabled(server.identifier || server.name)"
                   :busy="ensureMcpState(normalizeConfigKey(server.identifier || server.name)).busy"
-                  :disabled="ensureMcpState(normalizeConfigKey(server.identifier || server.name)).busy"
+                  :disabled="ensureMcpState(normalizeConfigKey(server.identifier || server.name)).busy || snapshotState.refreshing"
                   :aria-label="`切换 MCP ${server.name || server.identifier}`"
                   @change="(value) => handleMcpToggle(server, value)"
                 />
