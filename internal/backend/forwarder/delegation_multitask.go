@@ -44,15 +44,22 @@ type delegatedAggregateSnapshot struct {
 }
 
 type delegatedWorkerResult struct {
-	TaskID        string                `json:"task_id"`
-	ModelID       string                `json:"model_id"`
-	ModelGroupID  string                `json:"model_group_id"`
-	ExecutionMode string                `json:"execution_mode"`
-	Status        delegation.TaskStatus `json:"status"`
-	DurationMS    int64                 `json:"duration_ms"`
-	Output        string                `json:"output,omitempty"`
-	Error         string                `json:"error,omitempty"`
-	ToolCallCount int                   `json:"tool_call_count"`
+	TaskID               string                `json:"task_id"`
+	ModelID              string                `json:"model_id"`
+	ModelGroupID         string                `json:"model_group_id"`
+	ExecutionMode        string                `json:"execution_mode"`
+	Status               delegation.TaskStatus `json:"status"`
+	DurationMS           int64                 `json:"duration_ms"`
+	Output               string                `json:"output,omitempty"`
+	Error                string                `json:"error,omitempty"`
+	ToolCallCount        int                   `json:"tool_call_count"`
+	SupervisionStatus    string                `json:"supervision_status,omitempty"`
+	SupervisionRound     int                   `json:"supervision_round,omitempty"`
+	CorrectionCount      int                   `json:"correction_count,omitempty"`
+	RetryCount           int                   `json:"retry_count,omitempty"`
+	ReassignCount        int                   `json:"reassign_count,omitempty"`
+	Escalated            bool                  `json:"escalated,omitempty"`
+	SupervisionIssueCode string                `json:"supervision_issue_code,omitempty"`
 }
 
 type delegatedAggregateResult struct {
@@ -68,6 +75,7 @@ type multitaskDelegationCoordinator struct {
 	service        *Service
 	configProvider delegation.RuntimeConfigProvider
 	scheduler      *delegation.Scheduler
+	supervisor     *SupervisorCoordinator
 	maxConcurrency int
 
 	mu         sync.RWMutex
@@ -80,9 +88,9 @@ func newMultitaskDelegationCoordinator(service *Service, configProvider delegati
 	if service == nil || service.cursorDelegation == nil || service.localDelegation == nil {
 		return nil
 	}
-	config := delegation.RuntimeConfig{MaxConcurrency: delegation.DefaultMaxConcurrency}
+	config := delegation.NormalizeRuntimeConfig(delegation.RuntimeConfig{MaxConcurrency: delegation.DefaultMaxConcurrency})
 	if configProvider != nil {
-		config = configProvider.DelegationRuntimeConfig()
+		config = delegation.NormalizeRuntimeConfig(configProvider.DelegationRuntimeConfig())
 	}
 	coordinator := &multitaskDelegationCoordinator{
 		service:        service,
@@ -91,6 +99,7 @@ func newMultitaskDelegationCoordinator(service *Service, configProvider delegati
 	}
 	coordinator.scheduler = delegation.NewScheduler(delegation.Config{MaxConcurrency: config.MaxConcurrency}, coordinator.executeWorker)
 	coordinator.maxConcurrency = normalizedDelegationConcurrency(config.MaxConcurrency)
+	coordinator.supervisor = newSupervisorCoordinator(service, coordinator.scheduler)
 	return coordinator
 }
 
@@ -203,6 +212,9 @@ func (coordinator *multitaskDelegationCoordinator) Close() {
 	for _, aggregate := range aggregates {
 		aggregate.cancelTasks()
 	}
+	if coordinator.supervisor != nil {
+		coordinator.supervisor.Close()
+	}
 	if coordinator.scheduler != nil {
 		coordinator.scheduler.Close()
 	}
@@ -210,9 +222,9 @@ func (coordinator *multitaskDelegationCoordinator) Close() {
 
 func (coordinator *multitaskDelegationCoordinator) runtimeConfig() delegation.RuntimeConfig {
 	if coordinator == nil || coordinator.configProvider == nil {
-		return delegation.RuntimeConfig{}
+		return delegation.NormalizeRuntimeConfig(delegation.RuntimeConfig{})
 	}
-	return coordinator.configProvider.DelegationRuntimeConfig()
+	return delegation.NormalizeRuntimeConfig(coordinator.configProvider.DelegationRuntimeConfig())
 }
 
 func (coordinator *multitaskDelegationCoordinator) enabledWorkers(base delegation.TaskRequest, config delegation.RuntimeConfig) []delegation.TaskRequest {
@@ -313,6 +325,24 @@ func (coordinator *multitaskDelegationCoordinator) Start(stream *ActiveStream, p
 	stream.mu.Unlock()
 	coordinator.startMu.Unlock()
 
+	if useSupervision, supervisionErr := coordinator.shouldUseSupervision(base, config); supervisionErr != nil {
+		coordinator.CancelAggregate(pending.ExecID)
+		markExecCompleted(stream, pending)
+		return false, supervisionErr
+	} else if useSupervision {
+		if coordinator.supervisor == nil {
+			coordinator.CancelAggregate(pending.ExecID)
+			markExecCompleted(stream, pending)
+			return false, fmt.Errorf("supervisor coordinator is unavailable")
+		}
+		if _, err := coordinator.supervisor.Start(stream, pending, base, workers, config); err != nil {
+			coordinator.CancelAggregate(pending.ExecID)
+			markExecCompleted(stream, pending)
+			return false, err
+		}
+		return true, nil
+	}
+
 	for _, worker := range workers {
 		stream.mu.Lock()
 		if delegatedStartupCanceledLocked(stream, pending.ProviderPass) {
@@ -341,13 +371,18 @@ func (coordinator *multitaskDelegationCoordinator) ensureScheduler(maxConcurrenc
 	if coordinator.closed {
 		return
 	}
-	if coordinator.scheduler != nil && (coordinator.maxConcurrency == normalized || len(coordinator.aggregates) > 0) {
+	activeAggregates := len(coordinator.aggregates)
+	if coordinator.supervisor != nil {
+		activeAggregates += coordinator.supervisor.ActiveCount()
+	}
+	if coordinator.scheduler != nil && (coordinator.maxConcurrency == normalized || activeAggregates > 0) {
 		return
 	}
 	if coordinator.scheduler != nil {
 		coordinator.scheduler.Close()
 	}
 	coordinator.scheduler = delegation.NewScheduler(delegation.Config{MaxConcurrency: normalized}, coordinator.executeWorker)
+	coordinator.supervisor = newSupervisorCoordinator(coordinator.service, coordinator.scheduler)
 	coordinator.maxConcurrency = normalized
 }
 
@@ -479,9 +514,15 @@ func (coordinator *multitaskDelegationCoordinator) CancelAggregate(aggregateID s
 	aggregate := coordinator.aggregates[strings.TrimSpace(aggregateID)]
 	coordinator.mu.RUnlock()
 	if aggregate == nil {
+		if coordinator.supervisor != nil {
+			coordinator.supervisor.Cancel(aggregateID)
+		}
 		return
 	}
 	aggregate.cancelTasks()
+	if coordinator.supervisor != nil {
+		coordinator.supervisor.Cancel(aggregateID)
+	}
 }
 
 func (coordinator *multitaskDelegationCoordinator) CancelStream(stream *ActiveStream) {
@@ -512,6 +553,30 @@ func (coordinator *multitaskDelegationCoordinator) CancelStream(stream *ActiveSt
 	for _, execID := range execIDs {
 		coordinator.CancelAggregate(execID)
 	}
+}
+
+func (coordinator *multitaskDelegationCoordinator) shouldUseSupervision(base delegation.TaskRequest, config delegation.RuntimeConfig) (bool, error) {
+	if coordinator == nil {
+		return false, nil
+	}
+	config = delegation.NormalizeRuntimeConfig(config)
+	if !config.Enabled || !config.SupervisionEnabled {
+		return false, nil
+	}
+	modelID := resolveSupervisorModelID(config, base)
+	if modelID == "" {
+		if config.StrictUnavailable {
+			return false, fmt.Errorf("delegation supervision requires a supervisor model")
+		}
+		return false, nil
+	}
+	if coordinator.supervisor == nil || coordinator.service == nil || coordinator.service.provider == nil {
+		if config.StrictUnavailable {
+			return false, fmt.Errorf("delegation supervision is unavailable")
+		}
+		return false, nil
+	}
+	return true, nil
 }
 
 func delegatedStartupCanceledLocked(stream *ActiveStream, providerPass int) bool {
