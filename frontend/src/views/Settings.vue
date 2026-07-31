@@ -32,7 +32,7 @@ watch(selectedCategory, (value) => {
 
 const categoryContent = {
   general: {
-    title: "常规",
+    title: "通用",
     description: "工作区基础与常用偏好已经迁入独立页面。",
     sections: [
       {
@@ -55,7 +55,7 @@ const categoryContent = {
     ],
   },
   "cursor-service": {
-    title: "Cursor 服务",
+    title: "Cursor 与服务",
     description: "服务路由与启动相关设置会在后续任务中迁移到这里。",
     sections: [
       {
@@ -89,7 +89,7 @@ const categoryContent = {
     ],
   },
   delegation: {
-    title: "委托",
+    title: "模型与委派",
     description: "委托设置和运行时面板将拆成更清晰的工作区内容。",
     sections: [
       {
@@ -106,7 +106,7 @@ const categoryContent = {
     ],
   },
   "skills-mcp": {
-    title: "技能与 MCP",
+    title: "Skills 与 MCP",
     description: "跨工具扫描和开关管理将在这里收拢。",
     sections: [
       {
@@ -185,7 +185,7 @@ function handleBack() {
 <template>
   <div class="flex h-full min-h-0 flex-col overflow-hidden bg-[#202020] text-[#e5e5e5]">
     <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
-      <div class="mx-auto flex min-h-full w-full max-w-[1080px] gap-8 px-4 pb-8 pt-5 sm:px-6">
+      <div class="mx-auto flex min-h-full w-full max-w-[1080px] flex-col gap-5 px-4 pb-8 pt-5 sm:flex-row sm:gap-8 sm:px-6">
         <SettingsSidebar
           v-model="selectedCategory"
           :categories="SETTINGS_CATEGORIES"

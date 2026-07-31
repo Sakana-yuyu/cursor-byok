@@ -17,7 +17,7 @@ function updateValue(value) {
 </script>
 
 <template>
-  <div class="min-w-0">
+  <div class="w-full min-w-0 sm:w-[192px]">
     <div class="sm:hidden">
       <Select
         :model-value="modelValue"
@@ -28,7 +28,7 @@ function updateValue(value) {
       />
     </div>
 
-    <nav aria-label="设置分类" class="hidden w-[192px] shrink-0 sm:block">
+    <nav aria-label="设置分类" class="hidden w-full shrink-0 sm:block">
       <div class="space-y-1">
         <button
           v-for="category in categories"

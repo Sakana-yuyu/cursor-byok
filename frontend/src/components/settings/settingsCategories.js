@@ -4,13 +4,13 @@ export const SETTINGS_CATEGORIES = [
   {
     id: "general",
     value: "general",
-    label: "常规",
+    label: "通用",
     description: "工作区基础与常用偏好。",
   },
   {
     id: "cursor-service",
     value: "cursor-service",
-    label: "Cursor 服务",
+    label: "Cursor 与服务",
     description: "本地服务与启动相关配置。",
   },
   {
@@ -22,13 +22,13 @@ export const SETTINGS_CATEGORIES = [
   {
     id: "delegation",
     value: "delegation",
-    label: "委托",
+    label: "模型与委派",
     description: "任务委托与运行时面板。",
   },
   {
     id: "skills-mcp",
     value: "skills-mcp",
-    label: "技能与 MCP",
+    label: "Skills 与 MCP",
     description: "跨工具技能和 MCP 扫描。",
   },
   {
