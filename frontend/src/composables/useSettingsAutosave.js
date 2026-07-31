@@ -7,6 +7,7 @@ function createEntry() {
     timerID: null,
     revision: 0,
     lastSave: null,
+    queuedCount: 0,
     pendingCount: 0,
     error: null,
   };
@@ -35,9 +36,17 @@ export function useSettingsAutosave() {
   }
 
   function clearTimer(entry) {
+    let changed = false;
     if (entry.timerID !== null) {
       window.clearTimeout(entry.timerID);
       entry.timerID = null;
+      changed = true;
+    }
+    if (entry.queuedCount > 0) {
+      entry.queuedCount = 0;
+      changed = true;
+    }
+    if (changed) {
       touch();
     }
   }
@@ -76,9 +85,10 @@ export function useSettingsAutosave() {
 
   function schedule(key, save, options = {}) {
     const [normalizedKey, entry] = ensureEntry(key);
+    clearTimer(entry);
     entry.lastSave = save;
     entry.revision += 1;
-    clearTimer(entry);
+    entry.queuedCount = 1;
     touch();
 
     const debounceMs = Number.isFinite(options.debounceMs)
@@ -87,6 +97,7 @@ export function useSettingsAutosave() {
 
     entry.timerID = window.setTimeout(() => {
       entry.timerID = null;
+      entry.queuedCount = 0;
       touch();
       void run(normalizedKey).catch(() => {});
     }, debounceMs);
@@ -139,7 +150,7 @@ export function useSettingsAutosave() {
 
   const status = computed(() => {
     version.value;
-    if (Array.from(entries.values()).some((entry) => entry.pendingCount > 0)) {
+    if (Array.from(entries.values()).some((entry) => entry.queuedCount > 0 || entry.pendingCount > 0)) {
       return "saving";
     }
     if (hasErrors.value) {
