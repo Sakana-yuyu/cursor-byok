@@ -532,6 +532,51 @@ func buildStartedToolCall(invocation runtimecore.ToolInvocation) *agentv1.ToolCa
 				},
 			},
 		}
+	case "CreatePr", "UpdatePr":
+		var args struct {
+			Title        string   `json:"title"`
+			Body         string   `json:"body"`
+			BaseBranch   string   `json:"base_branch"`
+			Draft        bool     `json:"draft"`
+			BranchName   string   `json:"branch_name"`
+			AddLabels    []string `json:"add_labels"`
+			RemoveLabels []string `json:"remove_labels"`
+			RepoURL      string   `json:"repo_url"`
+			PrURL        string   `json:"pr_url"`
+		}
+		_ = json.Unmarshal(invocation.ArgsJSON, &args)
+		prArgs := &agentv1.PrManagementArgs{ToolCallId: invocation.CallID}
+		if strings.TrimSpace(invocation.ToolName) == "CreatePr" {
+			prArgs.Action = &agentv1.PrManagementArgs_CreatePr{
+				CreatePr: &agentv1.CreatePrAction{
+					Title:      strings.TrimSpace(args.Title),
+					Body:       strings.TrimSpace(args.Body),
+					BaseBranch: stringPtr(strings.TrimSpace(args.BaseBranch)),
+					Draft:      boolPtrIfTrue(args.Draft),
+					BranchName: strings.TrimSpace(args.BranchName),
+					AddLabels:  append([]string(nil), args.AddLabels...),
+					RepoUrl:    stringPtr(strings.TrimSpace(args.RepoURL)),
+				},
+			}
+		} else {
+			prArgs.Action = &agentv1.PrManagementArgs_UpdatePr{
+				UpdatePr: &agentv1.UpdatePrAction{
+					PrUrl:        stringPtr(strings.TrimSpace(args.PrURL)),
+					Title:        stringPtr(strings.TrimSpace(args.Title)),
+					Body:         stringPtr(strings.TrimSpace(args.Body)),
+					BaseBranch:   stringPtr(strings.TrimSpace(args.BaseBranch)),
+					BranchName:   stringPtr(strings.TrimSpace(args.BranchName)),
+					AddLabels:    append([]string(nil), args.AddLabels...),
+					RemoveLabels: append([]string(nil), args.RemoveLabels...),
+					RepoUrl:      stringPtr(strings.TrimSpace(args.RepoURL)),
+				},
+			}
+		}
+		return &agentv1.ToolCall{
+			Tool: &agentv1.ToolCall_PrManagementToolCall{
+				PrManagementToolCall: &agentv1.PrManagementToolCall{Args: prArgs},
+			},
+		}
 	default:
 		return nil
 	}
@@ -601,6 +646,23 @@ func stringPtr(value string) *string {
 	}
 	next := strings.TrimSpace(value)
 	return &next
+}
+
+// boolPtrIfTrue 在需要 optional bool 时构造指针值。
+func boolPtrIfTrue(value bool) *bool {
+	if value {
+		return &value
+	}
+	return nil
+}
+
+// stringPtrIfNonEmpty 在需要 optional string 时构造指针值，空串返回 nil。
+func stringPtrIfNonEmpty(value string) *string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	return &value
 }
 
 func literalStringPtr(value string) *string {

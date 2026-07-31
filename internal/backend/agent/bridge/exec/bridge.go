@@ -4,6 +4,7 @@ package execbridge
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -27,6 +28,8 @@ type ExecApplyResult struct {
 	IsTerminal bool
 	// ShellOutputDelta 保存 shell 流输出的增量事件。
 	ShellOutputDelta *agentv1.ShellOutputDeltaUpdate
+	// HookAdditionalContexts 保存客户端在 shell 流开始时带上的 hook 附加上下文。
+	HookAdditionalContexts []*agentv1.HookAdditionalContext
 	// ToolResultPayload 保存可回写给模型的工具结果摘要。
 	ToolResultPayload string
 	// ToolCall 保存可用于发 ToolCallCompletedUpdate 的工具调用对象；当前仅对支持 ToolCall 的执行型工具可用。
@@ -101,6 +104,14 @@ func (bridge *Bridge) OpenExec(openContext OpenExecContext, toolCall runtimecore
 		return bridge.openListMcpResources(toolCall)
 	case "read_mcp_resource":
 		return bridge.openReadMcpResource(toolCall)
+	case "fetch":
+		return bridge.openFetch(toolCall)
+	case "record_screen":
+		return bridge.openRecordScreen(toolCall)
+	case "computer_use":
+		return bridge.openComputerUse(toolCall)
+	case "force_background_subagent":
+		return bridge.openForceBackgroundSubagent(toolCall)
 	default:
 		return nil, runtimecore.PendingExec{}, fmt.Errorf("unsupported exec tool: %s", toolCall.ToolName)
 	}
@@ -202,6 +213,66 @@ func (bridge *Bridge) ApplyExecClientMessage(msg *agentv1.ExecClientMessage, pen
 		result.ToolCall = buildReadMcpResourceCompletedToolCall(pending.ArgsJSON, truncatedResult)
 		result.IsTerminal = true
 		return result, nil
+	case "fetch":
+		if msg.GetFetchResult() == nil {
+			return ExecApplyResult{}, fmt.Errorf("fetch result is required")
+		}
+		result.ToolResultPayload = summarizeFetchResult(msg.GetFetchResult())
+		result.ToolCall = &agentv1.ToolCall{
+			Tool: &agentv1.ToolCall_FetchToolCall{
+				FetchToolCall: &agentv1.FetchToolCall{
+					Args: &agentv1.FetchArgs{
+						ToolCallId: pending.ToolCallID,
+						Url:        readJSONStringArg(pending.ArgsJSON, "url"),
+					},
+					Result: msg.GetFetchResult(),
+				},
+			},
+		}
+		result.IsTerminal = true
+		return result, nil
+	case "record_screen":
+		if msg.GetRecordScreenResult() == nil {
+			return ExecApplyResult{}, fmt.Errorf("record screen result is required")
+		}
+		result.ToolResultPayload = summarizeRecordScreenResult(msg.GetRecordScreenResult())
+		result.ToolCall = &agentv1.ToolCall{
+			Tool: &agentv1.ToolCall_RecordScreenToolCall{
+				RecordScreenToolCall: &agentv1.RecordScreenToolCall{
+					Args: &agentv1.RecordScreenArgs{
+						ToolCallId: pending.ToolCallID,
+						Mode:       recordingModeFromString(readJSONStringArg(pending.ArgsJSON, "mode")),
+					},
+					Result: msg.GetRecordScreenResult(),
+				},
+			},
+		}
+		result.IsTerminal = true
+		return result, nil
+	case "computer_use":
+		if msg.GetComputerUseResult() == nil {
+			return ExecApplyResult{}, fmt.Errorf("computer use result is required")
+		}
+		result.ToolResultPayload = summarizeComputerUseResult(msg.GetComputerUseResult())
+		result.ToolCall = &agentv1.ToolCall{
+			Tool: &agentv1.ToolCall_ComputerUseToolCall{
+				ComputerUseToolCall: &agentv1.ComputerUseToolCall{
+					Args: &agentv1.ComputerUseArgs{
+						ToolCallId: pending.ToolCallID,
+					},
+					Result: msg.GetComputerUseResult(),
+				},
+			},
+		}
+		result.IsTerminal = true
+		return result, nil
+	case "force_background_subagent":
+		if msg.GetForceBackgroundSubagentResult() == nil {
+			return ExecApplyResult{}, fmt.Errorf("force background subagent result is required")
+		}
+		result.ToolResultPayload = summarizeForceBackgroundSubagentResult(msg.GetForceBackgroundSubagentResult())
+		result.IsTerminal = true
+		return result, nil
 	case "subagent":
 		result.ToolResultPayload = summarizeSubagentResult(msg.GetSubagentResult())
 		result.ToolCall = buildTaskCompletedToolCall(pending.ArgsJSON, msg.GetSubagentResult())
@@ -224,15 +295,13 @@ func (bridge *Bridge) ApplyExecClientMessage(msg *agentv1.ExecClientMessage, pen
 		result.ToolResultPayload = summarizeForceBackgroundShellResult(forceResult)
 		result.IsTerminal = true
 		return result, nil
-	case "execute_hook_pre_compact":
+	case "execute_hook_pre_compact", "execute_hook":
 		hookResult := msg.GetExecuteHookResult()
 		if hookResult == nil {
 			return ExecApplyResult{}, fmt.Errorf("execute hook result is required")
 		}
 		result.ExecuteHookResponse = hookResult.GetResponse()
-		if preCompact := hookResult.GetResponse().GetPreCompact(); preCompact != nil {
-			result.ToolResultPayload = strings.TrimSpace(preCompact.GetUserMessage())
-		}
+		result.ToolResultPayload = summarizeExecuteHookResponse(hookResult.GetResponse())
 		result.IsTerminal = true
 		return result, nil
 	case "shell":
@@ -291,8 +360,29 @@ func (bridge *Bridge) ApplyExecClientMessage(msg *agentv1.ExecClientMessage, pen
 			result.ToolCall = buildShellBackgroundedToolCall(pending.ToolCallID, pending.ArgsJSON, event.Backgrounded)
 			result.IsTerminal = true
 			return result, nil
+		case *agentv1.ShellStream_HookContext:
+			// 客户端在 shell 流开始前可能发送 hook 附加上下文事件；
+			// 它只是旁路信息，不影响流式收口，忽略并继续等待后续事件。
+			result.HookAdditionalContexts = append([]*agentv1.HookAdditionalContext(nil), event.HookContext.GetHookAdditionalContexts()...)
+			return result, nil
+		case *agentv1.ShellStream_SandboxUnsupported:
+			// 客户端请求了当前 host 不支持的 sandbox policy，shell 无法执行，按终态收口。
+			reason := strings.TrimSpace(event.SandboxUnsupported.GetReason())
+			policyType := strings.TrimSpace(event.SandboxUnsupported.GetSandboxPolicyType())
+			if reason == "" {
+				reason = "unknown reason"
+			}
+			if policyType == "" {
+				policyType = "unknown"
+			}
+			result.ToolResultPayload = fmt.Sprintf("shell sandbox policy unsupported on this host: %s (policy=%s)", reason, policyType)
+			result.IsTerminal = true
+			return result, nil
 		default:
-			return ExecApplyResult{}, fmt.Errorf("unsupported shell stream event")
+			// 客户端协议可能领先于本仓库 proto（例如未来新增的 shell 流事件）。
+			// 未知事件按非终态忽略，等待后续事件或 watchdog 收口，避免整个请求被打断。
+			log.Printf("exec bridge ignored unsupported shell stream event exec_id=%s tool_call_id=%s", strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID))
+			return result, nil
 		}
 	default:
 		return ExecApplyResult{}, fmt.Errorf("unsupported pending exec kind: %s", pending.ExecKind)
@@ -844,6 +934,151 @@ func (bridge *Bridge) openTask(openContext OpenExecContext, toolCall runtimecore
 		ExecKind:    "subagent",
 		StreamState: "opened",
 		OpenedAt:    now,
+	}, nil
+}
+
+// openFetch 构造 Fetch 对应的执行桥请求。
+func (bridge *Bridge) openFetch(toolCall runtimecore.ToolInvocation) (*agentv1.AgentServerMessage, runtimecore.PendingExec, error) {
+	var args struct {
+		URL string `json:"url"`
+	}
+	if err := json.Unmarshal(toolCall.ArgsJSON, &args); err != nil {
+		return nil, runtimecore.PendingExec{}, fmt.Errorf("decode Fetch args failed: %w", err)
+	}
+	if strings.TrimSpace(args.URL) == "" {
+		return nil, runtimecore.PendingExec{}, fmt.Errorf("Fetch url is required")
+	}
+	messageID := bridge.nextID()
+	execID := fmt.Sprintf("exec-fetch-%d", time.Now().UnixNano())
+	serverMessage := &agentv1.AgentServerMessage{
+		Message: &agentv1.AgentServerMessage_ExecServerMessage{
+			ExecServerMessage: &agentv1.ExecServerMessage{
+				Id:     messageID,
+				ExecId: execID,
+				Message: &agentv1.ExecServerMessage_FetchArgs{
+					FetchArgs: &agentv1.FetchArgs{
+						Url:        strings.TrimSpace(args.URL),
+						ToolCallId: toolCall.CallID,
+					},
+				},
+			},
+		},
+	}
+	return serverMessage, runtimecore.PendingExec{
+		MessageID:   messageID,
+		ExecID:      execID,
+		ArgsJSON:    append([]byte(nil), toolCall.ArgsJSON...),
+		ToolCallID:  toolCall.CallID,
+		ExecKind:    "fetch",
+		StreamState: "opened",
+		OpenedAt:    time.Now().UTC(),
+	}, nil
+}
+
+// openRecordScreen 构造 RecordScreen 对应的执行桥请求。
+func (bridge *Bridge) openRecordScreen(toolCall runtimecore.ToolInvocation) (*agentv1.AgentServerMessage, runtimecore.PendingExec, error) {
+	var args struct {
+		Mode           string `json:"mode"`
+		SaveAsFilename string `json:"save_as_filename"`
+		SaveAsFileName string `json:"saveAsFilename"`
+	}
+	if err := json.Unmarshal(toolCall.ArgsJSON, &args); err != nil {
+		return nil, runtimecore.PendingExec{}, fmt.Errorf("decode RecordScreen args failed: %w", err)
+	}
+	mode := recordingModeFromString(firstNonEmptyString(args.Mode, strings.ToLower(strings.ReplaceAll(args.SaveAsFileName, "-", "_"))))
+	messageID := bridge.nextID()
+	execID := fmt.Sprintf("exec-record-screen-%d", time.Now().UnixNano())
+	serverMessage := &agentv1.AgentServerMessage{
+		Message: &agentv1.AgentServerMessage_ExecServerMessage{
+			ExecServerMessage: &agentv1.ExecServerMessage{
+				Id:     messageID,
+				ExecId: execID,
+				Message: &agentv1.ExecServerMessage_RecordScreenArgs{
+					RecordScreenArgs: &agentv1.RecordScreenArgs{
+						Mode:           mode,
+						ToolCallId:     toolCall.CallID,
+						SaveAsFilename: stringPtrIfNonEmpty(firstNonEmptyString(args.SaveAsFilename, args.SaveAsFileName)),
+					},
+				},
+			},
+		},
+	}
+	return serverMessage, runtimecore.PendingExec{
+		MessageID:   messageID,
+		ExecID:      execID,
+		ArgsJSON:    append([]byte(nil), toolCall.ArgsJSON...),
+		ToolCallID:  toolCall.CallID,
+		ExecKind:    "record_screen",
+		StreamState: "opened",
+		OpenedAt:    time.Now().UTC(),
+	}, nil
+}
+
+// openComputerUse 构造 ComputerUse 对应的执行桥请求。
+func (bridge *Bridge) openComputerUse(toolCall runtimecore.ToolInvocation) (*agentv1.AgentServerMessage, runtimecore.PendingExec, error) {
+	actions, err := decodeComputerUseActions(toolCall.ArgsJSON)
+	if err != nil {
+		return nil, runtimecore.PendingExec{}, fmt.Errorf("decode ComputerUse args failed: %w", err)
+	}
+	if len(actions) == 0 {
+		return nil, runtimecore.PendingExec{}, fmt.Errorf("ComputerUse actions are required")
+	}
+	messageID := bridge.nextID()
+	execID := fmt.Sprintf("exec-computer-use-%d", time.Now().UnixNano())
+	serverMessage := &agentv1.AgentServerMessage{
+		Message: &agentv1.AgentServerMessage_ExecServerMessage{
+			ExecServerMessage: &agentv1.ExecServerMessage{
+				Id:     messageID,
+				ExecId: execID,
+				Message: &agentv1.ExecServerMessage_ComputerUseArgs{
+					ComputerUseArgs: &agentv1.ComputerUseArgs{
+						ToolCallId: toolCall.CallID,
+						Actions:    actions,
+					},
+				},
+			},
+		},
+	}
+	return serverMessage, runtimecore.PendingExec{
+		MessageID:   messageID,
+		ExecID:      execID,
+		ArgsJSON:    append([]byte(nil), toolCall.ArgsJSON...),
+		ToolCallID:  toolCall.CallID,
+		ExecKind:    "computer_use",
+		StreamState: "opened",
+		OpenedAt:    time.Now().UTC(),
+	}, nil
+}
+
+// openForceBackgroundSubagent 构造 ForceBackgroundSubagent 对应的执行桥请求。
+func (bridge *Bridge) openForceBackgroundSubagent(toolCall runtimecore.ToolInvocation) (*agentv1.AgentServerMessage, runtimecore.PendingExec, error) {
+	targetToolCallID := strings.TrimSpace(readJSONStringArg(toolCall.ArgsJSON, "tool_call_id", "toolCallId"))
+	if targetToolCallID == "" {
+		return nil, runtimecore.PendingExec{}, fmt.Errorf("ForceBackgroundSubagent tool_call_id is required")
+	}
+	messageID := bridge.nextID()
+	execID := fmt.Sprintf("exec-force-background-subagent-%d", time.Now().UnixNano())
+	serverMessage := &agentv1.AgentServerMessage{
+		Message: &agentv1.AgentServerMessage_ExecServerMessage{
+			ExecServerMessage: &agentv1.ExecServerMessage{
+				Id:     messageID,
+				ExecId: execID,
+				Message: &agentv1.ExecServerMessage_ForceBackgroundSubagentArgs{
+					ForceBackgroundSubagentArgs: &agentv1.ForceBackgroundSubagentArgs{
+						ToolCallId: targetToolCallID,
+					},
+				},
+			},
+		},
+	}
+	return serverMessage, runtimecore.PendingExec{
+		MessageID:   messageID,
+		ExecID:      execID,
+		ArgsJSON:    append([]byte(nil), toolCall.ArgsJSON...),
+		ToolCallID:  toolCall.CallID,
+		ExecKind:    "force_background_subagent",
+		StreamState: "opened",
+		OpenedAt:    time.Now().UTC(),
 	}, nil
 }
 
@@ -3052,6 +3287,353 @@ func uint64Ptr(value uint64) *uint64 {
 // shellAbortReasonPtr 在需要 optional ShellAbortReason 时构造指针值。
 func shellAbortReasonPtr(value agentv1.ShellAbortReason) *agentv1.ShellAbortReason {
 	return &value
+}
+
+// readJSONStringArg 从工具 JSON 参数中读取字符串参数。
+func readJSONStringArg(raw []byte, keys ...string) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	args, err := decodeArgsMap(raw)
+	if err != nil {
+		return ""
+	}
+	return readStringArg(args, keys...)
+}
+
+// summarizeExecuteHookResponse 提取各类 hook 响应对模型的可见文本。
+func summarizeExecuteHookResponse(response *agentv1.ExecuteHookResponse) string {
+	if response == nil {
+		return ""
+	}
+	switch item := response.GetResponse().(type) {
+	case *agentv1.ExecuteHookResponse_PreCompact:
+		return strings.TrimSpace(item.PreCompact.GetUserMessage())
+	case *agentv1.ExecuteHookResponse_PreToolUse:
+		pre := item.PreToolUse
+		parts := make([]string, 0, 3)
+		if permission := strings.TrimSpace(pre.GetPermission()); permission != "" {
+			parts = append(parts, "permission: "+permission)
+		}
+		if message := strings.TrimSpace(pre.GetUserMessage()); message != "" {
+			parts = append(parts, "message: "+message)
+		}
+		if message := strings.TrimSpace(pre.GetAgentMessage()); message != "" {
+			parts = append(parts, "agent message: "+message)
+		}
+		if len(parts) == 0 {
+			return ""
+		}
+		return "pre-tool-use hook: " + strings.Join(parts, "; ")
+	case *agentv1.ExecuteHookResponse_SubagentStart:
+		start := item.SubagentStart
+		parts := make([]string, 0, 2)
+		if permission := strings.TrimSpace(start.GetPermission()); permission != "" {
+			parts = append(parts, "permission: "+permission)
+		}
+		if message := strings.TrimSpace(start.GetUserMessage()); message != "" {
+			parts = append(parts, "message: "+message)
+		}
+		if len(parts) == 0 {
+			return ""
+		}
+		return "subagent-start hook: " + strings.Join(parts, "; ")
+	case *agentv1.ExecuteHookResponse_SubagentStop:
+		return "subagent-stop hook: " + strings.TrimSpace(item.SubagentStop.GetFollowupMessage())
+	case *agentv1.ExecuteHookResponse_PostToolUse:
+		return "post-tool-use hook: " + strings.TrimSpace(item.PostToolUse.GetAdditionalContext())
+	case *agentv1.ExecuteHookResponse_PostToolUseFailure:
+		return "post-tool-use-failure hook"
+	default:
+		return ""
+	}
+}
+
+// summarizeFetchResult 生成 Fetch 结果的模型回写摘要。
+func summarizeFetchResult(result *agentv1.FetchResult) string {
+	if result == nil {
+		return ""
+	}
+	switch item := result.GetResult().(type) {
+	case *agentv1.FetchResult_Success:
+		success := item.Success
+		content := truncateReplayTextMiddle("Fetch content", strings.TrimSpace(success.GetContent()), shellReplayStreamLimit)
+		return fmt.Sprintf("fetched %s (status %d, content-type %s):\n%s",
+			strings.TrimSpace(success.GetUrl()), success.GetStatusCode(), strings.TrimSpace(success.GetContentType()), content)
+	case *agentv1.FetchResult_Error:
+		return fmt.Sprintf("fetch failed: %s (url: %s)", strings.TrimSpace(item.Error.GetError()), strings.TrimSpace(item.Error.GetUrl()))
+	default:
+		return "fetch completed with no result"
+	}
+}
+
+// summarizeRecordScreenResult 生成 RecordScreen 结果的模型回写摘要。
+func summarizeRecordScreenResult(result *agentv1.RecordScreenResult) string {
+	if result == nil {
+		return ""
+	}
+	switch item := result.GetResult().(type) {
+	case *agentv1.RecordScreenResult_StartSuccess:
+		return fmt.Sprintf("screen recording started (prior recording cancelled=%t, save_as_filename ignored=%t)",
+			item.StartSuccess.GetWasPriorRecordingCancelled(), item.StartSuccess.GetWasSaveAsFilenameIgnored())
+	case *agentv1.RecordScreenResult_SaveSuccess:
+		msg := fmt.Sprintf("screen recording saved to %s (duration %d ms)", strings.TrimSpace(item.SaveSuccess.GetPath()), item.SaveSuccess.GetRecordingDurationMs())
+		if reason := item.SaveSuccess.GetRequestedFilePathRejectedReason(); reason != agentv1.RequestedFilePathRejectedReason_REQUESTED_FILE_PATH_REJECTED_REASON_UNSPECIFIED {
+			msg += fmt.Sprintf("; requested file path rejected: %s", reason)
+		}
+		return msg
+	case *agentv1.RecordScreenResult_DiscardSuccess:
+		return "screen recording discarded"
+	case *agentv1.RecordScreenResult_Failure:
+		return fmt.Sprintf("screen recording failed: %s", strings.TrimSpace(item.Failure.GetError()))
+	default:
+		return "screen recording completed with no result"
+	}
+}
+
+// summarizeComputerUseResult 生成 ComputerUse 结果的模型回写摘要。
+func summarizeComputerUseResult(result *agentv1.ComputerUseResult) string {
+	if result == nil {
+		return ""
+	}
+	switch item := result.GetResult().(type) {
+	case *agentv1.ComputerUseResult_Success:
+		success := item.Success
+		msg := fmt.Sprintf("computer use completed: %d actions in %d ms", success.GetActionCount(), success.GetDurationMs())
+		if logText := strings.TrimSpace(success.GetLog()); logText != "" {
+			msg += "\nlog: " + logText
+		}
+		if screenshotPath := strings.TrimSpace(success.GetScreenshotPath()); screenshotPath != "" {
+			msg += "\nscreenshot: " + screenshotPath
+		}
+		if strings.TrimSpace(success.GetScreenshot()) != "" {
+			msg += "\nscreenshot captured (inline)"
+		}
+		return msg
+	case *agentv1.ComputerUseResult_Error:
+		failed := item.Error
+		msg := fmt.Sprintf("computer use failed: %s", strings.TrimSpace(failed.GetError()))
+		if logText := strings.TrimSpace(failed.GetLog()); logText != "" {
+			msg += "\nlog: " + logText
+		}
+		return msg
+	default:
+		return "computer use completed with no result"
+	}
+}
+
+// summarizeForceBackgroundSubagentResult 生成 ForceBackgroundSubagent 结果的模型回写摘要。
+func summarizeForceBackgroundSubagentResult(result *agentv1.ForceBackgroundSubagentResult) string {
+	if result == nil {
+		return ""
+	}
+	switch result.GetStatus() {
+	case agentv1.ForceBackgroundSubagentStatus_FORCE_BACKGROUND_SUBAGENT_STATUS_ACCEPTED:
+		return "subagent moved to background"
+	case agentv1.ForceBackgroundSubagentStatus_FORCE_BACKGROUND_SUBAGENT_STATUS_NOT_FOUND:
+		return "force background subagent failed: subagent not found"
+	default:
+		return "force background subagent completed with no result"
+	}
+}
+
+// recordingModeFromString 把模型侧模式名映射为 RecordingMode 枚举。
+func recordingModeFromString(mode string) agentv1.RecordingMode {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "start_recording", "start", "record":
+		return agentv1.RecordingMode_RECORDING_MODE_START_RECORDING
+	case "save_recording", "save", "stop":
+		return agentv1.RecordingMode_RECORDING_MODE_SAVE_RECORDING
+	case "discard_recording", "discard":
+		return agentv1.RecordingMode_RECORDING_MODE_DISCARD_RECORDING
+	default:
+		return agentv1.RecordingMode_RECORDING_MODE_START_RECORDING
+	}
+}
+
+// decodeComputerUseActions 解析 ComputerUse 的模型侧动作参数并映射为协议动作。
+func decodeComputerUseActions(raw []byte) ([]*agentv1.ComputerUseAction, error) {
+	var input struct {
+		Actions []computerUseActionInput `json:"actions"`
+	}
+	if err := json.Unmarshal(raw, &input); err != nil {
+		return nil, err
+	}
+	actions := make([]*agentv1.ComputerUseAction, 0, len(input.Actions))
+	for _, item := range input.Actions {
+		action, err := buildComputerUseAction(item)
+		if err != nil {
+			return nil, err
+		}
+		actions = append(actions, action)
+	}
+	return actions, nil
+}
+
+// computerUseActionInput 是模型侧 ComputerUse 动作的宽松输入格式。
+type computerUseActionInput struct {
+	Type         string            `json:"type"`
+	X            *int32            `json:"x,omitempty"`
+	Y            *int32            `json:"y,omitempty"`
+	Text         string            `json:"text,omitempty"`
+	Key          string            `json:"key,omitempty"`
+	DurationMs   *int32            `json:"duration_ms,omitempty"`
+	Direction    string            `json:"direction,omitempty"`
+	Amount       *int32            `json:"amount,omitempty"`
+	Count        *int32            `json:"count,omitempty"`
+	Button       string            `json:"button,omitempty"`
+	ModifierKeys string            `json:"modifier_keys,omitempty"`
+	Path         []coordinateInput `json:"path,omitempty"`
+}
+
+// coordinateInput 是坐标的宽松输入格式。
+type coordinateInput struct {
+	X int32 `json:"x"`
+	Y int32 `json:"y"`
+}
+
+func buildComputerUseAction(item computerUseActionInput) (*agentv1.ComputerUseAction, error) {
+	switch strings.ToLower(strings.TrimSpace(item.Type)) {
+	case "mouse_move", "move":
+		return &agentv1.ComputerUseAction{
+			Action: &agentv1.ComputerUseAction_MouseMove{
+				MouseMove: &agentv1.MouseMoveAction{Coordinate: computerUseCoordinate(item)},
+			},
+		}, nil
+	case "click":
+		return &agentv1.ComputerUseAction{
+			Action: &agentv1.ComputerUseAction_Click{
+				Click: &agentv1.ClickAction{
+					Coordinate:   computerUseCoordinate(item),
+					Button:       computerUseMouseButton(item.Button),
+					Count:        int32Value(item.Count),
+					ModifierKeys: stringPtrIfNonEmpty(item.ModifierKeys),
+				},
+			},
+		}, nil
+	case "mouse_down", "down":
+		return &agentv1.ComputerUseAction{
+			Action: &agentv1.ComputerUseAction_MouseDown{
+				MouseDown: &agentv1.MouseDownAction{Button: computerUseMouseButton(item.Button)},
+			},
+		}, nil
+	case "mouse_up", "up":
+		return &agentv1.ComputerUseAction{
+			Action: &agentv1.ComputerUseAction_MouseUp{
+				MouseUp: &agentv1.MouseUpAction{Button: computerUseMouseButton(item.Button)},
+			},
+		}, nil
+	case "drag":
+		return &agentv1.ComputerUseAction{
+			Action: &agentv1.ComputerUseAction_Drag{
+				Drag: &agentv1.DragAction{
+					Path:   computerUsePath(item.Path),
+					Button: computerUseMouseButton(item.Button),
+				},
+			},
+		}, nil
+	case "scroll":
+		return &agentv1.ComputerUseAction{
+			Action: &agentv1.ComputerUseAction_Scroll{
+				Scroll: &agentv1.ScrollAction{
+					Coordinate:   computerUseCoordinate(item),
+					Direction:    computerUseScrollDirection(item.Direction),
+					Amount:       int32Value(item.Amount),
+					ModifierKeys: stringPtrIfNonEmpty(item.ModifierKeys),
+				},
+			},
+		}, nil
+	case "type":
+		return &agentv1.ComputerUseAction{
+			Action: &agentv1.ComputerUseAction_Type{
+				Type: &agentv1.TypeAction{Text: item.Text},
+			},
+		}, nil
+	case "key":
+		return &agentv1.ComputerUseAction{
+			Action: &agentv1.ComputerUseAction_Key{
+				Key: &agentv1.KeyAction{
+					Key:            item.Key,
+					HoldDurationMs: item.DurationMs,
+				},
+			},
+		}, nil
+	case "wait":
+		return &agentv1.ComputerUseAction{
+			Action: &agentv1.ComputerUseAction_Wait{
+				Wait: &agentv1.WaitAction{DurationMs: int32Value(item.DurationMs)},
+			},
+		}, nil
+	case "screenshot":
+		return &agentv1.ComputerUseAction{
+			Action: &agentv1.ComputerUseAction_Screenshot{
+				Screenshot: &agentv1.ScreenshotAction{},
+			},
+		}, nil
+	case "cursor_position", "cursor":
+		return &agentv1.ComputerUseAction{
+			Action: &agentv1.ComputerUseAction_CursorPosition{
+				CursorPosition: &agentv1.CursorPositionAction{},
+			},
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported computer use action type: %s", strings.TrimSpace(item.Type))
+	}
+}
+
+func computerUseCoordinate(item computerUseActionInput) *agentv1.Coordinate {
+	if item.X == nil && item.Y == nil {
+		return nil
+	}
+	return &agentv1.Coordinate{X: int32Value(item.X), Y: int32Value(item.Y)}
+}
+
+func computerUsePath(path []coordinateInput) []*agentv1.Coordinate {
+	if len(path) == 0 {
+		return nil
+	}
+	result := make([]*agentv1.Coordinate, 0, len(path))
+	for _, point := range path {
+		result = append(result, &agentv1.Coordinate{X: point.X, Y: point.Y})
+	}
+	return result
+}
+
+func computerUseMouseButton(button string) agentv1.MouseButton {
+	switch strings.ToLower(strings.TrimSpace(button)) {
+	case "right":
+		return agentv1.MouseButton_MOUSE_BUTTON_RIGHT
+	case "middle":
+		return agentv1.MouseButton_MOUSE_BUTTON_MIDDLE
+	case "back":
+		return agentv1.MouseButton_MOUSE_BUTTON_BACK
+	case "forward":
+		return agentv1.MouseButton_MOUSE_BUTTON_FORWARD
+	default:
+		return agentv1.MouseButton_MOUSE_BUTTON_LEFT
+	}
+}
+
+func computerUseScrollDirection(direction string) agentv1.ScrollDirection {
+	switch strings.ToLower(strings.TrimSpace(direction)) {
+	case "up":
+		return agentv1.ScrollDirection_SCROLL_DIRECTION_UP
+	case "down":
+		return agentv1.ScrollDirection_SCROLL_DIRECTION_DOWN
+	case "left":
+		return agentv1.ScrollDirection_SCROLL_DIRECTION_LEFT
+	case "right":
+		return agentv1.ScrollDirection_SCROLL_DIRECTION_RIGHT
+	default:
+		return agentv1.ScrollDirection_SCROLL_DIRECTION_DOWN
+	}
+}
+
+func int32Value(value *int32) int32 {
+	if value == nil {
+		return 0
+	}
+	return *value
 }
 
 // buildStructValueMap 把普通 JSON 对象映射为 protobuf Struct value 映射。

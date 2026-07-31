@@ -1225,6 +1225,17 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 		}
 	}
 	if !result.IsTerminal {
+		if len(result.HookAdditionalContexts) > 0 {
+			if _, err := service.appendConversationEntries(stream, stream.ConversationID, []HistoryEntry{
+				newMetadataEntry(stream.TurnSeq, stream.RequestID, "shell_hook_additional_context", map[string]any{
+					"tool_call_id": strings.TrimSpace(pending.ToolCallID),
+					"exec_id":      strings.TrimSpace(pending.ExecID),
+					"contexts":     hookAdditionalContextsToRecords(result.HookAdditionalContexts),
+				}),
+			}); err != nil {
+				log.Printf("forwarder shell hook context metadata failed request_id=%s tool_call_id=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ToolCallID), err)
+			}
+		}
 		// 心跳续期：子代理仍在活动（发送 delta/progress），重置 watchdog timer。
 		service.rescheduleExecWatchdog(intent.RequestID, pending)
 		return nil
@@ -1467,7 +1478,7 @@ func (service *Service) observeShellStreamClose(stream *ActiveStream, pending ru
 		return
 	}
 	recentState := strings.TrimSpace(current.StreamState)
-	if recentState == "transport_closed" || recentState == "exited" || recentState == "backgrounded" || recentState == "rejected" || recentState == "permission_denied" {
+	if recentState == "transport_closed" || recentState == "exited" || recentState == "backgrounded" || recentState == "rejected" || recentState == "permission_denied" || recentState == "sandbox_unsupported" {
 		return
 	}
 	log.Printf(
@@ -1510,6 +1521,7 @@ func (service *Service) handleMetadataIntent(intent InboundIntent) error {
 	}
 	backgroundShellToolCallID, backgroundShellActionWasNew := observeBackgroundShellAction(stream, intent.ClientMessage)
 	observeBackgroundTaskCompletionAction(stream, intent.ClientMessage)
+	backgroundSubagentToolCallID, backgroundSubagentActionWasNew := observeBackgroundSubagentAction(stream, intent.ClientMessage)
 	if !checkpointConversationInitialized(stream) {
 		if intent.HasExplicitMode {
 			stream.mu.Lock()
@@ -1527,6 +1539,9 @@ func (service *Service) handleMetadataIntent(intent InboundIntent) error {
 	}
 	if backgroundShellToolCallID != "" && backgroundShellActionWasNew {
 		entries = append(entries, newBackgroundShellActionMetadataEntry(stream.TurnSeq, stream.RequestID, backgroundShellToolCallID, backgroundShellActionSourceClient))
+	}
+	if backgroundSubagentToolCallID != "" && backgroundSubagentActionWasNew {
+		entries = append(entries, newBackgroundSubagentActionMetadataEntry(stream.TurnSeq, stream.RequestID, backgroundSubagentToolCallID, backgroundShellActionSourceClient))
 	}
 	entries = append(entries, backgroundTaskCompletionMetadataEntries(stream.TurnSeq, stream.RequestID, intent.ClientMessage)...)
 	if intent.HasExplicitMode {
@@ -2339,6 +2354,13 @@ func (service *Service) applyExecProgress(stream *ActiveStream, pending runtimec
 	case *agentv1.ShellStream_PermissionDenied:
 		current.StreamState = "permission_denied"
 		current.LastShellActivityAt = now
+	case *agentv1.ShellStream_HookContext:
+		// hook 附加上下文出现在 shell 开始阶段，不影响流状态。
+		current.StreamState = "started"
+		current.LastShellActivityAt = now
+	case *agentv1.ShellStream_SandboxUnsupported:
+		current.StreamState = "sandbox_unsupported"
+		current.LastShellActivityAt = now
 	}
 	stream.PendingExecs[pending.ExecID] = current
 	return current
@@ -2892,6 +2914,24 @@ func newMetadataEntry(turnSeq int64, requestID string, eventType string, values 
 		Kind:      "metadata",
 		Payload:   payload,
 	}
+}
+
+// hookAdditionalContextsToRecords 把 hook 附加上下文转换为可序列化的记录列表。
+func hookAdditionalContextsToRecords(contexts []*agentv1.HookAdditionalContext) []map[string]string {
+	if len(contexts) == 0 {
+		return nil
+	}
+	records := make([]map[string]string, 0, len(contexts))
+	for _, item := range contexts {
+		if item == nil {
+			continue
+		}
+		records = append(records, map[string]string{
+			"hook_event_name": strings.TrimSpace(item.GetHookEventName()),
+			"content":         strings.TrimSpace(item.GetContent()),
+		})
+	}
+	return records
 }
 
 // extractUserMessage 从 legacy run_request 中提取用户消息。
