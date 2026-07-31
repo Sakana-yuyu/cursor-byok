@@ -180,6 +180,7 @@ export const OpenMetricsDetailWindow = () => Promise.resolve();
 export const OpenRequestMetricsWindow = () => Promise.resolve();
 export const OpenStatsOverlayWindow = () => Promise.resolve();
 export const UpdateStatsOverlayWindow = (_style, _alwaysOnTop) => Promise.resolve();
+export const SetStatsOverlayAlwaysOnTop = (_alwaysOnTop) => Promise.resolve();
 export const CloseStatsOverlayWindow = () => Promise.resolve();
 export const SetMainWindowCloseAction = () => Promise.resolve();
 export const CloseApplication = () => Promise.resolve();

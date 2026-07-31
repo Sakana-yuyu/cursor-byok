@@ -20,7 +20,7 @@ import {
   openMetricsDetailWindow as openMetricsDetail,
   openRequestMetricsWindow as openRequestMetrics,
   openStatsOverlayWindow,
-  updateStatsOverlayWindow,
+  setStatsOverlayAlwaysOnTop,
   closeStatsOverlayWindow,
   setMainWindowCloseAction,
   closeApplication as closeApplicationNative,
@@ -1255,7 +1255,7 @@ export const appState = reactive({
   // 浮窗偏好是纯前端 UX 状态：localStorage 持久化 + 跨窗口 storage 事件广播。
   // 不进后端 config（后端 config 不含 overlay 字段）。初始给默认值，真实值由
   // getStatsOverlayPreferences() 在首次读取时从 localStorage 填充，避免模块求值顺序依赖。
-  statsOverlayPreferences: { style: "card", alwaysOnTop: true, visible: false, dockLocked: false, closeAction: "tray" },
+  statsOverlayPreferences: { style: "card", alwaysOnTop: true, visible: false, snapCollapse: true, dockLocked: false, closeAction: "tray" },
   turnStaleTimeout: cachedConfig.turnStaleTimeout,
   autoMatchContextWindow: cachedConfig.autoMatchContextWindow,
 
@@ -1646,6 +1646,7 @@ const STATS_OVERLAY_PREFERENCES_KEY = "cursor-byok.stats-overlay.preferences";
 const STATS_OVERLAY_CHANGED_EVENT = "stats-overlay-preferences-changed";
 const STATS_OVERLAY_SHOW_REQUESTED_EVENT = "stats-overlay-show-requested";
 const STATS_OVERLAY_STYLES = new Set(["card", "engine", "orb"]);
+let statsOverlayPreferenceSyncBound = false;
 let statsOverlayShowRequestBound = false;
 
 function normalizeStatsOverlayPreferences(input) {
@@ -1675,6 +1676,21 @@ function loadStatsOverlayPreferences() {
   }
 }
 
+function syncStatsOverlayPreferencesFromStorage() {
+  appState.statsOverlayPreferences = loadStatsOverlayPreferences();
+}
+
+function bindStatsOverlayPreferenceSync() {
+  if (statsOverlayPreferenceSyncBound || typeof window === "undefined") return;
+  window.addEventListener("storage", (event) => {
+    if (event.key === STATS_OVERLAY_PREFERENCES_KEY) syncStatsOverlayPreferencesFromStorage();
+  });
+  window.addEventListener(STATS_OVERLAY_CHANGED_EVENT, syncStatsOverlayPreferencesFromStorage);
+  statsOverlayPreferenceSyncBound = true;
+}
+
+bindStatsOverlayPreferenceSync();
+
 function persistStatsOverlayPreferences(next) {
   const normalized = normalizeStatsOverlayPreferences(next);
   try {
@@ -1696,10 +1712,7 @@ export function getStatsOverlayPreferences() {
 export async function setStatsOverlayPreferences(partial) {
   const next = { ...loadStatsOverlayPreferences(), ...(partial || {}) };
   const persisted = persistStatsOverlayPreferences(next);
-  // 样式/置顶变化需同步到原生窗口尺寸与层级（窗口不存在时后端静默返回）。
-  if (partial && ("style" in partial || "alwaysOnTop" in partial)) {
-    await updateStatsOverlayWindow(persisted.style, persisted.alwaysOnTop);
-  }
+  // 样式尺寸与窗口层级都由浮窗自己的响应式偏好监听同步，避免多个窗口竞争原生状态。
   if (partial && "closeAction" in partial) {
     await setMainWindowCloseAction(persisted.closeAction);
   }
@@ -1719,8 +1732,8 @@ export async function showStatsOverlay(position) {
   // 传入位置参数到后端
   const hasPosition = typeof persisted.x === "number" && typeof persisted.y === "number";
   await openStatsOverlayWindow(persisted.x || 0, persisted.y || 0, hasPosition);
-  // 首次打开后端按 card/置顶创建；按当前偏好对齐一次尺寸与层级。
-  await updateStatsOverlayWindow(persisted.style, persisted.alwaysOnTop);
+  // 尺寸由浮窗挂载后的布局同步；置顶偏好由独立原生调用立即对齐。
+  await setStatsOverlayAlwaysOnTop(persisted.alwaysOnTop);
   return loadStatsOverlayPreferences();
 }
 

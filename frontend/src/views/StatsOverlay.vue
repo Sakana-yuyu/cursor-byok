@@ -1,5 +1,5 @@
 <script setup>
-import { getHomeMetricsSummary, fetchLocalCacheStats, updateStatsOverlayWindow } from "@/services/clientApi";
+import { getHomeMetricsSummary, fetchLocalCacheStats, setStatsOverlayAlwaysOnTop, updateStatsOverlayLayout } from "@/services/clientApi";
 import { getStatsOverlayPreferences, setStatsOverlayPreferences, hideStatsOverlay, closeApplication, appState } from "@/state/appState";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 
@@ -17,14 +17,11 @@ let updatedTimer = null;
 let positionTimer = null;
 let hoverCollapseTimer = null;
 let morphTimer = null;
-let hoverAnchorScreenX = null;
-let hoverAnchorScreenY = null;
 let lastSavedX = null;
 let lastSavedY = null;
 
 const REFRESH_MS = 10000;
 const POSITION_CHECK_MS = 300;       // 轮询提速，响应更灵敏
-const STORAGE_KEY = "cursor-byok.stats-overlay.preferences";
 const SNAP_ENTER_THRESHOLD = 40;     // 进入吸附区的距离（像素）
 const SNAP_LEAVE_THRESHOLD = 80;     // 离开吸附区的距离——比进入阈值大，形成迟滞防抖动
 const HOVER_COLLAPSE_DELAY_MS = 220;  // 给原生窗口完成展开/定位留出时间，避免悬停反馈循环
@@ -34,6 +31,7 @@ const NATIVE_RESIZE_SETTLE_MS = 90;
 
 // snapCollapse 是否启用贴边自动收缩（来自 preferences）
 const snapCollapse = computed(() => preferences.value.snapCollapse !== false);
+const alwaysOnTop = computed(() => preferences.value.alwaysOnTop !== false);
 // dockLocked：锁定为收缩胶囊，鼠标悬停不再展开，且窗口不可拖动。
 // 同时由设置开关和浮窗内锁按钮控制（同一字段）。
 const dockLocked = computed(() => preferences.value.dockLocked === true);
@@ -172,8 +170,6 @@ function checkPosition() {
 // 鼠标进入浮窗
 function handleMouseEnter(event) {
   isHovering.value = true;
-  hoverAnchorScreenX = Number.isFinite(event?.screenX) ? event.screenX : null;
-  hoverAnchorScreenY = Number.isFinite(event?.screenY) ? event.screenY : null;
   clearHoverCollapseTimer();
   // 锁定胶囊时，悬停不展开
   if (dockLocked.value) return;
@@ -182,23 +178,33 @@ function handleMouseEnter(event) {
   }
 }
 
+function pointerIsWithinCurrentTarget(event) {
+  const target = event?.currentTarget;
+  if (!(target instanceof Element)) return false;
+  if (event.relatedTarget instanceof Node && target.contains(event.relatedTarget)) return true;
+
+  const clientX = Number.isFinite(event.screenX) && Number.isFinite(window.screenX)
+    ? event.screenX - window.screenX
+    : event.clientX;
+  const clientY = Number.isFinite(event.screenY) && Number.isFinite(window.screenY)
+    ? event.screenY - window.screenY
+    : event.clientY;
+  if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
+
+  const bounds = target.getBoundingClientRect();
+  return clientX >= bounds.left && clientX < bounds.right
+    && clientY >= bounds.top && clientY < bounds.bottom;
+}
+
 // 鼠标离开浮窗
 function handleMouseLeave(event) {
+  // 原生窗口 resize/reposition 可能合成 mouseleave；用当前窗口位置和当前目标边界重新判定指针是否真的离开。
+  if (pointerIsWithinCurrentTarget(event)) return;
+  isHovering.value = false;
   if (dockLocked.value) {
-    isHovering.value = false;
     return;
   }
   if (snapEdge.value && snapCollapse.value) {
-    // 原生窗口展开/重定位会改变 WebView 视口，可能产生一次伪 mouseleave。
-    // 屏幕坐标不随视口变化，鼠标没有实际移动时保留展开态，避免展开/收缩闪烁。
-    const hasScreenPoint = Number.isFinite(event?.screenX) && Number.isFinite(event?.screenY)
-      && Number.isFinite(hoverAnchorScreenX) && Number.isFinite(hoverAnchorScreenY);
-    if (hasScreenPoint
-      && Math.abs(event.screenX - hoverAnchorScreenX) <= 3
-      && Math.abs(event.screenY - hoverAnchorScreenY) <= 3) {
-      return;
-    }
-    isHovering.value = false;
     clearHoverCollapseTimer();
     hoverCollapseTimer = setTimeout(() => {
       hoverCollapseTimer = null;
@@ -208,7 +214,6 @@ function handleMouseLeave(event) {
     }, HOVER_COLLAPSE_DELAY_MS);
     return;
   }
-  isHovering.value = false;
 }
 
 // syncNativeWindowSize 把当前折叠/贴边/样式状态同步到原生窗口尺寸。
@@ -233,7 +238,7 @@ function syncNativeWindowSize() {
   const screenHeight = Math.round(window.screen.availHeight || window.screen.height || 0);
   // layout|collapsed/expanded|edge|style|x|y|screenLeft|screenTop|screenWidth|screenHeight
   const dsl = `layout|${collapsed}|${edge}|${currentStyle}|${x}|${y}|${screenLeft}|${screenTop}|${screenWidth}|${screenHeight}`;
-  void updateStatsOverlayWindow(dsl, preferences.value.alwaysOnTop !== false);
+  void updateStatsOverlayLayout(dsl);
 }
 
 function formatCompact(value) {
@@ -338,13 +343,6 @@ function syncPreferences() {
   const next = getStatsOverlayPreferences();
   preferences.value = { ...next };
 }
-function onStorage(event) {
-  if (!event || event.key === STORAGE_KEY) syncPreferences();
-}
-function onPreferencesChanged() {
-  syncPreferences();
-}
-
 watch(() => appState.statsOverlayPreferences, (next) => {
   if (next) preferences.value = { ...next };
 }, { deep: true });
@@ -381,6 +379,7 @@ watch(isCollapsed, () => syncNativeWindowSize());
 watch(isMorphing, () => syncNativeWindowSize());
 watch(snapEdge, () => syncNativeWindowSize());
 watch(style, () => syncNativeWindowSize());
+watch(alwaysOnTop, (next) => { void setStatsOverlayAlwaysOnTop(next); }, { flush: "sync" });
 
 onMounted(() => {
   syncPreferences();
@@ -394,8 +393,6 @@ onMounted(() => {
   positionTimer = setInterval(checkPosition, POSITION_CHECK_MS);
   startOrbCycle();
   startPillCycle();
-  window.addEventListener("storage", onStorage);
-  window.addEventListener("stats-overlay-preferences-changed", onPreferencesChanged);
   // 初始同步一次原生窗口尺寸，确保窗口矩形紧贴实际内容
   syncNativeWindowSize();
 });
@@ -406,12 +403,8 @@ onUnmounted(() => {
   if (positionTimer) clearInterval(positionTimer);
   clearHoverCollapseTimer();
   clearMorphTimer();
-  hoverAnchorScreenX = null;
-  hoverAnchorScreenY = null;
   stopOrbCycle();
   stopPillCycle();
-  window.removeEventListener("storage", onStorage);
-  window.removeEventListener("stats-overlay-preferences-changed", onPreferencesChanged);
 });
 </script>
 
