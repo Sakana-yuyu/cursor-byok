@@ -1,30 +1,18 @@
-# v0.0.70 发布说明
+## v0.0.71
 
-## 🐛 修复贴边胶囊被裁剪问题
-
-### 问题
-贴左/右/上/下边时竖向/横向胶囊只显示一半，另一半被裁剪到屏幕边缘外。
-
-### 根因
-两个冲突的定位逻辑：
-- **Go 定位**：左边吸附时窗口 `x = screenLeft`（屏幕边缘）
-- **CSS transform**：左边吸附时 `translateX(-14px)`，将胶囊向屏幕外推 14px
-
-结果：窗口在边缘，CSS 又把内容推出边缘 → 一半被裁剪
+### 新功能
+- **多模型委派与 Multitask**：支持委派模型组、并发调度、任务状态、取消、失败隔离和结构化结果汇总。
+- **Skills 管理**：支持按工作区扫描、稀疏激活、启停、中文简介、manifest 校验和加载诊断。
+- **MCP 运行时**：支持工作区隔离、工具 schema 发现、连接状态、能力健康和统一调用链。
 
 ### 修复
-在 Go 窗口定位时为 CSS transform 预留 14px 偏移空间：
+- **委派生命周期**：修复取消先于启动、终态后启动、晚到结果污染和伪造 Task 错误等并发问题。
+- **浮窗交互**：优化贴边收缩与展开、偏好同步、托盘恢复、置顶状态和鼠标悬浮稳定性。
+- **工具与 Agent 链路**：稳定 provider pass、checkpoint、历史恢复、工具续跑和 Cursor 原生模式衔接。
 
-| 边缘 | 修复前 | 修复后 |
-|---|---|---|
-| 左 | `x = screenLeft` | `x = screenLeft + 14` |
-| 右 | `x = screenRight - width` | `x = screenRight - width - 14` |
-| 上 | `y = screenTop` | `y = screenTop + 14` |
-| 下 | `y = screenBottom - height` | `y = screenBottom - height - 14` |
-
-### 效果
-- 贴边胶囊完整显示，不再被裁剪
-- "轻微内收"视觉效果保留（CSS transform 仍生效，但有了预留空间）
-- 悬停展开时面板位置正确
+### 优化
+- **发布资产**：更新清单覆盖 Windows amd64/386、Linux amd64、macOS arm64/amd64，并发布 Apple Silicon 与 Intel DMG。
+- **安全与隔离**：MCP 错误和配置指纹不再泄露密钥、Header、URL 凭据或机器标识。
+- **界面与交互**：完善设置、模型、委派、Skills、MCP、启动 Cursor 和浮窗相关按钮的状态与反馈。
 
 > **Windows 用户注意**：安装时若被 SmartScreen 拦截，点击「更多信息」->「仍要运行」即可。
