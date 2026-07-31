@@ -418,6 +418,18 @@
         }
       ]
     },
+    "0782451d86d4da11": {
+      "source": "控制是否将当前启用的模板注入到系统提示词。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 333,
+          "column": 15
+        }
+      ]
+    },
     "07aa271f91007d23": {
       "source": "自定义查询",
       "kind": "text",
@@ -535,6 +547,11 @@
           "column": 10
         },
         {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 33,
+          "column": 28
+        },
+        {
           "file": "src/views/RequestMetrics.vue",
           "line": 77,
           "column": 86
@@ -543,6 +560,18 @@
           "file": "src/views/RequestMetrics.vue",
           "line": 158,
           "column": 19
+        }
+      ]
+    },
+    "0bcf0dd7af62d263": {
+      "source": "指定拉取提示词时使用的分支、标签或提交。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 396,
+          "column": 38
         }
       ]
     },
@@ -641,6 +670,18 @@
         }
       ]
     },
+    "0e3bfa8d74acb5df": {
+      "source": "正在加载提示词设置...",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 326,
+          "column": 1
+        }
+      ]
+    },
     "0eddf68a8774618c": {
       "source": " / 剩余 {0}%",
       "kind": "template",
@@ -667,6 +708,18 @@
           "file": "src/views/Config.vue",
           "line": 154,
           "column": 48
+        }
+      ]
+    },
+    "0ef6dff091f2f7d4": {
+      "source": "当前筛选条件下没有可显示的条目。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 491,
+          "column": 16
         }
       ]
     },
@@ -927,6 +980,18 @@
           "file": "src/views/Home.vue",
           "line": 46,
           "column": 1033
+        }
+      ]
+    },
+    "14b3538b5e77e824": {
+      "source": "启用软件中文化",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 503,
+          "column": 17
         }
       ]
     },
@@ -1283,6 +1348,18 @@
           "file": "src/utils/errorHumanizer.js",
           "line": 8,
           "column": 8
+        }
+      ]
+    },
+    "1cbf07fc9d2ea663": {
+      "source": "启用注入",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 332,
+          "column": 15
         }
       ]
     },
@@ -1890,6 +1967,18 @@
         }
       ]
     },
+    "26778e39722faf68": {
+      "source": "提示词仓库",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 388,
+          "column": 19
+        }
+      ]
+    },
     "26a3855aed1d8d17": {
       "source": "服务未启动",
       "kind": "text",
@@ -1928,6 +2017,18 @@
           "file": "src/services/runtimeAdapter.js",
           "line": 77,
           "column": 26
+        }
+      ]
+    },
+    "2759997421d4e288": {
+      "source": "模板列表",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 430,
+          "column": 28
         }
       ]
     },
@@ -2182,6 +2283,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 1015,
           "column": 116
+        }
+      ]
+    },
+    "2c109fe2e209c73e": {
+      "source": "自定义提示词",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 509,
+          "column": 15
         }
       ]
     },
@@ -2679,15 +2792,15 @@
         }
       ]
     },
-    "35d42e47e9c17e1d": {
-      "source": "技能列表、MCP server 列表和重扫操作会迁入这里。",
+    "3542ee784f1345a3": {
+      "source": "输入模板文件名",
       "kind": "text",
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/views/Settings.vue",
-          "line": 51,
-          "column": 24
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 370,
+          "column": 19
         }
       ]
     },
@@ -2855,18 +2968,6 @@
         }
       ]
     },
-    "396be7b2be076404": {
-      "source": "模板、刷新和自定义内容将在这里提供独立编辑体验。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Settings.vue",
-          "line": 63,
-          "column": 24
-        }
-      ]
-    },
     "3989b3db011eb6bb": {
       "source": "· 等",
       "kind": "text",
@@ -3029,6 +3130,18 @@
         }
       ]
     },
+    "3c24f3393a3cf363": {
+      "source": "未提供标识符",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 575,
+          "column": 22
+        }
+      ]
+    },
     "3d13868593ae4eeb": {
       "source": "界面语言",
       "kind": "text",
@@ -3067,6 +3180,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 258,
+          "column": 23
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 91,
           "column": 87
@@ -3082,6 +3200,11 @@
           "file": "src/components/DelegationRuntimePanel.vue",
           "line": 55,
           "column": 17
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 326,
+          "column": 10
         }
       ]
     },
@@ -3240,6 +3363,18 @@
         }
       ]
     },
+    "3fe7045d8332f460": {
+      "source": "切换 MCP {0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 609,
+          "column": 32
+        }
+      ]
+    },
     "40e46d0e911f49ef": {
       "source": "开启后，启动时与点击「一键配对上下文」时，自动按内置目录为模型配对正确的上下文窗口（目录命中则覆盖，目录未命中则探测供应商 /models 回填）。可避免误填过大窗口导致 context_length_exceeded。",
       "kind": "text",
@@ -3257,6 +3392,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 516,
+          "column": 22
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 313,
@@ -3629,6 +3769,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 275,
+          "column": 7
+        },
+        {
           "file": "src/components/settings/settingsCategories.js",
           "line": 37,
           "column": 12
@@ -3657,6 +3802,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 483,
+          "column": 15
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 278,
@@ -3799,6 +3949,11 @@
           "file": "src/components/HomeMetricsCard.vue",
           "line": 51,
           "column": 27
+        },
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 76,
+          "column": 23
         },
         {
           "file": "src/components/SettingsDrawer.vue",
@@ -4114,6 +4269,23 @@
         }
       ]
     },
+    "5402ed2ebd5a8bbf": {
+      "source": "当前模板",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 356,
+          "column": 15
+        },
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 364,
+          "column": 19
+        }
+      ]
+    },
     "5437a2ee2d32df0c": {
       "source": "单渠道",
       "kind": "text",
@@ -4212,9 +4384,26 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 185,
+          "column": 23
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 183,
           "column": 21
+        }
+      ]
+    },
+    "55bfaec81d706c2f": {
+      "source": "启用自定义注入",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 490,
+          "column": 17
         }
       ]
     },
@@ -4483,6 +4672,11 @@
           "file": "src/components/DelegationRuntimePanel.vue",
           "line": 57,
           "column": 14
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 318,
+          "column": 12
         }
       ]
     },
@@ -4507,6 +4701,11 @@
           "file": "src/components/HomeMetricsCard.vue",
           "line": 50,
           "column": 24
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 30,
+          "column": 26
         },
         {
           "file": "src/views/MetricsDetail.vue",
@@ -4536,6 +4735,11 @@
           "column": 53
         },
         {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 581,
+          "column": 92
+        },
+        {
           "file": "src/views/ModelEditor.vue",
           "line": 967,
           "column": 68
@@ -4551,23 +4755,6 @@
           "file": "src/views/StatsOverlay.vue",
           "line": 451,
           "column": 17
-        }
-      ]
-    },
-    "5df9d88454a62fdb": {
-      "source": "后续任务继续完善",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Settings.vue",
-          "line": 52,
-          "column": 18
-        },
-        {
-          "file": "src/views/Settings.vue",
-          "line": 64,
-          "column": 18
         }
       ]
     },
@@ -4629,6 +4816,18 @@
         }
       ]
     },
+    "5f9cf764ee90fd58": {
+      "source": "扫描各工具的技能与 MCP 配置，按当前列表即时启用或停用。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 375,
+          "column": 7
+        }
+      ]
+    },
     "5fad5c8eca6fc714": {
       "source": "リリース日: {0}",
       "kind": "template",
@@ -4676,6 +4875,21 @@
           "column": 86
         },
         {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 291,
+          "column": 1
+        },
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 417,
+          "column": 1
+        },
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 460,
+          "column": 1
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 256,
           "column": 139
@@ -4692,6 +4906,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 371,
+          "column": 19
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 263,
@@ -4754,6 +4973,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 424,
+          "column": 22
+        },
+        {
           "file": "src/views/MetricsDetail.vue",
           "line": 332,
           "column": 106
@@ -4765,6 +4989,11 @@
       "kind": "template",
       "placeholders": 1,
       "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 81,
+          "column": 32
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 67,
@@ -4910,6 +5139,16 @@
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 216,
           "column": 38
+        },
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 151,
+          "column": 41
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 206,
+          "column": 39
         },
         {
           "file": "src/components/settings/SettingsPageHeader.vue",
@@ -5293,6 +5532,18 @@
         }
       ]
     },
+    "692873ddd8f40e66": {
+      "source": "基础设置",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 330,
+          "column": 28
+        }
+      ]
+    },
     "69675be7ecd1116c": {
       "source": "手动指定 Cursor.exe 路径",
       "kind": "text",
@@ -5433,6 +5684,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 934,
           "column": 15
+        }
+      ]
+    },
+    "6a7f40b5c27f77dd": {
+      "source": "启用扫描",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 412,
+          "column": 19
         }
       ]
     },
@@ -5743,6 +6006,18 @@
         }
       ]
     },
+    "7193193582d7c647": {
+      "source": "在标准模板之外附加自定义内容。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 484,
+          "column": 15
+        }
+      ]
+    },
     "71fcb173824e5544": {
       "source": "同步到同 URL 分组",
       "kind": "text",
@@ -5817,6 +6092,18 @@
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 642,
           "column": 7
+        }
+      ]
+    },
+    "7458d69a8f840ca6": {
+      "source": "默认使用中文回答，并保留代码、命令和协议字段原文。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 497,
+          "column": 15
         }
       ]
     },
@@ -6232,6 +6519,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 450,
+          "column": 24
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 249,
           "column": 128
@@ -6378,6 +6670,18 @@
         }
       ]
     },
+    "7f4f6fcaac6e0531": {
+      "source": "缓存状态",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 410,
+          "column": 26
+        }
+      ]
+    },
     "7f68ebad19ba6bcd": {
       "source": "检查更新",
       "kind": "text",
@@ -6423,9 +6727,26 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 86,
+          "column": 12
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 269,
           "column": 56
+        }
+      ]
+    },
+    "80314eea4b9d7abc": {
+      "source": "列表...",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 487,
+          "column": 70
         }
       ]
     },
@@ -6607,6 +6928,18 @@
           "file": "src/components/StationSpendCard.vue",
           "line": 125,
           "column": 90
+        }
+      ]
+    },
+    "84546a2a39e3f6bd": {
+      "source": "替换原提示词，或追加到受管区块中。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 344,
+          "column": 40
         }
       ]
     },
@@ -6818,6 +7151,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 380,
+          "column": 15
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 264,
@@ -7034,9 +7372,26 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 253,
+          "column": 21
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 90,
           "column": 92
+        }
+      ]
+    },
+    "8e9e086c19011389": {
+      "source": "断开中",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 324,
+          "column": 12
         }
       ]
     },
@@ -7100,6 +7455,18 @@
           "file": "src/views/Config.vue",
           "line": 201,
           "column": 70
+        }
+      ]
+    },
+    "9040f22c36751bc4": {
+      "source": "本地提示词已缓存",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 90,
+          "column": 7
         }
       ]
     },
@@ -7241,6 +7608,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 374,
+          "column": 7
+        },
         {
           "file": "src/components/settings/settingsCategories.js",
           "line": 31,
@@ -7603,6 +7975,18 @@
         }
       ]
     },
+    "98fd987d7d08f9eb": {
+      "source": "单独控制每个模板是否参与注入，并按需预览内容。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 430,
+          "column": 41
+        }
+      ]
+    },
     "9970736b36ff2b68": {
       "source": "模型服务的 API 根地址，通常为兼容 OpenAI 或 Anthropic 的接口入口。",
       "kind": "text",
@@ -7645,6 +8029,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 61,
+          "column": 30
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 38,
           "column": 30
@@ -7660,6 +8049,18 @@
           "file": "src/components/HomeMetricsCard.vue",
           "line": 547,
           "column": 21
+        }
+      ]
+    },
+    "9a9acd39e5361188": {
+      "source": "状态筛选",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 451,
+          "column": 15
         }
       ]
     },
@@ -8093,23 +8494,6 @@
         }
       ]
     },
-    "a4d5acf515c86e2f": {
-      "source": "迁移计划",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Settings.vue",
-          "line": 47,
-          "column": 14
-        },
-        {
-          "file": "src/views/Settings.vue",
-          "line": 59,
-          "column": 14
-        }
-      ]
-    },
     "a4dd8bb7e8b6eb31": {
       "source": "显示访问密钥",
       "kind": "text",
@@ -8209,6 +8593,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 63,
           "column": 12
+        }
+      ]
+    },
+    "a57fed9a8a7f797a": {
+      "source": "Skills 与 MCP 标签",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 383,
+          "column": 15
         }
       ]
     },
@@ -8357,11 +8753,72 @@
         }
       ]
     },
+    "a7e9c4b6ca057d4f": {
+      "source": "未提供路径",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 519,
+          "column": 69
+        }
+      ]
+    },
+    "a82fc4612929933b": {
+      "source": "搜索 Skills 与 MCP",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 443,
+          "column": 17
+        }
+      ]
+    },
+    "a898478be1813b95": {
+      "source": "连接中",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 321,
+          "column": 12
+        }
+      ]
+    },
     "a8c3698b5b8c485d": {
       "source": "已停用",
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 446,
+          "column": 26
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 32,
+          "column": 31
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 408,
+          "column": 19
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 520,
+          "column": 28
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 582,
+          "column": 28
+        },
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
           "line": 160,
@@ -8644,6 +9101,18 @@
         }
       ]
     },
+    "ade2b45fe30e6f04": {
+      "source": "搜索名称、来源、标识符或描述",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 441,
+          "column": 17
+        }
+      ]
+    },
     "ae5a738238463a92": {
       "source": "隐藏访问密钥",
       "kind": "text",
@@ -8653,6 +9122,18 @@
           "file": "src/components/ui/Input.vue",
           "line": 67,
           "column": 20
+        }
+      ]
+    },
+    "ae70037dd722d530": {
+      "source": "切换技能 {0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 546,
+          "column": 32
         }
       ]
     },
@@ -8987,6 +9468,18 @@
         }
       ]
     },
+    "b814cb0ad85dfd6a": {
+      "source": "当前没有可用模板。你仍然可以手动输入模板文件名并刷新。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 477,
+          "column": 1
+        }
+      ]
+    },
     "b853c7e67936a881": {
       "source": "当前共",
       "kind": "text",
@@ -9016,6 +9509,31 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 320,
+          "column": 1
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 469,
+          "column": 1
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 477,
+          "column": 1
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 534,
+          "column": 1
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 597,
+          "column": 1
+        },
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
           "line": 253,
@@ -9059,6 +9577,18 @@
           "file": "src/views/SupplierDetail.vue",
           "line": 947,
           "column": 18
+        }
+      ]
+    },
+    "b8da401c68a2f12c": {
+      "source": "自定义与本地化",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 481,
+          "column": 28
         }
       ]
     },
@@ -9176,6 +9706,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 496,
+          "column": 15
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 279,
           "column": 27
@@ -9275,6 +9810,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 424,
+          "column": 22
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 272,
           "column": 143
@@ -9302,6 +9842,18 @@
           "file": "src/components/HomeMetricsCard.vue",
           "line": 307,
           "column": 5
+        }
+      ]
+    },
+    "bddc807c9781b5ac": {
+      "source": "指定提示词来源仓库，默认使用 Codex-X 示例仓库。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 381,
+          "column": 15
         }
       ]
     },
@@ -9387,6 +9939,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 516,
+          "column": 19
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 276,
@@ -9516,9 +10073,26 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 406,
+          "column": 19
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 294,
           "column": 35
+        }
+      ]
+    },
+    "c353eb2fcd7b9d94": {
+      "source": "选择默认模板文件；模板列表为空时可手动输入文件名。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 357,
+          "column": 15
         }
       ]
     },
@@ -9642,6 +10216,18 @@
           "file": "src/views/MetricsDetail.vue",
           "line": 399,
           "column": 94
+        }
+      ]
+    },
+    "c68706edee1377b9": {
+      "source": "启用提示词注入",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 339,
+          "column": 17
         }
       ]
     },
@@ -9906,6 +10492,18 @@
         }
       ]
     },
+    "c9ecb45647d4d001": {
+      "source": "管理注入模板、仓库来源、自定义内容和中文化策略。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 276,
+          "column": 7
+        }
+      ]
+    },
     "ca00a39fcea70dc6": {
       "source": "启动中...",
       "kind": "text",
@@ -9976,6 +10574,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 62,
+          "column": 29
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 39,
@@ -10081,6 +10684,18 @@
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
           "line": 158,
           "column": 11
+        }
+      ]
+    },
+    "d00971a97bb58e6f": {
+      "source": "切换模板 {0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 466,
+          "column": 34
         }
       ]
     },
@@ -10509,18 +11124,6 @@
         }
       ]
     },
-    "d832fc97fb3cadae": {
-      "source": "扫描与开关",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Settings.vue",
-          "line": 50,
-          "column": 18
-        }
-      ]
-    },
     "d8c429ae6ff9cfab": {
       "source": "{0} 等 {1} 个",
       "kind": "template",
@@ -10653,6 +11256,16 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 421,
+          "column": 17
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 422,
+          "column": 17
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 301,
           "column": 123
@@ -10769,6 +11382,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 79,
+          "column": 23
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 66,
           "column": 60
@@ -10784,6 +11402,18 @@
           "file": "src/state/appState.js",
           "line": 1464,
           "column": 5
+        }
+      ]
+    },
+    "dc91444c44492991": {
+      "source": "加载失败，请重试。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 491,
+          "column": 16
         }
       ]
     },
@@ -10935,6 +11565,18 @@
         }
       ]
     },
+    "dfb006d46dfc45e2": {
+      "source": "命令：",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 578,
+          "column": 89
+        }
+      ]
+    },
     "dfb699c5437885a4": {
       "source": "设置分类",
       "kind": "text",
@@ -10949,6 +11591,38 @@
           "file": "src/components/settings/SettingsSidebar.vue",
           "line": 31,
           "column": 10
+        }
+      ]
+    },
+    "dfb802238b38fbd4": {
+      "source": "已启用",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 446,
+          "column": 26
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 31,
+          "column": 30
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 407,
+          "column": 19
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 520,
+          "column": 28
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 582,
+          "column": 28
         }
       ]
     },
@@ -11126,6 +11800,18 @@
         }
       ]
     },
+    "e28a88777d7972f2": {
+      "source": "地址：",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 579,
+          "column": 86
+        }
+      ]
+    },
     "e2f2389e7c114de9": {
       "source": "{0} 的协议模式仅支持 auto 或 fixed",
       "kind": "template",
@@ -11267,6 +11953,16 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 344,
+          "column": 26
+        },
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 349,
+          "column": 19
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 262,
           "column": 65
@@ -11284,9 +11980,9 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/views/Settings.vue",
-          "line": 62,
-          "column": 18
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 282,
+          "column": 59
         }
       ]
     },
@@ -11616,6 +12312,18 @@
         }
       ]
     },
+    "ee5fb580c6c2de86": {
+      "source": "支持多行内容；停止输入 500ms 后自动保存，失焦或回车时立即刷新保存队列。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 510,
+          "column": 15
+        }
+      ]
+    },
     "ee95057c6b0335d2": {
       "source": "当前出站请求使用系统代理：{0}",
       "kind": "template",
@@ -11710,6 +12418,18 @@
           "file": "src/views/RequestMetrics.vue",
           "line": 291,
           "column": 88
+        }
+      ]
+    },
+    "f020e4630a54d322": {
+      "source": "正在加载",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 487,
+          "column": 1
         }
       ]
     },
@@ -12036,6 +12756,18 @@
         }
       ]
     },
+    "f691833aa74a0483": {
+      "source": "本地提示词已缓存 · {0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 89,
+          "column": 7
+        }
+      ]
+    },
     "f6c244f98893cd95": {
       "source": "閉じる",
       "kind": "text",
@@ -12203,15 +12935,49 @@
         }
       ]
     },
+    "f8efafccb1525142": {
+      "source": "刷新提示词",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 297,
+          "column": 17
+        },
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 298,
+          "column": 17
+        }
+      ]
+    },
     "f95ea7f4c063eea7": {
       "source": "未启用",
       "kind": "text",
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 81,
+          "column": 68
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 67,
           "column": 58
+        }
+      ]
+    },
+    "f9c56630d29af6ca": {
+      "source": "提示词 Ref",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 402,
+          "column": 19
         }
       ]
     },
