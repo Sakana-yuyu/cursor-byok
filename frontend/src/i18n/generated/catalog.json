@@ -187,6 +187,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 260,
+          "column": 9
+        },
+        {
           "file": "src/views/Config.vue",
           "line": 128,
           "column": 48
@@ -322,6 +327,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 159,
+          "column": 27
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 133,
           "column": 26
@@ -345,6 +355,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 106,
+          "column": 16
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 96,
@@ -497,12 +512,12 @@
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 150,
+          "line": 157,
           "column": 30
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 150,
+          "line": 157,
           "column": 48
         },
         {
@@ -575,7 +590,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 173,
+          "line": 180,
           "column": 27
         }
       ]
@@ -597,6 +612,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 236,
+          "column": 11
+        },
         {
           "file": "src/views/Config.vue",
           "line": 154,
@@ -621,6 +641,16 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/OverlaySettings.vue",
+          "line": 101,
+          "column": 9
+        },
+        {
+          "file": "src/components/settings/categories/OverlaySettings.vue",
+          "line": 113,
+          "column": 11
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 225,
@@ -753,6 +783,30 @@
         }
       ]
     },
+    "137c443b3ec39d5b": {
+      "source": "Cursor 与服务",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/settingsCategories.js",
+          "line": 13,
+          "column": 12
+        }
+      ]
+    },
+    "1380d1915cfbf48d": {
+      "source": "跨工具技能和 MCP 扫描。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/settingsCategories.js",
+          "line": 32,
+          "column": 18
+        }
+      ]
+    },
     "13b61c5f697b6700": {
       "source": "缓存命中率",
       "kind": "text",
@@ -836,6 +890,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 195,
+          "column": 22
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 338,
           "column": 85
@@ -862,6 +921,18 @@
         {
           "file": "src/views/ModelEditor.vue",
           "line": 366,
+          "column": 24
+        }
+      ]
+    },
+    "15f2cfedd285e43f": {
+      "source": "这里将承载委托开关、运行时信息和相关说明。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Settings.vue",
+          "line": 48,
           "column": 24
         }
       ]
@@ -895,6 +966,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/OverlaySettings.vue",
+          "line": 82,
+          "column": 22
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 225,
@@ -933,7 +1009,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 267,
+          "line": 275,
           "column": 11
         }
       ]
@@ -1046,7 +1122,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 282,
+          "line": 290,
           "column": 11
         }
       ]
@@ -1118,8 +1194,20 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1917,
+          "line": 1939,
           "column": 32
+        }
+      ]
+    },
+    "1bd91a7d0c53c936": {
+      "source": "已保存",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/SettingsPageHeader.vue",
+          "line": 23,
+          "column": 10
         }
       ]
     },
@@ -1268,7 +1356,7 @@
       "refs": [
         {
           "file": "src/router/index.js",
-          "line": 40,
+          "line": 41,
           "column": 39
         },
         {
@@ -1466,6 +1554,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 105,
+          "column": 14
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 96,
           "column": 45
@@ -1638,6 +1731,16 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 217,
+          "column": 9
+        },
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 225,
+          "column": 13
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 226,
           "column": 317
@@ -1773,6 +1876,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 107,
+          "column": 20
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 96,
           "column": 129
@@ -1869,6 +1977,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/GeneralSettings.vue",
+          "line": 79,
+          "column": 9
+        },
         {
           "file": "src/views/Config.vue",
           "line": 180,
@@ -2042,6 +2155,11 @@
           "column": 65
         },
         {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 108,
+          "column": 19
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 96,
           "column": 149
@@ -2132,7 +2250,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 189,
+          "line": 196,
           "column": 27
         }
       ]
@@ -2142,6 +2260,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 180,
+          "column": 16
+        },
         {
           "file": "src/views/Config.vue",
           "line": 69,
@@ -2171,6 +2294,16 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/OverlaySettings.vue",
+          "line": 137,
+          "column": 9
+        },
+        {
+          "file": "src/components/settings/categories/OverlaySettings.vue",
+          "line": 149,
+          "column": 11
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 225,
@@ -2320,6 +2453,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/GeneralSettings.vue",
+          "line": 107,
+          "column": 9
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 339,
           "column": 171
@@ -2408,7 +2546,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 181,
+          "line": 188,
           "column": 27
         }
       ]
@@ -2475,6 +2613,18 @@
           "file": "src/components/ModelAdapterTestCard.vue",
           "line": 131,
           "column": 60
+        }
+      ]
+    },
+    "35d42e47e9c17e1d": {
+      "source": "技能列表、MCP server 列表和重扫操作会迁入这里。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Settings.vue",
+          "line": 60,
+          "column": 24
         }
       ]
     },
@@ -2550,7 +2700,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 247,
+          "line": 254,
           "column": 11
         }
       ]
@@ -2615,6 +2765,18 @@
           "file": "src/components/charts/CacheHitRateChart.vue",
           "line": 76,
           "column": 12
+        }
+      ]
+    },
+    "396be7b2be076404": {
+      "source": "模板、刷新和自定义内容将在这里提供独立编辑体验。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Settings.vue",
+          "line": 72,
+          "column": 24
         }
       ]
     },
@@ -2701,6 +2863,16 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 241,
+          "column": 9
+        },
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 252,
+          "column": 1
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 226,
           "column": 479
@@ -2729,6 +2901,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 255,
+          "column": 11
+        },
         {
           "file": "src/views/Config.vue",
           "line": 164,
@@ -2776,8 +2953,18 @@
           "column": 39
         },
         {
+          "file": "src/components/settings/categories/GeneralSettings.vue",
+          "line": 78,
+          "column": 9
+        },
+        {
+          "file": "src/components/settings/categories/GeneralSettings.vue",
+          "line": 83,
+          "column": 11
+        },
+        {
           "file": "src/layouts/MainLayout.vue",
-          "line": 370,
+          "line": 376,
           "column": 11
         },
         {
@@ -2956,7 +3143,7 @@
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 283,
+          "line": 291,
           "column": 19
         },
         {
@@ -3272,6 +3459,18 @@
         }
       ]
     },
+    "492833690b91a72d": {
+      "source": "任务委托",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Settings.vue",
+          "line": 47,
+          "column": 18
+        }
+      ]
+    },
     "497c85690c4cc0fc": {
       "source": "暂无数据",
       "kind": "text",
@@ -3351,6 +3550,18 @@
           "file": "src/components/DelegationRuntimePanel.vue",
           "line": 211,
           "column": 23
+        }
+      ]
+    },
+    "4b47dbae97ba938a": {
+      "source": "提示词",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/settingsCategories.js",
+          "line": 37,
+          "column": 12
         }
       ]
     },
@@ -3452,13 +3663,18 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/GeneralSettings.vue",
+          "line": 18,
+          "column": 27
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 47,
           "column": 27
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 283,
+          "line": 291,
           "column": 19
         }
       ]
@@ -3619,6 +3835,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 198,
+          "column": 9
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 338,
           "column": 115
@@ -3678,6 +3899,18 @@
         }
       ]
     },
+    "52bf29cbde2ab67a": {
+      "source": "模型与委派",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/settingsCategories.js",
+          "line": 25,
+          "column": 12
+        }
+      ]
+    },
     "52d703266d3872a5": {
       "source": "浏览器预览模式：未查询余额",
       "kind": "text",
@@ -3692,6 +3925,18 @@
           "file": "src/services/clientApi.js",
           "line": 238,
           "column": 128
+        }
+      ]
+    },
+    "52dcabd297764ac0": {
+      "source": "本地服务与启动相关配置。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/settingsCategories.js",
+          "line": 14,
+          "column": 18
         }
       ]
     },
@@ -3806,7 +4051,7 @@
       "refs": [
         {
           "file": "src/router/index.js",
-          "line": 66,
+          "line": 67,
           "column": 39
         },
         {
@@ -3821,6 +4066,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/OverlaySettings.vue",
+          "line": 24,
+          "column": 27
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 42,
@@ -3927,11 +4177,33 @@
         }
       ]
     },
+    "570d6020677958bd": {
+      "source": "正在保存",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/SettingsPageHeader.vue",
+          "line": 18,
+          "column": 12
+        }
+      ]
+    },
     "572cf45ba43634b3": {
       "source": "返回",
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/SettingsPageHeader.vue",
+          "line": 42,
+          "column": 9
+        },
+        {
+          "file": "src/components/settings/SettingsPageHeader.vue",
+          "line": 43,
+          "column": 9
+        },
         {
           "file": "src/views/ModelCatalog.vue",
           "line": 298,
@@ -4033,7 +4305,7 @@
         },
         {
           "file": "src/router/index.js",
-          "line": 20,
+          "line": 21,
           "column": 38
         }
       ]
@@ -4166,6 +4438,28 @@
         }
       ]
     },
+    "5df9d88454a62fdb": {
+      "source": "后续任务继续完善",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Settings.vue",
+          "line": 49,
+          "column": 18
+        },
+        {
+          "file": "src/views/Settings.vue",
+          "line": 61,
+          "column": 18
+        },
+        {
+          "file": "src/views/Settings.vue",
+          "line": 73,
+          "column": 18
+        }
+      ]
+    },
     "5e709712ce012f5d": {
       "source": "当前出站请求使用环境变量代理：{0}",
       "kind": "template",
@@ -4219,7 +4513,7 @@
       "refs": [
         {
           "file": "src/router/index.js",
-          "line": 61,
+          "line": 62,
           "column": 39
         }
       ]
@@ -4426,6 +4720,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 235,
+          "column": 1
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 226,
           "column": 873
@@ -4473,6 +4772,26 @@
           "file": "src/components/HomeMetricsCard.vue",
           "line": 411,
           "column": 53
+        },
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 141,
+          "column": 40
+        },
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 163,
+          "column": 44
+        },
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 176,
+          "column": 40
+        },
+        {
+          "file": "src/components/settings/SettingsPageHeader.vue",
+          "line": 21,
+          "column": 12
         },
         {
           "file": "src/views/Config.vue",
@@ -4565,7 +4884,7 @@
       "refs": [
         {
           "file": "src/router/index.js",
-          "line": 35,
+          "line": 36,
           "column": 39
         },
         {
@@ -4667,7 +4986,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1994,
+          "line": 2016,
           "column": 32
         }
       ]
@@ -4791,6 +5110,16 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/GeneralSettings.vue",
+          "line": 88,
+          "column": 9
+        },
+        {
+          "file": "src/components/settings/categories/GeneralSettings.vue",
+          "line": 98,
+          "column": 13
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 225,
           "column": 320
@@ -4827,6 +5156,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 216,
+          "column": 9
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 226,
           "column": 159
@@ -4851,6 +5185,16 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 197,
+          "column": 9
+        },
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 209,
+          "column": 11
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 338,
           "column": 102
@@ -4867,6 +5211,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 265,
+          "column": 15
+        },
         {
           "file": "src/views/Config.vue",
           "line": 169,
@@ -5010,8 +5359,20 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 256,
+          "line": 264,
           "column": 11
+        }
+      ]
+    },
+    "6bf218e23e6f7605": {
+      "source": "可配置运行模式和模型渠道；运行日志位于 ~/.cursor-local-assistant-v2/logs/",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 279,
+          "column": 9
         }
       ]
     },
@@ -5106,6 +5467,11 @@
           "file": "src/components/DelegationSettingsCard.vue",
           "line": 126,
           "column": 71
+        },
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 289,
+          "column": 1
         },
         {
           "file": "src/views/Config.vue",
@@ -5281,6 +5647,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/OverlaySettings.vue",
+          "line": 156,
+          "column": 9
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 225,
           "column": 850
@@ -5299,11 +5670,28 @@
         }
       ]
     },
+    "73915d74d996df84": {
+      "source": "重新检测当前可用的 Cursor 安装路径",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 242,
+          "column": 9
+        }
+      ]
+    },
     "74b5dcd19f994fbe": {
       "source": "靠近屏幕边缘时收缩为胶囊",
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/OverlaySettings.vue",
+          "line": 138,
+          "column": 9
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 225,
@@ -5470,7 +5858,7 @@
         },
         {
           "file": "src/router/index.js",
-          "line": 50,
+          "line": 51,
           "column": 39
         }
       ]
@@ -5849,7 +6237,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 320,
+          "line": 326,
           "column": 15
         },
         {
@@ -5864,6 +6252,16 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 217,
+          "column": 9
+        },
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 229,
+          "column": 11
+        },
         {
           "file": "src/views/Config.vue",
           "line": 145,
@@ -5922,6 +6320,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/OverlaySettings.vue",
+          "line": 120,
+          "column": 9
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 225,
@@ -5984,8 +6387,20 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 268,
+          "line": 276,
           "column": 19
+        }
+      ]
+    },
+    "835b700e028c9b20": {
+      "source": "通用",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/settingsCategories.js",
+          "line": 7,
+          "column": 12
         }
       ]
     },
@@ -6006,6 +6421,16 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/OverlaySettings.vue",
+          "line": 84,
+          "column": 9
+        },
+        {
+          "file": "src/components/settings/categories/OverlaySettings.vue",
+          "line": 93,
+          "column": 13
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 225,
@@ -6095,6 +6520,18 @@
         }
       ]
     },
+    "860e100ca3951404": {
+      "source": "关闭主窗口时隐藏到托盘，或直接退出应用",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/GeneralSettings.vue",
+          "line": 89,
+          "column": 9
+        }
+      ]
+    },
     "8622e5da4d4fee39": {
       "source": "固定协议",
       "kind": "text",
@@ -6159,6 +6596,16 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 259,
+          "column": 9
+        },
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 270,
+          "column": 13
+        },
+        {
           "file": "src/views/Config.vue",
           "line": 127,
           "column": 56
@@ -6182,6 +6629,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/GeneralSettings.vue",
+          "line": 19,
+          "column": 27
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 48,
@@ -6308,13 +6760,18 @@
           "column": 35
         },
         {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 294,
+          "column": 9
+        },
+        {
           "file": "src/router/index.js",
-          "line": 25,
+          "line": 26,
           "column": 39
         },
         {
           "file": "src/router/index.js",
-          "line": 30,
+          "line": 31,
           "column": 39
         },
         {
@@ -6453,6 +6910,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 305,
+          "column": 1
+        },
+        {
           "file": "src/views/Config.vue",
           "line": 201,
           "column": 70
@@ -6533,6 +6995,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 214,
+          "column": 22
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 226,
           "column": 93
@@ -6551,6 +7018,18 @@
         }
       ]
     },
+    "92d59eae0d229f42": {
+      "source": "提示词注入与本地化。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/settingsCategories.js",
+          "line": 38,
+          "column": 18
+        }
+      ]
+    },
     "93041860bf7ff27a": {
       "source": "存在重复模型冲突，请确认后重试",
       "kind": "text",
@@ -6558,7 +7037,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1957,
+          "line": 1979,
           "column": 32
         }
       ]
@@ -6572,6 +7051,18 @@
           "file": "src/components/SettingsDrawer.vue",
           "line": 226,
           "column": 572
+        }
+      ]
+    },
+    "93719234576b6363": {
+      "source": "Skills 与 MCP",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/settingsCategories.js",
+          "line": 31,
+          "column": 12
         }
       ]
     },
@@ -6592,6 +7083,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/OverlaySettings.vue",
+          "line": 25,
+          "column": 29
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 43,
@@ -6618,7 +7114,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 129,
+          "line": 136,
           "column": 44
         }
       ]
@@ -6668,6 +7164,18 @@
           "file": "src/views/RequestMetrics.vue",
           "line": 339,
           "column": 67
+        }
+      ]
+    },
+    "952da23934b76ed8": {
+      "source": "高风险或低频系统设置。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/settingsCategories.js",
+          "line": 44,
+          "column": 18
         }
       ]
     },
@@ -6838,12 +7346,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2225,
+          "line": 2247,
           "column": 32
         },
         {
           "file": "src/state/appState.js",
-          "line": 2246,
+          "line": 2268,
           "column": 32
         }
       ]
@@ -6886,6 +7394,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 364,
           "column": 12
+        }
+      ]
+    },
+    "997b5251fb714f0e": {
+      "source": "已配置 {0} 个模型适配器",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 295,
+          "column": 23
         }
       ]
     },
@@ -6978,6 +7498,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 122,
+          "column": 33
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 99,
@@ -7279,7 +7804,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2170,
+          "line": 2192,
           "column": 14
         }
       ]
@@ -7330,6 +7855,28 @@
           "file": "src/utils/errorHumanizer.js",
           "line": 51,
           "column": 60
+        }
+      ]
+    },
+    "a4d5acf515c86e2f": {
+      "source": "迁移计划",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Settings.vue",
+          "line": 44,
+          "column": 14
+        },
+        {
+          "file": "src/views/Settings.vue",
+          "line": 56,
+          "column": 14
+        },
+        {
+          "file": "src/views/Settings.vue",
+          "line": 68,
+          "column": 14
         }
       ]
     },
@@ -7482,6 +8029,16 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/OverlaySettings.vue",
+          "line": 155,
+          "column": 9
+        },
+        {
+          "file": "src/components/settings/categories/OverlaySettings.vue",
+          "line": 167,
+          "column": 11
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 225,
           "column": 837
@@ -7505,6 +8062,16 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/OverlaySettings.vue",
+          "line": 119,
+          "column": 9
+        },
+        {
+          "file": "src/components/settings/categories/OverlaySettings.vue",
+          "line": 131,
+          "column": 11
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 225,
@@ -7565,6 +8132,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/OverlaySettings.vue",
+          "line": 26,
+          "column": 26
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 44,
@@ -7719,7 +8291,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 257,
+          "line": 265,
           "column": 11
         }
       ]
@@ -7757,6 +8329,18 @@
           "file": "src/layouts/MainLayout.vue",
           "line": 50,
           "column": 22
+        }
+      ]
+    },
+    "ad813299b73eea36": {
+      "source": "浮窗",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/settingsCategories.js",
+          "line": 19,
+          "column": 12
         }
       ]
     },
@@ -7933,6 +8517,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/OverlaySettings.vue",
+          "line": 102,
+          "column": 9
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 225,
           "column": 423
@@ -7968,6 +8557,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 122,
+          "column": 54
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 99,
@@ -8019,6 +8613,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 232,
+          "column": 1
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 226,
@@ -8127,6 +8726,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/SettingsRow.vue",
+          "line": 47,
+          "column": 1
+        },
         {
           "file": "src/views/ModelConfig.vue",
           "line": 520,
@@ -8624,6 +9228,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 269,
+          "column": 13
+        },
+        {
           "file": "src/views/Config.vue",
           "line": 136,
           "column": 13
@@ -8666,7 +9275,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2013,
+          "line": 2035,
           "column": 32
         }
       ]
@@ -8712,6 +9321,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/GeneralSettings.vue",
+          "line": 106,
+          "column": 9
+        },
         {
           "file": "src/components/SettingsDrawer.vue",
           "line": 339,
@@ -8778,9 +9392,26 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/GeneralSettings.vue",
+          "line": 117,
+          "column": 1
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 339,
           "column": 247
+        }
+      ]
+    },
+    "c795d13a5f527d04": {
+      "source": "桌面浮窗样式与行为。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/settingsCategories.js",
+          "line": 20,
+          "column": 18
         }
       ]
     },
@@ -8890,17 +9521,17 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 2141,
+          "line": 2163,
           "column": 28
         },
         {
           "file": "src/state/appState.js",
-          "line": 2143,
+          "line": 2165,
           "column": 38
         },
         {
           "file": "src/state/appState.js",
-          "line": 2178,
+          "line": 2200,
           "column": 93
         },
         {
@@ -9130,6 +9761,16 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 120,
+          "column": 40
+        },
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 97,
+          "column": 40
+        },
+        {
           "file": "src/components/SettingsDrawer.vue",
           "line": 98,
           "column": 46
@@ -9177,7 +9818,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 143,
+          "line": 150,
           "column": 19
         }
       ]
@@ -9281,7 +9922,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2038,
+          "line": 2060,
           "column": 14
         }
       ]
@@ -9433,6 +10074,18 @@
         }
       ]
     },
+    "d6e61888b07853ea": {
+      "source": "高级",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/settingsCategories.js",
+          "line": 43,
+          "column": 12
+        }
+      ]
+    },
     "d71ddc74d2faf52f": {
       "source": "写入与编辑",
       "kind": "text",
@@ -9483,6 +10136,18 @@
           "file": "src/views/SupplierDetail.vue",
           "line": 1005,
           "column": 54
+        }
+      ]
+    },
+    "d832fc97fb3cadae": {
+      "source": "扫描与开关",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Settings.vue",
+          "line": 59,
+          "column": 18
         }
       ]
     },
@@ -9688,6 +10353,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 246,
+          "column": 15
+        },
+        {
           "file": "src/views/Config.vue",
           "line": 159,
           "column": 13
@@ -9778,7 +10448,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 268,
+          "line": 276,
           "column": 19
         }
       ]
@@ -9829,8 +10499,13 @@
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 248,
+          "line": 255,
           "column": 11
+        },
+        {
+          "file": "src/router/index.js",
+          "line": 72,
+          "column": 39
         }
       ]
     },
@@ -9872,6 +10547,23 @@
           "file": "src/state/appState.js",
           "line": 516,
           "column": 14
+        }
+      ]
+    },
+    "dfb699c5437885a4": {
+      "source": "设置分类",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/SettingsSidebar.vue",
+          "line": 25,
+          "column": 9
+        },
+        {
+          "file": "src/components/settings/SettingsSidebar.vue",
+          "line": 31,
+          "column": 10
         }
       ]
     },
@@ -9933,6 +10625,18 @@
         }
       ]
     },
+    "e0e45bb8a115ffdd": {
+      "source": "任务委托与运行时面板。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/settingsCategories.js",
+          "line": 26,
+          "column": 18
+        }
+      ]
+    },
     "e1035ed3a5c3a2e6": {
       "source": "模型不可用",
       "kind": "text",
@@ -9964,7 +10668,7 @@
       "refs": [
         {
           "file": "src/router/index.js",
-          "line": 55,
+          "line": 56,
           "column": 39
         },
         {
@@ -10074,6 +10778,16 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 257,
+          "column": 22
+        },
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 278,
+          "column": 9
+        },
+        {
           "file": "src/views/Config.vue",
           "line": 113,
           "column": 56
@@ -10164,6 +10878,18 @@
           "file": "src/components/SettingsDrawer.vue",
           "line": 262,
           "column": 147
+        }
+      ]
+    },
+    "e52f6f9c2e738a24": {
+      "source": "提示词注入",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Settings.vue",
+          "line": 71,
+          "column": 18
         }
       ]
     },
@@ -10636,6 +11362,18 @@
         }
       ]
     },
+    "f2c3bc69d650d644": {
+      "source": "工作区基础与常用偏好。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/settingsCategories.js",
+          "line": 8,
+          "column": 18
+        }
+      ]
+    },
     "f33ac04eece6a6a6": {
       "source": "断开",
       "kind": "text",
@@ -10801,6 +11539,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 179,
+          "column": 14
+        },
         {
           "file": "src/components/ui/InputModal.vue",
           "line": 6,
@@ -11077,7 +11820,7 @@
       "refs": [
         {
           "file": "src/router/index.js",
-          "line": 45,
+          "line": 46,
           "column": 39
         }
       ]
@@ -11099,6 +11842,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 218,
+          "column": 9
+        },
         {
           "file": "src/views/Config.vue",
           "line": 146,
@@ -11133,7 +11881,7 @@
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 151,
+          "line": 158,
           "column": 18
         },
         {
@@ -11336,7 +12084,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 328,
+          "line": 334,
           "column": 15
         }
       ]
