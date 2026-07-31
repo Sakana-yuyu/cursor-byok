@@ -1,7 +1,6 @@
 <script setup>
 import { isBrowserPreview, runtimeBrowser, runtimeWindow } from "@/services/runtimeAdapter";
 import LocaleSelect from "@/components/LocaleSelect.vue";
-import SettingsDrawer from "@/components/SettingsDrawer.vue";
 import { useMessage } from "@/composables/useMessage";
 import { showModal } from "@/composables/useModal";
 import {
@@ -18,11 +17,12 @@ import {
 import { closeApplication as closeApplicationNative } from "@/services/clientApi";
 import { isWindows } from "@/utils/isWindows";
 import { computed, onMounted, onUnmounted, ref } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useLocale } from "@/i18n/runtime";
 import Logo from "@/assets/logo.png";
 
 const route = useRoute();
+const router = useRouter();
 const message = useMessage();
 const showIcon = computed(() => route.meta.showIcon !== false);
 const title = computed(() => route.meta.title ?? "Cursor助手｜永久免费｜自定义API");
@@ -91,7 +91,6 @@ const proxyBadgeTitle = computed(() => {
 });
 
 const isMaximised = ref(false);
-const settingsDrawerVisible = ref(false);
 
 async function syncMaximiseState() {
   try {
@@ -120,6 +119,14 @@ async function closeWindow() {
     return;
   }
   await runtimeWindow.Hide();
+}
+
+function openSettingsWorkspace() {
+  if (route.path === "/settings") {
+    return;
+  }
+
+  void router.push("/settings");
 }
 
 async function handleCheckForUpdates() {
@@ -246,8 +253,9 @@ onUnmounted(() => {
           type="button"
           aria-label="打开设置"
           title="设置"
-          class="flex h-[20px] w-[26px] cursor-pointer items-center justify-center rounded-full text-[#9a9a9a] transition-colors duration-150 hover:bg-[#3a3a3a] hover:text-[#f0f0f0]"
-          @click="settingsDrawerVisible = true"
+          class="flex h-[20px] w-[26px] items-center justify-center rounded-full text-[#9a9a9a] transition-colors duration-150 hover:bg-[#3a3a3a] hover:text-[#f0f0f0]"
+          :class="route.path === '/settings' ? 'cursor-default opacity-60' : 'cursor-pointer'"
+          @click="openSettingsWorkspace"
         >
           <span class="icon-[mdi--menu] text-[15px]" aria-hidden="true"></span>
         </button>
@@ -294,8 +302,6 @@ onUnmounted(() => {
     <main class="flex-1 min-h-0 overflow-hidden flex flex-col w-full">
       <router-view />
     </main>
-
-    <SettingsDrawer v-if="settingsDrawerVisible" @close="settingsDrawerVisible = false" />
 
     <footer
       v-if="showFooter"
