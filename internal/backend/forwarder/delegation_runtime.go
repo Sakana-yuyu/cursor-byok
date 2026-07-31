@@ -54,10 +54,31 @@ func (service *Service) DelegationTaskSnapshots() []DelegationTaskSnapshot {
 		return nil
 	}
 	snapshots := service.multitaskDelegation.Snapshots()
-	runtimeStates := service.delegationTaskRuntimeStates()
+	runtimeStates := service.delegationTaskRuntimeStates(snapshots)
 	items := make([]DelegationTaskSnapshot, 0, len(snapshots))
 	now := time.Now().UTC()
 	for _, snapshot := range snapshots {
+		runtimeState := runtimeStates[strings.TrimSpace(snapshot.ID)]
+		if runtimeState.hasSnapshotOverride {
+			if runtimeState.status != "" {
+				snapshot.Status = runtimeState.status
+			}
+			if runtimeState.supervisionStatus != "" {
+				snapshot.SupervisionStatus = runtimeState.supervisionStatus
+			}
+			if runtimeState.issueCode != "" {
+				snapshot.SupervisionIssue = runtimeState.issueCode
+			}
+			if runtimeState.error != "" {
+				snapshot.Error = runtimeState.error
+			}
+			if !runtimeState.updatedAt.IsZero() {
+				snapshot.UpdatedAt = runtimeState.updatedAt
+			}
+			if !runtimeState.finishedAt.IsZero() {
+				snapshot.FinishedAt = runtimeState.finishedAt
+			}
+		}
 		finishedAt := snapshot.FinishedAt
 		end := finishedAt
 		if end.IsZero() && !snapshot.StartedAt.IsZero() {
@@ -70,9 +91,11 @@ func (service *Service) DelegationTaskSnapshots() []DelegationTaskSnapshot {
 				duration = 0
 			}
 		}
-		runtimeState := runtimeStates[strings.TrimSpace(snapshot.ID)]
 		supervisionStatus := strings.TrimSpace(string(snapshot.SupervisionStatus))
 		supervisionPhase := resolveDelegationRuntimePhase(snapshot, runtimeState.reviewPending)
+		if runtimeState.hasSnapshotOverride && runtimeState.supervisionPhase != "" {
+			supervisionPhase = runtimeState.supervisionPhase
+		}
 		issueCode := strings.TrimSpace(string(snapshot.SupervisionIssue))
 		progressSummary := normalizeDelegationRuntimeSummary(snapshot.ProgressSummary)
 		lastProgressAt := time.Time{}
@@ -112,7 +135,7 @@ func (service *Service) DelegationTaskSnapshots() []DelegationTaskSnapshot {
 			LastProgressAtUnixMS: unixMilliseconds(lastProgressAt),
 			ProgressSummary:      progressSummary,
 			ToolCallCount:        snapshot.ToolCallCount,
-			Error:                strings.TrimSpace(snapshot.Error),
+			Error:                safeDelegationRuntimeError(snapshot.Status),
 			EventID:              strings.TrimSpace(snapshot.EventID),
 			Sequence:             snapshot.Sequence,
 			EventType:            strings.TrimSpace(snapshot.EventType),
@@ -146,16 +169,30 @@ func unixMilliseconds(value time.Time) int64 {
 }
 
 type delegationTaskRuntimeState struct {
+	hasSnapshotOverride bool
 	reviewPending       bool
 	supervisorModelName string
 	reviewerModelName   string
+	status              delegation.TaskStatus
+	supervisionStatus   delegation.SupervisionStatus
+	supervisionPhase    string
+	issueCode           delegation.SupervisionIssueCode
+	error               string
+	updatedAt           time.Time
+	finishedAt          time.Time
 }
 
-func (service *Service) delegationTaskRuntimeStates() map[string]delegationTaskRuntimeState {
+func (service *Service) delegationTaskRuntimeStates(snapshots []delegation.TaskSnapshot) map[string]delegationTaskRuntimeState {
 	if service == nil || service.multitaskDelegation == nil || service.multitaskDelegation.supervisor == nil {
 		return nil
 	}
 	supervisor := service.multitaskDelegation.supervisor
+	taskIDs := make(map[string]struct{}, len(snapshots))
+	for _, snapshot := range snapshots {
+		if taskID := strings.TrimSpace(snapshot.ID); taskID != "" {
+			taskIDs[taskID] = struct{}{}
+		}
+	}
 	supervisor.mu.RLock()
 	aggregates := make([]*supervisedAggregate, 0, len(supervisor.aggregates))
 	for _, aggregate := range supervisor.aggregates {
@@ -164,25 +201,21 @@ func (service *Service) delegationTaskRuntimeStates() map[string]delegationTaskR
 		}
 	}
 	supervisor.mu.RUnlock()
-	if len(aggregates) == 0 {
-		return nil
-	}
-	result := make(map[string]delegationTaskRuntimeState)
+	result := supervisor.runtimeTaskStates(taskIDs)
 	for _, aggregate := range aggregates {
 		aggregate.mu.Lock()
-		supervisorModelID := resolveSupervisorModelID(aggregate.config, aggregate.base)
-		supervisorModelName := resolveDelegationRuntimeModelName(aggregate.config, supervisorModelID, firstNonEmpty(strings.TrimSpace(aggregate.base.ModelName), strings.TrimSpace(aggregate.base.ModelID)))
-		reviewerModelID := firstNonEmpty(strings.TrimSpace(aggregate.config.ReviewerModelID), supervisorModelID, strings.TrimSpace(aggregate.base.ModelID))
-		reviewerModelName := resolveDelegationRuntimeModelName(aggregate.config, reviewerModelID, supervisorModelName)
 		for _, task := range aggregate.tasks {
 			if task == nil {
 				continue
 			}
-			result[strings.TrimSpace(task.currentTaskID)] = delegationTaskRuntimeState{
-				reviewPending:       task.reviewPending,
-				supervisorModelName: supervisorModelName,
-				reviewerModelName:   reviewerModelName,
+			taskID := strings.TrimSpace(task.currentTaskID)
+			if _, ok := taskIDs[taskID]; !ok {
+				continue
 			}
+			if existing, ok := result[taskID]; ok && existing.hasSnapshotOverride {
+				continue
+			}
+			result[taskID] = delegationTaskRuntimeStateForTask(aggregate, task, false)
 		}
 		aggregate.mu.Unlock()
 	}
@@ -192,9 +225,50 @@ func (service *Service) delegationTaskRuntimeStates() map[string]delegationTaskR
 	return result
 }
 
+func delegationTaskRuntimeStateForTask(aggregate *supervisedAggregate, task *supervisedTaskState, snapshotOverride bool) delegationTaskRuntimeState {
+	if aggregate == nil || task == nil {
+		return delegationTaskRuntimeState{}
+	}
+	supervisorModelID := resolveSupervisorModelID(aggregate.config, aggregate.base)
+	supervisorModelName := resolveDelegationRuntimeModelName(aggregate.config, supervisorModelID, firstNonEmpty(strings.TrimSpace(aggregate.base.ModelName), strings.TrimSpace(aggregate.base.ModelID)))
+	reviewerModelID := firstNonEmpty(strings.TrimSpace(aggregate.config.ReviewerModelID), supervisorModelID, strings.TrimSpace(aggregate.base.ModelID))
+	state := delegationTaskRuntimeState{
+		hasSnapshotOverride: snapshotOverride,
+		reviewPending:       task.reviewPending,
+		supervisorModelName: supervisorModelName,
+		reviewerModelName:   resolveDelegationRuntimeModelName(aggregate.config, reviewerModelID, supervisorModelName),
+	}
+	if snapshotOverride {
+		state.status = task.lastSnapshot.Status
+		state.supervisionStatus = task.lastSnapshot.SupervisionStatus
+		state.supervisionPhase = resolveDelegationRuntimePhase(task.lastSnapshot, task.reviewPending)
+		state.issueCode = task.lastSnapshot.SupervisionIssue
+		state.error = safeDelegationRuntimeError(task.lastSnapshot.Status)
+		state.updatedAt = task.lastSnapshot.UpdatedAt
+		state.finishedAt = task.lastSnapshot.FinishedAt
+	}
+	return state
+}
+
+func safeDelegationRuntimeError(status delegation.TaskStatus) string {
+	switch status {
+	case delegation.TaskCanceled:
+		return "delegation task canceled"
+	case delegation.TaskTimedOut:
+		return "delegation task timed out"
+	case delegation.TaskFailed:
+		return "delegation task failed"
+	default:
+		return ""
+	}
+}
+
 func resolveDelegationRuntimePhase(snapshot delegation.TaskSnapshot, reviewPending bool) string {
 	if reviewPending {
 		return string(delegation.SupervisionStatusReviewing)
+	}
+	if delegatedStatusTerminal(snapshot.Status) && snapshot.SupervisionStatus != "" {
+		return strings.TrimSpace(string(snapshot.SupervisionStatus))
 	}
 	if snapshot.Checkpoint != nil && snapshot.Checkpoint.Phase != "" {
 		return strings.TrimSpace(string(snapshot.Checkpoint.Phase))
