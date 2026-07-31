@@ -131,12 +131,10 @@ function nameSummary(supplier) {
 }
 
 function modelHeader(supplier) {
-  const first = supplier?.models?.[0] || {};
-  const displayName = String(first.displayName || first.modelID || "").trim();
-  const modelID = String(first.modelID || "").trim();
+  const isNameMode = groupMode.value === SUPPLIER_GROUP_MODE_NAME;
   return {
-    displayName: displayName || nameSummary(supplier),
-    modelID: modelID || hostSummary(supplier),
+    displayName: isNameMode ? nameSummary(supplier) : hostSummary(supplier),
+    modelID: isNameMode ? hostSummary(supplier) : nameSummary(supplier),
     hasMore: (supplier?.models || []).length > 1,
   };
 }
@@ -468,9 +466,6 @@ onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }).catch(() =>
               </div>
 
               <div class="flex flex-col gap-1 text-xs">
-                <div class="truncate text-[11px] text-[#737373]" :title="`${nameSummary(supplier)} · ${hostSummary(supplier)}`">
-                  {{ nameSummary(supplier) }} · {{ hostSummary(supplier) }}
-                </div>
                 <div class="center-row justify-start gap-1.5 text-[#a3a3a3]">
                   <span class="text-[#d4d4d4]">{{ supplier.models.length }} 个模型</span>
                   <span

@@ -19,7 +19,7 @@ const (
 	usageEventKindProvider = "provider_call"
 	usageEventKindTurn     = "turn_finalized"
 	usageTurnStatusDone    = "completed"
-	
+
 	// 防抖批量写入配置
 	usageWriteDebounceMs = 2000 // 2秒内的写入合并为一次
 	usageWriteMaxBatch   = 50   // 或累积50个事件立即写入
@@ -27,7 +27,7 @@ const (
 
 type UsageFileStore struct {
 	path string
-	
+
 	// 批量写入优化
 	mu            sync.Mutex
 	pendingEvents []usageFileEvent
@@ -126,14 +126,14 @@ func (store *UsageFileStore) UpsertEvent(event usageFileEvent) error {
 	// 批量写入优化：将事件加入 pending 队列，防抖后统一写入
 	store.mu.Lock()
 	defer store.mu.Unlock()
-	
+
 	store.pendingEvents = append(store.pendingEvents, event)
-	
+
 	// 达到批量上限立即写入
 	if len(store.pendingEvents) >= usageWriteMaxBatch {
 		return store.flushPendingEventsLocked()
 	}
-	
+
 	// 否则启动/重置防抖定时器
 	if store.debounceTimer != nil {
 		store.debounceTimer.Stop()
@@ -143,7 +143,7 @@ func (store *UsageFileStore) UpsertEvent(event usageFileEvent) error {
 		defer store.mu.Unlock()
 		_ = store.flushPendingEventsLocked()
 	})
-	
+
 	return nil
 }
 
@@ -152,10 +152,10 @@ func (store *UsageFileStore) flushPendingEventsLocked() error {
 	if len(store.pendingEvents) == 0 {
 		return nil
 	}
-	
+
 	events := store.pendingEvents
 	store.pendingEvents = nil
-	
+
 	if err := os.MkdirAll(filepath.Dir(store.path), 0o755); err != nil {
 		return fmt.Errorf("create usage directory: %w", err)
 	}
@@ -172,7 +172,7 @@ func (store *UsageFileStore) flushPendingEventsLocked() error {
 	if doc.EventIndex == nil {
 		doc.EventIndex = make(map[string]usageFileEvent)
 	}
-	
+
 	// 批量应用所有事件
 	for _, event := range events {
 		oldEvent, found := doc.EventIndex[event.EventID]
@@ -190,17 +190,27 @@ func (store *UsageFileStore) flushPendingEventsLocked() error {
 		}
 		doc.EventIndex[event.EventID] = event
 	}
-	
+
 	doc.UpdatedAt = time.Now().UTC()
 	return writeJSONFileAtomic(store.path, doc)
 }
 
 // Reset 清空所有用量统计：Totals、Daily、RecentEvents 全部归零。
-// 在文件锁保护下原子写入空文档，确保与并发的 UpsertEvent 不冲突。
+// 在进程内锁和文件锁保护下停止延迟写入、丢弃 pending 事件并原子写入空文档。
 func (store *UsageFileStore) Reset() error {
 	if store == nil || strings.TrimSpace(store.path) == "" {
 		return nil
 	}
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	if store.debounceTimer != nil {
+		store.debounceTimer.Stop()
+		store.debounceTimer = nil
+	}
+	store.pendingEvents = nil
+
 	if err := os.MkdirAll(filepath.Dir(store.path), 0o755); err != nil {
 		return fmt.Errorf("create usage directory: %w", err)
 	}
@@ -212,6 +222,9 @@ func (store *UsageFileStore) Reset() error {
 	doc := usageFileDocument{
 		SchemaVersion: usageFileSchemaVersion,
 		UpdatedAt:     time.Now().UTC(),
+		Daily:         make([]usageFileDaily, 0),
+		RecentEvents:  make([]usageFileEvent, 0),
+		EventIndex:    make(map[string]usageFileEvent),
 	}
 	return writeJSONFileAtomic(store.path, doc)
 }

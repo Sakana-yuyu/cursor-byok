@@ -862,6 +862,14 @@ function loadCachedState() {
     if (!parsed || typeof parsed !== "object") {
       return {};
     }
+    // Older builds cached the full adapter list. Drop credential-bearing fields
+    // before they can enter reactive state; the first persistence effect below
+    // rewrites the same key using the safe whitelist.
+    delete parsed.modelAdapters;
+    delete parsed.serviceLastError;
+    delete parsed.netProxyHttp;
+    delete parsed.netProxyHttps;
+    delete parsed.netProxyDescription;
     return parsed;
   } catch (_error) {
     return {};
@@ -896,10 +904,27 @@ function normalizeDelegation(source) {
     };
   });
   const maxConcurrency = asPositiveInteger(raw.maxConcurrency);
+  const supervisionRaw = raw.supervision && typeof raw.supervision === "object" ? raw.supervision : {};
+  const positiveOrDefault = (value, fallback) => {
+    const parsed = asPositiveInteger(value);
+    return parsed > 0 ? parsed : fallback;
+  };
   return {
     enabled: asBoolean(raw.enabled, true),
     maxConcurrency: maxConcurrency > 0 ? maxConcurrency : 4,
     groups,
+    supervision: {
+      enabled: asBoolean(supervisionRaw.enabled),
+      supervisorModelID: asString(supervisionRaw.supervisorModelID || supervisionRaw.supervisorModelId),
+      reviewerModelID: asString(supervisionRaw.reviewerModelID || supervisionRaw.reviewerModelId),
+      workerGroupID: asString(supervisionRaw.workerGroupID || supervisionRaw.workerGroupId),
+      maxCorrections: positiveOrDefault(supervisionRaw.maxCorrections, 2),
+      maxRetries: positiveOrDefault(supervisionRaw.maxRetries, 1),
+      maxRounds: positiveOrDefault(supervisionRaw.maxRounds, 8),
+      allowReassign: asBoolean(supervisionRaw.allowReassign),
+      allowEscalate: asBoolean(supervisionRaw.allowEscalate),
+      strictUnavailable: asBoolean(supervisionRaw.strictUnavailable),
+    },
   };
 }
 
@@ -908,20 +933,33 @@ function normalizeDelegationForAdapters(source, adapters) {
   const availableModelIDs = new Set(
     asArray(adapters).map((adapter) => asString(adapter?.id)).filter(Boolean),
   );
+  const groups = delegation.groups.map((group) => {
+    const modelIDs = group.modelIDs.filter((modelID) => availableModelIDs.has(modelID));
+    const defaultModelID = modelIDs.includes(group.defaultModelID)
+      ? group.defaultModelID
+      : (modelIDs[0] || "");
+    return {
+      ...group,
+      enabled: modelIDs.length > 0 && group.enabled,
+      modelIDs,
+      defaultModelID,
+    };
+  });
+  const availableGroupIDs = new Set(groups.map((group) => group.id));
+  const supervision = { ...delegation.supervision };
+  if (supervision.workerGroupID && !availableGroupIDs.has(supervision.workerGroupID)) {
+    supervision.workerGroupID = "";
+  }
+  if (supervision.supervisorModelID && !availableModelIDs.has(supervision.supervisorModelID)) {
+    supervision.supervisorModelID = "";
+  }
+  if (supervision.reviewerModelID && !availableModelIDs.has(supervision.reviewerModelID)) {
+    supervision.reviewerModelID = "";
+  }
   return {
     ...delegation,
-    groups: delegation.groups.map((group) => {
-      const modelIDs = group.modelIDs.filter((modelID) => availableModelIDs.has(modelID));
-      const defaultModelID = modelIDs.includes(group.defaultModelID)
-        ? group.defaultModelID
-        : (modelIDs[0] || "");
-      return {
-        ...group,
-        enabled: modelIDs.length > 0 && group.enabled,
-        modelIDs,
-        defaultModelID,
-      };
-    }),
+    supervision,
+    groups,
   };
 }
 
@@ -999,6 +1037,23 @@ function buildConfigPayload(source = appState) {
   };
 }
 
+function buildCachedConfigPayload() {
+  const payload = buildConfigPayload();
+  return {
+    log: payload.log,
+    providerStreamIdleTimeout: payload.providerStreamIdleTimeout,
+    turnStaleTimeout: payload.turnStaleTimeout,
+    autoMatchContextWindow: payload.autoMatchContextWindow,
+    backendListenAddr: payload.backendListenAddr,
+    proxyListenAddr: payload.proxyListenAddr,
+    routing: payload.routing,
+    homeMetrics: payload.homeMetrics,
+    localResponseCache: payload.localResponseCache,
+    delegation: payload.delegation,
+    lastAgentModelHash: payload.lastAgentModelHash,
+  };
+}
+
 function applyConfigToState(config, { modelAdaptersOnly = false } = {}) {
   const normalized = normalizeConfig(config);
   if (modelAdaptersOnly) {
@@ -1021,8 +1076,30 @@ async function loadPersistedUserConfig() {
   return normalizeConfig(await loadUserConfig());
 }
 
-async function persistConfigPayload(config, { modelAdaptersOnly = false } = {}) {
-  const normalizedForValidation = normalizeConfig(config);
+let configPersistTail = Promise.resolve();
+
+async function persistConfigPayload(config, options = {}) {
+  const pendingSave = configPersistTail.catch(() => {}).then(() => (
+    persistConfigPayloadNow(config, options)
+  ));
+  configPersistTail = pendingSave.catch(() => {});
+  return pendingSave;
+}
+
+async function persistConfigPayloadNow(config, { modelAdaptersOnly = false } = {}) {
+  const latestConfig = await loadPersistedUserConfig();
+  const requestedConfig = normalizeConfig(config);
+  const mergedConfig = {
+    ...latestConfig,
+    ...requestedConfig,
+    modelAdapters: modelAdaptersOnly
+      ? requestedConfig.modelAdapters
+      : normalizeModelAdapters(appState.modelAdapters),
+    delegation: modelAdaptersOnly
+      ? latestConfig.delegation
+      : normalizeDelegation(appState.delegation),
+  };
+  const normalizedForValidation = normalizeConfig(mergedConfig);
   const prePayloadValidationError = validateModelAdapters(normalizedForValidation.modelAdapters);
   if (prePayloadValidationError) {
     return { ok: false, error: prePayloadValidationError };
@@ -1278,6 +1355,7 @@ export const appState = reactive({
   netProxyDescription: asString(cachedState.netProxyDescription),
 
   configSaving: false,
+  configReady: false,
   homeMetrics: createEmptyHomeMetrics(),
   homeMetricsLoading: false,
   homeMetricsError: "",
@@ -1304,11 +1382,10 @@ watchSyncEffect(() => {
     window.localStorage.setItem(
       APP_STATE_STORAGE_KEY,
       JSON.stringify({
-        ...buildConfigPayload(),
+        ...buildCachedConfigPayload(),
         serviceRunning: appState.serviceRunning,
         backendRunning: appState.backendRunning,
         proxyRunning: appState.proxyRunning,
-        serviceLastError: appState.serviceLastError,
         serviceListenAddr: appState.serviceListenAddr,
         configBackendListenAddr: appState.configBackendListenAddr,
         configProxyListenAddr: appState.configProxyListenAddr,
@@ -1319,10 +1396,7 @@ watchSyncEffect(() => {
         netProxyActive: appState.netProxyActive,
         netProxyUsingSystem: appState.netProxyUsingSystem,
         netProxyUsingEnv: appState.netProxyUsingEnv,
-        netProxyHttp: appState.netProxyHttp,
-        netProxyHttps: appState.netProxyHttps,
         netProxyPacIgnored: appState.netProxyPacIgnored,
-        netProxyDescription: appState.netProxyDescription,
       }),
     );
   } catch (_error) {
@@ -2352,6 +2426,10 @@ export async function bootstrapAppState() {
     await reloadUserConfig();
   } catch (_error) {
     // keep cached config if loading fails
+  } finally {
+    // Settings pages mount before bootstrap completes. Expose a single readiness
+    // gate so category components never race their own config fetch against this load.
+    appState.configReady = true;
   }
   await refreshModelAdapterTestResults().catch(() => {});
   try {

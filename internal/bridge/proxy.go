@@ -130,6 +130,11 @@ func (s *ProxyService) StopProxy() (ProxyState, error) {
 	return s.core.StopProxy()
 }
 
+// ResetUsageMetrics 清空会话与站点消耗共用的用量记录。
+func (s *ProxyService) ResetUsageMetrics() error {
+	return s.core.ResetUsageMetrics()
+}
+
 // GetDelegationTaskSnapshots returns retained Multitask worker state.
 func (s *ProxyService) GetDelegationTaskSnapshots() []DelegationTaskSnapshot {
 	return s.core.GetDelegationTaskSnapshots()

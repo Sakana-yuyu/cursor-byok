@@ -384,6 +384,14 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 	return service
 }
 
+// ResetUsageMetrics 清空当前 forwarder 持有的全部用量统计。
+func (service *Service) ResetUsageMetrics() error {
+	if service == nil || service.usageStore == nil {
+		return nil
+	}
+	return service.usageStore.Reset()
+}
+
 // newServiceWithDependencies 主要用于测试场景，允许注入替身依赖。
 func newServiceWithDependencies(store *ConversationFileStore, projector *HistoryProjector, compiler PromptCompiler, provider ProviderGateway, broker *StreamBroker) *Service {
 	historyRoot := ""

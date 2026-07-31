@@ -459,6 +459,7 @@ func parseCodexMCPTOML(data []byte) (map[string]normalizedMCPServer, error) {
 	lines := strings.Split(string(data), "\n")
 	servers := make(map[string]normalizedMCPServer)
 	var current string
+	currentTable := ""
 	currentFields := map[string]any{}
 
 	flush := func() {
@@ -469,6 +470,7 @@ func parseCodexMCPTOML(data []byte) (map[string]normalizedMCPServer, error) {
 			servers[current] = normalizeOneMCPServer(current, currentFields)
 		}
 		current = ""
+		currentTable = ""
 		currentFields = map[string]any{}
 	}
 
@@ -480,14 +482,33 @@ func parseCodexMCPTOML(data []byte) (map[string]normalizedMCPServer, error) {
 		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
 			header := strings.TrimSpace(line[1 : len(line)-1])
 			if strings.HasPrefix(header, "mcp_servers.") {
-				flush()
-				current = strings.TrimSpace(strings.TrimPrefix(header, "mcp_servers."))
-				currentFields = map[string]any{}
+				remainder := strings.TrimSpace(strings.TrimPrefix(header, "mcp_servers."))
+				serverName := remainder
+				tableName := ""
+				for _, table := range []string{"http_headers", "headers", "env"} {
+					suffix := "." + table
+					if strings.HasSuffix(remainder, suffix) {
+						serverName = strings.TrimSpace(strings.TrimSuffix(remainder, suffix))
+						tableName = table
+						break
+					}
+				}
+				if serverName == "" {
+					flush()
+					continue
+				}
+				if current != serverName {
+					flush()
+					current = serverName
+					currentFields = map[string]any{}
+				}
+				currentTable = strings.ToLower(tableName)
 				continue
 			}
 			// 进入其他表，结束当前 server 块
 			flush()
 			current = ""
+			currentTable = ""
 			continue
 		}
 		if current == "" {
@@ -495,6 +516,19 @@ func parseCodexMCPTOML(data []byte) (map[string]normalizedMCPServer, error) {
 		}
 		key, value, ok := splitTOMLKeyValue(line)
 		if !ok {
+			continue
+		}
+		if currentTable == "env" || currentTable == "headers" || currentTable == "http_headers" {
+			fieldName := "env"
+			if currentTable != "env" {
+				fieldName = "headers"
+			}
+			fields, _ := currentFields[fieldName].(map[string]any)
+			if fields == nil {
+				fields = make(map[string]any)
+				currentFields[fieldName] = fields
+			}
+			fields[strings.Trim(strings.TrimSpace(key), "\"'")] = unquoteTOML(value)
 			continue
 		}
 		switch strings.ToLower(key) {

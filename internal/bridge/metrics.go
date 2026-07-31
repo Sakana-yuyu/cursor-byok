@@ -28,13 +28,15 @@ type HomeMetricsSummary struct {
 type MetricsService struct {
 	includeCacheWriteInHitRate func() bool
 	priceRates                 func() []historymetrics.PriceRate
+	resetUsage                 func() error
 }
 
 // NewMetricsService 创建首页统计 service。
 // includeCacheWriteInHitRate 返回用户配置中的缓存命中率口径开关；为 nil 时按默认口径（不计入缓存创建）。
 // priceRates 返回当前配置渠道的价格条目快照，用于按读取时联结计算美元花费；为 nil 时花费恒为未知。
-func NewMetricsService(includeCacheWriteInHitRate func() bool, priceRates func() []historymetrics.PriceRate) *MetricsService {
-	return &MetricsService{includeCacheWriteInHitRate: includeCacheWriteInHitRate, priceRates: priceRates}
+// resetUsage 优先调用正在运行的 forwarder writer，确保 pending 事件不会在清除后写回；为空时使用文件重置兜底。
+func NewMetricsService(includeCacheWriteInHitRate func() bool, priceRates func() []historymetrics.PriceRate, resetUsage func() error) *MetricsService {
+	return &MetricsService{includeCacheWriteInHitRate: includeCacheWriteInHitRate, priceRates: priceRates, resetUsage: resetUsage}
 }
 
 // includeCacheWrite 读取当前缓存命中率口径。
@@ -148,8 +150,11 @@ func (service *MetricsService) GetHomeMetricsSummary() (HomeMetricsSummary, erro
 }
 
 // ResetUsageMetrics 清空所有会话统计：Totals、Daily、RecentEvents 全部归零。
-// 该操作不可恢复。forwarder 进程内的 UsageFileStore 在下次写入时会重新读取已清空的文件。
+// 优先委托给正在运行的 forwarder writer，确保 pending 事件不会在清除后写回。
 func (service *MetricsService) ResetUsageMetrics() error {
+	if service != nil && service.resetUsage != nil {
+		return service.resetUsage()
+	}
 	if err := appdata.EnsureAssistantHome(); err != nil {
 		return err
 	}
@@ -203,4 +208,3 @@ func unixMsRange(startUnixMs, endUnixMs int64) (time.Time, time.Time) {
 	}
 	return start, end
 }
-
