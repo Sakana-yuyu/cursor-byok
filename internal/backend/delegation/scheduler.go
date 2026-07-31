@@ -52,6 +52,7 @@ type TaskRequest struct {
 	Mode                         agentv1.AgentMode
 	ThinkingEffort               string
 	MaxMode                      bool
+	Contract                     *SupervisionTaskContract
 	SubagentModelOverrides       map[string]runtimecore.SubagentModelOverrideSelection
 	SelectedSubagentModels       []*agentv1.RequestedModel
 	SelectedSubagentModelDetails []*agentv1.ModelDetails
@@ -74,22 +75,26 @@ type TaskResult struct {
 
 // TaskSnapshot 是 UI 和主代理读取的稳定状态快照。
 type TaskSnapshot struct {
-	ID              string
-	Request         TaskRequest
-	Status          TaskStatus
-	Output          string
-	Error           string
-	ToolCallCount   int
-	EventID         string
-	Sequence        uint64
-	EventType       string
-	ParentRequestID string
-	ParentExecID    string
-	GroupID         string
-	QueuedAt        time.Time
-	StartedAt       time.Time
-	FinishedAt      time.Time
-	UpdatedAt       time.Time
+	ID                string
+	Request           TaskRequest
+	Contract          *SupervisionTaskContract
+	Checkpoint        *WorkerCheckpoint
+	SupervisionStatus SupervisionStatus
+	Counters          SupervisionCounters
+	Status            TaskStatus
+	Output            string
+	Error             string
+	ToolCallCount     int
+	EventID           string
+	Sequence          uint64
+	EventType         string
+	ParentRequestID   string
+	ParentExecID      string
+	GroupID           string
+	QueuedAt          time.Time
+	StartedAt         time.Time
+	FinishedAt        time.Time
+	UpdatedAt         time.Time
 }
 
 type Executor func(context.Context, TaskRequest) TaskResult
@@ -118,6 +123,9 @@ type Scheduler struct {
 type taskState struct {
 	snapshot   TaskSnapshot
 	result     TaskResult
+	contract   *SupervisionTaskContract
+	checkpoint *WorkerCheckpoint
+	counters   SupervisionCounters
 	ctx        context.Context
 	cancel     context.CancelFunc
 	runnerDone bool
@@ -179,6 +187,10 @@ func (s *Scheduler) Submit(request TaskRequest) (string, error) {
 		request.ID = fmt.Sprintf("delegated-%d", s.taskSequence.Add(1))
 	}
 	request = cloneTaskRequest(request)
+	if request.Contract != nil {
+		contract := normalizeSupervisionTaskContract(*request.Contract)
+		request.Contract = &contract
+	}
 	now := time.Now().UTC()
 
 	s.mu.Lock()
@@ -195,8 +207,20 @@ func (s *Scheduler) Submit(request TaskRequest) (string, error) {
 		return "", fmt.Errorf("delegated task %q is still executing", request.ID)
 	}
 	taskCtx, taskCancel := context.WithCancel(s.ctx)
+	supervisionStatus := SupervisionStatus("")
+	if request.Contract != nil {
+		supervisionStatus = SupervisionStatusPlanned
+	}
 	state := &taskState{
-		snapshot: TaskSnapshot{ID: request.ID, Request: request, Status: TaskQueued, QueuedAt: now},
+		snapshot: TaskSnapshot{
+			ID:                request.ID,
+			Request:           request,
+			Contract:          cloneSupervisionTaskContract(request.Contract),
+			Status:            TaskQueued,
+			SupervisionStatus: supervisionStatus,
+			QueuedAt:          now,
+		},
+		contract: request.Contract,
 		ctx:      taskCtx,
 		cancel:   taskCancel,
 	}
@@ -236,6 +260,9 @@ func (s *Scheduler) run(state *taskState) {
 		return
 	}
 	state.snapshot.Status = TaskRunning
+	if state.snapshot.Contract != nil {
+		state.snapshot.SupervisionStatus = SupervisionStatusRunning
+	}
 	state.snapshot.StartedAt = time.Now().UTC()
 	request := cloneTaskRequest(state.snapshot.Request)
 	s.publishLocked(&state.snapshot)
@@ -285,6 +312,9 @@ func (s *Scheduler) run(state *taskState) {
 	} else {
 		state.snapshot.Status = TaskCompleted
 	}
+	if state.snapshot.Contract != nil {
+		state.snapshot.SupervisionStatus = supervisionStatusForTaskStatus(state.snapshot.Status)
+	}
 	s.publishLocked(&state.snapshot)
 	s.mu.Unlock()
 }
@@ -305,6 +335,9 @@ func (s *Scheduler) Cancel(taskID string) error {
 		return nil
 	}
 	state.snapshot.Status = TaskCanceled
+	if state.snapshot.Contract != nil {
+		state.snapshot.SupervisionStatus = SupervisionStatusCanceled
+	}
 	state.snapshot.FinishedAt = time.Now().UTC()
 	state.cancel()
 	s.publishLocked(&state.snapshot)
@@ -325,8 +358,63 @@ func (s *Scheduler) CancelIfActive(taskID string) bool {
 		return false
 	}
 	state.snapshot.Status = TaskCanceled
+	if state.snapshot.Contract != nil {
+		state.snapshot.SupervisionStatus = SupervisionStatusCanceled
+	}
 	state.snapshot.FinishedAt = time.Now().UTC()
 	state.cancel()
+	s.publishLocked(&state.snapshot)
+	s.mu.Unlock()
+	return true
+}
+
+func (s *Scheduler) PublishCheckpoint(taskID string, checkpoint WorkerCheckpoint) bool {
+	if s == nil {
+		return false
+	}
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" {
+		return false
+	}
+	checkpoint = normalizeWorkerCheckpoint(checkpoint)
+	if checkpoint.TaskID == "" {
+		checkpoint.TaskID = taskID
+	}
+	if checkpoint.TaskID != taskID {
+		return false
+	}
+	s.mu.Lock()
+	state, ok := s.tasks[taskID]
+	if !ok || s.closed || isTerminalStatus(state.snapshot.Status) {
+		s.mu.Unlock()
+		return false
+	}
+	if state.snapshot.Contract != nil {
+		contract := state.snapshot.Contract
+		if contract.TaskID != "" && contract.TaskID != taskID {
+			s.mu.Unlock()
+			return false
+		}
+		if contract.AggregateID != "" {
+			if checkpoint.AggregateID == "" {
+				checkpoint.AggregateID = contract.AggregateID
+			} else if checkpoint.AggregateID != contract.AggregateID {
+				s.mu.Unlock()
+				return false
+			}
+		}
+		if checkpoint.Round <= 0 && contract.Round > 0 {
+			checkpoint.Round = contract.Round
+		}
+	}
+	state.checkpoint = cloneWorkerCheckpoint(&checkpoint)
+	state.snapshot.Checkpoint = cloneWorkerCheckpoint(&checkpoint)
+	state.counters.Checkpoints++
+	if checkpoint.Round > state.counters.Rounds {
+		state.counters.Rounds = checkpoint.Round
+	}
+	state.snapshot.Counters = cloneSupervisionCounters(state.counters)
+	state.snapshot.SupervisionStatus = checkpoint.Phase
 	s.publishLocked(&state.snapshot)
 	s.mu.Unlock()
 	return true
@@ -507,6 +595,9 @@ func (s *Scheduler) finishFromContext(state *taskState, cause error) {
 	} else {
 		state.snapshot.Status = TaskCanceled
 	}
+	if state.snapshot.Contract != nil {
+		state.snapshot.SupervisionStatus = supervisionStatusForTaskStatus(state.snapshot.Status)
+	}
 	s.publishLocked(&state.snapshot)
 	s.mu.Unlock()
 }
@@ -596,7 +687,17 @@ func (s *Scheduler) decorateSnapshotLocked(snapshot *TaskSnapshot) {
 	now := time.Now().UTC()
 	snapshot.Sequence = s.eventSequence.Add(1)
 	snapshot.EventID = fmt.Sprintf("delegation-event-%d", snapshot.Sequence)
-	snapshot.EventType = string(snapshot.Status)
+	switch {
+	case snapshot.Checkpoint != nil && snapshot.Checkpoint.Phase != "":
+		snapshot.EventType = string(snapshot.Checkpoint.Phase)
+	case snapshot.SupervisionStatus != "":
+		snapshot.EventType = string(snapshot.SupervisionStatus)
+	default:
+		snapshot.EventType = string(snapshot.Status)
+	}
+	if snapshot.Checkpoint != nil {
+		snapshot.Checkpoint.EventSequence = snapshot.Sequence
+	}
 	snapshot.ParentRequestID = strings.TrimSpace(snapshot.Request.ParentRequest)
 	snapshot.ParentExecID = strings.TrimSpace(snapshot.Request.ParentExecID)
 	snapshot.GroupID = snapshot.ParentExecID
@@ -613,6 +714,7 @@ func (s *Scheduler) notifyStateChangedLocked() {
 
 func cloneTaskRequest(request TaskRequest) TaskRequest {
 	request.ArgsJSON = append([]byte(nil), request.ArgsJSON...)
+	request.Contract = cloneSupervisionTaskContract(request.Contract)
 	request.ToolPermission = cloneToolPermissions(request.ToolPermission)
 	request.SubagentModelOverrides = cloneSubagentModelOverrides(request.SubagentModelOverrides)
 	request.SelectedSubagentModels = cloneRequestedModels(request.SelectedSubagentModels)
@@ -623,6 +725,9 @@ func cloneTaskRequest(request TaskRequest) TaskRequest {
 
 func cloneTaskSnapshot(snapshot TaskSnapshot) TaskSnapshot {
 	snapshot.Request = cloneTaskRequest(snapshot.Request)
+	snapshot.Contract = cloneSupervisionTaskContract(snapshot.Contract)
+	snapshot.Checkpoint = cloneWorkerCheckpoint(snapshot.Checkpoint)
+	snapshot.Counters = cloneSupervisionCounters(snapshot.Counters)
 	return snapshot
 }
 
