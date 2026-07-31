@@ -25,11 +25,22 @@ type streamDelegationResult struct {
 }
 
 type delegatedAggregate struct {
+	mu               sync.Mutex
 	id               string
 	workerIDs        []string
 	submissionErrors []delegatedWorkerResult
 	ctx              context.Context
 	cancel           context.CancelFunc
+	scheduler        *delegation.Scheduler
+	canceled         bool
+	startupDone      bool
+}
+
+type delegatedAggregateSnapshot struct {
+	workerIDs        []string
+	submissionErrors []delegatedWorkerResult
+	canceled         bool
+	startupDone      bool
 }
 
 type delegatedWorkerResult struct {
@@ -62,6 +73,7 @@ type multitaskDelegationCoordinator struct {
 	mu         sync.RWMutex
 	startMu    sync.Mutex
 	aggregates map[string]*delegatedAggregate
+	closed     bool
 }
 
 func newMultitaskDelegationCoordinator(service *Service, configProvider delegation.RuntimeConfigProvider) *multitaskDelegationCoordinator {
@@ -121,15 +133,8 @@ func (service *Service) tryStartDelegatedTask(stream *ActiveStream, invocation r
 	base.ThinkingEffort = thinkingEffort
 	base.MaxMode = maxMode
 
-	stream.mu.Lock()
-	stream.PendingExecs[pending.ExecID] = pending
-	stream.UpdatedAt = now
-	stream.mu.Unlock()
 	started, err := service.multitaskDelegation.Start(stream, pending, base)
 	if err != nil || !started {
-		stream.mu.Lock()
-		delete(stream.PendingExecs, pending.ExecID)
-		stream.mu.Unlock()
 		return false, err
 	}
 	service.recordExecDispatchMetadata(stream, pending, false, true, "delegation_scheduler")
@@ -184,14 +189,20 @@ func (coordinator *multitaskDelegationCoordinator) Close() {
 	coordinator.startMu.Lock()
 	defer coordinator.startMu.Unlock()
 	coordinator.mu.Lock()
+	if coordinator.closed {
+		coordinator.mu.Unlock()
+		return
+	}
+	coordinator.closed = true
+	aggregates := make([]*delegatedAggregate, 0, len(coordinator.aggregates))
 	for _, aggregate := range coordinator.aggregates {
-		aggregate.cancel()
-		for _, workerID := range aggregate.workerIDs {
-			_ = coordinator.scheduler.Cancel(workerID)
-		}
+		aggregates = append(aggregates, aggregate)
 	}
 	coordinator.aggregates = make(map[string]*delegatedAggregate)
 	coordinator.mu.Unlock()
+	for _, aggregate := range aggregates {
+		aggregate.cancelTasks()
+	}
 	if coordinator.scheduler != nil {
 		coordinator.scheduler.Close()
 	}
@@ -245,18 +256,32 @@ func (coordinator *multitaskDelegationCoordinator) enabledWorkers(base delegatio
 }
 
 func (coordinator *multitaskDelegationCoordinator) Start(stream *ActiveStream, pending runtimecore.PendingExec, base delegation.TaskRequest) (bool, error) {
-	if coordinator == nil || coordinator.scheduler == nil || stream == nil {
+	if coordinator == nil || stream == nil {
 		return false, nil
 	}
 	coordinator.startMu.Lock()
-	defer coordinator.startMu.Unlock()
+	coordinator.mu.RLock()
+	closed := coordinator.closed
+	coordinator.mu.RUnlock()
+	if closed {
+		coordinator.startMu.Unlock()
+		return false, fmt.Errorf("multitask delegation coordinator is closed")
+	}
 	config := coordinator.runtimeConfig()
 	coordinator.ensureScheduler(config.MaxConcurrency)
 	workers := coordinator.enabledWorkers(base, config)
 	if len(workers) == 0 {
+		coordinator.startMu.Unlock()
 		return false, nil
 	}
-	coordinator.scheduler.EnsureRetentionLimit(len(coordinator.scheduler.Snapshots()) + len(workers) + delegation.DefaultRetentionLimit)
+	coordinator.mu.RLock()
+	scheduler := coordinator.scheduler
+	coordinator.mu.RUnlock()
+	if scheduler == nil {
+		coordinator.startMu.Unlock()
+		return false, fmt.Errorf("delegation scheduler is nil")
+	}
+	scheduler.EnsureRetentionLimit(len(scheduler.Snapshots()) + len(workers) + delegation.DefaultRetentionLimit)
 	aggregateID := strings.TrimSpace(pending.ExecID)
 	ctx, cancel := context.WithCancel(context.Background())
 	aggregate := &delegatedAggregate{
@@ -264,32 +289,30 @@ func (coordinator *multitaskDelegationCoordinator) Start(stream *ActiveStream, p
 		workerIDs: make([]string, 0, len(workers)),
 		ctx:       ctx,
 		cancel:    cancel,
+		scheduler: scheduler,
 	}
 	coordinator.mu.Lock()
 	if _, exists := coordinator.aggregates[aggregateID]; exists {
 		coordinator.mu.Unlock()
+		coordinator.startMu.Unlock()
 		cancel()
 		return false, fmt.Errorf("delegation aggregate %q already exists", aggregateID)
 	}
 	coordinator.aggregates[aggregateID] = aggregate
 	coordinator.mu.Unlock()
+	stream.mu.Lock()
+	stream.PendingExecs[pending.ExecID] = pending
+	stream.UpdatedAt = time.Now().UTC()
+	stream.mu.Unlock()
+	coordinator.startMu.Unlock()
 
 	for _, worker := range workers {
-		workerID, err := coordinator.scheduler.Submit(worker)
-		if err != nil {
-			aggregate.submissionErrors = append(aggregate.submissionErrors, delegatedWorkerResult{
-				TaskID: worker.ID, ModelID: worker.ModelID, ModelGroupID: worker.ModelGroupID,
-				ExecutionMode: worker.ExecutionMode, Status: delegation.TaskFailed, Error: err.Error(),
-			})
-			continue
+		if !aggregate.submitWorker(worker) {
+			break
 		}
-		aggregate.workerIDs = append(aggregate.workerIDs, workerID)
 	}
-	if len(aggregate.workerIDs) == 0 {
-		go coordinator.awaitAggregate(stream, pending, aggregate)
-		return true, nil
-	}
-	go coordinator.awaitAggregate(stream, pending, aggregate)
+	snapshot := aggregate.finishStartup()
+	go coordinator.awaitAggregate(stream, pending, aggregate, snapshot)
 	return true, nil
 }
 
@@ -300,6 +323,9 @@ func (coordinator *multitaskDelegationCoordinator) ensureScheduler(maxConcurrenc
 	normalized := normalizedDelegationConcurrency(maxConcurrency)
 	coordinator.mu.Lock()
 	defer coordinator.mu.Unlock()
+	if coordinator.closed {
+		return
+	}
 	if coordinator.scheduler != nil && (coordinator.maxConcurrency == normalized || len(coordinator.aggregates) > 0) {
 		return
 	}
@@ -322,15 +348,23 @@ func (coordinator *multitaskDelegationCoordinator) executeWorker(ctx context.Con
 	}
 }
 
-func (coordinator *multitaskDelegationCoordinator) awaitAggregate(stream *ActiveStream, pending runtimecore.PendingExec, aggregate *delegatedAggregate) {
+func (coordinator *multitaskDelegationCoordinator) awaitAggregate(stream *ActiveStream, pending runtimecore.PendingExec, aggregate *delegatedAggregate, snapshot delegatedAggregateSnapshot) {
 	if coordinator == nil || aggregate == nil {
 		return
 	}
-	defer coordinator.removeAggregate(aggregate.id)
-	if len(aggregate.workerIDs) > 0 {
-		err := coordinator.scheduler.WaitForTerminal(aggregate.ctx, aggregate.workerIDs)
+	defer coordinator.removeAggregate(aggregate)
+	if !snapshot.startupDone {
+		return
+	}
+	if snapshot.canceled {
+		aggregate.cancelTasks()
+		return
+	}
+	if len(snapshot.workerIDs) > 0 {
+		err := aggregate.scheduler.WaitForTerminal(aggregate.ctx, snapshot.workerIDs)
 		if err != nil {
 			if errors.Is(err, context.Canceled) && aggregate.ctx.Err() != nil {
+				aggregate.cancelTasks()
 				return
 			}
 			waitErr := fmt.Errorf("delegation aggregate %q wait failed: %w", strings.TrimSpace(aggregate.id), err)
@@ -345,7 +379,11 @@ func (coordinator *multitaskDelegationCoordinator) awaitAggregate(stream *Active
 			return
 		}
 	}
-	result := coordinator.collectAggregate(aggregate)
+	if aggregate.isCanceled() {
+		aggregate.cancelTasks()
+		return
+	}
+	result := coordinator.collectAggregate(aggregate, snapshot)
 	payload, err := json.Marshal(result)
 	if err != nil {
 		payload = []byte(fmt.Sprintf(`{"aggregate_id":%q,"status":"failed","error":%q}`, aggregate.id, err.Error()))
@@ -371,27 +409,27 @@ func (coordinator *multitaskDelegationCoordinator) awaitAggregate(stream *Active
 	}
 }
 
-func (coordinator *multitaskDelegationCoordinator) collectAggregate(aggregate *delegatedAggregate) delegatedAggregateResult {
-	result := delegatedAggregateResult{AggregateID: aggregate.id, Tasks: append([]delegatedWorkerResult(nil), aggregate.submissionErrors...)}
-	totalWorkers := len(aggregate.workerIDs) + len(aggregate.submissionErrors)
+func (coordinator *multitaskDelegationCoordinator) collectAggregate(aggregate *delegatedAggregate, snapshot delegatedAggregateSnapshot) delegatedAggregateResult {
+	result := delegatedAggregateResult{AggregateID: aggregate.id, Tasks: append([]delegatedWorkerResult(nil), snapshot.submissionErrors...)}
+	totalWorkers := len(snapshot.workerIDs) + len(snapshot.submissionErrors)
 	workerOutputLimit := 0
 	if totalWorkers > 0 {
 		workerOutputLimit = (48 * projectedReplayKiB) / totalWorkers
 	}
-	for _, workerID := range aggregate.workerIDs {
-		snapshot, ok := coordinator.scheduler.Snapshot(workerID)
+	for _, workerID := range snapshot.workerIDs {
+		taskSnapshot, ok := aggregate.scheduler.Snapshot(workerID)
 		if !ok {
 			continue
 		}
 		output := ""
 		if workerOutputLimit >= 128 {
-			output = truncateProjectedReplayText("Task", snapshot.Output, workerOutputLimit)
+			output = truncateProjectedReplayText("Task", taskSnapshot.Output, workerOutputLimit)
 		}
 		worker := delegatedWorkerResult{
-			TaskID: snapshot.ID, ModelID: snapshot.Request.ModelID, ModelGroupID: snapshot.Request.ModelGroupID,
-			ExecutionMode: snapshot.Request.ExecutionMode, Status: snapshot.Status,
-			DurationMS: delegatedDuration(snapshot), Output: output, Error: truncateProjectedReplayText("Task error", snapshot.Error, 2048),
-			ToolCallCount: snapshot.ToolCallCount,
+			TaskID: taskSnapshot.ID, ModelID: taskSnapshot.Request.ModelID, ModelGroupID: taskSnapshot.Request.ModelGroupID,
+			ExecutionMode: taskSnapshot.Request.ExecutionMode, Status: taskSnapshot.Status,
+			DurationMS: delegatedDuration(taskSnapshot), Output: output, Error: truncateProjectedReplayText("Task error", taskSnapshot.Error, 2048),
+			ToolCallCount: taskSnapshot.ToolCallCount,
 		}
 		result.Tasks = append(result.Tasks, worker)
 	}
@@ -428,16 +466,15 @@ func (coordinator *multitaskDelegationCoordinator) CancelAggregate(aggregateID s
 	if aggregate == nil {
 		return
 	}
-	aggregate.cancel()
-	for _, workerID := range aggregate.workerIDs {
-		_ = coordinator.scheduler.Cancel(workerID)
-	}
+	aggregate.cancelTasks()
 }
 
 func (coordinator *multitaskDelegationCoordinator) CancelStream(stream *ActiveStream) {
 	if coordinator == nil || stream == nil {
 		return
 	}
+	coordinator.startMu.Lock()
+	defer coordinator.startMu.Unlock()
 	stream.mu.Lock()
 	execIDs := make([]string, 0)
 	for _, pending := range stream.PendingExecs {
@@ -481,10 +518,87 @@ func (coordinator *multitaskDelegationCoordinator) CancelTask(taskID string) boo
 	return scheduler.CancelIfActive(taskID)
 }
 
-func (coordinator *multitaskDelegationCoordinator) removeAggregate(aggregateID string) {
+func (coordinator *multitaskDelegationCoordinator) removeAggregate(aggregate *delegatedAggregate) {
+	if coordinator == nil || aggregate == nil {
+		return
+	}
 	coordinator.mu.Lock()
-	delete(coordinator.aggregates, strings.TrimSpace(aggregateID))
+	aggregateID := strings.TrimSpace(aggregate.id)
+	if coordinator.aggregates[aggregateID] == aggregate {
+		delete(coordinator.aggregates, aggregateID)
+	}
 	coordinator.mu.Unlock()
+}
+
+func (aggregate *delegatedAggregate) submitWorker(worker delegation.TaskRequest) bool {
+	if aggregate == nil || aggregate.scheduler == nil {
+		return false
+	}
+	aggregate.mu.Lock()
+	defer aggregate.mu.Unlock()
+	if aggregate.canceled || aggregate.ctx.Err() != nil {
+		return false
+	}
+	workerID, err := aggregate.scheduler.Submit(worker)
+	if err != nil {
+		aggregate.submissionErrors = append(aggregate.submissionErrors, delegatedWorkerResult{
+			TaskID: worker.ID, ModelID: worker.ModelID, ModelGroupID: worker.ModelGroupID,
+			ExecutionMode: worker.ExecutionMode, Status: delegation.TaskFailed, Error: err.Error(),
+		})
+		return true
+	}
+	aggregate.workerIDs = append(aggregate.workerIDs, workerID)
+	return true
+}
+
+func (aggregate *delegatedAggregate) finishStartup() delegatedAggregateSnapshot {
+	if aggregate == nil {
+		return delegatedAggregateSnapshot{}
+	}
+	aggregate.mu.Lock()
+	aggregate.startupDone = true
+	snapshot := aggregate.snapshotLocked()
+	aggregate.mu.Unlock()
+	return snapshot
+}
+
+func (aggregate *delegatedAggregate) isCanceled() bool {
+	if aggregate == nil {
+		return true
+	}
+	aggregate.mu.Lock()
+	canceled := aggregate.canceled || aggregate.ctx.Err() != nil
+	aggregate.mu.Unlock()
+	return canceled
+}
+
+func (aggregate *delegatedAggregate) cancelTasks() {
+	if aggregate == nil {
+		return
+	}
+	aggregate.mu.Lock()
+	if !aggregate.canceled {
+		aggregate.canceled = true
+		aggregate.cancel()
+	}
+	workerIDs := append([]string(nil), aggregate.workerIDs...)
+	scheduler := aggregate.scheduler
+	aggregate.mu.Unlock()
+	if scheduler == nil {
+		return
+	}
+	for _, workerID := range workerIDs {
+		_ = scheduler.Cancel(workerID)
+	}
+}
+
+func (aggregate *delegatedAggregate) snapshotLocked() delegatedAggregateSnapshot {
+	return delegatedAggregateSnapshot{
+		workerIDs:        append([]string(nil), aggregate.workerIDs...),
+		submissionErrors: append([]delegatedWorkerResult(nil), aggregate.submissionErrors...),
+		canceled:         aggregate.canceled || aggregate.ctx.Err() != nil,
+		startupDone:      aggregate.startupDone,
+	}
 }
 
 func delegatedStatusTerminal(status delegation.TaskStatus) bool {
