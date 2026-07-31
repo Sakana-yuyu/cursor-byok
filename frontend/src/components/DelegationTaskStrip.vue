@@ -36,6 +36,26 @@ function statusClass(status) {
   return "text-[#a3a3a3]";
 }
 
+function phaseClass(phase) {
+  if (phase === "completed") return "text-[#6ee7a5]";
+  if (phase === "failed" || phase === "canceled" || phase === "circuit_open") return "text-[#fca5a5]";
+  if (phase === "reviewing" || phase === "correcting" || phase === "retrying" || phase === "reassigning" || phase === "checkpointing" || phase === "running" || phase === "escalated") {
+    return "text-[#facc15]";
+  }
+  return "text-[#858585]";
+}
+
+function compactSupervision(item) {
+  const parts = [];
+  if (item?.workerRole) parts.push(item.workerRole);
+  if (item?.supervisionRound) parts.push(`r${item.supervisionRound}`);
+  if (Number.isFinite(item?.correctionCount)) parts.push(`c${item.correctionCount}`);
+  if (Number.isFinite(item?.retryCount)) parts.push(`rt${item.retryCount}`);
+  if (Number.isFinite(item?.reassignCount)) parts.push(`ra${item.reassignCount}`);
+  if (Number.isFinite(item?.escalateCount)) parts.push(`e${item.escalateCount}`);
+  return parts.join(" · ");
+}
+
 async function refresh() {
   if (refreshBusy) return;
   const currentGeneration = generation;
@@ -90,7 +110,13 @@ onUnmounted(() => window.clearInterval(refreshTimer));
           <span class="size-2 shrink-0 rounded-full" :class="item.cancelable ? 'bg-[#facc15]' : 'bg-[#525252]'" />
           <div class="min-w-0 flex-1">
             <div class="truncate text-xs text-white" :title="item.modelName || item.modelId">{{ item.modelName || item.modelId || "模型" }}</div>
-            <div class="mt-0.5 text-[11px]" :class="statusClass(item.status)">{{ statusLabels[item.status] || item.status }}</div>
+            <div class="mt-0.5 flex min-w-0 items-center gap-2 text-[11px]">
+              <span :class="statusClass(item.status)">{{ statusLabels[item.status] || item.status }}</span>
+              <span v-if="item.supervisionPhase" class="truncate" :class="phaseClass(item.supervisionPhase)" :title="item.supervisionPhase">{{ item.supervisionPhase }}</span>
+            </div>
+            <div v-if="item.isSupervised" class="mt-0.5 truncate text-[11px] text-[#858585]" :title="compactSupervision(item)">{{ compactSupervision(item) }}</div>
+            <div v-if="item.issueCategory" class="mt-0.5 truncate text-[11px] text-[#facc15]" :title="item.issueCategory">{{ item.issueCategory }}</div>
+            <div v-else-if="item.progressSummary" class="mt-0.5 line-clamp-2 break-words text-[11px] text-[#858585]" :title="item.progressSummary">{{ item.progressSummary }}</div>
           </div>
           <Button v-if="item.cancelable" variant="text" :disabled="Boolean(state.canceling[item.id])" @click="handleCancel(item)">{{ state.canceling[item.id] ? "取消中..." : "取消" }}</Button>
         </div>

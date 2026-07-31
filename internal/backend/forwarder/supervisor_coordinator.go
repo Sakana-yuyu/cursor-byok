@@ -250,6 +250,17 @@ func (aggregate *supervisedAggregate) submitAttempt(task *supervisedTaskState, r
 	request.ParentExecID = strings.TrimSpace(aggregate.id)
 	request.Contract = cloneSupervisionContract(task.contract)
 	request.ID = strings.TrimSpace(task.currentTaskID)
+	request.RuntimeSupervisionRound = task.round
+	request.RuntimeCorrectionCount = task.corrections
+	request.RuntimeRetryCount = task.retries
+	request.RuntimeReassignCount = task.reassignments
+	if task.escalated {
+		request.RuntimeEscalateCount = 1
+	} else {
+		request.RuntimeEscalateCount = 0
+	}
+	request.RuntimeSupervisionIssue = issueCodeOrDefault(task.lastIssue, "")
+	request.RuntimeProgressSummary = currentProgressSummary(task.contract, task.lastSnapshot)
 	if extraPrompt = strings.TrimSpace(extraPrompt); extraPrompt != "" {
 		request.Prompt = strings.TrimSpace(request.Prompt + "\n\nSupervisor correction:\n" + extraPrompt)
 	}
@@ -922,11 +933,7 @@ func (aggregate *supervisedAggregate) settleCurrentTask(task *supervisedTaskStat
 		return
 	}
 	task.completed = true
-	task.lastSnapshot.ID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ID), strings.TrimSpace(task.currentTaskID))
-	task.lastSnapshot.ModelID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelID), strings.TrimSpace(task.currentRequest.ModelID))
-	task.lastSnapshot.ModelName = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelName), strings.TrimSpace(task.currentRequest.ModelName))
-	task.lastSnapshot.ModelGroupID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelGroupID), strings.TrimSpace(task.currentRequest.ModelGroupID))
-	task.lastSnapshot.ExecutionMode = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ExecutionMode), strings.TrimSpace(task.currentRequest.ExecutionMode))
+	applyTaskRuntimeMetadata(task)
 	if task.lastSnapshot.SupervisionStatus == "" {
 		task.lastSnapshot.SupervisionStatus = supervisionStatusFromTaskStatus(task.lastSnapshot.Status)
 	}
@@ -937,11 +944,7 @@ func (aggregate *supervisedAggregate) markTaskFailed(task *supervisedTaskState, 
 		return
 	}
 	task.completed = true
-	task.lastSnapshot.ID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ID), strings.TrimSpace(task.currentTaskID))
-	task.lastSnapshot.ModelID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelID), strings.TrimSpace(task.currentRequest.ModelID))
-	task.lastSnapshot.ModelName = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelName), strings.TrimSpace(task.currentRequest.ModelName))
-	task.lastSnapshot.ModelGroupID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelGroupID), strings.TrimSpace(task.currentRequest.ModelGroupID))
-	task.lastSnapshot.ExecutionMode = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ExecutionMode), strings.TrimSpace(task.currentRequest.ExecutionMode))
+	applyTaskRuntimeMetadata(task)
 	task.lastSnapshot.Status = delegation.TaskFailed
 	if circuitOpen {
 		task.lastSnapshot.SupervisionStatus = delegation.SupervisionStatusCircuitOpen
@@ -961,6 +964,7 @@ func (aggregate *supervisedAggregate) markTaskFailed(task *supervisedTaskState, 
 			DetectedAt: now,
 		}
 	}
+	applyTaskRuntimeMetadata(task)
 }
 
 func (aggregate *supervisedAggregate) markTaskAbandoned(task *supervisedTaskState, code delegation.SupervisionIssueCode, reason string) {
@@ -969,11 +973,7 @@ func (aggregate *supervisedAggregate) markTaskAbandoned(task *supervisedTaskStat
 	}
 	task.completed = true
 	task.reviewPending = false
-	task.lastSnapshot.ID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ID), strings.TrimSpace(task.currentTaskID))
-	task.lastSnapshot.ModelID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelID), strings.TrimSpace(task.currentRequest.ModelID))
-	task.lastSnapshot.ModelName = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelName), strings.TrimSpace(task.currentRequest.ModelName))
-	task.lastSnapshot.ModelGroupID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelGroupID), strings.TrimSpace(task.currentRequest.ModelGroupID))
-	task.lastSnapshot.ExecutionMode = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ExecutionMode), strings.TrimSpace(task.currentRequest.ExecutionMode))
+	applyTaskRuntimeMetadata(task)
 	task.lastSnapshot.Status = delegation.TaskCanceled
 	task.lastSnapshot.SupervisionStatus = delegation.SupervisionStatusCanceled
 	task.lastSnapshot.Error = truncateProjectedReplayText("Supervisor reason", firstNonEmpty(strings.TrimSpace(reason), "stale supervised event ignored"), 512)
@@ -992,6 +992,30 @@ func (aggregate *supervisedAggregate) markTaskAbandoned(task *supervisedTaskStat
 			DetectedAt: now,
 		}
 	}
+	applyTaskRuntimeMetadata(task)
+}
+
+func applyTaskRuntimeMetadata(task *supervisedTaskState) {
+	if task == nil {
+		return
+	}
+	task.lastSnapshot.ID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ID), strings.TrimSpace(task.currentTaskID))
+	task.lastSnapshot.ModelID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelID), strings.TrimSpace(task.currentRequest.ModelID))
+	task.lastSnapshot.ModelName = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelName), strings.TrimSpace(task.currentRequest.ModelName))
+	task.lastSnapshot.ModelGroupID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelGroupID), strings.TrimSpace(task.currentRequest.ModelGroupID))
+	task.lastSnapshot.WorkerRole = firstNonEmpty(strings.TrimSpace(task.currentRequest.SubagentType), strings.TrimSpace(task.contract.Role), "generalPurpose")
+	task.lastSnapshot.ExecutionMode = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ExecutionMode), strings.TrimSpace(task.currentRequest.ExecutionMode))
+	task.lastSnapshot.SupervisionRound = task.round
+	task.lastSnapshot.CorrectionCount = task.corrections
+	task.lastSnapshot.RetryCount = task.retries
+	task.lastSnapshot.ReassignCount = task.reassignments
+	if task.escalated {
+		task.lastSnapshot.EscalateCount = 1
+	} else {
+		task.lastSnapshot.EscalateCount = 0
+	}
+	task.lastSnapshot.SupervisionIssue = issueCodeOrDefault(task.lastIssue, "")
+	task.lastSnapshot.ProgressSummary = currentProgressSummary(task.contract, task.lastSnapshot)
 }
 
 func buildWorkerSupervisionContract(aggregateID string, base delegation.TaskRequest, worker delegation.TaskRequest, config delegation.RuntimeConfig) delegation.SupervisionTaskContract {
@@ -1051,6 +1075,13 @@ func resolveReviewCheckpoint(contract delegation.SupervisionTaskContract, snapsh
 		Blocker:              strings.TrimSpace(snapshot.Error),
 		EffectiveProgressAt:  snapshot.FinishedAt,
 	}
+}
+
+func currentProgressSummary(contract delegation.SupervisionTaskContract, snapshot delegation.TaskSnapshot) string {
+	if value := strings.TrimSpace(snapshot.ProgressSummary); value != "" {
+		return value
+	}
+	return strings.TrimSpace(resolveReviewCheckpoint(contract, snapshot).ProgressSummary)
 }
 
 func detectSupervisionIssue(task *supervisedTaskState, checkpoint delegation.WorkerCheckpoint, snapshot delegation.TaskSnapshot, result delegation.TaskResult, previousCheckpoint *delegation.WorkerCheckpoint, previousSnapshot delegation.TaskSnapshot, previousResult delegation.TaskResult) *delegation.SupervisionIssue {

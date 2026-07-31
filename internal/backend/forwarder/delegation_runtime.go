@@ -15,8 +15,17 @@ type DelegationTaskSnapshot struct {
 	ModelID          string                `json:"modelId"`
 	ModelName        string                `json:"modelName"`
 	ModelGroupID     string                `json:"modelGroupId"`
+	WorkerRole       string                `json:"workerRole,omitempty"`
 	ExecutionMode    string                `json:"executionMode"`
 	Status           delegation.TaskStatus `json:"status"`
+	SupervisionPhase string                `json:"supervisionPhase,omitempty"`
+	SupervisionRound int                   `json:"supervisionRound,omitempty"`
+	CorrectionCount  int                   `json:"correctionCount,omitempty"`
+	RetryCount       int                   `json:"retryCount,omitempty"`
+	ReassignCount    int                   `json:"reassignCount,omitempty"`
+	EscalateCount    int                   `json:"escalateCount,omitempty"`
+	IssueCategory    string                `json:"issueCategory,omitempty"`
+	ProgressSummary  string                `json:"progressSummary,omitempty"`
 	ToolCallCount    int                   `json:"toolCallCount"`
 	Error            string                `json:"error,omitempty"`
 	EventID          string                `json:"eventId"`
@@ -62,8 +71,17 @@ func (service *Service) DelegationTaskSnapshots() []DelegationTaskSnapshot {
 			ModelID:          strings.TrimSpace(snapshot.ModelID),
 			ModelName:        strings.TrimSpace(snapshot.ModelName),
 			ModelGroupID:     strings.TrimSpace(snapshot.ModelGroupID),
+			WorkerRole:       strings.TrimSpace(snapshot.WorkerRole),
 			ExecutionMode:    strings.TrimSpace(snapshot.ExecutionMode),
 			Status:           snapshot.Status,
+			SupervisionPhase: strings.TrimSpace(string(snapshot.SupervisionStatus)),
+			SupervisionRound: snapshot.SupervisionRound,
+			CorrectionCount:  snapshot.CorrectionCount,
+			RetryCount:       snapshot.RetryCount,
+			ReassignCount:    snapshot.ReassignCount,
+			EscalateCount:    snapshot.EscalateCount,
+			IssueCategory:    strings.TrimSpace(string(snapshot.SupervisionIssue)),
+			ProgressSummary:  strings.TrimSpace(snapshot.ProgressSummary),
 			ToolCallCount:    snapshot.ToolCallCount,
 			Error:            strings.TrimSpace(snapshot.Error),
 			EventID:          strings.TrimSpace(snapshot.EventID),
