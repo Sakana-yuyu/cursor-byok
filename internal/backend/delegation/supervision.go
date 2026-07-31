@@ -173,8 +173,8 @@ func cloneWorkerCheckpoint(checkpoint *WorkerCheckpoint) *WorkerCheckpoint {
 func normalizeWorkerCheckpoint(checkpoint WorkerCheckpoint) WorkerCheckpoint {
 	checkpoint.AggregateID = strings.TrimSpace(checkpoint.AggregateID)
 	checkpoint.TaskID = strings.TrimSpace(checkpoint.TaskID)
-	if checkpoint.Round < 1 {
-		checkpoint.Round = 1
+	if checkpoint.Round < 0 {
+		checkpoint.Round = 0
 	}
 	phase := normalizeSupervisionStatus(string(checkpoint.Phase))
 	if phase == "" {
