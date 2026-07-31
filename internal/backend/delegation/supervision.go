@@ -228,52 +228,7 @@ func normalizeSupervisedWorkerCheckpoint(checkpoint WorkerCheckpoint, workspaceH
 	return checkpoint
 }
 
-func cloneSupervisionDecision(decision SupervisionDecision) SupervisionDecision {
-	return decision
-}
-
-func normalizeSupervisionDecision(decision SupervisionDecision) SupervisionDecision {
-	decision.Kind = normalizeSupervisionDecisionKind(string(decision.Kind))
-	decision.Reason = strings.TrimSpace(decision.Reason)
-	decision.Summary = strings.TrimSpace(decision.Summary)
-	if decision.Round < 0 {
-		decision.Round = 0
-	}
-	if decision.Step < 0 {
-		decision.Step = 0
-	}
-	if !decision.At.IsZero() {
-		decision.At = decision.At.UTC()
-	}
-	return decision
-}
-
 func cloneSupervisionCounters(counters SupervisionCounters) SupervisionCounters {
-	return counters
-}
-
-func cloneSupervisionIssue(issue *SupervisionIssue) *SupervisionIssue {
-	if issue == nil {
-		return nil
-	}
-	cloned := *issue
-	cloned.ChangedFiles = cloneStringSlice(issue.ChangedFiles)
-	return &cloned
-}
-
-func normalizeSupervisionCounters(counters SupervisionCounters) SupervisionCounters {
-	if counters.Corrections < 0 {
-		counters.Corrections = 0
-	}
-	if counters.Retries < 0 {
-		counters.Retries = 0
-	}
-	if counters.Rounds < 0 {
-		counters.Rounds = 0
-	}
-	if counters.Checkpoints < 0 {
-		counters.Checkpoints = 0
-	}
 	return counters
 }
 
@@ -322,27 +277,6 @@ func normalizeSupervisionStatus(value string) SupervisionStatus {
 		return SupervisionStatusCanceled
 	case string(SupervisionStatusCircuitOpen):
 		return SupervisionStatusCircuitOpen
-	default:
-		return ""
-	}
-}
-
-func normalizeSupervisionDecisionKind(value string) SupervisionDecisionKind {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case string(SupervisionDecisionAccept):
-		return SupervisionDecisionAccept
-	case string(SupervisionDecisionContinue):
-		return SupervisionDecisionContinue
-	case string(SupervisionDecisionCorrect):
-		return SupervisionDecisionCorrect
-	case string(SupervisionDecisionRetry):
-		return SupervisionDecisionRetry
-	case string(SupervisionDecisionReassign):
-		return SupervisionDecisionReassign
-	case string(SupervisionDecisionEscalate):
-		return SupervisionDecisionEscalate
-	case string(SupervisionDecisionCircuitOpen):
-		return SupervisionDecisionCircuitOpen
 	default:
 		return ""
 	}
