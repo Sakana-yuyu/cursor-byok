@@ -10,6 +10,9 @@ const (
 	DelegationModeCursor            = "cursor"
 	DelegationModeLocal             = "local"
 	DelegationModeAuto              = "auto"
+	DefaultDelegationMaxCorrections = 2
+	DefaultDelegationMaxRetries     = 1
+	DefaultDelegationMaxRounds      = 8
 )
 
 // DelegationModelGroup 描述一组可被 Multitask 委派的已配置模型。
@@ -24,11 +27,25 @@ type DelegationModelGroup struct {
 	ToolPermissions map[string]bool `json:"toolPermissions,omitempty" yaml:"toolPermissions,omitempty"`
 }
 
+type DelegationSupervisionConfig struct {
+	Enabled           bool   `json:"enabled" yaml:"enabled"`
+	SupervisorModelID string `json:"supervisorModelID,omitempty" yaml:"supervisorModelID,omitempty"`
+	ReviewerModelID   string `json:"reviewerModelID,omitempty" yaml:"reviewerModelID,omitempty"`
+	WorkerGroupID     string `json:"workerGroupID,omitempty" yaml:"workerGroupID,omitempty"`
+	MaxCorrections    int    `json:"maxCorrections,omitempty" yaml:"maxCorrections,omitempty"`
+	MaxRetries        int    `json:"maxRetries,omitempty" yaml:"maxRetries,omitempty"`
+	MaxRounds         int    `json:"maxRounds,omitempty" yaml:"maxRounds,omitempty"`
+	AllowReassign     bool   `json:"allowReassign,omitempty" yaml:"allowReassign,omitempty"`
+	AllowEscalate     bool   `json:"allowEscalate,omitempty" yaml:"allowEscalate,omitempty"`
+	StrictUnavailable bool   `json:"strictUnavailable,omitempty" yaml:"strictUnavailable,omitempty"`
+}
+
 // DelegationConfig 控制 Multitask 委派总开关、并发度和模型组。
 type DelegationConfig struct {
-	Enabled        bool                   `json:"enabled" yaml:"enabled"`
-	MaxConcurrency int                    `json:"maxConcurrency" yaml:"maxConcurrency"`
-	Groups         []DelegationModelGroup `json:"groups,omitempty" yaml:"groups,omitempty"`
+	Enabled        bool                        `json:"enabled" yaml:"enabled"`
+	MaxConcurrency int                         `json:"maxConcurrency" yaml:"maxConcurrency"`
+	Groups         []DelegationModelGroup      `json:"groups,omitempty" yaml:"groups,omitempty"`
+	Supervision    DelegationSupervisionConfig `json:"supervision,omitempty" yaml:"supervision,omitempty"`
 }
 
 func normalizeDelegationConfig(input DelegationConfig, adapters []ModelAdapterConfig) DelegationConfig {
@@ -42,11 +59,13 @@ func normalizeDelegationConfig(input DelegationConfig, adapters []ModelAdapterCo
 		Enabled:        input.Enabled,
 		MaxConcurrency: input.MaxConcurrency,
 		Groups:         make([]DelegationModelGroup, 0, len(input.Groups)),
+		Supervision:    normalizeDelegationSupervision(input.Supervision, availableModels, nil),
 	}
 	if output.MaxConcurrency <= 0 {
 		output.MaxConcurrency = DefaultDelegationMaxConcurrency
 	}
 	seenGroups := make(map[string]struct{}, len(input.Groups))
+	groupIDs := make(map[string]struct{}, len(input.Groups))
 	for index, group := range input.Groups {
 		group.ID = strings.TrimSpace(group.ID)
 		if group.ID == "" {
@@ -56,6 +75,7 @@ func normalizeDelegationConfig(input DelegationConfig, adapters []ModelAdapterCo
 			continue
 		}
 		seenGroups[group.ID] = struct{}{}
+		groupIDs[group.ID] = struct{}{}
 		group.Name = strings.TrimSpace(group.Name)
 		if group.Name == "" {
 			group.Name = group.ID
@@ -74,6 +94,45 @@ func normalizeDelegationConfig(input DelegationConfig, adapters []ModelAdapterCo
 		}
 		group.ToolPermissions = cloneBoolMap(group.ToolPermissions)
 		output.Groups = append(output.Groups, group)
+	}
+	output.Supervision = normalizeDelegationSupervision(input.Supervision, availableModels, groupIDs)
+	return output
+}
+
+func normalizeDelegationSupervision(input DelegationSupervisionConfig, availableModels map[string]struct{}, groupIDs map[string]struct{}) DelegationSupervisionConfig {
+	output := DelegationSupervisionConfig{
+		Enabled:           input.Enabled,
+		SupervisorModelID: strings.TrimSpace(input.SupervisorModelID),
+		ReviewerModelID:   strings.TrimSpace(input.ReviewerModelID),
+		WorkerGroupID:     strings.TrimSpace(input.WorkerGroupID),
+		MaxCorrections:    input.MaxCorrections,
+		MaxRetries:        input.MaxRetries,
+		MaxRounds:         input.MaxRounds,
+		AllowReassign:     input.AllowReassign,
+		AllowEscalate:     input.AllowEscalate,
+		StrictUnavailable: input.StrictUnavailable,
+	}
+	if output.MaxCorrections <= 0 {
+		output.MaxCorrections = DefaultDelegationMaxCorrections
+	}
+	if output.MaxRetries <= 0 {
+		output.MaxRetries = DefaultDelegationMaxRetries
+	}
+	if output.MaxRounds <= 0 {
+		output.MaxRounds = DefaultDelegationMaxRounds
+	}
+	if len(availableModels) > 0 {
+		if _, ok := availableModels[output.SupervisorModelID]; !ok {
+			output.SupervisorModelID = ""
+		}
+		if _, ok := availableModels[output.ReviewerModelID]; !ok {
+			output.ReviewerModelID = ""
+		}
+	}
+	if output.WorkerGroupID != "" && len(groupIDs) > 0 {
+		if _, ok := groupIDs[output.WorkerGroupID]; !ok {
+			output.WorkerGroupID = ""
+		}
 	}
 	return output
 }

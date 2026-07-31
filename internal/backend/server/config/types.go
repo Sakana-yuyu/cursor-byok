@@ -159,6 +159,12 @@ func DefaultConfig() Config {
 		Delegation: DelegationConfig{
 			Enabled:        true,
 			MaxConcurrency: DefaultDelegationMaxConcurrency,
+			Supervision: DelegationSupervisionConfig{
+				Enabled:        false,
+				MaxCorrections: DefaultDelegationMaxCorrections,
+				MaxRetries:     DefaultDelegationMaxRetries,
+				MaxRounds:      DefaultDelegationMaxRounds,
+			},
 		},
 	}
 }
