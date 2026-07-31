@@ -184,7 +184,7 @@ type delegationTaskRuntimeState struct {
 
 func (service *Service) delegationTaskRuntimeStates(snapshots []delegation.TaskSnapshot) map[string]delegationTaskRuntimeState {
 	if service == nil || service.multitaskDelegation == nil || service.multitaskDelegation.supervisor == nil {
-		return nil
+		return make(map[string]delegationTaskRuntimeState)
 	}
 	supervisor := service.multitaskDelegation.supervisor
 	taskIDs := make(map[string]struct{}, len(snapshots))
@@ -202,6 +202,9 @@ func (service *Service) delegationTaskRuntimeStates(snapshots []delegation.TaskS
 	}
 	supervisor.mu.RUnlock()
 	result := supervisor.runtimeTaskStates(taskIDs)
+	if result == nil {
+		result = make(map[string]delegationTaskRuntimeState, len(taskIDs))
+	}
 	for _, aggregate := range aggregates {
 		aggregate.mu.Lock()
 		for _, task := range aggregate.tasks {
@@ -218,9 +221,6 @@ func (service *Service) delegationTaskRuntimeStates(snapshots []delegation.TaskS
 			result[taskID] = delegationTaskRuntimeStateForTask(aggregate, task, false)
 		}
 		aggregate.mu.Unlock()
-	}
-	if len(result) == 0 {
-		return nil
 	}
 	return result
 }

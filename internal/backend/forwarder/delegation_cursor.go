@@ -30,18 +30,18 @@ func newCursorDelegationBridge(service *Service) *cursorDelegationBridge {
 func (bridge *cursorDelegationBridge) Close() {
 }
 
-func (bridge *cursorDelegationBridge) ConsumeExecMessage(message *agentv1.ExecClientMessage) bool {
+func (bridge *cursorDelegationBridge) ConsumeExecMessage(requestID string, message *agentv1.ExecClientMessage) bool {
 	if bridge == nil || bridge.cursor == nil {
 		return false
 	}
-	return bridge.cursor.ConsumeExecMessage(message)
+	return bridge.cursor.ConsumeExecMessage(requestID, message)
 }
 
-func (bridge *cursorDelegationBridge) ConsumeExecControl(message *agentv1.ExecClientControlMessage) bool {
+func (bridge *cursorDelegationBridge) ConsumeExecControl(requestID string, message *agentv1.ExecClientControlMessage) bool {
 	if bridge == nil || bridge.cursor == nil {
 		return false
 	}
-	return bridge.cursor.ConsumeExecControl(message)
+	return bridge.cursor.ConsumeExecControl(requestID, message)
 }
 
 func (bridge *cursorDelegationBridge) ConsumeConversationAction(message *agentv1.AgentClientMessage) bool {

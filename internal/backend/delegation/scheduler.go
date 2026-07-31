@@ -118,13 +118,15 @@ type TaskSnapshot struct {
 type Executor func(context.Context, TaskRequest) TaskResult
 
 type Scheduler struct {
-	maxConcurrency int
-	slots          chan struct{}
-	executor       Executor
-	ctx            context.Context
-	cancel         context.CancelFunc
-	retentionLimit int
-	retentionAge   time.Duration
+	maxConcurrency  int
+	slots           chan struct{}
+	executor        Executor
+	ctx             context.Context
+	cancel          context.CancelFunc
+	retentionBase   int
+	retentionMargin int
+	retentionLimit  int
+	retentionAge    time.Duration
 
 	mu               sync.RWMutex
 	tasks            map[string]*taskState
@@ -184,6 +186,7 @@ func NewScheduler(cfg Config, executor Executor) *Scheduler {
 		executor:         executor,
 		ctx:              ctx,
 		cancel:           cancel,
+		retentionBase:    retentionLimit,
 		retentionLimit:   retentionLimit,
 		retentionAge:     retentionAge,
 		tasks:            make(map[string]*taskState),
@@ -288,6 +291,10 @@ func (s *Scheduler) run(state *taskState) {
 		executionCtx, cancelTimeout = context.WithTimeout(state.ctx, request.Timeout)
 	}
 	defer cancelTimeout()
+	taskID := state.snapshot.ID
+	executionCtx = withWorkerCheckpointPublisher(executionCtx, func(checkpoint WorkerCheckpoint) bool {
+		return s.PublishCheckpoint(taskID, checkpoint)
+	})
 	resultChannel := make(chan TaskResult, 1)
 	executorStarted = true
 	go func(taskID string) {
@@ -322,7 +329,7 @@ func (s *Scheduler) run(state *taskState) {
 		}
 	} else if result.Error != nil {
 		state.snapshot.Status = TaskFailed
-		state.snapshot.Error = result.Error.Error()
+		state.snapshot.Error = SanitizeSupervisorText(result.Error.Error(), request.WorkspaceHint)
 	} else {
 		state.snapshot.Status = TaskCompleted
 	}
@@ -391,10 +398,7 @@ func (s *Scheduler) PublishCheckpoint(taskID string, checkpoint WorkerCheckpoint
 		return false
 	}
 	checkpoint = normalizeWorkerCheckpoint(checkpoint)
-	if checkpoint.TaskID == "" {
-		checkpoint.TaskID = taskID
-	}
-	if checkpoint.TaskID != taskID {
+	if checkpoint.TaskID == "" || checkpoint.TaskID != taskID {
 		return false
 	}
 	s.mu.Lock()
@@ -404,13 +408,11 @@ func (s *Scheduler) PublishCheckpoint(taskID string, checkpoint WorkerCheckpoint
 		return false
 	}
 	contract := state.contract
-	if checkpoint.TaskID != contract.TaskID {
+	if strings.TrimSpace(contract.TaskID) == "" || checkpoint.TaskID != contract.TaskID {
 		s.mu.Unlock()
 		return false
 	}
-	if checkpoint.AggregateID == "" {
-		checkpoint.AggregateID = contract.AggregateID
-	} else if checkpoint.AggregateID != contract.AggregateID {
+	if strings.TrimSpace(contract.AggregateID) == "" || checkpoint.AggregateID == "" || checkpoint.AggregateID != contract.AggregateID {
 		s.mu.Unlock()
 		return false
 	}
@@ -422,7 +424,7 @@ func (s *Scheduler) PublishCheckpoint(taskID string, checkpoint WorkerCheckpoint
 		checkpoint.Round = contract.Round
 	}
 	checkpoint = normalizeSupervisedWorkerCheckpoint(checkpoint, contract.WorkspaceHint)
-	checkpoint.EffectiveProgressAt = resolveCheckpointEffectiveProgressAt(state.checkpoint, checkpoint.EffectiveProgressAt, time.Now().UTC())
+	checkpoint.EffectiveProgressAt = resolveCheckpointEffectiveProgressAt(state.checkpoint, checkpoint, time.Now().UTC())
 	state.checkpoint = cloneWorkerCheckpoint(&checkpoint)
 	state.snapshot.Checkpoint = cloneWorkerCheckpoint(&checkpoint)
 	state.counters.Checkpoints++
@@ -438,18 +440,31 @@ func (s *Scheduler) PublishCheckpoint(taskID string, checkpoint WorkerCheckpoint
 	return true
 }
 
-func resolveCheckpointEffectiveProgressAt(previous *WorkerCheckpoint, candidate time.Time, now time.Time) time.Time {
+func resolveCheckpointEffectiveProgressAt(previous *WorkerCheckpoint, checkpoint WorkerCheckpoint, now time.Time) time.Time {
 	if previous != nil && !previous.EffectiveProgressAt.IsZero() {
 		previousAt := previous.EffectiveProgressAt.UTC()
-		if candidate.IsZero() || !candidate.After(previousAt) {
-			return previousAt
+		if checkpointShowsEffectiveProgress(*previous, checkpoint) {
+			return now.UTC()
 		}
-		return candidate.UTC()
+		return previousAt
 	}
-	if candidate.IsZero() {
-		return now.UTC()
+	return now.UTC()
+}
+
+func checkpointShowsEffectiveProgress(previous WorkerCheckpoint, current WorkerCheckpoint) bool {
+	if strings.TrimSpace(current.ProgressSummary) != strings.TrimSpace(previous.ProgressSummary) {
+		return true
 	}
-	return candidate.UTC()
+	if strings.TrimSpace(current.Blocker) != strings.TrimSpace(previous.Blocker) {
+		return true
+	}
+	if current.Phase != previous.Phase {
+		return true
+	}
+	if strings.Join(current.ChangedFileSummaries, "\x00") != strings.Join(previous.ChangedFileSummaries, "\x00") {
+		return true
+	}
+	return strings.Join(current.RecentToolNames, "\x00") != strings.Join(previous.RecentToolNames, "\x00")
 }
 
 func (s *Scheduler) Snapshot(taskID string) (TaskSnapshot, bool) {
@@ -476,6 +491,41 @@ func (s *Scheduler) Result(taskID string) (TaskResult, bool) {
 		return TaskResult{}, false
 	}
 	return cloneTaskResult(state.result), true
+}
+
+// WaitForTaskUpdate waits for a newer immutable snapshot for one task. It uses
+// the scheduler state-change signal instead of consuming the shared Events
+// channel, so multiple supervised aggregates can observe progress independently.
+func (s *Scheduler) WaitForTaskUpdate(ctx context.Context, taskID string, afterSequence uint64) (TaskSnapshot, error) {
+	if s == nil {
+		return TaskSnapshot{}, fmt.Errorf("delegation scheduler is nil")
+	}
+	if ctx == nil {
+		return TaskSnapshot{}, fmt.Errorf("delegation wait context is nil")
+	}
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" {
+		return TaskSnapshot{}, fmt.Errorf("delegation wait task id is required")
+	}
+	for {
+		s.mu.RLock()
+		state, ok := s.tasks[taskID]
+		if !ok {
+			s.mu.RUnlock()
+			return TaskSnapshot{}, fmt.Errorf("delegated task %q not found", taskID)
+		}
+		snapshot := cloneTaskSnapshot(state.snapshot)
+		waitCh := s.stateChanged
+		s.mu.RUnlock()
+		if snapshot.Sequence > afterSequence || isTerminalStatus(snapshot.Status) {
+			return snapshot, nil
+		}
+		select {
+		case <-ctx.Done():
+			return TaskSnapshot{}, ctx.Err()
+		case <-waitCh:
+		}
+	}
 }
 
 func (s *Scheduler) Snapshots() []TaskSnapshot {
@@ -548,16 +598,22 @@ func (s *Scheduler) WaitForTerminal(ctx context.Context, taskIDs []string) error
 	}
 }
 
-// EnsureRetentionLimit only raises the retained task ceiling. Active aggregates
-// can therefore keep every worker snapshot until fan-in has consumed it.
-func (s *Scheduler) EnsureRetentionLimit(limit int) {
-	if s == nil || limit <= 0 {
+// ReserveRetentionMargin keeps the largest aggregate's worker count as bounded
+// headroom above the live workload. It does not accumulate historical task
+// counts, and a smaller overlapping aggregate cannot shrink an active batch's
+// retention safety margin.
+func (s *Scheduler) ReserveRetentionMargin(margin int) {
+	if s == nil {
 		return
 	}
-	s.mu.Lock()
-	if limit > s.retentionLimit {
-		s.retentionLimit = limit
+	if margin < 0 {
+		margin = 0
 	}
+	s.mu.Lock()
+	if margin > s.retentionMargin {
+		s.retentionMargin = margin
+	}
+	s.pruneTerminalTasksLocked()
 	s.mu.Unlock()
 }
 
@@ -638,6 +694,7 @@ func (s *Scheduler) finishFromContext(state *taskState, cause error) {
 }
 
 func (s *Scheduler) pruneTerminalTasksLocked() {
+	s.refreshRetentionLimitLocked()
 	pruned := false
 	cutoff := time.Now().UTC().Add(-s.retentionAge)
 	for len(s.tasks) > s.retentionLimit {
@@ -661,6 +718,30 @@ func (s *Scheduler) pruneTerminalTasksLocked() {
 	if pruned {
 		s.notifyStateChangedLocked()
 	}
+}
+
+func (s *Scheduler) refreshRetentionLimitLocked() {
+	limit := s.retentionBase
+	if liveLimit := s.liveTaskCountLocked() + s.retentionMargin; liveLimit > limit {
+		limit = liveLimit
+	}
+	if limit <= 0 {
+		limit = DefaultRetentionLimit
+	}
+	s.retentionLimit = limit
+}
+
+func (s *Scheduler) liveTaskCountLocked() int {
+	live := 0
+	for _, state := range s.tasks {
+		if state == nil {
+			continue
+		}
+		if !state.runnerDone || !isTerminalStatus(state.snapshot.Status) {
+			live++
+		}
+	}
+	return live
 }
 
 func (s *Scheduler) purgeBufferedEventsLocked() {
@@ -724,6 +805,9 @@ func (s *Scheduler) decorateSnapshotLocked(snapshot *TaskSnapshot) {
 	snapshot.EventID = fmt.Sprintf("delegation-event-%d", snapshot.Sequence)
 	switch {
 	case isTerminalStatus(snapshot.Status):
+		if snapshot.SupervisionStatus != "" {
+			snapshot.SupervisionStatus = supervisionStatusForTaskStatus(snapshot.Status)
+		}
 		snapshot.EventType = string(snapshot.Status)
 	case snapshot.Checkpoint != nil && snapshot.Checkpoint.Phase != "":
 		snapshot.EventType = string(snapshot.Checkpoint.Phase)
@@ -758,9 +842,41 @@ func cloneTaskRequest(request TaskRequest) TaskRequest {
 }
 
 func cloneTaskSnapshot(snapshot TaskSnapshot) TaskSnapshot {
-	snapshot.Checkpoint = cloneWorkerCheckpoint(snapshot.Checkpoint)
-	snapshot.Counters = cloneSupervisionCounters(snapshot.Counters)
-	return snapshot
+	// Keep this external clone explicit: TaskSnapshot is a safe DTO and must
+	// never grow an implicit copy of the internal TaskRequest or contract.
+	return TaskSnapshot{
+		ID:                snapshot.ID,
+		Description:       snapshot.Description,
+		ModelID:           snapshot.ModelID,
+		ModelName:         snapshot.ModelName,
+		ModelGroupID:      snapshot.ModelGroupID,
+		WorkerRole:        snapshot.WorkerRole,
+		ExecutionMode:     snapshot.ExecutionMode,
+		ParentRequestID:   snapshot.ParentRequestID,
+		ParentExecID:      snapshot.ParentExecID,
+		GroupID:           snapshot.GroupID,
+		Checkpoint:        cloneWorkerCheckpoint(snapshot.Checkpoint),
+		SupervisionStatus: snapshot.SupervisionStatus,
+		Counters:          cloneSupervisionCounters(snapshot.Counters),
+		SupervisionRound:  snapshot.SupervisionRound,
+		CorrectionCount:   snapshot.CorrectionCount,
+		RetryCount:        snapshot.RetryCount,
+		ReassignCount:     snapshot.ReassignCount,
+		EscalateCount:     snapshot.EscalateCount,
+		SupervisionIssue:  snapshot.SupervisionIssue,
+		ProgressSummary:   snapshot.ProgressSummary,
+		Status:            snapshot.Status,
+		Output:            snapshot.Output,
+		Error:             snapshot.Error,
+		ToolCallCount:     snapshot.ToolCallCount,
+		EventID:           snapshot.EventID,
+		Sequence:          snapshot.Sequence,
+		EventType:         snapshot.EventType,
+		QueuedAt:          snapshot.QueuedAt,
+		StartedAt:         snapshot.StartedAt,
+		FinishedAt:        snapshot.FinishedAt,
+		UpdatedAt:         snapshot.UpdatedAt,
+	}
 }
 
 func buildTaskSnapshot(request TaskRequest, queuedAt time.Time) TaskSnapshot {
@@ -773,16 +889,16 @@ func buildTaskSnapshot(request TaskRequest, queuedAt time.Time) TaskSnapshot {
 		}
 	}
 	return TaskSnapshot{
-		ID:              request.ID,
-		Description:     strings.TrimSpace(request.Description),
-		ModelID:         strings.TrimSpace(request.ModelID),
-		ModelName:       strings.TrimSpace(request.ModelName),
-		ModelGroupID:    strings.TrimSpace(request.ModelGroupID),
-		WorkerRole:      workerRole,
-		ExecutionMode:   strings.TrimSpace(request.ExecutionMode),
-		ParentRequestID: strings.TrimSpace(request.ParentRequest),
-		ParentExecID:    strings.TrimSpace(request.ParentExecID),
-		GroupID:         strings.TrimSpace(firstNonEmpty(request.ParentExecID, request.ParentRequest)),
+		ID:               request.ID,
+		Description:      strings.TrimSpace(request.Description),
+		ModelID:          strings.TrimSpace(request.ModelID),
+		ModelName:        strings.TrimSpace(request.ModelName),
+		ModelGroupID:     strings.TrimSpace(request.ModelGroupID),
+		WorkerRole:       workerRole,
+		ExecutionMode:    strings.TrimSpace(request.ExecutionMode),
+		ParentRequestID:  strings.TrimSpace(request.ParentRequest),
+		ParentExecID:     strings.TrimSpace(request.ParentExecID),
+		GroupID:          strings.TrimSpace(firstNonEmpty(request.ParentExecID, request.ParentRequest)),
 		SupervisionRound: supervisionRound,
 		CorrectionCount:  request.RuntimeCorrectionCount,
 		RetryCount:       request.RuntimeRetryCount,
@@ -790,8 +906,8 @@ func buildTaskSnapshot(request TaskRequest, queuedAt time.Time) TaskSnapshot {
 		EscalateCount:    request.RuntimeEscalateCount,
 		SupervisionIssue: request.RuntimeSupervisionIssue,
 		ProgressSummary:  strings.TrimSpace(request.RuntimeProgressSummary),
-		Status:          TaskQueued,
-		QueuedAt:        queuedAt,
+		Status:           TaskQueued,
+		QueuedAt:         queuedAt,
 	}
 }
 

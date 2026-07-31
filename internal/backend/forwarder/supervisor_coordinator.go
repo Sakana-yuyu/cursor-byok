@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strconv"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -43,35 +43,41 @@ type supervisedAggregate struct {
 }
 
 type supervisedTaskState struct {
-	logicalID        string
-	currentTaskID    string
-	currentRequest   delegation.TaskRequest
-	contract         delegation.SupervisionTaskContract
-	round            int
-	corrections      int
-	retries          int
-	reassignments    int
-	escalated        bool
-	escalationUsed   bool
-	lastSnapshot     delegation.TaskSnapshot
-	lastResult       delegation.TaskResult
-	lastIssue        *delegation.SupervisionIssue
-	previous         *delegation.WorkerCheckpoint
-	reviewPending    bool
-	reviewCancel     context.CancelFunc
-	canceled         bool
-	completed        bool
-	recentSignatures []string
+	logicalID              string
+	currentTaskID          string
+	currentRequest         delegation.TaskRequest
+	contract               delegation.SupervisionTaskContract
+	round                  int
+	corrections            int
+	retries                int
+	reassignments          int
+	escalated              bool
+	escalationUsed         bool
+	lastSnapshot           delegation.TaskSnapshot
+	lastResult             delegation.TaskResult
+	lastIssue              *delegation.SupervisionIssue
+	previous               *delegation.WorkerCheckpoint
+	reviewPending          bool
+	reviewCancel           context.CancelFunc
+	reviewSequence         uint64
+	lastReviewedSequence   uint64
+	deferredWorkerEvent    *supervisorAggregateEvent
+	canceled               bool
+	completed              bool
+	recentSignatures       []string
+	lastCheckpointSequence uint64
+	attemptTaskIDs         map[string]struct{}
 }
 
 type supervisorAggregateEvent struct {
-	kind     string
-	identity supervisorTaskIdentity
-	snapshot delegation.TaskSnapshot
-	result   delegation.TaskResult
-	issue    *delegation.SupervisionIssue
-	decision delegation.SupervisionDecision
-	err      error
+	kind      string
+	identity  supervisorTaskIdentity
+	snapshot  delegation.TaskSnapshot
+	result    delegation.TaskResult
+	issue     *delegation.SupervisionIssue
+	decision  delegation.SupervisionDecision
+	err       error
+	heartbeat bool
 }
 
 type supervisorTaskIdentity struct {
@@ -82,6 +88,8 @@ type supervisorTaskIdentity struct {
 	ProviderPass int
 	Round        int
 }
+
+var errSupervisedTaskCanceled = errors.New("supervised task canceled")
 
 func newSupervisorCoordinator(service *Service, scheduler *delegation.Scheduler) *SupervisorCoordinator {
 	if service == nil || scheduler == nil {
@@ -112,14 +120,27 @@ func (coordinator *SupervisorCoordinator) rememberRuntimeState(taskID string, st
 	coordinator.mu.Unlock()
 }
 
+func (coordinator *SupervisorCoordinator) forgetRuntimeState(taskID string) {
+	if coordinator == nil {
+		return
+	}
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" {
+		return
+	}
+	coordinator.mu.Lock()
+	delete(coordinator.runtimeStates, taskID)
+	coordinator.mu.Unlock()
+}
+
 func (coordinator *SupervisorCoordinator) runtimeTaskStates(taskIDs map[string]struct{}) map[string]delegationTaskRuntimeState {
 	if coordinator == nil {
-		return nil
+		return make(map[string]delegationTaskRuntimeState)
 	}
 	coordinator.mu.Lock()
 	defer coordinator.mu.Unlock()
 	if len(coordinator.runtimeStates) == 0 {
-		return nil
+		return make(map[string]delegationTaskRuntimeState, len(taskIDs))
 	}
 	result := make(map[string]delegationTaskRuntimeState, len(coordinator.runtimeStates))
 	for taskID, state := range coordinator.runtimeStates {
@@ -271,6 +292,7 @@ func (aggregate *supervisedAggregate) newTaskState(worker delegation.TaskRequest
 		currentRequest: worker,
 		contract:       contract,
 		round:          contract.Round,
+		attemptTaskIDs: map[string]struct{}{strings.TrimSpace(worker.ID): {}},
 	}
 }
 
@@ -309,11 +331,19 @@ func (aggregate *supervisedAggregate) submitAttempt(task *supervisedTaskState, r
 	if aggregate.ctx.Err() != nil || !aggregate.parentExecStillCurrent() {
 		return fmt.Errorf("delegation aggregate startup canceled for provider pass %d: %w", aggregate.pending.ProviderPass, errProviderLoopInterrupted)
 	}
+	aggregate.mu.Lock()
+	if task.canceled || task.completed {
+		aggregate.mu.Unlock()
+		return errSupervisedTaskCanceled
+	}
 	request := task.currentRequest
 	request.ParentRequest = strings.TrimSpace(aggregate.base.ParentRequest)
 	request.ParentExecID = strings.TrimSpace(aggregate.id)
-	request.Contract = cloneSupervisionContract(task.contract)
 	request.ID = strings.TrimSpace(task.currentTaskID)
+	task.contract.AggregateID = strings.TrimSpace(aggregate.id)
+	task.contract.TaskID = request.ID
+	task.contract.Round = task.round
+	request.Contract = cloneSupervisionContract(task.contract)
 	request.RuntimeSupervisionRound = task.round
 	request.RuntimeCorrectionCount = task.corrections
 	request.RuntimeRetryCount = task.retries
@@ -329,24 +359,28 @@ func (aggregate *supervisedAggregate) submitAttempt(task *supervisedTaskState, r
 		request.Prompt = strings.TrimSpace(request.Prompt + "\n\nSupervisor correction:\n" + extraPrompt)
 	}
 	task.currentRequest = request
-	if _, err := aggregate.coordinator.scheduler.Submit(request); err != nil {
+	_, err := aggregate.coordinator.scheduler.Submit(request)
+	taskID := strings.TrimSpace(task.currentTaskID)
+	round := task.round
+	aggregate.mu.Unlock()
+	if err != nil {
 		return err
 	}
 	aggregate.startWait(task, supervisorTaskIdentity{
 		AggregateID:  aggregate.id,
 		LogicalID:    task.logicalID,
-		TaskID:       task.currentTaskID,
+		TaskID:       taskID,
 		ParentExec:   aggregate.id,
 		ProviderPass: aggregate.pending.ProviderPass,
-		Round:        task.round,
+		Round:        round,
 	})
 	log.Printf(
 		"forwarder supervised task submitted request_id=%s aggregate_id=%s task_id=%s logical_id=%s round=%d reason=%s",
 		strings.TrimSpace(activeStreamRequestID(aggregate.stream)),
 		strings.TrimSpace(aggregate.id),
-		strings.TrimSpace(task.currentTaskID),
+		taskID,
 		strings.TrimSpace(task.logicalID),
-		task.round,
+		round,
 		strings.TrimSpace(reason),
 	)
 	return nil
@@ -356,27 +390,49 @@ func (aggregate *supervisedAggregate) startWait(task *supervisedTaskState, ident
 	if aggregate == nil || task == nil || aggregate.coordinator == nil || aggregate.coordinator.scheduler == nil {
 		return
 	}
+	checkpointInterval := delegation.DefaultSupervisionCheckpointInterval
+	aggregate.mu.Lock()
+	if task.contract.CheckpointInterval > 0 {
+		checkpointInterval = task.contract.CheckpointInterval
+	}
+	aggregate.mu.Unlock()
 	go func() {
-		err := aggregate.coordinator.scheduler.WaitForTerminal(aggregate.ctx, []string{identity.TaskID})
-		if err != nil {
-			if errors.Is(err, context.Canceled) || aggregate.ctx.Err() != nil {
+		lastSequence := uint64(0)
+		for {
+			afterSequence := lastSequence
+			heartbeat := false
+			waitCtx, cancelWait := context.WithTimeout(aggregate.ctx, checkpointInterval)
+			snapshot, err := aggregate.coordinator.scheduler.WaitForTaskUpdate(waitCtx, identity.TaskID, afterSequence)
+			cancelWait()
+			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					var ok bool
+					snapshot, ok = aggregate.coordinator.scheduler.Snapshot(identity.TaskID)
+					if !ok {
+						aggregate.postEvent(supervisorAggregateEvent{kind: "worker_terminal", identity: identity, err: fmt.Errorf("supervised task snapshot %q disappeared", identity.TaskID)})
+						return
+					}
+					heartbeat = snapshot.Sequence <= afterSequence
+				} else {
+					if errors.Is(err, context.Canceled) || aggregate.ctx.Err() != nil {
+						return
+					}
+					aggregate.postEvent(supervisorAggregateEvent{kind: "worker_terminal", identity: identity, err: err})
+					return
+				}
+			}
+			if snapshot.Sequence > lastSequence {
+				lastSequence = snapshot.Sequence
+			}
+			if delegatedStatusTerminal(snapshot.Status) {
+				result, _ := aggregate.coordinator.scheduler.Result(identity.TaskID)
+				aggregate.postEvent(supervisorAggregateEvent{kind: "worker_terminal", identity: identity, snapshot: snapshot, result: result})
 				return
 			}
-			aggregate.postEvent(supervisorAggregateEvent{kind: "worker_terminal", identity: identity, err: err})
-			return
+			if snapshot.Checkpoint != nil {
+				aggregate.postEvent(supervisorAggregateEvent{kind: "worker_checkpoint", identity: identity, snapshot: snapshot, heartbeat: heartbeat})
+			}
 		}
-		snapshot, ok := aggregate.coordinator.scheduler.Snapshot(identity.TaskID)
-		if !ok {
-			aggregate.postEvent(supervisorAggregateEvent{kind: "worker_terminal", identity: identity, err: fmt.Errorf("supervised task snapshot %q disappeared", identity.TaskID)})
-			return
-		}
-		result, _ := aggregate.coordinator.scheduler.Result(identity.TaskID)
-		aggregate.postEvent(supervisorAggregateEvent{
-			kind:     "worker_terminal",
-			identity: identity,
-			snapshot: snapshot,
-			result:   result,
-		})
 	}()
 }
 
@@ -406,6 +462,8 @@ func (aggregate *supervisedAggregate) run() {
 
 func (aggregate *supervisedAggregate) handleEvent(event supervisorAggregateEvent) {
 	switch event.kind {
+	case "worker_checkpoint":
+		aggregate.handleWorkerCheckpoint(event)
 	case "worker_terminal":
 		aggregate.handleWorkerTerminal(event)
 	case "review_abandoned":
@@ -417,39 +475,132 @@ func (aggregate *supervisedAggregate) handleEvent(event supervisorAggregateEvent
 	}
 }
 
-func (aggregate *supervisedAggregate) handleWorkerTerminal(event supervisorAggregateEvent) {
-	task, ok := aggregate.matchIdentity(event.identity)
-	if !ok {
+func (aggregate *supervisedAggregate) handleWorkerCheckpoint(event supervisorAggregateEvent) {
+	if aggregate == nil || !aggregate.parentExecStillCurrent() || event.snapshot.Checkpoint == nil {
 		return
 	}
-	if !aggregate.parentExecStillCurrent() {
-		if event.err == nil {
-			task.lastSnapshot = event.snapshot
-			task.lastResult = event.result
-		}
-		aggregate.markTaskAbandoned(task, delegation.SupervisionIssueModelFailure, staleEventReason("stale worker result ignored after provider pass changed", firstNonEmpty(supervisorErrorString(event.err), strings.TrimSpace(event.snapshot.Error))))
+	reviewContext, reviewCancel := context.WithCancel(aggregate.ctx)
+	aggregate.mu.Lock()
+	task, ok := aggregate.matchIdentityLocked(event.identity)
+	if !ok || !aggregate.snapshotIdentityMatches(event.identity, event.snapshot) {
+		aggregate.mu.Unlock()
+		reviewCancel()
 		return
 	}
-	if event.err != nil {
-		aggregate.markTaskFailed(task, delegation.SupervisionIssueModelFailure, event.err.Error(), false)
+	if !event.heartbeat && workerSnapshotAlreadyHandled(task, event.snapshot) {
+		aggregate.mu.Unlock()
+		reviewCancel()
 		return
 	}
-	if !aggregate.resultIdentityMatches(task, event.identity, event.snapshot, event.result) {
+	if task.reviewPending {
+		deferWorkerEventLocked(task, event)
+		aggregate.mu.Unlock()
+		reviewCancel()
 		return
 	}
 	previousSnapshot := task.lastSnapshot
 	previousResult := task.lastResult
 	previousCheckpoint := cloneCheckpointPointer(task.previous)
 	currentCheckpoint := resolveReviewCheckpoint(task.contract, event.snapshot)
+	if currentCheckpoint.EventSequence > task.lastCheckpointSequence {
+		recordRecentToolSignatures(task, currentCheckpoint)
+		task.lastCheckpointSequence = currentCheckpoint.EventSequence
+	}
+	issue := detectSupervisionIssue(task, currentCheckpoint, event.snapshot, delegation.TaskResult{}, previousCheckpoint, previousSnapshot, previousResult)
+	task.lastSnapshot = event.snapshot
+	task.previous = cloneCheckpointPointer(&currentCheckpoint)
+	applyTaskRuntimeMetadata(task)
+	if issue == nil {
+		task.lastIssue = nil
+		aggregate.mu.Unlock()
+		reviewCancel()
+		aggregate.rememberTaskRuntimeState(task)
+		return
+	}
+	if currentCheckpoint.EventSequence > 0 && currentCheckpoint.EventSequence <= task.lastReviewedSequence {
+		task.lastIssue = nil
+		aggregate.mu.Unlock()
+		reviewCancel()
+		aggregate.rememberTaskRuntimeState(task)
+		return
+	}
+	task.lastIssue = issue
+	contract := *cloneSupervisionContract(task.contract)
+	task.reviewCancel = reviewCancel
+	task.reviewPending = true
+	task.reviewSequence = event.snapshot.Sequence
+	if currentCheckpoint.EventSequence > task.lastReviewedSequence {
+		task.lastReviewedSequence = currentCheckpoint.EventSequence
+	}
+	aggregate.mu.Unlock()
+	aggregate.rememberTaskRuntimeState(task)
+	allowed := aggregate.allowedActions(task, event.snapshot)
+	go aggregate.reviewTask(reviewContext, event.identity, contract, event.snapshot, delegation.TaskResult{}, issue, allowed)
+}
+
+func (aggregate *supervisedAggregate) handleWorkerTerminal(event supervisorAggregateEvent) {
+	if !aggregate.parentExecStillCurrent() {
+		aggregate.mu.Lock()
+		task, ok := aggregate.matchIdentityLocked(event.identity)
+		if ok && event.err == nil {
+			task.lastSnapshot = event.snapshot
+			task.lastResult = event.result
+		}
+		aggregate.mu.Unlock()
+		if !ok {
+			return
+		}
+		aggregate.markTaskAbandoned(task, delegation.SupervisionIssueModelFailure, staleEventReason("stale worker result ignored after provider pass changed", firstNonEmpty(supervisorErrorString(event.err), strings.TrimSpace(event.snapshot.Error))))
+		return
+	}
+	aggregate.mu.Lock()
+	task, ok := aggregate.matchIdentityLocked(event.identity)
+	if !ok {
+		aggregate.mu.Unlock()
+		return
+	}
+	if event.err == nil && workerSnapshotAlreadyHandled(task, event.snapshot) {
+		aggregate.mu.Unlock()
+		return
+	}
+	if task.reviewPending {
+		deferWorkerEventLocked(task, event)
+		aggregate.mu.Unlock()
+		return
+	}
+	aggregate.mu.Unlock()
+	if event.err != nil {
+		aggregate.markTaskFailed(task, delegation.SupervisionIssueModelFailure, event.err.Error(), false)
+		return
+	}
+	reviewContext, reviewCancel := context.WithCancel(aggregate.ctx)
+	aggregate.mu.Lock()
+	task, ok = aggregate.matchIdentityLocked(event.identity)
+	if !ok || !aggregate.resultIdentityMatches(task, event.identity, event.snapshot) {
+		aggregate.mu.Unlock()
+		reviewCancel()
+		return
+	}
+	previousSnapshot := task.lastSnapshot
+	previousResult := task.lastResult
+	previousCheckpoint := cloneCheckpointPointer(task.previous)
+	currentCheckpoint := resolveReviewCheckpoint(task.contract, event.snapshot)
+	recordRecentToolSignatures(task, currentCheckpoint)
 	issue := detectSupervisionIssue(task, currentCheckpoint, event.snapshot, event.result, previousCheckpoint, previousSnapshot, previousResult)
 	task.lastSnapshot = event.snapshot
 	task.lastResult = event.result
 	task.lastIssue = issue
 	task.previous = cloneCheckpointPointer(&currentCheckpoint)
-	reviewContext, reviewCancel := context.WithCancel(aggregate.ctx)
+	contract := *cloneSupervisionContract(task.contract)
 	task.reviewCancel = reviewCancel
 	task.reviewPending = true
-	go aggregate.reviewTask(reviewContext, event.identity, task.contract, event.snapshot, event.result, issue, aggregate.allowedActions(task, event.snapshot))
+	task.reviewSequence = event.snapshot.Sequence
+	if currentCheckpoint.EventSequence > task.lastReviewedSequence {
+		task.lastReviewedSequence = currentCheckpoint.EventSequence
+	}
+	aggregate.mu.Unlock()
+	allowed := aggregate.allowedActions(task, event.snapshot)
+	go aggregate.reviewTask(reviewContext, event.identity, contract, event.snapshot, event.result, issue, allowed)
 }
 
 func (aggregate *supervisedAggregate) reviewTask(reviewContext context.Context, identity supervisorTaskIdentity, contract delegation.SupervisionTaskContract, snapshot delegation.TaskSnapshot, result delegation.TaskResult, issue *delegation.SupervisionIssue, allowed []delegation.SupervisionDecisionKind) {
@@ -470,6 +621,9 @@ func (aggregate *supervisedAggregate) reviewTask(reviewContext context.Context, 
 		err = &supervisorReviewError{kind: supervisorReviewErrorUnavailable, message: boundedSupervisorError(errSupervisorUnavailable)}
 	} else {
 		modelID := resolveSupervisorModelID(aggregate.config, aggregate.base)
+		if delegatedStatusTerminal(snapshot.Status) {
+			modelID = firstNonEmpty(strings.TrimSpace(aggregate.config.ReviewerModelID), modelID)
+		}
 		reviewDecision, reviewErr := provider.Review(reviewContext, supervisorReviewInput{
 			AggregateID:    aggregate.id,
 			TaskID:         identity.TaskID,
@@ -525,20 +679,33 @@ func (aggregate *supervisedAggregate) reviewTask(reviewContext context.Context, 
 }
 
 func (aggregate *supervisedAggregate) handleReviewAbandoned(event supervisorAggregateEvent) {
-	task, ok := aggregate.matchIdentity(event.identity)
+	task, deferred, reviewSequence, ok := aggregate.takeReview(event.identity)
 	if !ok {
 		return
 	}
-	clearSupervisedReviewCancel(task)
-	task.reviewPending = false
-	if task.completed {
+	if !aggregate.parentExecStillCurrent() {
+		aggregate.markTaskAbandoned(task, delegation.SupervisionIssueReviewFailure, "stale supervisor review ignored after provider pass changed")
 		return
 	}
-	aggregate.settleCurrentTask(task)
+	if deferred == nil {
+		deferred = aggregate.latestWorkerEventAfterReview(event.identity, reviewSequence)
+	}
+	if deferred != nil {
+		aggregate.handleEvent(*deferred)
+		return
+	}
+	aggregate.mu.Lock()
+	terminal := delegatedStatusTerminal(task.lastSnapshot.Status)
+	aggregate.mu.Unlock()
+	if terminal {
+		aggregate.settleCurrentTask(task)
+		return
+	}
+	aggregate.resumeTaskAfterReview(task)
 }
 
 func (aggregate *supervisedAggregate) handleReviewResult(event supervisorAggregateEvent) {
-	task, ok := aggregate.matchIdentity(event.identity)
+	task, deferred, reviewSequence, ok := aggregate.takeReview(event.identity)
 	if !ok {
 		return
 	}
@@ -546,26 +713,42 @@ func (aggregate *supervisedAggregate) handleReviewResult(event supervisorAggrega
 		aggregate.markTaskAbandoned(task, issueCodeOrDefault(event.issue, delegation.SupervisionIssueReviewFailure), staleEventReason("stale supervisor review ignored after provider pass changed", firstNonEmpty(strings.TrimSpace(event.decision.Reason), boundedSupervisorError(event.err), issueSummary(event.issue))))
 		return
 	}
-	clearSupervisedReviewCancel(task)
-	task.reviewPending = false
+	if deferred == nil {
+		deferred = aggregate.latestWorkerEventAfterReview(event.identity, reviewSequence)
+	}
+	if deferred != nil {
+		aggregate.handleEvent(*deferred)
+		return
+	}
 	decision := normalizeDelegationDecision(event.decision)
 	if decision.Kind == "" {
 		aggregate.markTaskFailed(task, delegation.SupervisionIssueReviewFailure, firstNonEmpty(boundedSupervisorError(event.err), "supervisor decision was empty"), true)
 		return
 	}
+	aggregate.mu.Lock()
+	currentStatus := task.lastSnapshot.Status
+	aggregate.mu.Unlock()
 	switch decision.Kind {
 	case delegation.SupervisionDecisionAccept:
-		aggregate.settleCurrentTask(task)
+		if delegatedStatusTerminal(currentStatus) {
+			aggregate.settleCurrentTask(task)
+		} else {
+			aggregate.resumeTaskAfterReview(task)
+		}
 	case delegation.SupervisionDecisionContinue:
-		if delegatedStatusTerminal(task.lastSnapshot.Status) && task.lastSnapshot.Status != delegation.TaskCompleted {
-			aggregate.retryTask(task, "continue_after_terminal", "")
+		if delegatedStatusTerminal(currentStatus) && currentStatus != delegation.TaskCompleted {
+			aggregate.retryTask(task, "continue_after_terminal", supervisorDecisionGuidance(decision))
 			return
 		}
-		aggregate.settleCurrentTask(task)
+		if delegatedStatusTerminal(currentStatus) {
+			aggregate.settleCurrentTask(task)
+		} else {
+			aggregate.resumeTaskAfterReview(task)
+		}
 	case delegation.SupervisionDecisionCorrect:
 		aggregate.correctTask(task, decision)
 	case delegation.SupervisionDecisionRetry:
-		aggregate.retryTask(task, "retry", "")
+		aggregate.retryTask(task, "retry", supervisorDecisionGuidance(decision))
 	case delegation.SupervisionDecisionReassign:
 		aggregate.reassignTask(task, decision)
 	case delegation.SupervisionDecisionEscalate:
@@ -577,35 +760,126 @@ func (aggregate *supervisedAggregate) handleReviewResult(event supervisorAggrega
 	}
 }
 
+func supervisorDecisionGuidance(decision delegation.SupervisionDecision) string {
+	return firstNonEmpty(strings.TrimSpace(decision.Summary), strings.TrimSpace(decision.Reason))
+}
+
+func (aggregate *supervisedAggregate) resumeTaskAfterReview(task *supervisedTaskState) {
+	if aggregate == nil || task == nil {
+		return
+	}
+	aggregate.mu.Lock()
+	if task.canceled || task.completed {
+		aggregate.mu.Unlock()
+		return
+	}
+	task.lastIssue = nil
+	applyTaskRuntimeMetadata(task)
+	aggregate.mu.Unlock()
+	aggregate.rememberTaskRuntimeState(task)
+}
+
+func (aggregate *supervisedAggregate) takeReview(identity supervisorTaskIdentity) (*supervisedTaskState, *supervisorAggregateEvent, uint64, bool) {
+	if aggregate == nil {
+		return nil, nil, 0, false
+	}
+	aggregate.mu.Lock()
+	task, ok := aggregate.matchIdentityLocked(identity)
+	if !ok || !task.reviewPending {
+		aggregate.mu.Unlock()
+		return nil, nil, 0, false
+	}
+	reviewCancel := task.reviewCancel
+	deferred := task.deferredWorkerEvent
+	reviewSequence := task.reviewSequence
+	task.reviewCancel = nil
+	task.reviewPending = false
+	task.reviewSequence = 0
+	task.deferredWorkerEvent = nil
+	aggregate.mu.Unlock()
+	if reviewCancel != nil {
+		reviewCancel()
+	}
+	return task, deferred, reviewSequence, true
+}
+
+func (aggregate *supervisedAggregate) latestWorkerEventAfterReview(identity supervisorTaskIdentity, afterSequence uint64) *supervisorAggregateEvent {
+	if aggregate == nil || aggregate.coordinator == nil || aggregate.coordinator.scheduler == nil {
+		return nil
+	}
+	snapshot, ok := aggregate.coordinator.scheduler.Snapshot(identity.TaskID)
+	if !ok || snapshot.Sequence <= afterSequence || !aggregate.snapshotIdentityMatches(identity, snapshot) {
+		return nil
+	}
+	if delegatedStatusTerminal(snapshot.Status) {
+		result, _ := aggregate.coordinator.scheduler.Result(identity.TaskID)
+		return &supervisorAggregateEvent{
+			kind:     "worker_terminal",
+			identity: identity,
+			snapshot: snapshot,
+			result:   result,
+		}
+	}
+	if snapshot.Checkpoint == nil {
+		return nil
+	}
+	aggregate.mu.Lock()
+	task, matches := aggregate.matchIdentityLocked(identity)
+	supersedesReview := matches && checkpointSupersedesPendingReview(task, snapshot.Checkpoint)
+	aggregate.mu.Unlock()
+	if !supersedesReview {
+		return nil
+	}
+	return &supervisorAggregateEvent{
+		kind:     "worker_checkpoint",
+		identity: identity,
+		snapshot: snapshot,
+	}
+}
+
 func (aggregate *supervisedAggregate) correctTask(task *supervisedTaskState, decision delegation.SupervisionDecision) {
 	if task == nil {
 		return
 	}
+	aggregate.mu.Lock()
+	if task.canceled || task.completed {
+		aggregate.mu.Unlock()
+		return
+	}
 	if task.corrections >= task.contract.MaxCorrections {
+		aggregate.mu.Unlock()
 		aggregate.markTaskFailed(task, delegation.SupervisionIssueCorrectionLimit, "supervisor correction limit exceeded", true)
 		return
 	}
 	if task.round >= task.contract.MaxRounds {
+		aggregate.mu.Unlock()
 		aggregate.markTaskFailed(task, delegation.SupervisionIssueRoundLimit, "supervision round limit exceeded", true)
 		return
 	}
-	task.corrections++
-	aggregate.spawnFollowup(task, "correct", decision.Summary, "", "", "")
+	aggregate.mu.Unlock()
+	aggregate.spawnFollowup(task, "correct", supervisorDecisionGuidance(decision), "", "", "")
 }
 
 func (aggregate *supervisedAggregate) retryTask(task *supervisedTaskState, reason string, prompt string) {
 	if task == nil {
 		return
 	}
+	aggregate.mu.Lock()
+	if task.canceled || task.completed {
+		aggregate.mu.Unlock()
+		return
+	}
 	if task.retries >= task.contract.MaxRetries {
+		aggregate.mu.Unlock()
 		aggregate.markTaskFailed(task, delegation.SupervisionIssueRetryLimit, "supervisor retry limit exceeded", true)
 		return
 	}
 	if task.round >= task.contract.MaxRounds {
+		aggregate.mu.Unlock()
 		aggregate.markTaskFailed(task, delegation.SupervisionIssueRoundLimit, "supervision round limit exceeded", true)
 		return
 	}
-	task.retries++
+	aggregate.mu.Unlock()
 	aggregate.spawnFollowup(task, reason, prompt, "", "", "")
 }
 
@@ -614,17 +888,29 @@ func (aggregate *supervisedAggregate) reassignTask(task *supervisedTaskState, de
 		aggregate.markTaskFailed(task, delegation.SupervisionIssueReviewFailure, "supervisor reassignment is disabled", true)
 		return
 	}
+	aggregate.mu.Lock()
+	if task.canceled || task.completed {
+		aggregate.mu.Unlock()
+		return
+	}
 	if task.round >= task.contract.MaxRounds {
+		aggregate.mu.Unlock()
 		aggregate.markTaskFailed(task, delegation.SupervisionIssueRoundLimit, "supervision round limit exceeded", true)
 		return
 	}
+	aggregate.mu.Unlock()
 	modelID, groupID, executionMode, reason := aggregate.nextReassignedModel(task)
 	if modelID == "" {
 		aggregate.markTaskFailed(task, delegation.SupervisionIssueModelFailure, firstNonEmpty(strings.TrimSpace(reason), "no reassignment target is available"), true)
 		return
 	}
-	task.reassignments++
-	aggregate.spawnFollowup(task, "reassign", decision.Summary, modelID, groupID, executionMode)
+	aggregate.mu.Lock()
+	if task.canceled || task.completed {
+		aggregate.mu.Unlock()
+		return
+	}
+	aggregate.mu.Unlock()
+	aggregate.spawnFollowup(task, "reassign", supervisorDecisionGuidance(decision), modelID, groupID, executionMode)
 }
 
 func (aggregate *supervisedAggregate) escalateTask(task *supervisedTaskState, decision delegation.SupervisionDecision) {
@@ -632,28 +918,66 @@ func (aggregate *supervisedAggregate) escalateTask(task *supervisedTaskState, de
 		aggregate.markTaskFailed(task, delegation.SupervisionIssueReviewFailure, "supervisor escalation is disabled", true)
 		return
 	}
+	aggregate.mu.Lock()
+	if task.canceled || task.completed {
+		aggregate.mu.Unlock()
+		return
+	}
 	if task.escalationUsed {
+		aggregate.mu.Unlock()
 		aggregate.markTaskFailed(task, delegation.SupervisionIssueReviewFailure, "supervisor escalation already used", true)
 		return
 	}
 	if task.round >= task.contract.MaxRounds {
+		aggregate.mu.Unlock()
 		aggregate.markTaskFailed(task, delegation.SupervisionIssueRoundLimit, "supervision round limit exceeded", true)
 		return
 	}
+	aggregate.mu.Unlock()
 	modelID := firstNonEmpty(strings.TrimSpace(aggregate.config.ReviewerModelID), strings.TrimSpace(aggregate.config.SupervisorModelID), strings.TrimSpace(aggregate.base.ModelID))
 	if modelID == "" {
 		aggregate.markTaskFailed(task, delegation.SupervisionIssueModelFailure, "no escalation model is available", true)
 		return
 	}
-	groupID, executionMode := aggregate.resolveConfiguredModelRoute(modelID, firstNonEmpty(strings.TrimSpace(task.currentRequest.ExecutionMode), delegation.ExecutionModeAuto))
-	task.escalationUsed = true
-	task.escalated = true
-	aggregate.spawnFollowup(task, "escalate", decision.Summary, modelID, groupID, executionMode)
+	aggregate.mu.Lock()
+	if task.canceled || task.completed {
+		aggregate.mu.Unlock()
+		return
+	}
+	executionMode := firstNonEmpty(strings.TrimSpace(task.currentRequest.ExecutionMode), delegation.ExecutionModeAuto)
+	groupID, executionMode := aggregate.resolveConfiguredModelRoute(modelID, executionMode)
+	aggregate.mu.Unlock()
+	aggregate.spawnFollowup(task, "escalate", supervisorDecisionGuidance(decision), modelID, groupID, executionMode)
 }
 
 func (aggregate *supervisedAggregate) spawnFollowup(task *supervisedTaskState, reason string, prompt string, modelID string, groupOverride string, executionMode string) {
 	if task == nil {
 		return
+	}
+	aggregate.mu.Lock()
+	if task.canceled || task.completed {
+		aggregate.mu.Unlock()
+		return
+	}
+	previousTaskID := task.currentTaskID
+	previousRequest := task.currentRequest
+	previousRound := task.round
+	previousContract := delegationContractClone(task.contract)
+	previousCorrections := task.corrections
+	previousRetries := task.retries
+	previousReassignments := task.reassignments
+	previousEscalated := task.escalated
+	previousEscalationUsed := task.escalationUsed
+	switch strings.TrimSpace(reason) {
+	case "correct":
+		task.corrections++
+	case "retry", "continue_after_terminal":
+		task.retries++
+	case "reassign":
+		task.reassignments++
+	case "escalate":
+		task.escalationUsed = true
+		task.escalated = true
 	}
 	task.round++
 	task.contract.Round = task.round
@@ -665,6 +989,9 @@ func (aggregate *supervisedAggregate) spawnFollowup(task *supervisedTaskState, r
 		request.ArgsJSON = rewriteDelegatedWorkerModel(request.ArgsJSON, request.ModelID)
 		request.ModelGroupID = strings.TrimSpace(groupOverride)
 		request.ExecutionMode = delegation.NormalizeExecutionMode(firstNonEmpty(strings.TrimSpace(executionMode), strings.TrimSpace(request.ExecutionMode), delegation.ExecutionModeAuto))
+		if request.ModelGroupID != "" {
+			request.ToolPermission = cloneDelegatedPermissions(aggregate.toolPermissionsForGroup(request.ModelGroupID))
+		}
 	} else {
 		if strings.TrimSpace(groupOverride) != "" {
 			request.ModelGroupID = strings.TrimSpace(groupOverride)
@@ -673,9 +1000,33 @@ func (aggregate *supervisedAggregate) spawnFollowup(task *supervisedTaskState, r
 			request.ExecutionMode = delegation.NormalizeExecutionMode(executionMode)
 		}
 	}
+	task.contract.AllowedTools = allowedToolNames(request.ToolPermission)
 	task.currentTaskID = request.ID
 	task.currentRequest = request
+	if task.attemptTaskIDs == nil {
+		task.attemptTaskIDs = make(map[string]struct{})
+	}
+	task.attemptTaskIDs[request.ID] = struct{}{}
+	task.reviewSequence = 0
+	task.deferredWorkerEvent = nil
+	aggregate.mu.Unlock()
+	aggregate.coordinator.scheduler.CancelIfActive(previousTaskID)
+	aggregate.coordinator.forgetRuntimeState(previousTaskID)
 	if err := aggregate.submitAttempt(task, reason, prompt); err != nil {
+		aggregate.mu.Lock()
+		task.currentTaskID = previousTaskID
+		task.currentRequest = previousRequest
+		task.round = previousRound
+		task.contract = previousContract
+		task.corrections = previousCorrections
+		task.retries = previousRetries
+		task.reassignments = previousReassignments
+		task.escalated = previousEscalated
+		task.escalationUsed = previousEscalationUsed
+		aggregate.mu.Unlock()
+		if errors.Is(err, errSupervisedTaskCanceled) {
+			return
+		}
 		if errors.Is(err, errProviderLoopInterrupted) || !aggregate.parentExecStillCurrent() {
 			aggregate.cancelTasks()
 			return
@@ -684,7 +1035,48 @@ func (aggregate *supervisedAggregate) spawnFollowup(task *supervisedTaskState, r
 	}
 }
 
+func (aggregate *supervisedAggregate) toolPermissionsForGroup(groupID string) map[string]bool {
+	if aggregate == nil {
+		return nil
+	}
+	groupID = strings.TrimSpace(groupID)
+	if groupID == "" {
+		return nil
+	}
+	for _, group := range aggregate.config.Groups {
+		if strings.TrimSpace(group.ID) == groupID {
+			return cloneDelegatedPermissions(group.ToolPermissions)
+		}
+	}
+	return nil
+}
+
+func allowedToolNames(permissions map[string]bool) []string {
+	if len(permissions) == 0 {
+		return nil
+	}
+	allowed := make([]string, 0, len(permissions))
+	for name, enabled := range permissions {
+		if enabled {
+			if name = strings.TrimSpace(name); name != "" {
+				allowed = append(allowed, name)
+			}
+		}
+	}
+	sort.Strings(allowed)
+	return allowed
+}
+
 func (aggregate *supervisedAggregate) nextReassignedModel(task *supervisedTaskState) (string, string, string, string) {
+	aggregate.mu.Lock()
+	defer aggregate.mu.Unlock()
+	return aggregate.nextReassignedModelLocked(task)
+}
+
+func (aggregate *supervisedAggregate) nextReassignedModelLocked(task *supervisedTaskState) (string, string, string, string) {
+	if task == nil {
+		return "", "", "", "no task is available"
+	}
 	currentModelID := strings.TrimSpace(task.currentRequest.ModelID)
 	currentGroupID := strings.TrimSpace(task.currentRequest.ModelGroupID)
 	preferredGroup := strings.TrimSpace(aggregate.config.WorkerGroupID)
@@ -740,7 +1132,15 @@ func (aggregate *supervisedAggregate) resolveConfiguredModelRoute(modelID string
 }
 
 func (aggregate *supervisedAggregate) allowedActions(task *supervisedTaskState, snapshot delegation.TaskSnapshot) []delegation.SupervisionDecisionKind {
-	if aggregate == nil || task == nil {
+	if aggregate == nil {
+		return []delegation.SupervisionDecisionKind{
+			delegation.SupervisionDecisionAccept,
+			delegation.SupervisionDecisionCircuitOpen,
+		}
+	}
+	aggregate.mu.Lock()
+	defer aggregate.mu.Unlock()
+	if task == nil {
 		return []delegation.SupervisionDecisionKind{
 			delegation.SupervisionDecisionAccept,
 			delegation.SupervisionDecisionCircuitOpen,
@@ -764,7 +1164,7 @@ func (aggregate *supervisedAggregate) allowedActions(task *supervisedTaskState, 
 		actions = append(actions, delegation.SupervisionDecisionRetry)
 	}
 	if aggregate.config.AllowReassign && canSpawnFollowup {
-		if modelID, _, _, _ := aggregate.nextReassignedModel(task); modelID != "" {
+		if modelID, _, _, _ := aggregate.nextReassignedModelLocked(task); modelID != "" {
 			actions = append(actions, delegation.SupervisionDecisionReassign)
 		}
 	}
@@ -825,27 +1225,37 @@ func (aggregate *supervisedAggregate) finish() {
 }
 
 func (aggregate *supervisedAggregate) collectResult() delegatedAggregateResult {
+	if aggregate == nil {
+		return delegatedAggregateResult{Status: "failed"}
+	}
+	aggregate.mu.Lock()
+	defer aggregate.mu.Unlock()
 	result := delegatedAggregateResult{
 		AggregateID: aggregate.id,
 		Tasks:       append([]delegatedWorkerResult(nil), aggregate.submissionErrors...),
 	}
-	aggregate.mu.Lock()
-	tasks := make([]*supervisedTaskState, 0, len(aggregate.tasks))
-	for _, task := range aggregate.tasks {
-		tasks = append(tasks, task)
-	}
-	aggregate.mu.Unlock()
-	totalWorkers := len(tasks) + len(result.Tasks)
+	totalWorkers := len(aggregate.tasks) + len(result.Tasks)
 	workerOutputLimit := 0
 	if totalWorkers > 0 {
 		workerOutputLimit = (48 * projectedReplayKiB) / totalWorkers
 	}
-	for _, task := range tasks {
+	for _, task := range aggregate.tasks {
+		if task == nil {
+			continue
+		}
 		snapshot := task.lastSnapshot
 		output := ""
 		if workerOutputLimit >= 128 {
 			output = truncateProjectedReplayText("Task", task.lastResult.Output, workerOutputLimit)
 		}
+		workerError := delegation.SanitizeSupervisorText(
+			firstNonEmpty(strings.TrimSpace(snapshot.Error), supervisorErrorString(task.lastResult.Error)),
+			task.contract.WorkspaceHint,
+		)
+		supervisionReason := delegation.SanitizeSupervisorText(
+			firstNonEmpty(strings.TrimSpace(snapshot.Error), issueSummary(task.lastIssue)),
+			task.contract.WorkspaceHint,
+		)
 		item := delegatedWorkerResult{
 			TaskID:               strings.TrimSpace(task.currentTaskID),
 			ModelID:              strings.TrimSpace(snapshot.ModelID),
@@ -854,7 +1264,7 @@ func (aggregate *supervisedAggregate) collectResult() delegatedAggregateResult {
 			Status:               snapshot.Status,
 			DurationMS:           delegatedDuration(snapshot),
 			Output:               output,
-			Error:                truncateProjectedReplayText("Task error", firstNonEmpty(strings.TrimSpace(snapshot.Error), supervisorErrorString(task.lastResult.Error)), 2048),
+			Error:                truncateProjectedReplayText("Task error", workerError, 2048),
 			ToolCallCount:        snapshot.ToolCallCount,
 			SupervisionStatus:    firstNonEmpty(string(snapshot.SupervisionStatus), string(delegation.SupervisionStatusCompleted)),
 			SupervisionRound:     task.round,
@@ -863,7 +1273,7 @@ func (aggregate *supervisedAggregate) collectResult() delegatedAggregateResult {
 			ReassignCount:        task.reassignments,
 			Escalated:            task.escalated,
 			SupervisionIssueCode: supervisionIssueCode(task.lastIssue),
-			SupervisionReason:    truncateProjectedReplayText("Supervisor reason", firstNonEmpty(strings.TrimSpace(snapshot.Error), issueSummary(task.lastIssue)), 512),
+			SupervisionReason:    truncateProjectedReplayText("Supervisor reason", supervisionReason, 512),
 		}
 		result.Tasks = append(result.Tasks, item)
 	}
@@ -897,19 +1307,57 @@ func (aggregate *supervisedAggregate) cancelTasks() {
 		return
 	}
 	aggregate.cancel()
-	if aggregate.coordinator == nil || aggregate.coordinator.scheduler == nil {
-		return
-	}
 	aggregate.mu.Lock()
 	taskIDs := make([]string, 0, len(aggregate.tasks))
+	reviewCancels := make([]context.CancelFunc, 0, len(aggregate.tasks))
+	runtimeStates := make([]struct {
+		taskID string
+		state  delegationTaskRuntimeState
+	}, 0, len(aggregate.tasks))
+	now := time.Now().UTC()
 	for _, task := range aggregate.tasks {
-		if task != nil {
-			taskIDs = append(taskIDs, task.currentTaskID)
+		if task == nil || task.canceled || (task.completed && !task.reviewPending) {
+			continue
+		}
+		task.canceled = true
+		task.completed = true
+		task.reviewPending = false
+		task.reviewSequence = 0
+		task.deferredWorkerEvent = nil
+		if task.reviewCancel != nil {
+			reviewCancels = append(reviewCancels, task.reviewCancel)
+			task.reviewCancel = nil
+		}
+		task.lastSnapshot.Status = delegation.TaskCanceled
+		task.lastSnapshot.SupervisionStatus = delegation.SupervisionStatusCanceled
+		task.lastSnapshot.Error = "supervised task canceled"
+		task.lastSnapshot.UpdatedAt = now
+		task.lastSnapshot.FinishedAt = now
+		applyTaskRuntimeMetadata(task)
+		currentTaskID := strings.TrimSpace(task.currentTaskID)
+		taskIDs = append(taskIDs, taskAttemptIDsLocked(task)...)
+		if currentTaskID != "" {
+			runtimeStates = append(runtimeStates, struct {
+				taskID string
+				state  delegationTaskRuntimeState
+			}{taskID: currentTaskID, state: delegationTaskRuntimeStateForTask(aggregate, task, true)})
 		}
 	}
 	aggregate.mu.Unlock()
+	for _, cancelReview := range reviewCancels {
+		cancelReview()
+	}
+	if aggregate.coordinator == nil {
+		return
+	}
+	for _, item := range runtimeStates {
+		aggregate.coordinator.rememberRuntimeState(item.taskID, item.state)
+	}
+	if aggregate.coordinator.scheduler == nil {
+		return
+	}
 	for _, taskID := range taskIDs {
-		_ = aggregate.coordinator.scheduler.Cancel(strings.TrimSpace(taskID))
+		aggregate.coordinator.scheduler.CancelIfActive(strings.TrimSpace(taskID))
 	}
 }
 
@@ -924,7 +1372,7 @@ func (aggregate *supervisedAggregate) cancelTask(taskID string) bool {
 	aggregate.mu.Lock()
 	var target *supervisedTaskState
 	for _, task := range aggregate.tasks {
-		if task != nil && strings.TrimSpace(task.currentTaskID) == taskID {
+		if taskOwnsAttemptLocked(task, taskID) {
 			target = task
 			break
 		}
@@ -936,25 +1384,34 @@ func (aggregate *supervisedAggregate) cancelTask(taskID string) bool {
 	target.canceled = true
 	target.completed = true
 	target.reviewPending = false
+	target.reviewSequence = 0
+	target.deferredWorkerEvent = nil
 	reviewCancel := target.reviewCancel
 	target.reviewCancel = nil
 	target.lastSnapshot.Status = delegation.TaskCanceled
 	target.lastSnapshot.SupervisionStatus = delegation.SupervisionStatusCanceled
 	target.lastSnapshot.Error = "supervised task canceled"
 	target.lastSnapshot.UpdatedAt = time.Now().UTC()
-	if target.lastSnapshot.FinishedAt.IsZero() {
-		target.lastSnapshot.FinishedAt = target.lastSnapshot.UpdatedAt
-	}
+	target.lastSnapshot.FinishedAt = target.lastSnapshot.UpdatedAt
 	applyTaskRuntimeMetadata(target)
+	currentTaskID := strings.TrimSpace(target.currentTaskID)
+	attemptTaskIDs := taskAttemptIDsLocked(target)
 	runtimeState := delegationTaskRuntimeStateForTask(aggregate, target, true)
 	scheduler := aggregate.coordinator.scheduler
 	aggregate.mu.Unlock()
-	aggregate.coordinator.rememberRuntimeState(taskID, runtimeState)
+	for _, attemptTaskID := range attemptTaskIDs {
+		if attemptTaskID != currentTaskID {
+			aggregate.coordinator.forgetRuntimeState(attemptTaskID)
+		}
+	}
+	aggregate.coordinator.rememberRuntimeState(currentTaskID, runtimeState)
 	if reviewCancel != nil {
 		reviewCancel()
 	}
 	if scheduler != nil {
-		_ = scheduler.Cancel(taskID)
+		for _, attemptTaskID := range attemptTaskIDs {
+			scheduler.CancelIfActive(attemptTaskID)
+		}
 	}
 	aggregate.postEvent(supervisorAggregateEvent{kind: "task_canceled"})
 	return true
@@ -1019,8 +1476,15 @@ func (aggregate *supervisedAggregate) matchIdentity(identity supervisorTaskIdent
 	}
 	aggregate.mu.Lock()
 	defer aggregate.mu.Unlock()
+	return aggregate.matchIdentityLocked(identity)
+}
+
+func (aggregate *supervisedAggregate) matchIdentityLocked(identity supervisorTaskIdentity) (*supervisedTaskState, bool) {
+	if aggregate == nil {
+		return nil, false
+	}
 	task, ok := aggregate.tasks[strings.TrimSpace(identity.LogicalID)]
-	if !ok || task == nil || task.canceled {
+	if !ok || task == nil || task.canceled || task.completed {
 		return nil, false
 	}
 	if strings.TrimSpace(task.currentTaskID) != strings.TrimSpace(identity.TaskID) || task.round != identity.Round {
@@ -1029,20 +1493,140 @@ func (aggregate *supervisedAggregate) matchIdentity(identity supervisorTaskIdent
 	return task, true
 }
 
-func (aggregate *supervisedAggregate) resultIdentityMatches(task *supervisedTaskState, identity supervisorTaskIdentity, snapshot delegation.TaskSnapshot, result delegation.TaskResult) bool {
+func deferWorkerEventLocked(task *supervisedTaskState, event supervisorAggregateEvent) {
 	if task == nil {
+		return
+	}
+	sequence := event.snapshot.Sequence
+	if event.snapshot.Checkpoint != nil && event.snapshot.Checkpoint.EventSequence > sequence {
+		sequence = event.snapshot.Checkpoint.EventSequence
+	}
+	if sequence > 0 && task.reviewSequence > 0 && sequence <= task.reviewSequence && event.kind != "worker_terminal" {
+		return
+	}
+	if event.kind != "worker_terminal" && !checkpointSupersedesPendingReview(task, event.snapshot.Checkpoint) {
+		return
+	}
+	if current := task.deferredWorkerEvent; current != nil {
+		currentSequence := current.snapshot.Sequence
+		if current.snapshot.Checkpoint != nil && current.snapshot.Checkpoint.EventSequence > currentSequence {
+			currentSequence = current.snapshot.Checkpoint.EventSequence
+		}
+		if current.kind == "worker_terminal" && event.kind != "worker_terminal" {
+			return
+		}
+		if event.kind != "worker_terminal" && sequence <= currentSequence {
+			return
+		}
+		if event.kind == "worker_terminal" && current.kind == "worker_terminal" && sequence < currentSequence {
+			return
+		}
+	}
+	deferred := event
+	task.deferredWorkerEvent = &deferred
+}
+
+func checkpointSupersedesPendingReview(task *supervisedTaskState, checkpoint *delegation.WorkerCheckpoint) bool {
+	if task == nil || checkpoint == nil {
+		return false
+	}
+	if task.previous == nil {
+		return true
+	}
+	if checkpoint.EventSequence <= task.previous.EventSequence {
+		return false
+	}
+	if checkpoint.EffectiveProgressAt.IsZero() {
+		return false
+	}
+	return task.previous.EffectiveProgressAt.IsZero() || checkpoint.EffectiveProgressAt.After(task.previous.EffectiveProgressAt)
+}
+
+func workerSnapshotAlreadyHandled(task *supervisedTaskState, snapshot delegation.TaskSnapshot) bool {
+	return task != nil && snapshot.Sequence > 0 && snapshot.Sequence <= task.lastSnapshot.Sequence
+}
+
+func taskOwnsAttemptLocked(task *supervisedTaskState, taskID string) bool {
+	if task == nil {
+		return false
+	}
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" {
+		return false
+	}
+	if strings.TrimSpace(task.currentTaskID) == taskID || strings.TrimSpace(task.logicalID) == taskID {
+		return true
+	}
+	_, ok := task.attemptTaskIDs[taskID]
+	return ok
+}
+
+func taskAttemptIDsLocked(task *supervisedTaskState) []string {
+	if task == nil {
+		return nil
+	}
+	ids := make([]string, 0, len(task.attemptTaskIDs)+1)
+	seen := make(map[string]struct{}, len(task.attemptTaskIDs)+1)
+	appendID := func(taskID string) {
+		taskID = strings.TrimSpace(taskID)
+		if taskID == "" {
+			return
+		}
+		if _, ok := seen[taskID]; ok {
+			return
+		}
+		seen[taskID] = struct{}{}
+		ids = append(ids, taskID)
+	}
+	appendID(task.currentTaskID)
+	for taskID := range task.attemptTaskIDs {
+		appendID(taskID)
+	}
+	return ids
+}
+
+func recordRecentToolSignatures(task *supervisedTaskState, checkpoint delegation.WorkerCheckpoint) {
+	if task == nil || len(checkpoint.RecentToolNames) == 0 {
+		return
+	}
+	current := make([]string, 0, len(checkpoint.RecentToolNames))
+	for _, toolName := range checkpoint.RecentToolNames {
+		signature := delegation.NormalizeToolSignature(toolName, nil)
+		if strings.Contains(toolName, "#") {
+			signature = delegation.NormalizeToolSignatureValue(toolName)
+		}
+		if signature != "" {
+			current = append(current, signature)
+		}
+	}
+	if len(current) == 0 {
+		return
+	}
+	const maxRecentToolSignatures = 12
+	task.recentSignatures = append(task.recentSignatures, current...)
+	if len(task.recentSignatures) > maxRecentToolSignatures {
+		task.recentSignatures = append([]string(nil), task.recentSignatures[len(task.recentSignatures)-maxRecentToolSignatures:]...)
+	}
+}
+
+func (aggregate *supervisedAggregate) snapshotIdentityMatches(identity supervisorTaskIdentity, snapshot delegation.TaskSnapshot) bool {
+	if aggregate == nil {
 		return false
 	}
 	if strings.TrimSpace(snapshot.ID) != strings.TrimSpace(identity.TaskID) || strings.TrimSpace(snapshot.ParentExecID) != strings.TrimSpace(identity.ParentExec) {
 		return false
 	}
+	if snapshot.SupervisionRound != identity.Round {
+		return false
+	}
 	if checkpoint := snapshot.Checkpoint; checkpoint != nil && checkpoint.Round > 0 && checkpoint.Round != identity.Round {
 		return false
 	}
-	if metadataPass, ok := parseMetadataProviderPass(result.Metadata); ok && metadataPass != identity.ProviderPass {
-		return false
-	}
 	return true
+}
+
+func (aggregate *supervisedAggregate) resultIdentityMatches(task *supervisedTaskState, identity supervisorTaskIdentity, snapshot delegation.TaskSnapshot) bool {
+	return task != nil && aggregate.snapshotIdentityMatches(identity, snapshot)
 }
 
 func (aggregate *supervisedAggregate) recordSubmissionError(worker delegation.TaskRequest, err error) {
@@ -1050,17 +1634,18 @@ func (aggregate *supervisedAggregate) recordSubmissionError(worker delegation.Ta
 		return
 	}
 	aggregate.mu.Lock()
+	safeError := delegation.SanitizeSupervisorText(err.Error(), worker.WorkspaceHint)
 	aggregate.submissionErrors = append(aggregate.submissionErrors, delegatedWorkerResult{
 		TaskID:               strings.TrimSpace(worker.ID),
 		ModelID:              strings.TrimSpace(worker.ModelID),
 		ModelGroupID:         strings.TrimSpace(worker.ModelGroupID),
 		ExecutionMode:        strings.TrimSpace(worker.ExecutionMode),
 		Status:               delegation.TaskFailed,
-		Error:                err.Error(),
+		Error:                safeError,
 		SupervisionStatus:    string(delegation.SupervisionStatusFailed),
 		SupervisionRound:     1,
 		SupervisionIssueCode: string(delegation.SupervisionIssueModelFailure),
-		SupervisionReason:    truncateProjectedReplayText("Supervisor reason", err.Error(), 512),
+		SupervisionReason:    truncateProjectedReplayText("Supervisor reason", safeError, 512),
 	})
 	aggregate.mu.Unlock()
 }
@@ -1069,10 +1654,24 @@ func (aggregate *supervisedAggregate) settleCurrentTask(task *supervisedTaskStat
 	if task == nil {
 		return
 	}
+	aggregate.mu.Lock()
+	if task.canceled || task.completed {
+		aggregate.mu.Unlock()
+		return
+	}
+	reviewCancel := task.reviewCancel
+	task.reviewCancel = nil
+	task.reviewPending = false
+	task.reviewSequence = 0
+	task.deferredWorkerEvent = nil
 	task.completed = true
 	applyTaskRuntimeMetadata(task)
 	if task.lastSnapshot.SupervisionStatus == "" {
 		task.lastSnapshot.SupervisionStatus = supervisionStatusFromTaskStatus(task.lastSnapshot.Status)
+	}
+	aggregate.mu.Unlock()
+	if reviewCancel != nil {
+		reviewCancel()
 	}
 	aggregate.rememberTaskRuntimeState(task)
 }
@@ -1081,6 +1680,16 @@ func (aggregate *supervisedAggregate) markTaskFailed(task *supervisedTaskState, 
 	if task == nil {
 		return
 	}
+	aggregate.mu.Lock()
+	if task.canceled || task.completed {
+		aggregate.mu.Unlock()
+		return
+	}
+	reviewCancel := task.reviewCancel
+	task.reviewCancel = nil
+	task.reviewPending = false
+	task.reviewSequence = 0
+	task.deferredWorkerEvent = nil
 	task.completed = true
 	applyTaskRuntimeMetadata(task)
 	task.lastSnapshot.Status = delegation.TaskFailed
@@ -1089,7 +1698,8 @@ func (aggregate *supervisedAggregate) markTaskFailed(task *supervisedTaskState, 
 	} else {
 		task.lastSnapshot.SupervisionStatus = delegation.SupervisionStatusFailed
 	}
-	task.lastSnapshot.Error = truncateProjectedReplayText("Supervisor reason", firstNonEmpty(strings.TrimSpace(reason), "supervision failed"), 512)
+	safeReason := delegation.SanitizeSupervisorText(firstNonEmpty(strings.TrimSpace(reason), "supervision failed"), task.contract.WorkspaceHint)
+	task.lastSnapshot.Error = truncateProjectedReplayText("Supervisor reason", safeReason, 512)
 	now := time.Now().UTC()
 	if task.lastSnapshot.FinishedAt.IsZero() {
 		task.lastSnapshot.FinishedAt = now
@@ -1103,6 +1713,20 @@ func (aggregate *supervisedAggregate) markTaskFailed(task *supervisedTaskState, 
 		}
 	}
 	applyTaskRuntimeMetadata(task)
+	currentTaskID := strings.TrimSpace(task.currentTaskID)
+	attemptTaskIDs := taskAttemptIDsLocked(task)
+	aggregate.mu.Unlock()
+	if reviewCancel != nil {
+		reviewCancel()
+	}
+	if aggregate.coordinator != nil && aggregate.coordinator.scheduler != nil {
+		for _, attemptTaskID := range attemptTaskIDs {
+			aggregate.coordinator.scheduler.CancelIfActive(attemptTaskID)
+			if attemptTaskID != currentTaskID {
+				aggregate.coordinator.forgetRuntimeState(attemptTaskID)
+			}
+		}
+	}
 	aggregate.rememberTaskRuntimeState(task)
 }
 
@@ -1110,12 +1734,22 @@ func (aggregate *supervisedAggregate) markTaskAbandoned(task *supervisedTaskStat
 	if task == nil {
 		return
 	}
+	aggregate.mu.Lock()
+	if task.canceled || task.completed {
+		aggregate.mu.Unlock()
+		return
+	}
+	reviewCancel := task.reviewCancel
+	task.reviewCancel = nil
 	task.completed = true
 	task.reviewPending = false
+	task.reviewSequence = 0
+	task.deferredWorkerEvent = nil
 	applyTaskRuntimeMetadata(task)
 	task.lastSnapshot.Status = delegation.TaskCanceled
 	task.lastSnapshot.SupervisionStatus = delegation.SupervisionStatusCanceled
-	task.lastSnapshot.Error = truncateProjectedReplayText("Supervisor reason", firstNonEmpty(strings.TrimSpace(reason), "stale supervised event ignored"), 512)
+	safeReason := delegation.SanitizeSupervisorText(firstNonEmpty(strings.TrimSpace(reason), "stale supervised event ignored"), task.contract.WorkspaceHint)
+	task.lastSnapshot.Error = truncateProjectedReplayText("Supervisor reason", safeReason, 512)
 	now := time.Now().UTC()
 	if task.lastSnapshot.FinishedAt.IsZero() {
 		task.lastSnapshot.FinishedAt = now
@@ -1132,6 +1766,20 @@ func (aggregate *supervisedAggregate) markTaskAbandoned(task *supervisedTaskStat
 		}
 	}
 	applyTaskRuntimeMetadata(task)
+	currentTaskID := strings.TrimSpace(task.currentTaskID)
+	attemptTaskIDs := taskAttemptIDsLocked(task)
+	aggregate.mu.Unlock()
+	if reviewCancel != nil {
+		reviewCancel()
+	}
+	if aggregate.coordinator != nil && aggregate.coordinator.scheduler != nil {
+		for _, attemptTaskID := range attemptTaskIDs {
+			aggregate.coordinator.scheduler.CancelIfActive(attemptTaskID)
+			if attemptTaskID != currentTaskID {
+				aggregate.coordinator.forgetRuntimeState(attemptTaskID)
+			}
+		}
+	}
 	aggregate.rememberTaskRuntimeState(task)
 }
 
@@ -1139,12 +1787,12 @@ func applyTaskRuntimeMetadata(task *supervisedTaskState) {
 	if task == nil {
 		return
 	}
-	task.lastSnapshot.ID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ID), strings.TrimSpace(task.currentTaskID))
-	task.lastSnapshot.ModelID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelID), strings.TrimSpace(task.currentRequest.ModelID))
-	task.lastSnapshot.ModelName = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelName), strings.TrimSpace(task.currentRequest.ModelName))
-	task.lastSnapshot.ModelGroupID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelGroupID), strings.TrimSpace(task.currentRequest.ModelGroupID))
+	task.lastSnapshot.ID = firstNonEmpty(strings.TrimSpace(task.currentTaskID), strings.TrimSpace(task.lastSnapshot.ID))
+	task.lastSnapshot.ModelID = firstNonEmpty(strings.TrimSpace(task.currentRequest.ModelID), strings.TrimSpace(task.lastSnapshot.ModelID))
+	task.lastSnapshot.ModelName = firstNonEmpty(strings.TrimSpace(task.currentRequest.ModelName), strings.TrimSpace(task.lastSnapshot.ModelName))
+	task.lastSnapshot.ModelGroupID = firstNonEmpty(strings.TrimSpace(task.currentRequest.ModelGroupID), strings.TrimSpace(task.lastSnapshot.ModelGroupID))
 	task.lastSnapshot.WorkerRole = firstNonEmpty(strings.TrimSpace(task.currentRequest.SubagentType), strings.TrimSpace(task.contract.Role), "generalPurpose")
-	task.lastSnapshot.ExecutionMode = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ExecutionMode), strings.TrimSpace(task.currentRequest.ExecutionMode))
+	task.lastSnapshot.ExecutionMode = firstNonEmpty(strings.TrimSpace(task.currentRequest.ExecutionMode), strings.TrimSpace(task.lastSnapshot.ExecutionMode))
 	task.lastSnapshot.SupervisionRound = task.round
 	task.lastSnapshot.CorrectionCount = task.corrections
 	task.lastSnapshot.RetryCount = task.retries
@@ -1255,21 +1903,6 @@ func resolveSupervisorModelID(config delegation.RuntimeConfig, base delegation.T
 		modelID = strings.TrimSpace(base.ModelID)
 	}
 	return modelID
-}
-
-func parseMetadataProviderPass(metadata map[string]string) (int, bool) {
-	if len(metadata) == 0 {
-		return 0, false
-	}
-	raw := strings.TrimSpace(metadata["provider_pass"])
-	if raw == "" {
-		return 0, false
-	}
-	value, err := strconv.Atoi(raw)
-	if err != nil || value <= 0 {
-		return 0, false
-	}
-	return value, true
 }
 
 func supervisionIssueCode(issue *delegation.SupervisionIssue) string {

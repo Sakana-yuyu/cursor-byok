@@ -98,6 +98,7 @@ func (adapter *supervisorProviderAdapter) Review(ctx context.Context, input supe
 
 	input.Contract = delegationContractClone(input.Contract)
 	input.Checkpoint = delegationCheckpointClone(input.Checkpoint)
+	input = sanitizeSupervisorReviewInput(input)
 	sequence := adapter.sequence.Add(1)
 	requestID := fmt.Sprintf("%s-supervisor-request-%d", strings.TrimSpace(input.AggregateID), sequence)
 	conversationID := fmt.Sprintf("%s-supervisor-conversation-%d", strings.TrimSpace(input.AggregateID), sequence)
@@ -170,7 +171,50 @@ func buildSupervisorSystemPrompt(allowed []delegation.SupervisionDecisionKind) s
 	}
 	return "You supervise delegated workers. Return exactly one JSON object with keys kind, reason, and summary. " +
 		"kind must be one of: " + strings.Join(parts, ", ") + ". " +
-		"reason must be concise and non-empty. summary must stay concise; when kind is correct it should contain only the correction instructions."
+		"reason must be concise and non-empty. summary must stay concise; when kind is correct, reassign, or escalate it should contain only the correction instructions."
+}
+
+func sanitizeSupervisorReviewInput(input supervisorReviewInput) supervisorReviewInput {
+	workspaceHint := strings.TrimSpace(input.Contract.WorkspaceHint)
+	sanitize := func(value string) string {
+		return delegation.SanitizeSupervisorText(value, workspaceHint)
+	}
+	input.Contract.Goal = sanitize(input.Contract.Goal)
+	input.Contract.Scope = sanitize(input.Contract.Scope)
+	input.Contract.Role = sanitize(input.Contract.Role)
+	input.Contract.ExpectedOutput = sanitize(input.Contract.ExpectedOutput)
+	input.Contract.WorkspaceHint = sanitize(input.Contract.WorkspaceHint)
+	for index, criterion := range input.Contract.DoneCriteria {
+		input.Contract.DoneCriteria[index] = sanitize(criterion)
+	}
+	input.Checkpoint.ProgressSummary = sanitize(input.Checkpoint.ProgressSummary)
+	input.Checkpoint.Blocker = sanitize(input.Checkpoint.Blocker)
+	for index, file := range input.Checkpoint.ChangedFileSummaries {
+		input.Checkpoint.ChangedFileSummaries[index] = sanitize(file)
+	}
+	input.Result = delegation.SanitizeTaskResult(input.Result, workspaceHint)
+	input.Snapshot.Description = sanitize(input.Snapshot.Description)
+	input.Snapshot.Output = sanitize(input.Snapshot.Output)
+	input.Snapshot.Error = sanitize(input.Snapshot.Error)
+	input.Snapshot.ProgressSummary = sanitize(input.Snapshot.ProgressSummary)
+	if input.Snapshot.Checkpoint != nil {
+		checkpoint := delegationCheckpointClone(*input.Snapshot.Checkpoint)
+		checkpoint.ProgressSummary = sanitize(checkpoint.ProgressSummary)
+		checkpoint.Blocker = sanitize(checkpoint.Blocker)
+		for index, file := range checkpoint.ChangedFileSummaries {
+			checkpoint.ChangedFileSummaries[index] = sanitize(file)
+		}
+		input.Snapshot.Checkpoint = &checkpoint
+	}
+	if input.Issue != nil {
+		issue := delegationSupervisionIssueClone(input.Issue)
+		issue.Summary = sanitize(issue.Summary)
+		for index, file := range issue.ChangedFiles {
+			issue.ChangedFiles[index] = sanitize(file)
+		}
+		input.Issue = issue
+	}
+	return input
 }
 
 func buildSupervisorReviewPrompt(input supervisorReviewInput) string {
@@ -261,6 +305,9 @@ func decodeSupervisorDecision(raw string, allowed []delegation.SupervisionDecisi
 	if decision.Reason == "" {
 		return delegation.SupervisionDecision{}, fmt.Errorf("supervisor decision reason is required")
 	}
+	if decision.Summary == "" && (decision.Kind == delegation.SupervisionDecisionReassign || decision.Kind == delegation.SupervisionDecisionEscalate) {
+		decision.Summary = decision.Reason
+	}
 	if decision.Kind == delegation.SupervisionDecisionCorrect {
 		if decision.Summary == "" {
 			return delegation.SupervisionDecision{}, fmt.Errorf("supervisor correction summary is required")
@@ -298,6 +345,15 @@ func delegationCheckpointClone(checkpoint delegation.WorkerCheckpoint) delegatio
 	return cloned
 }
 
+func delegationSupervisionIssueClone(issue *delegation.SupervisionIssue) *delegation.SupervisionIssue {
+	if issue == nil {
+		return nil
+	}
+	cloned := *issue
+	cloned.ChangedFiles = append([]string(nil), issue.ChangedFiles...)
+	return &cloned
+}
+
 func supervisionActionAllowed(kind delegation.SupervisionDecisionKind, allowed []delegation.SupervisionDecisionKind) bool {
 	if kind == "" {
 		return false
@@ -317,5 +373,6 @@ func boundedSupervisorError(err error) string {
 	if err == nil {
 		return ""
 	}
-	return truncateProjectedReplayText("Supervisor review error", strings.TrimSpace(err.Error()), supervisorMaxErrorBytes)
+	sanitized := delegation.SanitizeSupervisorText(err.Error(), "")
+	return truncateProjectedReplayText("Supervisor review error", strings.TrimSpace(sanitized), supervisorMaxErrorBytes)
 }
