@@ -344,7 +344,15 @@ func (aggregate *supervisedAggregate) handleEvent(event supervisorAggregateEvent
 
 func (aggregate *supervisedAggregate) handleWorkerTerminal(event supervisorAggregateEvent) {
 	task, ok := aggregate.matchIdentity(event.identity)
-	if !ok || !aggregate.parentExecStillCurrent() {
+	if !ok {
+		return
+	}
+	if !aggregate.parentExecStillCurrent() {
+		if event.err == nil {
+			task.lastSnapshot = event.snapshot
+			task.lastResult = event.result
+		}
+		aggregate.markTaskAbandoned(task, delegation.SupervisionIssueModelFailure, staleEventReason("stale worker result ignored after provider pass changed", firstNonEmpty(supervisorErrorString(event.err), strings.TrimSpace(event.snapshot.Error))))
 		return
 	}
 	if event.err != nil {
@@ -450,7 +458,11 @@ func (aggregate *supervisedAggregate) handleReviewAbandoned(event supervisorAggr
 
 func (aggregate *supervisedAggregate) handleReviewResult(event supervisorAggregateEvent) {
 	task, ok := aggregate.matchIdentity(event.identity)
-	if !ok || !aggregate.parentExecStillCurrent() {
+	if !ok {
+		return
+	}
+	if !aggregate.parentExecStillCurrent() {
+		aggregate.markTaskAbandoned(task, issueCodeOrDefault(event.issue, delegation.SupervisionIssueReviewFailure), staleEventReason("stale supervisor review ignored after provider pass changed", firstNonEmpty(strings.TrimSpace(event.decision.Reason), boundedSupervisorError(event.err), issueSummary(event.issue))))
 		return
 	}
 	task.reviewPending = false
@@ -926,6 +938,37 @@ func (aggregate *supervisedAggregate) markTaskFailed(task *supervisedTaskState, 
 	}
 }
 
+func (aggregate *supervisedAggregate) markTaskAbandoned(task *supervisedTaskState, code delegation.SupervisionIssueCode, reason string) {
+	if task == nil {
+		return
+	}
+	task.completed = true
+	task.reviewPending = false
+	task.lastSnapshot.ID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ID), strings.TrimSpace(task.currentTaskID))
+	task.lastSnapshot.ModelID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelID), strings.TrimSpace(task.currentRequest.ModelID))
+	task.lastSnapshot.ModelName = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelName), strings.TrimSpace(task.currentRequest.ModelName))
+	task.lastSnapshot.ModelGroupID = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ModelGroupID), strings.TrimSpace(task.currentRequest.ModelGroupID))
+	task.lastSnapshot.ExecutionMode = firstNonEmpty(strings.TrimSpace(task.lastSnapshot.ExecutionMode), strings.TrimSpace(task.currentRequest.ExecutionMode))
+	task.lastSnapshot.Status = delegation.TaskCanceled
+	task.lastSnapshot.SupervisionStatus = delegation.SupervisionStatusCanceled
+	task.lastSnapshot.Error = truncateProjectedReplayText("Supervisor reason", firstNonEmpty(strings.TrimSpace(reason), "stale supervised event ignored"), 512)
+	now := time.Now().UTC()
+	if task.lastSnapshot.FinishedAt.IsZero() {
+		task.lastSnapshot.FinishedAt = now
+	}
+	if code == "" && task.lastIssue != nil {
+		code = task.lastIssue.Code
+	}
+	if task.lastIssue == nil || code != "" || strings.TrimSpace(reason) != "" {
+		task.lastIssue = &delegation.SupervisionIssue{
+			Code:       code,
+			Summary:    task.lastSnapshot.Error,
+			Round:      task.round,
+			DetectedAt: now,
+		}
+	}
+}
+
 func buildWorkerSupervisionContract(aggregateID string, base delegation.TaskRequest, worker delegation.TaskRequest, config delegation.RuntimeConfig) delegation.SupervisionTaskContract {
 	allowedTools := make([]string, 0, len(worker.ToolPermission))
 	for toolName, allowed := range worker.ToolPermission {
@@ -1074,6 +1117,18 @@ func issueSummary(issue *delegation.SupervisionIssue) string {
 		return ""
 	}
 	return strings.TrimSpace(issue.Summary)
+}
+
+func staleEventReason(prefix string, detail string) string {
+	prefix = strings.TrimSpace(prefix)
+	detail = strings.TrimSpace(detail)
+	if prefix == "" {
+		return detail
+	}
+	if detail == "" {
+		return prefix
+	}
+	return prefix + ": " + detail
 }
 
 func supervisionStatusFromTaskStatus(status delegation.TaskStatus) delegation.SupervisionStatus {
