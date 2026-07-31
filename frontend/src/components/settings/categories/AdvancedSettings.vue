@@ -21,6 +21,8 @@ const props = defineProps({
   },
 });
 
+const cacheFieldAutosaveKey = (field) => `advanced.${field}`;
+
 const message = useMessage();
 
 const directModeDraft = ref(appState.routingMode === "upstream");
@@ -44,14 +46,12 @@ const ttlSecondsState = reactive({
   busy: false,
   queued: false,
   error: "",
-  retry: null,
 });
 
 const maxEntriesState = reactive({
   busy: false,
   queued: false,
   error: "",
-  retry: null,
 });
 
 const cacheEnabled = computed(() => cacheEnabledDraft.value);
@@ -115,10 +115,12 @@ async function handleDirectModeChange(enabled) {
 
   directModeState.busy = true;
   try {
-    const result = await props.autosave.run("advanced.direct-mode", () => saveRoutingMode(targetMode));
-    if (!result?.ok) {
-      throw new Error(result?.error || "切换失败");
-    }
+    await props.autosave.run("advanced.direct-mode", async () => {
+      const result = await saveRoutingMode(targetMode);
+      if (!result?.ok) {
+        throw new Error(result?.error || "切换失败");
+      }
+    });
     message.success(nextValue ? "已切换到直连 Cursor 模式" : "已切换到本地服务模式");
   } catch (error) {
     directModeDraft.value = appState.routingMode === "upstream";
@@ -136,10 +138,12 @@ async function handleCacheEnabledChange(enabled) {
   cacheEnabledState.error = "";
   cacheEnabledState.busy = true;
   try {
-    const result = await props.autosave.run("advanced.cache-enabled", () => saveLocalResponseCacheEnabled(nextValue));
-    if (!result?.ok) {
-      throw new Error(result?.error || "保存失败");
-    }
+    await props.autosave.run("advanced.cache-enabled", async () => {
+      const result = await saveLocalResponseCacheEnabled(nextValue);
+      if (!result?.ok) {
+        throw new Error(result?.error || "保存失败");
+      }
+    });
   } catch (error) {
     cacheEnabledDraft.value = appState.localResponseCache?.enabled ?? previousValue;
     cacheEnabledState.error = toUserError(error);
@@ -149,11 +153,10 @@ async function handleCacheEnabledChange(enabled) {
 }
 
 function queueCacheFieldSave(field, state, valueRef) {
-  state.retry = () => flushCacheField(field, state);
   state.error = "";
   state.queued = true;
   props.autosave.schedule(
-    `advanced.${field}`,
+    cacheFieldAutosaveKey(field),
     async () => {
       state.queued = false;
       state.busy = true;
@@ -175,11 +178,21 @@ function queueCacheFieldSave(field, state, valueRef) {
 
 async function flushCacheField(field, state) {
   try {
-    await props.autosave.flush(`advanced.${field}`);
+    await props.autosave.flush(cacheFieldAutosaveKey(field));
   } catch (_error) {
     // error state is already surfaced on the row
   } finally {
     state.queued = false;
+  }
+}
+
+async function retryCacheField(field, state) {
+  state.queued = false;
+  state.error = "";
+  try {
+    await props.autosave.retry(cacheFieldAutosaveKey(field));
+  } catch (_error) {
+    // the replayed callback updates the row and coordinator error state
   }
 }
 
@@ -236,7 +249,7 @@ function handleCacheFieldInput(field, state, valueRef, value) {
           label="缓存有效期（秒）"
           :busy="ttlBusy"
           :error="ttlSecondsState.error"
-          @retry="retryState(ttlSecondsState)"
+          @retry="retryCacheField('ttlSeconds', ttlSecondsState)"
         >
           <div class="w-[220px] max-w-full">
             <Input
@@ -255,7 +268,7 @@ function handleCacheFieldInput(field, state, valueRef, value) {
           label="最多缓存条数"
           :busy="maxEntriesBusy"
           :error="maxEntriesState.error"
-          @retry="retryState(maxEntriesState)"
+          @retry="retryCacheField('maxEntries', maxEntriesState)"
         >
           <div class="w-[220px] max-w-full">
             <Input

@@ -4,13 +4,11 @@ import SettingsSection from "@/components/settings/SettingsSection.vue";
 import Button from "@/components/ui/Button.vue";
 import Input from "@/components/ui/Input.vue";
 import Select from "@/components/ui/Select.vue";
-import { showModal } from "@/composables/useModal";
 import {
   ROUTE_MODE_OPTIONS,
   appState,
   getCursorManualPath,
   openModelConfigWindow,
-  persistUserConfig,
   saveRoutingMode,
   setCursorManualPath,
   toUserError,
@@ -26,6 +24,8 @@ const props = defineProps({
     required: true,
   },
 });
+
+const MANUAL_PATH_AUTOSAVE_KEY = "cursor-service.manual-path";
 
 const router = useRouter();
 
@@ -43,16 +43,9 @@ const manualPathState = reactive({
   busy: false,
   queued: false,
   error: "",
-  retry: null,
 });
 
 const detectState = reactive({
-  busy: false,
-  error: "",
-  retry: null,
-});
-
-const persistConfigState = reactive({
   busy: false,
   error: "",
   retry: null,
@@ -92,10 +85,12 @@ async function saveRouteMode(value) {
   routeModeState.error = "";
   routeModeState.busy = true;
   try {
-    const result = await props.autosave.run("cursor-service.route-mode", () => saveRoutingMode(nextValue));
-    if (!result?.ok) {
-      throw new Error(result?.error || "切换失败");
-    }
+    await props.autosave.run("cursor-service.route-mode", async () => {
+      const result = await saveRoutingMode(nextValue);
+      if (!result?.ok) {
+        throw new Error(result?.error || "切换失败");
+      }
+    });
   } catch (error) {
     routeModeDraft.value = appState.routingMode || previousValue;
     routeModeState.error = toUserError(error);
@@ -110,34 +105,52 @@ function clearManualPathErrors() {
 }
 
 function queueManualPathSave() {
-  manualPathState.retry = flushManualPath;
   manualPathState.error = "";
   manualPathState.queued = true;
   props.autosave.schedule(
-    "cursor-service.manual-path",
-    async () => {
-      manualPathState.queued = false;
-      manualPathState.busy = true;
-      try {
-        manualPath.value = setCursorManualPath(manualPath.value);
-      } catch (error) {
-        manualPathState.error = toUserError(error);
-        throw error;
-      } finally {
-        manualPathState.busy = false;
-      }
-    },
+    MANUAL_PATH_AUTOSAVE_KEY,
+    persistAndValidateManualPath,
     { debounceMs: 500 },
   );
 }
 
+async function persistAndValidateManualPath() {
+  manualPathState.queued = false;
+  manualPathState.busy = true;
+  manualPathState.error = "";
+  try {
+    manualPath.value = setCursorManualPath(manualPath.value);
+    const nextDetectedPath = await detectCursorPath(manualPath.value) || "";
+    detectedPath.value = nextDetectedPath;
+    if (manualPath.value && !nextDetectedPath) {
+      throw new Error("手动指定的 Cursor.exe 路径无效，请检查文件是否存在。");
+    }
+  } catch (error) {
+    detectedPath.value = "";
+    manualPathState.error = toUserError(error);
+    throw error;
+  } finally {
+    manualPathState.busy = false;
+  }
+}
+
 async function flushManualPath() {
   try {
-    await props.autosave.flush("cursor-service.manual-path");
+    await props.autosave.flush(MANUAL_PATH_AUTOSAVE_KEY);
   } catch (_error) {
     // error state is already surfaced on the row
   } finally {
     manualPathState.queued = false;
+  }
+}
+
+async function retryManualPath() {
+  manualPathState.queued = false;
+  manualPathState.error = "";
+  try {
+    await props.autosave.retry(MANUAL_PATH_AUTOSAVE_KEY);
+  } catch (_error) {
+    // the replayed callback updates the row and coordinator error state
   }
 }
 
@@ -163,26 +176,6 @@ async function handleDetectCursorPath() {
     detectState.error = toUserError(error);
   } finally {
     detectState.busy = false;
-  }
-}
-
-async function handlePersistUserConfig() {
-  persistConfigState.retry = handlePersistUserConfig;
-  persistConfigState.error = "";
-  persistConfigState.busy = true;
-  try {
-    const result = await props.autosave.run("cursor-service.persist-config", () => persistUserConfig());
-    if (!result?.ok) {
-      throw new Error(result?.error || "保存失败");
-    }
-    await showModal({
-      title: "提示",
-      content: "本地配置已保存",
-    });
-  } catch (error) {
-    persistConfigState.error = toUserError(error);
-  } finally {
-    persistConfigState.busy = false;
   }
 }
 
@@ -216,8 +209,8 @@ onMounted(() => {
         label="手动指定 Cursor.exe 路径"
         description="留空则自动检测"
         :busy="manualPathBusy"
-        :error="manualPathState.error || detectState.error"
-        @retry="retryState(detectState.error ? detectState : manualPathState)"
+        :error="manualPathState.error"
+        @retry="retryManualPath"
       >
         <div class="w-full max-w-[460px] space-y-2">
           <Input
@@ -272,22 +265,6 @@ onMounted(() => {
             @change="saveRouteMode"
           />
         </div>
-      </SettingsRow>
-
-      <SettingsRow
-        label="本地配置"
-        description="可配置运行模式和模型渠道；运行日志位于 ~/.cursor-local-assistant-v2/logs/"
-        :busy="persistConfigState.busy"
-        :error="persistConfigState.error"
-        @retry="retryState(persistConfigState)"
-      >
-        <Button
-          variant="default"
-          :disabled="persistConfigState.busy"
-          @click="handlePersistUserConfig"
-        >
-          保存配置
-        </Button>
       </SettingsRow>
 
       <SettingsRow
