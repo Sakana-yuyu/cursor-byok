@@ -536,9 +536,9 @@ func (aggregate *supervisedAggregate) reassignTask(task *supervisedTaskState, de
 		aggregate.markTaskFailed(task, delegation.SupervisionIssueRoundLimit, "supervision round limit exceeded", true)
 		return
 	}
-	modelID, groupID, executionMode := aggregate.nextReassignedModel(task)
+	modelID, groupID, executionMode, reason := aggregate.nextReassignedModel(task)
 	if modelID == "" {
-		aggregate.markTaskFailed(task, delegation.SupervisionIssueModelFailure, "no reassignment target is available", true)
+		aggregate.markTaskFailed(task, delegation.SupervisionIssueModelFailure, firstNonEmpty(strings.TrimSpace(reason), "no reassignment target is available"), true)
 		return
 	}
 	task.reassignments++
@@ -563,9 +563,10 @@ func (aggregate *supervisedAggregate) escalateTask(task *supervisedTaskState, de
 		aggregate.markTaskFailed(task, delegation.SupervisionIssueModelFailure, "no escalation model is available", true)
 		return
 	}
+	groupID, executionMode := aggregate.resolveConfiguredModelRoute(modelID, firstNonEmpty(strings.TrimSpace(task.currentRequest.ExecutionMode), delegation.ExecutionModeAuto))
 	task.escalationUsed = true
 	task.escalated = true
-	aggregate.spawnFollowup(task, "escalate", decision.Summary, modelID, "", "")
+	aggregate.spawnFollowup(task, "escalate", decision.Summary, modelID, groupID, executionMode)
 }
 
 func (aggregate *supervisedAggregate) spawnFollowup(task *supervisedTaskState, reason string, prompt string, modelID string, groupOverride string, executionMode string) {
@@ -580,12 +581,15 @@ func (aggregate *supervisedAggregate) spawnFollowup(task *supervisedTaskState, r
 		request.ModelID = strings.TrimSpace(modelID)
 		request.ModelName = firstNonEmpty(aggregate.config.ModelNames[request.ModelID], request.ModelID)
 		request.ArgsJSON = rewriteDelegatedWorkerModel(request.ArgsJSON, request.ModelID)
-	}
-	if strings.TrimSpace(groupOverride) != "" {
 		request.ModelGroupID = strings.TrimSpace(groupOverride)
-	}
-	if strings.TrimSpace(executionMode) != "" {
-		request.ExecutionMode = delegation.NormalizeExecutionMode(executionMode)
+		request.ExecutionMode = delegation.NormalizeExecutionMode(firstNonEmpty(strings.TrimSpace(executionMode), strings.TrimSpace(request.ExecutionMode), delegation.ExecutionModeAuto))
+	} else {
+		if strings.TrimSpace(groupOverride) != "" {
+			request.ModelGroupID = strings.TrimSpace(groupOverride)
+		}
+		if strings.TrimSpace(executionMode) != "" {
+			request.ExecutionMode = delegation.NormalizeExecutionMode(executionMode)
+		}
 	}
 	task.currentTaskID = request.ID
 	task.currentRequest = request
@@ -598,24 +602,25 @@ func (aggregate *supervisedAggregate) spawnFollowup(task *supervisedTaskState, r
 	}
 }
 
-func (aggregate *supervisedAggregate) nextReassignedModel(task *supervisedTaskState) (string, string, string) {
+func (aggregate *supervisedAggregate) nextReassignedModel(task *supervisedTaskState) (string, string, string, string) {
 	currentModelID := strings.TrimSpace(task.currentRequest.ModelID)
 	currentGroupID := strings.TrimSpace(task.currentRequest.ModelGroupID)
 	preferredGroup := strings.TrimSpace(aggregate.config.WorkerGroupID)
-	for _, group := range aggregate.config.Groups {
-		if !group.Enabled {
-			continue
-		}
-		if preferredGroup != "" && strings.TrimSpace(group.ID) != preferredGroup {
-			continue
-		}
-		for _, modelID := range group.ModelIDs {
-			modelID = strings.TrimSpace(modelID)
-			if modelID == "" || (modelID == currentModelID && strings.TrimSpace(group.ID) == currentGroupID) {
+	if preferredGroup != "" {
+		for _, group := range aggregate.config.Groups {
+			if !group.Enabled || strings.TrimSpace(group.ID) != preferredGroup {
 				continue
 			}
-			return modelID, strings.TrimSpace(group.ID), delegation.NormalizeExecutionMode(group.ExecutionMode)
+			for _, modelID := range group.ModelIDs {
+				modelID = strings.TrimSpace(modelID)
+				if modelID == "" || (modelID == currentModelID && strings.TrimSpace(group.ID) == currentGroupID) {
+					continue
+				}
+				return modelID, strings.TrimSpace(group.ID), delegation.NormalizeExecutionMode(group.ExecutionMode), ""
+			}
+			return "", "", "", fmt.Sprintf("no eligible reassignment target is configured in worker group %q", preferredGroup)
 		}
+		return "", "", "", fmt.Sprintf("worker group %q has no enabled reassignment candidates", preferredGroup)
 	}
 	for _, group := range aggregate.config.Groups {
 		if !group.Enabled {
@@ -626,10 +631,30 @@ func (aggregate *supervisedAggregate) nextReassignedModel(task *supervisedTaskSt
 			if modelID == "" || modelID == currentModelID {
 				continue
 			}
-			return modelID, strings.TrimSpace(group.ID), delegation.NormalizeExecutionMode(group.ExecutionMode)
+			return modelID, strings.TrimSpace(group.ID), delegation.NormalizeExecutionMode(group.ExecutionMode), ""
 		}
 	}
-	return "", "", ""
+	return "", "", "", "no reassignment target is available"
+}
+
+func (aggregate *supervisedAggregate) resolveConfiguredModelRoute(modelID string, fallbackExecutionMode string) (string, string) {
+	modelID = strings.TrimSpace(modelID)
+	fallbackExecutionMode = delegation.NormalizeExecutionMode(fallbackExecutionMode)
+	if aggregate == nil || modelID == "" {
+		return "", fallbackExecutionMode
+	}
+	for _, group := range aggregate.config.Groups {
+		if !group.Enabled {
+			continue
+		}
+		for _, candidate := range group.ModelIDs {
+			if strings.TrimSpace(candidate) != modelID {
+				continue
+			}
+			return strings.TrimSpace(group.ID), delegation.NormalizeExecutionMode(group.ExecutionMode)
+		}
+	}
+	return "", fallbackExecutionMode
 }
 
 func (aggregate *supervisedAggregate) allowedActions(task *supervisedTaskState, snapshot delegation.TaskSnapshot) []delegation.SupervisionDecisionKind {
@@ -657,7 +682,7 @@ func (aggregate *supervisedAggregate) allowedActions(task *supervisedTaskState, 
 		actions = append(actions, delegation.SupervisionDecisionRetry)
 	}
 	if aggregate.config.AllowReassign && canSpawnFollowup {
-		if modelID, _, _ := aggregate.nextReassignedModel(task); modelID != "" {
+		if modelID, _, _, _ := aggregate.nextReassignedModel(task); modelID != "" {
 			actions = append(actions, delegation.SupervisionDecisionReassign)
 		}
 	}
