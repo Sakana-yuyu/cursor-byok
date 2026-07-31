@@ -1162,7 +1162,7 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 
 // handleExecResult 处理客户端返回的执行桥结果，并在终态时把 tool_result 写回 history。
 func (service *Service) handleExecResult(intent InboundIntent) error {
-	if intent.ExecClientMessage != nil && service.cursorDelegation != nil && service.cursorDelegation.ConsumeExecMessage(intent.ExecClientMessage) {
+	if intent.ExecClientMessage != nil && service.cursorDelegation != nil && service.cursorDelegation.ConsumeExecMessage(intent.RequestID, intent.ExecClientMessage) {
 		return nil
 	}
 	stream, ok := service.broker.Get(intent.RequestID)
@@ -1261,7 +1261,7 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 
 // handleExecControl 处理执行桥控制面结果，例如 stream_close 或 throw。
 func (service *Service) handleExecControl(intent InboundIntent) error {
-	if intent.ExecClientControlMessage != nil && service.cursorDelegation != nil && service.cursorDelegation.ConsumeExecControl(intent.ExecClientControlMessage) {
+	if intent.ExecClientControlMessage != nil && service.cursorDelegation != nil && service.cursorDelegation.ConsumeExecControl(intent.RequestID, intent.ExecClientControlMessage) {
 		return nil
 	}
 	stream, ok := service.broker.Get(intent.RequestID)

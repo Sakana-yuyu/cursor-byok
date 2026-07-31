@@ -55,8 +55,10 @@ func (adapter *localDelegatedAgentAdapter) Execute(ctx context.Context, request 
 	}
 
 	identity := adapter.newTaskIdentity(request)
+	delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusDispatched, 1, nil, nil, "delegated worker dispatched", "")
 	conversation, err := adapter.buildChildConversation(request, identity)
 	if err != nil {
+		delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusFailed, 1, nil, nil, "delegated worker could not initialize", delegation.SanitizeSupervisorText(err.Error(), request.WorkspaceHint))
 		return delegation.TaskResult{Error: err, Metadata: identity.metadata(0)}
 	}
 	mode := request.Mode
@@ -65,15 +67,18 @@ func (adapter *localDelegatedAgentAdapter) Execute(ctx context.Context, request 
 	}
 	compiled, err := adapter.compiler.Compile(conversation, mode, strings.TrimSpace(request.Prompt), strings.TrimSpace(request.ModelName))
 	if err != nil {
+		delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusFailed, 1, nil, nil, "delegated worker prompt compilation failed", delegation.SanitizeSupervisorText(err.Error(), request.WorkspaceHint))
 		return delegation.TaskResult{Error: err, Metadata: identity.metadata(0)}
 	}
 	compiled = guardCompiledConversationForProvider(compiled)
 	mcpToolNames, err := conversationMCPToolNameSet(conversation)
 	if err != nil {
+		delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusFailed, 1, nil, nil, "delegated worker MCP discovery failed", delegation.SanitizeSupervisorText(err.Error(), request.WorkspaceHint))
 		return delegation.TaskResult{Error: err, Metadata: identity.metadata(0)}
 	}
 	compiled.Tools, err = filterDelegatedTools(compiled.Tools, request.ToolPermission, mcpToolNames)
 	if err != nil {
+		delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusFailed, 1, nil, nil, "delegated worker tool filtering failed", delegation.SanitizeSupervisorText(err.Error(), request.WorkspaceHint))
 		return delegation.TaskResult{Error: err, Metadata: identity.metadata(0)}
 	}
 	messages := cloneDelegatedMessages(compiled.Messages)
@@ -88,19 +93,26 @@ func (adapter *localDelegatedAgentAdapter) Execute(ctx context.Context, request 
 	}
 	for providerPass := 1; providerPass <= maxPasses; providerPass++ {
 		if err := ctx.Err(); err != nil {
+			delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusCanceled, providerPass, nil, nil, "delegated worker canceled", "")
 			return delegation.TaskResult{Error: err, ToolCallCount: toolCallCount, Metadata: identity.metadata(providerPass)}
 		}
+		delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusRunning, providerPass, nil, nil, "delegated worker is running", "")
 		pass, err := adapter.runProviderPass(ctx, request, identity, conversation, compiled, messages, providerPass)
 		if err != nil {
+			delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusFailed, providerPass, nil, nil, "delegated provider failed", delegation.SanitizeSupervisorText(err.Error(), request.WorkspaceHint))
 			return delegation.TaskResult{Error: err, Output: strings.TrimSpace(pass.text), ToolCallCount: toolCallCount, Metadata: identity.metadata(providerPass)}
 		}
 		if len(pass.invocations) == 0 {
+			delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusCompleted, providerPass, nil, nil, "delegated worker completed", "")
 			return delegation.TaskResult{Output: strings.TrimSpace(pass.text), ToolCallCount: toolCallCount, Metadata: identity.metadata(providerPass)}
 		}
 
 		messages = append(messages, buildDelegatedAssistantToolMessage(pass.text, pass.invocations))
 		for _, invocation := range pass.invocations {
 			toolCallCount++
+			toolSignature := delegation.NormalizeToolSignature(invocation.ToolName, invocation.ArgsJSON)
+			changedFiles := localDelegationCheckpointChangedFiles(invocation)
+			delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusRunning, providerPass, []string{toolSignature}, changedFiles, "delegated tool is running", "")
 			resultText := adapter.executeTool(ctx, request, conversation, invocation)
 			messages = append(messages, modeladapter.Message{
 				Role:       "tool",
@@ -110,6 +122,7 @@ func (adapter *localDelegatedAgentAdapter) Execute(ctx context.Context, request 
 			})
 		}
 	}
+	delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusFailed, maxPasses, nil, nil, "delegated worker exceeded provider pass limit", fmt.Sprintf("provider pass limit: %d", maxPasses))
 	return delegation.TaskResult{
 		Error:         fmt.Errorf("local delegated agent exceeded %d provider passes", maxPasses),
 		ToolCallCount: toolCallCount,
@@ -396,4 +409,31 @@ func marshalDelegatedToolResult(value any, err error) (string, error) {
 		return "", marshalErr
 	}
 	return string(encoded), nil
+}
+
+func localDelegationCheckpointChangedFiles(invocation runtimecore.ToolInvocation) []string {
+	switch strings.TrimSpace(invocation.ToolName) {
+	case "Write", "PatchEdit", "PatchEditLines", "PatchEditSpan", "Edit", "Delete", "GenerateImage":
+	default:
+		return nil
+	}
+
+	args, err := runtimecore.DecodeArgsMap(invocation.ArgsJSON)
+	if err != nil {
+		return nil
+	}
+	path := strings.TrimSpace(localDelegationCheckpointTargetPath(strings.TrimSpace(invocation.ToolName), args))
+	if path == "" {
+		return nil
+	}
+	return []string{path}
+}
+
+func localDelegationCheckpointTargetPath(toolName string, args map[string]any) string {
+	switch strings.TrimSpace(toolName) {
+	case "GenerateImage":
+		return runtimecore.ReadStringArg(args, "file_path", "filePath", "path", "Path")
+	default:
+		return runtimecore.ReadStringArg(args, "path", "file_path", "filePath", "Path", "FilePath")
+	}
 }

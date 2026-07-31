@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -21,10 +22,14 @@ const (
 )
 
 var (
-	pathTokenPattern     = regexp.MustCompile(`(?i)(?:[a-z]:[\\/][^,\s;]+|/(?:[^/\s;]+/)*[^,\s;]+|(?:\.{0,2}[\\/])?[a-z0-9_.-]+(?:[\\/][a-z0-9_. -]+)+)`)
-	uuidLikePattern      = regexp.MustCompile(`\b[0-9a-f]{8,}\b`)
-	longDigitPattern     = regexp.MustCompile(`\b\d{3,}\b`)
-	spaceCollapsePattern = regexp.MustCompile(`\s+`)
+	pathTokenPattern              = regexp.MustCompile(`(?i)(?:[a-z]:[\\/][^,\s;]+|/(?:[^/\s;]+/)*[^,\s;]+|(?:\.{0,2}[\\/])?[a-z0-9_.-]+(?:[\\/][a-z0-9_. -]+)+)`)
+	uuidLikePattern               = regexp.MustCompile(`\b[0-9a-f]{8,}\b`)
+	longDigitPattern              = regexp.MustCompile(`\b\d{3,}\b`)
+	spaceCollapsePattern          = regexp.MustCompile(`\s+`)
+	sensitiveHeaderPattern        = regexp.MustCompile(`(?i)((?:access[\s_-]*tokens?|api[\s_-]*keys?|authorization(?:[\s_-]*headers?)?|proxy[\s_-]*authorization|bearer|secret|password|private[\s_-]*key|token|key)\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\r\n,;]+)`)
+	sensitiveAuthorizationPattern = regexp.MustCompile(`(?i)((?:\bauthorization(?:[\s_-]*headers?)?\b)\s+(?:bearer|basic)\s+)[^\r\n,;]+`)
+	sensitiveSchemePattern        = regexp.MustCompile(`(?i)\b(?:bearer|basic)\b\s+[^\r\n,;]+`)
+	credentialLikePattern         = regexp.MustCompile(`(?i)(?:\b(?:sk|rk|pk|ghp|github_pat|xox[baprs]-|AIza|AKIA)[a-z0-9_-]{8,}\b|\beyJ[a-z0-9_-]{10,}\.[a-z0-9_-]{10,}\.[a-z0-9_-]{10,}\b)`)
 )
 
 type LoopDetector struct {
@@ -113,6 +118,10 @@ func normalizeToolSignatureValue(value string) string {
 		return tool
 	}
 	return tool + "#" + hash
+}
+
+func NormalizeToolSignatureValue(value string) string {
+	return normalizeToolSignatureValue(value)
 }
 
 func normalizeChangedFileSummaries(values []string, workspaceHint string) []string {
@@ -381,26 +390,20 @@ func shapeString(value any) string {
 	case nil:
 		return "null"
 	case bool:
-		return "bool"
+		return "bool:" + strconv.FormatBool(typed)
 	case float64:
-		return "number"
+		return "number:" + strconv.FormatFloat(typed, 'g', -1, 64)
 	case string:
-		return "string"
+		sum := sha256.Sum256([]byte(typed))
+		return "string#" + hex.EncodeToString(sum[:toolSignatureHashBytes])
 	case []any:
 		if len(typed) == 0 {
 			return "array[]"
 		}
 		parts := make([]string, 0, len(typed))
-		seen := make(map[string]struct{}, len(typed))
 		for _, item := range typed {
-			part := shapeString(item)
-			if _, exists := seen[part]; exists {
-				continue
-			}
-			seen[part] = struct{}{}
-			parts = append(parts, part)
+			parts = append(parts, shapeString(item))
 		}
-		sort.Strings(parts)
 		return "array[" + strings.Join(parts, ",") + "]"
 	case map[string]any:
 		if len(typed) == 0 {
@@ -530,6 +533,15 @@ func hasDoneCriteriaEvidence(contract *SupervisionTaskContract, input DetectChec
 }
 
 func buildScopeMatchers(scope string, workspaceHint string) []scopeMatcher {
+	scope = strings.TrimSpace(scope)
+	if scope == "" {
+		return nil
+	}
+	if !strings.ContainsAny(scope, ",;\r\n") {
+		if normalized := normalizePathForComparison(scope, workspaceHint); normalized != "" {
+			return []scopeMatcher{{path: normalized}}
+		}
+	}
 	matches := pathTokenPattern.FindAllString(scope, -1)
 	if len(matches) == 0 {
 		return nil
@@ -556,6 +568,12 @@ func pathWithinScope(path string, scope []scopeMatcher) bool {
 		return true
 	}
 	for _, item := range scope {
+		if item.path == "." {
+			return normalizedPath != ".." && !strings.HasPrefix(normalizedPath, "../")
+		}
+		if item.path == "" {
+			return true
+		}
 		if normalizedPath == item.path || strings.HasPrefix(normalizedPath, item.path+"/") {
 			return true
 		}
@@ -575,6 +593,9 @@ func sanitizeChangedFileSummary(summary string, workspaceHint string) string {
 	if summary == "" {
 		return ""
 	}
+	if pathIsRootedOrVolumeRelative(summary) {
+		return normalizePathForComparison(summary, workspaceHint)
+	}
 	if match := pathTokenPattern.FindString(summary); match != "" {
 		return normalizePathForComparison(match, workspaceHint)
 	}
@@ -587,20 +608,42 @@ func normalizePathForComparison(raw string, workspaceHint string) string {
 	if raw == "" {
 		return ""
 	}
+	rootedOrVolumeRelative := pathIsRootedOrVolumeRelative(raw)
 	cleaned := filepath.Clean(filepath.FromSlash(raw))
 	workspaceRoot := filepath.Clean(strings.TrimSpace(workspaceHint))
+	rootDispositionHandled := false
 	if workspaceRoot != "." && workspaceRoot != "" && filepath.IsAbs(cleaned) {
-		if rel, err := filepath.Rel(workspaceRoot, cleaned); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			cleaned = rel
+		rootDispositionHandled = true
+		if rel, err := filepath.Rel(workspaceRoot, cleaned); err == nil {
+			if rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				cleaned = rel
+			} else {
+				cleaned = filepath.Join("..", summarizeAbsolutePath(cleaned))
+			}
+		} else {
+			cleaned = filepath.Join("..", summarizeAbsolutePath(cleaned))
 		}
 	}
+	if rootedOrVolumeRelative && !rootDispositionHandled {
+		cleaned = filepath.Join("..", summarizeAbsolutePath(raw))
+	}
 	if filepath.IsAbs(cleaned) {
-		cleaned = summarizeAbsolutePath(cleaned)
+		cleaned = filepath.Join("..", summarizeAbsolutePath(cleaned))
 	}
 	cleaned = filepath.ToSlash(cleaned)
 	cleaned = strings.TrimPrefix(cleaned, "./")
 	cleaned = strings.TrimPrefix(cleaned, "/")
 	return strings.TrimSpace(cleaned)
+}
+
+func pathIsRootedOrVolumeRelative(raw string) bool {
+	portable := strings.ReplaceAll(strings.TrimSpace(raw), `\`, "/")
+	if strings.HasPrefix(portable, "/") {
+		return true
+	}
+	return len(portable) >= 2 &&
+		portable[1] == ':' &&
+		((portable[0] >= 'a' && portable[0] <= 'z') || (portable[0] >= 'A' && portable[0] <= 'Z'))
 }
 
 func summarizeAbsolutePath(path string) string {
@@ -628,6 +671,10 @@ func sanitizeNarrativeText(value string, workspaceHint string) string {
 	if value == "" {
 		return ""
 	}
+	value = sensitiveHeaderPattern.ReplaceAllString(value, `${1}<redacted>`)
+	value = sensitiveAuthorizationPattern.ReplaceAllString(value, `${1}<redacted>`)
+	value = sensitiveSchemePattern.ReplaceAllString(value, "<redacted>")
+	value = credentialLikePattern.ReplaceAllString(value, "<redacted>")
 	workspaceHint = strings.TrimSpace(workspaceHint)
 	for _, match := range pathTokenPattern.FindAllString(value, -1) {
 		safe := normalizePathForComparison(match, workspaceHint)
@@ -640,6 +687,60 @@ func sanitizeNarrativeText(value string, workspaceHint string) string {
 	value = longDigitPattern.ReplaceAllString(value, "<n>")
 	value = spaceCollapsePattern.ReplaceAllString(value, " ")
 	return strings.TrimSpace(value)
+}
+
+// SanitizeSupervisorText exposes the same bounded redaction used by loop
+// detection so supervisor providers never receive raw worker narratives.
+func SanitizeSupervisorText(value string, workspaceHint string) string {
+	return sanitizeNarrativeText(value, workspaceHint)
+}
+
+func SanitizeTaskResult(result TaskResult, workspaceHint string) TaskResult {
+	result.Output = sanitizeNarrativeText(result.Output, workspaceHint)
+	result.Error = sanitizeTaskError(result.Error, workspaceHint)
+	result.Metadata = sanitizeResultMetadata(result.Metadata, workspaceHint)
+	if result.SubagentResult != nil {
+		if cloned := cloneSubagentResult(result.SubagentResult); cloned != nil {
+			result.SubagentResult = cloned
+			if failure := cloned.GetError(); failure != nil {
+				failure.Error = sanitizeNarrativeText(failure.Error, workspaceHint)
+			}
+		}
+	}
+	return result
+}
+
+type sanitizedTaskError struct {
+	message string
+	cause   error
+}
+
+func (err *sanitizedTaskError) Error() string {
+	if err == nil {
+		return ""
+	}
+	return err.message
+}
+
+func (err *sanitizedTaskError) Unwrap() error {
+	if err == nil {
+		return nil
+	}
+	return err.cause
+}
+
+func sanitizeTaskError(err error, workspaceHint string) error {
+	if err == nil {
+		return nil
+	}
+	message := sanitizeNarrativeText(err.Error(), workspaceHint)
+	if message == "" {
+		message = "delegated operation failed"
+	}
+	if message == err.Error() {
+		return err
+	}
+	return &sanitizedTaskError{message: message, cause: err}
 }
 
 func sanitizeResultMetadata(metadata map[string]string, workspaceHint string) map[string]string {

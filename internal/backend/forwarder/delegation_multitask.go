@@ -166,6 +166,9 @@ func (service *Service) handleDelegationResult(stream *ActiveStream, payload *st
 	if !ok || strings.TrimSpace(pending.ExecKind) != "delegation_aggregate" {
 		return nil
 	}
+	if strings.TrimSpace(payload.AggregateID) != strings.TrimSpace(pending.ExecID) {
+		return nil
+	}
 	if pending.ProviderPass != payload.ProviderPass {
 		return nil
 	}
@@ -239,6 +242,9 @@ func (coordinator *multitaskDelegationCoordinator) enabledWorkers(base delegatio
 		if !group.Enabled {
 			continue
 		}
+		if config.SupervisionEnabled && config.WorkerGroupID != "" && strings.TrimSpace(group.ID) != config.WorkerGroupID {
+			continue
+		}
 		for _, modelID := range group.ModelIDs {
 			modelID = strings.TrimSpace(modelID)
 			if modelID == "" {
@@ -299,7 +305,7 @@ func (coordinator *multitaskDelegationCoordinator) Start(stream *ActiveStream, p
 		coordinator.startMu.Unlock()
 		return false, fmt.Errorf("delegation scheduler is nil")
 	}
-	scheduler.EnsureRetentionLimit(len(scheduler.Snapshots()) + len(workers) + delegation.DefaultRetentionLimit)
+	scheduler.ReserveRetentionMargin(len(workers))
 	if useSupervision {
 		if coordinator.supervisor == nil {
 			coordinator.startMu.Unlock()

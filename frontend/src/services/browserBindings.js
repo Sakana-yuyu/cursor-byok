@@ -62,7 +62,73 @@ const previewConfig = {
   proxyListenAddr: "127.0.0.1:8788",
   routing: { mode: "local" },
   homeMetrics: { includeCacheWriteInHitRate: false },
+  delegation: {
+    enabled: true,
+    maxConcurrency: 4,
+    groups: [],
+    supervision: {
+      enabled: false,
+      supervisorModelID: "",
+      reviewerModelID: "",
+      workerGroupID: "",
+      maxCorrections: 2,
+      maxRetries: 1,
+      maxRounds: 8,
+      allowReassign: false,
+      allowEscalate: false,
+      strictUnavailable: false,
+    },
+  },
 };
+
+const PREVIEW_CONFIG_STORAGE_KEY = "cursor-byok.browser-preview.config";
+
+function previewAdapterForStorage(adapter) {
+  if (!adapter || typeof adapter !== "object") {
+    return {};
+  }
+  const safeAdapter = { ...adapter };
+  delete safeAdapter.apiKey;
+  delete safeAdapter.balanceAccessToken;
+  delete safeAdapter.customHeadersJSON;
+  delete safeAdapter.balanceQueryHeadersJSON;
+  delete safeAdapter.balanceQueryHeaders;
+  return safeAdapter;
+}
+
+function previewConfigForStorage() {
+  return {
+    ...previewConfig,
+    modelAdapters: Array.isArray(previewConfig.modelAdapters)
+      ? previewConfig.modelAdapters.map((adapter) => previewAdapterForStorage(adapter))
+      : [],
+  };
+}
+
+try {
+  const storedPreviewConfig = JSON.parse(localStorage.getItem(PREVIEW_CONFIG_STORAGE_KEY) || "null");
+  if (storedPreviewConfig && typeof storedPreviewConfig === "object") {
+    Object.assign(previewConfig, storedPreviewConfig);
+    previewConfig.delegation = {
+      ...previewConfig.delegation,
+      ...(storedPreviewConfig.delegation && typeof storedPreviewConfig.delegation === "object"
+        ? storedPreviewConfig.delegation
+        : {}),
+    };
+    // Migrate older preview entries that may have stored demo credentials.
+    persistPreviewConfig();
+  }
+} catch {
+  // Browser preview remains usable when storage is disabled.
+}
+
+function persistPreviewConfig() {
+  try {
+    localStorage.setItem(PREVIEW_CONFIG_STORAGE_KEY, JSON.stringify(previewConfigForStorage()));
+  } catch {
+    // In-memory preview fallback is still valid without localStorage.
+  }
+}
 let editorContext = { index: -1, adapterJSON: "{}" };
 let previewDelegationTasks = [
   {
@@ -159,12 +225,19 @@ function nextID() {
 export const IsWindows = () => Promise.resolve(false);
 export const GetState = () => Promise.resolve(browserPreviewMockProxyState());
 export const LoadUserConfig = () => Promise.resolve(clone(previewConfig));
+export const GetDelegationConfig = () => Promise.resolve(clone(previewConfig.delegation));
+export const SaveDelegationConfig = (value) => {
+  previewConfig.delegation = clone(value || {});
+  persistPreviewConfig();
+  return Promise.resolve(clone(previewConfig.delegation));
+};
 export const SaveUserConfig = (value) => {
   const next = value && typeof value === "object" ? clone(value) : {};
   previewConfig.modelAdapters = Array.isArray(next.modelAdapters)
     ? next.modelAdapters.map((adapter) => ({ ...adapter, id: adapter.id || nextID() }))
     : [];
   Object.assign(previewConfig, next, { modelAdapters: previewConfig.modelAdapters });
+  persistPreviewConfig();
   return Promise.resolve(clone(previewConfig));
 };
 export const AutoMatchContextWindows = () => {

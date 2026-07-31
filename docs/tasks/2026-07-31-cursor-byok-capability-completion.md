@@ -48,6 +48,21 @@
 - 浏览器预览人工检查通过：委派模型组新增与模型选择、默认模型启用、MCP 连接/断开状态、Skills/MCP 扫描面板和主要设置按钮均可操作，控制台无 error。
 - 全仓 `gofmt -l` 仍会列出大量任务前已存在的未格式化文件；未批量改写这些无关文件。
 
+## 监督式委派增量验收
+
+- 在现有 Multitask 之上增加 SupervisorCoordinator：高能力模型负责复核、纠偏、重试、改派、升级和熔断，worker 继续复用 Cursor 或本地委派适配器执行任务。
+- 主 Agent 只接收 pending exec 与异步状态事件，不同步等待 supervisor 或 worker；单任务失败、取消和超时不会阻塞兄弟任务。
+- worker 检查点使用 scheduler 单调序列和 `EffectiveProgressAt` 区分真实进展与 ShellStream 心跳；review 期间的终态会立即收口，普通流式分片不会造成重复复核或饥饿。
+- Cursor exec 结果按 parent request、exec ID 和 message ID 联合匹配；active waiter 与 45 分钟 tombstone 均拒绝跨请求晚到结果。
+- 本地 worker 从结构化 Write、PatchEdit、Edit、Delete 和 GenerateImage 参数提取 changed-file 证据；路径统一脱敏，Windows 根相对、盘符相对和工作区越界路径保留 `../` 标记。
+- scheduler retention 以当前 live task 数加最大单批 worker 余量计算，不再随历史 snapshot 数无界增长。
+- 委派设置页支持监督开关、监督/复核模型、执行模型组、轮次上限、纠偏/重试上限和改派/升级策略；专用保存链提供 busy、失败回滚、重试和刷新恢复。
+- 浏览器预览人工检查覆盖 640、768、1200px：设置页无横向溢出，监督开关和最大轮次保存后刷新可恢复，控制台无 error。
+- 两轮独立 scoped review 的最终结论为 Critical none、Important none；此前发现的队列自发送死锁、静默无进展失效、review 饥饿、Cursor parent 误匹配、scope 越界、retention 累积和 tombstone 过短均已收口。
+- 最终验证通过：`go test -race -count=1 ./internal/backend/delegation ./internal/backend/forwarder`、`go test -count=1 ./...`、`go vet ./...`、`go build ./...`、`npm --prefix frontend run i18n:scan`、`npm --prefix frontend run build`、JS 语法、i18n 键/占位符一致性、`git diff --check` 和相关 Go 文件格式检查。
+
+已知协议限制：Cursor 原生 `SubagentResult` 不包含 modified-files 字段，当前调用链也收不到带 `modified_files` 的 stop hook。为避免从 final message、transcript 或并发 git diff 猜测结果，Cursor worker 暂不生成文件修改证据；本地 worker 的结构化写工具已完整提供该证据。
+
 ## 每阶段验收
 
 每个阶段执行相关构建或静态检查，结合已有命令级工具和人工流程验证；仓库规则禁止新增测试文件，因此不新增测试目录。验收通过后使用独立 commit，commit 失败或验收失败时停止在当前阶段，不推进后续阶段。

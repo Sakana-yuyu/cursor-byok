@@ -17,9 +17,64 @@ import (
 	runtimecore "cursor/internal/backend/agent/core"
 )
 
-const defaultCursorAdapterRetention = 2 * time.Minute
+const defaultCursorAdapterRetention = 45 * time.Minute
 
 type CursorPublisher func(requestID string, message *agentv1.AgentServerMessage) error
+
+type checkpointPublisherContextKey struct{}
+
+func withWorkerCheckpointPublisher(ctx context.Context, publish func(WorkerCheckpoint) bool) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if publish == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, checkpointPublisherContextKey{}, publish)
+}
+
+func PublishWorkerCheckpoint(ctx context.Context, checkpoint WorkerCheckpoint) bool {
+	if ctx == nil {
+		return false
+	}
+	publish, ok := ctx.Value(checkpointPublisherContextKey{}).(func(WorkerCheckpoint) bool)
+	if !ok || publish == nil {
+		return false
+	}
+	return publish(checkpoint)
+}
+
+func PublishTaskCheckpoint(ctx context.Context, request TaskRequest, phase SupervisionStatus, step int, recentTools, changedFiles []string, progress, blocker string) bool {
+	contract := request.Contract
+	if contract == nil {
+		return false
+	}
+	aggregateID := strings.TrimSpace(contract.AggregateID)
+	taskID := strings.TrimSpace(contract.TaskID)
+	if aggregateID == "" || taskID == "" || taskID != strings.TrimSpace(request.ID) || contract.Round <= 0 {
+		return false
+	}
+	phase = normalizeSupervisionStatus(string(phase))
+	if phase == "" {
+		return false
+	}
+	if step <= 0 {
+		step = 1
+	}
+	workspaceHint := firstNonEmpty(strings.TrimSpace(contract.WorkspaceHint), strings.TrimSpace(request.WorkspaceHint))
+	checkpoint := WorkerCheckpoint{
+		AggregateID:          aggregateID,
+		TaskID:               taskID,
+		Round:                contract.Round,
+		Phase:                phase,
+		Step:                 step,
+		RecentToolNames:      normalizeStringSlice(recentTools),
+		ChangedFileSummaries: normalizeChangedFileSummaries(changedFiles, workspaceHint),
+		ProgressSummary:      sanitizeNarrativeText(progress, workspaceHint),
+		Blocker:              sanitizeNarrativeText(blocker, workspaceHint),
+	}
+	return PublishWorkerCheckpoint(ctx, checkpoint)
+}
 
 type CursorAdapter struct {
 	execBridge execbridge.ExecBridge
@@ -32,8 +87,8 @@ type CursorAdapter struct {
 	waitersByExecID     map[string]*cursorTaskWaiter
 	waitersByMessageID  map[uint32]*cursorTaskWaiter
 	waitersByTaskID     map[string]*cursorTaskWaiter
-	tombstoneExecIDs    map[string]time.Time
-	tombstoneMessageIDs map[uint32]time.Time
+	tombstoneExecIDs    map[string]cursorExecTombstone
+	tombstoneMessageIDs map[uint32]cursorExecTombstone
 }
 
 type cursorTaskWaiter struct {
@@ -45,9 +100,17 @@ type cursorTaskWaiter struct {
 	subagentType        string
 	modelID             string
 	pending             runtimecore.PendingExec
+	checkpointContext   context.Context
+	checkpointRequest   TaskRequest
+	checkpointStep      int
 	expectSubagent      bool
 	done                bool
 	resultCh            chan TaskResult
+}
+
+type cursorExecTombstone struct {
+	parentRequestID string
+	createdAt       time.Time
 }
 
 func NewCursorAdapter(bridge execbridge.ExecBridge, publish CursorPublisher) *CursorAdapter {
@@ -59,8 +122,8 @@ func NewCursorAdapter(bridge execbridge.ExecBridge, publish CursorPublisher) *Cu
 		waitersByExecID:     make(map[string]*cursorTaskWaiter),
 		waitersByMessageID:  make(map[uint32]*cursorTaskWaiter),
 		waitersByTaskID:     make(map[string]*cursorTaskWaiter),
-		tombstoneExecIDs:    make(map[string]time.Time),
-		tombstoneMessageIDs: make(map[uint32]time.Time),
+		tombstoneExecIDs:    make(map[string]cursorExecTombstone),
+		tombstoneMessageIDs: make(map[uint32]cursorExecTombstone),
 	}
 }
 
@@ -102,6 +165,7 @@ func (adapter *CursorAdapter) executeInvocation(ctx context.Context, request Tas
 	if taskID == "" {
 		return TaskResult{Error: fmt.Errorf("delegated cursor exec requires task id")}
 	}
+	PublishTaskCheckpoint(ctx, request, SupervisionStatusDispatched, 1, nil, nil, "Cursor 子代理已派发", "")
 	seq := adapter.sequence.Add(1)
 	childConversationID := fmt.Sprintf("%s-child-conversation-%d", taskID, seq)
 	childRequestID := fmt.Sprintf("%s-child-request-%d", taskID, seq)
@@ -121,6 +185,7 @@ func (adapter *CursorAdapter) executeInvocation(ctx context.Context, request Tas
 		SelectedSubagentModelDetails: cloneModelDetails(request.SelectedSubagentModelDetails),
 	}, invocation)
 	if err != nil {
+		PublishTaskCheckpoint(ctx, request, SupervisionStatusFailed, 2, nil, nil, "Cursor 子代理初始化失败", err.Error())
 		return TaskResult{Error: err}
 	}
 
@@ -133,12 +198,15 @@ func (adapter *CursorAdapter) executeInvocation(ctx context.Context, request Tas
 		subagentType:        strings.TrimSpace(request.SubagentType),
 		modelID:             strings.TrimSpace(request.ModelID),
 		pending:             pending,
+		checkpointContext:   ctx,
+		checkpointRequest:   cloneTaskRequest(request),
+		checkpointStep:      1,
 		expectSubagent:      expectSubagent,
 		resultCh:            make(chan TaskResult, 1),
 	}
 	adapter.registerWaiter(waiter)
 	if err := adapter.publish(parentRequestID, serverMessage); err != nil {
-		adapter.unregisterWaiter(waiter, false)
+		adapter.completeWaiterWithCheckpoint(waiter, TaskResult{Error: err, Output: err.Error()}, SupervisionStatusFailed, "Cursor 子代理派发失败", err.Error())
 		return TaskResult{Error: err}
 	}
 
@@ -150,11 +218,11 @@ func (adapter *CursorAdapter) executeInvocation(ctx context.Context, request Tas
 	}
 }
 
-func (adapter *CursorAdapter) ConsumeExecMessage(message *agentv1.ExecClientMessage) bool {
+func (adapter *CursorAdapter) ConsumeExecMessage(parentRequestID string, message *agentv1.ExecClientMessage) bool {
 	if adapter == nil || message == nil {
 		return false
 	}
-	waiter, tombstoned := adapter.lookupWaiter(message.GetExecId(), message.GetId())
+	waiter, tombstoned := adapter.lookupWaiter(parentRequestID, message.GetExecId(), message.GetId())
 	if tombstoned {
 		return true
 	}
@@ -162,19 +230,23 @@ func (adapter *CursorAdapter) ConsumeExecMessage(message *agentv1.ExecClientMess
 		return false
 	}
 	if waiter.expectSubagent && message.GetSubagentResult() == nil {
+		if message.GetShellStream() != nil {
+			adapter.observeExecProgress(waiter, message)
+			return true
+		}
 		err := fmt.Errorf("delegated cursor exec returned unexpected payload")
-		adapter.completeWaiter(waiter, TaskResult{Error: err, Output: err.Error(), Metadata: adapter.waiterMetadata(waiter)})
+		adapter.completeWaiterWithCheckpoint(waiter, TaskResult{Error: err, Output: err.Error(), Metadata: adapter.waiterMetadata(waiter)}, SupervisionStatusFailed, "Cursor 子代理返回了无法识别的结果", err.Error())
 		return true
 	}
 	adapter.observeExecProgress(waiter, message)
-	applyResult, err := adapter.execBridge.ApplyExecClientMessage(message, waiter.pending)
+	applyResult, err := adapter.execBridge.ApplyExecClientMessage(message, adapter.pendingSnapshot(waiter))
 	result := TaskResult{
 		Metadata: adapter.waiterMetadata(waiter),
 	}
 	if err != nil {
 		result.Error = err
 		result.Output = err.Error()
-		adapter.completeWaiter(waiter, result)
+		adapter.completeWaiterWithCheckpoint(waiter, result, SupervisionStatusFailed, "Cursor 子代理执行失败", err.Error())
 		return true
 	}
 	if !applyResult.IsTerminal {
@@ -196,11 +268,15 @@ func (adapter *CursorAdapter) ConsumeExecMessage(message *agentv1.ExecClientMess
 			}
 		}
 	}
-	adapter.completeWaiter(waiter, result)
+	if result.Error != nil {
+		adapter.completeWaiterWithCheckpoint(waiter, result, SupervisionStatusFailed, "Cursor 子代理执行失败", result.Error.Error())
+	} else {
+		adapter.completeWaiterWithCheckpoint(waiter, result, SupervisionStatusCompleted, "Cursor 子代理已完成", "")
+	}
 	return true
 }
 
-func (adapter *CursorAdapter) ConsumeExecControl(message *agentv1.ExecClientControlMessage) bool {
+func (adapter *CursorAdapter) ConsumeExecControl(parentRequestID string, message *agentv1.ExecClientControlMessage) bool {
 	if adapter == nil || message == nil {
 		return false
 	}
@@ -208,20 +284,20 @@ func (adapter *CursorAdapter) ConsumeExecControl(message *agentv1.ExecClientCont
 	if !ok {
 		return false
 	}
-	waiter, tombstoned := adapter.lookupWaiter("", messageID)
+	waiter, tombstoned := adapter.lookupWaiter(parentRequestID, "", messageID)
 	if tombstoned {
 		return true
 	}
 	if waiter == nil {
 		return false
 	}
-	applyResult, err := adapter.execBridge.ApplyExecClientControl(message, waiter.pending)
+	applyResult, err := adapter.execBridge.ApplyExecClientControl(message, adapter.pendingSnapshot(waiter))
 	if err != nil {
-		adapter.completeWaiter(waiter, TaskResult{
+		adapter.completeWaiterWithCheckpoint(waiter, TaskResult{
 			Error:    err,
 			Output:   err.Error(),
 			Metadata: adapter.waiterMetadata(waiter),
-		})
+		}, SupervisionStatusFailed, "Cursor 子代理控制通道失败", err.Error())
 		return true
 	}
 	if !applyResult.IsTerminal {
@@ -231,11 +307,11 @@ func (adapter *CursorAdapter) ConsumeExecControl(message *agentv1.ExecClientCont
 	if payload == "" {
 		payload = "delegated cursor exec terminated"
 	}
-	adapter.completeWaiter(waiter, TaskResult{
+	adapter.completeWaiterWithCheckpoint(waiter, TaskResult{
 		Error:    errors.New(payload),
 		Output:   payload,
 		Metadata: adapter.waiterMetadata(waiter),
-	})
+	}, SupervisionStatusFailed, "Cursor 子代理被控制通道终止", payload)
 	return true
 }
 
@@ -248,13 +324,22 @@ func (adapter *CursorAdapter) observeExecProgress(waiter *cursorTaskWaiter, mess
 		return
 	}
 	adapter.mu.Lock()
-	defer adapter.mu.Unlock()
+	if waiter.done {
+		adapter.mu.Unlock()
+		return
+	}
 	switch event := shellStream.GetEvent().(type) {
 	case *agentv1.ShellStream_Stdout:
 		waiter.pending.StdoutBuffer += execbridge.DecodeShellStdout(event.Stdout)
 	case *agentv1.ShellStream_Stderr:
 		waiter.pending.StderrBuffer += event.Stderr.GetData()
 	}
+	waiter.checkpointStep++
+	step := waiter.checkpointStep
+	checkpointContext := waiter.checkpointContext
+	checkpointRequest := cloneTaskRequest(waiter.checkpointRequest)
+	adapter.mu.Unlock()
+	PublishTaskCheckpoint(checkpointContext, checkpointRequest, SupervisionStatusRunning, step, nil, nil, "Cursor 子代理仍在执行", "")
 }
 
 func (adapter *CursorAdapter) CancelTask(taskID string, cause error) bool {
@@ -271,6 +356,9 @@ func (adapter *CursorAdapter) CancelTask(taskID string, cause error) bool {
 	if waiter == nil {
 		return false
 	}
+	if !adapter.claimWaiter(waiter) {
+		return false
+	}
 	if cause == nil {
 		cause = context.Canceled
 	}
@@ -282,15 +370,38 @@ func (adapter *CursorAdapter) CancelTask(taskID string, cause error) bool {
 	if result.Output == "" {
 		result.Output = "subagent canceled"
 	}
-	if err := adapter.publish(waiter.parentRequestID, buildCursorExecAbort(waiter.pending)); err != nil {
+	adapter.publishWaiterCheckpoint(waiter, SupervisionStatusCanceled, "Cursor 子代理已取消", result.Output)
+	if err := adapter.publish(waiter.parentRequestID, buildCursorExecAbort(adapter.pendingSnapshot(waiter))); err != nil {
 		result.Error = errors.Join(cause, fmt.Errorf("publish delegated cursor abort: %w", err))
 	}
-	adapter.completeWaiter(waiter, TaskResult{
+	adapter.finishClaimedWaiter(waiter, TaskResult{
 		Error:    result.Error,
 		Output:   result.Output,
 		Metadata: result.Metadata,
 	})
 	return true
+}
+
+func (adapter *CursorAdapter) publishWaiterCheckpoint(waiter *cursorTaskWaiter, phase SupervisionStatus, progress, blocker string) {
+	if adapter == nil || waiter == nil {
+		return
+	}
+	adapter.mu.Lock()
+	checkpointContext := waiter.checkpointContext
+	checkpointRequest := cloneTaskRequest(waiter.checkpointRequest)
+	waiter.checkpointStep++
+	step := waiter.checkpointStep
+	adapter.mu.Unlock()
+	PublishTaskCheckpoint(checkpointContext, checkpointRequest, phase, step, nil, nil, progress, blocker)
+}
+
+func (adapter *CursorAdapter) pendingSnapshot(waiter *cursorTaskWaiter) runtimecore.PendingExec {
+	if adapter == nil || waiter == nil {
+		return runtimecore.PendingExec{}
+	}
+	adapter.mu.Lock()
+	defer adapter.mu.Unlock()
+	return waiter.pending
 }
 
 func (adapter *CursorAdapter) cancelTask(taskID string, cause error) TaskResult {
@@ -360,21 +471,26 @@ func (adapter *CursorAdapter) unregisterWaiter(waiter *cursorTaskWaiter, tombsto
 	}
 	delete(adapter.waitersByTaskID, strings.TrimSpace(waiter.taskID))
 	if tombstone {
+		entry := cursorExecTombstone{
+			parentRequestID: strings.TrimSpace(waiter.parentRequestID),
+			createdAt:       now,
+		}
 		if execID := strings.TrimSpace(waiter.pending.ExecID); execID != "" {
-			adapter.tombstoneExecIDs[execID] = now
+			adapter.tombstoneExecIDs[execID] = entry
 		}
 		if waiter.pending.MessageID != 0 {
-			adapter.tombstoneMessageIDs[waiter.pending.MessageID] = now
+			adapter.tombstoneMessageIDs[waiter.pending.MessageID] = entry
 		}
 	}
 	adapter.pruneTombstonesLocked(now)
 }
 
-func (adapter *CursorAdapter) lookupWaiter(execID string, messageID uint32) (*cursorTaskWaiter, bool) {
+func (adapter *CursorAdapter) lookupWaiter(parentRequestID, execID string, messageID uint32) (*cursorTaskWaiter, bool) {
 	if adapter == nil {
 		return nil, false
 	}
 	now := adapter.now()
+	parentRequestID = strings.TrimSpace(parentRequestID)
 	adapter.mu.Lock()
 	defer adapter.mu.Unlock()
 	adapter.pruneTombstonesLocked(now)
@@ -384,18 +500,33 @@ func (adapter *CursorAdapter) lookupWaiter(execID string, messageID uint32) (*cu
 			if messageID != 0 && waiter.pending.MessageID != messageID {
 				return nil, false
 			}
+			if strings.TrimSpace(waiter.parentRequestID) != parentRequestID {
+				return nil, false
+			}
 			return waiter, false
 		}
-		if _, ok := adapter.tombstoneExecIDs[execID]; ok {
+		if entry, ok := adapter.tombstoneExecIDs[execID]; ok {
+			if entry.parentRequestID != parentRequestID {
+				return nil, false
+			}
+			if messageID != 0 {
+				messageEntry, ok := adapter.tombstoneMessageIDs[messageID]
+				if !ok || messageEntry.parentRequestID != parentRequestID {
+					return nil, false
+				}
+			}
 			return nil, true
 		}
 		return nil, false
 	}
 	if messageID != 0 {
 		if waiter := adapter.waitersByMessageID[messageID]; waiter != nil {
+			if strings.TrimSpace(waiter.parentRequestID) != parentRequestID {
+				return nil, false
+			}
 			return waiter, false
 		}
-		if _, ok := adapter.tombstoneMessageIDs[messageID]; ok {
+		if entry, ok := adapter.tombstoneMessageIDs[messageID]; ok && entry.parentRequestID == parentRequestID {
 			return nil, true
 		}
 	}
@@ -445,17 +576,32 @@ func buildCursorExecAbort(pending runtimecore.PendingExec) *agentv1.AgentServerM
 	}
 }
 
-func (adapter *CursorAdapter) completeWaiter(waiter *cursorTaskWaiter, result TaskResult) {
+func (adapter *CursorAdapter) completeWaiterWithCheckpoint(waiter *cursorTaskWaiter, result TaskResult, phase SupervisionStatus, progress, blocker string) bool {
+	if !adapter.claimWaiter(waiter) {
+		return false
+	}
+	adapter.publishWaiterCheckpoint(waiter, phase, progress, blocker)
+	adapter.finishClaimedWaiter(waiter, result)
+	return true
+}
+
+func (adapter *CursorAdapter) claimWaiter(waiter *cursorTaskWaiter) bool {
+	if adapter == nil || waiter == nil {
+		return false
+	}
+	adapter.mu.Lock()
+	defer adapter.mu.Unlock()
+	if waiter.done {
+		return false
+	}
+	waiter.done = true
+	return true
+}
+
+func (adapter *CursorAdapter) finishClaimedWaiter(waiter *cursorTaskWaiter, result TaskResult) {
 	if adapter == nil || waiter == nil {
 		return
 	}
-	adapter.mu.Lock()
-	if waiter.done {
-		adapter.mu.Unlock()
-		return
-	}
-	waiter.done = true
-	adapter.mu.Unlock()
 	adapter.unregisterWaiter(waiter, true)
 	select {
 	case waiter.resultCh <- cloneTaskResult(result):
@@ -467,13 +613,13 @@ func (adapter *CursorAdapter) pruneTombstonesLocked(now time.Time) {
 	if adapter == nil {
 		return
 	}
-	for execID, createdAt := range adapter.tombstoneExecIDs {
-		if now.Sub(createdAt) >= adapter.retention {
+	for execID, tombstone := range adapter.tombstoneExecIDs {
+		if now.Sub(tombstone.createdAt) >= adapter.retention {
 			delete(adapter.tombstoneExecIDs, execID)
 		}
 	}
-	for messageID, createdAt := range adapter.tombstoneMessageIDs {
-		if now.Sub(createdAt) >= adapter.retention {
+	for messageID, tombstone := range adapter.tombstoneMessageIDs {
+		if now.Sub(tombstone.createdAt) >= adapter.retention {
 			delete(adapter.tombstoneMessageIDs, messageID)
 		}
 	}

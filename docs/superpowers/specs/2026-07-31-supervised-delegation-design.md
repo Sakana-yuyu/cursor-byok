@@ -18,6 +18,16 @@
 
 不引入上述项目的完整运行时，只吸收其边界、事件和终止条件设计。
 
+参考项目及 2026-07-31 调研时的 GitHub 星标量级：
+
+- [OpenHands](https://github.com/OpenHands/OpenHands)：约 82k stars，参考运行时与编排解耦、事件观测和可取消执行。
+- [MetaGPT](https://github.com/FoundationAgents/MetaGPT)：约 69k stars，参考角色、目标、预期输出和验收约束。
+- [AutoGen](https://github.com/microsoft/autogen)：约 60k stars，参考异步消息、终止条件和多代理协作。
+- [CrewAI](https://github.com/crewAIInc/crewAI)：约 56k stars，参考 supervisor/worker 分层与任务路由。
+- [LangGraph Supervisor](https://github.com/langchain-ai/langgraph-supervisor-py)：约 1.6k stars，参考结构化 handoff 和监督决策接口。
+
+这些项目只作为设计依据；Cursor-byok 继续复用自己的模型适配器、Scheduler、工具、Skills、MCP 和 Cursor 子会话协议，避免引入第二套代理运行时。
+
 ## 总体架构
 
 ```text
@@ -205,4 +215,3 @@ Multitask 运行面板增加当前阶段、监督模型、worker 状态、纠偏
 4. 运行时快照、主 Agent 汇总和取消链路。
 5. 配置持久化、设置界面和 Multitask 状态展示。
 6. 构建、静态检查、协议回放和人工端到端验收。
-

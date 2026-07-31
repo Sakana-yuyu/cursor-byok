@@ -6,6 +6,55 @@ import {
   GetDelegationTaskSnapshots,
   GetSkillsMCPScanSnapshot,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
+import { getDelegationConfig as getDelegationConfigBinding, saveDelegationConfig as saveDelegationConfigBinding } from "@/services/clientApi";
+
+const DEFAULT_SUPERVISION = {
+  enabled: false,
+  supervisorModelID: "",
+  reviewerModelID: "",
+  workerGroupID: "",
+  maxCorrections: 2,
+  maxRetries: 1,
+  maxRounds: 8,
+  allowReassign: false,
+  allowEscalate: false,
+  strictUnavailable: false,
+};
+
+function normalizeSupervisionConfig(config) {
+  const raw = config && typeof config === "object" ? config : {};
+  const positive = (value, fallback) => {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  };
+  return {
+    ...DEFAULT_SUPERVISION,
+    enabled: Boolean(raw.enabled),
+    supervisorModelID: String(raw.supervisorModelID || raw.supervisorModelId || "").trim(),
+    reviewerModelID: String(raw.reviewerModelID || raw.reviewerModelId || "").trim(),
+    workerGroupID: String(raw.workerGroupID || raw.workerGroupId || "").trim(),
+    maxCorrections: positive(raw.maxCorrections, 2),
+    maxRetries: positive(raw.maxRetries, 1),
+    maxRounds: positive(raw.maxRounds, 8),
+    allowReassign: Boolean(raw.allowReassign),
+    allowEscalate: Boolean(raw.allowEscalate),
+    strictUnavailable: Boolean(raw.strictUnavailable),
+  };
+}
+
+export function getDelegationConfig() {
+  return getDelegationConfigBinding().then((config) => ({
+    ...(config || {}),
+    supervision: normalizeSupervisionConfig(config?.supervision),
+  }));
+}
+
+export function saveDelegationConfig(config) {
+  return saveDelegationConfigBinding(config).then((saved) => ({
+    ...(saved || {}),
+    supervision: normalizeSupervisionConfig(saved?.supervision || config?.supervision),
+  }));
+}
 
 function positiveInteger(value) {
   const next = Number.parseInt(value, 10);
