@@ -98,6 +98,20 @@ func (host *Host) CancelDelegationTask(taskID string) bool {
 	return module.Service.CancelDelegationTask(taskID)
 }
 
+func (host *Host) GetDelegationConfig(ctx context.Context) (serverconfig.DelegationConfig, error) {
+	if host == nil || host.configs == nil {
+		return serverconfig.DefaultConfig().Delegation, nil
+	}
+	return host.configs.GetDelegationConfig(ctx)
+}
+
+func (host *Host) SaveDelegationConfig(ctx context.Context, cfg serverconfig.DelegationConfig) (serverconfig.DelegationConfig, error) {
+	if host == nil || host.configs == nil {
+		return serverconfig.DelegationConfig{}, fmt.Errorf("backend config manager is not initialized")
+	}
+	return host.configs.SaveDelegationConfig(ctx, cfg)
+}
+
 func (host *Host) LoadConfig(ctx context.Context) (serverconfig.Config, error) {
 	if host == nil || host.configs == nil {
 		return serverconfig.DefaultConfig(), nil
