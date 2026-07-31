@@ -267,10 +267,6 @@ func (coordinator *multitaskDelegationCoordinator) Start(stream *ActiveStream, p
 		coordinator.startMu.Unlock()
 		return false, fmt.Errorf("multitask delegation coordinator is closed")
 	}
-	if delegatedStartupCanceled(stream, pending.ProviderPass) {
-		coordinator.startMu.Unlock()
-		return false, fmt.Errorf("delegation aggregate startup canceled for provider pass %d: %w", pending.ProviderPass, errProviderLoopInterrupted)
-	}
 	config := coordinator.runtimeConfig()
 	coordinator.ensureScheduler(config.MaxConcurrency)
 	workers := coordinator.enabledWorkers(base, config)
@@ -295,23 +291,38 @@ func (coordinator *multitaskDelegationCoordinator) Start(stream *ActiveStream, p
 		cancel:    cancel,
 		scheduler: scheduler,
 	}
+	stream.mu.Lock()
+	if delegatedStartupCanceledLocked(stream, pending.ProviderPass) {
+		stream.mu.Unlock()
+		coordinator.startMu.Unlock()
+		cancel()
+		return false, fmt.Errorf("delegation aggregate startup canceled for provider pass %d: %w", pending.ProviderPass, errProviderLoopInterrupted)
+	}
 	coordinator.mu.Lock()
 	if _, exists := coordinator.aggregates[aggregateID]; exists {
 		coordinator.mu.Unlock()
+		stream.mu.Unlock()
 		coordinator.startMu.Unlock()
 		cancel()
 		return false, fmt.Errorf("delegation aggregate %q already exists", aggregateID)
 	}
 	coordinator.aggregates[aggregateID] = aggregate
 	coordinator.mu.Unlock()
-	stream.mu.Lock()
 	stream.PendingExecs[pending.ExecID] = pending
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
 	coordinator.startMu.Unlock()
 
 	for _, worker := range workers {
-		if !aggregate.submitWorker(worker) {
+		stream.mu.Lock()
+		if delegatedStartupCanceledLocked(stream, pending.ProviderPass) {
+			stream.mu.Unlock()
+			aggregate.cancelTasks()
+			break
+		}
+		submitted := aggregate.submitWorker(worker)
+		stream.mu.Unlock()
+		if !submitted {
 			break
 		}
 	}
@@ -503,12 +514,10 @@ func (coordinator *multitaskDelegationCoordinator) CancelStream(stream *ActiveSt
 	}
 }
 
-func delegatedStartupCanceled(stream *ActiveStream, providerPass int) bool {
+func delegatedStartupCanceledLocked(stream *ActiveStream, providerPass int) bool {
 	if stream == nil {
 		return true
 	}
-	stream.mu.Lock()
-	defer stream.mu.Unlock()
 	if isTerminalStreamStatus(stream.Status) {
 		return true
 	}
