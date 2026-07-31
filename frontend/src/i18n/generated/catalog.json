@@ -937,7 +937,7 @@
       "refs": [
         {
           "file": "src/views/Settings.vue",
-          "line": 48,
+          "line": 49,
           "column": 24
         }
       ]
@@ -2623,7 +2623,7 @@
       "refs": [
         {
           "file": "src/views/Settings.vue",
-          "line": 60,
+          "line": 61,
           "column": 24
         }
       ]
@@ -2775,7 +2775,7 @@
       "refs": [
         {
           "file": "src/views/Settings.vue",
-          "line": 72,
+          "line": 73,
           "column": 24
         }
       ]
@@ -3466,7 +3466,7 @@
       "refs": [
         {
           "file": "src/views/Settings.vue",
-          "line": 47,
+          "line": 48,
           "column": 18
         }
       ]
@@ -4445,17 +4445,17 @@
       "refs": [
         {
           "file": "src/views/Settings.vue",
-          "line": 49,
+          "line": 50,
           "column": 18
         },
         {
           "file": "src/views/Settings.vue",
-          "line": 61,
+          "line": 62,
           "column": 18
         },
         {
           "file": "src/views/Settings.vue",
-          "line": 73,
+          "line": 74,
           "column": 18
         }
       ]
@@ -7843,17 +7843,17 @@
       "refs": [
         {
           "file": "src/views/Settings.vue",
-          "line": 44,
+          "line": 45,
           "column": 14
         },
         {
           "file": "src/views/Settings.vue",
-          "line": 56,
+          "line": 57,
           "column": 14
         },
         {
           "file": "src/views/Settings.vue",
-          "line": 68,
+          "line": 69,
           "column": 14
         }
       ]
@@ -10124,7 +10124,7 @@
       "refs": [
         {
           "file": "src/views/Settings.vue",
-          "line": 59,
+          "line": 60,
           "column": 18
         }
       ]
@@ -10861,7 +10861,7 @@
       "refs": [
         {
           "file": "src/views/Settings.vue",
-          "line": 71,
+          "line": 72,
           "column": 18
         }
       ]
