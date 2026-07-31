@@ -683,5 +683,270 @@
       }
     },
     "type": "function"
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "Fetch",
+      "description": "Fetch the content of a URL and return it as text. Use this when you need to read a web page, API response, or any HTTP resource directly. Prefer over WebSearch when you already know the exact URL.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The URL to fetch."
+          }
+        },
+        "required": [
+          "url"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "RecordScreen",
+      "description": "Control screen recording on the machine. Start a recording before performing actions you want captured, then save or discard it. Useful for capturing reproducible bug reproductions or demos.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "start_recording",
+              "save_recording",
+              "discard_recording"
+            ],
+            "description": "Whether to start, save, or discard a screen recording."
+          },
+          "save_as_filename": {
+            "type": "string",
+            "description": "Optional filename to save the recording as (used with save_recording)."
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "ComputerUse",
+      "description": "Control the computer with mouse, keyboard, scrolling, and screenshot actions. Use this to interact with the UI of the machine (for example clicking buttons in the built-in browser, typing text, or taking a screenshot to observe the current screen). Each action is executed in order; take a screenshot first when you need to observe the current state.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "actions": {
+            "type": "array",
+            "description": "Ordered list of actions to execute.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "mouse_move",
+                    "click",
+                    "mouse_down",
+                    "mouse_up",
+                    "drag",
+                    "scroll",
+                    "type",
+                    "key",
+                    "wait",
+                    "screenshot",
+                    "cursor_position"
+                  ],
+                  "description": "Action kind."
+                },
+                "x": {
+                  "type": "integer",
+                  "description": "X coordinate (mouse_move, click, scroll)."
+                },
+                "y": {
+                  "type": "integer",
+                  "description": "Y coordinate (mouse_move, click, scroll)."
+                },
+                "button": {
+                  "type": "string",
+                  "enum": [
+                    "left",
+                    "right",
+                    "middle"
+                  ],
+                  "description": "Mouse button (click, mouse_down, mouse_up, drag)."
+                },
+                "count": {
+                  "type": "integer",
+                  "description": "Click count (click)."
+                },
+                "modifier_keys": {
+                  "type": "string",
+                  "description": "Modifier keys like 'ctrl' or 'ctrl+shift' (click, scroll)."
+                },
+                "path": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "x": {
+                        "type": "integer"
+                      },
+                      "y": {
+                        "type": "integer"
+                      }
+                    }
+                  },
+                  "description": "Drag path (drag)."
+                },
+                "direction": {
+                  "type": "string",
+                  "enum": [
+                    "up",
+                    "down",
+                    "left",
+                    "right"
+                  ],
+                  "description": "Scroll direction (scroll)."
+                },
+                "amount": {
+                  "type": "integer",
+                  "description": "Scroll amount (scroll)."
+                },
+                "text": {
+                  "type": "string",
+                  "description": "Text to type (type)."
+                },
+                "key": {
+                  "type": "string",
+                  "description": "Key to press, e.g. 'Enter' or 'a' (key)."
+                },
+                "duration_ms": {
+                  "type": "integer",
+                  "description": "Duration in ms (wait, or key hold duration)."
+                }
+              },
+              "required": [
+                "type"
+              ]
+            }
+          }
+        },
+        "required": [
+          "actions"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "ForceBackgroundSubagent",
+      "description": "Requests that a running Task (subagent) tool call move to the background so the current agent turn can continue. Pass the original Task tool_call_id.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tool_call_id": {
+            "type": "string",
+            "description": "The original Task tool call id to move to background."
+          }
+        },
+        "required": [
+          "tool_call_id"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "CreatePr",
+      "description": "Create a pull request for the current branch. The client will register the PR with the connected git remote and return the resulting URL.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "PR title."
+          },
+          "body": {
+            "type": "string",
+            "description": "PR description/body."
+          },
+          "base_branch": {
+            "type": "string",
+            "description": "Optional base branch (defaults to the repository default branch)."
+          },
+          "branch_name": {
+            "type": "string",
+            "description": "Optional branch to create the PR from (defaults to the current branch)."
+          },
+          "draft": {
+            "type": "boolean",
+            "description": "Whether to create the PR as a draft."
+          },
+          "add_labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional labels to add."
+          }
+        },
+        "required": [
+          "title"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "UpdatePr",
+      "description": "Update an existing pull request (title, body, base branch, or labels).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "pr_url": {
+            "type": "string",
+            "description": "URL of the PR to update."
+          },
+          "title": {
+            "type": "string",
+            "description": "New title."
+          },
+          "body": {
+            "type": "string",
+            "description": "New body."
+          },
+          "base_branch": {
+            "type": "string",
+            "description": "New base branch."
+          },
+          "branch_name": {
+            "type": "string",
+            "description": "Branch the PR belongs to."
+          },
+          "add_labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "remove_labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "pr_url"
+        ]
+      }
+    }
   }
 ]

@@ -813,6 +813,50 @@ func observeBackgroundShellAction(stream *ActiveStream, message *agentv1.AgentCl
 	return recordBackgroundShellActionMemory(stream, item.BackgroundShellAction.GetToolCallId(), time.Now().UTC())
 }
 
+// observeBackgroundSubagentAction 处理客户端把子代理转入后台的通知，
+// 标记对应 pending subagent exec 为 backgrounded 并返回 tool_call_id 供 metadata 记录。
+func observeBackgroundSubagentAction(stream *ActiveStream, message *agentv1.AgentClientMessage) (string, bool) {
+	if stream == nil || message == nil {
+		return "", false
+	}
+	action := message.GetConversationAction()
+	if action == nil {
+		return "", false
+	}
+	item, ok := action.GetAction().(*agentv1.ConversationAction_BackgroundSubagentAction)
+	if !ok || item.BackgroundSubagentAction == nil {
+		return "", false
+	}
+	toolCallID := strings.TrimSpace(item.BackgroundSubagentAction.GetToolCallId())
+	if toolCallID == "" {
+		return "", false
+	}
+	now := time.Now().UTC()
+	stream.mu.Lock()
+	defer stream.mu.Unlock()
+	for execID, pending := range stream.PendingExecs {
+		if pending.ExecKind != "subagent" {
+			continue
+		}
+		if strings.TrimSpace(pending.ToolCallID) != toolCallID {
+			continue
+		}
+		pending.StreamState = "backgrounded"
+		pending.LastShellActivityAt = now
+		stream.PendingExecs[execID] = pending
+	}
+	stream.UpdatedAt = now
+	return toolCallID, true
+}
+
+// newBackgroundSubagentActionMetadataEntry 构造子代理后台化的 metadata entry。
+func newBackgroundSubagentActionMetadataEntry(turnSeq int64, requestID string, toolCallID string, source string) HistoryEntry {
+	return newMetadataEntry(turnSeq, requestID, "background_subagent_action", map[string]any{
+		"tool_call_id": strings.TrimSpace(toolCallID),
+		"source":       strings.TrimSpace(source),
+	})
+}
+
 func recordBackgroundShellActionMemory(stream *ActiveStream, toolCallID string, now time.Time) (string, bool) {
 	trimmedToolCallID := strings.TrimSpace(toolCallID)
 	if stream == nil || trimmedToolCallID == "" {

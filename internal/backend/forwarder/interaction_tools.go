@@ -251,6 +251,8 @@ func deriveToolNameFromPendingInteraction(pending runtimecore.PendingInteraction
 		return "WebFetch"
 	case "switch_mode":
 		return "SwitchMode"
+	case "pr_management":
+		return "PrManagement"
 	default:
 		return ""
 	}
@@ -258,7 +260,7 @@ func deriveToolNameFromPendingInteraction(pending runtimecore.PendingInteraction
 
 func isInteractionTool(name string) bool {
 	switch strings.TrimSpace(name) {
-	case "AskQuestion", "CreatePlan", "WebSearch", "WebFetch", "SwitchMode":
+	case "AskQuestion", "CreatePlan", "WebSearch", "WebFetch", "SwitchMode", "CreatePr", "UpdatePr":
 		return true
 	default:
 		return false

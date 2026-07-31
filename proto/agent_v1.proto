@@ -4401,7 +4401,29 @@ message ShellStream {
     ShellRejected rejected = 5;
     ShellPermissionDenied permission_denied = 6;
     ShellStreamBackgrounded backgrounded = 7;
+    ShellStreamHookContext hook_context = 8;
+    ShellSandboxUnsupported sandbox_unsupported = 9;
   }
+}
+
+// Copied from: local:agent.v1.ShellStreamHookContext (var: Ng)
+message ShellStreamHookContext {
+  repeated HookAdditionalContext hook_additional_contexts = 1;
+}
+
+// Copied from: local:agent.v1.HookAdditionalContext (var: mC)
+message HookAdditionalContext {
+  string hook_event_name = 1;
+  string content = 2;
+}
+
+// Copied from: local:agent.v1.ShellSandboxUnsupported (var: rI)
+message ShellSandboxUnsupported {
+  string command = 1;
+  string working_directory = 2;
+  string sandbox_policy_type = 3;
+  string reason = 4;
+  bool is_readonly = 5;
 }
 
 // Copied from: local:agent.v1.ShellStreamBackgrounded (var: Qk)
