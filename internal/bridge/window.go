@@ -387,6 +387,33 @@ func statsOverlayWindowSize(style string) (width, height int) {
 	}
 }
 
+func clampStatsOverlayCoordinate(value, minimum, maximum int) int {
+	if maximum < minimum {
+		return minimum
+	}
+	if value < minimum {
+		return minimum
+	}
+	if value > maximum {
+		return maximum
+	}
+	return value
+}
+
+func (s *WindowService) validateStatsOverlayPosition(x, y, width, height int) (int, int, bool) {
+	if s.app == nil || s.app.Screen == nil || width <= 0 || height <= 0 {
+		return 0, 0, false
+	}
+	screen := s.app.Screen.ScreenNearestDipRect(application.Rect{X: x, Y: y, Width: width, Height: height})
+	if screen == nil || screen.WorkArea.Width <= 0 || screen.WorkArea.Height <= 0 {
+		return 0, 0, false
+	}
+	workArea := screen.WorkArea
+	maxX := workArea.X + workArea.Width - width
+	maxY := workArea.Y + workArea.Height - height
+	return clampStatsOverlayCoordinate(x, workArea.X, maxX), clampStatsOverlayCoordinate(y, workArea.Y, maxY), true
+}
+
 // OpenStatsOverlayWindow 打开统计浮窗（置顶、无边框、小尺寸）。
 // 用于在任意应用上方常驻显示缓存命中率、Token 消耗、对话轮次、价值估算。
 // x, y 为窗口位置；hasPosition=false 时由系统决定初始位置。
@@ -398,11 +425,19 @@ func (s *WindowService) OpenStatsOverlayWindow(x, y int, hasPosition bool) {
 	if s.app == nil {
 		return
 	}
+	width, height := statsOverlayWindowSize(statsOverlayStyleCard)
 
 	// 已存在 -> 确保显示，不执行 toggle，避免设置开关与窗口状态竞争。
 	if s.statsOverlayWindow != nil {
 		if hasPosition {
-			s.statsOverlayWindow.SetRelativePosition(x, y)
+			currentWidth, currentHeight := s.statsOverlayWindow.Size()
+			if currentWidth > 0 && currentHeight > 0 {
+				width, height = currentWidth, currentHeight
+			}
+			x, y, hasPosition = s.validateStatsOverlayPosition(x, y, width, height)
+		}
+		if hasPosition {
+			s.statsOverlayWindow.SetPosition(x, y)
 		}
 		if !s.statsOverlayWindow.IsVisible() {
 			s.statsOverlayWindow.Show()
@@ -411,7 +446,9 @@ func (s *WindowService) OpenStatsOverlayWindow(x, y int, hasPosition bool) {
 		return
 	}
 
-	width, height := statsOverlayWindowSize(statsOverlayStyleCard)
+	if hasPosition {
+		x, y, hasPosition = s.validateStatsOverlayPosition(x, y, width, height)
+	}
 	opts := application.WebviewWindowOptions{
 		Title:               "统计浮窗",
 		Width:               width,
@@ -462,7 +499,7 @@ func (s *WindowService) OpenStatsOverlayWindow(x, y int, hasPosition bool) {
 
 	// 如果提供了保存的位置，在窗口创建后恢复
 	if hasPosition {
-		win.SetRelativePosition(x, y)
+		win.SetPosition(x, y)
 	}
 
 	win.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
@@ -474,7 +511,7 @@ func (s *WindowService) OpenStatsOverlayWindow(x, y int, hasPosition bool) {
 	s.statsOverlayWindow = win
 }
 
-// UpdateStatsOverlayWindow 更新现有统计浮窗的样式尺寸、贴边布局和置顶状态。
+// UpdateStatsOverlayWindow 更新现有统计浮窗的样式尺寸和贴边布局。
 // style 既可传普通样式，也可传 parseStatsOverlayLayout 支持的内部布局 DSL。
 func (s *WindowService) UpdateStatsOverlayWindow(style string, alwaysOnTop bool) {
 	layout, hasLayout := parseStatsOverlayLayout(style)
@@ -533,9 +570,20 @@ func (s *WindowService) UpdateStatsOverlayWindow(style string, alwaysOnTop bool)
 		if y+height > screenBottom {
 			y = screenBottom - height
 		}
-		win.SetRelativePosition(x, y)
+		win.SetPosition(x, y)
 	}
-	win.SetAlwaysOnTop(alwaysOnTop)
+	// 保留参数以兼容现有绑定；置顶状态由 SetStatsOverlayAlwaysOnTop 独立维护。
+	_ = alwaysOnTop
+}
+
+// SetStatsOverlayAlwaysOnTop 独立更新浮窗层级，避免尺寸/morph 调用携带旧偏好覆盖最新设置。
+func (s *WindowService) SetStatsOverlayAlwaysOnTop(alwaysOnTop bool) {
+	s.mu.RLock()
+	win := s.statsOverlayWindow
+	s.mu.RUnlock()
+	if win != nil {
+		win.SetAlwaysOnTop(alwaysOnTop)
+	}
 }
 
 // CloseStatsOverlayWindow 关闭统计浮窗。

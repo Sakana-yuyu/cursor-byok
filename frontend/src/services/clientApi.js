@@ -21,7 +21,7 @@ import {
 import {
   CheckForUpdates, GetAppVersion, GetFooterAuthorInfo, InstallReadyUpdate,
   GetModelEditorContext, OpenConfigWindow, OpenFooterAuthorHome, OpenHistoryWindow,
-  OpenMetricsDetailWindow, OpenRequestMetricsWindow, OpenStatsOverlayWindow, UpdateStatsOverlayWindow,
+  OpenMetricsDetailWindow, OpenRequestMetricsWindow, OpenStatsOverlayWindow, UpdateStatsOverlayWindow, SetStatsOverlayAlwaysOnTop,
   CloseStatsOverlayWindow, OpenModelConfigWindow, OpenModelEditorWindow, ExportLogs,
   SetMainWindowCloseAction, CloseApplication, DetectCursorPath, LaunchCursor,
 } from "@bindings/cursor/internal/bridge/windowservice.js";
@@ -31,7 +31,7 @@ const desktopMethods = {
   LoadUserConfig, SaveUserConfig, GetState, GetHomeMetricsSummary, GetAdRuntime, OpenExternalURL,
   StartProxy, StopProxy, OpenHistoryWindow, OpenConfigWindow, GetAppVersion, GetFooterAuthorInfo,
   CheckForUpdates, InstallReadyUpdate, OpenFooterAuthorHome, OpenModelConfigWindow, OpenModelEditorWindow,
-  OpenMetricsDetailWindow, OpenRequestMetricsWindow, OpenStatsOverlayWindow, UpdateStatsOverlayWindow,
+  OpenMetricsDetailWindow, OpenRequestMetricsWindow, OpenStatsOverlayWindow, UpdateStatsOverlayWindow, SetStatsOverlayAlwaysOnTop,
   CloseStatsOverlayWindow, SetMainWindowCloseAction, CloseApplication, GetModelEditorContext, TestModelAdapter, GetModelAdapterTestResults, GetRecentRequestMetrics,
   GetMetricsRangeSummary, GetMetricsTokenBuckets, GetProviderSpendSummary, GetLocalCacheStats,
   GetRecentRequestMetricsCount, GetRecentRequestMetricsAbnormalCount,
@@ -124,6 +124,12 @@ export function openStatsOverlayWindow(x, y, hasPosition = false) {
 }
 export function updateStatsOverlayWindow(style, alwaysOnTop) {
   return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "UpdateStatsOverlayWindow", [style, alwaysOnTop]);
+}
+export function updateStatsOverlayLayout(layout) {
+  return updateStatsOverlayWindow(layout, false);
+}
+export function setStatsOverlayAlwaysOnTop(alwaysOnTop) {
+  return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "SetStatsOverlayAlwaysOnTop", [alwaysOnTop]);
 }
 export function closeStatsOverlayWindow() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "CloseStatsOverlayWindow"); }
 export function setMainWindowCloseAction(action) {
