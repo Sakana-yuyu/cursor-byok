@@ -150,6 +150,14 @@ function taskSupervisionMeta(task) {
   return parts;
 }
 
+function taskStateLabel(task) {
+  return task?.supervisionPhase || taskStatusLabels[task?.status] || task?.status;
+}
+
+function taskStateClass(task) {
+  return task?.supervisionPhase ? supervisionClass(task.supervisionPhase) : statusClass(task?.status);
+}
+
 function replaceMCPServer(next, expectedKey = "") {
   if (!next?.identifier) return;
   const nextKey = mcpServerStateKey(next);
@@ -372,8 +380,7 @@ onUnmounted(() => {
               <div class="min-w-0 flex-1">
                 <div class="flex min-w-0 items-center gap-2 text-xs">
                   <span class="truncate font-medium text-white" :title="task.modelName || task.modelId">{{ task.modelName || task.modelId || "模型" }}</span>
-                  <span class="shrink-0" :class="statusClass(task.status)">{{ taskStatusLabels[task.status] || task.status }}</span>
-                  <span v-if="task.supervisionPhase" class="shrink-0" :class="supervisionClass(task.supervisionPhase)">{{ task.supervisionPhase }}</span>
+                  <span class="shrink-0" :class="taskStateClass(task)">{{ taskStateLabel(task) }}</span>
                 </div>
                 <div class="mt-1 truncate text-[11px] text-[#858585]" :title="task.description || task.id">{{ task.description || task.id }}</div>
                 <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-[#a3a3a3]">
@@ -384,7 +391,7 @@ onUnmounted(() => {
                 <div v-if="task.isSupervised" class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-[#858585]">
                   <span v-for="item in taskSupervisionMeta(task)" :key="item">{{ item }}</span>
                 </div>
-                <div v-if="task.issueCategory" class="mt-2 text-[11px] text-[#facc15]" :title="task.issueCategory">{{ task.issueCategory }}</div>
+                <div v-if="task.issueCategory" class="mt-2 line-clamp-2 break-words text-[11px] text-[#facc15]" :title="task.issueCategory">{{ task.issueCategory }}</div>
                 <div v-if="task.progressSummary" class="mt-2 line-clamp-3 break-words text-[11px] text-[#a3a3a3]" :title="task.progressSummary">{{ task.progressSummary }}</div>
                 <div v-if="task.error" class="mt-2 line-clamp-2 break-words text-[11px] text-[#fca5a5]" :title="task.error">{{ task.error }}</div>
               </div>
