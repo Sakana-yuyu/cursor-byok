@@ -4,16 +4,18 @@ import SettingsSection from "@/components/settings/SettingsSection.vue";
 import Button from "@/components/ui/Button.vue";
 import Input from "@/components/ui/Input.vue";
 import Select from "@/components/ui/Select.vue";
+import { useMessage } from "@/composables/useMessage";
 import {
   ROUTE_MODE_OPTIONS,
   appState,
   getCursorManualPath,
   openModelConfigWindow,
+  persistUserConfig,
   saveRoutingMode,
   setCursorManualPath,
   toUserError,
 } from "@/state/appState";
-import { detectCursorPath } from "@/services/clientApi";
+import { autoMatchContextWindows, detectCursorPath } from "@/services/clientApi";
 import { isBrowserPreview } from "@/services/runtimeAdapter";
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
@@ -28,6 +30,7 @@ const props = defineProps({
 const MANUAL_PATH_AUTOSAVE_KEY = "cursor-service.manual-path";
 
 const router = useRouter();
+const message = useMessage();
 
 const routeModeDraft = ref(appState.routingMode);
 const manualPath = ref("");
@@ -52,6 +55,12 @@ const detectState = reactive({
 });
 
 const modelConfigState = reactive({
+  busy: false,
+  error: "",
+  retry: null,
+});
+
+const contextMatchState = reactive({
   busy: false,
   error: "",
   retry: null,
@@ -196,6 +205,51 @@ async function handleOpenModelConfig() {
   }
 }
 
+function retryContextMatch() {
+  if (typeof contextMatchState.retry === "function") {
+    void contextMatchState.retry();
+  }
+}
+
+async function handleContextMatchEnabledChange(enabled) {
+  const nextValue = Boolean(enabled);
+  const previousValue = Boolean(appState.autoMatchContextWindow);
+  appState.autoMatchContextWindow = nextValue;
+  contextMatchState.busy = true;
+  contextMatchState.error = "";
+  contextMatchState.retry = () => handleContextMatchEnabledChange(nextValue);
+  try {
+    await props.autosave.run("cursor-service.context-match-enabled", async () => {
+      const result = await persistUserConfig();
+      if (!result?.ok) {
+        throw new Error(result?.error || "保存失败");
+      }
+    });
+  } catch (error) {
+    appState.autoMatchContextWindow = previousValue;
+    contextMatchState.error = toUserError(error);
+  } finally {
+    contextMatchState.busy = false;
+  }
+}
+
+async function handleContextMatchNow() {
+  contextMatchState.busy = true;
+  contextMatchState.error = "";
+  contextMatchState.retry = handleContextMatchNow;
+  try {
+    const result = await autoMatchContextWindows();
+    if (!result?.enabled) {
+      throw new Error("请先开启自动配对上下文窗口。");
+    }
+    message.success(`上下文配对完成：共 ${result.total} 个，已更新 ${result.changed} 个。`);
+  } catch (error) {
+    contextMatchState.error = toUserError(error);
+  } finally {
+    contextMatchState.busy = false;
+  }
+}
+
 onMounted(() => {
   manualPath.value = getCursorManualPath();
   void handleDetectCursorPath();
@@ -281,6 +335,33 @@ onMounted(() => {
         >
           打开模型配置
         </Button>
+      </SettingsRow>
+
+      <SettingsRow
+        label="自动配对上下文窗口"
+        description="按模型目录与服务端能力自动匹配上下文窗口，避免手动填写过大或过小。"
+        :busy="contextMatchState.busy"
+        :error="contextMatchState.error"
+        @retry="retryContextMatch"
+      >
+        <div class="flex flex-wrap items-center justify-end gap-2">
+          <Switch
+            compact
+            label=""
+            :enabled="Boolean(appState.autoMatchContextWindow)"
+            :busy="contextMatchState.busy"
+            :disabled="contextMatchState.busy"
+            aria-label="自动配对上下文窗口"
+            @change="handleContextMatchEnabledChange"
+          />
+          <Button
+            variant="default"
+            :disabled="contextMatchState.busy || !appState.autoMatchContextWindow"
+            @click="handleContextMatchNow"
+          >
+            一键配对
+          </Button>
+        </div>
       </SettingsRow>
     </SettingsSection>
   </div>
