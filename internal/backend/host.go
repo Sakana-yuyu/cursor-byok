@@ -17,6 +17,7 @@ import (
 	"cursor/internal/backend/server"
 	serverconfig "cursor/internal/backend/server/config"
 	"cursor/internal/backend/server/upstream"
+	"cursor/internal/historymetrics"
 	"cursor/internal/logger"
 	"cursor/internal/netproxy"
 	legacyruntime "cursor/internal/runtime"
@@ -82,6 +83,20 @@ func (host *Host) DelegationTaskSnapshots() []forwarder.DelegationTaskSnapshot {
 		return nil
 	}
 	return module.Service.DelegationTaskSnapshots()
+}
+
+// ResetUsageMetrics 清空活动 forwarder 持有的用量统计；没有活动 writer 时直接重置文件。
+func (host *Host) ResetUsageMetrics() error {
+	if host == nil {
+		return historymetrics.ResetUsageFile(appdata.UsageFilePath())
+	}
+	host.runMu.RLock()
+	module := host.agentModule
+	host.runMu.RUnlock()
+	if module == nil || module.Service == nil {
+		return historymetrics.ResetUsageFile(appdata.UsageFilePath())
+	}
+	return module.Service.ResetUsageMetrics()
 }
 
 // CancelDelegationTask cancels one delegated worker by its stable task ID.

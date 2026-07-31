@@ -873,6 +873,7 @@ func (s *WindowService) LaunchCursor(workspaceDir, manualPath string) error {
 	} else {
 		cmd = exec.Command(cursorPath)
 	}
+	configureCursorCommand(cmd)
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("启动 Cursor 失败: %w", err)

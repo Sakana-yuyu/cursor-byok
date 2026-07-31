@@ -7,8 +7,8 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 197,
-          "column": 60
+          "line": 230,
+          "column": 61
         }
       ]
     },
@@ -43,7 +43,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1467,
+          "line": 1541,
           "column": 14
         }
       ]
@@ -123,7 +123,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 159,
+          "line": 185,
           "column": 11
         }
       ]
@@ -224,7 +224,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 547,
+          "line": 542,
           "column": 79
         },
         {
@@ -299,7 +299,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 886,
+          "line": 888,
           "column": 14
         }
       ]
@@ -352,7 +352,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 34,
+          "line": 39,
           "column": 21
         }
       ]
@@ -369,7 +369,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 28,
+          "line": 33,
           "column": 111
         }
       ]
@@ -393,7 +393,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 206,
+          "line": 204,
           "column": 39
         },
         {
@@ -410,7 +410,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 307,
+          "line": 305,
           "column": 32
         }
       ]
@@ -504,7 +504,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 33,
+          "line": 37,
           "column": 28
         },
         {
@@ -592,7 +592,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 36,
+          "line": 41,
           "column": 27
         }
       ]
@@ -669,7 +669,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 511,
+          "line": 549,
           "column": 16
         }
       ]
@@ -693,7 +693,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 75,
+          "line": 80,
           "column": 49
         }
       ]
@@ -847,7 +847,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 951,
+          "line": 962,
           "column": 7
         }
       ]
@@ -924,7 +924,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 46,
+          "line": 51,
           "column": 1033
         }
       ]
@@ -986,6 +986,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 853,
           "column": 85
+        }
+      ]
+    },
+    "15b58f5021c8e107": {
+      "source": "断开 MCP {0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 676,
+          "column": 32
         }
       ]
     },
@@ -1080,7 +1092,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1521,
+          "line": 1595,
           "column": 38
         }
       ]
@@ -1104,7 +1116,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1420,
+          "line": 1494,
           "column": 47
         }
       ]
@@ -1133,12 +1145,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1036,
+          "line": 1047,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1047,
+          "line": 1058,
           "column": 13
         }
       ]
@@ -1246,7 +1258,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1940,
+          "line": 2014,
           "column": 32
         }
       ]
@@ -1306,7 +1318,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 442,
+          "line": 440,
           "column": 163
         }
       ]
@@ -1318,13 +1330,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1213,
+          "line": 1224,
           "column": 7
-        },
-        {
-          "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 113,
-          "column": 58
         }
       ]
     },
@@ -1335,7 +1342,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 439,
+          "line": 437,
           "column": 180
         }
       ]
@@ -1401,8 +1408,8 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 183,
-          "column": 62
+          "line": 218,
+          "column": 63
         }
       ]
     },
@@ -1537,7 +1544,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1484,
+          "line": 1558,
           "column": 40
         }
       ]
@@ -1629,7 +1636,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 28,
+          "line": 33,
           "column": 92
         }
       ]
@@ -1718,22 +1725,22 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 24,
+          "line": 29,
           "column": 184
         },
         {
           "file": "src/views/Home.vue",
-          "line": 25,
+          "line": 30,
           "column": 187
         },
         {
           "file": "src/views/Home.vue",
-          "line": 26,
+          "line": 31,
           "column": 178
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 293,
+          "line": 291,
           "column": 27
         },
         {
@@ -1856,7 +1863,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 370,
+          "line": 368,
           "column": 85
         }
       ]
@@ -1902,7 +1909,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1411,
+          "line": 1485,
           "column": 12
         }
       ]
@@ -1972,7 +1979,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 28,
+          "line": 33,
           "column": 176
         }
       ]
@@ -2177,7 +2184,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1000,
+          "line": 1011,
           "column": 9
         }
       ]
@@ -2228,7 +2235,7 @@
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 888,
+          "line": 890,
           "column": 17
         },
         {
@@ -2253,22 +2260,22 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 1526,
+          "line": 1600,
           "column": 12
         },
         {
           "file": "src/views/Home.vue",
-          "line": 28,
+          "line": 33,
           "column": 196
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 316,
+          "line": 314,
           "column": 19
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 341,
+          "line": 339,
           "column": 17
         },
         {
@@ -2370,6 +2377,11 @@
           "file": "src/components/PromptPreviewModal.vue",
           "line": 35,
           "column": 71
+        },
+        {
+          "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
+          "line": 92,
+          "column": 108
         }
       ]
     },
@@ -2380,12 +2392,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 887,
+          "line": 889,
           "column": 18
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 340,
+          "line": 338,
           "column": 18
         },
         {
@@ -2417,7 +2429,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 46,
+          "line": 51,
           "column": 446
         }
       ]
@@ -2622,8 +2634,20 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1189,
+          "line": 1200,
           "column": 15
+        }
+      ]
+    },
+    "344ea019b80ba858": {
+      "source": "连接 MCP {0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 676,
+          "column": 32
         }
       ]
     },
@@ -2646,7 +2670,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 46,
+          "line": 51,
           "column": 1721
         }
       ]
@@ -2670,7 +2694,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1055,
+          "line": 1066,
           "column": 9
         }
       ]
@@ -2783,7 +2807,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1511,
+          "line": 1585,
           "column": 14
         }
       ]
@@ -2795,7 +2819,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 104,
+          "line": 105,
           "column": 23
         }
       ]
@@ -2807,7 +2831,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1228,
+          "line": 1239,
           "column": 9
         }
       ]
@@ -2858,7 +2882,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 459,
+          "line": 457,
           "column": 88
         }
       ]
@@ -2957,7 +2981,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 534,
+          "line": 529,
           "column": 81
         }
       ]
@@ -3010,7 +3034,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 597,
+          "line": 635,
           "column": 22
         }
       ]
@@ -3066,7 +3090,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 343,
+          "line": 381,
           "column": 10
         }
       ]
@@ -3131,7 +3155,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 261,
+          "line": 259,
           "column": 59
         },
         {
@@ -3153,7 +3177,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1465,
+          "line": 1539,
           "column": 5
         }
       ]
@@ -3165,7 +3189,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 412,
+          "line": 410,
           "column": 17
         }
       ]
@@ -3199,7 +3223,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 27,
+          "line": 32,
           "column": 322
         },
         {
@@ -3216,7 +3240,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 631,
+          "line": 669,
           "column": 32
         }
       ]
@@ -3240,7 +3264,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 537,
+          "line": 575,
           "column": 22
         }
       ]
@@ -3264,7 +3288,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 338,
+          "line": 336,
           "column": 12
         }
       ]
@@ -3341,32 +3365,32 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1095,
+          "line": 1106,
           "column": 61
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1117,
+          "line": 1128,
           "column": 57
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1139,
+          "line": 1150,
           "column": 56
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1165,
+          "line": 1176,
           "column": 60
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1183,
+          "line": 1194,
           "column": 60
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1201,
+          "line": 1212,
           "column": 64
         }
       ]
@@ -3404,6 +3428,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 1099,
           "column": 22
+        }
+      ]
+    },
+    "4454bab9a7681bfe": {
+      "source": "个可用模型",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
+          "line": 152,
+          "column": 49
         }
       ]
     },
@@ -3477,7 +3513,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 553,
+          "line": 548,
           "column": 27
         }
       ]
@@ -3614,6 +3650,11 @@
           "file": "src/components/DelegationRuntimePanel.vue",
           "line": 260,
           "column": 23
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 340,
+          "column": 23
         }
       ]
     },
@@ -3706,7 +3747,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 481,
+          "line": 476,
           "column": 89
         },
         {
@@ -4098,7 +4139,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 313,
+          "line": 311,
           "column": 14
         }
       ]
@@ -4180,8 +4221,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1220,
-          "column": 94
+          "line": 1232,
+          "column": 1
         }
       ]
     },
@@ -4204,7 +4245,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 202,
+          "line": 207,
           "column": 23
         }
       ]
@@ -4228,7 +4269,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 27,
+          "line": 32,
           "column": 247
         }
       ]
@@ -4269,7 +4310,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 80,
+          "line": 101,
           "column": 12
         },
         {
@@ -4286,13 +4327,18 @@
       "refs": [
         {
           "file": "src/components/settings/SettingsPageHeader.vue",
-          "line": 42,
+          "line": 51,
           "column": 9
         },
         {
           "file": "src/components/settings/SettingsPageHeader.vue",
-          "line": 43,
+          "line": 52,
           "column": 9
+        },
+        {
+          "file": "src/components/settings/SettingsPageHeader.vue",
+          "line": 57,
+          "column": 15
         },
         {
           "file": "src/views/ModelCatalog.vue",
@@ -4342,7 +4388,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 315,
+          "line": 313,
           "column": 20
         }
       ]
@@ -4354,7 +4400,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 83,
+          "line": 104,
           "column": 12
         }
       ]
@@ -4472,7 +4518,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 335,
+          "line": 373,
           "column": 12
         }
       ]
@@ -4501,7 +4547,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 30,
+          "line": 34,
           "column": 26
         },
         {
@@ -4533,7 +4579,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 603,
+          "line": 641,
           "column": 92
         },
         {
@@ -4620,7 +4666,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 392,
+          "line": 430,
           "column": 7
         }
       ]
@@ -4632,7 +4678,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1458,
+          "line": 1532,
           "column": 7
         }
       ]
@@ -4644,7 +4690,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 480,
+          "line": 475,
           "column": 29
         }
       ]
@@ -4773,7 +4819,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1037,
+          "line": 1048,
           "column": 9
         }
       ]
@@ -4785,7 +4831,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1218,
+          "line": 1229,
           "column": 55
         }
       ]
@@ -4833,7 +4879,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 227,
+          "line": 225,
           "column": 23
         },
         {
@@ -4862,12 +4908,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 999,
+          "line": 1010,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1012,
+          "line": 1023,
           "column": 11
         }
       ]
@@ -4931,8 +4977,13 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 223,
+          "line": 228,
           "column": 39
+        },
+        {
+          "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
+          "line": 107,
+          "column": 12
         },
         {
           "file": "src/components/settings/SettingsPageHeader.vue",
@@ -4965,7 +5016,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 321,
+          "line": 319,
           "column": 30
         }
       ]
@@ -5013,7 +5064,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 96,
+          "line": 97,
           "column": 23
         }
       ]
@@ -5081,22 +5132,22 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 190,
+          "line": 191,
           "column": 40
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 730,
+          "line": 731,
           "column": 11
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 886,
+          "line": 888,
           "column": 36
         },
         {
           "file": "src/state/appState.js",
-          "line": 888,
+          "line": 896,
           "column": 37
         }
       ]
@@ -5108,7 +5159,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1019,
+          "line": 1030,
           "column": 9
         }
       ]
@@ -5132,7 +5183,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1434,
+          "line": 1508,
           "column": 14
         }
       ]
@@ -5144,7 +5195,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2017,
+          "line": 2091,
           "column": 32
         }
       ]
@@ -5156,7 +5207,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1409,
+          "line": 1483,
           "column": 14
         }
       ]
@@ -5209,12 +5260,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 964,
+          "line": 975,
           "column": 11
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1009,
+          "line": 1020,
           "column": 11
         },
         {
@@ -5248,7 +5299,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 314,
+          "line": 312,
           "column": 16
         }
       ]
@@ -5303,6 +5354,11 @@
           "file": "src/components/DelegationRuntimePanel.vue",
           "line": 455,
           "column": 20
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 679,
+          "column": 22
         }
       ]
     },
@@ -5371,7 +5427,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 46,
+          "line": 51,
           "column": 1000
         }
       ]
@@ -5431,7 +5487,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 509,
+          "line": 504,
           "column": 25
         },
         {
@@ -5465,7 +5521,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 432,
+          "line": 470,
           "column": 19
         }
       ]
@@ -5499,22 +5555,22 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 22,
+          "line": 27,
           "column": 98
         },
         {
           "file": "src/views/Home.vue",
-          "line": 22,
+          "line": 27,
           "column": 116
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 272,
+          "line": 270,
           "column": 53
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 272,
+          "line": 270,
           "column": 71
         }
       ]
@@ -5538,7 +5594,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 497,
+          "line": 492,
           "column": 84
         },
         {
@@ -5567,7 +5623,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1065,
+          "line": 1076,
           "column": 13
         }
       ]
@@ -5591,7 +5647,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 27,
+          "line": 32,
           "column": 185
         }
       ]
@@ -5603,7 +5659,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1426,
+          "line": 1500,
           "column": 20
         }
       ]
@@ -5704,7 +5760,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 378,
+          "line": 376,
           "column": 17
         }
       ]
@@ -5716,7 +5772,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 544,
+          "line": 539,
           "column": 19
         }
       ]
@@ -5812,7 +5868,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1262,
+          "line": 1275,
           "column": 7
         }
       ]
@@ -5860,7 +5916,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 311,
+          "line": 309,
           "column": 45
         }
       ]
@@ -5897,6 +5953,11 @@
         {
           "file": "src/components/DelegationRuntimePanel.vue",
           "line": 307,
+          "column": 23
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 337,
           "column": 23
         }
       ]
@@ -5954,8 +6015,8 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 189,
-          "column": 11
+          "line": 222,
+          "column": 13
         }
       ]
     },
@@ -6007,7 +6068,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1147,
+          "line": 1158,
           "column": 9
         }
       ]
@@ -6043,8 +6104,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1207,
-          "column": 110
+          "line": 1219,
+          "column": 1
         }
       ]
     },
@@ -6067,17 +6128,17 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 370,
+          "line": 368,
           "column": 160
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 459,
+          "line": 457,
           "column": 121
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 475,
+          "line": 470,
           "column": 77
         },
         {
@@ -6167,7 +6228,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1153,
+          "line": 1164,
           "column": 15
         }
       ]
@@ -6179,7 +6240,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 307,
+          "line": 305,
           "column": 49
         }
       ]
@@ -6227,7 +6288,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 27,
+          "line": 32,
           "column": 302
         }
       ]
@@ -6311,7 +6372,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1510,
+          "line": 1584,
           "column": 38
         }
       ]
@@ -6323,7 +6384,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 23,
+          "line": 28,
           "column": 116
         }
       ]
@@ -6415,7 +6476,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 1493,
+          "line": 1567,
           "column": 16
         }
       ]
@@ -6456,7 +6517,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 507,
+          "line": 545,
           "column": 70
         }
       ]
@@ -6526,7 +6587,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 369,
+          "line": 367,
           "column": 134
         }
       ]
@@ -6663,7 +6724,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1106,
+          "line": 1117,
           "column": 17
         }
       ]
@@ -6745,7 +6806,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1100,
+          "line": 1111,
           "column": 21
         }
       ]
@@ -6791,7 +6852,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1406,
+          "line": 1480,
           "column": 14
         }
       ]
@@ -6868,12 +6929,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 963,
+          "line": 974,
           "column": 11
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1008,
+          "line": 1019,
           "column": 11
         },
         {
@@ -6982,7 +7043,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 46,
+          "line": 51,
           "column": 2029
         },
         {
@@ -7047,7 +7108,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 393,
+          "line": 391,
           "column": 15
         }
       ]
@@ -7071,7 +7132,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 341,
+          "line": 379,
           "column": 12
         }
       ]
@@ -7083,7 +7144,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 885,
+          "line": 887,
           "column": 12
         }
       ]
@@ -7218,6 +7279,18 @@
         }
       ]
     },
+    "922d91300ce645aa": {
+      "source": "收起 {0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
+          "line": 136,
+          "column": 17
+        }
+      ]
+    },
     "92d59eae0d229f42": {
       "source": "提示词注入与本地化。",
       "kind": "text",
@@ -7237,7 +7310,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1980,
+          "line": 2054,
           "column": 32
         }
       ]
@@ -7249,7 +7322,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 391,
+          "line": 429,
           "column": 7
         },
         {
@@ -7266,7 +7339,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 499,
+          "line": 494,
           "column": 129
         }
       ]
@@ -7350,7 +7423,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1171,
+          "line": 1182,
           "column": 15
         }
       ]
@@ -7362,8 +7435,8 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 136,
-          "column": 23
+          "line": 174,
+          "column": 19
         }
       ]
     },
@@ -7488,7 +7561,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 349,
+          "line": 347,
           "column": 67
         },
         {
@@ -7546,8 +7619,8 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 130,
-          "column": 23
+          "line": 168,
+          "column": 19
         }
       ]
     },
@@ -7558,7 +7631,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 321,
+          "line": 319,
           "column": 47
         }
       ]
@@ -7570,8 +7643,8 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 147,
-          "column": 24
+          "line": 198,
+          "column": 22
         }
       ]
     },
@@ -7582,12 +7655,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2248,
+          "line": 2322,
           "column": 32
         },
         {
           "file": "src/state/appState.js",
-          "line": 2269,
+          "line": 2343,
           "column": 32
         }
       ]
@@ -7688,7 +7761,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 471,
+          "line": 509,
           "column": 15
         }
       ]
@@ -7753,7 +7826,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 28,
+          "line": 33,
           "column": 383
         }
       ]
@@ -7825,7 +7898,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1522,
+          "line": 1596,
           "column": 14
         }
       ]
@@ -7917,7 +7990,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1084,
+          "line": 1095,
           "column": 17
         }
       ]
@@ -7977,7 +8050,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1263,
+          "line": 1276,
           "column": 7
         }
       ]
@@ -8001,12 +8074,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1436,
+          "line": 1510,
           "column": 12
         },
         {
           "file": "src/state/appState.js",
-          "line": 1503,
+          "line": 1577,
           "column": 87
         }
       ]
@@ -8018,7 +8091,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1078,
+          "line": 1089,
           "column": 21
         }
       ]
@@ -8042,8 +8115,8 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 226,
-          "column": 60
+          "line": 257,
+          "column": 61
         }
       ]
     },
@@ -8083,7 +8156,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2193,
+          "line": 2267,
           "column": 14
         }
       ]
@@ -8144,12 +8217,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1122,
+          "line": 1133,
           "column": 21
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1128,
+          "line": 1139,
           "column": 17
         }
       ]
@@ -8199,6 +8272,11 @@
           "file": "src/components/DelegationRuntimePanel.vue",
           "line": 462,
           "column": 17
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 679,
+          "column": 22
         },
         {
           "file": "src/views/SupplierDetail.vue",
@@ -8263,7 +8341,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 401,
+          "line": 439,
           "column": 15
         }
       ]
@@ -8393,7 +8471,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 540,
+          "line": 578,
           "column": 69
         }
       ]
@@ -8405,12 +8483,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1018,
+          "line": 1029,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1029,
+          "line": 1040,
           "column": 13
         }
       ]
@@ -8422,7 +8500,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 463,
+          "line": 501,
           "column": 17
         }
       ]
@@ -8434,7 +8512,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 338,
+          "line": 376,
           "column": 12
         }
       ]
@@ -8451,27 +8529,32 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 32,
+          "line": 36,
           "column": 31
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 428,
+          "line": 466,
           "column": 19
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 541,
+          "line": 579,
           "column": 28
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 604,
+          "line": 642,
           "column": 28
         },
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 160,
+          "line": 148,
+          "column": 16
+        },
+        {
+          "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
+          "line": 186,
           "column": 11
         }
       ]
@@ -8495,8 +8578,8 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 203,
-          "column": 9
+          "line": 235,
+          "column": 1
         }
       ]
     },
@@ -8524,7 +8607,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1174,
+          "line": 1185,
           "column": 15
         }
       ]
@@ -8572,8 +8655,8 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 170,
-          "column": 62
+          "line": 207,
+          "column": 63
         }
       ]
     },
@@ -8647,7 +8730,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1485,
+          "line": 1559,
           "column": 16
         }
       ]
@@ -8741,7 +8824,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 461,
+          "line": 499,
           "column": 17
         }
       ]
@@ -8765,7 +8848,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 567,
+          "line": 605,
           "column": 32
         }
       ]
@@ -8825,7 +8908,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 46,
+          "line": 51,
           "column": 1053
         }
       ]
@@ -8917,7 +9000,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1192,
+          "line": 1203,
           "column": 15
         }
       ]
@@ -8929,7 +9012,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 974,
+          "line": 985,
           "column": 9
         }
       ]
@@ -8946,7 +9029,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 28,
+          "line": 33,
           "column": 404
         }
       ]
@@ -8987,7 +9070,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1492,
+          "line": 1566,
           "column": 40
         }
       ]
@@ -9083,7 +9166,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1217,
+          "line": 1228,
           "column": 46
         }
       ]
@@ -9112,28 +9195,28 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 488,
+          "line": 526,
           "column": 15
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 496,
+          "line": 534,
           "column": 15
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 554,
+          "line": 592,
           "column": 21
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 618,
+          "line": 656,
           "column": 21
         },
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 252,
-          "column": 9
+          "line": 282,
+          "column": 1
         },
         {
           "file": "src/components/settings/SettingsRow.vue",
@@ -9142,7 +9225,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 520,
+          "line": 515,
           "column": 25
         }
       ]
@@ -9154,7 +9237,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1214,
+          "line": 1225,
           "column": 7
         }
       ]
@@ -9195,7 +9278,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 46,
+          "line": 51,
           "column": 1854
         }
       ]
@@ -9245,6 +9328,11 @@
           "file": "src/components/DelegationRuntimePanel.vue",
           "line": 56,
           "column": 15
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 679,
+          "column": 22
         }
       ]
     },
@@ -9327,7 +9415,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 27,
+          "line": 32,
           "column": 264
         }
       ]
@@ -9339,12 +9427,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 954,
+          "line": 965,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 967,
+          "line": 978,
           "column": 11
         }
       ]
@@ -9423,6 +9511,18 @@
           "file": "src/components/HomeMetricsCard.vue",
           "line": 307,
           "column": 5
+        }
+      ]
+    },
+    "bd89c484632dbacc": {
+      "source": "展开 {0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
+          "line": 136,
+          "column": 17
         }
       ]
     },
@@ -9534,7 +9634,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 259,
+          "line": 257,
           "column": 66
         },
         {
@@ -9563,8 +9663,20 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 369,
+          "line": 367,
           "column": 49
+        }
+      ]
+    },
+    "c0ae8e199e923292": {
+      "source": "默认：",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
+          "line": 153,
+          "column": 17
         }
       ]
     },
@@ -9604,7 +9716,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 352,
+          "line": 350,
           "column": 29
         },
         {
@@ -9626,7 +9738,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 553,
+          "line": 548,
           "column": 27
         }
       ]
@@ -9638,7 +9750,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 426,
+          "line": 464,
           "column": 19
         }
       ]
@@ -9679,7 +9791,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1054,
+          "line": 1065,
           "column": 9
         }
       ]
@@ -9732,7 +9844,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2036,
+          "line": 2110,
           "column": 32
         }
       ]
@@ -9965,7 +10077,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 493,
+          "line": 488,
           "column": 89
         },
         {
@@ -9992,17 +10104,17 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 2164,
+          "line": 2238,
           "column": 28
         },
         {
           "file": "src/state/appState.js",
-          "line": 2166,
+          "line": 2240,
           "column": 38
         },
         {
           "file": "src/state/appState.js",
-          "line": 2201,
+          "line": 2275,
           "column": 93
         },
         {
@@ -10055,12 +10167,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1418,
+          "line": 1492,
           "column": 51
         },
         {
           "file": "src/views/Home.vue",
-          "line": 46,
+          "line": 51,
           "column": 1721
         }
       ]
@@ -10096,8 +10208,8 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 148,
-          "column": 11
+          "line": 199,
+          "column": 9
         }
       ]
     },
@@ -10209,7 +10321,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 158,
+          "line": 184,
           "column": 11
         }
       ]
@@ -10267,7 +10379,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 28,
+          "line": 33,
           "column": 324
         }
       ]
@@ -10383,8 +10495,8 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 124,
-          "column": 23
+          "line": 162,
+          "column": 19
         }
       ]
     },
@@ -10424,7 +10536,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2061,
+          "line": 2135,
           "column": 14
         }
       ]
@@ -10436,7 +10548,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 46,
+          "line": 51,
           "column": 446
         }
       ]
@@ -10547,7 +10659,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1072,
+          "line": 1083,
           "column": 9
         }
       ]
@@ -10571,7 +10683,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 531,
+          "line": 526,
           "column": 21
         }
       ]
@@ -10786,12 +10898,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 441,
+          "line": 479,
           "column": 17
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 442,
+          "line": 480,
           "column": 17
         },
         {
@@ -10822,6 +10934,11 @@
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 40,
           "column": 27
+        },
+        {
+          "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
+          "line": 96,
+          "column": 99
         }
       ]
     },
@@ -10868,7 +10985,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 46,
+          "line": 51,
           "column": 1854
         }
       ]
@@ -10880,7 +10997,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 501,
+          "line": 496,
           "column": 43
         }
       ]
@@ -10904,7 +11021,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1464,
+          "line": 1538,
           "column": 5
         }
       ]
@@ -10916,7 +11033,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 511,
+          "line": 549,
           "column": 16
         }
       ]
@@ -10928,7 +11045,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1146,
+          "line": 1157,
           "column": 9
         }
       ]
@@ -10940,7 +11057,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 416,
+          "line": 414,
           "column": 89
         }
       ]
@@ -10952,12 +11069,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 973,
+          "line": 984,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 985,
+          "line": 996,
           "column": 13
         }
       ]
@@ -11051,7 +11168,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1073,
+          "line": 1084,
           "column": 9
         }
       ]
@@ -11075,7 +11192,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 600,
+          "line": 638,
           "column": 89
         }
       ]
@@ -11109,23 +11226,28 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 31,
+          "line": 35,
           "column": 30
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 427,
+          "line": 465,
           "column": 19
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 541,
+          "line": 579,
           "column": 28
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 604,
+          "line": 642,
           "column": 28
+        },
+        {
+          "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
+          "line": 148,
+          "column": 16
         }
       ]
     },
@@ -11160,8 +11282,8 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 176,
-          "column": 11
+          "line": 211,
+          "column": 13
         }
       ]
     },
@@ -11172,7 +11294,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 339,
+          "line": 337,
           "column": 14
         }
       ]
@@ -11237,7 +11359,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 46,
+          "line": 51,
           "column": 1959
         },
         {
@@ -11271,7 +11393,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 416,
+          "line": 414,
           "column": 89
         }
       ]
@@ -11295,7 +11417,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 601,
+          "line": 639,
           "column": 86
         }
       ]
@@ -11367,7 +11489,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1488,
+          "line": 1562,
           "column": 40
         }
       ]
@@ -11466,7 +11588,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 417,
+          "line": 415,
           "column": 93
         },
         {
@@ -11524,7 +11646,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 225,
+          "line": 223,
           "column": 12
         },
         {
@@ -11594,7 +11716,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 426,
+          "line": 424,
           "column": 43
         }
       ]
@@ -11606,7 +11728,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 955,
+          "line": 966,
           "column": 9
         }
       ]
@@ -11741,7 +11863,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1489,
+          "line": 1563,
           "column": 16
         }
       ]
@@ -11830,7 +11952,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 950,
+          "line": 961,
           "column": 7
         }
       ]
@@ -11859,7 +11981,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 88,
+          "line": 89,
           "column": 23
         }
       ]
@@ -11871,7 +11993,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 440,
+          "line": 438,
           "column": 40
         }
       ]
@@ -11905,7 +12027,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 506,
+          "line": 544,
           "column": 154
         }
       ]
@@ -11941,7 +12063,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 402,
+          "line": 400,
           "column": 17
         }
       ]
@@ -11994,6 +12116,11 @@
           "file": "src/components/DelegationRuntimePanel.vue",
           "line": 455,
           "column": 20
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 679,
+          "column": 22
         }
       ]
     },
@@ -12064,7 +12191,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1420,
+          "line": 1494,
           "column": 38
         }
       ]
@@ -12076,7 +12203,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 995,
+          "line": 1006,
           "column": 7
         }
       ]
@@ -12251,12 +12378,12 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 233,
+          "line": 231,
           "column": 36
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 516,
+          "line": 511,
           "column": 90
         },
         {
@@ -12278,7 +12405,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1156,
+          "line": 1167,
           "column": 15
         }
       ]
@@ -12302,7 +12429,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 496,
+          "line": 491,
           "column": 60
         },
         {
@@ -12324,7 +12451,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 208,
+          "line": 206,
           "column": 36
         },
         {
@@ -12377,7 +12504,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 558,
+          "line": 553,
           "column": 73
         }
       ]
@@ -12430,7 +12557,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 433,
+          "line": 431,
           "column": 13
         }
       ]
@@ -12466,7 +12593,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 323,
+          "line": 321,
           "column": 27
         }
       ]
@@ -12515,7 +12642,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 1515,
+          "line": 1589,
           "column": 12
         },
         {
@@ -12581,7 +12708,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1418,
+          "line": 1492,
           "column": 40
         }
       ]
@@ -12737,7 +12864,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 996,
+          "line": 1007,
           "column": 7
         }
       ]

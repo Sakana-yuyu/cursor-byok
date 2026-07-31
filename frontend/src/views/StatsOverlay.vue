@@ -545,6 +545,8 @@ onUnmounted(() => {
 
 <style scoped>
 .stats-overlay { --accent: #6ee7a5; --muted: #777; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; background: transparent; color: #e5e5e5; font-family: inherit; pointer-events: none; }
+.stats-overlay,
+.stats-overlay * { user-select: none; -webkit-user-select: none; }
 .stats-overlay > * { pointer-events: auto; }
 
 /* 悬浮球样式 */

@@ -78,6 +78,7 @@ const supervisionLoaded = ref(false);
 
 const groupStates = reactive({});
 const groupNameDrafts = reactive({});
+const expandedGroupStates = reactive({});
 const maxConcurrencyDraft = ref("");
 
 let delegationSaveTail = Promise.resolve();
@@ -735,6 +736,7 @@ function handleAddGroup() {
     toolPermissions: {},
   };
   appState.delegation.groups.push(group);
+  expandedGroupStates[group.id] = true;
   clearGroupErrors(group.id);
   void persistGroupImmediate(group.id, "create");
 }
@@ -894,6 +896,7 @@ async function handleDeleteGroup(groupID) {
   const previousGroupID = appState.delegation.groups[groupIndex - 1]?.id || "";
   const nextGroupID = appState.delegation.groups[groupIndex + 1]?.id || "";
   const deletedGroup = appState.delegation.groups.splice(groupIndex, 1)[0];
+  delete expandedGroupStates[groupID];
   const state = ensureGroupState(groupID).immediate;
   state.retry = () => handleDeleteGroup(groupID);
   clearStateError(state);
@@ -922,6 +925,14 @@ function groupQueuedState(groupID) {
 function groupErrorState(groupID) {
   const state = ensureGroupState(groupID);
   return state.immediate.error || state.name.error;
+}
+
+function isGroupExpanded(groupID) {
+  return expandedGroupStates[groupID] === true;
+}
+
+function toggleGroupExpanded(groupID) {
+  expandedGroupStates[groupID] = !isGroupExpanded(groupID);
 }
 
 function retryGroup(groupID) {
@@ -1240,12 +1251,14 @@ watch(
           :model-adapters="appState.modelAdapters"
           :mode-options="modeOptions"
           :permission-groups="permissionGroups"
-          :busy="groupBusyState(group.id)"
+          :busy="!appState.configReady || groupBusyState(group.id)"
           :queued="groupQueuedState(group.id)"
           :error="groupErrorState(group.id)"
+          :expanded="isGroupExpanded(group.id)"
           @update:name="(value) => handleGroupNameInput(group.id, value)"
           @flush:name="flushGroupName(group.id)"
           @toggle:enabled="(value) => handleGroupEnabledChange(group.id, value)"
+          @toggle:expanded="toggleGroupExpanded(group.id)"
           @change:execution-mode="(value) => handleExecutionModeChange(group.id, value)"
           @change:default-model="(value) => handleDefaultModelChange(group.id, value)"
           @toggle:model="({ modelID, enabled }) => handleToggleModel(group.id, modelID, enabled)"
