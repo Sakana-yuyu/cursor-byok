@@ -267,6 +267,10 @@ func (coordinator *multitaskDelegationCoordinator) Start(stream *ActiveStream, p
 		coordinator.startMu.Unlock()
 		return false, fmt.Errorf("multitask delegation coordinator is closed")
 	}
+	if delegatedStartupCanceled(stream, pending.ProviderPass) {
+		coordinator.startMu.Unlock()
+		return false, fmt.Errorf("delegation aggregate startup canceled for provider pass %d: %w", pending.ProviderPass, errProviderLoopInterrupted)
+	}
 	config := coordinator.runtimeConfig()
 	coordinator.ensureScheduler(config.MaxConcurrency)
 	workers := coordinator.enabledWorkers(base, config)
@@ -475,8 +479,19 @@ func (coordinator *multitaskDelegationCoordinator) CancelStream(stream *ActiveSt
 	}
 	coordinator.startMu.Lock()
 	defer coordinator.startMu.Unlock()
+	coordinator.mu.RLock()
+	closed := coordinator.closed
+	coordinator.mu.RUnlock()
+	if closed {
+		return
+	}
 	stream.mu.Lock()
 	execIDs := make([]string, 0)
+	providerPass := stream.ProviderPassCount
+	stream.MultitaskStartupCanceled = true
+	if providerPass > stream.MultitaskCanceledProviderPass {
+		stream.MultitaskCanceledProviderPass = providerPass
+	}
 	for _, pending := range stream.PendingExecs {
 		if strings.TrimSpace(pending.ExecKind) == "delegation_aggregate" {
 			execIDs = append(execIDs, pending.ExecID)
@@ -486,6 +501,30 @@ func (coordinator *multitaskDelegationCoordinator) CancelStream(stream *ActiveSt
 	for _, execID := range execIDs {
 		coordinator.CancelAggregate(execID)
 	}
+}
+
+func delegatedStartupCanceled(stream *ActiveStream, providerPass int) bool {
+	if stream == nil {
+		return true
+	}
+	stream.mu.Lock()
+	defer stream.mu.Unlock()
+	if isTerminalStreamStatus(stream.Status) {
+		return true
+	}
+	switch stream.Phase {
+	case TurnPhaseCanceled, TurnPhaseCompleted, TurnPhaseFailed:
+		return true
+	}
+	if !stream.MultitaskStartupCanceled {
+		return false
+	}
+	if providerPass <= stream.MultitaskCanceledProviderPass {
+		return true
+	}
+	stream.MultitaskStartupCanceled = false
+	stream.MultitaskCanceledProviderPass = 0
+	return false
 }
 
 func (coordinator *multitaskDelegationCoordinator) Snapshots() []delegation.TaskSnapshot {
