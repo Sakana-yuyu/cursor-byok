@@ -1637,6 +1637,28 @@ export async function saveLocalResponseCacheEnabled(enabled) {
   return result;
 }
 
+export async function saveLocalResponseCacheSettings(partial) {
+  const currentConfig = await loadPersistedUserConfig();
+  const previous = appState.localResponseCache;
+  const nextCache = normalizeLocalResponseCache({
+    ...currentConfig.localResponseCache,
+    ...previous,
+    ...(partial && typeof partial === "object" ? partial : {}),
+  });
+  appState.localResponseCache = nextCache;
+  const result = await persistConfigPayload({
+    ...currentConfig,
+    localResponseCache: {
+      ...currentConfig.localResponseCache,
+      ...nextCache,
+    },
+  });
+  if (!result.ok) {
+    appState.localResponseCache = previous;
+  }
+  return result;
+}
+
 // ─── 浮窗偏好（stats overlay）──────────────────────────────────────────────
 // 偏好对象：{ style: "card"|"engine"|"orb", alwaysOnTop: boolean, visible: boolean }
 // 仅前端 localStorage 持久化；浮窗是独立 webview 窗口，靠 storage 事件 + 自定义事件
