@@ -12,8 +12,11 @@ function positiveInteger(value) {
   return Number.isFinite(next) && next > 0 ? next : 0;
 }
 
+const terminalTaskStatuses = new Set(["completed", "failed", "canceled", "timed_out"]);
+
 function normalizeDelegationTaskSnapshot(snapshot) {
   const phase = String(snapshot?.supervisionPhase || snapshot?.supervisionStatus || snapshot?.phase || "").trim();
+  const reviewPending = Boolean(snapshot?.reviewPending) || phase === "reviewing";
   const workerRole = String(snapshot?.workerRole || snapshot?.role || "").trim();
   const progressSummary = String(snapshot?.progressSummary || snapshot?.checkpoint?.progressSummary || "").trim();
   const issueCategory = String(snapshot?.issueCategory || snapshot?.supervisionIssueCode || "").trim();
@@ -22,9 +25,14 @@ function normalizeDelegationTaskSnapshot(snapshot) {
   const reassignCount = positiveInteger(snapshot?.reassignCount);
   const escalateCount = positiveInteger(snapshot?.escalateCount) || (snapshot?.escalated ? 1 : 0);
   const supervisionRound = positiveInteger(snapshot?.supervisionRound || snapshot?.checkpoint?.round);
+  const cancelable = typeof snapshot?.cancelable === "boolean"
+    ? snapshot.cancelable
+    : reviewPending || !terminalTaskStatuses.has(String(snapshot?.status || "").trim());
   return {
     ...snapshot,
     supervisionPhase: phase,
+    reviewPending,
+    cancelable,
     workerRole,
     supervisionRound,
     correctionCount,

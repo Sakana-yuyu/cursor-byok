@@ -72,3 +72,10 @@
 - 未执行桌面页面手动验收（enable/save/reload/disable/cancel、窄宽度、console）；
   当前仅完成代码级实现与构建校验。
 - 为满足 runtime UI 展示需求，除前端文件外还补充了最小后端安全 snapshot 映射文件；未触及受保护的 settings/locale 改动。
+
+## Focused Review Fix
+
+- `DelegationTaskStrip.vue` 同时渲染 `issueCategory` 和 `progressSummary`，保留紧凑布局、换行和溢出约束。
+- `runtimeControlApi.js` 统一归一化 `reviewPending`、`supervisionPhase` 和 `cancelable`；显式后端 `cancelable` 优先，缺失时只按 task status 回退，不把 `reviewing` 视为终态。
+- `DelegationTaskStrip.vue` 与 `DelegationRuntimePanel.vue` 使用 phase 作为有效状态展示，取消按钮仍只由 normalized `cancelable` 控制。
+- runtimePanel 仍只展示安全 runtime 字段，未增加 prompt、tool arguments、credentials、workspace paths 或 raw output 的渲染。

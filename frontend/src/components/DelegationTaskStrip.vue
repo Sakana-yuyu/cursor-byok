@@ -56,6 +56,14 @@ function compactSupervision(item) {
   return parts.join(" · ");
 }
 
+function taskStateLabel(item) {
+  return item?.supervisionPhase || statusLabels[item?.status] || item?.status;
+}
+
+function taskStateClass(item) {
+  return item?.supervisionPhase ? phaseClass(item.supervisionPhase) : statusClass(item?.status);
+}
+
 async function refresh() {
   if (refreshBusy) return;
   const currentGeneration = generation;
@@ -111,12 +119,11 @@ onUnmounted(() => window.clearInterval(refreshTimer));
           <div class="min-w-0 flex-1">
             <div class="truncate text-xs text-white" :title="item.modelName || item.modelId">{{ item.modelName || item.modelId || "模型" }}</div>
             <div class="mt-0.5 flex min-w-0 items-center gap-2 text-[11px]">
-              <span :class="statusClass(item.status)">{{ statusLabels[item.status] || item.status }}</span>
-              <span v-if="item.supervisionPhase" class="truncate" :class="phaseClass(item.supervisionPhase)" :title="item.supervisionPhase">{{ item.supervisionPhase }}</span>
+              <span class="truncate" :class="taskStateClass(item)" :title="taskStateLabel(item)">{{ taskStateLabel(item) }}</span>
             </div>
             <div v-if="item.isSupervised" class="mt-0.5 truncate text-[11px] text-[#858585]" :title="compactSupervision(item)">{{ compactSupervision(item) }}</div>
-            <div v-if="item.issueCategory" class="mt-0.5 truncate text-[11px] text-[#facc15]" :title="item.issueCategory">{{ item.issueCategory }}</div>
-            <div v-else-if="item.progressSummary" class="mt-0.5 line-clamp-2 break-words text-[11px] text-[#858585]" :title="item.progressSummary">{{ item.progressSummary }}</div>
+            <div v-if="item.issueCategory" class="mt-0.5 line-clamp-2 break-words text-[11px] text-[#facc15]" :title="item.issueCategory">{{ item.issueCategory }}</div>
+            <div v-if="item.progressSummary" class="mt-0.5 line-clamp-2 break-words text-[11px] text-[#858585]" :title="item.progressSummary">{{ item.progressSummary }}</div>
           </div>
           <Button v-if="item.cancelable" variant="text" :disabled="Boolean(state.canceling[item.id])" @click="handleCancel(item)">{{ state.canceling[item.id] ? "取消中..." : "取消" }}</Button>
         </div>
