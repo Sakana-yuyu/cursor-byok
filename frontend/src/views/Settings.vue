@@ -5,8 +5,8 @@ import CursorServiceSettings from "@/components/settings/categories/CursorServic
 import DelegationSettings from "@/components/settings/categories/DelegationSettings.vue";
 import GeneralSettings from "@/components/settings/categories/GeneralSettings.vue";
 import OverlaySettings from "@/components/settings/categories/OverlaySettings.vue";
-import SettingsRow from "@/components/settings/SettingsRow.vue";
-import SettingsSection from "@/components/settings/SettingsSection.vue";
+import PromptSettings from "@/components/settings/categories/PromptSettings.vue";
+import SkillsMcpSettings from "@/components/settings/categories/SkillsMcpSettings.vue";
 import SettingsSidebar from "@/components/settings/SettingsSidebar.vue";
 import { useSettingsAutosave } from "@/composables/useSettingsAutosave";
 import {
@@ -38,34 +38,9 @@ const categoryComponents = {
   "cursor-service": CursorServiceSettings,
   overlay: OverlaySettings,
   delegation: DelegationSettings,
+  "skills-mcp": SkillsMcpSettings,
+  prompts: PromptSettings,
   advanced: AdvancedSettings,
-};
-
-const placeholderCategoryContent = {
-  "skills-mcp": [
-    {
-      title: "迁移计划",
-      rows: [
-        {
-          label: "扫描与开关",
-          description: "技能列表、MCP server 列表和重扫操作会迁入这里。",
-          value: "后续任务继续完善",
-        },
-      ],
-    },
-  ],
-  prompts: [
-    {
-      title: "迁移计划",
-      rows: [
-        {
-          label: "提示词注入",
-          description: "模板、刷新和自定义内容将在这里提供独立编辑体验。",
-          value: "后续任务继续完善",
-        },
-      ],
-    },
-  ],
 };
 
 const activeCategory = computed(() => {
@@ -76,11 +51,6 @@ const activeCategory = computed(() => {
 const activeCategoryComponent = computed(() => {
   const categoryID = normalizeSettingsCategory(selectedCategory.value);
   return categoryComponents[categoryID] ?? null;
-});
-
-const activePlaceholderSections = computed(() => {
-  const categoryID = normalizeSettingsCategory(selectedCategory.value);
-  return placeholderCategoryContent[categoryID] ?? [];
 });
 
 function handleBack() {
@@ -125,24 +95,6 @@ function handleBack() {
                   v-if="activeCategoryComponent"
                   :autosave="autosave"
                 />
-
-                <div v-else class="space-y-8">
-                  <SettingsSection
-                    v-for="section in activePlaceholderSections"
-                    :key="section.title"
-                    :title="section.title"
-                    :description="section.description"
-                  >
-                    <SettingsRow
-                      v-for="row in section.rows"
-                      :key="row.label"
-                      :label="row.label"
-                      :description="row.description"
-                    ><div class="text-sm text-[#8f8f8f]">
-                        {{ row.value }}
-                      </div></SettingsRow>
-                  </SettingsSection>
-                </div>
               </div>
             </Transition>
           </div>
