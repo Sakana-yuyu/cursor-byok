@@ -5,6 +5,7 @@ import SettingsSection from "@/components/settings/SettingsSection.vue";
 import DelegationGroupEditor from "@/components/settings/delegation/DelegationGroupEditor.vue";
 import Button from "@/components/ui/Button.vue";
 import Input from "@/components/ui/Input.vue";
+import ModelTreeSelect from "@/components/ui/ModelTreeSelect.vue";
 import Select from "@/components/ui/Select.vue";
 import Switch from "@/components/ui/Switch.vue";
 import { showModal } from "@/composables/useModal";
@@ -84,22 +85,6 @@ const maxConcurrencyDraft = ref("");
 let delegationSaveTail = Promise.resolve();
 let maxConcurrencyDraftRevision = 0;
 const groupNameDraftRevisions = new Map();
-
-const supervisionModelOptions = computed(() => [
-  { value: "", label: "跟随主模型" },
-  ...appState.modelAdapters.map((adapter) => ({
-    value: adapter.id,
-    label: adapter.displayName || adapter.modelID || adapter.id,
-  })),
-]);
-
-const reviewerModelOptions = computed(() => [
-  { value: "", label: "跟随 Supervisor" },
-  ...appState.modelAdapters.map((adapter) => ({
-    value: adapter.id,
-    label: adapter.displayName || adapter.modelID || adapter.id,
-  })),
-]);
 
 const workerGroupOptions = computed(() => [
   { value: "", label: "自动选择委派组" },
@@ -1033,9 +1018,10 @@ watch(
         @retry="retrySupervisionField('supervisorModelID')"
       >
         <div class="w-[280px] max-w-full">
-          <Select
+          <ModelTreeSelect
             :model-value="supervisionConfig.supervisorModelID"
-            :options="supervisionModelOptions"
+            :adapters="appState.modelAdapters"
+            :fallback-option="{ value: '', label: '跟随主模型' }"
             :disabled="supervisionFieldBusy('supervisorModelID') || !supervisionConfig.enabled"
             aria-label="监督模型"
             @change="(value) => handleSupervisionSelect('supervisorModelID', value)"
@@ -1051,9 +1037,10 @@ watch(
         @retry="retrySupervisionField('reviewerModelID')"
       >
         <div class="w-[280px] max-w-full">
-          <Select
+          <ModelTreeSelect
             :model-value="supervisionConfig.reviewerModelID"
-            :options="reviewerModelOptions"
+            :adapters="appState.modelAdapters"
+            :fallback-option="{ value: '', label: '跟随 Supervisor' }"
             :disabled="supervisionFieldBusy('reviewerModelID') || !supervisionConfig.enabled"
             aria-label="复核模型"
             @change="(value) => handleSupervisionSelect('reviewerModelID', value)"

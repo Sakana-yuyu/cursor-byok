@@ -1,5 +1,6 @@
 <script setup>
 import Input from "@/components/ui/Input.vue";
+import ModelTreeSelect from "@/components/ui/ModelTreeSelect.vue";
 import Select from "@/components/ui/Select.vue";
 import Switch from "@/components/ui/Switch.vue";
 import DelegationIconButton from "@/components/settings/delegation/DelegationIconButton.vue";
@@ -67,13 +68,16 @@ const emit = defineEmits([
   "update:name",
 ]);
 
+const defaultModelAdapters = computed(() => {
+  const selectedIDs = new Set(props.group.modelIDs || []);
+  return props.modelAdapters.filter((adapter) => selectedIDs.has(adapter.id));
+});
+
 const defaultModelOptions = computed(() => {
-  return props.modelAdapters
-    .filter((adapter) => props.group.modelIDs.includes(adapter.id))
-    .map((adapter) => ({
-      value: adapter.id,
-      label: adapter.displayName || adapter.modelID,
-    }));
+  return defaultModelAdapters.value.map((adapter) => ({
+    value: adapter.id,
+    label: adapter.displayName || adapter.modelID,
+  }));
 });
 
 const groupDisplayName = computed(() => {
@@ -216,11 +220,12 @@ function handlePermissionToggle(permission, enabled) {
 
         <div class="space-y-2">
           <div class="text-[11px] font-medium text-[#8f8f8f]">默认模型</div>
-          <Select
+          <ModelTreeSelect
             :model-value="group.defaultModelID"
-            :options="defaultModelOptions"
-            aria-label="默认委派模型"
+            :adapters="defaultModelAdapters"
             :disabled="busy || !defaultModelOptions.length"
+            placeholder="请选择默认模型"
+            aria-label="默认委派模型"
             @change="(value) => emit('change:default-model', value)"
           />
         </div>
