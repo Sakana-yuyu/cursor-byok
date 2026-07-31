@@ -30,7 +30,7 @@ import {
   saveSkillsMCPScanConfig,
   detectCursorPath,
 } from "@/services/clientApi";
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 
 const emit = defineEmits(["close"]);
 const message = useMessage();
@@ -55,6 +55,9 @@ const promptInjectionExpanded = ref(false);
 const promptPreview = ref(null);
 const overlayPreferences = reactive({ style: "card", alwaysOnTop: true, visible: false, snapCollapse: true, dockLocked: false, closeAction: "tray" });
 const cursorLaunch = reactive({ manualPath: "", detectedPath: "", busy: false, error: "" });
+watch(() => appState.statsOverlayPreferences, (next) => {
+  if (next) Object.assign(overlayPreferences, next);
+}, { deep: true, flush: "sync" });
 const directModeEnabled = computed(() => appState.routingMode === "upstream");
 const promptInjectionSummary = computed(() => {
   const enabled = [];
