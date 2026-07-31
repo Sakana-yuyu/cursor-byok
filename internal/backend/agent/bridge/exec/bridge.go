@@ -985,7 +985,7 @@ func (bridge *Bridge) openRecordScreen(toolCall runtimecore.ToolInvocation) (*ag
 	if err := json.Unmarshal(toolCall.ArgsJSON, &args); err != nil {
 		return nil, runtimecore.PendingExec{}, fmt.Errorf("decode RecordScreen args failed: %w", err)
 	}
-	mode := recordingModeFromString(firstNonEmptyString(args.Mode, strings.ToLower(strings.ReplaceAll(args.SaveAsFileName, "-", "_"))))
+	mode := recordingModeFromString(args.Mode)
 	messageID := bridge.nextID()
 	execID := fmt.Sprintf("exec-record-screen-%d", time.Now().UnixNano())
 	serverMessage := &agentv1.AgentServerMessage{

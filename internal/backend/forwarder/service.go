@@ -2355,8 +2355,8 @@ func (service *Service) applyExecProgress(stream *ActiveStream, pending runtimec
 		current.StreamState = "permission_denied"
 		current.LastShellActivityAt = now
 	case *agentv1.ShellStream_HookContext:
-		// hook 附加上下文出现在 shell 开始阶段，不影响流状态。
-		current.StreamState = "started"
+		// hook 附加上下文出现在 shell 开始阶段，不改 StreamState（保留 opened/started 原值），
+		// 仅续期 LastShellActivityAt，避免污染 observeShellStreamClose 的状态判断。
 		current.LastShellActivityAt = now
 	case *agentv1.ShellStream_SandboxUnsupported:
 		current.StreamState = "sandbox_unsupported"
@@ -3936,6 +3936,14 @@ func deriveToolNameFromPendingExec(pending runtimecore.PendingExec) string {
 		return "Task"
 	case "delegation_aggregate":
 		return "Task"
+	case "fetch":
+		return "Fetch"
+	case "record_screen":
+		return "RecordScreen"
+	case "computer_use":
+		return "ComputerUse"
+	case "force_background_subagent":
+		return "ForceBackgroundSubagent"
 	default:
 		return ""
 	}
@@ -3973,6 +3981,14 @@ func execKindFromToolName(name string) (string, bool) {
 		return "force_background_shell", true
 	case "Task":
 		return "subagent", true
+	case "Fetch":
+		return "fetch", true
+	case "RecordScreen":
+		return "record_screen", true
+	case "ComputerUse":
+		return "computer_use", true
+	case "ForceBackgroundSubagent":
+		return "force_background_subagent", true
 	default:
 		return "", false
 	}
@@ -3980,7 +3996,8 @@ func execKindFromToolName(name string) (string, bool) {
 
 func isExecTool(name string) bool {
 	switch strings.TrimSpace(name) {
-	case "Read", "Write", "PatchEdit", "Delete", "Shell", "WriteShellStdin", "ForceBackgroundShell", "Grep", "Glob", "Ls", "ReadLints", "CallMcpTool", "FetchMcpResource", "Task":
+	case "Read", "Write", "PatchEdit", "Delete", "Shell", "WriteShellStdin", "ForceBackgroundShell", "Grep", "Glob", "Ls", "ReadLints", "CallMcpTool", "FetchMcpResource", "Task",
+		"Fetch", "RecordScreen", "ComputerUse", "ForceBackgroundSubagent":
 		return true
 	default:
 		return false

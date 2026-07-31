@@ -577,6 +577,49 @@ func buildStartedToolCall(invocation runtimecore.ToolInvocation) *agentv1.ToolCa
 				PrManagementToolCall: &agentv1.PrManagementToolCall{Args: prArgs},
 			},
 		}
+	case "Fetch":
+		var input struct {
+			URL string `json:"url"`
+		}
+		_ = json.Unmarshal(invocation.ArgsJSON, &input)
+		return &agentv1.ToolCall{
+			Tool: &agentv1.ToolCall_FetchToolCall{
+				FetchToolCall: &agentv1.FetchToolCall{
+					Args: &agentv1.FetchArgs{
+						Url:        strings.TrimSpace(input.URL),
+						ToolCallId: invocation.CallID,
+					},
+				},
+			},
+		}
+	case "RecordScreen":
+		var input struct {
+			Mode           string `json:"mode"`
+			SaveAsFilename string `json:"save_as_filename"`
+		}
+		_ = json.Unmarshal(invocation.ArgsJSON, &input)
+		return &agentv1.ToolCall{
+			Tool: &agentv1.ToolCall_RecordScreenToolCall{
+				RecordScreenToolCall: &agentv1.RecordScreenToolCall{
+					Args: &agentv1.RecordScreenArgs{
+						Mode:           forwarderRecordingModeFromString(strings.TrimSpace(input.Mode)),
+						ToolCallId:     invocation.CallID,
+						SaveAsFilename: stringPtr(strings.TrimSpace(input.SaveAsFilename)),
+					},
+				},
+			},
+		}
+	case "ComputerUse":
+		// ComputerUse 动作在 OpenExec 阶段才完整解码；started 阶段只需占位 Args（含 tool_call_id）。
+		return &agentv1.ToolCall{
+			Tool: &agentv1.ToolCall_ComputerUseToolCall{
+				ComputerUseToolCall: &agentv1.ComputerUseToolCall{
+					Args: &agentv1.ComputerUseArgs{
+						ToolCallId: invocation.CallID,
+					},
+				},
+			},
+		}
 	default:
 		return nil
 	}
@@ -663,6 +706,18 @@ func stringPtrIfNonEmpty(value string) *string {
 		return nil
 	}
 	return &value
+}
+
+// forwarderRecordingModeFromString 把模型侧模式名映射为 RecordingMode 枚举。
+func forwarderRecordingModeFromString(mode string) agentv1.RecordingMode {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "save_recording", "save", "stop":
+		return agentv1.RecordingMode_RECORDING_MODE_SAVE_RECORDING
+	case "discard_recording", "discard":
+		return agentv1.RecordingMode_RECORDING_MODE_DISCARD_RECORDING
+	default:
+		return agentv1.RecordingMode_RECORDING_MODE_START_RECORDING
+	}
 }
 
 func literalStringPtr(value string) *string {
