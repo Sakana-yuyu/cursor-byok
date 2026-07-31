@@ -52,6 +52,7 @@ const promptState = reactive({
   loading: false,
   refreshing: false,
   error: "",
+  errorSource: "",
   retry: null,
 });
 
@@ -66,6 +67,10 @@ const templateOptions = computed(() => prompt.templates.map((template) => ({
   value: template.name,
   label: template.name,
 })));
+
+const promptControlsDisabled = computed(() => (
+  !promptState.loaded || promptState.loading || promptState.refreshing
+));
 
 const promptSummary = computed(() => {
   const enabledItems = [];
@@ -133,6 +138,8 @@ function buildPromptConfig() {
 function markPromptChanged() {
   promptRevision.value += 1;
   promptState.error = "";
+  promptState.errorSource = "";
+  promptState.retry = null;
   return promptRevision.value;
 }
 
@@ -142,21 +149,48 @@ function queuePromptTask(task) {
   return queuedTask;
 }
 
-async function persistPromptSettings() {
+function clearPromptError() {
+  promptState.error = "";
+  promptState.errorSource = "";
+  promptState.retry = null;
+}
+
+async function retryPromptSave(payload, revision) {
+  if (revision !== promptRevision.value) {
+    return;
+  }
+
+  clearPromptError();
+  try {
+    await props.autosave.run(PROMPT_SAVE_KEY, async () => {
+      await persistPromptSettings({ payload, revision });
+    });
+  } catch (_error) {
+    // persistPromptSettings restores the scoped retry and inline error
+  }
+}
+
+async function persistPromptSettings({ payload = null, revision = null, onFailure = null } = {}) {
   return queuePromptTask(async () => {
-    const revisionAtStart = promptRevision.value;
+    const revisionAtStart = revision ?? promptRevision.value;
+    const savePayload = payload || buildPromptConfig();
     try {
-      const status = await savePromptInjectionSettings(buildPromptConfig());
+      const status = await savePromptInjectionSettings(savePayload);
       if (status?.ok === false) {
         throw new Error(status.error || "保存失败");
       }
       if (revisionAtStart === promptRevision.value) {
         applyPromptStatus(status);
-        promptState.error = "";
+        clearPromptError();
       }
     } catch (error) {
       if (revisionAtStart === promptRevision.value) {
+        if (typeof onFailure === "function") {
+          onFailure();
+        }
         promptState.error = toUserError(error);
+        promptState.errorSource = "save";
+        promptState.retry = () => retryPromptSave(savePayload, revisionAtStart);
       }
       throw error;
     }
@@ -169,10 +203,10 @@ function schedulePromptSave() {
   }, { debounceMs: 500 });
 }
 
-async function savePromptImmediately() {
+async function savePromptImmediately({ payload = null, revision = null, onFailure = null } = {}) {
   try {
     await props.autosave.run(PROMPT_SAVE_KEY, async () => {
-      await persistPromptSettings();
+      await persistPromptSettings({ payload, revision, onFailure });
     });
   } catch (_error) {
     // row-level state is already surfaced inline
@@ -185,6 +219,11 @@ async function flushPromptSave() {
   } catch (_error) {
     // error state is already surfaced inline
   }
+}
+
+async function drainPromptSaveQueue() {
+  await flushPromptSave();
+  await promptSaveTail;
 }
 
 function openPromptPreview(template = null) {
@@ -208,29 +247,44 @@ function updatePromptField(field, value) {
 }
 
 function updatePromptFieldImmediately(field, value) {
+  const previousValue = prompt[field];
   prompt[field] = value;
-  markPromptChanged();
-  void savePromptImmediately();
+  const revision = markPromptChanged();
+  void savePromptImmediately({
+    revision,
+    onFailure: () => {
+      prompt[field] = previousValue;
+    },
+  });
 }
 
 function togglePromptTemplate(templateName, enabled) {
+  const previousTemplates = prompt.templates;
   prompt.templates = prompt.templates.map((template) => (
     template.name === templateName
       ? { ...template, enabled: Boolean(enabled) }
       : template
   ));
-  markPromptChanged();
-  void savePromptImmediately();
+  const revision = markPromptChanged();
+  void savePromptImmediately({
+    revision,
+    onFailure: () => {
+      prompt.templates = previousTemplates;
+    },
+  });
 }
 
 async function loadPromptSettings() {
   promptState.loading = true;
-  promptState.error = "";
+  clearPromptError();
   promptState.retry = loadPromptSettings;
   try {
     applyPromptStatus(await getPromptInjectionSettings());
+    clearPromptError();
   } catch (error) {
     promptState.error = toUserError(error);
+    promptState.errorSource = "load";
+    promptState.retry = loadPromptSettings;
   } finally {
     promptState.loaded = true;
     promptState.loading = false;
@@ -238,27 +292,46 @@ async function loadPromptSettings() {
 }
 
 async function handleRefreshPrompt() {
-  promptState.retry = handleRefreshPrompt;
-  promptState.error = "";
+  if (promptState.errorSource === "save") {
+    return;
+  }
+
+  clearPromptError();
   promptState.refreshing = true;
 
   try {
-    await flushPromptSave();
-    if (promptState.error) {
+    await drainPromptSaveQueue();
+    if (promptState.errorSource === "save") {
       return;
     }
 
-    const status = await refreshPromptInjectionCatalog();
-    applyPromptStatus(status);
-    message.success("提示词清单已更新");
-  } catch (error) {
+    promptRevision.value += 1;
+    const refreshRevision = promptRevision.value;
     try {
+      const status = await refreshPromptInjectionCatalog();
+      if (status?.ok === false) {
+        throw new Error(status.error || "拉取提示词失败");
+      }
+      if (refreshRevision === promptRevision.value) {
+        applyPromptStatus(status);
+        clearPromptError();
+      }
+      message.success("提示词清单已更新");
+    } catch (error) {
       const fallbackStatus = await refreshPromptInjection();
-      applyPromptStatus(fallbackStatus);
+      if (fallbackStatus?.ok === false) {
+        throw new Error(fallbackStatus.error || toUserError(error));
+      }
+      if (refreshRevision === promptRevision.value) {
+        applyPromptStatus(fallbackStatus);
+        clearPromptError();
+      }
       message.success("提示词已更新");
-    } catch (fallbackError) {
-      promptState.error = toUserError(fallbackError || error);
     }
+  } catch (error) {
+    promptState.error = toUserError(error);
+    promptState.errorSource = "refresh";
+    promptState.retry = handleRefreshPrompt;
   } finally {
     promptState.refreshing = false;
   }
@@ -336,6 +409,7 @@ onMounted(() => {
                 compact
                 label=""
                 :enabled="prompt.enabled"
+                :disabled="promptControlsDisabled"
                 aria-label="启用提示词注入"
                 @change="(value) => updatePromptFieldImmediately('enabled', value)"
               />
@@ -346,6 +420,7 @@ onMounted(() => {
                 <Select
                   :model-value="prompt.mode"
                   :options="promptInjectionModeOptions"
+                  :disabled="promptControlsDisabled"
                   aria-label="提示词模式"
                   @change="(value) => updatePromptFieldImmediately('mode', value)"
                 />
@@ -361,12 +436,14 @@ onMounted(() => {
                   v-if="templateOptions.length"
                   :model-value="prompt.selectedTemplate"
                   :options="templateOptions"
+                  :disabled="promptControlsDisabled"
                   aria-label="当前模板"
                   @change="(value) => updatePromptFieldImmediately('selectedTemplate', value)"
                 />
                 <Input
                   v-else
                   :model-value="prompt.selectedTemplate"
+                  :disabled="promptControlsDisabled"
                   placeholder="输入模板文件名"
                   aria-label="模板文件名"
                   @update:model-value="(value) => updatePromptField('selectedTemplate', value)"
@@ -383,6 +460,7 @@ onMounted(() => {
               <div class="w-full max-w-[360px]">
                 <Input
                   :model-value="prompt.repo"
+                  :disabled="promptControlsDisabled"
                   placeholder="owner/repo"
                   spellcheck="false"
                   aria-label="提示词仓库"
@@ -397,6 +475,7 @@ onMounted(() => {
               <div class="w-full max-w-[240px]">
                 <Input
                   :model-value="prompt.ref"
+                  :disabled="promptControlsDisabled"
                   placeholder="main"
                   spellcheck="false"
                   aria-label="提示词 Ref"
@@ -463,6 +542,7 @@ onMounted(() => {
                     compact
                     label=""
                     :enabled="Boolean(template.enabled)"
+                    :disabled="promptControlsDisabled"
                     :aria-label="`切换模板 ${template.name}`"
                     @change="(value) => togglePromptTemplate(template.name, value)"
                   />
@@ -487,6 +567,7 @@ onMounted(() => {
                 compact
                 label=""
                 :enabled="prompt.customEnabled"
+                :disabled="promptControlsDisabled"
                 aria-label="启用自定义注入"
                 @change="(value) => updatePromptFieldImmediately('customEnabled', value)"
               />
@@ -500,6 +581,7 @@ onMounted(() => {
                 compact
                 label=""
                 :enabled="prompt.softwareChineseEnabled"
+                :disabled="promptControlsDisabled"
                 aria-label="启用软件中文化"
                 @change="(value) => updatePromptFieldImmediately('softwareChineseEnabled', value)"
               />
@@ -512,6 +594,7 @@ onMounted(() => {
               <div class="w-full max-w-[520px]">
                 <textarea
                   :value="prompt.customContent"
+                  :disabled="promptControlsDisabled"
                   class="min-h-[120px] w-full resize-y rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 py-2 text-sm text-[#e5e5e5] outline-none transition-colors focus:border-[#10AD5D]"
                   placeholder="输入自定义注入内容，留空则不注入..."
                   @input="(event) => updatePromptField('customContent', event?.target?.value || '')"
