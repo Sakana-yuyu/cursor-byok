@@ -1593,6 +1593,7 @@ export async function persistUserConfig() {
     routing: {
       mode: appState.routingMode,
     },
+    autoMatchContextWindow: appState.autoMatchContextWindow,
     homeMetrics: {
       ...currentConfig.homeMetrics,
       includeCacheWriteInHitRate: appState.includeCacheWriteInHitRate,

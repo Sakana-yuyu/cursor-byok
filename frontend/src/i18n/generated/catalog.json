@@ -65,18 +65,6 @@
         }
       ]
     },
-    "0273d14d88b25814": {
-      "source": "自动扫描 Cursor / Claude Code / Codex / ZCode / .agents 等主流工具的技能与 MCP 配置，合并注入到模型上下文，还原原生调用。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 299,
-          "column": 67
-        }
-      ]
-    },
     "02a559bbd0cfb569": {
       "source": "已更新 {0} 个模型的供应商配置。",
       "kind": "template",
@@ -212,13 +200,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 253,
+          "line": 307,
           "column": 9
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 128,
-          "column": 48
         }
       ]
     },
@@ -279,11 +262,6 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 21,
-          "column": 26
-        },
-        {
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 32,
           "column": 26
@@ -338,18 +316,6 @@
         }
       ]
     },
-    "0647728439b5da2e": {
-      "source": "可配置运行模式和模型渠道；运行日志位于",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Config.vue",
-          "line": 114,
-          "column": 48
-        }
-      ]
-    },
     "068754f918e2e396": {
       "source": "本地缓存：未启用",
       "kind": "text",
@@ -369,18 +335,13 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 126,
+          "line": 135,
           "column": 23
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 172,
+          "line": 181,
           "column": 27
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 133,
-          "column": 26
         }
       ]
     },
@@ -405,11 +366,6 @@
           "file": "src/components/settings/categories/AdvancedSettings.vue",
           "line": 106,
           "column": 16
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 96,
-          "column": 64
         },
         {
           "file": "src/views/Home.vue",
@@ -703,11 +659,6 @@
           "file": "src/components/settings/categories/AdvancedSettings.vue",
           "line": 249,
           "column": 11
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 154,
-          "column": 48
         }
       ]
     },
@@ -761,11 +712,6 @@
           "file": "src/components/settings/categories/OverlaySettings.vue",
           "line": 113,
           "column": 11
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 225,
-          "column": 410
         }
       ]
     },
@@ -1028,11 +974,6 @@
           "file": "src/components/settings/categories/AdvancedSettings.vue",
           "line": 208,
           "column": 22
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 338,
-          "column": 85
         }
       ]
     },
@@ -1072,18 +1013,6 @@
         }
       ]
     },
-    "16f0e116497cef1c": {
-      "source": "注入",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 239,
-          "column": 35
-        }
-      ]
-    },
     "16fb862e8ff9b3e4": {
       "source": "浮窗偏好",
       "kind": "text",
@@ -1093,11 +1022,6 @@
           "file": "src/components/settings/categories/OverlaySettings.vue",
           "line": 82,
           "column": 22
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 225,
-          "column": 85
         }
       ]
     },
@@ -1143,11 +1067,6 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 23,
-          "column": 25
-        },
-        {
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 34,
           "column": 25
@@ -1186,18 +1105,6 @@
         {
           "file": "src/state/appState.js",
           "line": 1420,
-          "column": 47
-        }
-      ]
-    },
-    "1966a1999bcb7e47": {
-      "source": "自动配对上下文窗口开关已关闭，可在下方「上下文配对」中开启。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Config.vue",
-          "line": 89,
           "column": 47
         }
       ]
@@ -1322,7 +1229,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1939,
+          "line": 1940,
           "column": 32
         }
       ]
@@ -1401,11 +1308,6 @@
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
           "line": 114,
           "column": 1
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 230,
-          "column": 60
         }
       ]
     },
@@ -1709,11 +1611,6 @@
           "column": 14
         },
         {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 96,
-          "column": 45
-        },
-        {
           "file": "src/views/Home.vue",
           "line": 28,
           "column": 92
@@ -1803,11 +1700,6 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/views/Config.vue",
-          "line": 77,
-          "column": 27
-        },
-        {
           "file": "src/views/Home.vue",
           "line": 24,
           "column": 184
@@ -1882,18 +1774,13 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 210,
+          "line": 264,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 218,
+          "line": 272,
           "column": 13
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 226,
-          "column": 317
         }
       ]
     },
@@ -1930,6 +1817,18 @@
           "file": "src/components/StationSpendCard.vue",
           "line": 81,
           "column": 75
+        }
+      ]
+    },
+    "25cfd5c48e1c9d3b": {
+      "source": "请先开启自动配对上下文窗口。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 243,
+          "column": 23
         }
       ]
     },
@@ -2055,11 +1954,6 @@
           "column": 20
         },
         {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 96,
-          "column": 129
-        },
-        {
           "file": "src/views/Home.vue",
           "line": 28,
           "column": 176
@@ -2155,11 +2049,6 @@
           "file": "src/components/settings/categories/GeneralSettings.vue",
           "line": 79,
           "column": 9
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 180,
-          "column": 48
         }
       ]
     },
@@ -2211,37 +2100,15 @@
         }
       ]
     },
-    "29c419f11b743917": {
-      "source": "自动配对失败",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Config.vue",
-          "line": 97,
-          "column": 27
-        }
-      ]
-    },
     "2a3879c6462aa621": {
       "source": "Multitask 委派",
       "kind": "text",
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 85,
-          "column": 54
-        },
-        {
           "file": "src/components/DelegationTaskStrip.vue",
           "line": 84,
           "column": 52
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 220,
-          "column": 58
         }
       ]
     },
@@ -2336,11 +2203,6 @@
           "column": 17
         },
         {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 96,
-          "column": 149
-        },
-        {
           "file": "src/components/ui/InputModal.vue",
           "line": 69,
           "column": 65
@@ -2431,18 +2293,6 @@
         }
       ]
     },
-    "2d706f7981b45a7b": {
-      "source": "本地配置已保存",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Config.vue",
-          "line": 69,
-          "column": 14
-        }
-      ]
-    },
     "2dc8367be398ec17": {
       "source": "Token Plan 供应商",
       "kind": "text",
@@ -2474,11 +2324,6 @@
           "file": "src/components/settings/categories/OverlaySettings.vue",
           "line": 149,
           "column": 11
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 225,
-          "column": 682
         }
       ]
     },
@@ -2505,19 +2350,9 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 104,
-          "column": 176
-        },
-        {
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 496,
           "column": 18
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 238,
-          "column": 149
         },
         {
           "file": "src/views/ModelConfig.vue",
@@ -2632,11 +2467,6 @@
           "file": "src/components/settings/categories/GeneralSettings.vue",
           "line": 107,
           "column": 9
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 339,
-          "column": 171
         }
       ]
     },
@@ -2917,18 +2747,6 @@
         }
       ]
     },
-    "380280dc086bd266": {
-      "source": "已发现 {0} 个技能、{1} 个 MCP server",
-      "kind": "template",
-      "placeholders": 2,
-      "refs": [
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 152,
-          "column": 10
-        }
-      ]
-    },
     "392d0dceb45998d3": {
       "source": "极高",
       "kind": "text",
@@ -3052,18 +2870,13 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 234,
+          "line": 288,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 245,
+          "line": 299,
           "column": 1
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 226,
-          "column": 479
         },
         {
           "file": "src/views/SupplierDetail.vue",
@@ -3093,11 +2906,6 @@
           "file": "src/components/settings/categories/AdvancedSettings.vue",
           "line": 268,
           "column": 11
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 164,
-          "column": 48
         }
       ]
     },
@@ -3166,11 +2974,6 @@
           "file": "src/layouts/MainLayout.vue",
           "line": 376,
           "column": 11
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 179,
-          "column": 56
         }
       ]
     },
@@ -3183,11 +2986,6 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 329,
           "column": 23
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 91,
-          "column": 87
         }
       ]
     },
@@ -3295,18 +3093,6 @@
         }
       ]
     },
-    "3edda85621fd03b2": {
-      "source": "个模型适配器",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Config.vue",
-          "line": 194,
-          "column": 55
-        }
-      ]
-    },
     "3efbf8f8f96a78c4": {
       "source": "连接分组",
       "kind": "text",
@@ -3342,11 +3128,6 @@
           "column": 62
         },
         {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 222,
-          "column": 53
-        },
-        {
           "file": "src/layouts/MainLayout.vue",
           "line": 291,
           "column": 19
@@ -3375,15 +3156,15 @@
         }
       ]
     },
-    "40e46d0e911f49ef": {
-      "source": "开启后，启动时与点击「一键配对上下文」时，自动按内置目录为模型配对正确的上下文窗口（目录命中则覆盖，目录未命中则探测供应商 /models 回填）。可避免误填过大窗口导致 context_length_exceeded。",
+    "4099927e3f7669af": {
+      "source": "一键配对",
       "kind": "text",
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/views/Config.vue",
-          "line": 211,
-          "column": 9
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 362,
+          "column": 1
         }
       ]
     },
@@ -3396,11 +3177,6 @@
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
           "line": 537,
           "column": 22
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 313,
-          "column": 108
         }
       ]
     },
@@ -3669,18 +3445,6 @@
         }
       ]
     },
-    "4927a53bcc886afb": {
-      "source": "加载中…",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 148,
-          "column": 33
-        }
-      ]
-    },
     "497c85690c4cc0fc": {
       "source": "暂无数据",
       "kind": "text",
@@ -3739,18 +3503,6 @@
         }
       ]
     },
-    "4a1311c6e2a48923": {
-      "source": "应用偏好与提示词配置",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 221,
-          "column": 115
-        }
-      ]
-    },
     "4a19cb8a31d71f33": {
       "source": "连接成功",
       "kind": "text",
@@ -3806,11 +3558,6 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 563,
           "column": 15
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 278,
-          "column": 27
         }
       ]
     },
@@ -3888,11 +3635,6 @@
           "column": 27
         },
         {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 47,
-          "column": 27
-        },
-        {
           "file": "src/layouts/MainLayout.vue",
           "line": 291,
           "column": 19
@@ -3954,11 +3696,6 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 81,
           "column": 23
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 65,
-          "column": 51
         },
         {
           "file": "src/views/MetricsDetail.vue",
@@ -4075,11 +3812,6 @@
           "file": "src/components/settings/categories/AdvancedSettings.vue",
           "line": 211,
           "column": 9
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 338,
-          "column": 115
         }
       ]
     },
@@ -4336,11 +4068,6 @@
           "file": "src/components/settings/categories/OverlaySettings.vue",
           "line": 24,
           "column": 27
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 42,
-          "column": 27
         }
       ]
     },
@@ -4350,19 +4077,9 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 96,
-          "column": 72
-        },
-        {
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 601,
           "column": 1
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 231,
-          "column": 65
         }
       ]
     },
@@ -4387,11 +4104,6 @@
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
           "line": 202,
           "column": 23
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 183,
-          "column": 21
         }
       ]
     },
@@ -4404,23 +4116,6 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 571,
           "column": 17
-        }
-      ]
-    },
-    "55f6ed520125ab5e": {
-      "source": "浮窗设置失败",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 106,
-          "column": 30
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 114,
-          "column": 30
         }
       ]
     },
@@ -4840,18 +4535,6 @@
         }
       ]
     },
-    "5ff20d5c6efc6ead": {
-      "source": "本地提示词已缓存{0}",
-      "kind": "template",
-      "placeholders": 1,
-      "refs": [
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 269,
-          "column": 56
-        }
-      ]
-    },
     "601b137379354ebb": {
       "source": "已测 {0}/{1}，可用 {2}，失败 {3}",
       "kind": "template",
@@ -4888,16 +4571,6 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 539,
           "column": 1
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 256,
-          "column": 139
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 271,
-          "column": 215
         }
       ]
     },
@@ -4910,11 +4583,6 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 448,
           "column": 19
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 263,
-          "column": 65
         }
       ]
     },
@@ -4993,11 +4661,6 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 86,
           "column": 32
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 67,
-          "column": 27
         }
       ]
     },
@@ -5073,13 +4736,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 228,
+          "line": 282,
           "column": 1
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 226,
-          "column": 873
         }
       ]
     },
@@ -5100,11 +4758,6 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
-        {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 70,
-          "column": 53
-        },
         {
           "file": "src/components/HomeMetricsCard.vue",
           "line": 390,
@@ -5136,6 +4789,11 @@
           "column": 44
         },
         {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 225,
+          "column": 42
+        },
+        {
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 216,
           "column": 38
@@ -5154,11 +4812,6 @@
           "file": "src/components/settings/SettingsPageHeader.vue",
           "line": 21,
           "column": 12
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 64,
-          "column": 27
         },
         {
           "file": "src/views/SupplierDetail.vue",
@@ -5283,28 +4936,11 @@
         }
       ]
     },
-    "6506d60ac6fd967e": {
-      "source": "技能 & MCP（跨工具扫描）",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 289,
-          "column": 72
-        }
-      ]
-    },
     "652f274e2d54d28c": {
       "source": "委派模型组 {0}",
       "kind": "template",
       "placeholders": 1,
       "refs": [
-        {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 30,
-          "column": 11
-        },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 118,
@@ -5324,11 +4960,6 @@
           "file": "src/state/appState.js",
           "line": 888,
           "column": 37
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 30,
-          "column": 11
         }
       ]
     },
@@ -5363,7 +4994,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2016,
+          "line": 2017,
           "column": 32
         }
       ]
@@ -5398,9 +5029,14 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/views/Config.vue",
-          "line": 210,
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 341,
           "column": 9
+        },
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 354,
+          "column": 13
         }
       ]
     },
@@ -5500,11 +5136,6 @@
           "file": "src/components/settings/categories/GeneralSettings.vue",
           "line": 98,
           "column": 13
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 225,
-          "column": 320
         }
       ]
     },
@@ -5551,13 +5182,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 209,
+          "line": 263,
           "column": 9
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 226,
-          "column": 159
         }
       ]
     },
@@ -5589,11 +5215,6 @@
           "column": 11
         },
         {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 338,
-          "column": 102
-        },
-        {
           "file": "src/views/Home.vue",
           "line": 46,
           "column": 1000
@@ -5609,11 +5230,6 @@
           "file": "src/components/settings/categories/AdvancedSettings.vue",
           "line": 278,
           "column": 15
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 169,
-          "column": 13
         }
       ]
     },
@@ -5727,16 +5343,6 @@
           "column": 31
         },
         {
-          "file": "src/views/Config.vue",
-          "line": 57,
-          "column": 30
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 57,
-          "column": 48
-        },
-        {
           "file": "src/views/Home.vue",
           "line": 22,
           "column": 98
@@ -5799,23 +5405,6 @@
         }
       ]
     },
-    "6dbebe76e2293a37": {
-      "source": "委派模型组名称",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 102,
-          "column": 158
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 236,
-          "column": 135
-        }
-      ]
-    },
     "6e3318ea706b3a6d": {
       "source": "· 来源",
       "kind": "text",
@@ -5837,35 +5426,6 @@
           "file": "src/views/Home.vue",
           "line": 27,
           "column": 185
-        }
-      ]
-    },
-    "6e4d160825078391": {
-      "source": "已更新。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Config.vue",
-          "line": 94,
-          "column": 135
-        }
-      ]
-    },
-    "6e584e3d5ce64aa0": {
-      "source": "保存配置",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 126,
-          "column": 71
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 119,
-          "column": 14
         }
       ]
     },
@@ -6051,11 +5611,6 @@
           "file": "src/components/settings/categories/OverlaySettings.vue",
           "line": 156,
           "column": 9
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 225,
-          "column": 850
         }
       ]
     },
@@ -6078,7 +5633,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 235,
+          "line": 289,
           "column": 9
         }
       ]
@@ -6116,11 +5671,6 @@
           "file": "src/components/settings/categories/OverlaySettings.vue",
           "line": 138,
           "column": 9
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 225,
-          "column": 697
         }
       ]
     },
@@ -6208,18 +5758,6 @@
         }
       ]
     },
-    "77b17fc4a52ac95d": {
-      "source": "关闭设置",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 222,
-          "column": 35
-        }
-      ]
-    },
     "77c9e582e85583af": {
       "source": "测试失败",
       "kind": "text",
@@ -6248,19 +5786,9 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 108,
-          "column": 212
-        },
-        {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
           "line": 189,
           "column": 11
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 241,
-          "column": 212
         }
       ]
     },
@@ -6326,6 +5854,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 362,
           "column": 16
+        }
+      ]
+    },
+    "7ad3541d19221c4f": {
+      "source": "上下文配对完成：共 {0} 个，已更新 {1} 个。",
+      "kind": "template",
+      "placeholders": 2,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 245,
+          "column": 21
         }
       ]
     },
@@ -6441,18 +5981,6 @@
         }
       ]
     },
-    "7c88db92fee24f2a": {
-      "source": "配对中...",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Config.vue",
-          "line": 199,
-          "column": 18
-        }
-      ]
-    },
     "7ccbe64b8c475eec": {
       "source": "请先填写接口地址",
       "kind": "text",
@@ -6522,11 +6050,6 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 529,
           "column": 24
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 249,
-          "column": 128
         }
       ]
     },
@@ -6535,11 +6058,6 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
-        {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 22,
-          "column": 24
-        },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 33,
@@ -6713,11 +6231,6 @@
           "file": "src/components/settings/categories/AdvancedSettings.vue",
           "line": 242,
           "column": 11
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 145,
-          "column": 9
         }
       ]
     },
@@ -6730,11 +6243,6 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 91,
           "column": 12
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 269,
-          "column": 56
         }
       ]
     },
@@ -6793,11 +6301,6 @@
           "file": "src/components/settings/categories/OverlaySettings.vue",
           "line": 120,
           "column": 9
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 225,
-          "column": 544
         }
       ]
     },
@@ -6810,18 +6313,6 @@
           "file": "src/views/ModelEditor.vue",
           "line": 373,
           "column": 18
-        }
-      ]
-    },
-    "81c713d4050be134": {
-      "source": "未发现技能或 MCP",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 151,
-          "column": 50
         }
       ]
     },
@@ -6911,11 +6402,6 @@
           "file": "src/components/settings/categories/OverlaySettings.vue",
           "line": 93,
           "column": 13
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 225,
-          "column": 168
         }
       ]
     },
@@ -7090,18 +6576,13 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 252,
+          "line": 306,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 263,
+          "line": 317,
           "column": 13
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 127,
-          "column": 56
         }
       ]
     },
@@ -7125,11 +6606,6 @@
         {
           "file": "src/components/settings/categories/GeneralSettings.vue",
           "line": 19,
-          "column": 27
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 48,
           "column": 27
         }
       ]
@@ -7155,11 +6631,6 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 457,
           "column": 15
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 264,
-          "column": 65
         }
       ]
     },
@@ -7264,7 +6735,7 @@
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 271,
+          "line": 325,
           "column": 9
         },
         {
@@ -7276,11 +6747,6 @@
           "file": "src/router/index.js",
           "line": 31,
           "column": 39
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 192,
-          "column": 58
         },
         {
           "file": "src/views/Home.vue",
@@ -7342,18 +6808,6 @@
         }
       ]
     },
-    "8dfe4523b124faad": {
-      "source": "一键配对上下文",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Config.vue",
-          "line": 199,
-          "column": 18
-        }
-      ]
-    },
     "8e5f663d56990f9a": {
       "source": "供应商分组方式",
       "kind": "text",
@@ -7375,11 +6829,6 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 319,
           "column": 23
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 90,
-          "column": 92
         }
       ]
     },
@@ -7401,19 +6850,9 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 104,
-          "column": 110
-        },
-        {
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 494,
           "column": 12
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 238,
-          "column": 92
         }
       ]
     },
@@ -7448,13 +6887,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 282,
+          "line": 336,
           "column": 1
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 201,
-          "column": 70
         }
       ]
     },
@@ -7505,16 +6939,6 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 126,
-          "column": 71
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 119,
-          "column": 14
-        },
-        {
           "file": "src/views/ModelEditor.vue",
           "line": 737,
           "column": 16
@@ -7545,13 +6969,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 207,
+          "line": 261,
           "column": 22
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 226,
-          "column": 93
         }
       ]
     },
@@ -7586,20 +7005,8 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1979,
+          "line": 1980,
           "column": 32
-        }
-      ]
-    },
-    "9314516c66885dc4": {
-      "source": "保存路径",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 226,
-          "column": 572
         }
       ]
     },
@@ -7640,11 +7047,6 @@
         {
           "file": "src/components/settings/categories/OverlaySettings.vue",
           "line": 25,
-          "column": 29
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 43,
           "column": 29
         }
       ]
@@ -7936,12 +7338,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2247,
+          "line": 2248,
           "column": 32
         },
         {
           "file": "src/state/appState.js",
-          "line": 2268,
+          "line": 2269,
           "column": 32
         }
       ]
@@ -8006,20 +7408,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 272,
+          "line": 326,
           "column": 23
-        }
-      ]
-    },
-    "99aea2f9131ad6da": {
-      "source": "技能",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 307,
-          "column": 67
         }
       ]
     },
@@ -8031,11 +7421,6 @@
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 62,
-          "column": 30
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 38,
           "column": 30
         }
       ]
@@ -8121,11 +7506,6 @@
           "file": "src/components/settings/categories/AdvancedSettings.vue",
           "line": 124,
           "column": 33
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 99,
-          "column": 29
         },
         {
           "file": "src/views/Home.vue",
@@ -8393,11 +7773,6 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 117,
-          "column": 56
-        },
-        {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
           "line": 227,
           "column": 1
@@ -8440,7 +7815,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2192,
+          "line": 2193,
           "column": 14
         }
       ]
@@ -8620,23 +7995,6 @@
         }
       ]
     },
-    "a5cff6d4a86a139d": {
-      "source": "尚未配置委派模型组，请先在模型配置中添加模型。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 99,
-          "column": 144
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 233,
-          "column": 149
-        }
-      ]
-    },
     "a5f1bd344c92e195": {
       "source": "调用该模型服务需要使用的访问密钥。",
       "kind": "text",
@@ -8663,11 +8021,6 @@
           "file": "src/components/settings/categories/OverlaySettings.vue",
           "line": 167,
           "column": 11
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 225,
-          "column": 837
         }
       ]
     },
@@ -8697,11 +8050,6 @@
           "file": "src/components/settings/categories/OverlaySettings.vue",
           "line": 131,
           "column": 11
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 225,
-          "column": 531
         }
       ]
     },
@@ -8835,11 +8183,6 @@
           "file": "src/components/settings/categories/OverlaySettings.vue",
           "line": 26,
           "column": 26
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 44,
-          "column": 26
         }
       ]
     },
@@ -8852,18 +8195,6 @@
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
           "line": 204,
           "column": 1
-        }
-      ]
-    },
-    "a9550a15c66ef4ed": {
-      "source": "清空手动路径",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 226,
-          "column": 694
         }
       ]
     },
@@ -9016,18 +8347,6 @@
           "file": "src/layouts/MainLayout.vue",
           "line": 265,
           "column": 11
-        }
-      ]
-    },
-    "ac35a93668d1b75d": {
-      "source": "未发现任何技能或 MCP 配置。请确认对应工具目录存在（如 ~/.cursor/skills、~/.cursor/mcp.json）。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 335,
-          "column": 187
         }
       ]
     },
@@ -9262,11 +8581,6 @@
           "file": "src/components/settings/categories/OverlaySettings.vue",
           "line": 102,
           "column": 9
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 225,
-          "column": 423
         }
       ]
     },
@@ -9294,18 +8608,6 @@
         }
       ]
     },
-    "b3cf2d6012feaa92": {
-      "source": "共 {0} 个：目录命中 {1}，探测命中 {2}，未变 {3}。{4}",
-      "kind": "template",
-      "placeholders": 5,
-      "refs": [
-        {
-          "file": "src/views/Config.vue",
-          "line": 94,
-          "column": 20
-        }
-      ]
-    },
     "b42049dcf8a05ef7": {
       "source": "已切换到本地服务模式",
       "kind": "text",
@@ -9317,26 +8619,9 @@
           "column": 54
         },
         {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 99,
-          "column": 50
-        },
-        {
           "file": "src/views/Home.vue",
           "line": 28,
           "column": 404
-        }
-      ]
-    },
-    "b425fdd5e41eb7f0": {
-      "source": "已恢复自动检测 Cursor",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 136,
-          "column": 62
         }
       ]
     },
@@ -9351,18 +8636,8 @@
           "column": 28
         },
         {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 15,
-          "column": 29
-        },
-        {
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 25,
-          "column": 29
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 22,
           "column": 29
         }
       ]
@@ -9374,13 +8649,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 225,
+          "line": 279,
           "column": 1
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 226,
-          "column": 792
         }
       ]
     },
@@ -9709,11 +8979,6 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 577,
           "column": 15
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 279,
-          "column": 27
         }
       ]
     },
@@ -9746,11 +9011,6 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
-        {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 88,
-          "column": 125
-        },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 553,
@@ -9813,11 +9073,6 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 503,
           "column": 22
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 272,
-          "column": 143
         }
       ]
     },
@@ -9943,11 +9198,6 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 599,
           "column": 19
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 276,
-          "column": 170
         }
       ]
     },
@@ -10043,18 +9293,6 @@
         }
       ]
     },
-    "c2502b505620c987": {
-      "source": "无需更新。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Config.vue",
-          "line": 94,
-          "column": 144
-        }
-      ]
-    },
     "c25c5a7acee62401": {
       "source": "删除该供应商",
       "kind": "text",
@@ -10076,11 +9314,6 @@
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
           "line": 426,
           "column": 19
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 294,
-          "column": 35
         }
       ]
     },
@@ -10120,12 +9353,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 262,
-          "column": 13
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 136,
+          "line": 316,
           "column": 13
         }
       ]
@@ -10166,7 +9394,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2035,
+          "line": 2036,
           "column": 32
         }
       ]
@@ -10240,11 +9468,6 @@
           "file": "src/components/settings/categories/GeneralSettings.vue",
           "line": 106,
           "column": 9
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 339,
-          "column": 120
         }
       ]
     },
@@ -10310,11 +9533,6 @@
           "file": "src/components/settings/categories/GeneralSettings.vue",
           "line": 117,
           "column": 1
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 339,
-          "column": 247
         }
       ]
     },
@@ -10436,35 +9654,23 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 2163,
+          "line": 2164,
           "column": 28
         },
         {
           "file": "src/state/appState.js",
-          "line": 2165,
+          "line": 2166,
           "column": 38
         },
         {
           "file": "src/state/appState.js",
-          "line": 2200,
+          "line": 2201,
           "column": 93
         },
         {
           "file": "src/views/RequestMetrics.vue",
           "line": 327,
           "column": 41
-        }
-      ]
-    },
-    "c9b6f4082b6a4039": {
-      "source": "提示词与本地化",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 234,
-          "column": 72
         }
       ]
     },
@@ -10557,18 +9763,6 @@
         }
       ]
     },
-    "cc95b476d2022391": {
-      "source": "Cursor 路径已保存",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 136,
-          "column": 45
-        }
-      ]
-    },
     "cce4e72b2b3d6483": {
       "source": "追加受管区块",
       "kind": "text",
@@ -10577,11 +9771,6 @@
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 63,
-          "column": 29
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 39,
           "column": 29
         }
       ]
@@ -10735,13 +9924,8 @@
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 91,
+          "line": 100,
           "column": 42
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 98,
-          "column": 46
         },
         {
           "file": "src/views/Home.vue",
@@ -10902,7 +10086,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2060,
+          "line": 2061,
           "column": 14
         }
       ]
@@ -11071,11 +10255,6 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
-        {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 20,
-          "column": 26
-        },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 31,
@@ -11266,11 +10445,6 @@
           "column": 17
         },
         {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 301,
-          "column": 123
-        },
-        {
           "file": "src/views/Diagnostics.vue",
           "line": 36,
           "column": 69
@@ -11295,18 +10469,8 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 14,
-          "column": 27
-        },
-        {
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 24,
-          "column": 27
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 21,
           "column": 27
         }
       ]
@@ -11344,11 +10508,6 @@
           "file": "src/components/settings/categories/AdvancedSettings.vue",
           "line": 259,
           "column": 15
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 159,
-          "column": 13
         }
       ]
     },
@@ -11385,11 +10544,6 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 84,
           "column": 23
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 66,
-          "column": 60
         }
       ]
     },
@@ -11435,11 +10589,6 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 92,
-          "column": 63
-        },
-        {
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 572,
           "column": 9
@@ -11448,11 +10597,6 @@
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 583,
           "column": 13
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 226,
-          "column": 17
         }
       ]
     },
@@ -11486,11 +10630,6 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/views/Config.vue",
-          "line": 193,
-          "column": 50
-        },
-        {
           "file": "src/views/ModelCatalog.vue",
           "line": 66,
           "column": 70
@@ -11502,16 +10641,6 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 219,
-          "column": 241
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 221,
-          "column": 65
-        },
         {
           "file": "src/layouts/MainLayout.vue",
           "line": 255,
@@ -11644,11 +10773,6 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 71,
-          "column": 21
-        },
-        {
           "file": "src/views/SupplierDetail.vue",
           "line": 872,
           "column": 14
@@ -11661,19 +10785,9 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 107,
-          "column": 72
-        },
-        {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
           "line": 176,
           "column": 11
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 240,
-          "column": 82
         }
       ]
     },
@@ -11867,13 +10981,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 250,
+          "line": 304,
           "column": 22
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 113,
-          "column": 56
         }
       ]
     },
@@ -11961,16 +11070,6 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 424,
           "column": 19
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 262,
-          "column": 65
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 262,
-          "column": 147
         }
       ]
     },
@@ -12132,19 +11231,9 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 86,
-          "column": 62
-        },
-        {
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 554,
           "column": 9
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 221,
-          "column": 49
         }
       ]
     },
@@ -12210,6 +11299,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 254,
           "column": 42
+        }
+      ]
+    },
+    "eb5b38b75ee2d503": {
+      "source": "按模型目录与服务端能力自动匹配上下文窗口，避免手动填写过大或过小。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 342,
+          "column": 9
         }
       ]
     },
@@ -12309,11 +11410,6 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 313,
           "column": 41
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 91,
-          "column": 149
         }
       ]
     },
@@ -12376,18 +11472,8 @@
           "column": 28
         },
         {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 16,
-          "column": 28
-        },
-        {
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 26,
-          "column": 28
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 23,
           "column": 28
         }
       ]
@@ -12447,18 +11533,6 @@
           "file": "src/views/ModelEditor.vue",
           "line": 981,
           "column": 203
-        }
-      ]
-    },
-    "f11ec671f54f7074": {
-      "source": "打开设置文件夹失败",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 142,
-          "column": 112
         }
       ]
     },
@@ -12597,18 +11671,6 @@
         }
       ]
     },
-    "f4428dac91e8c4c2": {
-      "source": "自动配对完成",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Config.vue",
-          "line": 95,
-          "column": 30
-        }
-      ]
-    },
     "f474a4108aba4c4c": {
       "source": "关闭服务",
       "kind": "text",
@@ -12649,24 +11711,9 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 103,
-          "column": 27
-        },
-        {
           "file": "src/components/ModelAdapterModal.vue",
           "line": 247,
           "column": 27
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 223,
-          "column": 19
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 237,
-          "column": 29
         },
         {
           "file": "src/views/ModelEditor.vue",
@@ -12719,16 +11766,6 @@
           "file": "src/composables/useModal.js",
           "line": 22,
           "column": 41
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 68,
-          "column": 12
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 89,
-          "column": 32
         }
       ]
     },
@@ -12905,11 +11942,6 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/components/DelegationSettingsCard.vue",
-          "line": 19,
-          "column": 25
-        },
-        {
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 30,
           "column": 25
@@ -12966,11 +11998,6 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 86,
           "column": 68
-        },
-        {
-          "file": "src/components/SettingsDrawer.vue",
-          "line": 67,
-          "column": 58
         }
       ]
     },
@@ -13042,11 +12069,6 @@
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
           "line": 231,
-          "column": 9
-        },
-        {
-          "file": "src/views/Config.vue",
-          "line": 146,
           "column": 9
         }
       ]
