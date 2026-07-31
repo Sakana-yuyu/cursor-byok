@@ -20,6 +20,7 @@ import { useRoute, useRouter } from "vue-router";
 const router = useRouter();
 const route = useRoute();
 const autosave = useSettingsAutosave();
+const autosaveStatus = autosave.status;
 const selectedCategory = ref(readStoredSettingsCategory());
 
 watch(selectedCategory, (value) => {
@@ -123,7 +124,7 @@ function handleBack() {
             <SettingsPageHeader
               :title="activeCategory.label"
               :description="activeCategory.description"
-              :status="autosave.status"
+              :status="autosaveStatus"
               @back="handleBack"
             />
 
