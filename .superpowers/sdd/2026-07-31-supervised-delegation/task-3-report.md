@@ -81,3 +81,20 @@ Re-ran successfully on July 31, 2026:
 - `go build ./...`
 - `go vet ./...`
 - `git diff --check`
+
+## 第二轮审查修复（中文）
+
+- 修复了 `reviewTask` 在 stale/canceled 路径直接 `return` 导致 `task.reviewPending` 永远不清零的问题。
+- 在 `SupervisorCoordinator` 内新增纯内部事件 `review_abandoned`，它不会触发新的 provider pass，也不会改动主 stream 或 provider 状态；事件处理只负责：
+  - 清除对应 task 的 `reviewPending`
+  - 用当前 worker 的终态 snapshot/result 将该 task 安全收口
+- 该收口路径覆盖了 `provider.Review` 调用前后的两处 stale/cancel 提前退出分支，因此陈旧 aggregate 在父 exec/provider pass 失效后也能自然满足 `allTasksCompleted`，随后走 `finish()/remove` 的内部清理路径。
+
+### 第二轮验证
+
+已重新执行并通过：
+
+- `gofmt -w internal/backend/delegation/supervision.go internal/backend/server/config/delegation.go internal/backend/server/config/types.go internal/backend/server/config/manager.go internal/backend/forwarder/supervisor_provider.go internal/backend/forwarder/supervisor_coordinator.go internal/backend/forwarder/delegation_multitask.go`
+- `go build ./...`
+- `go vet ./...`
+- `git diff --check`

@@ -333,6 +333,8 @@ func (aggregate *supervisedAggregate) handleEvent(event supervisorAggregateEvent
 	switch event.kind {
 	case "worker_terminal":
 		aggregate.handleWorkerTerminal(event)
+	case "review_abandoned":
+		aggregate.handleReviewAbandoned(event)
 	case "review_result":
 		aggregate.handleReviewResult(event)
 	case "startup_complete":
@@ -370,6 +372,7 @@ func (aggregate *supervisedAggregate) reviewTask(identity supervisorTaskIdentity
 		return
 	}
 	if _, ok := aggregate.matchIdentity(identity); !ok || !aggregate.parentExecStillCurrent() {
+		aggregate.postReviewAbandoned(identity)
 		return
 	}
 	provider := aggregate.coordinator.provider
@@ -402,9 +405,11 @@ func (aggregate *supervisedAggregate) reviewTask(identity supervisorTaskIdentity
 		}
 	}
 	if aggregate.ctx.Err() != nil || !aggregate.parentExecStillCurrent() {
+		aggregate.postReviewAbandoned(identity)
 		return
 	}
 	if _, ok := aggregate.matchIdentity(identity); !ok {
+		aggregate.postReviewAbandoned(identity)
 		return
 	}
 	if err != nil {
@@ -429,6 +434,18 @@ func (aggregate *supervisedAggregate) reviewTask(identity supervisorTaskIdentity
 		issue:    issue,
 		err:      err,
 	})
+}
+
+func (aggregate *supervisedAggregate) handleReviewAbandoned(event supervisorAggregateEvent) {
+	task, ok := aggregate.matchIdentity(event.identity)
+	if !ok {
+		return
+	}
+	task.reviewPending = false
+	if task.completed {
+		return
+	}
+	aggregate.settleCurrentTask(task)
 }
 
 func (aggregate *supervisedAggregate) handleReviewResult(event supervisorAggregateEvent) {
@@ -786,6 +803,16 @@ func (aggregate *supervisedAggregate) postEvent(event supervisorAggregateEvent) 
 		return
 	case aggregate.eventCh <- event:
 	}
+}
+
+func (aggregate *supervisedAggregate) postReviewAbandoned(identity supervisorTaskIdentity) {
+	if aggregate == nil || aggregate.ctx.Err() != nil {
+		return
+	}
+	aggregate.postEvent(supervisorAggregateEvent{
+		kind:     "review_abandoned",
+		identity: identity,
+	})
 }
 
 func (aggregate *supervisedAggregate) parentExecStillCurrent() bool {
