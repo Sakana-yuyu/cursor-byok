@@ -188,7 +188,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 260,
+          "line": 253,
           "column": 9
         },
         {
@@ -328,7 +328,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 159,
+          "line": 126,
+          "column": 23
+        },
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 172,
           "column": 27
         },
         {
@@ -614,7 +619,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 236,
+          "line": 249,
           "column": 11
         },
         {
@@ -891,7 +896,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 195,
+          "line": 208,
           "column": 22
         },
         {
@@ -1732,12 +1737,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 217,
+          "line": 210,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 225,
+          "line": 218,
           "column": 13
         },
         {
@@ -2260,11 +2265,6 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
-        {
-          "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 180,
-          "column": 16
-        },
         {
           "file": "src/views/Config.vue",
           "line": 69,
@@ -2864,12 +2864,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 241,
+          "line": 234,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 252,
+          "line": 245,
           "column": 1
         },
         {
@@ -2903,7 +2903,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 255,
+          "line": 268,
           "column": 11
         },
         {
@@ -3836,7 +3836,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 198,
+          "line": 211,
           "column": 9
         },
         {
@@ -4721,7 +4721,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 235,
+          "line": 228,
           "column": 1
         },
         {
@@ -4775,18 +4775,13 @@
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 141,
-          "column": 40
+          "line": 144,
+          "column": 42
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 163,
+          "line": 166,
           "column": 44
-        },
-        {
-          "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 176,
-          "column": 40
         },
         {
           "file": "src/components/settings/SettingsPageHeader.vue",
@@ -5157,7 +5152,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 216,
+          "line": 209,
           "column": 9
         },
         {
@@ -5186,12 +5181,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 197,
+          "line": 210,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 209,
+          "line": 222,
           "column": 11
         },
         {
@@ -5213,7 +5208,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 265,
+          "line": 278,
           "column": 15
         },
         {
@@ -5364,18 +5359,6 @@
         }
       ]
     },
-    "6bf218e23e6f7605": {
-      "source": "可配置运行模式和模型渠道；运行日志位于 ~/.cursor-local-assistant-v2/logs/",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 279,
-          "column": 9
-        }
-      ]
-    },
     "6c9f0c2097646673": {
       "source": "余额 不限额",
       "kind": "text",
@@ -5467,11 +5450,6 @@
           "file": "src/components/DelegationSettingsCard.vue",
           "line": 126,
           "column": 71
-        },
-        {
-          "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 289,
-          "column": 1
         },
         {
           "file": "src/views/Config.vue",
@@ -5677,7 +5655,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 242,
+          "line": 235,
           "column": 9
         }
       ]
@@ -6254,12 +6232,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 217,
+          "line": 230,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 229,
+          "line": 242,
           "column": 11
         },
         {
@@ -6597,12 +6575,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 259,
+          "line": 252,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 270,
+          "line": 263,
           "column": 13
         },
         {
@@ -6761,7 +6739,7 @@
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 294,
+          "line": 271,
           "column": 9
         },
         {
@@ -6911,7 +6889,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 305,
+          "line": 282,
           "column": 1
         },
         {
@@ -6996,7 +6974,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 214,
+          "line": 207,
           "column": 22
         },
         {
@@ -7404,7 +7382,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 295,
+          "line": 272,
           "column": 23
         }
       ]
@@ -7500,7 +7478,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 122,
+          "line": 124,
           "column": 33
         },
         {
@@ -8559,7 +8537,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 122,
+          "line": 124,
           "column": 54
         },
         {
@@ -8615,7 +8593,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 232,
+          "line": 225,
           "column": 1
         },
         {
@@ -9229,7 +9207,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 269,
+          "line": 262,
           "column": 13
         },
         {
@@ -9762,13 +9740,13 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 120,
-          "column": 40
+          "line": 121,
+          "column": 42
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 97,
-          "column": 40
+          "line": 91,
+          "column": 42
         },
         {
           "file": "src/components/SettingsDrawer.vue",
@@ -10354,7 +10332,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 246,
+          "line": 259,
           "column": 15
         },
         {
@@ -10779,13 +10757,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 257,
+          "line": 250,
           "column": 22
-        },
-        {
-          "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 278,
-          "column": 9
         },
         {
           "file": "src/views/Config.vue",
@@ -11540,11 +11513,6 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 179,
-          "column": 14
-        },
-        {
           "file": "src/components/ui/InputModal.vue",
           "line": 6,
           "column": 35
@@ -11844,7 +11812,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 218,
+          "line": 231,
           "column": 9
         },
         {
