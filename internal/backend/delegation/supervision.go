@@ -210,9 +210,7 @@ func normalizeWorkerCheckpoint(checkpoint WorkerCheckpoint) WorkerCheckpoint {
 	checkpoint.ChangedFileSummaries = normalizeStringSlice(checkpoint.ChangedFileSummaries)
 	checkpoint.ProgressSummary = strings.TrimSpace(checkpoint.ProgressSummary)
 	checkpoint.Blocker = strings.TrimSpace(checkpoint.Blocker)
-	if checkpoint.EffectiveProgressAt.IsZero() {
-		checkpoint.EffectiveProgressAt = time.Now().UTC()
-	} else {
+	if !checkpoint.EffectiveProgressAt.IsZero() {
 		checkpoint.EffectiveProgressAt = checkpoint.EffectiveProgressAt.UTC()
 	}
 	return checkpoint
