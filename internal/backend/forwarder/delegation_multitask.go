@@ -441,8 +441,8 @@ func (coordinator *multitaskDelegationCoordinator) collectAggregate(aggregate *d
 			output = truncateProjectedReplayText("Task", taskSnapshot.Output, workerOutputLimit)
 		}
 		worker := delegatedWorkerResult{
-			TaskID: taskSnapshot.ID, ModelID: taskSnapshot.Request.ModelID, ModelGroupID: taskSnapshot.Request.ModelGroupID,
-			ExecutionMode: taskSnapshot.Request.ExecutionMode, Status: taskSnapshot.Status,
+			TaskID: taskSnapshot.ID, ModelID: taskSnapshot.ModelID, ModelGroupID: taskSnapshot.ModelGroupID,
+			ExecutionMode: taskSnapshot.ExecutionMode, Status: taskSnapshot.Status,
 			DurationMS: delegatedDuration(taskSnapshot), Output: output, Error: truncateProjectedReplayText("Task error", taskSnapshot.Error, 2048),
 			ToolCallCount: taskSnapshot.ToolCallCount,
 		}

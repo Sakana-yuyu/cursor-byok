@@ -57,12 +57,12 @@ func (service *Service) DelegationTaskSnapshots() []DelegationTaskSnapshot {
 		}
 		items = append(items, DelegationTaskSnapshot{
 			ID:               strings.TrimSpace(snapshot.ID),
-			AggregateID:      strings.TrimSpace(snapshot.Request.ParentExecID),
-			Description:      strings.TrimSpace(snapshot.Request.Description),
-			ModelID:          strings.TrimSpace(snapshot.Request.ModelID),
-			ModelName:        strings.TrimSpace(snapshot.Request.ModelName),
-			ModelGroupID:     strings.TrimSpace(snapshot.Request.ModelGroupID),
-			ExecutionMode:    strings.TrimSpace(snapshot.Request.ExecutionMode),
+			AggregateID:      strings.TrimSpace(snapshot.ParentExecID),
+			Description:      strings.TrimSpace(snapshot.Description),
+			ModelID:          strings.TrimSpace(snapshot.ModelID),
+			ModelName:        strings.TrimSpace(snapshot.ModelName),
+			ModelGroupID:     strings.TrimSpace(snapshot.ModelGroupID),
+			ExecutionMode:    strings.TrimSpace(snapshot.ExecutionMode),
 			Status:           snapshot.Status,
 			ToolCallCount:    snapshot.ToolCallCount,
 			Error:            strings.TrimSpace(snapshot.Error),
