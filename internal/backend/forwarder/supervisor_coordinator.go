@@ -20,9 +20,10 @@ type SupervisorCoordinator struct {
 	scheduler *delegation.Scheduler
 	provider  *supervisorProviderAdapter
 
-	mu         sync.RWMutex
-	aggregates map[string]*supervisedAggregate
-	closed     bool
+	mu            sync.RWMutex
+	aggregates    map[string]*supervisedAggregate
+	runtimeStates map[string]delegationTaskRuntimeState
+	closed        bool
 }
 
 type supervisedAggregate struct {
@@ -87,11 +88,48 @@ func newSupervisorCoordinator(service *Service, scheduler *delegation.Scheduler)
 		return nil
 	}
 	return &SupervisorCoordinator{
-		service:    service,
-		scheduler:  scheduler,
-		provider:   newSupervisorProviderAdapter(service),
-		aggregates: make(map[string]*supervisedAggregate),
+		service:       service,
+		scheduler:     scheduler,
+		provider:      newSupervisorProviderAdapter(service),
+		aggregates:    make(map[string]*supervisedAggregate),
+		runtimeStates: make(map[string]delegationTaskRuntimeState),
 	}
+}
+
+func (coordinator *SupervisorCoordinator) rememberRuntimeState(taskID string, state delegationTaskRuntimeState) {
+	if coordinator == nil {
+		return
+	}
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" || !state.hasSnapshotOverride {
+		return
+	}
+	coordinator.mu.Lock()
+	if coordinator.runtimeStates == nil {
+		coordinator.runtimeStates = make(map[string]delegationTaskRuntimeState)
+	}
+	coordinator.runtimeStates[taskID] = state
+	coordinator.mu.Unlock()
+}
+
+func (coordinator *SupervisorCoordinator) runtimeTaskStates(taskIDs map[string]struct{}) map[string]delegationTaskRuntimeState {
+	if coordinator == nil {
+		return nil
+	}
+	coordinator.mu.Lock()
+	defer coordinator.mu.Unlock()
+	if len(coordinator.runtimeStates) == 0 {
+		return nil
+	}
+	result := make(map[string]delegationTaskRuntimeState, len(coordinator.runtimeStates))
+	for taskID, state := range coordinator.runtimeStates {
+		if _, ok := taskIDs[taskID]; !ok {
+			delete(coordinator.runtimeStates, taskID)
+			continue
+		}
+		result[taskID] = state
+	}
+	return result
 }
 
 func (coordinator *SupervisorCoordinator) Start(stream *ActiveStream, pending runtimecore.PendingExec, base delegation.TaskRequest, workers []delegation.TaskRequest, config delegation.RuntimeConfig) (string, error) {
@@ -903,12 +941,15 @@ func (aggregate *supervisedAggregate) cancelTask(taskID string) bool {
 	target.lastSnapshot.Status = delegation.TaskCanceled
 	target.lastSnapshot.SupervisionStatus = delegation.SupervisionStatusCanceled
 	target.lastSnapshot.Error = "supervised task canceled"
+	target.lastSnapshot.UpdatedAt = time.Now().UTC()
 	if target.lastSnapshot.FinishedAt.IsZero() {
-		target.lastSnapshot.FinishedAt = time.Now().UTC()
+		target.lastSnapshot.FinishedAt = target.lastSnapshot.UpdatedAt
 	}
 	applyTaskRuntimeMetadata(target)
+	runtimeState := delegationTaskRuntimeStateForTask(aggregate, target, true)
 	scheduler := aggregate.coordinator.scheduler
 	aggregate.mu.Unlock()
+	aggregate.coordinator.rememberRuntimeState(taskID, runtimeState)
 	if reviewCancel != nil {
 		reviewCancel()
 	}
@@ -925,6 +966,17 @@ func clearSupervisedReviewCancel(task *supervisedTaskState) {
 	}
 	task.reviewCancel()
 	task.reviewCancel = nil
+}
+
+func (aggregate *supervisedAggregate) rememberTaskRuntimeState(task *supervisedTaskState) {
+	if aggregate == nil || aggregate.coordinator == nil || task == nil {
+		return
+	}
+	aggregate.mu.Lock()
+	taskID := strings.TrimSpace(task.currentTaskID)
+	state := delegationTaskRuntimeStateForTask(aggregate, task, true)
+	aggregate.mu.Unlock()
+	aggregate.coordinator.rememberRuntimeState(taskID, state)
 }
 
 func (aggregate *supervisedAggregate) postEvent(event supervisorAggregateEvent) {
@@ -1022,6 +1074,7 @@ func (aggregate *supervisedAggregate) settleCurrentTask(task *supervisedTaskStat
 	if task.lastSnapshot.SupervisionStatus == "" {
 		task.lastSnapshot.SupervisionStatus = supervisionStatusFromTaskStatus(task.lastSnapshot.Status)
 	}
+	aggregate.rememberTaskRuntimeState(task)
 }
 
 func (aggregate *supervisedAggregate) markTaskFailed(task *supervisedTaskState, code delegation.SupervisionIssueCode, reason string, circuitOpen bool) {
@@ -1050,6 +1103,7 @@ func (aggregate *supervisedAggregate) markTaskFailed(task *supervisedTaskState, 
 		}
 	}
 	applyTaskRuntimeMetadata(task)
+	aggregate.rememberTaskRuntimeState(task)
 }
 
 func (aggregate *supervisedAggregate) markTaskAbandoned(task *supervisedTaskState, code delegation.SupervisionIssueCode, reason string) {
@@ -1078,6 +1132,7 @@ func (aggregate *supervisedAggregate) markTaskAbandoned(task *supervisedTaskStat
 		}
 	}
 	applyTaskRuntimeMetadata(task)
+	aggregate.rememberTaskRuntimeState(task)
 }
 
 func applyTaskRuntimeMetadata(task *supervisedTaskState) {
