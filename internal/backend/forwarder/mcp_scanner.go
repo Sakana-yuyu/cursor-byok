@@ -796,17 +796,6 @@ func redactMCPURL(raw string) string {
 	return trimmed
 }
 
-type mcpURLFingerprintMetadata struct {
-	Origin              string `json:"origin,omitempty"`
-	Parseable           bool   `json:"parseable"`
-	HasPath             bool   `json:"hasPath"`
-	PathSegmentCount    int    `json:"pathSegmentCount"`
-	HasQuery            bool   `json:"hasQuery"`
-	QueryParameterCount int    `json:"queryParameterCount"`
-	HasFragment         bool   `json:"hasFragment"`
-	HasUserInfo         bool   `json:"hasUserInfo"`
-}
-
 func mcpCommandBasename(command string) string {
 	normalized := strings.ReplaceAll(strings.TrimSpace(command), "\\", "/")
 	if normalized == "" {
@@ -819,110 +808,87 @@ func mcpCommandBasename(command string) string {
 	return strings.ToLower(basename)
 }
 
-func mcpCommandType(command string) string {
-	basename := mcpCommandBasename(command)
-	if basename == "" {
+func mcpCommandShapeClass(command string) string {
+	normalized := strings.ReplaceAll(strings.TrimSpace(command), "\\", "/")
+	if normalized == "" {
 		return ""
 	}
-	if extension := strings.TrimPrefix(strings.ToLower(path.Ext(basename)), "."); extension != "" {
-		return extension
+	switch strings.ToLower(path.Ext(normalized)) {
+	case "":
+		return "executable"
+	case ".exe", ".com", ".bin":
+		return "native"
+	case ".bat", ".cmd", ".ps1", ".sh", ".bash", ".zsh", ".fish":
+		return "shell-script"
+	case ".js", ".cjs", ".mjs", ".ts", ".py", ".pyw", ".rb", ".php", ".pl", ".lua":
+		return "script"
+	default:
+		return "other"
 	}
-	return "executable"
 }
 
-func mcpArgumentFlagNames(args []string) []string {
-	if len(args) == 0 {
-		return nil
-	}
-	flags := make([]string, 0, len(args))
-	for _, argument := range args {
-		argument = strings.TrimSpace(argument)
-		switch {
-		case strings.HasPrefix(argument, "--") && len(argument) > 2:
-			name := argument
-			if index := strings.IndexByte(name, '='); index >= 0 {
-				name = name[:index]
-			}
-			if isSafeMCPFlagName(name[2:]) {
-				flags = append(flags, strings.ToLower(name))
-			} else {
-				flags = append(flags, "--option")
-			}
-		case strings.HasPrefix(argument, "-") && len(argument) > 1:
-			if len(argument) == 2 || (len(argument) > 2 && argument[2] == '=') {
-				flags = append(flags, strings.ToLower(argument[:2]))
-			} else {
-				flags = append(flags, "-option")
-			}
-		}
-	}
-	return flags
-}
-
-func isSafeMCPFlagName(value string) bool {
-	if value == "" {
-		return false
-	}
-	for _, char := range value {
-		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '-' || char == '_' {
-			continue
-		}
-		return false
-	}
-	return true
-}
-
-func mcpSortedConfigKeys(values map[string]string, lower bool) []string {
-	if len(values) == 0 {
-		return nil
-	}
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		key = strings.TrimSpace(key)
-		if key == "" {
-			continue
-		}
-		if lower {
-			key = strings.ToLower(key)
-		}
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
-}
-
-func mcpURLFingerprint(raw string) mcpURLFingerprintMetadata {
+func mcpURLSchemeClass(raw string) string {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
-		return mcpURLFingerprintMetadata{}
+		return ""
 	}
 	parsed, err := url.Parse(trimmed)
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return mcpURLFingerprintMetadata{Parseable: false}
+	if err != nil {
+		return "unknown"
 	}
-	pathValue := strings.Trim(parsed.EscapedPath(), "/")
-	pathSegmentCount := 0
-	if pathValue != "" {
-		pathSegmentCount = len(strings.Split(pathValue, "/"))
-	}
-	queryParameterCount := len(parsed.Query())
-	if parsed.RawQuery != "" && queryParameterCount == 0 {
-		queryParameterCount = 1
-	}
-	return mcpURLFingerprintMetadata{
-		Origin:              strings.ToLower(parsed.Scheme) + "://" + strings.ToLower(parsed.Host),
-		Parseable:           true,
-		HasPath:             parsed.EscapedPath() != "" && parsed.EscapedPath() != "/",
-		PathSegmentCount:    pathSegmentCount,
-		HasQuery:            parsed.RawQuery != "" || parsed.ForceQuery,
-		QueryParameterCount: queryParameterCount,
-		HasFragment:         parsed.Fragment != "",
-		HasUserInfo:         parsed.User != nil,
+	switch strings.ToLower(parsed.Scheme) {
+	case "http", "https":
+		return strings.ToLower(parsed.Scheme)
+	case "ws", "wss":
+		return "websocket"
+	case "file", "unix":
+		return "local"
+	case "":
+		return "unknown"
+	default:
+		return "other"
 	}
 }
 
 func mcpURLOrigin(raw string) string {
-	return mcpURLFingerprint(raw).Origin
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+	return strings.ToLower(parsed.Scheme) + "://" + strings.ToLower(parsed.Host)
+}
+
+func mcpSourceKind(source MCPSource) string {
+	switch source {
+	case MCPSourceCursor, MCPSourceClaude, MCPSourceShared, MCPSourceZCode, MCPSourceCodex, MCPSourceCline:
+		return string(source)
+	default:
+		return "other"
+	}
+}
+
+func mcpConfigScopeKind(scope MCPConfigScope) string {
+	switch scope {
+	case MCPConfigScopeUser:
+		return "user"
+	case MCPConfigScopeWorkspace:
+		return "workspace"
+	default:
+		return "other"
+	}
+}
+
+func mcpTransportKind(transport string) string {
+	switch normalizeTransport(transport) {
+	case "", "stdio":
+		return "stdio"
+	case "http":
+		return "http"
+	case "sse":
+		return "sse"
+	default:
+		return "other"
+	}
 }
 
 func mcpRuntimeScopeKind(config MCPServerConfig) string {
@@ -932,39 +898,39 @@ func mcpRuntimeScopeKind(config MCPServerConfig) string {
 	return "user"
 }
 
-func mcpConfigFingerprint(config MCPServerConfig) string {
-	transport := strings.ToLower(strings.TrimSpace(config.Transport))
-	if transport == "" {
-		transport = "stdio"
-	}
+// mcpConfigShapeFingerprint identifies only coarse, non-secret config structure.
+// Exact runtime replacement identity is handled by sameMCPRuntimeConfig.
+func mcpConfigShapeFingerprint(config MCPServerConfig) string {
 	payload, _ := json.Marshal(struct {
-		Version           int                       `json:"version"`
-		Source            MCPSource                 `json:"source"`
-		Scope             MCPConfigScope            `json:"scope"`
-		RuntimeScopeKind  string                    `json:"runtimeScopeKind"`
-		Transport         string                    `json:"transport"`
-		CommandBasename   string                    `json:"commandBasename,omitempty"`
-		CommandType       string                    `json:"commandType,omitempty"`
-		ArgumentCount     int                       `json:"argumentCount"`
-		ArgumentFlagNames []string                  `json:"argumentFlagNames,omitempty"`
-		EnvKeys           []string                  `json:"envKeys,omitempty"`
-		HeaderKeys        []string                  `json:"headerKeys,omitempty"`
-		URL               mcpURLFingerprintMetadata `json:"url"`
-		ConfiguredEnabled bool                      `json:"configuredEnabled"`
-		Enabled           bool                      `json:"enabled"`
+		SchemaVersion     int    `json:"schemaVersion"`
+		SourceKind        string `json:"sourceKind"`
+		ConfigScopeKind   string `json:"configScopeKind"`
+		RuntimeScopeKind  string `json:"runtimeScopeKind"`
+		TransportKind     string `json:"transportKind"`
+		HasCommand        bool   `json:"hasCommand"`
+		CommandClass      string `json:"commandClass,omitempty"`
+		ArgumentCount     int    `json:"argumentCount"`
+		EnvironmentCount  int    `json:"environmentCount"`
+		HeaderCount       int    `json:"headerCount"`
+		HasCwd            bool   `json:"hasCwd"`
+		HasURL            bool   `json:"hasUrl"`
+		URLSchemeClass    string `json:"urlSchemeClass,omitempty"`
+		ConfiguredEnabled bool   `json:"configuredEnabled"`
+		Enabled           bool   `json:"enabled"`
 	}{
-		Version:           2,
-		Source:            config.Source,
-		Scope:             config.Scope,
+		SchemaVersion:     3,
+		SourceKind:        mcpSourceKind(config.Source),
+		ConfigScopeKind:   mcpConfigScopeKind(config.Scope),
 		RuntimeScopeKind:  mcpRuntimeScopeKind(config),
-		Transport:         transport,
-		CommandBasename:   mcpCommandBasename(config.Command),
-		CommandType:       mcpCommandType(config.Command),
+		TransportKind:     mcpTransportKind(config.Transport),
+		HasCommand:        strings.TrimSpace(config.Command) != "",
+		CommandClass:      mcpCommandShapeClass(config.Command),
 		ArgumentCount:     len(config.Args),
-		ArgumentFlagNames: mcpArgumentFlagNames(config.Args),
-		EnvKeys:           mcpSortedConfigKeys(config.Env, true),
-		HeaderKeys:        mcpSortedConfigKeys(config.Headers, true),
-		URL:               mcpURLFingerprint(config.URL),
+		EnvironmentCount:  len(config.Env),
+		HeaderCount:       len(config.Headers),
+		HasCwd:            strings.TrimSpace(config.Cwd) != "",
+		HasURL:            strings.TrimSpace(config.URL) != "",
+		URLSchemeClass:    mcpURLSchemeClass(config.URL),
 		ConfiguredEnabled: config.ConfiguredEnabled,
 		Enabled:           config.Enabled,
 	})
@@ -988,6 +954,7 @@ type MCPServerSnapshotItem struct {
 	HasTools          bool             `json:"hasTools"`
 	ToolCount         int              `json:"toolCount"`
 	Status            MCPRuntimeStatus `json:"status"`
+	// ConfigFingerprint is a coarse non-secret shape hash, not runtime identity.
 	ConfigFingerprint string           `json:"configFingerprint"`
 	CapabilityStatus  MCPRuntimeStatus `json:"capabilityStatus"`
 	LastError         string           `json:"lastError,omitempty"`
@@ -1013,9 +980,11 @@ func SnapshotMCPServersWithSettings(workspaceRoot string, settings SkillMCPScanS
 	}
 	items := make([]MCPServerSnapshotItem, 0, len(configs))
 	for _, config := range configs {
-		configFingerprint := mcpConfigFingerprint(config)
+		configFingerprint := mcpConfigShapeFingerprint(config)
 		runtimeItem, connected := runtimeByID[mcpRuntimeEntryKey(config.RuntimeScope, config.Identifier)]
-		connected = connected && runtimeItem.Source == string(config.Source) && runtimeItem.Scope == string(config.Scope) && runtimeItem.ConfigFingerprint == configFingerprint
+		// ReplaceScope already uses full config equality. The public shape fingerprint
+		// must not be reused as exact runtime identity here.
+		connected = connected && runtimeItem.Source == string(config.Source) && runtimeItem.Scope == string(config.Scope)
 		status := MCPRuntimeDisconnected
 		capabilityStatus := MCPRuntimeDisconnected
 		toolCount := 0
