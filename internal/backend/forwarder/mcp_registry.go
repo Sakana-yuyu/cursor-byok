@@ -44,14 +44,15 @@ const (
 )
 
 type MCPRuntimeSnapshot struct {
-	Identifier        string           `json:"identifier"`
-	Name              string           `json:"name"`
-	Source            string           `json:"source"`
-	Scope             string           `json:"scope"`
-	Transport         string           `json:"transport"`
-	Command           string           `json:"command,omitempty"`
-	URL               string           `json:"url,omitempty"`
-	Status            MCPRuntimeStatus `json:"status"`
+	Identifier string           `json:"identifier"`
+	Name       string           `json:"name"`
+	Source     string           `json:"source"`
+	Scope      string           `json:"scope"`
+	Transport  string           `json:"transport"`
+	Command    string           `json:"command,omitempty"`
+	URL        string           `json:"url,omitempty"`
+	Status     MCPRuntimeStatus `json:"status"`
+	// ConfigFingerprint is a coarse non-secret shape hash, not runtime identity.
 	ConfigFingerprint string           `json:"configFingerprint"`
 	CapabilityStatus  MCPRuntimeStatus `json:"capabilityStatus"`
 	ToolCount         int              `json:"toolCount"`
@@ -681,7 +682,7 @@ func snapshotMCPRuntimeEntry(entry *mcpRuntimeEntry) MCPRuntimeSnapshot {
 		Command:           mcpCommandBasename(entry.config.Command),
 		URL:               mcpURLOrigin(entry.config.URL),
 		Status:            entry.status,
-		ConfigFingerprint: mcpConfigFingerprint(entry.config),
+		ConfigFingerprint: mcpConfigShapeFingerprint(entry.config),
 		CapabilityStatus:  entry.capabilityStatus,
 		ToolCount:         len(entry.tools),
 		LastError:         entry.lastError,
@@ -707,6 +708,8 @@ func mcpRuntimeEntryKey(scope string, identifier string) string {
 func sameMCPRuntimeConfig(left MCPServerConfig, right MCPServerConfig) bool {
 	left.RuntimeScope = normalizeMCPRuntimeScope(left.RuntimeScope)
 	right.RuntimeScope = normalizeMCPRuntimeScope(right.RuntimeScope)
+	// Full config equality, including secret-bearing fields, is kept internal and
+	// is the exact identity boundary for runtime replacement.
 	return reflect.DeepEqual(left, right)
 }
 
