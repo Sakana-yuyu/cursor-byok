@@ -14,6 +14,10 @@ const props = defineProps({
     type: Number,
     required: true,
   },
+  nameDraft: {
+    type: String,
+    default: "",
+  },
   totalGroups: {
     type: Number,
     required: true,
@@ -68,7 +72,7 @@ const defaultModelOptions = computed(() => {
 });
 
 const groupDisplayName = computed(() => {
-  return props.group.name || `模型组 ${props.groupIndex + 1}`;
+  return props.nameDraft || props.group.name || `模型组 ${props.groupIndex + 1}`;
 });
 
 const saveStatusLabel = computed(() => {
@@ -138,7 +142,7 @@ function handlePermissionToggle(permission, enabled) {
         </div>
 
         <Input
-          :model-value="group.name"
+          :model-value="nameDraft"
           :disabled="busy"
           :aria-label="`模型组 ${groupIndex + 1} 名称`"
           placeholder="输入模型组名称"

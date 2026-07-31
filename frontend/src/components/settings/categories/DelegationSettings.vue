@@ -47,9 +47,12 @@ const maxConcurrencyState = reactive({
 });
 
 const groupStates = reactive({});
+const groupNameDrafts = reactive({});
 const maxConcurrencyDraft = ref("");
 
 let delegationSaveTail = Promise.resolve();
+let maxConcurrencyDraftRevision = 0;
+const groupNameDraftRevisions = new Map();
 
 watch(
   () => appState.delegation.maxConcurrency,
@@ -110,26 +113,63 @@ function groupImmediateAutosaveKey(groupID, action) {
   return `delegation.group.${groupID}.${action}`;
 }
 
-function normalizeGroupName(groupID) {
-  const group = getGroupByID(groupID);
-  if (!group) {
-    return "";
-  }
-
+function normalizeGroupNameDraft(groupID, value) {
   const fallbackIndex = currentGroupIndex(groupID) + 1;
-  const normalizedName = String(group.name || "").trim() || `委派模型组 ${fallbackIndex > 0 ? fallbackIndex : 1}`;
-  group.name = normalizedName;
-  return normalizedName;
+  return String(value || "").trim() || `委派模型组 ${fallbackIndex > 0 ? fallbackIndex : 1}`;
 }
 
-function normalizeMaxConcurrencyDraft() {
-  const parsed = Number.parseInt(String(maxConcurrencyDraft.value || "").trim(), 10);
-  const currentValue = Number(appState.delegation.maxConcurrency || 0);
+function normalizeMaxConcurrencyValue(value, committedValue) {
+  const parsed = Number.parseInt(String(value || "").trim(), 10);
+  const currentValue = Number(committedValue || 0);
   const fallback = currentValue > 0 ? currentValue : 4;
-  const normalized = Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-  appState.delegation.maxConcurrency = normalized;
-  maxConcurrencyDraft.value = String(normalized);
-  return normalized;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function groupNameDraftValue(groupID) {
+  if (Object.prototype.hasOwnProperty.call(groupNameDrafts, groupID)) {
+    return groupNameDrafts[groupID];
+  }
+  return getGroupByID(groupID)?.name || "";
+}
+
+function restoreGroupIDOrder(previousIDs) {
+  const groups = appState.delegation.groups;
+  const currentByID = new Map(groups.map((group) => [group.id, group]));
+  const restored = [];
+
+  for (const groupID of previousIDs) {
+    const group = currentByID.get(groupID);
+    if (!group) continue;
+    restored.push(group);
+    currentByID.delete(groupID);
+  }
+
+  for (const group of groups) {
+    if (!currentByID.has(group.id)) continue;
+    restored.push(group);
+    currentByID.delete(group.id);
+  }
+
+  groups.splice(0, groups.length, ...restored);
+}
+
+function reinsertDeletedGroup(group, previousIndex, previousGroupID, nextGroupID) {
+  const groups = appState.delegation.groups;
+  if (groups.some((item) => item.id === group.id)) return;
+
+  const nextIndex = nextGroupID ? groups.findIndex((item) => item.id === nextGroupID) : -1;
+  if (nextIndex >= 0) {
+    groups.splice(nextIndex, 0, group);
+    return;
+  }
+
+  const previousIndexNow = previousGroupID ? groups.findIndex((item) => item.id === previousGroupID) : -1;
+  if (previousIndexNow >= 0) {
+    groups.splice(previousIndexNow + 1, 0, group);
+    return;
+  }
+
+  groups.splice(Math.min(previousIndex, groups.length), 0, group);
 }
 
 function togglePermission(group, permission, enabled) {
@@ -170,13 +210,15 @@ function clearGroupErrors(groupID) {
   state.name.error = "";
 }
 
-async function serializeDelegationSave() {
-  const pendingSave = delegationSaveTail.catch(() => {}).then(async () => {
-    const result = await persistUserConfig();
-    if (!result?.ok) {
-      throw new Error(result?.error || "保存失败");
-    }
-  });
+async function persistDelegationConfig() {
+  const result = await persistUserConfig();
+  if (!result?.ok) {
+    throw new Error(result?.error || "保存失败");
+  }
+}
+
+async function serializeDelegationSave(save = persistDelegationConfig) {
+  const pendingSave = delegationSaveTail.catch(() => {}).then(save);
   delegationSaveTail = pendingSave.catch(() => {});
   return pendingSave;
 }
@@ -209,9 +251,23 @@ function queueMaxConcurrencySave() {
     async () => {
       maxConcurrencyState.queued = false;
       maxConcurrencyState.busy = true;
+      const draftValue = maxConcurrencyDraft.value;
+      const draftRevision = maxConcurrencyDraftRevision;
       try {
-        normalizeMaxConcurrencyDraft();
-        await serializeDelegationSave();
+        await serializeDelegationSave(async () => {
+          const previousValue = appState.delegation.maxConcurrency;
+          const nextValue = normalizeMaxConcurrencyValue(draftValue, previousValue);
+          appState.delegation.maxConcurrency = nextValue;
+          try {
+            await persistDelegationConfig();
+            if (maxConcurrencyDraftRevision === draftRevision) {
+              maxConcurrencyDraft.value = String(nextValue);
+            }
+          } catch (error) {
+            appState.delegation.maxConcurrency = previousValue;
+            throw error;
+          }
+        });
       } catch (error) {
         maxConcurrencyState.error = toUserError(error);
         throw error;
@@ -225,11 +281,8 @@ function queueMaxConcurrencySave() {
 
 function handleMaxConcurrencyInput(value) {
   maxConcurrencyDraft.value = value;
+  maxConcurrencyDraftRevision += 1;
   maxConcurrencyState.error = "";
-  const parsed = Number.parseInt(String(value || "").trim(), 10);
-  if (Number.isFinite(parsed) && parsed > 0) {
-    appState.delegation.maxConcurrency = parsed;
-  }
   queueMaxConcurrencySave();
 }
 
@@ -268,9 +321,29 @@ function queueGroupNameSave(groupID) {
     async () => {
       state.queued = false;
       state.busy = true;
+      const draftValue = groupNameDraftValue(groupID);
+      const draftRevision = groupNameDraftRevisions.get(groupID) || 0;
       try {
-        normalizeGroupName(groupID);
-        await serializeDelegationSave();
+        await serializeDelegationSave(async () => {
+          const group = getGroupByID(groupID);
+          if (!group) return;
+
+          const previousName = group.name;
+          const nextName = normalizeGroupNameDraft(groupID, draftValue);
+          group.name = nextName;
+          try {
+            await persistDelegationConfig();
+            if ((groupNameDraftRevisions.get(groupID) || 0) === draftRevision) {
+              groupNameDrafts[groupID] = nextName;
+            }
+          } catch (error) {
+            const currentGroup = getGroupByID(groupID);
+            if (currentGroup) {
+              currentGroup.name = previousName;
+            }
+            throw error;
+          }
+        });
       } catch (error) {
         state.error = toUserError(error);
         throw error;
@@ -283,12 +356,10 @@ function queueGroupNameSave(groupID) {
 }
 
 function handleGroupNameInput(groupID, value) {
-  const group = getGroupByID(groupID);
-  if (!group) {
-    return;
-  }
+  if (!getGroupByID(groupID)) return;
 
-  group.name = value;
+  groupNameDrafts[groupID] = value;
+  groupNameDraftRevisions.set(groupID, (groupNameDraftRevisions.get(groupID) || 0) + 1);
   ensureGroupState(groupID).name.error = "";
   queueGroupNameSave(groupID);
 }
@@ -392,7 +463,7 @@ async function handleMoveGroup(groupID, direction) {
     return;
   }
 
-  const snapshot = [...appState.delegation.groups];
+  const previousIDs = appState.delegation.groups.map((group) => group.id);
   const moved = appState.delegation.groups.splice(fromIndex, 1)[0];
   appState.delegation.groups.splice(toIndex, 0, moved);
   clearGroupErrors(groupID);
@@ -405,7 +476,7 @@ async function handleMoveGroup(groupID, direction) {
       await serializeDelegationSave();
     });
   } catch (error) {
-    appState.delegation.groups = snapshot;
+    restoreGroupIDOrder(previousIDs);
     state.error = toUserError(error);
   } finally {
     state.busy = false;
@@ -429,8 +500,9 @@ async function handleDeleteGroup(groupID) {
     return;
   }
 
-  const snapshot = [...appState.delegation.groups];
-  appState.delegation.groups.splice(groupIndex, 1);
+  const previousGroupID = appState.delegation.groups[groupIndex - 1]?.id || "";
+  const nextGroupID = appState.delegation.groups[groupIndex + 1]?.id || "";
+  const deletedGroup = appState.delegation.groups.splice(groupIndex, 1)[0];
   const state = ensureGroupState(groupID).immediate;
   state.retry = () => handleDeleteGroup(groupID);
   clearStateError(state);
@@ -440,7 +512,7 @@ async function handleDeleteGroup(groupID) {
       await serializeDelegationSave();
     });
   } catch (error) {
-    appState.delegation.groups = snapshot;
+    reinsertDeletedGroup(deletedGroup, groupIndex, previousGroupID, nextGroupID);
     state.error = toUserError(error);
   } finally {
     state.busy = false;
@@ -543,6 +615,7 @@ function retryGroup(groupID) {
           :key="group.id"
           :group="group"
           :group-index="groupIndex"
+          :name-draft="groupNameDraftValue(group.id)"
           :total-groups="appState.delegation.groups.length"
           :model-adapters="appState.modelAdapters"
           :mode-options="modeOptions"

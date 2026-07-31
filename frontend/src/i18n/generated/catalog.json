@@ -7,7 +7,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 194,
+          "line": 198,
           "column": 1
         }
       ]
@@ -135,7 +135,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 155,
+          "line": 159,
           "column": 11
         }
       ]
@@ -321,7 +321,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 424,
+          "line": 495,
           "column": 14
         }
       ]
@@ -689,8 +689,8 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 71,
-          "column": 30
+          "line": 75,
+          "column": 49
         }
       ]
     },
@@ -848,7 +848,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 478,
+          "line": 550,
           "column": 7
         }
       ]
@@ -1317,12 +1317,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 521,
+          "line": 593,
           "column": 7
         },
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 110,
+          "line": 114,
           "column": 1
         },
         {
@@ -1405,7 +1405,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 180,
+          "line": 184,
           "column": 1
         }
       ]
@@ -2219,7 +2219,7 @@
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 426,
+          "line": 497,
           "column": 17
         },
         {
@@ -2398,7 +2398,7 @@
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 425,
+          "line": 496,
           "column": 18
         },
         {
@@ -2799,7 +2799,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 537,
+          "line": 609,
           "column": 1
         }
       ]
@@ -4184,7 +4184,7 @@
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 529,
+          "line": 601,
           "column": 1
         },
         {
@@ -4283,7 +4283,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 76,
+          "line": 80,
           "column": 12
         },
         {
@@ -4368,7 +4368,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 79,
+          "line": 83,
           "column": 12
         }
       ]
@@ -4779,7 +4779,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 526,
+          "line": 598,
           "column": 55
         }
       ]
@@ -4908,8 +4908,8 @@
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 177,
-          "column": 40
+          "line": 216,
+          "column": 38
         },
         {
           "file": "src/components/settings/SettingsPageHeader.vue",
@@ -5068,17 +5068,17 @@
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 120,
-          "column": 61
+          "line": 118,
+          "column": 40
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 321,
+          "line": 392,
           "column": 11
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 424,
+          "line": 495,
           "column": 36
         },
         {
@@ -5184,7 +5184,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 491,
+          "line": 563,
           "column": 11
         },
         {
@@ -5815,7 +5815,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 569,
+          "line": 642,
           "column": 7
         }
       ]
@@ -5967,7 +5967,7 @@
         },
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 185,
+          "line": 189,
           "column": 11
         },
         {
@@ -6832,7 +6832,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 490,
+          "line": 562,
           "column": 11
         },
         {
@@ -7052,7 +7052,7 @@
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 423,
+          "line": 494,
           "column": 12
         },
         {
@@ -7344,7 +7344,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 132,
+          "line": 136,
           "column": 23
         }
       ]
@@ -7528,7 +7528,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 126,
+          "line": 130,
           "column": 23
         }
       ]
@@ -7552,7 +7552,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 143,
+          "line": 147,
           "column": 24
         }
       ]
@@ -7940,7 +7940,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 570,
+          "line": 643,
           "column": 7
         }
       ]
@@ -7998,7 +7998,7 @@
         },
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 223,
+          "line": 227,
           "column": 1
         }
       ]
@@ -8364,7 +8364,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 156,
+          "line": 160,
           "column": 11
         }
       ]
@@ -8393,7 +8393,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 200,
+          "line": 204,
           "column": 1
         }
       ]
@@ -8470,7 +8470,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 167,
+          "line": 171,
           "column": 1
         }
       ]
@@ -8808,7 +8808,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 501,
+          "line": 573,
           "column": 9
         }
       ]
@@ -8994,7 +8994,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 526,
+          "line": 598,
           "column": 1
         }
       ]
@@ -9018,7 +9018,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 249,
+          "line": 253,
           "column": 1
         },
         {
@@ -9040,7 +9040,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 522,
+          "line": 594,
           "column": 7
         }
       ]
@@ -9218,12 +9218,12 @@
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 481,
+          "line": 553,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 494,
+          "line": 566,
           "column": 11
         }
       ]
@@ -9954,7 +9954,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 144,
+          "line": 148,
           "column": 11
         }
       ]
@@ -10079,7 +10079,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 154,
+          "line": 158,
           "column": 11
         }
       ]
@@ -10246,7 +10246,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 120,
+          "line": 124,
           "column": 23
         }
       ]
@@ -10811,12 +10811,12 @@
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 500,
+          "line": 572,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 511,
+          "line": 583,
           "column": 13
         },
         {
@@ -10993,7 +10993,7 @@
         },
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 172,
+          "line": 176,
           "column": 11
         },
         {
@@ -11442,7 +11442,7 @@
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 482,
+          "line": 554,
           "column": 9
         },
         {
@@ -11647,7 +11647,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 477,
+          "line": 549,
           "column": 7
         }
       ]
