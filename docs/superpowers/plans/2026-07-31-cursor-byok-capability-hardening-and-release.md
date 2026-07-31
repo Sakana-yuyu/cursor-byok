@@ -27,9 +27,9 @@
 - Create: `docs/superpowers/plans/2026-07-31-cursor-byok-capability-hardening-and-release.md`
 - Modify: `docs/tasks/2026-07-31-cursor-byok-capability-completion.md`
 
-- [ ] 记录 P0/P1 根因、高星项目参考、扩展任务和发布验收条件。
-- [ ] 自审文档无占位符、矛盾或未定义接口。
-- [ ] 提交 `docs: add capability hardening and release plan`。
+- [x] 记录 P0/P1 根因、高星项目参考、扩展任务和发布验收条件。
+- [x] 自审文档无占位符、矛盾或未定义接口。
+- [x] 提交 `docs: add capability hardening and release plan`。
 
 ### Task 2: Close Delegation And SSE Lifecycles
 
@@ -42,11 +42,11 @@
 - `awaitAggregate(...)` routes post failure through `failStreamIfNonTerminal`.
 - `RunSSE(...)` returns a Connect error on broker read failure.
 
-- [ ] 在失败终态调用 `multitaskDelegation.CancelStream(stream)`，保持幂等。
-- [ ] 处理 `postStreamCommandAsync` 错误并记录 request/aggregate/exec 上下文。
-- [ ] 将 broker read error 转换为明确 RunSSE custom error。
-- [ ] 运行 `gofmt`、`go test -count=1 ./internal/backend/forwarder/...`、`go vet ./internal/backend/forwarder/...`。
-- [ ] 提交 `fix: close delegated task lifecycles`。
+- [x] 在失败终态调用 `multitaskDelegation.CancelStream(stream)`，保持幂等。
+- [x] 处理 `postStreamCommandAsync` 错误并记录 request/aggregate/exec 上下文。
+- [x] 将 broker read error 转换为明确 RunSSE custom error。
+- [x] 运行 `gofmt`、`go test -count=1 ./internal/backend/forwarder/...`、`go vet ./internal/backend/forwarder/...`。
+- [x] 提交 `fix: close delegated task lifecycles`。
 
 ### Task 3: Add Structured Delegation Events And Fan-in
 
@@ -60,13 +60,13 @@
 - `TaskSnapshot` adds `EventID`, `Sequence`, `EventType`, `ParentRequestID`, `ParentExecID`, `GroupID`, and `UpdatedAt`.
 - `Scheduler.WaitForTerminal(ctx context.Context, taskIDs []string) error` waits on state notifications without polling.
 
-- [ ] Allocate a monotonic sequence for every published task transition.
-- [ ] Add a scheduler notification channel that is closed and recreated on every state transition.
-- [ ] Implement `WaitForTerminal` with context cancellation and missing-task errors.
-- [ ] Replace the Multitask 50ms ticker with `WaitForTerminal`.
-- [ ] Expose sanitized event metadata in desktop snapshots and preview bindings.
-- [ ] Run `gofmt`, targeted Go verification, `go vet`, and frontend build.
-- [ ] 提交 `feat: add structured delegation events`。
+- [x] Allocate a monotonic sequence for every published task transition.
+- [x] Add a scheduler notification channel that is closed and recreated on every state transition.
+- [x] Implement `WaitForTerminal` with context cancellation and missing-task errors.
+- [x] Replace the Multitask 50ms ticker with `WaitForTerminal`.
+- [x] Expose sanitized event metadata in desktop snapshots and preview bindings.
+- [x] Run `gofmt`, targeted Go verification, `go vet`, and frontend build.
+- [x] 提交 `feat: add structured delegation events`。
 
 ### Task 4: Scope MCP Runtime By Workspace
 
@@ -83,13 +83,13 @@
 - Registry runtime methods accept `scope, identifier`.
 - Scope-specific snapshot and descriptor queries never return another workspace's entries.
 
-- [ ] Define stable user scope and canonical workspace scope helper.
-- [ ] Assign runtime scope during scanning and use scoped registry keys.
-- [ ] Replace only the requested scope during scan refresh.
-- [ ] Route UI connect/disconnect and local delegated MCP calls with workspace scope.
-- [ ] Preserve model-visible server identifiers and existing settings keys.
-- [ ] Run `gofmt`, targeted Go verification, `go vet`, and frontend build.
-- [ ] 提交 `fix: isolate mcp runtime by workspace`。
+- [x] Define stable user scope and canonical workspace scope helper.
+- [x] Assign runtime scope during scanning and use scoped registry keys.
+- [x] Replace only the requested scope during scan refresh.
+- [x] Route UI connect/disconnect and local delegated MCP calls with workspace scope.
+- [x] Preserve model-visible server identifiers and existing settings keys.
+- [x] Run `gofmt`, targeted Go verification, `go vet`, and frontend build.
+- [x] 提交 `fix: isolate mcp runtime by workspace`。
 
 ### Task 5: Add MCP Capability Identity And Health
 
@@ -104,11 +104,11 @@
 - Runtime snapshot adds `RuntimeScope`, `ConfigFingerprint`, `CapabilityStatus`, `LastCheckedAt`.
 - UI renders scope-safe connection state and degraded/error detail.
 
-- [ ] Compute a redacted stable config fingerprint from non-secret config metadata.
-- [ ] Record capability status after handshake and update check timestamps on runtime operations.
-- [ ] Display status without exposing env values, headers or secret URL parts.
-- [ ] Run frontend scan build twice and verify generated catalogs are stable and complete.
-- [ ] Run targeted Go verification and commit `feat: expose mcp capability health`。
+- [x] Compute a redacted stable config fingerprint from non-secret config metadata.
+- [x] Record capability status after handshake and update check timestamps on runtime operations.
+- [x] Display status without exposing env values, headers or secret URL parts.
+- [x] Run frontend scan build twice and verify generated catalogs are stable and complete.
+- [x] Run targeted Go verification and commit `feat: expose mcp capability health`。
 
 ### Task 6: Isolate Skills And Validate Manifests
 
@@ -123,13 +123,13 @@
 - `ScanForWorkspace(workspaceRoot string)` and `BuildActivatedSkillsPromptSectionForWorkspace(...)` replace shared current-workspace state.
 - Skill records add stable `ContentHash`, optional `Version`, and validation diagnostic metadata.
 
-- [ ] Snapshot scan settings under lock and scan the explicit workspace argument.
-- [ ] Derive workspace root from the current conversation request context in compiler.
-- [ ] Remove enrichment-time mutation of `SkillStore.workspaceRoot`.
-- [ ] Validate name/description, reject control characters and oversized manifest metadata, compute content hash.
-- [ ] Keep invalid skills out of prompt while preserving other skills.
-- [ ] Run `gofmt`, targeted Go verification, `go vet`, and prefix-cache verification.
-- [ ] 提交 `fix: isolate and validate skill activation`。
+- [x] Snapshot scan settings under lock and scan the explicit workspace argument.
+- [x] Derive workspace root from the current conversation request context in compiler.
+- [x] Remove enrichment-time mutation of `SkillStore.workspaceRoot`.
+- [x] Validate name/description, reject control characters and oversized manifest metadata, compute content hash.
+- [x] Keep invalid skills out of prompt while preserving other skills.
+- [x] Run `gofmt`, targeted Go verification, `go vet`, and prefix-cache verification.
+- [x] 提交 `fix: isolate and validate skill activation`。
 
 ### Task 7: Unify Release Asset And Manifest Generation
 
@@ -143,13 +143,13 @@
 - `scripts/release manifest` covers Windows amd64/386, Linux amd64 and macOS arm64/amd64 updater assets.
 - DMG remains an extra Release asset and is not substituted into updater platform URLs.
 
-- [ ] Add Windows 386 to the Go manifest asset list.
-- [ ] Version and copy `macos-arm64.dmg` and `macos-intel.dmg` into `publish/` as arm64/amd64 DMG.
-- [ ] Generate `update.json` through the Go release command, not inline Python JSON serialization.
-- [ ] Add tag/config fail-fast validation and JSON parse validation.
-- [ ] Align Taskfile verification/upload lists with workflow assets.
-- [ ] Run a temporary local release-assets fixture through manifest generation and parse the result; delete the fixture.
-- [ ] 提交 `fix: harden release assets and manifest`。
+- [x] Add Windows 386 to the Go manifest asset list.
+- [x] Version and copy `macos-arm64.dmg` and `macos-intel.dmg` into `publish/` as arm64/amd64 DMG.
+- [x] Generate `update.json` through the Go release command, not inline Python JSON serialization.
+- [x] Add tag/config fail-fast validation and JSON parse validation.
+- [x] Align Taskfile verification/upload lists with workflow assets.
+- [x] Run a temporary local release-assets fixture through manifest generation and parse the result; delete the fixture.
+- [x] 提交 `fix: harden release assets and manifest`。
 
 ### Task 8: Reconcile Existing Floating Window Changes
 
@@ -157,26 +157,26 @@
 - Existing dirty files under `frontend/src/`, `docs/superpowers/`, and `gui-test-screenshots/`.
 - Modify: `.gitignore` only if generated GUI screenshots should remain local evidence.
 
-- [ ] Distinguish content changes from CRLF-only changes.
-- [ ] Verify the floating-window design/plan matches implemented dimensions and transitions.
-- [ ] Regenerate i18n catalog instead of manually editing generated references.
-- [ ] Preserve local screenshots without committing binary evidence; ignore the generated screenshot directory if appropriate.
-- [ ] Run frontend build and package-level visual preview.
-- [ ] 提交 narrowly scoped reconciliation commit.
+- [x] Distinguish content changes from CRLF-only changes.
+- [x] Verify the floating-window design/plan matches implemented dimensions and transitions.
+- [x] Regenerate i18n catalog instead of manually editing generated references.
+- [x] Preserve local screenshots without committing binary evidence; ignore the generated screenshot directory if appropriate.
+- [x] Run frontend build and package-level visual preview.
+- [x] 提交 narrowly scoped reconciliation commit.
 
 ### Task 9: Full Verification And Review
 
 **Files:**
 - Modify: `docs/tasks/2026-07-31-cursor-byok-capability-completion.md`
 
-- [ ] Run `go test -count=1 ./...`.
-- [ ] Run `go vet ./...`.
-- [ ] Run `go build ./...`.
-- [ ] Run `npm --prefix frontend run build` twice if scanner inputs changed.
-- [ ] Run repository protocol generation/static checks available in Taskfile.
-- [ ] Manually verify buttons, Delegation, Skills, MCP, Cursor launch, tray and floating-window workflows.
-- [ ] Perform whole-range code review and fix all Critical/Important findings.
-- [ ] Record exact verification evidence and commit `chore: verify capability hardening`。
+- [x] Run `go test -count=1 ./...`.
+- [x] Run `go vet ./...`.
+- [x] Run `go build ./...`.
+- [x] Run `npm --prefix frontend run build` twice if scanner inputs changed.
+- [x] Run repository protocol generation/static checks available in Taskfile.
+- [x] Manually verify buttons, Delegation, Skills, MCP, Cursor launch, tray and floating-window workflows.
+- [x] Perform whole-range code review and fix all Critical/Important findings.
+- [x] Record exact verification evidence and commit `chore: verify capability hardening`。
 
 ### Task 10: Release v0.0.71
 

@@ -67,3 +67,15 @@ Task 1-13 的首次实现完成后，发布前审查发现了跨 workspace 共�
 - 计划：`docs/superpowers/plans/2026-07-31-cursor-byok-capability-hardening-and-release.md`
 
 原“不创建 release、tag 或执行 push”约束仅适用于 Task 0-13 的分阶段实现；用户后续明确要求完成强化后使用 `uploadcursor` 发布，因此最终发布任务以续篇计划为准。
+
+## 发布前强化最终验收
+
+- 委派终态链已补齐：主流失败会取消 Multitask aggregate，聚合投递失败进入统一终态收口，broker 读取失败不再伪装为正常 EOF。
+- 委派 fan-in 使用 scheduler 状态通知，不再 50ms 轮询；事件包含稳定序号、父 request、父 exec、模型组和更新时间。
+- Multitask 启动与取消按 provider pass 同步；终态检查、aggregate 注册和 `PendingExec` 写入在同一提交点完成，取消不会产生伪造的 `Task error` 历史。
+- MCP runtime 按 user/workspace scope 隔离，同名 server 可共存；连接状态、能力健康和错误信息不会泄露密钥、header 或机器标识。
+- Skills 扫描和稀疏激活按当前 workspace 显式执行；manifest 校验、content hash、诊断展示和禁用状态均已接入现有链路。
+- Release manifest 覆盖 Windows amd64/386、Linux amd64、macOS arm64/amd64；DMG 作为独立 Release 资产发布，不写入 updater URL。
+- 最终 scoped review 的两个 Important finding 均已修复，复审无 Critical/Important 遗留。
+- 最终树验证通过：`go test -count=1 ./...`、`go vet ./...`、`go build ./...`、targeted `go test -race`、`npm --prefix frontend run build` 和 `git diff --check`。
+- 仓库规则要求不新增测试文件，本轮沿用现有测试、race、静态检查、发布 fixture 和人工端到端验收。
