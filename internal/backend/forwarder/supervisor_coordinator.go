@@ -1417,14 +1417,6 @@ func (aggregate *supervisedAggregate) cancelTask(taskID string) bool {
 	return true
 }
 
-func clearSupervisedReviewCancel(task *supervisedTaskState) {
-	if task == nil || task.reviewCancel == nil {
-		return
-	}
-	task.reviewCancel()
-	task.reviewCancel = nil
-}
-
 func (aggregate *supervisedAggregate) rememberTaskRuntimeState(task *supervisedTaskState) {
 	if aggregate == nil || aggregate.coordinator == nil || task == nil {
 		return
@@ -1627,27 +1619,6 @@ func (aggregate *supervisedAggregate) snapshotIdentityMatches(identity superviso
 
 func (aggregate *supervisedAggregate) resultIdentityMatches(task *supervisedTaskState, identity supervisorTaskIdentity, snapshot delegation.TaskSnapshot) bool {
 	return task != nil && aggregate.snapshotIdentityMatches(identity, snapshot)
-}
-
-func (aggregate *supervisedAggregate) recordSubmissionError(worker delegation.TaskRequest, err error) {
-	if aggregate == nil || err == nil {
-		return
-	}
-	aggregate.mu.Lock()
-	safeError := delegation.SanitizeSupervisorText(err.Error(), worker.WorkspaceHint)
-	aggregate.submissionErrors = append(aggregate.submissionErrors, delegatedWorkerResult{
-		TaskID:               strings.TrimSpace(worker.ID),
-		ModelID:              strings.TrimSpace(worker.ModelID),
-		ModelGroupID:         strings.TrimSpace(worker.ModelGroupID),
-		ExecutionMode:        strings.TrimSpace(worker.ExecutionMode),
-		Status:               delegation.TaskFailed,
-		Error:                safeError,
-		SupervisionStatus:    string(delegation.SupervisionStatusFailed),
-		SupervisionRound:     1,
-		SupervisionIssueCode: string(delegation.SupervisionIssueModelFailure),
-		SupervisionReason:    truncateProjectedReplayText("Supervisor reason", safeError, 512),
-	})
-	aggregate.mu.Unlock()
 }
 
 func (aggregate *supervisedAggregate) settleCurrentTask(task *supervisedTaskState) {
