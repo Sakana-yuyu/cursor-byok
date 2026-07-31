@@ -399,6 +399,10 @@ func (s *Scheduler) PublishCheckpoint(taskID string, checkpoint WorkerCheckpoint
 		s.mu.Unlock()
 		return false
 	}
+	if checkpoint.Round > 0 && checkpoint.Round != contract.Round {
+		s.mu.Unlock()
+		return false
+	}
 	if checkpoint.Round <= 0 && contract.Round > 0 {
 		checkpoint.Round = contract.Round
 	}
