@@ -12,11 +12,12 @@ import (
 )
 
 const (
-	DefaultRepeatedActionThreshold = 3
-	toolSignatureHashBytes         = 6
-	maxChangedFilesPerIssue        = 4
-	maxScopeDriftFiles             = 3
-	maxPathTailSegments            = 5
+	DefaultRepeatedActionThreshold  = 3
+	DefaultRepeatedFailureThreshold = 2
+	toolSignatureHashBytes          = 6
+	maxChangedFilesPerIssue         = 4
+	maxScopeDriftFiles              = 3
+	maxPathTailSegments             = 5
 )
 
 var (
@@ -27,23 +28,26 @@ var (
 )
 
 type LoopDetector struct {
-	RepeatedActionThreshold int
-	NoProgressWindow        time.Duration
+	RepeatedActionThreshold  int
+	RepeatedFailureThreshold int
+	NoProgressWindow         time.Duration
 }
 
 type DetectCheckpointIssueInput struct {
-	Contract             *SupervisionTaskContract
-	Current              WorkerCheckpoint
-	Previous             *WorkerCheckpoint
-	ToolSignature        string
-	RecentToolSignatures []string
-	ChangedFiles         []string
-	ErrorText            string
-	PreviousErrorText    string
-	OutputSummary        string
-	ResultMetadata       map[string]string
-	ClaimedCompletion    bool
-	Now                  time.Time
+	Contract               *SupervisionTaskContract
+	Current                WorkerCheckpoint
+	Previous               *WorkerCheckpoint
+	ToolSignature          string
+	RecentToolSignatures   []string
+	ChangedFiles           []string
+	ErrorText              string
+	PreviousErrorText      string
+	OutputSummary          string
+	PreviousOutputSummary  string
+	ResultMetadata         map[string]string
+	PreviousResultMetadata map[string]string
+	ClaimedCompletion      bool
+	Now                    time.Time
 }
 
 type scopeMatcher struct {
@@ -52,8 +56,9 @@ type scopeMatcher struct {
 
 func NewLoopDetector() LoopDetector {
 	return LoopDetector{
-		RepeatedActionThreshold: DefaultRepeatedActionThreshold,
-		NoProgressWindow:        DefaultSupervisionCheckpointInterval,
+		RepeatedActionThreshold:  DefaultRepeatedActionThreshold,
+		RepeatedFailureThreshold: DefaultRepeatedFailureThreshold,
+		NoProgressWindow:         DefaultSupervisionCheckpointInterval,
 	}
 }
 
@@ -137,6 +142,9 @@ func (detector LoopDetector) normalize(contract *SupervisionTaskContract) LoopDe
 	if detector.RepeatedActionThreshold <= 1 {
 		detector.RepeatedActionThreshold = DefaultRepeatedActionThreshold
 	}
+	if detector.RepeatedFailureThreshold <= 1 {
+		detector.RepeatedFailureThreshold = DefaultRepeatedFailureThreshold
+	}
 	if detector.NoProgressWindow <= 0 {
 		detector.NoProgressWindow = DefaultSupervisionCheckpointInterval
 	}
@@ -148,14 +156,20 @@ func (detector LoopDetector) normalize(contract *SupervisionTaskContract) LoopDe
 
 func normalizeDetectCheckpointIssueInput(input DetectCheckpointIssueInput) DetectCheckpointIssueInput {
 	input.Contract = cloneSupervisionTaskContract(input.Contract)
-	input.Current = normalizeWorkerCheckpoint(input.Current)
-	if input.Previous != nil {
-		previous := normalizeWorkerCheckpoint(*input.Previous)
-		input.Previous = &previous
-	}
 	workspaceHint := ""
 	if input.Contract != nil {
 		workspaceHint = input.Contract.WorkspaceHint
+		input.Current = normalizeSupervisedWorkerCheckpoint(input.Current, workspaceHint)
+		if input.Previous != nil {
+			previous := normalizeSupervisedWorkerCheckpoint(*input.Previous, workspaceHint)
+			input.Previous = &previous
+		}
+	} else {
+		input.Current = normalizeWorkerCheckpoint(input.Current)
+		if input.Previous != nil {
+			previous := normalizeWorkerCheckpoint(*input.Previous)
+			input.Previous = &previous
+		}
 	}
 	input.ToolSignature = normalizeToolSignatureValue(input.ToolSignature)
 	input.RecentToolSignatures = normalizeToolSignatureSlice(input.RecentToolSignatures)
@@ -163,7 +177,11 @@ func normalizeDetectCheckpointIssueInput(input DetectCheckpointIssueInput) Detec
 	input.ErrorText = normalizeErrorFingerprint(input.ErrorText, workspaceHint)
 	input.PreviousErrorText = normalizeErrorFingerprint(firstNonEmpty(input.PreviousErrorText, previousCheckpointBlocker(input.Previous)), workspaceHint)
 	input.OutputSummary = sanitizeNarrativeText(input.OutputSummary, workspaceHint)
+	input.PreviousOutputSummary = sanitizeNarrativeText(input.PreviousOutputSummary, workspaceHint)
 	input.ResultMetadata = cloneStringMap(input.ResultMetadata)
+	input.PreviousResultMetadata = cloneStringMap(input.PreviousResultMetadata)
+	input.ResultMetadata = sanitizeResultMetadata(input.ResultMetadata, workspaceHint)
+	input.PreviousResultMetadata = sanitizeResultMetadata(input.PreviousResultMetadata, workspaceHint)
 	if input.Now.IsZero() {
 		input.Now = time.Now().UTC()
 	} else {
@@ -233,6 +251,9 @@ func (detector LoopDetector) detectRepeatedFailure(input DetectCheckpointIssueIn
 	if input.ErrorText != input.PreviousErrorText {
 		return nil
 	}
+	if repeatedFailureCount(input) < detector.RepeatedFailureThreshold {
+		return nil
+	}
 	if hasRecoveryStrategyChange(input) {
 		return nil
 	}
@@ -254,9 +275,9 @@ func (detector LoopDetector) detectNoProgress(input DetectCheckpointIssueInput) 
 	if hasMeaningfulProgress(input) {
 		return nil
 	}
-	lastProgressAt := input.Current.EffectiveProgressAt
+	lastProgressAt := input.Previous.EffectiveProgressAt
 	if lastProgressAt.IsZero() {
-		lastProgressAt = input.Previous.EffectiveProgressAt
+		lastProgressAt = input.Current.EffectiveProgressAt
 	}
 	if lastProgressAt.IsZero() || input.Now.Sub(lastProgressAt) < detector.NoProgressWindow {
 		return nil
@@ -399,36 +420,74 @@ func hasRecoveryStrategyChange(input DetectCheckpointIssueInput) bool {
 	if input.Previous == nil {
 		return true
 	}
-	if input.Current.Step > input.Previous.Step {
-		return true
-	}
 	if !equalStringSlices(currentChangedFiles(input), input.Previous.ChangedFileSummaries) {
 		return true
 	}
-	if len(input.RecentToolSignatures) >= 2 {
-		last := input.RecentToolSignatures[len(input.RecentToolSignatures)-1]
-		previous := input.RecentToolSignatures[len(input.RecentToolSignatures)-2]
-		if last != previous {
-			return true
-		}
+	if currentStrategySignature(input) != previousStrategySignature(input) {
+		return true
+	}
+	if outputEvidenceFingerprint(input.OutputSummary, input.ResultMetadata) != outputEvidenceFingerprint(input.PreviousOutputSummary, input.PreviousResultMetadata) {
+		return true
+	}
+	if meaningfulStateAdvance(input) {
+		return true
 	}
 	return false
+}
+
+func repeatedFailureCount(input DetectCheckpointIssueInput) int {
+	currentSignature := currentStrategySignature(input)
+	if currentSignature == "" {
+		return 0
+	}
+	signatures := append([]string(nil), input.RecentToolSignatures...)
+	if len(signatures) == 0 || signatures[len(signatures)-1] != currentSignature {
+		signatures = append(signatures, currentSignature)
+	}
+	count := 0
+	for index := len(signatures) - 1; index >= 0; index-- {
+		if signatures[index] != currentSignature {
+			break
+		}
+		count++
+	}
+	return count
+}
+
+func currentStrategySignature(input DetectCheckpointIssueInput) string {
+	if input.ToolSignature != "" {
+		return input.ToolSignature
+	}
+	if len(input.RecentToolSignatures) >= 2 {
+		return input.RecentToolSignatures[len(input.RecentToolSignatures)-1]
+	}
+	if len(input.RecentToolSignatures) == 1 {
+		return input.RecentToolSignatures[0]
+	}
+	return ""
+}
+
+func previousStrategySignature(input DetectCheckpointIssueInput) string {
+	if len(input.RecentToolSignatures) >= 2 {
+		return input.RecentToolSignatures[len(input.RecentToolSignatures)-2]
+	}
+	return currentStrategySignature(input)
 }
 
 func hasMeaningfulProgress(input DetectCheckpointIssueInput) bool {
 	if input.Previous == nil {
 		return false
 	}
-	if input.Current.EffectiveProgressAt.After(input.Previous.EffectiveProgressAt) {
-		return true
-	}
-	if input.Current.Step > input.Previous.Step {
-		return true
-	}
 	if !equalStringSlices(currentChangedFiles(input), input.Previous.ChangedFileSummaries) {
 		return true
 	}
-	return hasOutputEvidence(input)
+	if currentStrategySignature(input) != previousStrategySignature(input) {
+		return true
+	}
+	if outputEvidenceFingerprint(input.OutputSummary, input.ResultMetadata) != outputEvidenceFingerprint(input.PreviousOutputSummary, input.PreviousResultMetadata) {
+		return true
+	}
+	return meaningfulStateAdvance(input)
 }
 
 func currentChangedFiles(input DetectCheckpointIssueInput) []string {
@@ -439,15 +498,7 @@ func currentChangedFiles(input DetectCheckpointIssueInput) []string {
 }
 
 func hasOutputEvidence(input DetectCheckpointIssueInput) bool {
-	if strings.TrimSpace(input.OutputSummary) != "" {
-		return true
-	}
-	for _, key := range []string{"output", "final_message", "final_output", "result"} {
-		if value := sanitizeNarrativeText(input.ResultMetadata[key], ""); value != "" {
-			return true
-		}
-	}
-	return false
+	return outputEvidenceFingerprint(input.OutputSummary, input.ResultMetadata) != ""
 }
 
 func hasDoneCriteriaEvidence(contract *SupervisionTaskContract, input DetectCheckpointIssueInput) bool {
@@ -503,6 +554,19 @@ func pathWithinScope(path string, scope []scopeMatcher) bool {
 		}
 	}
 	return false
+}
+
+func meaningfulStateAdvance(input DetectCheckpointIssueInput) bool {
+	if input.Previous == nil {
+		return false
+	}
+	if input.Current.Phase != input.Previous.Phase {
+		return true
+	}
+	if input.Current.Step > input.Previous.Step {
+		return progressEvidenceFingerprint(input.Current) != progressEvidenceFingerprint(*input.Previous)
+	}
+	return progressEvidenceFingerprint(input.Current) != progressEvidenceFingerprint(*input.Previous)
 }
 
 func sanitizeChangedFileSummary(summary string, workspaceHint string) string {
@@ -575,6 +639,50 @@ func sanitizeNarrativeText(value string, workspaceHint string) string {
 	value = longDigitPattern.ReplaceAllString(value, "<n>")
 	value = spaceCollapsePattern.ReplaceAllString(value, " ")
 	return strings.TrimSpace(value)
+}
+
+func sanitizeResultMetadata(metadata map[string]string, workspaceHint string) map[string]string {
+	if len(metadata) == 0 {
+		return nil
+	}
+	sanitized := make(map[string]string, len(metadata))
+	for key, value := range metadata {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		if safe := sanitizeNarrativeText(value, workspaceHint); safe != "" {
+			sanitized[key] = safe
+		}
+	}
+	if len(sanitized) == 0 {
+		return nil
+	}
+	return sanitized
+}
+
+func outputEvidenceFingerprint(summary string, metadata map[string]string) string {
+	parts := make([]string, 0, 5)
+	if summary = strings.TrimSpace(summary); summary != "" {
+		parts = append(parts, summary)
+	}
+	for _, key := range []string{"output", "final_message", "final_output", "result"} {
+		if value := strings.TrimSpace(metadata[key]); value != "" {
+			parts = append(parts, value)
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+func progressEvidenceFingerprint(checkpoint WorkerCheckpoint) string {
+	parts := make([]string, 0, 2)
+	if value := strings.TrimSpace(checkpoint.ProgressSummary); value != "" {
+		parts = append(parts, value)
+	}
+	if value := strings.TrimSpace(checkpoint.Blocker); value != "" {
+		parts = append(parts, value)
+	}
+	return strings.Join(parts, "\n")
 }
 
 func normalizeErrorFingerprint(value string, workspaceHint string) string {
