@@ -560,12 +560,6 @@ func meaningfulStateAdvance(input DetectCheckpointIssueInput) bool {
 	if input.Previous == nil {
 		return false
 	}
-	if input.Current.Phase != input.Previous.Phase {
-		return true
-	}
-	if input.Current.Step > input.Previous.Step {
-		return progressEvidenceFingerprint(input.Current) != progressEvidenceFingerprint(*input.Previous)
-	}
 	return progressEvidenceFingerprint(input.Current) != progressEvidenceFingerprint(*input.Previous)
 }
 
