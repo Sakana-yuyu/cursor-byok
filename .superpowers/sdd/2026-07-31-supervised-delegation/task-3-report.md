@@ -118,3 +118,18 @@ Re-ran successfully on July 31, 2026:
 - `go build ./...`
 - `go vet ./...`
 - `git diff --check`
+
+## 本轮补丁修复（中文）
+
+- 修复了升级路由：`escalate` 现在会像 reassignment 一样，为 `ReviewerModelID` / `SupervisorModelID` 解析其已配置的 group 与 execution mode，并把 `modelID/groupID/executionMode` 分开传给 `spawnFollowup`；如果目标模型没有配置 group，则显式回退为 `group=""` 且使用归一化后的当前 mode / `auto`，不再沿用旧 worker 的 group 字段。
+- 修正了 `WorkerGroupID` 语义：当配置了 `config.WorkerGroupID` 时，`nextReassignedModel` 只会在该启用组内寻找替代模型，不再静默回退到其他组；若该组没有可用替代模型，则返回空候选，并带上有界原因让 reassign 失败路径收口。
+- 收紧了 supervisor 决策 JSON 解析：单个决策对象解码后，第二次 `Decode` 现在必须返回 `io.EOF`，任何 trailing JSON/value/content 都会被拒绝。
+
+### 本轮验证
+
+已重新执行并通过：
+
+- `gofmt -w internal/backend/delegation/supervision.go internal/backend/server/config/delegation.go internal/backend/server/config/types.go internal/backend/server/config/manager.go internal/backend/forwarder/supervisor_provider.go internal/backend/forwarder/supervisor_coordinator.go internal/backend/forwarder/delegation_multitask.go`
+- `go build ./...`
+- `go vet ./...`
+- `git diff --check`

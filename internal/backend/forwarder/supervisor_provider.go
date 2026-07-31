@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -237,8 +238,12 @@ func decodeSupervisorDecision(raw string, allowed []delegation.SupervisionDecisi
 	if err := decoder.Decode(&decoded); err != nil {
 		return delegation.SupervisionDecision{}, fmt.Errorf("decode supervisor decision: %w", err)
 	}
-	if decoder.More() {
-		return delegation.SupervisionDecision{}, fmt.Errorf("supervisor returned multiple JSON values")
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return delegation.SupervisionDecision{}, fmt.Errorf("supervisor returned trailing JSON content")
+		}
+		return delegation.SupervisionDecision{}, fmt.Errorf("supervisor returned trailing JSON content: %w", err)
 	}
 	decision := delegation.SupervisionDecision{
 		Kind:    delegation.SupervisionDecisionKind(strings.TrimSpace(decoded.Kind)),
