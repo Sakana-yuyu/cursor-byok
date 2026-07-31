@@ -120,7 +120,7 @@ func (manager *Manager) DelegationRuntimeConfig() delegation.RuntimeConfig {
 			ToolPermissions: cloneBoolMap(group.ToolPermissions),
 		})
 	}
-	return result
+	return delegation.NormalizeRuntimeConfig(result)
 }
 
 func firstNonEmptyConfigValue(values ...string) string {
