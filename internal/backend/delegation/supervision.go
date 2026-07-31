@@ -35,6 +35,18 @@ const (
 	SupervisionDecisionCircuitOpen SupervisionDecisionKind = "circuit_open"
 )
 
+type SupervisionIssueCode string
+
+const (
+	SupervisionIssueToolFailure     SupervisionIssueCode = "tool_failure"
+	SupervisionIssueNoProgress      SupervisionIssueCode = "no_progress"
+	SupervisionIssueRepeatedAction  SupervisionIssueCode = "repeated_action"
+	SupervisionIssueScopeDrift      SupervisionIssueCode = "scope_drift"
+	SupervisionIssueMissingEvidence SupervisionIssueCode = "missing_evidence"
+	SupervisionIssueTimeout         SupervisionIssueCode = "timeout"
+	SupervisionIssueModelFailure    SupervisionIssueCode = "model_failure"
+)
+
 const (
 	DefaultSupervisionCorrections        = 2
 	DefaultSupervisionRetries            = 1
@@ -92,6 +104,16 @@ type SupervisionCounters struct {
 	Retries     int
 	Rounds      int
 	Checkpoints int
+}
+
+type SupervisionIssue struct {
+	Code          SupervisionIssueCode
+	Summary       string
+	ToolSignature string
+	ChangedFiles  []string
+	Round         int
+	Step          int
+	DetectedAt    time.Time
 }
 
 func supervisionStatusForTaskStatus(status TaskStatus) SupervisionStatus {
@@ -185,7 +207,7 @@ func normalizeWorkerCheckpoint(checkpoint WorkerCheckpoint) WorkerCheckpoint {
 		checkpoint.Step = 0
 	}
 	checkpoint.RecentToolNames = normalizeStringSlice(checkpoint.RecentToolNames)
-	checkpoint.ChangedFileSummaries = normalizeStringSlice(checkpoint.ChangedFileSummaries)
+	checkpoint.ChangedFileSummaries = normalizeChangedFileSummaries(checkpoint.ChangedFileSummaries, "")
 	checkpoint.ProgressSummary = strings.TrimSpace(checkpoint.ProgressSummary)
 	checkpoint.Blocker = strings.TrimSpace(checkpoint.Blocker)
 	if checkpoint.EffectiveProgressAt.IsZero() {
@@ -220,6 +242,15 @@ func cloneSupervisionCounters(counters SupervisionCounters) SupervisionCounters 
 	return counters
 }
 
+func cloneSupervisionIssue(issue *SupervisionIssue) *SupervisionIssue {
+	if issue == nil {
+		return nil
+	}
+	cloned := *issue
+	cloned.ChangedFiles = cloneStringSlice(issue.ChangedFiles)
+	return &cloned
+}
+
 func normalizeSupervisionCounters(counters SupervisionCounters) SupervisionCounters {
 	if counters.Corrections < 0 {
 		counters.Corrections = 0
@@ -234,6 +265,23 @@ func normalizeSupervisionCounters(counters SupervisionCounters) SupervisionCount
 		counters.Checkpoints = 0
 	}
 	return counters
+}
+
+func normalizeSupervisionIssue(issue SupervisionIssue) SupervisionIssue {
+	issue.Code = normalizeSupervisionIssueCode(string(issue.Code))
+	issue.Summary = strings.TrimSpace(issue.Summary)
+	issue.ToolSignature = normalizeToolSignatureValue(issue.ToolSignature)
+	issue.ChangedFiles = normalizeChangedFileSummaries(issue.ChangedFiles, "")
+	if issue.Round < 0 {
+		issue.Round = 0
+	}
+	if issue.Step < 0 {
+		issue.Step = 0
+	}
+	if !issue.DetectedAt.IsZero() {
+		issue.DetectedAt = issue.DetectedAt.UTC()
+	}
+	return issue
 }
 
 func normalizeSupervisionStatus(value string) SupervisionStatus {
@@ -285,6 +333,27 @@ func normalizeSupervisionDecisionKind(value string) SupervisionDecisionKind {
 		return SupervisionDecisionEscalate
 	case string(SupervisionDecisionCircuitOpen):
 		return SupervisionDecisionCircuitOpen
+	default:
+		return ""
+	}
+}
+
+func normalizeSupervisionIssueCode(value string) SupervisionIssueCode {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case string(SupervisionIssueToolFailure):
+		return SupervisionIssueToolFailure
+	case string(SupervisionIssueNoProgress):
+		return SupervisionIssueNoProgress
+	case string(SupervisionIssueRepeatedAction):
+		return SupervisionIssueRepeatedAction
+	case string(SupervisionIssueScopeDrift):
+		return SupervisionIssueScopeDrift
+	case string(SupervisionIssueMissingEvidence):
+		return SupervisionIssueMissingEvidence
+	case string(SupervisionIssueTimeout):
+		return SupervisionIssueTimeout
+	case string(SupervisionIssueModelFailure):
+		return SupervisionIssueModelFailure
 	default:
 		return ""
 	}
