@@ -407,6 +407,7 @@ func (s *Scheduler) PublishCheckpoint(taskID string, checkpoint WorkerCheckpoint
 		checkpoint.Round = contract.Round
 	}
 	checkpoint = normalizeSupervisedWorkerCheckpoint(checkpoint, contract.WorkspaceHint)
+	checkpoint.EffectiveProgressAt = resolveCheckpointEffectiveProgressAt(state.checkpoint, checkpoint.EffectiveProgressAt, time.Now().UTC())
 	state.checkpoint = cloneWorkerCheckpoint(&checkpoint)
 	state.snapshot.Checkpoint = cloneWorkerCheckpoint(&checkpoint)
 	state.counters.Checkpoints++
@@ -418,6 +419,20 @@ func (s *Scheduler) PublishCheckpoint(taskID string, checkpoint WorkerCheckpoint
 	s.publishLocked(&state.snapshot)
 	s.mu.Unlock()
 	return true
+}
+
+func resolveCheckpointEffectiveProgressAt(previous *WorkerCheckpoint, candidate time.Time, now time.Time) time.Time {
+	if previous != nil && !previous.EffectiveProgressAt.IsZero() {
+		previousAt := previous.EffectiveProgressAt.UTC()
+		if candidate.IsZero() || !candidate.After(previousAt) {
+			return previousAt
+		}
+		return candidate.UTC()
+	}
+	if candidate.IsZero() {
+		return now.UTC()
+	}
+	return candidate.UTC()
 }
 
 func (s *Scheduler) Snapshot(taskID string) (TaskSnapshot, bool) {
