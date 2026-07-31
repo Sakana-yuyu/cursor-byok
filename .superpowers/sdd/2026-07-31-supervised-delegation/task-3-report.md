@@ -98,3 +98,23 @@ Re-ran successfully on July 31, 2026:
 - `go build ./...`
 - `go vet ./...`
 - `git diff --check`
+
+## 最终审查修复（中文）
+
+- 修复了 `worker_terminal` / `review_result` 事件已入队、但在 handler 执行时 `parentExecStillCurrent()` 已失效的 stale-event race。
+- 现在这两个 handler 在 identity 仍匹配但父 exec/provider pass 已陈旧时，不再直接 `return`；而是在 aggregate 内部：
+  - 将对应 task 标记为已完成/abandoned
+  - 清除 `reviewPending`
+  - 写入经过裁剪的 stale/canceled 原因
+  - 将 task 状态收口为 `TaskCanceled` + `SupervisionStatusCanceled`
+  - 保留 issue code / reason，确保 `allTasksCompleted()` 可以成立，aggregate 能继续走内部 `finish()/remove`
+- 这条 stale-event 收口路径不会发布新的 provider pass，也不会改动主 stream / provider history；`reviewTask` 现有的 stale handling 继续保留。
+
+### 最终审查验证
+
+已重新执行并通过：
+
+- `gofmt -w internal/backend/delegation/supervision.go internal/backend/server/config/delegation.go internal/backend/server/config/types.go internal/backend/server/config/manager.go internal/backend/forwarder/supervisor_provider.go internal/backend/forwarder/supervisor_coordinator.go internal/backend/forwarder/delegation_multitask.go`
+- `go build ./...`
+- `go vet ./...`
+- `git diff --check`
