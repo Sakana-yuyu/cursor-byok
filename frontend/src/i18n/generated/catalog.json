@@ -60,7 +60,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 296,
+          "line": 299,
           "column": 67
         }
       ]
@@ -323,7 +323,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 130,
+          "line": 133,
           "column": 26
         }
       ]
@@ -347,7 +347,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 93,
+          "line": 96,
           "column": 64
         },
         {
@@ -422,7 +422,7 @@
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 489,
+          "line": 503,
           "column": 35
         }
       ]
@@ -623,7 +623,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 222,
+          "line": 225,
           "column": 410
         }
       ]
@@ -724,7 +724,7 @@
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 483,
+          "line": 497,
           "column": 35
         }
       ]
@@ -825,7 +825,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 478,
+          "line": 492,
           "column": 57
         }
       ]
@@ -837,7 +837,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 335,
+          "line": 338,
           "column": 85
         }
       ]
@@ -885,7 +885,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 236,
+          "line": 239,
           "column": 35
         }
       ]
@@ -897,7 +897,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 222,
+          "line": 225,
           "column": 85
         }
       ]
@@ -1118,7 +1118,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1892,
+          "line": 1917,
           "column": 32
         }
       ]
@@ -1421,7 +1421,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 506,
+          "line": 520,
           "column": 39
         }
       ]
@@ -1467,7 +1467,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 93,
+          "line": 96,
           "column": 45
         },
         {
@@ -1639,7 +1639,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 223,
+          "line": 226,
           "column": 317
         }
       ]
@@ -1774,7 +1774,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 93,
+          "line": 96,
           "column": 129
         },
         {
@@ -2043,7 +2043,7 @@
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 93,
+          "line": 96,
           "column": 149
         },
         {
@@ -2173,7 +2173,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 222,
+          "line": 225,
           "column": 682
         }
       ]
@@ -2297,7 +2297,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 456,
+          "line": 470,
           "column": 17
         }
       ]
@@ -2321,7 +2321,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 336,
+          "line": 339,
           "column": 171
         }
       ]
@@ -2432,12 +2432,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 192,
+          "line": 193,
           "column": 133
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 152,
+          "line": 158,
           "column": 119
         }
       ]
@@ -2574,7 +2574,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 149,
+          "line": 152,
           "column": 10
         }
       ]
@@ -2702,7 +2702,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 223,
+          "line": 226,
           "column": 479
         },
         {
@@ -2794,7 +2794,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 88,
+          "line": 91,
           "column": 87
         }
       ]
@@ -2951,7 +2951,7 @@
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 219,
+          "line": 222,
           "column": 53
         },
         {
@@ -2990,7 +2990,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 310,
+          "line": 313,
           "column": 108
         }
       ]
@@ -3238,12 +3238,12 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 283,
+          "line": 282,
           "column": 12
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 307,
+          "line": 306,
           "column": 12
         }
       ]
@@ -3267,7 +3267,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 145,
+          "line": 148,
           "column": 33
         }
       ]
@@ -3337,7 +3337,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 218,
+          "line": 221,
           "column": 115
         }
       ]
@@ -3378,7 +3378,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 275,
+          "line": 278,
           "column": 27
         }
       ]
@@ -3516,7 +3516,7 @@
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 62,
+          "line": 65,
           "column": 51
         },
         {
@@ -3620,7 +3620,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 335,
+          "line": 338,
           "column": 115
         }
       ]
@@ -3685,12 +3685,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 235,
+          "line": 236,
           "column": 159
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 232,
+          "line": 238,
           "column": 128
         }
       ]
@@ -3864,7 +3864,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 180,
+          "line": 183,
           "column": 21
         }
       ]
@@ -3876,12 +3876,12 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 103,
+          "line": 106,
           "column": 30
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 111,
+          "line": 114,
           "column": 30
         }
       ]
@@ -4161,7 +4161,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 437,
+          "line": 451,
           "column": 17
         }
       ]
@@ -4243,7 +4243,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 266,
+          "line": 269,
           "column": 56
         }
       ]
@@ -4272,12 +4272,12 @@
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 253,
+          "line": 256,
           "column": 139
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 268,
+          "line": 271,
           "column": 215
         }
       ]
@@ -4289,7 +4289,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 260,
+          "line": 263,
           "column": 65
         }
       ]
@@ -4362,7 +4362,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 64,
+          "line": 67,
           "column": 27
         }
       ]
@@ -4427,7 +4427,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 223,
+          "line": 226,
           "column": 873
         }
       ]
@@ -4609,7 +4609,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 286,
+          "line": 289,
           "column": 72
         }
       ]
@@ -4667,7 +4667,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1969,
+          "line": 1994,
           "column": 32
         }
       ]
@@ -4792,7 +4792,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 222,
+          "line": 225,
           "column": 320
         }
       ]
@@ -4828,7 +4828,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 223,
+          "line": 226,
           "column": 159
         }
       ]
@@ -4840,7 +4840,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 480,
+          "line": 494,
           "column": 35
         }
       ]
@@ -4852,7 +4852,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 335,
+          "line": 338,
           "column": 102
         },
         {
@@ -5282,7 +5282,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 222,
+          "line": 225,
           "column": 850
         }
       ]
@@ -5306,7 +5306,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 222,
+          "line": 225,
           "column": 697
         }
       ]
@@ -5402,7 +5402,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 219,
+          "line": 222,
           "column": 35
         }
       ]
@@ -5666,7 +5666,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 456,
+          "line": 470,
           "column": 17
         }
       ]
@@ -5702,7 +5702,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 246,
+          "line": 249,
           "column": 128
         }
       ]
@@ -5878,7 +5878,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 266,
+          "line": 269,
           "column": 56
         }
       ]
@@ -5924,7 +5924,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 222,
+          "line": 225,
           "column": 544
         }
       ]
@@ -5948,7 +5948,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 148,
+          "line": 151,
           "column": 50
         }
       ]
@@ -6008,7 +6008,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 222,
+          "line": 225,
           "column": 168
         }
       ]
@@ -6068,12 +6068,12 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 463,
+          "line": 477,
           "column": 9
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 464,
+          "line": 478,
           "column": 9
         }
       ]
@@ -6208,7 +6208,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 261,
+          "line": 264,
           "column": 65
         }
       ]
@@ -6401,7 +6401,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 87,
+          "line": 90,
           "column": 92
         }
       ]
@@ -6534,7 +6534,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 223,
+          "line": 226,
           "column": 93
         }
       ]
@@ -6558,7 +6558,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1932,
+          "line": 1957,
           "column": 32
         }
       ]
@@ -6570,7 +6570,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 223,
+          "line": 226,
           "column": 572
         }
       ]
@@ -6630,7 +6630,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 437,
+          "line": 451,
           "column": 17
         }
       ]
@@ -6838,12 +6838,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2200,
+          "line": 2225,
           "column": 32
         },
         {
           "file": "src/state/appState.js",
-          "line": 2221,
+          "line": 2246,
           "column": 32
         }
       ]
@@ -6896,7 +6896,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 304,
+          "line": 307,
           "column": 67
         }
       ]
@@ -6980,7 +6980,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 96,
+          "line": 99,
           "column": 29
         },
         {
@@ -7279,7 +7279,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2145,
+          "line": 2170,
           "column": 14
         }
       ]
@@ -7398,12 +7398,12 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 471,
+          "line": 485,
           "column": 9
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 472,
+          "line": 486,
           "column": 9
         }
       ]
@@ -7483,7 +7483,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 222,
+          "line": 225,
           "column": 837
         }
       ]
@@ -7507,7 +7507,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 222,
+          "line": 225,
           "column": 531
         }
       ]
@@ -7543,7 +7543,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 284,
+          "line": 283,
           "column": 12
         }
       ]
@@ -7579,7 +7579,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 223,
+          "line": 226,
           "column": 694
         }
       ]
@@ -7731,7 +7731,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 332,
+          "line": 335,
           "column": 187
         }
       ]
@@ -7934,7 +7934,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 222,
+          "line": 225,
           "column": 423
         }
       ]
@@ -7970,7 +7970,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 96,
+          "line": 99,
           "column": 50
         },
         {
@@ -7987,7 +7987,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 133,
+          "line": 136,
           "column": 62
         }
       ]
@@ -8021,7 +8021,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 223,
+          "line": 226,
           "column": 792
         }
       ]
@@ -8266,7 +8266,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 276,
+          "line": 279,
           "column": 27
         }
       ]
@@ -8355,7 +8355,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 269,
+          "line": 272,
           "column": 143
         }
       ]
@@ -8456,7 +8456,7 @@
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 486,
+          "line": 500,
           "column": 35
         }
       ]
@@ -8468,7 +8468,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 273,
+          "line": 276,
           "column": 170
         }
       ]
@@ -8596,7 +8596,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 291,
+          "line": 294,
           "column": 35
         }
       ]
@@ -8666,7 +8666,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1988,
+          "line": 2013,
           "column": 32
         }
       ]
@@ -8714,7 +8714,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 336,
+          "line": 339,
           "column": 120
         }
       ]
@@ -8779,7 +8779,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 336,
+          "line": 339,
           "column": 247
         }
       ]
@@ -8890,17 +8890,17 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 2116,
+          "line": 2141,
           "column": 28
         },
         {
           "file": "src/state/appState.js",
-          "line": 2118,
+          "line": 2143,
           "column": 38
         },
         {
           "file": "src/state/appState.js",
-          "line": 2153,
+          "line": 2178,
           "column": 93
         },
         {
@@ -8917,7 +8917,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 231,
+          "line": 234,
           "column": 72
         }
       ]
@@ -8994,7 +8994,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 133,
+          "line": 136,
           "column": 45
         }
       ]
@@ -9131,7 +9131,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 95,
+          "line": 98,
           "column": 46
         },
         {
@@ -9281,7 +9281,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2013,
+          "line": 2038,
           "column": 14
         }
       ]
@@ -9570,17 +9570,17 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 281,
+          "line": 280,
           "column": 12
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 305,
+          "line": 304,
           "column": 12
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 496,
+          "line": 510,
           "column": 87
         }
       ]
@@ -9619,7 +9619,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 298,
+          "line": 301,
           "column": 123
         },
         {
@@ -9725,7 +9725,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 63,
+          "line": 66,
           "column": 60
         }
       ]
@@ -9819,12 +9819,12 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 216,
+          "line": 219,
           "column": 241
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 218,
+          "line": 221,
           "column": 65
         },
         {
@@ -10099,7 +10099,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 493,
+          "line": 507,
           "column": 66
         }
       ]
@@ -10157,12 +10157,12 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 259,
+          "line": 262,
           "column": 65
         },
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 259,
+          "line": 262,
           "column": 147
         }
       ]
@@ -10203,7 +10203,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 488,
+          "line": 502,
           "column": 32
         }
       ]
@@ -10476,7 +10476,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 88,
+          "line": 91,
           "column": 149
         }
       ]
@@ -10580,7 +10580,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 139,
+          "line": 142,
           "column": 112
         }
       ]
@@ -11041,7 +11041,7 @@
       "refs": [
         {
           "file": "src/components/SettingsDrawer.vue",
-          "line": 64,
+          "line": 67,
           "column": 58
         }
       ]
