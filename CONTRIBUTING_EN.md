@@ -2,7 +2,7 @@
 
 > 中文版本：[CONTRIBUTING.md](./CONTRIBUTING.md)
 
-Thank you for considering contributing to cursor-byok!
+Thank you for considering contributing to Cursor Local Assistant!
 
 ## Prerequisites
 
@@ -33,7 +33,7 @@ task build
 
 ```
 ├── main.go                 # Entry point
-├── internal/               # Go backend (proxy, forwarding, client management)
+├── internal/               # Go backend (proxy, forwarding, delegation, client management)
 ├── frontend/               # Vue 3 + Vite + Tailwind frontend
 │   ├── src/
 │   │   ├── views/          # Pages
@@ -47,6 +47,8 @@ task build
 ├── scripts/                # Helper scripts (release, metrics)
 └── Taskfile.yml            # Top-level task orchestration
 ```
+
+For Cursor delegation or local-mode issues, preserve a real request log and describe the event order using `request_id`, `conversation_id`, `model_call_id`, `tool_call_id`, and `exec_id`. Do not modify the installed Cursor directory; validate protocol behavior through the local proxy and a reproducible request.
 
 ## Development Guidelines
 

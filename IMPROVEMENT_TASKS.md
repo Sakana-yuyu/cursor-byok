@@ -1,4 +1,4 @@
-# cursor-byok 持续优化任务清单
+# Cursor Local Assistant 持续优化任务清单
 
 > 目标：面向客户的易用性 + 稳定性。先修 bug 再上功能。
 > 约束：**不写任何测试**；改 prompt/history/replay 遵守 prefix-cache-stability；不改已安装 Cursor 客户端。
