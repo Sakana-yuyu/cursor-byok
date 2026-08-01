@@ -882,6 +882,7 @@ message ConversationStateStructure {
   optional string communicate_update_final_summary = 25;
   optional string communicate_update_completed_subtitle = 28;
   map<string, CommunicateUpdateTurnState> communicate_update_states_by_parent_tool_call_id = 29;
+  map<string, SubagentRun> subagent_runs_by_parent_tool_call_id = 30;
   optional uint64 conversation_started_timestamp_ms = 26;
   optional string conversation_started_time_zone = 27;
 }
@@ -4817,6 +4818,34 @@ message SubagentPersistedState {
   optional string model_id = 5;
   SubagentExecutionEnvironment environment = 6;
   optional CloudSubagentReference cloud_subagent = 7;
+}
+
+// Copied from: local:agent.v1.SubagentRunStatus (var: c)
+enum SubagentRunStatus {
+  SUBAGENT_RUN_STATUS_UNSPECIFIED = 0;
+  SUBAGENT_RUN_STATUS_RUNNING = 1;
+  SUBAGENT_RUN_STATUS_BACKGROUNDED = 2;
+  SUBAGENT_RUN_STATUS_SUCCESS = 3;
+  SUBAGENT_RUN_STATUS_ERROR = 4;
+  SUBAGENT_RUN_STATUS_ABORTED = 5;
+}
+
+// Copied from: local:agent.v1.SubagentRun (var: Ze)
+// 客户端 Cursor 按 conversation_checkpoint_update.subagent_runs_by_parent_tool_call_id
+// 渲染 Task 卡片状态：有记录时按 status 显示 running/succeeded/error/aborted；
+// 无记录时不更新（bubble 创建失败时卡片停留在 stopped）。byok 本地委派必须
+// 通过该字段同步委派状态，保证 Cursor 端与 byok 实际进度一致。
+message SubagentRun {
+  string parent_tool_call_id = 1;
+  optional string subagent_id = 2;
+  SubagentExecutionEnvironment environment = 3;
+  SubagentRunStatus status = 4;
+  optional string title = 5;
+  optional string detail = 6;
+  optional string transcript_path = 7;
+  optional string output_path = 8;
+  optional uint64 completed_timestamp_ms = 9;
+  optional BackgroundTaskCompletionReason completion_reason = 10;
 }
 
 // Copied from: local:agent.v1.SubagentResult (var: m6)

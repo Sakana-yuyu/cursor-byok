@@ -957,6 +957,7 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 	stream.ProviderFinishReason = ""
 	stream.ProviderUsage = turnUsageSnapshot{}
 	stream.ToolInvocationCount = 0
+	stream.AutoMultitaskDelegationStarted = false
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
 	service.setTurnPhase(stream, TurnPhaseIdle)
@@ -1152,7 +1153,30 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	}
 	stream.mu.Lock()
 	turnSeq := stream.TurnSeq
+	conversationID := strings.TrimSpace(stream.ConversationID)
+	phase := stream.Phase
+	status := stream.Status
+	providerActive := stream.ProviderActive
+	pendingExecCount := len(stream.PendingExecs)
+	activeDelegationCount := 0
+	for _, pending := range stream.PendingExecs {
+		if strings.TrimSpace(pending.ExecKind) == "delegation_aggregate" {
+			activeDelegationCount++
+		}
+	}
 	stream.mu.Unlock()
+	log.Printf("forwarder cancel intent received request_id=%s conversation_id=%s reason=%q phase=%s status=%s provider_active=%t pending_execs=%d active_delegations=%d",
+		strings.TrimSpace(intent.RequestID), conversationID, strings.TrimSpace(intent.CancelReason), phase, status, providerActive, pendingExecCount, activeDelegationCount)
+	service.debug.LogRuntime(context.Background(), intent.RequestID, conversationID, "cancel_intent_received", map[string]any{
+		"reason":                     strings.TrimSpace(intent.CancelReason),
+		"phase":                      string(phase),
+		"status":                     string(status),
+		"provider_active":            providerActive,
+		"pending_exec_count":         pendingExecCount,
+		"active_delegation_count":    activeDelegationCount,
+		"client_requested_cancel":    true,
+		"cancel_replay_policy_value": cancelReplayPolicyForReason(intent.CancelReason),
+	})
 	service.clearProvider400Recovery(intent.RequestID, turnSeq)
 	// 先切断当前 provider 请求，再做 history、工具 abort 和委派清理。
 	// 断线取消不能因为后续持久化或广播变慢而继续消耗上游额度。
@@ -1312,12 +1336,15 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 		status := delegation.TaskCompleted
 		progress := "Cursor 子代理已完成"
 		errorText := ""
+		runStatus := agentv1.SubagentRunStatus_SUBAGENT_RUN_STATUS_SUCCESS
 		if subagentResultFailed(intent.ExecClientMessage.GetSubagentResult()) {
 			status = delegation.TaskFailed
 			progress = "Cursor 子代理执行失败"
 			errorText = subagentResultErrorText(intent.ExecClientMessage.GetSubagentResult())
+			runStatus = agentv1.SubagentRunStatus_SUBAGENT_RUN_STATUS_ERROR
 		}
 		service.updateNativeDelegationStatus(pending.ExecID, status, progress, errorText)
+		service.recordDelegationRunTerminal(stream, pending, runStatus, "Cursor 子代理", errorText)
 	}
 	backgroundShellToolCallID := ""
 	if strings.TrimSpace(pending.ExecKind) == "shell" && shellToolCallIsBackgrounded(result.ToolCall) {
@@ -1748,6 +1775,10 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	if stream.ProviderSyntheticThinkingStartedAt.IsZero() {
 		stream.ProviderSyntheticThinkingStartedAt = time.Now().UTC()
 	}
+	// 每个 provider pass 独立发送 synthetic thinking（"Thinking is encrypted"）。
+	// 若不重置，同一 turn 内第二次及以后的 pass 会因 ProviderSyntheticThinkingPublished
+	// 仍为 true 而跳过 thinking_delta，Cursor 在主 agent 推理期间会卡在 "Planning next moves"。
+	stream.ProviderSyntheticThinkingPublished = false
 	stream.ProviderFinishReason = ""
 	stream.ProviderUsage = turnUsageSnapshot{}
 	stream.ToolInvocationCount = 0
@@ -2155,6 +2186,7 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 	trimmedToolName := strings.TrimSpace(invocation.ToolName)
 	stream.mu.Lock()
 	mode := stream.Mode
+	providerPass := stream.ProviderPassCount
 	subagentTypeName := ""
 	if stream.CheckpointConversation != nil {
 		subagentTypeName = strings.TrimSpace(stream.CheckpointConversation.SubagentTypeName)
@@ -2162,6 +2194,30 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 	stream.ToolInvocationCount++
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
+	delegationEnabled := false
+	delegationSupervision := false
+	delegationGroups := 0
+	if service != nil && service.multitaskDelegation != nil {
+		config := service.multitaskDelegation.runtimeConfig()
+		delegationEnabled = config.Enabled
+		delegationSupervision = config.SupervisionEnabled
+		delegationGroups = len(config.Groups)
+	}
+	log.Printf("forwarder tool invocation request_id=%s conversation_id=%s mode=%s tool=%s call_id=%s model_call_id=%s provider_pass=%d multitask_coordinator=%t delegation_enabled=%t supervision_enabled=%t delegation_groups=%d",
+		strings.TrimSpace(stream.RequestID), strings.TrimSpace(stream.ConversationID), mode.String(), trimmedToolName, strings.TrimSpace(invocation.CallID), strings.TrimSpace(invocation.ModelCallID), providerPass, service != nil && service.multitaskDelegation != nil, delegationEnabled, delegationSupervision, delegationGroups)
+	if service != nil && service.debug != nil {
+		service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "tool_invocation_routed", map[string]any{
+			"mode":                   mode.String(),
+			"tool_name":              trimmedToolName,
+			"call_id":                strings.TrimSpace(invocation.CallID),
+			"model_call_id":          strings.TrimSpace(invocation.ModelCallID),
+			"provider_pass":          providerPass,
+			"multitask_coordinator":  service != nil && service.multitaskDelegation != nil,
+			"delegation_enabled":     delegationEnabled,
+			"supervision_enabled":    delegationSupervision,
+			"delegation_group_count": delegationGroups,
+		})
+	}
 	if !isToolAllowedInMode(mode, subagentTypeName, trimmedToolName) {
 		return service.completePreDispatchToolError(stream, invocation, nil, false, false, fmt.Errorf("tool invocation is not enabled in mode %s: %s", mode.String(), invocation.ToolName))
 	}
@@ -2210,8 +2266,17 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 	suppressStartedToolCall := shouldSuppressStartedToolCallAfterPartial(stream, trimmedToolName, invocation.CallID)
 	startedToolCall := buildStartedToolCall(invocation)
 	startedEmitted := suppressStartedToolCall
+	delegatedTaskStarted := false
+	nativeTaskOpened := false
+	var nativeTaskServerMessage *agentv1.AgentServerMessage
+	var nativeTaskPending runtimecore.PendingExec
 	ensureLoopActive := func() error {
 		return providerLoopInterruptErr(nil, stream, invocation.ModelCallID)
+	}
+	if autoStarted, autoErr := service.maybeStartAutomaticMultitaskDelegation(stream, invocation); autoErr != nil {
+		log.Printf("forwarder automatic multitask delegation ignored request_id=%s tool=%s reason=%v", strings.TrimSpace(stream.RequestID), trimmedToolName, autoErr)
+	} else if autoStarted {
+		log.Printf("forwarder automatic multitask delegation started request_id=%s trigger_tool=%s", strings.TrimSpace(stream.RequestID), trimmedToolName)
 	}
 	if startedToolCall != nil {
 		if err := ensureLoopActive(); err != nil {
@@ -2228,16 +2293,77 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 			return err
 		}
 	}
+	// Cursor creates the Task bubble as soon as tool_call_started arrives. For a
+	// locally executed Task, register the aggregate and publish its RUNNING
+	// checkpoint first so that the bubble can be associated with a live
+	// subagent run instead of briefly falling back to the client's "Stopped"
+	// label. A second checkpoint immediately after the bubble is required
+	// because the first one predates the client-side tool bubble.
+	if trimmedToolName == "Task" && !bufferExecDispatch && !suppressStartedToolCall {
+		if err := ensureLoopActive(); err != nil {
+			return err
+		}
+		delegatedTaskStarted, err = service.tryStartDelegatedTask(stream, invocation)
+		if err != nil {
+			if errors.Is(err, errProviderLoopInterrupted) {
+				return err
+			}
+			return service.completePreDispatchToolError(stream, invocation, startedToolCall, startedToolCall != nil, startedEmitted, err)
+		}
+		if delegatedTaskStarted {
+			log.Printf("forwarder task dispatch order request_id=%s tool_call_id=%s order=aggregate_started_then_checkpoint_then_started", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID))
+			if service.debug != nil {
+				service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "task_dispatch_order", map[string]any{
+					"tool_call_id": strings.TrimSpace(invocation.CallID),
+					"order":        "aggregate_started_then_checkpoint_then_started",
+				})
+			}
+		} else {
+			// Direct Cursor Task executions must be registered before the client
+			// sees tool_call_started. The installed Cursor client creates the Task
+			// bubble immediately and labels it Stopped when no RUNNING subagent
+			// checkpoint exists at that moment.
+			nativeTaskServerMessage, nativeTaskPending, err = service.openNativeTaskExec(stream, invocation, subagentOverrides)
+			if err != nil {
+				if errors.Is(err, errProviderLoopInterrupted) {
+					return err
+				}
+				return service.completePreDispatchToolError(stream, invocation, startedToolCall, startedToolCall != nil, startedEmitted, err)
+			}
+			nativeTaskOpened = true
+			log.Printf("forwarder task dispatch order request_id=%s tool_call_id=%s order=native_exec_registered_then_checkpoint_then_started exec_id=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID), strings.TrimSpace(nativeTaskPending.ExecID))
+			if service.debug != nil {
+				service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "task_dispatch_order", map[string]any{
+					"tool_call_id": strings.TrimSpace(invocation.CallID),
+					"exec_id":      strings.TrimSpace(nativeTaskPending.ExecID),
+					"order":        "native_exec_registered_then_checkpoint_then_started",
+				})
+			}
+		}
+	}
 	if !bufferExecDispatch && !suppressStartedToolCall {
 		if err := ensureLoopActive(); err != nil {
 			return err
 		}
+		if trimmedToolName == "Task" {
+			log.Printf("forwarder task tool_call_started publishing request_id=%s tool_call_id=%s model_call_id=%s agent_id=%s args_bytes=%d", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID), strings.TrimSpace(invocation.ModelCallID), delegationSubagentID(invocation.CallID), len(invocation.ArgsJSON))
+		}
 		if err := service.broker.Publish(stream.RequestID, StreamEvent{
 			Message: buildToolCallStartedMessage(invocation.CallID, invocation.ModelCallID, startedToolCall),
 		}); err != nil {
+			if trimmedToolName == "Task" {
+				log.Printf("forwarder task tool_call_started publish failed request_id=%s tool_call_id=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID), err)
+			}
 			return err
 		}
 		startedEmitted = true
+		if trimmedToolName == "Task" && (delegatedTaskStarted || nativeTaskOpened) {
+			if err := service.publishCheckpoint(stream.RequestID, stream.ConversationID); err != nil {
+				log.Printf("forwarder task post-start checkpoint failed request_id=%s tool_call_id=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID), err)
+				return err
+			}
+			log.Printf("forwarder task post-start checkpoint published request_id=%s tool_call_id=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID))
+		}
 	}
 	if isImmediateNativeInvocation {
 		return service.handleImmediateNativeToolInvocation(stream, invocation)
@@ -2255,7 +2381,16 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 		return nil
 	}
 	if isExecInvocation {
-		if trimmedToolName == "Task" {
+		// A Multitask Task handled by the local delegation aggregate is already
+		// registered, checkpointed, and represented in Cursor's Task bubble above.
+		// Do not fall through to OpenExec: doing so registers a second native
+		// subagent for the same tool call and can leave the foreground turn stuck
+		// in Stopped after the native watchdog fires.
+		if trimmedToolName == "Task" && delegatedTaskStarted {
+			log.Printf("forwarder task local aggregate dispatch complete request_id=%s tool_call_id=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID))
+			return nil
+		}
+		if trimmedToolName == "Task" && !delegatedTaskStarted && !nativeTaskOpened {
 			started, err := service.tryStartDelegatedTask(stream, invocation)
 			if err != nil {
 				if errors.Is(err, errProviderLoopInterrupted) {
@@ -2267,22 +2402,28 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 				return nil
 			}
 		}
-		serverMessage, pendingExec, err := service.execBridge.OpenExec(buildExecOpenContextForStream(stream, subagentOverrides), invocation)
-		if err != nil {
-			return service.completePreDispatchToolError(stream, invocation, startedToolCall, startedToolCall != nil, startedEmitted, err)
+		serverMessage := nativeTaskServerMessage
+		pendingExec := nativeTaskPending
+		if !nativeTaskOpened {
+			serverMessage, pendingExec, err = service.execBridge.OpenExec(buildExecOpenContextForStream(stream, subagentOverrides), invocation)
+			if err != nil {
+				return service.completePreDispatchToolError(stream, invocation, startedToolCall, startedToolCall != nil, startedEmitted, err)
+			}
+			pendingExec.ModelCallID = invocation.ModelCallID
+			pendingExec.ReasoningContent = invocation.ReasoningContent
+			pendingExec.ReasoningSignature = invocation.ReasoningSignature
+			pendingExec.ReasoningSignatureSource = invocation.ReasoningSignatureSource
+			pendingExec = initializePendingExecForTracking(pendingExec)
+			stream.mu.Lock()
+			pendingExec.ProviderPass = stream.ProviderPassCount
+			stream.PendingExecs[pendingExec.ExecID] = pendingExec
+			stream.mu.Unlock()
+			if strings.TrimSpace(pendingExec.ExecKind) == "subagent" {
+				service.registerNativeDelegation(stream, pendingExec, serverMessage)
+			}
+			service.scheduleShellForegroundRecovery(stream.RequestID, pendingExec)
+			service.scheduleExecWatchdog(stream.RequestID, pendingExec)
 		}
-		pendingExec.ModelCallID = invocation.ModelCallID
-		pendingExec.ReasoningContent = invocation.ReasoningContent
-		pendingExec.ReasoningSignature = invocation.ReasoningSignature
-		pendingExec.ReasoningSignatureSource = invocation.ReasoningSignatureSource
-		pendingExec = initializePendingExecForTracking(pendingExec)
-		stream.mu.Lock()
-		pendingExec.ProviderPass = stream.ProviderPassCount
-		stream.PendingExecs[pendingExec.ExecID] = pendingExec
-		stream.mu.Unlock()
-		service.registerNativeDelegation(stream, pendingExec, serverMessage)
-		service.scheduleShellForegroundRecovery(stream.RequestID, pendingExec)
-		service.scheduleExecWatchdog(stream.RequestID, pendingExec)
 		removePendingExec := func() {
 			stream.mu.Lock()
 			delete(stream.PendingExecs, pendingExec.ExecID)
@@ -2352,6 +2493,53 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 		return nil
 	}
 	return nil
+}
+
+// openNativeTaskExec registers a direct Cursor Task before tool_call_started is
+// published. Cursor creates the Task bubble on that event and immediately
+// falls back to Stopped when its checkpoint has no RUNNING subagent entry.
+func (service *Service) openNativeTaskExec(stream *ActiveStream, invocation runtimecore.ToolInvocation, subagentOverrides map[string]runtimecore.SubagentModelOverrideSelection) (*agentv1.AgentServerMessage, runtimecore.PendingExec, error) {
+	if service == nil || stream == nil || service.execBridge == nil {
+		return nil, runtimecore.PendingExec{}, fmt.Errorf("cursor exec bridge is unavailable")
+	}
+	serverMessage, pendingExec, err := service.execBridge.OpenExec(buildExecOpenContextForStream(stream, subagentOverrides), invocation)
+	if err != nil {
+		return nil, runtimecore.PendingExec{}, err
+	}
+	pendingExec.ModelCallID = invocation.ModelCallID
+	pendingExec.ReasoningContent = invocation.ReasoningContent
+	pendingExec.ReasoningSignature = invocation.ReasoningSignature
+	pendingExec.ReasoningSignatureSource = invocation.ReasoningSignatureSource
+	pendingExec = initializePendingExecForTracking(pendingExec)
+	stream.mu.Lock()
+	pendingExec.ProviderPass = stream.ProviderPassCount
+	stream.PendingExecs[pendingExec.ExecID] = pendingExec
+	stream.mu.Unlock()
+	if strings.TrimSpace(pendingExec.ExecKind) == "subagent" {
+		service.registerNativeDelegation(stream, pendingExec, serverMessage)
+	}
+	if strings.TrimSpace(pendingExec.ExecKind) == "subagent" {
+		service.scheduleShellForegroundRecovery(stream.RequestID, pendingExec)
+		service.scheduleExecWatchdog(stream.RequestID, pendingExec)
+	}
+	log.Printf("forwarder native task pre-start registered request_id=%s conversation_id=%s tool_call_id=%s exec_id=%s exec_kind=%s message_id=%d", strings.TrimSpace(stream.RequestID), strings.TrimSpace(stream.ConversationID), strings.TrimSpace(pendingExec.ToolCallID), strings.TrimSpace(pendingExec.ExecID), strings.TrimSpace(pendingExec.ExecKind), pendingExec.MessageID)
+	if service.debug != nil {
+		service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "native_task_prestart_registered", map[string]any{
+			"tool_call_id": strings.TrimSpace(pendingExec.ToolCallID),
+			"exec_id":      strings.TrimSpace(pendingExec.ExecID),
+			"exec_kind":    strings.TrimSpace(pendingExec.ExecKind),
+			"message_id":   pendingExec.MessageID,
+		})
+	}
+	if err := service.publishCheckpoint(stream.RequestID, stream.ConversationID); err != nil {
+		stream.mu.Lock()
+		delete(stream.PendingExecs, pendingExec.ExecID)
+		stream.mu.Unlock()
+		service.updateNativeDelegationStatus(pendingExec.ExecID, delegation.TaskFailed, "Cursor 子代理启动状态同步失败", err.Error())
+		return nil, runtimecore.PendingExec{}, err
+	}
+	log.Printf("forwarder native task pre-start checkpoint published request_id=%s tool_call_id=%s exec_id=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pendingExec.ToolCallID), strings.TrimSpace(pendingExec.ExecID))
+	return serverMessage, pendingExec, nil
 }
 
 func shouldSuppressStartedToolCallAfterPartial(stream *ActiveStream, toolName string, callID string) bool {
@@ -2438,9 +2626,30 @@ func (service *Service) publishToolCallCompleted(requestID string, toolCallID st
 	if strings.TrimSpace(requestID) == "" || strings.TrimSpace(toolCallID) == "" {
 		return nil
 	}
-	return service.broker.Publish(requestID, StreamEvent{
+	task := toolCall.GetTaskToolCall()
+	resultKind := "none"
+	agentID := ""
+	stepCount := 0
+	if task != nil && task.GetResult() != nil {
+		switch task.GetResult().GetResult().(type) {
+		case *agentv1.TaskResult_Success:
+			resultKind = "success"
+			if success := task.GetResult().GetSuccess(); success != nil {
+				agentID = success.GetAgentId()
+				stepCount = len(success.GetConversationSteps())
+			}
+		case *agentv1.TaskResult_Error:
+			resultKind = "error"
+		}
+	}
+	log.Printf("forwarder tool_call_completed publishing request_id=%s tool_call_id=%s model_call_id=%s task_result=%s agent_id=%s conversation_steps=%d", strings.TrimSpace(requestID), strings.TrimSpace(toolCallID), strings.TrimSpace(modelCallID), resultKind, strings.TrimSpace(agentID), stepCount)
+	err := service.broker.Publish(requestID, StreamEvent{
 		Message: buildToolCallCompletedMessage(toolCallID, modelCallID, toolCall),
 	})
+	if err != nil {
+		log.Printf("forwarder tool_call_completed publish failed request_id=%s tool_call_id=%s model_call_id=%s err=%v", strings.TrimSpace(requestID), strings.TrimSpace(toolCallID), strings.TrimSpace(modelCallID), err)
+	}
+	return err
 }
 
 func (service *Service) applyExecProgress(stream *ActiveStream, pending runtimecore.PendingExec, message *agentv1.ExecClientMessage) runtimecore.PendingExec {
@@ -2700,8 +2909,10 @@ func (service *Service) failStreamIfNonTerminal(stream *ActiveStream, terminalCo
 	terminal := isTerminalStreamStatus(stream.Status)
 	stream.mu.Unlock()
 	if terminal {
+		log.Printf("forwarder fail_stream_if_non_terminal skipped request_id=%s terminal_code=%s cause=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(terminalCode), cause)
 		return nil
 	}
+	log.Printf("forwarder fail_stream_if_non_terminal firing request_id=%s terminal_code=%s cause=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(terminalCode), cause)
 	return service.failStream(stream, terminalCode, cause)
 }
 
@@ -2721,9 +2932,125 @@ func (service *Service) publishCheckpoint(requestID string, _ string) error {
 	}
 	state.PendingToolCalls = buildPendingToolCalls(pendingExecs, pendingInteractions)
 	service.rewriteCheckpointTokenDetailsForClient(stream, conversation, state)
+	attachDelegationRunStates(stream, state)
+	delegationRunCount := len(state.GetSubagentRunsByParentToolCallId())
+	if delegationRunCount > 0 {
+		activeDelegationRuns := 0
+		terminalDelegationRuns := 0
+		for _, run := range state.GetSubagentRunsByParentToolCallId() {
+			if run == nil {
+				continue
+			}
+			switch run.GetStatus() {
+			case agentv1.SubagentRunStatus_SUBAGENT_RUN_STATUS_RUNNING, agentv1.SubagentRunStatus_SUBAGENT_RUN_STATUS_BACKGROUNDED:
+				activeDelegationRuns++
+			default:
+				terminalDelegationRuns++
+			}
+		}
+		log.Printf("forwarder delegation checkpoint publishing request_id=%s conversation_id=%s active_runs=%d terminal_runs=%d pending_execs=%d pending_interactions=%d",
+			strings.TrimSpace(requestID), strings.TrimSpace(stream.ConversationID), activeDelegationRuns, terminalDelegationRuns, len(pendingExecs), len(pendingInteractions))
+		service.debug.LogRuntime(context.Background(), requestID, stream.ConversationID, "delegation_checkpoint_publishing", map[string]any{
+			"active_run_count":          activeDelegationRuns,
+			"terminal_run_count":        terminalDelegationRuns,
+			"pending_exec_count":        len(pendingExecs),
+			"pending_interaction_count": len(pendingInteractions),
+		})
+	}
+	if delegationRunCount > 0 {
+		for key, run := range state.GetSubagentRunsByParentToolCallId() {
+			if run == nil {
+				continue
+			}
+			log.Printf("forwarder delegation checkpoint run request_id=%s map_key=%s parent_tool_call_id=%s subagent_id=%s status=%s env=%s", strings.TrimSpace(requestID), strings.TrimSpace(key), strings.TrimSpace(run.GetParentToolCallId()), strings.TrimSpace(run.GetSubagentId()), run.GetStatus().String(), run.GetEnvironment().String())
+		}
+	}
 	return service.broker.Publish(requestID, StreamEvent{
 		Message: buildCheckpointMessage(state),
 	})
+}
+
+// attachDelegationRunStates 把本地委派（delegation_aggregate）的运行状态写入
+// checkpoint 的 subagent_runs_by_parent_tool_call_id。Cursor 客户端在
+// conversation_checkpoint_update 到达时按 toolCallId 查该 map 渲染 Task 卡片：
+// 有记录时按 status 显示 running/succeeded/error/aborted；无记录时不更新
+// （bubble 创建失败或本地委派场景下卡片会停留在 stopped）。byok 本地委派
+// 必须通过该字段把真实进度同步给客户端，保证 UI 与 byok 实际状态一致。
+func attachDelegationRunStates(stream *ActiveStream, state *agentv1.ConversationStateStructure) {
+	if stream == nil || state == nil {
+		return
+	}
+	stream.mu.Lock()
+	runs := make(map[string]*agentv1.SubagentRun)
+	for _, pending := range stream.PendingExecs {
+		execKind := strings.TrimSpace(pending.ExecKind)
+		if execKind != "delegation_aggregate" && execKind != "subagent" {
+			continue
+		}
+		toolCallID := strings.TrimSpace(pending.ToolCallID)
+		if toolCallID == "" {
+			continue
+		}
+		title := "委派任务"
+		if execKind == "subagent" {
+			title = "Cursor 子代理"
+		}
+		runs[toolCallID] = &agentv1.SubagentRun{
+			ParentToolCallId: toolCallID,
+			SubagentId:       stringPtr(delegationSubagentID(toolCallID)),
+			Environment:      agentv1.SubagentExecutionEnvironment_SUBAGENT_EXECUTION_ENVIRONMENT_LOCAL,
+			Status:           agentv1.SubagentRunStatus_SUBAGENT_RUN_STATUS_RUNNING,
+			Title:            stringPtr(title),
+		}
+	}
+	for toolCallID, terminal := range stream.DelegationRunTerminals {
+		if terminal != nil && strings.TrimSpace(toolCallID) != "" {
+			runs[toolCallID] = terminal
+		}
+	}
+	stream.mu.Unlock()
+	if len(runs) > 0 {
+		state.SubagentRunsByParentToolCallId = runs
+	}
+}
+
+// recordDelegationRunTerminal 在委派收尾时记录终态 SubagentRun，供后续
+// checkpoint 同步给 Cursor 客户端（UI 从 stopped 恢复为 succeeded/error）。
+func (service *Service) recordDelegationRunTerminal(stream *ActiveStream, pending runtimecore.PendingExec, status agentv1.SubagentRunStatus, title string, detail string) {
+	if stream == nil || strings.TrimSpace(pending.ToolCallID) == "" {
+		return
+	}
+	now := uint64(time.Now().UTC().UnixMilli())
+	completionReason := agentv1.BackgroundTaskCompletionReason_BACKGROUND_TASK_COMPLETION_REASON_TASK_FINISHED
+	run := &agentv1.SubagentRun{
+		ParentToolCallId:     strings.TrimSpace(pending.ToolCallID),
+		SubagentId:           stringPtr(delegationSubagentID(pending.ToolCallID)),
+		Environment:          agentv1.SubagentExecutionEnvironment_SUBAGENT_EXECUTION_ENVIRONMENT_LOCAL,
+		Status:               status,
+		Title:                stringPtr(strings.TrimSpace(title)),
+		CompletedTimestampMs: &now,
+		CompletionReason:     &completionReason,
+	}
+	if detail := strings.TrimSpace(detail); detail != "" {
+		run.Detail = stringPtr(detail)
+	}
+	stream.mu.Lock()
+	if stream.DelegationRunTerminals == nil {
+		stream.DelegationRunTerminals = make(map[string]*agentv1.SubagentRun)
+	}
+	stream.DelegationRunTerminals[strings.TrimSpace(pending.ToolCallID)] = run
+	stream.mu.Unlock()
+	log.Printf("forwarder delegation run terminal recorded request_id=%s conversation_id=%s exec_id=%s tool_call_id=%s status=%s completion_reason=%s detail=%q",
+		strings.TrimSpace(stream.RequestID), strings.TrimSpace(stream.ConversationID), strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID), status.String(), completionReason.String(), strings.TrimSpace(detail))
+	if service != nil && service.debug != nil {
+		service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "delegation_run_terminal_recorded", map[string]any{
+			"exec_id":           strings.TrimSpace(pending.ExecID),
+			"tool_call_id":      strings.TrimSpace(pending.ToolCallID),
+			"status":            status.String(),
+			"completion_reason": completionReason.String(),
+			"detail":            strings.TrimSpace(detail),
+		})
+	}
 }
 
 func (service *Service) rewriteCheckpointTokenDetailsForClient(stream *ActiveStream, conversation *ConversationFile, state *agentv1.ConversationStateStructure) {
@@ -2852,6 +3179,12 @@ func (service *Service) failActiveStream(stream *ActiveStream, conversationID st
 	if stream == nil {
 		return nil
 	}
+	stream.mu.Lock()
+	activePending := len(stream.PendingExecs)
+	phase := stream.Phase
+	status := stream.Status
+	stream.mu.Unlock()
+	log.Printf("forwarder fail_active_stream request_id=%s conversation_id=%s model_call_id=%s terminal_code=%s phase=%s status=%s pending_execs=%d message=%q", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), strings.TrimSpace(terminalCode), phase, status, activePending, strings.TrimSpace(terminalMessage))
 	service.clearProvider400Recovery(requestID, stream.TurnSeq)
 	clearPendingProviderCompletion(stream)
 	stream.mu.Lock()

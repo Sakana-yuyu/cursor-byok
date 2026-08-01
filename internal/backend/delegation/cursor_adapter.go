@@ -168,33 +168,69 @@ func (adapter *CursorAdapter) Execute(ctx context.Context, request TaskRequest) 
 		ToolName: "Task",
 		ArgsJSON: argsJSON,
 	}
-	return adapter.executeInvocation(ctx, request, invocation, true)
+	waiter, err := adapter.openInvocation(ctx, request, invocation, true)
+	if err != nil {
+		return TaskResult{Error: err}
+	}
+	return adapter.awaitInvocation(ctx, waiter)
 }
 
 func (adapter *CursorAdapter) ExecuteTool(ctx context.Context, request TaskRequest, invocation runtimecore.ToolInvocation) TaskResult {
-	return adapter.executeInvocation(ctx, request, invocation, strings.TrimSpace(invocation.ToolName) == "Task")
+	waiter, err := adapter.openInvocation(ctx, request, invocation, strings.TrimSpace(invocation.ToolName) == "Task")
+	if err != nil {
+		return TaskResult{Error: err}
+	}
+	return adapter.awaitInvocation(ctx, waiter)
 }
 
-func (adapter *CursorAdapter) executeInvocation(ctx context.Context, request TaskRequest, invocation runtimecore.ToolInvocation, expectSubagent bool) TaskResult {
+// ExecuteToolAsync 与 ExecuteTool 语义一致，但终态结果通过 onResult 回调异步
+// 返回，不阻塞调用方 goroutine。waiter 注册/派发失败时直接返回 error 且不
+// 调用 onResult。ctx 取消时内部会取消已派发的 exec 并把取消结果交给 onResult。
+func (adapter *CursorAdapter) ExecuteToolAsync(ctx context.Context, request TaskRequest, invocation runtimecore.ToolInvocation, onResult func(TaskResult)) error {
 	if adapter == nil {
-		return TaskResult{Error: fmt.Errorf("cursor adapter is nil")}
+		return fmt.Errorf("cursor adapter is nil")
+	}
+	if onResult == nil {
+		return fmt.Errorf("cursor adapter async result callback is nil")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	waiter, err := adapter.openInvocation(ctx, request, invocation, strings.TrimSpace(invocation.ToolName) == "Task")
+	if err != nil {
+		return err
+	}
+	go func() {
+		select {
+		case result := <-waiter.resultCh:
+			onResult(cloneTaskResult(result))
+		case <-ctx.Done():
+			onResult(adapter.cancelTask(waiter.taskID, ctx.Err()))
+		}
+	}()
+	return nil
+}
+
+func (adapter *CursorAdapter) openInvocation(ctx context.Context, request TaskRequest, invocation runtimecore.ToolInvocation, expectSubagent bool) (*cursorTaskWaiter, error) {
+	if adapter == nil {
+		return nil, fmt.Errorf("cursor adapter is nil")
 	}
 	if adapter.execBridge == nil {
-		return TaskResult{Error: fmt.Errorf("cursor exec bridge is unavailable")}
+		return nil, fmt.Errorf("cursor exec bridge is unavailable")
 	}
 	if adapter.publish == nil {
-		return TaskResult{Error: fmt.Errorf("cursor publisher is unavailable")}
+		return nil, fmt.Errorf("cursor publisher is unavailable")
 	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	parentRequestID := strings.TrimSpace(request.ParentRequest)
 	if parentRequestID == "" {
-		return TaskResult{Error: fmt.Errorf("delegated cursor exec requires parent request id")}
+		return nil, fmt.Errorf("delegated cursor exec requires parent request id")
 	}
 	taskID := strings.TrimSpace(request.ID)
 	if taskID == "" {
-		return TaskResult{Error: fmt.Errorf("delegated cursor exec requires task id")}
+		return nil, fmt.Errorf("delegated cursor exec requires task id")
 	}
 	PublishTaskCheckpoint(ctx, request, SupervisionStatusDispatched, 1, nil, nil, "Cursor 子代理已派发", "")
 	seq := adapter.sequence.Add(1)
@@ -217,7 +253,7 @@ func (adapter *CursorAdapter) executeInvocation(ctx context.Context, request Tas
 	}, invocation)
 	if err != nil {
 		PublishTaskCheckpoint(ctx, request, SupervisionStatusFailed, 2, nil, nil, "Cursor 子代理初始化失败", err.Error())
-		return TaskResult{Error: err}
+		return nil, err
 	}
 
 	waiter := &cursorTaskWaiter{
@@ -238,9 +274,12 @@ func (adapter *CursorAdapter) executeInvocation(ctx context.Context, request Tas
 	adapter.registerWaiter(waiter)
 	if err := adapter.publish(parentRequestID, serverMessage); err != nil {
 		adapter.completeWaiterWithCheckpoint(waiter, TaskResult{Error: err, Output: err.Error()}, SupervisionStatusFailed, "Cursor 子代理派发失败", err.Error())
-		return TaskResult{Error: err}
+		return nil, err
 	}
+	return waiter, nil
+}
 
+func (adapter *CursorAdapter) awaitInvocation(ctx context.Context, waiter *cursorTaskWaiter) TaskResult {
 	select {
 	case result := <-waiter.resultCh:
 		return cloneTaskResult(result)
