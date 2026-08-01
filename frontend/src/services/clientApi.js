@@ -5,6 +5,7 @@ import {
   SavePromptInjectionSettings, RefreshPromptInjection, RefreshPromptInjectionCatalog,
   AutoMatchContextWindows, DiagnoseModelAdapters, ApplyDiagnosticFixes,
   GetSkillsMCPScanSnapshot, RefreshSkillsMCPScan, SaveSkillsMCPScanConfig,
+  RepairProxySettings,
   GetDelegationConfig, SaveDelegationConfig,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
 import { GetAdRuntime, OpenExternalURL } from "@bindings/cursor/internal/bridge/adservice.js";
@@ -41,6 +42,7 @@ const desktopMethods = {
   SavePromptInjectionSettings, RefreshPromptInjection,
   RefreshPromptInjectionCatalog, ExportLogs, AutoMatchContextWindows, DiagnoseModelAdapters, ApplyDiagnosticFixes,
   DetectCursorPath, LaunchCursor, GetSkillsMCPScanSnapshot, RefreshSkillsMCPScan, SaveSkillsMCPScanConfig,
+  RepairProxySettings,
   GetDelegationConfig, SaveDelegationConfig,
 };
 
@@ -281,6 +283,10 @@ export function refreshSkillsMCPScan(workspaceRoot = "") {
 }
 export function saveSkillsMCPScanConfig(config) {
   return desktopOrMock(true, "@bindings/cursor/internal/bridge/proxyservice.js", "SaveSkillsMCPScanConfig", [config]);
+}
+
+export function repairProxySettings() {
+  return withApiLogging("RepairProxySettings", undefined, () => desktopOrMock(undefined, "@bindings/cursor/internal/bridge/proxyservice.js", "RepairProxySettings"));
 }
 
 export function getDelegationConfig() {
