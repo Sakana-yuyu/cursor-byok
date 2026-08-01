@@ -193,6 +193,31 @@ function formatCost(row) {
   return `${currency} ${cost.toFixed(6)}`;
 }
 
+function roleLabel(role) {
+  const labels = {
+    parent: "父请求",
+    worker: "委派 worker",
+    supervisor: "监督模型",
+    reviewer: "审查模型",
+  };
+  return labels[String(role || "").trim()] || String(role || "").trim();
+}
+
+function modelMetaForRow(row) {
+  const providerModel = String(row?.providerModel || "").trim();
+  const displayModel = providerModel || String(row?.model || "").trim() || String(row?.logicalModel || "").trim();
+  const logicalModel = String(row?.logicalModel || "").trim();
+  const role = roleLabel(row?.role);
+  const parts = [];
+  if (role) parts.push(role);
+  if (logicalModel && logicalModel !== displayModel) parts.push("逻辑模型 " + logicalModel);
+  return {
+    displayModel: displayModel || "-",
+    secondary: parts.join(" · "),
+    title: [displayModel, role, logicalModel && logicalModel !== displayModel ? "逻辑模型 " + logicalModel : ""].filter(Boolean).join("\n"),
+  };
+}
+
 // 预计算当前页每行的展示元数据（tone/cost），避免模板内每行重复调用 statusTone/formatCost
 const displayRows = computed(() =>
   pagedItems.value.map((row) => ({
@@ -201,6 +226,7 @@ const displayRows = computed(() =>
     cost: formatCost(row),
     supplier: supplierMetaForRow(row),
     errorCode: errorCodeForRow(row),
+    model: modelMetaForRow(row),
   })),
 );
 
@@ -376,7 +402,10 @@ onUnmounted(() => {
               </span>
               <span v-else class="text-[#666]">-</span>
             </td>
-            <td class="max-w-[240px] truncate p-3" :title="item.row.model">{{ item.row.model || "-" }}</td>
+            <td class="max-w-[260px] p-3" :title="item.model.title">
+              <div class="truncate text-[#e5e5e5]">{{ item.model.displayModel }}</div>
+              <div v-if="item.model.secondary" class="mt-0.5 truncate text-[11px] text-[#8f8f8f]">{{ item.model.secondary }}</div>
+            </td>
             <td class="p-3 font-medium text-[#60a5fa]" style="font-family: var(--font-num)">
               {{ formatNumber(item.row.inputTokens) }}
             </td>

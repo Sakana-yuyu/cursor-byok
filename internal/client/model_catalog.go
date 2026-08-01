@@ -2,6 +2,8 @@ package client
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,10 +26,15 @@ const (
 // ModelCatalogRequest 是拉取模型列表所需的临时连接参数，不会写入配置。
 type ModelCatalogRequest struct {
 	Type                 string `json:"type"`
+	SupplierID           string `json:"supplierID,omitempty"`
+	ModelCatalogStatus   string `json:"modelCatalogStatus,omitempty"`
+	AppendModelCatalogCandidates *bool `json:"appendModelCatalogCandidates,omitempty"`
 	BaseURL              string `json:"baseURL"`
 	APIKey               string `json:"apiKey"`
 	CustomHeadersEnabled bool   `json:"customHeadersEnabled"`
 	CustomHeadersJSON    string `json:"customHeadersJSON"`
+	ModelCatalogURL      string `json:"modelCatalogURL,omitempty"`
+	ModelCatalogURLsJSON string `json:"modelCatalogURLsJSON,omitempty"`
 	// ForceRefresh 为 true 时绕过进程内 TTL 缓存，强制重新拉取（供 UI 显式刷新使用）。
 	ForceRefresh bool `json:"forceRefresh,omitempty"`
 }
@@ -59,11 +66,6 @@ type ModelCatalogResult struct {
 
 // FetchModelCatalog 使用当前编辑器中的临时参数拉取模型，不要求先保存模型配置。
 func (s *ProxyService) FetchModelCatalog(request ModelCatalogRequest) (ModelCatalogResult, error) {
-	endpoint, err := buildModelCatalogURL(request.BaseURL)
-	if err != nil {
-		return ModelCatalogResult{}, err
-	}
-
 	typeName := strings.ToLower(strings.TrimSpace(request.Type))
 	if typeName != "openai" && typeName != "anthropic" && typeName != "gemini" {
 		return ModelCatalogResult{}, i18n.NewError("error.model_adapter.type_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 type 仅支持 openai、anthropic 或 gemini")
@@ -73,17 +75,24 @@ func (s *ProxyService) FetchModelCatalog(request ModelCatalogRequest) (ModelCata
 		return ModelCatalogResult{}, i18n.NewError("error.model_adapter.api_key_required", i18n.CodeInvalidModelAdapter, "模型适配器 apiKey 不能为空")
 	}
 
-	cacheKey := metadataCacheKey(typeName, request.BaseURL, apiKey)
+	candidates, err := buildModelCatalogCandidates(request)
+	if err != nil {
+		return ModelCatalogResult{}, err
+	}
+
+	customHeaders, err := parseModelCatalogHeaders(request)
+	if err != nil {
+		return ModelCatalogResult{}, err
+	}
+	headerIdentity := modelCatalogHeadersIdentity(customHeaders)
+	cacheKey := metadataCacheKey(typeName, request.BaseURL, apiKey) + "|supplier=" + strings.ToLower(strings.TrimSpace(request.SupplierID)) + "|catalog=" + strings.Join(candidates, "\x1f") + "|headers=" + headerIdentity
 	if request.ForceRefresh {
 		s.modelCatalogCache.invalidate(cacheKey)
 	} else if cached, ok := s.modelCatalogCache.get(cacheKey); ok {
 		return cached, nil
 	}
 
-	headers, err := parseModelCatalogHeaders(request)
-	if err != nil {
-		return ModelCatalogResult{}, err
-	}
+	headers := make(http.Header)
 	if typeName == "anthropic" {
 		headers.Set("x-api-key", apiKey)
 		headers.Set("anthropic-version", "2023-06-01")
@@ -92,45 +101,75 @@ func (s *ProxyService) FetchModelCatalog(request ModelCatalogRequest) (ModelCata
 	} else {
 		headers.Set("Authorization", "Bearer "+apiKey)
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), modelCatalogTimeout)
-	defer cancel()
-	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return ModelCatalogResult{}, i18n.WrapError("error.model_catalog.request_failed", i18n.CodeModelCatalog, "创建模型列表请求失败", err)
+	for name, values := range customHeaders {
+		headers.Del(name)
+		for _, value := range values {
+			headers.Set(name, value)
+		}
 	}
-	httpRequest.Header = headers
 
 	client := s.publicClient
 	if client == nil {
 		client = http.DefaultClient
 	}
-	response, err := client.Do(httpRequest)
-	if err != nil {
-		return ModelCatalogResult{}, i18n.WrapError("error.model_catalog.request_failed", i18n.CodeModelCatalog, "拉取模型列表失败", err)
+	ctx, cancel := context.WithTimeout(context.Background(), modelCatalogTimeout)
+	defer cancel()
+	lastStatus := 0
+	var lastErr error
+	for _, endpoint := range candidates {
+		httpRequest, requestErr := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		if requestErr != nil {
+			lastErr = requestErr
+			continue
+		}
+		httpRequest.Header = headers.Clone()
+		response, requestErr := client.Do(httpRequest)
+		if requestErr != nil {
+			lastErr = requestErr
+			continue
+		}
+		body, readErr := io.ReadAll(io.LimitReader(response.Body, modelCatalogMaxBodyBytes+1))
+		response.Body.Close()
+		if readErr != nil {
+			lastErr = readErr
+			continue
+		}
+		lastStatus = response.StatusCode
+		if len(body) > modelCatalogMaxBodyBytes {
+			lastErr = fmt.Errorf("模型列表响应超过 %d MB 限制", modelCatalogMaxBodyBytes/(1<<20))
+			continue
+		}
+		if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+			lastErr = fmt.Errorf("服务返回 HTTP %d", response.StatusCode)
+			continue
+		}
+		models, decodeErr := decodeModelCatalog(body)
+		if decodeErr != nil {
+			lastErr = decodeErr
+			continue
+		}
+		models = filterModelCatalogByType(models, typeName)
+		result := ModelCatalogResult{Models: models}
+		s.modelCatalogCache.set(cacheKey, result)
+		return result, nil
 	}
-	defer response.Body.Close()
+	message := "所有模型目录候选地址均失败"
+	if lastStatus > 0 {
+		message = fmt.Sprintf("所有模型目录候选地址均失败，最后响应 HTTP %d", lastStatus)
+	} else if lastErr != nil {
+		message = message + "：" + lastErr.Error()
+	}
+	return ModelCatalogResult{}, i18n.NewError("error.model_catalog.request_failed", i18n.CodeModelCatalog, message)
+}
 
-	body, err := io.ReadAll(io.LimitReader(response.Body, modelCatalogMaxBodyBytes+1))
-	if err != nil {
-		return ModelCatalogResult{}, i18n.WrapError("error.model_catalog.request_failed", i18n.CodeModelCatalog, "读取模型列表失败", err)
+func modelCatalogHeadersIdentity(headers http.Header) string {
+	parts := make([]string, 0, len(headers))
+	for name, values := range headers {
+		parts = append(parts, strings.ToLower(strings.TrimSpace(name))+"="+strings.Join(values, "\x1f"))
 	}
-	if len(body) > modelCatalogMaxBodyBytes {
-		return ModelCatalogResult{}, i18n.NewError("error.model_catalog.response_invalid", i18n.CodeModelCatalog, fmt.Sprintf("模型列表响应超过 %d MB 限制", modelCatalogMaxBodyBytes/(1<<20)))
-	}
-	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return ModelCatalogResult{}, i18n.NewError("error.model_catalog.request_failed", i18n.CodeModelCatalog, fmt.Sprintf("拉取模型列表失败，服务返回 HTTP %d", response.StatusCode))
-	}
-
-	models, err := decodeModelCatalog(body)
-	if err != nil {
-		return ModelCatalogResult{}, err
-	}
-	models = filterModelCatalogByType(models, typeName)
-	result := ModelCatalogResult{Models: models}
-	// 仅缓存成功结果；错误路径在上方已直接返回，绝不缓存错误。
-	s.modelCatalogCache.set(cacheKey, result)
-	return result, nil
+	sort.Strings(parts)
+	sum := sha256.Sum256([]byte(strings.Join(parts, "\n")))
+	return hex.EncodeToString(sum[:])
 }
 
 // filterModelCatalogByType 剔除与适配器类型不匹配的占位/水印模型。
@@ -180,6 +219,138 @@ func buildModelCatalogURL(rawBaseURL string) (string, error) {
 	parsed.Path = path
 	parsed.RawPath = ""
 	return parsed.String(), nil
+}
+
+// buildModelCatalogCandidates keeps explicit provider URLs ahead of generated fallbacks.
+func buildModelCatalogCandidates(request ModelCatalogRequest) ([]string, error) {
+	baseURL, err := modelchannel.NormalizeBaseURL(request.BaseURL)
+	if err != nil {
+		return nil, err
+	}
+	typeName := strings.ToLower(strings.TrimSpace(request.Type))
+	var candidates []string
+	appendCandidate := func(raw string) {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			return
+		}
+		if parsed, parseErr := url.Parse(raw); parseErr != nil || parsed.Scheme == "" || parsed.Host == "" {
+			return
+		}
+		for _, existing := range candidates {
+			if existing == raw {
+				return
+			}
+		}
+		candidates = append(candidates, raw)
+	}
+	appendCandidate(request.ModelCatalogURL)
+	if strings.TrimSpace(request.ModelCatalogURLsJSON) != "" {
+		var explicit []string
+		if err := json.Unmarshal([]byte(request.ModelCatalogURLsJSON), &explicit); err != nil {
+			return nil, i18n.NewError("error.model_catalog.urls_invalid", i18n.CodeInvalidModelAdapter, "模型目录候选地址必须是字符串数组 JSON")
+		}
+		for _, candidate := range explicit {
+			appendCandidate(candidate)
+		}
+	}
+	if strings.EqualFold(strings.TrimSpace(request.ModelCatalogStatus), "manual_only") {
+		if len(candidates) == 0 {
+			return nil, i18n.NewError("error.model_catalog.url_invalid", i18n.CodeModelCatalog, "该供应商未核验模型目录地址，请手动添加模型")
+		}
+		return candidates, nil
+	}
+	appendGenerated := request.AppendModelCatalogCandidates == nil || *request.AppendModelCatalogCandidates
+	if typeName == "gemini" && appendGenerated {
+		appendGeminiModelCatalogCandidates(baseURL, appendCandidate)
+	} else if appendGenerated {
+		appendGeneratedModelCatalogCandidates(candidatesForBaseURL(baseURL), appendCandidate)
+	}
+	if len(candidates) == 0 {
+		return nil, i18n.NewError("error.model_catalog.url_invalid", i18n.CodeInvalidModelAdapter, "模型目录地址不能为空")
+	}
+	return candidates, nil
+}
+
+func candidatesForBaseURL(baseURL string) []string {
+	parsed, err := url.Parse(baseURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return nil
+	}
+	path := strings.TrimRight(parsed.Path, "/")
+	lowerPath := strings.ToLower(path)
+	if strings.HasSuffix(lowerPath, "/models") {
+		return []string{parsed.String()}
+	}
+	var result []string
+	add := func(candidatePath string) {
+		clone := *parsed
+		clone.Path = candidatePath
+		clone.RawPath = ""
+		result = append(result, clone.String())
+	}
+	if strings.HasSuffix(lowerPath, "/v1") || hasVersionPathSuffix(path) {
+		add(path + "/models")
+		if !strings.HasSuffix(lowerPath, "/v1") {
+			add(path + "/v1/models")
+		}
+	} else {
+		add(path + "/v1/models")
+	}
+	for _, suffix := range []string{"/api/claudecode", "/api/anthropic", "/apps/anthropic", "/api/coding", "/claudecode", "/anthropic", "/step_plan", "/coding", "/claude", "/compatible"} {
+		if strings.HasSuffix(strings.ToLower(path), suffix) {
+			root := strings.TrimRight(path[:len(path)-len(suffix)], "/")
+			if root != "" {
+				add(root + "/v1/models")
+				add(root + "/models")
+			}
+			break
+		}
+	}
+	return result
+}
+
+func hasVersionPathSuffix(path string) bool {
+	last := path
+	if index := strings.LastIndex(last, "/"); index >= 0 {
+		last = last[index+1:]
+	}
+	if len(last) < 2 || (last[0] != 'v' && last[0] != 'V') {
+		return false
+	}
+	for _, ch := range last[1:] {
+		if ch < '0' || ch > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func appendGeneratedModelCatalogCandidates(generated []string, appendCandidate func(string)) {
+	for _, candidate := range generated {
+		appendCandidate(candidate)
+	}
+}
+
+func appendGeminiModelCatalogCandidates(baseURL string, appendCandidate func(string)) {
+	parsed, err := url.Parse(baseURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return
+	}
+	path := strings.TrimRight(parsed.Path, "/")
+	lowerPath := strings.ToLower(path)
+	switch {
+	case strings.HasSuffix(lowerPath, "/models"):
+		appendCandidate(parsed.String())
+	case strings.HasSuffix(lowerPath, "/v1beta"):
+		parsed.Path = path + "/models"
+		parsed.RawPath = ""
+		appendCandidate(parsed.String())
+	default:
+		parsed.Path = path + "/v1beta/models"
+		parsed.RawPath = ""
+		appendCandidate(parsed.String())
+	}
 }
 
 func parseModelCatalogHeaders(request ModelCatalogRequest) (http.Header, error) {

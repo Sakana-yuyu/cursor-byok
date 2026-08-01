@@ -95,6 +95,7 @@ const createEmptyModelAdapter = () => ({
   fastMode: false,
   openAIServiceTier: "",
   supplierID: "custom",
+  modelCatalogURL: "",
   balanceQueryURL: "",
   balanceQueryField: "",
   balanceQueryHeaders: {},
@@ -106,6 +107,7 @@ const createEmptyModelAdapter = () => ({
 });
 
 const balanceProfileOptions = [
+  { label: "暂无自动查询", value: "none", icon: "icon-[mdi--minus-circle-outline]" },
   { label: "自定义", value: "custom", icon: "icon-[mdi--code-json]" },
   { label: "通用模板", value: "general", icon: "icon-[mdi--web]" },
   { label: "New API", value: "newapi", icon: "icon-[mdi--key-variant]" },
@@ -141,7 +143,10 @@ const openAIRequestGroupOptions = [
 ];
 
 const providerTypeOptions = providerSelectOptions();
-const supplierOptions = supplierSelectOptions();
+const supplierOptions = computed(() => supplierSelectOptions(draft.supplierID));
+const currentSupplierTemplate = computed(() => supplierTemplate(draft.supplierID));
+const currentSupplierUsage = computed(() => currentSupplierTemplate.value.usage || {});
+const currentSupplierCatalog = computed(() => currentSupplierTemplate.value.modelCatalog || {});
 const supplierModelOptions = computed(() => {
   const template = supplierTemplate(draft.supplierID);
   const models = new Set(template.models || []);
@@ -256,7 +261,7 @@ const interfacePlaceholder = computed(() => {
   return "例如：https://api.openai.com/v1";
 });
 const quickBaseURLLabel = computed(() =>
-  draft.type === "gemini" ? "接口地址" : "接口地址（自动补 /v1）",
+  draft.type === "openai" ? "接口地址（自动补 /v1）" : "接口地址",
 );
 const autoProtocolGroup = computed(() => classifyModelProtocol(
   draft.type,
@@ -362,6 +367,7 @@ const fieldTips = {
   displayName: "仅用于界面展示，便于你区分不同模型。",
   modelID: "请求实际发送给服务端的模型名称，例如 gpt-4.1 或 claude-sonnet。",
   baseURL: "模型服务的 API 根地址，通常为兼容 OpenAI 或 Anthropic 的接口入口。",
+  modelCatalogURL: "直接读取模型列表的完整 URL。留空时使用供应商预设地址或兼容协议的自动候选地址。",
   apiKey: "调用该模型服务需要使用的访问密钥。",
   contextWindowTokens: "模型单次可接受的最大上下文 Token 数。留空时使用默认值。",
   reasoningEffort: "推理强度仅对部分支持 reasoning_effort 的模型生效，并不是所有模型都支持。越高通常越稳，但也可能更慢。",
@@ -501,6 +507,18 @@ function applySupplierTemplate(id, { force = false } = {}) {
       draft.balanceCodingPlanProvider = planMap[template.id];
     }
   }
+  const usage = template.usage || {};
+  if (force && usage.status === "fixed") {
+    draft.balanceProfile = "official";
+    draft.balanceCodingPlanProvider = "";
+  } else if (force && usage.status === "token_plan") {
+    draft.balanceProfile = "token_plan";
+    draft.balanceCodingPlanProvider = usage.provider || "";
+  } else if (force && usage.status === "general") {
+    draft.balanceProfile = "general";
+  } else if (force && (usage.status === "none" || usage.status === "custom_only")) {
+    draft.balanceProfile = usage.status === "custom_only" ? "custom" : "none";
+  }
 }
 
 function handleSupplierChange(id) {
@@ -544,7 +562,7 @@ function handleModelTypeChange(type) {
 }
 
 function ensureV1Suffix() {
-  if (draft.type === "gemini") return;
+  if (draft.type !== "openai") return;
   let url = String(draft.baseURL || "").trim();
   if (!url) return;
   url = url.replace(/\/+$/, "");
@@ -575,8 +593,20 @@ async function openCatalogPage() {
       MODEL_CATALOG_DRAFT_KEY,
       JSON.stringify({
         type: draft.type,
+        supplierID: draft.supplierID,
         baseURL,
         apiKey,
+        modelCatalogURL: draft.modelCatalogURL || "",
+        balanceProfile: draft.balanceProfile || "auto",
+        balanceAccessToken: draft.balanceAccessToken || "",
+        balanceUserID: draft.balanceUserID || "",
+        balanceCodingPlanProvider: draft.balanceCodingPlanProvider || "",
+        balanceQueryURL: draft.balanceQueryURL || "",
+        balanceQueryField: draft.balanceQueryField || "",
+        balanceQueryHeadersJSON: draft.balanceQueryHeadersJSON || "",
+        modelCatalogStatus: supplierTemplate(draft.supplierID).modelCatalog?.status || "",
+        appendModelCatalogCandidates: supplierTemplate(draft.supplierID).modelCatalog?.appendCandidates !== false,
+        modelCatalogURLsJSON: JSON.stringify(supplierTemplate(draft.supplierID).modelCatalog?.urls || []),
         customHeadersEnabled: Boolean(draft.customHeadersEnabled),
         customHeadersJSON: draft.customHeadersJSON || "",
         tooltipData: String(draft.tooltipData || "").trim(),
@@ -857,6 +887,10 @@ onMounted(async () => {
             <span class="text-sm text-[#d4d4d4]">供应商模板</span>
             <Select :model-value="draft.supplierID" :options="supplierOptions" @update:model-value="handleSupplierChange" />
             <span class="text-xs text-[#8f8f8f]">选择固定供应商会自动填充接口地址、协议和常用模型；仍可在下方覆盖。</span>
+            <span class="text-xs leading-5 text-[#737373]">
+              模型目录：{{ currentSupplierCatalog.status === 'manual_only' ? '手动添加' : currentSupplierCatalog.source || '预设地址' }}
+              · 用量：{{ currentSupplierUsage.status === 'none' ? '暂无自动查询' : currentSupplierUsage.source || currentSupplierUsage.status || '自动匹配' }}
+            </span>
           </label>
 
           <label class="flex flex-col gap-1">
@@ -947,6 +981,20 @@ onMounted(async () => {
               :placeholder="interfacePlaceholder"
               class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
             />
+          </label>
+
+          <label class="flex flex-col gap-1 md:col-span-2">
+            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
+              <Tooltip :content="fieldTips.modelCatalogURL" />
+              <span>模型目录 URL（可选）</span>
+            </span>
+            <input
+              v-model="draft.modelCatalogURL"
+              type="text"
+              :placeholder="currentSupplierCatalog.urls?.[0] || '例如：https://api.example.com/v1/models'"
+              class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+            />
+            <span class="text-xs leading-5 text-[#737373]">留空使用供应商预设地址；手动添加供应商时，请填写返回模型数组的完整地址。</span>
           </label>
 
           <label class="flex flex-col gap-1">

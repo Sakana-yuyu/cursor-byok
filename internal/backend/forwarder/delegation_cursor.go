@@ -19,8 +19,15 @@ func newCursorDelegationBridge(service *Service) *cursorDelegationBridge {
 	if service == nil || service.execBridge == nil || service.broker == nil {
 		return nil
 	}
-	cursor := delegation.NewCursorAdapter(service.execBridge, func(requestID string, message *agentv1.AgentServerMessage) error {
+	cursor := delegation.NewCursorAdapterWithProgress(service.execBridge, func(requestID string, message *agentv1.AgentServerMessage) error {
 		return service.broker.Publish(strings.TrimSpace(requestID), StreamEvent{Message: message})
+	}, func(parentRequestID string, pending runtimecore.PendingExec, message *agentv1.ExecClientMessage, result execbridge.ExecApplyResult) {
+		if strings.TrimSpace(pending.ExecKind) != "subagent" {
+			return
+		}
+		if service.markNativeDelegationEffectiveProgress(pending.ExecID, "Cursor 子代理收到真实执行结果") {
+			service.rescheduleExecWatchdog(parentRequestID, pending)
+		}
 	})
 	return &cursorDelegationBridge{
 		cursor: cursor,
@@ -30,18 +37,18 @@ func newCursorDelegationBridge(service *Service) *cursorDelegationBridge {
 func (bridge *cursorDelegationBridge) Close() {
 }
 
-func (bridge *cursorDelegationBridge) ConsumeExecMessage(message *agentv1.ExecClientMessage) bool {
+func (bridge *cursorDelegationBridge) ConsumeExecMessage(requestID string, message *agentv1.ExecClientMessage) bool {
 	if bridge == nil || bridge.cursor == nil {
 		return false
 	}
-	return bridge.cursor.ConsumeExecMessage(message)
+	return bridge.cursor.ConsumeExecMessage(requestID, message)
 }
 
-func (bridge *cursorDelegationBridge) ConsumeExecControl(message *agentv1.ExecClientControlMessage) bool {
+func (bridge *cursorDelegationBridge) ConsumeExecControl(requestID string, message *agentv1.ExecClientControlMessage) bool {
 	if bridge == nil || bridge.cursor == nil {
 		return false
 	}
-	return bridge.cursor.ConsumeExecControl(message)
+	return bridge.cursor.ConsumeExecControl(requestID, message)
 }
 
 func (bridge *cursorDelegationBridge) ConsumeConversationAction(message *agentv1.AgentClientMessage) bool {
@@ -103,6 +110,12 @@ func firstSubagentOverrides(values ...map[string]runtimecore.SubagentModelOverri
 func buildDelegatedCursorTaskRequest(stream *ActiveStream, pending runtimecore.PendingExec, invocation runtimecore.ToolInvocation, executionMode string, modelGroupID string) delegation.TaskRequest {
 	openContext := buildExecOpenContextForStream(stream, nil)
 	args, _ := runtimecore.DecodeArgsMap(invocation.ArgsJSON)
+	parentModel := ""
+	if stream != nil {
+		stream.mu.Lock()
+		parentModel = firstNonEmpty(stream.ModelName, stream.ModelID)
+		stream.mu.Unlock()
+	}
 	return delegation.TaskRequest{
 		ParentRequest:                activeStreamRequestID(stream),
 		ParentExecID:                 strings.TrimSpace(pending.ExecID),
@@ -116,6 +129,7 @@ func buildDelegatedCursorTaskRequest(stream *ActiveStream, pending runtimecore.P
 		Readonly:                     runtimecore.ReadBoolArg(args, "readonly", "readOnly"),
 		RunInBackground:              runtimecore.ReadBoolArg(args, "run_in_background", "runInBackground"),
 		ModelID:                      firstNonEmpty(runtimecore.ReadStringArg(args, "model", "model_id", "modelId"), openContext.ModelID),
+		ModelName:                    parentModel,
 		SubagentModelOverrides:       cloneSubagentModelOverrides(openContext.SubagentModelOverrides),
 		SelectedSubagentModels:       cloneSelectedSubagentModels(openContext.SelectedSubagentModels),
 		SelectedSubagentModelDetails: cloneSelectedSubagentModelDetails(openContext.SelectedSubagentModelDetails),

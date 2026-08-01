@@ -272,6 +272,14 @@ type ProviderRequest struct {
 	RunID               string
 	ModelCallID         string
 	ModelID             string
+	ModelName           string
+	Role                string
+	ParentModel         string
+	ModelGroupID        string
+	TaskID              string
+	ExecutionMode       string
+	SupervisorModel     string
+	ReviewerModel       string
 	Mode                agentv1.AgentMode
 	ThinkingEffort      string
 	MaxMode             bool

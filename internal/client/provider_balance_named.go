@@ -48,6 +48,8 @@ func namedBalanceProviderForSupplier(supplierID string) namedBalanceProvider {
 		return balanceProviderStepFun
 	case "siliconflow":
 		return balanceProviderSiliconFlowCN
+	case "siliconflow_en":
+		return balanceProviderSiliconFlowEN
 	case "openrouter":
 		return balanceProviderOpenRouter
 	case "novita":

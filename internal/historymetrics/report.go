@@ -22,6 +22,15 @@ type RequestMetric struct {
 	Status           string    `json:"status"`
 	At               time.Time `json:"at"`
 	Model            string    `json:"model"`
+	Role             string    `json:"role,omitempty"`
+	ParentModel      string    `json:"parentModel,omitempty"`
+	LogicalModel     string    `json:"logicalModel,omitempty"`
+	ProviderModel    string    `json:"providerModel,omitempty"`
+	ModelGroupID     string    `json:"modelGroupId,omitempty"`
+	TaskID           string    `json:"taskId,omitempty"`
+	ExecutionMode    string    `json:"executionMode,omitempty"`
+	SupervisorModel  string    `json:"supervisorModel,omitempty"`
+	ReviewerModel    string    `json:"reviewerModel,omitempty"`
 	Provider         string    `json:"provider"`
 	BaseURL          string    `json:"baseUrl"`
 	GroupName        string    `json:"groupName"`

@@ -24,6 +24,9 @@ type UserConfig = client.UserConfig
 // ModelAdapterConfig 定义模型测速使用的模型配置结构。
 type ModelAdapterConfig = serverconfig.ModelAdapterConfig
 
+// DelegationConfig 定义 Multitask 委派与监督配置结构。
+type DelegationConfig = serverconfig.DelegationConfig
+
 // ModelAdapterTestResult 定义一次模型测速结果。
 type ModelAdapterTestResult = client.ModelAdapterTestResult
 
@@ -127,9 +130,24 @@ func (s *ProxyService) StopProxy() (ProxyState, error) {
 	return s.core.StopProxy()
 }
 
+// ResetUsageMetrics 清空会话与站点消耗共用的用量记录。
+func (s *ProxyService) ResetUsageMetrics() error {
+	return s.core.ResetUsageMetrics()
+}
+
 // GetDelegationTaskSnapshots returns retained Multitask worker state.
 func (s *ProxyService) GetDelegationTaskSnapshots() []DelegationTaskSnapshot {
 	return s.core.GetDelegationTaskSnapshots()
+}
+
+// GetDelegationConfig returns the normalized delegation settings subtree.
+func (s *ProxyService) GetDelegationConfig() (DelegationConfig, error) {
+	return s.core.GetDelegationConfig()
+}
+
+// SaveDelegationConfig persists only the delegation settings subtree.
+func (s *ProxyService) SaveDelegationConfig(cfg DelegationConfig) (DelegationConfig, error) {
+	return s.core.SaveDelegationConfig(cfg)
 }
 
 // CancelDelegationTask cancels one Multitask worker without stopping siblings.

@@ -5,10 +5,10 @@
 //
 //	可能补发的真实工具结果能重新被接受；并设置一个较短的宽限期，给真实结果一次机会。
 //
-// 阶段二（强制收口 + 自动继续）：宽限后仍卡住时，对所有未完成的 pending exec 注入合成
+// 阶段二（强制收口 + 自动继续）：宽限后仍卡住时，对普通未完成的 pending exec 注入合成
 //
-//	工具结果（复用 recoverExecWithoutTerminal），随后自动驱动 provider 继续——模型收到
-//	tool 超时错误后会自行重试或换方案，从而让任务最终完成而非永久中断。
+//	工具结果（复用 recoverExecWithoutTerminal），随后自动驱动 provider 继续。长时间运行的
+//	subagent/delegation aggregate 不在这里回收，交给它们自己的 exec watchdog。
 package forwarder
 
 import (
@@ -108,16 +108,64 @@ func (service *Service) handleTurnStaleTimeout(stream *ActiveStream, payload *st
 		return nil
 	}
 
-	// 阶段二：强制收口所有未完成的 pending exec，再自动继续 provider。
+	// 阶段二：收口普通 pending exec，再自动继续 provider。长任务必须等待自身 watchdog，
+	// 否则默认 120 秒加 60 秒宽限会在它们完成前制造 synthetic timeout。
 	return service.forceCompleteTurnStale(stream, requestID, conversationID, pendingExecCount)
 }
 
-// forceCompleteTurnStale 对所有未完成的 pending exec 注入合成工具结果，
+func isTurnStaleProtectedExecKind(kind string) bool {
+	switch strings.TrimSpace(kind) {
+	case "subagent", "delegation_aggregate":
+		return true
+	default:
+		return false
+	}
+}
+
+// forceCompleteTurnStale 对普通未完成的 pending exec 注入合成工具结果，
 // 然后自动驱动 provider 继续。若无任何 pending exec（纯序列失配死锁），直接强制 resume。
 func (service *Service) forceCompleteTurnStale(stream *ActiveStream, requestID string, conversationID string, pendingExecCount int) error {
-	if pendingExecCount > 0 {
-		pendingExecs := snapshotPendingExecs(stream)
-		for _, pending := range pendingExecs {
+	pendingExecs := snapshotPendingExecs(stream)
+	protectedExecs := make([]runtimecore.PendingExec, 0)
+	recoverableExecs := make([]runtimecore.PendingExec, 0, len(pendingExecs))
+	for _, pending := range pendingExecs {
+		if isTurnStaleProtectedExecKind(pending.ExecKind) {
+			protectedExecs = append(protectedExecs, pending)
+			continue
+		}
+		recoverableExecs = append(recoverableExecs, pending)
+	}
+
+	if len(protectedExecs) > 0 {
+		// 普通工具仍保留 turn-stale 的最终兜底；长任务不在自身 watchdog 之前被
+		// 父 turn 回收。清掉本次 turn-stale timer，避免每 60 秒重复进入这里。
+		for _, pending := range recoverableExecs {
+			if err := service.recoverExecWithoutTerminal(stream, pending, "turn_stale_force_complete"); err != nil {
+				return err
+			}
+		}
+		clearStreamTimer(stream, providerTimerKey(streamTimerTurnStale, ""))
+		stream.mu.Lock()
+		stream.TurnStaleGraceStartedAt = time.Time{}
+		stream.mu.Unlock()
+		service.debug.LogRuntime(context.Background(), requestID, conversationID, "turn_stale_deferred_long_running_exec", map[string]any{
+			"pending_execs":         pendingExecCount,
+			"deferred_execs":        len(protectedExecs),
+			"recovered_execs":       len(recoverableExecs),
+			"exec_watchdog_timeout": longRunningExecTimeout.String(),
+		})
+		log.Printf(
+			"forwarder turn stale deferred long-running execs request_id=%s deferred_execs=%d recovered_execs=%d timeout=%s",
+			strings.TrimSpace(requestID),
+			len(protectedExecs),
+			len(recoverableExecs),
+			longRunningExecTimeout,
+		)
+		return nil
+	}
+
+	if len(recoverableExecs) > 0 {
+		for _, pending := range recoverableExecs {
 			// recoverExecWithoutTerminal 会写合成 tool_result、清理 pending，并调用 reconcileStream。
 			// 在仍有其他 pending 时 reconcile 会因 pendingBridgeCount>0 提前返回；
 			// 最后一个被收口后才会真正触发 provider resume。

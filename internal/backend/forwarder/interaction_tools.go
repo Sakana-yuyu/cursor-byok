@@ -251,6 +251,8 @@ func deriveToolNameFromPendingInteraction(pending runtimecore.PendingInteraction
 		return "WebFetch"
 	case "switch_mode":
 		return "SwitchMode"
+	case "pr_management":
+		return "PrManagement"
 	default:
 		return ""
 	}
@@ -258,7 +260,7 @@ func deriveToolNameFromPendingInteraction(pending runtimecore.PendingInteraction
 
 func isInteractionTool(name string) bool {
 	switch strings.TrimSpace(name) {
-	case "AskQuestion", "CreatePlan", "WebSearch", "WebFetch", "SwitchMode":
+	case "AskQuestion", "CreatePlan", "WebSearch", "WebFetch", "SwitchMode", "CreatePr", "UpdatePr":
 		return true
 	default:
 		return false
@@ -283,7 +285,7 @@ type generateImageToolCarrier struct {
 
 func isImmediateNativeTool(name string) bool {
 	switch strings.TrimSpace(name) {
-	case "GenerateImage", "AwaitShell":
+	case "GenerateImage", "AwaitShell", "SeeImage":
 		return true
 	default:
 		return false
@@ -296,6 +298,8 @@ func (service *Service) handleImmediateNativeToolInvocation(stream *ActiveStream
 		return service.handleGenerateImageToolInvocation(stream, invocation)
 	case "AwaitShell":
 		return service.handleAwaitShellToolInvocation(stream, invocation)
+	case "SeeImage":
+		return service.handleSeeImageToolInvocation(stream, invocation)
 	default:
 		return fmt.Errorf("unsupported immediate native tool: %s", invocation.ToolName)
 	}

@@ -18,6 +18,15 @@ import (
 type turnUsageSnapshot struct {
 	Provider          string
 	Model             string
+	Role              string
+	ParentModel       string
+	LogicalModel      string
+	ProviderModel     string
+	ModelGroupID      string
+	TaskID            string
+	ExecutionMode     string
+	SupervisorModel   string
+	ReviewerModel     string
 	BaseURL           string
 	GroupName         string
 	ErrorCode         string
@@ -342,9 +351,18 @@ func (service *Service) recordTurnUsageSnapshot(stream *ActiveStream, conversati
 	if strings.TrimSpace(modelName) == "" {
 		modelName = modelID
 	}
+	role := strings.TrimSpace(usage.Role)
+	if role == "" {
+		role = "parent"
+	}
+	logicalModel := firstNonEmpty(strings.TrimSpace(usage.LogicalModel), modelName, modelID)
+	providerModel := firstNonEmpty(strings.TrimSpace(usage.ProviderModel), strings.TrimSpace(usage.Model))
+	if providerModel == "" {
+		providerModel = logicalModel
+	}
 	provider := strings.TrimSpace(usage.Provider)
-	if strings.TrimSpace(usage.Model) != "" {
-		modelName = strings.TrimSpace(usage.Model)
+	if providerModel != "" {
+		modelName = providerModel
 	}
 	channelBaseURL := strings.TrimSpace(usage.BaseURL)
 	channelGroupName := strings.TrimSpace(usage.GroupName)
@@ -362,6 +380,7 @@ func (service *Service) recordTurnUsageSnapshot(stream *ActiveStream, conversati
 			}
 			if strings.TrimSpace(usage.Model) == "" && strings.TrimSpace(channel.Model) != "" {
 				modelName = strings.TrimSpace(channel.Model)
+				providerModel = strings.TrimSpace(channel.Model)
 			}
 		}
 	}
@@ -378,6 +397,15 @@ func (service *Service) recordTurnUsageSnapshot(stream *ActiveStream, conversati
 			Status:           normalizedStatus,
 			At:               lastEventAt,
 			Model:            modelName,
+			Role:             role,
+			ParentModel:      strings.TrimSpace(usage.ParentModel),
+			LogicalModel:     logicalModel,
+			ProviderModel:    providerModel,
+			ModelGroupID:     strings.TrimSpace(usage.ModelGroupID),
+			TaskID:           strings.TrimSpace(usage.TaskID),
+			ExecutionMode:    strings.TrimSpace(usage.ExecutionMode),
+			SupervisorModel:  strings.TrimSpace(usage.SupervisorModel),
+			ReviewerModel:    strings.TrimSpace(usage.ReviewerModel),
 			Provider:         provider,
 			BaseURL:          channelBaseURL,
 			GroupName:        channelGroupName,
@@ -414,6 +442,48 @@ func (service *Service) recordTurnUsageSnapshot(stream *ActiveStream, conversati
 	_ = turnSeq
 	_ = startedAt
 	return nil
+}
+
+// upsertStandaloneUsageSnapshot records provider calls that do not own an
+// ActiveStream, such as local delegated workers and supervisor reviews.
+func upsertStandaloneUsageSnapshot(store *UsageFileStore, requestID, modelCallID, status string, usage turnUsageSnapshot, errorText string) error {
+	if store == nil || strings.TrimSpace(requestID) == "" {
+		return nil
+	}
+	role := firstNonEmpty(strings.TrimSpace(usage.Role), "parent")
+	logicalModel := firstNonEmpty(strings.TrimSpace(usage.LogicalModel), strings.TrimSpace(usage.Model))
+	providerModel := firstNonEmpty(strings.TrimSpace(usage.ProviderModel), strings.TrimSpace(usage.Model), logicalModel)
+	model := firstNonEmpty(providerModel, logicalModel)
+	eventID := usageEventID(requestID, modelCallID)
+	errorCode := strings.TrimSpace(usage.ErrorCode)
+	if errorCode == "" {
+		errorCode = extractUsageErrorCode(errorText)
+	}
+	return store.UpsertEvent(usageFileEvent{
+		EventID:          eventID,
+		Kind:             usageEventKindProvider,
+		Status:           normalizeUsageProviderStatus(status, usage.UsagePresent),
+		At:               time.Now().UTC(),
+		Model:            model,
+		Role:             role,
+		ParentModel:      strings.TrimSpace(usage.ParentModel),
+		LogicalModel:     logicalModel,
+		ProviderModel:    providerModel,
+		ModelGroupID:     strings.TrimSpace(usage.ModelGroupID),
+		TaskID:           strings.TrimSpace(usage.TaskID),
+		ExecutionMode:    strings.TrimSpace(usage.ExecutionMode),
+		SupervisorModel:  strings.TrimSpace(usage.SupervisorModel),
+		ReviewerModel:    strings.TrimSpace(usage.ReviewerModel),
+		Provider:         strings.TrimSpace(usage.Provider),
+		BaseURL:          strings.TrimSpace(usage.BaseURL),
+		GroupName:        strings.TrimSpace(usage.GroupName),
+		ErrorCode:        errorCode,
+		InputTokens:      usage.InputTokens,
+		OutputTokens:     usage.OutputTokens,
+		CacheReadTokens:  usage.CacheReadTokens,
+		CacheWriteTokens: usage.CacheWriteTokens,
+		UsagePresent:     usage.UsagePresent,
+	})
 }
 
 func (service *Service) recordTurnFinalizedSnapshot(stream *ActiveStream, conversationID string, turnSeq int64, requestID string, status string, errorText string) error {

@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"cursor/internal/modelcontext"
@@ -23,7 +24,13 @@ type Router struct {
 	// gemini 负责 Gemini native 流式请求。
 	gemini ModelAdapter
 	// resolver 负责从本地配置中解析实际模型通道。
-	resolver ChannelResolver
+	resolver        ChannelResolver
+	healthMu        sync.Mutex
+	healthByChannel map[string]channelHealth
+}
+
+type channelHealth struct {
+	cooldownUntil time.Time
 }
 
 type ChannelResolver interface {
@@ -34,13 +41,18 @@ type ChannelResolver interface {
 	TurnStaleTimeout(context.Context) time.Duration
 }
 
+type multiChannelResolver interface {
+	SelectChannelsForModel(context.Context, string) ([]*legacyruntime.ResolvedChannel, error)
+}
+
 // NewRouter 创建模型适配路由器。
 func NewRouter(resolver ChannelResolver) *Router {
 	return &Router{
-		openai:    NewOpenAIAdapter(),
-		anthropic: NewAnthropicAdapter(),
-		gemini:    NewGeminiAdapter(),
-		resolver:  resolver,
+		openai:          NewOpenAIAdapter(),
+		anthropic:       NewAnthropicAdapter(),
+		gemini:          NewGeminiAdapter(),
+		resolver:        resolver,
+		healthByChannel: make(map[string]channelHealth),
 	}
 }
 
@@ -80,7 +92,7 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 			return err
 		}
 
-		channel, err := router.resolver.SelectChannelForModel(ctx, req.ModelID)
+		channel, err := router.selectChannel(ctx, req.ModelID)
 		if err != nil {
 			return err
 		}
@@ -104,8 +116,12 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 
 		streamErr := router.streamChannel(ctx, req, channel, sink)
 		if streamErr == nil || ctx.Err() != nil {
+			if streamErr == nil {
+				router.clearChannelFailure(channelID)
+			}
 			return streamErr
 		}
+		router.recordChannelFailure(channelID, streamErr)
 		if firstErr == nil {
 			firstErr = streamErr
 		}
@@ -117,6 +133,84 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 		return firstErr
 	}
 	return fmt.Errorf("all model channels failed")
+}
+
+func (router *Router) selectChannel(ctx context.Context, modelID string) (*legacyruntime.ResolvedChannel, error) {
+	if resolver, ok := router.resolver.(multiChannelResolver); ok {
+		channels, err := resolver.SelectChannelsForModel(ctx, modelID)
+		if err != nil || len(channels) == 0 {
+			return nil, err
+		}
+		return router.preferHealthyChannel(channels), nil
+	}
+	return router.resolver.SelectChannelForModel(ctx, modelID)
+}
+
+func (router *Router) preferHealthyChannel(channels []*legacyruntime.ResolvedChannel) *legacyruntime.ResolvedChannel {
+	if router == nil || len(channels) == 0 {
+		return nil
+	}
+	now := time.Now()
+	router.healthMu.Lock()
+	defer router.healthMu.Unlock()
+	var earliest *legacyruntime.ResolvedChannel
+	var earliestUntil time.Time
+	for _, channel := range channels {
+		if channel == nil {
+			continue
+		}
+		id := strings.TrimSpace(channel.ID)
+		health, cooled := router.healthByChannel[id]
+		if !cooled || !health.cooldownUntil.After(now) {
+			if cooled {
+				delete(router.healthByChannel, id)
+			}
+			return channel
+		}
+		if earliest == nil || health.cooldownUntil.Before(earliestUntil) {
+			earliest = channel
+			earliestUntil = health.cooldownUntil
+		}
+	}
+	return earliest
+}
+
+func (router *Router) recordChannelFailure(channelID string, err error) {
+	if router == nil || strings.TrimSpace(channelID) == "" || err == nil {
+		return
+	}
+	cooldown := channelFailureCooldown(err)
+	if cooldown <= 0 {
+		return
+	}
+	router.healthMu.Lock()
+	router.healthByChannel[strings.TrimSpace(channelID)] = channelHealth{cooldownUntil: time.Now().Add(cooldown)}
+	router.healthMu.Unlock()
+}
+
+func (router *Router) clearChannelFailure(channelID string) {
+	if router == nil || strings.TrimSpace(channelID) == "" {
+		return
+	}
+	router.healthMu.Lock()
+	delete(router.healthByChannel, strings.TrimSpace(channelID))
+	router.healthMu.Unlock()
+}
+
+func channelFailureCooldown(err error) time.Duration {
+	status := parseProviderErrorStatus(err.Error())
+	var statusErr *HTTPStatusError
+	if errors.As(err, &statusErr) && statusErr != nil {
+		status = statusErr.StatusCode
+	}
+	switch status {
+	case 401, 402, 403:
+		return 10 * time.Minute
+	case 429, 500, 502, 503, 504:
+		return time.Minute
+	default:
+		return 0
+	}
 }
 
 // streamChannel 使用已解析的渠道构造请求并驱动对应 provider 适配器。此函数不改变模型可见的请求内容。

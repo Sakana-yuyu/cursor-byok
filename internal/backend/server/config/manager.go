@@ -93,14 +93,54 @@ func (manager *Manager) LastAgentModelHash() string {
 	return strings.TrimSpace(manager.Current().LastAgentModelHash)
 }
 
+func (manager *Manager) GetDelegationConfig(ctx context.Context) (DelegationConfig, error) {
+	if manager == nil {
+		return cloneDelegationConfig(DefaultConfig().Delegation), nil
+	}
+	cfg, err := manager.Load(ctx)
+	if err != nil {
+		return cloneDelegationConfig(DefaultConfig().Delegation), err
+	}
+	return cloneDelegationConfig(cfg.Delegation), nil
+}
+
+func (manager *Manager) SaveDelegationConfig(ctx context.Context, cfg DelegationConfig) (DelegationConfig, error) {
+	if manager == nil {
+		return DelegationConfig{}, fmt.Errorf("config manager is not initialized")
+	}
+	current, err := manager.Load(ctx)
+	if err != nil {
+		return cloneDelegationConfig(DefaultConfig().Delegation), err
+	}
+	current.Delegation = cloneDelegationConfig(cfg)
+	normalized, err := manager.Save(ctx, current)
+	if err != nil {
+		return cloneDelegationConfig(DefaultConfig().Delegation), err
+	}
+	return cloneDelegationConfig(normalized.Delegation), nil
+}
+
 func (manager *Manager) DelegationRuntimeConfig() delegation.RuntimeConfig {
 	config := manager.Current()
 	current := config.Delegation
 	result := delegation.RuntimeConfig{
-		Enabled:        current.Enabled,
-		MaxConcurrency: current.MaxConcurrency,
-		Groups:         make([]delegation.RuntimeModelGroup, 0, len(current.Groups)),
-		ModelNames:     make(map[string]string),
+		Enabled:                 current.Enabled,
+		MaxConcurrency:          current.MaxConcurrency,
+		Groups:                  make([]delegation.RuntimeModelGroup, 0, len(current.Groups)),
+		ModelNames:              make(map[string]string),
+		SupervisionEnabled:      current.Supervision.Enabled,
+		SupervisorModelID:       strings.TrimSpace(current.Supervision.SupervisorModelID),
+		ReviewerModelID:         strings.TrimSpace(current.Supervision.ReviewerModelID),
+		WorkerGroupID:           strings.TrimSpace(current.Supervision.WorkerGroupID),
+		MaxCorrections:          current.Supervision.MaxCorrections,
+		MaxRetries:              current.Supervision.MaxRetries,
+		MaxRounds:               current.Supervision.MaxRounds,
+		AllowReassign:           current.Supervision.AllowReassign,
+		AllowEscalate:           current.Supervision.AllowEscalate,
+		StrictUnavailable:       current.Supervision.StrictUnavailable,
+		VisionDelegationEnabled: current.VisionDelegation.Enabled,
+		VisionModelID:           strings.TrimSpace(current.VisionDelegation.VisionModelID),
+		VisionMode:              strings.TrimSpace(current.VisionDelegation.Mode),
 	}
 	for _, adapter := range config.ModelAdapters {
 		adapterID := strings.TrimSpace(adapter.ID)
@@ -120,7 +160,7 @@ func (manager *Manager) DelegationRuntimeConfig() delegation.RuntimeConfig {
 			ToolPermissions: cloneBoolMap(group.ToolPermissions),
 		})
 	}
-	return result
+	return delegation.NormalizeRuntimeConfig(result)
 }
 
 func firstNonEmptyConfigValue(values ...string) string {
