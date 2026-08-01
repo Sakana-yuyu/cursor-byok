@@ -24,6 +24,7 @@ import (
 	interactionbridge "cursor/internal/backend/agent/bridge/interaction"
 	runtimecore "cursor/internal/backend/agent/core"
 	modeladapter "cursor/internal/backend/agent/model"
+	promptengine "cursor/internal/backend/agent/prompt"
 	protocol "cursor/internal/backend/agent/protocol"
 	"cursor/internal/backend/delegation"
 	"cursor/internal/modelcontext"
@@ -795,6 +796,7 @@ func (service *Service) decodeInboundIntent(requestID string, message *agentv1.A
 	default:
 		return InboundIntent{}, fmt.Errorf("unsupported client message kind: %s", clientKind)
 	}
+	intent.ManualCompaction = resolveInboundManualCompaction(message, intent.UserMessage)
 	return intent, nil
 }
 
@@ -922,6 +924,7 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 	stream.SubagentModelOverrides = cloneSubagentModelOverrides(intent.SubagentModelOverrides)
 	stream.SelectedSubagentModels = cloneSelectedSubagentModels(intent.SelectedSubagentModels)
 	stream.SelectedSubagentModelDetails = cloneSelectedSubagentModelDetails(intent.SelectedSubagentModelDetails)
+	stream.ManualCompaction = intent.ManualCompaction
 	stream.PendingProviderAction = providerActionNone
 	stream.PendingCompaction = nil
 	stream.PendingExecs = make(map[string]runtimecore.PendingExec)
@@ -974,6 +977,7 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 		"selected_subagent_model_count":        len(intent.SelectedSubagentModels),
 		"selected_subagent_model_detail_count": len(intent.SelectedSubagentModelDetails),
 		"latest_user_text":                     userMessageText(intent.UserMessage),
+		"manual_compaction_requested":          intent.ManualCompaction.Requested,
 	})
 	if err := service.publishCheckpoint(intent.RequestID, intent.ConversationID); err != nil {
 		return err
@@ -3277,7 +3281,8 @@ func buildRunEntries(intent InboundIntent, effectiveMode agentv1.AgentMode, turn
 		}
 	}
 	if intent.UserMessage != nil {
-		payload, err := protojson.Marshal(normalizeUserMessageForStorage(intent.UserMessage))
+		normalized := normalizeUserMessageForStorage(intent.UserMessage)
+		payload, err := protojson.Marshal(normalized)
 		if err != nil {
 			return nil, err
 		}
@@ -3288,6 +3293,13 @@ func buildRunEntries(intent InboundIntent, effectiveMode agentv1.AgentMode, turn
 			Kind:      "user_message",
 			Payload:   payload,
 		})
+		if commandMessage, ok := promptengine.BuildSelectedCursorCommandsReplayMessage(normalized); ok {
+			entries = append(entries, newPromptContextEntry(turnSeq, intent.RequestID, newPromptContextMessage(
+				promptContextSourceSelectedCursorCommands,
+				modeladapter.Message{Role: commandMessage.Role, Content: commandMessage.Content},
+				true,
+			)))
+		}
 	}
 	modeEntry, err := newModeMetadataEntry(turnSeq, intent.RequestID, effectiveMode, intent.HasExplicitMode, intent.ModeSource)
 	if err != nil {
@@ -3606,6 +3618,38 @@ func conversationActionIsResume(action *agentv1.ConversationAction) bool {
 	return ok
 }
 
+func inboundConversationAction(message *agentv1.AgentClientMessage) *agentv1.ConversationAction {
+	if message == nil {
+		return nil
+	}
+	if action := message.GetConversationAction(); action != nil {
+		return action
+	}
+	if runRequest := message.GetRunRequest(); runRequest != nil {
+		return runRequest.GetAction()
+	}
+	return nil
+}
+
+func conversationActionIsSummarize(action *agentv1.ConversationAction) bool {
+	if action == nil {
+		return false
+	}
+	_, ok := action.GetAction().(*agentv1.ConversationAction_SummarizeAction)
+	return ok
+}
+
+func resolveInboundManualCompaction(message *agentv1.AgentClientMessage, userMessage *agentv1.UserMessage) manualCompactionDirective {
+	instruction, requested := parseManualCompactionRequest(userMessage)
+	if conversationActionIsSummarize(inboundConversationAction(message)) {
+		requested = true
+	}
+	return manualCompactionDirective{
+		Requested:   requested,
+		Instruction: instruction,
+	}
+}
+
 func conversationActionStartsRun(action *agentv1.ConversationAction) bool {
 	if action == nil {
 		return false
@@ -3613,6 +3657,7 @@ func conversationActionStartsRun(action *agentv1.ConversationAction) bool {
 	switch action.GetAction().(type) {
 	case *agentv1.ConversationAction_UserMessageAction,
 		*agentv1.ConversationAction_ResumeAction,
+		*agentv1.ConversationAction_SummarizeAction,
 		*agentv1.ConversationAction_StartPlanAction,
 		*agentv1.ConversationAction_ExecutePlanAction:
 		return true
