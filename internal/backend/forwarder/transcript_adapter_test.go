@@ -3,6 +3,7 @@ package forwarder
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,14 +15,14 @@ import (
 )
 
 func TestProjectCursorTranscriptJSONLMatchesCursorContract(t *testing.T) {
-	toolCall := testEditToolCall(t, "file.txt")
-	conversation := testConversation([]HistoryEntry{
-		testUserMessageEntry(t, 1, "request-1", "<user_info>hidden</user_info>\n\nchange the file"),
+	toolCall := transcriptTestEditToolCall(t, "file.txt")
+	conversation := transcriptTestConversation([]HistoryEntry{
+		transcriptTestUserMessageEntry(t, 1, "request-1", "<user_info>hidden</user_info>\n\nchange the file"),
 		newAssistantTextEntry(1, "request-1", "<thinking>hidden</thinking>\nDone", "checked carefully", ""),
 		newToolCallEntry(1, "request-1", "call-1", "Edit", "", "", toolCall),
 		newToolResultEntry(1, "request-1", "call-1", "Edit", `{"path":"file.txt"}`, "edited", "", toolCall),
 		newMetadataEntry(1, "request-1", "turn_completed", nil),
-		testUserMessageEntry(t, 2, "request-2", "next question"),
+		transcriptTestUserMessageEntry(t, 2, "request-2", "next question"),
 		newMetadataEntry(2, "request-2", "turn_completed", nil),
 	})
 
@@ -63,11 +64,11 @@ func TestConversationFileStoreSyncsCursorTranscript(t *testing.T) {
 	historyRoot := filepath.Join(t.TempDir(), "history")
 	transcriptsFolder := filepath.Join(t.TempDir(), "agent-transcripts")
 	store := NewConversationFileStore(historyRoot)
-	conversation := testConversation(nil)
+	conversation := transcriptTestConversation(nil)
 	conversation.AgentTranscriptsFolder = transcriptsFolder
 
 	persisted, err := store.SaveConversationWithEntries(conversation.ConversationID, conversation, []HistoryEntry{
-		testUserMessageEntry(t, 1, "request-1", "hello"),
+		transcriptTestUserMessageEntry(t, 1, "request-1", "hello"),
 		newAssistantTextEntry(1, "request-1", "hi", "", ""),
 	})
 	if err != nil {
@@ -103,10 +104,10 @@ func TestConversationFileStoreBackfillsTranscriptOnStartup(t *testing.T) {
 		t.Fatalf("create transcript root: %v", err)
 	}
 	store := NewConversationFileStore(historyRoot)
-	conversation := testConversation(nil)
+	conversation := transcriptTestConversation(nil)
 	conversation.AgentTranscriptsFolder = transcriptsFolder
 	_, err := store.SaveConversationWithEntries(conversation.ConversationID, conversation, []HistoryEntry{
-		testUserMessageEntry(t, 1, "request-1", "hello"),
+		transcriptTestUserMessageEntry(t, 1, "request-1", "hello"),
 		newAssistantTextEntry(1, "request-1", "hi", "", ""),
 		newMetadataEntry(1, "request-1", "turn_completed", nil),
 	})
@@ -169,7 +170,7 @@ func TestAgentTranscriptsFolderRecoveredFromLegacyRequestContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal request context: %v", err)
 	}
-	conversation := testConversation([]HistoryEntry{{
+	conversation := transcriptTestConversation([]HistoryEntry{{
 		TurnSeq: 1,
 		Role:    "user",
 		Kind:    "request_context",
@@ -180,6 +181,49 @@ func TestAgentTranscriptsFolderRecoveredFromLegacyRequestContext(t *testing.T) {
 	if conversation.AgentTranscriptsFolder != folder {
 		t.Fatalf("recovered transcript folder = %q", conversation.AgentTranscriptsFolder)
 	}
+}
+
+func transcriptTestConversation(entries []HistoryEntry) *ConversationFile {
+	conversation := &ConversationFile{
+		ConversationID:     "conversation-1",
+		RootConversationID: "conversation-1",
+		Mode:               "agent",
+		NextTurnSeq:        1,
+		NextEntrySeq:       1,
+		Entries:            make([]HistoryEntry, 0, len(entries)),
+	}
+	appendEntriesInPlace(conversation, entries)
+	return conversation
+}
+
+func transcriptTestUserMessageEntry(t *testing.T, turnSeq int64, requestID string, text string) HistoryEntry {
+	t.Helper()
+	payload, err := protojson.Marshal(&agentv1.UserMessage{Text: text, MessageId: fmt.Sprintf("message-%d", turnSeq)})
+	if err != nil {
+		t.Fatalf("marshal user message: %v", err)
+	}
+	return HistoryEntry{
+		TurnSeq:   turnSeq,
+		RequestID: requestID,
+		Role:      "user",
+		Kind:      "user_message",
+		Payload:   payload,
+	}
+}
+
+func transcriptTestEditToolCall(t *testing.T, path string) []byte {
+	t.Helper()
+	payload, err := protojson.Marshal(&agentv1.ToolCall{
+		Tool: &agentv1.ToolCall_EditToolCall{
+			EditToolCall: &agentv1.EditToolCall{
+				Args: &agentv1.EditArgs{Path: path},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal edit tool call: %v", err)
+	}
+	return payload
 }
 
 func decodeCursorTranscriptLines(t *testing.T, data []byte) []cursorTranscriptLine {
