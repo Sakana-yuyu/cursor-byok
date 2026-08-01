@@ -256,6 +256,7 @@ export const DiagnoseModelAdapters = () => Promise.resolve({ total: previewConfi
 export const ApplyDiagnosticFixes = () => Promise.resolve({ total: previewConfig.modelAdapters.length, issues: [] });
 export const StartProxy = () => Promise.resolve(browserPreviewMockProxyState());
 export const StopProxy = () => Promise.resolve(browserPreviewMockProxyState());
+export const RepairProxySettings = () => Promise.resolve({ settingsApplied: true, settingsPath: "", proxyURL: "http://127.0.0.1:18080", cursorRunning: false, needsCursorRestart: false, details: ["浏览器预览模式：模拟修复成功"] });
 export const GetAdRuntime = () => Promise.resolve({ available: false, slots: [], window: {} });
 export const OpenExternalURL = () => Promise.resolve();
 export const GetHomeMetricsSummary = () => Promise.resolve(browserPreviewMockMetrics());
