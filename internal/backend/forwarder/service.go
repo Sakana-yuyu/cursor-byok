@@ -663,6 +663,10 @@ func (service *Service) decodeInboundIntent(requestID string, message *agentv1.A
 		intent.ConversationID = conversationID
 		intent.ConversationState = runRequest.GetConversationState()
 		intent.UserMessage = extractUserMessage(message)
+		// Cursor 粘贴图片走 blob 协议：图片数据在 pre_fetched_blobs 里，selected_images 只带 blob_id。
+		// 这里把 blob 数据填充进图片，否则后续 buildSelectedImageContentParts 会静默丢弃图片，
+		// 图片进不了消息 ContentPart，图片路径占位也不会触发。
+		hydrateSelectedImageBlobs(intent.UserMessage, buildPrefetchedBlobMap(runRequest.GetPreFetchedBlobs()))
 		actionRequestContext := extractRequestContext(message)
 		intent.RequestContext = extractEffectiveRunRequestContext(message)
 		intent.MCPToolsProvided = runRequest.McpTools != nil || len(actionRequestContext.GetTools()) > 0

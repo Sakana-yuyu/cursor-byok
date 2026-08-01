@@ -279,8 +279,9 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 	// protocolMode=fixed 表示用户明确锁定协议，跳过自动升级（逃生口）。
 	upgraded := upgradeOpenAIClaudeToAnthropic(&resolved)
 	resolved.Messages = sanitizeProviderMessages(req.Messages)
-	// 对明确不支持视觉的模型，将图片内容块替换为文字占位说明。
-	resolved.Messages = stripImagesFromMessages(resolved.Messages, resolved.ProviderModelID)
+	// 对明确不支持视觉的模型，把图片 ContentPart 替换为包含本地文件路径的文字占位，
+	// 让模型通过用户自己配置的读图工具（MCP）自行读取；exe 自身不做识图。
+	resolved.Messages = placeholderImagesFromMessages(ctx, resolved.Messages, resolved.ProviderModelID)
 	applyStreamKnobs(&resolved, runtimeThinkingEffort)
 
 	var streamErr error

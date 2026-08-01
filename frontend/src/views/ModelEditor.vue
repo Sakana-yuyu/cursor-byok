@@ -4,7 +4,8 @@ import Input from "@/components/ui/Input.vue";
 import ModelAdapterTestCard from "@/components/ModelAdapterTestCard.vue";
 import Select from "@/components/ui/Select.vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
-import { getModelEditorContext } from "@/services/clientApi";
+import { enableReaderMCP, getModelEditorContext } from "@/services/clientApi";
+import { connectMCPRuntimeServer } from "@/services/runtimeControlApi";
 import { resolveModelContextWindow, resolveModelCapabilities } from "@/utils/modelContext";
 import { providerIcon, providerLabel, providerSelectOptions } from "@/utils/providerMeta";
 import { supplierSelectOptions, supplierTemplate } from "@/utils/supplierCatalog";
@@ -162,6 +163,61 @@ const editorIndex = ref(-1);
 const router = useRouter();
 const draft = reactive(createEmptyModelAdapter());
 const errorMessage = ref("");
+// 读图 MCP 设置：一键为不支持图片的模型添加读图 MCP（写入 Cursor 全局 mcp.json）。
+const readerState = reactive({
+  open: false,
+  url: "",
+  apiKey: "",
+  model: "gpt-5.6-luna",
+  busy: false,
+  ok: "",
+  error: "",
+});
+
+function openReaderPanel() {
+  readerState.url = String(draft.baseURL || "");
+  readerState.apiKey = String(draft.apiKey || "");
+  readerState.model = "gpt-5.6-luna";
+  readerState.open = true;
+  readerState.ok = "";
+  readerState.error = "";
+}
+
+async function handleEnableReaderMCP() {
+  if (readerState.busy) {
+    return;
+  }
+  const url = String(readerState.url || "").trim();
+  if (!url) {
+    readerState.error = "请填写视觉网关地址（url）";
+    return;
+  }
+  readerState.busy = true;
+  readerState.error = "";
+  readerState.ok = "";
+  try {
+    const result = await enableReaderMCP(url, String(readerState.apiKey || "").trim(), String(readerState.model || "").trim());
+    const identifier = String(result?.identifier || "vision-reader");
+    readerState.ok = `读图 MCP「${identifier}」已添加并启用，可在「设置 → Skills 与 MCP」中查看。`;
+    // 自动尝试连接（不阻塞，连接失败仅提示可手动连接）
+    void connectReaderMCPAttempt(identifier);
+  } catch (error) {
+    readerState.error = toUserError(error);
+  } finally {
+    readerState.busy = false;
+  }
+}
+
+async function connectReaderMCPAttempt(identifier) {
+  try {
+    await connectMCPRuntimeServer(identifier, `reader-${Date.now()}`, "");
+    readerState.ok += "已尝试连接读图 MCP。";
+  } catch (_error) {
+    readerState.error = readerState.error
+      ? `${readerState.error} 读图 MCP 自动连接失败，请到「设置 → Skills 与 MCP」手动连接。`
+      : "读图 MCP 已添加，但自动连接失败，请到「设置 → Skills 与 MCP」手动连接。";
+  }
+}
 const loading = ref(true);
 const lastTestAdapterID = ref("");
 const localTestFailure = ref("");
@@ -1028,6 +1084,40 @@ onMounted(async () => {
             <!-- 图片不支持警告 -->
             <div v-if="detectedCapabilities && detectedCapabilities.supportsVision === false" class="rounded-[6px] border border-yellow-800/40 bg-yellow-900/20 px-3 py-1.5 text-[11px] text-yellow-200">
               ⚠️ 此模型不支持图片输入。发送图片时，后端会自动将图片替换为文字占位说明。
+            </div>
+
+            <!-- 读图 MCP 设置：一键为不支持图片的模型添加读图 MCP -->
+            <div v-if="detectedCapabilities && detectedCapabilities.supportsVision === false" class="mt-1.5">
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2.5 py-1 text-[11px] text-[#93c5fd] transition-colors hover:bg-[#2a2a2a]"
+                @click="readerState.open ? (readerState.open = false) : openReaderPanel()"
+              >
+                <span class="icon-[mdi--image-search-outline] text-[12px]"></span>
+                {{ readerState.open ? "收起读图 MCP 设置" : "读图 MCP 设置" }}
+              </button>
+
+              <div v-if="readerState.open" class="mt-2 space-y-2 rounded-[6px] border border-[#343434] bg-[#252525] p-3">
+                <div class="space-y-1">
+                  <span class="text-[11px] text-[#a3a3a3]">视觉网关地址（OpenAI 兼容，参考 vision-luna）</span>
+                  <Input :model-value="readerState.url" placeholder="https://your-gateway.example.com/v1" autocomplete="off" @update:model-value="(value) => (readerState.url = value)" />
+                </div>
+                <div class="space-y-1">
+                  <span class="text-[11px] text-[#a3a3a3]">API Key（网关无需鉴权可留空）</span>
+                  <Input :model-value="readerState.apiKey" type="password" placeholder="sk-..." @update:model-value="(value) => (readerState.apiKey = value)" />
+                </div>
+                <div class="space-y-1">
+                  <span class="text-[11px] text-[#a3a3a3]">视觉模型名</span>
+                  <Input :model-value="readerState.model" placeholder="gpt-5.6-luna" @update:model-value="(value) => (readerState.model = value)" />
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <Button variant="primary" :disabled="readerState.busy" @click="handleEnableReaderMCP">
+                    {{ readerState.busy ? "启用中..." : "启用读图 MCP" }}
+                  </Button>
+                </div>
+                <div v-if="readerState.ok" class="text-[11px] text-[#6ee7a5]">{{ readerState.ok }}</div>
+                <div v-if="readerState.error" class="text-[11px] text-[#fca5a5]">{{ readerState.error }}</div>
+              </div>
             </div>
 
             <!-- 快捷档位按钮 -->
