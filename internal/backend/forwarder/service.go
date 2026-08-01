@@ -9,6 +9,7 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"connectrpc.com/connect"
@@ -279,31 +280,35 @@ func subagentModelOverrideSummaries(overrides map[string]runtimecore.SubagentMod
 }
 
 type Service struct {
-	store               *ConversationFileStore
-	usageStore          *UsageFileStore
-	codebaseIndexStore  *CodebaseIndexStore
-	docsIndexStore      *DocsIndexStore
-	rules               *UserRuleStore
-	projector           *HistoryProjector
-	compiler            PromptCompiler
-	promptInjection     *promptinject.Manager
-	provider            ProviderGateway
-	resolver            modeladapter.ChannelResolver
-	modelMemory         agentModelMemory
-	maxTokensPersister  maxTokensConfigPersister
-	scanConfig          skillMCPScanConfigProvider
-	mcpRuntime          *MCPRuntimeRegistry
-	broker              *StreamBroker
-	recorder            *artifactRecorder
-	debug               *debugRecorder
-	execBridge          execbridge.ExecBridge
-	interactionBridge   interactionbridge.InteractionBridge
-	appendSeq           *appendSequenceTracker
-	runQueue            *runQueue
-	cursorDelegation    *cursorDelegationBridge
-	localDelegation     *localDelegatedAgentAdapter
-	delegationConfig    delegation.RuntimeConfigProvider
-	multitaskDelegation *multitaskDelegationCoordinator
+	store                    *ConversationFileStore
+	usageStore               *UsageFileStore
+	codebaseIndexStore       *CodebaseIndexStore
+	docsIndexStore           *DocsIndexStore
+	rules                    *UserRuleStore
+	projector                *HistoryProjector
+	compiler                 PromptCompiler
+	promptInjection          *promptinject.Manager
+	provider                 ProviderGateway
+	resolver                 modeladapter.ChannelResolver
+	modelMemory              agentModelMemory
+	maxTokensPersister       maxTokensConfigPersister
+	scanConfig               skillMCPScanConfigProvider
+	mcpRuntime               *MCPRuntimeRegistry
+	broker                   *StreamBroker
+	recorder                 *artifactRecorder
+	debug                    *debugRecorder
+	execBridge               execbridge.ExecBridge
+	interactionBridge        interactionbridge.InteractionBridge
+	appendSeq                *appendSequenceTracker
+	runQueue                 *runQueue
+	cursorDelegation         *cursorDelegationBridge
+	localDelegation          *localDelegatedAgentAdapter
+	delegationConfig         delegation.RuntimeConfigProvider
+	multitaskDelegation      *multitaskDelegationCoordinator
+	delegationRuntimeMu      sync.Mutex
+	nativeDelegations        map[string]*nativeDelegationRuntime
+	provider400RecoveryMu    sync.Mutex
+	provider400RecoveryTurns map[string]struct{}
 }
 
 type agentModelMemory interface {
@@ -376,6 +381,7 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 		interactionBridge:  interactionbridge.NewBridge(),
 		appendSeq:          newAppendSequenceTracker(),
 		runQueue:           newRunQueue(),
+		nativeDelegations:  make(map[string]*nativeDelegationRuntime),
 	}
 	service.cursorDelegation = newCursorDelegationBridge(service)
 	service.localDelegation = newLocalDelegatedAgentAdapter(service)
@@ -416,6 +422,7 @@ func newServiceWithDependencies(store *ConversationFileStore, projector *History
 		mcpRuntime:         SharedMCPRuntimeRegistry(),
 		appendSeq:          newAppendSequenceTracker(),
 		runQueue:           newRunQueue(),
+		nativeDelegations:  make(map[string]*nativeDelegationRuntime),
 	}
 	service.cursorDelegation = newCursorDelegationBridge(service)
 	service.localDelegation = newLocalDelegatedAgentAdapter(service)
@@ -1114,6 +1121,10 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	if !ok || stream == nil {
 		return fmt.Errorf("request is not active: %s", intent.RequestID)
 	}
+	stream.mu.Lock()
+	turnSeq := stream.TurnSeq
+	stream.mu.Unlock()
+	service.clearProvider400Recovery(intent.RequestID, turnSeq)
 	if service.multitaskDelegation != nil {
 		service.multitaskDelegation.CancelStream(stream)
 	}
@@ -1138,6 +1149,9 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	}
 	stream.mu.Unlock()
 	for _, pending := range pendingExecs {
+		if strings.TrimSpace(pending.ExecKind) == "subagent" {
+			service.updateNativeDelegationStatus(pending.ExecID, delegation.TaskCanceled, "Cursor 子代理已取消", "subagent canceled")
+		}
 		if strings.TrimSpace(pending.ExecKind) == "delegation_aggregate" {
 			continue
 		}
@@ -1170,6 +1184,9 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 
 // handleExecResult 处理客户端返回的执行桥结果，并在终态时把 tool_result 写回 history。
 func (service *Service) handleExecResult(intent InboundIntent) error {
+	// CursorAdapter only owns child worker execs registered in its waiter table.
+	// The parent aggregate remains owned by this stream and is closed later by
+	// streamDelegationResult -> handleDelegationResult.
 	if intent.ExecClientMessage != nil && service.cursorDelegation != nil && service.cursorDelegation.ConsumeExecMessage(intent.RequestID, intent.ExecClientMessage) {
 		return nil
 	}
@@ -1193,6 +1210,18 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 		}
 		return fmt.Errorf("pending exec not found")
 	}
+	if execID := strings.TrimSpace(intent.ExecClientMessage.GetExecId()); execID != "" &&
+		intent.ExecClientMessage.GetId() != 0 && pending.MessageID != 0 &&
+		intent.ExecClientMessage.GetId() != pending.MessageID && service.debug != nil {
+		service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "exec_identity_mismatch_accepted", map[string]any{
+			"exec_id":             execID,
+			"expected_message_id": pending.MessageID,
+			"received_message_id": intent.ExecClientMessage.GetId(),
+			"parent_request_id":   stream.RequestID,
+			"exec_kind":           strings.TrimSpace(pending.ExecKind),
+			"provider_pass":       pending.ProviderPass,
+		})
+	}
 	if service.ignoreStaleExecProviderPass(stream, pending, "exec_client_message") {
 		return nil
 	}
@@ -1207,6 +1236,9 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 	}
 	result, err := service.execBridge.ApplyExecClientMessage(intent.ExecClientMessage, pending)
 	if err != nil {
+		if strings.TrimSpace(pending.ExecKind) == "subagent" {
+			service.updateNativeDelegationStatus(pending.ExecID, delegation.TaskFailed, "Cursor 子代理执行失败", err.Error())
+		}
 		return err
 	}
 	// 捕获点：MCP 执行结果（含失败模式），便于后续读取日志针对性修复执行层问题。
@@ -1236,11 +1268,25 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 				log.Printf("forwarder shell hook context metadata failed request_id=%s tool_call_id=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ToolCallID), err)
 			}
 		}
-		// 心跳续期：子代理仍在活动（发送 delta/progress），重置 watchdog timer。
-		service.rescheduleExecWatchdog(intent.RequestID, pending)
+		// 只有真实执行数据才算有效进展；摘要/heartbeat 不能延长 watchdog。
+		if execMessageHasEffectiveProgress(intent.ExecClientMessage, result) {
+			service.markNativeDelegationEffectiveProgress(pending.ExecID, "Cursor 子代理正在处理工具结果")
+			service.rescheduleExecWatchdog(intent.RequestID, pending)
+		}
 		return nil
 	}
 	markExecCompleted(stream, pending)
+	if strings.TrimSpace(pending.ExecKind) == "subagent" {
+		status := delegation.TaskCompleted
+		progress := "Cursor 子代理已完成"
+		errorText := ""
+		if subagentResultFailed(intent.ExecClientMessage.GetSubagentResult()) {
+			status = delegation.TaskFailed
+			progress = "Cursor 子代理执行失败"
+			errorText = subagentResultErrorText(intent.ExecClientMessage.GetSubagentResult())
+		}
+		service.updateNativeDelegationStatus(pending.ExecID, status, progress, errorText)
+	}
 	backgroundShellToolCallID := ""
 	if strings.TrimSpace(pending.ExecKind) == "shell" && shellToolCallIsBackgrounded(result.ToolCall) {
 		backgroundShellToolCallID = firstNonEmpty(strings.TrimSpace(result.ToolCallID), strings.TrimSpace(pending.ToolCallID))
@@ -1278,6 +1324,36 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 	return service.reconcileStream(stream)
 }
 
+func execMessageHasEffectiveProgress(message *agentv1.ExecClientMessage, result execbridge.ExecApplyResult) bool {
+	if message == nil {
+		return false
+	}
+	if result.ShellOutputDelta != nil {
+		return true
+	}
+	if message.GetSubagentResult() != nil {
+		return true
+	}
+	if shell := message.GetShellStream(); shell != nil {
+		switch shell.GetEvent().(type) {
+		case *agentv1.ShellStream_Stdout, *agentv1.ShellStream_Stderr, *agentv1.ShellStream_Start, *agentv1.ShellStream_Exit, *agentv1.ShellStream_Rejected, *agentv1.ShellStream_PermissionDenied, *agentv1.ShellStream_Backgrounded:
+			return true
+		default:
+			return false
+		}
+	}
+	return message.GetReadResult() != nil ||
+		message.GetWriteResult() != nil ||
+		message.GetDeleteResult() != nil ||
+		message.GetGrepResult() != nil ||
+		message.GetLsResult() != nil ||
+		message.GetDiagnosticsResult() != nil ||
+		message.GetMcpResult() != nil ||
+		message.GetFetchResult() != nil ||
+		message.GetExecuteHookResult() != nil ||
+		message.GetWriteShellStdinResult() != nil
+}
+
 // handleExecControl 处理执行桥控制面结果，例如 stream_close 或 throw。
 func (service *Service) handleExecControl(intent InboundIntent) error {
 	if intent.ExecClientControlMessage != nil && service.cursorDelegation != nil && service.cursorDelegation.ConsumeExecControl(intent.RequestID, intent.ExecClientControlMessage) {
@@ -1312,6 +1388,9 @@ func (service *Service) handleExecControl(intent InboundIntent) error {
 	}
 	result, err := service.execBridge.ApplyExecClientControl(intent.ExecClientControlMessage, pending)
 	if err != nil {
+		if strings.TrimSpace(pending.ExecKind) == "subagent" {
+			service.updateNativeDelegationStatus(pending.ExecID, delegation.TaskFailed, "Cursor 子代理控制通道失败", err.Error())
+		}
 		return err
 	}
 	if !result.IsTerminal {
@@ -1326,6 +1405,9 @@ func (service *Service) handleExecControl(intent InboundIntent) error {
 		return nil
 	}
 	markExecCompleted(stream, pending)
+	if strings.TrimSpace(pending.ExecKind) == "subagent" {
+		service.updateNativeDelegationStatus(pending.ExecID, delegation.TaskFailed, "Cursor 子代理被控制通道终止", strings.TrimSpace(result.ToolResultPayload))
+	}
 	if strings.TrimSpace(pending.ExecKind) == "execute_hook_pre_compact" {
 		return service.handlePreCompactTerminal(stream, pending.ProviderPass, "")
 	}
@@ -1735,6 +1817,19 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 		requestKnobs["max_tokens_recovery_cap"] = recoveryCap
 	}
 	service.maybeSaveLastAgentModelHash(conversation, modelID, mode, currentPass)
+	// 视觉代理：主模型不支持图片输入时，自动把消息中的图片委派给识图模型，
+	// 用返回的画面描述 / OCR 文本替换图片块，使纯文本模型也能“看图”。
+	// 此处持有 service.provider，可发起同步子调用；替换后不再含图片 ContentPart，
+	// 下游 router.stripImagesFromMessages 会原样放行，不会重复处理。
+	// 未启用视觉委派时，从工具清单剔除 see_image，避免模型调用一个不可用的工具。
+	if service.needsVisionProxy(modelName, compiled.Messages) {
+		visionCtx, visionCancel := context.WithCancel(context.Background())
+		compiled.Messages = service.synthesizeImageDescriptions(visionCtx, compiled.Messages, modelName)
+		visionCancel()
+	}
+	if !service.visionProxyEnabled() {
+		compiled.Tools = filterToolDescriptorByName(compiled.Tools, seeImageToolName)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	stream.mu.Lock()
 	stream.ProviderActive = true
@@ -1749,6 +1844,9 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 		RunID:              requestID,
 		ModelCallID:        modelCallID,
 		ModelID:            modelID,
+		ModelName:          modelName,
+		Role:               "parent",
+		ExecutionMode:      "parent",
 		Mode:               compiled.Mode,
 		ThinkingEffort:     compiled.Mode.String(),
 		MaxMode:            maxMode,
@@ -2150,12 +2248,22 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 		pendingExec.ProviderPass = stream.ProviderPassCount
 		stream.PendingExecs[pendingExec.ExecID] = pendingExec
 		stream.mu.Unlock()
+		service.registerNativeDelegation(stream, pendingExec, serverMessage)
 		service.scheduleShellForegroundRecovery(stream.RequestID, pendingExec)
 		service.scheduleExecWatchdog(stream.RequestID, pendingExec)
 		removePendingExec := func() {
 			stream.mu.Lock()
 			delete(stream.PendingExecs, pendingExec.ExecID)
 			stream.mu.Unlock()
+			if strings.TrimSpace(pendingExec.ExecKind) == "subagent" {
+				status := delegation.TaskFailed
+				progress := "Cursor 子代理派发失败"
+				if !streamStillActive(stream) {
+					status = delegation.TaskCanceled
+					progress = "Cursor 子代理已取消"
+				}
+				service.updateNativeDelegationStatus(pendingExec.ExecID, status, progress, progress)
+			}
 		}
 		if err := ensureLoopActive(); err != nil {
 			removePendingExec()
@@ -2512,6 +2620,7 @@ func (service *Service) completeSuccessfulTurn(stream *ActiveStream, completion 
 	if turnSeq <= 0 {
 		turnSeq = stream.TurnSeq
 	}
+	service.clearProvider400Recovery(requestID, turnSeq)
 	usage := completion.Usage
 	if err := service.recordTurnUsageSnapshot(stream, conversationID, turnSeq, requestID, modelCallID, "completed", usage, "", false); err != nil {
 		return fmt.Errorf("record completed turn usage: %w", err)
@@ -2711,6 +2820,7 @@ func (service *Service) failActiveStream(stream *ActiveStream, conversationID st
 	if stream == nil {
 		return nil
 	}
+	service.clearProvider400Recovery(requestID, stream.TurnSeq)
 	clearPendingProviderCompletion(stream)
 	stream.mu.Lock()
 	cancel := stream.ProviderCancel
@@ -2739,6 +2849,47 @@ func (service *Service) failActiveStream(stream *ActiveStream, conversationID st
 	// 当前 turn 终态后，排空该会话因「子代理运行期间」排队的新消息。
 	service.drainRunQueue(conversationID)
 	return firstErr
+}
+
+func provider400RecoveryKey(requestID string, turnSeq int64) string {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s:%d", requestID, turnSeq)
+}
+
+func (service *Service) claimProvider400Recovery(requestID string, turnSeq int64) bool {
+	if service == nil {
+		return false
+	}
+	key := provider400RecoveryKey(requestID, turnSeq)
+	if key == "" {
+		return false
+	}
+	service.provider400RecoveryMu.Lock()
+	defer service.provider400RecoveryMu.Unlock()
+	if service.provider400RecoveryTurns == nil {
+		service.provider400RecoveryTurns = make(map[string]struct{})
+	}
+	if _, exists := service.provider400RecoveryTurns[key]; exists {
+		return false
+	}
+	service.provider400RecoveryTurns[key] = struct{}{}
+	return true
+}
+
+func (service *Service) clearProvider400Recovery(requestID string, turnSeq int64) {
+	if service == nil {
+		return
+	}
+	key := provider400RecoveryKey(requestID, turnSeq)
+	if key == "" {
+		return
+	}
+	service.provider400RecoveryMu.Lock()
+	delete(service.provider400RecoveryTurns, key)
+	service.provider400RecoveryMu.Unlock()
 }
 
 // buildRunEntries 构造一次 run intent 需要写入 history 的首批 entry。
@@ -3384,10 +3535,19 @@ func currentStreamMode(stream *ActiveStream) agentv1.AgentMode {
 
 // selectPendingExec 按 exec_id 或 message_id 在当前流里查找挂起执行桥。
 func selectPendingExec(execID string, messageID uint32, stream *ActiveStream) (runtimecore.PendingExec, bool) {
+	if stream == nil {
+		return runtimecore.PendingExec{}, false
+	}
 	stream.mu.Lock()
 	defer stream.mu.Unlock()
-	if item, ok := stream.PendingExecs[strings.TrimSpace(execID)]; ok {
-		return item, true
+	normalizedExecID := strings.TrimSpace(execID)
+	if normalizedExecID != "" {
+		if item, ok := stream.PendingExecs[normalizedExecID]; ok {
+			// exec_id is the stable execution identity. The bridge message id is
+			// transport metadata and may be zero or reassigned by the client.
+			return item, true
+		}
+		return runtimecore.PendingExec{}, false
 	}
 	if messageID != 0 {
 		for _, item := range stream.PendingExecs {
@@ -3652,20 +3812,42 @@ func markExecCompleted(stream *ActiveStream, pending runtimecore.PendingExec) {
 	stream.mu.Unlock()
 }
 
+// ignoreStaleExecProviderPass ignores only an exec whose exact identity is no
+// longer pending. A provider pass mismatch by itself is diagnostic metadata and
+// must not discard a still-pending terminal result.
 func (service *Service) ignoreStaleExecProviderPass(stream *ActiveStream, pending runtimecore.PendingExec, source string) bool {
-	if stream == nil || pending.ProviderPass <= 0 {
+	if stream == nil || strings.TrimSpace(pending.ExecID) == "" {
 		return false
 	}
 	stream.mu.Lock()
 	currentPass := stream.ProviderPassCount
+	_, stillPending := stream.PendingExecs[pending.ExecID]
 	stream.mu.Unlock()
-	if currentPass <= 0 || currentPass == pending.ProviderPass {
+	// Once the exact exec_id is still pending, message-id drift is transport
+	// metadata and must not turn a valid terminal result into a stale result.
+	identityMatches := stillPending
+	if !identityMatches {
+		if service != nil && service.debug != nil {
+			service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "stale_exec_result_ignored", map[string]any{
+				"source":        strings.TrimSpace(source),
+				"exec_id":       strings.TrimSpace(pending.ExecID),
+				"message_id":    pending.MessageID,
+				"provider_pass": pending.ProviderPass,
+				"current_pass":  currentPass,
+				"tool_call_id":  strings.TrimSpace(pending.ToolCallID),
+				"reason":        "pending identity no longer active",
+			})
+		}
+		return true
+	}
+	if currentPass <= 0 || pending.ProviderPass <= 0 || currentPass == pending.ProviderPass {
 		return false
 	}
-	clearStreamTimer(stream, providerTimerKey(streamTimerExecWatchdog, pending.ExecID))
-	markExecCompleted(stream, pending)
+	// provider_pass changes when the provider resumes, but it does not change the
+	// identity or validity of an exec that is still pending. Keep the watchdog and
+	// let the terminal result complete the original exec; pass is diagnostic only.
 	if service != nil && service.debug != nil {
-		service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "stale_exec_result_ignored", map[string]any{
+		service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "late_exec_result_accepted", map[string]any{
 			"source":        strings.TrimSpace(source),
 			"exec_id":       strings.TrimSpace(pending.ExecID),
 			"message_id":    pending.MessageID,
@@ -3674,7 +3856,7 @@ func (service *Service) ignoreStaleExecProviderPass(stream *ActiveStream, pendin
 			"tool_call_id":  strings.TrimSpace(pending.ToolCallID),
 		})
 	}
-	return true
+	return false
 }
 
 func recentlyCompletedExecExists(stream *ActiveStream, messageID uint32) bool {

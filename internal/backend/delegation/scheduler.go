@@ -3,7 +3,10 @@ package delegation
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -68,7 +71,10 @@ type TaskRequest struct {
 	RuntimeSupervisionIssue      SupervisionIssueCode
 	RuntimeProgressSummary       string
 	ModelParams                  []*agentv1.RequestedModel_ModelParameterValue
-	Timeout                      time.Duration
+	// QueueTimeout bounds how long a worker can wait for a scheduler slot. It
+	// protects later delegation batches from being held behind stalled workers.
+	QueueTimeout time.Duration
+	Timeout      time.Duration
 }
 
 // TaskResult 是适配器返回给主代理的统一结果。
@@ -150,6 +156,7 @@ type taskState struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
 	runnerDone bool
+	lastEffectiveProgressAt time.Time
 }
 
 type Config struct {
@@ -240,6 +247,7 @@ func (s *Scheduler) Submit(request TaskRequest) (string, error) {
 		contract: contract,
 		ctx:      taskCtx,
 		cancel:   taskCancel,
+		lastEffectiveProgressAt: now,
 	}
 	s.tasks[request.ID] = state
 	s.activeExecutions[request.ID] = struct{}{}
@@ -263,10 +271,16 @@ func (s *Scheduler) run(state *taskState) {
 		s.purgeBufferedEventsLocked()
 		s.mu.Unlock()
 	}()
+	queueCtx := state.ctx
+	cancelQueueTimeout := func() {}
+	if state.request.QueueTimeout > 0 {
+		queueCtx, cancelQueueTimeout = context.WithTimeout(state.ctx, state.request.QueueTimeout)
+	}
+	defer cancelQueueTimeout()
 	select {
 	case s.slots <- struct{}{}:
-	case <-state.ctx.Done():
-		s.finishFromContext(state, state.ctx.Err())
+	case <-queueCtx.Done():
+		s.finishFromContext(state, queueCtx.Err())
 		return
 	}
 	defer func() { <-s.slots }()
@@ -281,6 +295,7 @@ func (s *Scheduler) run(state *taskState) {
 		state.snapshot.SupervisionStatus = SupervisionStatusRunning
 	}
 	state.snapshot.StartedAt = time.Now().UTC()
+	state.lastEffectiveProgressAt = state.snapshot.StartedAt
 	request := cloneTaskRequest(state.request)
 	s.publishLocked(&state.snapshot)
 	s.mu.Unlock()
@@ -295,8 +310,12 @@ func (s *Scheduler) run(state *taskState) {
 	executionCtx = withWorkerCheckpointPublisher(executionCtx, func(checkpoint WorkerCheckpoint) bool {
 		return s.PublishCheckpoint(taskID, checkpoint)
 	})
+	executionCtx = withWorkerProgressPublisher(executionCtx, func() bool {
+		return s.MarkEffectiveProgress(taskID)
+	})
 	resultChannel := make(chan TaskResult, 1)
 	executorStarted = true
+	go s.watchEffectiveProgress(state)
 	go func(taskID string) {
 		result := s.executor(executionCtx, request)
 		s.mu.Lock()
@@ -355,6 +374,7 @@ func (s *Scheduler) Cancel(taskID string) error {
 		s.mu.Unlock()
 		return nil
 	}
+	logSchedulerCancellation("cancel", taskID, state.snapshot.Status)
 	state.snapshot.Status = TaskCanceled
 	if state.contract != nil {
 		state.snapshot.SupervisionStatus = SupervisionStatusCanceled
@@ -378,6 +398,7 @@ func (s *Scheduler) CancelIfActive(taskID string) bool {
 		s.mu.Unlock()
 		return false
 	}
+	logSchedulerCancellation("cancel_if_active", taskID, state.snapshot.Status)
 	state.snapshot.Status = TaskCanceled
 	if state.contract != nil {
 		state.snapshot.SupervisionStatus = SupervisionStatusCanceled
@@ -387,6 +408,23 @@ func (s *Scheduler) CancelIfActive(taskID string) bool {
 	s.publishLocked(&state.snapshot)
 	s.mu.Unlock()
 	return true
+}
+
+func logSchedulerCancellation(action string, taskID string, status TaskStatus) {
+	callerFile := "unknown"
+	callerLine := 0
+	if _, file, line, ok := runtime.Caller(2); ok {
+		callerFile = file
+		callerLine = line
+	}
+	log.Printf(
+		"delegation scheduler task cancellation action=%s task_id=%s previous_status=%s caller=%s:%d",
+		strings.TrimSpace(action),
+		strings.TrimSpace(taskID),
+		strings.TrimSpace(string(status)),
+		callerFile,
+		callerLine,
+	)
 }
 
 func (s *Scheduler) PublishCheckpoint(taskID string, checkpoint WorkerCheckpoint) bool {
@@ -424,7 +462,11 @@ func (s *Scheduler) PublishCheckpoint(taskID string, checkpoint WorkerCheckpoint
 		checkpoint.Round = contract.Round
 	}
 	checkpoint = normalizeSupervisedWorkerCheckpoint(checkpoint, contract.WorkspaceHint)
-	checkpoint.EffectiveProgressAt = resolveCheckpointEffectiveProgressAt(state.checkpoint, checkpoint, time.Now().UTC())
+	now := time.Now().UTC()
+	checkpoint.EffectiveProgressAt = resolveCheckpointEffectiveProgressAt(state.checkpoint, checkpoint, now)
+	if state.checkpoint == nil || checkpointShowsEffectiveProgress(*state.checkpoint, checkpoint) {
+		state.lastEffectiveProgressAt = now
+	}
 	state.checkpoint = cloneWorkerCheckpoint(&checkpoint)
 	state.snapshot.Checkpoint = cloneWorkerCheckpoint(&checkpoint)
 	state.counters.Checkpoints++
@@ -438,6 +480,66 @@ func (s *Scheduler) PublishCheckpoint(taskID string, checkpoint WorkerCheckpoint
 	s.publishLocked(&state.snapshot)
 	s.mu.Unlock()
 	return true
+}
+
+// MarkEffectiveProgress records a real provider/tool/file event without
+// publishing a synthetic checkpoint. Transport heartbeats and periodic
+// summaries must not call this method.
+func (s *Scheduler) MarkEffectiveProgress(taskID string) bool {
+	if s == nil {
+		return false
+	}
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state, ok := s.tasks[taskID]
+	if !ok || isTerminalStatus(state.snapshot.Status) {
+		return false
+	}
+	state.lastEffectiveProgressAt = time.Now().UTC()
+	return true
+}
+
+func (s *Scheduler) watchEffectiveProgress(state *taskState) {
+	if s == nil || state == nil {
+		return
+	}
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-state.ctx.Done():
+			return
+		case <-ticker.C:
+			s.mu.Lock()
+			if isTerminalStatus(state.snapshot.Status) {
+				s.mu.Unlock()
+				return
+			}
+			last := state.lastEffectiveProgressAt
+			if last.IsZero() {
+				last = state.snapshot.StartedAt
+			}
+			if time.Since(last) < DefaultEffectiveProgressTimeout {
+				s.mu.Unlock()
+				continue
+			}
+			state.snapshot.Status = TaskTimedOut
+			state.snapshot.Error = fmt.Sprintf("无有效进展超时：连续 %s 没有新的 provider 事件、工具调用、工具结果、文件变更或有效 checkpoint", DefaultEffectiveProgressTimeout)
+			state.snapshot.FinishedAt = time.Now().UTC()
+			state.result.Error = errors.New(state.snapshot.Error)
+			if state.contract != nil {
+				state.snapshot.SupervisionStatus = supervisionStatusForTaskStatus(state.snapshot.Status)
+			}
+			state.cancel()
+			s.publishLocked(&state.snapshot)
+			s.mu.Unlock()
+			return
+		}
+	}
 }
 
 func resolveCheckpointEffectiveProgressAt(previous *WorkerCheckpoint, checkpoint WorkerCheckpoint, now time.Time) time.Time {

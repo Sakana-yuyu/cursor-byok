@@ -46,10 +46,11 @@ func (err *supervisorReviewError) Error() string {
 }
 
 type supervisorProviderAdapter struct {
-	provider  ProviderGateway
-	recorder  modeladapter.LLMArtifactObserver
-	sequence  atomic.Uint64
-	modelName func(string) string
+	provider   ProviderGateway
+	recorder   modeladapter.LLMArtifactObserver
+	usageStore *UsageFileStore
+	sequence   atomic.Uint64
+	modelName  func(string) string
 }
 
 type supervisorReviewInput struct {
@@ -74,8 +75,9 @@ func newSupervisorProviderAdapter(service *Service) *supervisorProviderAdapter {
 		return nil
 	}
 	return &supervisorProviderAdapter{
-		provider: service.provider,
-		recorder: service.recorder,
+		provider:   service.provider,
+		recorder:   service.recorder,
+		usageStore: service.usageStore,
 		modelName: func(modelID string) string {
 			return strings.TrimSpace(modelID)
 		},
@@ -108,12 +110,28 @@ func (adapter *supervisorProviderAdapter) Review(ctx context.Context, input supe
 		{Role: "user", Content: buildSupervisorReviewPrompt(input)},
 	}
 	var textBuilder strings.Builder
+	usage := turnUsageSnapshot{
+		Role:            "supervisor",
+		ParentModel:     strings.TrimSpace(input.Snapshot.ModelName),
+		LogicalModel:    strings.TrimSpace(input.ModelName),
+		TaskID:          strings.TrimSpace(input.TaskID),
+		ExecutionMode:   "supervisor",
+		SupervisorModel: strings.TrimSpace(input.ModelName),
+		ReviewerModel:   strings.TrimSpace(input.ModelName),
+	}
 	err := adapter.provider.StartStream(reviewCtx, ProviderRequest{
 		RequestID:          requestID,
 		ConversationID:     conversationID,
 		RunID:              requestID,
 		ModelCallID:        modelCallID,
 		ModelID:            modelID,
+		ModelName:          strings.TrimSpace(input.ModelName),
+		Role:               "supervisor",
+		ParentModel:        strings.TrimSpace(input.Snapshot.ModelName),
+		TaskID:             strings.TrimSpace(input.TaskID),
+		ExecutionMode:      "supervisor",
+		SupervisorModel:    strings.TrimSpace(input.ModelName),
+		ReviewerModel:      strings.TrimSpace(input.ModelName),
 		Mode:               agentv1.AgentMode_AGENT_MODE_AGENT,
 		ThinkingEffort:     strings.TrimSpace(input.ThinkingEffort),
 		MaxMode:            input.MaxMode,
@@ -138,9 +156,35 @@ func (adapter *supervisorProviderAdapter) Review(ctx context.Context, input supe
 				return event.Err
 			}
 			return fmt.Errorf("supervisor provider returned an error")
+		case modeladapter.ModelEventKindTurnFinished:
+			usage.Provider = event.Provider
+			usage.Model = event.Model
+			usage.ProviderModel = event.Model
+			usage.BaseURL = event.BaseURL
+			usage.GroupName = event.GroupName
+			usage.InputTokens = event.InputTokens
+			usage.OutputTokens = event.OutputTokens
+			usage.CacheReadTokens = event.CacheReadTokens
+			usage.CacheWriteTokens = event.CacheWriteTokens
+			usage.UsagePresent = event.UsagePresent
+			usage.CacheReadPresent = event.CacheReadPresent
+			usage.CacheWritePresent = event.CacheWritePresent
 		}
 		return nil
 	})
+	if err != nil {
+		usage.ErrorCode = "provider_error"
+	}
+	if usage.ProviderModel == "" {
+		usage.ProviderModel = usage.Model
+	}
+	errorText := ""
+	if err != nil {
+		errorText = err.Error()
+	}
+	if recordErr := upsertStandaloneUsageSnapshot(adapter.usageStore, requestID, modelCallID, map[bool]string{true: "completed", false: "provider_error"}[err == nil], usage, errorText); recordErr != nil {
+		// Usage persistence must not make a review fail after the provider has returned.
+	}
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return delegation.SupervisionDecision{}, err

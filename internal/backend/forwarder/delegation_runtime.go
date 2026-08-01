@@ -1,6 +1,7 @@
 package forwarder
 
 import (
+	"sort"
 	"strings"
 	"time"
 
@@ -50,10 +51,13 @@ type DelegationTaskSnapshot struct {
 // DelegationTaskSnapshots returns retained worker state without prompts, tool
 // arguments, workspace paths, or model credentials.
 func (service *Service) DelegationTaskSnapshots() []DelegationTaskSnapshot {
-	if service == nil || service.multitaskDelegation == nil {
+	if service == nil {
 		return nil
 	}
-	snapshots := service.multitaskDelegation.Snapshots()
+	snapshots := make([]delegation.TaskSnapshot, 0)
+	if service.multitaskDelegation != nil {
+		snapshots = append(snapshots, service.multitaskDelegation.Snapshots()...)
+	}
 	runtimeStates := service.delegationTaskRuntimeStates(snapshots)
 	items := make([]DelegationTaskSnapshot, 0, len(snapshots))
 	now := time.Now().UTC()
@@ -150,15 +154,25 @@ func (service *Service) DelegationTaskSnapshots() []DelegationTaskSnapshot {
 			Cancelable:           runtimeState.reviewPending || !delegatedStatusTerminal(snapshot.Status),
 		})
 	}
+	items = append(items, service.nativeDelegationSnapshots()...)
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].QueuedAtUnixMS == items[j].QueuedAtUnixMS {
+			return items[i].ID < items[j].ID
+		}
+		return items[i].QueuedAtUnixMS < items[j].QueuedAtUnixMS
+	})
 	return items
 }
 
 // CancelDelegationTask cancels one worker without affecting sibling workers.
 func (service *Service) CancelDelegationTask(taskID string) bool {
-	if service == nil || service.multitaskDelegation == nil {
+	if service == nil {
 		return false
 	}
-	return service.multitaskDelegation.CancelTask(taskID)
+	if service.multitaskDelegation != nil && service.multitaskDelegation.CancelTask(taskID) {
+		return true
+	}
+	return service.cancelNativeDelegation(taskID)
 }
 
 func unixMilliseconds(value time.Time) int64 {
@@ -266,6 +280,12 @@ func safeDelegationRuntimeError(status delegation.TaskStatus) string {
 func resolveDelegationRuntimePhase(snapshot delegation.TaskSnapshot, reviewPending bool) string {
 	if reviewPending {
 		return string(delegation.SupervisionStatusReviewing)
+	}
+	// A checkpoint describes the last provider pass, while Status describes the
+	// lifecycle of the worker. Do not show a stale checkpoint phase (for
+	// example, completed) while the scheduler still owns a running worker.
+	if !delegatedStatusTerminal(snapshot.Status) {
+		return strings.TrimSpace(string(supervisionStatusFromTaskStatus(snapshot.Status)))
 	}
 	if delegatedStatusTerminal(snapshot.Status) && snapshot.SupervisionStatus != "" {
 		return strings.TrimSpace(string(snapshot.SupervisionStatus))

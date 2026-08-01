@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -479,6 +480,12 @@ func (aggregate *supervisedAggregate) handleWorkerCheckpoint(event supervisorAgg
 	if aggregate == nil || !aggregate.parentExecStillCurrent() || event.snapshot.Checkpoint == nil {
 		return
 	}
+	// Dispatch and startup checkpoints only report liveness. They carry no
+	// worker action or result, so reviewing them can replace a live worker
+	// before its first provider event arrives.
+	if !supervisionCheckpointReadyForReview(*event.snapshot.Checkpoint) {
+		return
+	}
 	reviewContext, reviewCancel := context.WithCancel(aggregate.ctx)
 	aggregate.mu.Lock()
 	task, ok := aggregate.matchIdentityLocked(event.identity)
@@ -536,6 +543,21 @@ func (aggregate *supervisedAggregate) handleWorkerCheckpoint(event supervisorAgg
 	aggregate.rememberTaskRuntimeState(task)
 	allowed := aggregate.allowedActions(task, event.snapshot)
 	go aggregate.reviewTask(reviewContext, event.identity, contract, event.snapshot, delegation.TaskResult{}, issue, allowed)
+}
+
+func supervisionCheckpointReadyForReview(checkpoint delegation.WorkerCheckpoint) bool {
+	if len(checkpoint.RecentToolNames) > 0 || len(checkpoint.ChangedFileSummaries) > 0 {
+		return true
+	}
+	if strings.TrimSpace(checkpoint.Blocker) != "" {
+		return true
+	}
+	switch checkpoint.Phase {
+	case delegation.SupervisionStatusCompleted, delegation.SupervisionStatusFailed, delegation.SupervisionStatusCanceled:
+		return true
+	default:
+		return false
+	}
 }
 
 func (aggregate *supervisedAggregate) handleWorkerTerminal(event supervisorAggregateEvent) {
@@ -1306,6 +1328,20 @@ func (aggregate *supervisedAggregate) cancelTasks() {
 	if aggregate == nil {
 		return
 	}
+	callerFile := "unknown"
+	callerLine := 0
+	if _, file, line, ok := runtime.Caller(1); ok {
+		callerFile = file
+		callerLine = line
+	}
+	log.Printf(
+		"forwarder supervised aggregate canceling aggregate_id=%s request_id=%s parent_exec_current=%t caller=%s:%d",
+		strings.TrimSpace(aggregate.id),
+		strings.TrimSpace(activeStreamRequestID(aggregate.stream)),
+		aggregate.parentExecStillCurrent(),
+		callerFile,
+		callerLine,
+	)
 	aggregate.cancel()
 	aggregate.mu.Lock()
 	taskIDs := make([]string, 0, len(aggregate.tasks))
@@ -1461,9 +1497,6 @@ func (aggregate *supervisedAggregate) matchIdentity(identity supervisorTaskIdent
 		return nil, false
 	}
 	if strings.TrimSpace(identity.AggregateID) != strings.TrimSpace(aggregate.id) || strings.TrimSpace(identity.ParentExec) != strings.TrimSpace(aggregate.id) {
-		return nil, false
-	}
-	if identity.ProviderPass != aggregate.pending.ProviderPass {
 		return nil, false
 	}
 	aggregate.mu.Lock()
@@ -1966,8 +1999,9 @@ func supervisedParentExecStillCurrent(stream *ActiveStream, pending runtimecore.
 	if !ok || strings.TrimSpace(current.ExecKind) != "delegation_aggregate" {
 		return false
 	}
-	if current.ProviderPass != pending.ProviderPass {
-		return false
-	}
-	return stream.ProviderPassCount == pending.ProviderPass
+	// ProviderPass identifies the provider attempt that opened the exec, but it
+	// is not the identity of the aggregate. A still-pending aggregate remains
+	// valid across provider resumes; the exact exec/task identity checks above
+	// provide the stale-event protection.
+	return true
 }

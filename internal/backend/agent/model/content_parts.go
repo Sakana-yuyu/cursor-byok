@@ -246,3 +246,63 @@ func stripImagesFromMessages(messages []Message, modelID string) []Message {
 	}
 	return result
 }
+
+// ---- 导出的 content part 辅助函数（供 forwarder 视觉委派等跨包使用）----
+
+// IsImageContentPart 判断该内容块是否为图片类型。
+func IsImageContentPart(part ContentPart) bool {
+	return normalizeContentPartType(part.Type) == contentPartTypeImage
+}
+
+// IsTextContentPart 判断该内容块是否为文本类型。
+func IsTextContentPart(part ContentPart) bool {
+	return normalizeContentPartType(part.Type) == contentPartTypeText
+}
+
+// NewTextContentPart 构造一个文本内容块。
+func NewTextContentPart(text string) ContentPart {
+	return ContentPart{Type: contentPartTypeText, Text: text}
+}
+
+// NewImageContentPart 构造一个图片内容块。
+func NewImageContentPart(image *ImageContent) ContentPart {
+	return ContentPart{Type: contentPartTypeImage, Image: image}
+}
+
+// MessageHasImage 判断消息是否含图片内容块。
+func MessageHasImage(message Message) bool {
+	return hasImageContentParts(message.ContentParts)
+}
+
+// MessagesContainImage 判断消息列表中是否存在任何图片内容块。
+func MessagesContainImage(messages []Message) bool {
+	for _, message := range messages {
+		if hasImageContentParts(message.ContentParts) {
+			return true
+		}
+	}
+	return false
+}
+
+// CountImageParts 统计消息列表中图片内容块的总数。
+func CountImageParts(messages []Message) int {
+	total := 0
+	for _, message := range messages {
+		for _, part := range message.ContentParts {
+			if normalizeContentPartType(part.Type) == contentPartTypeImage {
+				total++
+			}
+		}
+	}
+	return total
+}
+
+// ResolveImageContent 是 resolveImageContent 的导出封装，供跨包调用。
+func ResolveImageContent(image *ImageContent) ([]byte, string, error) {
+	return resolveImageContent(image)
+}
+
+// NormalizeImageMIMEType 是 normalizeImageMIMEType 的导出封装，供跨包调用。
+func NormalizeImageMIMEType(mimeType string, path string, payload []byte) string {
+	return normalizeImageMIMEType(mimeType, path, payload)
+}

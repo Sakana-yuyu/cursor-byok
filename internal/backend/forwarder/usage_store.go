@@ -74,6 +74,15 @@ type usageFileEvent struct {
 	Status           string    `json:"status,omitempty"`
 	At               time.Time `json:"at"`
 	Model            string    `json:"model,omitempty"`
+	Role             string    `json:"role,omitempty"`
+	ParentModel      string    `json:"parent_model,omitempty"`
+	LogicalModel     string    `json:"logical_model,omitempty"`
+	ProviderModel    string    `json:"provider_model,omitempty"`
+	ModelGroupID     string    `json:"model_group_id,omitempty"`
+	TaskID           string    `json:"task_id,omitempty"`
+	ExecutionMode    string    `json:"execution_mode,omitempty"`
+	SupervisorModel  string    `json:"supervisor_model,omitempty"`
+	ReviewerModel    string    `json:"reviewer_model,omitempty"`
 	Provider         string    `json:"provider,omitempty"`
 	BaseURL          string    `json:"base_url,omitempty"`
 	GroupName        string    `json:"group_name,omitempty"`

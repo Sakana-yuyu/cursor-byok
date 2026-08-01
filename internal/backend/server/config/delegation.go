@@ -13,6 +13,10 @@ const (
 	DefaultDelegationMaxCorrections = 2
 	DefaultDelegationMaxRetries     = 1
 	DefaultDelegationMaxRounds      = 8
+	// 视觉委派识图模式。
+	VisionModeAuto     = "auto"     // 描述 + OCR，按内容自适应
+	VisionModeDescribe = "describe" // 仅结构化描述画面
+	VisionModeOCR      = "ocr"      // 仅抄录可见文字 / 表格
 )
 
 // DelegationModelGroup 描述一组可被 Multitask 委派的已配置模型。
@@ -40,12 +44,22 @@ type DelegationSupervisionConfig struct {
 	StrictUnavailable bool   `json:"strictUnavailable,omitempty" yaml:"strictUnavailable,omitempty"`
 }
 
+// VisionDelegationConfig 控制视觉委派（识图代理）。
+// 当主模型不支持图片输入时，把图片转发给 VisionModelID 指定的识图模型，
+// 把返回的画面描述 / OCR 文本注入回原消息，使纯文本模型也能"看图"。
+type VisionDelegationConfig struct {
+	Enabled       bool   `json:"enabled" yaml:"enabled"`
+	VisionModelID string `json:"visionModelID,omitempty" yaml:"visionModelID,omitempty"`
+	Mode          string `json:"mode,omitempty" yaml:"mode,omitempty"`
+}
+
 // DelegationConfig 控制 Multitask 委派总开关、并发度和模型组。
 type DelegationConfig struct {
-	Enabled        bool                        `json:"enabled" yaml:"enabled"`
-	MaxConcurrency int                         `json:"maxConcurrency" yaml:"maxConcurrency"`
-	Groups         []DelegationModelGroup      `json:"groups,omitempty" yaml:"groups,omitempty"`
-	Supervision    DelegationSupervisionConfig `json:"supervision,omitempty" yaml:"supervision,omitempty"`
+	Enabled          bool                        `json:"enabled" yaml:"enabled"`
+	MaxConcurrency   int                         `json:"maxConcurrency" yaml:"maxConcurrency"`
+	Groups           []DelegationModelGroup      `json:"groups,omitempty" yaml:"groups,omitempty"`
+	Supervision      DelegationSupervisionConfig `json:"supervision,omitempty" yaml:"supervision,omitempty"`
+	VisionDelegation VisionDelegationConfig      `json:"visionDelegation,omitempty" yaml:"visionDelegation,omitempty"`
 }
 
 func cloneDelegationConfig(input DelegationConfig) DelegationConfig {
@@ -76,10 +90,11 @@ func normalizeDelegationConfig(input DelegationConfig, adapters []ModelAdapterCo
 		}
 	}
 	output := DelegationConfig{
-		Enabled:        input.Enabled,
-		MaxConcurrency: input.MaxConcurrency,
-		Groups:         make([]DelegationModelGroup, 0, len(input.Groups)),
-		Supervision:    normalizeDelegationSupervision(input.Supervision, availableModels, nil),
+		Enabled:          input.Enabled,
+		MaxConcurrency:   input.MaxConcurrency,
+		Groups:           make([]DelegationModelGroup, 0, len(input.Groups)),
+		Supervision:      normalizeDelegationSupervision(input.Supervision, availableModels, nil),
+		VisionDelegation: normalizeDelegationVision(input.VisionDelegation, availableModels),
 	}
 	if output.MaxConcurrency <= 0 {
 		output.MaxConcurrency = DefaultDelegationMaxConcurrency
@@ -155,6 +170,35 @@ func normalizeDelegationSupervision(input DelegationSupervisionConfig, available
 		}
 	}
 	return output
+}
+
+// normalizeDelegationVision 归一化视觉委派配置。VisionModelID 必须引用已配置的
+// 模型适配器；引用失效时清空，此时自动触发回退为"占位文字"，see_image 工具不注册。
+func normalizeDelegationVision(input VisionDelegationConfig, availableModels map[string]struct{}) VisionDelegationConfig {
+	output := VisionDelegationConfig{
+		Enabled:       input.Enabled,
+		VisionModelID: strings.TrimSpace(input.VisionModelID),
+		Mode:          normalizeVisionMode(input.Mode),
+	}
+	if len(availableModels) > 0 {
+		if _, ok := availableModels[output.VisionModelID]; !ok {
+			output.VisionModelID = ""
+		}
+	}
+	// 未指定识图模型时强制关闭自动委派，避免空跑（see_image 工具同样不注册）。
+	if output.VisionModelID == "" {
+		output.Enabled = false
+	}
+	return output
+}
+
+func normalizeVisionMode(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case VisionModeDescribe, VisionModeOCR:
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return VisionModeAuto
+	}
 }
 
 func filterAvailableModelIDs(values []string, available map[string]struct{}) []string {

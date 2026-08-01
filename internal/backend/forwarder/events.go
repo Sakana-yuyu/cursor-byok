@@ -171,6 +171,19 @@ func buildToolCallDeltaMessage(callID string, modelCallID string, delta *agentv1
 	}
 }
 
+// buildDelegationTaskProgressMessage reports aggregate liveness as a regular
+// parent interaction update. A TaskToolCallDelta belongs to a concrete native
+// subagent exec; using one for a locally managed aggregate makes Cursor open an
+// empty child transcript and hides the parent output.
+func buildDelegationTaskProgressMessage(callID string, modelCallID string) *agentv1.AgentServerMessage {
+	_ = callID
+	_ = modelCallID
+	return buildThinkingDeltaMessage(
+		"Delegated workers are still running.",
+		agentv1.ThinkingStyle_THINKING_STYLE_UNSPECIFIED,
+	)
+}
+
 // buildToolCallCompletedMessage 构造工具调用完成消息。
 func buildToolCallCompletedMessage(callID string, modelCallID string, toolCall *agentv1.ToolCall) *agentv1.AgentServerMessage {
 	return &agentv1.AgentServerMessage{

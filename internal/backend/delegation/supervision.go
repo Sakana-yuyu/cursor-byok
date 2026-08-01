@@ -56,6 +56,7 @@ const (
 	DefaultSupervisionRetries            = 1
 	DefaultSupervisionRounds             = 8
 	DefaultSupervisionCheckpointInterval = 1500 * time.Millisecond
+	DefaultEffectiveProgressTimeout      = 5 * time.Minute
 )
 
 type SupervisionTaskContract struct {

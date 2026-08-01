@@ -15,7 +15,10 @@ import (
 	"cursor/internal/backend/delegation"
 )
 
-const delegatedWorkerTimeout = 30 * time.Minute
+const (
+	delegatedWorkerTimeout      = 30 * time.Minute
+	delegatedWorkerQueueTimeout = 90 * time.Second
+)
 
 type streamDelegationResult struct {
 	AggregateID  string
@@ -122,6 +125,9 @@ func (service *Service) tryStartDelegatedTask(stream *ActiveStream, invocation r
 	if mode != agentv1.AgentMode_AGENT_MODE_MULTITASK {
 		return false, nil
 	}
+	if hasActiveDelegationAggregate(stream) {
+		return false, fmt.Errorf("a delegated task batch is already running for this turn")
+	}
 	now := time.Now().UTC()
 	pending := runtimecore.PendingExec{
 		ExecID:                   fmt.Sprintf("exec-delegation-%d", now.UnixNano()),
@@ -147,13 +153,69 @@ func (service *Service) tryStartDelegatedTask(stream *ActiveStream, invocation r
 	if err != nil || !started {
 		return false, err
 	}
+	// Keep the aggregate under the same long-running exec watchdog as a direct
+	// subagent. turn-stale must not be its only recovery path.
+	service.scheduleExecWatchdog(stream.RequestID, pending)
 	service.recordExecDispatchMetadata(stream, pending, false, true, "delegation_scheduler")
 	if err := service.publishCheckpoint(stream.RequestID, stream.ConversationID); err != nil {
 		service.multitaskDelegation.CancelAggregate(pending.ExecID)
 		markExecCompleted(stream, pending)
 		return false, err
 	}
+	service.keepDelegationTaskAlive(stream, pending)
 	return true, nil
+}
+
+const delegationTaskProgressInterval = 15 * time.Second
+
+// keepDelegationTaskAlive gives the Cursor foreground Task a genuine child
+// progress update while its locally managed worker batch is active. A RunSSE
+// heartbeat only keeps the transport open; it does not reset Cursor's
+// foreground Task inactivity controller.
+func (service *Service) keepDelegationTaskAlive(stream *ActiveStream, pending runtimecore.PendingExec) {
+	if service == nil || stream == nil || strings.TrimSpace(pending.ExecKind) != "delegation_aggregate" {
+		return
+	}
+	requestID := strings.TrimSpace(stream.RequestID)
+	execID := strings.TrimSpace(pending.ExecID)
+	toolCallID := strings.TrimSpace(pending.ToolCallID)
+	modelCallID := strings.TrimSpace(pending.ModelCallID)
+	if requestID == "" || execID == "" || toolCallID == "" {
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(delegationTaskProgressInterval)
+		defer ticker.Stop()
+		for range ticker.C {
+			stream.mu.Lock()
+			_, active := stream.PendingExecs[execID]
+			terminal := isTerminalStreamStatus(stream.Status)
+			stream.mu.Unlock()
+			if !active || terminal {
+				return
+			}
+			if err := service.broker.Publish(requestID, StreamEvent{
+				Message: buildDelegationTaskProgressMessage(toolCallID, modelCallID),
+			}); err != nil {
+				log.Printf("forwarder delegation progress publish failed request_id=%s exec_id=%s err=%v", requestID, execID, err)
+				return
+			}
+		}
+	}()
+}
+
+func hasActiveDelegationAggregate(stream *ActiveStream) bool {
+	if stream == nil {
+		return false
+	}
+	stream.mu.Lock()
+	defer stream.mu.Unlock()
+	for _, pending := range stream.PendingExecs {
+		if strings.TrimSpace(pending.ExecKind) == "delegation_aggregate" {
+			return true
+		}
+	}
+	return false
 }
 
 func (service *Service) handleDelegationResult(stream *ActiveStream, payload *streamDelegationResult) error {
@@ -167,9 +229,6 @@ func (service *Service) handleDelegationResult(stream *ActiveStream, payload *st
 		return nil
 	}
 	if strings.TrimSpace(payload.AggregateID) != strings.TrimSpace(pending.ExecID) {
-		return nil
-	}
-	if pending.ProviderPass != payload.ProviderPass {
 		return nil
 	}
 	if service.ignoreStaleExecProviderPass(stream, pending, "delegation_result") {
@@ -266,6 +325,7 @@ func (coordinator *multitaskDelegationCoordinator) enabledWorkers(base delegatio
 			worker.ModelGroupID = strings.TrimSpace(group.ID)
 			worker.ExecutionMode = mode
 			worker.ToolPermission = cloneDelegatedPermissions(group.ToolPermissions)
+			worker.QueueTimeout = delegatedWorkerQueueTimeout
 			worker.Timeout = delegatedWorkerTimeout
 			worker.ArgsJSON = rewriteDelegatedWorkerModel(worker.ArgsJSON, modelID)
 			workers = append(workers, worker)

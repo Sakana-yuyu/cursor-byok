@@ -8,11 +8,14 @@ package client
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -42,6 +45,10 @@ const (
 type ProviderBalanceRequest struct {
 	Type       string `json:"type"`
 	SupplierID string `json:"supplierID,omitempty"`
+	// UsageStatus/UsageProvider are the verified capability selected by the supplier preset.
+	// Empty values preserve the legacy generic resolver for old callers/configurations.
+	UsageStatus   string `json:"usageStatus,omitempty"`
+	UsageProvider string `json:"usageProvider,omitempty"`
 	BaseURL    string `json:"baseURL"`
 	APIKey     string `json:"apiKey"`
 	// ForceRefresh 为 true 时绕过进程内 TTL 缓存，强制重新查询（供 UI 显式刷新使用）。
@@ -53,6 +60,7 @@ type ProviderBalanceRequest struct {
 	BalanceCodingPlanProvider string `json:"balanceCodingPlanProvider,omitempty"`
 	BalanceQueryURL           string `json:"balanceQueryURL,omitempty"`
 	BalanceQueryField         string `json:"balanceQueryField,omitempty"`
+	BalanceQueryHeaders       map[string]string `json:"balanceQueryHeaders,omitempty"`
 }
 
 // ProviderBalance 是统一的余额/额度查询结果，带 JSON 标签供 Wails 前端使用。
@@ -80,6 +88,11 @@ type transientTracker struct{ hit bool }
 
 // QueryProviderBalance 依次尝试各余额查询策略，返回第一个成功结果。
 func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) ProviderBalance {
+	usageStatus := strings.ToLower(strings.TrimSpace(request.UsageStatus))
+	usageProvider := strings.ToLower(strings.TrimSpace(request.UsageProvider))
+	if usageStatus == "none" {
+		return ProviderBalance{Supported: false, Source: "none", Message: "暂无自动查询"}
+	}
 	apiKey := strings.TrimSpace(request.APIKey)
 	normalized, err := modelchannel.NormalizeBaseURL(request.BaseURL)
 	if err != nil {
@@ -89,10 +102,16 @@ func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) Prov
 	configuredAdapter, hasConfiguredAdapter := s.findAdapterForBalance(request.Type, request.SupplierID, normalized, apiKey)
 	creds := resolveBalanceCredentials(request, configuredAdapter, hasConfiguredAdapter)
 	profile := resolveBalanceProfile(creds, normalized)
-
-	// New API 可用 accessToken 代替渠道 sk；其它策略仍需要 apiKey。
-	if apiKey == "" && strings.TrimSpace(creds.AccessToken) == "" {
-		return ProviderBalance{Supported: false, Transient: false, Message: "缺少 apiKey / 访问令牌，无法查询余额"}
+	// A declared capability always wins over a stale persisted profile.
+	// This prevents a preset marked fixed/token_plan/none from entering a generic endpoint chain.
+	if usageStatus == "general" {
+		profile = balanceProfileGeneral
+	}
+	if usageStatus == "newapi" {
+		profile = balanceProfileNewAPI
+	}
+	if profile == balanceProfileNone {
+		return ProviderBalance{Supported: false, Source: "none", Message: "暂无自动查询"}
 	}
 
 	cacheKey := metadataCacheKey(request.Type, request.BaseURL, firstNonEmpty(apiKey, creds.AccessToken))
@@ -100,6 +119,7 @@ func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) Prov
 		cacheKey += "|supplier=" + supplierID
 	}
 	cacheKey += "|profile=" + profile
+	cacheKey += "|usage=" + balanceRequestCacheIdentity(request, configuredAdapter, hasConfiguredAdapter, creds, profile)
 	if hasConfiguredAdapter || strings.TrimSpace(creds.AccessToken) != "" || strings.TrimSpace(creds.UserID) != "" {
 		cacheKey = configuredBalanceCacheKey(cacheKey, mergeBalanceAdapterIdentity(configuredAdapter, creds, profile))
 	}
@@ -115,6 +135,60 @@ func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) Prov
 	httpClient := s.publicClient
 	if httpClient == nil {
 		httpClient = http.DefaultClient
+	}
+
+	if usageStatus == "custom_only" {
+		adapter := configuredAdapter
+		if !hasConfiguredAdapter {
+			adapter = serverconfig.ModelAdapterConfig{
+				BalanceQueryURL:   strings.TrimSpace(request.BalanceQueryURL),
+				BalanceQueryField: strings.TrimSpace(request.BalanceQueryField),
+			}
+		}
+		// Request values are a one-shot override for the persisted adapter.
+		if strings.TrimSpace(request.BalanceQueryURL) != "" {
+			adapter.BalanceQueryURL = strings.TrimSpace(request.BalanceQueryURL)
+		}
+		if strings.TrimSpace(request.BalanceQueryField) != "" {
+			adapter.BalanceQueryField = strings.TrimSpace(request.BalanceQueryField)
+		}
+		if request.BalanceQueryHeaders != nil {
+			adapter.BalanceQueryHeaders = request.BalanceQueryHeaders
+		}
+		configured, matched := s.queryConfiguredBalanceWithAdapter(ctx, httpClient, adapter, normalized, apiKey, creds)
+		if matched {
+			if configured.Supported {
+				s.providerBalanceCache.set(cacheKey, configured)
+			}
+			return configured
+		}
+		return ProviderBalance{Supported: false, Source: "custom_only", Message: "请先配置自定义用量查询"}
+	}
+
+	// New API 可用 accessToken 代替渠道 sk；其它策略仍需要 apiKey。
+	if apiKey == "" && strings.TrimSpace(creds.AccessToken) == "" {
+		return ProviderBalance{Supported: false, Transient: false, Message: "缺少 apiKey / 访问令牌，无法查询余额"}
+	}
+
+	if usageStatus == "fixed" {
+		providerID := firstNonEmpty(usageProvider, request.SupplierID)
+		if named, matched := s.queryNamedProviderBalance(ctx, httpClient, normalized, apiKey, providerID); matched {
+			if named.Supported {
+				s.providerBalanceCache.set(cacheKey, named)
+			}
+			return named
+		}
+		return ProviderBalance{Supported: false, Source: providerID, Message: "暂无自动查询"}
+	}
+
+	if usageStatus == "token_plan" {
+		if balance, matched := queryCodingPlanBalance(ctx, httpClient, normalized, apiKey, firstNonEmpty(usageProvider, creds.CodingPlanProvider)); matched {
+			if balance.Supported {
+				s.providerBalanceCache.set(cacheKey, balance)
+			}
+			return balance
+		}
+		return ProviderBalance{Supported: false, Source: "token_plan", Message: "暂无自动查询"}
 	}
 
 	// 策略 0：通用模板。对齐 cc-switch 的 GENERAL 模板：
@@ -229,6 +303,7 @@ func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) Prov
 
 const (
 	balanceProfileAuto      = "auto"
+	balanceProfileNone      = "none"
 	balanceProfileGeneral   = "general"
 	balanceProfileOfficial  = "official"
 	balanceProfileNewAPI    = "newapi"
@@ -289,7 +364,7 @@ func resolveBalanceCredentials(request ProviderBalanceRequest, adapter servercon
 
 func resolveBalanceProfile(creds balanceCredentials, baseURL string) string {
 	switch strings.ToLower(strings.TrimSpace(creds.Profile)) {
-	case balanceProfileGeneral, balanceProfileOfficial, balanceProfileNewAPI, balanceProfileTokenPlan, balanceProfileCustom:
+	case balanceProfileNone, balanceProfileGeneral, balanceProfileOfficial, balanceProfileNewAPI, balanceProfileTokenPlan, balanceProfileCustom:
 		return strings.ToLower(strings.TrimSpace(creds.Profile))
 	}
 	if detectCodingPlanProvider(baseURL, creds.CodingPlanProvider) != codingPlanNone {
@@ -323,6 +398,35 @@ func mergeBalanceAdapterIdentity(adapter serverconfig.ModelAdapterConfig, creds 
 	}
 	out.BalanceProfile = profile
 	return out
+}
+
+// balanceRequestCacheIdentity distinguishes request-only capability and custom-template
+// inputs without putting credentials or header values into the in-memory cache key.
+func balanceRequestCacheIdentity(request ProviderBalanceRequest, adapter serverconfig.ModelAdapterConfig, hasAdapter bool, creds balanceCredentials, profile string) string {
+	parts := []string{
+		strings.ToLower(strings.TrimSpace(request.UsageStatus)),
+		strings.ToLower(strings.TrimSpace(request.UsageProvider)),
+		strings.ToLower(strings.TrimSpace(profile)),
+		strings.TrimSpace(creds.QueryURL),
+		strings.TrimSpace(creds.QueryField),
+		strings.TrimSpace(creds.AccessToken),
+		strings.TrimSpace(creds.UserID),
+		strings.TrimSpace(creds.CodingPlanProvider),
+	}
+	headerMap := request.BalanceQueryHeaders
+	if headerMap == nil && hasAdapter {
+		headerMap = adapter.BalanceQueryHeaders
+	}
+	keys := make([]string, 0, len(headerMap))
+	for key := range headerMap {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		parts = append(parts, strings.TrimSpace(key)+"="+headerMap[key])
+	}
+	sum := sha256.Sum256([]byte(strings.Join(parts, "\n")))
+	return hex.EncodeToString(sum[:])
 }
 
 // queryGeneralBalance 对齐 cc-switch 的 GENERAL 模板：

@@ -49,7 +49,11 @@ func (s *ProxyService) queryConfiguredBalanceWithAdapter(ctx context.Context, ht
 
 	const source = "configured"
 	endpoint := applyBalanceTemplate(queryURL, apiKey, normalizedBaseURL, creds.AccessToken, creds.UserID)
-	body, status, transient, err := namedBalanceGETWithHeaders(ctx, httpClient, endpoint, apiKey, adapter.BalanceQueryHeaders, normalizedBaseURL, creds.AccessToken, creds.UserID)
+	headers := adapter.BalanceQueryHeaders
+	if len(headers) == 0 {
+		headers = nil
+	}
+	body, status, transient, err := namedBalanceGETWithHeaders(ctx, httpClient, endpoint, apiKey, headers, normalizedBaseURL, creds.AccessToken, creds.UserID)
 	if err != nil {
 		return namedBalanceFail(source, "网络错误："+err.Error(), transient), true
 	}

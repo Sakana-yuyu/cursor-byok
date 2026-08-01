@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"cursor/gen/agentv1"
 	runtimecore "cursor/internal/backend/agent/core"
@@ -13,12 +15,16 @@ import (
 	"cursor/internal/backend/delegation"
 )
 
-const defaultLocalDelegationMaxProviderPasses = 32
+const (
+	defaultLocalDelegationMaxProviderPasses = 32
+	localDelegationFirstEventTimeout        = 90 * time.Second
+)
 
 type LocalDelegatedToolExecutor func(context.Context, delegation.TaskRequest, runtimecore.ToolInvocation) (string, error)
 
 type localDelegatedAgentAdapter struct {
 	store         *ConversationFileStore
+	usageStore    *UsageFileStore
 	compiler      PromptCompiler
 	provider      ProviderGateway
 	recorder      modeladapter.LLMArtifactObserver
@@ -34,6 +40,7 @@ func newLocalDelegatedAgentAdapter(service *Service) *localDelegatedAgentAdapter
 	}
 	return &localDelegatedAgentAdapter{
 		store:         service.store,
+		usageStore:    service.usageStore,
 		compiler:      service.compiler,
 		provider:      service.provider,
 		recorder:      service.recorder,
@@ -213,6 +220,12 @@ func (adapter *localDelegatedAgentAdapter) runProviderPass(ctx context.Context, 
 		RunID:              identity.runID,
 		ModelCallID:        modelCallID,
 		ModelID:            strings.TrimSpace(request.ModelID),
+		ModelName:          strings.TrimSpace(request.ModelName),
+		Role:               "worker",
+		ParentModel:        strings.TrimSpace(request.ModelName),
+		ModelGroupID:       strings.TrimSpace(request.ModelGroupID),
+		TaskID:             strings.TrimSpace(request.ID),
+		ExecutionMode:      strings.TrimSpace(request.ExecutionMode),
 		Mode:               compiled.Mode,
 		ThinkingEffort:     strings.TrimSpace(request.ThinkingEffort),
 		MaxMode:            request.MaxMode,
@@ -227,11 +240,37 @@ func (adapter *localDelegatedAgentAdapter) runProviderPass(ctx context.Context, 
 	}
 	var textBuilder strings.Builder
 	invocations := make([]runtimecore.ToolInvocation, 0, 4)
-	err := adapter.provider.StartStream(ctx, providerRequest, func(event modeladapter.ModelEvent) error {
+	usage := turnUsageSnapshot{
+		Role:          "worker",
+		ParentModel:   strings.TrimSpace(request.ModelName),
+		LogicalModel:  strings.TrimSpace(request.ModelName),
+		ModelGroupID:  strings.TrimSpace(request.ModelGroupID),
+		TaskID:        strings.TrimSpace(request.ID),
+		ExecutionMode: strings.TrimSpace(request.ExecutionMode),
+	}
+	firstEventCtx, cancelFirstEvent := context.WithCancel(ctx)
+	firstEventTimer := time.AfterFunc(localDelegationFirstEventTimeout, cancelFirstEvent)
+	defer func() {
+		firstEventTimer.Stop()
+		cancelFirstEvent()
+	}()
+	var firstEvent atomic.Bool
+	log.Printf(
+		"forwarder local delegated provider starting task_id=%s model_id=%s provider_pass=%d",
+		strings.TrimSpace(identity.taskID),
+		strings.TrimSpace(request.ModelID),
+		providerPass,
+	)
+	err := adapter.provider.StartStream(firstEventCtx, providerRequest, func(event modeladapter.ModelEvent) error {
+		if firstEvent.CompareAndSwap(false, true) {
+			firstEventTimer.Stop()
+		}
 		switch event.Kind {
 		case modeladapter.ModelEventKindTextDelta:
+			delegation.MarkWorkerProgress(ctx)
 			textBuilder.WriteString(event.Text)
 		case modeladapter.ModelEventKindToolLikeCompleted:
+			delegation.MarkWorkerProgress(ctx)
 			if event.ToolInvocation != nil {
 				invocation := *event.ToolInvocation
 				invocation.ArgsJSON = append([]byte(nil), event.ToolInvocation.ArgsJSON...)
@@ -242,13 +281,58 @@ func (adapter *localDelegatedAgentAdapter) runProviderPass(ctx context.Context, 
 				return event.Err
 			}
 			return fmt.Errorf("delegated provider error")
+		case modeladapter.ModelEventKindTurnFinished:
+			usage.Provider = event.Provider
+			usage.Model = event.Model
+			usage.ProviderModel = event.Model
+			usage.BaseURL = event.BaseURL
+			usage.GroupName = event.GroupName
+			usage.InputTokens = event.InputTokens
+			usage.OutputTokens = event.OutputTokens
+			usage.CacheReadTokens = event.CacheReadTokens
+			usage.CacheWriteTokens = event.CacheWriteTokens
+			usage.UsagePresent = event.UsagePresent
+			usage.CacheReadPresent = event.CacheReadPresent
+			usage.CacheWritePresent = event.CacheWritePresent
 		}
 		return nil
 	})
+	if err != nil {
+		usage.ErrorCode = "provider_error"
+	}
+	if usage.ProviderModel == "" {
+		usage.ProviderModel = usage.Model
+	}
+	errorText := ""
+	if err != nil {
+		errorText = err.Error()
+	}
+	if recordErr := upsertStandaloneUsageSnapshot(adapter.usageStore, identity.requestID, modelCallID, map[bool]string{true: "completed", false: "provider_error"}[err == nil], usage, errorText); recordErr != nil {
+		log.Printf("forwarder local delegated usage persistence failed task_id=%s err=%v", strings.TrimSpace(identity.taskID), recordErr)
+	}
 	pass := localProviderPass{text: textBuilder.String(), invocations: invocations}
 	if err != nil {
+		if !firstEvent.Load() && firstEventCtx.Err() != nil && ctx.Err() == nil {
+			err = fmt.Errorf("delegated provider produced no event within %s: %w", localDelegationFirstEventTimeout, firstEventCtx.Err())
+		}
+		log.Printf(
+			"forwarder local delegated provider failed task_id=%s model_id=%s provider_pass=%d first_event=%t err=%v",
+			strings.TrimSpace(identity.taskID),
+			strings.TrimSpace(request.ModelID),
+			providerPass,
+			firstEvent.Load(),
+			err,
+		)
 		return pass, err
 	}
+	log.Printf(
+		"forwarder local delegated provider completed task_id=%s model_id=%s provider_pass=%d first_event=%t tool_calls=%d",
+		strings.TrimSpace(identity.taskID),
+		strings.TrimSpace(request.ModelID),
+		providerPass,
+		firstEvent.Load(),
+		len(invocations),
+	)
 	return pass, nil
 }
 

@@ -76,6 +76,7 @@ var agentModeToolNames = map[string]struct{}{
 	"ForceBackgroundSubagent": {},
 	"CreatePr":                {},
 	"UpdatePr":                {},
+	"SeeImage":                {},
 }
 
 var multitaskModeToolNames = map[string]struct{}{
@@ -106,6 +107,7 @@ var multitaskModeToolNames = map[string]struct{}{
 	"ForceBackgroundSubagent": {},
 	"CreatePr":                {},
 	"UpdatePr":                {},
+	"SeeImage":                {},
 }
 
 var debugModeToolNames = map[string]struct{}{
@@ -162,6 +164,7 @@ var askModeToolNames = map[string]struct{}{
 	"ForceBackgroundSubagent": {},
 	"CreatePr":                {},
 	"UpdatePr":                {},
+	"SeeImage":                {},
 }
 
 var planModeToolNames = map[string]struct{}{
@@ -182,6 +185,7 @@ var planModeToolNames = map[string]struct{}{
 	"TodoWrite":            {},
 	"WebFetch":             {},
 	"WebSearch":            {},
+	"SeeImage":             {},
 }
 
 var childConversationDisallowedAgentToolNames = map[string]struct{}{

@@ -16,6 +16,7 @@ import (
 
 	"cursor/gen/agentv1"
 	runtimecore "cursor/internal/backend/agent/core"
+	"cursor/internal/modelchannel"
 )
 
 // ExecApplyResult 表示一次执行桥结果归一化后的最小产物。
@@ -378,10 +379,15 @@ func (bridge *Bridge) ApplyExecClientMessage(msg *agentv1.ExecClientMessage, pen
 			result.ToolResultPayload = fmt.Sprintf("shell sandbox policy unsupported on this host: %s (policy=%s)", reason, policyType)
 			result.IsTerminal = true
 			return result, nil
+		case nil:
+			// 未知字段在 protobuf 解码后可能表现为空 oneof；它不是终态，
+			// 继续等待后续 shell 事件或 watchdog 收口。
+			log.Printf("exec bridge ignored empty shell stream event exec_id=%s tool_call_id=%s", strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID))
+			return result, nil
 		default:
 			// 客户端协议可能领先于本仓库 proto（例如未来新增的 shell 流事件）。
 			// 未知事件按非终态忽略，等待后续事件或 watchdog 收口，避免整个请求被打断。
-			log.Printf("exec bridge ignored unsupported shell stream event exec_id=%s tool_call_id=%s", strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID))
+			log.Printf("exec bridge ignored unsupported shell stream event exec_id=%s tool_call_id=%s event_type=%T", strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID), event)
 			return result, nil
 		}
 	default:
@@ -876,6 +882,12 @@ func (bridge *Bridge) openTask(openContext OpenExecContext, toolCall runtimecore
 	workspaceHint := strings.TrimSpace(openContext.WorkspaceHint)
 	taskRequestedModelID := strings.TrimSpace(readStringArg(args, "model", "model_id", "modelId"))
 	modelID := taskRequestedModelID
+	// Cursor emits fast/default/auto for a Task that should inherit its parent
+	// model. Leaving the alias intact makes the channel resolver select the first
+	// configured adapter, which can send child tasks to an unrelated account.
+	if modelchannel.IsMetaModelAlias(modelID) {
+		modelID = strings.TrimSpace(openContext.ModelID)
+	}
 	if override, _, ok := runtimecore.LookupSubagentModelOverride(openContext.SubagentModelOverrides, subagentType); ok {
 		switch strings.TrimSpace(override.Selection) {
 		case "disabled":
@@ -909,7 +921,7 @@ func (bridge *Bridge) openTask(openContext OpenExecContext, toolCall runtimecore
 						ToolCallId:                    toolCall.CallID,
 						SubagentType:                  subagentType,
 						ModelId:                       modelID,
-						Prompt:                        strings.TrimSpace(readStringArg(args, "prompt")),
+						Prompt:                        augmentSubagentPrompt(readStringArg(args, "prompt"), readStringArg(args, "description")),
 						Readonly:                      readonly,
 						ResumeAgentId:                 stringPtr(strings.TrimSpace(readStringArg(args, "resume"))),
 						RunInBackground:               boolPtrIfTrue(runInBackground),
@@ -935,6 +947,23 @@ func (bridge *Bridge) openTask(openContext OpenExecContext, toolCall runtimecore
 		StreamState: "opened",
 		OpenedAt:    now,
 	}, nil
+}
+
+// augmentSubagentPrompt 要求子代理输出面向用户的工作摘要，避免界面只显示连续工具调用。
+// 这不是要求暴露隐藏思维链；模型只需给出简短计划、阶段发现和最终结论。
+func augmentSubagentPrompt(prompt string, description string) string {
+	prompt = strings.TrimSpace(prompt)
+	description = strings.TrimSpace(description)
+	parts := []string{
+		"请把工作过程中的可见进度写给用户：开始执行前先用1-2句话说明任务目标、检查范围和下一步；每完成一组关键检查后，用一句话总结当前发现和下一步；结束时给出简洁结论。不要输出隐藏思维链，只输出面向用户的工作摘要，然后再调用工具。",
+	}
+	if description != "" {
+		parts = append(parts, "任务简述："+description)
+	}
+	if prompt != "" {
+		parts = append(parts, "具体任务："+prompt)
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 // openFetch 构造 Fetch 对应的执行桥请求。
