@@ -8,19 +8,32 @@ import (
 	"time"
 
 	runtimecore "cursor/internal/backend/agent/core"
+	"cursor/internal/backend/delegation"
 )
 
 const (
 	// defaultExecTimeout 是非 shell exec 的默认超时（从最后一次活动算起）。
 	defaultExecTimeout = 10 * time.Minute
+	// longRunningExecTimeout 是 subagent/delegation aggregate 的最终兜底超时。
+	longRunningExecTimeout = 30 * time.Minute
 	// execWatchdogTick 是 watchdog 扫描间隔。
 	execWatchdogTick = 30 * time.Second
 )
 
 const streamTimerExecWatchdog = "exec_watchdog"
 
-// scheduleExecWatchdog 为非 shell、非 subagent 的 pending exec 注册超时监管。
-// shell 有自己的 foreground recovery；subagent 由 Cursor 客户端管理生命周期，跳过。
+// execTimeoutForKind 返回指定执行桥的最终兜底时长。
+func execTimeoutForKind(kind string) time.Duration {
+	switch strings.TrimSpace(kind) {
+	case "subagent", "delegation_aggregate":
+		return longRunningExecTimeout
+	default:
+		return defaultExecTimeout
+	}
+}
+
+// scheduleExecWatchdog 为非 shell pending exec 注册超时监管。
+// shell 有自己的 foreground recovery。
 func (service *Service) scheduleExecWatchdog(requestID string, pending runtimecore.PendingExec) {
 	if service == nil || strings.TrimSpace(requestID) == "" || strings.TrimSpace(pending.ExecID) == "" {
 		return
@@ -37,11 +50,7 @@ func (service *Service) scheduleExecWatchdog(requestID string, pending runtimeco
 	if deadline.IsZero() {
 		deadline = time.Now().UTC()
 	}
-	// subagent 可能需要很长时间，使用 30 分钟兜底防止客户端漏发终态时无限等待。
-	timeout := defaultExecTimeout
-	if kind == "subagent" {
-		timeout = 30 * time.Minute
-	}
+	timeout := execTimeoutForKind(kind)
 	deadline = deadline.Add(timeout)
 	service.scheduleStreamTimer(
 		stream,
@@ -83,6 +92,9 @@ func (service *Service) recoverExecWithoutTerminal(stream *ActiveStream, pending
 		return nil
 	}
 	markExecCompleted(stream, pending)
+	if strings.TrimSpace(pending.ExecKind) == "subagent" {
+		service.updateNativeDelegationStatus(pending.ExecID, delegation.TaskTimedOut, "Cursor 子代理超时", strings.TrimSpace(reason))
+	}
 	resultPayload := buildSyntheticExecResultPayload(pending, reason)
 	log.Printf(
 		"forwarder synthetic exec recovery request_id=%s tool_call_id=%s exec_id=%s exec_kind=%s reason=%s",
@@ -122,12 +134,14 @@ func (service *Service) recoverExecWithoutTerminal(stream *ActiveStream, pending
 // buildSyntheticExecResultPayload 构造超时/丢失终态时的 tool_result 文本。
 func buildSyntheticExecResultPayload(pending runtimecore.PendingExec, reason string) string {
 	toolName := deriveToolNameFromPendingExec(pending)
-	detail := fmt.Sprintf("[exec watchdog] %s timed out or lost terminal signal (exec_id=%s, reason=%s)", toolName, pending.ExecID, reason)
+	timeout := execTimeoutForKind(pending.ExecKind)
+	detail := fmt.Sprintf("[exec watchdog] %s timed out or lost terminal signal after %s (exec_id=%s, reason=%s)", toolName, timeout, pending.ExecID, reason)
 	summary := map[string]any{
-		"status":  "timeout",
-		"detail":  detail,
-		"reason":  reason,
-		"timeout": defaultExecTimeout.String(),
+		"status":    "timeout",
+		"detail":    detail,
+		"reason":    reason,
+		"exec_kind": strings.TrimSpace(pending.ExecKind),
+		"timeout":   timeout.String(),
 	}
 	encoded, err := json.Marshal(summary)
 	if err != nil {

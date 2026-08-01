@@ -11,6 +11,7 @@ import (
 	backend "cursor/internal/backend"
 	serverconfig "cursor/internal/backend/server/config"
 	"cursor/internal/certs"
+	"cursor/internal/historymetrics"
 	"cursor/internal/logger"
 	"cursor/internal/mitm"
 	"cursor/internal/netproxy"
@@ -116,6 +117,14 @@ func (s *ProxyService) ensureBackendHost() error {
 	}
 	s.backendHost = host
 	return nil
+}
+
+// ResetUsageMetrics 清空当前 backend writer 管理的用量统计。
+func (s *ProxyService) ResetUsageMetrics() error {
+	if s == nil || s.backendHost == nil {
+		return historymetrics.ResetUsageFile(appdata.UsageFilePath())
+	}
+	return s.backendHost.ResetUsageMetrics()
 }
 
 func (s *ProxyService) ensureProxy(cfg serverconfig.Config) error {

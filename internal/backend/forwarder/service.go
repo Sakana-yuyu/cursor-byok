@@ -9,6 +9,7 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"connectrpc.com/connect"
@@ -279,31 +280,35 @@ func subagentModelOverrideSummaries(overrides map[string]runtimecore.SubagentMod
 }
 
 type Service struct {
-	store               *ConversationFileStore
-	usageStore          *UsageFileStore
-	codebaseIndexStore  *CodebaseIndexStore
-	docsIndexStore      *DocsIndexStore
-	rules               *UserRuleStore
-	projector           *HistoryProjector
-	compiler            PromptCompiler
-	promptInjection     *promptinject.Manager
-	provider            ProviderGateway
-	resolver            modeladapter.ChannelResolver
-	modelMemory         agentModelMemory
-	maxTokensPersister  maxTokensConfigPersister
-	scanConfig          skillMCPScanConfigProvider
-	mcpRuntime          *MCPRuntimeRegistry
-	broker              *StreamBroker
-	recorder            *artifactRecorder
-	debug               *debugRecorder
-	execBridge          execbridge.ExecBridge
-	interactionBridge   interactionbridge.InteractionBridge
-	appendSeq           *appendSequenceTracker
-	runQueue            *runQueue
-	cursorDelegation    *cursorDelegationBridge
-	localDelegation     *localDelegatedAgentAdapter
-	delegationConfig    delegation.RuntimeConfigProvider
-	multitaskDelegation *multitaskDelegationCoordinator
+	store                    *ConversationFileStore
+	usageStore               *UsageFileStore
+	codebaseIndexStore       *CodebaseIndexStore
+	docsIndexStore           *DocsIndexStore
+	rules                    *UserRuleStore
+	projector                *HistoryProjector
+	compiler                 PromptCompiler
+	promptInjection          *promptinject.Manager
+	provider                 ProviderGateway
+	resolver                 modeladapter.ChannelResolver
+	modelMemory              agentModelMemory
+	maxTokensPersister       maxTokensConfigPersister
+	scanConfig               skillMCPScanConfigProvider
+	mcpRuntime               *MCPRuntimeRegistry
+	broker                   *StreamBroker
+	recorder                 *artifactRecorder
+	debug                    *debugRecorder
+	execBridge               execbridge.ExecBridge
+	interactionBridge        interactionbridge.InteractionBridge
+	appendSeq                *appendSequenceTracker
+	runQueue                 *runQueue
+	cursorDelegation         *cursorDelegationBridge
+	localDelegation          *localDelegatedAgentAdapter
+	delegationConfig         delegation.RuntimeConfigProvider
+	multitaskDelegation      *multitaskDelegationCoordinator
+	delegationRuntimeMu      sync.Mutex
+	nativeDelegations        map[string]*nativeDelegationRuntime
+	provider400RecoveryMu    sync.Mutex
+	provider400RecoveryTurns map[string]struct{}
 }
 
 type agentModelMemory interface {
@@ -376,12 +381,21 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 		interactionBridge:  interactionbridge.NewBridge(),
 		appendSeq:          newAppendSequenceTracker(),
 		runQueue:           newRunQueue(),
+		nativeDelegations:  make(map[string]*nativeDelegationRuntime),
 	}
 	service.cursorDelegation = newCursorDelegationBridge(service)
 	service.localDelegation = newLocalDelegatedAgentAdapter(service)
 	service.multitaskDelegation = newMultitaskDelegationCoordinator(service, delegationConfig)
 	service.startHistoryMaintenance()
 	return service
+}
+
+// ResetUsageMetrics 清空当前 forwarder 持有的全部用量统计。
+func (service *Service) ResetUsageMetrics() error {
+	if service == nil || service.usageStore == nil {
+		return nil
+	}
+	return service.usageStore.Reset()
 }
 
 // newServiceWithDependencies 主要用于测试场景，允许注入替身依赖。
@@ -408,6 +422,7 @@ func newServiceWithDependencies(store *ConversationFileStore, projector *History
 		mcpRuntime:         SharedMCPRuntimeRegistry(),
 		appendSeq:          newAppendSequenceTracker(),
 		runQueue:           newRunQueue(),
+		nativeDelegations:  make(map[string]*nativeDelegationRuntime),
 	}
 	service.cursorDelegation = newCursorDelegationBridge(service)
 	service.localDelegation = newLocalDelegatedAgentAdapter(service)
@@ -1050,21 +1065,33 @@ func (service *Service) Shutdown(ctx context.Context) error {
 				firstErr = err
 			}
 		}
-		// actor 未及时终态时，补发 TurnEnded 并强制 canceled endstream，让 RunSSE 能退出。
-		if streamStillActive(stream) {
-			_ = service.broker.Publish(requestID, StreamEvent{
-				Message: buildTurnEndedMessage(0, 0, 0, 0),
-			})
-			if cancelErr := service.broker.Cancel(requestID, "[canceled] Local assistant service shutting down"); cancelErr != nil {
+		// 无条件补发终态：不依赖 streamStillActive 判断。actor 的异步 cancel 命令可能
+		// 在 1.5s 内把 stream 改成 Canceled 但终态事件尚未被 RunSSE 读走，也可能完全
+		// 卡住没发终态。无论哪种情况，这里都必须保证 Cursor 能收到 TurnEnded + canceled
+		// endstream，否则前端会一直停在「运行中」等待永远不会到来的响应。
+		// 先停掉 provider，避免它继续往已取消的 stream 写入造成竞态。
+		forceCancelStreamProvider(stream)
+		_ = service.broker.Publish(requestID, StreamEvent{
+			Message: buildTurnEndedMessage(0, 0, 0, 0),
+		})
+		if cancelErr := service.broker.Cancel(requestID, "[canceled] Local assistant service shutting down"); cancelErr != nil {
+			// broker.Cancel 仅在 stream 已不在 broker 中时返回 error（已被 actor 移除），
+			// 这种情况下 TurnEnded 已 Publish 到已关闭的订阅也不会被消费——属正常，不记错误。
+			if !errors.Is(cancelErr, errStreamNotActive) {
 				log.Printf("forwarder shutdown force cancel failed request_id=%s err=%v", strings.TrimSpace(requestID), cancelErr)
 				if firstErr == nil {
 					firstErr = cancelErr
 				}
 			}
 		}
+		service.setTurnPhase(stream, TurnPhaseCanceled)
 	}
-	// 给已连接的 RunSSE 一点时间读走 TurnEnded/endstream，再进入 HTTP Shutdown。
-	drainDeadline := time.Now().Add(750 * time.Millisecond)
+
+	// 给已连接的 RunSSE 充分时间读走 TurnEnded/endstream，再进入 HTTP Shutdown。
+	// RunSSE 从 broker 读事件是异步的，若 drain 太短，Cursor 会在读到终态前被 HTTP
+	// 连接关闭打断，表现为「byok 断了但 Cursor 还在转」。这里拉长到 1.5s 并优先等
+	// 所有活跃 request 真正退出。
+	drainDeadline := time.Now().Add(1500 * time.Millisecond)
 	for time.Now().Before(drainDeadline) {
 		if err := ctx.Err(); err != nil {
 			break
@@ -1100,12 +1127,36 @@ func streamStillActive(stream *ActiveStream) bool {
 	}
 }
 
+// forceCancelStreamProvider 直接取消 stream 持有的 provider context，
+// 不经过 actor 命令链。用于 shutdown 等必须立即停掉上游调用的场景，
+// 防止 provider 在 stream 已发终态后继续写入造成竞态。
+func forceCancelStreamProvider(stream *ActiveStream) {
+	if stream == nil {
+		return
+	}
+	stream.mu.Lock()
+	cancel := stream.ProviderCancel
+	stream.ProviderCancel = nil
+	stream.ProviderActive = false
+	stream.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
 // handleCancelIntent 处理取消请求，并向客户端发送执行桥 abort。
 func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	stream, ok := service.broker.Get(intent.RequestID)
 	if !ok || stream == nil {
 		return fmt.Errorf("request is not active: %s", intent.RequestID)
 	}
+	stream.mu.Lock()
+	turnSeq := stream.TurnSeq
+	stream.mu.Unlock()
+	service.clearProvider400Recovery(intent.RequestID, turnSeq)
+	// 先切断当前 provider 请求，再做 history、工具 abort 和委派清理。
+	// 断线取消不能因为后续持久化或广播变慢而继续消耗上游额度。
+	forceCancelStreamProvider(stream)
 	if service.multitaskDelegation != nil {
 		service.multitaskDelegation.CancelStream(stream)
 	}
@@ -1130,6 +1181,9 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	}
 	stream.mu.Unlock()
 	for _, pending := range pendingExecs {
+		if strings.TrimSpace(pending.ExecKind) == "subagent" {
+			service.updateNativeDelegationStatus(pending.ExecID, delegation.TaskCanceled, "Cursor 子代理已取消", "subagent canceled")
+		}
 		if strings.TrimSpace(pending.ExecKind) == "delegation_aggregate" {
 			continue
 		}
@@ -1162,7 +1216,10 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 
 // handleExecResult 处理客户端返回的执行桥结果，并在终态时把 tool_result 写回 history。
 func (service *Service) handleExecResult(intent InboundIntent) error {
-	if intent.ExecClientMessage != nil && service.cursorDelegation != nil && service.cursorDelegation.ConsumeExecMessage(intent.ExecClientMessage) {
+	// CursorAdapter only owns child worker execs registered in its waiter table.
+	// The parent aggregate remains owned by this stream and is closed later by
+	// streamDelegationResult -> handleDelegationResult.
+	if intent.ExecClientMessage != nil && service.cursorDelegation != nil && service.cursorDelegation.ConsumeExecMessage(intent.RequestID, intent.ExecClientMessage) {
 		return nil
 	}
 	stream, ok := service.broker.Get(intent.RequestID)
@@ -1185,6 +1242,18 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 		}
 		return fmt.Errorf("pending exec not found")
 	}
+	if execID := strings.TrimSpace(intent.ExecClientMessage.GetExecId()); execID != "" &&
+		intent.ExecClientMessage.GetId() != 0 && pending.MessageID != 0 &&
+		intent.ExecClientMessage.GetId() != pending.MessageID && service.debug != nil {
+		service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "exec_identity_mismatch_accepted", map[string]any{
+			"exec_id":             execID,
+			"expected_message_id": pending.MessageID,
+			"received_message_id": intent.ExecClientMessage.GetId(),
+			"parent_request_id":   stream.RequestID,
+			"exec_kind":           strings.TrimSpace(pending.ExecKind),
+			"provider_pass":       pending.ProviderPass,
+		})
+	}
 	if service.ignoreStaleExecProviderPass(stream, pending, "exec_client_message") {
 		return nil
 	}
@@ -1199,6 +1268,9 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 	}
 	result, err := service.execBridge.ApplyExecClientMessage(intent.ExecClientMessage, pending)
 	if err != nil {
+		if strings.TrimSpace(pending.ExecKind) == "subagent" {
+			service.updateNativeDelegationStatus(pending.ExecID, delegation.TaskFailed, "Cursor 子代理执行失败", err.Error())
+		}
 		return err
 	}
 	// 捕获点：MCP 执行结果（含失败模式），便于后续读取日志针对性修复执行层问题。
@@ -1217,11 +1289,36 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 		}
 	}
 	if !result.IsTerminal {
-		// 心跳续期：子代理仍在活动（发送 delta/progress），重置 watchdog timer。
-		service.rescheduleExecWatchdog(intent.RequestID, pending)
+		if len(result.HookAdditionalContexts) > 0 {
+			if _, err := service.appendConversationEntries(stream, stream.ConversationID, []HistoryEntry{
+				newMetadataEntry(stream.TurnSeq, stream.RequestID, "shell_hook_additional_context", map[string]any{
+					"tool_call_id": strings.TrimSpace(pending.ToolCallID),
+					"exec_id":      strings.TrimSpace(pending.ExecID),
+					"contexts":     hookAdditionalContextsToRecords(result.HookAdditionalContexts),
+				}),
+			}); err != nil {
+				log.Printf("forwarder shell hook context metadata failed request_id=%s tool_call_id=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ToolCallID), err)
+			}
+		}
+		// 只有真实执行数据才算有效进展；摘要/heartbeat 不能延长 watchdog。
+		if execMessageHasEffectiveProgress(intent.ExecClientMessage, result) {
+			service.markNativeDelegationEffectiveProgress(pending.ExecID, "Cursor 子代理正在处理工具结果")
+			service.rescheduleExecWatchdog(intent.RequestID, pending)
+		}
 		return nil
 	}
 	markExecCompleted(stream, pending)
+	if strings.TrimSpace(pending.ExecKind) == "subagent" {
+		status := delegation.TaskCompleted
+		progress := "Cursor 子代理已完成"
+		errorText := ""
+		if subagentResultFailed(intent.ExecClientMessage.GetSubagentResult()) {
+			status = delegation.TaskFailed
+			progress = "Cursor 子代理执行失败"
+			errorText = subagentResultErrorText(intent.ExecClientMessage.GetSubagentResult())
+		}
+		service.updateNativeDelegationStatus(pending.ExecID, status, progress, errorText)
+	}
 	backgroundShellToolCallID := ""
 	if strings.TrimSpace(pending.ExecKind) == "shell" && shellToolCallIsBackgrounded(result.ToolCall) {
 		backgroundShellToolCallID = firstNonEmpty(strings.TrimSpace(result.ToolCallID), strings.TrimSpace(pending.ToolCallID))
@@ -1259,9 +1356,39 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 	return service.reconcileStream(stream)
 }
 
+func execMessageHasEffectiveProgress(message *agentv1.ExecClientMessage, result execbridge.ExecApplyResult) bool {
+	if message == nil {
+		return false
+	}
+	if result.ShellOutputDelta != nil {
+		return true
+	}
+	if message.GetSubagentResult() != nil {
+		return true
+	}
+	if shell := message.GetShellStream(); shell != nil {
+		switch shell.GetEvent().(type) {
+		case *agentv1.ShellStream_Stdout, *agentv1.ShellStream_Stderr, *agentv1.ShellStream_Start, *agentv1.ShellStream_Exit, *agentv1.ShellStream_Rejected, *agentv1.ShellStream_PermissionDenied, *agentv1.ShellStream_Backgrounded:
+			return true
+		default:
+			return false
+		}
+	}
+	return message.GetReadResult() != nil ||
+		message.GetWriteResult() != nil ||
+		message.GetDeleteResult() != nil ||
+		message.GetGrepResult() != nil ||
+		message.GetLsResult() != nil ||
+		message.GetDiagnosticsResult() != nil ||
+		message.GetMcpResult() != nil ||
+		message.GetFetchResult() != nil ||
+		message.GetExecuteHookResult() != nil ||
+		message.GetWriteShellStdinResult() != nil
+}
+
 // handleExecControl 处理执行桥控制面结果，例如 stream_close 或 throw。
 func (service *Service) handleExecControl(intent InboundIntent) error {
-	if intent.ExecClientControlMessage != nil && service.cursorDelegation != nil && service.cursorDelegation.ConsumeExecControl(intent.ExecClientControlMessage) {
+	if intent.ExecClientControlMessage != nil && service.cursorDelegation != nil && service.cursorDelegation.ConsumeExecControl(intent.RequestID, intent.ExecClientControlMessage) {
 		return nil
 	}
 	stream, ok := service.broker.Get(intent.RequestID)
@@ -1293,6 +1420,9 @@ func (service *Service) handleExecControl(intent InboundIntent) error {
 	}
 	result, err := service.execBridge.ApplyExecClientControl(intent.ExecClientControlMessage, pending)
 	if err != nil {
+		if strings.TrimSpace(pending.ExecKind) == "subagent" {
+			service.updateNativeDelegationStatus(pending.ExecID, delegation.TaskFailed, "Cursor 子代理控制通道失败", err.Error())
+		}
 		return err
 	}
 	if !result.IsTerminal {
@@ -1307,6 +1437,9 @@ func (service *Service) handleExecControl(intent InboundIntent) error {
 		return nil
 	}
 	markExecCompleted(stream, pending)
+	if strings.TrimSpace(pending.ExecKind) == "subagent" {
+		service.updateNativeDelegationStatus(pending.ExecID, delegation.TaskFailed, "Cursor 子代理被控制通道终止", strings.TrimSpace(result.ToolResultPayload))
+	}
 	if strings.TrimSpace(pending.ExecKind) == "execute_hook_pre_compact" {
 		return service.handlePreCompactTerminal(stream, pending.ProviderPass, "")
 	}
@@ -1459,7 +1592,7 @@ func (service *Service) observeShellStreamClose(stream *ActiveStream, pending ru
 		return
 	}
 	recentState := strings.TrimSpace(current.StreamState)
-	if recentState == "transport_closed" || recentState == "exited" || recentState == "backgrounded" || recentState == "rejected" || recentState == "permission_denied" {
+	if recentState == "transport_closed" || recentState == "exited" || recentState == "backgrounded" || recentState == "rejected" || recentState == "permission_denied" || recentState == "sandbox_unsupported" {
 		return
 	}
 	log.Printf(
@@ -1502,6 +1635,7 @@ func (service *Service) handleMetadataIntent(intent InboundIntent) error {
 	}
 	backgroundShellToolCallID, backgroundShellActionWasNew := observeBackgroundShellAction(stream, intent.ClientMessage)
 	observeBackgroundTaskCompletionAction(stream, intent.ClientMessage)
+	backgroundSubagentToolCallID, backgroundSubagentActionWasNew := observeBackgroundSubagentAction(stream, intent.ClientMessage)
 	if !checkpointConversationInitialized(stream) {
 		if intent.HasExplicitMode {
 			stream.mu.Lock()
@@ -1519,6 +1653,9 @@ func (service *Service) handleMetadataIntent(intent InboundIntent) error {
 	}
 	if backgroundShellToolCallID != "" && backgroundShellActionWasNew {
 		entries = append(entries, newBackgroundShellActionMetadataEntry(stream.TurnSeq, stream.RequestID, backgroundShellToolCallID, backgroundShellActionSourceClient))
+	}
+	if backgroundSubagentToolCallID != "" && backgroundSubagentActionWasNew {
+		entries = append(entries, newBackgroundSubagentActionMetadataEntry(stream.TurnSeq, stream.RequestID, backgroundSubagentToolCallID, backgroundShellActionSourceClient))
 	}
 	entries = append(entries, backgroundTaskCompletionMetadataEntries(stream.TurnSeq, stream.RequestID, intent.ClientMessage)...)
 	if intent.HasExplicitMode {
@@ -1712,6 +1849,19 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 		requestKnobs["max_tokens_recovery_cap"] = recoveryCap
 	}
 	service.maybeSaveLastAgentModelHash(conversation, modelID, mode, currentPass)
+	// 视觉代理：主模型不支持图片输入时，自动把消息中的图片委派给识图模型，
+	// 用返回的画面描述 / OCR 文本替换图片块，使纯文本模型也能“看图”。
+	// 此处持有 service.provider，可发起同步子调用；替换后不再含图片 ContentPart，
+	// 下游 router.stripImagesFromMessages 会原样放行，不会重复处理。
+	// 未启用视觉委派时，从工具清单剔除 see_image，避免模型调用一个不可用的工具。
+	if service.needsVisionProxy(modelName, compiled.Messages) {
+		visionCtx, visionCancel := context.WithCancel(context.Background())
+		compiled.Messages = service.synthesizeImageDescriptions(visionCtx, compiled.Messages, modelName)
+		visionCancel()
+	}
+	if !service.visionProxyEnabled() {
+		compiled.Tools = filterToolDescriptorByName(compiled.Tools, seeImageToolName)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	stream.mu.Lock()
 	stream.ProviderActive = true
@@ -1726,6 +1876,9 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 		RunID:              requestID,
 		ModelCallID:        modelCallID,
 		ModelID:            modelID,
+		ModelName:          modelName,
+		Role:               "parent",
+		ExecutionMode:      "parent",
 		Mode:               compiled.Mode,
 		ThinkingEffort:     compiled.Mode.String(),
 		MaxMode:            maxMode,
@@ -2127,12 +2280,22 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 		pendingExec.ProviderPass = stream.ProviderPassCount
 		stream.PendingExecs[pendingExec.ExecID] = pendingExec
 		stream.mu.Unlock()
+		service.registerNativeDelegation(stream, pendingExec, serverMessage)
 		service.scheduleShellForegroundRecovery(stream.RequestID, pendingExec)
 		service.scheduleExecWatchdog(stream.RequestID, pendingExec)
 		removePendingExec := func() {
 			stream.mu.Lock()
 			delete(stream.PendingExecs, pendingExec.ExecID)
 			stream.mu.Unlock()
+			if strings.TrimSpace(pendingExec.ExecKind) == "subagent" {
+				status := delegation.TaskFailed
+				progress := "Cursor 子代理派发失败"
+				if !streamStillActive(stream) {
+					status = delegation.TaskCanceled
+					progress = "Cursor 子代理已取消"
+				}
+				service.updateNativeDelegationStatus(pendingExec.ExecID, status, progress, progress)
+			}
 		}
 		if err := ensureLoopActive(); err != nil {
 			removePendingExec()
@@ -2331,6 +2494,13 @@ func (service *Service) applyExecProgress(stream *ActiveStream, pending runtimec
 	case *agentv1.ShellStream_PermissionDenied:
 		current.StreamState = "permission_denied"
 		current.LastShellActivityAt = now
+	case *agentv1.ShellStream_HookContext:
+		// hook 附加上下文出现在 shell 开始阶段，不改 StreamState（保留 opened/started 原值），
+		// 仅续期 LastShellActivityAt，避免污染 observeShellStreamClose 的状态判断。
+		current.LastShellActivityAt = now
+	case *agentv1.ShellStream_SandboxUnsupported:
+		current.StreamState = "sandbox_unsupported"
+		current.LastShellActivityAt = now
 	}
 	stream.PendingExecs[pending.ExecID] = current
 	return current
@@ -2482,6 +2652,7 @@ func (service *Service) completeSuccessfulTurn(stream *ActiveStream, completion 
 	if turnSeq <= 0 {
 		turnSeq = stream.TurnSeq
 	}
+	service.clearProvider400Recovery(requestID, turnSeq)
 	usage := completion.Usage
 	if err := service.recordTurnUsageSnapshot(stream, conversationID, turnSeq, requestID, modelCallID, "completed", usage, "", false); err != nil {
 		return fmt.Errorf("record completed turn usage: %w", err)
@@ -2681,6 +2852,7 @@ func (service *Service) failActiveStream(stream *ActiveStream, conversationID st
 	if stream == nil {
 		return nil
 	}
+	service.clearProvider400Recovery(requestID, stream.TurnSeq)
 	clearPendingProviderCompletion(stream)
 	stream.mu.Lock()
 	cancel := stream.ProviderCancel
@@ -2709,6 +2881,47 @@ func (service *Service) failActiveStream(stream *ActiveStream, conversationID st
 	// 当前 turn 终态后，排空该会话因「子代理运行期间」排队的新消息。
 	service.drainRunQueue(conversationID)
 	return firstErr
+}
+
+func provider400RecoveryKey(requestID string, turnSeq int64) string {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s:%d", requestID, turnSeq)
+}
+
+func (service *Service) claimProvider400Recovery(requestID string, turnSeq int64) bool {
+	if service == nil {
+		return false
+	}
+	key := provider400RecoveryKey(requestID, turnSeq)
+	if key == "" {
+		return false
+	}
+	service.provider400RecoveryMu.Lock()
+	defer service.provider400RecoveryMu.Unlock()
+	if service.provider400RecoveryTurns == nil {
+		service.provider400RecoveryTurns = make(map[string]struct{})
+	}
+	if _, exists := service.provider400RecoveryTurns[key]; exists {
+		return false
+	}
+	service.provider400RecoveryTurns[key] = struct{}{}
+	return true
+}
+
+func (service *Service) clearProvider400Recovery(requestID string, turnSeq int64) {
+	if service == nil {
+		return
+	}
+	key := provider400RecoveryKey(requestID, turnSeq)
+	if key == "" {
+		return
+	}
+	service.provider400RecoveryMu.Lock()
+	delete(service.provider400RecoveryTurns, key)
+	service.provider400RecoveryMu.Unlock()
 }
 
 // buildRunEntries 构造一次 run intent 需要写入 history 的首批 entry。
@@ -2884,6 +3097,24 @@ func newMetadataEntry(turnSeq int64, requestID string, eventType string, values 
 		Kind:      "metadata",
 		Payload:   payload,
 	}
+}
+
+// hookAdditionalContextsToRecords 把 hook 附加上下文转换为可序列化的记录列表。
+func hookAdditionalContextsToRecords(contexts []*agentv1.HookAdditionalContext) []map[string]string {
+	if len(contexts) == 0 {
+		return nil
+	}
+	records := make([]map[string]string, 0, len(contexts))
+	for _, item := range contexts {
+		if item == nil {
+			continue
+		}
+		records = append(records, map[string]string{
+			"hook_event_name": strings.TrimSpace(item.GetHookEventName()),
+			"content":         strings.TrimSpace(item.GetContent()),
+		})
+	}
+	return records
 }
 
 // extractUserMessage 从 legacy run_request 中提取用户消息。
@@ -3336,10 +3567,19 @@ func currentStreamMode(stream *ActiveStream) agentv1.AgentMode {
 
 // selectPendingExec 按 exec_id 或 message_id 在当前流里查找挂起执行桥。
 func selectPendingExec(execID string, messageID uint32, stream *ActiveStream) (runtimecore.PendingExec, bool) {
+	if stream == nil {
+		return runtimecore.PendingExec{}, false
+	}
 	stream.mu.Lock()
 	defer stream.mu.Unlock()
-	if item, ok := stream.PendingExecs[strings.TrimSpace(execID)]; ok {
-		return item, true
+	normalizedExecID := strings.TrimSpace(execID)
+	if normalizedExecID != "" {
+		if item, ok := stream.PendingExecs[normalizedExecID]; ok {
+			// exec_id is the stable execution identity. The bridge message id is
+			// transport metadata and may be zero or reassigned by the client.
+			return item, true
+		}
+		return runtimecore.PendingExec{}, false
 	}
 	if messageID != 0 {
 		for _, item := range stream.PendingExecs {
@@ -3604,20 +3844,42 @@ func markExecCompleted(stream *ActiveStream, pending runtimecore.PendingExec) {
 	stream.mu.Unlock()
 }
 
+// ignoreStaleExecProviderPass ignores only an exec whose exact identity is no
+// longer pending. A provider pass mismatch by itself is diagnostic metadata and
+// must not discard a still-pending terminal result.
 func (service *Service) ignoreStaleExecProviderPass(stream *ActiveStream, pending runtimecore.PendingExec, source string) bool {
-	if stream == nil || pending.ProviderPass <= 0 {
+	if stream == nil || strings.TrimSpace(pending.ExecID) == "" {
 		return false
 	}
 	stream.mu.Lock()
 	currentPass := stream.ProviderPassCount
+	_, stillPending := stream.PendingExecs[pending.ExecID]
 	stream.mu.Unlock()
-	if currentPass <= 0 || currentPass == pending.ProviderPass {
+	// Once the exact exec_id is still pending, message-id drift is transport
+	// metadata and must not turn a valid terminal result into a stale result.
+	identityMatches := stillPending
+	if !identityMatches {
+		if service != nil && service.debug != nil {
+			service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "stale_exec_result_ignored", map[string]any{
+				"source":        strings.TrimSpace(source),
+				"exec_id":       strings.TrimSpace(pending.ExecID),
+				"message_id":    pending.MessageID,
+				"provider_pass": pending.ProviderPass,
+				"current_pass":  currentPass,
+				"tool_call_id":  strings.TrimSpace(pending.ToolCallID),
+				"reason":        "pending identity no longer active",
+			})
+		}
+		return true
+	}
+	if currentPass <= 0 || pending.ProviderPass <= 0 || currentPass == pending.ProviderPass {
 		return false
 	}
-	clearStreamTimer(stream, providerTimerKey(streamTimerExecWatchdog, pending.ExecID))
-	markExecCompleted(stream, pending)
+	// provider_pass changes when the provider resumes, but it does not change the
+	// identity or validity of an exec that is still pending. Keep the watchdog and
+	// let the terminal result complete the original exec; pass is diagnostic only.
 	if service != nil && service.debug != nil {
-		service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "stale_exec_result_ignored", map[string]any{
+		service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "late_exec_result_accepted", map[string]any{
 			"source":        strings.TrimSpace(source),
 			"exec_id":       strings.TrimSpace(pending.ExecID),
 			"message_id":    pending.MessageID,
@@ -3626,7 +3888,7 @@ func (service *Service) ignoreStaleExecProviderPass(stream *ActiveStream, pendin
 			"tool_call_id":  strings.TrimSpace(pending.ToolCallID),
 		})
 	}
-	return true
+	return false
 }
 
 func recentlyCompletedExecExists(stream *ActiveStream, messageID uint32) bool {
@@ -3888,6 +4150,14 @@ func deriveToolNameFromPendingExec(pending runtimecore.PendingExec) string {
 		return "Task"
 	case "delegation_aggregate":
 		return "Task"
+	case "fetch":
+		return "Fetch"
+	case "record_screen":
+		return "RecordScreen"
+	case "computer_use":
+		return "ComputerUse"
+	case "force_background_subagent":
+		return "ForceBackgroundSubagent"
 	default:
 		return ""
 	}
@@ -3925,6 +4195,14 @@ func execKindFromToolName(name string) (string, bool) {
 		return "force_background_shell", true
 	case "Task":
 		return "subagent", true
+	case "Fetch":
+		return "fetch", true
+	case "RecordScreen":
+		return "record_screen", true
+	case "ComputerUse":
+		return "computer_use", true
+	case "ForceBackgroundSubagent":
+		return "force_background_subagent", true
 	default:
 		return "", false
 	}
@@ -3932,7 +4210,8 @@ func execKindFromToolName(name string) (string, bool) {
 
 func isExecTool(name string) bool {
 	switch strings.TrimSpace(name) {
-	case "Read", "Write", "PatchEdit", "Delete", "Shell", "WriteShellStdin", "ForceBackgroundShell", "Grep", "Glob", "Ls", "ReadLints", "CallMcpTool", "FetchMcpResource", "Task":
+	case "Read", "Write", "PatchEdit", "Delete", "Shell", "WriteShellStdin", "ForceBackgroundShell", "Grep", "Glob", "Ls", "ReadLints", "CallMcpTool", "FetchMcpResource", "Task",
+		"Fetch", "RecordScreen", "ComputerUse", "ForceBackgroundSubagent":
 		return true
 	default:
 		return false

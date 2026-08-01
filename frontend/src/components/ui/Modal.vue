@@ -53,7 +53,7 @@ function onMaskClick() {
     <Transition name="modal-mask">
       <div
         v-show="visible"
-        class="modal-mask-layer fixed inset-0 z-999 flex items-center justify-center bg-black/50 p-4 "
+        class="modal-mask-layer fixed inset-0 z-[100000] flex items-center justify-center bg-black/50 p-4 "
         @click.self="onMaskClick"
       >
         <Transition name="modal-content">

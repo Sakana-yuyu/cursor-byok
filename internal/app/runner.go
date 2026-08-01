@@ -107,7 +107,7 @@ func Run(resources EmbeddedResources) error {
 			return nil
 		}
 		return priceRatesFromAdapters(cfg.ModelAdapters)
-	})
+	}, proxyService.ResetUsageMetrics)
 	windowService := bridge.NewWindowService()
 	adCore := ads.NewService(ads.Options{
 		StoreRoot:    appdata.AdsRootPath(),

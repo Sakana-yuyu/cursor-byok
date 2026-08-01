@@ -9,6 +9,10 @@ import {
   refreshSkillsMCPScan,
   saveSkillsMCPScanConfig,
 } from "@/services/clientApi";
+import {
+  connectMCPRuntimeServer,
+  disconnectMCPRuntimeServer,
+} from "@/services/runtimeControlApi";
 import { toUserError } from "@/state/appState";
 import { computed, onMounted, reactive, ref } from "vue";
 
@@ -67,6 +71,7 @@ const mcpItemStates = reactive({});
 const tabRefs = ref([]);
 
 let configMutationTail = Promise.resolve();
+let mcpAttemptSequence = 0;
 
 function setTabRef(element, index) {
   if (element) {
@@ -307,6 +312,39 @@ async function handleMcpToggle(server, enabled) {
       itemState.busy = false;
     }
   }).catch(() => {});
+}
+
+async function handleMcpConnection(server) {
+  const identifier = String(server?.identifier || server?.name || "").trim();
+  const itemKey = normalizeConfigKey(identifier);
+  if (!itemKey || !isMcpEnabled(identifier)) {
+    return;
+  }
+
+  const itemState = ensureMcpState(itemKey);
+  if (itemState.busy) {
+    return;
+  }
+  const disconnect = server?.status === "connected";
+  const attemptID = `mcp-connect-${Date.now()}-${mcpAttemptSequence += 1}`;
+  itemState.busy = true;
+  itemState.error = "";
+  itemState.retry = () => handleMcpConnection(server);
+
+  try {
+    if (disconnect) {
+      await disconnectMCPRuntimeServer(identifier, WORKSPACE_ROOT);
+      message.success("已断开连接");
+    } else {
+      await connectMCPRuntimeServer(identifier, attemptID, WORKSPACE_ROOT);
+      message.success("连接成功");
+    }
+  } catch (error) {
+    itemState.error = toUserError(error);
+  } finally {
+    itemState.busy = false;
+    await loadSnapshot();
+  }
 }
 
 function matchesQuery(values) {
@@ -557,7 +595,7 @@ onMounted(() => {
                 </div>
               </div>
 
-              <div class="flex items-start justify-start md:justify-end">
+              <div class="flex flex-wrap items-start justify-start gap-2 md:justify-end">
                 <Switch
                   compact
                   label=""
@@ -631,6 +669,15 @@ onMounted(() => {
                   :aria-label="`切换 MCP ${server.name || server.identifier}`"
                   @change="(value) => handleMcpToggle(server, value)"
                 />
+                <button
+                  type="button"
+                  class="shrink-0 rounded-[6px] border border-[#3b3b3b] bg-[#202020] px-2.5 py-1 text-xs text-[#c7c7c7] transition-colors hover:border-[#10AD5D]/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="!isMcpEnabled(server.identifier || server.name) || ensureMcpState(normalizeConfigKey(server.identifier || server.name)).busy || snapshotState.refreshing"
+                  :aria-label="server.status === 'connected' ? `断开 MCP ${server.identifier || server.name}` : `连接 MCP ${server.identifier || server.name}`"
+                  @click="handleMcpConnection(server)"
+                >
+                  {{ ensureMcpState(normalizeConfigKey(server.identifier || server.name)).busy ? (server.status === "connected" ? "断开中..." : "连接中...") : (server.status === "connected" ? "断开" : "连接") }}
+                </button>
               </div>
             </article>
           </div>

@@ -171,6 +171,19 @@ func buildToolCallDeltaMessage(callID string, modelCallID string, delta *agentv1
 	}
 }
 
+// buildDelegationTaskProgressMessage reports aggregate liveness as a regular
+// parent interaction update. A TaskToolCallDelta belongs to a concrete native
+// subagent exec; using one for a locally managed aggregate makes Cursor open an
+// empty child transcript and hides the parent output.
+func buildDelegationTaskProgressMessage(callID string, modelCallID string) *agentv1.AgentServerMessage {
+	_ = callID
+	_ = modelCallID
+	return buildThinkingDeltaMessage(
+		"Delegated workers are still running.",
+		agentv1.ThinkingStyle_THINKING_STYLE_UNSPECIFIED,
+	)
+}
+
 // buildToolCallCompletedMessage 构造工具调用完成消息。
 func buildToolCallCompletedMessage(callID string, modelCallID string, toolCall *agentv1.ToolCall) *agentv1.AgentServerMessage {
 	return &agentv1.AgentServerMessage{
@@ -532,6 +545,94 @@ func buildStartedToolCall(invocation runtimecore.ToolInvocation) *agentv1.ToolCa
 				},
 			},
 		}
+	case "CreatePr", "UpdatePr":
+		var args struct {
+			Title        string   `json:"title"`
+			Body         string   `json:"body"`
+			BaseBranch   string   `json:"base_branch"`
+			Draft        bool     `json:"draft"`
+			BranchName   string   `json:"branch_name"`
+			AddLabels    []string `json:"add_labels"`
+			RemoveLabels []string `json:"remove_labels"`
+			RepoURL      string   `json:"repo_url"`
+			PrURL        string   `json:"pr_url"`
+		}
+		_ = json.Unmarshal(invocation.ArgsJSON, &args)
+		prArgs := &agentv1.PrManagementArgs{ToolCallId: invocation.CallID}
+		if strings.TrimSpace(invocation.ToolName) == "CreatePr" {
+			prArgs.Action = &agentv1.PrManagementArgs_CreatePr{
+				CreatePr: &agentv1.CreatePrAction{
+					Title:      strings.TrimSpace(args.Title),
+					Body:       strings.TrimSpace(args.Body),
+					BaseBranch: stringPtr(strings.TrimSpace(args.BaseBranch)),
+					Draft:      boolPtrIfTrue(args.Draft),
+					BranchName: strings.TrimSpace(args.BranchName),
+					AddLabels:  append([]string(nil), args.AddLabels...),
+					RepoUrl:    stringPtr(strings.TrimSpace(args.RepoURL)),
+				},
+			}
+		} else {
+			prArgs.Action = &agentv1.PrManagementArgs_UpdatePr{
+				UpdatePr: &agentv1.UpdatePrAction{
+					PrUrl:        stringPtr(strings.TrimSpace(args.PrURL)),
+					Title:        stringPtr(strings.TrimSpace(args.Title)),
+					Body:         stringPtr(strings.TrimSpace(args.Body)),
+					BaseBranch:   stringPtr(strings.TrimSpace(args.BaseBranch)),
+					BranchName:   stringPtr(strings.TrimSpace(args.BranchName)),
+					AddLabels:    append([]string(nil), args.AddLabels...),
+					RemoveLabels: append([]string(nil), args.RemoveLabels...),
+					RepoUrl:      stringPtr(strings.TrimSpace(args.RepoURL)),
+				},
+			}
+		}
+		return &agentv1.ToolCall{
+			Tool: &agentv1.ToolCall_PrManagementToolCall{
+				PrManagementToolCall: &agentv1.PrManagementToolCall{Args: prArgs},
+			},
+		}
+	case "Fetch":
+		var input struct {
+			URL string `json:"url"`
+		}
+		_ = json.Unmarshal(invocation.ArgsJSON, &input)
+		return &agentv1.ToolCall{
+			Tool: &agentv1.ToolCall_FetchToolCall{
+				FetchToolCall: &agentv1.FetchToolCall{
+					Args: &agentv1.FetchArgs{
+						Url:        strings.TrimSpace(input.URL),
+						ToolCallId: invocation.CallID,
+					},
+				},
+			},
+		}
+	case "RecordScreen":
+		var input struct {
+			Mode           string `json:"mode"`
+			SaveAsFilename string `json:"save_as_filename"`
+		}
+		_ = json.Unmarshal(invocation.ArgsJSON, &input)
+		return &agentv1.ToolCall{
+			Tool: &agentv1.ToolCall_RecordScreenToolCall{
+				RecordScreenToolCall: &agentv1.RecordScreenToolCall{
+					Args: &agentv1.RecordScreenArgs{
+						Mode:           forwarderRecordingModeFromString(strings.TrimSpace(input.Mode)),
+						ToolCallId:     invocation.CallID,
+						SaveAsFilename: stringPtr(strings.TrimSpace(input.SaveAsFilename)),
+					},
+				},
+			},
+		}
+	case "ComputerUse":
+		// ComputerUse 动作在 OpenExec 阶段才完整解码；started 阶段只需占位 Args（含 tool_call_id）。
+		return &agentv1.ToolCall{
+			Tool: &agentv1.ToolCall_ComputerUseToolCall{
+				ComputerUseToolCall: &agentv1.ComputerUseToolCall{
+					Args: &agentv1.ComputerUseArgs{
+						ToolCallId: invocation.CallID,
+					},
+				},
+			},
+		}
 	default:
 		return nil
 	}
@@ -601,6 +702,35 @@ func stringPtr(value string) *string {
 	}
 	next := strings.TrimSpace(value)
 	return &next
+}
+
+// boolPtrIfTrue 在需要 optional bool 时构造指针值。
+func boolPtrIfTrue(value bool) *bool {
+	if value {
+		return &value
+	}
+	return nil
+}
+
+// stringPtrIfNonEmpty 在需要 optional string 时构造指针值，空串返回 nil。
+func stringPtrIfNonEmpty(value string) *string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
+// forwarderRecordingModeFromString 把模型侧模式名映射为 RecordingMode 枚举。
+func forwarderRecordingModeFromString(mode string) agentv1.RecordingMode {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "save_recording", "save", "stop":
+		return agentv1.RecordingMode_RECORDING_MODE_SAVE_RECORDING
+	case "discard_recording", "discard":
+		return agentv1.RecordingMode_RECORDING_MODE_DISCARD_RECORDING
+	default:
+		return agentv1.RecordingMode_RECORDING_MODE_START_RECORDING
+	}
 }
 
 func literalStringPtr(value string) *string {

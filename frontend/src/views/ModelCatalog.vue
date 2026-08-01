@@ -24,6 +24,7 @@ import {
   normalizeSupplierGroupMode,
 } from "@/utils/supplierGrouping";
 import { MODEL_CATALOG_DRAFT_KEY } from "@/utils/modelCatalogDraft";
+import { supplierTemplate, supplierUsageRequest } from "@/utils/supplierCatalog";
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
@@ -98,8 +99,9 @@ function buildProbeAdapter(model) {
     ...createEmptyModelAdapter(),
     type: inferredType,
     baseURL: d.baseURL || "",
-    apiKey: d.apiKey || "",
-    customHeadersEnabled: Boolean(d.customHeadersEnabled),
+       apiKey: d.apiKey || "",
+       modelCatalogURL: String(d.modelCatalogURL || "").trim(),
+       customHeadersEnabled: Boolean(d.customHeadersEnabled),
     customHeadersJSON: d.customHeadersJSON || "",
     displayName: model.id,
     modelID: model.id,
@@ -144,8 +146,13 @@ async function fetchModels() {
   try {
     const result = await fetchModelCatalog({
       type: d.type || "openai",
+      supplierID: d.supplierID || "custom",
       baseURL,
       apiKey,
+      modelCatalogURL: String(d.modelCatalogURL || "").trim(),
+      modelCatalogStatus: supplierTemplate(d.supplierID).modelCatalog?.status || "",
+      appendModelCatalogCandidates: supplierTemplate(d.supplierID).modelCatalog?.appendCandidates !== false,
+      modelCatalogURLsJSON: d.modelCatalogURLsJSON || JSON.stringify(supplierTemplate(d.supplierID).modelCatalog?.urls || []),
       customHeadersEnabled: Boolean(d.customHeadersEnabled),
       customHeadersJSON: d.customHeadersJSON || "",
     });
@@ -194,6 +201,12 @@ async function handleBatchAdd() {
   catalogSaving.value = true;
   try {
     const baseURL = String(d.baseURL || "").trim();
+    const usage = supplierUsageRequest(d);
+    const balanceProfile = usage.status === "fixed"
+      ? "official"
+      : usage.status === "custom_only"
+        ? "custom"
+        : usage.status || "none";
     const adapters = picked.map((model) => {
       // 按模型名推断 provider type，让 claude→anthropic、gemini→gemini 走原生协议，
         // 避免错误套用渠道级 openai 协议导致缓存失效。
@@ -206,8 +219,17 @@ async function handleBatchAdd() {
         customHeadersEnabled: Boolean(d.customHeadersEnabled),
         customHeadersJSON: d.customHeadersJSON || "",
         displayName: model.id,
-        modelID: model.id,
-        protocolMode: PROTOCOL_MODE_AUTO,
+         modelID: model.id,
+         supplierID: d.supplierID || "custom",
+         modelCatalogURL: String(d.modelCatalogURL || "").trim(),
+         balanceProfile,
+         balanceAccessToken: String(d.balanceAccessToken || "").trim(),
+         balanceUserID: String(d.balanceUserID || "").trim(),
+         balanceCodingPlanProvider: usage.status === "token_plan" ? usage.provider : "",
+         balanceQueryURL: String(d.balanceQueryURL || "").trim(),
+         balanceQueryField: String(d.balanceQueryField || "").trim(),
+         balanceQueryHeadersJSON: String(d.balanceQueryHeadersJSON || "").trim(),
+         protocolMode: PROTOCOL_MODE_AUTO,
         protocolGroup: classifyModelProtocol(inferredType, model.id, baseURL, "", ""),
         openAIRequestGroup:
           inferredType === "openai"
@@ -266,8 +288,20 @@ onMounted(async () => {
     }
     draft.value = {
       type: parsed.type || "openai",
+      supplierID: String(parsed.supplierID || "custom").trim().toLowerCase(),
       baseURL: String(parsed.baseURL || "").trim(),
       apiKey: String(parsed.apiKey || "").trim(),
+      modelCatalogURL: String(parsed.modelCatalogURL || "").trim(),
+      balanceProfile: String(parsed.balanceProfile || "auto").trim().toLowerCase(),
+      balanceAccessToken: String(parsed.balanceAccessToken || "").trim(),
+      balanceUserID: String(parsed.balanceUserID || "").trim(),
+      balanceCodingPlanProvider: String(parsed.balanceCodingPlanProvider || "").trim().toLowerCase(),
+      balanceQueryURL: String(parsed.balanceQueryURL || "").trim(),
+      balanceQueryField: String(parsed.balanceQueryField || "").trim(),
+      balanceQueryHeadersJSON: String(parsed.balanceQueryHeadersJSON || "").trim(),
+      modelCatalogStatus: parsed.modelCatalogStatus || supplierTemplate(parsed.supplierID).modelCatalog?.status || "",
+      appendModelCatalogCandidates: parsed.appendModelCatalogCandidates !== false && supplierTemplate(parsed.supplierID).modelCatalog?.appendCandidates !== false,
+      modelCatalogURLsJSON: parsed.modelCatalogURLsJSON || JSON.stringify(supplierTemplate(parsed.supplierID).modelCatalog?.urls || []),
       customHeadersEnabled: Boolean(parsed.customHeadersEnabled),
       customHeadersJSON: parsed.customHeadersJSON || "",
       tooltipData: String(parsed.tooltipData || "").trim(),

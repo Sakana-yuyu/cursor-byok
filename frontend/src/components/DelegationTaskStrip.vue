@@ -36,6 +36,48 @@ function statusClass(status) {
   return "text-[#a3a3a3]";
 }
 
+function phaseClass(phase) {
+  if (phase === "completed") return "text-[#6ee7a5]";
+  if (phase === "failed" || phase === "canceled" || phase === "circuit_open") return "text-[#fca5a5]";
+  if (phase === "reviewing" || phase === "correcting" || phase === "retrying" || phase === "reassigning" || phase === "checkpointing" || phase === "running" || phase === "escalated") {
+    return "text-[#facc15]";
+  }
+  return "text-[#858585]";
+}
+
+function compactSupervision(item) {
+  const parts = [];
+  if (item?.workerRole) parts.push(item.workerRole);
+  if (item?.supervisionRound) parts.push(`r${item.supervisionRound}`);
+  if (Number.isFinite(item?.correctionCount)) parts.push(`c${item.correctionCount}`);
+  if (Number.isFinite(item?.retryCount)) parts.push(`rt${item.retryCount}`);
+  if (Number.isFinite(item?.reassignCount)) parts.push(`ra${item.reassignCount}`);
+  if (Number.isFinite(item?.escalateCount)) parts.push(`e${item.escalateCount}`);
+  return parts.join(" · ");
+}
+
+function taskDescription(item) {
+  return item?.description || item?.progressSummary || item?.issueCategory || "委派任务";
+}
+
+function taskModel(item) {
+  return item?.modelName || item?.modelId || "模型";
+}
+
+function taskStateLabel(item) {
+  if (item?.cancelable || item?.status === "queued" || item?.status === "running") {
+    return statusLabels[item?.status] || item?.status;
+  }
+  return item?.supervisionPhase || statusLabels[item?.status] || item?.status;
+}
+
+function taskStateClass(item) {
+  if (item?.cancelable || item?.status === "queued" || item?.status === "running") {
+    return statusClass(item?.status);
+  }
+  return item?.supervisionPhase ? phaseClass(item.supervisionPhase) : statusClass(item?.status);
+}
+
 async function refresh() {
   if (refreshBusy) return;
   const currentGeneration = generation;
@@ -81,7 +123,7 @@ onUnmounted(() => window.clearInterval(refreshTimer));
   <Card v-if="visibleItems.length || state.error">
     <div class="min-w-0 space-y-3">
       <div class="flex items-center justify-between gap-3">
-        <h2 class="text-sm font-medium text-white">Multitask 委派</h2>
+        <h2 class="text-sm font-medium text-white">委派任务</h2>
         <span class="text-xs text-[#858585]">{{ activeCount }} 运行中</span>
       </div>
       <div v-if="state.error" class="break-words text-xs text-[#fca5a5]">{{ state.error }}</div>
@@ -89,8 +131,16 @@ onUnmounted(() => window.clearInterval(refreshTimer));
         <div v-for="item in visibleItems" :key="item.id" class="flex min-w-0 items-center gap-2 rounded-[6px] border border-white/10 bg-black/15 px-3 py-2">
           <span class="size-2 shrink-0 rounded-full" :class="item.cancelable ? 'bg-[#facc15]' : 'bg-[#525252]'" />
           <div class="min-w-0 flex-1">
-            <div class="truncate text-xs text-white" :title="item.modelName || item.modelId">{{ item.modelName || item.modelId || "模型" }}</div>
-            <div class="mt-0.5 text-[11px]" :class="statusClass(item.status)">{{ statusLabels[item.status] || item.status }}</div>
+            <div class="flex min-w-0 items-center gap-2">
+              <div class="min-w-0 flex-1 truncate text-xs text-white" :title="taskDescription(item)">{{ taskDescription(item) }}</div>
+              <span class="shrink-0 truncate text-[11px] text-[#858585]" :title="taskModel(item)">{{ taskModel(item) }}</span>
+            </div>
+            <div class="mt-0.5 flex min-w-0 items-center gap-2 text-[11px]">
+              <span class="truncate" :class="taskStateClass(item)" :title="taskStateLabel(item)">{{ taskStateLabel(item) }}</span>
+            </div>
+            <div v-if="item.isSupervised" class="mt-0.5 truncate text-[11px] text-[#858585]" :title="compactSupervision(item)">{{ compactSupervision(item) }}</div>
+            <div v-if="item.issueCategory" class="mt-0.5 line-clamp-2 break-words text-[11px] text-[#facc15]" :title="item.issueCategory">{{ item.issueCategory }}</div>
+            <div v-if="item.progressSummary" class="mt-0.5 line-clamp-2 break-words text-[11px] text-[#858585]" :title="item.progressSummary">{{ item.progressSummary }}</div>
           </div>
           <Button v-if="item.cancelable" variant="text" :disabled="Boolean(state.canceling[item.id])" @click="handleCancel(item)">{{ state.canceling[item.id] ? "取消中..." : "取消" }}</Button>
         </div>
