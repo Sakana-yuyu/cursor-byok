@@ -1065,21 +1065,33 @@ func (service *Service) Shutdown(ctx context.Context) error {
 				firstErr = err
 			}
 		}
-		// actor 未及时终态时，补发 TurnEnded 并强制 canceled endstream，让 RunSSE 能退出。
-		if streamStillActive(stream) {
-			_ = service.broker.Publish(requestID, StreamEvent{
-				Message: buildTurnEndedMessage(0, 0, 0, 0),
-			})
-			if cancelErr := service.broker.Cancel(requestID, "[canceled] Local assistant service shutting down"); cancelErr != nil {
+		// 无条件补发终态：不依赖 streamStillActive 判断。actor 的异步 cancel 命令可能
+		// 在 1.5s 内把 stream 改成 Canceled 但终态事件尚未被 RunSSE 读走，也可能完全
+		// 卡住没发终态。无论哪种情况，这里都必须保证 Cursor 能收到 TurnEnded + canceled
+		// endstream，否则前端会一直停在「运行中」等待永远不会到来的响应。
+		// 先停掉 provider，避免它继续往已取消的 stream 写入造成竞态。
+		forceCancelStreamProvider(stream)
+		_ = service.broker.Publish(requestID, StreamEvent{
+			Message: buildTurnEndedMessage(0, 0, 0, 0),
+		})
+		if cancelErr := service.broker.Cancel(requestID, "[canceled] Local assistant service shutting down"); cancelErr != nil {
+			// broker.Cancel 仅在 stream 已不在 broker 中时返回 error（已被 actor 移除），
+			// 这种情况下 TurnEnded 已 Publish 到已关闭的订阅也不会被消费——属正常，不记错误。
+			if !errors.Is(cancelErr, errStreamNotActive) {
 				log.Printf("forwarder shutdown force cancel failed request_id=%s err=%v", strings.TrimSpace(requestID), cancelErr)
 				if firstErr == nil {
 					firstErr = cancelErr
 				}
 			}
 		}
+		service.setTurnPhase(stream, TurnPhaseCanceled)
 	}
-	// 给已连接的 RunSSE 一点时间读走 TurnEnded/endstream，再进入 HTTP Shutdown。
-	drainDeadline := time.Now().Add(750 * time.Millisecond)
+
+	// 给已连接的 RunSSE 充分时间读走 TurnEnded/endstream，再进入 HTTP Shutdown。
+	// RunSSE 从 broker 读事件是异步的，若 drain 太短，Cursor 会在读到终态前被 HTTP
+	// 连接关闭打断，表现为「byok 断了但 Cursor 还在转」。这里拉长到 1.5s 并优先等
+	// 所有活跃 request 真正退出。
+	drainDeadline := time.Now().Add(1500 * time.Millisecond)
 	for time.Now().Before(drainDeadline) {
 		if err := ctx.Err(); err != nil {
 			break
@@ -1115,6 +1127,23 @@ func streamStillActive(stream *ActiveStream) bool {
 	}
 }
 
+// forceCancelStreamProvider 直接取消 stream 持有的 provider context，
+// 不经过 actor 命令链。用于 shutdown 等必须立即停掉上游调用的场景，
+// 防止 provider 在 stream 已发终态后继续写入造成竞态。
+func forceCancelStreamProvider(stream *ActiveStream) {
+	if stream == nil {
+		return
+	}
+	stream.mu.Lock()
+	cancel := stream.ProviderCancel
+	stream.ProviderCancel = nil
+	stream.ProviderActive = false
+	stream.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
 // handleCancelIntent 处理取消请求，并向客户端发送执行桥 abort。
 func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	stream, ok := service.broker.Get(intent.RequestID)
@@ -1125,6 +1154,9 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	turnSeq := stream.TurnSeq
 	stream.mu.Unlock()
 	service.clearProvider400Recovery(intent.RequestID, turnSeq)
+	// 先切断当前 provider 请求，再做 history、工具 abort 和委派清理。
+	// 断线取消不能因为后续持久化或广播变慢而继续消耗上游额度。
+	forceCancelStreamProvider(stream)
 	if service.multitaskDelegation != nil {
 		service.multitaskDelegation.CancelStream(stream)
 	}

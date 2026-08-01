@@ -2,6 +2,7 @@
 package forwarder
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -15,6 +16,10 @@ import (
 const subscriberSignalBufferSize = 1
 const orphanSubscriberGracePeriod = 30 * time.Second
 const terminalStreamRetentionPeriod = 30 * time.Second
+
+// errStreamNotActive 表示 Cancel/Get 等操作目标 request 已不在 broker 中
+// （已被 actor 正常收口移除，或从未存在）。调用方可用 errors.Is 判定后静默忽略。
+var errStreamNotActive = errors.New("stream is not active")
 
 type StreamBroker struct {
 	mu      sync.RWMutex
@@ -457,7 +462,7 @@ func (broker *StreamBroker) Fail(requestID string, terminalCode string, terminal
 func (broker *StreamBroker) Cancel(requestID string, terminalMessage string) error {
 	stream, ok := broker.Get(requestID)
 	if !ok || stream == nil {
-		return fmt.Errorf("request is not active: %s", strings.TrimSpace(requestID))
+		return fmt.Errorf("%w: %s", errStreamNotActive, strings.TrimSpace(requestID))
 	}
 	stream.mu.Lock()
 	broker.stopTerminalCleanupTimerLocked(stream)
