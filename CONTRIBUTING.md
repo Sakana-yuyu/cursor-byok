@@ -2,7 +2,7 @@
 
 > English version: [CONTRIBUTING_EN.md](./CONTRIBUTING_EN.md)
 
-感谢你考虑为 cursor-byok 做出贡献！
+感谢你考虑为 Cursor Local Assistant 做出贡献！
 
 ## 开发环境
 
@@ -33,7 +33,7 @@ task build
 
 ```
 ├── main.go                 # 入口
-├── internal/               # Go 后端（代理、转发、客户端管理等）
+├── internal/               # Go 后端（代理、转发、委派、客户端管理等）
 ├── frontend/               # Vue 3 + Vite + Tailwind 前端
 │   ├── src/
 │   │   ├── views/          # 页面
@@ -47,6 +47,8 @@ task build
 ├── scripts/                # 辅助脚本（release、metrics）
 └── Taskfile.yml            # 顶层任务编排
 ```
+
+涉及 Cursor 委派或本地模式的问题，请优先保留真实请求日志，并按 `request_id`、`conversation_id`、`model_call_id`、`tool_call_id` 和 `exec_id` 说明事件顺序。不要修改已安装的 Cursor 目录；协议行为应通过本地代理和可复现请求验证。
 
 ## 开发规范
 

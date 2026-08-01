@@ -164,6 +164,11 @@ func (s *ProxyService) GetState() ProxyState {
 	return s.core.GetState()
 }
 
+// RepairProxySettings 一键修复 Cursor 代理配置（重新注入 settings.json 并校验）。
+func (s *ProxyService) RepairProxySettings() (client.ProxyRepairResult, error) {
+	return s.core.RepairProxySettings()
+}
+
 // ClearLastError 用于处理与 ClearLastError 相关的逻辑。
 func (s *ProxyService) ClearLastError() ProxyState {
 	return s.core.ClearLastError()

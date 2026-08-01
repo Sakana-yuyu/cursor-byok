@@ -392,13 +392,31 @@ func (service *Service) postStreamCommandAsync(stream *ActiveStream, command str
 	if err != nil {
 		return err
 	}
+	if command.Kind == streamCommandDelegationResult || command.Kind == streamCommandCancel {
+		log.Printf("forwarder stream command enqueue request_id=%s kind=%s exec_id=%s tool_call_id=%s reason=%s", strings.TrimSpace(stream.RequestID), command.Kind, delegationExecID(command), delegationToolCallID(command), strings.TrimSpace(command.Reason))
+	}
 	envelope := streamCommandEnvelope{command: command}
 	select {
 	case <-done:
+		log.Printf("forwarder stream command enqueue rejected request_id=%s kind=%s reason=actor_done", strings.TrimSpace(stream.RequestID), command.Kind)
 		return errProviderLoopInterrupted
 	case mailbox <- envelope:
 		return nil
 	}
+}
+
+func delegationExecID(command streamCommand) string {
+	if command.Delegation == nil {
+		return ""
+	}
+	return strings.TrimSpace(command.Delegation.ExecID)
+}
+
+func delegationToolCallID(command streamCommand) string {
+	if command.Delegation == nil {
+		return ""
+	}
+	return strings.TrimSpace(command.Delegation.ToolCallID)
 }
 
 func (service *Service) runStreamActor(stream *ActiveStream, mailbox <-chan streamCommandEnvelope, done chan struct{}) {
@@ -884,12 +902,14 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 			len(accumulatedReasoningSummary) == 0 &&
 			!hadToolInvocation {
 			if service.claimProvider400Recovery(requestID, turnSeq) {
-				service.debug.LogRuntime(context.Background(), requestID, conversationID, "provider_400_recovery_triggered", map[string]any{
-					"reason":        string(reason),
-					"provider_pass": providerPass,
-					"attempt_limit": 1,
-					"condition":     "pre_output_and_no_tool_invocation",
-				})
+				if service.debug != nil {
+					service.debug.LogRuntime(context.Background(), requestID, conversationID, "provider_400_recovery_triggered", map[string]any{
+						"reason":        string(reason),
+						"provider_pass": providerPass,
+						"attempt_limit": 1,
+						"condition":     "pre_output_and_no_tool_invocation",
+					})
+				}
 				log.Printf("forwarder provider 400 recovery request_id=%s reason=%s pass=%d", strings.TrimSpace(requestID), string(reason), providerPass)
 				if err := service.requestProviderAction(stream, providerActionResume); err != nil {
 					return service.failStreamIfNonTerminal(stream, "unknown", err)

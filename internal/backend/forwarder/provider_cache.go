@@ -83,18 +83,18 @@ func (c *cacheKeyCache) put(req ProviderRequest, key string) {
 	fp := c.fingerprint(req)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	if _, exists := c.entries[fp]; exists {
 		return // 已存在，无需更新
 	}
-	
+
 	// FIFO 淘汰
 	if len(c.entries) >= c.maxSize {
 		oldest := c.order[0]
 		delete(c.entries, oldest)
 		c.order = c.order[1:]
 	}
-	
+
 	c.entries[fp] = key
 	c.order = append(c.order, fp)
 }
@@ -271,29 +271,29 @@ func (store *responseCacheStore) removeOrderLocked(key string) {
 // 刻意排除每次调用都不同的标识（RequestID/RunID/ModelCallID/ConversationID）与
 // 非确定性的观测/工件指针，以保证 byte-identical 的请求得到一致缓存键。
 type providerCacheKeyShape struct {
-	ModelID             string                 `json:"model_id"`
-	Mode                int32                  `json:"mode"`
-	ThinkingEffort      string                 `json:"thinking_effort"`
-	Messages            []modeladapter.Message `json:"messages"`
-	StableMessageCount  int                    `json:"stable_message_count"`
-	Tools               []json.RawMessage      `json:"tools"`
-	MaxTokens           int                    `json:"max_tokens"`
+	ModelID            string                 `json:"model_id"`
+	Mode               int32                  `json:"mode"`
+	ThinkingEffort     string                 `json:"thinking_effort"`
+	Messages           []modeladapter.Message `json:"messages"`
+	StableMessageCount int                    `json:"stable_message_count"`
+	Tools              []json.RawMessage      `json:"tools"`
+	MaxTokens          int                    `json:"max_tokens"`
 	// RequestKnobs 包含动态估算字段（compiled_prompt_tokens_estimate 等），导致每次请求 key 不同
 	// CompileSummary 每次 compile 可能变化
 	// 移除这两个字段以提高缓存命中率
-	RequestBodyOverride map[string]any         `json:"request_body_override"`
+	RequestBodyOverride map[string]any `json:"request_body_override"`
 }
 
 // providerCacheKey 对归一化请求做 sha256，返回稳定的十六进制缓存键；序列化失败返回空串（不缓存）。
 func providerCacheKey(req ProviderRequest) string {
 	shape := providerCacheKeyShape{
-		ModelID:             req.ModelID,
-		Mode:                int32(req.Mode),
-		ThinkingEffort:      req.ThinkingEffort,
-		Messages:            req.Messages,
-		StableMessageCount:  req.StableMessageCount,
-		Tools:               req.Tools,
-		MaxTokens:           req.MaxTokens,
+		ModelID:            req.ModelID,
+		Mode:               int32(req.Mode),
+		ThinkingEffort:     req.ThinkingEffort,
+		Messages:           req.Messages,
+		StableMessageCount: req.StableMessageCount,
+		Tools:              req.Tools,
+		MaxTokens:          req.MaxTokens,
 		// 移除 RequestKnobs 和 CompileSummary 以避免动态字段污染缓存 key
 		RequestBodyOverride: req.RequestBodyOverride,
 	}

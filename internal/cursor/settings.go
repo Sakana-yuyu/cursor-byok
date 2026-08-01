@@ -234,6 +234,33 @@ func ClearUserProxySettings() error {
 	return nil
 }
 
+// VerifyUserProxySettings 读取 Cursor settings.json，校验 http.proxy 是否已正确注入。
+// 返回校验结果、配置文件路径与当前实际值。
+func VerifyUserProxySettings(proxyURL string) (applied bool, settingsPath string, actualValue string, err error) {
+	settingsPath, err = resolveCursorSettingsPath()
+	if err != nil {
+		return false, "", "", err
+	}
+
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, settingsPath, "", nil
+		}
+		return false, settingsPath, "", fmt.Errorf("读取 Cursor 配置失败: %w", err)
+	}
+	if len(bytes.TrimSpace(data)) == 0 {
+		return false, settingsPath, "", nil
+	}
+
+	settings, err := decodeCursorSettingsJSONC(data)
+	if err != nil {
+		return false, settingsPath, "", fmt.Errorf("解析 Cursor 配置失败: %w", err)
+	}
+	actual, _ := settings["http.proxy"].(string)
+	return strings.TrimSpace(actual) == strings.TrimSpace(proxyURL), settingsPath, actual, nil
+}
+
 // resolveCursorSettingsPath 用于处理与 resolveCursorSettingsPath 相关的逻辑。
 func resolveCursorSettingsPath() (string, error) {
 	homeDir, err := os.UserHomeDir()
