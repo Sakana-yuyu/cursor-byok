@@ -35,8 +35,18 @@ func (service *Service) WriteGitCommitMessage(ctx context.Context, req *connect.
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("forwarder service is nil"))
 	}
 	logger.Infof("WriteGitCommitMessage called diffs=%d previous_commits=%d",
-		func() int { if req != nil && req.Msg != nil { return len(req.Msg.GetDiffs()) }; return 0 }(),
-		func() int { if req != nil && req.Msg != nil { return len(req.Msg.GetPreviousCommitMessages()) }; return 0 }(),
+		func() int {
+			if req != nil && req.Msg != nil {
+				return len(req.Msg.GetDiffs())
+			}
+			return 0
+		}(),
+		func() int {
+			if req != nil && req.Msg != nil {
+				return len(req.Msg.GetPreviousCommitMessages())
+			}
+			return 0
+		}(),
 	)
 	requestID := commitMessageGeneratedRequestIDPrefix + uuid.NewString()
 	recorder, err := newCommitMessageLogRecorder(service.commitMessageHistoryRoot(), requestID)

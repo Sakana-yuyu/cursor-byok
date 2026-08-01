@@ -1,6 +1,8 @@
 package forwarder
 
 import (
+	"context"
+	"log"
 	"strings"
 	"time"
 
@@ -19,6 +21,8 @@ const nativeDelegationEffectiveProgressTimeout = 5 * time.Minute
 type nativeDelegationRuntime struct {
 	ID                      string
 	ParentRequestID         string
+	ConversationID          string
+	ToolCallID              string
 	Description             string
 	ModelID                 string
 	ModelName               string
@@ -41,13 +45,12 @@ func (service *Service) registerNativeDelegation(stream *ActiveStream, pending r
 	args, _ := runtimecore.DecodeArgsMap(pending.ArgsJSON)
 	now := time.Now().UTC()
 	modelID := strings.TrimSpace(runtimecore.ReadStringArg(args, "model", "model_id", "modelId"))
-	modelName := modelID
+	modelName := ""
 	workerRole := strings.TrimSpace(runtimecore.ReadStringArg(args, "subagent_type", "subagentType"))
 	if serverMessage != nil {
 		if execMessage := serverMessage.GetExecServerMessage(); execMessage != nil {
 			if subagentArgs := execMessage.GetSubagentArgs(); subagentArgs != nil {
 				modelID = firstNonEmpty(subagentArgs.GetModelId(), modelID)
-				modelName = modelID
 				workerRole = firstNonEmpty(subagentArgs.GetSubagentType(), workerRole)
 			}
 		}
@@ -58,11 +61,22 @@ func (service *Service) registerNativeDelegation(stream *ActiveStream, pending r
 		modelID = strings.TrimSpace(stream.ModelID)
 	}
 	if modelName == "" {
-		modelName = firstNonEmpty(strings.TrimSpace(stream.ModelName), modelID)
+		modelName = service.resolveDelegationTaskModelName(modelID, stream.ModelName)
 	}
 	stream.mu.Unlock()
 	if strings.TrimSpace(pending.ExecID) == "" || parentRequestID == "" {
 		return
+	}
+	log.Printf("forwarder native delegation identity request_id=%s exec_id=%s tool_call_id=%s model_id=%s model_name=%s worker_role=%s source=config_or_resolver",
+		parentRequestID, strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID), strings.TrimSpace(modelID), strings.TrimSpace(modelName), strings.TrimSpace(workerRole))
+	if service.debug != nil {
+		service.debug.LogRuntime(context.Background(), parentRequestID, stream.ConversationID, "native_delegation_identity_resolved", map[string]any{
+			"exec_id":      strings.TrimSpace(pending.ExecID),
+			"tool_call_id": strings.TrimSpace(pending.ToolCallID),
+			"model_id":     strings.TrimSpace(modelID),
+			"model_name":   strings.TrimSpace(modelName),
+			"worker_role":  strings.TrimSpace(workerRole),
+		})
 	}
 	service.delegationRuntimeMu.Lock()
 	if service.nativeDelegations == nil {
@@ -76,6 +90,8 @@ func (service *Service) registerNativeDelegation(stream *ActiveStream, pending r
 	service.nativeDelegations[pending.ExecID] = &nativeDelegationRuntime{
 		ID:                      strings.TrimSpace(pending.ExecID),
 		ParentRequestID:         parentRequestID,
+		ConversationID:          strings.TrimSpace(stream.ConversationID),
+		ToolCallID:              strings.TrimSpace(pending.ToolCallID),
 		Description:             description,
 		ModelID:                 modelID,
 		ModelName:               modelName,
@@ -91,6 +107,33 @@ func (service *Service) registerNativeDelegation(stream *ActiveStream, pending r
 	service.publishNativeDelegationProgress(parentRequestID, pending.ExecID, nativeDelegationStartSummary(description, modelName, workerRole))
 	service.keepNativeDelegationAlive(parentRequestID, pending.ExecID)
 	service.watchNativeDelegationProgress(parentRequestID, pending.ExecID)
+}
+
+// resolveDelegationTaskModelName converts Cursor's runtime model identifier
+// into the configured display name used by the desktop delegation cards.
+// Direct Cursor Task executions bypass the Multitask worker builder, so this
+// lookup must happen here as well.
+func (service *Service) resolveDelegationTaskModelName(modelID string, fallback string) string {
+	modelID = strings.TrimSpace(modelID)
+	fallback = strings.TrimSpace(fallback)
+	lookupID := modelID
+	if canonical, _ := splitRuntimeThinkingEffortVariantString(modelID); canonical != "" {
+		lookupID = canonical
+	}
+	if service != nil && service.delegationConfig != nil {
+		config := delegation.NormalizeRuntimeConfig(service.delegationConfig.DelegationRuntimeConfig())
+		if name := strings.TrimSpace(config.ModelNames[lookupID]); name != "" {
+			return name
+		}
+	}
+	if service != nil && service.resolver != nil && lookupID != "" {
+		if channel, err := service.resolver.SelectChannelForModel(context.Background(), lookupID); err == nil && channel != nil {
+			if name := strings.TrimSpace(channel.Name); name != "" {
+				return name
+			}
+		}
+	}
+	return firstNonEmpty(fallback, modelID)
 }
 
 func nativeDelegationStartSummary(description, modelName, workerRole string) string {
@@ -260,6 +303,18 @@ func (service *Service) updateNativeDelegationStatus(execID string, status deleg
 	requestID := item.ParentRequestID
 	snapshot := *item
 	service.delegationRuntimeMu.Unlock()
+	log.Printf("forwarder native delegation status request_id=%s conversation_id=%s exec_id=%s tool_call_id=%s model_id=%s model_name=%s status=%s error=%s",
+		strings.TrimSpace(requestID), strings.TrimSpace(snapshot.ConversationID), strings.TrimSpace(execID), strings.TrimSpace(snapshot.ToolCallID), strings.TrimSpace(snapshot.ModelID), strings.TrimSpace(snapshot.ModelName), strings.TrimSpace(string(status)), strings.TrimSpace(errorText))
+	if service.debug != nil {
+		service.debug.LogRuntime(context.Background(), requestID, snapshot.ConversationID, "native_delegation_status", map[string]any{
+			"exec_id":      strings.TrimSpace(execID),
+			"tool_call_id": strings.TrimSpace(snapshot.ToolCallID),
+			"model_id":     strings.TrimSpace(snapshot.ModelID),
+			"model_name":   strings.TrimSpace(snapshot.ModelName),
+			"status":       strings.TrimSpace(string(status)),
+			"error":        strings.TrimSpace(errorText),
+		})
+	}
 	if delegatedStatusTerminal(status) {
 		service.publishNativeDelegationProgress(requestID, execID, nativeDelegationTerminalSummary(&snapshot))
 		_ = service.broker.Publish(requestID, StreamEvent{
@@ -356,6 +411,7 @@ func (service *Service) cancelNativeDelegation(execID string) bool {
 	}
 	markExecCompleted(stream, pending)
 	service.updateNativeDelegationStatus(execID, delegation.TaskCanceled, "Cursor 子代理已取消", "subagent canceled")
+	service.recordDelegationRunTerminal(stream, pending, agentv1.SubagentRunStatus_SUBAGENT_RUN_STATUS_ABORTED, "Cursor 子代理", "subagent canceled")
 	payload := "{\"status\":\"canceled\",\"detail\":\"Cursor 子代理已取消\"}"
 	if err := service.appendToolResult(stream, pending.ToolCallID, "Task", pending.ArgsJSON, payload, pending.ReasoningContent, nil); err != nil {
 		return false

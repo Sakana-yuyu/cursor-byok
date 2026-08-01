@@ -1,6 +1,6 @@
 # Backend 架构说明
 
-`internal/backend` 当前支持本地助手模式与直连上游模式。
+`internal/backend` 当前支持 Cursor Local Assistant 的本地助手模式与直连上游模式。
 
 关于 backend agent「最小事实集合」的第一阶段研究文档，见 [`../../docs/backend-agent-minimum-facts-phase1.md`](../../docs/backend-agent-minimum-facts-phase1.md)。
 
@@ -16,9 +16,9 @@
   - 唯一组装点
   - 负责把 `server/config.Manager`、`forwarder.Module` 和根路由装起来
 
-当前实现不再支持：
+当前实现不再支持以下历史能力：
 
-- Pro / `cursor-byok`
+- Pro / 旧版 `cursor-byok`
 - HTTP/protocol trace debug UI
 - DB-backed store、会话索引和 searchable conversation memory
 
