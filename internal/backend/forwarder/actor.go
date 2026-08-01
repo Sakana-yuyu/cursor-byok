@@ -1212,14 +1212,12 @@ func (service *Service) handleTimerEvent(stream *ActiveStream, payload *streamTi
 		if subscriberCount > 0 || isTerminalStreamStatus(status) {
 			return nil
 		}
-		// A delegated aggregate is independently supervised and can outlive a
-		// transient RunSSE disconnect. Cancelling the parent here cancels every
-		// worker despite active provider/tool progress. Its own watchdog remains
-		// responsible for a genuine abandoned aggregate.
-		if hasActiveDelegationAggregate(stream) {
-			log.Printf("forwarder orphan cancel deferred for active delegation request_id=%s", strings.TrimSpace(stream.RequestID))
-			return nil
-		}
+		// Once the reconnect grace period expires, a missing RunSSE subscriber
+		// means the client can no longer observe or cancel this turn. Delegation
+		// must not keep the parent alive: canceling the parent also cancels its
+		// provider and every delegated worker.
+		log.Printf("forwarder orphan canceling disconnected request request_id=%s subscriber_count=%d active_delegation=%t",
+			strings.TrimSpace(stream.RequestID), subscriberCount, hasActiveDelegationAggregate(stream))
 		return service.handleCancelIntent(InboundIntent{
 			Kind:         "cancel",
 			RequestID:    stream.RequestID,
