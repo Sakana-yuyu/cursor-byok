@@ -284,6 +284,9 @@ export function refreshSkillsMCPScan(workspaceRoot = "") {
 export function saveSkillsMCPScanConfig(config) {
   return desktopOrMock(true, "@bindings/cursor/internal/bridge/proxyservice.js", "SaveSkillsMCPScanConfig", [config]);
 }
+export function enableReaderMCP(url, apiKey, model) {
+  return desktopOrMock({ identifier: "vision-reader", scriptPath: "", wasAdded: true }, "@bindings/cursor/internal/bridge/proxyservice.js", "EnableReaderMCP", [url || "", apiKey || "", model || ""]);
+}
 
 export function repairProxySettings() {
   return withApiLogging("RepairProxySettings", undefined, () => desktopOrMock(undefined, "@bindings/cursor/internal/bridge/proxyservice.js", "RepairProxySettings"));
