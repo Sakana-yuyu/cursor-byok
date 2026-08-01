@@ -138,20 +138,27 @@ type ActiveStream struct {
 	SelectedSubagentModels       []*agentv1.RequestedModel
 	SelectedSubagentModelDetails []*agentv1.ModelDetails
 
-	CurrentModelCallID                          string
-	ProviderActive                              bool
-	ProviderCancel                              func()
-	ProviderPassCount                           int
-	MultitaskStartupCanceled                    bool
-	MultitaskCanceledProviderPass               int
-	ToolInvocationCount                         int
-	ActorMailbox                                chan streamCommandEnvelope
-	ActorDone                                   chan struct{}
-	Phase                                       TurnPhase
-	PendingProviderAction                       providerAction
-	PendingProviderCompletion                   *pendingTurnCompletion
-	CurrentProviderToken                        uint64
-	CurrentCompactionToken                      uint64
+	CurrentModelCallID             string
+	ProviderActive                 bool
+	ProviderCancel                 func()
+	ProviderPassCount              int
+	MultitaskStartupCanceled       bool
+	MultitaskCanceledProviderPass  int
+	ToolInvocationCount            int
+	AutoMultitaskDelegationStarted bool
+	ActorMailbox                   chan streamCommandEnvelope
+	ActorDone                      chan struct{}
+	Phase                          TurnPhase
+	PendingProviderAction          providerAction
+	PendingProviderCompletion      *pendingTurnCompletion
+	CurrentProviderToken           uint64
+	CurrentCompactionToken         uint64
+	// DelegationRunTerminals 记录已收尾委派（delegation_aggregate）的终态
+	// SubagentRun（toolCallID → run）。publishCheckpoint 时随 checkpoint 的
+	// subagent_runs_by_parent_tool_call_id 同步给 Cursor 客户端，客户端 UI
+	// 据此把 Task 卡片渲染为 succeeded/error/aborted；运行中的委派则由
+	// attachDelegationRunStates 从 PendingExecs 推导为 RUNNING。
+	DelegationRunTerminals                      map[string]*agentv1.SubagentRun
 	TimerTokens                                 map[string]uint64
 	StreamTimers                                map[string]*time.Timer
 	ProviderAccumulatedText                     string

@@ -78,8 +78,12 @@ func (service *Service) handleTurnStaleTimeout(stream *ActiveStream, payload *st
 	pendingExecCount := len(stream.PendingExecs)
 	stream.mu.Unlock()
 
-	// 已离开等待态 / provider 仍在跑 / 已终态 / 正在等待真实用户输入 → 不干预。
-	if isTerminalStreamStatus(status) || providerActive || awaitingUser || phase != TurnPhaseWaitingExternal {
+	// 检查是否有活跃的委派任务。委派任务不产生主 stream 的 providerActive 标记，
+	// 但它们是有效进展，不应触发 turn stale。
+	hasActiveDelegation := hasActiveDelegationAggregate(stream)
+
+	// 已离开等待态 / provider 仍在跑 / 委派任务活跃 / 已终态 / 正在等待真实用户输入 → 不干预。
+	if isTerminalStreamStatus(status) || providerActive || hasActiveDelegation || awaitingUser || phase != TurnPhaseWaitingExternal {
 		// 重新挂一个看门狗，确保「仍处于等待态但本次条件不满足」时不会丢失兜底。
 		if phase == TurnPhaseWaitingExternal && !isTerminalStreamStatus(status) {
 			service.scheduleTurnStaleWatchdog(stream)
@@ -145,15 +149,21 @@ func (service *Service) forceCompleteTurnStale(stream *ActiveStream, requestID s
 			}
 		}
 		clearStreamTimer(stream, providerTimerKey(streamTimerTurnStale, ""))
+		// 长任务（委派/subagent）被识别后，同时取消 orphan-cancel 定时器。
+		// orphan cancel 是在 RunSSE 客户端断连时启动的，但长任务场景下客户端
+		// 断连是正常现象（turn stale 后无需 SSE 推流），不能因此强制取消任务。
+		clearStreamTimer(stream, providerTimerKey(streamTimerOrphanCancel, ""))
 		stream.mu.Lock()
 		stream.TurnStaleGraceStartedAt = time.Time{}
 		stream.mu.Unlock()
-		service.debug.LogRuntime(context.Background(), requestID, conversationID, "turn_stale_deferred_long_running_exec", map[string]any{
-			"pending_execs":         pendingExecCount,
-			"deferred_execs":        len(protectedExecs),
-			"recovered_execs":       len(recoverableExecs),
-			"exec_watchdog_timeout": longRunningExecTimeout.String(),
-		})
+		if service.debug != nil {
+			service.debug.LogRuntime(context.Background(), requestID, conversationID, "turn_stale_deferred_long_running_exec", map[string]any{
+				"pending_execs":         pendingExecCount,
+				"deferred_execs":        len(protectedExecs),
+				"recovered_execs":       len(recoverableExecs),
+				"exec_watchdog_timeout": longRunningExecTimeout.String(),
+			})
+		}
 		log.Printf(
 			"forwarder turn stale deferred long-running execs request_id=%s deferred_execs=%d recovered_execs=%d timeout=%s",
 			strings.TrimSpace(requestID),

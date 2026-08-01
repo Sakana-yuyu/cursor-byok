@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -338,6 +341,17 @@ func (adapter *localDelegatedAgentAdapter) runProviderPass(ctx context.Context, 
 
 func (adapter *localDelegatedAgentAdapter) executeTool(ctx context.Context, request delegation.TaskRequest, conversation *ConversationFile, invocation runtimecore.ToolInvocation) string {
 	originalToolName := strings.TrimSpace(invocation.ToolName)
+	// 委派 worker 不应嵌套调用 Task：该工具会经 cursor bridge 转发给 Cursor 客户端
+	// 创建 subagent bubble，本地委派场景下客户端无法创建，返回 bubble 超时错误并最终
+	// 触发 user_stopped_generation 取消。防御性拦截，与 filterDelegatedTools 保持一致。
+	if originalToolName == "Task" {
+		return "工具不可用：委派 worker 不能嵌套调用 Task 工具。请直接完成当前任务或在结果中说明无法执行子代理委派。"
+	}
+	// Shell 系列工具依赖 Cursor 终端交互，委派 worker 经 cursor bridge 转发后
+	// 客户端只回 start 事件不回 stdout/exit，worker 会永久卡死。防御性拦截。
+	if delegatedToolNeedsCursorInteraction(originalToolName) {
+		return "工具不可用：委派 worker 不能执行 Shell/终端工具。请使用只读工具（Read/Grep/Glob/Ls）或 MCP 工具完成当前任务。"
+	}
 	routedInvocation, routedMCP, err := rewriteConversationMCPToolInvocation(conversation, invocation)
 	if err != nil {
 		return fmt.Sprintf("tool routing failed: %s", err.Error())
@@ -369,8 +383,24 @@ func filterDelegatedTools(tools []json.RawMessage, permissions map[string]bool, 
 		if err != nil {
 			return nil, err
 		}
-		permissionToolName := name
-		if _, isMCPTool := mcpToolNames[name]; isMCPTool {
+		trimmedName := strings.TrimSpace(name)
+		// Task 工具是主 agent 用来创建子代理/委派的入口。委派 worker 自身已经是
+		// 子代理，不能再嵌套调用 Task：若允许，worker 会把 Task 工具通过 cursor
+		// bridge 转发给 Cursor 客户端创建 subagent bubble，而客户端无法为本地委派
+		// worker 创建 bubble，会返回 "Timeout waiting for bubble creation"，反复失败
+		// 后 Cursor 判定任务异常并触发 user_stopped_generation 取消整个委派。
+		if trimmedName == "Task" {
+			continue
+		}
+		// Shell 系列工具依赖 Cursor 客户端的终端交互（bubble/stream）。委派 worker
+		// 通过 cursor bridge 转发 Shell 时，客户端只回 start 事件、不回 stdout/exit，
+		// worker 会永久卡在工具执行上，主请求的 Task 在 Cursor 中显示为 stopped。
+		// 委派 worker 只能使用纯查询/只读工具和 MCP 工具。
+		if delegatedToolNeedsCursorInteraction(trimmedName) {
+			continue
+		}
+		permissionToolName := trimmedName
+		if _, isMCPTool := mcpToolNames[trimmedName]; isMCPTool {
 			permissionToolName = "CallMcpTool"
 		}
 		if !delegatedToolAllowed(permissions, permissionToolName) {
@@ -379,6 +409,18 @@ func filterDelegatedTools(tools []json.RawMessage, permissions map[string]bool, 
 		filtered = append(filtered, append(json.RawMessage(nil), raw...))
 	}
 	return filtered, nil
+}
+
+// delegatedToolNeedsCursorInteraction 判断工具是否需要 Cursor 客户端的交互执行
+// （终端、流式输出、编辑确认等）。委派 worker 在 byok 内运行，这些工具经 cursor
+// bridge 转发后无法可靠闭环，会卡住 worker。
+func delegatedToolNeedsCursorInteraction(toolName string) bool {
+	switch strings.TrimSpace(toolName) {
+	case "Shell", "AwaitShell", "WriteShellStdin", "ForceBackgroundShell", "ForceBackgroundSubagent":
+		return true
+	default:
+		return false
+	}
 }
 
 func delegatedToolAllowed(permissions map[string]bool, toolName string) bool {
@@ -472,6 +514,12 @@ func (service *Service) executeLocalDelegatedTool(ctx context.Context, request d
 		runtimeScope := service.mcpRuntime.ResolveScope(preferredRuntimeScope, serverID)
 		result, err := service.mcpRuntime.ReadResource(ctx, runtimeScope, serverID, strings.TrimSpace(args.URI))
 		return marshalDelegatedToolResult(result, err)
+	case "Read", "Ls", "Glob", "Grep", "ReadLints":
+		// 纯查询/只读工具在 byok 内本地执行，不派发给 Cursor 客户端。
+		// 委派 worker 的工具经 cursor bridge 转发依赖客户端应答；委派期间的
+		// 客户端 bubble 结束（或进入等待态）后客户端不再应答这些 exec，worker
+		// 会永久卡在工具执行上，委派永不收尾。本地执行可彻底消除该依赖。
+		return service.executeLocalQueryTool(ctx, request, invocation)
 	default:
 		if service.cursorDelegation == nil || service.cursorDelegation.cursor == nil {
 			return "", fmt.Errorf("tool %q requires the Cursor delegated exec bridge", strings.TrimSpace(invocation.ToolName))
@@ -482,6 +530,414 @@ func (service *Service) executeLocalDelegatedTool(ctx context.Context, request d
 		}
 		return result.Output, nil
 	}
+}
+
+const (
+	localQueryReadMaxBytes     = 64 * 1024
+	localQueryGrepMaxBytes     = 512 * 1024
+	localQueryGrepMaxMatches   = 200
+	localQueryGrepMaxOutputKiB = 32
+	// localQueryGrepMaxVisited 限制单次 Grep 遍历的文件数，防止超大仓库
+	// 造成持续的 CPU/IO 消耗（匹配数上限之外的第二道护栏）。
+	localQueryGrepMaxVisited = 20000
+)
+
+// executeLocalQueryTool 在 byok 进程内本地执行委派 worker 的只读查询工具，
+// 返回给模型的文本结果。支持 Read/Ls/Glob/Grep/ReadLints。
+//
+// 安全边界：所有路径都约束在 workspace 内（constrainWorkspacePath）。旧的
+// cursor bridge 路径依赖 Cursor 客户端的权限层；本地执行必须自己约束，否则
+// worker（外部模型）可以用 .. 或绝对路径读取 byok 进程可读的任何文件。
+func (service *Service) executeLocalQueryTool(ctx context.Context, request delegation.TaskRequest, invocation runtimecore.ToolInvocation) (string, error) {
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+	}
+	toolName := strings.TrimSpace(invocation.ToolName)
+	args, err := runtimecore.DecodeArgsMap(invocation.ArgsJSON)
+	if err != nil {
+		return "", fmt.Errorf("decode %s args: %w", toolName, err)
+	}
+	workspace := strings.TrimSpace(request.WorkspaceHint)
+	if workspace == "" {
+		workspace = "."
+	}
+	readArg := func(names ...string) string {
+		for _, name := range names {
+			if value := strings.TrimSpace(runtimecore.ReadStringArg(args, name)); value != "" {
+				return value
+			}
+		}
+		return ""
+	}
+	switch toolName {
+	case "Read":
+		target, err := constrainWorkspacePath(workspace, readArg("path", "Path", "file_path", "filePath", "file"))
+		if err != nil {
+			return "", err
+		}
+		content, err := os.ReadFile(target)
+		if err != nil {
+			return "", err
+		}
+		truncated := false
+		if len(content) > localQueryReadMaxBytes {
+			content = content[:localQueryReadMaxBytes]
+			truncated = true
+		}
+		result := fmt.Sprintf("文件内容（%s）：\n%s", target, string(content))
+		if truncated {
+			result += "\n...[truncated]"
+		}
+		return result, nil
+	case "Ls":
+		target, err := constrainWorkspacePath(workspace, readArg("path", "Path", "dir", "directory"))
+		if err != nil {
+			return "", err
+		}
+		entries, err := os.ReadDir(target)
+		if err != nil {
+			return "", err
+		}
+		lines := make([]string, 0, len(entries))
+		for _, entry := range entries {
+			name := entry.Name()
+			if entry.IsDir() {
+				name += "/"
+			}
+			lines = append(lines, name)
+		}
+		if len(lines) == 0 {
+			return "（目录为空）", nil
+		}
+		return strings.Join(lines, "\n"), nil
+	case "Glob":
+		pattern := readArg("pattern", "glob", "Path", "path")
+		if pattern == "" {
+			return "", fmt.Errorf("glob pattern is required")
+		}
+		pattern, err = constrainGlobPattern(workspace, pattern)
+		if err != nil {
+			return "", err
+		}
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			return "", err
+		}
+		matches = constrainGlobMatches(workspace, matches)
+		if len(matches) == 0 {
+			return "（无匹配）", nil
+		}
+		return strings.Join(matches, "\n"), nil
+	case "Grep":
+		return localQueryGrep(ctx, args, workspace, readArg)
+	case "ReadLints":
+		return "（本地委派 worker 不提供 lint 诊断数据）", nil
+	default:
+		return "", fmt.Errorf("unsupported local query tool %q", toolName)
+	}
+}
+
+// constrainWorkspacePath 把目标路径解析到 workspace 内；使用绝对路径或 ..
+// 逃逸 workspace 的一律拒绝，防止委派 worker 经本地执行读取工作区外文件。
+// 仅做词法约束不够：workspace 内的 symlink 可以指向工作区外（monorepo、
+// pnpm/current 链接等），因此对已存在的路径执行 EvalSymlinks 后再校验真实
+// 目标仍在 workspace 内。
+func constrainWorkspacePath(workspace string, value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		value = "."
+	}
+	base := resolveWorkspaceBase(workspace)
+	if !filepath.IsAbs(value) {
+		value = filepath.Join(base, value)
+	}
+	resolved := filepath.Clean(value)
+	if err := ensureResolvedInsideWorkspace(base, resolved); err != nil {
+		return "", err
+	}
+	// 路径存在时解析符号链接后重新校验（不存在时保留原路径，后续
+	// os.ReadFile/os.ReadDir 会返回 not found）。
+	if evaluated, evalErr := filepath.EvalSymlinks(resolved); evalErr == nil {
+		if err := ensureResolvedInsideWorkspace(base, evaluated); err != nil {
+			return "", err
+		}
+		resolved = evaluated
+	}
+	return resolved, nil
+}
+
+// resolveWorkspaceBase 解析 workspace 根目录的真实路径：根目录本身可能是
+// symlink（macOS /tmp、symlinked home 等），先用 EvalSymlinks 解析，确保
+// 后续 Rel 校验在真实路径空间内进行，避免 symlinked 根导致所有路径误报
+// "path escapes workspace"。
+func resolveWorkspaceBase(workspace string) string {
+	base, err := filepath.Abs(workspace)
+	if err != nil {
+		return workspace
+	}
+	if evaluated, evalErr := filepath.EvalSymlinks(base); evalErr == nil {
+		base = evaluated
+	}
+	return base
+}
+
+// ensureResolvedInsideWorkspace 校验解析后的路径仍位于 workspace（base）内。
+func ensureResolvedInsideWorkspace(base string, resolved string) error {
+	rel, err := filepath.Rel(base, resolved)
+	if err != nil {
+		return fmt.Errorf("path outside workspace: %s", resolved)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("path escapes workspace: %s", resolved)
+	}
+	return nil
+}
+
+// constrainGlobPattern 把 glob pattern 解析到 workspace 内。先 Clean（消除
+// 通配符前后的 .. 段，避免 */../../../etc 之类逃逸），再取通配符前的静态
+// 前缀做工作区约束判断，最后返回清理后的完整 pattern。
+func constrainGlobPattern(workspace string, pattern string) (string, error) {
+	pattern = strings.TrimSpace(pattern)
+	if pattern == "" {
+		return "", fmt.Errorf("glob pattern is required")
+	}
+	base := resolveWorkspaceBase(workspace)
+	if !filepath.IsAbs(pattern) {
+		pattern = filepath.Join(base, pattern)
+	}
+	cleaned := filepath.Clean(pattern)
+	static := cleaned
+	if idx := strings.IndexAny(static, "*?["); idx >= 0 {
+		static = static[:idx]
+	}
+	if static == "" {
+		static = "."
+	}
+	if _, err := constrainWorkspacePath(base, static); err != nil {
+		return "", err
+	}
+	return cleaned, nil
+}
+
+// constrainGlobMatches 过滤 glob 匹配结果：解析符号链接后仍在 workspace 内
+// 的才保留，防止 workspace 内 symlink 指向工作区外文件被枚举/读取。
+func constrainGlobMatches(workspace string, matches []string) []string {
+	if len(matches) == 0 {
+		return matches
+	}
+	base := resolveWorkspaceBase(workspace)
+	filtered := matches[:0]
+	for _, match := range matches {
+		resolved := filepath.Clean(match)
+		if evaluated, evalErr := filepath.EvalSymlinks(resolved); evalErr == nil {
+			resolved = evaluated
+		}
+		if ensureResolvedInsideWorkspace(base, resolved) == nil {
+			filtered = append(filtered, match)
+		}
+	}
+	return filtered
+}
+
+// localQueryGrep 在 workspace 内递归执行 Grep：正则匹配文件内容，
+// 输出 文件:行号:行内容（默认）或仅文件列表（files_with_matches）。
+func localQueryGrep(ctx context.Context, args map[string]any, workspace string, readArg func(...string) string) (string, error) {
+	pattern := readArg("pattern", "regex", "regexp")
+	if pattern == "" {
+		return "", fmt.Errorf("grep pattern is required")
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return "", fmt.Errorf("invalid grep pattern: %w", err)
+	}
+	outputMode := strings.ToLower(strings.TrimSpace(readArg("output_mode", "outputMode", "mode")))
+	includeGlob := readArg("glob", "include")
+	var includeRe *regexp.Regexp
+	if includeGlob != "" && includeGlob != "*" {
+		includeRe, err = regexp.Compile(globToRegex(includeGlob))
+		if err != nil {
+			return "", fmt.Errorf("invalid grep glob: %w", err)
+		}
+	}
+	target := strings.TrimSpace(readArg("path", "Path"))
+	if target == "" {
+		target = workspace
+	}
+	target, err = constrainWorkspacePath(workspace, target)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		// 单文件 grep。
+		return grepFile(target, target, re, outputMode)
+	}
+	var builder strings.Builder
+	matchCount := 0
+	visitedFiles := 0
+	walkErr := filepath.WalkDir(target, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return nil
+		}
+		if ctx != nil {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+		}
+		if entry.IsDir() {
+			if path != target && localQueryGrepSkipDir(entry.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		// 不跟随符号链接：workspace 内的 symlink 可能指向工作区外文件，
+		// 直接跳过（文件与目录 symlink 都不读取）。
+		if entry.Type()&os.ModeSymlink != 0 {
+			if path != target {
+				return nil
+			}
+		}
+		// include glob 按相对根目录的斜杠路径匹配，避免绝对路径分隔符差异。
+		if includeRe != nil {
+			rel, relErr := filepath.Rel(target, path)
+			if relErr != nil || !includeRe.MatchString(filepath.ToSlash(rel)) {
+				return nil
+			}
+		}
+		if matchCount >= localQueryGrepMaxMatches {
+			return nil
+		}
+		visitedFiles++
+		if visitedFiles > localQueryGrepMaxVisited {
+			return fmt.Errorf("grep visited file limit reached (%d)", localQueryGrepMaxVisited)
+		}
+		lines, err := grepFile(path, target, re, outputMode)
+		if err != nil {
+			return nil
+		}
+		if lines != "" {
+			if builder.Len() > 0 {
+				builder.WriteString("\n")
+			}
+			builder.WriteString(lines)
+			matchCount++
+		}
+		return nil
+	})
+	if walkErr != nil {
+		if ctx != nil && ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		return "", walkErr
+	}
+	if builder.Len() == 0 {
+		return "（无匹配）", nil
+	}
+	return truncateGrepOutput(builder.String()), nil
+}
+
+func grepFile(path string, root string, re *regexp.Regexp, outputMode string) (string, error) {
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() || info.Size() > localQueryGrepMaxBytes {
+		return "", nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", nil
+	}
+	if len(data) > localQueryGrepMaxBytes {
+		data = data[:localQueryGrepMaxBytes]
+	}
+	rel := path
+	if rootRel, relErr := filepath.Rel(root, path); relErr == nil {
+		rel = rootRel
+	}
+	var builder strings.Builder
+	for lineIndex, line := range strings.Split(string(data), "\n") {
+		if re.MatchString(line) {
+			if outputMode == "files_with_matches" || outputMode == "files" {
+				builder.WriteString(rel)
+				builder.WriteString("\n")
+				break
+			}
+			builder.WriteString(rel)
+			builder.WriteString(":")
+			builder.WriteString(fmt.Sprintf("%d:", lineIndex+1))
+			builder.WriteString(line)
+			builder.WriteString("\n")
+		}
+	}
+	return strings.TrimRight(builder.String(), "\n"), nil
+}
+
+func localQueryGrepSkipDir(name string) bool {
+	switch name {
+	case ".git", "node_modules", "dist", "build", "logs", "runtime", ".venv", "venv", "__pycache__", ".reasonix", ".superpowers":
+		return true
+	default:
+		return false
+	}
+}
+
+func globToRegex(pattern string) string {
+	var builder strings.Builder
+	builder.WriteString("(?i)^")
+	parts := strings.Split(pattern, "/")
+	skipSep := false
+	for index, part := range parts {
+		if part == "**" {
+			// ** 段：跨目录递归。index>0 时先保留它前面的分隔符（避免
+			// a/**/b 误匹配 ab）；非末段时把 ** 及后续分隔符合并为
+			// (?:.*/)?（可匹配零目录深度），末段 ** 匹配任意剩余路径。
+			if index > 0 {
+				builder.WriteString("/")
+			}
+			if index < len(parts)-1 {
+				builder.WriteString("(?:.*/)?")
+				skipSep = true
+			} else {
+				builder.WriteString(".*")
+			}
+			continue
+		}
+		if index > 0 && !skipSep {
+			builder.WriteString("/")
+		}
+		skipSep = false
+		for i := 0; i < len(part); i++ {
+			switch part[i] {
+			case '*':
+				builder.WriteString("[^/]*")
+			case '?':
+				builder.WriteString("[^/]")
+			default:
+				builder.WriteString(regexp.QuoteMeta(string(part[i])))
+			}
+		}
+	}
+	builder.WriteString("$")
+	return builder.String()
+}
+
+func truncateGrepOutput(text string) string {
+	const maxKiB = localQueryGrepMaxOutputKiB * 1024
+	if len(text) <= maxKiB {
+		return text
+	}
+	lines := strings.Split(text, "\n")
+	if len(lines) > localQueryGrepMaxMatches {
+		lines = lines[:localQueryGrepMaxMatches]
+	}
+	joined := strings.Join(lines, "\n")
+	if len(joined) > maxKiB {
+		joined = joined[:maxKiB]
+	}
+	return joined + "\n...[truncated]"
 }
 
 func marshalDelegatedToolResult(value any, err error) (string, error) {

@@ -1228,7 +1228,12 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		}
 		if effort := strings.TrimSpace(req.ReasoningEffort); effort != "" {
 			requestBody.Reasoning = &openAIResponsesReasoning{Effort: effort}
-			requestBody.Include = []string{"reasoning.encrypted_content"}
+			// 同时请求明文 reasoning.summary 与 reasoning.encrypted_content：
+			// - reasoning.summary 让 provider 返回可读思维链（response.reasoning_summary_text.delta
+			//   走 thinking_delta 转发，Cursor 显示思维链而非 "Thinking is encrypted"）。
+			// - reasoning.encrypted_content 保留 reasoning signature，供工具调用（委派 worker）
+			//   的 prefix-cache 稳定，避免缓存命中率下降。
+			requestBody.Include = []string{"reasoning.summary", "reasoning.encrypted_content"}
 		}
 		body = requestBody
 	} else {

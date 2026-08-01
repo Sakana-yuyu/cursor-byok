@@ -147,15 +147,15 @@ type Scheduler struct {
 }
 
 type taskState struct {
-	request    TaskRequest
-	snapshot   TaskSnapshot
-	result     TaskResult
-	contract   *SupervisionTaskContract
-	checkpoint *WorkerCheckpoint
-	counters   SupervisionCounters
-	ctx        context.Context
-	cancel     context.CancelFunc
-	runnerDone bool
+	request                 TaskRequest
+	snapshot                TaskSnapshot
+	result                  TaskResult
+	contract                *SupervisionTaskContract
+	checkpoint              *WorkerCheckpoint
+	counters                SupervisionCounters
+	ctx                     context.Context
+	cancel                  context.CancelFunc
+	runnerDone              bool
 	lastEffectiveProgressAt time.Time
 }
 
@@ -242,11 +242,11 @@ func (s *Scheduler) Submit(request TaskRequest) (string, error) {
 		snapshot.SupervisionStatus = SupervisionStatusPlanned
 	}
 	state := &taskState{
-		request:  request,
-		snapshot: snapshot,
-		contract: contract,
-		ctx:      taskCtx,
-		cancel:   taskCancel,
+		request:                 request,
+		snapshot:                snapshot,
+		contract:                contract,
+		ctx:                     taskCtx,
+		cancel:                  taskCancel,
 		lastEffectiveProgressAt: now,
 	}
 	s.tasks[request.ID] = state
@@ -437,25 +437,30 @@ func (s *Scheduler) PublishCheckpoint(taskID string, checkpoint WorkerCheckpoint
 	}
 	checkpoint = normalizeWorkerCheckpoint(checkpoint)
 	if checkpoint.TaskID == "" || checkpoint.TaskID != taskID {
+		log.Printf("delegation checkpoint rejected task_id=%s reason=task_id_mismatch checkpoint_task_id=%s aggregate_id=%s phase=%s step=%d", taskID, strings.TrimSpace(checkpoint.TaskID), strings.TrimSpace(checkpoint.AggregateID), strings.TrimSpace(string(checkpoint.Phase)), checkpoint.Step)
 		return false
 	}
 	s.mu.Lock()
 	state, ok := s.tasks[taskID]
 	if !ok || s.closed || isTerminalStatus(state.snapshot.Status) || state.contract == nil {
 		s.mu.Unlock()
+		log.Printf("delegation checkpoint rejected task_id=%s reason=state_unavailable found=%t closed=%t terminal=%t has_contract=%t", taskID, ok, s.closed, ok && isTerminalStatus(state.snapshot.Status), ok && state.contract != nil)
 		return false
 	}
 	contract := state.contract
 	if strings.TrimSpace(contract.TaskID) == "" || checkpoint.TaskID != contract.TaskID {
 		s.mu.Unlock()
+		log.Printf("delegation checkpoint rejected task_id=%s reason=contract_task_mismatch contract_task_id=%s checkpoint_task_id=%s aggregate_id=%s", taskID, strings.TrimSpace(contract.TaskID), strings.TrimSpace(checkpoint.TaskID), strings.TrimSpace(checkpoint.AggregateID))
 		return false
 	}
 	if strings.TrimSpace(contract.AggregateID) == "" || checkpoint.AggregateID == "" || checkpoint.AggregateID != contract.AggregateID {
 		s.mu.Unlock()
+		log.Printf("delegation checkpoint rejected task_id=%s reason=aggregate_mismatch contract_aggregate_id=%s checkpoint_aggregate_id=%s", taskID, strings.TrimSpace(contract.AggregateID), strings.TrimSpace(checkpoint.AggregateID))
 		return false
 	}
 	if checkpoint.Round > 0 && checkpoint.Round != contract.Round {
 		s.mu.Unlock()
+		log.Printf("delegation checkpoint rejected task_id=%s reason=round_mismatch contract_round=%d checkpoint_round=%d aggregate_id=%s", taskID, contract.Round, checkpoint.Round, strings.TrimSpace(checkpoint.AggregateID))
 		return false
 	}
 	if checkpoint.Round <= 0 && contract.Round > 0 {
@@ -479,6 +484,7 @@ func (s *Scheduler) PublishCheckpoint(taskID string, checkpoint WorkerCheckpoint
 	state.snapshot.ProgressSummary = checkpoint.ProgressSummary
 	s.publishLocked(&state.snapshot)
 	s.mu.Unlock()
+	log.Printf("delegation checkpoint accepted task_id=%s aggregate_id=%s phase=%s round=%d step=%d effective_progress_at=%s", taskID, strings.TrimSpace(checkpoint.AggregateID), strings.TrimSpace(string(checkpoint.Phase)), checkpoint.Round, checkpoint.Step, checkpoint.EffectiveProgressAt.UTC().Format(time.RFC3339Nano))
 	return true
 }
 
@@ -497,9 +503,11 @@ func (s *Scheduler) MarkEffectiveProgress(taskID string) bool {
 	defer s.mu.Unlock()
 	state, ok := s.tasks[taskID]
 	if !ok || isTerminalStatus(state.snapshot.Status) {
+		log.Printf("delegation effective progress rejected task_id=%s found=%t terminal=%t", taskID, ok, ok && isTerminalStatus(state.snapshot.Status))
 		return false
 	}
 	state.lastEffectiveProgressAt = time.Now().UTC()
+	log.Printf("delegation effective progress accepted task_id=%s status=%s", taskID, strings.TrimSpace(string(state.snapshot.Status)))
 	return true
 }
 
