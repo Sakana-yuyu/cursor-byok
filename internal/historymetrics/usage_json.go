@@ -29,6 +29,15 @@ type usageFileEvent struct {
 	Status           string    `json:"status"`
 	At               time.Time `json:"at"`
 	Model            string    `json:"model"`
+	Role             string    `json:"role"`
+	ParentModel      string    `json:"parent_model"`
+	LogicalModel     string    `json:"logical_model"`
+	ProviderModel    string    `json:"provider_model"`
+	ModelGroupID     string    `json:"model_group_id"`
+	TaskID           string    `json:"task_id"`
+	ExecutionMode    string    `json:"execution_mode"`
+	SupervisorModel  string    `json:"supervisor_model"`
+	ReviewerModel    string    `json:"reviewer_model"`
 	Provider         string    `json:"provider"`
 	BaseURL          string    `json:"base_url"`
 	GroupName        string    `json:"group_name"`
@@ -90,6 +99,15 @@ func LoadRecentRequestMetrics(path string, limit int, offset int, includeCacheWr
 			Status:           strings.TrimSpace(event.Status),
 			At:               event.At,
 			Model:            model,
+			Role:             strings.TrimSpace(event.Role),
+			ParentModel:     strings.TrimSpace(event.ParentModel),
+			LogicalModel:    strings.TrimSpace(event.LogicalModel),
+			ProviderModel:   strings.TrimSpace(event.ProviderModel),
+			ModelGroupID:    strings.TrimSpace(event.ModelGroupID),
+			TaskID:          strings.TrimSpace(event.TaskID),
+			ExecutionMode:   strings.TrimSpace(event.ExecutionMode),
+			SupervisorModel: strings.TrimSpace(event.SupervisorModel),
+			ReviewerModel:   strings.TrimSpace(event.ReviewerModel),
 			Provider:         provider,
 			BaseURL:          baseURL,
 			GroupName:        strings.TrimSpace(event.GroupName),

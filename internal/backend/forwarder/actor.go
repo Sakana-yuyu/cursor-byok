@@ -1,6 +1,7 @@
 package forwarder
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -721,6 +722,11 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 		stream.ProviderUsage = turnUsageSnapshot{
 			Provider:          event.Provider,
 			Model:             event.Model,
+			Role:              "parent",
+			ParentModel:       "",
+			LogicalModel:      stream.ModelName,
+			ProviderModel:     event.Model,
+			ExecutionMode:     "parent",
 			BaseURL:           event.BaseURL,
 			GroupName:         event.GroupName,
 			InputTokens:       event.InputTokens,
@@ -826,6 +832,7 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 	finishReason := stream.ProviderFinishReason
 	usage := stream.ProviderUsage
 	hadToolInvocation := stream.ToolInvocationCount > 0
+	providerPass := stream.ProviderPassCount
 	terminalToolInvocation := stream.ProviderTerminalToolInvocation
 	existingCompletion := stream.PendingProviderCompletion
 	stream.ProviderActive = false
@@ -866,6 +873,27 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 			if recovered, err := service.recoverFromMaxTokensExceeded(stream, requestID, payload.Err); err != nil {
 				return service.failStreamIfNonTerminal(stream, "unknown", err)
 			} else if recovered {
+				return nil
+			}
+		}
+		if reason := classifyProvider400Recovery(payload.Err); reason != "" &&
+			providerPass == 1 &&
+			strings.TrimSpace(accumulatedText) == "" &&
+			strings.TrimSpace(accumulatedReasoning) == "" &&
+			strings.TrimSpace(accumulatedReasoningSignature) == "" &&
+			len(accumulatedReasoningSummary) == 0 &&
+			!hadToolInvocation {
+			if service.claimProvider400Recovery(requestID, turnSeq) {
+				service.debug.LogRuntime(context.Background(), requestID, conversationID, "provider_400_recovery_triggered", map[string]any{
+					"reason":        string(reason),
+					"provider_pass": providerPass,
+					"attempt_limit": 1,
+					"condition":     "pre_output_and_no_tool_invocation",
+				})
+				log.Printf("forwarder provider 400 recovery request_id=%s reason=%s pass=%d", strings.TrimSpace(requestID), string(reason), providerPass)
+				if err := service.requestProviderAction(stream, providerActionResume); err != nil {
+					return service.failStreamIfNonTerminal(stream, "unknown", err)
+				}
 				return nil
 			}
 		}
@@ -1182,6 +1210,14 @@ func (service *Service) handleTimerEvent(stream *ActiveStream, payload *streamTi
 		status := stream.Status
 		stream.mu.Unlock()
 		if subscriberCount > 0 || isTerminalStreamStatus(status) {
+			return nil
+		}
+		// A delegated aggregate is independently supervised and can outlive a
+		// transient RunSSE disconnect. Cancelling the parent here cancels every
+		// worker despite active provider/tool progress. Its own watchdog remains
+		// responsible for a genuine abandoned aggregate.
+		if hasActiveDelegationAggregate(stream) {
+			log.Printf("forwarder orphan cancel deferred for active delegation request_id=%s", strings.TrimSpace(stream.RequestID))
 			return nil
 		}
 		return service.handleCancelIntent(InboundIntent{

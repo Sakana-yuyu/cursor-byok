@@ -908,6 +908,7 @@ func coalesceInterleavedReplayToolBatches(messages []modeladapter.Message) []mod
 		batch := message
 		toolResults := make(map[string]modeladapter.Message)
 		toolResultOrder := make([]string, 0)
+		deferredMessages := make([]modeladapter.Message, 0)
 		changed := false
 		nextIndex := index + 1
 		for nextIndex < len(messages) {
@@ -935,6 +936,16 @@ func coalesceInterleavedReplayToolBatches(messages []modeladapter.Message) []mod
 				nextIndex++
 				continue
 			}
+			// A provider can stream ordinary assistant text after emitting a batch
+			// of tool calls while some fast local execs are still completing. Keep
+			// scanning through that text so every function_call_output is placed
+			// next to its function_call before the text is replayed. Otherwise the
+			// later dangling-call cleanup removes the call but leaves its output.
+			if strings.TrimSpace(next.Role) == "assistant" && len(next.ToolCalls) == 0 {
+				deferredMessages = append(deferredMessages, next)
+				nextIndex++
+				continue
+			}
 			break
 		}
 
@@ -959,6 +970,7 @@ func coalesceInterleavedReplayToolBatches(messages []modeladapter.Message) []mod
 			}
 			normalized = append(normalized, toolResults[toolCallID])
 		}
+		normalized = append(normalized, deferredMessages...)
 		index = nextIndex - 1
 	}
 	return normalized

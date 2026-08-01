@@ -20,8 +20,10 @@ import (
 const defaultCursorAdapterRetention = 45 * time.Minute
 
 type CursorPublisher func(requestID string, message *agentv1.AgentServerMessage) error
+type CursorProgressPublisher func(parentRequestID string, pending runtimecore.PendingExec, message *agentv1.ExecClientMessage, result execbridge.ExecApplyResult)
 
 type checkpointPublisherContextKey struct{}
+type progressPublisherContextKey struct{}
 
 func withWorkerCheckpointPublisher(ctx context.Context, publish func(WorkerCheckpoint) bool) context.Context {
 	if ctx == nil {
@@ -42,6 +44,29 @@ func PublishWorkerCheckpoint(ctx context.Context, checkpoint WorkerCheckpoint) b
 		return false
 	}
 	return publish(checkpoint)
+}
+
+func withWorkerProgressPublisher(ctx context.Context, publish func() bool) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if publish == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, progressPublisherContextKey{}, publish)
+}
+
+// MarkWorkerProgress reports a real provider/tool event to the scheduler.
+// Callers must not use it for transport heartbeats or periodic summaries.
+func MarkWorkerProgress(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	publish, ok := ctx.Value(progressPublisherContextKey{}).(func() bool)
+	if !ok || publish == nil {
+		return false
+	}
+	return publish()
 }
 
 func PublishTaskCheckpoint(ctx context.Context, request TaskRequest, phase SupervisionStatus, step int, recentTools, changedFiles []string, progress, blocker string) bool {
@@ -79,6 +104,7 @@ func PublishTaskCheckpoint(ctx context.Context, request TaskRequest, phase Super
 type CursorAdapter struct {
 	execBridge execbridge.ExecBridge
 	publish    CursorPublisher
+	progress   CursorProgressPublisher
 	retention  time.Duration
 	now        func() time.Time
 	sequence   atomic.Uint64
@@ -114,9 +140,14 @@ type cursorExecTombstone struct {
 }
 
 func NewCursorAdapter(bridge execbridge.ExecBridge, publish CursorPublisher) *CursorAdapter {
+	return NewCursorAdapterWithProgress(bridge, publish, nil)
+}
+
+func NewCursorAdapterWithProgress(bridge execbridge.ExecBridge, publish CursorPublisher, progress CursorProgressPublisher) *CursorAdapter {
 	return &CursorAdapter{
 		execBridge:          bridge,
 		publish:             publish,
+		progress:            progress,
 		retention:           defaultCursorAdapterRetention,
 		now:                 func() time.Time { return time.Now().UTC() },
 		waitersByExecID:     make(map[string]*cursorTaskWaiter),
@@ -232,6 +263,9 @@ func (adapter *CursorAdapter) ConsumeExecMessage(parentRequestID string, message
 	if waiter.expectSubagent && message.GetSubagentResult() == nil {
 		if message.GetShellStream() != nil {
 			adapter.observeExecProgress(waiter, message)
+			if adapter.hasEffectiveProgress(message, execbridge.ExecApplyResult{}) {
+				adapter.publishEffectiveProgress(waiter, message, execbridge.ExecApplyResult{})
+			}
 			return true
 		}
 		err := fmt.Errorf("delegated cursor exec returned unexpected payload")
@@ -248,6 +282,9 @@ func (adapter *CursorAdapter) ConsumeExecMessage(parentRequestID string, message
 		result.Output = err.Error()
 		adapter.completeWaiterWithCheckpoint(waiter, result, SupervisionStatusFailed, "Cursor 子代理执行失败", err.Error())
 		return true
+	}
+	if adapter.hasEffectiveProgress(message, applyResult) {
+		adapter.publishEffectiveProgress(waiter, message, applyResult)
 	}
 	if !applyResult.IsTerminal {
 		return true
@@ -274,6 +311,40 @@ func (adapter *CursorAdapter) ConsumeExecMessage(parentRequestID string, message
 		adapter.completeWaiterWithCheckpoint(waiter, result, SupervisionStatusCompleted, "Cursor 子代理已完成", "")
 	}
 	return true
+}
+
+func (adapter *CursorAdapter) publishEffectiveProgress(waiter *cursorTaskWaiter, message *agentv1.ExecClientMessage, result execbridge.ExecApplyResult) {
+	if adapter == nil || waiter == nil || adapter.progress == nil || message == nil {
+		return
+	}
+	adapter.progress(waiter.parentRequestID, adapter.pendingSnapshot(waiter), message, result)
+}
+
+func (adapter *CursorAdapter) hasEffectiveProgress(message *agentv1.ExecClientMessage, result execbridge.ExecApplyResult) bool {
+	if message == nil {
+		return false
+	}
+	if result.ShellOutputDelta != nil || message.GetSubagentResult() != nil {
+		return true
+	}
+	if message.GetShellStream() != nil {
+		switch message.GetShellStream().GetEvent().(type) {
+		case *agentv1.ShellStream_Stdout, *agentv1.ShellStream_Stderr, *agentv1.ShellStream_Start, *agentv1.ShellStream_Exit, *agentv1.ShellStream_Rejected, *agentv1.ShellStream_PermissionDenied, *agentv1.ShellStream_Backgrounded:
+			return true
+		default:
+			return false
+		}
+	}
+	return message.GetReadResult() != nil ||
+		message.GetWriteResult() != nil ||
+		message.GetDeleteResult() != nil ||
+		message.GetGrepResult() != nil ||
+		message.GetLsResult() != nil ||
+		message.GetDiagnosticsResult() != nil ||
+		message.GetMcpResult() != nil ||
+		message.GetFetchResult() != nil ||
+		message.GetExecuteHookResult() != nil ||
+		message.GetWriteShellStdinResult() != nil
 }
 
 func (adapter *CursorAdapter) ConsumeExecControl(parentRequestID string, message *agentv1.ExecClientControlMessage) bool {
@@ -331,8 +402,12 @@ func (adapter *CursorAdapter) observeExecProgress(waiter *cursorTaskWaiter, mess
 	switch event := shellStream.GetEvent().(type) {
 	case *agentv1.ShellStream_Stdout:
 		waiter.pending.StdoutBuffer += execbridge.DecodeShellStdout(event.Stdout)
+		MarkWorkerProgress(waiter.checkpointContext)
 	case *agentv1.ShellStream_Stderr:
 		waiter.pending.StderrBuffer += event.Stderr.GetData()
+		MarkWorkerProgress(waiter.checkpointContext)
+	case *agentv1.ShellStream_Start:
+		MarkWorkerProgress(waiter.checkpointContext)
 	}
 	waiter.checkpointStep++
 	step := waiter.checkpointStep
@@ -497,24 +572,19 @@ func (adapter *CursorAdapter) lookupWaiter(parentRequestID, execID string, messa
 	execID = strings.TrimSpace(execID)
 	if execID != "" {
 		if waiter := adapter.waitersByExecID[execID]; waiter != nil {
-			if messageID != 0 && waiter.pending.MessageID != messageID {
-				return nil, false
-			}
 			if strings.TrimSpace(waiter.parentRequestID) != parentRequestID {
 				return nil, false
 			}
+			// exec_id is the stable child execution identity. The bridge message
+			// id is transport metadata and may be zero or reassigned by Cursor.
 			return waiter, false
 		}
 		if entry, ok := adapter.tombstoneExecIDs[execID]; ok {
 			if entry.parentRequestID != parentRequestID {
 				return nil, false
 			}
-			if messageID != 0 {
-				messageEntry, ok := adapter.tombstoneMessageIDs[messageID]
-				if !ok || messageEntry.parentRequestID != parentRequestID {
-					return nil, false
-				}
-			}
+			// A matching exec tombstone is sufficient to absorb a late result;
+			// do not require the stale transport message id to match as well.
 			return nil, true
 		}
 		return nil, false

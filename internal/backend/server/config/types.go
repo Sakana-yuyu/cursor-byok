@@ -71,13 +71,14 @@ type ModelAdapterConfig struct {
 	Pricing                     *ModelPricing `json:"pricing,omitempty" yaml:"pricing,omitempty"`
 	FastMode                    bool          `json:"fastMode,omitempty" yaml:"fastMode,omitempty"`
 	OpenAIServiceTier           string        `json:"openAIServiceTier,omitempty" yaml:"openAIServiceTier,omitempty"`
+	ModelCatalogURL             string        `json:"modelCatalogURL,omitempty" yaml:"modelCatalogURL,omitempty"`
 	// 余额查询（可配置兜底）：全部可选，零值即「未启用」。
 	// 具名 provider 未命中时，若 BalanceQueryURL 非空，则用它发一次 GET 并按点分路径取值。
 	// URL/Headers 支持 {{apiKey}}、{{baseUrl}}、{{accessToken}}、{{userId}} 占位符替换。
 	BalanceQueryURL     string            `json:"balanceQueryURL,omitempty" yaml:"balanceQueryURL,omitempty"`
 	BalanceQueryField   string            `json:"balanceQueryField,omitempty" yaml:"balanceQueryField,omitempty"`
 	BalanceQueryHeaders map[string]string `json:"balanceQueryHeaders,omitempty" yaml:"balanceQueryHeaders,omitempty"`
-	// BalanceProfile 对齐 cc-switch 用量模板：general | newapi | token_plan | custom | official。
+	// BalanceProfile 对齐 cc-switch 用量模板：none | general | newapi | token_plan | custom | official。
 	// auto 仅为旧配置兼容值：后端按 baseURL / 字段推断；official 走具名官方余额接口。
 	BalanceProfile string `json:"balanceProfile,omitempty" yaml:"balanceProfile,omitempty"`
 	// New API 等站点的 Web 访问令牌（与渠道 sk 不同）。
@@ -165,6 +166,10 @@ func DefaultConfig() Config {
 				MaxRetries:     DefaultDelegationMaxRetries,
 				MaxRounds:      DefaultDelegationMaxRounds,
 			},
+			VisionDelegation: VisionDelegationConfig{
+				Enabled: false,
+				Mode:    VisionModeAuto,
+			},
 		},
 	}
 }
@@ -245,6 +250,7 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			Pricing:                   item.Pricing,
 			FastMode:                  item.FastMode,
 			OpenAIServiceTier:         strings.TrimSpace(item.OpenAIServiceTier),
+			ModelCatalogURL:           strings.TrimSpace(item.ModelCatalogURL),
 			BalanceQueryURL:           strings.TrimSpace(item.BalanceQueryURL),
 			BalanceQueryField:         strings.TrimSpace(item.BalanceQueryField),
 			BalanceQueryHeaders:       item.BalanceQueryHeaders,
@@ -334,6 +340,9 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			}
 			if existing.Pricing == nil {
 				existing.Pricing = next.Pricing
+			}
+			if existing.ModelCatalogURL == "" {
+				existing.ModelCatalogURL = next.ModelCatalogURL
 			}
 			if existing.SupplierID == "" {
 				existing.SupplierID = next.SupplierID

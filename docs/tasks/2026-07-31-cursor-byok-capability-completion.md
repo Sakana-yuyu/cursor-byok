@@ -53,7 +53,7 @@
 - 在现有 Multitask 之上增加 SupervisorCoordinator：高能力模型负责复核、纠偏、重试、改派、升级和熔断，worker 继续复用 Cursor 或本地委派适配器执行任务。
 - 主 Agent 只接收 pending exec 与异步状态事件，不同步等待 supervisor 或 worker；单任务失败、取消和超时不会阻塞兄弟任务。
 - worker 检查点使用 scheduler 单调序列和 `EffectiveProgressAt` 区分真实进展与 ShellStream 心跳；review 期间的终态会立即收口，普通流式分片不会造成重复复核或饥饿。
-- Cursor exec 结果按 parent request、exec ID 和 message ID 联合匹配；active waiter 与 45 分钟 tombstone 均拒绝跨请求晚到结果。
+- Cursor exec 结果按 parent request 隔离，并优先按稳定的 exec ID 匹配；只有回包缺少 exec ID 时才按 message ID fallback。message ID 漂移不会丢弃仍 pending 的 exec；active waiter 与 45 分钟 tombstone 仍拒绝跨请求晚到结果。控制面回包协议只有 message ID，因此继续严格按 message ID 匹配。
 - 本地 worker 从结构化 Write、PatchEdit、Edit、Delete 和 GenerateImage 参数提取 changed-file 证据；路径统一脱敏，Windows 根相对、盘符相对和工作区越界路径保留 `../` 标记。
 - scheduler retention 以当前 live task 数加最大单批 worker 余量计算，不再随历史 snapshot 数无界增长。
 - 委派设置页支持监督开关、监督/复核模型、执行模型组、轮次上限、纠偏/重试上限和改派/升级策略；专用保存链提供 busy、失败回滚、重试和刷新恢复。

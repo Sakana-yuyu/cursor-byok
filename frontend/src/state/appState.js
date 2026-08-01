@@ -315,6 +315,7 @@ export function createEmptyModelAdapter() {
     pricing: null,
     fastMode: false,
     openAIServiceTier: "",
+    modelCatalogURL: "",
     balanceQueryURL: "",
     balanceQueryField: "",
     balanceQueryHeaders: {},
@@ -607,7 +608,7 @@ export function normalizeModelAdapter(source) {
     ? balanceQueryHeadersJSONRaw
     : balanceQueryHeadersToJSON(balanceQueryHeaders);
   const balanceProfileRaw = asString(raw.balanceProfile ?? raw.balance_profile).trim().toLowerCase();
-  const balanceProfile = ["auto", "general", "newapi", "token_plan", "custom", "official"].includes(balanceProfileRaw)
+  const balanceProfile = ["auto", "none", "general", "newapi", "token_plan", "custom", "official"].includes(balanceProfileRaw)
     ? balanceProfileRaw
     : "auto";
   const balanceAccessToken = asString(raw.balanceAccessToken ?? raw.balance_access_token).trim();
@@ -615,6 +616,7 @@ export function normalizeModelAdapter(source) {
   const balanceCodingPlanProvider = asString(
     raw.balanceCodingPlanProvider ?? raw.balance_coding_plan_provider,
   ).trim().toLowerCase();
+  const modelCatalogURL = asString(raw.modelCatalogURL ?? raw.model_catalog_url).trim();
   return {
     id: asString(raw.id),
     displayName: asString(raw.displayName || raw.name),
@@ -659,6 +661,7 @@ export function normalizeModelAdapter(source) {
     pricing: normalizePricing(raw.pricing),
     fastMode: normalizedType === "openai" ? asBoolean(raw.fastMode ?? raw.fast_mode) : false,
     openAIServiceTier: normalizedType === "openai" ? asString(raw.openAIServiceTier ?? raw.openai_service_tier) : "",
+    modelCatalogURL,
     balanceQueryURL,
     balanceQueryField,
     balanceQueryHeaders,
@@ -673,7 +676,7 @@ export function normalizeModelAdapter(source) {
 export function resolveBalanceProfileForAdapter(source) {
   const adapter = source && typeof source === "object" ? source : {};
   const raw = asString(adapter.balanceProfile).toLowerCase();
-  if (["general", "newapi", "token_plan", "custom", "official"].includes(raw)) {
+  if (["none", "general", "newapi", "token_plan", "custom", "official"].includes(raw)) {
     return raw;
   }
   if (asString(adapter.balanceAccessToken) && asString(adapter.balanceUserID)) {
@@ -709,6 +712,7 @@ function mergeDuplicateModelAdapter(existing, incoming) {
       ? existing.contextWindowTokens
       : incoming.contextWindowTokens,
     pricing: existing.pricing || incoming.pricing,
+    modelCatalogURL: existing.modelCatalogURL || incoming.modelCatalogURL,
     balanceQueryURL: existing.balanceQueryURL || incoming.balanceQueryURL,
     balanceQueryField: existing.balanceQueryField || incoming.balanceQueryField,
     balanceQueryHeaders: existingHasBalanceHeaders ? existing.balanceQueryHeaders : incoming.balanceQueryHeaders,
@@ -905,10 +909,13 @@ function normalizeDelegation(source) {
   });
   const maxConcurrency = asPositiveInteger(raw.maxConcurrency);
   const supervisionRaw = raw.supervision && typeof raw.supervision === "object" ? raw.supervision : {};
+  const visionRaw = raw.visionDelegation && typeof raw.visionDelegation === "object" ? raw.visionDelegation : {};
   const positiveOrDefault = (value, fallback) => {
     const parsed = asPositiveInteger(value);
     return parsed > 0 ? parsed : fallback;
   };
+  const visionMode = asString(visionRaw.mode).toLowerCase();
+  const visionModelID = asString(visionRaw.visionModelID || visionRaw.visionModelId);
   return {
     enabled: asBoolean(raw.enabled, true),
     maxConcurrency: maxConcurrency > 0 ? maxConcurrency : 4,
@@ -924,6 +931,11 @@ function normalizeDelegation(source) {
       allowReassign: asBoolean(supervisionRaw.allowReassign),
       allowEscalate: asBoolean(supervisionRaw.allowEscalate),
       strictUnavailable: asBoolean(supervisionRaw.strictUnavailable),
+    },
+    visionDelegation: {
+      enabled: visionModelID !== "" && asBoolean(visionRaw.enabled),
+      visionModelID,
+      mode: ["auto", "describe", "ocr"].includes(visionMode) ? visionMode : "auto",
     },
   };
 }
@@ -956,9 +968,15 @@ function normalizeDelegationForAdapters(source, adapters) {
   if (supervision.reviewerModelID && !availableModelIDs.has(supervision.reviewerModelID)) {
     supervision.reviewerModelID = "";
   }
+  const visionDelegation = { ...delegation.visionDelegation };
+  if (visionDelegation.visionModelID && !availableModelIDs.has(visionDelegation.visionModelID)) {
+    visionDelegation.visionModelID = "";
+    visionDelegation.enabled = false;
+  }
   return {
     ...delegation,
     supervision,
+    visionDelegation,
     groups,
   };
 }

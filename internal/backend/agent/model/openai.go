@@ -4,9 +4,12 @@ package modeladapter
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -109,6 +112,8 @@ const (
 	openAIThinkCloseTag      = "</think>"
 	openAIStreamMaxTokenSize = 64 * 1024 * 1024
 )
+
+var openAIPromptCacheKeyMaximumLengthPattern = regexp.MustCompile(`(?i)maximum\s+(?:string\s+)?length\s*(?:of|is|:)?\s*(\d+)`)
 
 type openAIContentPartKind string
 
@@ -221,24 +226,46 @@ func openAIModelSupportsPromptCacheKey(modelID string) bool {
 	return true
 }
 
-func openAIPromptCacheKey(req StreamRequest, modelID string) string {
+func openAIPromptCacheKey(req StreamRequest, modelID string, maximumLength int) string {
 	conversationID := strings.TrimSpace(req.ConversationID)
 	if conversationID == "" {
 		return ""
 	}
-	return "cursor:" + conversationID
+	key := "cursor:" + conversationID
+	if maximumLength <= 0 || len(key) <= maximumLength {
+		return key
+	}
+
+	// Providers do not agree on a key-size limit. Once a provider tells us its
+	// limit, preserve a recognizable prefix when possible and shorten only the
+	// generated key with a deterministic digest.
+	digest := fmt.Sprintf("%x", sha256.Sum256([]byte(conversationID)))
+	prefix := "cursor:"
+	if maximumLength <= len(prefix) {
+		return digest[:min(maximumLength, len(digest))]
+	}
+	digestLength := min(maximumLength-len(prefix), len(digest))
+	return prefix + digest[:digestLength]
 }
 
-func applyOpenAIPromptCacheKeyOverride(body map[string]any, req StreamRequest, modelID string) {
+func applyOpenAIPromptCacheKeyOverride(body map[string]any, req StreamRequest, modelID string, maximumLength int) {
 	if len(body) == 0 {
 		return
 	}
 	if _, ok := body["prompt_cache_key"]; ok {
 		return
 	}
-	if key := openAIPromptCacheKey(req, modelID); key != "" {
+	if key := openAIPromptCacheKey(req, modelID, maximumLength); key != "" {
 		body["prompt_cache_key"] = key
 	}
+}
+
+func hasExplicitOpenAIPromptCacheKey(req StreamRequest) bool {
+	if openAIExtraParamsHasKey(req, "prompt_cache_key") {
+		return true
+	}
+	_, ok := req.RequestBodyOverride["prompt_cache_key"]
+	return ok
 }
 
 func shouldExposeOpenAIResponsesImageGeneration(req StreamRequest, tools []map[string]any) bool {
@@ -518,51 +545,52 @@ func (adapter *OpenAIAdapter) Stream(ctx context.Context, req StreamRequest, sin
 		}
 	}
 	if requestGroup == modelchannel.OpenAIRequestGroupResponses {
-		return adapter.streamResponses(ctx, req, baseURL, apiKey, modelID, sink)
+		return adapter.streamResponsesWithReconnect(ctx, req, baseURL, apiKey, modelID, sink)
 	}
 	return adapter.streamChatCompletionsWithReconnect(ctx, req, baseURL, apiKey, modelID, sink)
 }
 
-// streamChatCompletionsWithReconnect 包装 streamChatCompletions，实现 pre-output 透明重连。
-// 当流式连接在转发任何有效内容给客户端之前断开（连接重置/EOF），
-// 透明重试整个请求，客户端不会感知到中断。
-// 一旦任何 ModelEvent 被转发给 sink，不再重连（避免重复输出）。
-// 移植自 Reasonix streamWithReconnect 的 emitted 标记策略。
-func (adapter *OpenAIAdapter) streamChatCompletionsWithReconnect(ctx context.Context, req StreamRequest, baseURL string, apiKey string, modelID string, sink func(ModelEvent) error) error {
-	var attempt int
+// runOpenAIStreamWithReconnect 统一处理 OpenAI 两种流协议的连接级 pre-output 重连。
+// 对自动生成的 prompt_cache_key，若上游 400 明确给出最大长度，会用该长度生成
+// 确定性短键并重试一次；其他 HTTP 400 仍不在 adapter 层重试。
+func (adapter *OpenAIAdapter) runOpenAIStreamWithReconnect(ctx context.Context, sink func(ModelEvent) error, adaptPromptCacheKey bool, stream func(int, func(ModelEvent) error) error) error {
+	var connectionAttempt int
+	promptCacheKeyMaximumLength := 0
+	promptCacheKeyAdapted := false
 	for {
 		emitted := false
-		// 包装 sink：首次调用时标记 emitted=true，之后透传。
 		wrappedSink := func(event ModelEvent) error {
 			emitted = true
 			return sink(event)
 		}
-		err := adapter.streamChatCompletions(ctx, req, baseURL, apiKey, modelID, wrappedSink)
+		err := stream(promptCacheKeyMaximumLength, wrappedSink)
 		if err == nil {
 			return nil
 		}
-		// 已经转发过内容 -> 不能重连（会导致客户端收到重复输出）。
-		// 若是连接级中断（EOF/重置/断管），包装成可识别的「上游中断」错误，
-		// 便于用户/日志区分是上游连接断开而非程序 bug。
 		if emitted {
 			if IsStreamConnectionReset(err) {
 				return fmt.Errorf("upstream stream interrupted mid-response (already forwarded partial content, will not reconnect to avoid duplicates): %w", err)
 			}
 			return err
 		}
-		// 未转发任何内容且错误是连接重置类 -> 透明重连
+		if adaptPromptCacheKey && !promptCacheKeyAdapted {
+			if maximumLength, ok := openAIPromptCacheKeyMaximumLength(err); ok {
+				promptCacheKeyMaximumLength = maximumLength
+				promptCacheKeyAdapted = true
+				continue
+			}
+		}
 		if !IsStreamConnectionReset(err) {
 			return err
 		}
 		if ctx.Err() != nil {
 			return err
 		}
-		attempt++
-		if attempt > maxStreamReconnects {
+		connectionAttempt++
+		if connectionAttempt > maxStreamReconnects {
 			return fmt.Errorf("openai stream reconnect exhausted after %d attempts: %w", maxStreamReconnects, err)
 		}
-		// 短暂退避后重试
-		backoff := providerRetryBaseDelay << (attempt - 1)
+		backoff := providerRetryBaseDelay << (connectionAttempt - 1)
 		if backoff > providerRetryMaxDelay {
 			backoff = providerRetryMaxDelay
 		}
@@ -572,11 +600,52 @@ func (adapter *OpenAIAdapter) streamChatCompletionsWithReconnect(ctx context.Con
 	}
 }
 
+func openAIPromptCacheKeyMaximumLength(err error) (int, bool) {
+	var statusErr *HTTPStatusError
+	if !errors.As(err, &statusErr) || statusErr == nil || statusErr.StatusCode != http.StatusBadRequest {
+		return 0, false
+	}
+	message := strings.ToLower(statusErr.Message + " " + statusErr.Body)
+	if !strings.Contains(message, "prompt_cache_key") || !strings.Contains(message, "length") {
+		return 0, false
+	}
+	matches := openAIPromptCacheKeyMaximumLengthPattern.FindStringSubmatch(message)
+	if len(matches) != 2 {
+		return 0, false
+	}
+	maximumLength, parseErr := strconv.Atoi(matches[1])
+	if parseErr != nil || maximumLength <= 0 {
+		return 0, false
+	}
+	return maximumLength, true
+}
+
+// streamChatCompletionsWithReconnect 包装 streamChatCompletions，实现 pre-output 透明重连。
+// 当流式连接在转发任何有效内容给客户端之前断开（连接重置/EOF），
+// 透明重试整个请求，客户端不会感知到中断。
+// 一旦任何 ModelEvent 被转发给 sink，不再重连（避免重复输出）。
+// 移植自 Reasonix streamWithReconnect 的 emitted 标记策略。
+func (adapter *OpenAIAdapter) streamChatCompletionsWithReconnect(ctx context.Context, req StreamRequest, baseURL string, apiKey string, modelID string, sink func(ModelEvent) error) error {
+	manualPromptCacheKey := hasExplicitOpenAIPromptCacheKey(req)
+	return adapter.runOpenAIStreamWithReconnect(ctx, sink, !manualPromptCacheKey, func(maximumLength int, wrappedSink func(ModelEvent) error) error {
+		return adapter.streamChatCompletions(ctx, req, baseURL, apiKey, modelID, maximumLength, manualPromptCacheKey, wrappedSink)
+	})
+}
+
+// streamResponsesWithReconnect 为 Responses 路径补齐与 Chat Completions 相同的
+// pre-output 保护；请求体在每次 streamResponses 调用中重新构建，因此不会复用已消费 body。
+func (adapter *OpenAIAdapter) streamResponsesWithReconnect(ctx context.Context, req StreamRequest, baseURL string, apiKey string, modelID string, sink func(ModelEvent) error) error {
+	manualPromptCacheKey := hasExplicitOpenAIPromptCacheKey(req)
+	return adapter.runOpenAIStreamWithReconnect(ctx, sink, !manualPromptCacheKey, func(maximumLength int, wrappedSink func(ModelEvent) error) error {
+		return adapter.streamResponses(ctx, req, baseURL, apiKey, modelID, maximumLength, manualPromptCacheKey, wrappedSink)
+	})
+}
+
 func openAIChatRequestGroupUsesCompatShape(group string) bool {
 	return strings.TrimSpace(group) == modelchannel.OpenAIRequestGroupChatCompletionsCompat
 }
 
-func openAIChatRequestBody(req StreamRequest, modelID string) openAIRequestBody {
+func openAIChatRequestBody(req StreamRequest, modelID string, promptCacheKeyMaximumLength int) openAIRequestBody {
 	requestBody := openAIRequestBody{
 		Model:    modelID,
 		Stream:   true,
@@ -589,7 +658,7 @@ func openAIChatRequestBody(req StreamRequest, modelID string) openAIRequestBody 
 		return requestBody
 	}
 	requestBody.StreamOptions = map[string]any{"include_usage": true}
-	if key := openAIPromptCacheKey(req, modelID); key != "" {
+	if key := openAIPromptCacheKey(req, modelID, promptCacheKeyMaximumLength); key != "" {
 		requestBody.PromptCacheKey = key
 	}
 	if strings.TrimSpace(req.ReasoningEffort) != "" {
@@ -598,7 +667,7 @@ func openAIChatRequestBody(req StreamRequest, modelID string) openAIRequestBody 
 	return requestBody
 }
 
-func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req StreamRequest, baseURL string, apiKey string, modelID string, sink func(ModelEvent) error) error {
+func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req StreamRequest, baseURL string, apiKey string, modelID string, promptCacheKeyMaximumLength int, manualPromptCacheKey bool, sink func(ModelEvent) error) error {
 	startedAt := time.Now().UTC()
 	finishedAt := time.Time{}
 	overrideBody := cloneRequestBodyOverride(req.RequestBodyOverride)
@@ -610,7 +679,7 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 			recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))
 			return err
 		}
-		requestBody := openAIChatRequestBody(req, modelID)
+		requestBody := openAIChatRequestBody(req, modelID, promptCacheKeyMaximumLength)
 		requestBody.Messages = normalizedMessages
 		if len(req.Tools) > 0 {
 			tools, err := normalizeOpenAIChatTools(req.Tools)
@@ -625,7 +694,7 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 	} else {
 		if !openAIChatRequestGroupUsesCompatShape(req.OpenAIRequestGroup) {
 
-			applyOpenAIPromptCacheKeyOverride(overrideBody, req, modelID)
+			applyOpenAIPromptCacheKeyOverride(overrideBody, req, modelID, promptCacheKeyMaximumLength)
 		}
 	}
 	bodyMap, err := requestBodyToMap(body)
@@ -641,7 +710,7 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		return err
 	}
 	normalizeOpenAIRequestToolSchemas(bodyMap)
-	applyOpenAIChatCompletionsCompatibility(bodyMap, baseURL, modelID, openAIExtraParamsHasKey(req, "prompt_cache_key"))
+	applyOpenAIChatCompletionsCompatibility(bodyMap, baseURL, modelID, manualPromptCacheKey)
 	if modelchannel.OpenAIRequestGroupSupportsAdvancedFields(req.OpenAIRequestGroup) {
 		applyOpenAIServiceTier(bodyMap, req)
 	}
@@ -716,12 +785,12 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		} `json:"choices"`
 		Model string `json:"model"`
 		Usage *struct {
-			PromptTokens        int64 `json:"prompt_tokens"`
-			CompletionTokens    int64 `json:"completion_tokens"`
+			PromptTokens     int64 `json:"prompt_tokens"`
+			CompletionTokens int64 `json:"completion_tokens"`
 			// DeepSeek 在顶层返回 prompt_cache_hit_tokens / prompt_cache_miss_tokens。
 			PromptCacheHitTokens  int64 `json:"prompt_cache_hit_tokens"`
 			PromptCacheMissTokens int64 `json:"prompt_cache_miss_tokens"`
-			PromptTokensDetails *struct {
+			PromptTokensDetails   *struct {
 				// OpenAI / MiMo 在嵌套结构里返回 cached_tokens。
 				CachedTokens int64 `json:"cached_tokens"`
 				// 部分中转（如包装 claude 的 OpenAI 兼容接口）在嵌套结构里返回 cache_creation_tokens，
@@ -874,11 +943,11 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		return fmt.Errorf("openai chat stream error")
 	}
 	applyUsage := func(usage *struct {
-		PromptTokens        int64 `json:"prompt_tokens"`
-		CompletionTokens    int64 `json:"completion_tokens"`
+		PromptTokens          int64 `json:"prompt_tokens"`
+		CompletionTokens      int64 `json:"completion_tokens"`
 		PromptCacheHitTokens  int64 `json:"prompt_cache_hit_tokens"`
 		PromptCacheMissTokens int64 `json:"prompt_cache_miss_tokens"`
-		PromptTokensDetails *struct {
+		PromptTokensDetails   *struct {
 			CachedTokens        int64 `json:"cached_tokens"`
 			CacheCreationTokens int64 `json:"cache_creation_tokens"`
 		} `json:"prompt_tokens_details,omitempty"`
@@ -1117,7 +1186,7 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 	return nil
 }
 
-func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamRequest, baseURL string, apiKey string, modelID string, sink func(ModelEvent) error) error {
+func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamRequest, baseURL string, apiKey string, modelID string, promptCacheKeyMaximumLength int, manualPromptCacheKey bool, sink func(ModelEvent) error) error {
 	startedAt := time.Now().UTC()
 	finishedAt := time.Time{}
 	overrideBody := cloneRequestBodyOverride(req.RequestBodyOverride)
@@ -1139,7 +1208,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		if shouldSendOpenAIMaxOutputTokens(modelID) {
 			requestBody.MaxOutputTokens = req.MaxTokens
 		}
-		if key := openAIPromptCacheKey(req, modelID); key != "" {
+		if key := openAIPromptCacheKey(req, modelID, promptCacheKeyMaximumLength); key != "" {
 			requestBody.PromptCacheKey = key
 		}
 		if len(req.Tools) > 0 {
@@ -1163,7 +1232,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		}
 		body = requestBody
 	} else {
-		applyOpenAIPromptCacheKeyOverride(overrideBody, req, modelID)
+		applyOpenAIPromptCacheKeyOverride(overrideBody, req, modelID, promptCacheKeyMaximumLength)
 	}
 	bodyMap, err := requestBodyToMap(body)
 	if err != nil {
@@ -1178,7 +1247,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		return err
 	}
 	normalizeOpenAIResponsesRequestToolSchemas(bodyMap)
-	applyOpenAIResponsesCompatibility(bodyMap, baseURL, modelID, openAIExtraParamsHasKey(req, "prompt_cache_key"))
+	applyOpenAIResponsesCompatibility(bodyMap, baseURL, modelID, manualPromptCacheKey)
 
 	body = bodyMap
 

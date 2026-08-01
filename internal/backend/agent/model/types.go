@@ -74,6 +74,16 @@ type StreamRequest struct {
 	Mode agentv1.AgentMode
 	// ModelID 表示当前模型标识。
 	ModelID string
+	// ModelName 是本地逻辑模型名称，用于请求链路追踪。
+	ModelName string
+	// Role 表示本次调用在请求链路中的角色。
+	Role string
+	ParentModel string
+	ModelGroupID string
+	TaskID string
+	ExecutionMode string
+	SupervisorModel string
+	ReviewerModel string
 	// ThinkingEffort 表示客户端在本轮运行时选择的思考强度覆盖。
 	ThinkingEffort string
 	// MaxMode 表示是否使用模型最大上下文窗口（true=目录最大值, false=配置值）。

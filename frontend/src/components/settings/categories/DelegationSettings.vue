@@ -23,6 +23,7 @@ const props = defineProps({
 const DELEGATION_ENABLED_KEY = "delegation.enabled";
 const DELEGATION_MAX_CONCURRENCY_KEY = "delegation.max-concurrency";
 const DELEGATION_SUPERVISION_KEY = "delegation.supervision";
+const DELEGATION_VISION_KEY = "delegation.vision";
 
 const DEFAULT_SUPERVISION = {
   enabled: false,
@@ -36,6 +37,18 @@ const DEFAULT_SUPERVISION = {
   allowEscalate: false,
   strictUnavailable: false,
 };
+
+const DEFAULT_VISION_DELEGATION = {
+  enabled: false,
+  visionModelID: "",
+  mode: "auto",
+};
+
+const visionModeOptions = [
+  { value: "auto", label: "描述 + OCR（推荐）" },
+  { value: "describe", label: "仅画面描述" },
+  { value: "ocr", label: "仅文字抄录" },
+];
 
 const modeOptions = [
   { value: "auto", label: "自动选择" },
@@ -76,6 +89,11 @@ const supervisionNumberDrafts = reactive({
   maxRounds: String(DEFAULT_SUPERVISION.maxRounds),
 });
 const supervisionLoaded = ref(false);
+
+const visionLoadState = reactive({ busy: false, error: "", retry: null });
+const visionFieldStates = reactive({});
+const visionConfig = reactive({ ...DEFAULT_VISION_DELEGATION });
+const visionLoaded = ref(false);
 
 const groupStates = reactive({});
 const groupNameDrafts = reactive({});
@@ -380,6 +398,7 @@ function delegationSnapshot(value = appState.delegation) {
     maxConcurrency: normalizeMaxConcurrencyValue(source.maxConcurrency, 4),
     groups: Array.isArray(source.groups) ? cloneConfigValue(source.groups) : [],
     supervision: normalizeSupervision(source.supervision),
+    visionDelegation: normalizeVisionDelegation(source.visionDelegation),
   };
 }
 
@@ -392,30 +411,45 @@ function reconcileSavedDelegation(savedValue, submitted, current) {
     submitted.supervision,
     current.supervision,
   );
+  reconciled.visionDelegation = reconcileSavedObject(
+    saved.visionDelegation,
+    submitted.visionDelegation,
+    current.visionDelegation,
+  );
   return delegationSnapshot(reconciled);
 }
 
 async function persistDelegationConfig() {
   const previousSupervision = normalizeSupervision(appState.delegation.supervision);
+  const previousVision = normalizeVisionDelegation(appState.delegation.visionDelegation);
   appState.delegation.supervision = supervisionForPersistence();
+  appState.delegation.visionDelegation = visionForPersistence();
   const submitted = delegationSnapshot();
   try {
     const saved = await saveDelegationConfig(submitted);
     const current = delegationSnapshot();
     current.supervision = supervisionForPersistence();
+    current.visionDelegation = visionForPersistence();
     const reconciled = reconcileSavedDelegation(saved, submitted, current);
     appState.delegation = reconciled;
     Object.assign(supervisionConfig, reconciled.supervision);
+    Object.assign(visionConfig, reconciled.visionDelegation);
     return reconciled;
   } catch (error) {
     const current = delegationSnapshot();
     current.supervision = supervisionForPersistence();
+    current.visionDelegation = visionForPersistence();
     appState.delegation = {
       ...current,
       supervision: normalizeSupervision(reconcileSavedObject(
         previousSupervision,
         submitted.supervision,
         current.supervision,
+      )),
+      visionDelegation: normalizeVisionDelegation(reconcileSavedObject(
+        previousVision,
+        submitted.visionDelegation,
+        current.visionDelegation,
       )),
     };
     throw error;
@@ -520,6 +554,109 @@ function supervisionFieldError(field) {
 
 function retrySupervisionField(field) {
   const state = ensureSupervisionFieldState(field);
+  if (typeof state.retry === "function") {
+    void state.retry();
+  }
+}
+
+// ---- 视觉委派（vision delegation）----
+
+function normalizeVisionDelegation(value) {
+  const raw = value && typeof value === "object" ? value : {};
+  const visionModelID = String(raw.visionModelID || raw.visionModelId || "").trim();
+  const mode = String(raw.mode || "").trim().toLowerCase();
+  return {
+    enabled: visionModelID !== "" && Boolean(raw.enabled),
+    visionModelID,
+    mode: ["auto", "describe", "ocr"].includes(mode) ? mode : "auto",
+  };
+}
+
+function applyVisionDelegation(value) {
+  const normalized = normalizeVisionDelegation(value);
+  Object.assign(visionConfig, normalized);
+  if (appState.delegation) {
+    appState.delegation.visionDelegation = { ...normalized };
+  }
+}
+
+async function loadVisionDelegationConfig() {
+  if (!appState.configReady) {
+    return;
+  }
+  visionLoadState.busy = true;
+  visionLoadState.error = "";
+  visionLoadState.retry = loadVisionDelegationConfig;
+  try {
+    applyVisionDelegation(appState.delegation?.visionDelegation);
+    visionLoaded.value = true;
+  } catch (error) {
+    visionLoadState.error = toUserError(error);
+  } finally {
+    visionLoadState.busy = false;
+  }
+}
+
+function visionForPersistence() {
+  const next = { ...visionConfig };
+  if (next.visionModelID && !appState.modelAdapters.some((adapter) => adapter.id === next.visionModelID)) {
+    next.visionModelID = "";
+    next.enabled = false;
+  }
+  return next;
+}
+
+function ensureVisionFieldState(field) {
+  if (!visionFieldStates[field]) {
+    visionFieldStates[field] = reactive({ busy: false, error: "", retry: null, lastValue: null, revision: 0 });
+  }
+  return visionFieldStates[field];
+}
+
+function visionFieldBusy(field) {
+  const state = ensureVisionFieldState(field);
+  return visionLoadState.busy || state.busy;
+}
+
+function visionFieldError(field) {
+  return ensureVisionFieldState(field).error;
+}
+
+async function saveVisionField(field, value) {
+  const state = ensureVisionFieldState(field);
+  const previous = visionConfig[field];
+  const revision = state.revision + 1;
+  visionConfig[field] = value;
+  state.revision = revision;
+  state.lastValue = value;
+  state.retry = () => saveVisionField(field, state.lastValue);
+  state.error = "";
+  state.busy = true;
+  try {
+    await props.autosave.run(`${DELEGATION_VISION_KEY}.${field}`, async () => {
+      await serializeDelegationSave();
+    });
+  } catch (error) {
+    if (state.revision === revision) {
+      visionConfig[field] = previous;
+      appState.delegation.visionDelegation = { ...visionConfig };
+    }
+    state.error = toUserError(error);
+  } finally {
+    state.busy = false;
+  }
+}
+
+function handleVisionToggle(field, value) {
+  void saveVisionField(field, Boolean(value));
+}
+
+function handleVisionSelect(field, value) {
+  void saveVisionField(field, String(value || ""));
+}
+
+function retryVisionField(field) {
+  const state = ensureVisionFieldState(field);
   if (typeof state.retry === "function") {
     void state.retry();
   }
@@ -935,6 +1072,9 @@ watch(
     if (ready && !supervisionLoaded.value) {
       void loadSupervisionConfig();
     }
+    if (ready && !visionLoaded.value) {
+      void loadVisionDelegationConfig();
+    }
   },
   { immediate: true },
 );
@@ -1205,6 +1345,66 @@ watch(
       <div v-if="supervisionSaveState.success && !supervisionSaveError" class="mt-3 text-xs text-[#10AD5D]">
         监督策略已保存
       </div>
+    </SettingsSection>
+
+    <SettingsSection
+      title="视觉委派"
+      description="当主模型不支持识图时，自动把图片转发给上面的识图模型，返回画面描述和文字（OCR），让纯文本模型也能“看图”。未配置识图模型时图片仍会被替换为占位说明。"
+    >
+      <SettingsRow
+        label="启用视觉委派"
+        description="开启后，主模型不支持图片输入时，后端会把每张图片委派给下方识图模型，并把识图结果注入回对话。"
+        :busy="visionFieldBusy('enabled')"
+        :error="visionFieldError('enabled')"
+      >
+        <Switch
+          compact
+          label=""
+          enabled-text="已开启"
+          disabled-text="已关闭"
+          :enabled="visionConfig.enabled"
+          :disabled="visionFieldBusy('enabled') || !visionLoaded || !visionConfig.visionModelID"
+          aria-label="启用视觉委派"
+          @change="(value) => handleVisionToggle('enabled', value)"
+        />
+      </SettingsRow>
+
+      <SettingsRow
+        label="识图模型"
+        description="作为识图通道的模型，建议选择明确支持视觉输入的模型。未选择时视觉委派自动关闭。"
+        :busy="visionFieldBusy('visionModelID')"
+        :error="visionFieldError('visionModelID')"
+        @retry="retryVisionField('visionModelID')"
+      >
+        <div class="w-[280px] max-w-full">
+          <ModelTreeSelect
+            :model-value="visionConfig.visionModelID"
+            :adapters="appState.modelAdapters"
+            :fallback-option="{ value: '', label: '未配置（回退占位文字）' }"
+            :disabled="visionFieldBusy('visionModelID') || !visionLoaded"
+            aria-label="识图模型"
+            @change="(value) => handleVisionSelect('visionModelID', value)"
+          />
+        </div>
+      </SettingsRow>
+
+      <SettingsRow
+        label="识图模式"
+        description="识图模型返回内容的形式。描述 + OCR 最通用；仅文字抄录适合票据 / 截图。"
+        :busy="visionFieldBusy('mode')"
+        :error="visionFieldError('mode')"
+        @retry="retryVisionField('mode')"
+      >
+        <div class="w-[280px] max-w-full">
+          <Select
+            :model-value="visionConfig.mode"
+            :options="visionModeOptions"
+            :disabled="visionFieldBusy('mode') || !visionLoaded"
+            aria-label="识图模式"
+            @change="(value) => handleVisionSelect('mode', value)"
+          />
+        </div>
+      </SettingsRow>
     </SettingsSection>
 
     <SettingsSection

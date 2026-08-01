@@ -285,7 +285,7 @@ type generateImageToolCarrier struct {
 
 func isImmediateNativeTool(name string) bool {
 	switch strings.TrimSpace(name) {
-	case "GenerateImage", "AwaitShell":
+	case "GenerateImage", "AwaitShell", "SeeImage":
 		return true
 	default:
 		return false
@@ -298,6 +298,8 @@ func (service *Service) handleImmediateNativeToolInvocation(stream *ActiveStream
 		return service.handleGenerateImageToolInvocation(stream, invocation)
 	case "AwaitShell":
 		return service.handleAwaitShellToolInvocation(stream, invocation)
+	case "SeeImage":
+		return service.handleSeeImageToolInvocation(stream, invocation)
 	default:
 		return fmt.Errorf("unsupported immediate native tool: %s", invocation.ToolName)
 	}

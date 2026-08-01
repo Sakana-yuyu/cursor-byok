@@ -24,7 +24,7 @@ import {
 import { fetchModelCatalog, queryProviderBalance } from "@/services/clientApi";
 import { useModelProbe } from "@/composables/useModelProbe";
 import { providerIcon, providerSelectOptions } from "@/utils/providerMeta";
-import { supplierSelectOptions } from "@/utils/supplierCatalog";
+import { supplierSelectOptions, supplierTemplate, supplierModelCatalog, supplierUsageRequest } from "@/utils/supplierCatalog";
 import {
   SUPPLIER_GROUP_MODE_CONNECTION,
   SUPPLIER_GROUP_MODE_NAME,
@@ -224,6 +224,14 @@ const supplierMeta = computed(() => {
   };
 });
 
+const supplierCapability = computed(() => {
+  const template = supplierTemplate(supplierMeta.value?.supplierID);
+  return {
+    catalog: template.modelCatalog || {},
+    usage: template.usage || {},
+  };
+});
+
 // 余额/额度查询（非阻塞，失败不影响页面）
 // data：当前用于展示的余额（成功值，或瞬时失败时保留的上次成功值）。
 // stale：为 true 表示 data 是被保留的上次成功值，当前查询是瞬时失败（数据可能过期）。
@@ -302,13 +310,28 @@ const balancePrimary = computed(() => {
 async function loadBalance(forceRefresh = false) {
   const meta = supplierMeta.value;
   if (!meta || balanceState.loading) return;
+  const usage = supplierUsageRequest(meta);
+  const catalog = supplierModelCatalog(meta.supplierID);
   balanceState.loading = true;
   try {
     const request = {
       type: meta.type,
       supplierID: meta.supplierID,
+      usageStatus: usage.status,
+      usageProvider: usage.provider,
+      modelCatalogURLsJSON: JSON.stringify(catalog.urls || []),
+      modelCatalogStatus: catalog.status || "",
+      appendModelCatalogCandidates: catalog.appendCandidates !== false,
       baseURL: meta.baseURL || queryBaseURL.value,
       apiKey: meta.apiKey,
+      modelCatalogURL: meta.modelCatalogURL || "",
+      balanceProfile: meta.balanceProfile || "auto",
+      balanceAccessToken: meta.balanceAccessToken || "",
+      balanceUserID: meta.balanceUserID || "",
+      balanceCodingPlanProvider: meta.balanceCodingPlanProvider || "",
+      balanceQueryURL: meta.balanceQueryURL || "",
+      balanceQueryField: meta.balanceQueryField || "",
+      balanceQueryHeaders: meta.balanceQueryHeaders || {},
     };
     if (forceRefresh) request.forceRefresh = true;
     const result = await queryProviderBalance(request);
@@ -443,6 +466,10 @@ async function handleFetchModels() {
       supplierID: supplierMeta.value.supplierID,
       baseURL: supplierMeta.value.baseURL || queryBaseURL.value,
       apiKey: supplierMeta.value.apiKey,
+      modelCatalogURL: supplierMeta.value.modelCatalogURL || "",
+      modelCatalogStatus: supplierTemplate(supplierMeta.value.supplierID).modelCatalog?.status || "",
+      appendModelCatalogCandidates: supplierTemplate(supplierMeta.value.supplierID).modelCatalog?.appendCandidates !== false,
+      modelCatalogURLsJSON: JSON.stringify(supplierTemplate(supplierMeta.value.supplierID).modelCatalog?.urls || []),
       customHeadersEnabled: Boolean(supplierMeta.value.customHeadersEnabled),
       customHeadersJSON: supplierMeta.value.customHeadersJSON || "",
     });
@@ -480,13 +507,27 @@ async function handleBatchAddModels() {
     const adapters = selected.map((model) => {
       // 按模型名推断 type，让 claude→anthropic、gemini→gemini 走原生协议，避免缓存失效。
       const inferredType = inferProviderType(model.id, supplierMeta.value.type);
+      const usage = supplierUsageRequest(supplierMeta.value);
+      const balanceProfile = usage.status === "fixed"
+        ? "official"
+        : usage.status === "custom_only"
+          ? "custom"
+          : usage.status || "none";
       return {
         ...createEmptyModelAdapter(),
         type: inferredType,
-        supplierID: supplierMeta.value.supplierID,
-        baseURL: seedBaseURL,
-        apiKey: supplierMeta.value.apiKey,
-        customHeadersEnabled: Boolean(supplierMeta.value.customHeadersEnabled),
+         supplierID: supplierMeta.value.supplierID,
+         baseURL: seedBaseURL,
+         apiKey: supplierMeta.value.apiKey,
+         modelCatalogURL: supplierMeta.value.modelCatalogURL || "",
+         balanceProfile,
+         balanceAccessToken: supplierMeta.value.balanceAccessToken || "",
+         balanceUserID: supplierMeta.value.balanceUserID || "",
+         balanceCodingPlanProvider: usage.status === "token_plan" ? usage.provider : "",
+         balanceQueryURL: supplierMeta.value.balanceQueryURL || "",
+         balanceQueryField: supplierMeta.value.balanceQueryField || "",
+         balanceQueryHeaders: supplierMeta.value.balanceQueryHeaders || {},
+         customHeadersEnabled: Boolean(supplierMeta.value.customHeadersEnabled),
         customHeadersJSON: supplierMeta.value.customHeadersJSON || "",
         displayName: model.id,
         modelID: model.id,
@@ -783,6 +824,8 @@ async function testBulkEditBalance() {
     const request = {
       type: String(bulkEditDraft.type || "").trim(),
       supplierID: String(bulkEditDraft.supplierID || "").trim(),
+      usageStatus: supplierUsageRequest(bulkEditDraft).status,
+      usageProvider: supplierUsageRequest(bulkEditDraft).provider,
       baseURL: String(bulkEditDraft.baseURL || "").trim(),
       apiKey: String(bulkEditDraft.apiKey || "").trim(),
       forceRefresh: true,
@@ -898,6 +941,12 @@ async function saveBulkEdit(force = false) {
                 <span v-if="healthStats.ok > 0" class="rounded-full bg-[#10AD5D]/15 px-2 py-0.5 text-[#6ee7a5]">可用 {{ healthStats.ok }}</span>
                 <span v-if="healthStats.fail > 0" class="rounded-full bg-[#f87171]/15 px-2 py-0.5 text-[#fca5a5]">失败 {{ healthStats.fail }}</span>
                 <span v-if="healthStats.untested > 0" class="rounded-full bg-[#3f3f3f]/60 px-2 py-0.5 text-[#a3a3a3]">未测 {{ healthStats.untested }}</span>
+                <span class="rounded-full bg-[#3f3f3f]/60 px-2 py-0.5 text-[#a3a3a3]">
+                  目录 {{ supplierCapability.catalog.status === 'manual_only' ? '手动' : '自动' }}
+                </span>
+                <span class="rounded-full bg-[#3f3f3f]/60 px-2 py-0.5 text-[#a3a3a3]">
+                  用量 {{ supplierCapability.usage.status === 'none' ? '暂无自动查询' : supplierCapability.usage.source || supplierCapability.usage.status }}
+                </span>
                 <!-- 余额 / 额度 -->
                 <span v-if="balanceState.loading" class="center-row gap-1 text-[#8f8f8f]">
                   <span class="icon-[mdi--loading] animate-spin text-[13px]"></span>查询余额…
@@ -914,7 +963,7 @@ async function saveBulkEdit(force = false) {
                   v-else-if="balanceState.loaded"
                   class="text-[#737373]"
                   :title="(balanceState.data && balanceState.data.message) || '余额不可用'"
-                >余额不可用</span>
+                  >{{ balanceState.data?.source === 'none' || balanceState.data?.message === '暂无自动查询' ? '暂无自动查询' : '余额不可用' }}</span>
                 <button
                   v-if="supplierMeta && !balanceState.loading"
                   type="button"
@@ -990,7 +1039,7 @@ async function saveBulkEdit(force = false) {
                 <span class="text-xs text-[#a3a3a3]">供应商模板</span>
                 <select v-model="bulkEditDraft.supplierID" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]">
                   <option value="">不使用模板</option>
-                  <option v-for="opt in supplierSelectOptions(bulkEditDraft.type)" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                  <option v-for="opt in supplierSelectOptions(bulkEditDraft.supplierID)" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
                 </select>
               </label>
               <label class="flex flex-col gap-1">
@@ -1043,6 +1092,7 @@ async function saveBulkEdit(force = false) {
               <label class="flex flex-col gap-1">
                 <span class="text-xs text-[#a3a3a3]">查询模板</span>
                 <select v-model="bulkEditDraft.balanceProfile" class="h-8 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]">
+                  <option value="none">暂无自动查询</option>
                   <option value="custom">自定义</option>
                   <option value="general">通用模板</option>
                   <option value="newapi">New API</option>

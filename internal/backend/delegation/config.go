@@ -19,20 +19,23 @@ type RuntimeModelGroup struct {
 }
 
 type RuntimeConfig struct {
-	Enabled            bool
-	MaxConcurrency     int
-	Groups             []RuntimeModelGroup
-	ModelNames         map[string]string
-	SupervisionEnabled bool
-	SupervisorModelID  string
-	ReviewerModelID    string
-	WorkerGroupID      string
-	MaxCorrections     int
-	MaxRetries         int
-	MaxRounds          int
-	AllowReassign      bool
-	AllowEscalate      bool
-	StrictUnavailable  bool
+	Enabled                 bool
+	MaxConcurrency          int
+	Groups                  []RuntimeModelGroup
+	ModelNames              map[string]string
+	SupervisionEnabled      bool
+	SupervisorModelID       string
+	ReviewerModelID         string
+	WorkerGroupID           string
+	MaxCorrections          int
+	MaxRetries              int
+	MaxRounds               int
+	AllowReassign           bool
+	AllowEscalate           bool
+	StrictUnavailable       bool
+	VisionDelegationEnabled bool
+	VisionModelID           string
+	VisionMode              string
 }
 
 type RuntimeConfigProvider interface {
@@ -58,8 +61,14 @@ func NormalizeRuntimeConfig(config RuntimeConfig) RuntimeConfig {
 	config.MaxCorrections = normalizePositive(config.MaxCorrections, DefaultSupervisionCorrections)
 	config.MaxRetries = normalizePositive(config.MaxRetries, DefaultSupervisionRetries)
 	config.MaxRounds = normalizePositive(config.MaxRounds, DefaultSupervisionRounds)
+	config.VisionModelID = strings.TrimSpace(config.VisionModelID)
+	config.VisionMode = strings.TrimSpace(config.VisionMode)
 	if !config.Enabled {
 		config.SupervisionEnabled = false
+		config.VisionDelegationEnabled = false
+	}
+	if config.VisionModelID == "" {
+		config.VisionDelegationEnabled = false
 	}
 	if len(config.Groups) > 0 {
 		cloned := make([]RuntimeModelGroup, 0, len(config.Groups))

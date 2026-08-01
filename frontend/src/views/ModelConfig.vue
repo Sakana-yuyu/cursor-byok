@@ -11,6 +11,7 @@ import {
   toUserError,
 } from "@/state/appState";
 import { providerIcon, providerLabel } from "@/utils/providerMeta";
+import { supplierModelCatalog, supplierUsageRequest } from "@/utils/supplierCatalog";
 import { getModelAdapterTestResultByID } from "@/state/appState";
 import { queryProviderBalance, diagnoseModelAdapters, applyDiagnosticFixes } from "@/services/clientApi";
 import {
@@ -228,6 +229,7 @@ function balanceTooltip(key) {
 
 function balanceMessage(key) {
   const data = balanceEntry(key)?.data;
+  if (data?.source === "none") return "暂无自动查询";
   return (data && data.message) || "余额不可用";
 }
 
@@ -240,6 +242,8 @@ async function loadSupplierBalance(supplier, forceRefresh = false) {
     [key]: { loading: true, loaded: false, data: existing?.data || null },
   };
   const rep = (supplier.models && supplier.models[0]) || supplier;
+  const usage = supplierUsageRequest(rep);
+  const catalog = supplierModelCatalog(rep.supplierID || supplier.supplierID);
   const prevData = existing?.data || null;
   const hasLastGood = Boolean(prevData && prevData.supported);
   let data = null;
@@ -247,8 +251,20 @@ async function loadSupplierBalance(supplier, forceRefresh = false) {
     const request = {
       type: supplier.type,
       supplierID: rep.supplierID || supplier.supplierID,
+      usageStatus: usage.status,
+      usageProvider: usage.provider,
+      modelCatalogURLsJSON: JSON.stringify(catalog.urls || []),
+      modelCatalogStatus: catalog.status || "",
+      appendModelCatalogCandidates: catalog.appendCandidates !== false,
       baseURL: rep.baseURL || supplier.baseURL,
       apiKey: rep.apiKey || supplier.apiKey,
+      balanceProfile: rep.balanceProfile || "auto",
+      balanceAccessToken: rep.balanceAccessToken || "",
+      balanceUserID: rep.balanceUserID || "",
+      balanceCodingPlanProvider: rep.balanceCodingPlanProvider || "",
+      balanceQueryURL: rep.balanceQueryURL || "",
+      balanceQueryField: rep.balanceQueryField || "",
+      balanceQueryHeaders: rep.balanceQueryHeaders || {},
     };
     if (forceRefresh) request.forceRefresh = true;
     data = await queryProviderBalance(request);
@@ -508,7 +524,7 @@ onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }).catch(() =>
                       </button>
                     </template>
                     <template v-else>
-                      <span class="text-[#737373]" :title="balanceMessage(supplier.key)">余额不可用</span>
+                      <span class="text-[#737373]" :title="balanceMessage(supplier.key)">{{ balanceMessage(supplier.key) === '暂无自动查询' ? '暂无自动查询' : '余额不可用' }}</span>
                       <button
                         type="button"
                         class="center-row text-[#737373] transition-colors hover:text-white"

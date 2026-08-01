@@ -26,6 +26,8 @@ type HTTPStatusError struct {
 	StatusCode int
 	// Message 表示已格式化的可读错误信息（与历史行为保持一致）。
 	Message string
+	// Body 保存去除首尾空白后的原始响应体；Message 可能已经提取了 JSON 中的 message。
+	Body string
 }
 
 // Error 返回可读错误信息，保持与历史错误字符串完全一致以兼容旧解析逻辑。
@@ -67,35 +69,36 @@ func buildHTTPStatusError(prefix string, resp *http.Response) error {
 		// 超时关闭的 body：io.ReadAll 返回的错误通常是 "read on closed body" 之类，
 		// 我们用明确的超时错误替换，让日志可诊断。
 		if retrySummary := ProviderRetryAttemptSummary(resp); retrySummary != "" {
-			return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d %s body_read_timeout=%v", strings.TrimSpace(prefix), resp.StatusCode, retrySummary, err)}
+			return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d %s body_read_timeout=%v", strings.TrimSpace(prefix), resp.StatusCode, retrySummary, err), Body: strings.TrimSpace(string(limitedBody))}
 		}
-		return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d body_read_timeout=%v", strings.TrimSpace(prefix), resp.StatusCode, err)}
+		return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d body_read_timeout=%v", strings.TrimSpace(prefix), resp.StatusCode, err), Body: strings.TrimSpace(string(limitedBody))}
 	}
 	if err != nil {
 		if retrySummary := ProviderRetryAttemptSummary(resp); retrySummary != "" {
-			return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d %s body_read_error=%v", strings.TrimSpace(prefix), resp.StatusCode, retrySummary, err)}
+			return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d %s body_read_error=%v", strings.TrimSpace(prefix), resp.StatusCode, retrySummary, err), Body: strings.TrimSpace(string(limitedBody))}
 		}
-		return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d body_read_error=%v", strings.TrimSpace(prefix), resp.StatusCode, err)}
+		return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d body_read_error=%v", strings.TrimSpace(prefix), resp.StatusCode, err), Body: strings.TrimSpace(string(limitedBody))}
 	}
 	retrySummary := ProviderRetryAttemptSummary(resp)
-	bodyText := strings.TrimSpace(string(limitedBody))
-	
+	rawBodyText := strings.TrimSpace(string(limitedBody))
+	bodyText := rawBodyText
+
 	// 尝试提取并美化 JSON 错误体中的关键信息
 	friendlyError := extractFriendlyErrorMessage(bodyText)
 	if friendlyError != "" {
 		bodyText = friendlyError
 	}
-	
+
 	if bodyText == "" {
 		if retrySummary != "" {
-			return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d %s", strings.TrimSpace(prefix), resp.StatusCode, retrySummary)}
+			return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d %s", strings.TrimSpace(prefix), resp.StatusCode, retrySummary), Body: rawBodyText}
 		}
-		return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d", strings.TrimSpace(prefix), resp.StatusCode)}
+		return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d", strings.TrimSpace(prefix), resp.StatusCode), Body: rawBodyText}
 	}
 	if retrySummary != "" {
-		return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d %s body=%s", strings.TrimSpace(prefix), resp.StatusCode, retrySummary, bodyText)}
+		return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d %s body=%s", strings.TrimSpace(prefix), resp.StatusCode, retrySummary, bodyText), Body: rawBodyText}
 	}
-	return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d body=%s", strings.TrimSpace(prefix), resp.StatusCode, bodyText)}
+	return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d body=%s", strings.TrimSpace(prefix), resp.StatusCode, bodyText), Body: rawBodyText}
 }
 
 // ChannelError 包装底层 provider 错误并携带命中渠道的身份信息，
@@ -132,12 +135,12 @@ func extractFriendlyErrorMessage(bodyText string) string {
 	if bodyText == "" || !strings.HasPrefix(strings.TrimSpace(bodyText), "{") {
 		return ""
 	}
-	
+
 	var errorBody map[string]any
 	if err := json.Unmarshal([]byte(bodyText), &errorBody); err != nil {
 		return ""
 	}
-	
+
 	// 提取嵌套的 error.message
 	var message string
 	if errorObj, ok := errorBody["error"].(map[string]any); ok {
@@ -145,21 +148,21 @@ func extractFriendlyErrorMessage(bodyText string) string {
 			message = strings.TrimSpace(msg)
 		}
 	}
-	
+
 	if message == "" {
 		return ""
 	}
-	
+
 	// 识别常见错误模式并提供友好的中文提示
 	if strings.Contains(message, "Upstream returned HTTP 400") {
 		return "上游服务器返回 400 错误，可能是请求参数不符合要求。请检查模型配置或联系中转站运营者"
 	}
-	
+
 	if strings.Contains(message, "Upstream returned HTTP") {
 		// 提取状态码
 		return fmt.Sprintf("上游服务器错误: %s", message)
 	}
-	
+
 	// 其他情况返回原始 message（比完整 JSON 更清晰）
 	return message
 }

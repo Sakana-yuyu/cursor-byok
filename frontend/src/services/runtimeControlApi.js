@@ -21,6 +21,12 @@ const DEFAULT_SUPERVISION = {
   strictUnavailable: false,
 };
 
+const DEFAULT_VISION_DELEGATION = {
+  enabled: false,
+  visionModelID: "",
+  mode: "auto",
+};
+
 function normalizeSupervisionConfig(config) {
   const raw = config && typeof config === "object" ? config : {};
   const positive = (value, fallback) => {
@@ -42,10 +48,23 @@ function normalizeSupervisionConfig(config) {
   };
 }
 
+function normalizeVisionDelegationConfig(config) {
+  const raw = config && typeof config === "object" ? config : {};
+  const mode = String(raw.mode || "").trim().toLowerCase();
+  const visionModelID = String(raw.visionModelID || raw.visionModelId || "").trim();
+  return {
+    ...DEFAULT_VISION_DELEGATION,
+    enabled: visionModelID !== "" && Boolean(raw.enabled),
+    visionModelID,
+    mode: ["auto", "describe", "ocr"].includes(mode) ? mode : "auto",
+  };
+}
+
 export function getDelegationConfig() {
   return getDelegationConfigBinding().then((config) => ({
     ...(config || {}),
     supervision: normalizeSupervisionConfig(config?.supervision),
+    visionDelegation: normalizeVisionDelegationConfig(config?.visionDelegation),
   }));
 }
 
@@ -53,6 +72,7 @@ export function saveDelegationConfig(config) {
   return saveDelegationConfigBinding(config).then((saved) => ({
     ...(saved || {}),
     supervision: normalizeSupervisionConfig(saved?.supervision || config?.supervision),
+    visionDelegation: normalizeVisionDelegationConfig(saved?.visionDelegation || config?.visionDelegation),
   }));
 }
 

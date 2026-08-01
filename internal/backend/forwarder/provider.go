@@ -4,10 +4,42 @@ package forwarder
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 
 	modeladapter "cursor/internal/backend/agent/model"
 )
+
+type provider400RecoveryReason string
+
+const provider400RecoveryContentExists provider400RecoveryReason = "content_exists"
+
+// classifyProvider400Recovery returns a non-empty reason only for a known
+// relay-side transient 400. Generic 400 responses remain terminal so malformed
+// requests are not retried indefinitely.
+func classifyProvider400Recovery(err error) provider400RecoveryReason {
+	if err == nil {
+		return ""
+	}
+	var statusErr *modeladapter.HTTPStatusError
+	if !errors.As(err, &statusErr) || statusErr == nil || statusErr.StatusCode != 400 {
+		return ""
+	}
+	message := strings.ToLower(strings.TrimSpace(statusErr.Message))
+	body := strings.ToLower(strings.TrimSpace(statusErr.Body))
+	if exactContentExistsMessage(message) || exactContentExistsMessage(body) {
+		return provider400RecoveryContentExists
+	}
+	return ""
+}
+
+func exactContentExistsMessage(value string) bool {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "content exists" || value == "content_exists" {
+		return true
+	}
+	return strings.HasSuffix(value, "body=content exists") || strings.HasSuffix(value, "body=content_exists")
+}
 
 type DefaultProviderGateway struct {
 	router modeladapter.ModelAdapterRouter
@@ -51,6 +83,14 @@ func (gateway *DefaultProviderGateway) StartStream(ctx context.Context, req Prov
 		ConversationID:      req.ConversationID,
 		Mode:                req.Mode,
 		ModelID:             req.ModelID,
+		ModelName:           req.ModelName,
+		Role:                req.Role,
+		ParentModel:         req.ParentModel,
+		ModelGroupID:        req.ModelGroupID,
+		TaskID:              req.TaskID,
+		ExecutionMode:       req.ExecutionMode,
+		SupervisorModel:     req.SupervisorModel,
+		ReviewerModel:       req.ReviewerModel,
 		ThinkingEffort:      req.ThinkingEffort,
 		MaxMode:             req.MaxMode,
 		Messages:            req.Messages,

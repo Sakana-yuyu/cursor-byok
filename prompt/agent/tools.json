@@ -687,6 +687,32 @@
   {
     "type": "function",
     "function": {
+      "name": "SeeImage",
+      "description": "Read / OCR / describe a local image or image URL by delegating it to a vision-capable model. Use this when you need to see an image but the current model cannot view images directly (e.g. a text-only model). Returns the image's description and any visible text. Trigger for any image-viewing need: reading a screenshot, OCR of a table/receipt, describing a diagram, verifying rendered output. Not for image generation.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "image_path": {
+            "type": "string",
+            "description": "Absolute path to a local image file, or an http(s) URL of the image. Supported formats: png, jpg, jpeg, webp, gif, bmp, tif."
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["auto", "describe", "ocr"],
+            "description": "Recognition mode. 'auto' (default): structured description + OCR text. 'describe': only describe the scene/layout. 'ocr': only transcribe visible text/tables as Markdown."
+          },
+          "question": {
+            "type": "string",
+            "description": "Optional question about the image; the vision model will answer it after describing/reading the image."
+          }
+        },
+        "required": ["image_path"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
       "name": "Fetch",
       "description": "Fetch the content of a URL and return it as text. Use this when you need to read a web page, API response, or any HTTP resource directly. Prefer over WebSearch when you already know the exact URL.",
       "parameters": {
