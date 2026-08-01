@@ -1,14 +1,15 @@
-## v0.0.75
+## v0.0.76
+
+### 新功能
+- **非多模态图片占位**：不支持视觉输入的模型会收到可访问的本地图片路径，并可通过读图工具读取图片内容。
+- **一键添加读图 MCP**：在模型编辑器中配置视觉网关、密钥和模型后，可自动写入 Cursor 用户级 MCP 配置并启用 `vision-reader`。
 
 ### 修复
-- **Multitask 自动委派**：选择 Multitask 后，普通只读探索请求会自动创建 Explorer 子代理，不再要求用户额外输入“使用子代理”。
-- **Cursor 委派状态同步**：通过 conversation checkpoint 同步子代理的运行中、成功、失败和取消状态，修复 Cursor 卡片显示 stopped 但后端仍在运行，或任务完成后不显示结果的问题。
-- **执行身份追踪**：统一记录 request_id、conversation_id、model_call_id、tool_call_id 和 exec_id，降低终态错配、重复注册和超时恢复误判。
-- **Prompt replay 与压缩**：合并上游 Cursor command replay、summarize 和 compaction 修复，减少上下文恢复后工具调用状态丢失。
+- **Cursor 图片恢复**：恢复委派请求中仅携带 blob ID 的图片，避免图片数据在转发链路中丢失。
+- **Windows Cursor 启动**：改进 `cursor.cmd`/`cursor.bat` 解析和真实 `Cursor.exe` 定位，兼容管理员启动场景。
+- **MCP 配置保留**：启用读图 MCP 时保留现有 `mcp.json` 顶层配置，不覆盖其他用户设置。
 
 ### 优化
-- **子代理模型显示**：委派卡片优先显示模型名称，保留模型 ID 作为内部追踪字段。
-- **调试日志**：补充委派启动、checkpoint 接受/拒绝、终态收口和 provider pass 日志，便于根据真实请求定位传输链路。
-- **文档**：README 更新为独立项目说明，补充 Multitask、状态同步和本地调试流程。
+- **图片下载限制**：限制远程图片下载大小，避免异常大文件占用资源。
 
 > **Windows 用户注意**：安装时若被 SmartScreen 拦截，点击“更多信息”后选择“仍要运行”。
