@@ -2,6 +2,7 @@ package upstream
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -26,6 +27,34 @@ func DirectAction(deps Dependencies, cfg CompatRouteConfig) server.HandlerFunc {
 			return err
 		}
 		return handleDirect(reqCtx, route)
+	}
+}
+
+// AuthenticatedDirectAction forwards a Cursor control-plane request with the
+// independent desktop account after the local-mode identity rewrite has run.
+func AuthenticatedDirectAction(deps Dependencies, cfg CompatRouteConfig, authorizationProvider AuthorizationProvider) server.HandlerFunc {
+	return func(ctx *server.Context) error {
+		reqCtx, _, err := newCompatRouteObjects(ctx, deps, cfg)
+		if err != nil {
+			return err
+		}
+		if reqCtx == nil || reqCtx.Request == nil {
+			return fmt.Errorf("Cursor 控制面请求上下文无效")
+		}
+		if authorizationProvider == nil {
+			return fmt.Errorf("Cursor 账号服务未初始化")
+		}
+		authorization, err := authorizationProvider.Authorization(reqCtx.Request.Context())
+		if err != nil {
+			return err
+		}
+		_, err = ForwardToUpstream(reqCtx, ForwardOptions{
+			PatchHeaders: func(headers http.Header) {
+				headers.Set("Authorization", authorization)
+				headers.Set("x-cursor-checksum", BuildCursorChecksum(authorization))
+			},
+		})
+		return err
 	}
 }
 
