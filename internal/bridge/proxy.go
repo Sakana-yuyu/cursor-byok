@@ -8,7 +8,11 @@ import (
 	"cursor/internal/client"
 	"cursor/internal/mitm"
 	"cursor/internal/promptinject"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -334,6 +338,145 @@ func (s *ProxyService) SaveSkillsMCPScanConfig(scanCfg serverconfig.SkillMCPScan
 	}
 	cfg.SkillMCPScan = scanCfg
 	return s.core.SaveUserConfig(cfg)
+}
+
+// ReaderMCPResult 是一键启用读图 MCP 的返回结果。
+type ReaderMCPResult struct {
+	Identifier string `json:"identifier"`
+	ScriptPath string `json:"scriptPath"`
+	WasAdded   bool   `json:"wasAdded"`
+}
+
+// readerMCPIdentifier 是写入 Cursor mcp.json 的读图 MCP 服务名。
+const readerMCPIdentifier = "vision-reader"
+
+// readerMCPScriptCandidates 返回 vision_mcp_server.py 可能存在的路径
+//（image-see 技能会同步到 .claude/.cursor/.codex 三个 skills 目录）。
+func readerMCPScriptCandidates() []string {
+	home, _ := os.UserHomeDir()
+	home = strings.TrimSpace(home)
+	if home == "" {
+		return nil
+	}
+	return []string{
+		filepath.Join(home, ".claude", "skills", "image-see", "scripts", "vision_mcp_server.py"),
+		filepath.Join(home, ".cursor", "skills", "image-see", "scripts", "vision_mcp_server.py"),
+		filepath.Join(home, ".codex", "skills", "image-see", "scripts", "vision_mcp_server.py"),
+	}
+}
+
+// detectVisionReaderScript 探测本地读图 MCP 脚本，返回第一个存在的绝对路径。
+func detectVisionReaderScript() (string, error) {
+	for _, candidate := range readerMCPScriptCandidates() {
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("未找到读图 MCP 脚本 vision_mcp_server.py，请先安装 image-see 技能")
+}
+
+// EnableReaderMCP 把读图 MCP（stdio：python + vision_mcp_server.py，env 注入网关三项）
+// upsert 进 Cursor 全局 ~/.cursor/mcp.json 并失效扫描缓存，使其出现在
+// 「设置 → Skills 与 MCP」列表并自动启用（未写入 disabledMcpServers 即默认启用）。
+func (s *ProxyService) EnableReaderMCP(url, apiKey, model string) (ReaderMCPResult, error) {
+	scriptPath, err := detectVisionReaderScript()
+	if err != nil {
+		return ReaderMCPResult{}, err
+	}
+	baseURL := strings.TrimSpace(url)
+	if baseURL == "" {
+		return ReaderMCPResult{}, fmt.Errorf("读图网关地址（url）不能为空")
+	}
+	readerModel := strings.TrimSpace(model)
+	if readerModel == "" {
+		readerModel = "gpt-5.6-luna"
+	}
+	mcpPath, err := cursorUserMCPConfigPath()
+	if err != nil {
+		return ReaderMCPResult{}, err
+	}
+	servers, err := readCursorMCPServers(mcpPath)
+	if err != nil {
+		return ReaderMCPResult{}, err
+	}
+	_, existed := servers[readerMCPIdentifier]
+	servers[readerMCPIdentifier] = map[string]any{
+		"command": "python",
+		"args":    []any{scriptPath},
+		"env": map[string]any{
+			"IMAGE_SEE_BASE_URL": baseURL,
+			"IMAGE_SEE_API_KEY":  strings.TrimSpace(apiKey),
+			"IMAGE_SEE_MODEL":    readerModel,
+		},
+	}
+	if err := writeCursorMCPServers(mcpPath, servers); err != nil {
+		return ReaderMCPResult{}, err
+	}
+	forwarder.InvalidateMCPScanCache()
+	return ReaderMCPResult{
+		Identifier: readerMCPIdentifier,
+		ScriptPath: scriptPath,
+		WasAdded:   !existed,
+	}, nil
+}
+
+// cursorUserMCPConfigPath 返回用户级 Cursor MCP 配置文件路径（与 mcp_scanner 一致）。
+func cursorUserMCPConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		return "", fmt.Errorf("无法确定用户主目录")
+	}
+	return filepath.Join(home, ".cursor", "mcp.json"), nil
+}
+
+// readCursorMCPServers 读取 Cursor mcp.json 的 mcpServers 映射；文件不存在时返回空映射。
+func readCursorMCPServers(path string) (map[string]any, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return map[string]any{}, nil
+		}
+		return nil, fmt.Errorf("读取 %s 失败: %w", path, err)
+	}
+	var doc struct {
+		MCPServers map[string]any `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return nil, fmt.Errorf("解析 %s 失败: %w", path, err)
+	}
+	if doc.MCPServers == nil {
+		doc.MCPServers = map[string]any{}
+	}
+	return doc.MCPServers, nil
+}
+
+// writeCursorMCPServers 原子写回 Cursor mcp.json（tmp 文件 + rename）。
+func writeCursorMCPServers(path string, servers map[string]any) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("创建目录失败: %w", err)
+	}
+	doc := map[string]any{"mcpServers": servers}
+	data, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return fmt.Errorf("序列化失败: %w", err)
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".mcp-*.tmp")
+	if err != nil {
+		return fmt.Errorf("创建临时文件失败: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("写入临时文件失败: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("关闭临时文件失败: %w", err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("写入 %s 失败: %w", path, err)
+	}
+	return nil
 }
 
 // ConnectMCPServer explicitly trusts and connects one discovered MCP server.
