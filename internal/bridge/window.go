@@ -5,6 +5,7 @@ import (
 	"cursor/internal/buildinfo"
 	"cursor/internal/client"
 	"cursor/internal/i18n"
+	"cursor/internal/logger"
 	"cursor/internal/updater"
 	"fmt"
 	"io"
@@ -825,7 +826,9 @@ func (s *WindowService) DetectCursorPath(manualPath string) string {
 	var candidates []string
 	switch goruntime.GOOS {
 	case "windows":
-		if path, err := exec.LookPath("cursor"); err == nil {
+		// 优先解析 PATH 中 cursor 启动脚本指向的真实 Cursor.exe（跳过 .cmd/.bat 本身，
+		// 直接执行会弹 cmd 窗口）。解析不到再回退常规安装路径。
+		if path := findCursorExecutableOnPath(); path != "" {
 			candidates = append(candidates, path)
 		}
 		candidates = append(candidates,
@@ -867,17 +870,11 @@ func (s *WindowService) LaunchCursor(workspaceDir, manualPath string) error {
 		return fmt.Errorf("未检测到 Cursor 安装路径，请在设置中指定 Cursor.exe")
 	}
 
-	var cmd *exec.Cmd
-	if workspaceDir != "" {
-		cmd = exec.Command(cursorPath, workspaceDir)
-	} else {
-		cmd = exec.Command(cursorPath)
-	}
-	configureCursorCommand(cmd)
-
-	if err := cmd.Start(); err != nil {
+	logger.Infof("launch cursor: path=%s workspace=%q", cursorPath, workspaceDir)
+	if err := launchCursorProcess(cursorPath, workspaceDir); err != nil {
+		logger.Errorf("launch cursor failed: path=%s err=%v", cursorPath, err)
 		return fmt.Errorf("启动 Cursor 失败: %w", err)
 	}
-
+	logger.Infof("launch cursor ok: path=%s", cursorPath)
 	return nil
 }
