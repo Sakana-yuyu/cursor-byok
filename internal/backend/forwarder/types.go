@@ -121,6 +121,11 @@ type StreamSubscriber struct {
 	Signal chan struct{}
 }
 
+type manualCompactionDirective struct {
+	Requested   bool
+	Instruction string
+}
+
 type ActiveStream struct {
 	mu sync.Mutex
 
@@ -137,6 +142,7 @@ type ActiveStream struct {
 	SubagentModelOverrides       map[string]runtimecore.SubagentModelOverrideSelection
 	SelectedSubagentModels       []*agentv1.RequestedModel
 	SelectedSubagentModelDetails []*agentv1.ModelDetails
+	ManualCompaction             manualCompactionDirective
 
 	CurrentModelCallID             string
 	ProviderActive                 bool
@@ -473,6 +479,7 @@ type InboundIntent struct {
 	CancelReason                 string
 	IgnoredReason                string
 	Prewarm                      bool
+	ManualCompaction             manualCompactionDirective
 }
 
 // normalizeMode 对外部传入的 mode 做最小归一化，但不再静默降级。
