@@ -92,7 +92,7 @@ func LoadRecentRequestMetrics(path string, limit int, offset int, includeCacheWr
 		model := strings.TrimSpace(event.Model)
 		provider := strings.TrimSpace(event.Provider)
 		baseURL := strings.TrimSpace(event.BaseURL)
-		cost, known, currency := lookup.Cost(model, provider, baseURL, event.InputTokens, event.OutputTokens, event.CacheReadTokens, event.CacheWriteTokens)
+		cost, known, currency, pricingSource := lookup.Cost(model, provider, baseURL, event.InputTokens, event.OutputTokens, event.CacheReadTokens, event.CacheWriteTokens)
 		result = append(result, RequestMetric{
 			EventID:          strings.TrimSpace(event.EventID),
 			Kind:             strings.TrimSpace(event.Kind),
@@ -100,14 +100,14 @@ func LoadRecentRequestMetrics(path string, limit int, offset int, includeCacheWr
 			At:               event.At,
 			Model:            model,
 			Role:             strings.TrimSpace(event.Role),
-			ParentModel:     strings.TrimSpace(event.ParentModel),
-			LogicalModel:    strings.TrimSpace(event.LogicalModel),
-			ProviderModel:   strings.TrimSpace(event.ProviderModel),
-			ModelGroupID:    strings.TrimSpace(event.ModelGroupID),
-			TaskID:          strings.TrimSpace(event.TaskID),
-			ExecutionMode:   strings.TrimSpace(event.ExecutionMode),
-			SupervisorModel: strings.TrimSpace(event.SupervisorModel),
-			ReviewerModel:   strings.TrimSpace(event.ReviewerModel),
+			ParentModel:      strings.TrimSpace(event.ParentModel),
+			LogicalModel:     strings.TrimSpace(event.LogicalModel),
+			ProviderModel:    strings.TrimSpace(event.ProviderModel),
+			ModelGroupID:     strings.TrimSpace(event.ModelGroupID),
+			TaskID:           strings.TrimSpace(event.TaskID),
+			ExecutionMode:    strings.TrimSpace(event.ExecutionMode),
+			SupervisorModel:  strings.TrimSpace(event.SupervisorModel),
+			ReviewerModel:    strings.TrimSpace(event.ReviewerModel),
 			Provider:         provider,
 			BaseURL:          baseURL,
 			GroupName:        strings.TrimSpace(event.GroupName),
@@ -122,6 +122,7 @@ func LoadRecentRequestMetrics(path string, limit int, offset int, includeCacheWr
 			CostUSD:          cost,
 			PricingKnown:     known,
 			Currency:         currency,
+			PricingSource:    pricingSource,
 		})
 	}
 	return result, nil
@@ -174,10 +175,10 @@ func LoadRecentTurnEvents(path string) ([]RequestMetric, error) {
 			continue
 		}
 		result = append(result, RequestMetric{
-			EventID:     strings.TrimSpace(event.EventID),
-			Kind:        strings.TrimSpace(event.Kind),
-			Status:      strings.TrimSpace(event.Status),
-			At:          event.At,
+			EventID:      strings.TrimSpace(event.EventID),
+			Kind:         strings.TrimSpace(event.Kind),
+			Status:       strings.TrimSpace(event.Status),
+			At:           event.At,
 			UsagePresent: event.UsagePresent,
 		})
 	}

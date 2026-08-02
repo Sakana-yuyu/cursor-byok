@@ -43,7 +43,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 354,
+          "line": 359,
           "column": 30
         }
       ]
@@ -101,7 +101,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 351,
+          "line": 357,
           "column": 41
         }
       ]
@@ -113,7 +113,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 201,
+          "line": 206,
           "column": 15
         }
       ]
@@ -200,7 +200,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 332,
+          "line": 337,
           "column": 106
         }
       ]
@@ -347,7 +347,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 357,
+          "line": 368,
           "column": 41
         }
       ]
@@ -470,7 +470,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 333,
+          "line": 344,
           "column": 5
         }
       ]
@@ -482,7 +482,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 638,
+          "line": 650,
           "column": 19
         },
         {
@@ -794,7 +794,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 86,
+          "line": 91,
           "column": 24
         }
       ]
@@ -830,7 +830,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 325,
+          "line": 336,
           "column": 5
         }
       ]
@@ -854,8 +854,8 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 599,
-          "column": 65
+          "line": 612,
+          "column": 1
         }
       ]
     },
@@ -866,7 +866,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 615,
+          "line": 627,
           "column": 19
         },
         {
@@ -943,7 +943,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 538,
+          "line": 549,
           "column": 19
         }
       ]
@@ -1008,7 +1008,7 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 110,
+          "line": 126,
           "column": 65
         }
       ]
@@ -1080,7 +1080,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 435,
+          "line": 443,
           "column": 46
         }
       ]
@@ -1116,7 +1116,7 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 112,
+          "line": 128,
           "column": 81
         }
       ]
@@ -1222,7 +1222,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 334,
+          "line": 340,
           "column": 35
         }
       ]
@@ -1414,7 +1414,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1411,
+          "line": 1414,
           "column": 7
         }
       ]
@@ -1438,17 +1438,17 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 240,
+          "line": 245,
           "column": 26
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 280,
+          "line": 285,
           "column": 15
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 370,
+          "line": 375,
           "column": 75
         },
         {
@@ -1458,12 +1458,12 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 332,
+          "line": 338,
           "column": 88
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 356,
+          "line": 362,
           "column": 56
         }
       ]
@@ -1545,7 +1545,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 496,
+          "line": 507,
           "column": 40
         }
       ]
@@ -1579,7 +1579,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 398,
+          "line": 403,
           "column": 94
         }
       ]
@@ -1591,17 +1591,17 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 240,
+          "line": 245,
           "column": 14
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 278,
+          "line": 283,
           "column": 15
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 362,
+          "line": 367,
           "column": 75
         },
         {
@@ -1611,12 +1611,12 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 330,
+          "line": 336,
           "column": 88
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 354,
+          "line": 360,
           "column": 56
         }
       ]
@@ -1894,7 +1894,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 377,
+          "line": 388,
           "column": 5
         }
       ]
@@ -1935,7 +1935,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 323,
+          "line": 334,
           "column": 5
         }
       ]
@@ -1947,7 +1947,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 305,
+          "line": 316,
           "column": 5
         }
       ]
@@ -1959,7 +1959,7 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 81,
+          "line": 92,
           "column": 75
         }
       ]
@@ -2251,12 +2251,12 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 382,
+          "line": 387,
           "column": 75
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 359,
+          "line": 365,
           "column": 41
         }
       ]
@@ -2602,7 +2602,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 419,
+          "line": 424,
           "column": 57
         }
       ]
@@ -2742,7 +2742,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1327,
+          "line": 1330,
           "column": 15
         }
       ]
@@ -2778,7 +2778,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 574,
+          "line": 585,
           "column": 23
         }
       ]
@@ -2802,7 +2802,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1356,
+          "line": 1359,
           "column": 9
         }
       ]
@@ -2963,8 +2963,35 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1426,
+          "line": 1429,
           "column": 9
+        }
+      ]
+    },
+    "390ef225fb5fd22b": {
+      "source": "手动配置",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/HomeMetricsCard.vue",
+          "line": 225,
+          "column": 68
+        },
+        {
+          "file": "src/components/StationSpendCard.vue",
+          "line": 43,
+          "column": 68
+        },
+        {
+          "file": "src/views/MetricsDetail.vue",
+          "line": 84,
+          "column": 68
+        },
+        {
+          "file": "src/views/RequestMetrics.vue",
+          "line": 197,
+          "column": 68
         }
       ]
     },
@@ -3067,7 +3094,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 503,
+          "line": 514,
           "column": 21
         }
       ]
@@ -3246,7 +3273,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 400,
+          "line": 405,
           "column": 94
         }
       ]
@@ -3444,7 +3471,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 317,
+          "line": 323,
           "column": 65
         }
       ]
@@ -3519,17 +3546,17 @@
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1303,
+          "line": 1304,
           "column": 60
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1321,
+          "line": 1323,
           "column": 60
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1339,
+          "line": 1342,
           "column": 64
         }
       ]
@@ -3616,7 +3643,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 546,
+          "line": 557,
           "column": 21
         }
       ]
@@ -3688,7 +3715,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 298,
+          "line": 309,
           "column": 5
         }
       ]
@@ -3700,7 +3727,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1351,
+          "line": 1354,
           "column": 7
         }
       ]
@@ -3862,7 +3889,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 297,
+          "line": 308,
           "column": 5
         }
       ]
@@ -3886,7 +3913,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 368,
+          "line": 379,
           "column": 7
         }
       ]
@@ -4005,7 +4032,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 91,
+          "line": 96,
           "column": 27
         },
         {
@@ -4056,7 +4083,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 379,
+          "line": 390,
           "column": 5
         }
       ]
@@ -4179,7 +4206,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 337,
+          "line": 348,
           "column": 9
         }
       ]
@@ -4430,7 +4457,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1418,
+          "line": 1421,
           "column": 94
         }
       ]
@@ -4575,7 +4602,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 393,
+          "line": 398,
           "column": 52
         }
       ]
@@ -4645,12 +4672,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1373,
+          "line": 1376,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1385,
+          "line": 1388,
           "column": 13
         }
       ]
@@ -4727,7 +4754,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 321,
+          "line": 332,
           "column": 5
         }
       ]
@@ -4802,7 +4829,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 90,
+          "line": 95,
           "column": 24
         },
         {
@@ -4870,7 +4897,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 492,
+          "line": 503,
           "column": 21
         }
       ]
@@ -4894,17 +4921,17 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 240,
+          "line": 245,
           "column": 49
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 265,
+          "line": 270,
           "column": 15
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 283,
+          "line": 288,
           "column": 15
         }
       ]
@@ -5003,17 +5030,17 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 240,
+          "line": 245,
           "column": 34
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 281,
+          "line": 286,
           "column": 15
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 374,
+          "line": 379,
           "column": 75
         },
         {
@@ -5023,12 +5050,12 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 333,
+          "line": 339,
           "column": 88
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 357,
+          "line": 363,
           "column": 56
         }
       ]
@@ -5040,7 +5067,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 88,
+          "line": 93,
           "column": 23
         }
       ]
@@ -5057,7 +5084,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 332,
+          "line": 337,
           "column": 106
         }
       ]
@@ -5093,7 +5120,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1416,
+          "line": 1419,
           "column": 55
         }
       ]
@@ -5199,7 +5226,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 476,
+          "line": 487,
           "column": 61
         }
       ]
@@ -5223,22 +5250,22 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 390,
+          "line": 401,
           "column": 55
         },
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 393,
+          "line": 404,
           "column": 54
         },
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 408,
+          "line": 419,
           "column": 54
         },
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 411,
+          "line": 422,
           "column": 53
         },
         {
@@ -5290,7 +5317,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 349,
+          "line": 355,
           "column": 41
         }
       ]
@@ -5561,7 +5588,7 @@
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1364,
+          "line": 1367,
           "column": 11
         },
         {
@@ -5665,7 +5692,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 323,
+          "line": 329,
           "column": 14
         }
       ]
@@ -5967,12 +5994,12 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 75,
+          "line": 86,
           "column": 56
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 407,
+          "line": 412,
           "column": 57
         }
       ]
@@ -5996,7 +6023,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 299,
+          "line": 310,
           "column": 5
         }
       ]
@@ -6128,7 +6155,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1374,
+          "line": 1377,
           "column": 9
         }
       ]
@@ -6140,7 +6167,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 545,
+          "line": 556,
           "column": 21
         }
       ]
@@ -6164,7 +6191,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 320,
+          "line": 331,
           "column": 5
         }
       ]
@@ -6188,7 +6215,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1462,
+          "line": 1465,
           "column": 7
         }
       ]
@@ -6260,7 +6287,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 375,
+          "line": 386,
           "column": 5
         }
       ]
@@ -6272,7 +6299,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 311,
+          "line": 317,
           "column": 115
         }
       ]
@@ -6313,7 +6340,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 250,
+          "line": 255,
           "column": 49
         }
       ]
@@ -6383,7 +6410,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 482,
+          "line": 493,
           "column": 13
         },
         {
@@ -6460,7 +6487,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1345,
+          "line": 1348,
           "column": 110
         }
       ]
@@ -6548,7 +6575,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 653,
+          "line": 665,
           "column": 61
         }
       ]
@@ -6584,7 +6611,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1291,
+          "line": 1292,
           "column": 15
         }
       ]
@@ -6716,7 +6743,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 294,
+          "line": 305,
           "column": 7
         }
       ]
@@ -6960,12 +6987,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1392,
+          "line": 1395,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1403,
+          "line": 1406,
           "column": 13
         }
       ]
@@ -7078,7 +7105,7 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 125,
+          "line": 142,
           "column": 90
         }
       ]
@@ -7138,7 +7165,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 417,
+          "line": 422,
           "column": 62
         }
       ]
@@ -7341,7 +7368,7 @@
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1363,
+          "line": 1366,
           "column": 11
         },
         {
@@ -7358,7 +7385,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 472,
+          "line": 481,
           "column": 11
         }
       ]
@@ -7382,7 +7409,7 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 76,
+          "line": 87,
           "column": 48
         }
       ]
@@ -7394,7 +7421,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 350,
+          "line": 356,
           "column": 41
         }
       ]
@@ -7470,7 +7497,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 433,
+          "line": 442,
           "column": 15
         }
       ]
@@ -7543,7 +7570,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 310,
+          "line": 321,
           "column": 5
         }
       ]
@@ -7733,7 +7760,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 603,
+          "line": 615,
           "column": 23
         }
       ]
@@ -7882,7 +7909,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 257,
+          "line": 263,
           "column": 53
         }
       ]
@@ -7906,7 +7933,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1309,
+          "line": 1311,
           "column": 15
         }
       ]
@@ -7930,7 +7957,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 365,
+          "line": 371,
           "column": 67
         }
       ]
@@ -8031,7 +8058,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 85,
+          "line": 90,
           "column": 26
         }
       ]
@@ -8119,7 +8146,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 486,
+          "line": 497,
           "column": 40
         }
       ]
@@ -8261,7 +8288,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 547,
+          "line": 558,
           "column": 21
         }
       ]
@@ -8285,7 +8312,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 367,
+          "line": 378,
           "column": 7
         }
       ]
@@ -8297,7 +8324,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 308,
+          "line": 319,
           "column": 5
         }
       ]
@@ -8309,7 +8336,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 87,
+          "line": 92,
           "column": 23
         }
       ]
@@ -8321,7 +8348,7 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 126,
+          "line": 143,
           "column": 36
         }
       ]
@@ -8362,7 +8389,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 352,
+          "line": 358,
           "column": 41
         }
       ]
@@ -8386,7 +8413,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 368,
+          "line": 374,
           "column": 67
         }
       ]
@@ -8434,7 +8461,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 408,
+          "line": 413,
           "column": 69
         },
         {
@@ -8538,12 +8565,12 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 213,
+          "line": 218,
           "column": 65
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 217,
+          "line": 222,
           "column": 81
         }
       ]
@@ -8591,7 +8618,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1463,
+          "line": 1466,
           "column": 7
         }
       ]
@@ -8799,7 +8826,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 574,
+          "line": 585,
           "column": 23
         }
       ]
@@ -8906,7 +8933,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 415,
+          "line": 420,
           "column": 51
         }
       ]
@@ -8976,7 +9003,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1383,
+          "line": 1386,
           "column": 31
         }
       ]
@@ -9058,7 +9085,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 200,
+          "line": 205,
           "column": 17
         }
       ]
@@ -9177,7 +9204,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1312,
+          "line": 1314,
           "column": 15
         }
       ]
@@ -9442,7 +9469,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 323,
+          "line": 329,
           "column": 14
         }
       ]
@@ -9454,7 +9481,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 89,
+          "line": 94,
           "column": 24
         }
       ]
@@ -9582,7 +9609,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1330,
+          "line": 1333,
           "column": 15
         }
       ]
@@ -9688,7 +9715,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 316,
+          "line": 327,
           "column": 5
         }
       ]
@@ -9700,7 +9727,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 436,
+          "line": 444,
           "column": 35
         }
       ]
@@ -9712,7 +9739,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1393,
+          "line": 1396,
           "column": 9
         }
       ]
@@ -9772,7 +9799,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1415,
+          "line": 1418,
           "column": 46
         }
       ]
@@ -9843,7 +9870,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1412,
+          "line": 1415,
           "column": 7
         }
       ]
@@ -9920,7 +9947,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 376,
+          "line": 387,
           "column": 5
         }
       ]
@@ -9973,7 +10000,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 315,
+          "line": 321,
           "column": 49
         }
       ]
@@ -10062,12 +10089,12 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 498,
+          "line": 509,
           "column": 17
         },
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 503,
+          "line": 514,
           "column": 21
         }
       ]
@@ -10115,7 +10142,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 307,
+          "line": 318,
           "column": 5
         }
       ]
@@ -10175,7 +10202,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 359,
+          "line": 370,
           "column": 10
         }
       ]
@@ -10192,6 +10219,33 @@
         }
       ]
     },
+    "be5bdd33a50840a0": {
+      "source": "官方价",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/HomeMetricsCard.vue",
+          "line": 225,
+          "column": 30
+        },
+        {
+          "file": "src/components/StationSpendCard.vue",
+          "line": 43,
+          "column": 30
+        },
+        {
+          "file": "src/views/MetricsDetail.vue",
+          "line": 84,
+          "column": 30
+        },
+        {
+          "file": "src/views/RequestMetrics.vue",
+          "line": 197,
+          "column": 30
+        }
+      ]
+    },
     "bec6840dba23b1f1": {
       "source": "缓存读取（从缓存复用的内容）",
       "kind": "text",
@@ -10199,7 +10253,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 397,
+          "line": 402,
           "column": 94
         }
       ]
@@ -10223,7 +10277,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 588,
+          "line": 599,
           "column": 19
         },
         {
@@ -10351,7 +10405,7 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 42,
+          "line": 53,
           "column": 53
         }
       ]
@@ -10421,7 +10475,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 416,
+          "line": 421,
           "column": 51
         },
         {
@@ -10479,7 +10533,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 336,
+          "line": 347,
           "column": 9
         }
       ]
@@ -10539,7 +10593,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 199,
+          "line": 204,
           "column": 13
         }
       ]
@@ -10551,7 +10605,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 360,
+          "line": 366,
           "column": 41
         }
       ]
@@ -10563,7 +10617,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 399,
+          "line": 404,
           "column": 94
         }
       ]
@@ -10623,7 +10677,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 318,
+          "line": 324,
           "column": 65
         }
       ]
@@ -10690,6 +10744,33 @@
           "file": "src/utils/modelContext.js",
           "line": 126,
           "column": 18
+        }
+      ]
+    },
+    "c854982f47c43f99": {
+      "source": "中转站探测价",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/HomeMetricsCard.vue",
+          "line": 225,
+          "column": 46
+        },
+        {
+          "file": "src/components/StationSpendCard.vue",
+          "line": 43,
+          "column": 46
+        },
+        {
+          "file": "src/views/MetricsDetail.vue",
+          "line": 84,
+          "column": 46
+        },
+        {
+          "file": "src/views/RequestMetrics.vue",
+          "line": 197,
+          "column": 46
         }
       ]
     },
@@ -10790,7 +10871,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 353,
+          "line": 359,
           "column": 41
         }
       ]
@@ -10802,7 +10883,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 448,
+          "line": 457,
           "column": 11
         }
       ]
@@ -10814,7 +10895,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 295,
+          "line": 306,
           "column": 7
         }
       ]
@@ -10848,6 +10929,33 @@
         }
       ]
     },
+    "ca03a61ddf4d1e5c": {
+      "source": "均价估算",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/HomeMetricsCard.vue",
+          "line": 225,
+          "column": 85
+        },
+        {
+          "file": "src/components/StationSpendCard.vue",
+          "line": 43,
+          "column": 85
+        },
+        {
+          "file": "src/views/MetricsDetail.vue",
+          "line": 84,
+          "column": 85
+        },
+        {
+          "file": "src/views/RequestMetrics.vue",
+          "line": 197,
+          "column": 85
+        }
+      ]
+    },
     "ca1d1059408b3837": {
       "source": "异常轮次：{0}",
       "kind": "template",
@@ -10855,7 +10963,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 309,
+          "line": 320,
           "column": 5
         }
       ]
@@ -10867,7 +10975,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 395,
+          "line": 400,
           "column": 94
         }
       ]
@@ -10939,7 +11047,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 492,
+          "line": 503,
           "column": 21
         }
       ]
@@ -10963,7 +11071,7 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 95,
+          "line": 111,
           "column": 89
         }
       ]
@@ -10987,12 +11095,12 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 418,
+          "line": 423,
           "column": 62
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 358,
+          "line": 364,
           "column": 41
         }
       ]
@@ -11057,18 +11165,6 @@
         }
       ]
     },
-    "d04acbd47f7c9e2e": {
-      "source": "估算 = 该区间内已知价格模型的美元花费合计。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/HomeMetricsCard.vue",
-          "line": 332,
-          "column": 5
-        }
-      ]
-    },
     "d08fd4224abcd69d": {
       "source": "切换失败",
       "kind": "text",
@@ -11115,7 +11211,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 373,
+          "line": 384,
           "column": 5
         }
       ]
@@ -11228,6 +11324,18 @@
           "file": "src/views/SupplierDetail.vue",
           "line": 1183,
           "column": 88
+        }
+      ]
+    },
+    "d2be6be426b6e184": {
+      "source": "估算 = 该区间内已知价格模型的花费合计，按币种分别展示。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/HomeMetricsCard.vue",
+          "line": 343,
+          "column": 5
         }
       ]
     },
@@ -11349,7 +11457,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 425,
+          "line": 436,
           "column": 23
         }
       ]
@@ -11539,12 +11647,12 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 250,
+          "line": 255,
           "column": 38
         },
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 544,
+          "line": 555,
           "column": 21
         }
       ]
@@ -11663,7 +11771,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 436,
+          "line": 444,
           "column": 68
         }
       ]
@@ -11899,12 +12007,12 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 99,
+          "line": 115,
           "column": 83
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 411,
+          "line": 416,
           "column": 99
         }
       ]
@@ -12102,7 +12210,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 318,
+          "line": 329,
           "column": 5
         }
       ]
@@ -12124,7 +12232,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 310,
+          "line": 316,
           "column": 56
         }
       ]
@@ -12213,7 +12321,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 656,
+          "line": 668,
           "column": 28
         }
       ]
@@ -12273,7 +12381,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 357,
+          "line": 368,
           "column": 22
         }
       ]
@@ -12307,7 +12415,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 372,
+          "line": 383,
           "column": 5
         }
       ]
@@ -12365,7 +12473,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 322,
+          "line": 333,
           "column": 5
         }
       ]
@@ -12423,7 +12531,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 365,
+          "line": 376,
           "column": 7
         }
       ]
@@ -12512,7 +12620,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 651,
+          "line": 663,
           "column": 75
         }
       ]
@@ -12565,12 +12673,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1355,
+          "line": 1358,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1367,
+          "line": 1370,
           "column": 11
         }
       ]
@@ -12594,17 +12702,17 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 240,
+          "line": 245,
           "column": 42
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 282,
+          "line": 287,
           "column": 15
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 378,
+          "line": 383,
           "column": 75
         }
       ]
@@ -12758,7 +12866,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 198,
+          "line": 203,
           "column": 13
         }
       ]
@@ -12828,17 +12936,17 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 654,
+          "line": 666,
           "column": 77
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 312,
+          "line": 318,
           "column": 32
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 317,
+          "line": 323,
           "column": 88
         }
       ]
@@ -13002,7 +13110,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 378,
+          "line": 389,
           "column": 5
         }
       ]
@@ -13312,7 +13420,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1294,
+          "line": 1295,
           "column": 15
         }
       ]
@@ -13324,7 +13432,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 440,
+          "line": 449,
           "column": 15
         }
       ]
@@ -13561,17 +13669,17 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 240,
+          "line": 245,
           "column": 20
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 279,
+          "line": 284,
           "column": 15
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 366,
+          "line": 371,
           "column": 75
         },
         {
@@ -13581,12 +13689,12 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 331,
+          "line": 337,
           "column": 88
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 355,
+          "line": 361,
           "column": 56
         }
       ]
@@ -13598,7 +13706,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 396,
+          "line": 401,
           "column": 94
         }
       ]
@@ -13622,7 +13730,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 340,
+          "line": 351,
           "column": 16
         }
       ]
@@ -13730,7 +13838,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1352,
+          "line": 1355,
           "column": 7
         }
       ]

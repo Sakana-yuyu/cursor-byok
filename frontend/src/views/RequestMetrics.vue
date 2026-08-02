@@ -193,6 +193,11 @@ function formatCost(row) {
   return `${currency} ${cost.toFixed(6)}`;
 }
 
+function pricingSourceLabel(source) {
+  const labels = { official: "官方价", catalog: "中转站探测价", configured: "手动配置", average: "均价估算" };
+  return labels[String(source || "").trim()] || "";
+}
+
 function roleLabel(role) {
   const labels = {
     parent: "父请求",
@@ -224,6 +229,7 @@ const displayRows = computed(() =>
     row,
     tone: statusTone(row),
     cost: formatCost(row),
+    pricingSource: pricingSourceLabel(row?.pricingSource),
     supplier: supplierMetaForRow(row),
     errorCode: errorCodeForRow(row),
     model: modelMetaForRow(row),
@@ -422,7 +428,10 @@ onUnmounted(() => {
             <td class="p-3 font-medium" :class="rateTone(item.row.cacheRate)" style="font-family: var(--font-num)">
               {{ formatRate(item.row.cacheRate) }}
             </td>
-            <td class="p-3 text-[#cfcfcf]" style="font-family: var(--font-num)">{{ item.cost }}</td>
+            <td class="p-3 text-[#cfcfcf]" style="font-family: var(--font-num)">
+              <div>{{ item.cost }}</div>
+              <div v-if="item.pricingSource" class="mt-0.5 text-[10px] text-[#8f8f8f]">{{ item.pricingSource }}</div>
+            </td>
           </tr>
         </tbody>
       </table>

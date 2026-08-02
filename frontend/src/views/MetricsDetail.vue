@@ -80,6 +80,11 @@ function formatSpend(row) {
   return `${currency} ${value.toFixed(decimals)}`;
 }
 
+function pricingSourceLabel(source) {
+  const labels = { official: "官方价", catalog: "中转站探测价", configured: "手动配置", average: "均价估算" };
+  return labels[String(source || "").trim()] || "";
+}
+
 // --- 时间范围 ---
 const timeRanges = [
   { key: "today", label: "当日" },
@@ -425,7 +430,10 @@ function formatRate(v) {
                 <td class="py-2 pr-3 text-[#a0a0a0]">{{ row.provider || "-" }}</td>
                 <td class="py-2 pr-3 text-right" style="font-family: var(--font-num)">{{ formatCompactInteger(row.providerCalls || 0) }}</td>
                 <td class="py-2 pr-3 text-right" style="font-family: var(--font-num)">{{ formatCompactInteger(row.totalTokens || 0) }}</td>
-                <td class="py-2 text-right" :class="row.estimatedCostUsd == null ? 'text-[#8f8f8f]' : 'text-[#6ee7a5]'" style="font-family: var(--font-num)">{{ formatSpend(row) }}</td>
+                <td class="py-2 text-right" :class="row.estimatedCostUsd == null ? 'text-[#8f8f8f]' : 'text-[#6ee7a5]'" style="font-family: var(--font-num)">
+                  <div>{{ formatSpend(row) }}</div>
+                  <div v-if="row.pricingSource" class="mt-0.5 text-[10px] text-[#8f8f8f]">{{ pricingSourceLabel(row.pricingSource) }}</div>
+                </td>
               </tr>
             </tbody>
           </table>

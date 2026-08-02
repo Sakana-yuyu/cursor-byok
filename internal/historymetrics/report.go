@@ -45,6 +45,7 @@ type RequestMetric struct {
 	CostUSD          *float64  `json:"costUsd"`
 	PricingKnown     bool      `json:"pricingKnown"`
 	Currency         string    `json:"currency"`
+	PricingSource    string    `json:"pricingSource,omitempty"`
 }
 
 type Totals struct {

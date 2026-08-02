@@ -14,6 +14,7 @@ type PriceRate struct {
 	CacheWrite *float64
 	Currency   string
 	Known      bool
+	Source     string
 }
 
 // PriceLookup 支持按 (model, provider, baseURL) 及其降级键解析价格。
@@ -46,9 +47,9 @@ func NewPriceLookup(rates []PriceRate) *PriceLookup {
 
 // Cost 计算一次请求的美元成本。
 // 返回 (成本指针, 价格是否已知, 币种)。价格未知时成本为 nil。
-func (lookup *PriceLookup) Cost(model, provider, baseURL string, input, output, cacheRead, cacheWrite int64) (*float64, bool, string) {
+func (lookup *PriceLookup) Cost(model, provider, baseURL string, input, output, cacheRead, cacheWrite int64) (*float64, bool, string, string) {
 	if lookup == nil {
-		return nil, false, ""
+		return nil, false, "", ""
 	}
 	for _, key := range priceKeys(model, provider, baseURL) {
 		rate, ok := lookup.byKey[key]
@@ -61,9 +62,9 @@ func (lookup *PriceLookup) Cost(model, provider, baseURL string, input, output, 
 		total += ratePart(rate.CacheRead, cacheRead)
 		total += ratePart(rate.CacheWrite, cacheWrite)
 		cost := total / 1_000_000
-		return &cost, true, strings.TrimSpace(rate.Currency)
+		return &cost, rate.Known, strings.TrimSpace(rate.Currency), strings.TrimSpace(rate.Source)
 	}
-	return nil, false, ""
+	return nil, false, "", ""
 }
 
 func ratePart(rate *float64, tokens int64) float64 {

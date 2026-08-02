@@ -9,17 +9,17 @@ const loading = ref(false);
 const error = ref("");
 let timer = null;
 
-const totalCost = computed(() =>
-  rows.value.reduce((sum, row) => {
+const currencyTotals = computed(() => {
+  const totals = new Map();
+  for (const row of rows.value) {
     const cost = Number(row?.estimatedCostUsd);
-    return sum + (Number.isFinite(cost) ? cost : 0);
-  }, 0),
-);
-const hasCost = computed(() => rows.value.some((row) => Number.isFinite(Number(row?.estimatedCostUsd))));
-const currency = computed(() => {
-  const hit = rows.value.find((row) => row && row.currency);
-  return hit ? hit.currency : "USD";
+    const currency = String(row?.currency || "").trim();
+    if (!currency || !Number.isFinite(cost)) continue;
+    totals.set(currency, (totals.get(currency) || 0) + cost);
+  }
+  return [...totals.entries()].map(([currency, total]) => ({ currency, total }));
 });
+const hasCost = computed(() => currencyTotals.value.length > 0);
 
 function formatNumber(value) {
   return Number(value || 0).toLocaleString();
@@ -31,6 +31,17 @@ function formatCost(value) {
   // 避免极小花费被截断为 0，自适应精度
   const decimals = cost >= 1 ? 2 : cost >= 0.01 ? 4 : 6;
   return cost.toFixed(decimals);
+}
+function formatTotalCost(value) {
+  const cost = Number(value);
+  if (!Number.isFinite(cost)) return "—";
+  // 零值不能走科学计数法，否则会显示为 0.00e+0。
+  if (cost === 0) return "0.00";
+  return Math.abs(cost) < 0.000001 ? cost.toExponential(2) : cost.toFixed(2);
+}
+function pricingSourceLabel(source) {
+  const labels = { official: "官方价", catalog: "中转站探测价", configured: "手动配置", average: "均价估算" };
+  return labels[String(source || "").trim()] || "";
 }
 
 async function load() {
@@ -80,7 +91,12 @@ defineExpose({ refresh: load });
         <div class="text-right">
           <div class="text-[10px] uppercase tracking-wide text-[#737373]">合计花费</div>
           <div class="font-semibold text-[#6ee7a5]" style="font-family: var(--font-num)">
-            {{ hasCost ? `${currency} ${totalCost < 0.000001 ? totalCost.toExponential(2) : totalCost.toFixed(2)}` : "—" }}
+            <template v-if="hasCost">
+              <span v-for="item in currencyTotals" :key="item.currency" class="ml-2 first:ml-0">
+                {{ item.currency }} {{ formatTotalCost(item.total) }}
+              </span>
+            </template>
+            <span v-else>—</span>
           </div>
         </div>
       </div>
@@ -118,7 +134,8 @@ defineExpose({ refresh: load });
           </div>
           <div class="min-w-[64px] text-right" style="font-family: var(--font-num)">
             <span :class="Number.isFinite(Number(row.estimatedCostUsd)) ? 'text-[#6ee7a5]' : 'text-[#666]'">
-              {{ formatCost(row.estimatedCostUsd) }}
+              <div>{{ row.currency ? `${row.currency} ${formatCost(row.estimatedCostUsd)}` : formatCost(row.estimatedCostUsd) }}</div>
+              <div v-if="row.pricingSource" class="mt-0.5 text-[10px] text-[#737373]">{{ pricingSourceLabel(row.pricingSource) }}</div>
             </span>
           </div>
         </div>
