@@ -16,7 +16,7 @@ type Capability struct {
 	SupportsAudio       bool
 	SupportsTools       bool
 	SupportsThinking    bool
-	// Pricing 是该模型官方公布的 token 价格（每百万 token，USD）。
+	// Pricing 是该模型官方公布的 token 价格（每百万 token）。
 	// 仅在 adapter 未配置手动/catalog 价格时作为兜底使用。
 	Pricing *BuiltinPricing `json:"-"`
 }
@@ -27,6 +27,8 @@ type BuiltinPricing struct {
 	Output     *float64
 	CacheRead  *float64
 	CacheWrite *float64
+	Currency   string
+	Source     string
 }
 
 type capabilityRule struct {
@@ -208,12 +210,79 @@ var capabilityRules = []capabilityRule{
 	// ─── GLM ───────────────────────────────────────────────────────────────
 	{
 		regexp.MustCompile(`^glm-?5[.-]?2(?:-|$)`),
-		// Excel 中 GLM-5.2 为 200K-1M，自动配置采用保守下限。
-		Capability{DisplayName: "GLM-5.2", ContextWindowTokens: 200_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, SupportsThinking: true, Pricing: pricing(0.5, 2, 0.05)},
+		Capability{DisplayName: "GLM-5.2", ContextWindowTokens: 200_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, SupportsThinking: true, Pricing: pricingUSD(1.4, 4.4, 0.26)},
+	},
+	{
+		regexp.MustCompile(`^glm-?5[.-]?1(?:-|$)`),
+		Capability{DisplayName: "GLM-5.1", ContextWindowTokens: 200_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, SupportsThinking: true, Pricing: pricingUSD(1.4, 4.4, 0.26)},
+	},
+	{
+		regexp.MustCompile(`^glm-?5-turbo(?:-|$)`),
+		Capability{DisplayName: "GLM-5-Turbo", ContextWindowTokens: 200_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(1.2, 4.0, 0.24)},
+	},
+	{
+		regexp.MustCompile(`^glm-?5(?:-|$)`),
+		Capability{DisplayName: "GLM-5", ContextWindowTokens: 200_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(1.0, 3.2, 0.2)},
+	},
+	{
+		regexp.MustCompile(`^glm-?4[.-]?7-flashx(?:-|$)`),
+		Capability{DisplayName: "GLM-4.7-FlashX", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(0.07, 0.4, 0.01)},
+	},
+	{
+		regexp.MustCompile(`^glm-?4[.-]?7(?:-|$)`),
+		Capability{DisplayName: "GLM-4.7", ContextWindowTokens: 200_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(0.6, 2.2, 0.11)},
+	},
+	{
+		regexp.MustCompile(`^glm-?4[.-]?6(?:-|$)`),
+		Capability{DisplayName: "GLM-4.6", ContextWindowTokens: 200_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(0.6, 2.2, 0.11)},
+	},
+	{
+		regexp.MustCompile(`^glm-?4[.-]?5-airx(?:-|$)`),
+		Capability{DisplayName: "GLM-4.5-AirX", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(1.1, 4.5, 0.22)},
+	},
+	{
+		regexp.MustCompile(`^glm-?4[.-]?5-air(?:-|$)`),
+		Capability{DisplayName: "GLM-4.5-Air", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(0.2, 1.1, 0.03)},
+	},
+	{
+		regexp.MustCompile(`^glm-?4[.-]?5-x(?:-|$)`),
+		Capability{DisplayName: "GLM-4.5-X", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(2.2, 8.9, 0.45)},
+	},
+	{
+		regexp.MustCompile(`^glm-?4[.-]?5(?:-|$)`),
+		Capability{DisplayName: "GLM-4.5", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(0.6, 2.2, 0.11)},
+	},
+	{
+		regexp.MustCompile(`^glm-?4-32b-0414-128k(?:-|$)`),
+		Capability{DisplayName: "GLM-4-32B-0414-128K", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: false, SupportsTools: true, Pricing: pricingUSDNoCache(0.1, 0.1)},
+	},
+	{
+		regexp.MustCompile(`^glm-?4[.-]?7-flash(?:-|$)|^glm-?4[.-]?5-flash(?:-|$)`),
+		Capability{DisplayName: "GLM Flash", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: false, SupportsTools: true, Pricing: pricingUSD(0, 0, 0)},
 	},
 	{
 		regexp.MustCompile(`^glm-?4v`),
-		Capability{DisplayName: "GLM-4V", ContextWindowTokens: 128_000, MaxOutputTokens: 4_096, SupportsVision: true, SupportsTools: true, Pricing: pricing(0.5, 2, 0.05)},
+		Capability{DisplayName: "GLM-4V", ContextWindowTokens: 128_000, MaxOutputTokens: 4_096, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(0.3, 0.9, 0.05)},
+	},
+	{
+		regexp.MustCompile(`^glm-?5v-turbo(?:-|$)`),
+		Capability{DisplayName: "GLM-5V-Turbo", ContextWindowTokens: 200_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(1.2, 4.0, 0.24)},
+	},
+	{
+		regexp.MustCompile(`^glm-?4[.-]?6v-flashx(?:-|$)`),
+		Capability{DisplayName: "GLM-4.6V-FlashX", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(0.04, 0.4, 0.004)},
+	},
+	{
+		regexp.MustCompile(`^glm-?4[.-]?6v(?:-|$)`),
+		Capability{DisplayName: "GLM-4.6V", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(0.3, 0.9, 0.05)},
+	},
+	{
+		regexp.MustCompile(`^glm-?4[.-]?5v(?:-|$)`),
+		Capability{DisplayName: "GLM-4.5V", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(0.6, 1.8, 0.11)},
+	},
+	{
+		regexp.MustCompile(`^glm-?ocr(?:-|$)`),
+		Capability{DisplayName: "GLM-OCR", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSDNoCache(0.03, 0.03)},
 	},
 	{
 		regexp.MustCompile(`^glm`),
@@ -233,11 +302,24 @@ var capabilityRules = []capabilityRule{
 	// ─── MiniMax ───────────────────────────────────────────────────────────
 	{
 		regexp.MustCompile(`^minimax-?(?:vl|vision)`),
-		Capability{DisplayName: "MiniMax-VL", ContextWindowTokens: 256_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricing(1, 3, 0.1)},
+		Capability{DisplayName: "MiniMax-VL", ContextWindowTokens: 256_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingCNY(2.1, 8.4, 0.42, 2.625)},
+	},
+	{
+		regexp.MustCompile(`^minimax-m3(?:-|$)`),
+		// 默认采用官方标准档 <=512K；超 512K 请求需按官方分段价计费，当前 PriceRate 结构无法表达阈值。
+		Capability{DisplayName: "MiniMax-M3", ContextWindowTokens: 1_000_000, MaxOutputTokens: 16_384, SupportsVision: false, SupportsTools: true, Pricing: pricingCNYNoWrite(2.1, 8.4, 0.42)},
+	},
+	{
+		regexp.MustCompile(`^minimax-m2[.-]?7-highspeed(?:-|$)`),
+		Capability{DisplayName: "MiniMax-M2.7-highspeed", ContextWindowTokens: 1_000_000, MaxOutputTokens: 16_384, SupportsVision: false, SupportsTools: true, Pricing: pricingCNY(4.2, 16.8, 0.42, 2.625)},
+	},
+	{
+		regexp.MustCompile(`^minimax-m2[.-]?7(?:-|$)`),
+		Capability{DisplayName: "MiniMax-M2.7", ContextWindowTokens: 1_000_000, MaxOutputTokens: 16_384, SupportsVision: false, SupportsTools: true, Pricing: pricingCNY(2.1, 8.4, 0.42, 2.625)},
 	},
 	{
 		regexp.MustCompile(`^minimax`),
-		Capability{DisplayName: "MiniMax", ContextWindowTokens: 256_000, MaxOutputTokens: 8_192, SupportsVision: false, SupportsTools: true, Pricing: pricing(1, 3, 0.1)},
+		Capability{DisplayName: "MiniMax", ContextWindowTokens: 256_000, MaxOutputTokens: 8_192, SupportsVision: false, SupportsTools: true, Pricing: pricingCNY(2.1, 8.4, 0.21, 2.625)},
 	},
 
 	// ─── StepFun ───────────────────────────────────────────────────────────
@@ -315,17 +397,278 @@ func BuiltinPricingFor(modelID string) *BuiltinPricing {
 	return c.Pricing
 }
 
+// BuiltinPricingForAdapter 返回供应商感知的官方价格。
+func BuiltinPricingForAdapter(modelID, supplierID, provider, baseURL string) *BuiltinPricing {
+	supplier := strings.ToLower(strings.TrimSpace(supplierID))
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	base := strings.ToLower(strings.TrimSpace(baseURL))
+	if supplier == "opencode_go" || strings.Contains(base, "opencode.ai/zen/go") {
+		return clonePricing(opencodeGoBuiltinPricing(modelID))
+	}
+	if strings.Contains(base, "opencode.ai/zen") {
+		return clonePricing(opencodeZenBuiltinPricing(modelID))
+	}
+	if supplier == "zhipu_glm" || supplier == "zhipu_glm_en" || supplier == "zhipu" || supplier == "zhipu_team" || strings.Contains(base, "bigmodel.cn") || strings.Contains(base, "api.z.ai") || strings.Contains(base, "z.ai") {
+		return clonePricing(BuiltinPricingFor(modelID))
+	}
+	if supplier == "minimax" || supplier == "minimax_en" || strings.Contains(base, "minimaxi") || strings.Contains(base, "minimax.io") || strings.Contains(base, "minimax.com") {
+		return clonePricing(BuiltinPricingFor(modelID))
+	}
+	if supplier == "volcengine" || supplier == "volcengine_agent" || supplier == "doubaoseed" || supplier == "byteplus" || strings.Contains(base, "volces.com") || strings.Contains(base, "bytepluses.com") {
+		return clonePricing(volcengineBuiltinPricing(modelID))
+	}
+	if provider == "" {
+		return clonePricing(BuiltinPricingFor(modelID))
+	}
+	return clonePricing(BuiltinPricingFor(modelID))
+}
+
+// BuiltinPricingCurrencyForAdapter 返回未命中具体模型价格时应使用的估算币种。
+func BuiltinPricingCurrencyForAdapter(supplierID, provider, baseURL string) string {
+	supplier := strings.ToLower(strings.TrimSpace(supplierID))
+	base := strings.ToLower(strings.TrimSpace(baseURL))
+	if supplier == "minimax" || supplier == "minimax_en" || strings.Contains(base, "minimaxi") || strings.Contains(base, "minimax.io") || strings.Contains(base, "minimax.com") {
+		return "CNY"
+	}
+	if supplier == "volcengine" || supplier == "volcengine_agent" || supplier == "doubaoseed" || supplier == "byteplus" || strings.Contains(base, "volces.com") || strings.Contains(base, "bytepluses.com") {
+		return "CNY"
+	}
+	if supplier == "zhipu_glm" || supplier == "zhipu_glm_en" || supplier == "zhipu" || supplier == "zhipu_team" || strings.Contains(base, "bigmodel.cn") || strings.Contains(base, "z.ai") {
+		return "USD"
+	}
+	_ = provider
+	return "USD"
+}
+
+// volcengineBuiltinPricing 只收录本轮从火山方舟官方价格表逐项核对的固定段价格。
+// 其它模型的官方价格可能随输入长度分段或套餐变化，交由调用方使用 CNY 均价估算。
+func volcengineBuiltinPricing(modelID string) *BuiltinPricing {
+	normalized := normalizeModelID(modelID)
+	switch {
+	case strings.HasPrefix(normalized, "doubao-seed-2-1-pro") || strings.HasPrefix(normalized, "doubao-seed-2.1-pro"):
+		return &BuiltinPricing{Input: p(3.0), Output: p(15.0), CacheRead: p(1.2), Currency: "CNY", Source: "official"}
+	default:
+		return nil
+	}
+}
+
+// opencodeZenBuiltinPricing mirrors the current official pricing table at
+// https://opencode.ai/docs/zen. Prices are USD per 1M tokens.
+func opencodeZenBuiltinPricing(modelID string) *BuiltinPricing {
+	switch normalized := normalizeModelID(modelID); normalized {
+	case "big-pickle", "deepseek-v4-flash-free", "mimo-v2.5-free", "laguna-s-2.1-free", "ling-3.0-flash-free", "north-mini-code-free", "nemotron-3-ultra-free":
+		return pricingUSD(0, 0, 0)
+	case "minimax-m3", "minimax-m2.7", "minimax-m2.5":
+		return pricingUSD(0.30, 1.20, 0.06)
+	case "glm-5.2", "glm-5.1":
+		return pricingUSD(1.40, 4.40, 0.26)
+	case "glm-5":
+		return pricingUSD(1.00, 3.20, 0.20)
+	case "kimi-k2.7-code":
+		return pricingUSD(0.95, 4.00, 0.19)
+	case "kimi-k3":
+		return pricingUSD(3.00, 15.00, 0.30)
+	case "kimi-k2.6":
+		return pricingUSD(0.95, 4.00, 0.16)
+	case "kimi-k2.5":
+		return pricingUSD(0.60, 3.00, 0.10)
+	case "qwen3.7-max":
+		return pricingCW(2.50, 7.50, 0.50, 3.125)
+	case "qwen3.7-plus":
+		return pricingCW(0.40, 1.60, 0.04, 0.50)
+	case "qwen3.6-plus":
+		return pricingCW(0.50, 3.00, 0.05, 0.625)
+	case "qwen3.5-plus":
+		return pricingCW(0.20, 1.20, 0.02, 0.25)
+	case "deepseek-v4-pro":
+		return pricingUSD(1.74, 3.48, 0.145)
+	case "deepseek-v4-flash":
+		return pricingUSD(0.14, 0.28, 0.028)
+	case "claude-fable-5":
+		return pricingCW(10.00, 50.00, 1.00, 12.50)
+	case "claude-opus-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-opus-4-5":
+		return pricingCW(5.00, 25.00, 0.50, 6.25)
+	case "claude-sonnet-5":
+		return pricingCW(2.00, 10.00, 0.20, 2.50)
+	case "claude-sonnet-4-6", "claude-sonnet-4-5":
+		return pricingCW(3.00, 15.00, 0.30, 3.75)
+	case "claude-haiku-4-5":
+		return pricingCW(1.00, 5.00, 0.10, 1.25)
+	case "gemini-3.6-flash":
+		return pricingUSD(1.50, 7.50, 0.15)
+	case "gemini-3.5-flash":
+		return pricingUSD(1.50, 9.00, 0.15)
+	case "gemini-3.5-flash-lite":
+		return pricingUSD(0.30, 2.50, 0.03)
+	case "gemini-3.1-pro":
+		return pricingUSD(2.00, 12.00, 0.20)
+	case "gemini-3-flash":
+		return pricingUSD(0.50, 3.00, 0.05)
+	case "grok-4.5":
+		return pricingUSD(2.00, 6.00, 0.30)
+	case "grok-build-0.1":
+		return pricingUSD(1.00, 2.00, 0.20)
+	case "gpt-5.6-sol":
+		return pricingCW(5.00, 30.00, 0.50, 6.25)
+	case "gpt-5.6-terra":
+		return pricingCW(2.00, 12.00, 0.20, 2.50)
+	case "gpt-5.6-luna":
+		return pricingCW(0.20, 1.20, 0.02, 0.25)
+	case "gpt-5.5":
+		return pricingUSD(5.00, 30.00, 0.50)
+	case "gpt-5.5-pro":
+		return pricingUSD(30.00, 180.00, 30.00)
+	case "gpt-5.4":
+		return pricingUSD(2.50, 15.00, 0.25)
+	case "gpt-5.4-pro":
+		return pricingUSD(30.00, 180.00, 30.00)
+	case "gpt-5.4-mini":
+		return pricingUSD(0.75, 4.50, 0.075)
+	case "gpt-5.4-nano":
+		return pricingUSD(0.20, 1.25, 0.02)
+	case "gpt-5.3-codex-spark", "gpt-5.3-codex", "gpt-5.2", "gpt-5.2-codex":
+		return pricingUSD(1.75, 14.00, 0.175)
+	case "gpt-5.1", "gpt-5.1-codex":
+		return pricingUSD(1.07, 8.50, 0.107)
+	case "gpt-5.1-codex-max":
+		return pricingUSD(1.25, 10.00, 0.125)
+	case "gpt-5.1-codex-mini":
+		return pricingUSD(0.25, 2.00, 0.025)
+	case "gpt-5", "gpt-5-codex":
+		return pricingUSD(1.07, 8.50, 0.107)
+	case "gpt-5-nano":
+		return pricingUSD(0.05, 0.40, 0.005)
+	default:
+		return nil
+	}
+}
+
+// opencodeGoBuiltinPricing mirrors the current official pricing table at
+// https://opencode.ai/docs/go. Prices are USD per 1M tokens.
+func opencodeGoBuiltinPricing(modelID string) *BuiltinPricing {
+	switch normalized := normalizeModelID(modelID); normalized {
+	case "grok-4.5":
+		return pricingUSD(2.00, 6.00, 0.30)
+	case "gpt-5.6-luna":
+		return pricingCW(0.20, 1.20, 0.02, 0.25)
+	case "glm-5.2", "glm-5.1":
+		return pricingUSD(1.40, 4.40, 0.26)
+	case "kimi-k3":
+		return pricingUSD(3.00, 15.00, 0.30)
+	case "kimi-k2.7-code":
+		return pricingUSD(0.95, 4.00, 0.19)
+	case "kimi-k2.6":
+		return pricingUSD(0.95, 4.00, 0.16)
+	case "mimo-v2.5":
+		return pricingUSD(0.14, 0.28, 0.0028)
+	case "mimo-v2.5-pro":
+		return pricingUSD(0.435, 0.87, 0.003625)
+	case "minimax-m3":
+		return pricingUSD(0.30, 1.20, 0.06)
+	case "minimax-m2.7", "minimax-m2.5":
+		return pricingCW(0.30, 1.20, 0.06, 0.375)
+	case "qwen3.7-max":
+		return pricingCW(2.50, 7.50, 0.50, 3.125)
+	case "qwen3.7-plus":
+		return pricingCW(0.40, 1.60, 0.04, 0.50)
+	case "qwen3.6-plus":
+		return pricingCW(0.50, 3.00, 0.05, 0.625)
+	case "deepseek-v4-pro":
+		return pricingUSD(0.435, 0.87, 0.003625)
+	case "deepseek-v4-flash":
+		return pricingUSD(0.14, 0.28, 0.0028)
+	case "hy3":
+		return pricingUSD(0.14, 0.58, 0.035)
+	default:
+		return nil
+	}
+}
+
+// AverageBuiltinPricing 返回内置官方目录中各价格字段的算术平均。
+// 这是估算价，不是任何供应商的官方报价；按币种分别聚合。
+func AverageBuiltinPricing(currency string) *BuiltinPricing {
+	wanted := strings.ToUpper(strings.TrimSpace(currency))
+	if wanted == "" {
+		wanted = "USD"
+	}
+	var input, output, cacheRead, cacheWrite float64
+	var inputN, outputN, cacheReadN, cacheWriteN int
+	for _, rule := range capabilityRules {
+		pricing := rule.capability.Pricing
+		if pricing == nil || strings.ToUpper(strings.TrimSpace(pricing.Currency)) != wanted || pricing.Source == "average" {
+			continue
+		}
+		if pricing.Input != nil {
+			input += *pricing.Input
+			inputN++
+		}
+		if pricing.Output != nil {
+			output += *pricing.Output
+			outputN++
+		}
+		if pricing.CacheRead != nil {
+			cacheRead += *pricing.CacheRead
+			cacheReadN++
+		}
+		if pricing.CacheWrite != nil {
+			cacheWrite += *pricing.CacheWrite
+			cacheWriteN++
+		}
+	}
+	result := &BuiltinPricing{Currency: wanted, Source: "average"}
+	if inputN > 0 {
+		result.Input = p(input / float64(inputN))
+	}
+	if outputN > 0 {
+		result.Output = p(output / float64(outputN))
+	}
+	if cacheReadN > 0 {
+		result.CacheRead = p(cacheRead / float64(cacheReadN))
+	}
+	if cacheWriteN > 0 {
+		result.CacheWrite = p(cacheWrite / float64(cacheWriteN))
+	}
+	if result.Input == nil && result.Output == nil && result.CacheRead == nil && result.CacheWrite == nil {
+		return nil
+	}
+	return result
+}
+
 // p 是构造 *float64 的简写辅助函数。
 func p(v float64) *float64 { return &v }
 
 // pricing 构造 BuiltinPricing 的简写辅助函数。
 func pricing(input, output, cacheRead float64) *BuiltinPricing {
-	return &BuiltinPricing{Input: p(input), Output: p(output), CacheRead: p(cacheRead)}
+	return pricingUSD(input, output, cacheRead)
 }
 
 // pricingCW 同上但带 cacheWrite。
 func pricingCW(input, output, cacheRead, cacheWrite float64) *BuiltinPricing {
-	return &BuiltinPricing{Input: p(input), Output: p(output), CacheRead: p(cacheRead), CacheWrite: p(cacheWrite)}
+	return &BuiltinPricing{Input: p(input), Output: p(output), CacheRead: p(cacheRead), CacheWrite: p(cacheWrite), Currency: "USD", Source: "official"}
+}
+
+func pricingUSD(input, output, cacheRead float64) *BuiltinPricing {
+	return &BuiltinPricing{Input: p(input), Output: p(output), CacheRead: p(cacheRead), Currency: "USD", Source: "official"}
+}
+
+func pricingUSDNoCache(input, output float64) *BuiltinPricing {
+	return &BuiltinPricing{Input: p(input), Output: p(output), Currency: "USD", Source: "official"}
+}
+
+func pricingCNY(input, output, cacheRead, cacheWrite float64) *BuiltinPricing {
+	return &BuiltinPricing{Input: p(input), Output: p(output), CacheRead: p(cacheRead), CacheWrite: p(cacheWrite), Currency: "CNY", Source: "official"}
+}
+
+func pricingCNYNoWrite(input, output, cacheRead float64) *BuiltinPricing {
+	return &BuiltinPricing{Input: p(input), Output: p(output), CacheRead: p(cacheRead), Currency: "CNY", Source: "official"}
+}
+
+func clonePricing(input *BuiltinPricing) *BuiltinPricing {
+	if input == nil {
+		return nil
+	}
+	copy := *input
+	return &copy
 }
 
 // Resolve 优先使用 explicitTokens，否则从目录推断。

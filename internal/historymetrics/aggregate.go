@@ -208,6 +208,7 @@ type ProviderSpend struct {
 	TotalTokens      int64    `json:"totalTokens"`
 	EstimatedCostUSD *float64 `json:"estimatedCostUsd"`
 	Currency         string   `json:"currency,omitempty"`
+	PricingSource    string   `json:"pricingSource,omitempty"`
 }
 
 // SummarizeProviderSpend 按中转站聚合 provider_call 事件的 token 与花费。
@@ -217,6 +218,9 @@ func SummarizeProviderSpend(events []RequestMetric) []ProviderSpend {
 		spend    ProviderSpend
 		cost     float64
 		costKnwn bool
+		currency string
+		source   string
+		mixed    bool
 	}
 	order := make([]string, 0)
 	byKey := make(map[string]*acc)
@@ -226,7 +230,9 @@ func SummarizeProviderSpend(events []RequestMetric) []ProviderSpend {
 		}
 		station := stationLabel(event.GroupName, event.BaseURL, event.Provider)
 		provider := strings.TrimSpace(event.Provider)
-		key := station + "\x00" + provider
+		currency := strings.TrimSpace(event.Currency)
+		// 不同币种不能进入同一个累计桶；未知价格仍使用空币种桶。
+		key := station + "\x00" + provider + "\x00" + currency
 		item, ok := byKey[key]
 		if !ok {
 			item = &acc{spend: ProviderSpend{Station: station, Provider: provider}}
@@ -240,11 +246,14 @@ func SummarizeProviderSpend(events []RequestMetric) []ProviderSpend {
 		item.spend.CacheWriteTokens += event.CacheWriteTokens
 		item.spend.TotalTokens += event.TotalTokens
 		if event.CostUSD != nil {
+			if item.currency == "" {
+				item.currency = currency
+			}
+			if item.source == "" {
+				item.source = strings.TrimSpace(event.PricingSource)
+			}
 			item.cost += *event.CostUSD
 			item.costKnwn = true
-			if item.spend.Currency == "" {
-				item.spend.Currency = strings.TrimSpace(event.Currency)
-			}
 		}
 	}
 	result := make([]ProviderSpend, 0, len(order))
@@ -253,6 +262,8 @@ func SummarizeProviderSpend(events []RequestMetric) []ProviderSpend {
 		if item.costKnwn {
 			cost := item.cost
 			item.spend.EstimatedCostUSD = &cost
+			item.spend.Currency = item.currency
+			item.spend.PricingSource = item.source
 		}
 		result = append(result, item.spend)
 	}

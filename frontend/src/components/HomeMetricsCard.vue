@@ -214,11 +214,16 @@ function calculateRate(numerator, denominator) {
   return top / bottom;
 }
 
-function formatUSD(value) {
+function formatCost(value, currency = "USD") {
   const amount = Number(value);
-  if (!Number.isFinite(amount)) return "$0.00";
-  if (amount > 0 && amount < 0.01) return "<$0.01";
-  return `$${amount.toFixed(2)}`;
+  const unit = String(currency || "USD").trim() || "USD";
+  if (!Number.isFinite(amount)) return `${unit} 0.00`;
+  if (amount > 0 && amount < 0.01) return `${unit} <0.01`;
+  return `${unit} ${amount.toFixed(2)}`;
+}
+function pricingSourceLabel(source) {
+  const labels = { official: "官方价", catalog: "中转站探测价", configured: "手动配置", average: "均价估算" };
+  return labels[String(source || "").trim()] || "";
 }
 
 const cacheReadTokensTotal = computed(() => normalizeNumber(summary.value.cacheReadTokens));
@@ -267,27 +272,33 @@ const rangeCostSummary = computed(() => {
   let total = 0;
   let pricedRows = 0;
   let unpricedRows = 0;
-  let currency = "USD";
+  const totals = new Map();
+  const sources = new Set();
   for (const ev of filteredEvents.value) {
     if (String(ev.kind || "").trim() !== "provider_call" && String(ev.kind || "").trim() !== "") continue;
     if (ev.pricingKnown === true && ev.costUsd != null) {
       const amount = Number(ev.costUsd);
       if (Number.isFinite(amount)) {
+        const currency = String(ev.currency || "USD").trim() || "USD";
+        totals.set(currency, (totals.get(currency) || 0) + amount);
+        if (ev.pricingSource) sources.add(String(ev.pricingSource));
         total += amount;
         pricedRows++;
-        if (ev.currency) currency = String(ev.currency);
         continue;
       }
     }
     unpricedRows++;
   }
-  return { total, pricedRows, unpricedRows, currency, hasPriced: pricedRows > 0 };
+  return { total, pricedRows, unpricedRows, totals: [...totals.entries()].map(([currency, total]) => ({ currency, total })), sources: [...sources], hasPriced: pricedRows > 0 };
 });
 
 // 展示值：无任何已计价请求时显示占位符，避免伪造数字
 const estimatedCostDisplay = computed(() =>
-  rangeCostSummary.value.hasPriced ? formatUSD(rangeCostSummary.value.total) : "—",
+  rangeCostSummary.value.hasPriced
+    ? rangeCostSummary.value.totals.map((item) => formatCost(item.total, item.currency)).join(" · ")
+    : "—",
 );
+const estimatedCostSourceDisplay = computed(() => rangeCostSummary.value.sources.map(pricingSourceLabel).filter(Boolean).join(" · "));
 
 const cacheTooltipContent = computed(() => {
   const formula = includeCacheWriteInHitRate.value
@@ -329,11 +340,11 @@ const tokensTooltipContent = computed(() =>
 const costTooltipContent = computed(() => {
   const { pricedRows, unpricedRows, hasPriced } = rangeCostSummary.value;
   const lines = [
-    "估算 = 该区间内已知价格模型的美元花费合计。",
+    "估算 = 该区间内已知价格模型的花费合计，按币种分别展示。",
     "价格优先级：手动配价 > 中转站探测 > 内置官方价。",
     "",
     hasPriced
-      ? `合计：${formatUSD(rangeCostSummary.value.total)}（已计价 ${formatMetricValue(pricedRows)} 条）`
+      ? `合计：${rangeCostSummary.value.totals.map((item) => formatCost(item.total, item.currency)).join(" · ")}（已计价 ${formatMetricValue(pricedRows)} 条）`
       : "区间内暂无可计价请求。",
   ];
   if (unpricedRows > 0) {
@@ -597,6 +608,7 @@ onUnmounted(() => {
               {{ formatCompactInteger(summary.turnsTotal) }}
             </div>
             <div class="mt-3 text-xs leading-5 text-[#8c8c8c]">
+              <span v-if="estimatedCostSourceDisplay" class="mr-2 text-[#737373]">{{ estimatedCostSourceDisplay }}</span>
               有效
               <span :title="formatInteger(summary.validTurnsTotal)">
                 {{ formatCompactInteger(summary.validTurnsTotal) }}

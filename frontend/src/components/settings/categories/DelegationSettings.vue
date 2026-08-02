@@ -1284,10 +1284,11 @@ watch(
         label="监督处置"
         description="允许监督模型在执行偏离时改派模型、升级复核，或在监督服务不可用时阻止任务继续。"
       >
-        <div class="grid w-full max-w-[560px] gap-3 lg:grid-cols-3">
-          <div class="min-w-0 space-y-1">
+        <div class="grid w-full max-w-[560px] grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <div class="min-h-[68px] min-w-0 rounded-[6px] border border-white/8 bg-black/10 px-3 py-2.5">
             <Switch
               compact
+              class="w-full"
               label="允许改派"
               :enabled="supervisionConfig.allowReassign"
               :disabled="supervisionFieldBusy('allowReassign') || !supervisionConfig.enabled"
@@ -1303,9 +1304,10 @@ watch(
               {{ supervisionFieldError('allowReassign') }} · 重试
             </button>
           </div>
-          <div class="min-w-0 space-y-1">
+          <div class="min-h-[68px] min-w-0 rounded-[6px] border border-white/8 bg-black/10 px-3 py-2.5">
             <Switch
               compact
+              class="w-full"
               label="允许升级"
               :enabled="supervisionConfig.allowEscalate"
               :disabled="supervisionFieldBusy('allowEscalate') || !supervisionConfig.enabled"
@@ -1321,9 +1323,10 @@ watch(
               {{ supervisionFieldError('allowEscalate') }} · 重试
             </button>
           </div>
-          <div class="min-w-0 space-y-1">
+          <div class="min-h-[68px] min-w-0 rounded-[6px] border border-white/8 bg-black/10 px-3 py-2.5">
             <Switch
               compact
+              class="w-full"
               label="严格不可用处理"
               :enabled="supervisionConfig.strictUnavailable"
               :disabled="supervisionFieldBusy('strictUnavailable') || !supervisionConfig.enabled"
