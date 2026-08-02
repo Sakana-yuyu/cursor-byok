@@ -1232,10 +1232,17 @@ func (service *Service) handleTimerEvent(stream *ActiveStream, payload *streamTi
 		if subscriberCount > 0 || isTerminalStreamStatus(status) {
 			return nil
 		}
-		// Once the reconnect grace period expires, a missing RunSSE subscriber
-		// means the client can no longer observe or cancel this turn. Delegation
-		// must not keep the parent alive: canceling the parent also cancels its
-		// provider and every delegated worker.
+		// 活跃委派（Multitask aggregate 或 native Cursor 子代理）仍在运行时，
+		// 客户端断连不应级联取消整个 turn：Cursor 在长任务期间重建 SSE 连接是
+		// 正常现象，此时取消父请求会连带杀掉正在执行的子代理。交给各自的 exec
+		// watchdog 兜底收口，与 turn_stale.go 中“长任务断连是正常现象，不能因此
+		// 强制取消任务”的处理保持一致（此处定时器已在 handleTimerEvent 开头清理，
+		// 不再续排，委派结束前不会再次触发）。
+		if service.hasActiveDelegation(stream) {
+			log.Printf("forwarder orphan cancel deferred active delegation request_id=%s subscriber_count=%d",
+				strings.TrimSpace(stream.RequestID), subscriberCount)
+			return nil
+		}
 		log.Printf("forwarder orphan canceling disconnected request request_id=%s subscriber_count=%d active_delegation=%t",
 			strings.TrimSpace(stream.RequestID), subscriberCount, hasActiveDelegationAggregate(stream))
 		return service.handleCancelIntent(InboundIntent{
