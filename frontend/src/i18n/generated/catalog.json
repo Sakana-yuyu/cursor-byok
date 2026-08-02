@@ -854,8 +854,8 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 611,
-          "column": 123
+          "line": 612,
+          "column": 1
         }
       ]
     },
