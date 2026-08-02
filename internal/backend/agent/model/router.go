@@ -107,9 +107,23 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 
 		if attempt > 0 {
 			// 游标回到已尝试过的渠道，说明没有其它可用端点。
-			// OpenAI 兼容端点的 404 视为可换渠道（模型名/路径未就绪），不提前返回。
-			if _, seen := tried[channelID]; seen && lastErrPermanent && !isOpenAINotFoundError(streamErr) {
-				return firstErr
+			if _, seen := tried[channelID]; seen {
+				// OpenAI 兼容端点的 404：已无新渠道可换（单渠道必然如此；多渠道
+				// 路径下等于轮转一圈、全部渠道已 404），继续重试无意义，直接返回。
+				if isOpenAINotFoundError(streamErr) {
+					if isOpenAINotFoundError(firstErr) {
+						return openAINotFoundReadableError(req.ModelID, firstErr)
+					}
+					return firstErr
+				}
+				// 其它永久错误同样立即返回；若 firstErr 为 OpenAI 404（如后续渠道
+				// 返回非 404 永久错误），提前返回时同样给出可读文案。
+				if lastErrPermanent {
+					if isOpenAINotFoundError(firstErr) {
+						return openAINotFoundReadableError(req.ModelID, firstErr)
+					}
+					return firstErr
+				}
 			}
 			if err := sleepWithContext(ctx, routerRetryBackoff(attempt)); err != nil {
 				if firstErr != nil {
@@ -136,7 +150,7 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 
 	if firstErr != nil {
 		if isOpenAINotFoundError(firstErr) {
-			return fmt.Errorf("model %q not found at provider (404)：请检查模型名或中转站是否支持该模型（%w）", req.ModelID, firstErr)
+			return openAINotFoundReadableError(req.ModelID, firstErr)
 		}
 		return firstErr
 	}
@@ -464,6 +478,13 @@ func isOpenAINotFoundError(err error) bool {
 		return false
 	}
 	return strings.EqualFold(strings.TrimSpace(channelErr.Provider), "openai")
+}
+
+// openAINotFoundReadableError 生成 OpenAI 兼容端点 404 的可读错误，提示用户检查
+// 模型名或中转站是否支持该模型。文案与 brief 保持一致，供提前返回路径与循环
+// 耗尽路径共用。
+func openAINotFoundReadableError(modelID string, err error) error {
+	return fmt.Errorf("model %q not found at provider (404)：请检查模型名或中转站是否支持该模型（%w）", modelID, err)
 }
 
 // parseProviderErrorStatus 从错误文本中解析 "status=<code>" 的状态码；解析失败返回 0。
