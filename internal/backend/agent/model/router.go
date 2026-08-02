@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -83,6 +84,9 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 	tried := make(map[string]struct{})
 	var firstErr error
 	var lastErrPermanent bool
+	// streamErr 保存最近一次渠道失败的错误，供提前返回前的 404 判定
+	//（提前返回检查发生在 streamChannel 调用之前，因此需在循环外声明）。
+	var streamErr error
 
 	for attempt := 0; attempt < routerMaxStreamAttempts; attempt++ {
 		if err := ctx.Err(); err != nil {
@@ -103,7 +107,8 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 
 		if attempt > 0 {
 			// 游标回到已尝试过的渠道，说明没有其它可用端点。
-			if _, seen := tried[channelID]; seen && lastErrPermanent {
+			// OpenAI 兼容端点的 404 视为可换渠道（模型名/路径未就绪），不提前返回。
+			if _, seen := tried[channelID]; seen && lastErrPermanent && !isOpenAINotFoundError(streamErr) {
 				return firstErr
 			}
 			if err := sleepWithContext(ctx, routerRetryBackoff(attempt)); err != nil {
@@ -114,7 +119,7 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 			}
 		}
 
-		streamErr := router.streamChannel(ctx, req, channel, sink)
+		streamErr = router.streamChannel(ctx, req, channel, sink)
 		if streamErr == nil || ctx.Err() != nil {
 			if streamErr == nil {
 				router.clearChannelFailure(channelID)
@@ -130,6 +135,9 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 	}
 
 	if firstErr != nil {
+		if isOpenAINotFoundError(firstErr) {
+			return fmt.Errorf("model %q not found at provider (404)：请检查模型名或中转站是否支持该模型（%w）", req.ModelID, firstErr)
+		}
 		return firstErr
 	}
 	return fmt.Errorf("all model channels failed")
@@ -440,6 +448,22 @@ func isPermanentProviderError(err error) bool {
 		return false
 	}
 	return true
+}
+
+// isOpenAINotFoundError 判断是否为 OpenAI 兼容端点的 404（模型名/路径未就绪）。
+// 仅对 OpenAI 兼容端点放宽为可继续尝试其他渠道；Anthropic 协议 404 仍视为永久。
+// 通过错误链中 ChannelError.Provider 识别协议（streamChannel 总会在错误上附加渠道身份），
+// 无法识别协议时保守视为非 OpenAI 端点（保持原有提前返回行为）。
+func isOpenAINotFoundError(err error) bool {
+	var statusErr *HTTPStatusError
+	if !errors.As(err, &statusErr) || statusErr == nil || statusErr.StatusCode != http.StatusNotFound {
+		return false
+	}
+	var channelErr *ChannelError
+	if !errors.As(err, &channelErr) || channelErr == nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(channelErr.Provider), "openai")
 }
 
 // parseProviderErrorStatus 从错误文本中解析 "status=<code>" 的状态码；解析失败返回 0。
