@@ -288,6 +288,7 @@ type Service struct {
 	rules                    *UserRuleStore
 	projector                *HistoryProjector
 	compiler                 PromptCompiler
+	toolCatalog              *DefaultToolCatalog
 	promptInjection          *promptinject.Manager
 	provider                 ProviderGateway
 	resolver                 modeladapter.ChannelResolver
@@ -326,6 +327,7 @@ type maxTokensConfigPersister interface {
 
 // NewService 使用默认依赖创建 forwarder 服务。
 func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Service {
+	toolCatalog := NewToolCatalog()
 	projector := NewHistoryProjector()
 	store := NewConversationFileStore(historyRoot)
 	broker := NewStreamBroker()
@@ -366,7 +368,8 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 		docsIndexStore:     NewDocsIndexStore(appdata.DocsIndexRootPath()),
 		rules:              rules,
 		projector:          projector,
-		compiler:           NewPromptCompiler(projector, NewToolCatalog(), NewReminderInjector(), rules, skills, promptInjection),
+		compiler:           NewPromptCompiler(projector, toolCatalog, NewReminderInjector(), rules, skills, promptInjection),
+		toolCatalog:        toolCatalog,
 		promptInjection:    promptInjection,
 		provider:           NewProviderGateway(resolver),
 		resolver:           resolver,
@@ -2260,7 +2263,13 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 	isLocalStateInvocation := isLocalStateTool(trimmedToolName)
 	isImmediateNativeInvocation := isImmediateNativeTool(trimmedToolName)
 	if !isExecInvocation && !isInteractionInvocation && !isLocalStateInvocation && !isImmediateNativeInvocation {
-		return service.completePreDispatchToolError(stream, invocation, nil, false, false, fmt.Errorf("unsupported tool invocation: %s", invocation.ToolName))
+		available := ""
+		if service.toolCatalog != nil {
+			if _, names, loadErr := service.toolCatalog.Load(mode, subagentTypeName); loadErr == nil && len(names) > 0 {
+				available = fmt.Sprintf("（可用工具：%s）", strings.Join(names, ", "))
+			}
+		}
+		return service.completePreDispatchToolError(stream, invocation, nil, false, false, fmt.Errorf("unsupported tool invocation: %s%s", invocation.ToolName, available))
 	}
 	var subagentOverrides map[string]runtimecore.SubagentModelOverrideSelection
 	if isExecInvocation {
