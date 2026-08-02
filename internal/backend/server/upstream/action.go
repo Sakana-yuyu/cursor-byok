@@ -20,7 +20,7 @@ type CompatRouteConfig struct {
 	ConsoleLog    bool
 }
 
-func DirectAction(deps Dependencies, cfg CompatRouteConfig) server.HandlerFunc {
+func ForwardAction(deps Dependencies, cfg CompatRouteConfig) server.HandlerFunc {
 	return func(ctx *server.Context) error {
 		reqCtx, route, err := newCompatRouteObjects(ctx, deps, cfg)
 		if err != nil {
@@ -30,9 +30,9 @@ func DirectAction(deps Dependencies, cfg CompatRouteConfig) server.HandlerFunc {
 	}
 }
 
-// AuthenticatedDirectAction forwards a Cursor control-plane request with the
+// AuthenticatedForwardAction forwards a Cursor control-plane request with the
 // independent desktop account after the local-mode identity rewrite has run.
-func AuthenticatedDirectAction(deps Dependencies, cfg CompatRouteConfig, authorizationProvider AuthorizationProvider) server.HandlerFunc {
+func AuthenticatedForwardAction(deps Dependencies, cfg CompatRouteConfig, authorizationProvider AuthorizationProvider) server.HandlerFunc {
 	return func(ctx *server.Context) error {
 		reqCtx, _, err := newCompatRouteObjects(ctx, deps, cfg)
 		if err != nil {
@@ -162,7 +162,6 @@ func newCompatRouteObjects(ctx *server.Context, deps Dependencies, cfg CompatRou
 		Headers:        ctx.Request.Header.Clone(),
 		ContentType:    strings.TrimSpace(ctx.Request.Header.Get("content-type")),
 		RequestBody:    body,
-		Mode:           ctx.Mode,
 		Deps:           &deps,
 		HTTPRequestID:  resolveHTTPRequestID(ctx.Request),
 	}

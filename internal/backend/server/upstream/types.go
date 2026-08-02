@@ -48,7 +48,6 @@ type RequestContext struct {
 	Headers        http.Header
 	ContentType    string
 	RequestBody    []byte
-	Mode           server.ExecutionMode
 	Deps           *Dependencies
 	HTTPRequestID  string
 }

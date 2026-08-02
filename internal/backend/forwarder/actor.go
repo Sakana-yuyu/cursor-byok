@@ -524,7 +524,7 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 			stream.mu.Unlock()
 		}
 		if shouldEmitSyntheticThinking {
-			if err := service.broker.Publish(requestID, StreamEvent{Message: buildThinkingDeltaMessage("Thinking is encrypted. Please wait a moment.", event.ThinkingStyle)}); err != nil {
+			if err := service.broker.Publish(requestID, StreamEvent{Message: buildThinkingDeltaMessage("The reasoning process is encrypted. Please wait a moment. (This message does not affect any functionality; it only indicates the current reasoning status.)", event.ThinkingStyle)}); err != nil {
 				return err
 			}
 		}
