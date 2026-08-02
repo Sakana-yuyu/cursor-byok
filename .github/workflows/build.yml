@@ -298,6 +298,48 @@ jobs:
           set -uo pipefail
 
           ARCH_NAME="${{ endsWith(matrix.target, 'arm64') && 'arm64' || 'amd64' }}"
+          LOG_PREFIX="${RUNNER_TEMP:-/tmp}/cursor-byok-${ARCH_NAME}"
+
+          run_logged() {
+            local label="$1"
+            shift
+            local safe_label="${label//[^a-zA-Z0-9_.-]/_}"
+            local log_path="${LOG_PREFIX}-${safe_label}.log"
+            echo "--- ${label} (log: ${log_path}) ---"
+            "$@" 2>&1 | tee "${log_path}"
+            local status="${PIPESTATUS[0]}"
+            echo "==> ${label} exit=${status}"
+            if [ "${status}" -ne 0 ]; then
+              echo "!!! ${label} failed; last 200 log lines:"
+              tail -n 200 "${log_path}" || true
+            fi
+            return "${status}"
+          }
+
+          diagnose_failure() {
+            local status="$1"
+            if [ "${status}" -eq 0 ]; then
+              return 0
+            fi
+            echo "=== macOS build diagnostics (status=${status}) ==="
+            echo "--- workspace ---"
+            pwd
+            ls -la bin/ 2>/dev/null || true
+            find bin/release -print -exec ls -ld {} \; 2>/dev/null || true
+            echo "--- disk ---"
+            df -h . || true
+            echo "--- mounted volumes ---"
+            if command -v hdiutil >/dev/null 2>&1; then
+              hdiutil info || true
+            fi
+            echo "--- process snapshot ---"
+            ps aux | grep -E '[h]diutil|[c]reate-dmg|[c]odesign|[t]ask|[g]o build|[y]arn' || true
+            echo "--- captured logs ---"
+            find "${RUNNER_TEMP:-/tmp}" -type f -name "cursor-byok-${ARCH_NAME}-*.log" -print -exec tail -n 80 {} \; 2>/dev/null || true
+            return "${status}"
+          }
+          trap 'status=$?; diagnose_failure "${status}"; exit "${status}"' EXIT
+
           echo "==> target=${{ matrix.target }} ARCH_NAME=${ARCH_NAME} RUNNER_OS=${RUNNER_OS:-}"
 
           echo "--- toolchain ---"
@@ -318,7 +360,7 @@ jobs:
           fi
 
           echo "--- build:darwin:${ARCH_NAME} ---"
-          task "build:darwin:${ARCH_NAME}"
+          run_logged "build:darwin:${ARCH_NAME}" task "build:darwin:${ARCH_NAME}"
           BUILD_STATUS=$?
           echo "==> task build:darwin:${ARCH_NAME} exit=${BUILD_STATUS}"
           ls -la bin/ || true
@@ -336,7 +378,7 @@ jobs:
           echo "==> produced ${DMG_PATH}"
 
           echo "--- release:build:macos:${ARCH_NAME} ---"
-          task "release:build:macos:${ARCH_NAME}"
+          run_logged "release:build:macos:${ARCH_NAME}" task "release:build:macos:${ARCH_NAME}"
           RELEASE_STATUS=$?
           echo "==> task release:build:macos:${ARCH_NAME} exit=${RELEASE_STATUS}"
           ls -la "bin/release/${VERSION}/" || true
@@ -390,6 +432,14 @@ jobs:
           path: |
             bin/macos-*.dmg
             bin/release/**/*
+
+      - name: Upload macOS build diagnostics
+        if: always() && startsWith(matrix.target, 'macos-')
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}-diagnostics
+          if-no-files-found: ignore
+          path: ${{ runner.temp }}/cursor-byok-*.log
 
   release:
     name: Publish GitHub Release
