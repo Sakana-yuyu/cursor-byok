@@ -39,6 +39,11 @@ const (
 	providerDefaultMaxOutputTokens = 65536
 	providerOutputSafetyTokens     = 1024
 
+	// doomLoopThreshold 连续相同工具调用达到该次数时，向模型注入"请改变策略"提示。
+	doomLoopThreshold = 3
+	// doomLoopHardLimit 连续相同工具调用达到该次数时，中断本轮（返回可恢复错误）。
+	doomLoopHardLimit = 5
+
 	runtimeThinkingEffortParameterID = "thinking_effort"
 )
 
@@ -2195,6 +2200,7 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 	invocation = service.rewriteDirectMCPToolInvocation(stream, invocation)
 	invocation = service.normalizeCallMCPToolInvocation(stream, invocation)
 	trimmedToolName := strings.TrimSpace(invocation.ToolName)
+	signature := delegation.NormalizeToolSignature(trimmedToolName, invocation.ArgsJSON)
 	stream.mu.Lock()
 	mode := stream.Mode
 	providerPass := stream.ProviderPassCount
@@ -2204,7 +2210,28 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 	}
 	stream.ToolInvocationCount++
 	stream.UpdatedAt = time.Now().UTC()
+	// B1 doom loop 检测：以（工具名+规范化参数）签名对连续相同调用计数。
+	// 签名变化即重置；达到硬阈值时中断本轮，达到警告阈值时注入提示。
+	doomLoopCount := 0
+	if stream.lastDoomLoopSignature != signature {
+		stream.doomLoopCounts = map[string]int{}
+		stream.lastDoomLoopSignature = signature
+	}
+	if stream.doomLoopCounts == nil {
+		stream.doomLoopCounts = map[string]int{}
+	}
+	stream.doomLoopCounts[signature]++
+	doomLoopCount = stream.doomLoopCounts[signature]
 	stream.mu.Unlock()
+	if doomLoopCount >= doomLoopHardLimit {
+		return service.completePreDispatchToolError(stream, invocation, nil, false, false,
+			fmt.Errorf("检测到 %s 以相同参数连续调用 %d 次，已中断本轮：请先阅读之前的工具结果并改变策略", trimmedToolName, doomLoopCount))
+	}
+	if doomLoopCount == doomLoopThreshold {
+		stream.mu.Lock()
+		stream.pendingDoomLoopNotice = fmt.Sprintf("[检测到 %s 以相同参数连续调用 %d 次，请先阅读上次工具结果并改变策略]", trimmedToolName, doomLoopCount)
+		stream.mu.Unlock()
+	}
 	delegationEnabled := false
 	delegationSupervision := false
 	delegationGroups := 0
@@ -2624,6 +2651,16 @@ func shouldBufferExecDispatch(toolName string) bool {
 func (service *Service) appendToolResult(stream *ActiveStream, toolCallID string, toolName string, argsJSON []byte, resultText string, reasoningContent string, toolCall *agentv1.ToolCall) error {
 	if stream == nil {
 		return nil
+	}
+	// B1 doom loop 提示注入：取走并清空待注入提示，非空时追加到工具结果末尾。
+	stream.mu.Lock()
+	notice := stream.pendingDoomLoopNotice
+	stream.pendingDoomLoopNotice = ""
+	stream.mu.Unlock()
+	if notice != "" && strings.TrimSpace(resultText) != "" {
+		resultText = strings.TrimSpace(resultText) + "\n" + notice
+	} else if notice != "" {
+		resultText = notice
 	}
 	var payload json.RawMessage
 	if toolCall != nil {

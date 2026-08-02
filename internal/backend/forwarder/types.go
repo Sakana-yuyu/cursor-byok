@@ -197,6 +197,10 @@ type ActiveStream struct {
 	// driveProvider 据此在 maybeCompactBeforeProvider 返回「不压缩」后重新快照+编译一次，
 	// 让后续 provider 请求用上 snip 后的新鲜历史（参考 tool_result_snip.go）。
 	StaleToolResultSnipApplied bool
+	// doomLoopCounts 记录以（工具名+规范化参数）签名计的连续相同工具调用次数（stream.mu 保护）。
+	doomLoopCounts        map[string]int
+	lastDoomLoopSignature string
+	pendingDoomLoopNotice string
 
 	Backlog                     []StreamEvent
 	BacklogStartCursor          int
