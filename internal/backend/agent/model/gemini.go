@@ -67,41 +67,46 @@ func (adapter *GeminiAdapter) Stream(ctx context.Context, req StreamRequest, sin
 		return err
 	}
 
-	streamCtx, streamIdle := newProviderStreamIdleWatchdog(ctx, req.ProviderStreamIdleTimeout)
-	defer streamIdle.Stop()
-	resp, err := doProviderRequestWithGzipFallback(streamCtx, adapter.client, "gemini", req.RequestID, req.ModelCallID, payload, requestURL, func(httpReq *http.Request) error {
-		httpReq.Header.Set("Content-Type", "application/json")
-		httpReq.Header.Set("User-Agent", ClaudeCodeUserAgent)
-		httpReq.Header.Set("x-goog-api-key", apiKey)
-		if err := ApplyCustomHeaders(httpReq, req.CustomHeadersEnabled, req.CustomHeadersJSON); err != nil {
-			return err
+	err = streamWithReconnect(ctx, sink, func(_ int, wrappedSink func(ModelEvent) error) error {
+		streamCtx, streamIdle := newProviderStreamIdleWatchdog(ctx, req.ProviderStreamIdleTimeout)
+		defer streamIdle.Stop()
+		resp, reqErr := doProviderRequestWithGzipFallback(streamCtx, adapter.client, "gemini", req.RequestID, req.ModelCallID, payload, requestURL, func(httpReq *http.Request) error {
+			httpReq.Header.Set("Content-Type", "application/json")
+			httpReq.Header.Set("User-Agent", ClaudeCodeUserAgent)
+			httpReq.Header.Set("x-goog-api-key", apiKey)
+			if err := ApplyCustomHeaders(httpReq, req.CustomHeadersEnabled, req.CustomHeadersJSON); err != nil {
+				return err
+			}
+			return nil
+		})
+		if reqErr != nil {
+			if idleErr := streamIdle.Err(); idleErr != nil {
+				reqErr = idleErr
+			}
+			finishedAt = time.Now().UTC()
+			recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "gemini", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, reqErr))
+			return reqErr
 		}
+		streamIdle.AttachBody(resp.Body)
+		defer resp.Body.Close()
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			reqErr = buildHTTPStatusError("gemini adapter", resp)
+			finishedAt = time.Now().UTC()
+			recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "gemini", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, reqErr))
+			return reqErr
+		}
+		inputTokens, outputTokens, cacheReadTokens, finishReason, firstEventAt, parseErr := adapter.streamGeminiEvents(resp, req, modelID, startedAt, streamIdle, wrappedSink)
+		finishedAt = time.Now().UTC()
+		if parseErr != nil {
+			recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "gemini", modelID, startedAt, firstEventAt, finishedAt, finishReason, inputTokens, outputTokens, cacheReadTokens, 0, parseErr))
+			return parseErr
+		}
+		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "gemini", modelID, startedAt, firstEventAt, finishedAt, finishReason, inputTokens, outputTokens, cacheReadTokens, 0, nil))
 		return nil
 	})
 	if err != nil {
-		if idleErr := streamIdle.Err(); idleErr != nil {
-			err = idleErr
-		}
-		finishedAt = time.Now().UTC()
-		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "gemini", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))
 		return err
 	}
-	streamIdle.AttachBody(resp.Body)
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		err = buildHTTPStatusError("gemini adapter", resp)
-		finishedAt = time.Now().UTC()
-		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "gemini", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))
-		return err
-	}
-
-	inputTokens, outputTokens, cacheReadTokens, finishReason, firstEventAt, err := adapter.streamGeminiEvents(resp, req, modelID, startedAt, streamIdle, sink)
-	finishedAt = time.Now().UTC()
-	if err != nil {
-		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "gemini", modelID, startedAt, firstEventAt, finishedAt, finishReason, inputTokens, outputTokens, cacheReadTokens, 0, err))
-		return err
-	}
-	recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "gemini", modelID, startedAt, firstEventAt, finishedAt, finishReason, inputTokens, outputTokens, cacheReadTokens, 0, nil))
 	return nil
 }
 
