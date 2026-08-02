@@ -79,8 +79,9 @@ func (service *Service) handleTurnStaleTimeout(stream *ActiveStream, payload *st
 	stream.mu.Unlock()
 
 	// 检查是否有活跃的委派任务。委派任务不产生主 stream 的 providerActive 标记，
-	// 但它们是有效进展，不应触发 turn stale。
-	hasActiveDelegation := hasActiveDelegationAggregate(stream)
+	// 但它们是有效进展，不应触发 turn stale。这里同时覆盖 Multitask 聚合与
+	// native Cursor 子代理（hasActiveDelegationAggregate 只认前者）。
+	hasActiveDelegation := service.hasActiveDelegation(stream)
 
 	// 已离开等待态 / provider 仍在跑 / 委派任务活跃 / 已终态 / 正在等待真实用户输入 → 不干预。
 	if isTerminalStreamStatus(status) || providerActive || hasActiveDelegation || awaitingUser || phase != TurnPhaseWaitingExternal {

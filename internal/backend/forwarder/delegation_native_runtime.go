@@ -439,3 +439,35 @@ func subagentResultErrorText(result *agentv1.SubagentResult) string {
 	}
 	return strings.TrimSpace(result.GetError().GetError())
 }
+
+// hasActiveDelegation reports whether the stream currently owns any live
+// delegated work that must not be torn down by an orphan-cancel or a turn-stale
+// watchdog. It covers both delegation shapes: a Multitask aggregate
+// (delegation_aggregate pending exec) and a native Cursor subagent
+// (subagent pending exec registered in service.nativeDelegations that is still
+// non-terminal). Native subagents live outside stream.PendingExecs as an
+// aggregate, so hasActiveDelegationAggregate alone would miss them.
+func (service *Service) hasActiveDelegation(stream *ActiveStream) bool {
+	if hasActiveDelegationAggregate(stream) {
+		return true
+	}
+	if service == nil || stream == nil {
+		return false
+	}
+	requestID := strings.TrimSpace(stream.RequestID)
+	if requestID == "" {
+		return false
+	}
+	service.delegationRuntimeMu.Lock()
+	defer service.delegationRuntimeMu.Unlock()
+	service.pruneNativeDelegationsLocked(time.Now().UTC())
+	for _, item := range service.nativeDelegations {
+		if item == nil {
+			continue
+		}
+		if strings.TrimSpace(item.ParentRequestID) == requestID && !delegatedStatusTerminal(item.Status) {
+			return true
+		}
+	}
+	return false
+}
