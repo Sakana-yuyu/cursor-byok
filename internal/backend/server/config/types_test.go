@@ -24,8 +24,8 @@ func TestNormalizeModelAdapterConfigsDeduplicatesChannelsAndSetsContext(t *testi
 	if len(got) != 1 {
 		t.Fatalf("NormalizeModelAdapterConfigs() len = %d, want 1", len(got))
 	}
-	if got[0].ContextWindowTokens != 1_000_000 {
-		t.Errorf("ContextWindowTokens = %d, want 1000000", got[0].ContextWindowTokens)
+	if got[0].ContextWindowTokens != 272_000 {
+		t.Errorf("ContextWindowTokens = %d, want 272000", got[0].ContextWindowTokens)
 	}
 	if got[0].GroupName != "OAI 供应商" {
 		t.Errorf("GroupName = %q, want %q", got[0].GroupName, "OAI 供应商")

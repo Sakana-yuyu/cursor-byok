@@ -448,6 +448,16 @@ func isPermanentProviderError(err error) bool {
 		return false
 	}
 	msg := err.Error()
+	// 流式 SSE 层的确定性错误：OpenAI Responses adapter 把流内 error event（如
+	// context_too_large / context_length_exceeded）包装成 "openai responses stream error
+	// code=..."，不含 HTTP status，因此上面的 status 解析会返回 0 被当作瞬时错误。
+	// 但这类错误由输入本身决定（上下文超限），重试不可能改变结果——若不识别为永久错误，
+	// 单渠道下 router 会盲目重试 routerMaxStreamAttempts(=10) 次，每次都收到同样错误，
+	// 造成约一分钟空转后才冒泡到 forwarder 的 context-overflow 压缩恢复。
+	// 这里提前识别，让 router 立即放弃重试，把控制权交给 forwarder 的恢复机制。
+	if isContextOverflowStreamError(msg) {
+		return true
+	}
 	status := parseProviderErrorStatus(msg)
 	if status < 400 || status >= 500 {
 		return false
@@ -485,6 +495,19 @@ func isOpenAINotFoundError(err error) bool {
 // 耗尽路径共用。
 func openAINotFoundReadableError(modelID string, err error) error {
 	return fmt.Errorf("model %q not found at provider (404)：请检查模型名或中转站是否支持该模型（%w）", modelID, err)
+}
+
+// isContextOverflowStreamError 判断流式 SSE error event 包装出的错误文本是否表示
+// 上下文超限（输入超过模型窗口）。这类错误是确定性的：同一输入重试必然得到同样结果。
+// 匹配 OpenAI Responses 的 "code=context_too_large" 与 OpenAI Chat 的
+// "context_length_exceeded" / "maximum context length" / "exceeds ... context window"。
+func isContextOverflowStreamError(message string) bool {
+	lower := strings.ToLower(message)
+	return strings.Contains(lower, "context_too_large") ||
+		strings.Contains(lower, "context_length_exceeded") ||
+		strings.Contains(lower, "maximum context length") ||
+		strings.Contains(lower, "exceeds the context window") ||
+		strings.Contains(lower, "exceeds context window")
 }
 
 // parseProviderErrorStatus 从错误文本中解析 "status=<code>" 的状态码；解析失败返回 0。
