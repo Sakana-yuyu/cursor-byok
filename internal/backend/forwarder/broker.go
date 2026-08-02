@@ -14,7 +14,10 @@ import (
 )
 
 const subscriberSignalBufferSize = 1
-const orphanSubscriberGracePeriod = 30 * time.Second
+// orphanSubscriberGracePeriod 是 RunSSE 订阅归零后、判定请求为孤儿前的宽限期。
+// 网络波动（本地代理/线路抖动）时 Cursor 客户端会短暂断开并自动重连，期间
+// subscriber 短暂归零；宽限期给客户端充足的重连窗口，避免波动几秒就误杀长任务。
+const orphanSubscriberGracePeriod = 3 * time.Minute
 const terminalStreamRetentionPeriod = 30 * time.Second
 
 // errStreamNotActive 表示 Cancel/Get 等操作目标 request 已不在 broker 中

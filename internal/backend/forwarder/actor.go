@@ -1228,19 +1228,19 @@ func (service *Service) handleTimerEvent(stream *ActiveStream, payload *streamTi
 		stream.mu.Lock()
 		subscriberCount := len(stream.Subscribers)
 		status := stream.Status
+		providerActive := stream.ProviderActive
+		pendingWork := len(stream.PendingExecs) + len(stream.PendingInteractions)
 		stream.mu.Unlock()
 		if subscriberCount > 0 || isTerminalStreamStatus(status) {
 			return nil
 		}
-		// 活跃委派（Multitask aggregate 或 native Cursor 子代理）仍在运行时，
-		// 客户端断连不应级联取消整个 turn：Cursor 在长任务期间重建 SSE 连接是
-		// 正常现象，此时取消父请求会连带杀掉正在执行的子代理。交给各自的 exec
-		// watchdog 兜底收口，与 turn_stale.go 中“长任务断连是正常现象，不能因此
-		// 强制取消任务”的处理保持一致（此处定时器已在 handleTimerEvent 开头清理，
-		// 不再续排，委派结束前不会再次触发）。
-		if service.hasActiveDelegation(stream) {
-			log.Printf("forwarder orphan cancel deferred active delegation request_id=%s subscriber_count=%d",
-				strings.TrimSpace(stream.RequestID), subscriberCount)
+		// 网络波动加固：客户端 RunSSE 断连但任务仍在推进（provider 活跃、有待执行
+		// 工具/交互、或有活跃委派子代理）时，不取消 turn，保留运行等待客户端重连
+		// 订阅；彻底清理交给 turn-stale 看门狗与 broker retention 兜底，避免网络
+		// 波动几秒就误杀长任务。定时器已在 handleTimerEvent 开头清理，不续排。
+		if providerActive || pendingWork > 0 || service.hasActiveDelegation(stream) {
+			log.Printf("forwarder orphan cancel deferred active turn request_id=%s subscriber_count=%d provider_active=%t pending=%d",
+				strings.TrimSpace(stream.RequestID), subscriberCount, providerActive, pendingWork)
 			return nil
 		}
 		log.Printf("forwarder orphan canceling disconnected request request_id=%s subscriber_count=%d active_delegation=%t",
