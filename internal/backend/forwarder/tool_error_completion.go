@@ -107,5 +107,9 @@ func formatPreDispatchToolError(invocation runtimecore.ToolInvocation, cause err
 	if cause != nil && strings.TrimSpace(cause.Error()) != "" {
 		message = strings.TrimSpace(cause.Error())
 	}
+	var invalid *runtimecore.InvalidToolArgumentsError
+	if errors.As(cause, &invalid) {
+		return fmt.Sprintf("%s error: %s。请修正参数后重试（参考该工具的参数结构说明）", toolName, message)
+	}
 	return fmt.Sprintf("%s error: %s", toolName, message)
 }

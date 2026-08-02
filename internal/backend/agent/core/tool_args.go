@@ -3,6 +3,7 @@ package runtimecore
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -10,6 +11,19 @@ import (
 	"strconv"
 	"strings"
 )
+
+// InvalidToolArgumentsError 标记模型产生的工具参数无法解析（JSON 语法错误、
+// 多顶层值等），用于错误反馈层对模型注入"请修正参数"的引导。
+type InvalidToolArgumentsError struct{ Err error }
+
+func (err *InvalidToolArgumentsError) Error() string {
+	if err == nil || err.Err == nil {
+		return "invalid tool arguments"
+	}
+	return err.Err.Error()
+}
+
+func (err *InvalidToolArgumentsError) Unwrap() error { return err.Err }
 
 // DecodeArgsMap decodes model-produced built-in tool arguments while preserving
 // JSON number spellings for lossless numeric coercion by the typed readers below.
@@ -21,7 +35,7 @@ func DecodeArgsMap(raw []byte) (map[string]any, error) {
 	decoder.UseNumber()
 	var result map[string]any
 	if err := decoder.Decode(&result); err != nil {
-		return nil, err
+		return nil, &InvalidToolArgumentsError{Err: fmt.Errorf("invalid tool arguments JSON: %w", err)}
 	}
 	if result == nil {
 		return map[string]any{}, nil
@@ -29,9 +43,9 @@ func DecodeArgsMap(raw []byte) (map[string]any, error) {
 	var trailing any
 	if err := decoder.Decode(&trailing); err != io.EOF {
 		if err == nil {
-			return nil, fmt.Errorf("invalid JSON arguments: multiple top-level values")
+			return nil, &InvalidToolArgumentsError{Err: errors.New("invalid JSON arguments: multiple top-level values")}
 		}
-		return nil, err
+		return nil, &InvalidToolArgumentsError{Err: err}
 	}
 	return result, nil
 }
