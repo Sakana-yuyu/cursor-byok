@@ -292,10 +292,6 @@ export function repairProxySettings() {
   return withApiLogging("RepairProxySettings", undefined, () => desktopOrMock(undefined, "@bindings/cursor/internal/bridge/proxyservice.js", "RepairProxySettings"));
 }
 
-export function repairProxySettings() {
-  return withApiLogging("RepairProxySettings", undefined, () => desktopOrMock(undefined, "@bindings/cursor/internal/bridge/proxyservice.js", "RepairProxySettings"));
-}
-
 export function getDelegationConfig() {
   return desktopOrMock(() => GetDelegationConfig(), "@bindings/cursor/internal/bridge/proxyservice.js", "GetDelegationConfig");
 }
