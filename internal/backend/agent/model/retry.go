@@ -150,6 +150,11 @@ func parseRetryAfter(resp *http.Response) time.Duration {
 	if resp == nil {
 		return 0
 	}
+	if ms := strings.TrimSpace(resp.Header.Get("retry-after-ms")); ms != "" {
+		if milliseconds, err := strconv.Atoi(ms); err == nil && milliseconds > 0 {
+			return time.Duration(milliseconds) * time.Millisecond
+		}
+	}
 	raw := strings.TrimSpace(resp.Header.Get("Retry-After"))
 	if raw == "" {
 		return 0
