@@ -698,15 +698,18 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 			return nil
 		}
 
+		// A2 SSE 逐块读超时：每次 Scan 前设置 30s 读 deadline，块到达后清除（不累积）。
+		// 底层连接不支持 SetReadDeadline 时静默 fallback，行为与原来一致。
+		// chunkTimedOut 记录本轮是否发生过逐块读超时；是则把扫描错误转为可触发
+		// pre-output 重连的读超时错误（见下方 scanner.Err 处理）。
+		var chunkTimedOut bool
 		for {
-			// A2 SSE 逐块读超时：每次 Scan 前设置 30s 读 deadline，块到达后清除（不累积）。
-			// 底层连接不支持 SetReadDeadline 时静默 fallback，行为与原来一致。
-			resetDeadline := func() {}
-			if reset, ok := resetStreamReadDeadline(resp); ok {
-				resetDeadline = reset
+			disarm := func() bool { return false }
+			if d, ok := resetStreamReadDeadline(resp); ok {
+				disarm = d
 			}
 			scanOK := scanner.Scan()
-			resetDeadline()
+			chunkTimedOut = chunkTimedOut || disarm()
 			if !scanOK {
 				break
 			}
@@ -735,10 +738,16 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 			return fail(err)
 		}
 		if err := scanner.Err(); err != nil {
+			if chunkTimedOut {
+				err = streamChunkTimeoutError()
+			}
 			if idleErr := streamIdle.Err(); idleErr != nil {
 				return fail(idleErr)
 			}
 			return fail(err)
+		}
+		if chunkTimedOut {
+			return fail(streamChunkTimeoutError())
 		}
 		if !messageStopped {
 			return fail(fmt.Errorf("anthropic stream ended before message_stop"))

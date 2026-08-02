@@ -1004,17 +1004,20 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		}
 		cacheWritePresent = true
 	}
+	// A2 SSE 逐块读超时：每次 Scan 前设置 30s 读 deadline，块到达后清除（不累积）。
+	// 底层连接不支持 SetReadDeadline 时静默 fallback，行为与原来一致。
+	// chunkTimedOut 记录本轮是否发生过逐块读超时；是则把扫描错误转为可触发
+	// pre-output 重连的读超时错误（见下方 scanner.Err 处理）。
+	var chunkTimedOut bool
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), openAIStreamMaxTokenSize)
 	for {
-		// A2 SSE 逐块读超时：每次 Scan 前设置 30s 读 deadline，块到达后清除（不累积）。
-		// 底层连接不支持 SetReadDeadline 时静默 fallback，行为与原来一致。
-		resetDeadline := func() {}
-		if reset, ok := resetStreamReadDeadline(resp); ok {
-			resetDeadline = reset
+		disarm := func() bool { return false }
+		if d, ok := resetStreamReadDeadline(resp); ok {
+			disarm = d
 		}
 		scanOK := scanner.Scan()
-		resetDeadline()
+		chunkTimedOut = chunkTimedOut || disarm()
 		if !scanOK {
 			break
 		}
@@ -1174,10 +1177,16 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		streamIdle.MarkEffectiveContent()
 	}
 	if err := scanner.Err(); err != nil {
+		if chunkTimedOut {
+			err = streamChunkTimeoutError()
+		}
 		if idleErr := streamIdle.Err(); idleErr != nil {
 			return fail(idleErr)
 		}
 		return fail(err)
+	}
+	if chunkTimedOut {
+		return fail(streamChunkTimeoutError())
 	}
 	if !streamTerminated {
 		return fail(fmt.Errorf("provider stream ended before terminal event"))
@@ -1786,17 +1795,20 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		return fmt.Errorf("openai responses stream failed %s", strings.Join(details, " "))
 	}
 
+	// A2 SSE 逐块读超时：每次 Scan 前设置 30s 读 deadline，块到达后清除（不累积）。
+	// 底层连接不支持 SetReadDeadline 时静默 fallback，行为与原来一致。
+	// chunkTimedOut 记录本轮是否发生过逐块读超时；是则把扫描错误转为可触发
+	// pre-output 重连的读超时错误（见下方 scanner.Err 处理）。
+	var chunkTimedOut bool
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), openAIStreamMaxTokenSize)
 	for {
-		// A2 SSE 逐块读超时：每次 Scan 前设置 30s 读 deadline，块到达后清除（不累积）。
-		// 底层连接不支持 SetReadDeadline 时静默 fallback，行为与原来一致。
-		resetDeadline := func() {}
-		if reset, ok := resetStreamReadDeadline(resp); ok {
-			resetDeadline = reset
+		disarm := func() bool { return false }
+		if d, ok := resetStreamReadDeadline(resp); ok {
+			disarm = d
 		}
 		scanOK := scanner.Scan()
-		resetDeadline()
+		chunkTimedOut = chunkTimedOut || disarm()
 		if !scanOK {
 			break
 		}
@@ -1972,10 +1984,16 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		}
 	}
 	if err := scanner.Err(); err != nil {
+		if chunkTimedOut {
+			err = streamChunkTimeoutError()
+		}
 		if idleErr := streamIdle.Err(); idleErr != nil {
 			return fail(idleErr)
 		}
 		return fail(err)
+	}
+	if chunkTimedOut {
+		return fail(streamChunkTimeoutError())
 	}
 	if !streamTerminated {
 		return fail(fmt.Errorf("provider stream ended before terminal event"))

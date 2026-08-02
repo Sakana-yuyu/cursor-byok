@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -142,16 +145,30 @@ func providerStreamIdleTimeoutError(timeout time.Duration) error {
 // resetStreamReadDeadline 在每次 SSE 块读取前设置读超时，块到达后清除。
 // 客户端 *http.Response 没有服务端 ResponseController 的读 deadline 能力，
 // 因此改为定时看护：chunkTimeout 内无块到达即关闭响应体，使阻塞中的读返回
-// 错误（等价于读超时中断；错误可被 IsStreamConnectionReset 识别并触发重连）。
+// 错误。超时触发会先原子记录标记再关闭 body；返回的 disarm 在每次 Scan 返回后
+// 调用，报告本次是否发生过读超时。调用方据此把扫描错误转换为可被
+// IsStreamConnectionReset 识别的读超时错误（net.Error），从而触发 pre-output
+// 流式重连。
 // 响应体不可用时静默忽略（fallback，不改变原有行为）。
-func resetStreamReadDeadline(resp *http.Response) (reset func(), ok bool) {
+func resetStreamReadDeadline(resp *http.Response) (disarm func() bool, ok bool) {
 	if resp == nil || resp.Body == nil {
-		return func() {}, false
+		return func() bool { return false }, false
 	}
+	var timedOut atomic.Bool
 	timer := time.AfterFunc(chunkTimeout, func() {
+		timedOut.Store(true)
 		_ = resp.Body.Close()
 	})
-	return func() {
-		timer.Stop()
+	return func() bool {
+		stopped := timer.Stop()
+		// !stopped 覆盖回调已触发或正在触发、但原子标记尚未可见的竞态窗口。
+		return timedOut.Load() || !stopped
 	}, true
+}
+
+// streamChunkTimeoutError 构造可被 IsStreamConnectionReset 识别的逐块读超时错误。
+// *net.OpError 实现 net.Error 接口，errors.As 在 IsStreamConnectionReset 中命中，
+// 使逐块超时与连接重置一样触发 pre-output 流式重连。
+func streamChunkTimeoutError() error {
+	return &net.OpError{Op: "read", Net: "tcp", Err: os.ErrDeadlineExceeded}
 }
