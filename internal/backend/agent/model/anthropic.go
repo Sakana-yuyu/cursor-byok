@@ -698,7 +698,18 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 			return nil
 		}
 
-		for scanner.Scan() {
+		for {
+			// A2 SSE 逐块读超时：每次 Scan 前设置 30s 读 deadline，块到达后清除（不累积）。
+			// 底层连接不支持 SetReadDeadline 时静默 fallback，行为与原来一致。
+			resetDeadline := func() {}
+			if reset, ok := resetStreamReadDeadline(resp); ok {
+				resetDeadline = reset
+			}
+			scanOK := scanner.Scan()
+			resetDeadline()
+			if !scanOK {
+				break
+			}
 			rawLine := scanner.Text()
 			_, _ = appendLLMResponseArtifact(req, rawLine+"\n")
 			line := strings.TrimSpace(rawLine)

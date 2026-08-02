@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"sync"
 	"time"
 )
@@ -14,6 +15,9 @@ const (
 	// 用户可在配置中调大（最高无上限）或调小（最低 minProviderStreamIdleTimeout）。
 	defaultProviderStreamIdleTimeout = 90 * time.Second
 	minProviderStreamIdleTimeout     = 30 * time.Second
+
+	// chunkTimeout 是 SSE 单块（单次读）之间的最大间隔；超过即视为流卡死。
+	chunkTimeout = 30 * time.Second
 )
 
 type providerStreamIdleWatchdog struct {
@@ -133,4 +137,21 @@ func providerStreamIdleTimeoutError(timeout time.Duration) error {
 		return fmt.Errorf("provider stream idle timeout after %ds without effective content", seconds)
 	}
 	return fmt.Errorf("provider stream idle timeout after %s without effective content", timeout)
+}
+
+// resetStreamReadDeadline 在每次 SSE 块读取前设置读超时，块到达后清除。
+// 客户端 *http.Response 没有服务端 ResponseController 的读 deadline 能力，
+// 因此改为定时看护：chunkTimeout 内无块到达即关闭响应体，使阻塞中的读返回
+// 错误（等价于读超时中断；错误可被 IsStreamConnectionReset 识别并触发重连）。
+// 响应体不可用时静默忽略（fallback，不改变原有行为）。
+func resetStreamReadDeadline(resp *http.Response) (reset func(), ok bool) {
+	if resp == nil || resp.Body == nil {
+		return func() {}, false
+	}
+	timer := time.AfterFunc(chunkTimeout, func() {
+		_ = resp.Body.Close()
+	})
+	return func() {
+		timer.Stop()
+	}, true
 }

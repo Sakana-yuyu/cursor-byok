@@ -1006,7 +1006,18 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 	}
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), openAIStreamMaxTokenSize)
-	for scanner.Scan() {
+	for {
+		// A2 SSE 逐块读超时：每次 Scan 前设置 30s 读 deadline，块到达后清除（不累积）。
+		// 底层连接不支持 SetReadDeadline 时静默 fallback，行为与原来一致。
+		resetDeadline := func() {}
+		if reset, ok := resetStreamReadDeadline(resp); ok {
+			resetDeadline = reset
+		}
+		scanOK := scanner.Scan()
+		resetDeadline()
+		if !scanOK {
+			break
+		}
 		rawLine := scanner.Text()
 		_, _ = appendLLMResponseArtifact(req, redactOpenAIStreamArtifactLine(rawLine)+"\n")
 		line := strings.TrimSpace(rawLine)
@@ -1777,7 +1788,18 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), openAIStreamMaxTokenSize)
-	for scanner.Scan() {
+	for {
+		// A2 SSE 逐块读超时：每次 Scan 前设置 30s 读 deadline，块到达后清除（不累积）。
+		// 底层连接不支持 SetReadDeadline 时静默 fallback，行为与原来一致。
+		resetDeadline := func() {}
+		if reset, ok := resetStreamReadDeadline(resp); ok {
+			resetDeadline = reset
+		}
+		scanOK := scanner.Scan()
+		resetDeadline()
+		if !scanOK {
+			break
+		}
 		rawLine := scanner.Text()
 		_, _ = appendLLMResponseArtifact(req, redactOpenAIStreamArtifactLine(rawLine)+"\n")
 		line := strings.TrimSpace(rawLine)
