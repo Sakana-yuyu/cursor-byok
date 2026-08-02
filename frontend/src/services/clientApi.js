@@ -84,6 +84,18 @@ export function saveUserConfig(payload) {
   return withApiLogging("SaveUserConfig", payload, () => desktopOrMock(() => SaveUserConfig(payload), "@bindings/cursor/internal/bridge/proxyservice.js", "SaveUserConfig", [payload]));
 }
 
+export function getCursorAccountStatus() {
+  return withApiLogging("GetCursorAccountStatus", undefined, () => GetCursorAccountStatus());
+}
+
+export function startCursorAccountLogin() {
+  return withApiLogging("StartCursorAccountLogin", undefined, () => StartCursorAccountLogin());
+}
+
+export function disconnectCursorAccount() {
+  return withApiLogging("DisconnectCursorAccount", undefined, () => DisconnectCursorAccount());
+}
+
 export function getProxyState() {
   return withApiLogging("GetState", undefined, () => desktopOrMock(browserPreviewMockProxyState(), "@bindings/cursor/internal/bridge/proxyservice.js", "GetState"));
 }

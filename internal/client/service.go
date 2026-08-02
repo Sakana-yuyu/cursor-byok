@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -36,6 +37,8 @@ type ProxyService struct {
 	certManager *certs.Manager
 	// backendHost 表示当前嵌入式 backend 服务。
 	backendHost *backend.Host
+	// cursorAccount 持有仅供插件、Skills 和 MCP 控制面使用的真实 Cursor 身份。
+	cursorAccount *cursoraccount.Manager
 
 	// mu 表示当前声明中的 mu。
 	mu sync.RWMutex
@@ -95,7 +98,7 @@ func NewProxyService(proxy *mitm.ProxyServer, certManager *certs.Manager, caCert
 	}
 	service.loadPersistedModelAdapterTestResults()
 	service.store = serverconfig.NewStore(service.configPath, service.logsRoot)
-	host, err := backend.NewHost(service.store)
+	host, err := backend.NewHost(service.store, service.cursorAccount)
 	if err != nil {
 		logger.Errorf("init backend host failed: %v", err)
 	} else {
@@ -111,7 +114,7 @@ func (s *ProxyService) ensureBackendHost() error {
 	if s.backendHost != nil {
 		return nil
 	}
-	host, err := backend.NewHost(s.store)
+	host, err := backend.NewHost(s.store, s.cursorAccount)
 	if err != nil {
 		return err
 	}

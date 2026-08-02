@@ -674,6 +674,18 @@
         }
       ]
     },
+    "0d6b7efd5ccefd8a": {
+      "source": "可配置模型渠道；运行日志位于",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Config.vue",
+          "line": 54,
+          "column": 1
+        }
+      ]
+    },
     "0dde813d719dbd01": {
       "source": "打开主页失败",
       "kind": "text",
@@ -1465,6 +1477,18 @@
           "file": "src/views/RequestMetrics.vue",
           "line": 362,
           "column": 56
+        }
+      ]
+    },
+    "1c631615c1d85c9e": {
+      "source": "登录 Cursor",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 173,
+          "column": 14
         }
       ]
     },
@@ -3324,6 +3348,18 @@
         }
       ]
     },
+    "3d52574ce1500561": {
+      "source": "未连接",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 35,
+          "column": 10
+        }
+      ]
+    },
     "3ea83f9f55062582": {
       "source": "发布时间：{0}",
       "kind": "template",
@@ -4706,6 +4742,18 @@
         }
       ]
     },
+    "58c6b0935a7216da": {
+      "source": "打开贡献者主页失败",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 49,
+          "column": 27
+        }
+      ]
+    },
     "593a972852ba0004": {
       "source": "Cursor助手｜永久免费｜自定义API",
       "kind": "text",
@@ -5871,6 +5919,16 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 41,
+          "column": 30
+        },
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 41,
+          "column": 48
+        },
         {
           "file": "src/state/appState.js",
           "line": 35,
@@ -10786,6 +10844,18 @@
         }
       ]
     },
+    "c8a52b66651d294c": {
+      "source": "退出登录失败",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 83,
+          "column": 27
+        }
+      ]
+    },
     "c8c14507b2d37395": {
       "source": "推理强度",
       "kind": "text",
@@ -12446,6 +12516,42 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 355,
           "column": 59
+        }
+      ]
+    },
+    "e4343921c928a856": {
+      "source": "登录失败",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 62,
+          "column": 27
+        }
+      ]
+    },
+    "e4c0daa3c4bea691": {
+      "source": "感谢 @aike0210 对 Cursor 控制面账号功能的贡献。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 122,
+          "column": 20
+        }
+      ]
+    },
+    "e53580f8031f13c0": {
+      "source": "请在浏览器完成登录，完成后返回 Cursor 重新打开插件市场",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 149,
+          "column": 1
         }
       ]
     },

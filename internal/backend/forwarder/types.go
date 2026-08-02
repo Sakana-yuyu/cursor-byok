@@ -22,6 +22,7 @@ type ConversationFile struct {
 	ParentConversationID            string                                `json:"parent_conversation_id"`
 	ParentToolCallID                string                                `json:"parent_tool_call_id"`
 	SubagentTypeName                string                                `json:"subagent_type_name,omitempty"`
+	AgentTranscriptsFolder          string                                `json:"agent_transcripts_folder,omitempty"`
 	Mode                            string                                `json:"mode"`
 	ContextVersion                  int64                                 `json:"context_version,omitempty"`
 	CurrentLoopID                   string                                `json:"current_loop_id,omitempty"`
@@ -258,6 +259,32 @@ type pendingTurnCompletion struct {
 	ProviderPass   int
 	Usage          turnUsageSnapshot
 	Disposition    pendingCompletionDisposition
+}
+
+type pendingCheckpointBlobWrite struct {
+	Key      string
+	Revision uint64
+}
+
+type checkpointTerminalActionKind uint8
+
+const (
+	checkpointTerminalActionNone checkpointTerminalActionKind = iota
+	checkpointTerminalActionComplete
+	checkpointTerminalActionCancel
+)
+
+type checkpointTerminalAction struct {
+	kind          checkpointTerminalActionKind
+	completion    pendingTurnCompletion
+	cancelMessage string
+}
+
+type pendingCheckpointPublish struct {
+	Revision       uint64
+	State          *agentv1.ConversationStateStructure
+	Required       map[string]struct{}
+	TerminalAction checkpointTerminalAction
 }
 
 type PendingCompaction struct {

@@ -396,6 +396,7 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 	service.localDelegation = newLocalDelegatedAgentAdapter(service)
 	service.multitaskDelegation = newMultitaskDelegationCoordinator(service, delegationConfig)
 	service.startHistoryMaintenance()
+	store.SyncAllCursorTranscriptsBestEffort()
 	return service
 }
 
@@ -670,6 +671,7 @@ func (service *Service) decodeInboundIntent(requestID string, message *agentv1.A
 		}
 		intent.ConversationID = conversationID
 		intent.ConversationState = runRequest.GetConversationState()
+		intent.PreFetchedBlobs = runRequest.GetPreFetchedBlobs()
 		intent.UserMessage = extractUserMessage(message)
 		// Cursor 粘贴图片走 blob 协议：图片数据在 pre_fetched_blobs 里，selected_images 只带 blob_id。
 		// 这里把 blob 数据填充进图片，否则后续 buildSelectedImageContentParts 会静默丢弃图片，
@@ -732,6 +734,7 @@ func (service *Service) decodeInboundIntent(requestID string, message *agentv1.A
 		intent.RequestContext = extractEffectivePrewarmRequestContext(prewarmRequest)
 		intent.MCPToolsProvided = prewarmRequest.McpTools != nil
 		intent.ConversationState = prewarmRequest.GetConversationState()
+		intent.PreFetchedBlobs = prewarmRequest.GetPreFetchedBlobs()
 		intent.Mode, intent.ModeSource, intent.HasExplicitMode, err = extractPrewarmMode(prewarmRequest)
 		if err != nil {
 			return InboundIntent{}, err
@@ -870,6 +873,11 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 	conversation, effectiveMode, turnSeq, initialEntries, err := service.bootstrapRuntimeConversation(intent)
 	if err != nil {
 		return err
+	}
+	if intent.RequestContext != nil {
+		if folder := normalizeAgentTranscriptsFolder(intent.RequestContext.GetEnv().GetAgentTranscriptsFolder()); folder != "" {
+			conversation.AgentTranscriptsFolder = folder
+		}
 	}
 	rewindDecision := service.decideRunRewind(intent, conversation)
 	if rewindDecision.Evaluated && !rewindDecision.Apply {
@@ -1011,11 +1019,14 @@ func (service *Service) snapshotVisibleTurns(conversation *ConversationFile) ([]
 	if service == nil || service.projector == nil || conversation == nil {
 		return nil, nil
 	}
-	state, err := service.projector.ProjectLegacyCheckpoint(conversation)
+	projection, err := service.projector.ProjectCheckpointProjection(conversation)
 	if err != nil {
 		return nil, err
 	}
-	return cloneByteSlices(state.GetTurns()), nil
+	if projection == nil || projection.State == nil {
+		return nil, fmt.Errorf("checkpoint projection is empty")
+	}
+	return cloneByteSlices(projection.State.GetTurns()), nil
 }
 
 // Shutdown 在服务退出前主动取消所有未终态活动流。
@@ -1201,25 +1212,36 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 		service.multitaskDelegation.CancelStream(stream)
 	}
 	hasCheckpoint := checkpointConversationInitialized(stream)
-	if hasCheckpoint {
-		cancelReason := firstNonEmpty(intent.CancelReason, "user aborted")
-		_, err := service.appendConversationEntries(stream, stream.ConversationID, []HistoryEntry{
-			newMetadataEntry(stream.TurnSeq, intent.RequestID, "control", map[string]any{
-				"status":        "canceled",
-				"reason":        cancelReason,
-				"replay_policy": cancelReplayPolicyForReason(cancelReason),
-			}),
-		})
-		if err != nil {
-			return err
-		}
-	}
 	stream.mu.Lock()
 	pendingExecs := make([]runtimecore.PendingExec, 0, len(stream.PendingExecs))
 	for _, pending := range stream.PendingExecs {
 		pendingExecs = append(pendingExecs, pending)
 	}
+	if stream.ProviderCancel != nil {
+		stream.ProviderCancel()
+		stream.ProviderCancel = nil
+	}
+	stream.ProviderActive = false
+	stream.CurrentProviderToken++
+	stream.CurrentCompactionToken++
+	stream.PendingProviderAction = providerActionNone
+	stream.PendingCompaction = nil
+	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
+	if hasCheckpoint {
+		cancelReason := firstNonEmpty(intent.CancelReason, "user aborted")
+		cancelEntry := newMetadataEntry(stream.TurnSeq, intent.RequestID, "control", map[string]any{
+			"status":        "canceled",
+			"reason":        cancelReason,
+			"replay_policy": cancelReplayPolicyForReason(cancelReason),
+		})
+		if _, err := service.appendConversationEntries(stream, stream.ConversationID, []HistoryEntry{cancelEntry}); err != nil {
+			log.Printf("forwarder cancellation metadata persistence failed request_id=%s conversation_id=%s err=%v", stream.RequestID, stream.ConversationID, err)
+			if memoryErr := service.appendCheckpointEntries(stream, []HistoryEntry{cancelEntry}); memoryErr != nil {
+				return memoryErr
+			}
+		}
+	}
 	for _, pending := range pendingExecs {
 		if strings.TrimSpace(pending.ExecKind) == "subagent" {
 			service.updateNativeDelegationStatus(pending.ExecID, delegation.TaskCanceled, "Cursor 子代理已取消", "subagent canceled")
@@ -1239,8 +1261,10 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 		}
 	}
 	clearPendingProviderCompletion(stream)
+	terminalMessage := firstNonEmpty(intent.CancelReason, "[canceled] User aborted request")
 	stream.mu.Lock()
-	stream.PendingProviderAction = providerActionNone
+	stream.PendingExecs = make(map[string]runtimecore.PendingExec)
+	stream.PendingInteractions = make(map[string]runtimecore.PendingInteraction)
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
 	service.setTurnPhase(stream, TurnPhaseCanceled)
@@ -2938,9 +2962,18 @@ func (service *Service) completeSuccessfulTurn(stream *ActiveStream, completion 
 			err,
 		)
 	}
-	if err := service.publishCheckpoint(requestID, conversationID); err != nil {
+	if err := service.publishCheckpointWithCompletion(requestID, conversationID, &completion); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (service *Service) finishSuccessfulTurnAfterCheckpoint(stream *ActiveStream, completion pendingTurnCompletion) error {
+	if stream == nil {
+		return nil
+	}
+	requestID := firstNonEmpty(strings.TrimSpace(completion.RequestID), strings.TrimSpace(stream.RequestID))
+	usage := completion.Usage
 	if err := service.broker.Publish(requestID, StreamEvent{
 		Message: buildTurnEndedMessage(usage.InputTokens, usage.OutputTokens, usage.CacheReadTokens, usage.CacheWriteTokens),
 	}); err != nil {
@@ -2971,7 +3004,15 @@ func (service *Service) failStreamIfNonTerminal(stream *ActiveStream, terminalCo
 }
 
 // publishCheckpoint 按当前内存会话镜像投影出 checkpoint，并广播给所有 RunSSE 订阅者。
-func (service *Service) publishCheckpoint(requestID string, _ string) error {
+func (service *Service) publishCheckpoint(requestID string, conversationID string) error {
+	return service.publishCheckpointWithCompletion(requestID, conversationID, nil)
+}
+
+func (service *Service) publishCheckpointWithCompletion(requestID string, conversationID string, completion *pendingTurnCompletion) error {
+	return service.publishCheckpointWithTerminalAction(requestID, conversationID, checkpointCompletionAction(completion))
+}
+
+func (service *Service) publishCheckpointWithTerminalAction(requestID string, conversationID string, terminalAction checkpointTerminalAction) error {
 	stream, ok := service.broker.Get(requestID)
 	if !ok || stream == nil {
 		return fmt.Errorf("request is not active: %s", requestID)
@@ -2980,7 +3021,7 @@ func (service *Service) publishCheckpoint(requestID string, _ string) error {
 	if err != nil {
 		return err
 	}
-	state, err := service.projector.ProjectLegacyCheckpoint(conversation)
+	projection, err := service.projector.ProjectCheckpointProjection(conversation)
 	if err != nil {
 		return err
 	}

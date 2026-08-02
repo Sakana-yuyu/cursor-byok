@@ -1,7 +1,6 @@
 <script setup>
 import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
-import Switch from "@/components/ui/Switch.vue";
 import HomeMetricsCard from "@/components/HomeMetricsCard.vue";
 import StationSpendCard from "@/components/StationSpendCard.vue";
 import DelegationTaskStrip from "@/components/DelegationTaskStrip.vue";

@@ -189,6 +189,21 @@ func (s *ProxyService) SaveUserConfig(cfg UserConfig) error {
 	return s.core.SaveUserConfig(cfg)
 }
 
+// GetCursorAccountStatus 返回 cursor-byok 独立 Cursor 账号的脱敏状态。
+func (s *ProxyService) GetCursorAccountStatus() CursorAccountStatus {
+	return s.core.GetCursorAccountStatus()
+}
+
+// StartCursorAccountLogin 打开官方浏览器登录并异步等待结果。
+func (s *ProxyService) StartCursorAccountLogin() (CursorAccountStatus, error) {
+	return s.core.StartCursorAccountLogin()
+}
+
+// DisconnectCursorAccount 只断开 cursor-byok 自己的账号。
+func (s *ProxyService) DisconnectCursorAccount() (CursorAccountStatus, error) {
+	return s.core.DisconnectCursorAccount()
+}
+
 // TestModelAdapter 用于处理与 TestModelAdapter 相关的逻辑。
 func (s *ProxyService) TestModelAdapter(adapter ModelAdapterConfig) (ModelAdapterTestResult, error) {
 	return s.core.TestModelAdapter(adapter)

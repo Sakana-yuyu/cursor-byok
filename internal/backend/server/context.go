@@ -37,7 +37,6 @@ type Context struct {
 
 	Locale      string
 	UpstreamURL *url.URL
-	Mode        ExecutionMode
 	LastError   error
 
 	Logger *slog.Logger

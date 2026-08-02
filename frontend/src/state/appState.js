@@ -73,11 +73,6 @@ const MODEL_ADAPTER_TEST_UPDATED_EVENT = "model-adapter-test:updated";
 const SUPPORTED_MODEL_ADAPTER_TEST_STATUSES = new Set(["idle", "running", "success", "error"]);
 const HOME_METRICS_MIN_LOADING_MS = 600;
 
-export const ROUTE_MODE_OPTIONS = [
-  { label: "本地服务模式", value: "local" },
-  { label: "直连 Cursor 模式", value: "upstream" },
-];
-
 function asString(value) {
   if (typeof value === "string") {
     return value.trim();
@@ -150,14 +145,6 @@ function formatReleaseDate(value) {
     return text;
   }
   return parsed.format("YYYY-MM-DD HH:mm");
-}
-
-function normalizeRouteMode(value, fallback = "local") {
-  const text = asString(value).toLowerCase();
-  if (SUPPORTED_ROUTE_MODES.has(text)) {
-    return text;
-  }
-  return fallback;
 }
 
 function normalizeBaseURL(value) {
@@ -823,13 +810,6 @@ export function validateModelAdapters(source) {
   return "";
 }
 
-function validateConfigPayload(payload) {
-  if (!SUPPORTED_ROUTE_MODES.has(normalizeRouteMode(payload?.routing?.mode, ""))) {
-    return "运行模式仅支持 local 或 upstream";
-  }
-  return "";
-}
-
 function canUseLocalStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
@@ -984,7 +964,6 @@ function normalizeDelegationForAdapters(source, adapters) {
 
 function normalizeConfig(source) {
   const raw = source && typeof source === "object" ? source : {};
-  const routing = raw.routing && typeof raw.routing === "object" ? raw.routing : {};
   const homeMetrics = raw.homeMetrics && typeof raw.homeMetrics === "object" ? raw.homeMetrics : {};
   return {
     log: asBoolean(raw.log),
@@ -1082,7 +1061,6 @@ function applyConfigToState(config, { modelAdaptersOnly = false } = {}) {
   appState.modelAdapters = normalized.modelAdapters;
   appState.configBackendListenAddr = normalized.backendListenAddr;
   appState.configProxyListenAddr = normalized.proxyListenAddr;
-  appState.routingMode = normalized.routing.mode;
   appState.includeCacheWriteInHitRate = normalized.homeMetrics.includeCacheWriteInHitRate;
   appState.localResponseCache = normalized.localResponseCache;
   appState.delegation = normalized.delegation;
@@ -1344,7 +1322,6 @@ export const appState = reactive({
   modelAdapterTestResults: {},
   configBackendListenAddr: cachedConfig.backendListenAddr,
   configProxyListenAddr: cachedConfig.proxyListenAddr,
-  routingMode: cachedConfig.routing.mode,
   includeCacheWriteInHitRate: cachedConfig.homeMetrics.includeCacheWriteInHitRate,
   localResponseCache: cachedConfig.localResponseCache,
   delegation: cachedConfig.delegation,

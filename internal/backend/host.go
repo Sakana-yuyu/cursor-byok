@@ -28,10 +28,11 @@ const healthPath = "/healthz"
 const tabServerBaseURL = "https://tab.leokun.cn"
 
 type Host struct {
-	store      *serverconfig.Store
-	listenAddr string
-	configs    *serverconfig.Manager
-	healthHTTP *http.Client
+	store            *serverconfig.Store
+	listenAddr       string
+	configs          *serverconfig.Manager
+	healthHTTP       *http.Client
+	controlPlaneAuth upstream.AuthorizationProvider
 
 	runMu      sync.RWMutex
 	httpServer *http.Server
@@ -43,7 +44,7 @@ type Host struct {
 	mux http.Handler
 }
 
-func NewHost(store *serverconfig.Store) (*Host, error) {
+func NewHost(store *serverconfig.Store, controlPlaneAuth upstream.AuthorizationProvider) (*Host, error) {
 	if store == nil {
 		return nil, fmt.Errorf("backend config store is required")
 	}
@@ -53,10 +54,11 @@ func NewHost(store *serverconfig.Store) (*Host, error) {
 	}
 	cfg := configs.Current()
 	host := &Host{
-		store:      store,
-		listenAddr: cfg.BackendListenAddr,
-		configs:    configs,
-		healthHTTP: newLoopbackHTTPClient(),
+		store:            store,
+		listenAddr:       cfg.BackendListenAddr,
+		configs:          configs,
+		healthHTTP:       newLoopbackHTTPClient(),
+		controlPlaneAuth: controlPlaneAuth,
 	}
 	if err := host.rebuild(cfg); err != nil {
 		return nil, err
@@ -353,7 +355,6 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 		server.Use(
 			server.Recover(),
 			server.ServerContext(),
-			server.PolicyMiddleware(host.configs),
 			server.ErrorEncoder(),
 		),
 		server.Mount(ads.RoutePrefix, ads.NewHTTPHandler(appdata.AdsRootPath())),
@@ -366,17 +367,11 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 			server.Name("bidi_append"),
 			server.ConnectUnary(),
 			server.Local(server.HTTPHandlerAction(agentModule.LocalBidiHandler)),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "bidi_append",
-			})),
 		),
 		server.POST(legacyRunSSEProcedure,
 			server.Name("run_sse"),
 			server.ConnectStream(),
 			server.Local(server.HTTPHandlerAction(agentModule.LocalRunSSE)),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "run_sse",
-			})),
 		),
 		server.POST("/aiserver.v1.AiService/ServerTime",
 			server.Name("server_time"),
@@ -386,9 +381,6 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 				StatusCode:    http.StatusOK,
 				MockProtoType: "aiserver.v1.ServerTimeResponse",
 				MockBuilder:   upstream.ServerTimeMockBuilder,
-			})),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "server_time",
 			})),
 		),
 		server.POST("/aiserver.v1.AiService/GetServerConfig",
@@ -400,9 +392,6 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 				MockProtoType: "aiserver.v1.GetServerConfigResponse",
 				MockBuilder:   upstream.ServerConfigMockBuilder,
 			})),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "server_config",
-			})),
 		),
 		server.POST("/aiserver.v1.AiService/AvailableModels",
 			server.Name("available_models"),
@@ -412,9 +401,6 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 				StatusCode:    http.StatusOK,
 				MockProtoType: "aiserver.v1.AvailableModelsResponse",
 				MockBuilder:   upstream.AvailableModelsMockBuilder,
-			})),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "available_models",
 			})),
 		),
 		server.POST("/aiserver.v1.AiService/GetDefaultModelNudgeData",
@@ -426,9 +412,6 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 				MockProtoType: "aiserver.v1.GetDefaultModelNudgeDataResponse",
 				MockBuilder:   upstream.DefaultModelNudgeMockBuilder,
 			})),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "default_model_nudge",
-			})),
 		),
 		server.POST("/aiserver.v1.AnalyticsService/BootstrapStatsig",
 			server.Name("bootstrap_statsig"),
@@ -438,9 +421,6 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 				StatusCode:    http.StatusOK,
 				MockProtoType: "aiserver.v1.BootstrapStatsigResponse",
 				MockBuilder:   upstream.BootstrapStatsigMockBuilder,
-			})),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "bootstrap_statsig",
 			})),
 		),
 		server.POST("/aiserver.v1.AnalyticsService/GetFirstWindowStatsigDecision",
@@ -452,9 +432,6 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 				MockProtoType: "aiserver.v1.GetFirstWindowStatsigDecisionResponse",
 				MockBuilder:   upstream.FirstWindowStatsigDecisionMockBuilder,
 			})),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "first_window_statsig_decision",
-			})),
 		),
 		server.POST("/oauth/token",
 			server.Name("oauth_token"),
@@ -463,9 +440,6 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 				Name:       "oauth_token",
 				StatusCode: http.StatusOK,
 			})),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "oauth_token",
-			})),
 		),
 		server.POST("/aiserver.v1.AuthService/GetEmail",
 			server.Name("auth_service_get_email"),
@@ -473,9 +447,6 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 			server.Local(upstream.MockAuthEmailAction(routeDeps, upstream.CompatRouteConfig{
 				Name:       "auth_service_get_email",
 				StatusCode: http.StatusOK,
-			})),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "auth_service_get_email",
 			})),
 		),
 		tabServerUpstreamProcedure("/aiserver.v1.AiService/StreamCpp", "ai_stream_cpp", server.ConnectStream(), routeDeps),
@@ -518,12 +489,9 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 			server.Name("ai_service"),
 			server.HTTP(),
 			server.Local(server.HTTPHandlerAction(agentModule.AiHandler)),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "ai_service",
-			})),
 		),
-		tabServerUpstreamProcedure("/aiserver.v1.CppService/AvailableModels", "cpp_available_models", server.ConnectUnary(), routeDeps),
-		tabServerUpstreamProcedure("/aiserver.v1.CppService/RecordCppFate", "cpp_record_cpp_fate", server.ConnectUnary(), routeDeps),
+		tabServerProcedure("/aiserver.v1.CppService/AvailableModels", "cpp_available_models", server.ConnectUnary(), routeDeps),
+		tabServerProcedure("/aiserver.v1.CppService/RecordCppFate", "cpp_record_cpp_fate", server.ConnectUnary(), routeDeps),
 		server.Any("/aiserver.v1.CppService/*",
 			server.Name("cpp_service"),
 			server.HTTP(),
@@ -531,14 +499,11 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 				http.NotFound(ctx.Writer, ctx.Request)
 				return nil
 			}),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "cpp_service",
-			})),
 		),
-		tabServerUpstreamProcedure("/aiserver.v1.FileSyncService/FSSyncFile", "file_sync_sync_file", server.ConnectUnary(), routeDeps),
-		tabServerUpstreamProcedure("/aiserver.v1.FileSyncService/FSIsEnabledForUser", "file_sync_is_enabled_for_user", server.ConnectUnary(), routeDeps),
-		tabServerUpstreamProcedure("/aiserver.v1.FileSyncService/FSConfig", "file_sync_config", server.ConnectUnary(), routeDeps),
-		tabServerUpstreamProcedure("/aiserver.v1.FileSyncService/FSUploadFile", "file_sync_upload_file", server.ConnectUnary(), routeDeps),
+		tabServerProcedure("/aiserver.v1.FileSyncService/FSSyncFile", "file_sync_sync_file", server.ConnectUnary(), routeDeps),
+		tabServerProcedure("/aiserver.v1.FileSyncService/FSIsEnabledForUser", "file_sync_is_enabled_for_user", server.ConnectUnary(), routeDeps),
+		tabServerProcedure("/aiserver.v1.FileSyncService/FSConfig", "file_sync_config", server.ConnectUnary(), routeDeps),
+		tabServerProcedure("/aiserver.v1.FileSyncService/FSUploadFile", "file_sync_upload_file", server.ConnectUnary(), routeDeps),
 		server.Any("/aiserver.v1.FileSyncService/*",
 			server.Name("file_sync"),
 			server.HTTP(),
@@ -546,25 +511,16 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 				http.NotFound(ctx.Writer, ctx.Request)
 				return nil
 			}),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "file_sync",
-			})),
 		),
 		server.POST("/aiserver.v1.DashboardService/GetTokenUsage",
 			server.Name("dashboard_token_usage"),
 			server.HTTP(),
 			server.Local(server.HTTPHandlerAction(agentModule.AiHandler)),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "dashboard_token_usage",
-			})),
 		),
 		server.POST("/aiserver.v1.DashboardService/GetGlassEarlyPreviewEnrollment",
 			server.Name("dashboard_glass_early_preview_enrollment"),
 			server.ConnectUnary(),
 			server.Local(server.HTTPHandlerAction(agentModule.AiHandler)),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "dashboard_glass_early_preview_enrollment",
-			})),
 		),
 		server.POST("/aiserver.v1.DashboardService/GetCurrentPeriodUsage",
 			server.Name("dashboard_current_period_usage"),
@@ -574,9 +530,6 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 				StatusCode:    http.StatusOK,
 				MockProtoType: "aiserver.v1.GetCurrentPeriodUsageResponse",
 				MockBuilder:   upstream.DashboardCurrentPeriodUsageMockBuilder,
-			})),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "dashboard_current_period_usage",
 			})),
 		),
 		server.POST("/aiserver.v1.DashboardService/GetTeams",
@@ -588,22 +541,21 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 				MockProtoType: "aiserver.v1.GetTeamsResponse",
 				MockBuilder:   upstream.DashboardTeamsMockBuilder,
 			})),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "dashboard_get_teams",
-			})),
 		),
 		server.POST("/aiserver.v1.DashboardService/GetManagedSkills",
 			server.Name("dashboard_get_managed_skills"),
 			server.ConnectUnary(),
-			server.Local(upstream.MockProtoAction(routeDeps, upstream.CompatRouteConfig{
-				Name:          "dashboard_get_managed_skills",
-				StatusCode:    http.StatusOK,
-				MockProtoType: "aiserver.v1.GetManagedSkillsResponse",
-				MockBuilder:   upstream.DashboardManagedSkillsMockBuilder,
-			})),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "dashboard_get_managed_skills",
-			})),
+			server.Local(cursorControlPlaneAction(
+				host.controlPlaneAuth,
+				routeDeps,
+				"dashboard_get_managed_skills",
+				upstream.MockProtoAction(routeDeps, upstream.CompatRouteConfig{
+					Name:          "dashboard_get_managed_skills",
+					StatusCode:    http.StatusOK,
+					MockProtoType: "aiserver.v1.GetManagedSkillsResponse",
+					MockBuilder:   upstream.DashboardManagedSkillsMockBuilder,
+				}),
+			)),
 		),
 		server.POST("/aiserver.v1.DashboardService/GetMe",
 			server.Name("dashboard_get_me"),
@@ -613,9 +565,6 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 				StatusCode:    http.StatusOK,
 				MockProtoType: "aiserver.v1.GetMeResponse",
 				MockBuilder:   upstream.DashboardGetMeMockBuilder,
-			})),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "dashboard_get_me",
 			})),
 		),
 		server.POST("/aiserver.v1.DashboardService/GetUserPrivacyMode",
@@ -627,9 +576,6 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 				MockProtoType: "aiserver.v1.GetUserPrivacyModeResponse",
 				MockBuilder:   upstream.DashboardUserPrivacyModeMockBuilder,
 			})),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "dashboard_user_privacy_mode",
-			})),
 		),
 		server.POST("/aiserver.v1.DashboardService/GetPlanInfo",
 			server.Name("dashboard_plan_info"),
@@ -639,9 +585,6 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 				StatusCode:    http.StatusOK,
 				MockProtoType: "aiserver.v1.GetPlanInfoResponse",
 				MockBuilder:   upstream.DashboardPlanInfoMockBuilder,
-			})),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "dashboard_plan_info",
 			})),
 		),
 		server.POST("/aiserver.v1.DashboardService/GetUsageLimitStatusAndActiveGrants",
@@ -653,9 +596,6 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 				MockProtoType: "aiserver.v1.GetUsageLimitStatusAndActiveGrantsResponse",
 				MockBuilder:   upstream.DashboardUsageLimitStatusAndActiveGrantsMockBuilder,
 			})),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "dashboard_usage_limit_status",
-			})),
 		),
 		server.POST("/aiserver.v1.DashboardService/IsOnNewPricing",
 			server.Name("dashboard_is_on_new_pricing"),
@@ -666,11 +606,25 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 				MockProtoType: "aiserver.v1.IsOnNewPricingResponse",
 				MockBuilder:   upstream.DashboardIsOnNewPricingMockBuilder,
 			})),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "dashboard_is_on_new_pricing",
-			})),
 		),
-		// tabServerUpstreamProcedure("/aiserver.v1.DashboardService/GetEffectiveUserPlugins", "dashboard_get_effective_user_plugins", server.ConnectUnary(), routeDeps),
+		cursorControlPlaneProcedure("/aiserver.v1.DashboardService/AddMarketplace", "dashboard_add_marketplace", server.ConnectUnary(), host.controlPlaneAuth, routeDeps),
+		cursorControlPlaneProcedure("/aiserver.v1.DashboardService/AddMcpServersFromPlugin", "dashboard_add_mcp_servers_from_plugin", server.ConnectUnary(), host.controlPlaneAuth, routeDeps),
+		cursorControlPlaneProcedure("/aiserver.v1.DashboardService/BatchGetPluginMcpConfig", "dashboard_batch_get_plugin_mcp_config", server.ConnectUnary(), host.controlPlaneAuth, routeDeps),
+		cursorControlPlaneProcedure("/aiserver.v1.DashboardService/GetAvailableMcpServers", "dashboard_get_available_mcp_servers", server.ConnectUnary(), host.controlPlaneAuth, routeDeps),
+		cursorControlPlaneProcedure("/aiserver.v1.DashboardService/GetEffectiveUserPlugins", "dashboard_get_effective_user_plugins", server.ConnectUnary(), host.controlPlaneAuth, routeDeps),
+		cursorControlPlaneProcedure("/aiserver.v1.DashboardService/GetPlugin", "dashboard_get_plugin", server.ConnectUnary(), host.controlPlaneAuth, routeDeps),
+		cursorControlPlaneProcedure("/aiserver.v1.DashboardService/GetPluginMcpConfig", "dashboard_get_plugin_mcp_config", server.ConnectUnary(), host.controlPlaneAuth, routeDeps),
+		cursorControlPlaneProcedure("/aiserver.v1.DashboardService/InstallUserPlugin", "dashboard_install_user_plugin", server.ConnectUnary(), host.controlPlaneAuth, routeDeps),
+		cursorControlPlaneProcedure("/aiserver.v1.DashboardService/ListMarketplacePlugins", "dashboard_list_marketplace_plugins", server.ConnectUnary(), host.controlPlaneAuth, routeDeps),
+		cursorControlPlaneProcedure("/aiserver.v1.DashboardService/ListMarketplaces", "dashboard_list_marketplaces", server.ConnectUnary(), host.controlPlaneAuth, routeDeps),
+		cursorControlPlaneProcedure("/aiserver.v1.DashboardService/ListUserPluginInstalls", "dashboard_list_user_plugin_installs", server.ConnectUnary(), host.controlPlaneAuth, routeDeps),
+		cursorControlPlaneProcedure("/aiserver.v1.DashboardService/RefreshMarketplace", "dashboard_refresh_marketplace", server.ConnectUnary(), host.controlPlaneAuth, routeDeps),
+		cursorControlPlaneProcedure("/aiserver.v1.DashboardService/RegisterMarketplaceAndPlugins", "dashboard_register_marketplace_and_plugins", server.ConnectUnary(), host.controlPlaneAuth, routeDeps),
+		cursorControlPlaneProcedure("/aiserver.v1.DashboardService/RemoveMarketplace", "dashboard_remove_marketplace", server.ConnectUnary(), host.controlPlaneAuth, routeDeps),
+		cursorControlPlaneProcedure("/aiserver.v1.DashboardService/ResolvePluginsByRef", "dashboard_resolve_plugins_by_ref", server.ConnectUnary(), host.controlPlaneAuth, routeDeps),
+		cursorControlPlaneProcedure("/aiserver.v1.DashboardService/UninstallUserPlugin", "dashboard_uninstall_user_plugin", server.ConnectUnary(), host.controlPlaneAuth, routeDeps),
+		cursorControlPlaneProcedure("/aiserver.v1.DashboardService/UpdateUserPluginInstall", "dashboard_update_user_plugin_install", server.ConnectUnary(), host.controlPlaneAuth, routeDeps),
+		cursorControlPlaneProcedure("/aiserver.v1.MCPRegistryService/GetKnownServers", "mcp_registry_get_known_servers", server.ConnectUnary(), host.controlPlaneAuth, routeDeps),
 		server.Any("/aiserver.v1.DashboardService/*",
 			server.Name("dashboard"),
 			server.HTTP(),
@@ -678,9 +632,6 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 				http.NotFound(ctx.Writer, ctx.Request)
 				return nil
 			}),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "dashboard",
-			})),
 		),
 		server.Any("/aiserver.v1.NetworkService/*",
 			server.Name("network_service"),
@@ -689,9 +640,6 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 				http.NotFound(ctx.Writer, ctx.Request)
 				return nil
 			}),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "network_service",
-			})),
 		),
 		server.Any("/aiserver.v1.InAppAdService/*",
 			server.Name("in_app_ad"),
@@ -700,9 +648,6 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 				http.NotFound(ctx.Writer, ctx.Request)
 				return nil
 			}),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "in_app_ad",
-			})),
 		),
 		server.GET("/auth/full_stripe_profile",
 			server.Name("auth_full_stripe_profile"),
@@ -711,9 +656,6 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 				Name:       "auth_full_stripe_profile",
 				StatusCode: http.StatusOK,
 			})),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "auth_full_stripe_profile",
-			})),
 		),
 		server.GET("/auth/stripe_profile",
 			server.Name("auth_stripe_profile"),
@@ -721,9 +663,6 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 			server.Local(upstream.MockAuthStripeProfileAction(routeDeps, upstream.CompatRouteConfig{
 				Name:       "auth_stripe_profile",
 				StatusCode: http.StatusOK,
-			})),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "auth_stripe_profile",
 			})),
 		),
 		server.GET("/auth/has_valid_payment_method",
@@ -736,9 +675,6 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 					"hasValidPaymentMethod": true,
 				},
 			})),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "auth_has_valid_payment_method",
-			})),
 		),
 		server.Any("/auth/poll",
 			server.Name("auth_poll"),
@@ -746,9 +682,6 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 			server.Local(upstream.MockAuthPollAction(routeDeps, upstream.CompatRouteConfig{
 				Name:       "auth_poll",
 				StatusCode: http.StatusOK,
-			})),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "auth_poll",
 			})),
 		),
 		server.POST("/auth/logout",
@@ -758,9 +691,6 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 				Name:       "auth_logout",
 				StatusCode: http.StatusNoContent,
 			})),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "auth_logout",
-			})),
 		),
 		server.Any("/auth/*",
 			server.Name("auth_proxy"),
@@ -769,53 +699,27 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 				http.NotFound(ctx.Writer, ctx.Request)
 				return nil
 			}),
-			server.Upstream(upstream.DirectAction(routeDeps, upstream.CompatRouteConfig{
-				Name: "auth_proxy",
-			})),
 		),
 	)
 
 	return nil
 }
 
-func directUpstreamProcedure(pattern string, name string, protocol server.RouteOption, deps upstream.Dependencies) server.Option {
-	direct := upstream.DirectAction(deps, upstream.CompatRouteConfig{Name: name})
-	action := func(ctx *server.Context) error {
-		if ctx != nil && ctx.UpstreamURL == nil && ctx.Request != nil && ctx.Request.URL != nil {
-			targetURL := *ctx.Request.URL
-			targetURL.Scheme = "https"
-			targetURL.Host = "api2.cursor.sh:443"
-			ctx.UpstreamURL = &targetURL
-		}
-		return direct(ctx)
-	}
-	return server.POST(pattern,
-		server.Name(name),
-		protocol,
-		server.Local(action),
-		server.Upstream(action),
-	)
-}
-
-func repositoryServiceProcedure(pattern string, name string, protocol server.RouteOption, module *forwarder.Module, deps upstream.Dependencies) server.Option {
+func repositoryServiceProcedure(pattern string, name string, protocol server.RouteOption, module *forwarder.Module) server.Option {
 	localAction := server.HTTPHandlerAction(module.RepositoryServiceHandler)
-	upstreamAction := upstream.DirectAction(deps, upstream.CompatRouteConfig{Name: name})
 	return server.POST(pattern,
 		server.Name(name),
 		protocol,
 		server.Local(localAction),
-		server.Upstream(upstreamAction),
 	)
 }
 
-func uploadServiceProcedure(pattern string, name string, protocol server.RouteOption, module *forwarder.Module, deps upstream.Dependencies) server.Option {
+func uploadServiceProcedure(pattern string, name string, protocol server.RouteOption, module *forwarder.Module) server.Option {
 	localAction := server.HTTPHandlerAction(module.UploadServiceHandler)
-	upstreamAction := upstream.DirectAction(deps, upstream.CompatRouteConfig{Name: name})
 	return server.POST(pattern,
 		server.Name(name),
 		protocol,
 		server.Local(localAction),
-		server.Upstream(upstreamAction),
 	)
 }
 
@@ -857,7 +761,47 @@ func tabServerUpstreamAction(name string, deps upstream.Dependencies) server.Han
 			targetURL.Host = baseURL.Host
 			ctx.UpstreamURL = &targetURL
 		}
-		return direct(ctx)
+		return forward(ctx)
+	}
+}
+
+func cursorControlPlaneProcedure(
+	pattern string,
+	name string,
+	protocol server.RouteOption,
+	authorizationProvider upstream.AuthorizationProvider,
+	deps upstream.Dependencies,
+) server.Option {
+	notFound := func(ctx *server.Context) error {
+		http.NotFound(ctx.Writer, ctx.Request)
+		return nil
+	}
+	return server.POST(pattern,
+		server.Name(name),
+		protocol,
+		server.Local(cursorControlPlaneAction(authorizationProvider, deps, name, notFound)),
+	)
+}
+
+func cursorControlPlaneAction(
+	authorizationProvider upstream.AuthorizationProvider,
+	deps upstream.Dependencies,
+	name string,
+	fallback server.HandlerFunc,
+) server.HandlerFunc {
+	forward := upstream.AuthenticatedForwardAction(deps, upstream.CompatRouteConfig{Name: name}, authorizationProvider)
+	return func(ctx *server.Context) error {
+		if authorizationProvider == nil || !authorizationProvider.SignedIn() {
+			return fallback(ctx)
+		}
+		if ctx == nil || ctx.Request == nil || ctx.Request.URL == nil {
+			return fmt.Errorf("Cursor 控制面请求上下文无效")
+		}
+		targetURL := *ctx.Request.URL
+		targetURL.Scheme = "https"
+		targetURL.Host = "api2.cursor.sh:443"
+		ctx.UpstreamURL = &targetURL
+		return forward(ctx)
 	}
 }
 

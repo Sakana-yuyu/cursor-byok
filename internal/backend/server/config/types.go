@@ -90,10 +90,6 @@ type ModelAdapterConfig struct {
 	BalanceCodingPlanProvider string `json:"balanceCodingPlanProvider,omitempty" yaml:"balanceCodingPlanProvider,omitempty"`
 }
 
-type RoutingConfig struct {
-	Mode string `json:"mode" yaml:"mode"`
-}
-
 type HomeMetricsConfig struct {
 	IncludeCacheWriteInHitRate bool `json:"includeCacheWriteInHitRate" yaml:"includeCacheWriteInHitRate"`
 }
@@ -194,10 +190,6 @@ func NormalizeConfig(input Config) (Config, error) {
 	output.LocalResponseCache = normalizeLocalResponseCache(input.LocalResponseCache)
 	output.SkillMCPScan = input.SkillMCPScan
 	output.LastAgentModelHash = strings.TrimSpace(input.LastAgentModelHash)
-	output.Routing.Mode = normalizeRoutingMode(input.Routing.Mode)
-	if output.Routing.Mode == "" {
-		output.Routing.Mode = DefaultRoutingMode
-	}
 	adapters, err := NormalizeModelAdapterConfigs(input.ModelAdapters)
 	if err != nil {
 		return Config{}, err
@@ -525,17 +517,6 @@ func normalizeModelAdapterType(value string) string {
 		return "anthropic"
 	case "gemini":
 		return "gemini"
-	default:
-		return ""
-	}
-}
-
-func normalizeRoutingMode(value string) string {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "", "local":
-		return "local"
-	case "upstream":
-		return "upstream"
 	default:
 		return ""
 	}
