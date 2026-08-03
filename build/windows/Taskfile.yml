@@ -91,10 +91,10 @@ tasks:
       # File 使用无 `..` 的本地文件名。
       - |
         {{if eq OS "windows"}}
-        powershell -NoProfile -Command "Copy-Item -Force '..\\..\\{{.OUTPUT}}' 'app-windows-{{.ARCH}}.exe'"
+        powershell -NoProfile -Command "Copy-Item -Force '{{.PROJECT_ROOT}}/{{.OUTPUT}}' 'app-windows-{{.ARCH}}.exe'"
         makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DOUTPUT_INSTALLER="cursor-byok-windows-{{.ARCH}}-installer.exe" -DARG_WAILS_{{.ARG_FLAG}}_BINARY="app-windows-{{.ARCH}}.exe" project.nsi
         {{else}}
-        cp -f '../../{{.OUTPUT}}' 'app-windows-{{.ARCH}}.exe'
+        cp -f '{{.PROJECT_ROOT}}/{{.OUTPUT}}' 'app-windows-{{.ARCH}}.exe'
         makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DOUTPUT_INSTALLER="cursor-byok-windows-{{.ARCH}}-installer.exe" -DARG_WAILS_{{.ARG_FLAG}}_BINARY="app-windows-{{.ARCH}}.exe" project.nsi
         {{end}}
     vars:
@@ -120,10 +120,10 @@ tasks:
       # 与 create:nsis:installer 相同：先复制二进制到脚本目录，File 使用本地文件名。
       - |
         {{if eq OS "windows"}}
-        powershell -NoProfile -Command "Copy-Item -Force '..\\..\\{{.OUTPUT}}' 'app-windows-x32.exe'"
+        powershell -NoProfile -Command "Copy-Item -Force '{{.PROJECT_ROOT}}/{{.OUTPUT}}' 'app-windows-x32.exe'"
         makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DARG_WAILS_386_BINARY="app-windows-x32.exe" project-386.nsi
         {{else}}
-        cp -f '../../{{.OUTPUT}}' 'app-windows-x32.exe'
+        cp -f '{{.PROJECT_ROOT}}/{{.OUTPUT}}' 'app-windows-x32.exe'
         makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DARG_WAILS_386_BINARY="app-windows-x32.exe" project-386.nsi
         {{end}}
     vars:
