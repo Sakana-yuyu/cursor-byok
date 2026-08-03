@@ -156,7 +156,11 @@ func (service *Service) dispatchInboundIntent(intent InboundIntent) error {
 	}
 	// "run" 类型 intent 使用异步发送，避免 BidiAppend 阻塞等待模型调用完成。
 	// 主进程可以在模型生成期间继续接收新消息，实现 Multitask Mode 的并发对话。
-	if commandKind == streamCommandRun {
+	// exec_result / interaction_result 同样必须异步：并行工具结果（如一次并行读取
+	// 多个文件）会在 stream actor 中串行处理，若 BidiAppend 同步等待自己的命令完成，
+	// 排在后面的 BidiAppend 等待时间会随队列累积，超过客户端转发超时（约 5s），
+	// 表现为「接口超时 + 工具结果丢失」。mailbox FIFO 保证命令仍按序处理。
+	if commandKind == streamCommandRun || commandKind == streamCommandExecResult || commandKind == streamCommandInteractionResult {
 		return service.postStreamCommandAsync(stream, streamCommand{
 			Kind:   commandKind,
 			Intent: intent,

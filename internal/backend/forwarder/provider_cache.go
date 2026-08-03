@@ -13,6 +13,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -101,32 +102,43 @@ func (c *cacheKeyCache) put(req ProviderRequest, key string) {
 }
 
 // localResponseCacheSettingsProvider 由 resolver（配置管理器）实现，用于按调用即时读取
-// 本地响应缓存的启用状态、TTL 与最大条目数（支持配置热加载）。
+// 本地响应缓存的启用状态、TTL、最大条目数与持久化开关（支持配置热加载）。
 type localResponseCacheSettingsProvider interface {
-	LocalResponseCacheSettings() (enabled bool, ttl time.Duration, maxEntries int)
+	LocalResponseCacheSettings() (enabled bool, ttl time.Duration, maxEntries int, persist bool)
 }
 
 // cachingProviderGateway 是包装底层 ProviderGateway 的响应缓存网关。
 type cachingProviderGateway struct {
 	inner    ProviderGateway
-	settings func() (enabled bool, ttl time.Duration, maxEntries int)
+	settings func() (enabled bool, ttl time.Duration, maxEntries int, persist bool)
 	store    *responseCacheStore
 	keyCache *cacheKeyCache // 缓存 key 哈希计算结果
+	// inflight 记录进行中的请求（key → 通知 channel），相同 key 的并发请求合并为一次上游调用。
+	inflight sync.Map
 }
 
-// newCachingProviderGateway 构造响应缓存网关。
-func newCachingProviderGateway(inner ProviderGateway, settings func() (bool, time.Duration, int)) *cachingProviderGateway {
+// newCachingProviderGateway 构造响应缓存网关。persistPath 为空时不做磁盘持久化。
+func newCachingProviderGateway(inner ProviderGateway, settings func() (bool, time.Duration, int, bool), persistPath string) *cachingProviderGateway {
 	return &cachingProviderGateway{
 		inner:    inner,
 		settings: settings,
-		store:    newResponseCacheStore(),
+		store: newResponseCacheStore(persistPath, func() time.Duration {
+			_, ttl, _, _ := settings()
+			return ttl
+		}),
 		keyCache: newCacheKeyCache(1024), // 缓存最近 1024 个请求的 key
 	}
 }
 
-// StartStream 在缓存关闭时直接透传；开启时按精确匹配尝试命中或录制后有条件写入。
+// inflightCall 是一次进行中的上游请求的完成信号。
+type inflightCall struct {
+	done chan struct{}
+}
+
+// StartStream 在缓存关闭时直接透传；开启时按精确匹配尝试命中或录制后有条件写入，
+// 相同 key 的并发请求共享一次上游调用（singleflight）。
 func (gateway *cachingProviderGateway) StartStream(ctx context.Context, req ProviderRequest, sink func(modeladapter.ModelEvent) error) error {
-	enabled, ttl, maxEntries := gateway.settings()
+	enabled, ttl, maxEntries, _ := gateway.settings()
 	if !enabled {
 		// 禁用路径：与今日完全一致，不做哈希、不录制、不产生额外延迟。
 		return gateway.inner.StartStream(ctx, req, sink)
@@ -139,9 +151,23 @@ func (gateway *cachingProviderGateway) StartStream(ctx context.Context, req Prov
 			gateway.keyCache.put(req, key)
 		}
 	}
-	if key != "" {
+	if key == "" {
+		// 无法归一化 key（序列化失败）：直接透传，不参与缓存与合并。
+		return gateway.inner.StartStream(ctx, req, sink)
+	}
+
+	// 单飞：相同 key 的并发请求等待首个请求结束后复用其结果。
+	call := &inflightCall{done: make(chan struct{})}
+	actual, loaded := gateway.inflight.LoadOrStore(key, call)
+	if loaded {
+		waiter := actual.(*inflightCall)
+		select {
+		case <-waiter.done:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 		if entry, ok := gateway.store.get(key, time.Now()); ok {
-			// 命中：直接把缓存事件序列回放给 sink，等价于底层 provider 成功流。
+			// 首个请求成功收口并写入缓存：直接回放。
 			for _, event := range entry.events {
 				if err := sink(event); err != nil {
 					return err
@@ -150,6 +176,25 @@ func (gateway *cachingProviderGateway) StartStream(ctx context.Context, req Prov
 			localcache.RecordHit(entry.savedInputTokens, entry.savedOutputTokens)
 			return nil
 		}
+		// 首个请求失败未产生缓存：本请求自行发起（此时首请求已离开 inflight）。
+		return gateway.inner.StartStream(ctx, req, sink)
+	}
+
+	// 本请求成为上游发起者；结束后通知所有等待者。
+	defer func() {
+		close(call.done)
+		gateway.inflight.Delete(key)
+	}()
+
+	if entry, ok := gateway.store.get(key, time.Now()); ok {
+		// 命中：直接把缓存事件序列回放给 sink，等价于底层 provider 成功流。
+		for _, event := range entry.events {
+			if err := sink(event); err != nil {
+				return err
+			}
+		}
+		localcache.RecordHit(entry.savedInputTokens, entry.savedOutputTokens)
+		return nil
 	}
 
 	recorder := &streamRecorder{}
@@ -169,6 +214,7 @@ func (gateway *cachingProviderGateway) StartStream(ctx context.Context, req Prov
 			savedInputTokens:  recorder.maxInputTokens,
 			savedOutputTokens: recorder.maxOutputTokens,
 			expiresAt:         time.Now().Add(ttl),
+			lastAccessAt:      time.Now(),
 		}, maxEntries)
 	}
 	return innerErr
@@ -245,31 +291,110 @@ type responseCacheEntry struct {
 	savedInputTokens  int64
 	savedOutputTokens int64
 	expiresAt         time.Time
+	lastAccessAt      time.Time // 最近一次命中时间，用于 LRU 排序与磁盘恢复
 }
 
-// responseCacheStore 是带 TTL 与 FIFO 淘汰上限的内存响应缓存。
+// responseCacheStore 是带 TTL 与 LRU 淘汰上限的内存响应缓存，可持久化到磁盘。
 type responseCacheStore struct {
-	mu      sync.Mutex
-	entries map[string]*responseCacheEntry
-	order   []string
+	mu         sync.Mutex
+	path       string // 磁盘持久化路径；空表示不持久化
+	ttlProvider func() time.Duration // 当前 TTL（热加载），用于磁盘恢复时续期
+	loaded     bool
+	dirty      bool
+	saveTimer  *time.Timer
+	entries    map[string]*responseCacheEntry
+	order      []string // LRU 顺序：头部最久未使用，尾部最近使用
 }
 
-func newResponseCacheStore() *responseCacheStore {
-	return &responseCacheStore{entries: make(map[string]*responseCacheEntry)}
+func newResponseCacheStore(path string, ttlProvider func() time.Duration) *responseCacheStore {
+	return &responseCacheStore{
+		path:        path,
+		ttlProvider: ttlProvider,
+		entries:     make(map[string]*responseCacheEntry),
+	}
+}
+
+// ensureLoaded 懒加载磁盘缓存（首次访问时执行一次）。
+// 加载时按「最近访问时间 + 当前 TTL」续期：TTL 语义是"多久未访问则失效"，
+// 用户调长 TTL 后，此前写入的条目（旧 ExpiresAt）不应立即过期，而应继续可用。
+func (store *responseCacheStore) ensureLoaded() {
+	if store.loaded || store.path == "" {
+		store.loaded = true
+		return
+	}
+	store.loaded = true
+	loaded := loadResponseCacheFromDisk(store.path)
+	if len(loaded) == 0 {
+		return
+	}
+	now := time.Now()
+	ttl := store.currentTTL()
+	for key, entry := range loaded {
+		if ttl > 0 && !entry.lastAccessAt.IsZero() {
+			renewed := entry.lastAccessAt.Add(ttl)
+			if renewed.After(entry.expiresAt) {
+				entry.expiresAt = renewed
+			}
+		}
+		if now.After(entry.expiresAt) {
+			continue
+		}
+		store.entries[key] = entry
+	}
+	// 按最近访问时间升序重建 LRU 顺序（磁盘时间戳缺失视为最早）。
+	store.order = make([]string, 0, len(store.entries))
+	for key := range store.entries {
+		store.order = append(store.order, key)
+	}
+	sort.Slice(store.order, func(i, j int) bool {
+		left := store.entries[store.order[i]].lastAccessAt
+		right := store.entries[store.order[j]].lastAccessAt
+		if left.IsZero() {
+			return true
+		}
+		if right.IsZero() {
+			return false
+		}
+		return left.Before(right)
+	})
+}
+
+// currentTTL 读取当前热加载 TTL；无 provider 时返回 0（不续期）。
+func (store *responseCacheStore) currentTTL() time.Duration {
+	if store.ttlProvider == nil {
+		return 0
+	}
+	return store.ttlProvider()
+}
+
+// touchLocked 将 key 移到 LRU 末尾（最近使用）。
+func (store *responseCacheStore) touchLocked(key string) {
+	for index, candidate := range store.order {
+		if candidate == key {
+			store.order = append(store.order[:index], store.order[index+1:]...)
+			break
+		}
+	}
+	store.order = append(store.order, key)
 }
 
 func (store *responseCacheStore) get(key string, now time.Time) (*responseCacheEntry, bool) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
+	store.ensureLoaded()
 	entry, ok := store.entries[key]
 	if !ok {
 		return nil, false
 	}
 	if now.After(entry.expiresAt) {
 		delete(store.entries, key)
-		store.removeOrderLocked(key)
+		store.touchLocked(key)
+		store.order = store.order[:len(store.order)-1]
+		store.markDirtyLocked()
 		return nil, false
 	}
+	entry.lastAccessAt = now
+	store.touchLocked(key)
 	return entry, true
 }
 
@@ -279,24 +404,48 @@ func (store *responseCacheStore) put(key string, entry *responseCacheEntry, maxE
 	}
 	store.mu.Lock()
 	defer store.mu.Unlock()
+	store.ensureLoaded()
 	if _, exists := store.entries[key]; !exists {
 		store.order = append(store.order, key)
 	}
 	store.entries[key] = entry
-	// FIFO 淘汰：超出上限时逐出最早写入的条目。
+	// LRU 淘汰：超出上限时逐出最久未使用的条目。
 	for len(store.entries) > maxEntries && len(store.order) > 0 {
 		oldest := store.order[0]
 		store.order = store.order[1:]
 		delete(store.entries, oldest)
 	}
+	store.markDirtyLocked()
 }
 
-func (store *responseCacheStore) removeOrderLocked(key string) {
-	for index, candidate := range store.order {
-		if candidate == key {
-			store.order = append(store.order[:index], store.order[index+1:]...)
-			return
-		}
+// markDirtyLocked 标记缓存已变更并调度节流落盘（2s 合并多次写入）。
+func (store *responseCacheStore) markDirtyLocked() {
+	if store.path == "" {
+		return
+	}
+	store.dirty = true
+	if store.saveTimer != nil {
+		return
+	}
+	store.saveTimer = time.AfterFunc(saveDebounceDelay, func() {
+		store.flushToDisk()
+	})
+}
+
+// flushToDisk 立即把当前内存内容写入磁盘（节流回调与关闭前兜底共用）。
+func (store *responseCacheStore) flushToDisk() {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	store.saveTimer = nil
+	if !store.dirty || store.path == "" {
+		return
+	}
+	snapshot := make(map[string]*responseCacheEntry, len(store.entries))
+	for key, entry := range store.entries {
+		snapshot[key] = entry
+	}
+	if err := saveResponseCacheToDisk(store.path, snapshot); err == nil {
+		store.dirty = false
 	}
 }
 
@@ -317,6 +466,16 @@ type providerCacheKeyShape struct {
 	RequestBodyOverride map[string]any `json:"request_body_override"`
 }
 
+// normalizeCacheMaxTokens 把 max_tokens 归一化到 1024 分桶：同一请求因预算恢复/调整
+// 产生的 max_tokens 差异（如 400 降级恢复后的 cap）不再改变缓存键。回放的是完整
+// 成功流，不受 max_tokens 影响，因此归一化只提升命中率、不影响正确性。
+func normalizeCacheMaxTokens(value int) int {
+	if value <= 0 {
+		return 0
+	}
+	return (value + 1023) / 1024 * 1024
+}
+
 // providerCacheKey 对归一化请求做 sha256，返回稳定的十六进制缓存键；序列化失败返回空串（不缓存）。
 func providerCacheKey(req ProviderRequest) string {
 	shape := providerCacheKeyShape{
@@ -326,7 +485,7 @@ func providerCacheKey(req ProviderRequest) string {
 		Messages:           req.Messages,
 		StableMessageCount: req.StableMessageCount,
 		Tools:              req.Tools,
-		MaxTokens:          req.MaxTokens,
+		MaxTokens:          normalizeCacheMaxTokens(req.MaxTokens),
 		// 移除 RequestKnobs 和 CompileSummary 以避免动态字段污染缓存 key
 		RequestBodyOverride: req.RequestBodyOverride,
 	}

@@ -317,6 +317,12 @@ type Service struct {
 	multitaskDelegation      *multitaskDelegationCoordinator
 	delegationRuntimeMu      sync.Mutex
 	nativeDelegations        map[string]*nativeDelegationRuntime
+	visionRunsMu             sync.Mutex
+	visionRuns               map[string]*visionDelegationRun
+	visionCacheMu            sync.Mutex
+	visionCache              map[string]visionCacheEntry
+	visionImageMu            sync.Mutex
+	visionImageFiles         map[string][]string
 	provider400RecoveryMu    sync.Mutex
 	provider400RecoveryTurns map[string]struct{}
 	// conversationActivityMu 保护 conversationLastActivity：
@@ -457,6 +463,9 @@ func newServiceWithDependencies(store *ConversationFileStore, projector *History
 		appendSeq:                newAppendSequenceTracker(),
 		runQueue:                 newRunQueue(),
 		nativeDelegations:        make(map[string]*nativeDelegationRuntime),
+		visionRuns:               make(map[string]*visionDelegationRun),
+		visionCache:              make(map[string]visionCacheEntry),
+		visionImageFiles:         make(map[string][]string),
 		checkpointBlobs:          make(map[string]*checkpointBlobCacheEntry),
 		conversationLastActivity: make(map[string]time.Time),
 	}
@@ -2009,7 +2018,7 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	// 未启用视觉委派时，从工具清单剔除 see_image，避免模型调用一个不可用的工具。
 	if service.needsVisionProxy(modelName, compiled.Messages) {
 		visionCtx, visionCancel := context.WithCancel(context.Background())
-		compiled.Messages = service.synthesizeImageDescriptions(visionCtx, compiled.Messages, modelName)
+		compiled.Messages = service.synthesizeImageDescriptions(visionCtx, requestID, conversationID, compiled.Messages, modelName)
 		visionCancel()
 	}
 	if !service.visionProxyEnabled() {

@@ -8,11 +8,15 @@ import {
   getSkillsMCPScanSnapshot,
   refreshSkillsMCPScan,
   saveSkillsMCPScanConfig,
+  readSkillFile,
+  saveSkillFile,
+  generateSkillSummary,
 } from "@/services/clientApi";
 import {
   connectMCPRuntimeServer,
   disconnectMCPRuntimeServer,
 } from "@/services/runtimeControlApi";
+import MarkdownEditorModal from "@/components/ui/MarkdownEditorModal.vue";
 import { toUserError } from "@/state/appState";
 import { computed, onMounted, reactive, ref } from "vue";
 
@@ -64,6 +68,24 @@ const state = reactive({
   mcpServers: [],
   disabledSkills: {},
   disabledMcpServers: {},
+  skillSummaries: {},
+  mcpSummaries: {},
+});
+
+const editorState = reactive({
+  visible: false,
+  mode: "", // "skill-file" | "mcp-summary"
+  key: "",
+  title: "",
+  content: "",
+  busy: false,
+});
+
+const summaryBatchState = reactive({
+  busy: false,
+  done: 0,
+  total: 0,
+  error: "",
 });
 
 const skillItemStates = reactive({});
@@ -170,6 +192,8 @@ function buildScanConfig() {
     enabled: state.enabled,
     disabledSkills: { ...state.disabledSkills },
     disabledMcpServers: { ...state.disabledMcpServers },
+    skillSummaries: { ...state.skillSummaries },
+    mcpSummaries: { ...state.mcpSummaries },
   };
 }
 
@@ -180,6 +204,8 @@ function applySnapshot(snapshot) {
   state.enabled = config.enabled !== false;
   state.disabledSkills = { ...(config.disabledSkills || {}) };
   state.disabledMcpServers = { ...(config.disabledMcpServers || {}) };
+  state.skillSummaries = { ...(config.skillSummaries || {}) };
+  state.mcpSummaries = { ...(config.mcpSummaries || {}) };
 }
 
 async function loadSnapshot({ refresh = false } = {}) {
@@ -381,6 +407,161 @@ function formatMcpStatus(status) {
   return "未连接";
 }
 
+// ---------- 编辑与简介 ----------
+
+// skillSummaryOf 返回技能的中文简介（无则空串）。
+function skillSummaryOf(name) {
+  return state.skillSummaries[normalizeConfigKey(name)] || "";
+}
+
+// mcpSummaryOf 返回 MCP server 的中文简介（无则空串）。
+function mcpSummaryOf(server) {
+  return state.mcpSummaries[normalizeConfigKey(server?.identifier || server?.name)] || "";
+}
+
+// openSkillEditor 读取技能 SKILL.md 全文并打开编辑弹窗。
+async function openSkillEditor(skill) {
+  const itemKey = normalizeConfigKey(skill?.name);
+  if (!itemKey) {
+    return;
+  }
+  const itemState = ensureSkillState(itemKey);
+  itemState.busy = true;
+  itemState.error = "";
+  itemState.retry = () => openSkillEditor(skill);
+
+  try {
+    const file = await readSkillFile(skill.name, WORKSPACE_ROOT);
+    editorState.mode = "skill-file";
+    editorState.key = itemKey;
+    editorState.title = `编辑 ${skill.name}`;
+    editorState.content = file?.content || "";
+    editorState.visible = true;
+  } catch (error) {
+    itemState.error = toUserError(error);
+  } finally {
+    itemState.busy = false;
+  }
+}
+
+// saveSkillEditor 将编辑后的 SKILL.md 正文写回原文件，并触发重新扫描。
+async function saveSkillEditor() {
+  editorState.busy = true;
+  try {
+    await saveSkillFile(editorState.key, editorState.content, WORKSPACE_ROOT);
+    editorState.visible = false;
+    message.success("已保存到 SKILL.md");
+    await loadSnapshot({ refresh: true });
+  } catch (error) {
+    message.error(toUserError(error));
+  } finally {
+    editorState.busy = false;
+  }
+}
+
+// openMcpSummaryEditor 打开 MCP 简介编辑弹窗（简介存 config，不改工具配置文件）。
+function openMcpSummaryEditor(server) {
+  const itemKey = normalizeConfigKey(server?.identifier || server?.name);
+  if (!itemKey) {
+    return;
+  }
+  editorState.mode = "mcp-summary";
+  editorState.key = itemKey;
+  editorState.title = `编辑 MCP 简介：${server?.name || server?.identifier}`;
+  editorState.content = mcpSummaryOf(server);
+  editorState.visible = true;
+}
+
+// saveMcpSummaryEditor 将 MCP 简介写回配置持久化。
+async function saveMcpSummaryEditor() {
+  editorState.busy = true;
+  try {
+    const next = { ...state.mcpSummaries, [editorState.key]: editorState.content.trim() };
+    if (!next[editorState.key]) {
+      delete next[editorState.key];
+    }
+    state.mcpSummaries = next;
+    editorState.visible = false;
+    await persistScanConfig(`skills-mcp.summary.${editorState.key}`);
+    message.success("简介已保存");
+  } catch (error) {
+    message.error(toUserError(error));
+  } finally {
+    editorState.busy = false;
+  }
+}
+
+// handleEditorSave 根据编辑模式分发保存逻辑。
+async function handleEditorSave() {
+  if (editorState.mode === "skill-file") {
+    await saveSkillEditor();
+  } else if (editorState.mode === "mcp-summary") {
+    await saveMcpSummaryEditor();
+  }
+}
+
+// generateSummary 为单个 skill/MCP 生成中文简介（后端自动持久化到 config）。
+async function generateSummary(kind, key) {
+  const itemKey = normalizeConfigKey(key);
+  if (!itemKey || summaryBatchState.busy) {
+    return;
+  }
+  const itemState = kind === "skill" ? ensureSkillState(itemKey) : ensureMcpState(itemKey);
+  itemState.busy = true;
+  itemState.error = "";
+  itemState.retry = () => generateSummary(kind, key);
+
+  try {
+    const summary = await generateSkillSummary(kind, key, WORKSPACE_ROOT);
+    if (kind === "skill") {
+      state.skillSummaries = { ...state.skillSummaries, [itemKey]: summary };
+    } else {
+      state.mcpSummaries = { ...state.mcpSummaries, [itemKey]: summary };
+    }
+    message.success("简介已生成并保存");
+  } catch (error) {
+    itemState.error = toUserError(error);
+  } finally {
+    itemState.busy = false;
+  }
+}
+
+// generateAllSummaries 为当前 tab 下所有条目批量生成简介，逐条持久化。
+async function generateAllSummaries() {
+  if (summaryBatchState.busy) {
+    return;
+  }
+  const kind = state.activeTab === "mcp" ? "mcp" : "skill";
+  const items = kind === "mcp" ? filteredMcpServers.value : filteredSkills.value;
+  if (!items.length) {
+    return;
+  }
+  summaryBatchState.busy = true;
+  summaryBatchState.done = 0;
+  summaryBatchState.total = items.length;
+  summaryBatchState.error = "";
+
+  try {
+    for (const item of items) {
+      const key = kind === "mcp" ? (item.identifier || item.name) : item.name;
+      const summary = await generateSkillSummary(kind, key, WORKSPACE_ROOT);
+      const itemKey = normalizeConfigKey(key);
+      if (kind === "skill") {
+        state.skillSummaries = { ...state.skillSummaries, [itemKey]: summary };
+      } else {
+        state.mcpSummaries = { ...state.mcpSummaries, [itemKey]: summary };
+      }
+      summaryBatchState.done += 1;
+    }
+    message.success(`已为 ${items.length} 个条目生成简介`);
+  } catch (error) {
+    summaryBatchState.error = toUserError(error);
+    message.error(summaryBatchState.error);
+  } finally {
+    summaryBatchState.busy = false;
+  }
+}
+
 const filteredSkills = computed(() => state.skills.filter((skill) => {
   const itemState = ensureSkillState(normalizeConfigKey(skill?.name));
   const enabled = isSkillEnabled(skill?.name);
@@ -458,6 +639,19 @@ onMounted(() => {
             </div>
 
             <div class="ml-auto flex items-center gap-3">
+              <button
+                type="button"
+                class="shrink-0 rounded-[8px] border border-[#343434] bg-[#202020] px-3 py-1.5 text-xs text-[#c7c7c7] transition-colors hover:border-[#10AD5D]/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35 disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="summaryBatchState.busy || snapshotState.refreshing || snapshotState.loading || !hasResults"
+                :title="'为当前列表的所有条目生成中文简介（自动保存到配置）'"
+                @click="generateAllSummaries"
+              >
+                <span v-if="summaryBatchState.busy">
+                  生成中 {{ summaryBatchState.done }}/{{ summaryBatchState.total }}...
+                </span>
+                <span v-else>一键生成简介</span>
+              </button>
+
               <div class="rounded-[8px] border border-[#343434] bg-[#202020] px-3 py-1.5">
                 <Switch
                   compact
@@ -555,12 +749,12 @@ onMounted(() => {
             role="tabpanel"
             :aria-labelledby="tabID('skills')"
             tabindex="0"
-            class="divide-y divide-[#343434]"
+            class="grid max-h-[480px] grid-cols-1 gap-3 overflow-y-auto overscroll-contain p-3 sm:grid-cols-2"
           >
             <article
               v-for="skill in filteredSkills"
               :key="skill.fullPath || skill.name"
-              class="grid gap-4 px-4 py-4 md:grid-cols-[minmax(0,1fr)_auto]"
+              class="flex min-w-0 flex-col gap-3 rounded-[8px] border border-[#343434] bg-[#252525]/60 p-3 transition-colors hover:border-[#3f3f3f]"
             >
               <div class="min-w-0 space-y-1">
                 <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -579,6 +773,13 @@ onMounted(() => {
                   <span>{{ isSkillEnabled(skill.name) ? "已启用" : "已停用" }}</span>
                 </div>
                 <div
+                  v-if="skillSummaryOf(skill.name)"
+                  class="rounded-[6px] border border-[#2f4a3a] bg-[#16261d]/60 px-2.5 py-1.5 text-xs leading-5 text-[#8ddcb3]"
+                >
+                  <span class="mr-1.5 font-medium text-[#6ee7a5]">简介</span>
+                  {{ skillSummaryOf(skill.name) }}
+                </div>
+                <div
                   v-if="ensureSkillState(normalizeConfigKey(skill.name)).error"
                   class="flex flex-wrap items-center gap-3 text-xs text-[#f2a7a7]"
                 >
@@ -595,7 +796,25 @@ onMounted(() => {
                 </div>
               </div>
 
-              <div class="flex flex-wrap items-start justify-start gap-2 md:justify-end">
+              <div class="mt-auto flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  class="shrink-0 rounded-[6px] border border-[#3b3b3b] bg-[#202020] px-2.5 py-1 text-xs text-[#c7c7c7] transition-colors hover:border-[#10AD5D]/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="ensureSkillState(normalizeConfigKey(skill.name)).busy || snapshotState.refreshing"
+                  :aria-label="`编辑技能 ${skill.name}`"
+                  @click="openSkillEditor(skill)"
+                >
+                  编辑
+                </button>
+                <button
+                  type="button"
+                  class="shrink-0 rounded-[6px] border border-[#3b3b3b] bg-[#202020] px-2.5 py-1 text-xs text-[#c7c7c7] transition-colors hover:border-[#10AD5D]/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="ensureSkillState(normalizeConfigKey(skill.name)).busy || snapshotState.refreshing"
+                  :aria-label="`为技能 ${skill.name} 生成简介`"
+                  @click="generateSummary('skill', skill.name)"
+                >
+                  {{ ensureSkillState(normalizeConfigKey(skill.name)).busy ? "生成中..." : "翻译" }}
+                </button>
                 <Switch
                   compact
                   label=""
@@ -615,12 +834,12 @@ onMounted(() => {
             role="tabpanel"
             :aria-labelledby="tabID('mcp')"
             tabindex="0"
-            class="divide-y divide-[#343434]"
+            class="grid max-h-[480px] grid-cols-1 gap-3 overflow-y-auto overscroll-contain p-3 sm:grid-cols-2"
           >
             <article
               v-for="server in filteredMcpServers"
               :key="server.identifier || server.name"
-              class="grid gap-4 px-4 py-4 md:grid-cols-[minmax(0,1fr)_auto]"
+              class="flex min-w-0 flex-col gap-3 rounded-[8px] border border-[#343434] bg-[#252525]/60 p-3 transition-colors hover:border-[#3f3f3f]"
             >
               <div class="min-w-0 space-y-1">
                 <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -642,6 +861,13 @@ onMounted(() => {
                   <span>{{ isMcpEnabled(server.identifier || server.name) ? "已启用" : "已停用" }}</span>
                 </div>
                 <div
+                  v-if="mcpSummaryOf(server)"
+                  class="rounded-[6px] border border-[#2f4a3a] bg-[#16261d]/60 px-2.5 py-1.5 text-xs leading-5 text-[#8ddcb3]"
+                >
+                  <span class="mr-1.5 font-medium text-[#6ee7a5]">简介</span>
+                  {{ mcpSummaryOf(server) }}
+                </div>
+                <div
                   v-if="ensureMcpState(normalizeConfigKey(server.identifier || server.name)).error || server.lastError"
                   class="flex flex-wrap items-center gap-3 text-xs text-[#f2a7a7]"
                 >
@@ -659,7 +885,25 @@ onMounted(() => {
                 </div>
               </div>
 
-              <div class="flex items-start justify-start md:justify-end">
+              <div class="mt-auto flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  class="shrink-0 rounded-[6px] border border-[#3b3b3b] bg-[#202020] px-2.5 py-1 text-xs text-[#c7c7c7] transition-colors hover:border-[#10AD5D]/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="ensureMcpState(normalizeConfigKey(server.identifier || server.name)).busy || snapshotState.refreshing"
+                  :aria-label="`编辑 MCP ${server.name || server.identifier} 简介`"
+                  @click="openMcpSummaryEditor(server)"
+                >
+                  编辑
+                </button>
+                <button
+                  type="button"
+                  class="shrink-0 rounded-[6px] border border-[#3b3b3b] bg-[#202020] px-2.5 py-1 text-xs text-[#c7c7c7] transition-colors hover:border-[#10AD5D]/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="ensureMcpState(normalizeConfigKey(server.identifier || server.name)).busy || snapshotState.refreshing"
+                  :aria-label="`为 MCP ${server.name || server.identifier} 生成简介`"
+                  @click="generateSummary('mcp', server.identifier || server.name)"
+                >
+                  {{ ensureMcpState(normalizeConfigKey(server.identifier || server.name)).busy ? "生成中..." : "翻译" }}
+                </button>
                 <Switch
                   compact
                   label=""
@@ -684,5 +928,15 @@ onMounted(() => {
         </div>
       </div>
     </SettingsSection>
+
+    <MarkdownEditorModal
+      v-model:visible="editorState.visible"
+      v-model="editorState.content"
+      :title="editorState.title"
+      :save-busy="editorState.busy"
+      :save-text="editorState.mode === 'skill-file' ? '保存到文件' : '保存'"
+      placeholder="支持 Markdown 语法，可切换到预览查看效果。"
+      @save="handleEditorSave"
+    />
   </div>
 </template>

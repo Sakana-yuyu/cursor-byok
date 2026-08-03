@@ -27,6 +27,7 @@ const message = useMessage();
 
 const directModeDraft = ref(appState.routingMode === "upstream");
 const cacheEnabledDraft = ref(Boolean(appState.localResponseCache?.enabled));
+const cachePersistDraft = ref(appState.localResponseCache?.persist !== false);
 const ttlSecondsDraft = ref("");
 const maxEntriesDraft = ref("");
 
@@ -37,6 +38,12 @@ const directModeState = reactive({
 });
 
 const cacheEnabledState = reactive({
+  busy: false,
+  error: "",
+  retry: null,
+});
+
+const cachePersistState = reactive({
   busy: false,
   error: "",
   retry: null,
@@ -57,6 +64,7 @@ const maxEntriesState = reactive({
 const cacheEnabled = computed(() => cacheEnabledDraft.value);
 const directModeBusy = computed(() => directModeState.busy || appState.configSaving);
 const cacheEnabledBusy = computed(() => cacheEnabledState.busy || appState.configSaving);
+const cachePersistBusy = computed(() => cachePersistState.busy || appState.configSaving);
 const ttlBusy = computed(() => ttlSecondsState.busy || ttlSecondsState.queued || appState.configSaving);
 const maxEntriesBusy = computed(() => maxEntriesState.busy || maxEntriesState.queued || appState.configSaving);
 
@@ -76,6 +84,9 @@ watch(
     const next = value || {};
     if (!cacheEnabledState.busy) {
       cacheEnabledDraft.value = Boolean(next.enabled);
+    }
+    if (!cachePersistState.busy) {
+      cachePersistDraft.value = next.persist !== false;
     }
     if (!ttlSecondsState.busy && !ttlSecondsState.queued) {
       ttlSecondsDraft.value = next.ttlSeconds ? String(next.ttlSeconds) : "";
@@ -149,6 +160,28 @@ async function handleCacheEnabledChange(enabled) {
     cacheEnabledState.error = toUserError(error);
   } finally {
     cacheEnabledState.busy = false;
+  }
+}
+
+async function handleCachePersistChange(enabled) {
+  const nextValue = Boolean(enabled);
+  const previousValue = cachePersistDraft.value;
+  cachePersistDraft.value = nextValue;
+  cachePersistState.retry = () => handleCachePersistChange(nextValue);
+  cachePersistState.error = "";
+  cachePersistState.busy = true;
+  try {
+    await props.autosave.run("advanced.cache-persist", async () => {
+      const result = await saveLocalResponseCacheSettings({ persist: nextValue });
+      if (!result?.ok) {
+        throw new Error(result?.error || "保存失败");
+      }
+    });
+  } catch (error) {
+    cachePersistDraft.value = appState.localResponseCache?.persist !== false;
+    cachePersistState.error = toUserError(error);
+  } finally {
+    cachePersistState.busy = false;
   }
 }
 
@@ -246,7 +279,26 @@ function handleCacheFieldInput(field, state, valueRef, value) {
 
       <template v-if="cacheEnabled">
         <SettingsRow
+          label="持久化到磁盘"
+          description="把缓存条目写入本地磁盘，重启应用后仍可命中。关闭后仅保留内存缓存，重启即清空。"
+          :busy="cachePersistBusy"
+          :error="cachePersistState.error"
+          @retry="retryState(cachePersistState)"
+        >
+          <Switch
+            compact
+            label=""
+            :enabled="cachePersistDraft"
+            :busy="cachePersistBusy"
+            :disabled="cachePersistBusy"
+            aria-label="持久化到磁盘"
+            @change="handleCachePersistChange"
+          />
+        </SettingsRow>
+
+        <SettingsRow
           label="缓存有效期（秒）"
+          description="缓存条目多久未访问则失效（0 = 默认 30 天）。"
           :busy="ttlBusy"
           :error="ttlSecondsState.error"
           @retry="retryCacheField('ttlSeconds', ttlSecondsState)"
@@ -256,7 +308,7 @@ function handleCacheFieldInput(field, state, valueRef, value) {
               :model-value="ttlSecondsDraft"
               type="number"
               min="0"
-              placeholder="留空/0 = 默认 900"
+              placeholder="留空/0 = 默认 30 天"
               @update:model-value="(value) => handleCacheFieldInput('ttlSeconds', ttlSecondsState, ttlSecondsDraft, value)"
               @blur="flushCacheField('ttlSeconds', ttlSecondsState)"
               @keydown.enter.prevent="flushCacheField('ttlSeconds', ttlSecondsState)"
@@ -275,7 +327,7 @@ function handleCacheFieldInput(field, state, valueRef, value) {
               :model-value="maxEntriesDraft"
               type="number"
               min="0"
-              placeholder="留空/0 = 默认 256"
+              placeholder="留空/0 = 默认 2048"
               @update:model-value="(value) => handleCacheFieldInput('maxEntries', maxEntriesState, maxEntriesDraft, value)"
               @blur="flushCacheField('maxEntries', maxEntriesState)"
               @keydown.enter.prevent="flushCacheField('maxEntries', maxEntriesState)"

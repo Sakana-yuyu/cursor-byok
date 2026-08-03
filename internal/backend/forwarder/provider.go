@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"strings"
 
+	"cursor/internal/appdata"
 	modeladapter "cursor/internal/backend/agent/model"
 )
 
@@ -54,9 +56,19 @@ func NewProviderGateway(resolver modeladapter.ChannelResolver) ProviderGateway {
 		router: modeladapter.NewRouter(resolver),
 	}
 	if settingsProvider, ok := resolver.(localResponseCacheSettingsProvider); ok {
-		return newCachingProviderGateway(base, settingsProvider.LocalResponseCacheSettings)
+		// 缓存条目持久化到磁盘（L2 层），跨进程/重启保留；持久化开关关闭时退回纯内存。
+		persistPath := localResponseCachePersistPath()
+		if _, _, _, persist := settingsProvider.LocalResponseCacheSettings(); !persist {
+			persistPath = ""
+		}
+		return newCachingProviderGateway(base, settingsProvider.LocalResponseCacheSettings, persistPath)
 	}
 	return base
+}
+
+// localResponseCachePersistPath 返回本地响应缓存的磁盘持久化路径。
+func localResponseCachePersistPath() string {
+	return filepath.Join(appdata.DataRootPath(), "local-response-cache.json")
 }
 
 // StartStream 把 forwarder 的 provider 请求翻译成 modeladapter.StreamRequest 并发起流式调用。

@@ -72,7 +72,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1546,
+          "line": 1555,
           "column": 14
         }
       ]
@@ -234,6 +234,23 @@
         }
       ]
     },
+    "047e10afbd7828b5": {
+      "source": "持久化到磁盘",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 282,
+          "column": 11
+        },
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 294,
+          "column": 13
+        }
+      ]
+    },
     "047e31021f92468a": {
       "source": "供应商暂时不可用，请稍后重试",
       "kind": "text",
@@ -255,6 +272,18 @@
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
           "line": 317,
           "column": 9
+        }
+      ]
+    },
+    "048d530d5d7cbe10": {
+      "source": "编辑 MCP {0} 简介",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 893,
+          "column": 32
         }
       ]
     },
@@ -287,6 +316,21 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 806,
+          "column": 19
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 895,
+          "column": 19
+        },
+        {
+          "file": "src/components/ui/MarkdownEditorModal.vue",
+          "line": 9,
+          "column": 35
+        },
         {
           "file": "src/views/ModelConfig.vue",
           "line": 578,
@@ -381,6 +425,18 @@
         }
       ]
     },
+    "067c8a97ec89a4ad": {
+      "source": "遇到 bug、测试失败或意外行为时，先建立证据链再提出修复方案，避免盲改代码。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 472,
+          "column": 41
+        }
+      ]
+    },
     "068754f918e2e396": {
       "source": "本地缓存：未启用",
       "kind": "text",
@@ -429,8 +485,20 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 39,
+          "line": 41,
           "column": 21
+        }
+      ]
+    },
+    "06dced8b80626e07": {
+      "source": "删除所选 ({0})",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 300,
+          "column": 14
         }
       ]
     },
@@ -441,13 +509,25 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 106,
+          "line": 117,
           "column": 16
         },
         {
           "file": "src/views/Home.vue",
-          "line": 33,
+          "line": 35,
           "column": 111
+        }
+      ]
+    },
+    "077a6d37719a0e21": {
+      "source": "已删除",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 144,
+          "column": 21
         }
       ]
     },
@@ -501,6 +581,18 @@
           "file": "src/views/ModelConfig.vue",
           "line": 341,
           "column": 32
+        }
+      ]
+    },
+    "08a525b04e87672d": {
+      "source": "负责发布 cursor-byok 新版本：更新版本号、推送 tag 触发 GitHub Action 自动构建。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 473,
+          "column": 21
         }
       ]
     },
@@ -581,6 +673,18 @@
         }
       ]
     },
+    "0bb62e8b45b6c339": {
+      "source": "{0} · {1} 次 · {2} tokens",
+      "kind": "template",
+      "placeholders": 3,
+      "refs": [
+        {
+          "file": "src/components/StationSpendCard.vue",
+          "line": 233,
+          "column": 79
+        }
+      ]
+    },
     "0bc1fb72ae1be5c5": {
       "source": "错误",
       "kind": "text",
@@ -593,7 +697,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 37,
+          "line": 41,
           "column": 28
         },
         {
@@ -693,8 +797,25 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 41,
+          "line": 43,
           "column": 27
+        }
+      ]
+    },
+    "0d0e1a86b3aa7877": {
+      "source": "用户",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 283,
+          "column": 18
+        },
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 504,
+          "column": 78
         }
       ]
     },
@@ -724,6 +845,18 @@
           "file": "src/layouts/MainLayout.vue",
           "line": 180,
           "column": 27
+        }
+      ]
+    },
+    "0e1b54eeb868023d": {
+      "source": "正在读取站点余额…",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/StationSpendCard.vue",
+          "line": 171,
+          "column": 107
         }
       ]
     },
@@ -758,7 +891,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 249,
+          "line": 300,
           "column": 11
         }
       ]
@@ -770,7 +903,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 549,
+          "line": 743,
           "column": 16
         }
       ]
@@ -897,6 +1030,18 @@
           "file": "src/components/HomeMetricsCard.vue",
           "line": 336,
           "column": 5
+        }
+      ]
+    },
+    "115c4b886190e199": {
+      "source": "2H 使用窗口",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 431,
+          "column": 117
         }
       ]
     },
@@ -1051,6 +1196,36 @@
           "file": "src/services/browserBindings.js",
           "line": 34,
           "column": 18
+        },
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 422,
+          "column": 16
+        },
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 429,
+          "column": 16
+        },
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 436,
+          "column": 16
+        },
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 443,
+          "column": 16
+        },
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 450,
+          "column": 16
+        },
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 457,
+          "column": 16
         }
       ]
     },
@@ -1061,7 +1236,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 75,
+          "line": 77,
           "column": 1033
         }
       ]
@@ -1085,8 +1260,13 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 126,
-          "column": 65
+          "line": 230,
+          "column": 80
+        },
+        {
+          "file": "src/components/StationSpendCard.vue",
+          "line": 231,
+          "column": 20
         }
       ]
     },
@@ -1109,7 +1289,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 208,
+          "line": 241,
           "column": 22
         }
       ]
@@ -1145,7 +1325,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 676,
+          "line": 920,
           "column": 32
         }
       ]
@@ -1210,18 +1390,6 @@
         }
       ]
     },
-    "172fb7e67b9b09dd": {
-      "source": "次",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/StationSpendCard.vue",
-          "line": 128,
-          "column": 81
-        }
-      ]
-    },
     "1813d362a82fd437": {
       "source": "最大化窗口",
       "kind": "text",
@@ -1246,6 +1414,18 @@
         }
       ]
     },
+    "1834c1c9dc4a9fad": {
+      "source": "，提供 {0} 个工具",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 511,
+          "column": 90
+        }
+      ]
+    },
     "184c1a3ae90a8bf6": {
       "source": "後で",
       "kind": "text",
@@ -1253,7 +1433,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1600,
+          "line": 1609,
           "column": 38
         }
       ]
@@ -1270,6 +1450,18 @@
         }
       ]
     },
+    "18aca1725f849820": {
+      "source": "已用 {0} {1}",
+      "kind": "template",
+      "placeholders": 2,
+      "refs": [
+        {
+          "file": "src/components/StationSpendCard.vue",
+          "line": 74,
+          "column": 16
+        }
+      ]
+    },
     "18b7312022cd1840": {
       "source": "启动服务",
       "kind": "text",
@@ -1277,7 +1469,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1499,
+          "line": 1508,
           "column": 47
         }
       ]
@@ -1364,7 +1556,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 62,
+          "line": 64,
           "column": 9
         }
       ]
@@ -1436,7 +1628,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2019,
+          "line": 2028,
           "column": 32
         }
       ]
@@ -1714,6 +1906,18 @@
         }
       ]
     },
+    "1fdbb1a93a6f6889": {
+      "source": "次 ·",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/StationSpendCard.vue",
+          "line": 234,
+          "column": 83
+        }
+      ]
+    },
     "2087c777c06fefe5": {
       "source": "输入",
       "kind": "text",
@@ -1770,7 +1974,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1563,
+          "line": 1572,
           "column": 40
         }
       ]
@@ -1881,12 +2085,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 105,
+          "line": 116,
           "column": 14
         },
         {
           "file": "src/views/Home.vue",
-          "line": 33,
+          "line": 35,
           "column": 92
         }
       ]
@@ -1915,6 +2119,18 @@
         }
       ]
     },
+    "223900f5f9bf403e": {
+      "source": "确定清空全部历史记录吗？将删除 {0} 个会话、孤儿调试数据并重置用量统计，此操作不可恢复。",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 158,
+          "column": 14
+        }
+      ]
+    },
     "227de288e5c952ec": {
       "source": "状态过滤",
       "kind": "text",
@@ -1936,6 +2152,18 @@
           "file": "src/views/SupplierDetail.vue",
           "line": 1069,
           "column": 54
+        }
+      ]
+    },
+    "22d83733be24e126": {
+      "source": "个会话 · 占用",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 188,
+          "column": 35
         }
       ]
     },
@@ -1987,18 +2215,23 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 29,
+          "line": 30,
           "column": 184
         },
         {
           "file": "src/views/Home.vue",
-          "line": 30,
+          "line": 31,
           "column": 187
         },
         {
           "file": "src/views/Home.vue",
-          "line": 31,
+          "line": 32,
           "column": 178
+        },
+        {
+          "file": "src/views/Home.vue",
+          "line": 34,
+          "column": 122
         },
         {
           "file": "src/views/ModelConfig.vue",
@@ -2106,7 +2339,7 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 92,
+          "line": 145,
           "column": 75
         }
       ]
@@ -2188,7 +2421,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1490,
+          "line": 1499,
           "column": 12
         }
       ]
@@ -2253,13 +2486,25 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 107,
+          "line": 118,
           "column": 20
         },
         {
           "file": "src/views/Home.vue",
-          "line": 33,
+          "line": 35,
           "column": 176
+        }
+      ]
+    },
+    "278de1a205d6403d": {
+      "source": "一键生成简介",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 652,
+          "column": 30
         }
       ]
     },
@@ -2503,7 +2748,7 @@
         {
           "file": "src/components/DelegationTaskStrip.vue",
           "line": 145,
-          "column": 134
+          "column": 151
         },
         {
           "file": "src/components/ModelAdapterModal.vue",
@@ -2512,7 +2757,7 @@
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 108,
+          "line": 119,
           "column": 19
         },
         {
@@ -2521,8 +2766,23 @@
           "column": 17
         },
         {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 138,
+          "column": 17
+        },
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 160,
+          "column": 17
+        },
+        {
           "file": "src/components/ui/InputModal.vue",
           "line": 69,
+          "column": 65
+        },
+        {
+          "file": "src/components/ui/MarkdownEditorModal.vue",
+          "line": 64,
           "column": 65
         },
         {
@@ -2542,12 +2802,12 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 1605,
+          "line": 1614,
           "column": 12
         },
         {
           "file": "src/views/Home.vue",
-          "line": 33,
+          "line": 35,
           "column": 196
         },
         {
@@ -2596,6 +2856,18 @@
           "file": "src/components/PromptPreviewModal.vue",
           "line": 33,
           "column": 69
+        }
+      ]
+    },
+    "2ce3d9dafd380f16": {
+      "source": "删除历史",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 135,
+          "column": 12
         }
       ]
     },
@@ -2678,6 +2950,11 @@
           "column": 18
         },
         {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 137,
+          "column": 18
+        },
+        {
           "file": "src/views/ModelConfig.vue",
           "line": 374,
           "column": 18
@@ -2711,7 +2988,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 75,
+          "line": 77,
           "column": 446
         }
       ]
@@ -2802,6 +3079,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 1502,
           "column": 11
+        }
+      ]
+    },
+    "323cca9a71277df7": {
+      "source": "确定删除选中的 {0} 条历史记录吗？此操作不可恢复。",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 136,
+          "column": 14
         }
       ]
     },
@@ -2899,12 +3188,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 294,
+          "line": 365,
           "column": 133
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 174,
+          "line": 178,
           "column": 119
         }
       ]
@@ -2928,7 +3217,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 676,
+          "line": 920,
           "column": 32
         }
       ]
@@ -2952,7 +3241,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 75,
+          "line": 77,
           "column": 1721
         }
       ]
@@ -3089,7 +3378,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1590,
+          "line": 1599,
           "column": 14
         }
       ]
@@ -3130,7 +3419,7 @@
         },
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 43,
+          "line": 51,
           "column": 68
         },
         {
@@ -3295,6 +3584,18 @@
         }
       ]
     },
+    "3b844dd73df45920": {
+      "source": "为技能 {0} 生成简介",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 813,
+          "column": 32
+        }
+      ]
+    },
     "3b89fd6b0cedd01e": {
       "source": "自动检测",
       "kind": "text",
@@ -3336,7 +3637,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 268,
+          "line": 320,
           "column": 11
         }
       ]
@@ -3377,7 +3678,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 635,
+          "line": 854,
           "column": 22
         }
       ]
@@ -3438,7 +3739,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 381,
+          "line": 407,
           "column": 10
         }
       ]
@@ -3487,7 +3788,7 @@
         {
           "file": "src/components/DelegationTaskStrip.vue",
           "line": 145,
-          "column": 134
+          "column": 151
         }
       ]
     },
@@ -3520,7 +3821,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1544,
+          "line": 1553,
           "column": 5
         }
       ]
@@ -3549,6 +3850,18 @@
         }
       ]
     },
+    "3fa8454dc017b3b8": {
+      "source": "支持 Markdown 语法，可切换到预览查看效果。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 938,
+          "column": 7
+        }
+      ]
+    },
     "3fd47edce45b3603": {
       "source": "关闭",
       "kind": "text",
@@ -3566,7 +3879,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 32,
+          "line": 33,
           "column": 322
         },
         {
@@ -3583,8 +3896,20 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 669,
+          "line": 913,
           "column": 32
+        }
+      ]
+    },
+    "406daed3058c87b2": {
+      "source": "「{0}」基于 {1} 传输接入{2}{3}。",
+      "kind": "template",
+      "placeholders": 4,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 511,
+          "column": 21
         }
       ]
     },
@@ -3607,7 +3932,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 575,
+          "line": 769,
           "column": 22
         }
       ]
@@ -3831,6 +4156,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/StationSpendCard.vue",
+          "line": 203,
+          "column": 62
+        },
+        {
           "file": "src/views/SupplierDetail.vue",
           "line": 1328,
           "column": 21
@@ -3854,6 +4184,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 300,
+          "column": 14
+        },
         {
           "file": "src/views/ModelConfig.vue",
           "line": 584,
@@ -3894,6 +4229,18 @@
           "file": "src/components/HomeMetricsCard.vue",
           "line": 309,
           "column": 5
+        }
+      ]
+    },
+    "47c8425fc8942c69": {
+      "source": "为 MCP {0} 生成简介",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 902,
+          "column": 32
         }
       ]
     },
@@ -3948,6 +4295,18 @@
         }
       ]
     },
+    "49cc6edf9354359c": {
+      "source": "基于文件系统的 MCP 服务，提供 12 个文件读写与目录操作工具。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 476,
+          "column": 27
+        }
+      ]
+    },
     "49d19477abd64f23": {
       "source": "{0} 等 {1} 个连接",
       "kind": "template",
@@ -3996,7 +4355,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 340,
+          "line": 366,
           "column": 23
         }
       ]
@@ -4071,6 +4430,18 @@
         }
       ]
     },
+    "4c797bc97a3f0cfb": {
+      "source": "创建或修改网页、桌面界面、组件和交互时使用，关注信息架构与视觉层级。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 234,
+          "column": 18
+        }
+      ]
+    },
     "4c84f80138ecf5f7": {
       "source": "Kimi / Moonshot（兼容配置）",
       "kind": "text",
@@ -4080,6 +4451,18 @@
           "file": "src/utils/supplierCatalog.js",
           "line": 288,
           "column": 12
+        }
+      ]
+    },
+    "4ca8bf3182a3d159": {
+      "source": "留空/0 = 默认 2048",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 330,
+          "column": 15
         }
       ]
     },
@@ -4100,6 +4483,21 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 35,
+          "column": 57
+        },
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 36,
+          "column": 92
+        },
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 37,
+          "column": 86
+        },
         {
           "file": "src/state/appState.js",
           "line": 145,
@@ -4342,8 +4740,25 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 211,
+          "line": 244,
           "column": 9
+        }
+      ]
+    },
+    "51d3629e97b93d6d": {
+      "source": "生成中...",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 816,
+          "column": 22
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 905,
+          "column": 22
         }
       ]
     },
@@ -4419,12 +4834,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 337,
+          "line": 417,
           "column": 159
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 255,
+          "line": 259,
           "column": 128
         }
       ]
@@ -4477,7 +4892,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 64,
+          "line": 66,
           "column": 60
         }
       ]
@@ -4658,7 +5073,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 207,
+          "line": 233,
           "column": 23
         }
       ]
@@ -4682,7 +5097,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 32,
+          "line": 33,
           "column": 247
         }
       ]
@@ -4723,7 +5138,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 63,
+          "line": 65,
           "column": 9
         }
       ]
@@ -4781,6 +5196,23 @@
           "file": "src/views/MetricsDetail.vue",
           "line": 398,
           "column": 52
+        }
+      ]
+    },
+    "577e9588f0a97225": {
+      "source": "个站点",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/StationSpendCard.vue",
+          "line": 168,
+          "column": 103
+        },
+        {
+          "file": "src/components/StationSpendCard.vue",
+          "line": 213,
+          "column": 87
         }
       ]
     },
@@ -4936,6 +5368,18 @@
         }
       ]
     },
+    "59ce804379ac5f16": {
+      "source": "保存到文件",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 937,
+          "column": 19
+        }
+      ]
+    },
     "5a90d6398d92a8bb": {
       "source": "上下文配对完成：共 {0} 个，已更新 {1} 个。{2}",
       "kind": "template",
@@ -5008,7 +5452,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 373,
+          "line": 399,
           "column": 12
         }
       ]
@@ -5037,7 +5481,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 34,
+          "line": 38,
           "column": 26
         },
         {
@@ -5069,7 +5513,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 641,
+          "line": 860,
           "column": 92
         },
         {
@@ -5168,7 +5612,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 430,
+          "line": 611,
           "column": 7
         }
       ]
@@ -5180,8 +5624,20 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1537,
+          "line": 1546,
           "column": 7
+        }
+      ]
+    },
+    "5ff1823bdeaf990c": {
+      "source": "导出日志 ZIP",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 77,
+          "column": 2653
         }
       ]
     },
@@ -5303,6 +5759,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 193,
+          "column": 16
+        },
+        {
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 503,
           "column": 22
@@ -5311,6 +5772,18 @@
           "file": "src/views/MetricsDetail.vue",
           "line": 337,
           "column": 106
+        }
+      ]
+    },
+    "6094ff6a9b5b5e23": {
+      "source": "，当前已连接",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 511,
+          "column": 159
         }
       ]
     },
@@ -5335,6 +5808,18 @@
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 1181,
           "column": 9
+        }
+      ]
+    },
+    "6140957adac911c7": {
+      "source": "在遇到任何 bug、测试失败或意外行为时使用，先建立证据再提出修复方案。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 210,
+          "column": 18
         }
       ]
     },
@@ -5444,6 +5929,18 @@
         }
       ]
     },
+    "627b1dab389765ba": {
+      "source": "本地历史记录管理、日志导出与清理。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/settingsCategories.js",
+          "line": 50,
+          "column": 18
+        }
+      ]
+    },
     "62873083fcaed27d": {
       "source": "会话统计",
       "kind": "text",
@@ -5483,12 +5980,17 @@
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 144,
+          "line": 155,
           "column": 42
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 166,
+          "line": 177,
+          "column": 42
+        },
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 199,
           "column": 44
         },
         {
@@ -5503,7 +6005,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 228,
+          "line": 254,
           "column": 39
         },
         {
@@ -5678,7 +6180,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 885,
+          "line": 891,
           "column": 37
         }
       ]
@@ -5714,7 +6216,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1513,
+          "line": 1522,
           "column": 14
         }
       ]
@@ -5726,7 +6228,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2096,
+          "line": 2105,
           "column": 32
         }
       ]
@@ -5738,7 +6240,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1488,
+          "line": 1497,
           "column": 14
         }
       ]
@@ -5893,7 +6395,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 679,
+          "line": 923,
           "column": 22
         }
       ]
@@ -5953,30 +6455,18 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 210,
+          "line": 243,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 222,
+          "line": 255,
           "column": 11
         },
         {
           "file": "src/views/Home.vue",
-          "line": 75,
+          "line": 77,
           "column": 1000
-        }
-      ]
-    },
-    "69a308945881cfb6": {
-      "source": "留空/0 = 默认 256",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 278,
-          "column": 15
         }
       ]
     },
@@ -6057,7 +6547,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 470,
+          "line": 664,
           "column": 19
         }
       ]
@@ -6101,12 +6591,12 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 27,
+          "line": 28,
           "column": 98
         },
         {
           "file": "src/views/Home.vue",
-          "line": 27,
+          "line": 28,
           "column": 116
         },
         {
@@ -6174,6 +6664,18 @@
         }
       ]
     },
+    "6e15bd283c306fc3": {
+      "source": "打开日志目录",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 77,
+          "column": 3009
+        }
+      ]
+    },
     "6e3318ea706b3a6d": {
       "source": "· 来源",
       "kind": "text",
@@ -6193,7 +6695,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 32,
+          "line": 33,
           "column": 185
         }
       ]
@@ -6229,8 +6731,20 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1505,
+          "line": 1514,
           "column": 20
+        }
+      ]
+    },
+    "6e8db40922f83f6b": {
+      "source": "排查 Cursor 客户端本地模式、工具调用、后端存储与 provider 回放故障。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 222,
+          "column": 18
         }
       ]
     },
@@ -6241,8 +6755,13 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 86,
-          "column": 56
+          "line": 139,
+          "column": 54
+        },
+        {
+          "file": "src/components/StationSpendCard.vue",
+          "line": 212,
+          "column": 77
         },
         {
           "file": "src/views/MetricsDetail.vue",
@@ -6508,6 +7027,18 @@
         }
       ]
     },
+    "76b12cf14404d1ff": {
+      "source": "简介已生成并保存",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 521,
+          "column": 21
+        }
+      ]
+    },
     "76e547a8fa546381": {
       "source": "共",
       "kind": "text",
@@ -6532,7 +7063,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 337,
+          "line": 363,
           "column": 23
         }
       ]
@@ -6657,6 +7188,23 @@
           "file": "src/utils/errorHumanizer.js",
           "line": 15,
           "column": 8
+        }
+      ]
+    },
+    "79f326be4409d51f": {
+      "source": "项目",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 270,
+          "column": 18
+        },
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 504,
+          "column": 71
         }
       ]
     },
@@ -6808,6 +7356,18 @@
         }
       ]
     },
+    "7cb08373b31cc6a0": {
+      "source": "{0}年{1}月{2}日",
+      "kind": "template",
+      "placeholders": 3,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 92,
+          "column": 31
+        }
+      ]
+    },
     "7ccbe64b8c475eec": {
       "source": "请先填写接口地址",
       "kind": "text",
@@ -6851,7 +7411,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 32,
+          "line": 33,
           "column": 302
         }
       ]
@@ -6889,6 +7449,18 @@
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 63,
           "column": 24
+        }
+      ]
+    },
+    "7dbac1c20f237bd4": {
+      "source": "日志",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 77,
+          "column": 2129
         }
       ]
     },
@@ -6947,7 +7519,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1589,
+          "line": 1598,
           "column": 38
         }
       ]
@@ -6959,7 +7531,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 28,
+          "line": 29,
           "column": 116
         }
       ]
@@ -7056,7 +7628,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 1572,
+          "line": 1581,
           "column": 16
         }
       ]
@@ -7068,12 +7640,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 230,
+          "line": 263,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 242,
+          "line": 275,
           "column": 11
         }
       ]
@@ -7097,7 +7669,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 545,
+          "line": 739,
           "column": 70
         }
       ]
@@ -7160,6 +7732,23 @@
         }
       ]
     },
+    "8131eafd02396e6a": {
+      "source": "简介",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 779,
+          "column": 67
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 867,
+          "column": 67
+        }
+      ]
+    },
     "8139cb3dd11f5a67": {
       "source": "开启后会把 JSON 对象覆盖到最终请求头。同名请求头以这里为准，值必须是字符串。",
       "kind": "text",
@@ -7208,8 +7797,20 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 75,
+          "line": 77,
           "column": 1911
+        }
+      ]
+    },
+    "8235371183214b84": {
+      "source": "编辑 {0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 437,
+          "column": 25
         }
       ]
     },
@@ -7309,8 +7910,20 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 142,
-          "column": 90
+          "line": 246,
+          "column": 92
+        }
+      ]
+    },
+    "83f3da9c1212f521": {
+      "source": "发布 cursor-byok 新版本：更新版本号、推送 tag 触发 GitHub Action 自动构建。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 228,
+          "column": 18
         }
       ]
     },
@@ -7478,6 +8091,18 @@
         }
       ]
     },
+    "86aa862f0f285298": {
+      "source": "已清理 {0} 个会话",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 166,
+          "column": 21
+        }
+      ]
+    },
     "86df7ec743047234": {
       "source": "服务运行中",
       "kind": "text",
@@ -7485,8 +8110,25 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1485,
+          "line": 1494,
           "column": 14
+        }
+      ]
+    },
+    "876056ff40e2e6a1": {
+      "source": "历史与日志",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 186,
+          "column": 54
+        },
+        {
+          "file": "src/components/settings/settingsCategories.js",
+          "line": 49,
+          "column": 12
         }
       ]
     },
@@ -7528,6 +8170,18 @@
           "file": "src/components/settings/categories/GeneralSettings.vue",
           "line": 19,
           "column": 27
+        }
+      ]
+    },
+    "88f60ba89c9f083a": {
+      "source": "暂无历史记录",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 209,
+          "column": 156
         }
       ]
     },
@@ -7613,8 +8267,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 87,
-          "column": 48
+          "line": 140,
+          "column": 52
         }
       ]
     },
@@ -7689,6 +8343,18 @@
         }
       ]
     },
+    "8c53629f337c148c": {
+      "source": "在实现任何功能或修复之前，先编写测试并观察其失败。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 216,
+          "column": 18
+        }
+      ]
+    },
     "8c932f987c21bf0a": {
       "source": "每页",
       "kind": "text",
@@ -7728,8 +8394,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 75,
-          "column": 2213
+          "line": 77,
+          "column": 3178
         },
         {
           "file": "src/views/ModelGroups.vue",
@@ -7786,6 +8452,18 @@
         }
       ]
     },
+    "8da7f18d3cbd7912": {
+      "source": "留空/0 = 默认 30 天",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 311,
+          "column": 15
+        }
+      ]
+    },
     "8e02d75331a193b9": {
       "source": "Token Plan 用量接口未在当前后端核验",
       "kind": "text",
@@ -7829,7 +8507,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 379,
+          "line": 405,
           "column": 12
         }
       ]
@@ -7935,11 +8613,28 @@
         }
       ]
     },
+    "90dd1ef5a5b3a874": {
+      "source": "---\nname: {0}\ndescription: {1}\n---\n\n# {2}\n\n{3}\n\n## 使用场景\n\n- 调试与排查\n- 编写测试\n- 回归验证\n",
+      "kind": "template",
+      "placeholders": 4,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 495,
+          "column": 14
+        }
+      ]
+    },
     "917b1c1f18d0276b": {
       "source": "保存中...",
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/ui/MarkdownEditorModal.vue",
+          "line": 66,
+          "column": 22
+        },
         {
           "file": "src/views/ModelEditor.vue",
           "line": 767,
@@ -7961,6 +8656,18 @@
           "file": "src/components/HomeMetricsCard.vue",
           "line": 615,
           "column": 23
+        }
+      ]
+    },
+    "91f39e61610cf327": {
+      "source": "站点余额",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/StationSpendCard.vue",
+          "line": 167,
+          "column": 77
         }
       ]
     },
@@ -8019,7 +8726,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2059,
+          "line": 2068,
           "column": 32
         }
       ]
@@ -8031,7 +8738,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 429,
+          "line": 610,
           "column": 7
         },
         {
@@ -8050,6 +8757,18 @@
           "file": "src/views/ModelConfig.vue",
           "line": 530,
           "column": 129
+        }
+      ]
+    },
+    "937aa4abf993098f": {
+      "source": "未知的生成目标类型 {0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 515,
+          "column": 35
         }
       ]
     },
@@ -8262,6 +8981,18 @@
         }
       ]
     },
+    "969ef41f7e5bf3a8": {
+      "source": "生成中",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 649,
+          "column": 54
+        }
+      ]
+    },
     "96ad1e31a4152205": {
       "source": "当日",
       "kind": "text",
@@ -8398,12 +9129,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2327,
+          "line": 2336,
           "column": 32
         },
         {
           "file": "src/state/appState.js",
-          "line": 2348,
+          "line": 2357,
           "column": 32
         }
       ]
@@ -8446,6 +9177,23 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 509,
           "column": 41
+        }
+      ]
+    },
+    "994615e36164d509": {
+      "source": "一键清理",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 157,
+          "column": 12
+        },
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 200,
+          "column": 16
         }
       ]
     },
@@ -8516,7 +9264,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 509,
+          "line": 703,
           "column": 15
         }
       ]
@@ -8564,8 +9312,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 143,
-          "column": 36
+          "line": 247,
+          "column": 38
         }
       ]
     },
@@ -8576,12 +9324,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 124,
+          "line": 135,
           "column": 33
         },
         {
           "file": "src/views/Home.vue",
-          "line": 33,
+          "line": 35,
           "column": 383
         }
       ]
@@ -8653,7 +9401,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1601,
+          "line": 1610,
           "column": 14
         }
       ]
@@ -8784,6 +9532,23 @@
         }
       ]
     },
+    "a026e8bcfbf9ce1a": {
+      "source": "不限额度",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/StationSpendCard.vue",
+          "line": 70,
+          "column": 16
+        },
+        {
+          "file": "src/components/StationSpendCard.vue",
+          "line": 195,
+          "column": 59
+        }
+      ]
+    },
     "a026f37e613cf48b": {
       "source": "输出 Token",
       "kind": "text",
@@ -8839,12 +9604,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1515,
+          "line": 1524,
           "column": 12
         },
         {
           "file": "src/state/appState.js",
-          "line": 1582,
+          "line": 1591,
           "column": 87
         }
       ]
@@ -8858,6 +9623,18 @@
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 1223,
           "column": 21
+        }
+      ]
+    },
+    "a1f5e23e3cf37c3f": {
+      "source": "为当前列表的所有条目生成中文简介（自动保存到配置）",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 646,
+          "column": 25
         }
       ]
     },
@@ -8908,6 +9685,16 @@
           "column": 63
         },
         {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 937,
+          "column": 19
+        },
+        {
+          "file": "src/components/ui/MarkdownEditorModal.vue",
+          "line": 12,
+          "column": 38
+        },
+        {
           "file": "src/views/ModelEditor.vue",
           "line": 767,
           "column": 16
@@ -8921,7 +9708,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2272,
+          "line": 2281,
           "column": 14
         }
       ]
@@ -8975,6 +9762,18 @@
         }
       ]
     },
+    "a3ba53fadbaed9d7": {
+      "source": "调试",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 282,
+          "column": 134
+        }
+      ]
+    },
     "a48d5b8a0e409c4f": {
       "source": "最大监督轮次",
       "kind": "text",
@@ -9016,6 +9815,40 @@
         }
       ]
     },
+    "a50df0a400dfe674": {
+      "source": "未找到技能 {0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 491,
+          "column": 47
+        },
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 503,
+          "column": 49
+        }
+      ]
+    },
+    "a52a08335185f048": {
+      "source": "翻译",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 816,
+          "column": 22
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 905,
+          "column": 22
+        }
+      ]
+    },
     "a54d745d9a9249e2": {
       "source": "开启后会把 JSON 对象覆盖到 Anthropic 请求体。同名字段以这里为准。",
       "kind": "text",
@@ -9040,7 +9873,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 679,
+          "line": 923,
           "column": 22
         },
         {
@@ -9106,7 +9939,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 439,
+          "line": 620,
           "column": 15
         }
       ]
@@ -9229,6 +10062,18 @@
         }
       ]
     },
+    "a737fd72b0160164": {
+      "source": "已选中",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 298,
+          "column": 46
+        }
+      ]
+    },
     "a7b351e53cb54593": {
       "source": "· 币种",
       "kind": "text",
@@ -9248,7 +10093,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 578,
+          "line": 772,
           "column": 69
         }
       ]
@@ -9282,7 +10127,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 501,
+          "line": 695,
           "column": 17
         }
       ]
@@ -9294,7 +10139,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 376,
+          "line": 402,
           "column": 12
         }
       ]
@@ -9311,22 +10156,22 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 36,
+          "line": 40,
           "column": 31
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 466,
+          "line": 660,
           "column": 19
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 579,
+          "line": 773,
           "column": 28
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 642,
+          "line": 861,
           "column": 28
         },
         {
@@ -9500,7 +10345,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1564,
+          "line": 1573,
           "column": 16
         }
       ]
@@ -9606,7 +10451,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 499,
+          "line": 693,
           "column": 17
         }
       ]
@@ -9630,7 +10475,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 605,
+          "line": 824,
           "column": 32
         }
       ]
@@ -9652,6 +10497,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 193,
+          "column": 16
+        },
         {
           "file": "src/views/RequestMetrics.vue",
           "line": 329,
@@ -9700,6 +10550,18 @@
         }
       ]
     },
+    "b069931fb5aab9da": {
+      "source": "鉴权失败：Invalid API key",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 452,
+          "column": 114
+        }
+      ]
+    },
     "b07d4a0d02c5f615": {
       "source": "监督策略和视觉委派属于低频高级配置，默认收起；需要调整时点击此处展开。",
       "kind": "text",
@@ -9719,7 +10581,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 75,
+          "line": 77,
           "column": 1053
         }
       ]
@@ -9854,12 +10716,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 124,
+          "line": 135,
           "column": 54
         },
         {
           "file": "src/views/Home.vue",
-          "line": 33,
+          "line": 35,
           "column": 404
         }
       ]
@@ -9888,7 +10750,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 75,
+          "line": 77,
           "column": 1911
         }
       ]
@@ -9912,7 +10774,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1571,
+          "line": 1580,
           "column": 40
         }
       ]
@@ -9965,6 +10827,18 @@
         }
       ]
     },
+    "b65a8a086b513d63": {
+      "source": "已为 {0} 个条目生成简介",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 556,
+          "column": 21
+        }
+      ]
+    },
     "b6bfd721735fe56b": {
       "source": "当主模型不支持识图时，自动把图片转发给已配置的识图模型，返回画面描述和文字（OCR），让纯文本模型也能“看图”。启用后会自动把识图模型的网关地址 / API Key / 模型名同步到读图 MCP（vision-reader）作为兜底：委派失败或不可用时，纯文本主模型仍可通过该 MCP 工具读取图片；无需在单个模型中重复配置读图 MCP。",
       "kind": "text",
@@ -10010,6 +10884,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 375,
           "column": 19
+        }
+      ]
+    },
+    "b7dccbd691f5f098": {
+      "source": "总 {0} {1}",
+      "kind": "template",
+      "placeholders": 2,
+      "refs": [
+        {
+          "file": "src/components/StationSpendCard.vue",
+          "line": 76,
+          "column": 18
         }
       ]
     },
@@ -10061,22 +10947,22 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 526,
+          "line": 720,
           "column": 15
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 534,
+          "line": 728,
           "column": 15
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 592,
+          "line": 793,
           "column": 21
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 656,
+          "line": 882,
           "column": 21
         },
         {
@@ -10122,18 +11008,6 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 561,
           "column": 28
-        }
-      ]
-    },
-    "b8f32d2848485a01": {
-      "source": "导出日志",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Home.vue",
-          "line": 75,
-          "column": 2038
         }
       ]
     },
@@ -10185,7 +11059,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 679,
+          "line": 923,
           "column": 22
         }
       ]
@@ -10293,7 +11167,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 32,
+          "line": 33,
           "column": 264
         }
       ]
@@ -10476,7 +11350,7 @@
         },
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 43,
+          "line": 51,
           "column": 30
         },
         {
@@ -10650,7 +11524,7 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 53,
+          "line": 90,
           "column": 53
         }
       ]
@@ -10689,6 +11563,18 @@
         }
       ]
     },
+    "c25f8d3795b9a0dd": {
+      "source": "总额 {0} {1}",
+      "kind": "template",
+      "placeholders": 2,
+      "refs": [
+        {
+          "file": "src/components/StationSpendCard.vue",
+          "line": 79,
+          "column": 16
+        }
+      ]
+    },
     "c2a291b64f6bfddd": {
       "source": "扫描",
       "kind": "text",
@@ -10696,7 +11582,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 464,
+          "line": 658,
           "column": 19
         }
       ]
@@ -10802,7 +11688,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2115,
+          "line": 2124,
           "column": 32
         }
       ]
@@ -10939,6 +11825,18 @@
         }
       ]
     },
+    "c75bb65232483ae4": {
+      "source": "对话 {0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 108,
+          "column": 27
+        }
+      ]
+    },
     "c768815a704d314d": {
       "source": "服务未返回可用模型",
       "kind": "text",
@@ -10980,6 +11878,18 @@
         }
       ]
     },
+    "c7a8b2c7cf556b5b": {
+      "source": "已保存到 SKILL.md",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 453,
+          "column": 21
+        }
+      ]
+    },
     "c8051ff3c41db669": {
       "source": "（可能过期）",
       "kind": "text",
@@ -11016,7 +11926,7 @@
         },
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 43,
+          "line": 51,
           "column": 46
         },
         {
@@ -11052,6 +11962,18 @@
           "file": "src/components/CursorAccountCard.vue",
           "line": 83,
           "column": 27
+        }
+      ]
+    },
+    "c8af3c2c77a232fa": {
+      "source": "全部清理",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 159,
+          "column": 18
         }
       ]
     },
@@ -11125,17 +12047,17 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 2243,
+          "line": 2252,
           "column": 28
         },
         {
           "file": "src/state/appState.js",
-          "line": 2245,
+          "line": 2254,
           "column": 38
         },
         {
           "file": "src/state/appState.js",
-          "line": 2280,
+          "line": 2289,
           "column": 93
         },
         {
@@ -11188,12 +12110,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1497,
+          "line": 1506,
           "column": 51
         },
         {
           "file": "src/views/Home.vue",
-          "line": 75,
+          "line": 77,
           "column": 1721
         }
       ]
@@ -11210,7 +12132,7 @@
         },
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 43,
+          "line": 51,
           "column": 85
         },
         {
@@ -11270,6 +12192,18 @@
           "file": "src/views/MetricsDetail.vue",
           "line": 400,
           "column": 94
+        }
+      ]
+    },
+    "caefe2da6c912d4e": {
+      "source": "读取站点余额失败",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/StationSpendCard.vue",
+          "line": 102,
+          "column": 61
         }
       ]
     },
@@ -11352,8 +12286,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 111,
-          "column": 89
+          "line": 216,
+          "column": 91
         }
       ]
     },
@@ -11453,7 +12387,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 121,
+          "line": 132,
           "column": 42
         },
         {
@@ -11463,7 +12397,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 33,
+          "line": 35,
           "column": 324
         }
       ]
@@ -11528,7 +12462,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 59,
+          "line": 61,
           "column": 31
         }
       ]
@@ -11673,7 +12607,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2140,
+          "line": 2149,
           "column": 14
         }
       ]
@@ -11685,7 +12619,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 75,
+          "line": 77,
           "column": 446
         }
       ]
@@ -11719,6 +12653,18 @@
         }
       ]
     },
+    "d44beb8813893470": {
+      "source": "未找到 MCP server {0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 510,
+          "column": 50
+        }
+      ]
+    },
     "d44e9b3d3b31d37b": {
       "source": "名称",
       "kind": "text",
@@ -11728,6 +12674,18 @@
           "file": "src/views/SupplierDetail.vue",
           "line": 152,
           "column": 27
+        }
+      ]
+    },
+    "d45d6272fbbf1f5c": {
+      "source": "缓存条目多久未访问则失效（0 = 默认 30 天）。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 301,
+          "column": 11
         }
       ]
     },
@@ -11757,6 +12715,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 390,
           "column": 30
+        }
+      ]
+    },
+    "d507304fff71e369": {
+      "source": "编辑技能 {0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 804,
+          "column": 32
         }
       ]
     },
@@ -11834,6 +12804,18 @@
           "file": "src/views/ModelGroups.vue",
           "line": 68,
           "column": 61
+        }
+      ]
+    },
+    "d6822b04178d6929": {
+      "source": "剩余",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/StationSpendCard.vue",
+          "line": 201,
+          "column": 64
         }
       ]
     },
@@ -11921,7 +12903,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 64,
+          "line": 66,
           "column": 30
         }
       ]
@@ -11988,6 +12970,18 @@
           "file": "src/views/ModelCatalog.vue",
           "line": 432,
           "column": 16
+        }
+      ]
+    },
+    "da038becf0eae506": {
+      "source": "简介已保存",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 486,
+          "column": 21
         }
       ]
     },
@@ -12059,12 +13053,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 479,
+          "line": 673,
           "column": 17
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 480,
+          "line": 674,
           "column": 17
         },
         {
@@ -12127,18 +13121,6 @@
         }
       ]
     },
-    "dc164c3821c7809b": {
-      "source": "留空/0 = 默认 900",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 259,
-          "column": 15
-        }
-      ]
-    },
     "dc3af0929a89533d": {
       "source": "导出中...",
       "kind": "text",
@@ -12146,8 +13128,13 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 75,
-          "column": 2038
+          "line": 77,
+          "column": 2129
+        },
+        {
+          "file": "src/views/Home.vue",
+          "line": 77,
+          "column": 2653
         }
       ]
     },
@@ -12182,7 +13169,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1543,
+          "line": 1552,
           "column": 5
         }
       ]
@@ -12194,7 +13181,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 549,
+          "line": 743,
           "column": 16
         }
       ]
@@ -12312,8 +13299,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 115,
-          "column": 83
+          "line": 219,
+          "column": 85
         },
         {
           "file": "src/views/MetricsDetail.vue",
@@ -12353,7 +13340,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 638,
+          "line": 857,
           "column": 89
         }
       ]
@@ -12387,22 +13374,22 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 35,
+          "line": 39,
           "column": 30
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 465,
+          "line": 659,
           "column": 19
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 579,
+          "line": 773,
           "column": 28
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 642,
+          "line": 861,
           "column": 28
         },
         {
@@ -12532,8 +13519,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 75,
-          "column": 2143
+          "line": 77,
+          "column": 3108
         },
         {
           "file": "src/views/RequestMetrics.vue",
@@ -12590,7 +13577,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 639,
+          "line": 858,
           "column": 86
         }
       ]
@@ -12643,6 +13630,18 @@
         }
       ]
     },
+    "e3b88e753bde27fb": {
+      "source": "{0}年{1}月",
+      "kind": "template",
+      "placeholders": 2,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 97,
+          "column": 31
+        }
+      ]
+    },
     "e406825e0a72d2c2": {
       "source": "本地配置",
       "kind": "text",
@@ -12674,7 +13673,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1567,
+          "line": 1576,
           "column": 40
         }
       ]
@@ -12894,6 +13893,18 @@
         }
       ]
     },
+    "e7e3b655f02a91c6": {
+      "source": "，当前未连接",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 511,
+          "column": 170
+        }
+      ]
+    },
     "e825a2a42c22380e": {
       "source": "模型类型",
       "kind": "text",
@@ -12990,7 +14001,7 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 29,
+          "line": 37,
           "column": 38
         },
         {
@@ -13123,7 +14134,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1568,
+          "line": 1577,
           "column": 16
         }
       ]
@@ -13315,6 +14326,11 @@
           "column": 77
         },
         {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 298,
+          "column": 70
+        },
+        {
           "file": "src/views/RequestMetrics.vue",
           "line": 318,
           "column": 32
@@ -13333,8 +14349,20 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 544,
+          "line": 738,
           "column": 154
+        }
+      ]
+    },
+    "f064d1bd5ae40aa0": {
+      "source": "「{0}」在{1}技能库中提供{2}",
+      "kind": "template",
+      "placeholders": 3,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 504,
+          "column": 21
         }
       ]
     },
@@ -13345,7 +14373,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 266,
+          "line": 337,
           "column": 196
         }
       ]
@@ -13437,7 +14465,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 679,
+          "line": 923,
           "column": 22
         }
       ]
@@ -13502,6 +14530,18 @@
         }
       ]
     },
+    "f444ec5ed4d6f7b9": {
+      "source": "不限额度套餐",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 445,
+          "column": 139
+        }
+      ]
+    },
     "f474a4108aba4c4c": {
       "source": "关闭服务",
       "kind": "text",
@@ -13509,7 +14549,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1499,
+          "line": 1508,
           "column": 38
         }
       ]
@@ -13689,6 +14729,18 @@
         }
       ]
     },
+    "f6c7f969c8cdf53c": {
+      "source": "清理中...",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 200,
+          "column": 16
+        }
+      ]
+    },
     "f6d3fa64ec2f133e": {
       "source": "可选，例如：用于日常代码补全",
       "kind": "text",
@@ -13718,6 +14770,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/StationSpendCard.vue",
+          "line": 66,
+          "column": 53
+        },
         {
           "file": "src/views/ModelConfig.vue",
           "line": 233,
@@ -13834,6 +14891,18 @@
         }
       ]
     },
+    "f868a9cdb9a4f78e": {
+      "source": "把缓存条目写入本地磁盘，重启应用后仍可命中。关闭后仅保留内存缓存，重启即清空。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 283,
+          "column": 11
+        }
+      ]
+    },
     "f88182fcd575be3a": {
       "source": "进入",
       "kind": "text",
@@ -13942,7 +15011,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 231,
+          "line": 264,
           "column": 9
         }
       ]
@@ -13979,7 +15048,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 1594,
+          "line": 1603,
           "column": 12
         },
         {
@@ -14045,7 +15114,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1497,
+          "line": 1506,
           "column": 40
         }
       ]
@@ -14141,7 +15210,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 53,
+          "line": 55,
           "column": 29
         }
       ]
@@ -14167,6 +15236,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 1131,
           "column": 17
+        }
+      ]
+    },
+    "fe2ff6252caa3840": {
+      "source": "编辑 MCP 简介：{0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 470,
+          "column": 23
         }
       ]
     },
@@ -14249,7 +15330,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 59,
+          "line": 61,
           "column": 66
         }
       ]

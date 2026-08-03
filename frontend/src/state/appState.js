@@ -865,12 +865,18 @@ function loadCachedState() {
   }
 }
 
+function normalizeRouteMode(value) {
+  const normalized = asString(value).toLowerCase();
+  return SUPPORTED_ROUTE_MODES.has(normalized) ? normalized : "local";
+}
+
 function normalizeLocalResponseCache(source) {
   const raw = source && typeof source === "object" ? source : {};
   return {
     enabled: asBoolean(raw.enabled),
     ttlSeconds: asPositiveInteger(raw.ttlSeconds),
     maxEntries: asPositiveInteger(raw.maxEntries),
+    persist: asBoolean(raw.persist, true),
   };
 }
 
@@ -968,6 +974,7 @@ function normalizeDelegationForAdapters(source, adapters) {
 
 function normalizeConfig(source) {
   const raw = source && typeof source === "object" ? source : {};
+  const routing = raw.routing && typeof raw.routing === "object" ? raw.routing : {};
   const homeMetrics = raw.homeMetrics && typeof raw.homeMetrics === "object" ? raw.homeMetrics : {};
   return {
     log: asBoolean(raw.log),
@@ -979,7 +986,7 @@ function normalizeConfig(source) {
     proxyListenAddr: asString(raw.configProxyListenAddr) || asString(raw.proxyListenAddr),
     modelAdapters: dedupeModelAdapters(raw.modelAdapters),
     routing: {
-      mode: normalizeRouteMode(routing.mode),
+      mode: normalizeRouteMode(routing.mode ?? raw.routingMode),
     },
     homeMetrics: {
       includeCacheWriteInHitRate: asBoolean(homeMetrics.includeCacheWriteInHitRate),
@@ -1068,6 +1075,7 @@ function applyConfigToState(config, { modelAdaptersOnly = false } = {}) {
   appState.modelAdapters = normalized.modelAdapters;
   appState.configBackendListenAddr = normalized.backendListenAddr;
   appState.configProxyListenAddr = normalized.proxyListenAddr;
+  appState.routingMode = normalized.routing.mode;
   appState.includeCacheWriteInHitRate = normalized.homeMetrics.includeCacheWriteInHitRate;
   appState.localResponseCache = normalized.localResponseCache;
   appState.delegation = normalized.delegation;
@@ -1330,6 +1338,7 @@ export const appState = reactive({
   modelAdapterTestResults: {},
   configBackendListenAddr: cachedConfig.backendListenAddr,
   configProxyListenAddr: cachedConfig.proxyListenAddr,
+  routingMode: cachedConfig.routing.mode,
   includeCacheWriteInHitRate: cachedConfig.homeMetrics.includeCacheWriteInHitRate,
   localResponseCache: cachedConfig.localResponseCache,
   delegation: cachedConfig.delegation,

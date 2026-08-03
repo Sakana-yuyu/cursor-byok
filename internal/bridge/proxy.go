@@ -145,6 +145,22 @@ func (s *ProxyService) ResetUsageMetrics() error {
 	return s.core.ResetUsageMetrics()
 }
 
+// GetHistorySessions returns metadata for every retained history session.
+func (s *ProxyService) GetHistorySessions() ([]HistorySession, error) {
+	return scanHistorySessions()
+}
+
+// DeleteHistorySessions removes the given history sessions (UUID ids).
+func (s *ProxyService) DeleteHistorySessions(sessionIDs []string) error {
+	return deleteHistorySessions(sessionIDs)
+}
+
+// ClearHistory removes every history session plus orphan debug data and resets usage stats.
+// Returns the number of removed session directories.
+func (s *ProxyService) ClearHistory() (int, error) {
+	return clearHistory()
+}
+
 // GetDelegationTaskSnapshots returns retained Multitask worker state.
 func (s *ProxyService) GetDelegationTaskSnapshots() []DelegationTaskSnapshot {
 	return s.core.GetDelegationTaskSnapshots()
@@ -254,6 +270,63 @@ func (s *ProxyService) ProbeModelAdapter(adapter ModelAdapterConfig) ModelAdapte
 // QueryProviderBalance 查询中转站余额/额度，失败时返回结构化的 unsupported 结果。
 func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) ProviderBalance {
 	return s.core.QueryProviderBalance(request)
+}
+
+// ProviderBalanceSummaryItem 是首页「站点余额」展示条目：模型通道名 + 余额查询结果。
+type ProviderBalanceSummaryItem struct {
+	AdapterID   string                 `json:"adapterId"`
+	DisplayName string                 `json:"displayName"`
+	GroupName   string                 `json:"groupName,omitempty"`
+	ModelID     string                 `json:"modelID"`
+	Balance     client.ProviderBalance `json:"balance"`
+}
+
+// hasBalanceQueryCapability 判断模型通道是否配置了余额查询能力。
+// auto/空/none 需要至少一个显式凭据才算配置；其余 profile 视为显式启用。
+func hasBalanceQueryCapability(adapter serverconfig.ModelAdapterConfig) bool {
+	profile := strings.ToLower(strings.TrimSpace(adapter.BalanceProfile))
+	if profile == "none" || profile == "" || profile == "auto" {
+		return strings.TrimSpace(adapter.BalanceQueryURL) != "" ||
+			strings.TrimSpace(adapter.BalanceAccessToken) != "" ||
+			strings.TrimSpace(adapter.BalanceUserID) != ""
+	}
+	return true
+}
+
+// QueryAllProviderBalances 汇总所有已配置余额查询的模型通道余额，供首页展示。
+// 复用单通道查询的 TTL 缓存与凭据补齐逻辑；未配置余额查询的通道不会发起请求。
+func (s *ProxyService) QueryAllProviderBalances() []ProviderBalanceSummaryItem {
+	cfg, err := s.core.LoadUserConfig()
+	if err != nil {
+		return nil
+	}
+	out := make([]ProviderBalanceSummaryItem, 0, len(cfg.ModelAdapters))
+	for _, adapter := range cfg.ModelAdapters {
+		if !hasBalanceQueryCapability(adapter) {
+			continue
+		}
+		balance := s.core.QueryProviderBalance(ProviderBalanceRequest{
+			Type:                     adapter.Type,
+			SupplierID:               adapter.SupplierID,
+			BaseURL:                  adapter.BaseURL,
+			APIKey:                   adapter.APIKey,
+			BalanceProfile:           adapter.BalanceProfile,
+			BalanceAccessToken:       adapter.BalanceAccessToken,
+			BalanceUserID:            adapter.BalanceUserID,
+			BalanceCodingPlanProvider: adapter.BalanceCodingPlanProvider,
+			BalanceQueryURL:          adapter.BalanceQueryURL,
+			BalanceQueryField:        adapter.BalanceQueryField,
+			BalanceQueryHeaders:      adapter.BalanceQueryHeaders,
+		})
+		out = append(out, ProviderBalanceSummaryItem{
+			AdapterID:   adapter.ID,
+			DisplayName: adapter.DisplayName,
+			GroupName:   adapter.GroupName,
+			ModelID:     adapter.ModelID,
+			Balance:     balance,
+		})
+	}
+	return out
 }
 
 // GetModelAdapterTestResults 用于处理与 GetModelAdapterTestResults 相关的逻辑。

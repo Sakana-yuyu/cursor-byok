@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,11 +21,24 @@ type debugLogConfig interface {
 	IsObservabilityLogEnabled(context.Context) bool
 }
 
+// debugWriteJob 是一次待落盘的 debug 日志事件。
+type debugWriteJob struct {
+	dir      string
+	filename string
+	payload  []byte
+}
+
+// debugQueueCapacity 是 debug 写盘队列容量。写盘是尽力而为的证据层，队列满时丢弃
+// 新事件（限频日志提示），绝不让日志拖垮主链路（此前同步写盘 + 全局互斥导致
+// BidiAppend 接口超时与 provider 事件流吞吐下降，见 13:36 的 timeout 日志）。
+const debugQueueCapacity = 8192
+
 type debugRecorder struct {
 	historyRoot string
 	broker      *StreamBroker
 	config      debugLogConfig
-	mu          sync.Mutex
+	queue       chan debugWriteJob
+	workerOnce  sync.Once
 }
 
 const maxDebugProtoPayloadBytes = 64 * 1024
@@ -56,12 +70,22 @@ func (recorder *debugRecorder) LogBidiRaw(ctx context.Context, requestID string,
 	event["procedure"] = "/aiserver.v1.BidiService/BidiAppend"
 	event["append_seqno"] = appendSeqno
 	event["status"] = strings.TrimSpace(status)
-	event["data_hex"] = dataHex
+	// data_hex 截断到 maxDebugProtoPayloadBytes：大 payload（如多文件并行读取的工具
+	// 结果）完整写盘会放大磁盘占用并拖慢落盘 worker，data_len 保留完整长度信息。
+	event["data_hex"] = truncateDebugPayload(dataHex)
 	event["data_len"] = len(dataHex)
 	for key, value := range extra {
 		event[key] = value
 	}
 	recorder.appendJSONL(ctx, requestID, conversationID, "bidi.raw.jsonl", event)
+}
+
+// truncateDebugPayload 把超长 hex/文本截断到 maxDebugProtoPayloadBytes。
+func truncateDebugPayload(value string) string {
+	if len(value) <= maxDebugProtoPayloadBytes {
+		return value
+	}
+	return value[:maxDebugProtoPayloadBytes]
 }
 
 func (recorder *debugRecorder) LogBidiDecoded(ctx context.Context, requestID string, conversationID string, appendSeqno int64, clientKind string, message *agentv1.AgentClientMessage, intent InboundIntent, extra map[string]any) {
@@ -156,17 +180,40 @@ func (recorder *debugRecorder) appendJSONL(ctx context.Context, requestID string
 	if err != nil {
 		return
 	}
-	recorder.mu.Lock()
-	defer recorder.mu.Unlock()
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	// 异步落盘：序列化后的 payload 投递到后台 worker，主链路（BidiAppend / provider
+	// 事件流 / RunSSE）不再被磁盘 IO 阻塞，也不被全局互斥串行化。
+	recorder.enqueue(debugWriteJob{dir: dir, filename: filename, payload: payload})
+}
+
+// enqueue 把一条 debug 事件投递到写盘队列；队列满时丢弃并限频提示。
+func (recorder *debugRecorder) enqueue(job debugWriteJob) {
+	if recorder == nil {
 		return
 	}
-	file, err := os.OpenFile(filepath.Join(dir, filename), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		return
+	recorder.workerOnce.Do(func() {
+		recorder.queue = make(chan debugWriteJob, debugQueueCapacity)
+		go recorder.writeLoop()
+	})
+	select {
+	case recorder.queue <- job:
+	default:
+		log.Printf("debug recorder queue full, dropping %s event", job.filename)
 	}
-	defer file.Close()
-	_, _ = file.Write(append(payload, '\n'))
+}
+
+// writeLoop 是 debug 落盘 worker：单 goroutine 串行写文件，天然保序。
+func (recorder *debugRecorder) writeLoop() {
+	for job := range recorder.queue {
+		if err := os.MkdirAll(job.dir, 0o755); err != nil {
+			continue
+		}
+		file, err := os.OpenFile(filepath.Join(job.dir, job.filename), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+		if err != nil {
+			continue
+		}
+		_, _ = file.Write(append(job.payload, '\n'))
+		_ = file.Close()
+	}
 }
 
 func (recorder *debugRecorder) debugDir(requestID string, conversationID string) string {

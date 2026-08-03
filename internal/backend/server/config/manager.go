@@ -304,11 +304,11 @@ func (manager *Manager) NativeDelegationProgressTimeout(ctx context.Context) tim
 	return time.Duration(seconds) * time.Second
 }
 
-// LocalResponseCacheSettings 返回本地响应缓存的当前配置：是否启用、TTL 与最大条目数。
-// 该方法读取热加载后的最新配置，供 provider 网关按调用即时判断。
-func (manager *Manager) LocalResponseCacheSettings() (enabled bool, ttl time.Duration, maxEntries int) {
+// LocalResponseCacheSettings 返回本地响应缓存的当前配置：是否启用、TTL、最大条目数
+// 与是否持久化到磁盘。该方法读取热加载后的最新配置，供 provider 网关按调用即时判断。
+func (manager *Manager) LocalResponseCacheSettings() (enabled bool, ttl time.Duration, maxEntries int, persist bool) {
 	if manager == nil {
-		return false, time.Duration(DefaultLocalResponseCacheTTLSeconds) * time.Second, DefaultLocalResponseCacheMaxEntries
+		return false, time.Duration(DefaultLocalResponseCacheTTLSeconds) * time.Second, DefaultLocalResponseCacheMaxEntries, true
 	}
 	cfg := manager.Current().LocalResponseCache
 	ttlSeconds := cfg.TTLSeconds
@@ -319,7 +319,11 @@ func (manager *Manager) LocalResponseCacheSettings() (enabled bool, ttl time.Dur
 	if entries <= 0 {
 		entries = DefaultLocalResponseCacheMaxEntries
 	}
-	return cfg.Enabled, time.Duration(ttlSeconds) * time.Second, entries
+	persist = cfg.Persist
+	if !cfg.Enabled && cfg.TTLSeconds == 0 && cfg.MaxEntries == 0 && !persist {
+		persist = true
+	}
+	return cfg.Enabled, time.Duration(ttlSeconds) * time.Second, entries, persist
 }
 
 func (manager *Manager) IsObservabilityLogEnabled(ctx context.Context) bool {

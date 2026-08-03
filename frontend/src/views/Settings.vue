@@ -7,6 +7,7 @@ import GeneralSettings from "@/components/settings/categories/GeneralSettings.vu
 import OverlaySettings from "@/components/settings/categories/OverlaySettings.vue";
 import PromptSettings from "@/components/settings/categories/PromptSettings.vue";
 import SkillsMcpSettings from "@/components/settings/categories/SkillsMcpSettings.vue";
+import HistorySettings from "@/components/settings/categories/HistorySettings.vue";
 import SettingsSidebar from "@/components/settings/SettingsSidebar.vue";
 import { useSettingsAutosave } from "@/composables/useSettingsAutosave";
 import {
@@ -55,6 +56,7 @@ const categoryComponents = {
   "skills-mcp": SkillsMcpSettings,
   prompts: PromptSettings,
   advanced: AdvancedSettings,
+  history: HistorySettings,
 };
 
 const activeCategory = computed(() => {

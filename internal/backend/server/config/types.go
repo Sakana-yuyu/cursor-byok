@@ -33,9 +33,10 @@ const (
 	// MinNativeDelegationProgressTimeoutSeconds 表示 native 子代理无进展看门狗允许的最小阈值，单位秒。
 	MinNativeDelegationProgressTimeoutSeconds = 60
 	// DefaultLocalResponseCacheTTLSeconds 表示本地响应缓存条目的默认存活时长。
-	DefaultLocalResponseCacheTTLSeconds = 900
-	// DefaultLocalResponseCacheMaxEntries 表示本地响应缓存的默认最大条目数。
-	DefaultLocalResponseCacheMaxEntries = 256
+	// 条目持久化到磁盘，TTL 指「多久未访问则失效」；30 天覆盖跨会话的重复请求。
+	DefaultLocalResponseCacheTTLSeconds = 30 * 24 * 3600
+	// DefaultLocalResponseCacheMaxEntries 表示本地响应缓存的默认最大条目数（LRU 淘汰）。
+	DefaultLocalResponseCacheMaxEntries = 2048
 	// DefaultAutoMatchContextWindow 表示是否在启动时/手动触发时自动为所有模型适配器
 	// 配对正确的上下文窗口（目录命中则覆盖，目录无则探测 provider /models 回填）。
 	DefaultAutoMatchContextWindow = true
@@ -112,6 +113,8 @@ type LocalResponseCacheConfig struct {
 	TTLSeconds int `json:"ttlSeconds,omitempty" yaml:"ttlSeconds,omitempty"`
 	// MaxEntries 表示缓存最大条目数；<=0 时回退默认值。
 	MaxEntries int `json:"maxEntries,omitempty" yaml:"maxEntries,omitempty"`
+	// Persist 表示是否把缓存条目持久化到磁盘（跨进程/重启保留）；默认 true。
+	Persist bool `json:"persist,omitempty" yaml:"persist,omitempty"`
 }
 
 // SkillMCPScanConfig 控制跨工具的 Skills / MCP 自动扫描与注入。
@@ -129,6 +132,10 @@ type SkillMCPScanConfig struct {
 	DisabledSkills map[string]bool `json:"disabledSkills,omitempty" yaml:"disabledSkills,omitempty"`
 	// DisabledMCPServers 显式禁用的 MCP server identifier 集合（小写匹配）。
 	DisabledMCPServers map[string]bool `json:"disabledMcpServers,omitempty" yaml:"disabledMcpServers,omitempty"`
+	// SkillSummaries 用户为技能生成的简介（key 为技能名小写）；仅存配置，不写回 SKILL.md。
+	SkillSummaries map[string]string `json:"skillSummaries,omitempty" yaml:"skillSummaries,omitempty"`
+	// MCPSummaries 用户为 MCP server 生成的简介（key 为 identifier 小写）。
+	MCPSummaries map[string]string `json:"mcpSummaries,omitempty" yaml:"mcpSummaries,omitempty"`
 }
 
 type Config struct {
@@ -475,9 +482,10 @@ func normalizeListenAddr(value string, defaultValue string, fieldName string) (s
 // 对无效的 TTL/MaxEntries 回退到默认值。
 func normalizeLocalResponseCache(input LocalResponseCacheConfig) LocalResponseCacheConfig {
 	output := input
-	// 默认启用缓存（零值配置时 Enabled 为 false，需要显式设置为 true）
-	if !input.Enabled && input.TTLSeconds == 0 && input.MaxEntries == 0 {
+	// 默认启用缓存并默认持久化（零值配置时 Enabled/Persist 均为 false，需要显式设置为 true）
+	if !input.Enabled && input.TTLSeconds == 0 && input.MaxEntries == 0 && !input.Persist {
 		output.Enabled = true
+		output.Persist = true
 	}
 	if output.TTLSeconds <= 0 {
 		output.TTLSeconds = DefaultLocalResponseCacheTTLSeconds

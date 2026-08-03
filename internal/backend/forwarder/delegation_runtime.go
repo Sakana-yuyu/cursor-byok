@@ -155,6 +155,7 @@ func (service *Service) DelegationTaskSnapshots() []DelegationTaskSnapshot {
 		})
 	}
 	items = append(items, service.nativeDelegationSnapshots()...)
+	items = append(items, service.visionDelegationSnapshots()...)
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].QueuedAtUnixMS == items[j].QueuedAtUnixMS {
 			return items[i].ID < items[j].ID

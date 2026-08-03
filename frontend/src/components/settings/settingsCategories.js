@@ -43,6 +43,12 @@ export const SETTINGS_CATEGORIES = [
     label: "高级",
     description: "高风险或低频系统设置。",
   },
+  {
+    id: "history",
+    value: "history",
+    label: "历史与日志",
+    description: "本地历史记录管理、日志导出与清理。",
+  },
 ];
 
 const settingsCategoryIDs = new Set(SETTINGS_CATEGORIES.map((category) => category.id));

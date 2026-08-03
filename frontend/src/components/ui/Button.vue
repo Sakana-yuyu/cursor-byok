@@ -3,7 +3,7 @@ defineProps({
   variant: {
     type: String,
     default: "default",
-    validator: (v) => ["default", "primary", "text"].includes(v),
+    validator: (v) => ["default", "primary", "text", "danger"].includes(v),
   },
 });
 </script>
@@ -23,6 +23,7 @@ defineProps({
     :class="{
       'bg-[linear-gradient(to_bottom,#656565_0%,#3A3A3A_10px,#3A3A3A_100%)]': variant === 'default',
       'bg-gradient-to-b from-[#1D8010] to-[#25B433]': variant === 'primary',
+      'bg-[linear-gradient(to_bottom,#7a2626_0%,#4d1818_10px,#4d1818_100%)]': variant === 'danger',
     }"
   >
     <span
@@ -30,6 +31,7 @@ defineProps({
       :class="{
         'bg-gradient-to-b from-[#2a2a2a] to-[#1f1f1f] ': variant === 'default',
         'font-medium bg-gradient-to-b from-[#10AD5D] to-[#0F8A4C] ': variant === 'primary',
+        'font-medium bg-gradient-to-b from-[#c0392b] to-[#8f2419] ': variant === 'danger',
       }"
     >
       <slot />

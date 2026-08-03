@@ -121,15 +121,15 @@ onUnmounted(() => window.clearInterval(refreshTimer));
 
 <template>
   <Card v-if="visibleItems.length || state.error">
-    <div class="min-w-0 space-y-3">
+    <div class="flex h-[180px] min-w-0 flex-col gap-3">
       <div class="flex items-center justify-between gap-3">
         <h2 class="text-sm font-medium text-white">委派任务</h2>
         <span class="text-xs text-[#858585]">{{ activeCount }} 运行中</span>
       </div>
       <div v-if="state.error" class="break-words text-xs text-[#fca5a5]">{{ state.error }}</div>
-      <div v-if="visibleItems.length" class="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-        <div v-for="item in visibleItems" :key="item.id" class="flex min-w-0 items-center gap-2 rounded-[6px] border border-white/10 bg-black/15 px-3 py-2">
-          <span class="size-2 shrink-0 rounded-full" :class="item.cancelable ? 'bg-[#facc15]' : 'bg-[#525252]'" />
+      <div v-if="visibleItems.length" class="grid min-h-0 flex-1 grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+        <div v-for="item in visibleItems" :key="item.id" class="flex min-w-0 items-start gap-2 overflow-hidden rounded-[6px] border border-white/10 bg-black/15 px-3 py-2">
+          <span class="mt-1 size-2 shrink-0 rounded-full" :class="item.cancelable ? 'bg-[#facc15]' : 'bg-[#525252]'" />
           <div class="min-w-0 flex-1">
             <div class="flex min-w-0 items-center gap-2">
               <div class="min-w-0 flex-1 truncate text-xs text-white" :title="taskDescription(item)">{{ taskDescription(item) }}</div>
@@ -142,7 +142,7 @@ onUnmounted(() => window.clearInterval(refreshTimer));
             <div v-if="item.issueCategory" class="mt-0.5 line-clamp-2 break-words text-[11px] text-[#facc15]" :title="item.issueCategory">{{ item.issueCategory }}</div>
             <div v-if="item.progressSummary" class="mt-0.5 line-clamp-2 break-words text-[11px] text-[#858585]" :title="item.progressSummary">{{ item.progressSummary }}</div>
           </div>
-          <Button v-if="item.cancelable" variant="text" :disabled="Boolean(state.canceling[item.id])" @click="handleCancel(item)">{{ state.canceling[item.id] ? "取消中..." : "取消" }}</Button>
+          <Button v-if="item.cancelable" variant="text" class="shrink-0" :disabled="Boolean(state.canceling[item.id])" @click="handleCancel(item)">{{ state.canceling[item.id] ? "取消中..." : "取消" }}</Button>
         </div>
       </div>
     </div>

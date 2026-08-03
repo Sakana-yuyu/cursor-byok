@@ -5,6 +5,8 @@ import {
   SavePromptInjectionSettings, RefreshPromptInjection, RefreshPromptInjectionCatalog,
   AutoMatchContextWindows, DiagnoseModelAdapters, ApplyDiagnosticFixes,
   GetSkillsMCPScanSnapshot, RefreshSkillsMCPScan, SaveSkillsMCPScanConfig,
+  ReadSkillFile, SaveSkillFile, GenerateSkillSummary,
+  QueryAllProviderBalances,
   RepairProxySettings,
   GetDelegationConfig, SaveDelegationConfig,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
@@ -42,6 +44,8 @@ const desktopMethods = {
   SavePromptInjectionSettings, RefreshPromptInjection,
   RefreshPromptInjectionCatalog, ExportLogs, AutoMatchContextWindows, DiagnoseModelAdapters, ApplyDiagnosticFixes,
   DetectCursorPath, LaunchCursor, GetSkillsMCPScanSnapshot, RefreshSkillsMCPScan, SaveSkillsMCPScanConfig,
+  ReadSkillFile, SaveSkillFile, GenerateSkillSummary,
+  QueryAllProviderBalances,
   RepairProxySettings,
   GetDelegationConfig, SaveDelegationConfig,
 };
@@ -256,6 +260,9 @@ export function queryProviderBalance(request) {
   }
   return withApiLogging("QueryProviderBalance", request, () => invoke("@bindings/cursor/internal/bridge/proxyservice.js", "QueryProviderBalance", [request]));
 }
+export function queryAllProviderBalances() {
+  return desktopOrMock(() => QueryAllProviderBalances(), "@bindings/cursor/internal/bridge/proxyservice.js", "QueryAllProviderBalances");
+}
 
 // 按中转站聚合区间内的用量与美元花费（GroupName → baseURL host → provider 类型）。
 export function fetchProviderSpendSummary(startUnixMs = 0, endUnixMs = 0) {
@@ -289,13 +296,22 @@ export function launchCursor(workspaceDir, manualPath = "") { return desktopOrMo
 // Skills & MCP 跨工具扫描：快照 / 重新扫描 / 保存开关配置。
 // 注意：这些 binding 由 wails 工具链自动生成；新增方法需在下次 wails dev/build 时重新生成 bindings。
 export function getSkillsMCPScanSnapshot(workspaceRoot = "") {
-  return desktopOrMock({ skills: [], mcpServers: [], config: { enabled: true } }, "@bindings/cursor/internal/bridge/proxyservice.js", "GetSkillsMCPScanSnapshot", [workspaceRoot]);
+  return desktopOrMock(() => GetSkillsMCPScanSnapshot(workspaceRoot), "@bindings/cursor/internal/bridge/proxyservice.js", "GetSkillsMCPScanSnapshot", [workspaceRoot]);
 }
 export function refreshSkillsMCPScan(workspaceRoot = "") {
-  return desktopOrMock({ skills: [], mcpServers: [], config: { enabled: true } }, "@bindings/cursor/internal/bridge/proxyservice.js", "RefreshSkillsMCPScan", [workspaceRoot]);
+  return desktopOrMock(() => RefreshSkillsMCPScan(workspaceRoot), "@bindings/cursor/internal/bridge/proxyservice.js", "RefreshSkillsMCPScan", [workspaceRoot]);
 }
 export function saveSkillsMCPScanConfig(config) {
   return desktopOrMock(true, "@bindings/cursor/internal/bridge/proxyservice.js", "SaveSkillsMCPScanConfig", [config]);
+}
+export function readSkillFile(name, workspaceRoot = "") {
+  return desktopOrMock({ name, fullPath: "", content: "" }, "@bindings/cursor/internal/bridge/proxyservice.js", "ReadSkillFile", [workspaceRoot, name]);
+}
+export function saveSkillFile(name, content, workspaceRoot = "") {
+  return desktopOrMock(true, "@bindings/cursor/internal/bridge/proxyservice.js", "SaveSkillFile", [workspaceRoot, name, content]);
+}
+export function generateSkillSummary(kind, key, workspaceRoot = "") {
+  return desktopOrMock("", "@bindings/cursor/internal/bridge/proxyservice.js", "GenerateSkillSummary", [workspaceRoot, kind, key]);
 }
 export function enableReaderMCP(url, apiKey, model) {
   return desktopOrMock({ identifier: "vision-reader", scriptPath: "", wasAdded: true }, "@bindings/cursor/internal/bridge/proxyservice.js", "EnableReaderMCP", [url || "", apiKey || "", model || ""]);

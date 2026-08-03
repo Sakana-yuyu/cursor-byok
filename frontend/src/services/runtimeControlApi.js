@@ -5,6 +5,9 @@ import {
   DisconnectMCPServer,
   GetDelegationTaskSnapshots,
   GetSkillsMCPScanSnapshot,
+  GetHistorySessions,
+  DeleteHistorySessions,
+  ClearHistory,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
 import { getDelegationConfig as getDelegationConfigBinding, saveDelegationConfig as saveDelegationConfigBinding } from "@/services/clientApi";
 
@@ -138,4 +141,33 @@ export function disconnectMCPRuntimeServer(identifier, workspaceRoot = "") {
 
 export function cancelMCPRuntimeConnection(identifier, attemptID) {
   return CancelMCPServerConnection(identifier, attemptID);
+}
+
+function normalizeHistorySession(session) {
+  const raw = session && typeof session === "object" ? session : {};
+  return {
+    ...raw,
+    id: String(raw.id || ""),
+    createdAtUnixMs: Number(raw.createdAtUnixMs || 0),
+    updatedAtUnixMs: Number(raw.updatedAtUnixMs || 0),
+    sizeBytes: Number(raw.sizeBytes || 0),
+    subagentType: String(raw.subagentType || "").trim(),
+    mode: String(raw.mode || "").trim(),
+    title: String(raw.title || "").trim(),
+    hasDebug: Boolean(raw.hasDebug),
+  };
+}
+
+export function getHistorySessions() {
+  return GetHistorySessions().then((items) => (
+    Array.isArray(items) ? items.map((item) => normalizeHistorySession(item)) : []
+  ));
+}
+
+export function deleteHistorySessions(sessionIDs) {
+  return DeleteHistorySessions(Array.isArray(sessionIDs) ? sessionIDs : []);
+}
+
+export function clearHistory() {
+  return ClearHistory().then((count) => Number(count || 0));
 }
