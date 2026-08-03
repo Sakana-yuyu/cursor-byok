@@ -118,6 +118,7 @@
   "1a46658cee3fb5bc": "Cache rate = cache reads / (input + cache reads)",
   "1ad1f0e94cf4757c": "Selecting a preset provider will auto-fill the endpoint URL, protocol, and common models; you can still override them below.",
   "1ae6b0a0f8266382": "Close Window",
+  "1af38868896cf53d": "",
   "1b271b56008c54dc": "\n\nCursor is currently running. Fully quit Cursor and reopen it for the change to take effect.",
   "1b2d437836b0a425": "No model list yet. Click \"Re-fetch\".",
   "1b3c4510740bbc8a": "Zhipu GLM Team (Compatibility)",

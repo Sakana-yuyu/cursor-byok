@@ -9,6 +9,7 @@
     "build:dev": "node ./scripts/run-vite-build.mjs --scan --minify false --mode development",
     "build": "node ./scripts/run-vite-build.mjs --scan --mode production",
     "preview": "vite preview",
+    "lint": "eslint src scripts plugins",
     "i18n:scan": "node --input-type=module -e \"import { syncCatalogFiles } from './plugins/static-i18n-plugin.js'; import path from 'path'; syncCatalogFiles(path.resolve('.')); console.log('i18n catalog synced');\""
   },
   "dependencies": {
@@ -32,10 +33,13 @@
     "@vitejs/plugin-vue-jsx": "^5.1.1",
     "autoprefixer": "^10.5.0",
     "code-inspector-plugin": "^1.4.3",
+    "eslint": "^10.8.0",
+    "globals": "^17.9.0",
     "postcss": "^8.5.14",
     "tailwindcss": "^3.4.17",
     "vite": "^7.1.11",
-    "vite-plugin-top-level-await": "^1.6.0"
+    "vite-plugin-top-level-await": "^1.6.0",
+    "vue-eslint-parser": "^10.4.1"
   },
   "browserslist": [
     "Safari >= 13"

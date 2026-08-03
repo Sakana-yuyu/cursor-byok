@@ -9,6 +9,7 @@ import {
   QueryAllProviderBalances,
   RepairProxySettings,
   GetDelegationConfig, SaveDelegationConfig,
+  GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
 import { GetAdRuntime, OpenExternalURL } from "@bindings/cursor/internal/bridge/adservice.js";
 import {
@@ -48,6 +49,7 @@ const desktopMethods = {
   QueryAllProviderBalances,
   RepairProxySettings,
   GetDelegationConfig, SaveDelegationConfig,
+  GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
 };
 
 const API_LOG_PREFIX = "[clientApi]";
@@ -88,16 +90,18 @@ export function saveUserConfig(payload) {
   return withApiLogging("SaveUserConfig", payload, () => desktopOrMock(() => SaveUserConfig(payload), "@bindings/cursor/internal/bridge/proxyservice.js", "SaveUserConfig", [payload]));
 }
 
+const CURSOR_ACCOUNT_SIGNED_OUT_MOCK = { state: "signed_out", authId: "", email: "", error: "" };
+
 export function getCursorAccountStatus() {
-  return withApiLogging("GetCursorAccountStatus", undefined, () => GetCursorAccountStatus());
+  return withApiLogging("GetCursorAccountStatus", undefined, () => desktopOrMock(CURSOR_ACCOUNT_SIGNED_OUT_MOCK, "@bindings/cursor/internal/bridge/proxyservice.js", "GetCursorAccountStatus"));
 }
 
 export function startCursorAccountLogin() {
-  return withApiLogging("StartCursorAccountLogin", undefined, () => StartCursorAccountLogin());
+  return withApiLogging("StartCursorAccountLogin", undefined, () => desktopOrMock(CURSOR_ACCOUNT_SIGNED_OUT_MOCK, "@bindings/cursor/internal/bridge/proxyservice.js", "StartCursorAccountLogin"));
 }
 
 export function disconnectCursorAccount() {
-  return withApiLogging("DisconnectCursorAccount", undefined, () => DisconnectCursorAccount());
+  return withApiLogging("DisconnectCursorAccount", undefined, () => desktopOrMock(CURSOR_ACCOUNT_SIGNED_OUT_MOCK, "@bindings/cursor/internal/bridge/proxyservice.js", "DisconnectCursorAccount"));
 }
 
 export function getProxyState() {

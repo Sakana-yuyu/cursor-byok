@@ -84,7 +84,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1555,
+          "line": 1563,
           "column": 14
         }
       ]
@@ -1492,7 +1492,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1609,
+          "line": 1617,
           "column": 38
         }
       ]
@@ -1528,7 +1528,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1508,
+          "line": 1516,
           "column": 47
         }
       ]
@@ -1605,6 +1605,18 @@
           "file": "src/layouts/MainLayout.vue",
           "line": 290,
           "column": 11
+        }
+      ]
+    },
+    "1af38868896cf53d": {
+      "source": "运行模式仅支持 local 或 upstream",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/state/appState.js",
+          "line": 876,
+          "column": 12
         }
       ]
     },
@@ -1687,7 +1699,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2065,
+          "line": 2073,
           "column": 32
         }
       ]
@@ -2045,7 +2057,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1572,
+          "line": 1580,
           "column": 40
         }
       ]
@@ -2516,7 +2528,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1499,
+          "line": 1507,
           "column": 12
         }
       ]
@@ -2933,7 +2945,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 1614,
+          "line": 1622,
           "column": 12
         },
         {
@@ -3348,7 +3360,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 178,
+          "line": 182,
           "column": 119
         }
       ]
@@ -3550,7 +3562,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1599,
+          "line": 1607,
           "column": 14
         }
       ]
@@ -4039,7 +4051,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1553,
+          "line": 1561,
           "column": 5
         }
       ]
@@ -5144,7 +5156,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 259,
+          "line": 263,
           "column": 128
         }
       ]
@@ -5999,7 +6011,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1546,
+          "line": 1554,
           "column": 7
         }
       ]
@@ -6560,7 +6572,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 891,
+          "line": 899,
           "column": 37
         }
       ]
@@ -6596,7 +6608,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1522,
+          "line": 1530,
           "column": 14
         }
       ]
@@ -6608,7 +6620,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2142,
+          "line": 2150,
           "column": 32
         }
       ]
@@ -6620,7 +6632,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1497,
+          "line": 1505,
           "column": 14
         }
       ]
@@ -7159,7 +7171,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1514,
+          "line": 1522,
           "column": 20
         }
       ]
@@ -8029,7 +8041,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1598,
+          "line": 1606,
           "column": 38
         }
       ]
@@ -8138,7 +8150,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 1581,
+          "line": 1589,
           "column": 16
         }
       ]
@@ -8620,7 +8632,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1494,
+          "line": 1502,
           "column": 14
         }
       ]
@@ -9272,7 +9284,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2105,
+          "line": 2113,
           "column": 32
         }
       ]
@@ -9716,12 +9728,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2373,
+          "line": 2381,
           "column": 32
         },
         {
           "file": "src/state/appState.js",
-          "line": 2394,
+          "line": 2402,
           "column": 32
         }
       ]
@@ -10024,7 +10036,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1610,
+          "line": 1618,
           "column": 14
         }
       ]
@@ -10227,12 +10239,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1524,
+          "line": 1532,
           "column": 12
         },
         {
           "file": "src/state/appState.js",
-          "line": 1591,
+          "line": 1599,
           "column": 87
         }
       ]
@@ -10331,7 +10343,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2318,
+          "line": 2326,
           "column": 14
         }
       ]
@@ -11033,7 +11045,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1573,
+          "line": 1581,
           "column": 16
         }
       ]
@@ -11503,7 +11515,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1580,
+          "line": 1588,
           "column": 40
         }
       ]
@@ -12429,7 +12441,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2161,
+          "line": 2169,
           "column": 32
         }
       ]
@@ -12800,17 +12812,17 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 2289,
+          "line": 2297,
           "column": 28
         },
         {
           "file": "src/state/appState.js",
-          "line": 2291,
+          "line": 2299,
           "column": 38
         },
         {
           "file": "src/state/appState.js",
-          "line": 2326,
+          "line": 2334,
           "column": 93
         },
         {
@@ -12863,7 +12875,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1506,
+          "line": 1514,
           "column": 51
         },
         {
@@ -13408,7 +13420,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2186,
+          "line": 2194,
           "column": 14
         }
       ]
@@ -13970,7 +13982,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1552,
+          "line": 1560,
           "column": 5
         }
       ]
@@ -14462,7 +14474,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1576,
+          "line": 1584,
           "column": 40
         }
       ]
@@ -14935,7 +14947,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1577,
+          "line": 1585,
           "column": 16
         }
       ]
@@ -15391,7 +15403,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1508,
+          "line": 1516,
           "column": 38
         }
       ]
@@ -15907,7 +15919,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 1603,
+          "line": 1611,
           "column": 12
         },
         {
@@ -15973,7 +15985,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1506,
+          "line": 1514,
           "column": 40
         }
       ]

@@ -870,6 +870,14 @@ function normalizeRouteMode(value) {
   return SUPPORTED_ROUTE_MODES.has(normalized) ? normalized : "local";
 }
 
+function validateConfigPayload(payload) {
+  const mode = payload?.routing?.mode;
+  if (!SUPPORTED_ROUTE_MODES.has(mode)) {
+    return "运行模式仅支持 local 或 upstream";
+  }
+  return "";
+}
+
 function normalizeLocalResponseCache(source) {
   const raw = source && typeof source === "object" ? source : {};
   return {
