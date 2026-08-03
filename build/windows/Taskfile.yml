@@ -42,6 +42,9 @@ tasks:
           ARCH:
             ref: .ARCH
       - go build {{.BUILD_FLAGS}} -o "{{.OUTPUT}}"
+      - cmd: |-
+          powershell -NoProfile -Command "Write-Host ('cwd=' + (Get-Location).Path); Write-Host ('bin=' + ((Get-ChildItem 'bin' -Name -ErrorAction SilentlyContinue) -join ',')); Write-Host ('nsis-bin=' + ((Get-ChildItem 'build/windows/nsis/bin' -Name -ErrorAction SilentlyContinue) -join ',')); if (Test-Path '{{.OUTPUT}}') { Write-Host 'OUTPUT OK' } else { Write-Host 'OUTPUT MISSING' }"
+        platforms: [windows]
       - cmd: powershell Remove-item *.syso
         platforms: [windows]
       - cmd: rm -f *.syso
