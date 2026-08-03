@@ -37,3 +37,29 @@ cursor-tab-server/cursor-tab-server-linux-amd64.tar
 
 # 运行时缓存（话题标题等本地状态）
 .reasonix/
+
+# 本地构建/发布产物（防误提交；已跟踪文件不受影响）
+*.exe
+*.zip
+*.dmg
+*.tar.gz
+*.msi
+*.nupkg
+*.log
+*.tmp
+
+# Python 缓存（内置 vision_mcp_server.py 运行产生）
+__pycache__/
+*.pyc
+
+# 数据库/本地缓存
+*.sqlite
+*.db
+
+# IDE / 系统文件
+.vscode/
+.idea/
+*.suo
+*.user
+Thumbs.db
+.DS_Store
