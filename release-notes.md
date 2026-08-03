@@ -1,4 +1,4 @@
-## v0.0.79
+## v0.0.78
 
 ### 新功能
 - **读图 MCP 一键启用**：内置 `vision_mcp_server.py`（随程序打包，无需再安装 image-see 技能），一键把读图 MCP（`vision-reader`）写入 Cursor 全局配置，纯文本模型也能通过 MCP 工具识图
@@ -16,7 +16,7 @@
 - **Windows 安装包构建失败**：NSIS 打包改为先把二进制复制到脚本目录再打包，解决 `File: ..\..\bin\xxx.exe -> no files found` 问题
 
 ### 优化
-- **发布产物命名更直观**：`386` 改为 `x32`、`amd64` 改为 `x64`、`darwin` 改为 `macos`（如 `cursor-byok-0.0.79-windows-x32.zip`），避免 `386`/`amd64` 等技术代号误导；Windows 更新通道同步调整
+- **发布产物命名更直观**：`386` 改为 `x32`、`amd64` 改为 `x64`、`darwin` 改为 `macos`（如 `cursor-byok-0.0.78-windows-x32.zip`），避免 `386`/`amd64` 等技术代号误导；Windows 更新通道同步调整
 - **多币种计费**：按供应商、模型和币种分组汇总，避免美元与人民币直接相加
 - **价格来源展示**：统计页面区分官方价、中转站探测价、手动配置和均价估算
 - **响应式设置布局**：监督处置开关在不同窗口宽度下自动使用单列、双列或三列布局
@@ -25,12 +25,12 @@
 
 > 名字里的 x64 / x32 / arm64 表示 CPU 架构，认准自己系统的类型下载即可。
 
-- **Windows 64 位（绝大多数 Windows 电脑）**：下载 `cursor-byok-0.0.79-windows-x64-installer.exe`（安装版，推荐）或 `cursor-byok-0.0.79-windows-x64.zip`（绿色版）
-- **Windows ARM64（骁龙/麒麟等 ARM 处理器的 Win 电脑）**：下载 `cursor-byok-0.0.79-windows-arm64-installer.exe` 或 `cursor-byok-0.0.79-windows-arm64.zip`
-- **Windows 32 位（很老的低配电脑才需要）**：下载 `cursor-byok-0.0.79-windows-x32-installer.exe` 或 `cursor-byok-0.0.79-windows-x32.zip`
-- **macOS Apple Silicon（M1/M2/M3/M4 芯片）**：下载 `cursor-byok-0.0.79-macos-arm64.dmg`
-- **macOS Intel**：下载 `cursor-byok-0.0.79-macos-x64.dmg`
-- **Linux 64 位**：下载 `cursor-byok-0.0.79-linux-x64.tar.gz`
+- **Windows 64 位（绝大多数 Windows 电脑）**：下载 `cursor-byok-0.0.78-windows-x64-installer.exe`（安装版，推荐）或 `cursor-byok-0.0.78-windows-x64.zip`（绿色版）
+- **Windows ARM64（骁龙/麒麟等 ARM 处理器的 Win 电脑）**：下载 `cursor-byok-0.0.78-windows-arm64-installer.exe` 或 `cursor-byok-0.0.78-windows-arm64.zip`
+- **Windows 32 位（很老的低配电脑才需要）**：下载 `cursor-byok-0.0.78-windows-x32-installer.exe` 或 `cursor-byok-0.0.78-windows-x32.zip`
+- **macOS Apple Silicon（M1/M2/M3/M4 芯片）**：下载 `cursor-byok-0.0.78-macos-arm64.dmg`
+- **macOS Intel**：下载 `cursor-byok-0.0.78-macos-x64.dmg`
+- **Linux 64 位**：下载 `cursor-byok-0.0.78-linux-x64.tar.gz`
 
 **如何判断自己的 Windows 是多少位**：右键「此电脑」→「属性」，看「系统类型」显示"64 位操作系统"就下载 x64，显示"32 位"才下载 x32。macOS 可在「关于本机」查看芯片是 Apple 还是 Intel。
 
