@@ -104,9 +104,9 @@ git push origin v0.0.50
 
 推送 `v*` tag 后，`.github/workflows/build.yml` 自动触发：
 
-1. 构建 5 个平台资产（Windows amd64/386、Linux amd64、macOS arm64/amd64）
-2. 生成 `update.json`（包含所有平台 checksum）
-3. 创建 GitHub Release（使用 `release-notes.md` 作为发布说明）
+1. 构建 6 个平台资产（Windows x64/arm64/x32、Linux x64、macOS arm64/x64 的 ZIP/DMG/tar.gz，命名见上表）
+2. 生成 `update.json`（包含所有平台 checksum，平台 key 用上表命名）
+3. 创建 GitHub Release（使用 `release-notes.md` 作为发布说明，必须含「下载哪个文件？」推荐段落）
 4. 上传所有发布资产
 
 在 GitHub 仓库的 **Actions** 页面查看进度。完成后 Release 自动出现在 **Releases** 页面。
