@@ -42,9 +42,6 @@ tasks:
           ARCH:
             ref: .ARCH
       - go build {{.BUILD_FLAGS}} -o "{{.OUTPUT}}"
-      - cmd: |-
-          powershell -NoProfile -Command "Write-Host ('cwd=' + (Get-Location).Path); Write-Host ('bin=' + ((Get-ChildItem 'bin' -Name -ErrorAction SilentlyContinue) -join ',')); Write-Host ('nsis-bin=' + ((Get-ChildItem 'build/windows/nsis/bin' -Name -ErrorAction SilentlyContinue) -join ',')); if (Test-Path '{{.OUTPUT}}') { Write-Host 'OUTPUT OK' } else { Write-Host 'OUTPUT MISSING' }"
-        platforms: [windows]
       - cmd: powershell Remove-item *.syso
         platforms: [windows]
       - cmd: rm -f *.syso
@@ -91,11 +88,13 @@ tasks:
       - wails3 generate webview2bootstrapper -dir "{{.PROJECT_ROOT}}/build/windows/nsis"
       - |
         {{if eq OS "windows"}}
-        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DOUTPUT_INSTALLER="cursor-byok-windows-{{.ARCH}}-installer.exe" -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.PROJECT_ROOT}}\{{.OUTPUT}}" project.nsi
+        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DOUTPUT_INSTALLER="cursor-byok-windows-{{.ARCH}}-installer.exe" -DARG_WAILS_{{.ARG_FLAG}}_BINARY="..\..\{{.OUTPUT}}" project.nsi
         {{else}}
-        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DOUTPUT_INSTALLER="cursor-byok-windows-{{.ARCH}}-installer.exe" -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.PROJECT_ROOT}}/{{.OUTPUT}}" project.nsi
+        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DOUTPUT_INSTALLER="cursor-byok-windows-{{.ARCH}}-installer.exe" -DARG_WAILS_{{.ARG_FLAG}}_BINARY="../../{{.OUTPUT}}" project.nsi
         {{end}}
     vars:
+      # makensis 的 File 指令无法解析带 `..` 段的绝对路径（File: .../../../bin/x.exe -> no files found），
+      # 因此二进制路径使用相对脚本目录（build/windows/nsis）的 `..\..\bin\...` 写法（NSIS 原生支持）。
       PROJECT_ROOT: '{{.TASKFILE_DIR}}/../..'
       ARCH: '{{.ARCH | default ARCH}}'
       OUTPUT: '{{.OUTPUT | default (printf "%s/%s.exe" .BIN_DIR .APP_NAME)}}'
@@ -117,9 +116,9 @@ tasks:
       - wails3 generate webview2bootstrapper -dir "{{.PROJECT_ROOT}}/build/windows/nsis"
       - |
         {{if eq OS "windows"}}
-        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DARG_WAILS_386_BINARY="{{.PROJECT_ROOT}}\{{.OUTPUT}}" project-386.nsi
+        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DARG_WAILS_386_BINARY="..\..\{{.OUTPUT}}" project-386.nsi
         {{else}}
-        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DARG_WAILS_386_BINARY="{{.PROJECT_ROOT}}/{{.OUTPUT}}" project-386.nsi
+        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DARG_WAILS_386_BINARY="../../{{.OUTPUT}}" project-386.nsi
         {{end}}
     vars:
       PROJECT_ROOT: '{{.TASKFILE_DIR}}/../..'
