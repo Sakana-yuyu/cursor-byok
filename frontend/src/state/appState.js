@@ -63,6 +63,10 @@ const SUPPORTED_OPENAI_REQUEST_GROUPS = new Set([
 ]);
 const SUPPORTED_PROTOCOL_MODES = new Set([PROTOCOL_MODE_AUTO, PROTOCOL_MODE_FIXED]);
 const SUPPORTED_ROUTE_MODES = new Set(["local", "upstream"]);
+export const ROUTE_MODE_OPTIONS = [
+  { label: "本地服务模式", value: "local" },
+  { label: "直连 Cursor 模式", value: "upstream" },
+];
 const PROXY_STATE_EVENT = "proxy:state";
 const USER_CONFIG_CHANGED_EVENT = "user-config:changed";
 const UPDATE_STATE_EVENT = "update:state";
@@ -969,6 +973,7 @@ function normalizeConfig(source) {
     log: asBoolean(raw.log),
     providerStreamIdleTimeout: asPositiveInteger(raw.providerStreamIdleTimeout),
     turnStaleTimeout: asPositiveInteger(raw.turnStaleTimeout),
+    nativeDelegationProgressTimeout: asPositiveInteger(raw.nativeDelegationProgressTimeout),
     autoMatchContextWindow: asBoolean(raw.autoMatchContextWindow),
     backendListenAddr: asString(raw.configBackendListenAddr) || asString(raw.backendListenAddr),
     proxyListenAddr: asString(raw.configProxyListenAddr) || asString(raw.proxyListenAddr),
@@ -1022,6 +1027,7 @@ function buildConfigPayload(source = appState) {
     log: normalized.log,
     providerStreamIdleTimeout: normalized.providerStreamIdleTimeout,
     turnStaleTimeout: normalized.turnStaleTimeout,
+    nativeDelegationProgressTimeout: normalized.nativeDelegationProgressTimeout,
     autoMatchContextWindow: normalized.autoMatchContextWindow,
     backendListenAddr: normalized.backendListenAddr,
     proxyListenAddr: normalized.proxyListenAddr,
@@ -1041,6 +1047,7 @@ function buildCachedConfigPayload() {
     log: payload.log,
     providerStreamIdleTimeout: payload.providerStreamIdleTimeout,
     turnStaleTimeout: payload.turnStaleTimeout,
+    nativeDelegationProgressTimeout: payload.nativeDelegationProgressTimeout,
     autoMatchContextWindow: payload.autoMatchContextWindow,
     backendListenAddr: payload.backendListenAddr,
     proxyListenAddr: payload.proxyListenAddr,
@@ -1065,6 +1072,7 @@ function applyConfigToState(config, { modelAdaptersOnly = false } = {}) {
   appState.localResponseCache = normalized.localResponseCache;
   appState.delegation = normalized.delegation;
   appState.turnStaleTimeout = normalized.turnStaleTimeout;
+  appState.nativeDelegationProgressTimeout = normalized.nativeDelegationProgressTimeout;
   appState.autoMatchContextWindow = normalized.autoMatchContextWindow;
   return normalized;
 }
@@ -1330,6 +1338,7 @@ export const appState = reactive({
   // getStatsOverlayPreferences() 在首次读取时从 localStorage 填充，避免模块求值顺序依赖。
   statsOverlayPreferences: { style: "card", alwaysOnTop: true, visible: false, snapCollapse: true, dockLocked: false, closeAction: "tray" },
   turnStaleTimeout: cachedConfig.turnStaleTimeout,
+  nativeDelegationProgressTimeout: cachedConfig.nativeDelegationProgressTimeout,
   autoMatchContextWindow: cachedConfig.autoMatchContextWindow,
 
   serviceRunning: asBoolean(cachedState.serviceRunning),

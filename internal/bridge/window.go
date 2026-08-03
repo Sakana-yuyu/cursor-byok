@@ -380,11 +380,11 @@ func parseStatsOverlayLayout(value string) (statsOverlayLayout, bool) {
 func statsOverlayWindowSize(style string) (width, height int) {
 	switch style {
 	case statsOverlayStyleEngine:
-		return 240, 124
+		return 240, 196
 	case statsOverlayStyleOrb:
-		return 176, 176
+		return 176, 220
 	default:
-		return 240, 144
+		return 240, 218
 	}
 }
 

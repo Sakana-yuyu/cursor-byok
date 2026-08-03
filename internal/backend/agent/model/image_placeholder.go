@@ -31,12 +31,17 @@ const (
 )
 
 // placeholderImagesFromMessages 把不支持视觉模型消息里的图片替换为「本地路径占位」。
-//   - 支持视觉的模型或未知模型（SupportsVision 为 nil 或 true）→ 原样保留图片；
-//   - 不支持视觉的模型 → 每张图片解析为可访问的本地路径后替换为文字占位，
-//     让模型通过读图工具（MCP）自行读取；无法落地路径的图片替换为兜底文案。
+//   - 明确支持视觉的模型（SupportsVision 为 true）→ 原样保留图片；
+//   - 不支持视觉或未知能力的模型（SupportsVision 为 nil 或 false）→ 每张图片解析为
+//     可访问的本地路径后替换为文字占位，让模型通过读图工具（MCP）自行读取；
+//     无法落地路径的图片替换为兜底文案。
+//
+// 未知模型（nil）按「保守不支持视觉」处理：图片上传给能力未知的模型可能被拒绝
+// （纯文本模型收到图片返回 400），且用户要求未开启视觉委派时默认占位、不上传图片，
+// 因此 nil 与 false 一样走占位路径。
 func placeholderImagesFromMessages(ctx context.Context, messages []Message, modelID string) []Message {
 	vision := modelcontext.SupportsVision(modelID)
-	if vision == nil || *vision {
+	if vision != nil && *vision {
 		return messages
 	}
 	imageParts := 0
@@ -204,4 +209,11 @@ func downloadVisionImage(ctx context.Context, url string) ([]byte, string, error
 		mime = "image/png"
 	}
 	return payload, mime, nil
+}
+
+// ImageLocalPath 是 imageLocalPath 的导出封装，供 forwarder 视觉委派
+// 在识图失败时生成「带图片路径」的兜底占位，让纯文本主模型仍能通过
+// 读图 MCP 工具自行读取该路径，实现委派失败后的 MCP 兜底。
+func ImageLocalPath(ctx context.Context, image *ImageContent) (string, error) {
+	return imageLocalPath(ctx, image)
 }

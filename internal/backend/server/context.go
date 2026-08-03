@@ -54,7 +54,6 @@ func newContext(writer http.ResponseWriter, request *http.Request, route Route) 
 		Protocol:  route.Protocol,
 		StartedAt: time.Now(),
 		Logger:    slog.Default(),
-		Mode:      ModeLocal,
 		Locale:    locale,
 	}
 }

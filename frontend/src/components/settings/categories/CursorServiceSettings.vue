@@ -169,6 +169,14 @@ function handleManualPathInput(value) {
   queueManualPathSave();
 }
 
+function applyDetectedCursorPath(nextDetectedPath, persistAutoDetected = false) {
+  detectedPath.value = nextDetectedPath;
+  if (!persistAutoDetected || manualPath.value || !nextDetectedPath) {
+    return;
+  }
+  manualPath.value = setCursorManualPath(nextDetectedPath);
+}
+
 async function handleDetectCursorPath() {
   detectState.retry = handleDetectCursorPath;
   detectState.error = "";
@@ -176,7 +184,7 @@ async function handleDetectCursorPath() {
   try {
     await flushManualPath();
     const nextDetectedPath = await detectCursorPath(manualPath.value) || "";
-    detectedPath.value = nextDetectedPath;
+    applyDetectedCursorPath(nextDetectedPath, true);
     if (manualPath.value && !nextDetectedPath) {
       detectState.error = "手动指定的 Cursor.exe 路径无效，请检查文件是否存在。";
     }
@@ -238,11 +246,13 @@ async function handleContextMatchNow() {
   contextMatchState.error = "";
   contextMatchState.retry = handleContextMatchNow;
   try {
-    const result = await autoMatchContextWindows();
+    // force=true：手动触发不受 autoMatchContextWindow 开关限制。
+    const result = await autoMatchContextWindows(true);
     if (!result?.enabled) {
       throw new Error("请先开启自动配对上下文窗口。");
     }
-    message.success(`上下文配对完成：共 ${result.total} 个，已更新 ${result.changed} 个。`);
+    const forcedHint = result.switchEnabled === false ? "（自动配对开关未开启，本次为手动强制对齐）" : "";
+    message.success(`上下文配对完成：共 ${result.total} 个，已更新 ${result.changed} 个。${forcedHint}`);
   } catch (error) {
     contextMatchState.error = toUserError(error);
   } finally {

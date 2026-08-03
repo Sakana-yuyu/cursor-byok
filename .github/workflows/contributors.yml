@@ -1,0 +1,51 @@
+name: Update Contributors
+
+# 从本仓库（fork）的 git 提交历史自动生成 README 贡献者头像网格。
+# 只统计往本 fork 提交过的人，不依赖上游。push 到 main 或 PR 合并时自动跑；
+# 提交带 [skip ci] 避免触发 build workflow。
+# 头像来源：GitHub noreply email → GitHub avatar API；其他 email → Gravatar MD5。
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'README.md'
+      - '.mailmap'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-contributors
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 完整历史，确保统计所有提交者
+
+      - name: Generate contributors grid
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          bash .github/scripts/generate-contributors.sh
+
+      - name: Commit README changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet README.md; then
+            echo "README.md unchanged, nothing to commit."
+            exit 0
+          fi
+          git add README.md
+          # [skip ci] 避免本次提交再次触发 build workflow（避免循环构建）
+          git commit -m "docs: 自动刷新贡献者列表 [skip ci]"
+          git push

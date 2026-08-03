@@ -4,7 +4,7 @@
 # wails_tools.nsh only supports AMD64/ARM64; this script handles 32-bit directly.
 #
 # Usage:
-#   makensis -DARG_WAILS_386_BINARY=..\..\bin\windows-32.exe project-386.nsi
+#   makensis -DARG_WAILS_386_BINARY=..\..\bin\cursor-byok-windows-386.exe project-386.nsi
 
 !define INFO_PROJECTNAME "Cursor助手"
 !define INFO_COMPANYNAME "Sakana"
@@ -14,7 +14,9 @@
 !define UNINST_KEY_NAME "${INFO_COMPANYNAME}${INFO_PRODUCTNAME}"
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${UNINST_KEY_NAME}"
 !define ARCH "386"
-!define INFO_PRODUCTVERSION "0.0.46"
+!ifndef INFO_PRODUCTVERSION
+!define INFO_PRODUCTVERSION "0.0.0"
+!endif
 !define REQUEST_EXECUTION_LEVEL "admin"
 
 !include "x64.nsh"
@@ -56,7 +58,7 @@ ManifestDPIAware true
 !insertmacro MUI_LANGUAGE "SimpChinese"
 
 Name "${INFO_PRODUCTNAME}"
-OutFile "..\..\..\bin\${INFO_PROJECTNAME}-386-installer.exe"
+OutFile "..\..\..\bin\cursor-byok-windows-386-installer.exe"
 InstallDir "$PROGRAMFILES32\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}"
 InstallDirRegKey HKLM "${UNINST_KEY}" "InstallLocation"
 SetOverwrite on

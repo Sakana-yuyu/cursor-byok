@@ -1140,41 +1140,62 @@ async function saveBulkEdit(force = false) {
               </label>
             </div>
 
-            <div class="flex flex-wrap items-center gap-2 rounded-[7px] border border-[#3f3f3f] bg-[#202020] px-3 py-2">
-              <Button variant="default" :disabled="balanceTestState.loading || bulkEditSaving" @click="testBulkEditBalance">
-                <span v-if="balanceTestState.loading" class="icon-[mdi--loading] mr-1 animate-spin text-[14px]"></span>
-                {{ balanceTestState.loading ? "测试中…" : "测试余额" }}
-              </Button>
-              <span class="text-xs text-[#737373]">使用当前未保存的连接与余额配置，不会保存修改。</span>
-              <div v-if="balanceTestState.data" class="basis-full text-xs" :class="balanceTestState.data.supported ? 'text-[#6ee7a5]' : 'text-[#fca5a5]'">
-                <template v-if="balanceTestState.data.supported">
-                  <span class="font-medium">{{ balanceTestState.data.unlimited ? "余额不限额" : `余额 ${formatMoney(balanceTestState.data.remaining, balanceTestState.data.currency)}` }}</span>
-                  <span v-if="balanceTestState.data.total != null"> · 总额 {{ formatMoney(balanceTestState.data.total, balanceTestState.data.currency) }}</span>
-                  <span v-if="balanceTestState.data.used != null"> · 已用 {{ formatMoney(balanceTestState.data.used, balanceTestState.data.currency) }}</span>
-                  <span v-if="balanceTestState.data.currency"> · 币种 {{ balanceTestState.data.currency }}</span>
-                  <span v-if="balanceTestState.data.source"> · 来源 {{ balanceSourceLabel(balanceTestState.data.source) }}</span>
-                  <span v-if="balanceTestState.data.planName"> · {{ balanceTestState.data.planName }}</span>
-                </template>
-                <span v-else>{{ balanceTestState.data.message || "余额查询失败" }}</span>
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div class="flex min-w-0 flex-col gap-2 rounded-[7px] border border-[#3f3f3f] bg-[#202020] p-3">
+                <div class="center-row gap-2">
+                  <span class="icon-[mdi--wallet-outline] text-[16px] text-[#6ee7a5]"></span>
+                  <span class="text-sm font-medium text-[#e5e5e5]">测试余额</span>
+                </div>
+                <p class="text-xs leading-5 text-[#737373]">使用当前未保存的连接与余额配置，不会保存修改。</p>
+                <Button
+                  class="self-start"
+                  variant="primary"
+                  :disabled="balanceTestState.loading || bulkEditSaving"
+                  @click="testBulkEditBalance"
+                >
+                  <span v-if="balanceTestState.loading" class="icon-[mdi--loading] mr-1 animate-spin text-[14px]"></span>
+                  {{ balanceTestState.loading ? "测试中…" : "测试余额" }}
+                </Button>
+                <div
+                  v-if="balanceTestState.data"
+                  class="rounded-[6px] border border-[#343434] bg-[#252525] px-2.5 py-2 text-xs leading-5"
+                  :class="balanceTestState.data.supported ? 'text-[#6ee7a5]' : 'text-[#fca5a5]'"
+                >
+                  <template v-if="balanceTestState.data.supported">
+                    <span class="font-medium">{{ balanceTestState.data.unlimited ? "余额不限额" : `余额 ${formatMoney(balanceTestState.data.remaining, balanceTestState.data.currency)}` }}</span>
+                    <span v-if="balanceTestState.data.total != null"> · 总额 {{ formatMoney(balanceTestState.data.total, balanceTestState.data.currency) }}</span>
+                    <span v-if="balanceTestState.data.used != null"> · 已用 {{ formatMoney(balanceTestState.data.used, balanceTestState.data.currency) }}</span>
+                    <span v-if="balanceTestState.data.currency"> · 币种 {{ balanceTestState.data.currency }}</span>
+                    <span v-if="balanceTestState.data.source"> · 来源 {{ balanceSourceLabel(balanceTestState.data.source) }}</span>
+                    <span v-if="balanceTestState.data.planName"> · {{ balanceTestState.data.planName }}</span>
+                  </template>
+                  <span v-else>{{ balanceTestState.data.message || "余额查询失败" }}</span>
+                </div>
               </div>
-              <Button
-                variant="default"
-                :disabled="balanceSyncState.loading || bulkEditSaving"
-                :title="sameURLGroupCount > 1 ? `将余额配置同步到同 URL 下的 ${sameURLGroupCount} 个分组（保留各自 API Key 与分组名）` : '同一中转站下暂无其他分组'"
-                @click="syncBalanceToSameURL"
-              >
-                <span v-if="balanceSyncState.loading" class="icon-[mdi--sync] mr-1 animate-spin text-[14px]"></span>
-                <span v-else class="icon-[mdi--sync] mr-1 text-[14px]"></span>
-                {{ balanceSyncState.loading ? "同步中…" : "同步到同 URL 分组" }}
-              </Button>
-              <span class="text-xs text-[#737373]">
-                仅同步余额查询配置，保留各分组 API Key{{ sameURLGroupCount > 1 ? `（当前 ${sameURLGroupCount} 个分组）` : "" }}
-              </span>
-              <div
-                v-if="balanceSyncState.message"
-                class="basis-full text-xs"
-                :class="balanceSyncState.ok ? 'text-[#6ee7a5]' : 'text-[#fca5a5]'"
-              >{{ balanceSyncState.message }}</div>
+
+              <div class="flex min-w-0 flex-col gap-2 rounded-[7px] border border-[#3f3f3f] bg-[#202020] p-3">
+                <div class="center-row gap-2">
+                  <span class="icon-[mdi--sync] text-[16px] text-[#67e8f9]"></span>
+                  <span class="text-sm font-medium text-[#e5e5e5]">同步到同 URL 分组</span>
+                </div>
+                <p class="text-xs leading-5 text-[#737373]">仅同步余额查询配置，保留各分组 API Key{{ sameURLGroupCount > 1 ? `（当前 ${sameURLGroupCount} 个分组）` : "" }}。</p>
+                <Button
+                  class="self-start"
+                  variant="default"
+                  :disabled="balanceSyncState.loading || bulkEditSaving"
+                  :title="sameURLGroupCount > 1 ? `将余额配置同步到同 URL 下的 ${sameURLGroupCount} 个分组（保留各自 API Key 与分组名）` : '同一中转站下暂无其他分组'"
+                  @click="syncBalanceToSameURL"
+                >
+                  <span v-if="balanceSyncState.loading" class="icon-[mdi--sync] mr-1 animate-spin text-[14px]"></span>
+                  <span v-else class="icon-[mdi--sync] mr-1 text-[14px]"></span>
+                  {{ balanceSyncState.loading ? "同步中…" : "同步到同 URL 分组" }}
+                </Button>
+                <div
+                  v-if="balanceSyncState.message"
+                  class="rounded-[6px] border border-[#343434] bg-[#252525] px-2.5 py-2 text-xs leading-5"
+                  :class="balanceSyncState.ok ? 'text-[#6ee7a5]' : 'text-[#fca5a5]'"
+                >{{ balanceSyncState.message }}</div>
+              </div>
             </div>
 
             <!-- 冲突提示 -->

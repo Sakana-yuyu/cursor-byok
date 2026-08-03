@@ -116,13 +116,11 @@ func filterToolDescriptorByName(tools []json.RawMessage, name string) []json.Raw
 }
 
 // supportsVision 复用 modelcontext 能力目录判定模型是否支持视觉输入。
-// 未知模型（nil）保守视为支持，避免对未登记模型误触发委派。
+// 未知模型（nil）保守视为不支持视觉：图片上传给能力未知的模型可能被纯文本模型
+// 拒绝（400），因此由视觉委派/路径占位兜底接管，而不是原样上传。
 func supportsVision(modelName string) bool {
 	vision := modelcontext.SupportsVision(modelName)
-	if vision == nil {
-		return true
-	}
-	return *vision
+	return vision != nil && *vision
 }
 
 func messagesContainImage(messages []modeladapter.Message) bool {
@@ -204,9 +202,17 @@ func (service *Service) synthesizeMessageImages(ctx context.Context, message mod
 			mu.Lock()
 			if err != nil {
 				log.Printf("forwarder vision proxy image failed vision_model=%s error=%v", config.visionName, err)
-				replaced[p.index] = modeladapter.NewTextContentPart(
-					fmt.Sprintf("%s失败：%s]", visionProxyResultPrefix, truncateErr(err.Error())),
-				)
+				// 委派失败时保留图片本地路径占位（MCP 兜底衔接）：让纯文本主模型仍能
+				// 通过读图 MCP 工具读取该路径。路径无法落地时退化为纯失败说明。
+				if path, pathErr := modeladapter.ImageLocalPath(ctx, p.image); pathErr == nil && strings.TrimSpace(path) != "" {
+					replaced[p.index] = modeladapter.NewTextContentPart(fmt.Sprintf(
+						"[图片识图失败：%s]\n[图片文件: %s] 请使用你可用的读图工具读取该文件路径来查看图片内容，不要在工作区中搜索或猜测其他图片文件。",
+						truncateErr(err.Error()), path))
+				} else {
+					replaced[p.index] = modeladapter.NewTextContentPart(
+						fmt.Sprintf("%s失败：%s]", visionProxyResultPrefix, truncateErr(err.Error())),
+					)
+				}
 			} else {
 				replaced[p.index] = modeladapter.NewTextContentPart(
 					fmt.Sprintf("%s（由 %s 提供）]\n%s", visionProxyResultPrefix, config.visionName, description),
@@ -219,6 +225,10 @@ func (service *Service) synthesizeMessageImages(ctx context.Context, message mod
 
 	newMessage := message
 	newMessage.ContentParts = replaced
+	// 同步 message.Content：下游 openAIContentValue 在消息没有图片 part 时只读
+	// message.Content（ContentParts 会被忽略）。若不更新，识图结果文本会被丢弃，
+	// 纯文本主模型只会收到原始文本、看不到识图结果（图片已替换，无法恢复）。
+	newMessage.Content = modeladapter.CollapseTextContentParts(replaced)
 	return newMessage
 }
 

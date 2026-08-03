@@ -187,7 +187,7 @@ func (service *Service) tryStartDelegatedTask(stream *ActiveStream, invocation r
 	// subagent. turn-stale must not be its only recovery path.
 	service.scheduleExecWatchdog(stream.RequestID, pending)
 	service.recordExecDispatchMetadata(stream, pending, false, true, "delegation_scheduler")
-	if err := service.publishCheckpoint(stream.RequestID, stream.ConversationID); err != nil {
+	if err := service.publishCheckpointForce(stream.RequestID, stream.ConversationID); err != nil {
 		service.multitaskDelegation.CancelAggregate(pending.ExecID)
 		markExecCompleted(stream, pending)
 		return false, err
@@ -473,7 +473,7 @@ func (service *Service) handleDelegationResult(stream *ActiveStream, payload *st
 	if err := service.syncSummaryCarryForward(stream.ConversationID, stream.RequestID, pending.ModelCallID); err != nil {
 		return err
 	}
-	if err := service.publishCheckpoint(stream.RequestID, stream.ConversationID); err != nil {
+	if err := service.publishCheckpointForce(stream.RequestID, stream.ConversationID); err != nil {
 		return err
 	}
 	return service.reconcileStream(stream)

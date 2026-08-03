@@ -354,7 +354,12 @@ func (service *Service) finishCanceledTurnAfterCheckpoint(stream *ActiveStream, 
 		return nil
 	}
 	service.setTurnPhase(stream, TurnPhaseCanceled)
-	return service.broker.Cancel(stream.RequestID, firstNonEmpty(strings.TrimSpace(message), "[canceled] User aborted request"))
+	_ = service.broker.Publish(stream.RequestID, StreamEvent{
+		Message: buildTurnEndedMessage(0, 0, 0, 0),
+	})
+	cancelErr := service.broker.Cancel(stream.RequestID, firstNonEmpty(strings.TrimSpace(message), "[canceled] User aborted request"))
+	service.drainRunQueue(stream.ConversationID)
+	return cancelErr
 }
 
 func (service *Service) failTerminalCheckpointSync(stream *ActiveStream, cause error) error {

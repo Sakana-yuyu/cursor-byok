@@ -12,6 +12,7 @@ import (
 	backend "cursor/internal/backend"
 	serverconfig "cursor/internal/backend/server/config"
 	"cursor/internal/certs"
+	"cursor/internal/cursoraccount"
 	"cursor/internal/historymetrics"
 	"cursor/internal/logger"
 	"cursor/internal/mitm"
@@ -96,6 +97,10 @@ func NewProxyService(proxy *mitm.ProxyServer, certManager *certs.Manager, caCert
 		modelCatalogCache:    newMetadataCache[ModelCatalogResult](modelCatalogCacheTTL),
 		providerBalanceCache: newMetadataCache[ProviderBalance](providerBalanceCacheTTL),
 	}
+	service.cursorAccount = cursoraccount.NewManager(
+		filepath.Join(appdata.DataRootPath(), "cursor-account.json"),
+		netproxy.NewHTTPClient(publicAPITimeout),
+	)
 	service.loadPersistedModelAdapterTestResults()
 	service.store = serverconfig.NewStore(service.configPath, service.logsRoot)
 	host, err := backend.NewHost(service.store, service.cursorAccount)

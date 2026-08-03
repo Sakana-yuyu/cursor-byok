@@ -87,7 +87,10 @@ ManifestDPIAware true
 #!finalize 'signtool --file "%1"'
 
 Name "${INFO_PRODUCTNAME}"
-OutFile "..\..\..\bin\${INFO_PROJECTNAME}-${ARCH}-installer.exe" # Name of the installer's file.
+!ifndef OUTPUT_INSTALLER
+!define OUTPUT_INSTALLER "cursor-byok-windows-${ARCH}-installer.exe"
+!endif
+OutFile "..\..\..\bin\${OUTPUT_INSTALLER}" # Name of the installer's file.
 InstallDir "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}" # Default installing folder ($PROGRAMFILES is Program Files folder).
 InstallDirRegKey HKLM "${UNINST_KEY}" "InstallLocation"
 SetOverwrite on

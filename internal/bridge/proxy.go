@@ -8,15 +8,21 @@ import (
 	"cursor/internal/client"
 	"cursor/internal/mitm"
 	"cursor/internal/promptinject"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
 )
+
+//go:embed vision_mcp_server.py
+var bundledVisionMCPScript []byte
 
 // Public DTOs remain in package main for Wails service compatibility.
 // ProxyState 定义了当前模块中的 ProxyState 类型。
@@ -150,8 +156,17 @@ func (s *ProxyService) GetDelegationConfig() (DelegationConfig, error) {
 }
 
 // SaveDelegationConfig persists only the delegation settings subtree.
+// 保存后若视觉委派已启用，自动把识图模型的网关信息同步到读图 MCP（vision-reader）
+// 作为 MCP 兜底；同步失败不影响保存结果，仅记录日志。
 func (s *ProxyService) SaveDelegationConfig(cfg DelegationConfig) (DelegationConfig, error) {
-	return s.core.SaveDelegationConfig(cfg)
+	saved, err := s.core.SaveDelegationConfig(cfg)
+	if err != nil {
+		return saved, err
+	}
+	if err := s.syncVisionReaderFromDelegation(saved); err != nil {
+		log.Printf("proxy sync vision reader mcp failed: %v", err)
+	}
+	return saved, nil
 }
 
 // CancelDelegationTask cancels one Multitask worker without stopping siblings.
@@ -216,8 +231,9 @@ func (s *ProxyService) FetchModelCatalog(request ModelCatalogRequest) (ModelCata
 
 // AutoMatchContextWindows 自动为所有已存储模型适配器配对正确的上下文窗口：
 // 目录命中则覆盖，目录未命中则探测 provider /models 回填。供前端「一键自动配对」按钮调用。
-func (s *ProxyService) AutoMatchContextWindows(ctx context.Context) (AutoMatchResult, error) {
-	return s.core.AutoMatchContextWindows(ctx)
+// force=true 时无视 autoMatchContextWindow 开关强制执行（供「一键诊断优化」手动触发）。
+func (s *ProxyService) AutoMatchContextWindows(ctx context.Context, force bool) (AutoMatchResult, error) {
+	return s.core.AutoMatchContextWindows(ctx, force)
 }
 
 // DiagnoseModelAdapters 扫描已导入模型的 provider 协议配置。
@@ -370,6 +386,9 @@ type ReaderMCPResult struct {
 // readerMCPIdentifier 是写入 Cursor mcp.json 的读图 MCP 服务名。
 const readerMCPIdentifier = "vision-reader"
 
+// readerMCPBundledScriptName 是内置读图 MCP 脚本的文件名（go:embed vision_mcp_server.py）。
+const readerMCPBundledScriptName = "vision_mcp_server.py"
+
 // readerMCPScriptCandidates 返回 vision_mcp_server.py 可能存在的路径
 // （image-see 技能会同步到 .claude/.cursor/.codex 三个 skills 目录）。
 func readerMCPScriptCandidates() []string {
@@ -385,24 +404,88 @@ func readerMCPScriptCandidates() []string {
 	}
 }
 
-// detectVisionReaderScript 探测本地读图 MCP 脚本，返回第一个存在的绝对路径。
-func detectVisionReaderScript() (string, error) {
+// detectVisionReaderScript 探测本地已存在的读图 MCP 脚本，返回第一个存在的绝对路径；不存在返回空串。
+func detectVisionReaderScript() string {
 	for _, candidate := range readerMCPScriptCandidates() {
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate
+		}
+	}
+	return ""
+}
+
+// ensureVisionReaderScript 返回读图 MCP 脚本绝对路径。优先复用已安装的
+// image-see 技能脚本；不存在时把内置脚本落盘到 ~/.cursor/skills/image-see/scripts/
+// （原子写：tmp 文件 + rename），保证「一键启用读图 MCP」不依赖外部技能安装。
+func ensureVisionReaderScript() (string, error) {
+	if existing := detectVisionReaderScript(); existing != "" {
+		return existing, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		return "", fmt.Errorf("无法确定用户主目录")
+	}
+	scriptDir := filepath.Join(home, ".cursor", "skills", "image-see", "scripts")
+	scriptPath := filepath.Join(scriptDir, readerMCPBundledScriptName)
+	if err := os.MkdirAll(scriptDir, 0o755); err != nil {
+		return "", fmt.Errorf("创建技能目录失败: %w", err)
+	}
+	tmp, err := os.CreateTemp(scriptDir, ".vision-*.tmp")
+	if err != nil {
+		return "", fmt.Errorf("创建临时脚本失败: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if _, err := tmp.Write(bundledVisionMCPScript); err != nil {
+		_ = tmp.Close()
+		return "", fmt.Errorf("写入临时脚本失败: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return "", fmt.Errorf("关闭临时脚本失败: %w", err)
+	}
+	if err := os.Rename(tmpName, scriptPath); err != nil {
+		return "", fmt.Errorf("写入脚本 %s 失败: %w", scriptPath, err)
+	}
+	return scriptPath, nil
+}
+
+// resolvePythonCommand 探测可用的 python 解释器绝对路径。
+// Windows GUI 启动的进程可能缺少用户级 PATH，因此除 LookPath 外再兜底常见安装目录。
+func resolvePythonCommand() (string, error) {
+	for _, name := range []string{"python", "python3", "py"} {
+		if resolved, err := exec.LookPath(name); err == nil && strings.TrimSpace(resolved) != "" {
+			return resolved, nil
+		}
+	}
+	home, _ := os.UserHomeDir()
+	var fallbackDirs []string
+	if programFiles := strings.TrimSpace(os.Getenv("ProgramFiles")); programFiles != "" {
+		for _, version := range []string{"Python313", "Python312", "Python311", "Python310", "Python39"} {
+			fallbackDirs = append(fallbackDirs, filepath.Join(programFiles, version))
+		}
+	}
+	if localAppData := strings.TrimSpace(os.Getenv("LOCALAPPDATA")); localAppData != "" {
+		for _, version := range []string{"Python313", "Python312", "Python311", "Python310"} {
+			fallbackDirs = append(fallbackDirs, filepath.Join(localAppData, "Programs", "Python", version))
+		}
+	}
+	if home != "" {
+		fallbackDirs = append(fallbackDirs, filepath.Join(home, "AppData", "Local", "Programs", "Python", "Python313"))
+	}
+	for _, dir := range fallbackDirs {
+		candidate := filepath.Join(dir, "python.exe")
 		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("未找到读图 MCP 脚本 vision_mcp_server.py，请先安装 image-see 技能")
+	return "", fmt.Errorf("未找到 python 解释器（python/python3/py）。请安装 Python，或在 MCP 配置中使用 python 的绝对路径")
 }
 
 // EnableReaderMCP 把读图 MCP（stdio：python + vision_mcp_server.py，env 注入网关三项）
 // upsert 进 Cursor 全局 ~/.cursor/mcp.json 并失效扫描缓存，使其出现在
 // 「设置 → Skills 与 MCP」列表并自动启用（未写入 disabledMcpServers 即默认启用）。
+// 脚本由本程序内置，首次启用时自动落盘，不再要求用户预先安装 image-see 技能。
 func (s *ProxyService) EnableReaderMCP(url, apiKey, model string) (ReaderMCPResult, error) {
-	scriptPath, err := detectVisionReaderScript()
-	if err != nil {
-		return ReaderMCPResult{}, err
-	}
 	baseURL := strings.TrimSpace(url)
 	if baseURL == "" {
 		return ReaderMCPResult{}, fmt.Errorf("读图网关地址（url）不能为空")
@@ -419,27 +502,120 @@ func (s *ProxyService) EnableReaderMCP(url, apiKey, model string) (ReaderMCPResu
 	if err != nil {
 		return ReaderMCPResult{}, err
 	}
-	servers := cursorMCPServersFromDocument(doc)
-	_, existed := servers[readerMCPIdentifier]
-	servers[readerMCPIdentifier] = map[string]any{
-		"command": "python",
-		"args":    []any{scriptPath},
-		"env": map[string]any{
-			"IMAGE_SEE_BASE_URL": baseURL,
-			"IMAGE_SEE_API_KEY":  strings.TrimSpace(apiKey),
-			"IMAGE_SEE_MODEL":    readerModel,
-		},
-	}
-	doc["mcpServers"] = servers
-	if err := writeCursorMCPDocument(mcpPath, doc); err != nil {
+	_, existed := cursorMCPServersFromDocument(doc)[readerMCPIdentifier]
+	// 手动启用入口无协议指定，默认 OpenAI 兼容 chat/completions；
+	// 由视觉委派联动写入时会带上与委派一致的 endpoint。
+	scriptPath, err := s.upsertReaderMCPServer(baseURL, strings.TrimSpace(apiKey), readerModel, "/v1/chat/completions")
+	if err != nil {
 		return ReaderMCPResult{}, err
 	}
-	forwarder.InvalidateMCPScanCache()
 	return ReaderMCPResult{
 		Identifier: readerMCPIdentifier,
 		ScriptPath: scriptPath,
 		WasAdded:   !existed,
 	}, nil
+}
+
+// upsertReaderMCPServer 把读图 MCP（stdio：python + vision_mcp_server.py，env 注入网关三项
+// + 请求端点）upsert 进 Cursor 全局 ~/.cursor/mcp.json 并失效扫描缓存。供 EnableReaderMCP
+// 与视觉委派自动联动共用；脚本内置，首次写入时自动落盘。
+// endpoint 是与视觉委派所用协议对齐的请求端点（如 /v1/chat/completions、/v1/responses）。
+func (s *ProxyService) upsertReaderMCPServer(baseURL, apiKey, model, endpoint string) (string, error) {
+	scriptPath, err := ensureVisionReaderScript()
+	if err != nil {
+		return "", err
+	}
+	pythonCmd, err := resolvePythonCommand()
+	if err != nil {
+		return "", err
+	}
+	baseURL = strings.TrimSpace(baseURL)
+	if baseURL == "" {
+		return "", fmt.Errorf("读图网关地址（baseURL）不能为空")
+	}
+	model = strings.TrimSpace(model)
+	if model == "" {
+		model = "gpt-5.6-luna"
+	}
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		endpoint = "/v1/chat/completions"
+	}
+	mcpPath, err := cursorUserMCPConfigPath()
+	if err != nil {
+		return "", err
+	}
+	doc, err := readCursorMCPDocument(mcpPath)
+	if err != nil {
+		return "", err
+	}
+	servers := cursorMCPServersFromDocument(doc)
+	servers[readerMCPIdentifier] = map[string]any{
+		"command": pythonCmd,
+		"args":    []any{scriptPath},
+		"env": map[string]any{
+			"IMAGE_SEE_BASE_URL": baseURL,
+			"IMAGE_SEE_ENDPOINT": endpoint,
+			"IMAGE_SEE_API_KEY":  apiKey,
+			"IMAGE_SEE_MODEL":    model,
+		},
+	}
+	doc["mcpServers"] = servers
+	if err := writeCursorMCPDocument(mcpPath, doc); err != nil {
+		return "", err
+	}
+	forwarder.InvalidateMCPScanCache()
+	return scriptPath, nil
+}
+
+// syncVisionReaderFromDelegation 在视觉委派配置保存后，自动把识图模型对应的
+// 网关信息（baseURL / apiKey / 模型名 / 请求端点）同步到读图 MCP（vision-reader），
+// 作为委派失败或不可用时的 MCP 兜底通道。端点与视觉委派所用协议保持一致
+// （OpenAIEndpoint 优先，其次按 OpenAIRequestGroup 推断），保证 MCP 兜底与
+// 委派请求打同一个网关、用同一种协议。同步失败不阻断保存，仅记录日志。
+func (s *ProxyService) syncVisionReaderFromDelegation(cfg DelegationConfig) error {
+	if !cfg.VisionDelegation.Enabled {
+		return nil
+	}
+	visionID := strings.TrimSpace(cfg.VisionDelegation.VisionModelID)
+	if visionID == "" {
+		return nil
+	}
+	userCfg, err := s.core.LoadUserConfig()
+	if err != nil {
+		return fmt.Errorf("load user config: %w", err)
+	}
+	var adapter *serverconfig.ModelAdapterConfig
+	for i := range userCfg.ModelAdapters {
+		if strings.TrimSpace(userCfg.ModelAdapters[i].ID) == visionID {
+			adapter = &userCfg.ModelAdapters[i]
+			break
+		}
+	}
+	if adapter == nil {
+		return fmt.Errorf("vision model %q not found in model adapters", visionID)
+	}
+	baseURL := strings.TrimSpace(adapter.BaseURL)
+	if baseURL == "" {
+		return fmt.Errorf("vision model %q has no baseURL", visionID)
+	}
+	model := strings.TrimSpace(adapter.ModelID)
+	if model == "" {
+		model = visionID
+	}
+	endpoint := strings.TrimSpace(adapter.OpenAIEndpoint)
+	if endpoint == "" {
+		switch strings.ToLower(strings.TrimSpace(adapter.OpenAIRequestGroup)) {
+		case "responses":
+			endpoint = "/v1/responses"
+		default:
+			endpoint = "/v1/chat/completions"
+		}
+	}
+	if _, err := s.upsertReaderMCPServer(baseURL, strings.TrimSpace(adapter.APIKey), model, endpoint); err != nil {
+		return err
+	}
+	return nil
 }
 
 // cursorUserMCPConfigPath 返回用户级 Cursor MCP 配置文件路径（与 mcp_scanner 一致）。

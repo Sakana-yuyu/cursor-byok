@@ -634,17 +634,37 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 		stream.ProviderAccumulatedText += event.Text
 		stream.UpdatedAt = time.Now().UTC()
 		stream.mu.Unlock()
+		service.markConversationActivity(conversationID)
 		return service.broker.Publish(requestID, StreamEvent{Message: buildTextDeltaMessage(event.Text)})
 	case modeladapter.ModelEventKindThinkingDelta:
 		stream.mu.Lock()
 		stream.ProviderAccumulatedReasoning += event.Text
+		stream.ProviderThinkingDeltaCount++
+		deltaCount := stream.ProviderThinkingDeltaCount
+		accumulatedLength := len(stream.ProviderAccumulatedReasoning)
 		stream.UpdatedAt = time.Now().UTC()
 		stream.mu.Unlock()
+		service.markConversationActivity(conversationID)
+		log.Printf("forwarder thinking delta request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d delta_count=%d accumulated_bytes=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), currentProviderPass(stream), deltaCount, accumulatedLength)
+		if service.debug != nil {
+			service.debug.LogRuntime(context.Background(), requestID, conversationID, "thinking_delta_forwarded", map[string]any{
+				"model_call_id":     strings.TrimSpace(modelCallID),
+				"provider_pass":     currentProviderPass(stream),
+				"delta_count":       deltaCount,
+				"accumulated_bytes": accumulatedLength,
+			})
+		}
 		return service.broker.Publish(requestID, StreamEvent{Message: buildThinkingDeltaMessage(event.Text, event.ThinkingStyle)})
 	case modeladapter.ModelEventKindThinkingCompleted:
 		shouldEmitSyntheticThinking := false
+		encryptedOnlyThinking := false
 		suppressThinkingCompleted := false
 		completedDuration := event.ThinkingDurationMS
+		stream.mu.Lock()
+		stream.ProviderThinkingCompletedCount++
+		completedCount := stream.ProviderThinkingCompletedCount
+		stream.UpdatedAt = time.Now().UTC()
+		stream.mu.Unlock()
 		if strings.TrimSpace(event.ThinkingSignature) != "" {
 			stream.mu.Lock()
 			stream.ProviderAccumulatedReasoningSignature = strings.TrimSpace(event.ThinkingSignature)
@@ -655,6 +675,7 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 			shouldEmitSyntheticThinking = strings.TrimSpace(stream.ProviderAccumulatedReasoning) == "" &&
 				strings.TrimSpace(event.ThinkingSignatureSource) == modeladapter.ReasoningSignatureSourceOpenAIResponses
 			if shouldEmitSyntheticThinking {
+				encryptedOnlyThinking = true
 				if stream.ProviderSyntheticThinkingStartedAt.IsZero() {
 					stream.ProviderSyntheticThinkingStartedAt = time.Now().UTC()
 				}
@@ -664,23 +685,52 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 						completedDuration = 1
 					}
 				}
-				if !stream.ProviderSyntheticThinkingPublished {
-					stream.ProviderSyntheticThinkingPublished = true
-				} else {
-					shouldEmitSyntheticThinking = false
-					suppressThinkingCompleted = true
-				}
+				// An OpenAI Responses encrypted signature is replay metadata, not
+				// readable thinking. Never invent placeholder text for Cursor.
+				// Keep the signature for the next tool-call request and close the
+				// empty thinking block without publishing a fake delta.
+				shouldEmitSyntheticThinking = false
+				suppressThinkingCompleted = true
 			}
 			stream.UpdatedAt = time.Now().UTC()
 			stream.mu.Unlock()
 		}
 		if shouldEmitSyntheticThinking {
-			if err := service.broker.Publish(requestID, StreamEvent{Message: buildThinkingDeltaMessage("The reasoning process is encrypted. Please wait a moment. (This message does not affect any functionality; it only indicates the current reasoning status.)", event.ThinkingStyle)}); err != nil {
-				return err
-			}
+			// Defensive guard: this path is intentionally unreachable after the
+			// encrypted-only handling above.
+			return nil
 		}
 		if suppressThinkingCompleted {
+			stream.mu.Lock()
+			stream.ProviderThinkingSuppressedCount++
+			suppressedCount := stream.ProviderThinkingSuppressedCount
+			stream.mu.Unlock()
+			log.Printf("forwarder thinking completion suppressed request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d completed_count=%d suppressed_count=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), currentProviderPass(stream), completedCount, suppressedCount)
+			if service.debug != nil {
+				eventName := "thinking_completed_suppressed"
+				if encryptedOnlyThinking {
+					eventName = "thinking_placeholder_suppressed"
+				}
+				service.debug.LogRuntime(context.Background(), requestID, conversationID, eventName, map[string]any{
+					"model_call_id":      strings.TrimSpace(modelCallID),
+					"provider_pass":      currentProviderPass(stream),
+					"completed_count":    completedCount,
+					"suppressed_count":   suppressedCount,
+					"has_reasoning_text": strings.TrimSpace(stream.ProviderAccumulatedReasoning) != "",
+					"has_signature":      strings.TrimSpace(event.ThinkingSignature) != "",
+				})
+			}
 			return nil
+		}
+		log.Printf("forwarder thinking completion forwarded request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d completed_count=%d synthetic=%t duration_ms=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), currentProviderPass(stream), completedCount, shouldEmitSyntheticThinking, completedDuration)
+		if service.debug != nil {
+			service.debug.LogRuntime(context.Background(), requestID, conversationID, "thinking_completed_forwarded", map[string]any{
+				"model_call_id":   strings.TrimSpace(modelCallID),
+				"provider_pass":   currentProviderPass(stream),
+				"completed_count": completedCount,
+				"synthetic":       shouldEmitSyntheticThinking,
+				"duration_ms":     completedDuration,
+			})
 		}
 		return service.broker.Publish(requestID, StreamEvent{Message: buildThinkingCompletedMessage(completedDuration)})
 	case modeladapter.ModelEventKindPartialToolCall:
@@ -856,6 +906,9 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 	usage := stream.ProviderUsage
 	hadToolInvocation := stream.ToolInvocationCount > 0
 	providerPass := stream.ProviderPassCount
+	thinkingDeltaCount := stream.ProviderThinkingDeltaCount
+	thinkingCompletedCount := stream.ProviderThinkingCompletedCount
+	thinkingSuppressedCount := stream.ProviderThinkingSuppressedCount
 	terminalToolInvocation := stream.ProviderTerminalToolInvocation
 	existingCompletion := stream.PendingProviderCompletion
 	stream.ProviderActive = false
@@ -875,6 +928,18 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 	status := stream.Status
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
+	log.Printf("forwarder provider pass done request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d thinking_delta_count=%d thinking_completed_count=%d thinking_suppressed_count=%d had_tool=%t finish_reason=%s", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), providerPass, thinkingDeltaCount, thinkingCompletedCount, thinkingSuppressedCount, hadToolInvocation, strings.TrimSpace(finishReason))
+	if service.debug != nil {
+		service.debug.LogRuntime(context.Background(), requestID, conversationID, "provider_pass_done", map[string]any{
+			"model_call_id":             strings.TrimSpace(modelCallID),
+			"provider_pass":             providerPass,
+			"thinking_delta_count":      thinkingDeltaCount,
+			"thinking_completed_count":  thinkingCompletedCount,
+			"thinking_suppressed_count": thinkingSuppressedCount,
+			"had_tool_invocation":       hadToolInvocation,
+			"finish_reason":             strings.TrimSpace(finishReason),
+		})
+	}
 
 	if errors.Is(payload.Err, errProviderLoopInterrupted) || isTerminalStreamStatus(status) {
 		return nil
@@ -1012,6 +1077,25 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 		return nil
 	}
 
+	// max_output_tokens 截断恢复：provider 返回 200 但流式被输出预算截断（response.incomplete，
+	// incomplete_details.reason=max_output_tokens），整回合只产出了 reasoning、没有助手正文也没有
+	// 工具调用。此时若直接 completeSuccessfulTurn 会把"零输出"回合标记成功并关闭 SSE 流，任务无法推进
+	//（且该截断响应在开启本地缓存时还会被缓存——由 provider_cache.go 的 completedCleanly 拦截）。
+	//
+	// 处理方式（参考 Reasonix emptyFinalRetry + 本仓 handleSubagentEmptyStopAfterToolResult 的成熟模式）：
+	// 追加一条 prompt_context 提示消息引导模型重新产出可见回复/工具调用，再续写一轮 provider pass。
+	// 相比依赖 OpenAI Responses 的 encrypted_content 续写，追加通用 user 提示更稳健、多 provider 兼容。
+	// 用 prompt_context source 做幂等去重，本回合最多恢复一次；续写后仍截断则走正常收口。
+	if isMaxOutputTokensTruncation(finishReason) && !hadToolInvocation && strings.TrimSpace(accumulatedText) == "" {
+		handled, err := service.handleMaxOutputTokensRecovery(stream, conversationID, turnSeq, requestID, modelCallID, providerPass, finishReason)
+		if err != nil {
+			return service.failStreamIfNonTerminal(stream, "unknown", err)
+		}
+		if handled {
+			return nil
+		}
+	}
+
 	clearPendingProviderCompletion(stream)
 	if err := service.completeSuccessfulTurn(stream, pendingTurnCompletion{
 		ConversationID: conversationID,
@@ -1024,6 +1108,69 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 		return service.failStreamIfNonTerminal(stream, "unknown", err)
 	}
 	return nil
+}
+
+// isMaxOutputTokensTruncation 判断 provider 流式收口原因是否表示被输出预算截断（而非模型主动结束）。
+// 与 provider_cache.go 的 isTruncationFinishReason 语义一致，但范围收窄到恢复能获益的截断原因：
+// max_output_tokens / length / incomplete。content_filter 是策略拦截而非预算截断，恢复无益，故排除。
+func isMaxOutputTokensTruncation(reason string) bool {
+	switch strings.TrimSpace(reason) {
+	case "max_output_tokens", "length", "incomplete":
+		return true
+	default:
+		return false
+	}
+}
+
+// handleMaxOutputTokensRecovery 在 provider 流式被输出预算截断、整回合无可见输出时，
+// 追加一条 prompt_context 提示消息引导模型重新产出可见回复/工具调用，并续写一轮 provider pass。
+// 返回 (true, nil) 表示已挂起恢复（调用方应直接 return）；返回 (false, nil) 表示不适用或本回合已恢复过，
+// 调用方走正常收口。镜像 handleSubagentEmptyStopAfterToolResult 的结构与幂等去重。
+func (service *Service) handleMaxOutputTokensRecovery(stream *ActiveStream, conversationID string, turnSeq int64, requestID string, modelCallID string, providerPass int, finishReason string) (bool, error) {
+	if stream == nil {
+		return false, nil
+	}
+	conversation, _, _, err := service.snapshotCheckpointConversation(stream)
+	if err != nil {
+		return true, err
+	}
+	if conversation == nil {
+		return false, nil
+	}
+	// 幂等去重：本回合已追加过该提示则不再恢复，避免无限循环。
+	if currentTurnHasPromptContextSource(conversation, turnSeq, promptContextSourceMaxOutputTokensRecovery) {
+		return false, nil
+	}
+	reminder := newPromptContextReminder(promptContextSourceMaxOutputTokensRecovery, maxOutputTokensRecoveryText())
+	if _, err := service.appendConversationEntries(stream, conversationID, []HistoryEntry{
+		newPromptContextEntry(turnSeq, requestID, reminder),
+	}); err != nil {
+		return true, err
+	}
+	if service.debug != nil {
+		service.debug.LogRuntime(context.Background(), requestID, conversationID, "max_output_tokens_recovery_triggered", map[string]any{
+			"provider_pass": providerPass,
+			"finish_reason": strings.TrimSpace(finishReason),
+		})
+	}
+	log.Printf("forwarder max_output_tokens recovery request_id=%s pass=%d finish_reason=%s",
+		strings.TrimSpace(requestID), providerPass, strings.TrimSpace(finishReason))
+	if err := service.syncSummaryCarryForward(conversationID, requestID, modelCallID); err != nil {
+		return true, err
+	}
+	if err := service.publishCheckpoint(requestID, conversationID); err != nil {
+		return true, err
+	}
+	if err := service.requestProviderAction(stream, providerActionResume); err != nil {
+		return true, err
+	}
+	return true, nil
+}
+
+// maxOutputTokensRecoveryText 是 max_output_tokens 截断恢复追加的 prompt_context 提示文案。
+// 参考 Reasonix emptyFinalRetryMessage：明确告知模型上一轮被截断、要求给出可见回复而非只输出思考。
+func maxOutputTokensRecoveryText() string {
+	return "上一轮回复因输出 token 上限被截断（max_output_tokens），只产出了思考过程，没有可见正文或工具调用。请基于本轮任务直接给出简洁的可见回复，或发起必要的工具调用，不要只输出思考内容。"
 }
 
 const subagentEmptyStopErrorText = "subagent returned empty response after tool result"

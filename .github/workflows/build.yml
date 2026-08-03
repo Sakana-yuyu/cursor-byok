@@ -25,6 +25,11 @@ jobs:
             target: windows
             artifact: windows-amd64
             protoc_asset: protoc-29.3-win64.zip
+          - name: Windows arm64
+            runner: windows-latest
+            target: windows-arm64
+            artifact: windows-arm64
+            protoc_asset: protoc-29.3-win64.zip
           - name: Windows 386
             runner: windows-latest
             target: windows-386
@@ -37,13 +42,13 @@ jobs:
             protoc_asset: protoc-29.3-linux-x86_64.zip
           - name: macOS amd64
             runner: macos-15-intel
-            target: macos-amd64
-            artifact: macos-amd64
+            target: darwin-amd64
+            artifact: darwin-amd64
             protoc_asset: protoc-29.3-osx-x86_64.zip
           - name: macOS arm64
             runner: macos-15
-            target: macos-arm64
-            artifact: macos-arm64
+            target: darwin-arm64
+            artifact: darwin-arm64
             protoc_asset: protoc-29.3-osx-aarch_64.zip
 
     steps:
@@ -211,11 +216,26 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           task build:windows:installer
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $archive = Get-Item 'bin/windows-64.zip' -ErrorAction SilentlyContinue
-          if (-not $archive -or $archive.Length -le 0) { throw 'Windows ZIP was not produced or is empty' }
-          $installer = Get-ChildItem 'bin/*-amd64-installer.exe' -File | Select-Object -First 1
-          if (-not $installer -or $installer.Length -le 0) { throw 'Windows NSIS installer was not produced or is empty' }
+          $archive = Get-Item 'bin/windows-amd64.zip' -ErrorAction SilentlyContinue
+          if (-not $archive -or $archive.Length -le 0) { throw 'Windows amd64 ZIP was not produced or is empty' }
+          $installer = Get-Item 'bin/cursor-byok-windows-amd64-installer.exe' -ErrorAction SilentlyContinue
+          if (-not $installer -or $installer.Length -le 0) { throw 'Windows amd64 NSIS installer was not produced or is empty' }
           Write-Host "Produced $($installer.FullName)"
+
+      - name: Build Windows arm64 package
+        if: matrix.target == 'windows-arm64'
+        shell: pwsh
+        run: |
+          task build:windows:arm64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $archiveArm64 = Get-Item 'bin/windows-arm64.zip' -ErrorAction SilentlyContinue
+          if (-not $archiveArm64 -or $archiveArm64.Length -le 0) { throw 'Windows arm64 ZIP was not produced or is empty' }
+          Write-Host "Produced bin/windows-arm64.zip"
+          task build:windows:installer:arm64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $installerArm64 = Get-Item 'bin/cursor-byok-windows-arm64-installer.exe' -ErrorAction SilentlyContinue
+          if (-not $installerArm64 -or $installerArm64.Length -le 0) { throw 'Windows arm64 NSIS installer was not produced or is empty' }
+          Write-Host "Produced $($installerArm64.FullName)"
 
       - name: Build Windows 386 package
         if: matrix.target == 'windows-386'
@@ -223,12 +243,12 @@ jobs:
         run: |
           task build:windows:386
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $archive386 = Get-Item 'bin/windows-32.zip' -ErrorAction SilentlyContinue
+          $archive386 = Get-Item 'bin/windows-386.zip' -ErrorAction SilentlyContinue
           if (-not $archive386 -or $archive386.Length -le 0) { throw 'Windows 386 ZIP was not produced or is empty' }
-          Write-Host "Produced bin/windows-32.zip"
+          Write-Host "Produced bin/windows-386.zip"
           task build:windows:installer:386
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $installer386 = Get-ChildItem 'bin/*-386-installer.exe' -File | Select-Object -First 1
+          $installer386 = Get-Item 'bin/cursor-byok-windows-386-installer.exe' -ErrorAction SilentlyContinue
           if (-not $installer386 -or $installer386.Length -le 0) { throw 'Windows 386 NSIS installer was not produced or is empty' }
           Write-Host "Produced $($installer386.FullName)"
 
@@ -265,13 +285,13 @@ jobs:
             $st = $signtoolExe.FullName
 
             # 签名主 exe
-            $exe = Resolve-Path "bin/Cursor助手.exe"
+            $exe = Resolve-Path "bin/cursor-byok-windows-amd64.exe"
             & $st sign /fd SHA256 /a /f $pfxPath /p "temp-signing-key" $exe.Path
             if ($LASTEXITCODE -ne 0) { throw "signtool failed to sign exe" }
             Write-Host "Signed $($exe.Path)"
 
             # 签名 installer
-            $installer = Get-ChildItem 'bin/*-amd64-installer.exe' -File | Select-Object -First 1
+            $installer = Get-Item 'bin/cursor-byok-windows-amd64-installer.exe' -ErrorAction SilentlyContinue
             if ($installer) {
               & $st sign /fd SHA256 /a /f $pfxPath /p "temp-signing-key" $installer.FullName
               if ($LASTEXITCODE -ne 0) { throw "signtool failed to sign installer" }
@@ -291,7 +311,7 @@ jobs:
           test -s bin/linux-amd64.tar.gz
 
       - name: Build macOS package
-        if: startsWith(matrix.target, 'macos-')
+        if: startsWith(matrix.target, 'darwin-')
         shell: bash
         run: |
           # 关闭 set -e：失败时仍要打印诊断信息再退出。
@@ -369,7 +389,7 @@ jobs:
             exit "${BUILD_STATUS}"
           fi
 
-          DMG_PATH="bin/${{ endsWith(matrix.target, 'arm64') && 'macos-arm64.dmg' || 'macos-intel.dmg' }}"
+          DMG_PATH="bin/${{ endsWith(matrix.target, 'arm64') && 'darwin-arm64.dmg' || 'darwin-amd64.dmg' }}"
           if [ ! -s "${DMG_PATH}" ]; then
             echo "!!! expected DMG not found or empty: ${DMG_PATH}"
             ls -la bin/
@@ -387,7 +407,7 @@ jobs:
             exit "${RELEASE_STATUS}"
           fi
 
-          ARCHIVE_PATH="bin/release/${VERSION}/cursor-byok-${VERSION}-macos-${ARCH_NAME}.tar.gz"
+          ARCHIVE_PATH="bin/release/${VERSION}/cursor-byok-${VERSION}-darwin-${ARCH_NAME}.tar.gz"
           if [ ! -s "${ARCHIVE_PATH}" ]; then
             echo "!!! expected archive not found or empty: ${ARCHIVE_PATH}"
             ls -la "bin/release/${VERSION}/"
@@ -402,8 +422,18 @@ jobs:
           name: ${{ matrix.artifact }}
           if-no-files-found: error
           path: |
-            bin/windows-64.zip
-            bin/*-amd64-installer.exe
+            bin/windows-amd64.zip
+            bin/cursor-byok-windows-amd64-installer.exe
+
+      - name: Upload Windows arm64 artifact
+        if: matrix.target == 'windows-arm64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          if-no-files-found: error
+          path: |
+            bin/windows-arm64.zip
+            bin/cursor-byok-windows-arm64-installer.exe
 
       - name: Upload Windows 386 artifact
         if: matrix.target == 'windows-386'
@@ -412,8 +442,8 @@ jobs:
           name: ${{ matrix.artifact }}
           if-no-files-found: error
           path: |
-            bin/windows-32.zip
-            bin/*-386-installer.exe
+            bin/windows-386.zip
+            bin/cursor-byok-windows-386-installer.exe
 
       - name: Upload Linux artifact
         if: matrix.target == 'linux'
@@ -424,17 +454,17 @@ jobs:
           path: bin/linux-amd64.tar.gz
 
       - name: Upload macOS artifact
-        if: startsWith(matrix.target, 'macos-')
+        if: startsWith(matrix.target, 'darwin-')
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           if-no-files-found: error
           path: |
-            bin/macos-*.dmg
+            bin/darwin-*.dmg
             bin/release/**/*
 
       - name: Upload macOS build diagnostics
-        if: always() && startsWith(matrix.target, 'macos-')
+        if: always() && startsWith(matrix.target, 'darwin-')
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}-diagnostics
@@ -509,15 +539,17 @@ jobs:
             fi
           }
 
-          copy_asset "windows-64.zip" "cursor-byok-${VERSION}-windows-amd64.zip"
-          copy_asset "Cursor助手-amd64-installer.exe" "cursor-byok-${VERSION}-windows-amd64-installer.exe"
-          copy_asset "windows-32.zip" "cursor-byok-${VERSION}-windows-386.zip"
-          copy_asset "Cursor助手-386-installer.exe" "cursor-byok-${VERSION}-windows-386-installer.exe"
+          copy_asset "windows-amd64.zip" "cursor-byok-${VERSION}-windows-amd64.zip"
+          copy_asset "cursor-byok-windows-amd64-installer.exe" "cursor-byok-${VERSION}-windows-amd64-installer.exe"
+          copy_asset "windows-arm64.zip" "cursor-byok-${VERSION}-windows-arm64.zip"
+          copy_asset "cursor-byok-windows-arm64-installer.exe" "cursor-byok-${VERSION}-windows-arm64-installer.exe"
+          copy_asset "windows-386.zip" "cursor-byok-${VERSION}-windows-386.zip"
+          copy_asset "cursor-byok-windows-386-installer.exe" "cursor-byok-${VERSION}-windows-386-installer.exe"
           copy_asset "linux-amd64.tar.gz" "cursor-byok-${VERSION}-linux-amd64.tar.gz"
-          copy_asset "cursor-byok-${VERSION}-macos-arm64.tar.gz" "cursor-byok-${VERSION}-macos-arm64.tar.gz"
-          copy_asset "cursor-byok-${VERSION}-macos-amd64.tar.gz" "cursor-byok-${VERSION}-macos-amd64.tar.gz"
-          copy_asset "macos-arm64.dmg" "cursor-byok-${VERSION}-macos-arm64.dmg"
-          copy_asset "macos-intel.dmg" "cursor-byok-${VERSION}-macos-amd64.dmg"
+          copy_asset "cursor-byok-${VERSION}-darwin-arm64.tar.gz" "cursor-byok-${VERSION}-darwin-arm64.tar.gz"
+          copy_asset "cursor-byok-${VERSION}-darwin-amd64.tar.gz" "cursor-byok-${VERSION}-darwin-amd64.tar.gz"
+          copy_asset "darwin-arm64.dmg" "cursor-byok-${VERSION}-darwin-arm64.dmg"
+          copy_asset "darwin-amd64.dmg" "cursor-byok-${VERSION}-darwin-amd64.dmg"
 
           go run ./scripts/release manifest \
             -config ./build/config.yml \
@@ -530,11 +562,12 @@ jobs:
           jq -e --arg version "$VERSION" '
             .version == $version and
             (.platforms | keys | sort) == [
+              "darwin-amd64",
+              "darwin-arm64",
               "linux-amd64",
-              "macos-amd64",
-              "macos-arm64",
               "windows-386",
-              "windows-amd64"
+              "windows-amd64",
+              "windows-arm64"
             ] and
             all(.platforms[]; .size > 0) and
             ([.platforms[].url | endswith(".dmg")] | any | not)

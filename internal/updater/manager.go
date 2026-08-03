@@ -503,14 +503,16 @@ func currentPlatformKey() (string, error) {
 	case "darwin":
 		switch runtime.GOARCH {
 		case "arm64":
-			return "macos-arm64", nil
+			return "darwin-arm64", nil
 		case "amd64":
-			return "macos-amd64", nil
+			return "darwin-amd64", nil
 		}
 	case "windows":
 		switch runtime.GOARCH {
 		case "amd64":
 			return "windows-amd64", nil
+		case "arm64":
+			return "windows-arm64", nil
 		case "386":
 			return "windows-386", nil
 		}

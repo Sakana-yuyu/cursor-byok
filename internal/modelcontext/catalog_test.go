@@ -6,7 +6,12 @@ func TestWindowTokensFromSpreadsheetRules(t *testing.T) {
 	tests := map[string]int{
 		"claude-opus-4-8":          1_000_000,
 		"claude-sonnet-4.6-latest": 1_000_000,
-		"gpt-5.6-luna":             1_000_000,
+		"gpt-5.6-luna":             272_000,  // Codex 实际上限（非理论 1M）
+		"gpt-5.6-sol":              272_000,
+		"gpt-5.6-terra":            272_000,
+		"gpt-5.6":                  1_000_000, // 无后缀=理论最大值
+		"gpt-5.5":                  400_000,
+		"gpt-5.4":                  400_000,
 		"gpt-4o":                   128_000,
 		"grok-4.5":                 500_000,
 		"grok-4.20-fast":           1_000_000,
@@ -46,8 +51,8 @@ func TestCapabilitiesKnownModels(t *testing.T) {
 		{"gpt-4o", true, false, true, 128_000},
 		// GPT-5 — 支持思考
 		{"gpt-5", true, true, true, 1_000_000},
-		// Gemini 2.5 — 支持视觉和音频
-		{"gemini-2.5-pro", true, true, true, 1_000_000},
+		// Gemini 2.5 — 支持视觉和音频（官方 2M 上下文）
+		{"gemini-2.5-pro", true, true, true, 2_000_000},
 		// DeepSeek V4 — 不支持视觉
 		{"deepseek-v4-flash", false, false, true, 1_000_000},
 		{"deepseek-v4-pro", false, false, true, 1_000_000},

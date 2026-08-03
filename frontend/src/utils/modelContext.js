@@ -33,8 +33,18 @@ const MODEL_CAPABILITIES = [
     supportsVision: true, supportsAudio: false, supportsTools: true, supportsThinking: false },
 
   // ─── GPT ──────────────────────────────────────────────────────────────────
+  // gpt-5.6-luna/sol/terra：Codex 实际上限 272K（非理论 1M），须在通用规则前匹配
+  { pattern: /^gpt-?5[.-]?6-(?:luna|sol|terra)(?:-|$)/,
+    displayName: "GPT-5.6 (Codex)", contextWindowTokens: 272_000, maxOutputTokens: 32_768,
+    supportsVision: true, supportsAudio: false, supportsTools: true, supportsThinking: true },
   { pattern: /^gpt-?5[.-]?6(?:-|$)/,
     displayName: "GPT-5.6", contextWindowTokens: 1_000_000, maxOutputTokens: 32_768,
+    supportsVision: true, supportsAudio: false, supportsTools: true, supportsThinking: true },
+  { pattern: /^gpt-?5[.-]?5(?:-|$)/,
+    displayName: "GPT-5.5", contextWindowTokens: 400_000, maxOutputTokens: 128_000,
+    supportsVision: true, supportsAudio: false, supportsTools: true, supportsThinking: true },
+  { pattern: /^gpt-?5[.-]?4(?:-|$)/,
+    displayName: "GPT-5.4", contextWindowTokens: 400_000, maxOutputTokens: 128_000,
     supportsVision: true, supportsAudio: false, supportsTools: true, supportsThinking: true },
   { pattern: /^gpt-?5(?:-|$)/,
     displayName: "GPT-5", contextWindowTokens: 1_000_000, maxOutputTokens: 32_768,
@@ -55,7 +65,7 @@ const MODEL_CAPABILITIES = [
 
   // ─── Gemini ───────────────────────────────────────────────────────────────
   { pattern: /^gemini-2[.-]?5-pro/,
-    displayName: "Gemini 2.5 Pro", contextWindowTokens: 1_000_000, maxOutputTokens: 65_536,
+    displayName: "Gemini 2.5 Pro", contextWindowTokens: 2_000_000, maxOutputTokens: 65_536,
     supportsVision: true, supportsAudio: true, supportsTools: true, supportsThinking: true },
   { pattern: /^gemini-2[.-]?5-flash/,
     displayName: "Gemini 2.5 Flash", contextWindowTokens: 1_000_000, maxOutputTokens: 65_536,

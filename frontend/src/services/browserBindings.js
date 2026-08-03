@@ -78,6 +78,11 @@ const previewConfig = {
       allowEscalate: false,
       strictUnavailable: false,
     },
+    visionDelegation: {
+      enabled: false,
+      visionModelID: "",
+      mode: "auto",
+    },
   },
 };
 
@@ -240,10 +245,12 @@ export const SaveUserConfig = (value) => {
   persistPreviewConfig();
   return Promise.resolve(clone(previewConfig));
 };
-export const AutoMatchContextWindows = () => {
+export const AutoMatchContextWindows = (force = false) => {
   const total = previewConfig.modelAdapters.length;
+  void force;
   return Promise.resolve({
     enabled: true,
+    switchEnabled: true,
     changed: false,
     total,
     fromCatalog: 0,

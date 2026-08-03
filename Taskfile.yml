@@ -18,9 +18,9 @@ vars:
   RELEASE_NOTES_PATH: '{{.RELEASE_DIR}}/.release-notes.md'
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
   SCAN: '{{.SCAN | default "false"}}'
-  CURRENT_WINDOWS_ARCH: '{{if eq ARCH "386"}}386{{else}}amd64{{end}}'
-  CURRENT_WINDOWS_NAME: '{{if eq .CURRENT_WINDOWS_ARCH "386"}}windows-32{{else}}windows-64{{end}}'
-  CURRENT_DARWIN_NAME: '{{if eq ARCH "arm64"}}macos-arm64{{else}}macos-intel{{end}}'
+  CURRENT_WINDOWS_ARCH: '{{if eq ARCH "386"}}386{{else if eq ARCH "arm64"}}arm64{{else}}amd64{{end}}'
+  CURRENT_WINDOWS_NAME: '{{if eq .CURRENT_WINDOWS_ARCH "386"}}windows-386{{else if eq .CURRENT_WINDOWS_ARCH "arm64"}}windows-arm64{{else}}windows-amd64{{end}}'
+  CURRENT_DARWIN_NAME: '{{if eq ARCH "arm64"}}darwin-arm64{{else}}darwin-amd64{{end}}'
   CURRENT_LINUX_ARCH: "amd64"
   CURRENT_LINUX_NAME: "linux-amd64"
 
@@ -46,10 +46,11 @@ tasks:
         msg: "task build:all 仅支持在 macOS 上执行；Linux 需在原生 Linux 主机构建。"
     cmds:
       - task: clean:dist
-      - task: build:darwin:arm64
       - task: build:darwin:amd64
+      - task: build:darwin:arm64
       - task: build:windows:386
       - task: build:windows:amd64
+      - task: build:windows:arm64
 
   build:current:
     internal: true
@@ -74,10 +75,10 @@ tasks:
       - task: darwin:package:dmg
         vars:
           ARCH: arm64
-          BINARY_NAME: macos-arm64
-          OUTPUT: '{{.BIN_DIR}}/macos-arm64'
-          APP_BUNDLE: macos-arm64.app
-          DMG_NAME: macos-arm64.dmg
+          BINARY_NAME: darwin-arm64
+          OUTPUT: '{{.BIN_DIR}}/darwin-arm64'
+          APP_BUNDLE: darwin-arm64.app
+          DMG_NAME: darwin-arm64.dmg
           SCAN: '{{.SCAN}}'
 
   build:darwin:amd64:
@@ -86,10 +87,10 @@ tasks:
       - task: darwin:package:dmg
         vars:
           ARCH: amd64
-          BINARY_NAME: macos-intel
-          OUTPUT: '{{.BIN_DIR}}/macos-intel'
-          APP_BUNDLE: macos-intel.app
-          DMG_NAME: macos-intel.dmg
+          BINARY_NAME: darwin-amd64
+          OUTPUT: '{{.BIN_DIR}}/darwin-amd64'
+          APP_BUNDLE: darwin-amd64.app
+          DMG_NAME: darwin-amd64.dmg
           SCAN: '{{.SCAN}}'
 
   build:windows:current:
@@ -108,8 +109,8 @@ tasks:
       - task: windows:create:zip
         vars:
           ARCH: 386
-          OUTPUT: '{{.BIN_DIR}}/windows-32.exe'
-          ZIP_NAME: windows-32.zip
+          OUTPUT: '{{.BIN_DIR}}/windows-386.exe'
+          ZIP_NAME: windows-386.zip
           SCAN: '{{.SCAN}}'
 
   build:windows:amd64:
@@ -117,8 +118,18 @@ tasks:
       - task: windows:create:zip
         vars:
           ARCH: amd64
-          OUTPUT: '{{.BIN_DIR}}/windows-64.exe'
-          ZIP_NAME: windows-64.zip
+          OUTPUT: '{{.BIN_DIR}}/windows-amd64.exe'
+          ZIP_NAME: windows-amd64.zip
+          SCAN: '{{.SCAN}}'
+
+  build:windows:arm64:
+    summary: 构建 Windows ARM64 ZIP 绿色版
+    cmds:
+      - task: windows:create:zip
+        vars:
+          ARCH: arm64
+          OUTPUT: '{{.BIN_DIR}}/windows-arm64.exe'
+          ZIP_NAME: windows-arm64.zip
           SCAN: '{{.SCAN}}'
 
   build:windows:installer:
@@ -127,6 +138,7 @@ tasks:
       - task: windows:create:nsis:installer
         vars:
           ARCH: amd64
+          OUTPUT: '{{.BIN_DIR}}/cursor-byok-windows-amd64.exe'
           SCAN: '{{.SCAN}}'
 
   build:windows:installer:386:
@@ -135,6 +147,16 @@ tasks:
       - task: windows:create:nsis:installer:386
         vars:
           ARCH: 386
+          OUTPUT: '{{.BIN_DIR}}/cursor-byok-windows-386.exe'
+          SCAN: '{{.SCAN}}'
+
+  build:windows:installer:arm64:
+    summary: 构建 Windows ARM64 NSIS 安装程序
+    cmds:
+      - task: windows:create:nsis:installer
+        vars:
+          ARCH: arm64
+          OUTPUT: '{{.BIN_DIR}}/cursor-byok-windows-arm64.exe'
           SCAN: '{{.SCAN}}'
 
   build:linux:current:
@@ -187,15 +209,15 @@ tasks:
         platforms: [windows]
       - cmd: mkdir -p "{{.BIN_DIR}}"
         platforms: [darwin, linux]
-      - cmd: powershell -NoProfile -Command "Remove-Item -Force -ErrorAction SilentlyContinue '{{.BIN_DIR}}/*.dmg','{{.BIN_DIR}}/*.zip','{{.BIN_DIR}}/*.tar.gz','{{.BIN_DIR}}/{{.APP_NAME}}*'"
+      - cmd: powershell -NoProfile -Command "Remove-Item -Force -ErrorAction SilentlyContinue '{{.BIN_DIR}}/*.dmg','{{.BIN_DIR}}/*.zip','{{.BIN_DIR}}/*.tar.gz','{{.BIN_DIR}}/{{.APP_NAME}}*','{{.BIN_DIR}}/cursor-byok-windows-*'"
         platforms: [windows]
-      - cmd: rm -f "{{.BIN_DIR}}/macos-arm64.dmg" "{{.BIN_DIR}}/macos-intel.dmg" "{{.BIN_DIR}}/windows-32.zip" "{{.BIN_DIR}}/windows-64.zip" "{{.BIN_DIR}}/linux-amd64.tar.gz"
+      - cmd: rm -f "{{.BIN_DIR}}/darwin-arm64.dmg" "{{.BIN_DIR}}/darwin-amd64.dmg" "{{.BIN_DIR}}/windows-386.zip" "{{.BIN_DIR}}/windows-amd64.zip" "{{.BIN_DIR}}/windows-arm64.zip" "{{.BIN_DIR}}/linux-amd64.tar.gz"
         platforms: [darwin, linux]
-      - cmd: rm -f "{{.BIN_DIR}}/macos-arm64" "{{.BIN_DIR}}/macos-intel" "{{.BIN_DIR}}/windows-32.exe" "{{.BIN_DIR}}/windows-64.exe" "{{.BIN_DIR}}/linux-amd64"
+      - cmd: rm -f "{{.BIN_DIR}}/darwin-arm64" "{{.BIN_DIR}}/darwin-amd64" "{{.BIN_DIR}}/windows-386.exe" "{{.BIN_DIR}}/windows-amd64.exe" "{{.BIN_DIR}}/windows-arm64.exe" "{{.BIN_DIR}}/linux-amd64"
         platforms: [darwin, linux]
       - cmd: powershell -NoProfile -Command "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue '{{.BIN_DIR}}/*.app'"
         platforms: [windows]
-      - cmd: rm -rf "{{.BIN_DIR}}/macos-arm64.app" "{{.BIN_DIR}}/macos-intel.app" "{{.BIN_DIR}}/{{.APP_NAME}}.app" "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app"
+      - cmd: rm -rf "{{.BIN_DIR}}/darwin-arm64.app" "{{.BIN_DIR}}/darwin-amd64.app" "{{.BIN_DIR}}/{{.APP_NAME}}.app" "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app"
         platforms: [darwin, linux]
 
   dev:
@@ -274,10 +296,10 @@ tasks:
       - task: darwin:package:archive
         vars:
           ARCH: arm64
-          BINARY_NAME: cursor-release-macos-arm64
-          OUTPUT: '{{.BIN_DIR}}/cursor-release-macos-arm64'
+          BINARY_NAME: cursor-release-darwin-arm64
+          OUTPUT: '{{.BIN_DIR}}/cursor-release-darwin-arm64'
           APP_BUNDLE: '{{.APP_NAME}}.app'
-          ARCHIVE_PATH: '{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-macos-arm64.tar.gz'
+          ARCHIVE_PATH: '{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-darwin-arm64.tar.gz'
           SCAN: '{{.SCAN}}'
 
   release:build:macos:amd64:
@@ -285,22 +307,22 @@ tasks:
       - task: darwin:package:archive
         vars:
           ARCH: amd64
-          BINARY_NAME: cursor-release-macos-amd64
-          OUTPUT: '{{.BIN_DIR}}/cursor-release-macos-amd64'
+          BINARY_NAME: cursor-release-darwin-amd64
+          OUTPUT: '{{.BIN_DIR}}/cursor-release-darwin-amd64'
           APP_BUNDLE: '{{.APP_NAME}}.app'
-          ARCHIVE_PATH: '{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-macos-amd64.tar.gz'
+          ARCHIVE_PATH: '{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-darwin-amd64.tar.gz'
           SCAN: '{{.SCAN}}'
 
   release:copy:macos:dmgs:
     internal: true
     preconditions:
-      - sh: test -s "{{.BIN_DIR}}/macos-arm64.dmg"
+      - sh: test -s "{{.BIN_DIR}}/darwin-arm64.dmg"
         msg: "缺少 macOS arm64 DMG 或文件为空，请先执行 build:darwin:arm64。"
-      - sh: test -s "{{.BIN_DIR}}/macos-intel.dmg"
+      - sh: test -s "{{.BIN_DIR}}/darwin-amd64.dmg"
         msg: "缺少 macOS amd64 DMG 或文件为空，请先执行 build:darwin:amd64。"
     cmds:
-      - cp -f "{{.BIN_DIR}}/macos-arm64.dmg" "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-macos-arm64.dmg"
-      - cp -f "{{.BIN_DIR}}/macos-intel.dmg" "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-macos-amd64.dmg"
+      - cp -f "{{.BIN_DIR}}/darwin-arm64.dmg" "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-darwin-arm64.dmg"
+      - cp -f "{{.BIN_DIR}}/darwin-amd64.dmg" "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-darwin-amd64.dmg"
 
   release:build:windows:amd64:
     cmds:
@@ -309,6 +331,15 @@ tasks:
           ARCH: amd64
           OUTPUT: '{{.BIN_DIR}}/{{.RELEASE_BASE_NAME}}-windows-amd64.exe'
           ZIP_NAME: 'release/{{.APP_VERSION}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-amd64.zip'
+          SCAN: '{{.SCAN}}'
+
+  release:build:windows:arm64:
+    cmds:
+      - task: windows:create:zip
+        vars:
+          ARCH: arm64
+          OUTPUT: '{{.BIN_DIR}}/{{.RELEASE_BASE_NAME}}-windows-arm64.exe'
+          ZIP_NAME: 'release/{{.APP_VERSION}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-arm64.zip'
           SCAN: '{{.SCAN}}'
 
   release:build:windows:386:
@@ -326,10 +357,11 @@ tasks:
       - task: windows:create:nsis:installer
         vars:
           ARCH: amd64
+          OUTPUT: '{{.BIN_DIR}}/{{.RELEASE_BASE_NAME}}-windows-amd64.exe'
           SCAN: '{{.SCAN}}'
-      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.RELEASE_DIR}}' | Out-Null; Copy-Item -Force '{{.BIN_DIR}}/{{.APP_NAME}}-amd64-installer.exe' '{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-amd64-installer.exe'"
+      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.RELEASE_DIR}}' | Out-Null; Copy-Item -Force '{{.BIN_DIR}}/cursor-byok-windows-amd64-installer.exe' '{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-amd64-installer.exe'"
         platforms: [windows]
-      - cmd: mkdir -p '{{.RELEASE_DIR}}' && cp -f '{{.BIN_DIR}}/{{.APP_NAME}}-amd64-installer.exe' '{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-amd64-installer.exe'
+      - cmd: mkdir -p '{{.RELEASE_DIR}}' && cp -f '{{.BIN_DIR}}/cursor-byok-windows-amd64-installer.exe' '{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-amd64-installer.exe'
         platforms: [darwin, linux]
 
   release:build:windows:installer:386:
@@ -338,10 +370,24 @@ tasks:
       - task: windows:create:nsis:installer:386
         vars:
           ARCH: 386
+          OUTPUT: '{{.BIN_DIR}}/{{.RELEASE_BASE_NAME}}-windows-386.exe'
           SCAN: '{{.SCAN}}'
-      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.RELEASE_DIR}}' | Out-Null; Copy-Item -Force '{{.BIN_DIR}}/{{.APP_NAME}}-386-installer.exe' '{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-386-installer.exe'"
+      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.RELEASE_DIR}}' | Out-Null; Copy-Item -Force '{{.BIN_DIR}}/cursor-byok-windows-386-installer.exe' '{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-386-installer.exe'"
         platforms: [windows]
-      - cmd: mkdir -p '{{.RELEASE_DIR}}' && cp -f '{{.BIN_DIR}}/{{.APP_NAME}}-386-installer.exe' '{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-386-installer.exe'
+      - cmd: mkdir -p '{{.RELEASE_DIR}}' && cp -f '{{.BIN_DIR}}/cursor-byok-windows-386-installer.exe' '{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-386-installer.exe'
+        platforms: [darwin, linux]
+
+  release:build:windows:installer:arm64:
+    summary: 构建 Windows ARM64 NSIS 安装包并以 ASCII 命名复制到 release 目录
+    cmds:
+      - task: windows:create:nsis:installer
+        vars:
+          ARCH: arm64
+          OUTPUT: '{{.BIN_DIR}}/{{.RELEASE_BASE_NAME}}-windows-arm64.exe'
+          SCAN: '{{.SCAN}}'
+      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.RELEASE_DIR}}' | Out-Null; Copy-Item -Force '{{.BIN_DIR}}/cursor-byok-windows-arm64-installer.exe' '{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-arm64-installer.exe'"
+        platforms: [windows]
+      - cmd: mkdir -p '{{.RELEASE_DIR}}' && cp -f '{{.BIN_DIR}}/cursor-byok-windows-arm64-installer.exe' '{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-arm64-installer.exe'
         platforms: [darwin, linux]
 
   release:build:linux:amd64:
@@ -389,7 +435,9 @@ tasks:
       - task: release:build:macos:amd64
       - task: release:copy:macos:dmgs
       - task: release:build:windows:amd64
+      - task: release:build:windows:arm64
       - task: release:build:windows:installer
+      - task: release:build:windows:installer:arm64
       - task: release:build:windows:386
       - task: release:build:windows:installer:386
       - task: release:build:linux:amd64
@@ -412,18 +460,22 @@ tasks:
     preconditions:
       - sh: test -s "{{.RELEASE_NOTES_PATH}}"
         msg: "未找到发布说明或文件为空，请先执行对应的 release:prepare 任务。"
-      - sh: test -s "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-macos-arm64.tar.gz"
+      - sh: test -s "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-darwin-arm64.tar.gz"
         msg: "缺少 macOS arm64 发布资产或文件为空。"
-      - sh: test -s "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-macos-amd64.tar.gz"
+      - sh: test -s "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-darwin-amd64.tar.gz"
         msg: "缺少 macOS amd64 发布资产或文件为空。"
-      - sh: test -s "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-macos-arm64.dmg"
+      - sh: test -s "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-darwin-arm64.dmg"
         msg: "缺少 macOS arm64 DMG 发布资产或文件为空。"
-      - sh: test -s "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-macos-amd64.dmg"
+      - sh: test -s "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-darwin-amd64.dmg"
         msg: "缺少 macOS amd64 DMG 发布资产或文件为空。"
       - sh: test -s "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-amd64.zip"
         msg: "缺少 Windows amd64 发布资产或文件为空。"
       - sh: test -s "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-amd64-installer.exe"
         msg: "缺少 Windows amd64 NSIS 安装包发布资产或文件为空。"
+      - sh: test -s "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-arm64.zip"
+        msg: "缺少 Windows ARM64 发布资产或文件为空。"
+      - sh: test -s "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-arm64-installer.exe"
+        msg: "缺少 Windows ARM64 NSIS 安装包发布资产或文件为空。"
       - sh: test -s "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-386.zip"
         msg: "缺少 Windows 386 发布资产或文件为空。"
       - sh: test -s "{{.RELEASE_DIR}}/{{.RELEASE_BASE_NAME}}-{{.APP_VERSION}}-windows-386-installer.exe"

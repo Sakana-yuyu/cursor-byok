@@ -34,3 +34,6 @@ cursor-tab-server/cursor-tab-server-linux-amd64.tar
 .superpowers/
 .worktrees/
 /gui-test-screenshots/
+
+# 运行时缓存（话题标题等本地状态）
+.reasonix/

@@ -226,6 +226,38 @@ func (manager *Manager) PersistChannelMaxTokensCap(ctx context.Context, channelI
 	return err
 }
 
+// PersistChannelContextWindow 把中转站自适应探测到的真实上下文窗口写回某个 adapter 条目。
+// 仅在该值小于当前配置值时下调（中转站限制通常比 catalog 理论值更小）；
+// 上调不在此处理（避免把探测偏差写大）。粒度是「某一用户的某一供应商的某一模型」，不影响全局。
+func (manager *Manager) PersistChannelContextWindow(ctx context.Context, channelID string, contextWindowTokens int) error {
+	if manager == nil {
+		return fmt.Errorf("config manager is not initialized")
+	}
+	channelID = strings.TrimSpace(channelID)
+	if channelID == "" || contextWindowTokens <= 0 {
+		return nil
+	}
+	current := manager.Current()
+	matched := false
+	for i := range current.ModelAdapters {
+		item := &current.ModelAdapters[i]
+		if strings.TrimSpace(item.ID) != channelID {
+			continue
+		}
+		matched = true
+		// 仅下调：保留用户手动设置的更大值，只在中转站实测更小时收敛。
+		if item.ContextWindowTokens <= 0 || contextWindowTokens < item.ContextWindowTokens {
+			item.ContextWindowTokens = contextWindowTokens
+		}
+		break
+	}
+	if !matched {
+		return nil
+	}
+	_, err := manager.Save(ctx, current)
+	return err
+}
+
 func (manager *Manager) SaveLastAgentModelHash(ctx context.Context, value string) error {
 	if manager == nil {
 		return fmt.Errorf("config manager is not initialized")
@@ -258,6 +290,17 @@ func (manager *Manager) TurnStaleTimeout(ctx context.Context) time.Duration {
 	}
 	manager.reloadIfChanged(ctx)
 	seconds := normalizeTurnStaleTimeout(manager.currentConfig().TurnStaleTimeout)
+	return time.Duration(seconds) * time.Second
+}
+
+// NativeDelegationProgressTimeout 返回 native Cursor 子代理「无有效进展」看门狗的触发阈值：
+// 子代理既无工具结果、又无模型输出/思考活动超过此时长时判定超时。读取热加载后的最新配置。
+func (manager *Manager) NativeDelegationProgressTimeout(ctx context.Context) time.Duration {
+	if manager == nil {
+		return time.Duration(DefaultNativeDelegationProgressTimeoutSeconds) * time.Second
+	}
+	manager.reloadIfChanged(ctx)
+	seconds := normalizeNativeDelegationProgressTimeout(manager.currentConfig().NativeDelegationProgressTimeout)
 	return time.Duration(seconds) * time.Second
 }
 

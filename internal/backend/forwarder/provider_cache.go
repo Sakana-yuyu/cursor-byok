@@ -13,6 +13,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"strings"
 	"sync"
 	"time"
 
@@ -175,11 +176,13 @@ func (gateway *cachingProviderGateway) StartStream(ctx context.Context, req Prov
 
 // streamRecorder 录制一次流的事件序列，并跟踪收口/错误状态与 usage 峰值。
 type streamRecorder struct {
-	events           []modeladapter.ModelEvent
-	hasTurnFinished  bool
-	hasProviderError bool
-	maxInputTokens   int64
-	maxOutputTokens  int64
+	events             []modeladapter.ModelEvent
+	hasTurnFinished    bool
+	hasProviderError   bool
+	finishReason       string
+	hadAssistantOutput bool
+	maxInputTokens     int64
+	maxOutputTokens    int64
 }
 
 func (recorder *streamRecorder) record(event modeladapter.ModelEvent) {
@@ -187,8 +190,20 @@ func (recorder *streamRecorder) record(event modeladapter.ModelEvent) {
 	switch event.Kind {
 	case modeladapter.ModelEventKindTurnFinished:
 		recorder.hasTurnFinished = true
+		recorder.finishReason = strings.TrimSpace(event.FinishReason)
 	case modeladapter.ModelEventKindProviderError:
 		recorder.hasProviderError = true
+	case modeladapter.ModelEventKindTextDelta:
+		// 模型产出了可见的助手正文增量，视为有效输出。
+		recorder.hadAssistantOutput = true
+	case modeladapter.ModelEventKindPartialToolCall,
+		modeladapter.ModelEventKindToolCallDelta,
+		modeladapter.ModelEventKindToolLikeCompleted:
+		// 模型发起了工具调用，视为有效输出（工具调用结果回合也可能没有 TextDelta）。
+		recorder.hadAssistantOutput = true
+	}
+	if event.ToolInvocation != nil {
+		recorder.hadAssistantOutput = true
 	}
 	if event.Err != nil {
 		recorder.hasProviderError = true
@@ -202,8 +217,26 @@ func (recorder *streamRecorder) record(event modeladapter.ModelEvent) {
 }
 
 // completedCleanly 表示流正常收口：出现 TurnFinished 且无任何 ProviderError。
+// 额外排除两类不应被缓存的「看似成功」流：
+//   - finishReason 为截断类（max_output_tokens/length/content_filter）：响应被输出预算截断，
+//     不是完整结果，缓存后重试只会回放同样的截断流，导致任务永久卡死。
+//   - 整回合没有任何助手正文或工具调用（如纯 reasoning 触顶）：空结果缓存无意义且会遮蔽真实重试。
 func (recorder *streamRecorder) completedCleanly() bool {
-	return recorder.hasTurnFinished && !recorder.hasProviderError
+	return recorder.hasTurnFinished &&
+		!recorder.hasProviderError &&
+		!isTruncationFinishReason(recorder.finishReason) &&
+		recorder.hadAssistantOutput
+}
+
+// isTruncationFinishReason 判断收口原因是否表示响应被截断（而非模型主动结束）。
+// 这类响应不应进入本地响应缓存，否则重试会回放相同的截断流。
+func isTruncationFinishReason(reason string) bool {
+	switch strings.TrimSpace(reason) {
+	case "max_output_tokens", "length", "content_filter":
+		return true
+	default:
+		return false
+	}
 }
 
 // responseCacheEntry 是一条缓存的响应事件序列及其估算节省 token 与过期时间。

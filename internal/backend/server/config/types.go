@@ -27,6 +27,11 @@ const (
 	MinTurnStaleTimeoutSeconds = 30
 	// TurnStaleGraceSeconds 表示阶段一（重对齐 append 序列）后给真实工具结果的宽限期，单位秒。
 	TurnStaleGraceSeconds = 60
+	// DefaultNativeDelegationProgressTimeoutSeconds 表示 native Cursor 子代理「无有效进展」的
+	// 默认超时阈值，单位秒：子代理既无工具结果、又无模型输出/思考活动时判定超时。
+	DefaultNativeDelegationProgressTimeoutSeconds = 300
+	// MinNativeDelegationProgressTimeoutSeconds 表示 native 子代理无进展看门狗允许的最小阈值，单位秒。
+	MinNativeDelegationProgressTimeoutSeconds = 60
 	// DefaultLocalResponseCacheTTLSeconds 表示本地响应缓存条目的默认存活时长。
 	DefaultLocalResponseCacheTTLSeconds = 900
 	// DefaultLocalResponseCacheMaxEntries 表示本地响应缓存的默认最大条目数。
@@ -90,6 +95,10 @@ type ModelAdapterConfig struct {
 	BalanceCodingPlanProvider string `json:"balanceCodingPlanProvider,omitempty" yaml:"balanceCodingPlanProvider,omitempty"`
 }
 
+type RoutingConfig struct {
+	Mode string `json:"mode" yaml:"mode"`
+}
+
 type HomeMetricsConfig struct {
 	IncludeCacheWriteInHitRate bool `json:"includeCacheWriteInHitRate" yaml:"includeCacheWriteInHitRate"`
 }
@@ -123,30 +132,32 @@ type SkillMCPScanConfig struct {
 }
 
 type Config struct {
-	Log                       bool                     `json:"log" yaml:"log"`
-	ProviderStreamIdleTimeout int                      `json:"providerStreamIdleTimeout" yaml:"providerStreamIdleTimeout"`
-	TurnStaleTimeout          int                      `json:"turnStaleTimeout" yaml:"turnStaleTimeout"`
-	AutoMatchContextWindow    bool                     `json:"autoMatchContextWindow" yaml:"autoMatchContextWindow"`
-	BackendListenAddr         string                   `json:"backendListenAddr" yaml:"backendListenAddr"`
-	ProxyListenAddr           string                   `json:"proxyListenAddr" yaml:"proxyListenAddr"`
-	ModelAdapters             []ModelAdapterConfig     `json:"modelAdapters" yaml:"modelAdapters"`
-	Routing                   RoutingConfig            `json:"routing" yaml:"routing"`
-	HomeMetrics               HomeMetricsConfig        `json:"homeMetrics" yaml:"homeMetrics"`
-	LocalResponseCache        LocalResponseCacheConfig `json:"localResponseCache" yaml:"localResponseCache"`
-	SkillMCPScan              SkillMCPScanConfig       `json:"skillMcpScan" yaml:"skillMcpScan"`
-	Delegation                DelegationConfig         `json:"delegation" yaml:"delegation"`
-	LastAgentModelHash        string                   `json:"lastAgentModelHash" yaml:"lastAgentModelHash"`
+	Log                             bool                     `json:"log" yaml:"log"`
+	ProviderStreamIdleTimeout       int                      `json:"providerStreamIdleTimeout" yaml:"providerStreamIdleTimeout"`
+	TurnStaleTimeout                int                      `json:"turnStaleTimeout" yaml:"turnStaleTimeout"`
+	NativeDelegationProgressTimeout int                      `json:"nativeDelegationProgressTimeout" yaml:"nativeDelegationProgressTimeout"`
+	AutoMatchContextWindow          bool                     `json:"autoMatchContextWindow" yaml:"autoMatchContextWindow"`
+	BackendListenAddr               string                   `json:"backendListenAddr" yaml:"backendListenAddr"`
+	ProxyListenAddr                 string                   `json:"proxyListenAddr" yaml:"proxyListenAddr"`
+	ModelAdapters                   []ModelAdapterConfig     `json:"modelAdapters" yaml:"modelAdapters"`
+	Routing                         RoutingConfig            `json:"routing" yaml:"routing"`
+	HomeMetrics                     HomeMetricsConfig        `json:"homeMetrics" yaml:"homeMetrics"`
+	LocalResponseCache              LocalResponseCacheConfig `json:"localResponseCache" yaml:"localResponseCache"`
+	SkillMCPScan                    SkillMCPScanConfig       `json:"skillMcpScan" yaml:"skillMcpScan"`
+	Delegation                      DelegationConfig         `json:"delegation" yaml:"delegation"`
+	LastAgentModelHash              string                   `json:"lastAgentModelHash" yaml:"lastAgentModelHash"`
 }
 
 func DefaultConfig() Config {
 	return Config{
-		Log:                       false,
-		ProviderStreamIdleTimeout: DefaultProviderStreamIdleTimeoutSeconds,
-		TurnStaleTimeout:          DefaultTurnStaleTimeoutSeconds,
-		AutoMatchContextWindow:    DefaultAutoMatchContextWindow,
-		BackendListenAddr:         DefaultBackendListenAddr,
-		ProxyListenAddr:           DefaultProxyListenAddr,
-		ModelAdapters:             []ModelAdapterConfig{},
+		Log:                             false,
+		ProviderStreamIdleTimeout:       DefaultProviderStreamIdleTimeoutSeconds,
+		TurnStaleTimeout:                DefaultTurnStaleTimeoutSeconds,
+		NativeDelegationProgressTimeout: DefaultNativeDelegationProgressTimeoutSeconds,
+		AutoMatchContextWindow:          DefaultAutoMatchContextWindow,
+		BackendListenAddr:               DefaultBackendListenAddr,
+		ProxyListenAddr:                 DefaultProxyListenAddr,
+		ModelAdapters:                   []ModelAdapterConfig{},
 		Routing: RoutingConfig{
 			Mode: DefaultRoutingMode,
 		},
@@ -175,6 +186,7 @@ func NormalizeConfig(input Config) (Config, error) {
 	output.Log = input.Log
 	output.ProviderStreamIdleTimeout = normalizeProviderStreamIdleTimeout(input.ProviderStreamIdleTimeout)
 	output.TurnStaleTimeout = normalizeTurnStaleTimeout(input.TurnStaleTimeout)
+	output.NativeDelegationProgressTimeout = normalizeNativeDelegationProgressTimeout(input.NativeDelegationProgressTimeout)
 	output.AutoMatchContextWindow = normalizeAutoMatchContextWindow(input.AutoMatchContextWindow)
 	backendListenAddr, err := normalizeListenAddr(input.BackendListenAddr, DefaultBackendListenAddr, "backendListenAddr")
 	if err != nil {
@@ -190,6 +202,10 @@ func NormalizeConfig(input Config) (Config, error) {
 	output.LocalResponseCache = normalizeLocalResponseCache(input.LocalResponseCache)
 	output.SkillMCPScan = input.SkillMCPScan
 	output.LastAgentModelHash = strings.TrimSpace(input.LastAgentModelHash)
+	output.Routing.Mode = normalizeRoutingMode(input.Routing.Mode)
+	if output.Routing.Mode == "" {
+		output.Routing.Mode = DefaultRoutingMode
+	}
 	adapters, err := NormalizeModelAdapterConfigs(input.ModelAdapters)
 	if err != nil {
 		return Config{}, err
@@ -494,6 +510,18 @@ func normalizeTurnStaleTimeout(value int) int {
 	return value
 }
 
+// normalizeNativeDelegationProgressTimeout 把 native 子代理「无有效进展」看门狗阈值
+// 约束到合法区间（单位秒）：<=0 回退默认值，过小回退最小值，避免正常的长任务被误判超时。
+func normalizeNativeDelegationProgressTimeout(value int) int {
+	if value <= 0 {
+		return DefaultNativeDelegationProgressTimeoutSeconds
+	}
+	if value < MinNativeDelegationProgressTimeoutSeconds {
+		return MinNativeDelegationProgressTimeoutSeconds
+	}
+	return value
+}
+
 // normalizeAutoMatchContextWindow 把「自动配对上下文窗口」开关归一为显式 bool。
 // YAML 中未出现该键时，Load 得到的字段为零值 false；但语义上「未配置」应回退到默认开启，
 // 因此这里无法仅凭 false 区分「显式关闭」与「未配置」。当前实现：直接透传用户值；
@@ -507,6 +535,17 @@ func normalizeMaxCompletionTokens(value int) int {
 		return 0
 	}
 	return value
+}
+
+func normalizeRoutingMode(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "local":
+		return "local"
+	case "upstream":
+		return "upstream"
+	default:
+		return ""
+	}
 }
 
 func normalizeModelAdapterType(value string) string {

@@ -1,0 +1,13 @@
+# .mailmap 归并同人不同 name/email，让 git log 贡献者统计去重。
+# 格式：Canonical Name <canonical-email> Other Name <other-email>
+# canonical 用 GitHub noreply email 时可解析头像；无 noreply 的用 Gravatar MD5 兜底。
+
+# 仓库所有者（Sakana-yuyu）：QQ 邮箱 + 不同显示名归并到主身份
+呆呆可达鸭鸭 <2751244500@qq.com> 呆呆可达鸭鸭 <2129005038@qq.com>
+呆呆可达鸭鸭 <2751244500@qq.com> Sakana <2751244500@qq.com>
+
+# leookun：name 拼写变体（leokun/leookun）+ gmail + noreply 都归并到统一 noreply（id=131544788，可解析头像）
+leookun <131544788+leokun@users.noreply.github.com> leokun <131544788+leookun@users.noreply.github.com>
+leookun <131544788+leokun@users.noreply.github.com> leokun <leokun.cn@gmail.com>
+leookun <131544788+leokun@users.noreply.github.com> leookun <leokun.cn@gmail.com>
+leookun <131544788+leokun@users.noreply.github.com> leookun <131544788+leokun@users.noreply.github.com>

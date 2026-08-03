@@ -4,8 +4,7 @@ import Input from "@/components/ui/Input.vue";
 import ModelAdapterTestCard from "@/components/ModelAdapterTestCard.vue";
 import Select from "@/components/ui/Select.vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
-import { enableReaderMCP, getModelEditorContext } from "@/services/clientApi";
-import { connectMCPRuntimeServer } from "@/services/runtimeControlApi";
+import { getModelEditorContext } from "@/services/clientApi";
 import { resolveModelContextWindow, resolveModelCapabilities } from "@/utils/modelContext";
 import { providerIcon, providerLabel, providerSelectOptions } from "@/utils/providerMeta";
 import { supplierSelectOptions, supplierTemplate } from "@/utils/supplierCatalog";
@@ -146,7 +145,6 @@ const openAIRequestGroupOptions = [
 const providerTypeOptions = providerSelectOptions();
 const supplierOptions = computed(() => supplierSelectOptions(draft.supplierID));
 const currentSupplierTemplate = computed(() => supplierTemplate(draft.supplierID));
-const currentSupplierUsage = computed(() => currentSupplierTemplate.value.usage || {});
 const currentSupplierCatalog = computed(() => currentSupplierTemplate.value.modelCatalog || {});
 const supplierModelOptions = computed(() => {
   const template = supplierTemplate(draft.supplierID);
@@ -163,61 +161,6 @@ const editorIndex = ref(-1);
 const router = useRouter();
 const draft = reactive(createEmptyModelAdapter());
 const errorMessage = ref("");
-// 读图 MCP 设置：一键为不支持图片的模型添加读图 MCP（写入 Cursor 全局 mcp.json）。
-const readerState = reactive({
-  open: false,
-  url: "",
-  apiKey: "",
-  model: "gpt-5.6-luna",
-  busy: false,
-  ok: "",
-  error: "",
-});
-
-function openReaderPanel() {
-  readerState.url = String(draft.baseURL || "");
-  readerState.apiKey = String(draft.apiKey || "");
-  readerState.model = "gpt-5.6-luna";
-  readerState.open = true;
-  readerState.ok = "";
-  readerState.error = "";
-}
-
-async function handleEnableReaderMCP() {
-  if (readerState.busy) {
-    return;
-  }
-  const url = String(readerState.url || "").trim();
-  if (!url) {
-    readerState.error = "请填写视觉网关地址（url）";
-    return;
-  }
-  readerState.busy = true;
-  readerState.error = "";
-  readerState.ok = "";
-  try {
-    const result = await enableReaderMCP(url, String(readerState.apiKey || "").trim(), String(readerState.model || "").trim());
-    const identifier = String(result?.identifier || "vision-reader");
-    readerState.ok = `读图 MCP「${identifier}」已添加并启用，可在「设置 → Skills 与 MCP」中查看。`;
-    // 自动尝试连接（不阻塞，连接失败仅提示可手动连接）
-    void connectReaderMCPAttempt(identifier);
-  } catch (error) {
-    readerState.error = toUserError(error);
-  } finally {
-    readerState.busy = false;
-  }
-}
-
-async function connectReaderMCPAttempt(identifier) {
-  try {
-    await connectMCPRuntimeServer(identifier, `reader-${Date.now()}`, "");
-    readerState.ok += "已尝试连接读图 MCP。";
-  } catch (_error) {
-    readerState.error = readerState.error
-      ? `${readerState.error} 读图 MCP 自动连接失败，请到「设置 → Skills 与 MCP」手动连接。`
-      : "读图 MCP 已添加，但自动连接失败，请到「设置 → Skills 与 MCP」手动连接。";
-  }
-}
 const loading = ref(true);
 const lastTestAdapterID = ref("");
 const localTestFailure = ref("");
@@ -289,6 +232,7 @@ function clearPricing() {
 }
 
 const detectedCapabilities = computed(() => resolveModelCapabilities(draft.modelID));
+const detectedContextWindow = computed(() => resolveModelContextWindow(draft.modelID));
 
 // 上下文窗口快捷档位
 const CONTEXT_TIERS = [
@@ -811,7 +755,7 @@ onMounted(async () => {
 
 <template>
   <div class="flex h-full flex-col text-[#e5e5e5]">
-    <div class="flex shrink-0 items-center justify-between px-4 pb-2">
+    <div class="flex shrink-0 items-center justify-between border-b border-[#343434] bg-[#1f1f1f] px-4 py-2">
       <h2 class="text-base font-medium text-white">{{ title }}</h2>
       <div class="flex items-center gap-2">
         <Button variant="default" @click="handleCancel">取消</Button>
@@ -830,9 +774,16 @@ onMounted(async () => {
       加载中...
     </div>
 
-    <div v-else class="flex-1 overflow-y-auto min-h-0 px-4 pb-4">
-      <div class="flex flex-col gap-4">
+    <div v-else class="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
+      <div class="mx-auto flex w-full max-w-[960px] flex-col gap-4">
         <div v-if="isQuickMode && !manualAddMode" class="flex flex-col gap-3">
+          <div class="flex items-start gap-3">
+            <span class="mt-0.5 icon-[mdi--flash-outline] shrink-0 text-[18px] text-[#6ee7a5]"></span>
+            <div>
+              <div class="text-sm font-medium text-[#e5e5e5]">快捷添加</div>
+              <div class="mt-0.5 text-xs leading-5 text-[#8f8f8f]">先填写连接信息，再从模型目录批量导入可用模型。</div>
+            </div>
+          </div>
           <div class="center-row justify-between gap-3 rounded-[8px] border border-[#343434] bg-[#252525] px-3 py-2">
             <div class="center-row min-w-0 gap-2">
               <span class="icon-[mdi--information-outline] shrink-0 text-[16px] text-[#8f8f8f]"></span>
@@ -845,6 +796,10 @@ onMounted(async () => {
           </div>
 
           <div class="flex flex-col gap-3 rounded-[8px] border border-[#343434] bg-[#252525] p-3">
+            <div>
+              <div class="text-sm font-medium text-[#e5e5e5]">供应商与连接</div>
+              <div class="mt-0.5 text-xs text-[#8f8f8f]">选择模板会自动带入接口协议和常用模型，也可以手动覆盖。</div>
+            </div>
             <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
               <label class="flex flex-col gap-1">
                 <span class="text-sm text-[#d4d4d4]">模型类型</span>
@@ -870,6 +825,18 @@ onMounted(async () => {
                 </span>
               </label>
             </div>
+            <label class="flex flex-col gap-1 md:col-span-2">
+              <span class="text-sm text-[#d4d4d4]">供应商模板</span>
+              <Select
+                :model-value="draft.supplierID"
+                :options="supplierOptions"
+                button-class="h-9 text-sm"
+                @update:model-value="handleSupplierChange"
+              />
+              <span class="text-xs text-[#8f8f8f]">
+                选择固定供应商会自动填充接口地址、协议和常用模型；仍可在下方覆盖。
+              </span>
+            </label>
             <label class="flex flex-col gap-1">
               <span class="text-sm text-[#d4d4d4]">{{ quickBaseURLLabel }}</span>
               <input
@@ -938,17 +905,68 @@ onMounted(async () => {
 
         <div class="text-xs font-medium uppercase tracking-[0.08em] text-[#737373]">基础信息</div>
 
-        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div class="md:col-span-2 rounded-[8px] border border-[#343434] bg-[#252525] p-3">
+            <div class="mb-3">
+              <div class="text-sm font-medium text-[#e5e5e5]">供应商与连接</div>
+              <div class="mt-0.5 text-xs leading-5 text-[#8f8f8f]">供应商模板、接口地址和访问密钥决定模型请求的入口。</div>
+            </div>
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
           <label class="flex flex-col gap-1 md:col-span-2">
             <span class="text-sm text-[#d4d4d4]">供应商模板</span>
             <Select :model-value="draft.supplierID" :options="supplierOptions" @update:model-value="handleSupplierChange" />
             <span class="text-xs text-[#8f8f8f]">选择固定供应商会自动填充接口地址、协议和常用模型；仍可在下方覆盖。</span>
-            <span class="text-xs leading-5 text-[#737373]">
-              模型目录：{{ currentSupplierCatalog.status === 'manual_only' ? '手动添加' : currentSupplierCatalog.source || '预设地址' }}
-              · 用量：{{ currentSupplierUsage.status === 'none' ? '暂无自动查询' : currentSupplierUsage.source || currentSupplierUsage.status || '自动匹配' }}
-            </span>
           </label>
 
+          <label class="flex flex-col gap-1 md:col-span-2">
+            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
+              <Tooltip :content="fieldTips.baseURL" />
+              <span>接口地址</span>
+            </span>
+            <input
+              v-model="draft.baseURL"
+              type="text"
+              :placeholder="interfacePlaceholder"
+              class="h-9 min-w-0 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+            />
+          </label>
+
+          <label class="flex min-w-0 flex-col gap-1">
+            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
+              <Tooltip :content="fieldTips.apiKey" />
+              <span>访问密钥</span>
+            </span>
+            <Input
+              v-model="draft.apiKey"
+              type="password"
+              allow-visibility-toggle
+              placeholder="例如：sk-xxxxxx"
+              autocomplete="off"
+            />
+          </label>
+
+          <label class="flex flex-col gap-1 md:col-span-2">
+            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
+              <Tooltip :content="fieldTips.modelCatalogURL" />
+              <span>模型目录 URL（可选）</span>
+            </span>
+            <input
+              v-model="draft.modelCatalogURL"
+              type="text"
+              :placeholder="currentSupplierCatalog.urls?.[0] || '例如：https://api.example.com/v1/models'"
+              class="h-9 min-w-0 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+            />
+            <span class="text-xs leading-5 text-[#737373]">留空使用供应商预设地址；手动添加供应商时，请填写返回模型数组的完整地址。</span>
+          </label>
+            </div>
+          </div>
+
+          <div class="md:col-span-2 rounded-[8px] border border-[#343434] bg-[#252525] p-3">
+            <div class="mb-3">
+              <div class="text-sm font-medium text-[#e5e5e5]">模型标识</div>
+              <div class="mt-0.5 text-xs leading-5 text-[#8f8f8f]">用于区分模型、渠道分组和供应商预设。</div>
+            </div>
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
           <label class="flex flex-col gap-1">
             <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
               <Tooltip :content="fieldTips.displayName" />
@@ -1011,49 +1029,12 @@ onMounted(async () => {
               {{ catalogError }}
             </div>
           </label>
-
-          <label class="flex flex-col gap-1">
-            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
-              <Tooltip :content="fieldTips.apiKey" />
-              <span>访问密钥</span>
-            </span>
-            <Input
-              v-model="draft.apiKey"
-              type="password"
-              allow-visibility-toggle
-              placeholder="例如：sk-xxxxxx"
-              autocomplete="off"
-            />
-          </label>
-
-          <label class="flex flex-col gap-1">
-            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
-              <Tooltip :content="fieldTips.baseURL" />
-              <span>接口地址</span>
-            </span>
-            <input
-              v-model="draft.baseURL"
-              type="text"
-              :placeholder="interfacePlaceholder"
-              class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
-            />
-          </label>
+          <div class="md:col-span-2 border-t border-[#343434] pt-3">
+            <div class="text-sm font-medium text-[#e5e5e5]">模型能力与行为</div>
+            <div class="mt-0.5 text-xs leading-5 text-[#8f8f8f]">上下文、图片能力、推理强度和价格会影响模型的实际使用方式。</div>
+          </div>
 
           <label class="flex flex-col gap-1 md:col-span-2">
-            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
-              <Tooltip :content="fieldTips.modelCatalogURL" />
-              <span>模型目录 URL（可选）</span>
-            </span>
-            <input
-              v-model="draft.modelCatalogURL"
-              type="text"
-              :placeholder="currentSupplierCatalog.urls?.[0] || '例如：https://api.example.com/v1/models'"
-              class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
-            />
-            <span class="text-xs leading-5 text-[#737373]">留空使用供应商预设地址；手动添加供应商时，请填写返回模型数组的完整地址。</span>
-          </label>
-
-          <label class="flex flex-col gap-1">
             <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
               <Tooltip :content="fieldTips.contextWindowTokens" />
               <span>上下文窗口</span>
@@ -1081,43 +1062,19 @@ onMounted(async () => {
               </span>
             </div>
 
-            <!-- 图片不支持警告 -->
             <div v-if="detectedCapabilities && detectedCapabilities.supportsVision === false" class="rounded-[6px] border border-yellow-800/40 bg-yellow-900/20 px-3 py-1.5 text-[11px] text-yellow-200">
-              ⚠️ 此模型不支持图片输入。发送图片时，后端会自动将图片替换为文字占位说明。
+              此模型不支持图片输入。图片将按视觉委派设置转交给已配置的识图模型；未配置时保留文字占位说明。
             </div>
 
-            <!-- 读图 MCP 设置：一键为不支持图片的模型添加读图 MCP -->
-            <div v-if="detectedCapabilities && detectedCapabilities.supportsVision === false" class="mt-1.5">
+            <div v-if="detectedCapabilities && detectedCapabilities.supportsVision === false" class="mt-1.5 rounded-[6px] border border-[#343434] bg-[#252525] px-3 py-2 text-[11px] text-[#a3a3a3]">
+              读图能力已统一到「设置 → 模型与委派 → 高级委派 → 视觉委派」。请在那里选择一个支持视觉输入的模型并启用视觉委派；无需在当前模型中重复配置读图 MCP。
               <button
                 type="button"
-                class="inline-flex items-center gap-1 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-2.5 py-1 text-[11px] text-[#93c5fd] transition-colors hover:bg-[#2a2a2a]"
-                @click="readerState.open ? (readerState.open = false) : openReaderPanel()"
+                class="ml-1 text-[#93c5fd] underline decoration-[#93c5fd]/50 underline-offset-2 hover:text-white"
+                @click="router.push({ path: '/settings', query: { category: 'delegation' } })"
               >
-                <span class="icon-[mdi--image-search-outline] text-[12px]"></span>
-                {{ readerState.open ? "收起读图 MCP 设置" : "读图 MCP 设置" }}
+                打开视觉委派设置
               </button>
-
-              <div v-if="readerState.open" class="mt-2 space-y-2 rounded-[6px] border border-[#343434] bg-[#252525] p-3">
-                <div class="space-y-1">
-                  <span class="text-[11px] text-[#a3a3a3]">视觉网关地址（OpenAI 兼容，参考 vision-luna）</span>
-                  <Input :model-value="readerState.url" placeholder="https://your-gateway.example.com/v1" autocomplete="off" @update:model-value="(value) => (readerState.url = value)" />
-                </div>
-                <div class="space-y-1">
-                  <span class="text-[11px] text-[#a3a3a3]">API Key（网关无需鉴权可留空）</span>
-                  <Input :model-value="readerState.apiKey" type="password" placeholder="sk-..." @update:model-value="(value) => (readerState.apiKey = value)" />
-                </div>
-                <div class="space-y-1">
-                  <span class="text-[11px] text-[#a3a3a3]">视觉模型名</span>
-                  <Input :model-value="readerState.model" placeholder="gpt-5.6-luna" @update:model-value="(value) => (readerState.model = value)" />
-                </div>
-                <div class="flex flex-wrap items-center gap-2">
-                  <Button variant="primary" :disabled="readerState.busy" @click="handleEnableReaderMCP">
-                    {{ readerState.busy ? "启用中..." : "启用读图 MCP" }}
-                  </Button>
-                </div>
-                <div v-if="readerState.ok" class="text-[11px] text-[#6ee7a5]">{{ readerState.ok }}</div>
-                <div v-if="readerState.error" class="text-[11px] text-[#fca5a5]">{{ readerState.error }}</div>
-              </div>
             </div>
 
             <!-- 快捷档位按钮 -->
@@ -1201,6 +1158,34 @@ onMounted(async () => {
 
           <label v-if="draft.type === 'openai' || draft.type === 'gemini'" class="flex flex-col gap-1">
             <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
+              <Tooltip :content="fieldTips.maxCompletionTokens" />
+              <span>最大输出 Token</span>
+            </span>
+            <input
+              v-model="maxCompletionTokensInput"
+              type="text"
+              inputmode="numeric"
+              placeholder="例如：65536（留空用默认值）"
+              class="h-9 min-w-0 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+            />
+          </label>
+
+          <label v-if="draft.type === 'anthropic'" class="flex flex-col gap-1">
+            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
+              <Tooltip :content="fieldTips.anthropicMaxTokens" />
+              <span>最大输出 Token</span>
+            </span>
+            <input
+              v-model="anthropicMaxTokensInput"
+              type="text"
+              inputmode="numeric"
+              placeholder="例如：65536（留空用默认值）"
+              class="h-9 min-w-0 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+            />
+          </label>
+
+          <label v-if="draft.type === 'openai' || draft.type === 'gemini'" class="flex flex-col gap-1">
+            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
               <Tooltip :content="fieldTips.reasoningEffort" />
               <span>推理强度</span>
             </span>
@@ -1222,24 +1207,41 @@ onMounted(async () => {
           </label>
 
         </div>
+        </div>
 
         <button
           type="button"
-          class="center-row w-full justify-between gap-3 rounded-[8px] border border-[#343434] bg-[#252525] px-3 py-2 text-left transition-colors hover:border-[#4a4a4a]"
+          class="center-row w-full justify-between gap-3 rounded-[8px] border border-[#343434] bg-[#252525] px-3 py-2 text-left transition-colors hover:border-[#4a4a4a] focus:outline-none focus:ring-1 focus:ring-[#10AD5D]"
+          :aria-expanded="advancedExpanded"
+          aria-controls="model-editor-advanced-settings"
           @click="advancedExpanded = !advancedExpanded"
         >
           <div class="center-row min-w-0 gap-2 text-xs">
             <span class="icon-[mdi--tune-variant] shrink-0 text-[15px] text-[#8f8f8f]"></span>
-            <span class="text-[#a3a3a3]">协议</span>
+            <span class="text-[#a3a3a3]">协议与高级设置</span>
             <span class="truncate text-[#86efac]">{{ draft.protocolMode === PROTOCOL_MODE_FIXED ? '固定' : '自动' }} · {{ effectiveProtocolGroup || "未识别" }}</span>
+            <span
+              v-if="hasAdvancedOverrides"
+              class="shrink-0 rounded-full border border-[#3f6f52] bg-[#173322] px-1.5 py-0.5 text-[10px] text-[#86efac]"
+            >
+              已覆盖
+            </span>
           </div>
           <span class="center-row shrink-0 gap-1 text-xs text-[#8f8f8f]">
-            <span>{{ advancedExpanded ? "收起" : "高级设置" }}</span>
+            <span>{{ advancedExpanded ? "收起" : "展开" }}</span>
             <span class="icon-[mdi--chevron-right] text-[16px] transition-transform" :class="{ 'rotate-90': advancedExpanded }"></span>
           </span>
         </button>
 
-        <div v-if="advancedExpanded" class="flex flex-col gap-3 rounded-[8px] border border-[#343434] bg-[#252525] p-3">
+        <div
+          v-if="advancedExpanded"
+          id="model-editor-advanced-settings"
+          class="flex flex-col gap-3 rounded-[8px] border border-[#343434] bg-[#252525] p-3"
+        >
+          <div>
+            <div class="text-sm font-medium text-[#e5e5e5]">协议与高级参数</div>
+            <div class="mt-0.5 text-xs leading-5 text-[#8f8f8f]">仅在需要覆盖自动识别、请求参数、请求头或余额策略时展开。</div>
+          </div>
           <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
             <label class="flex flex-col gap-1">
               <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
@@ -1258,19 +1260,6 @@ onMounted(async () => {
           </div>
 
           <div v-if="draft.type === 'openai' || draft.type === 'gemini'" class="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <label class="flex flex-col gap-1">
-            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
-              <Tooltip :content="fieldTips.maxCompletionTokens" />
-              <span>最大输出 Token</span>
-            </span>
-            <input
-              v-model="maxCompletionTokensInput"
-              type="text"
-              inputmode="numeric"
-              placeholder="例如：65536（留空用默认值）"
-              class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
-            />
-          </label>
 
           <label v-if="draft.type === 'openai' && /gpt/i.test(draft.modelID || '')" class="center-row justify-between gap-3 rounded-[8px] border border-[#343434] bg-[#232323] px-3 py-2 text-sm text-[#d4d4d4]">
             <span>Fast 模式（priority）</span>
@@ -1323,20 +1312,6 @@ onMounted(async () => {
             class="mt-3 min-h-[120px] w-full resize-none rounded-[6px] border border-[#3f3f3f] bg-[#1f1f1f] px-3 py-2 font-mono text-xs text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
           />
         </div>
-
-        <label v-if="draft.type === 'anthropic'" class="flex flex-col gap-1">
-          <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
-            <Tooltip :content="fieldTips.anthropicMaxTokens" />
-            <span>最大输出 Token</span>
-          </span>
-          <input
-            v-model="anthropicMaxTokensInput"
-            type="text"
-            inputmode="numeric"
-            placeholder="例如：65536（留空用默认值）"
-            class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
-          />
-        </label>
 
         <div v-if="draft.type === 'anthropic'" class="rounded-[8px] border border-[#343434] bg-[#232323] p-3">
           <div class="flex items-center justify-between gap-3">
@@ -1532,6 +1507,7 @@ onMounted(async () => {
           class="rounded-[8px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-sm text-[#fca5a5]"
         >
           {{ errorMessage }}
+        </div>
         </div>
         </template>
       </div>

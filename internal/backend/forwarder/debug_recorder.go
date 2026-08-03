@@ -27,6 +27,8 @@ type debugRecorder struct {
 	mu          sync.Mutex
 }
 
+const maxDebugProtoPayloadBytes = 64 * 1024
+
 func newDebugRecorder(historyRoot string, broker *StreamBroker, config debugLogConfig) *debugRecorder {
 	return &debugRecorder{
 		historyRoot: strings.TrimSpace(historyRoot),
@@ -294,6 +296,20 @@ func protoJSONDebugPayload(message proto.Message) any {
 	if message == nil {
 		return nil
 	}
+	if size := proto.Size(message); size > maxDebugProtoPayloadBytes {
+		summary := map[string]any{
+			"proto_size":      size,
+			"payload_omitted": true,
+			"message_type":    fmt.Sprintf("%T", message),
+		}
+		if serverMessage, ok := message.(*agentv1.AgentServerMessage); ok {
+			summary["message_case"] = agentServerMessageCase(serverMessage)
+			if checkpoint := serverMessage.GetConversationCheckpointUpdate(); checkpoint != nil {
+				summary["checkpoint"] = checkpointDebugStats(checkpoint)
+			}
+		}
+		return summary
+	}
 	payload, err := protojson.MarshalOptions{
 		UseProtoNames:   true,
 		EmitUnpopulated: false,
@@ -306,6 +322,33 @@ func protoJSONDebugPayload(message proto.Message) any {
 		return string(payload)
 	}
 	return decoded
+}
+
+func checkpointDebugStats(state *agentv1.ConversationStateStructure) map[string]any {
+	if state == nil {
+		return nil
+	}
+	return map[string]any{
+		"proto_size":                 proto.Size(state),
+		"root_prompt_messages_count": len(state.GetRootPromptMessagesJson()),
+		"root_prompt_messages_bytes": byteSliceTotal(state.GetRootPromptMessagesJson()),
+		"turns_count":                len(state.GetTurns()),
+		"turns_bytes":                byteSliceTotal(state.GetTurns()),
+		"summary_bytes":              len(state.GetSummary()),
+		"summary_archive_bytes":      len(state.GetSummaryArchive()),
+		"summary_archives_count":     len(state.GetSummaryArchives()),
+		"pending_tool_calls_count":   len(state.GetPendingToolCalls()),
+		"subagent_runs_count":        len(state.GetSubagentRunsByParentToolCallId()),
+		"file_states_count":          len(state.GetFileStates()) + len(state.GetFileStatesV2()),
+	}
+}
+
+func byteSliceTotal(items [][]byte) int {
+	total := 0
+	for _, item := range items {
+		total += len(item)
+	}
+	return total
 }
 
 func inboundIntentDebugPayload(intent InboundIntent) map[string]any {

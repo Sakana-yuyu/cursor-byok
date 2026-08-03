@@ -1,10 +1,10 @@
 {
 	"fixed": {
-		"file_version": "0.0.44"
+		"file_version": "0.0.77"
 	},
 	"info": {
 		"0000": {
-			"ProductVersion": "0.0.44",
+			"ProductVersion": "0.0.77",
 			"CompanyName": "Sakana",
 			"FileDescription": "Cursor助手",
 			"LegalCopyright": "© 2026, Sakana",

@@ -13,7 +13,7 @@ import {
 import { providerIcon, providerLabel } from "@/utils/providerMeta";
 import { supplierModelCatalog, supplierUsageRequest } from "@/utils/supplierCatalog";
 import { getModelAdapterTestResultByID } from "@/state/appState";
-import { queryProviderBalance, diagnoseModelAdapters, applyDiagnosticFixes } from "@/services/clientApi";
+import { queryProviderBalance, diagnoseModelAdapters, applyDiagnosticFixes, autoMatchContextWindows } from "@/services/clientApi";
 import {
   SUPPLIER_GROUP_MODE_CONNECTION,
   SUPPLIER_GROUP_MODE_NAME,
@@ -310,29 +310,49 @@ async function openEditor() {
 
 const diagnosing = ref(false);
 
-// 一键诊断优化：扫描已导入模型的协议配置，发现 claude/gemini 被误配为 openai
-// 等问题后，弹窗确认并一键修正为原生协议（anthropic/gemini），修正后刷新配置。
+// 一键诊断优化：并行执行「协议诊断」+「上下文对齐」。
+//  - 协议诊断：扫描已导入模型的协议配置，发现 claude/gemini 被误配为 openai 等问题，
+//    弹窗确认后一键修正为原生协议（anthropic/gemini）。
+//  - 上下文对齐：force 触发 autoMatchContextWindows（无视 autoMatchContextWindow 开关），
+//    目录命中覆盖为真实窗口（如 gpt-5.6-luna=272K），目录未命中则探测 provider /models 回填。
+// 两项都完成后刷新配置并汇总展示。
 async function handleDiagnose() {
   if (diagnosing.value) return;
   diagnosing.value = true;
   try {
-    const result = await diagnoseModelAdapters();
-    if (!result.issues || result.issues.length === 0) {
-      await showModal({ title: "诊断完成", content: `已检查 ${result.total} 个模型，未发现协议配置问题。` });
+    const [diagResult, alignResult] = await Promise.all([
+      diagnoseModelAdapters(),
+      autoMatchContextWindows(true),
+    ]);
+
+    // 汇总上下文对齐结果
+    let alignSummary = "";
+    if (alignResult?.enabled) {
+      alignSummary = `上下文对齐完成：共 ${alignResult.total ?? 0} 个，目录对齐 ${alignResult.fromCatalog ?? 0} 个，探测对齐 ${alignResult.fromProbe ?? 0} 个。`;
+      if (alignResult.switchEnabled === false) {
+        alignSummary += "\n（自动配对开关未开启，本次为手动强制对齐）";
+      }
+    } else {
+      alignSummary = `上下文对齐未执行：共 ${alignResult?.total ?? 0} 个模型。`;
+    }
+
+    const issues = diagResult?.issues || [];
+    if (issues.length === 0) {
+      await showModal({ title: "诊断完成", content: `已检查 ${diagResult?.total ?? 0} 个模型，未发现协议配置问题。\n\n${alignSummary}` });
       return;
     }
-    const sample = result.issues.slice(0, 5).map((i) => `· ${i.modelID}：${i.currentValue} → ${i.suggestedValue}`);
-    const more = result.issues.length > 5 ? `\n……等共 ${result.issues.length} 个问题` : "";
+    const sample = issues.slice(0, 5).map((i) => `· ${i.modelID}：${i.currentValue} → ${i.suggestedValue}`);
+    const more = issues.length > 5 ? `\n……等共 ${issues.length} 个问题` : "";
     const confirmed = await showModal({
       title: "发现协议配置问题",
-      content: `检测到 ${result.issues.length} 个模型的协议配置可能不匹配（如 Claude/Gemini 被配为 OpenAI 协议，导致缓存失效）：\n\n${sample.join("\n")}${more}\n\n是否一键修正为原生协议？`,
+      content: `检测到 ${issues.length} 个模型的协议配置可能不匹配（如 Claude/Gemini 被配为 OpenAI 协议，导致缓存失效）：\n\n${sample.join("\n")}${more}\n\n是否一键修正为原生协议？\n\n${alignSummary}`,
       confirmText: "一键修正",
       cancelText: "取消",
     });
     if (!confirmed) return;
-    await applyDiagnosticFixes(result.issues.map((i) => i.channelId));
+    await applyDiagnosticFixes(issues.map((i) => i.channelId));
     await reloadUserConfig({ modelAdaptersOnly: true });
-    await showModal({ title: "修正完成", content: `已修正 ${result.issues.length} 个模型的协议配置。` });
+    await showModal({ title: "修正完成", content: `已修正 ${issues.length} 个模型的协议配置。\n\n${alignSummary}` });
   } catch (error) {
     await showActionError("诊断失败", toUserError(error));
   } finally {
@@ -474,10 +494,10 @@ onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }).catch(() =>
                   </div>
                 </div>
                 <span
-                  class="center-row size-7 shrink-0 justify-center rounded-full border border-[#3f3f3f] text-[#a3a3a3]"
+                  class="center-row size-7 shrink-0 justify-center text-[#a3a3a3]"
                   :title="providerLabel(supplier.type)"
                 >
-                  <span :class="[providerIcon(supplier.type), 'text-[16px]']"></span>
+                  <span :class="[providerIcon(supplier.type), 'text-[32px]']"></span>
                 </span>
               </div>
 

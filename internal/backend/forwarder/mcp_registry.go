@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"reflect"
 	"regexp"
 	"sort"
@@ -556,24 +555,24 @@ func (registry *MCPRuntimeRegistry) finishCapabilityOperation(operation mcpCapab
 }
 
 func connectMCPRuntime(ctx context.Context, config MCPServerConfig) (*mcp.ClientSession, []*agentv1.McpToolDescriptor, error) {
-	transport, err := mcpRuntimeTransport(config)
+	transport, stderr, err := mcpRuntimeTransport(config)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("%s%s", err, mcpStderrSuffix(stderr))
 	}
 	client := mcp.NewClient(&mcp.Implementation{Name: "cursor-byok", Version: "dev"}, nil)
 	session, err := client.Connect(ctx, transport, nil)
 	if err != nil {
-		return nil, nil, fmt.Errorf("connect mcp server %q: %w", config.Name, err)
+		return nil, nil, fmt.Errorf("connect mcp server %q: %w%s", config.Name, err, mcpStderrSuffix(stderr))
 	}
 	tools, err := listBoundedMCPTools(ctx, session, config.Name)
 	if err != nil {
 		_ = session.Close()
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("%w%s", err, mcpStderrSuffix(stderr))
 	}
 	return session, tools, nil
 }
 
-func mcpRuntimeTransport(config MCPServerConfig) (mcp.Transport, error) {
+func mcpRuntimeTransport(config MCPServerConfig) (mcp.Transport, *mcpStderrBuffer, error) {
 	transport := strings.ToLower(strings.TrimSpace(config.Transport))
 	if transport == "" {
 		transport = "stdio"
@@ -581,9 +580,13 @@ func mcpRuntimeTransport(config MCPServerConfig) (mcp.Transport, error) {
 	switch transport {
 	case "stdio":
 		if strings.TrimSpace(config.Command) == "" {
-			return nil, fmt.Errorf("mcp stdio server %q has no command", config.Name)
+			return nil, nil, fmt.Errorf("mcp stdio server %q has no command", config.Name)
 		}
-		cmd := exec.Command(config.Command, config.Args...)
+		resolved, err := resolveMCPStdioCommand(config)
+		if err != nil {
+			return nil, nil, err
+		}
+		cmd := exec.Command(resolved, config.Args...)
 		if cwd := strings.TrimSpace(config.Cwd); cwd != "" {
 			cmd.Dir = cwd
 		}
@@ -591,19 +594,21 @@ func mcpRuntimeTransport(config MCPServerConfig) (mcp.Transport, error) {
 		for key, value := range config.Env {
 			cmd.Env = append(cmd.Env, key+"="+value)
 		}
-		return &mcp.CommandTransport{Command: cmd, TerminateDuration: mcpProcessCloseDuration}, nil
+		stderr := &mcpStderrBuffer{limit: mcpStderrTailLimit}
+		cmd.Stderr = stderr
+		return &mcp.CommandTransport{Command: cmd, TerminateDuration: mcpProcessCloseDuration}, stderr, nil
 	case "http", "streamable-http", "streamable_http":
 		if strings.TrimSpace(config.URL) == "" {
-			return nil, fmt.Errorf("mcp http server %q has no url", config.Name)
+			return nil, nil, fmt.Errorf("mcp http server %q has no url", config.Name)
 		}
-		return &mcp.StreamableClientTransport{Endpoint: config.URL, HTTPClient: mcpHTTPClient(config.Headers)}, nil
+		return &mcp.StreamableClientTransport{Endpoint: config.URL, HTTPClient: mcpHTTPClient(config.Headers)}, nil, nil
 	case "sse":
 		if strings.TrimSpace(config.URL) == "" {
-			return nil, fmt.Errorf("mcp sse server %q has no url", config.Name)
+			return nil, nil, fmt.Errorf("mcp sse server %q has no url", config.Name)
 		}
-		return &mcp.SSEClientTransport{Endpoint: config.URL, HTTPClient: mcpHTTPClient(config.Headers)}, nil
+		return &mcp.SSEClientTransport{Endpoint: config.URL, HTTPClient: mcpHTTPClient(config.Headers)}, nil, nil
 	default:
-		return nil, fmt.Errorf("unsupported mcp transport %q", config.Transport)
+		return nil, nil, fmt.Errorf("unsupported mcp transport %q", config.Transport)
 	}
 }
 
@@ -767,15 +772,8 @@ func sanitizeMCPRuntimeError(err error, config MCPServerConfig) string {
 			appendSecretRedaction(values...)
 		}
 	}
-	appendSecretRedaction(
-		config.Command,
-		mcpCommandBasename(config.Command),
-		config.Cwd,
-		filepath.Clean(config.Cwd),
-		filepath.ToSlash(config.Cwd),
-		config.ConfigPath,
-		normalizeMCPRuntimeScope(config.RuntimeScope),
-	)
+	// 命令名、工作目录、配置文件路径用于可排查的错误提示，不视为 secret；
+	// 只有 env/headers/args 里的值可能携带凭据，需要脱敏。
 	for _, value := range config.Env {
 		appendSecretRedaction(value)
 	}

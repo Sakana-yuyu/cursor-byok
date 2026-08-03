@@ -13,7 +13,10 @@ import (
 
 const nativeDelegationRetention = 10 * time.Minute
 const nativeDelegationProgressInterval = 12 * time.Second
-const nativeDelegationEffectiveProgressTimeout = 5 * time.Minute
+
+// defaultNativeDelegationProgressTimeout 是 native Cursor 子代理「无有效进展」看门狗的兜底阈值，
+// 运行时由 config.nativeDelegationProgressTimeout 覆盖（默认 5 分钟，最小 1 分钟）。
+const defaultNativeDelegationProgressTimeout = 5 * time.Minute
 
 // nativeDelegationRuntime tracks direct Cursor Task -> subagent executions.
 // These executions do not enter the Multitask scheduler, but they still need
@@ -242,19 +245,72 @@ func (service *Service) watchNativeDelegationProgress(requestID, execID string) 
 			if last.IsZero() {
 				last = item.StartedAt
 			}
-			if time.Since(last) < nativeDelegationEffectiveProgressTimeout {
+			if time.Since(last) < service.nativeDelegationProgressTimeout() {
 				continue
 			}
-			service.updateNativeDelegationStatus(execID, delegation.TaskTimedOut, "Cursor 子代理无有效进展，已停止等待", "无有效进展超时：Cursor 子代理连续 5 分钟没有新的工具调用、工具结果或有效输出")
+			// 子代理会话仍有模型输出/思考或工具活动（conversation 级）时不算「无有效进展」：
+			// 模型正在长文本生成或长思考期间没有工具结果事件，误判会砍掉正常任务。
+			if service.markDelegationConversationProgress(item) {
+				continue
+			}
+			service.updateNativeDelegationStatus(execID, delegation.TaskTimedOut, "Cursor 子代理无有效进展，已停止等待", "无有效进展超时：Cursor 子代理连续没有新的工具调用、工具结果或有效输出")
 			stream, ok := service.broker.Get(requestID)
 			if ok && stream != nil {
 				if pending, found := selectPendingExec(execID, 0, stream); found {
-					_ = service.recoverExecWithoutTerminal(stream, pending, "无有效进展超时：Cursor 子代理连续 5 分钟没有新的工具调用、工具结果或有效输出")
+					_ = service.recoverExecWithoutTerminal(stream, pending, "无有效进展超时：Cursor 子代理连续没有新的工具调用、工具结果或有效输出")
 				}
 			}
 			return
 		}
 	}()
+}
+
+// nativeDelegationProgressTimeout 解析当前 native 子代理「无有效进展」看门狗阈值，
+// 读取热加载配置；resolver 缺失时回退默认 5 分钟。
+func (service *Service) nativeDelegationProgressTimeout() time.Duration {
+	if service != nil && service.resolver != nil {
+		return service.resolver.NativeDelegationProgressTimeout(context.Background())
+	}
+	return defaultNativeDelegationProgressTimeout
+}
+
+// markConversationActivity 记录某 conversation 最近一次模型输出/思考/工具活动的时间。
+// native 子代理与主 agent 共享 conversation_id（本地模式下同一会话的不同 request），
+// 子代理模型仍在生成内容、思考或执行工具时该时间持续刷新，使无进展看门狗不会误杀正常任务。
+func (service *Service) markConversationActivity(conversationID string) {
+	if service == nil || strings.TrimSpace(conversationID) == "" {
+		return
+	}
+	service.conversationActivityMu.Lock()
+	if service.conversationLastActivity == nil {
+		service.conversationLastActivity = make(map[string]time.Time)
+	}
+	service.conversationLastActivity[strings.TrimSpace(conversationID)] = time.Now().UTC()
+	service.conversationActivityMu.Unlock()
+}
+
+// markDelegationConversationProgress 检查子代理所属 conversation 最近是否有模型输出/思考
+// 或工具活动；有则续期该子代理的「有效进展」时间并返回 true。
+// 子代理与主 agent 共享 conversation_id（本地模式下同一会话的不同 request），
+// 因此 conversation 级活动可直接反映该子代理是否仍在工作。
+func (service *Service) markDelegationConversationProgress(item *nativeDelegationRuntime) bool {
+	if service == nil || item == nil {
+		return false
+	}
+	conversationID := strings.TrimSpace(item.ConversationID)
+	if conversationID == "" {
+		return false
+	}
+	service.conversationActivityMu.Lock()
+	last, ok := service.conversationLastActivity[conversationID]
+	service.conversationActivityMu.Unlock()
+	if !ok {
+		return false
+	}
+	if time.Since(last) >= service.nativeDelegationProgressTimeout() {
+		return false
+	}
+	return service.markNativeDelegationEffectiveProgress(item.ID, "")
 }
 
 func (service *Service) keepNativeDelegationAlive(requestID, execID string) {
@@ -422,7 +478,7 @@ func (service *Service) cancelNativeDelegation(execID string) bool {
 	if err := service.syncSummaryCarryForward(stream.ConversationID, stream.RequestID, pending.ModelCallID); err != nil {
 		return false
 	}
-	if err := service.publishCheckpoint(stream.RequestID, stream.ConversationID); err != nil {
+	if err := service.publishCheckpointForce(stream.RequestID, stream.ConversationID); err != nil {
 		return false
 	}
 	_ = service.reconcileStream(stream)

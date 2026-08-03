@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"regexp"
 	"sort"
@@ -54,7 +55,8 @@ type openAIResponsesRequestBody struct {
 }
 
 type openAIResponsesReasoning struct {
-	Effort string `json:"effort,omitempty"`
+	Effort  string `json:"effort,omitempty"`
+	Summary string `json:"summary,omitempty"`
 }
 
 type openAIToolAccumulator struct {
@@ -1247,7 +1249,10 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			requestBody.Tools = tools
 		}
 		if effort := strings.TrimSpace(req.ReasoningEffort); effort != "" {
-			requestBody.Reasoning = &openAIResponsesReasoning{Effort: effort}
+			requestBody.Reasoning = &openAIResponsesReasoning{
+				Effort:  effort,
+				Summary: "auto",
+			}
 			// 同时请求明文 reasoning.summary 与 reasoning.encrypted_content：
 			// - reasoning.summary 让 provider 返回可读思维链（response.reasoning_summary_text.delta
 			//   走 thinking_delta 转发，Cursor 显示思维链而非 "Thinking is encrypted"）。
@@ -1394,6 +1399,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 	thinkingStarted := time.Time{}
 	thinkingActive := false
 	emittedReasoningSignature := ""
+	reasoningSummaryForwarded := ""
 	thinkParser := &openAIThinkTagParser{}
 	toolKey := func(itemID string, outputIndex int) string {
 		if strings.TrimSpace(itemID) != "" {
@@ -1483,6 +1489,41 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			Text:          reasoning,
 			ThinkingStyle: agentv1.ThinkingStyle_THINKING_STYLE_DEFAULT,
 		})
+	}
+	emitReasoningSummary := func(summary string) error {
+		if summary == "" {
+			return nil
+		}
+		// Responses sends summary deltas during the stream and may repeat the
+		// complete summary on response.output_item.done. Forward only the
+		// unseen suffix so Cursor gets one readable thinking block.
+		if strings.TrimSpace(summary) == "" {
+			return nil
+		}
+		forward := summary
+		previous := reasoningSummaryForwarded
+		if previous != "" {
+			switch {
+			case summary == previous:
+				return nil
+			case strings.HasPrefix(summary, previous):
+				forward = summary[len(previous):]
+			case strings.HasPrefix(previous, summary):
+				return nil
+			}
+		}
+		if strings.TrimSpace(forward) == "" {
+			return nil
+		}
+		if err := emitThinkingDelta(forward); err != nil {
+			return err
+		}
+		if previous == "" || strings.HasPrefix(summary, previous) {
+			reasoningSummaryForwarded = summary
+		} else {
+			reasoningSummaryForwarded += forward
+		}
+		return nil
 	}
 	emitTaggedContentParts := func(parts []openAIContentPart) error {
 		for _, part := range parts {
@@ -1664,6 +1705,14 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		return nil
 	}
 	emitReasoningSignature := func(signature string, providerItemID string, providerStatus string, providerSummary json.RawMessage) error {
+		if summary := extractOpenAIResponsesReasoningSummary(providerSummary); summary != "" {
+			if err := emitReasoningSummary(summary); err != nil {
+				return err
+			}
+			log.Printf("openai responses reasoning summary item request_id=%s model_call_id=%s item_id=%s summary_bytes=%d forwarded_bytes=%d", strings.TrimSpace(req.RequestID), strings.TrimSpace(req.ModelCallID), strings.TrimSpace(providerItemID), len(summary), len(reasoningSummaryForwarded))
+		} else if strings.TrimSpace(signature) != "" {
+			log.Printf("openai responses reasoning summary unavailable request_id=%s model_call_id=%s item_id=%s encrypted=true", strings.TrimSpace(req.RequestID), strings.TrimSpace(req.ModelCallID), strings.TrimSpace(providerItemID))
+		}
 		trimmedSignature := strings.TrimSpace(signature)
 		if trimmedSignature == "" || trimmedSignature == emittedReasoningSignature {
 			return nil
@@ -1736,6 +1785,13 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 	applyOutputItem := func(item openAIResponsesOutputItem, outputIndex int, complete bool) error {
 		switch strings.TrimSpace(item.Type) {
 		case "reasoning":
+			// The added event only announces the reasoning item. Its encrypted
+			// content and complete summary are finalized on output_item.done;
+			// completing here would split a later summary into a second Cursor
+			// thinking block.
+			if !complete {
+				return nil
+			}
 			return emitReasoningSignature(item.EncryptedContent, item.ID, item.Status, item.Summary)
 		case "function_call":
 			return applyFunctionCallItem(item, outputIndex, complete)
@@ -1928,7 +1984,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			}
 		case "response.reasoning_summary_text.delta", "response.reasoning_text.delta":
 			streamIdle.MarkEffectiveContent()
-			if err := emitThinkingDelta(event.Delta); err != nil {
+			if err := emitReasoningSummary(event.Delta); err != nil {
 				return fail(err)
 			}
 		case "response.completed", "response.incomplete":
@@ -2038,6 +2094,30 @@ func cloneRawJSON(raw json.RawMessage) json.RawMessage {
 		return nil
 	}
 	return append(json.RawMessage(nil), raw...)
+}
+
+// extractOpenAIResponsesReasoningSummary converts the Responses reasoning
+// output item's summary array into readable text. OpenAI currently returns
+// entries such as [{"type":"summary_text","text":"..."}], but
+// accepting any entry with a text field keeps compatible gateways working.
+func extractOpenAIResponsesReasoningSummary(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var entries []struct {
+		Type string `json:"type,omitempty"`
+		Text string `json:"text,omitempty"`
+	}
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		return ""
+	}
+	parts := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if text := strings.TrimSpace(entry.Text); text != "" {
+			parts = append(parts, text)
+		}
+	}
+	return strings.TrimSpace(strings.Join(parts, "\n"))
 }
 
 func redactOpenAIStreamArtifactLine(rawLine string) string {

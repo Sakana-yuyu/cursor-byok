@@ -56,6 +56,12 @@ func collapseTextContentParts(parts []ContentPart) string {
 	return strings.Join(texts, "")
 }
 
+// CollapseTextContentParts 是 collapseTextContentParts 的导出封装，
+// 供 forwarder 视觉委派等跨包同步 message.Content 使用。
+func CollapseTextContentParts(parts []ContentPart) string {
+	return collapseTextContentParts(parts)
+}
+
 func normalizeContentPartType(value string) string {
 	trimmed := strings.TrimSpace(strings.ToLower(value))
 	switch trimmed {

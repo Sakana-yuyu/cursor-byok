@@ -1,11 +1,17 @@
 package modelcontext
 
 import (
+	_ "embed"
+	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 )
 
 const DataSource = "主流大模型列表.xlsx"
+
+//go:embed models.json
+var modelsCatalogJSON []byte
 
 // Capability 表示一个已知模型的能力元数据。
 type Capability struct {
@@ -36,311 +42,80 @@ type capabilityRule struct {
 	capability Capability
 }
 
-// capabilityRules 按模型 ID 前缀/正则匹配，条目越靠前优先级越高。
-var capabilityRules = []capabilityRule{
-	// ─── Claude ────────────────────────────────────────────────────────────
-	{
-		regexp.MustCompile(`^(?:claude-)?opus-?4[.-]?8(?:-|$)|^claude-4[.-]?8-opus(?:-|$)`),
-		Capability{DisplayName: "Claude Opus 4.8", ContextWindowTokens: 1_000_000, MaxOutputTokens: 32_000, SupportsVision: true, SupportsTools: true, SupportsThinking: true, Pricing: pricingCW(15, 75, 1.5, 18.75)},
-	},
-	{
-		regexp.MustCompile(`^(?:claude-)?opus-?4[.-]?7(?:-|$)|^claude-4[.-]?7-opus(?:-|$)`),
-		Capability{DisplayName: "Claude Opus 4.7", ContextWindowTokens: 1_000_000, MaxOutputTokens: 32_000, SupportsVision: true, SupportsTools: true, SupportsThinking: true, Pricing: pricingCW(15, 75, 1.5, 18.75)},
-	},
-	{
-		regexp.MustCompile(`^(?:claude-)?sonnet-?4[.-]?6(?:-|$)|^claude-4[.-]?6-sonnet(?:-|$)`),
-		Capability{DisplayName: "Claude Sonnet 4.6", ContextWindowTokens: 1_000_000, MaxOutputTokens: 64_000, SupportsVision: true, SupportsTools: true, SupportsThinking: true, Pricing: pricingCW(3, 15, 0.3, 3.75)},
-	},
-	{
-		regexp.MustCompile(`^(?:claude-)?sonnet-?5(?:-|$)|^claude-5-sonnet(?:-|$)`),
-		Capability{DisplayName: "Claude Sonnet 5", ContextWindowTokens: 1_000_000, MaxOutputTokens: 64_000, SupportsVision: true, SupportsTools: true, SupportsThinking: true, Pricing: pricingCW(3, 15, 0.3, 3.75)},
-	},
-	// claude-3-5 系列
-	{
-		regexp.MustCompile(`^claude-3-5-sonnet`),
-		Capability{DisplayName: "Claude 3.5 Sonnet", ContextWindowTokens: 200_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingCW(3, 15, 0.3, 3.75)},
-	},
-	{
-		regexp.MustCompile(`^claude-3-5-haiku`),
-		Capability{DisplayName: "Claude 3.5 Haiku", ContextWindowTokens: 200_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingCW(0.8, 4, 0.08, 1)},
-	},
-	// claude-3 系列兜底
-	{
-		regexp.MustCompile(`^claude-3`),
-		Capability{DisplayName: "Claude 3", ContextWindowTokens: 200_000, MaxOutputTokens: 4_096, SupportsVision: true, SupportsTools: true, Pricing: pricingCW(0.8, 4, 0.08, 1)},
-	},
-	// claude 系列通用兜底
-	{
-		regexp.MustCompile(`^claude`),
-		Capability{DisplayName: "Claude", ContextWindowTokens: 200_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingCW(3, 15, 0.3, 3.75)},
-	},
-
-	// ─── GPT ───────────────────────────────────────────────────────────────
-	{
-		regexp.MustCompile(`^gpt-?5[.-]?6(?:-|$)`),
-		Capability{DisplayName: "GPT-5.6", ContextWindowTokens: 1_000_000, MaxOutputTokens: 32_768, SupportsVision: true, SupportsTools: true, SupportsThinking: true, Pricing: pricing(1.25, 10, 0.125)},
-	},
-	{
-		regexp.MustCompile(`^gpt-?5(?:-|$)`),
-		Capability{DisplayName: "GPT-5", ContextWindowTokens: 1_000_000, MaxOutputTokens: 32_768, SupportsVision: true, SupportsTools: true, SupportsThinking: true, Pricing: pricing(1.25, 10, 0.125)},
-	},
-	{
-		regexp.MustCompile(`^gpt-?4o-mini(?:-|$)`),
-		Capability{DisplayName: "GPT-4o mini", ContextWindowTokens: 128_000, MaxOutputTokens: 16_384, SupportsVision: true, SupportsTools: true, Pricing: pricing(0.15, 0.6, 0.075)},
-	},
-	{
-		regexp.MustCompile(`^gpt-?4o(?:-|$)`),
-		Capability{DisplayName: "GPT-4o", ContextWindowTokens: 128_000, MaxOutputTokens: 16_384, SupportsVision: true, SupportsTools: true, Pricing: pricing(2.5, 10, 1.25)},
-	},
-	{
-		regexp.MustCompile(`^o[13]-mini(?:-|$)`),
-		Capability{DisplayName: "OpenAI o-mini", ContextWindowTokens: 128_000, MaxOutputTokens: 65_536, SupportsVision: true, SupportsTools: true, SupportsThinking: true, Pricing: pricing(1.1, 4.4, 0.55)},
-	},
-	{
-		regexp.MustCompile(`^o[134](?:-|$)`),
-		Capability{DisplayName: "OpenAI o 系列", ContextWindowTokens: 200_000, MaxOutputTokens: 100_000, SupportsVision: true, SupportsTools: true, SupportsThinking: true, Pricing: pricing(15, 60, 1.875)},
-	},
-
-	// ─── Gemini ────────────────────────────────────────────────────────────
-	{
-		regexp.MustCompile(`^gemini-2[.-]?5-pro`),
-		Capability{DisplayName: "Gemini 2.5 Pro", ContextWindowTokens: 1_000_000, MaxOutputTokens: 65_536, SupportsVision: true, SupportsAudio: true, SupportsTools: true, SupportsThinking: true, Pricing: pricing(1.25, 10, 0.3125)},
-	},
-	{
-		regexp.MustCompile(`^gemini-2[.-]?5-flash`),
-		Capability{DisplayName: "Gemini 2.5 Flash", ContextWindowTokens: 1_000_000, MaxOutputTokens: 65_536, SupportsVision: true, SupportsAudio: true, SupportsTools: true, SupportsThinking: true, Pricing: pricing(0.3, 2.5, 0.075)},
-	},
-	{
-		regexp.MustCompile(`^gemini-2[.-]?0`),
-		Capability{DisplayName: "Gemini 2.0", ContextWindowTokens: 1_000_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsAudio: true, SupportsTools: true, Pricing: pricing(0.3, 2.5, 0.075)},
-	},
-	{
-		regexp.MustCompile(`^gemini`),
-		Capability{DisplayName: "Gemini", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricing(0.3, 2.5, 0.075)},
-	},
-
-	// ─── Grok ──────────────────────────────────────────────────────────────
-	{
-		regexp.MustCompile(`^grok-?4[.-]?5(?:-|$)`),
-		Capability{DisplayName: "Grok 4.5", ContextWindowTokens: 500_000, MaxOutputTokens: 32_768, SupportsVision: true, SupportsTools: true, SupportsThinking: true, Pricing: pricing(2, 6, 0.5)},
-	},
-	{
-		regexp.MustCompile(`^grok-?4[.-]?(?:3|20)(?:-|$)`),
-		Capability{DisplayName: "Grok 4.3/4.20", ContextWindowTokens: 1_000_000, MaxOutputTokens: 32_768, SupportsVision: true, SupportsTools: true, SupportsThinking: true, Pricing: pricing(3, 15, 0.75)},
-	},
-	{
-		regexp.MustCompile(`^grok-?4(?:-|$)`),
-		Capability{DisplayName: "Grok 4", ContextWindowTokens: 256_000, MaxOutputTokens: 32_768, SupportsVision: true, SupportsTools: true, SupportsThinking: true, Pricing: pricing(3, 15, 0.75)},
-	},
-	{
-		regexp.MustCompile(`^grok`),
-		Capability{DisplayName: "Grok", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricing(3, 15, 0.75)},
-	},
-
-	// ─── Qwen ──────────────────────────────────────────────────────────────
-	{
-		regexp.MustCompile(`^qwen-?3[.-]?8-max-preview(?:-|$)`),
-		Capability{DisplayName: "Qwen3-8-Max-Preview", ContextWindowTokens: 1_000_000, MaxOutputTokens: 32_768, SupportsVision: false, SupportsTools: true, SupportsThinking: true, Pricing: pricing(0.84, 2.52, 0.084)},
-	},
-	{
-		regexp.MustCompile(`^qwen-?3[.-]?7-max(?:-|$)`),
-		Capability{DisplayName: "Qwen3-7-Max", ContextWindowTokens: 1_000_000, MaxOutputTokens: 32_768, SupportsVision: false, SupportsTools: true, SupportsThinking: true, Pricing: pricing(0.84, 2.52, 0.084)},
-	},
-	{
-		regexp.MustCompile(`^qwen-?(?:vl|2-vl|2\.5-vl)`),
-		Capability{DisplayName: "Qwen-VL", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricing(0.28, 0.84, 0.028)},
-	},
-	{
-		regexp.MustCompile(`^qwen-?(?:max|plus|turbo|long)(?:-|$)`),
-		Capability{DisplayName: "Qwen", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: false, SupportsTools: true, Pricing: pricing(0.84, 2.52, 0.084)},
-	},
-	{
-		regexp.MustCompile(`^qwen`),
-		Capability{DisplayName: "Qwen", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: false, SupportsTools: true, Pricing: pricing(0.3, 0.6, 0.03)},
-	},
-
-	// ─── DeepSeek ──────────────────────────────────────────────────────────
-	{
-		regexp.MustCompile(`^deepseek-?v?4-flash(?:-|$)`),
-		Capability{DisplayName: "DeepSeek V4 Flash", ContextWindowTokens: 1_000_000, MaxOutputTokens: 32_768, SupportsVision: false, SupportsTools: true, SupportsThinking: false, Pricing: pricing(0.14, 0.28, 0.014)},
-	},
-	{
-		regexp.MustCompile(`^deepseek-?v?4-pro(?:-|$)`),
-		Capability{DisplayName: "DeepSeek V4 Pro", ContextWindowTokens: 1_000_000, MaxOutputTokens: 32_768, SupportsVision: false, SupportsTools: true, SupportsThinking: false, Pricing: pricing(0.27, 1.1, 0.027)},
-	},
-	{
-		regexp.MustCompile(`^deepseek-?v?4(?:-|$)`),
-		Capability{DisplayName: "DeepSeek V4", ContextWindowTokens: 1_000_000, MaxOutputTokens: 32_768, SupportsVision: false, SupportsTools: true, SupportsThinking: false, Pricing: pricing(0.27, 1.1, 0.027)},
-	},
-	{
-		regexp.MustCompile(`^deepseek-?v?3(?:-|$)`),
-		Capability{DisplayName: "DeepSeek V3", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: false, SupportsTools: true, Pricing: pricing(0.27, 1.1, 0.014)},
-	},
-	{
-		regexp.MustCompile(`^deepseek-?r[12](?:-|$)`),
-		Capability{DisplayName: "DeepSeek R 系列", ContextWindowTokens: 128_000, MaxOutputTokens: 32_768, SupportsVision: false, SupportsTools: true, SupportsThinking: true, Pricing: pricing(0.55, 2.19, 0.028)},
-	},
-	{
-		regexp.MustCompile(`^deepseek`),
-		Capability{DisplayName: "DeepSeek", ContextWindowTokens: 64_000, MaxOutputTokens: 4_096, SupportsVision: false, SupportsTools: true, Pricing: pricing(0.27, 1.1, 0.014)},
-	},
-
-	// ─── Kimi / Moonshot ───────────────────────────────────────────────────
-	{
-		regexp.MustCompile(`^kimi-?k?2[.-]?6(?:-|$)`),
-		Capability{DisplayName: "Kimi K2.6", ContextWindowTokens: 256_000, MaxOutputTokens: 16_384, SupportsVision: false, SupportsTools: true, Pricing: pricing(0.6, 2.5, 0.06)},
-	},
-	{
-		regexp.MustCompile(`^kimi-?k?2[.-]?7(?:-|$)`),
-		Capability{DisplayName: "Kimi K2.7", ContextWindowTokens: 256_000, MaxOutputTokens: 4_096, SupportsVision: false, SupportsTools: true, Pricing: pricing(0.6, 2.5, 0.06)},
-	},
-	{
-		regexp.MustCompile(`^kimi-?k[12](?:-|$)`),
-		Capability{DisplayName: "Kimi K 系列", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: false, SupportsTools: true, Pricing: pricing(0.6, 2.5, 0.06)},
-	},
-	{
-		regexp.MustCompile(`^moonshot`),
-		Capability{DisplayName: "Moonshot", ContextWindowTokens: 128_000, MaxOutputTokens: 4_096, SupportsVision: false, SupportsTools: true, Pricing: pricing(0.6, 2.5, 0.06)},
-	},
-	{
-		regexp.MustCompile(`^kimi`),
-		Capability{DisplayName: "Kimi", ContextWindowTokens: 128_000, MaxOutputTokens: 4_096, SupportsVision: false, SupportsTools: true, Pricing: pricing(0.6, 2.5, 0.06)},
-	},
-
-	// ─── GLM ───────────────────────────────────────────────────────────────
-	{
-		regexp.MustCompile(`^glm-?5[.-]?2(?:-|$)`),
-		Capability{DisplayName: "GLM-5.2", ContextWindowTokens: 200_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, SupportsThinking: true, Pricing: pricingUSD(1.4, 4.4, 0.26)},
-	},
-	{
-		regexp.MustCompile(`^glm-?5[.-]?1(?:-|$)`),
-		Capability{DisplayName: "GLM-5.1", ContextWindowTokens: 200_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, SupportsThinking: true, Pricing: pricingUSD(1.4, 4.4, 0.26)},
-	},
-	{
-		regexp.MustCompile(`^glm-?5-turbo(?:-|$)`),
-		Capability{DisplayName: "GLM-5-Turbo", ContextWindowTokens: 200_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(1.2, 4.0, 0.24)},
-	},
-	{
-		regexp.MustCompile(`^glm-?5(?:-|$)`),
-		Capability{DisplayName: "GLM-5", ContextWindowTokens: 200_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(1.0, 3.2, 0.2)},
-	},
-	{
-		regexp.MustCompile(`^glm-?4[.-]?7-flashx(?:-|$)`),
-		Capability{DisplayName: "GLM-4.7-FlashX", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(0.07, 0.4, 0.01)},
-	},
-	{
-		regexp.MustCompile(`^glm-?4[.-]?7(?:-|$)`),
-		Capability{DisplayName: "GLM-4.7", ContextWindowTokens: 200_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(0.6, 2.2, 0.11)},
-	},
-	{
-		regexp.MustCompile(`^glm-?4[.-]?6(?:-|$)`),
-		Capability{DisplayName: "GLM-4.6", ContextWindowTokens: 200_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(0.6, 2.2, 0.11)},
-	},
-	{
-		regexp.MustCompile(`^glm-?4[.-]?5-airx(?:-|$)`),
-		Capability{DisplayName: "GLM-4.5-AirX", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(1.1, 4.5, 0.22)},
-	},
-	{
-		regexp.MustCompile(`^glm-?4[.-]?5-air(?:-|$)`),
-		Capability{DisplayName: "GLM-4.5-Air", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(0.2, 1.1, 0.03)},
-	},
-	{
-		regexp.MustCompile(`^glm-?4[.-]?5-x(?:-|$)`),
-		Capability{DisplayName: "GLM-4.5-X", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(2.2, 8.9, 0.45)},
-	},
-	{
-		regexp.MustCompile(`^glm-?4[.-]?5(?:-|$)`),
-		Capability{DisplayName: "GLM-4.5", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(0.6, 2.2, 0.11)},
-	},
-	{
-		regexp.MustCompile(`^glm-?4-32b-0414-128k(?:-|$)`),
-		Capability{DisplayName: "GLM-4-32B-0414-128K", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: false, SupportsTools: true, Pricing: pricingUSDNoCache(0.1, 0.1)},
-	},
-	{
-		regexp.MustCompile(`^glm-?4[.-]?7-flash(?:-|$)|^glm-?4[.-]?5-flash(?:-|$)`),
-		Capability{DisplayName: "GLM Flash", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: false, SupportsTools: true, Pricing: pricingUSD(0, 0, 0)},
-	},
-	{
-		regexp.MustCompile(`^glm-?4v`),
-		Capability{DisplayName: "GLM-4V", ContextWindowTokens: 128_000, MaxOutputTokens: 4_096, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(0.3, 0.9, 0.05)},
-	},
-	{
-		regexp.MustCompile(`^glm-?5v-turbo(?:-|$)`),
-		Capability{DisplayName: "GLM-5V-Turbo", ContextWindowTokens: 200_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(1.2, 4.0, 0.24)},
-	},
-	{
-		regexp.MustCompile(`^glm-?4[.-]?6v-flashx(?:-|$)`),
-		Capability{DisplayName: "GLM-4.6V-FlashX", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(0.04, 0.4, 0.004)},
-	},
-	{
-		regexp.MustCompile(`^glm-?4[.-]?6v(?:-|$)`),
-		Capability{DisplayName: "GLM-4.6V", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(0.3, 0.9, 0.05)},
-	},
-	{
-		regexp.MustCompile(`^glm-?4[.-]?5v(?:-|$)`),
-		Capability{DisplayName: "GLM-4.5V", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSD(0.6, 1.8, 0.11)},
-	},
-	{
-		regexp.MustCompile(`^glm-?ocr(?:-|$)`),
-		Capability{DisplayName: "GLM-OCR", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingUSDNoCache(0.03, 0.03)},
-	},
-	{
-		regexp.MustCompile(`^glm`),
-		Capability{DisplayName: "GLM", ContextWindowTokens: 128_000, MaxOutputTokens: 4_096, SupportsVision: false, SupportsTools: true, Pricing: pricing(0.5, 2, 0.05)},
-	},
-
-	// ─── MiMo ──────────────────────────────────────────────────────────────
-	{
-		regexp.MustCompile(`^mimo-?vl(?:-|$)`),
-		Capability{DisplayName: "MiMo-VL", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, SupportsThinking: true, Pricing: pricing(0.35, 0.35, 0.035)},
-	},
-	{
-		regexp.MustCompile(`^mimo`),
-		Capability{DisplayName: "MiMo", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: false, SupportsTools: true, SupportsThinking: true, Pricing: pricing(0.35, 0.35, 0.035)},
-	},
-
-	// ─── MiniMax ───────────────────────────────────────────────────────────
-	{
-		regexp.MustCompile(`^minimax-?(?:vl|vision)`),
-		Capability{DisplayName: "MiniMax-VL", ContextWindowTokens: 256_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricingCNY(2.1, 8.4, 0.42, 2.625)},
-	},
-	{
-		regexp.MustCompile(`^minimax-m3(?:-|$)`),
-		// 默认采用官方标准档 <=512K；超 512K 请求需按官方分段价计费，当前 PriceRate 结构无法表达阈值。
-		Capability{DisplayName: "MiniMax-M3", ContextWindowTokens: 1_000_000, MaxOutputTokens: 16_384, SupportsVision: false, SupportsTools: true, Pricing: pricingCNYNoWrite(2.1, 8.4, 0.42)},
-	},
-	{
-		regexp.MustCompile(`^minimax-m2[.-]?7-highspeed(?:-|$)`),
-		Capability{DisplayName: "MiniMax-M2.7-highspeed", ContextWindowTokens: 1_000_000, MaxOutputTokens: 16_384, SupportsVision: false, SupportsTools: true, Pricing: pricingCNY(4.2, 16.8, 0.42, 2.625)},
-	},
-	{
-		regexp.MustCompile(`^minimax-m2[.-]?7(?:-|$)`),
-		Capability{DisplayName: "MiniMax-M2.7", ContextWindowTokens: 1_000_000, MaxOutputTokens: 16_384, SupportsVision: false, SupportsTools: true, Pricing: pricingCNY(2.1, 8.4, 0.42, 2.625)},
-	},
-	{
-		regexp.MustCompile(`^minimax`),
-		Capability{DisplayName: "MiniMax", ContextWindowTokens: 256_000, MaxOutputTokens: 8_192, SupportsVision: false, SupportsTools: true, Pricing: pricingCNY(2.1, 8.4, 0.21, 2.625)},
-	},
-
-	// ─── StepFun ───────────────────────────────────────────────────────────
-	{
-		regexp.MustCompile(`^step-2`),
-		Capability{DisplayName: "Step-2", ContextWindowTokens: 512_000, MaxOutputTokens: 16_384, SupportsVision: true, SupportsTools: true, SupportsThinking: true, Pricing: pricing(0.7, 2.8, 0.07)},
-	},
-	{
-		regexp.MustCompile(`^step-1[.-]?v(?:-|$)`),
-		Capability{DisplayName: "Step-1V", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: true, SupportsTools: true, Pricing: pricing(0.7, 2.8, 0.07)},
-	},
-	{
-		regexp.MustCompile(`^step-1`),
-		Capability{DisplayName: "Step-1", ContextWindowTokens: 256_000, MaxOutputTokens: 8_192, SupportsVision: false, SupportsTools: true, Pricing: pricing(0.7, 2.8, 0.07)},
-	},
-	{
-		regexp.MustCompile(`^step`),
-		Capability{DisplayName: "StepFun", ContextWindowTokens: 128_000, MaxOutputTokens: 8_192, SupportsVision: false, SupportsTools: true, Pricing: pricing(0.7, 2.8, 0.07)},
-	},
+// modelsCatalogDoc 是 models.json 的反序列化结构。
+type modelsCatalogDoc struct {
+	Rules []modelsCatalogRule `json:"rules"`
 }
 
+// modelsCatalogRule 是 models.json 中单条规则的反序列化结构（pattern 为字符串，启动时编译为正则）。
+type modelsCatalogRule struct {
+	Pattern            string                  `json:"pattern"`
+	DisplayName        string                  `json:"displayName"`
+	ContextWindowTokens int                    `json:"contextWindowTokens"`
+	MaxOutputTokens    int                     `json:"maxOutputTokens"`
+	SupportsVision     bool                    `json:"supportsVision"`
+	SupportsAudio      bool                    `json:"supportsAudio"`
+	SupportsTools      bool                    `json:"supportsTools"`
+	SupportsThinking   bool                    `json:"supportsThinking"`
+	Pricing            *modelsCatalogPricing   `json:"pricing,omitempty"`
+}
+
+// modelsCatalogPricing 是 models.json 中 pricing 子结构的反序列化结构。
+// 字段使用指针以便区分「未设置」与「0」。
+type modelsCatalogPricing struct {
+	Input      *float64 `json:"input,omitempty"`
+	Output     *float64 `json:"output,omitempty"`
+	CacheRead  *float64 `json:"cacheRead,omitempty"`
+	CacheWrite *float64 `json:"cacheWrite,omitempty"`
+	Currency   string   `json:"currency,omitempty"`
+	Source     string   `json:"source,omitempty"`
+}
+
+// capabilityRules 从嵌入的 models.json 加载，按数组顺序 first-match-wins。
+// 启动时一次性编译 pattern 字符串为正则并转换为 Capability（含 Pricing 指针）。
+var capabilityRules = mustLoadCapabilityRules()
+
+// mustLoadCapabilityRules 在包初始化时从 models.json 解析并编译正则规则。
+// 解析失败属于构建期数据错误，直接 panic（与原手写规则同等保证）。
+func mustLoadCapabilityRules() []capabilityRule {
+	var doc modelsCatalogDoc
+	if err := json.Unmarshal(modelsCatalogJSON, &doc); err != nil {
+		panic(fmt.Sprintf("modelcontext: failed to parse embedded models.json: %v", err))
+	}
+	rules := make([]capabilityRule, 0, len(doc.Rules))
+	for _, raw := range doc.Rules {
+		pattern, err := regexp.Compile(raw.Pattern)
+		if err != nil {
+			panic(fmt.Sprintf("modelcontext: invalid pattern %q in models.json: %v", raw.Pattern, err))
+		}
+		cap := Capability{
+			DisplayName:         raw.DisplayName,
+			ContextWindowTokens: raw.ContextWindowTokens,
+			MaxOutputTokens:     raw.MaxOutputTokens,
+			SupportsVision:      raw.SupportsVision,
+			SupportsAudio:       raw.SupportsAudio,
+			SupportsTools:       raw.SupportsTools,
+			SupportsThinking:    raw.SupportsThinking,
+		}
+		if raw.Pricing != nil {
+			cap.Pricing = &BuiltinPricing{
+				Input:      raw.Pricing.Input,
+				Output:     raw.Pricing.Output,
+				CacheRead:  raw.Pricing.CacheRead,
+				CacheWrite: raw.Pricing.CacheWrite,
+				Currency:   raw.Pricing.Currency,
+				Source:     raw.Pricing.Source,
+			}
+		}
+		rules = append(rules, capabilityRule{pattern: pattern, capability: cap})
+	}
+	if len(rules) == 0 {
+		panic("modelcontext: embedded models.json contains no rules")
+	}
+	return rules
+}
+
+// 注：原手写规则数组已迁移至 models.json（go:embed 加载）；以下 lookup 函数签名不变，调用方无感知。
 // Capabilities 根据模型 ID 返回能力元数据；未知模型返回 nil。
 func Capabilities(modelID string) *Capability {
 	normalized := normalizeModelID(modelID)
@@ -357,7 +132,8 @@ func Capabilities(modelID string) *Capability {
 }
 
 // SupportsVision 报告模型是否支持图片输入。
-// 返回 nil 表示未知（保守策略：调用方应默认保留图片）。
+// 返回 nil 表示未知（调用方按「保守不支持视觉」处理：不把图片上传给能力未知的
+// 模型，由视觉委派/路径占位兜底，避免纯文本模型收到图片返回 400）。
 func SupportsVision(modelID string) *bool {
 	c := Capabilities(modelID)
 	if c == nil {

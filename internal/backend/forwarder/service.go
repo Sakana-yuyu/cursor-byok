@@ -3,6 +3,7 @@ package forwarder
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,6 +46,7 @@ const (
 	doomLoopHardLimit = 5
 
 	runtimeThinkingEffortParameterID = "thinking_effort"
+	checkpointMinSendInterval        = 1500 * time.Millisecond
 )
 
 type parsedSubagentModelOverrides struct {
@@ -299,6 +301,7 @@ type Service struct {
 	resolver                 modeladapter.ChannelResolver
 	modelMemory              agentModelMemory
 	maxTokensPersister       maxTokensConfigPersister
+	contextWindowPersister   contextWindowPersister
 	scanConfig               skillMCPScanConfigProvider
 	mcpRuntime               *MCPRuntimeRegistry
 	broker                   *StreamBroker
@@ -316,6 +319,13 @@ type Service struct {
 	nativeDelegations        map[string]*nativeDelegationRuntime
 	provider400RecoveryMu    sync.Mutex
 	provider400RecoveryTurns map[string]struct{}
+	// conversationActivityMu 保护 conversationLastActivity：
+	// 记录每个 conversation 最近一次模型输出/思考/工具活动，供 native 子代理
+	// 无进展看门狗判断「子代理是否仍在工作」，避免长文本生成/长思考被误判超时。
+	conversationActivityMu   sync.Mutex
+	conversationLastActivity map[string]time.Time
+	checkpointBlobMu         sync.Mutex
+	checkpointBlobs          map[string]*checkpointBlobCacheEntry
 }
 
 type agentModelMemory interface {
@@ -328,6 +338,13 @@ type agentModelMemory interface {
 // 由 *serverconfig.Manager 实现（在 NewService 中通过类型断言注入）。
 type maxTokensConfigPersister interface {
 	PersistChannelMaxTokensCap(ctx context.Context, channelID string, maxTokens int) error
+}
+
+// contextWindowPersister 允许转发层把中转站自适应探测到的真实上下文窗口
+// 持久化到命中的具体渠道配置（按 channelID 匹配），实现「只修正该渠道」而非全局修改。
+// 由 *serverconfig.Manager 实现（在 NewService 中通过类型断言注入）。
+type contextWindowPersister interface {
+	PersistChannelContextWindow(ctx context.Context, channelID string, contextWindowTokens int) error
 }
 
 // NewService 使用默认依赖创建 forwarder 服务。
@@ -357,6 +374,10 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 	if candidate, ok := resolver.(maxTokensConfigPersister); ok {
 		maxTokensPersister = candidate
 	}
+	var ctxWindowPersister contextWindowPersister
+	if candidate, ok := resolver.(contextWindowPersister); ok {
+		ctxWindowPersister = candidate
+	}
 	var scanConfig skillMCPScanConfigProvider
 	if candidate, ok := resolver.(skillMCPScanConfigProvider); ok {
 		scanConfig = candidate
@@ -367,30 +388,33 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 	}
 	debug := newDebugRecorder(historyRoot, broker, debugConfig)
 	service := &Service{
-		store:              store,
-		usageStore:         NewUsageFileStore(historyRoot),
-		codebaseIndexStore: NewCodebaseIndexStore(appdata.CodebaseIndexRootPath()),
-		docsIndexStore:     NewDocsIndexStore(appdata.DocsIndexRootPath()),
-		rules:              rules,
-		projector:          projector,
-		compiler:           NewPromptCompiler(projector, toolCatalog, NewReminderInjector(), rules, skills, promptInjection),
-		toolCatalog:        toolCatalog,
-		promptInjection:    promptInjection,
-		provider:           NewProviderGateway(resolver),
-		resolver:           resolver,
-		modelMemory:        modelMemory,
-		maxTokensPersister: maxTokensPersister,
-		scanConfig:         scanConfig,
-		delegationConfig:   delegationConfig,
-		mcpRuntime:         SharedMCPRuntimeRegistry(),
-		broker:             broker,
-		recorder:           newArtifactRecorder(store, broker, debug),
-		debug:              debug,
-		execBridge:         execbridge.NewBridge(),
-		interactionBridge:  interactionbridge.NewBridge(),
-		appendSeq:          newAppendSequenceTracker(),
-		runQueue:           newRunQueue(),
-		nativeDelegations:  make(map[string]*nativeDelegationRuntime),
+		store:                    store,
+		usageStore:               NewUsageFileStore(historyRoot),
+		codebaseIndexStore:       NewCodebaseIndexStore(appdata.CodebaseIndexRootPath()),
+		docsIndexStore:           NewDocsIndexStore(appdata.DocsIndexRootPath()),
+		rules:                    rules,
+		projector:                projector,
+		compiler:                 NewPromptCompiler(projector, toolCatalog, NewReminderInjector(), rules, skills, promptInjection),
+		toolCatalog:              toolCatalog,
+		promptInjection:          promptInjection,
+		provider:                 NewProviderGateway(resolver),
+		resolver:                 resolver,
+		modelMemory:              modelMemory,
+		maxTokensPersister:       maxTokensPersister,
+		contextWindowPersister:   ctxWindowPersister,
+		scanConfig:               scanConfig,
+		delegationConfig:         delegationConfig,
+		mcpRuntime:               SharedMCPRuntimeRegistry(),
+		broker:                   broker,
+		recorder:                 newArtifactRecorder(store, broker, debug),
+		debug:                    debug,
+		execBridge:               execbridge.NewBridge(),
+		interactionBridge:        interactionbridge.NewBridge(),
+		appendSeq:                newAppendSequenceTracker(),
+		runQueue:                 newRunQueue(),
+		nativeDelegations:        make(map[string]*nativeDelegationRuntime),
+		checkpointBlobs:          make(map[string]*checkpointBlobCacheEntry),
+		conversationLastActivity: make(map[string]time.Time),
 	}
 	service.cursorDelegation = newCursorDelegationBridge(service)
 	service.localDelegation = newLocalDelegatedAgentAdapter(service)
@@ -416,23 +440,25 @@ func newServiceWithDependencies(store *ConversationFileStore, projector *History
 	}
 	debug := newDebugRecorder(historyRoot, broker, nil)
 	service := &Service{
-		store:              store,
-		rules:              NewUserRuleStore(appdata.RulesRootPath()),
-		projector:          projector,
-		compiler:           compiler,
-		provider:           provider,
-		broker:             broker,
-		usageStore:         NewUsageFileStore(store.HistoryDir()),
-		codebaseIndexStore: NewCodebaseIndexStore(appdata.CodebaseIndexRootPath()),
-		docsIndexStore:     NewDocsIndexStore(appdata.DocsIndexRootPath()),
-		recorder:           newArtifactRecorder(store, broker, debug),
-		debug:              debug,
-		execBridge:         execbridge.NewBridge(),
-		interactionBridge:  interactionbridge.NewBridge(),
-		mcpRuntime:         SharedMCPRuntimeRegistry(),
-		appendSeq:          newAppendSequenceTracker(),
-		runQueue:           newRunQueue(),
-		nativeDelegations:  make(map[string]*nativeDelegationRuntime),
+		store:                    store,
+		rules:                    NewUserRuleStore(appdata.RulesRootPath()),
+		projector:                projector,
+		compiler:                 compiler,
+		provider:                 provider,
+		broker:                   broker,
+		usageStore:               NewUsageFileStore(store.HistoryDir()),
+		codebaseIndexStore:       NewCodebaseIndexStore(appdata.CodebaseIndexRootPath()),
+		docsIndexStore:           NewDocsIndexStore(appdata.DocsIndexRootPath()),
+		recorder:                 newArtifactRecorder(store, broker, debug),
+		debug:                    debug,
+		execBridge:               execbridge.NewBridge(),
+		interactionBridge:        interactionbridge.NewBridge(),
+		mcpRuntime:               SharedMCPRuntimeRegistry(),
+		appendSeq:                newAppendSequenceTracker(),
+		runQueue:                 newRunQueue(),
+		nativeDelegations:        make(map[string]*nativeDelegationRuntime),
+		checkpointBlobs:          make(map[string]*checkpointBlobCacheEntry),
+		conversationLastActivity: make(map[string]time.Time),
 	}
 	service.cursorDelegation = newCursorDelegationBridge(service)
 	service.localDelegation = newLocalDelegatedAgentAdapter(service)
@@ -541,6 +567,7 @@ func (service *Service) RunSSE(ctx context.Context, req *connect.Request[aiserve
 	})
 	defer func() {
 		remaining := service.broker.Unsubscribe(requestID, subscriberID)
+		service.debug.LogRunSSE(context.Background(), requestID, "", "unsubscribe_state", service.runSSEStateDebugFields(requestID))
 		service.debug.LogRunSSE(context.Background(), requestID, "", "unsubscribe", map[string]any{
 			"subscriber_id":         subscriberID,
 			"remaining_subscribers": remaining,
@@ -572,6 +599,7 @@ func (service *Service) RunSSE(ctx context.Context, req *connect.Request[aiserve
 						service.debug.LogRunSSE(ctx, requestID, "", "send_error", map[string]any{
 							"cursor":       cursor,
 							"message_case": agentServerMessageCase(event.Message),
+							"message_size": proto.Size(event.Message),
 							"message":      protoJSONDebugPayload(event.Message),
 							"error":        err.Error(),
 						})
@@ -580,6 +608,7 @@ func (service *Service) RunSSE(ctx context.Context, req *connect.Request[aiserve
 					service.debug.LogRunSSE(ctx, requestID, "", "send_message", map[string]any{
 						"cursor":       cursor,
 						"message_case": agentServerMessageCase(event.Message),
+						"message_size": proto.Size(event.Message),
 						"message":      protoJSONDebugPayload(event.Message),
 					})
 				}
@@ -601,6 +630,7 @@ func (service *Service) RunSSE(ctx context.Context, req *connect.Request[aiserve
 				"cursor": cursor,
 				"error":  ctx.Err().Error(),
 			})
+			service.debug.LogRunSSE(context.Background(), requestID, "", "client_context_done_state", service.runSSEStateDebugFields(requestID))
 			if backlog, err := service.broker.ReadFromCursor(requestID, cursor); err == nil {
 				for _, event := range backlog {
 					cursor++
@@ -639,6 +669,7 @@ func (service *Service) RunSSE(ctx context.Context, req *connect.Request[aiserve
 			service.debug.LogRunSSE(ctx, requestID, "", "heartbeat_error", map[string]any{
 				"cursor":       cursor,
 				"message_case": agentServerMessageCase(heartbeat),
+				"message_size": proto.Size(heartbeat),
 				"message":      protoJSONDebugPayload(heartbeat),
 				"error":        err.Error(),
 			})
@@ -647,9 +678,42 @@ func (service *Service) RunSSE(ctx context.Context, req *connect.Request[aiserve
 		service.debug.LogRunSSE(ctx, requestID, "", "heartbeat", map[string]any{
 			"cursor":       cursor,
 			"message_case": agentServerMessageCase(heartbeat),
+			"message_size": proto.Size(heartbeat),
 			"message":      protoJSONDebugPayload(heartbeat),
 		})
 	}
+}
+
+func (service *Service) runSSEStateDebugFields(requestID string) map[string]any {
+	fields := map[string]any{}
+	if service == nil || service.broker == nil {
+		return fields
+	}
+	stream, ok := service.broker.Get(requestID)
+	if !ok || stream == nil {
+		fields["stream_found"] = false
+		return fields
+	}
+	stream.mu.Lock()
+	defer stream.mu.Unlock()
+	fields["stream_found"] = true
+	fields["conversation_id"] = strings.TrimSpace(stream.ConversationID)
+	fields["status"] = string(stream.Status)
+	fields["phase"] = string(stream.Phase)
+	fields["provider_active"] = stream.ProviderActive
+	fields["provider_pass_count"] = stream.ProviderPassCount
+	fields["current_model_call_id"] = strings.TrimSpace(stream.CurrentModelCallID)
+	fields["pending_exec_count"] = len(stream.PendingExecs)
+	fields["pending_interaction_count"] = len(stream.PendingInteractions)
+	fields["subscriber_count"] = len(stream.Subscribers)
+	fields["backlog_count"] = len(stream.Backlog)
+	fields["backlog_start_cursor"] = stream.BacklogStartCursor
+	fields["delegation_terminal_count"] = len(stream.DelegationRunTerminals)
+	if stream.CheckpointConversation != nil {
+		fields["checkpoint_context_version"] = stream.CheckpointConversation.ContextVersion
+		fields["checkpoint_entry_count"] = len(stream.CheckpointConversation.Entries)
+	}
+	return fields
 }
 
 // decodeInboundIntent 把 legacy AgentClientMessage 映射为 forwarder 内部 intent。
@@ -977,6 +1041,9 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 	stream.ProviderAccumulatedReasoningSummary = nil
 	stream.ProviderSyntheticThinkingStartedAt = time.Time{}
 	stream.ProviderSyntheticThinkingPublished = false
+	stream.ProviderThinkingDeltaCount = 0
+	stream.ProviderThinkingCompletedCount = 0
+	stream.ProviderThinkingSuppressedCount = 0
 	stream.ProviderFinishReason = ""
 	stream.ProviderUsage = turnUsageSnapshot{}
 	stream.ToolInvocationCount = 0
@@ -999,7 +1066,7 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 		"latest_user_text":                     userMessageText(intent.UserMessage),
 		"manual_compaction_requested":          intent.ManualCompaction.Requested,
 	})
-	if err := service.publishCheckpoint(intent.RequestID, intent.ConversationID); err != nil {
+	if err := service.publishCheckpointForce(intent.RequestID, intent.ConversationID); err != nil {
 		return err
 	}
 	if intent.Prewarm {
@@ -1255,18 +1322,22 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	}
 	// 清除所有 pending exec，防止 stream 永远卡在 running
 	cleanupAllPendingExecs(stream)
-	if hasCheckpoint {
-		if err := service.publishCheckpoint(stream.RequestID, stream.ConversationID); err != nil {
-			return err
-		}
-	}
 	clearPendingProviderCompletion(stream)
-	terminalMessage := firstNonEmpty(intent.CancelReason, "[canceled] User aborted request")
 	stream.mu.Lock()
 	stream.PendingExecs = make(map[string]runtimecore.PendingExec)
 	stream.PendingInteractions = make(map[string]runtimecore.PendingInteraction)
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
+	if hasCheckpoint {
+		if err := service.publishCheckpointWithTerminalAction(
+			stream.RequestID,
+			stream.ConversationID,
+			checkpointCancellationAction(firstNonEmpty(intent.CancelReason, "[canceled] User aborted request")),
+		); err != nil {
+			return err
+		}
+		return nil
+	}
 	service.setTurnPhase(stream, TurnPhaseCanceled)
 	// 发送 TurnEndedUpdate 让前端退出活跃状态（否则一直显示 "planning next moves"）
 	_ = service.broker.Publish(intent.RequestID, StreamEvent{
@@ -1323,6 +1394,7 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 	}
 	service.observeBackgroundShellExecClientMessage(stream, pending, intent.ExecClientMessage)
 	service.observeShellExecClientMessage(stream, pending, intent.ExecClientMessage)
+	service.markConversationActivity(stream.ConversationID)
 	pending = service.applyExecProgress(stream, pending, intent.ExecClientMessage)
 	if isHiddenPatchEditExecKind(pending.ExecKind) {
 		return service.handleHiddenPatchEditExecResult(stream, pending, intent.ExecClientMessage)
@@ -1417,7 +1489,7 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 	if err := service.syncSummaryCarryForward(stream.ConversationID, intent.RequestID, pending.ModelCallID); err != nil {
 		return err
 	}
-	if err := service.publishCheckpoint(intent.RequestID, stream.ConversationID); err != nil {
+	if err := service.publishExecCheckpoint(stream, pending); err != nil {
 		return err
 	}
 	return service.reconcileStream(stream)
@@ -1478,6 +1550,7 @@ func (service *Service) handleExecControl(intent InboundIntent) error {
 	if service.ignoreStaleExecProviderPass(stream, pending, "exec_client_control") {
 		return nil
 	}
+	service.markConversationActivity(stream.ConversationID)
 	pending = service.applyExecControlProgress(stream, pending, intent.ExecClientControlMessage)
 	if isHiddenPatchEditExecKind(pending.ExecKind) {
 		return service.handleHiddenPatchEditExecControl(stream, pending, intent.ExecClientControlMessage)
@@ -1530,7 +1603,7 @@ func (service *Service) handleExecControl(intent InboundIntent) error {
 	if err := service.publishToolCallCompleted(intent.RequestID, result.ToolCallID, pending.ModelCallID, nil); err != nil {
 		return err
 	}
-	if err := service.publishCheckpoint(intent.RequestID, stream.ConversationID); err != nil {
+	if err := service.publishExecCheckpoint(stream, pending); err != nil {
 		return err
 	}
 	return service.reconcileStream(stream)
@@ -1644,7 +1717,7 @@ func (service *Service) recoverNonStreamingExecAfterStreamClose(stream *ActiveSt
 	if err := service.publishToolCallCompleted(stream.RequestID, pending.ToolCallID, pending.ModelCallID, nil); err != nil {
 		return err
 	}
-	if err := service.publishCheckpoint(stream.RequestID, stream.ConversationID); err != nil {
+	if err := service.publishCheckpointForce(stream.RequestID, stream.ConversationID); err != nil {
 		return err
 	}
 	return service.reconcileStream(stream)
@@ -1815,10 +1888,9 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	if stream.ProviderSyntheticThinkingStartedAt.IsZero() {
 		stream.ProviderSyntheticThinkingStartedAt = time.Now().UTC()
 	}
-	// 每个 provider pass 独立发送 synthetic thinking（"Thinking is encrypted"）。
-	// 若不重置，同一 turn 内第二次及以后的 pass 会因 ProviderSyntheticThinkingPublished
-	// 仍为 true 而跳过 thinking_delta，Cursor 在主 agent 推理期间会卡在 "Planning next moves"。
-	stream.ProviderSyntheticThinkingPublished = false
+	// Synthetic encrypted-thinking placeholder 属于整个 Cursor turn，而不是
+	// 单个 provider pass。保留 Published 标记，避免工具调用后的重试 pass
+	// 再次创建 Cursor 思考块；新 turn 在 handleRunIntent 中统一清零。
 	stream.ProviderFinishReason = ""
 	stream.ProviderUsage = turnUsageSnapshot{}
 	stream.ToolInvocationCount = 0
@@ -1832,9 +1904,19 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	maxMode := stream.MaxMode
 	mode := stream.Mode
 	latestUserText := stream.LatestUserText
+	thinkingCompletedPublished := stream.ProviderSyntheticThinkingPublished
+	thinkingDeltaCount := stream.ProviderThinkingDeltaCount
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
-	log.Printf("forwarder provider pass started request_id=%s model_call_id=%s provider_pass=%d", strings.TrimSpace(requestID), strings.TrimSpace(modelCallID), currentPass)
+	log.Printf("forwarder provider pass started request_id=%s model_call_id=%s provider_pass=%d thinking_completed=%t thinking_delta_count=%d", strings.TrimSpace(requestID), strings.TrimSpace(modelCallID), currentPass, thinkingCompletedPublished, thinkingDeltaCount)
+	if service.debug != nil {
+		service.debug.LogRuntime(context.Background(), requestID, conversationID, "provider_pass_started", map[string]any{
+			"model_call_id":                strings.TrimSpace(modelCallID),
+			"provider_pass":                currentPass,
+			"thinking_completed_published": thinkingCompletedPublished,
+			"thinking_delta_count":         thinkingDeltaCount,
+		})
+	}
 
 	conversation, _, _, err := service.snapshotCheckpointConversation(stream)
 	if err != nil {
@@ -2426,7 +2508,7 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 		}
 		startedEmitted = true
 		if trimmedToolName == "Task" && (delegatedTaskStarted || nativeTaskOpened) {
-			if err := service.publishCheckpoint(stream.RequestID, stream.ConversationID); err != nil {
+			if err := service.publishCheckpointForce(stream.RequestID, stream.ConversationID); err != nil {
 				log.Printf("forwarder task post-start checkpoint failed request_id=%s tool_call_id=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID), err)
 				return err
 			}
@@ -2599,7 +2681,7 @@ func (service *Service) openNativeTaskExec(stream *ActiveStream, invocation runt
 			"message_id":   pendingExec.MessageID,
 		})
 	}
-	if err := service.publishCheckpoint(stream.RequestID, stream.ConversationID); err != nil {
+	if err := service.publishCheckpointForce(stream.RequestID, stream.ConversationID); err != nil {
 		stream.mu.Lock()
 		delete(stream.PendingExecs, pendingExec.ExecID)
 		stream.mu.Unlock()
@@ -2984,7 +3066,7 @@ func (service *Service) finishSuccessfulTurnAfterCheckpoint(stream *ActiveStream
 	}
 	service.setTurnPhase(stream, TurnPhaseCompleted)
 	// 当前 turn 终态后，排空该会话因「子代理运行期间」排队的新消息。
-	service.drainRunQueue(conversationID)
+	service.drainRunQueue(stream.ConversationID)
 	return nil
 }
 
@@ -3003,9 +3085,11 @@ func (service *Service) failStreamIfNonTerminal(stream *ActiveStream, terminalCo
 	return service.failStream(stream, terminalCode, cause)
 }
 
-// publishCheckpoint 按当前内存会话镜像投影出 checkpoint，并广播给所有 RunSSE 订阅者。
+// publishCheckpoint projects the in-memory conversation and broadcasts a legacy checkpoint.
+// Ordinary snapshots are deduplicated and rate-limited; terminal snapshots bypass that gate
+// so completion, cancellation, and delegation state cannot remain stale in Cursor.
 func (service *Service) publishCheckpoint(requestID string, conversationID string) error {
-	return service.publishCheckpointWithCompletion(requestID, conversationID, nil)
+	return service.publishCheckpointWithOptions(requestID, conversationID, false)
 }
 
 func (service *Service) publishCheckpointWithCompletion(requestID string, conversationID string, completion *pendingTurnCompletion) error {
@@ -3013,6 +3097,29 @@ func (service *Service) publishCheckpointWithCompletion(requestID string, conver
 }
 
 func (service *Service) publishCheckpointWithTerminalAction(requestID string, conversationID string, terminalAction checkpointTerminalAction) error {
+	return service.publishCheckpointWithOptionsAndAction(requestID, conversationID, terminalAction, true)
+}
+
+func (service *Service) publishCheckpointForce(requestID string, conversationID string) error {
+	return service.publishCheckpointWithOptions(requestID, conversationID, true)
+}
+
+// publishExecCheckpoint keeps ordinary tool completions coalesced while task-like
+// executions are flushed immediately so their Cursor status reflects the backend.
+func (service *Service) publishExecCheckpoint(stream *ActiveStream, pending runtimecore.PendingExec) error {
+	if stream == nil {
+		return nil
+	}
+	execKind := strings.TrimSpace(pending.ExecKind)
+	force := execKind == "subagent" || execKind == "delegation_aggregate"
+	return service.publishCheckpointWithOptions(stream.RequestID, stream.ConversationID, force)
+}
+
+func (service *Service) publishCheckpointWithOptions(requestID string, conversationID string, force bool) error {
+	return service.publishCheckpointWithOptionsAndAction(requestID, conversationID, checkpointTerminalAction{kind: checkpointTerminalActionNone}, force)
+}
+
+func (service *Service) publishCheckpointWithOptionsAndAction(requestID string, _ string, terminalAction checkpointTerminalAction, force bool) error {
 	stream, ok := service.broker.Get(requestID)
 	if !ok || stream == nil {
 		return fmt.Errorf("request is not active: %s", requestID)
@@ -3025,14 +3132,17 @@ func (service *Service) publishCheckpointWithTerminalAction(requestID string, co
 	if err != nil {
 		return err
 	}
-	state.PendingToolCalls = buildPendingToolCalls(pendingExecs, pendingInteractions)
-	service.rewriteCheckpointTokenDetailsForClient(stream, conversation, state)
-	attachDelegationRunStates(stream, state)
-	delegationRunCount := len(state.GetSubagentRunsByParentToolCallId())
+	if projection == nil || projection.State == nil {
+		return fmt.Errorf("checkpoint projection is empty")
+	}
+	projection.State.PendingToolCalls = buildPendingToolCalls(pendingExecs, pendingInteractions)
+	service.rewriteCheckpointTokenDetailsForClient(stream, conversation, projection.State)
+	attachDelegationRunStates(stream, projection.State)
+	delegationRunCount := len(projection.State.GetSubagentRunsByParentToolCallId())
 	if delegationRunCount > 0 {
 		activeDelegationRuns := 0
 		terminalDelegationRuns := 0
-		for _, run := range state.GetSubagentRunsByParentToolCallId() {
+		for _, run := range projection.State.GetSubagentRunsByParentToolCallId() {
 			if run == nil {
 				continue
 			}
@@ -3045,24 +3155,94 @@ func (service *Service) publishCheckpointWithTerminalAction(requestID string, co
 		}
 		log.Printf("forwarder delegation checkpoint publishing request_id=%s conversation_id=%s active_runs=%d terminal_runs=%d pending_execs=%d pending_interactions=%d",
 			strings.TrimSpace(requestID), strings.TrimSpace(stream.ConversationID), activeDelegationRuns, terminalDelegationRuns, len(pendingExecs), len(pendingInteractions))
-		service.debug.LogRuntime(context.Background(), requestID, stream.ConversationID, "delegation_checkpoint_publishing", map[string]any{
-			"active_run_count":          activeDelegationRuns,
-			"terminal_run_count":        terminalDelegationRuns,
-			"pending_exec_count":        len(pendingExecs),
-			"pending_interaction_count": len(pendingInteractions),
-		})
+		if service.debug != nil {
+			service.debug.LogRuntime(context.Background(), requestID, stream.ConversationID, "delegation_checkpoint_publishing", map[string]any{
+				"active_run_count":          activeDelegationRuns,
+				"terminal_run_count":        terminalDelegationRuns,
+				"pending_exec_count":        len(pendingExecs),
+				"pending_interaction_count": len(pendingInteractions),
+			})
+		}
 	}
 	if delegationRunCount > 0 {
-		for key, run := range state.GetSubagentRunsByParentToolCallId() {
+		for key, run := range projection.State.GetSubagentRunsByParentToolCallId() {
 			if run == nil {
 				continue
 			}
 			log.Printf("forwarder delegation checkpoint run request_id=%s map_key=%s parent_tool_call_id=%s subagent_id=%s status=%s env=%s", strings.TrimSpace(requestID), strings.TrimSpace(key), strings.TrimSpace(run.GetParentToolCallId()), strings.TrimSpace(run.GetSubagentId()), run.GetStatus().String(), run.GetEnvironment().String())
 		}
 	}
-	return service.broker.Publish(requestID, StreamEvent{
-		Message: buildCheckpointMessage(state),
-	})
+	message := buildCheckpointMessage(projection.State)
+	wireSize := proto.Size(message)
+	wireBytes, marshalErr := (proto.MarshalOptions{Deterministic: true}).Marshal(message)
+	if marshalErr != nil {
+		return fmt.Errorf("marshal checkpoint for dedupe: %w", marshalErr)
+	}
+	wireHash := fmt.Sprintf("%x", sha256.Sum256(wireBytes))
+	now := time.Now().UTC()
+	stream.mu.Lock()
+	lastHash := stream.LastCheckpointWireHash
+	lastSentAt := stream.LastCheckpointSentAt
+	if !force && wireHash == lastHash {
+		if stream.CheckpointPublishTimer != nil {
+			stream.CheckpointPublishTimer.Stop()
+			stream.CheckpointPublishTimer = nil
+		}
+		stream.CheckpointPublishPending = false
+		stream.mu.Unlock()
+		log.Printf("forwarder checkpoint skipped request_id=%s reason=duplicate hash=%s wire_size=%d", strings.TrimSpace(requestID), wireHash[:12], wireSize)
+		if service.debug != nil {
+			service.debug.LogRuntime(context.Background(), requestID, stream.ConversationID, "checkpoint_skipped_duplicate", map[string]any{
+				"wire_hash": wireHash, "wire_size": wireSize, "pending_exec_count": len(pendingExecs),
+			})
+		}
+		return nil
+	}
+	if !force && !lastSentAt.IsZero() && now.Sub(lastSentAt) < checkpointMinSendInterval {
+		remaining := checkpointMinSendInterval - now.Sub(lastSentAt)
+		if stream.CheckpointPublishTimer == nil {
+			stream.CheckpointPublishPending = true
+			stream.CheckpointPublishTimer = time.AfterFunc(remaining, func() {
+				if delayedStream, delayedOK := service.broker.Get(requestID); delayedOK && delayedStream != nil {
+					delayedStream.mu.Lock()
+					delayedStream.CheckpointPublishTimer = nil
+					delayedStream.CheckpointPublishPending = false
+					delayedStream.mu.Unlock()
+				}
+				if service.debug != nil {
+					service.debug.LogRuntime(context.Background(), requestID, "", "checkpoint_delayed_publish_fired", map[string]any{
+						"delay": remaining.String(),
+					})
+				}
+				if err := service.publishCheckpoint(requestID, ""); err != nil {
+					log.Printf("forwarder checkpoint delayed publish failed request_id=%s err=%v", strings.TrimSpace(requestID), err)
+				}
+			})
+		}
+		stream.mu.Unlock()
+		log.Printf("forwarder checkpoint skipped request_id=%s reason=rate_limited hash=%s wire_size=%d elapsed=%s min_interval=%s", strings.TrimSpace(requestID), wireHash[:12], wireSize, now.Sub(lastSentAt).Round(time.Millisecond), checkpointMinSendInterval)
+		if service.debug != nil {
+			service.debug.LogRuntime(context.Background(), requestID, stream.ConversationID, "checkpoint_skipped_rate_limited", map[string]any{
+				"wire_hash": wireHash, "wire_size": wireSize, "elapsed_since_last": now.Sub(lastSentAt).String(), "min_interval": checkpointMinSendInterval.String(), "pending_exec_count": len(pendingExecs),
+			})
+		}
+		return nil
+	}
+	stream.LastCheckpointWireHash = wireHash
+	stream.LastCheckpointSentAt = now
+	stream.CheckpointPublishPending = false
+	if stream.CheckpointPublishTimer != nil {
+		stream.CheckpointPublishTimer.Stop()
+		stream.CheckpointPublishTimer = nil
+	}
+	stream.mu.Unlock()
+	log.Printf("forwarder checkpoint queued request_id=%s hash=%s wire_size=%d force=%t pending_execs=%d pending_interactions=%d", strings.TrimSpace(requestID), wireHash[:12], wireSize, force, len(pendingExecs), len(pendingInteractions))
+	if service.debug != nil {
+		service.debug.LogRuntime(context.Background(), requestID, stream.ConversationID, "checkpoint_queued", map[string]any{
+			"wire_hash": wireHash, "wire_size": wireSize, "force": force, "pending_exec_count": len(pendingExecs), "pending_interaction_count": len(pendingInteractions),
+		})
+	}
+	return service.queueCheckpointProjection(stream, projection, terminalAction)
 }
 
 // attachDelegationRunStates 把本地委派（delegation_aggregate）的运行状态写入
@@ -3300,7 +3480,7 @@ func (service *Service) failActiveStream(stream *ActiveStream, conversationID st
 	if err := service.syncSummaryCarryForward(conversationID, requestID, modelCallID); err != nil && firstErr == nil {
 		firstErr = err
 	}
-	if err := service.publishCheckpoint(requestID, conversationID); err != nil && firstErr == nil {
+	if err := service.publishCheckpointForce(requestID, conversationID); err != nil && firstErr == nil {
 		firstErr = err
 	}
 	if err := service.broker.Fail(requestID, terminalCode, terminalMessage); err != nil && firstErr == nil {

@@ -390,9 +390,9 @@ func Run(resources EmbeddedResources) error {
 			})
 			// 启动时自动配对上下文窗口（受 autoMatchContextWindow 开关控制）：
 			// 目录命中则覆盖为真实窗口，目录未命中则探测 provider /models 回填。
-			// 失败仅记日志、不阻断启动。
+			// 失败仅记日志、不阻断启动。force=false：启动路径受开关控制，手动「一键诊断优化」才走 force。
 			autoMatchOnce.Do(func() {
-				if matchResult, matchErr := proxyService.AutoMatchContextWindows(context.Background()); matchErr != nil {
+				if matchResult, matchErr := proxyService.AutoMatchContextWindows(context.Background(), false); matchErr != nil {
 					logger.Errorf("自动配对上下文窗口失败: %v", matchErr)
 				} else if matchResult.Enabled {
 					logger.Infof("自动配对上下文窗口完成: total=%d from_catalog=%d from_probe=%d unchanged=%d changed=%t",

@@ -2,7 +2,6 @@ package server
 
 import (
 	"cursor/internal/i18n"
-	"cursor/internal/logger"
 	"errors"
 	"fmt"
 	"net/http"

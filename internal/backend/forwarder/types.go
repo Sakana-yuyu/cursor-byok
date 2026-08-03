@@ -44,6 +44,7 @@ type ConversationFile struct {
 	// 供子代理会话读取作保底候选（调用链传递）。不进 model-visible history，不影响 replay prefix。
 	LastActivatedSkills []string                   `json:"last_activated_skills,omitempty"`
 	CurrentTodos        []*agentv1.TodoItem        `json:"current_todos,omitempty"`
+	ImportedTurnIDs     [][]byte                   `json:"imported_turn_ids,omitempty"`
 	LatestRequestPrefix *ConversationRequestPrefix `json:"latest_request_prefix,omitempty"`
 	LastProviderCall    *ConversationProviderCall  `json:"last_provider_call,omitempty"`
 	CreatedAt           time.Time                  `json:"created_at"`
@@ -177,10 +178,23 @@ type ActiveStream struct {
 	ProviderAccumulatedReasoningSummary         json.RawMessage
 	ProviderSyntheticThinkingStartedAt          time.Time
 	ProviderSyntheticThinkingPublished          bool
+	ProviderThinkingDeltaCount                  int
+	ProviderThinkingCompletedCount              int
+	ProviderThinkingSuppressedCount             int
 	ProviderFinishReason                        string
 	ProviderUsage                               turnUsageSnapshot
 	ProviderTerminalToolInvocation              bool
-	PendingCompaction                           *PendingCompaction
+	// Wire-level checkpoint dedupe/rate limiting; persisted history is untouched.
+	LastCheckpointWireHash        string
+	LastCheckpointSentAt          time.Time
+	CheckpointPublishTimer        *time.Timer
+	CheckpointPublishPending      bool
+	PendingCompaction             *PendingCompaction
+	PendingCheckpointBlobWrites   map[uint32]pendingCheckpointBlobWrite
+	PendingCheckpointBlobRequests map[string]uint32
+	NextCheckpointBlobRequestID   uint32
+	NextCheckpointRevision        uint64
+	PendingCheckpoint             *pendingCheckpointPublish
 	// TurnStaleGraceStartedAt 记录 turn-staleness 看门狗「阶段一（重对齐 append 序列）」的触发时刻。
 	// 零值表示尚未进入宽限期；非零值表示已重对齐过序列并进入宽限，再次触发即走「阶段二强制收口」。
 	TurnStaleGraceStartedAt time.Time
@@ -499,6 +513,7 @@ type InboundIntent struct {
 	SelectedSubagentModels       []*agentv1.RequestedModel
 	SelectedSubagentModelDetails []*agentv1.ModelDetails
 	ConversationState            *agentv1.ConversationStateStructure
+	PreFetchedBlobs              []*agentv1.PreFetchedBlob
 	UserMessage                  *agentv1.UserMessage
 	RequestContext               *agentv1.RequestContext
 	MCPToolsProvided             bool

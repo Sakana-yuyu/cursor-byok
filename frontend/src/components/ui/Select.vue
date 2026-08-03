@@ -35,6 +35,8 @@ const normalizedOptions = computed(() => props.options.map((option) => {
     label: option?.label ?? option?.value ?? "",
     value: option?.value ?? "",
     icon: option?.icon ?? option?.iconClass ?? "",
+    iconURL: option?.iconURL ?? option?.iconUrl ?? "",
+    iconLight: option?.iconLight === true,
   };
 }));
 
@@ -283,7 +285,14 @@ onBeforeUnmount(() => {
             : 'text-[#7b7b7b]',
         ]"
       >
-        <span v-if="selectedOption?.icon" :class="[selectedOption.icon, 'text-[16px] shrink-0']" aria-hidden="true"></span>
+        <img
+          v-if="selectedOption?.iconURL"
+          :src="selectedOption.iconURL"
+          :alt="selectedOption.label"
+          :class="['size-4 shrink-0 object-contain', selectedOption.iconLight ? 'brightness-0 invert' : '']"
+          aria-hidden="true"
+        />
+        <span v-else-if="selectedOption?.icon" :class="[selectedOption.icon, 'text-[16px] shrink-0']" aria-hidden="true"></span>
         <span class="truncate">{{ selectedLabel }}</span>
       </span>
       <span
@@ -307,11 +316,11 @@ onBeforeUnmount(() => {
       <div
         v-if="isOpen"
         ref="menuRef"
-        class="fixed z-[10010] overflow-hidden rounded-[8px] border border-[#3f3f3f] bg-[#232323] p-1 shadow-[0_16px_30px_-12px_rgba(0,0,0,0.7)]"
+        class="fixed z-[10010] overscroll-contain overflow-y-auto rounded-[8px] border border-[#3f3f3f] bg-[#232323] p-1 shadow-[0_16px_30px_-12px_rgba(0,0,0,0.7)]"
         :class="menuClass"
         :style="menuStyle"
       >
-        <ul role="listbox" class="overflow-y-auto py-1">
+        <ul role="listbox" class="py-1">
           <li v-for="(option, index) in normalizedOptions" :key="option.value">
             <button
               :ref="(el) => setOptionRef(el, index)"
@@ -331,7 +340,14 @@ onBeforeUnmount(() => {
               @keydown="handleOptionKeydown($event, option, index)"
             >
               <span class="flex min-w-0 items-center gap-2">
-                <span v-if="option.icon" :class="[option.icon, 'text-[16px] shrink-0']" aria-hidden="true"></span>
+                <img
+                  v-if="option.iconURL"
+                  :src="option.iconURL"
+                  :alt="option.label"
+                  :class="['size-4 shrink-0 object-contain', option.iconLight ? 'brightness-0 invert' : '']"
+                  aria-hidden="true"
+                />
+                <span v-else-if="option.icon" :class="[option.icon, 'text-[16px] shrink-0']" aria-hidden="true"></span>
                 <span class="truncate">{{ option.label }}</span>
               </span>
             </button>

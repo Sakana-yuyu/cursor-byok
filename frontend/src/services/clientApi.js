@@ -231,11 +231,12 @@ export function fetchModelCatalog(request) {
 }
 
 // 一键自动配对所有模型适配器的上下文窗口：目录命中则覆盖，目录未命中则探测 provider /models 回填。
-export function autoMatchContextWindows() {
+// force=true 时无视 autoMatchContextWindow 开关强制执行（「一键诊断优化」手动触发用）。
+export function autoMatchContextWindows(force = false) {
   if (isBrowserPreview) {
-    return Promise.resolve({ enabled: false, changed: false, total: 0, fromCatalog: 0, fromProbe: 0, unchanged: 0 });
+    return Promise.resolve({ enabled: false, switchEnabled: true, changed: false, total: 0, fromCatalog: 0, fromProbe: 0, unchanged: 0 });
   }
-  return withApiLogging("AutoMatchContextWindows", undefined, () => invoke("@bindings/cursor/internal/bridge/proxyservice.js", "AutoMatchContextWindows", []));
+  return withApiLogging("AutoMatchContextWindows", [force], () => invoke("@bindings/cursor/internal/bridge/proxyservice.js", "AutoMatchContextWindows", [force]));
 }
 
 export function diagnoseModelAdapters() {

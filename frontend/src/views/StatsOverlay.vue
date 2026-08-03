@@ -1,4 +1,5 @@
 <script setup>
+import StatsOverlayChart from "@/components/charts/StatsOverlayChart.vue";
 import { getHomeMetricsSummary, fetchLocalCacheStats, setStatsOverlayAlwaysOnTop, updateStatsOverlayLayout } from "@/services/clientApi";
 import { getStatsOverlayPreferences, setStatsOverlayPreferences, hideStatsOverlay, closeApplication, appState } from "@/state/appState";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
@@ -7,6 +8,7 @@ const summary = ref({});
 const localCache = ref({});
 const preferences = ref({ style: "card" });
 const updated = ref(false);
+const chartRefreshKey = ref(0);
 const isCollapsed = ref(false); // 收缩状态
 const isHovering = ref(false); // 鼠标悬停状态
 const isMorphing = ref(false); // 胶囊与面板之间的过渡状态
@@ -324,6 +326,7 @@ const turnsTitle = computed(() => `${validTurns.value} / ${invalidTurns.value}`)
 
 function markUpdated() {
   updated.value = true;
+  chartRefreshKey.value += 1;
   if (updatedTimer) clearTimeout(updatedTimer);
   updatedTimer = setTimeout(() => { updated.value = false; }, 900);
 }
@@ -539,6 +542,7 @@ onUnmounted(() => {
         </div>
       </div>
     </section>
+    <StatsOverlayChart :refresh-key="chartRefreshKey" />
     </div>
   </div>
 </template>
@@ -597,7 +601,25 @@ onUnmounted(() => {
 }
 
 /* 完整面板容器 */
-.overlay-content { padding: 6px 8px; }
+.overlay-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 6px 8px;
+  border: 1px solid rgba(110, 231, 165, 0.4);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(20, 27, 25, 0.94), rgba(10, 15, 15, 0.94));
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.48), 0 0 0 1px rgba(0, 0, 0, 0.24);
+  overflow: visible;
+}
+.stats-overlay--card .overlay-content,
+.stats-overlay--engine .overlay-content { width: 240px; }
+.stats-overlay--orb .overlay-content { width: 176px; }
 
 /* 收缩状态：完整面板隐藏 */
 .stats-overlay.is-collapsed .overlay-content { display: none; }
@@ -614,8 +636,9 @@ onUnmounted(() => {
 /* 收缩完成后仍保持与形变阶段相同的边缘坐标，避免切回 flex 居中造成一帧闪烁。 */
 .stats-overlay.is-collapsed.is-snap-left .float-pill { position: absolute; left: 7px; top: 50%; transform: translateY(-50%); }
 .stats-overlay.is-collapsed.is-snap-right .float-pill { position: absolute; right: 7px; top: 50%; transform: translateY(-50%); }
-.stats-overlay.is-collapsed.is-snap-top .float-pill { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); }
-.stats-overlay.is-collapsed.is-snap-bottom .float-pill { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); }
+/* 上下贴边的原生胶囊窗口高度只有 36px，必须以窗口中心定位，避免 18px 偏移把胶囊裁掉。 */
+.stats-overlay.is-collapsed:not(.is-morphing).is-snap-top .float-pill { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.stats-overlay.is-collapsed:not(.is-morphing).is-snap-bottom .float-pill { position: absolute; left: 50%; top: 50%; bottom: auto; transform: translate(-50%, -50%); }
 
 /* 展开态沿贴边方向保持锚定，面板只向屏幕内部扩展，鼠标始终落在面板内。 */
 .stats-overlay:not(.is-collapsed).is-snap-left { justify-content: flex-start; }
@@ -648,7 +671,7 @@ onUnmounted(() => {
 .stats-overlay.is-morphing-in .float-pill { animation: pillMorphOut .3s cubic-bezier(.22,.8,.24,1) .09s both; }
 .stats-overlay.is-morphing-out .float-pill { animation: pillMorphIn .36s cubic-bezier(.22,.8,.24,1) both; }
 
-.overlay-header { height: 15px; display: flex; align-items: center; justify-content: flex-end; gap: 3px; padding: 0 2px; transition: opacity 0.3s ease; }
+.overlay-header { height: 15px; flex: 0 0 15px; display: flex; align-items: center; justify-content: flex-end; gap: 3px; padding: 0 2px; transition: opacity 0.3s ease; }
 
 /* 贴标收缩开关按钮 */
 .snap-toggle { width: 10px; height: 10px; border: 1.5px solid rgba(110,231,165,.55); border-radius: 2px; background: none; cursor: pointer; padding: 0; flex-shrink: 0; position: relative; transition: border-color .2s, opacity .2s; }
@@ -663,7 +686,7 @@ onUnmounted(() => {
 .overlay-action:hover { color: #fff; background: rgba(255,255,255,.12); }
 .overlay-action--danger:hover { color: #ffb4b4; background: rgba(180,60,60,.2); }
 
-.card-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid rgba(110,231,165,.4); border-radius: 8px; background: linear-gradient(135deg, rgba(24,24,24,.74), rgba(16,16,16,.8)); backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%); transition: opacity 0.3s ease; box-shadow: 0 4px 16px rgba(0,0,0,.4), 0 0 0 1px rgba(0,0,0,.2); }
+.card-panel { display: grid; flex: 0 0 auto; min-height: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid rgba(110,231,165,.4); border-radius: 8px; background: linear-gradient(135deg, rgba(24,24,24,.74), rgba(16,16,16,.8)); backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%); transition: opacity 0.3s ease; box-shadow: 0 4px 16px rgba(0,0,0,.4), 0 0 0 1px rgba(0,0,0,.2); }
 .metric-card { min-width: 0; padding: 3px 6px; border: 1px solid rgba(110,231,165,.18); border-radius: 5px; background: rgba(36,36,36,.9); transition: border-color .3s ease, transform .3s ease; }
 .is-updated .metric-card { border-color: rgba(110,231,165,.55); }
 .metric-label { color: #777; font-size: 9px; white-space: nowrap; }
@@ -695,7 +718,7 @@ onUnmounted(() => {
 .is-updated .orb-core::before { animation: orbRipple .9s ease; }
 .orb-core::before { content: ''; position: absolute; inset: 30%; border-radius: 50%; border: 1px solid rgba(110,231,165,.6); opacity: 0; pointer-events: none; }
 @keyframes orbRipple { 0% { opacity: .8; inset: 30%; } 100% { opacity: 0; inset: -10%; } }
-.engine-panel { position: relative; display: flex; align-items: center; gap: 8px; min-height: calc(100vh - 27px); padding: 5px 7px; border: 1px solid rgba(110,231,165,.45); border-radius: 9px; background: linear-gradient(135deg, rgba(18,39,32,.76), rgba(12,21,25,.82)); backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%); overflow: hidden; transition: opacity 0.3s ease; box-shadow: 0 4px 16px rgba(0,0,0,.4), 0 0 0 1px rgba(0,0,0,.2); }
+.engine-panel { position: relative; display: flex; flex: 0 0 86px; align-items: center; gap: 8px; height: 86px; min-height: 86px; padding: 5px 7px; border: 1px solid rgba(110,231,165,.45); border-radius: 9px; background: linear-gradient(135deg, rgba(18,39,32,.76), rgba(12,21,25,.82)); backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%); overflow: hidden; transition: opacity 0.3s ease; box-shadow: 0 4px 16px rgba(0,0,0,.4), 0 0 0 1px rgba(0,0,0,.2); }
 .engine-panel::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent 0 11px, rgba(110,231,165,.07) 12px); animation: scan 8s linear infinite; pointer-events: none; }
 .engine-gauge { position: relative; flex: 0 0 74px; height: 74px; }
 .engine-gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
@@ -709,7 +732,7 @@ onUnmounted(() => {
 .telemetry-grid div { padding: 3px 5px; border-left: 2px solid rgba(110,231,165,.6); background: rgba(5,15,17,.36); }
 .telemetry-grid span { display: block; color: #77918e; font-size: 8px; white-space: nowrap; }
 .telemetry-grid strong { color: #d8eee8; font: 12px var(--font-num, ui-monospace, monospace); }
-.orb-panel { position: relative; width: 100%; height: calc(100vh - 27px); min-height: 120px; overflow: visible; display: grid; place-items: center; }
+.orb-panel { position: relative; width: 100%; height: 106px; min-height: 106px; flex: 0 0 106px; overflow: visible; display: grid; place-items: center; }
 /* 球体舞台：去掉四角卡片，中心球独占舞台，轮换展示指标 */
 .orb-stage { position: relative; display: grid; place-items: center; width: 100%; height: 100%; }
 .orb-core { position: relative; width: 104px; height: 104px; display: grid; place-items: center; border-radius: 50%; background: linear-gradient(135deg, rgba(18,28,26,.62), rgba(10,16,16,.74)); backdrop-filter: blur(14px) saturate(160%); -webkit-backdrop-filter: blur(14px) saturate(160%); box-shadow: 0 4px 16px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06); }

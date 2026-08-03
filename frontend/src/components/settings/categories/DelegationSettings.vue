@@ -1128,9 +1128,16 @@ watch(
     </SettingsSection>
 
     <SettingsSection
-      title="监督策略"
-      description="由更强的模型负责规划、检查和纠偏，委派模型负责执行。仅对 Multitask 生效，关闭后保持原有委派流程。"
+      title="高级委派"
+      description="监督策略和视觉委派属于低频高级配置，默认收起；需要调整时点击此处展开。"
+      collapsible
+      :default-expanded="false"
     >
+      <div class="space-y-8">
+        <SettingsSection
+          title="监督策略"
+          description="由更强的模型负责规划、检查和纠偏，委派模型负责执行。仅对 Multitask 生效，关闭后保持原有委派流程。"
+        >
       <SettingsRow
         label="启用监督委派"
         description="监督模型会检查子任务进度，在发现循环、偏离范围或缺少证据时进行纠偏。"
@@ -1351,12 +1358,12 @@ watch(
     </SettingsSection>
 
     <SettingsSection
-      title="视觉委派"
-      description="当主模型不支持识图时，自动把图片转发给上面的识图模型，返回画面描述和文字（OCR），让纯文本模型也能“看图”。未配置识图模型时图片仍会被替换为占位说明。"
+      title="视觉委派（统一读图入口）"
+      description="当主模型不支持识图时，自动把图片转发给已配置的识图模型，返回画面描述和文字（OCR），让纯文本模型也能“看图”。启用后会自动把识图模型的网关地址 / API Key / 模型名同步到读图 MCP（vision-reader）作为兜底：委派失败或不可用时，纯文本主模型仍可通过该 MCP 工具读取图片；无需在单个模型中重复配置读图 MCP。"
     >
       <SettingsRow
         label="启用视觉委派"
-        description="开启后，主模型不支持图片输入时，后端会把每张图片委派给下方识图模型，并把识图结果注入回对话。"
+        description="开启后，主模型不支持图片输入时，后端会把每张图片委派给下方识图模型，并把识图结果注入回对话；识图失败时自动回退为带图片路径的占位说明，模型可调用已同步的读图 MCP（vision-reader）兜底读取。不需要为当前主模型单独配置读图 MCP。"
         :busy="visionFieldBusy('enabled')"
         :error="visionFieldError('enabled')"
       >
@@ -1374,7 +1381,7 @@ watch(
 
       <SettingsRow
         label="识图模型"
-        description="作为识图通道的模型，建议选择明确支持视觉输入的模型。未选择时视觉委派自动关闭。"
+        description="选择一个已配置且明确支持视觉输入的模型适配器。连接地址、API Key 和模型标识都来自模型配置页；未选择时视觉委派自动关闭。"
         :busy="visionFieldBusy('visionModelID')"
         :error="visionFieldError('visionModelID')"
         @retry="retryVisionField('visionModelID')"
@@ -1408,11 +1415,15 @@ watch(
           />
         </div>
       </SettingsRow>
+        </SettingsSection>
+      </div>
     </SettingsSection>
 
     <SettingsSection
       title="模型组"
-      description="模型组用于划分委派模型、默认模型、执行模式和工具权限。新增、排序、开关和删除会立即保存。"
+      description="模型组用于划分委派模型、默认模型、执行模式和工具权限。新增、排序、开关和删除会立即保存；需要调整时展开本区。"
+      collapsible
+      :default-expanded="false"
     >
       <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div class="text-sm text-[#8f8f8f]">
@@ -1463,7 +1474,9 @@ watch(
 
     <SettingsSection
       title="运行时状态"
-      description="运行中的委派任务和 MCP 运行时连接状态独立轮询，不会阻塞上方的配置保存。"
+      description="运行中的委派任务和 MCP 运行时连接状态独立轮询，不会阻塞上方的配置保存；需要查看时展开。"
+      collapsible
+      :default-expanded="false"
     >
       <DelegationRuntimePanel :framed="false" />
     </SettingsSection>

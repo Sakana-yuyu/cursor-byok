@@ -65,7 +65,9 @@ func NormalizeRuntimeConfig(config RuntimeConfig) RuntimeConfig {
 	config.VisionMode = strings.TrimSpace(config.VisionMode)
 	if !config.Enabled {
 		config.SupervisionEnabled = false
-		config.VisionDelegationEnabled = false
+		// 视觉委派是独立能力：是否生效只取决于是否配置了有效的识图模型
+		// （见下方 VisionModelID 判断），不应被多任务委派总开关关闭。
+		// 否则用户仅开启「视觉委派」而未开启多任务委派时，纯文本主模型无法识图。
 	}
 	if config.VisionModelID == "" {
 		config.VisionDelegationEnabled = false

@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
@@ -40,6 +39,9 @@ type ChannelResolver interface {
 	// TurnStaleTimeout 表示一轮回合进入「等待外部（工具/交互结果）」后，
 	// 在无任何进展时由 turn-staleness 看门狗触发自救的阈值。
 	TurnStaleTimeout(context.Context) time.Duration
+	// NativeDelegationProgressTimeout 表示 native Cursor 子代理「无有效进展」看门狗的阈值：
+	// 子代理既无工具结果、又无模型输出/思考活动超过此时长时判定超时。
+	NativeDelegationProgressTimeout(context.Context) time.Duration
 }
 
 type multiChannelResolver interface {
@@ -62,10 +64,10 @@ const (
 	// 内层 providerRetryMaxAttempts 已降为 1（不再自行重试 429/5xx），
 	// 因此本值即单次 Stream 调用的总尝试上限；耗尽后直接返回错误。
 	routerMaxStreamAttempts = 10
-	// routerRetryBaseDelay 是渠道切换/重试之间的基准退避间隔。
-	routerRetryBaseDelay = 150 * time.Millisecond
-	// routerRetryMaxDelay 是渠道切换/重试之间的最大退避间隔。
-	routerRetryMaxDelay = 2 * time.Second
+	// routerRetryFixedInterval 是渠道切换/重试之间的固定重试间隔。
+	// 每 10 秒重试一次、共重试 routerMaxStreamAttempts(10) 次，全部失败才上报错误；
+	// 给上游瞬时故障（如中转站 Codex OAuth 认证恢复、连接超时恢复）留出恢复窗口。
+	routerRetryFixedInterval = 10 * time.Second
 )
 
 // Stream 根据模型标识选择具体 provider，并在 provider 失败时按需切换渠道或退避重试。
@@ -450,7 +452,7 @@ func isPermanentProviderError(err error) bool {
 	msg := err.Error()
 	// 流式 SSE 层的确定性错误：OpenAI Responses adapter 把流内 error event（如
 	// context_too_large / context_length_exceeded）包装成 "openai responses stream error
-	// code=..."，不含 HTTP status，因此上面的 status 解析会返回 0 被当作瞬时错误。
+	// code=..."，不含 HTTP status，因此下面的 status 解析会返回 0 被当作瞬时错误。
 	// 但这类错误由输入本身决定（上下文超限），重试不可能改变结果——若不识别为永久错误，
 	// 单渠道下 router 会盲目重试 routerMaxStreamAttempts(=10) 次，每次都收到同样错误，
 	// 造成约一分钟空转后才冒泡到 forwarder 的 context-overflow 压缩恢复。
@@ -532,14 +534,12 @@ func parseProviderErrorStatus(message string) int {
 	return status
 }
 
-// routerRetryBackoff 计算渠道切换/重试之间的退避时长（指数加抖动，带上限）。
-func routerRetryBackoff(attempt int) time.Duration {
-	backoff := routerRetryBaseDelay << attempt
-	if backoff <= 0 || backoff > routerRetryMaxDelay {
-		backoff = routerRetryMaxDelay
-	}
-	jitter := time.Duration(rand.Int63n(int64(backoff)/2 + 1))
-	return backoff/2 + jitter
+// routerRetryBackoff 返回渠道切换/重试之间的固定重试间隔（10 秒）。
+// 用户要求：每 10 秒重试一次、共重试 10 次，全部失败才上报错误。
+// 固定间隔给上游瞬时故障（如中转站 Codex OAuth 认证恢复、连接超时恢复）留出恢复窗口，
+// 且避免指数退避在多次失败后间隔过短导致过早耗尽。
+func routerRetryBackoff(_ int) time.Duration {
+	return routerRetryFixedInterval
 }
 
 // sanitizeProviderMessages removes replay-only placeholders and trims trailing

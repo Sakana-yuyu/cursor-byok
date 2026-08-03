@@ -160,6 +160,9 @@ func shouldPersistNormalizedConfig(raw []byte, current Config, normalized Config
 	if current.TurnStaleTimeout != normalized.TurnStaleTimeout && yamlHasKey(raw, "turnStaleTimeout") {
 		return true
 	}
+	if current.NativeDelegationProgressTimeout != normalized.NativeDelegationProgressTimeout && yamlHasKey(raw, "nativeDelegationProgressTimeout") {
+		return true
+	}
 	if modelAdapterIDsChanged(current.ModelAdapters, normalized.ModelAdapters) {
 		return true
 	}

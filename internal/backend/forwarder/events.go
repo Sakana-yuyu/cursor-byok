@@ -13,6 +13,8 @@ import (
 	runtimecore "cursor/internal/backend/agent/core"
 )
 
+const maxCheckpointWireBytes = 512 * 1024
+
 // buildHeartbeatMessage 构造一个服务端心跳消息。
 func buildHeartbeatMessage() *agentv1.AgentServerMessage {
 	return &agentv1.AgentServerMessage{
@@ -238,6 +240,7 @@ func buildCheckpointMessage(state *agentv1.ConversationStateStructure) *agentv1.
 		cloned.TokenDetails.MaxTokens = projectedConversationMaxTokens
 	}
 	cloned.TurnTimings = nil
+	trimCheckpointForWire(cloned, maxCheckpointWireBytes)
 	return &agentv1.AgentServerMessage{
 		Message: &agentv1.AgentServerMessage_ConversationCheckpointUpdate{
 			ConversationCheckpointUpdate: cloned,
@@ -258,6 +261,53 @@ func buildSetCheckpointBlobMessage(id uint32, blob CheckpointBlob) *agentv1.Agen
 				},
 			},
 		},
+	}
+}
+
+// trimCheckpointForWire keeps the persisted history untouched while bounding a
+// single legacy checkpoint sent to Cursor. Cursor persists this message as one
+// Composer JSON object; very large checkpoints make the renderer spend seconds
+// in JSON.stringify and can abort the active stream. The current UI state (tool
+// status, pending calls, plans, todos and subagent runs) is retained first.
+func trimCheckpointForWire(state *agentv1.ConversationStateStructure, maxBytes int) {
+	if state == nil || maxBytes <= 0 || proto.Size(state) <= maxBytes {
+		return
+	}
+
+	// These fields are useful for replay, but are not needed to render the live
+	// Task/turn state. The backend keeps the complete copies for replay.
+	state.FileStates = nil
+	state.FileStatesV2 = nil
+	state.ReadPaths = nil
+	state.CommunicateUpdateHistory = nil
+	state.TrackedGitRepoBranches = nil
+	state.SubagentStates = nil
+	state.SubagentThreads = nil
+	state.SummaryArchives = nil
+
+	// Keep the newest serialized blobs. Each blob is an atomic protobuf
+	// payload, so never cut an individual element in the middle.
+	for proto.Size(state) > maxBytes && len(state.RootPromptMessagesJson) > 0 {
+		state.RootPromptMessagesJson = state.RootPromptMessagesJson[1:]
+	}
+	for proto.Size(state) > maxBytes && len(state.Turns) > 0 {
+		state.Turns = state.Turns[1:]
+	}
+	if proto.Size(state) > maxBytes {
+		state.RootPromptMessagesJson = nil
+	}
+	if proto.Size(state) > maxBytes {
+		state.Turns = nil
+	}
+
+	// A single oversized blob can still exceed the budget. Preserve live UI
+	// state and remove only replay payloads in that case.
+	if proto.Size(state) > maxBytes {
+		state.Summary = nil
+		state.SummaryArchive = nil
+		state.Plan = nil
+		state.Plans = nil
+		state.Todos = nil
 	}
 }
 

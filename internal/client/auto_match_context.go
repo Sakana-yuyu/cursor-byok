@@ -22,8 +22,12 @@ import (
 
 // AutoMatchResult 是一次自动配对上下文窗口的汇总结果，供前端展示与日志记录。
 type AutoMatchResult struct {
-	// Enabled 表示是否实际执行了配对（开关关闭时为 false）。
+	// Enabled 表示是否实际执行了配对（开关关闭且未强制时为 false）。
 	Enabled bool `json:"enabled"`
+	// SwitchEnabled 表示 config 的 autoMatchContextWindow 开关当前是否为开启状态。
+	// force 触发时即使开关关闭也会执行对齐，此时 Enabled=true 而 SwitchEnabled=false，
+	// 前端据此提示「开关关闭但本次为手动强制对齐」。
+	SwitchEnabled bool `json:"switchEnabled"`
 	// Changed 表示是否有任何适配器被改动（决定是否落盘）。
 	Changed bool `json:"changed"`
 	// Total 表示参与判定的适配器总数。
@@ -53,9 +57,9 @@ type AutoMatchDetail struct {
 }
 
 // AutoMatchContextWindows 执行一次自动配对：目录命中则覆盖，目录未命中则探测 provider /models 回填。
-// 受 config.AutoMatchContextWindow 开关控制；开关关闭时直接返回 Enabled=false。
-// 仅当有改动时才会落盘（SaveUserConfig），避免无谓写盘。
-func (s *ProxyService) AutoMatchContextWindows(ctx context.Context) (AutoMatchResult, error) {
+// force=true 时无视 config.AutoMatchContextWindow 开关强制执行（供「一键诊断优化」手动触发）；
+// force=false 时受开关控制，开关关闭则返回 Enabled=false。仅当有改动时才会落盘（SaveUserConfig），避免无谓写盘。
+func (s *ProxyService) AutoMatchContextWindows(ctx context.Context, force bool) (AutoMatchResult, error) {
 	if s == nil {
 		return AutoMatchResult{}, nil
 	}
@@ -64,9 +68,10 @@ func (s *ProxyService) AutoMatchContextWindows(ctx context.Context) (AutoMatchRe
 	if err != nil {
 		return result, err
 	}
-	if !cfg.AutoMatchContextWindow {
-		// 开关关闭：不执行，但返回明确的「未启用」结果，便于前端提示。
-		return AutoMatchResult{Enabled: false, Total: len(cfg.ModelAdapters)}, nil
+	result.SwitchEnabled = cfg.AutoMatchContextWindow
+	if !cfg.AutoMatchContextWindow && !force {
+		// 开关关闭且未强制：不执行，但返回明确的「未启用」结果，便于前端提示。
+		return AutoMatchResult{Enabled: false, SwitchEnabled: false, Total: len(cfg.ModelAdapters)}, nil
 	}
 
 	adapters := cfg.ModelAdapters

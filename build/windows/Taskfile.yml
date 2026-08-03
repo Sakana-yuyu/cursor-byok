@@ -78,19 +78,24 @@ tasks:
     deps:
       - task: build
         vars:
+          ARCH:
+            ref: .ARCH
+          OUTPUT:
+            ref: .OUTPUT
           SCAN:
             ref: .SCAN
     cmds:
       - wails3 generate webview2bootstrapper -dir "{{.PROJECT_ROOT}}/build/windows/nsis"
       - |
         {{if eq OS "windows"}}
-        makensis -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.PROJECT_ROOT}}\{{.BIN_DIR}}\{{.APP_NAME}}.exe" project.nsi
+        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DOUTPUT_INSTALLER="cursor-byok-windows-{{.ARCH}}-installer.exe" -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.PROJECT_ROOT}}\{{.OUTPUT}}" project.nsi
         {{else}}
-        makensis -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.PROJECT_ROOT}}/{{.BIN_DIR}}/{{.APP_NAME}}.exe" project.nsi
+        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DOUTPUT_INSTALLER="cursor-byok-windows-{{.ARCH}}-installer.exe" -DARG_WAILS_{{.ARG_FLAG}}_BINARY="{{.PROJECT_ROOT}}/{{.OUTPUT}}" project.nsi
         {{end}}
     vars:
       PROJECT_ROOT: '{{.TASKFILE_DIR}}/../..'
       ARCH: '{{.ARCH | default ARCH}}'
+      OUTPUT: '{{.OUTPUT | default (printf "%s/%s.exe" .BIN_DIR .APP_NAME)}}'
       ARG_FLAG: '{{if eq .ARCH "amd64"}}AMD64{{else}}ARM64{{end}}'
 
   create:nsis:installer:386:
@@ -101,19 +106,22 @@ tasks:
       - task: build
         vars:
           ARCH: 386
+          OUTPUT:
+            ref: .OUTPUT
           SCAN:
             ref: .SCAN
     cmds:
       - wails3 generate webview2bootstrapper -dir "{{.PROJECT_ROOT}}/build/windows/nsis"
       - |
         {{if eq OS "windows"}}
-        makensis -DARG_WAILS_386_BINARY="{{.PROJECT_ROOT}}\{{.BIN_DIR}}\{{.APP_NAME}}.exe" project-386.nsi
+        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DARG_WAILS_386_BINARY="{{.PROJECT_ROOT}}\{{.OUTPUT}}" project-386.nsi
         {{else}}
-        makensis -DARG_WAILS_386_BINARY="{{.PROJECT_ROOT}}/{{.BIN_DIR}}/{{.APP_NAME}}.exe" project-386.nsi
+        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DARG_WAILS_386_BINARY="{{.PROJECT_ROOT}}/{{.OUTPUT}}" project-386.nsi
         {{end}}
     vars:
       PROJECT_ROOT: '{{.TASKFILE_DIR}}/../..'
       ARCH: 386
+      OUTPUT: '{{.OUTPUT | default (printf "%s/%s.exe" .BIN_DIR .APP_NAME)}}'
 
   create:msix:package:
     summary: 生成 MSIX 安装包

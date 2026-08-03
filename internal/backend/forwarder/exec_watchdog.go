@@ -91,6 +91,12 @@ func (service *Service) recoverExecWithoutTerminal(stream *ActiveStream, pending
 	if stream == nil {
 		return nil
 	}
+	// native Cursor 子代理超时收口时，先向客户端执行桥发 abort，真正取消客户端侧
+	// 仍在运行的子代理，避免出现「Cursor 任务还在进行中、byok 已显示超时」的割裂。
+	// 普通工具（read/write/shell 等）不需要 abort，客户端侧没有对应任务在跑。
+	if strings.TrimSpace(pending.ExecKind) == "subagent" {
+		_ = service.broker.Publish(stream.RequestID, StreamEvent{Message: buildExecAbortMessage(pending)})
+	}
 	markExecCompleted(stream, pending)
 	if strings.TrimSpace(pending.ExecKind) == "subagent" {
 		service.updateNativeDelegationStatus(pending.ExecID, delegation.TaskTimedOut, "Cursor 子代理超时", strings.TrimSpace(reason))
