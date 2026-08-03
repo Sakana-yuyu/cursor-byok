@@ -273,6 +273,57 @@ const displayRate = computed(() => cacheHitRate.value ?? localCacheRate.value);
 const gaugeDash = computed(() => `${Math.max(0, Math.min(1, Number(displayRate.value || 0))) * 100} 100`);
 const style = computed(() => preferences.value.style || "card");
 
+// ===== 外观：透明度 / 磨砂 / 主题色 =====
+// 主题色表：accent 强调色、glow 辉光色（含 alpha 分量，供 rgba() 直接拼装）。
+const ACCENT_PALETTE = {
+  mint:  { accent: "#6ee7a5", glow: "110,231,165" },
+  cyan:  { accent: "#5eead4", glow: "94,234,212" },
+  amber: { accent: "#fcd34d", glow: "252,211,77" },
+  violet:{ accent: "#c4b5fd", glow: "196,181,253" },
+  rose:  { accent: "#fda4af", glow: "253,164,175" },
+  blue:  { accent: "#93c5fd", glow: "147,197,253" },
+};
+const overlayOpacity = computed(() => {
+  const value = Number(preferences.value.opacity);
+  return Number.isFinite(value) ? Math.min(1, Math.max(0.3, value)) : 0.85;
+});
+const overlayFrosted = computed(() => {
+  const blur = Number(preferences.value.frostBlur);
+  return Number.isFinite(blur) ? blur > 0 : preferences.value.frosted !== false;
+});
+const overlayFrostBlur = computed(() => {
+  const blur = Number(preferences.value.frostBlur);
+  return Number.isFinite(blur) ? Math.min(30, Math.max(0, blur)) : 18;
+});
+// custom：自定义色；rainbow：流动炫彩动画（CSS 变量由动画驱动）；其余走预设色板。
+const overlayPalette = computed(() => {
+  const accent = preferences.value.accent;
+  if (accent === "custom") {
+    const hex = String(preferences.value.accentCustom || "").trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
+      const rgb = [1, 3, 5].map((index) => parseInt(hex.slice(index, index + 2), 16));
+      return { accent: hex, glow: rgb.join(",") };
+    }
+    return ACCENT_PALETTE.mint;
+  }
+  if (accent === "rainbow") {
+    return { accent: "var(--rainbow-accent)", glow: "var(--rainbow-glow)" };
+  }
+  return ACCENT_PALETTE[accent] || ACCENT_PALETTE.mint;
+});
+// 浮窗外观 CSS 变量：透明度作用于背景层，内容文字保持不透明以保证可读性。
+const overlayStyleVars = computed(() => ({
+  "--accent": overlayPalette.value.accent,
+  "--accent-glow": overlayPalette.value.glow,
+  "--overlay-bg-alpha": String(overlayOpacity.value),
+  "--overlay-blur": overlayFrosted.value ? `${overlayFrostBlur.value}px` : "0px",
+  "--overlay-saturate": overlayFrosted.value ? "140%" : "100%",
+  "--pill-blur": overlayFrosted.value ? `${Math.max(8, overlayFrostBlur.value)}px` : "0px",
+  "--pill-saturate": overlayFrosted.value ? "160%" : "100%",
+}));
+// 流动炫彩：动画切换主色与辉光 RGB。
+const overlayRainbowActive = computed(() => preferences.value.accent === "rainbow");
+
 // ===== 球体样式：中心球轮换显示 4 项指标，每 3 秒切换一次 =====
 const orbCycleMs = 3000;
 let orbCycleTimer = null;
@@ -421,10 +472,11 @@ onUnmounted(() => {
         'is-collapsed': isCollapsed,
         'is-morphing': isMorphing,
         [`is-morphing-${morphDirection}`]: morphDirection,
-        [`is-snap-${snapEdge}`]: snapEdge
+        [`is-snap-${snapEdge}`]: snapEdge,
+        'overlay-rainbow': overlayRainbowActive,
       }
     ]" 
-    :style="{ '--wails-draggable': draggable }"
+    :style="{ '--wails-draggable': draggable, ...overlayStyleVars }"
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
   >
@@ -548,7 +600,18 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.stats-overlay { --accent: #6ee7a5; --muted: #777; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; background: transparent; color: #e5e5e5; font-family: inherit; pointer-events: none; }
+.stats-overlay { --accent: #6ee7a5; --accent-glow: 110,231,165; --overlay-bg-alpha: 0.85; --overlay-blur: 18px; --overlay-saturate: 140%; --pill-blur: 16px; --pill-saturate: 160%; --muted: #777; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; background: transparent; color: #e5e5e5; font-family: inherit; pointer-events: none; }
+/* 流动炫彩：主色与辉光 RGB 周期性渐变，供 --accent / --accent-glow 引用 */
+.overlay-rainbow { --rainbow-accent: #6ee7a5; --rainbow-glow: 110,231,165; animation: overlayRainbowCycle 8s linear infinite; }
+@keyframes overlayRainbowCycle {
+  0%   { --rainbow-accent: #6ee7a5; --rainbow-glow: 110,231,165; }
+  17%  { --rainbow-accent: #5eead4; --rainbow-glow: 94,234,212; }
+  34%  { --rainbow-accent: #93c5fd; --rainbow-glow: 147,197,253; }
+  51%  { --rainbow-accent: #c4b5fd; --rainbow-glow: 196,181,253; }
+  68%  { --rainbow-accent: #fda4af; --rainbow-glow: 253,164,175; }
+  85%  { --rainbow-accent: #fcd34d; --rainbow-glow: 252,211,77; }
+  100% { --rainbow-accent: #6ee7a5; --rainbow-glow: 110,231,165; }
+}
 .stats-overlay,
 .stats-overlay * { user-select: none; -webkit-user-select: none; }
 .stats-overlay > * { pointer-events: auto; }
@@ -556,8 +619,8 @@ onUnmounted(() => {
 /* 悬浮球样式 */
 /* 收缩态胶囊：左侧脉冲图标 + 右侧实时数据，一体紧凑。
    背景不透明 + 强边框/投影，确保在任意（含白色）背景下都可读。 */
-.float-pill { position: relative; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 15px; background: linear-gradient(135deg, rgba(26,32,31,.78), rgba(14,18,18,.82)); border: 1px solid rgba(110,231,165,.55); box-shadow: 0 4px 14px rgba(0,0,0,.5), 0 0 0 1px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.08); backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%); cursor: pointer; transition: border-color .3s ease; }
-.float-pill:hover { border-color: rgba(110,231,165,.85); }
+.float-pill { position: relative; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 15px; background: linear-gradient(135deg, rgba(26,32,31,.78), rgba(14,18,18,.82)); border: 1px solid rgba(var(--accent-glow),.55); box-shadow: 0 4px 14px rgba(0,0,0,.5), 0 0 0 1px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.08); backdrop-filter: blur(var(--pill-blur)) saturate(var(--pill-saturate)); -webkit-backdrop-filter: blur(var(--pill-blur)) saturate(var(--pill-saturate)); cursor: pointer; transition: border-color .3s ease; }
+.float-pill:hover { border-color: rgba(var(--accent-glow),.85); }
 /* 竖向贴边：贴左/右边时图标在上、轮换数值在下，竖排不旋转 */
 .float-pill.is-vertical { flex-direction: column; gap: 4px; width: 30px; height: auto; padding: 7px 0; border-radius: 15px; }
 .float-pill.is-vertical .pill-data { line-height: 1.2; }
@@ -565,15 +628,15 @@ onUnmounted(() => {
 .float-pill.is-vertical .pill-tick { margin: 2px 0 0; }
 .pill-icon { position: relative; width: 16px; height: 16px; flex-shrink: 0; display: grid; place-items: center; }
 .pill-pulse { width: 16px; height: 16px; overflow: visible; }
-.pill-pulse-ring { fill: none; stroke: rgba(110,231,165,.85); stroke-width: 1.4; }
-.pill-pulse-dot { fill: #6ee7a5; filter: drop-shadow(0 0 3px rgba(110,231,165,.95)); }
+.pill-pulse-ring { fill: none; stroke: rgba(var(--accent-glow),.85); stroke-width: 1.4; }
+.pill-pulse-dot { fill: var(--accent); filter: drop-shadow(0 0 3px rgba(var(--accent-glow),.95)); }
 .pill-data { display: flex; align-items: center; gap: 5px; font: 600 11px var(--font-num, ui-monospace, monospace); letter-spacing: .01em; white-space: nowrap; }
 .pill-rate { color: #eafff4; }
 .pill-rate.is-good { color: var(--accent); }
 .pill-sep { color: #5a5a5a; }
 .pill-tokens, .pill-turns { color: #d2d2d2; }
 .pill-tick { width: 5px; height: 5px; border-radius: 50%; background: #444; margin-left: 2px; flex-shrink: 0; transition: background .25s ease, box-shadow .25s ease; }
-.pill-tick.is-on { background: var(--accent); box-shadow: 0 0 6px rgba(110,231,165,.85); }
+.pill-tick.is-on { background: var(--accent); box-shadow: 0 0 6px rgba(var(--accent-glow),.85); }
 /* 锁定按钮：迷你锁形，融入胶囊；锁定态高亮 */
 .pill-lock { width: 14px; height: 14px; flex-shrink: 0; display: grid; place-items: center; padding: 0; border: none; background: none; cursor: pointer; opacity: .55; transition: opacity .2s ease; }
 .pill-lock:hover { opacity: 1; }
@@ -609,11 +672,11 @@ onUnmounted(() => {
   min-width: 0;
   min-height: 0;
   padding: 6px 8px;
-  border: 1px solid rgba(110, 231, 165, 0.4);
+  border: 1px solid rgba(var(--accent-glow), 0.4);
   border-radius: 10px;
-  background: linear-gradient(135deg, rgba(20, 27, 25, 0.94), rgba(10, 15, 15, 0.94));
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  background: linear-gradient(135deg, rgba(20, 27, 25, var(--overlay-bg-alpha)), rgba(10, 15, 15, var(--overlay-bg-alpha)));
+  backdrop-filter: blur(var(--overlay-blur)) saturate(var(--overlay-saturate));
+  -webkit-backdrop-filter: blur(var(--overlay-blur)) saturate(var(--overlay-saturate));
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.48), 0 0 0 1px rgba(0, 0, 0, 0.24);
   overflow: visible;
 }
@@ -674,11 +737,11 @@ onUnmounted(() => {
 .overlay-header { height: 15px; flex: 0 0 15px; display: flex; align-items: center; justify-content: flex-end; gap: 3px; padding: 0 2px; transition: opacity 0.3s ease; }
 
 /* 贴标收缩开关按钮 */
-.snap-toggle { width: 10px; height: 10px; border: 1.5px solid rgba(110,231,165,.55); border-radius: 2px; background: none; cursor: pointer; padding: 0; flex-shrink: 0; position: relative; transition: border-color .2s, opacity .2s; }
-.snap-toggle::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 4px; height: 4px; border-radius: 50%; background: rgba(110,231,165,.75); transition: background .2s; }
+.snap-toggle { width: 10px; height: 10px; border: 1.5px solid rgba(var(--accent-glow),.55); border-radius: 2px; background: none; cursor: pointer; padding: 0; flex-shrink: 0; position: relative; transition: border-color .2s, opacity .2s; }
+.snap-toggle::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 4px; height: 4px; border-radius: 50%; background: rgba(var(--accent-glow),.75); transition: background .2s; }
 .snap-toggle.is-off { border-color: rgba(100,100,100,.45); }
 .snap-toggle.is-off::after { background: rgba(100,100,100,.45); }
-.snap-toggle:hover { border-color: rgba(110,231,165,.9); opacity: 1; }
+.snap-toggle:hover { border-color: rgba(var(--accent-glow),.9); opacity: 1; }
 .snap-toggle.is-off:hover { border-color: rgba(150,150,150,.7); }
 .snap-toggle > span { font-size: 9px; line-height: 1; color: rgba(190,220,205,.85); }
 .overlay-action { width: 13px; height: 13px; display: grid; place-items: center; border: 0; border-radius: 3px; padding: 0; color: rgba(180,180,180,.75); background: transparent; cursor: pointer; transition: color .2s ease, background .2s ease; }
@@ -686,13 +749,13 @@ onUnmounted(() => {
 .overlay-action:hover { color: #fff; background: rgba(255,255,255,.12); }
 .overlay-action--danger:hover { color: #ffb4b4; background: rgba(180,60,60,.2); }
 
-.card-panel { display: grid; flex: 0 0 auto; min-height: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid rgba(110,231,165,.4); border-radius: 8px; background: linear-gradient(135deg, rgba(24,24,24,.74), rgba(16,16,16,.8)); backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%); transition: opacity 0.3s ease; box-shadow: 0 4px 16px rgba(0,0,0,.4), 0 0 0 1px rgba(0,0,0,.2); }
-.metric-card { min-width: 0; padding: 3px 6px; border: 1px solid rgba(110,231,165,.18); border-radius: 5px; background: rgba(36,36,36,.9); transition: border-color .3s ease, transform .3s ease; }
-.is-updated .metric-card { border-color: rgba(110,231,165,.55); }
+.card-panel { display: grid; flex: 0 0 auto; min-height: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid rgba(var(--accent-glow),.4); border-radius: 8px; background: linear-gradient(135deg, rgba(24,24,24,var(--overlay-bg-alpha)), rgba(16,16,16,var(--overlay-bg-alpha))); backdrop-filter: blur(var(--overlay-blur)) saturate(var(--overlay-saturate)); -webkit-backdrop-filter: blur(var(--overlay-blur)) saturate(var(--overlay-saturate)); transition: opacity 0.3s ease; box-shadow: 0 4px 16px rgba(0,0,0,.4), 0 0 0 1px rgba(0,0,0,.2); }
+.metric-card { min-width: 0; padding: 3px 6px; border: 1px solid rgba(var(--accent-glow),.18); border-radius: 5px; background: rgba(36,36,36,.9); transition: border-color .3s ease, transform .3s ease; }
+.is-updated .metric-card { border-color: rgba(var(--accent-glow),.55); }
 .metric-label { color: #777; font-size: 9px; white-space: nowrap; }
 .metric-value { color: #fff; font-family: var(--font-num, ui-monospace, monospace); font-size: 14px; line-height: 1.15; transition: color .35s ease, text-shadow .35s ease; }
 .metric-value.is-good, .metric-value--good { color: var(--accent); }
-.is-updated .metric-value { text-shadow: 0 0 6px rgba(110,231,165,.7); }
+.is-updated .metric-value { text-shadow: 0 0 6px rgba(var(--accent-glow),.7); }
 
 /* ===== 卡片样式动效：四卡错峰入场 + 刷新时数值高亮微跳 ===== */
 .card-panel .metric-card { animation: cardEnter .4s ease backwards; }
@@ -711,15 +774,15 @@ onUnmounted(() => {
 .telemetry-grid div:nth-child(2) { animation-delay: .08s; }
 .telemetry-grid div:nth-child(3) { animation-delay: .16s; }
 .telemetry-grid div:nth-child(4) { animation-delay: .24s; }
-@keyframes gaugeBeat { 0%,100% { filter: drop-shadow(0 0 0 rgba(110,231,165,0)); } 45% { filter: drop-shadow(0 0 5px rgba(110,231,165,.7)); } }
-@keyframes telemetryFlash { 0%,100% { box-shadow: inset 2px 0 0 transparent; } 45% { box-shadow: inset 2px 0 0 rgba(110,231,165,.9); } }
+@keyframes gaugeBeat { 0%,100% { filter: drop-shadow(0 0 0 rgba(var(--accent-glow),0)); } 45% { filter: drop-shadow(0 0 5px rgba(var(--accent-glow),.7)); } }
+@keyframes telemetryFlash { 0%,100% { box-shadow: inset 2px 0 0 transparent; } 45% { box-shadow: inset 2px 0 0 rgba(var(--accent-glow),.9); } }
 
 /* ===== 球体样式动效：刷新时核心涟漪扩散 ===== */
 .is-updated .orb-core::before { animation: orbRipple .9s ease; }
-.orb-core::before { content: ''; position: absolute; inset: 30%; border-radius: 50%; border: 1px solid rgba(110,231,165,.6); opacity: 0; pointer-events: none; }
+.orb-core::before { content: ''; position: absolute; inset: 30%; border-radius: 50%; border: 1px solid rgba(var(--accent-glow),.6); opacity: 0; pointer-events: none; }
 @keyframes orbRipple { 0% { opacity: .8; inset: 30%; } 100% { opacity: 0; inset: -10%; } }
-.engine-panel { position: relative; display: flex; flex: 0 0 86px; align-items: center; gap: 8px; height: 86px; min-height: 86px; padding: 5px 7px; border: 1px solid rgba(110,231,165,.45); border-radius: 9px; background: linear-gradient(135deg, rgba(18,39,32,.76), rgba(12,21,25,.82)); backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%); overflow: hidden; transition: opacity 0.3s ease; box-shadow: 0 4px 16px rgba(0,0,0,.4), 0 0 0 1px rgba(0,0,0,.2); }
-.engine-panel::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent 0 11px, rgba(110,231,165,.07) 12px); animation: scan 8s linear infinite; pointer-events: none; }
+.engine-panel { position: relative; display: flex; flex: 0 0 86px; align-items: center; gap: 8px; height: 86px; min-height: 86px; padding: 5px 7px; border: 1px solid rgba(var(--accent-glow),.45); border-radius: 9px; background: linear-gradient(135deg, rgba(18,39,32,var(--overlay-bg-alpha)), rgba(12,21,25,var(--overlay-bg-alpha))); backdrop-filter: blur(var(--overlay-blur)) saturate(var(--overlay-saturate)); -webkit-backdrop-filter: blur(var(--overlay-blur)) saturate(var(--overlay-saturate)); overflow: hidden; transition: opacity 0.3s ease; box-shadow: 0 4px 16px rgba(0,0,0,.4), 0 0 0 1px rgba(0,0,0,.2); }
+.engine-panel::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent 0 11px, rgba(var(--accent-glow),.07) 12px); animation: scan 8s linear infinite; pointer-events: none; }
 .engine-gauge { position: relative; flex: 0 0 74px; height: 74px; }
 .engine-gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .gauge-track, .gauge-value { fill: none; stroke-width: 7; }
@@ -729,21 +792,21 @@ onUnmounted(() => {
 .gauge-center strong { color: #f5fff9; font: 600 14px var(--font-num, ui-monospace, monospace); }
 .gauge-center span { color: #8da9a4; font-size: 8px; }
 .telemetry-grid { z-index: 1; display: grid; flex: 1; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 5px; }
-.telemetry-grid div { padding: 3px 5px; border-left: 2px solid rgba(110,231,165,.6); background: rgba(5,15,17,.36); }
+.telemetry-grid div { padding: 3px 5px; border-left: 2px solid rgba(var(--accent-glow),.6); background: rgba(5,15,17,.36); }
 .telemetry-grid span { display: block; color: #77918e; font-size: 8px; white-space: nowrap; }
 .telemetry-grid strong { color: #d8eee8; font: 12px var(--font-num, ui-monospace, monospace); }
 .orb-panel { position: relative; width: 100%; height: 106px; min-height: 106px; flex: 0 0 106px; overflow: visible; display: grid; place-items: center; }
 /* 球体舞台：去掉四角卡片，中心球独占舞台，轮换展示指标 */
 .orb-stage { position: relative; display: grid; place-items: center; width: 100%; height: 100%; }
-.orb-core { position: relative; width: 104px; height: 104px; display: grid; place-items: center; border-radius: 50%; background: linear-gradient(135deg, rgba(18,28,26,.62), rgba(10,16,16,.74)); backdrop-filter: blur(14px) saturate(160%); -webkit-backdrop-filter: blur(14px) saturate(160%); box-shadow: 0 4px 16px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06); }
-.orb-glow { position: absolute; inset: -10px; border-radius: 50%; background: radial-gradient(circle, rgba(58,206,171,.3) 0%, rgba(58,206,171,0) 70%); filter: blur(8px); animation: orbPulse 4s ease-in-out infinite; }
+.orb-core { position: relative; width: 104px; height: 104px; display: grid; place-items: center; border-radius: 50%; background: linear-gradient(135deg, rgba(18,28,26,var(--overlay-bg-alpha)), rgba(10,16,16,var(--overlay-bg-alpha))); backdrop-filter: blur(14px) saturate(160%); -webkit-backdrop-filter: blur(14px) saturate(160%); box-shadow: 0 4px 16px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06); }
+.orb-glow { position: absolute; inset: -10px; border-radius: 50%; background: radial-gradient(circle, rgba(var(--accent-glow),.3) 0%, rgba(var(--accent-glow),0) 70%); filter: blur(8px); animation: orbPulse 4s ease-in-out infinite; }
 .orb-arc { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
 .orb-arc-track { fill: none; stroke: rgba(120,170,165,.2); stroke-width: 2.5; }
 .orb-arc-value { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; transition: stroke-dasharray .6s ease; }
 /* 非比例指标（Token/轮次/缓存）进度环满圈展示，并降低亮度作为装饰 */
-.orb-arc-value.is-full { stroke: rgba(110,231,165,.32); }
+.orb-arc-value.is-full { stroke: rgba(var(--accent-glow),.32); }
 /* 标志性动效：让环上的小点绕中心匀速运行 */
-.orb-arc-sat { fill: #6ee7a5; transform-origin: 60px 60px; animation: orbSatSpin 6s linear infinite; }
+.orb-arc-sat { fill: var(--accent); transform-origin: 60px 60px; animation: orbSatSpin 6s linear infinite; }
 /* 读数区：key 变化时触发淡入切换 */
 .orb-readout { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; animation: orbSwap .45s ease; }
 .orb-readout strong { color: #eafff4; font: 600 18px var(--font-num, ui-monospace, monospace); letter-spacing: -.02em; line-height: 1; }
@@ -752,7 +815,7 @@ onUnmounted(() => {
 /* 指标切换指示点：当前项高亮 */
 .orb-dots { position: absolute; bottom: 22%; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; z-index: 1; }
 .orb-dots i { width: 4px; height: 4px; border-radius: 50%; background: rgba(141,169,164,.45); transition: background .3s ease, box-shadow .3s ease; }
-.orb-dots i.is-active { background: var(--accent); box-shadow: 0 0 5px rgba(110,231,165,.8); }
+.orb-dots i.is-active { background: var(--accent); box-shadow: 0 0 5px rgba(var(--accent-glow),.8); }
 @keyframes scan { from { transform: translateY(-12px); } to { transform: translateY(12px); } }
 @keyframes orbSatSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @keyframes orbPulse { 0%,100% { opacity: .55; transform: scale(.94); } 50% { opacity: .85; transform: scale(1.04); } }

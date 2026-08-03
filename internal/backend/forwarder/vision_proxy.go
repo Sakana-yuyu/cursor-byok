@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -38,6 +39,14 @@ const (
 	// 注入回原消息的图片识图结果前缀（自动触发场景），明确标注来源为视觉委派。
 	visionProxyResultPrefix = "[图片识图结果（视觉委派"
 )
+
+// vdbg 输出视觉委派链路调试日志：写 stderr（黑窗调试版即时可见）并进 app.log。
+// 正式构建（-H windowsgui）下 stderr 被系统丢弃，只剩 app.log 中的记录，无副作用。
+func vdbg(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	fmt.Fprintln(os.Stderr, "[VDBG] "+msg)
+	log.Printf("vision debug: %s", msg)
+}
 
 // visionProxyConfig 是从 delegation 运行时配置派生的视觉委派参数。
 type visionProxyConfig struct {
@@ -169,6 +178,7 @@ func supportsVision(modelName string) bool {
 //     绝不让图片静默丢失导致"模型没看图"。
 func (service *Service) synthesizeImageDescriptions(ctx context.Context, requestID string, conversationID string, messages []modeladapter.Message, modelName string) []modeladapter.Message {
 	config := service.resolveVisionProxyConfig()
+	vdbg("[pass] enter request_id=%s conv=%s model=%s enabled=%v msgs=%d", requestID, conversationID, modelName, config.enabled, len(messages))
 	if !config.enabled {
 		return messages
 	}
@@ -178,6 +188,7 @@ func (service *Service) synthesizeImageDescriptions(ctx context.Context, request
 
 	// 历史图片恢复：checkpoint 只保留 Type=image 的空 part，按会话内顺序补 Path。
 	imageSeq := 0
+	restored := 0
 	for mi := range messages {
 		for pi := range messages[mi].ContentParts {
 			part := &messages[mi].ContentParts[pi]
@@ -187,11 +198,16 @@ func (service *Service) synthesizeImageDescriptions(ctx context.Context, request
 			if part.Image == nil || (len(part.Image.Data) == 0 && strings.TrimSpace(part.Image.Path) == "") {
 				if path := service.visionImagePathFor(conversationID, imageSeq); path != "" {
 					part.Image = &modeladapter.ImageContent{Path: path}
+					restored++
+					vdbg("[pass] restored path seq=%d path=%s", imageSeq, path)
+				} else {
+					vdbg("[pass] empty image part, no cached path seq=%d", imageSeq)
 				}
 			}
 			imageSeq++
 		}
 	}
+	vdbg("[pass] image parts total=%d restored=%d", imageSeq, restored)
 
 	imageCount := countResolvableImageParts(messages)
 	if imageCount == 0 {
@@ -202,7 +218,7 @@ func (service *Service) synthesizeImageDescriptions(ctx context.Context, request
 	startedAt := time.Now()
 	log.Printf("forwarder vision proxy pass started request_model=%s vision_model=%s mode=%s images=%d",
 		strings.TrimSpace(modelName), config.visionName, config.mode, imageCount)
-	service.beginVisionRun(requestID, config, imageCount)
+	service.beginVisionRun(requestID, config, imageCount, service.visionPassIntent(messages))
 
 	// 整个 pass 的识图总预算：synthesizeImageDescriptions 同步阻塞在 provider pass
 	// 编译阶段（期间主模型请求尚未开始、客户端收不到任何事件），必须限制最长等待，
@@ -226,6 +242,19 @@ func (service *Service) synthesizeImageDescriptions(ctx context.Context, request
 	}
 	service.visionRunsMu.Unlock()
 	service.finishVisionRun(requestID, status)
+
+	// 结果残留检查：替换后若仍有可解析图片 part，说明识图结果未真正注入消息，
+	// 下游主模型会拿到原始图片（可能触发其自身读图或拒绝）。
+	remain := 0
+	for _, msg := range result {
+		for _, part := range msg.ContentParts {
+			if modeladapter.IsImageContentPart(part) && part.Image != nil &&
+				(len(part.Image.Data) > 0 || strings.TrimSpace(part.Image.Path) != "") {
+				remain++
+			}
+		}
+	}
+	vdbg("[pass] result residual_images=%d", remain)
 
 	log.Printf("forwarder vision proxy pass completed request_model=%s vision_model=%s images=%d elapsed_ms=%d",
 		strings.TrimSpace(modelName), config.visionName, imageCount, time.Since(startedAt).Milliseconds())
@@ -321,6 +350,9 @@ func (service *Service) synthesizeMessageImages(ctx context.Context, requestID s
 					if path, pathErr := modeladapter.ImageLocalPath(ctx, part.Image); pathErr == nil && strings.TrimSpace(path) != "" {
 						part.Image.Path = path
 						service.registerVisionImageFile(conversationID, path)
+						vdbg("[img] data-only landed path=%s", path)
+					} else {
+						vdbg("[img] data-only land FAILED err=%v", pathErr)
 					}
 				}
 				pendings = append(pendings, pendingImage{
@@ -328,16 +360,19 @@ func (service *Service) synthesizeMessageImages(ctx context.Context, requestID s
 					image:    part.Image,
 					fallback: modeladapter.NewTextContentPart(visionProxyImagePlaceholder()),
 				})
+				vdbg("[img] pending idx=%d role=%s data_len=%d path=%q", idx, message.Role, len(part.Image.Data), strings.TrimSpace(part.Image.Path))
 				continue
 			}
 			// 图片内容不可用（快照恢复后字节丢失且无落地缓存）：强引导占位，
 			// 不透传空图片 part，避免下游序列化异常或静默丢失。
 			replaced[idx] = modeladapter.NewTextContentPart(visionProxyUnavailableGuide())
+			vdbg("[img] unavailable placeholder idx=%d", idx)
 			continue
 		}
 		replaced[idx] = part
 	}
 	if len(pendings) == 0 {
+		vdbg("[img] no pendings, return original message parts=%d", len(message.ContentParts))
 		return message
 	}
 
@@ -356,8 +391,7 @@ func (service *Service) synthesizeMessageImages(ctx context.Context, requestID s
 		wg.Add(1)
 		go func(p pendingImage) {
 			defer wg.Done()
-			// 识图子调用链路（HTTP fetch / provider stream）出现 panic 时兜底为失败
-			// 文本，绝不让 panic 冒泡崩掉整个 forwarder（那会导致所有活跃对话掉线）。
+			vdbg("[goro] start idx=%d", p.index)
 			defer func() {
 				if r := recover(); r != nil {
 					log.Printf("forwarder vision proxy image panic recovered request_id=%s panic=%v", strings.TrimSpace(requestID), r)
@@ -367,6 +401,7 @@ func (service *Service) synthesizeMessageImages(ctx context.Context, requestID s
 						fmt.Sprintf("%s失败：识图内部异常）]", visionProxyResultPrefix),
 					)
 					mu.Unlock()
+					vdbg("[goro] PANIC idx=%d panic=%v", p.index, r)
 				}
 			}()
 			sem <- struct{}{}
@@ -379,10 +414,18 @@ func (service *Service) synthesizeMessageImages(ctx context.Context, requestID s
 					fmt.Sprintf("%s预算耗尽，未识别）]", visionProxyResultPrefix),
 				)
 				mu.Unlock()
+				vdbg("[goro] CTX_ERR idx=%d err=%v", p.index, ctxErr)
 				return
 			}
-			description, err := service.cachedVisionDescribe(ctx, visionCacheKey(requestID, p.image), p.image, config, userContext)
+			key := visionCacheKey(requestID, p.image)
+			vdbg("[goro] describe idx=%d key=%q", p.index, key)
+			description, err := service.cachedVisionDescribe(ctx, key, p.image, config, userContext)
 			service.visionRunImageDone(requestID, err)
+			if err != nil {
+				vdbg("[goro] FAILED idx=%d err=%v", p.index, err)
+			} else {
+				vdbg("[goro] OK idx=%d desc_len=%d", p.index, len(description))
+			}
 			mu.Lock()
 			if err != nil {
 				log.Printf("forwarder vision proxy image failed vision_model=%s error=%v", config.visionName, err)
@@ -433,12 +476,15 @@ func truncateErr(message string) string {
 // userContext 是用户随图片发出的需求文本，注入识图 prompt 让识别结果贴合用户意图。
 func (service *Service) describeImageOnce(ctx context.Context, image *modeladapter.ImageContent, config visionProxyConfig, userContext string, extraQuestion ...string) (string, error) {
 	if service.provider == nil {
+		vdbg("[describe] provider NIL")
 		return "", fmt.Errorf("provider gateway is not initialized")
 	}
 	payload, err := buildVisionImageContent(image)
 	if err != nil {
+		vdbg("[describe] build payload FAILED err=%v path=%q data_len=%d", err, strings.TrimSpace(image.Path), len(image.Data))
 		return "", err
 	}
+	vdbg("[describe] payload ok data_len=%d mime=%s path=%q", len(payload.Data), payload.MIMEType, strings.TrimSpace(payload.Path))
 	question := ""
 	if len(extraQuestion) > 0 {
 		question = strings.TrimSpace(extraQuestion[0])
@@ -457,6 +503,8 @@ func (service *Service) describeImageOnce(ctx context.Context, image *modeladapt
 	requestID := fmt.Sprintf("vision-proxy-%d", time.Now().UnixNano())
 	modelCallID := requestID + "-model"
 	accumulated := ""
+	vdbg("[describe] StartStream call vision_id=%s model_call_id=%s", config.visionID, modelCallID)
+	startedAt := time.Now()
 	err = service.provider.StartStream(callCtx, ProviderRequest{
 		RequestID:      requestID,
 		RunID:          requestID,
@@ -486,9 +534,11 @@ func (service *Service) describeImageOnce(ctx context.Context, image *modeladapt
 		}
 	})
 	if err != nil {
+		vdbg("[describe] StartStream RETURNED err=%v elapsed_ms=%d", err, time.Since(startedAt).Milliseconds())
 		return "", err
 	}
 	description := strings.TrimSpace(accumulated)
+	vdbg("[describe] StartStream ok elapsed_ms=%d accum_len=%d", time.Since(startedAt).Milliseconds(), len(accumulated))
 	if description == "" {
 		return "", fmt.Errorf("vision model returned empty description")
 	}
@@ -599,9 +649,12 @@ func (service *Service) cachedVisionDescribe(ctx context.Context, key string, im
 		service.visionCacheMu.Lock()
 		if entry, ok := service.visionCache[key]; ok {
 			service.visionCacheMu.Unlock()
+			vdbg("[cache] HIT key=%q text_len=%d err=%v", key, len(entry.text), entry.err)
 			return entry.text, entry.err
 		}
 		service.visionCacheMu.Unlock()
+	} else {
+		vdbg("[cache] SKIP (empty key)")
 	}
 	text, err := service.describeImageOnce(ctx, image, config, userContext)
 	if key != "" && service != nil {
@@ -660,10 +713,14 @@ func (service *Service) handleSeeImageToolInvocation(stream *ActiveStream, invoc
 		visionConfig.mode = normalizeVisionProxyMode(trimmedMode)
 	}
 	requestID := strings.TrimSpace(stream.RequestID)
-	service.beginVisionRun(requestID, config, 1)
 	// 主模型未显式传 question 时，用最近一条用户消息文本作为识图任务的用户意图，
 	// 让识图模型知道用户在问什么（如"这块改错了"），并结合圈画/标注区域作答。
 	userContext := truncateVisionUserContext(strings.TrimSpace(stream.LatestUserText))
+	seeImageIntent := strings.TrimSpace(args.Question)
+	if seeImageIntent == "" {
+		seeImageIntent = userContext
+	}
+	service.beginVisionRun(requestID, config, 1, seeImageIntent)
 	description, err := service.describeImageOnce(context.Background(), image, visionConfig, userContext, args.Question)
 	if err != nil {
 		service.visionRunImageDone(requestID, err)
@@ -724,6 +781,7 @@ func resolveSeeImageContent(imagePath string) (*modeladapter.ImageContent, error
 type visionDelegationRun struct {
 	ID              string
 	ParentRequestID string
+	Intent          string // 用户随图片提出的需求（委派意图），用于任务条标题
 	Description     string
 	ModelID         string
 	ModelName       string
@@ -745,7 +803,7 @@ func visionRunKey(requestID string) string {
 }
 
 // beginVisionRun 注册一次视觉委派运行；同一 request 重复调用（一轮多图）时复用已有条目并刷新图片总数。
-func (service *Service) beginVisionRun(requestID string, config visionProxyConfig, total int) {
+func (service *Service) beginVisionRun(requestID string, config visionProxyConfig, total int, intent string) {
 	if service == nil || total <= 0 {
 		return
 	}
@@ -758,6 +816,7 @@ func (service *Service) beginVisionRun(requestID string, config visionProxyConfi
 		run = &visionDelegationRun{
 			ID:              key,
 			ParentRequestID: strings.TrimSpace(requestID),
+			Intent:          strings.TrimSpace(intent),
 			Description:     "视觉委派识图",
 			ModelID:         config.visionID,
 			ModelName:       config.visionName,
@@ -772,6 +831,30 @@ func (service *Service) beginVisionRun(requestID string, config visionProxyConfi
 	run.Total = total
 	run.Status = delegation.TaskRunning
 	run.UpdatedAt = now
+}
+
+// visionPassIntent 提取本轮识图任务要服务的用户意图：取最后一条含图片的 user
+// 消息中的文本部分，单行化并截断，作为任务条标题展示（如「识别截图中的报错」）。
+func (service *Service) visionPassIntent(messages []modeladapter.Message) string {
+	for i := len(messages) - 1; i >= 0; i-- {
+		message := messages[i]
+		if !modeladapter.MessageHasImage(message) {
+			continue
+		}
+		if !strings.EqualFold(strings.TrimSpace(message.Role), "user") {
+			continue
+		}
+		text := strings.Join(strings.Fields(modeladapter.CollapseTextContentParts(message.ContentParts)), " ")
+		if text == "" {
+			continue
+		}
+		runes := []rune(text)
+		if len(runes) > 48 {
+			runes = runes[:48]
+		}
+		return string(runes)
+	}
+	return ""
 }
 
 // visionRunImageDone 记录一张图片识图完成（成功或失败），更新进度摘要。并发安全。
@@ -794,7 +877,16 @@ func (service *Service) visionRunImageDone(requestID string, err error) {
 	} else {
 		run.Completed++
 	}
-	run.ProgressSummary = fmt.Sprintf("识图 %d/%d", run.Completed+run.Failed, run.Total)
+	done := run.Completed + run.Failed
+	remain := run.Total - done
+	switch {
+	case run.Total > 0 && remain == 0:
+		run.ProgressSummary = fmt.Sprintf("识图完成 %d/%d", run.Completed, run.Total)
+	case run.Failed > 0:
+		run.ProgressSummary = fmt.Sprintf("识图成功 %d，失败 %d（共 %d）", run.Completed, run.Failed, run.Total)
+	default:
+		run.ProgressSummary = fmt.Sprintf("识图中 %d/%d", done, run.Total)
+	}
 	run.UpdatedAt = time.Now().UTC()
 }
 
@@ -822,6 +914,18 @@ func (service *Service) finishVisionRun(requestID string, status delegation.Task
 		}
 		run.ProgressSummary = fmt.Sprintf("识图失败 %d/%d", run.Completed+run.Failed, run.Total)
 	}
+}
+
+// visionRunDisplayTitle 任务条标题：优先展示委派意图，无意图时回退固定描述。
+func visionRunDisplayTitle(run *visionDelegationRun) string {
+	if run == nil {
+		return "视觉委派识图"
+	}
+	intent := strings.TrimSpace(run.Intent)
+	if intent == "" {
+		return run.Description
+	}
+	return fmt.Sprintf("视觉委派：%s", intent)
 }
 
 // visionDelegationSnapshots 输出视觉委派运行的首页快照，复用委派任务条的数据契约。
@@ -858,7 +962,7 @@ func (service *Service) visionDelegationSnapshots() []DelegationTaskSnapshot {
 		items = append(items, DelegationTaskSnapshot{
 			ID:               run.ID,
 			AggregateID:      run.ParentRequestID,
-			Description:      run.Description,
+			Description:      visionRunDisplayTitle(run),
 			ModelID:          run.ModelID,
 			ModelName:        run.ModelName,
 			WorkerRole:       "vision",

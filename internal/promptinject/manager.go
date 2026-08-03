@@ -63,6 +63,12 @@ type Config struct {
 	SourceLicense          string           `json:"sourceLicense,omitempty"`
 	CustomEnabled          bool             `json:"customEnabled,omitempty"`
 	CustomContent          string           `json:"customContent,omitempty"`
+	// Git 提交文本本地化：CommitMessageEnabled 开启后，
+	// CommitMessageLanguage 为界面所选模式（auto=跟随界面语言，或具体语言代码）；
+	// CommitMessageLanguageResolved 是 auto 模式下解析出的具体语言（由前端同步）。
+	CommitMessageEnabled          bool   `json:"commitMessageEnabled,omitempty"`
+	CommitMessageLanguage         string `json:"commitMessageLanguage,omitempty"`
+	CommitMessageLanguageResolved string `json:"commitMessageLanguageResolved,omitempty"`
 }
 
 // PromptTemplate is one independently persisted prompt injection entry.
@@ -110,6 +116,11 @@ func normalizeConfig(cfg Config) Config {
 	if strings.TrimSpace(cfg.SourceLicense) == "" {
 		cfg.SourceLicense = defaults.SourceLicense
 	}
+	// 提交信息本地化语言：空值视为 auto（跟随界面语言）。
+	cfg.CommitMessageLanguage = strings.ToLower(strings.TrimSpace(cfg.CommitMessageLanguage))
+	if cfg.CommitMessageLanguage == "" {
+		cfg.CommitMessageLanguage = "auto"
+	}
 	// Migrate the legacy single-template representation into the new list.
 	if len(cfg.Templates) == 0 && strings.TrimSpace(cfg.LocalContent) != "" {
 		name := cfg.SelectedTemplate
@@ -154,6 +165,45 @@ func (m *Manager) statusLocked() Status {
 }
 
 func (m *Manager) Status() (Status, error) { return m.Load() }
+
+// SoftwareChineseEnabled 返回「软件使用中文化」开关状态（兼容旧字段）。
+func (m *Manager) SoftwareChineseEnabled() bool {
+	m.mu.RLock()
+	cfg := m.cfg
+	m.mu.RUnlock()
+	if cfg.Mode == "" {
+		if _, err := m.Load(); err == nil {
+			m.mu.RLock()
+			cfg = m.cfg
+			m.mu.RUnlock()
+		}
+	}
+	return cfg.SoftwareChineseEnabled
+}
+
+// CommitMessageLanguage 返回 Git 提交信息本地化的目标语言代码：
+// auto（跟随界面）时返回前端解析好的具体语言（CommitMessageLanguageResolved）；
+// 未启用本地化时返回空字符串。
+func (m *Manager) CommitMessageLanguage() string {
+	m.mu.RLock()
+	cfg := m.cfg
+	m.mu.RUnlock()
+	if cfg.Mode == "" {
+		if _, err := m.Load(); err == nil {
+			m.mu.RLock()
+			cfg = m.cfg
+			m.mu.RUnlock()
+		}
+	}
+	if !cfg.CommitMessageEnabled {
+		return ""
+	}
+	lang := strings.ToLower(strings.TrimSpace(cfg.CommitMessageLanguage))
+	if lang == "auto" {
+		return strings.ToLower(strings.TrimSpace(cfg.CommitMessageLanguageResolved))
+	}
+	return lang
+}
 
 func (m *Manager) Save(cfg Config) (Status, error) {
 	m.mu.Lock()

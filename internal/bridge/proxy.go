@@ -277,6 +277,7 @@ type ProviderBalanceSummaryItem struct {
 	AdapterID   string                 `json:"adapterId"`
 	DisplayName string                 `json:"displayName"`
 	GroupName   string                 `json:"groupName,omitempty"`
+	BaseURL     string                 `json:"baseURL,omitempty"`
 	ModelID     string                 `json:"modelID"`
 	Balance     client.ProviderBalance `json:"balance"`
 }
@@ -295,38 +296,88 @@ func hasBalanceQueryCapability(adapter serverconfig.ModelAdapterConfig) bool {
 
 // QueryAllProviderBalances 汇总所有已配置余额查询的模型通道余额，供首页展示。
 // 复用单通道查询的 TTL 缓存与凭据补齐逻辑；未配置余额查询的通道不会发起请求。
+// QueryAllProviderBalances 并发查询所有已配置余额能力的供应商余额。
+// 每个适配器独立查询并隔离 panic：单个供应商的解析/网络异常绝不崩掉整个进程
+// （此前串行同步查询，任何一步 panic 都会导致 Wails 主进程闪退）。
 func (s *ProxyService) QueryAllProviderBalances() []ProviderBalanceSummaryItem {
 	cfg, err := s.core.LoadUserConfig()
 	if err != nil {
 		return nil
 	}
-	out := make([]ProviderBalanceSummaryItem, 0, len(cfg.ModelAdapters))
+	type adapterJob struct {
+		adapter serverconfig.ModelAdapterConfig
+	}
+	jobs := make([]adapterJob, 0, len(cfg.ModelAdapters))
 	for _, adapter := range cfg.ModelAdapters {
 		if !hasBalanceQueryCapability(adapter) {
 			continue
 		}
-		balance := s.core.QueryProviderBalance(ProviderBalanceRequest{
-			Type:                     adapter.Type,
-			SupplierID:               adapter.SupplierID,
-			BaseURL:                  adapter.BaseURL,
-			APIKey:                   adapter.APIKey,
-			BalanceProfile:           adapter.BalanceProfile,
-			BalanceAccessToken:       adapter.BalanceAccessToken,
-			BalanceUserID:            adapter.BalanceUserID,
-			BalanceCodingPlanProvider: adapter.BalanceCodingPlanProvider,
-			BalanceQueryURL:          adapter.BalanceQueryURL,
-			BalanceQueryField:        adapter.BalanceQueryField,
-			BalanceQueryHeaders:      adapter.BalanceQueryHeaders,
-		})
-		out = append(out, ProviderBalanceSummaryItem{
-			AdapterID:   adapter.ID,
-			DisplayName: adapter.DisplayName,
-			GroupName:   adapter.GroupName,
-			ModelID:     adapter.ModelID,
-			Balance:     balance,
-		})
+		jobs = append(jobs, adapterJob{adapter: adapter})
+	}
+	if len(jobs) == 0 {
+		return nil
+	}
+	const maxParallel = 3
+	sem := make(chan struct{}, maxParallel)
+	var wg sync.WaitGroup
+	results := make([]ProviderBalanceSummaryItem, len(jobs))
+	for index, job := range jobs {
+		wg.Add(1)
+		go func(index int, adapter serverconfig.ModelAdapterConfig) {
+			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("bridge query provider balance panic recovered adapter_id=%s panic=%v",
+						strings.TrimSpace(adapter.ID), r)
+				}
+			}()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			item := ProviderBalanceSummaryItem{
+				AdapterID:   adapter.ID,
+				DisplayName: adapter.DisplayName,
+				GroupName:   adapter.GroupName,
+				BaseURL:     adapter.BaseURL,
+				ModelID:     adapter.ModelID,
+			}
+			item.Balance = s.queryProviderBalanceSafe(adapter)
+			results[index] = item
+		}(index, job.adapter)
+	}
+	wg.Wait()
+	out := make([]ProviderBalanceSummaryItem, 0, len(results))
+	for _, item := range results {
+		if item.AdapterID != "" || item.Balance.Supported || item.Balance.Message != "" {
+			out = append(out, item)
+		}
 	}
 	return out
+}
+
+// queryProviderBalanceSafe 包装单次余额查询：panic 转为失败结果，保证调用方进程存活。
+func (s *ProxyService) queryProviderBalanceSafe(adapter serverconfig.ModelAdapterConfig) (result ProviderBalance) {
+	defer func() {
+		if r := recover(); r != nil {
+			result = ProviderBalance{
+				Supported: false,
+				Transient: false,
+				Message:   fmt.Sprintf("余额查询内部异常：%v", r),
+			}
+		}
+	}()
+	return s.core.QueryProviderBalance(ProviderBalanceRequest{
+		Type:                     adapter.Type,
+		SupplierID:               adapter.SupplierID,
+		BaseURL:                  adapter.BaseURL,
+		APIKey:                   adapter.APIKey,
+		BalanceProfile:           adapter.BalanceProfile,
+		BalanceAccessToken:       adapter.BalanceAccessToken,
+		BalanceUserID:            adapter.BalanceUserID,
+		BalanceCodingPlanProvider: adapter.BalanceCodingPlanProvider,
+		BalanceQueryURL:          adapter.BalanceQueryURL,
+		BalanceQueryField:        adapter.BalanceQueryField,
+		BalanceQueryHeaders:      adapter.BalanceQueryHeaders,
+	})
 }
 
 // GetModelAdapterTestResults 用于处理与 GetModelAdapterTestResults 相关的逻辑。

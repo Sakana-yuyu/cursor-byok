@@ -1,5 +1,29 @@
 export const SETTINGS_CATEGORY_STORAGE_KEY = "cursor-byok.settings.category";
 
+// 设置侧边栏分组：每组一个标题，组内按使用频率排序。
+export const SETTINGS_GROUPS = [
+  {
+    key: "core",
+    label: "基础",
+    categories: ["general"],
+  },
+  {
+    key: "service",
+    label: "服务与模型",
+    categories: ["cursor-service", "delegation", "skills-mcp", "prompts"],
+  },
+  {
+    key: "view",
+    label: "界面",
+    categories: ["overlay"],
+  },
+  {
+    key: "system",
+    label: "系统",
+    categories: ["history", "advanced"],
+  },
+];
+
 export const SETTINGS_CATEGORIES = [
   {
     id: "general",
@@ -14,16 +38,10 @@ export const SETTINGS_CATEGORIES = [
     description: "本地服务与启动相关配置。",
   },
   {
-    id: "overlay",
-    value: "overlay",
-    label: "浮窗",
-    description: "桌面浮窗样式与行为。",
-  },
-  {
     id: "delegation",
     value: "delegation",
     label: "模型与委派",
-    description: "任务委托与运行时面板。",
+    description: "模型分组、任务委托与视觉委派。",
   },
   {
     id: "skills-mcp",
@@ -38,16 +56,22 @@ export const SETTINGS_CATEGORIES = [
     description: "提示词注入与本地化。",
   },
   {
-    id: "advanced",
-    value: "advanced",
-    label: "高级",
-    description: "高风险或低频系统设置。",
+    id: "overlay",
+    value: "overlay",
+    label: "浮窗",
+    description: "桌面浮窗样式与行为。",
   },
   {
     id: "history",
     value: "history",
     label: "历史与日志",
     description: "本地历史记录管理、日志导出与清理。",
+  },
+  {
+    id: "advanced",
+    value: "advanced",
+    label: "高级",
+    description: "高风险或低频系统设置。",
   },
 ];
 

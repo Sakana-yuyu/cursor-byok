@@ -419,6 +419,13 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 		appendSeq:                newAppendSequenceTracker(),
 		runQueue:                 newRunQueue(),
 		nativeDelegations:        make(map[string]*nativeDelegationRuntime),
+		// 视觉委派相关的三个 map 必须在构造时初始化：
+		// 缺失会导致 beginVisionRun 向 nil map 写入，触发
+		// "assignment to entry in nil map" panic，杀死整个 Wails 主进程
+		// （视觉委派一触发就闪退的根因）。
+		visionRuns:               make(map[string]*visionDelegationRun),
+		visionCache:              make(map[string]visionCacheEntry),
+		visionImageFiles:         make(map[string][]string),
 		checkpointBlobs:          make(map[string]*checkpointBlobCacheEntry),
 		conversationLastActivity: make(map[string]time.Time),
 	}
@@ -2017,9 +2024,12 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	// 下游 router.stripImagesFromMessages 会原样放行，不会重复处理。
 	// 未启用视觉委派时，从工具清单剔除 see_image，避免模型调用一个不可用的工具。
 	if service.needsVisionProxy(modelName, compiled.Messages) {
+		vdbg("[service] needsVisionProxy true -> run vision pass msgs=%d model=%s", len(compiled.Messages), modelName)
 		visionCtx, visionCancel := context.WithCancel(context.Background())
 		compiled.Messages = service.synthesizeImageDescriptions(visionCtx, requestID, conversationID, compiled.Messages, modelName)
 		visionCancel()
+	} else {
+		vdbg("[service] needsVisionProxy false enabled=%v", service.visionProxyEnabled())
 	}
 	if !service.visionProxyEnabled() {
 		compiled.Tools = filterToolDescriptorByName(compiled.Tools, seeImageToolName)

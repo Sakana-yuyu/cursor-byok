@@ -29,6 +29,31 @@ const (
 
 var errCommitMessageToolInvocation = errors.New("commit message generation must not invoke tools")
 
+// commitLanguageHardPrompts 按目标语言给出强制指令，追加到 commit system prompt，
+// 覆盖静态资产中的默认要求与历史提交示例的语言，保证输出语言符合本地化设置。
+// key 与前端界面语言代码一致（auto 由前端解析为具体语言后写入）。
+var commitLanguageHardPrompts = map[string]string{
+	"zh-cn": `Mandatory language rule: The commit message title and body MUST be written in Simplified Chinese (简体中文). This rule overrides all previous commit message examples and any other language preference. Keep code identifiers, file names, API names and original error text unchanged. Return only the commit message text.`,
+	"en-us": `Mandatory language rule: The commit message title and body MUST be written in English. This rule overrides all previous commit message examples and any other language preference. Keep code identifiers, file names, API names and original error text unchanged. Return only the commit message text.`,
+	"ja-jp": `Mandatory language rule: The commit message title and body MUST be written in Japanese (日本語). This rule overrides all previous commit message examples and any other language preference. Keep code identifiers, file names, API names and original error text unchanged. Return only the commit message text.`,
+	"ru-ru": `Mandatory language rule: The commit message title and body MUST be written in Russian (Русский). This rule overrides all previous commit message examples and any other language preference. Keep code identifiers, file names, API names and original error text unchanged. Return only the commit message text.`,
+}
+
+// commitLanguageHardPrompt 按语言代码返回强制指令；auto 或未知名回退到中文。
+func commitLanguageHardPrompt(language string) string {
+	lang := strings.ToLower(strings.TrimSpace(language))
+	if lang == "" {
+		return ""
+	}
+	if prompt, ok := commitLanguageHardPrompts[lang]; ok {
+		return prompt
+	}
+	if lang == "auto" {
+		return commitLanguageHardPrompts["zh-cn"]
+	}
+	return ""
+}
+
 // WriteGitCommitMessage handles Cursor's SCM "Generate Commit Message" action.
 func (service *Service) WriteGitCommitMessage(ctx context.Context, req *connect.Request[aiserverv1.WriteGitCommitMessageRequest]) (*connect.Response[aiserverv1.WriteGitCommitMessageResponse], error) {
 	if service == nil {
@@ -66,7 +91,7 @@ func (service *Service) WriteGitCommitMessage(ctx context.Context, req *connect.
 	if service.provider == nil {
 		return nil, commitMessageConnectError(recorder, connect.CodeInternal, fmt.Errorf("provider gateway is not initialized"))
 	}
-	messages, err := buildCommitMessagePrompt(req.Msg, diffs)
+	messages, err := service.buildCommitMessagePrompt(req.Msg, diffs)
 	if err != nil {
 		return nil, commitMessageConnectError(recorder, connect.CodeInternal, err)
 	}
@@ -136,13 +161,21 @@ func (service *Service) WriteGitCommitMessage(ctx context.Context, req *connect.
 	}), nil
 }
 
-func buildCommitMessagePrompt(req *aiserverv1.WriteGitCommitMessageRequest, diffs []string) ([]modeladapter.Message, error) {
+// buildCommitMessagePrompt 组装提交信息生成的 system + user 消息。
+// 静态资产已含简体中文要求；当「软件使用中文化」开启时再追加一条更强的
+// 强制指令，避免模型被历史英文提交带偏。
+func (service *Service) buildCommitMessagePrompt(req *aiserverv1.WriteGitCommitMessageRequest, diffs []string) ([]modeladapter.Message, error) {
 	system, err := promptassets.ReadCommitPrompt()
 	if err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(system) == "" {
 		return nil, fmt.Errorf("commit prompt asset is empty")
+	}
+	if service != nil && service.promptInjection != nil {
+		if languagePrompt := commitLanguageHardPrompt(service.promptInjection.CommitMessageLanguage()); languagePrompt != "" {
+			system = strings.TrimSpace(system) + "\n\n" + languagePrompt
+		}
 	}
 	sections := []string{"Generate a Git commit message for the following changes."}
 	previous := truncateCommitMessagePreviousCommits(req.GetPreviousCommitMessages(), commitMessagePreviousCommitLimit)

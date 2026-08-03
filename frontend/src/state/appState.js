@@ -1345,7 +1345,7 @@ export const appState = reactive({
   // 浮窗偏好是纯前端 UX 状态：localStorage 持久化 + 跨窗口 storage 事件广播。
   // 不进后端 config（后端 config 不含 overlay 字段）。初始给默认值，真实值由
   // getStatsOverlayPreferences() 在首次读取时从 localStorage 填充，避免模块求值顺序依赖。
-  statsOverlayPreferences: { style: "card", alwaysOnTop: true, visible: false, snapCollapse: true, dockLocked: false, closeAction: "tray" },
+  statsOverlayPreferences: { style: "card", alwaysOnTop: true, visible: false, snapCollapse: true, dockLocked: false, closeAction: "tray", opacity: 0.85, frosted: true, frostBlur: 18, accent: "mint", accentCustom: "" },
   turnStaleTimeout: cachedConfig.turnStaleTimeout,
   nativeDelegationProgressTimeout: cachedConfig.nativeDelegationProgressTimeout,
   autoMatchContextWindow: cachedConfig.autoMatchContextWindow,
@@ -1757,14 +1757,45 @@ const STATS_OVERLAY_PREFERENCES_KEY = "cursor-byok.stats-overlay.preferences";
 const STATS_OVERLAY_CHANGED_EVENT = "stats-overlay-preferences-changed";
 const STATS_OVERLAY_SHOW_REQUESTED_EVENT = "stats-overlay-show-requested";
 const STATS_OVERLAY_STYLES = new Set(["card", "engine", "orb"]);
+// 浮窗主题色：每项含主色（强调）与发光色（glow，用于辉光/光晕类效果）。
+// custom 为自定义 RGB 色（存于 accentCustom），rainbow 为流动炫彩动画。
+const STATS_OVERLAY_ACCENTS = new Set(["mint", "cyan", "amber", "violet", "rose", "blue", "custom", "rainbow"]);
 let statsOverlayPreferenceSyncBound = false;
 let statsOverlayShowRequestBound = false;
+
+// 校验自定义主题色：接受 #RGB / #RRGGBB / rgb(...) 形式，返回标准 #RRGGBB。
+function normalizeAccentCustom(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const match = text.match(/^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
+  if (match) {
+    const hex = match[1];
+    return `#${hex.length === 3 ? hex.split("").map((ch) => ch + ch).join("") : hex}`.toLowerCase();
+  }
+  const rgb = text.match(/^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/);
+  if (rgb) {
+    const toHex = (value) => Math.min(255, Math.max(0, Number(value))).toString(16).padStart(2, "0");
+    return `#${toHex(rgb[1])}${toHex(rgb[2])}${toHex(rgb[3])}`;
+  }
+  return "";
+}
 
 function normalizeStatsOverlayPreferences(input) {
   const raw = input && typeof input === "object" ? input : {};
   const style = STATS_OVERLAY_STYLES.has(raw.style) ? raw.style : "card";
   const closeAction = raw.closeAction === "quit" ? "quit" : "tray";
   const normalizeCoordinate = (value) => typeof value === "number" && Number.isFinite(value) ? Math.round(value) : null;
+  const normalizeOpacity = (value) => {
+    const opacity = Number(value);
+    if (!Number.isFinite(opacity)) return 0.85;
+    return Math.min(1, Math.max(0.3, opacity));
+  };
+  // 磨砂模糊程度（px）：0 表示关闭磨砂；其余范围 2-30。
+  const normalizeFrostBlur = (value) => {
+    const blur = Number(value);
+    if (!Number.isFinite(blur)) return raw.frosted === false ? 0 : 18;
+    return Math.min(30, Math.max(0, blur));
+  };
   return {
     style,
     alwaysOnTop: asBoolean(raw.alwaysOnTop ?? true),
@@ -1775,6 +1806,12 @@ function normalizeStatsOverlayPreferences(input) {
     // dockLocked：锁定为收缩胶囊（悬停不展开）且窗口不可拖动。由设置开关与浮窗内锁按钮共同控制。
     dockLocked: asBoolean(raw.dockLocked ?? false),
     closeAction,
+    // 外观：背景不透明度（0.3-1）、磨砂模糊程度（0-30，0=关闭）、主题色。
+    opacity: normalizeOpacity(raw.opacity ?? 0.85),
+    frosted: asBoolean(raw.frosted ?? true),
+    frostBlur: normalizeFrostBlur(raw.frostBlur),
+    accent: STATS_OVERLAY_ACCENTS.has(raw.accent) ? raw.accent : "mint",
+    accentCustom: normalizeAccentCustom(raw.accentCustom),
   };
 }
 

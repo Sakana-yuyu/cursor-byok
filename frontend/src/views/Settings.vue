@@ -94,24 +94,28 @@ function handleBack() {
         class="shrink-0 sm:sticky sm:top-0 sm:self-start"
       />
 
-      <div class="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pr-1">
-        <div class="mx-auto flex w-full max-w-[820px] flex-col gap-6 pb-8">
+      <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div class="mx-auto flex w-full max-w-[820px] flex-col">
           <SettingsPageHeader
             :title="activeCategory.label"
             :description="activeCategory.description"
             :status="autosaveStatus"
             @back="handleBack"
           />
+        </div>
 
-          <Transition name="settings-category" mode="out-in">
-            <div :key="selectedCategory" class="settings-category-panel min-w-0">
-              <component
-                :is="activeCategoryComponent"
-                v-if="activeCategoryComponent"
-                :autosave="autosave"
-              />
-            </div>
-          </Transition>
+        <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pr-1">
+          <div class="mx-auto flex w-full max-w-[820px] flex-col gap-6 pb-8">
+            <Transition name="settings-category" mode="out-in">
+              <div :key="selectedCategory" class="settings-category-panel min-w-0">
+                <component
+                  :is="activeCategoryComponent"
+                  v-if="activeCategoryComponent"
+                  :autosave="autosave"
+                />
+              </div>
+            </Transition>
+          </div>
         </div>
       </div>
     </div>

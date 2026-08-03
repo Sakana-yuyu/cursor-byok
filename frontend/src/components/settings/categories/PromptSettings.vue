@@ -7,6 +7,7 @@ import Input from "@/components/ui/Input.vue";
 import Select from "@/components/ui/Select.vue";
 import Switch from "@/components/ui/Switch.vue";
 import { useMessage } from "@/composables/useMessage";
+import { useLocale } from "@/i18n/runtime";
 import {
   getPromptInjectionSettings,
   refreshPromptInjection,
@@ -14,7 +15,7 @@ import {
   savePromptInjectionSettings,
 } from "@/services/clientApi";
 import { toUserError } from "@/state/appState";
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 
 const props = defineProps({
   autosave: {
@@ -26,6 +27,22 @@ const props = defineProps({
 const PROMPT_SAVE_KEY = "prompts.config";
 
 const message = useMessage();
+const { locale: interfaceLocale } = useLocale();
+
+// Git 提交文本本地化语言选项；auto 表示跟随界面语言。
+const commitLanguageOptions = [
+  { value: "auto", label: "跟随界面语言" },
+  { value: "zh-CN", label: "简体中文" },
+  { value: "en-US", label: "English" },
+  { value: "ja-JP", label: "日本語" },
+  { value: "ru-RU", label: "Русский" },
+];
+
+// interfaceLocaleToCode 把界面语言代码归一化为后端可用的语言代码。
+function interfaceLocaleToCode(localeValue) {
+  const value = String(localeValue || "").trim().toLowerCase();
+  return value === "en-us" || value === "ja-jp" || value === "ru-ru" ? value : "zh-cn";
+}
 
 const promptPreview = ref(null);
 const promptRevision = ref(0);
@@ -33,6 +50,8 @@ const promptRevision = ref(0);
 const prompt = reactive({
   enabled: false,
   softwareChineseEnabled: false,
+  commitMessageEnabled: false,
+  commitMessageLanguage: "auto",
   customEnabled: false,
   customContent: "",
   mode: "replace",
@@ -83,6 +102,9 @@ const promptSummary = computed(() => {
   if (prompt.softwareChineseEnabled) {
     enabledItems.push("中文化");
   }
+  if (prompt.commitMessageEnabled) {
+    enabledItems.push("提交本地化");
+  }
   return enabledItems.length ? `已启用：${enabledItems.join(" / ")}` : "未启用";
 });
 
@@ -100,6 +122,10 @@ function applyPromptStatus(status) {
   Object.assign(prompt, {
     enabled: Boolean(value.enabled),
     softwareChineseEnabled: Boolean(value.softwareChineseEnabled),
+    commitMessageEnabled: Boolean(value.commitMessageEnabled),
+    commitMessageLanguage: commitLanguageOptions.some((option) => option.value === value.commitMessageLanguage)
+      ? value.commitMessageLanguage
+      : "auto",
     customEnabled: Boolean(value.customEnabled),
     customContent: value.customContent || "",
     mode: value.mode === "append" ? "append" : "replace",
@@ -116,9 +142,16 @@ function applyPromptStatus(status) {
 }
 
 function buildPromptConfig() {
+  // auto 模式把当前界面语言作为已解析值一并持久化，保证后端注入具体语言。
+  const resolvedLanguage = prompt.commitMessageLanguage === "auto"
+    ? interfaceLocaleToCode(interfaceLocale.value)
+    : prompt.commitMessageLanguage;
   return {
     enabled: prompt.enabled,
     softwareChineseEnabled: prompt.softwareChineseEnabled,
+    commitMessageEnabled: prompt.commitMessageEnabled,
+    commitMessageLanguage: prompt.commitMessageLanguage,
+    commitMessageLanguageResolved: resolvedLanguage,
     customEnabled: prompt.customEnabled,
     customContent: prompt.customContent,
     mode: prompt.mode,
@@ -257,6 +290,30 @@ function updatePromptFieldImmediately(field, value) {
     },
   });
 }
+
+// updateCommitMessageLanguage 更新提交文本语言：
+// 「跟随界面语言」时 commitMessageLanguage 保持 auto，已解析值由 buildPromptConfig 写入。
+function updateCommitMessageLanguage(value) {
+  const selected = String(value || "auto");
+  const previousValue = prompt.commitMessageLanguage;
+  prompt.commitMessageLanguage = selected;
+  const revision = markPromptChanged();
+  void savePromptImmediately({
+    revision,
+    onFailure: () => {
+      prompt.commitMessageLanguage = previousValue;
+    },
+  });
+}
+
+// 界面语言切换时，若用户选择「跟随界面语言」，自动把新语言写入提交本地化配置。
+watch(interfaceLocale, () => {
+  if (prompt.commitMessageLanguage !== "auto" || !prompt.commitMessageEnabled) {
+    return;
+  }
+  const revision = markPromptChanged();
+  void savePromptImmediately({ revision });
+});
 
 function togglePromptTemplate(templateName, enabled) {
   const previousTemplates = prompt.templates;
@@ -506,7 +563,12 @@ onMounted(() => {
             </SettingsRow>
           </SettingsSection>
 
-          <SettingsSection title="模板列表" description="单独控制每个模板是否参与注入，并按需预览内容。">
+          <SettingsSection
+            title="模板列表"
+            description="单独控制每个模板是否参与注入，并按需预览内容。"
+            collapsible
+            :default-expanded="false"
+          >
             <div
               v-if="prompt.templates.length"
               class="overflow-hidden rounded-[8px] border border-[#343434] bg-[#252525]/40"
@@ -558,7 +620,11 @@ onMounted(() => {
             </div>
           </SettingsSection>
 
-          <SettingsSection title="自定义与本地化">
+          <SettingsSection
+            title="自定义与本地化"
+            collapsible
+            :default-expanded="false"
+          >
             <SettingsRow
               label="自定义注入"
               description="在标准模板之外附加自定义内容。"
@@ -574,17 +640,28 @@ onMounted(() => {
             </SettingsRow>
 
             <SettingsRow
-              label="软件使用中文化"
-              description="默认使用中文回答，并保留代码、命令和协议字段原文。"
+              label="Git 提交文本本地化"
+              description="按所选语言生成提交信息；选择跟随界面语言时，提交信息语言会随界面语言切换自动同步。"
             >
-              <Switch
-                compact
-                label=""
-                :enabled="prompt.softwareChineseEnabled"
-                :disabled="promptControlsDisabled"
-                aria-label="启用软件中文化"
-                @change="(value) => updatePromptFieldImmediately('softwareChineseEnabled', value)"
-              />
+              <div class="flex items-center gap-3">
+                <Switch
+                  compact
+                  label=""
+                  :enabled="prompt.commitMessageEnabled"
+                  :disabled="promptControlsDisabled"
+                  aria-label="启用 Git 提交文本本地化"
+                  @change="(value) => updatePromptFieldImmediately('commitMessageEnabled', value)"
+                />
+                <div class="w-[170px] max-w-full">
+                  <Select
+                    :model-value="prompt.commitMessageLanguage"
+                    :options="commitLanguageOptions"
+                    aria-label="提交信息语言"
+                    :disabled="promptControlsDisabled || !prompt.commitMessageEnabled"
+                    @change="updateCommitMessageLanguage"
+                  />
+                </div>
+              </div>
             </SettingsRow>
 
             <SettingsRow
