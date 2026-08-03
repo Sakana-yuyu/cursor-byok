@@ -92,14 +92,16 @@ tasks:
       - |
         {{if eq OS "windows"}}
         powershell -NoProfile -Command "Copy-Item -Force '{{.PROJECT_ROOT}}/{{.OUTPUT}}' 'app-windows-{{.ARCH}}.exe'"
-        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DOUTPUT_INSTALLER="cursor-byok-windows-{{.ARCH}}-installer.exe" -DARG_WAILS_{{.ARG_FLAG}}_BINARY="app-windows-{{.ARCH}}.exe" project.nsi
+        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DOUTPUT_INSTALLER="cursor-byok-windows-{{.INSTALLER_ARCH}}-installer.exe" -DARG_WAILS_{{.ARG_FLAG}}_BINARY="app-windows-{{.ARCH}}.exe" project.nsi
         {{else}}
         cp -f '{{.PROJECT_ROOT}}/{{.OUTPUT}}' 'app-windows-{{.ARCH}}.exe'
-        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DOUTPUT_INSTALLER="cursor-byok-windows-{{.ARCH}}-installer.exe" -DARG_WAILS_{{.ARG_FLAG}}_BINARY="app-windows-{{.ARCH}}.exe" project.nsi
+        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DOUTPUT_INSTALLER="cursor-byok-windows-{{.INSTALLER_ARCH}}-installer.exe" -DARG_WAILS_{{.ARG_FLAG}}_BINARY="app-windows-{{.ARCH}}.exe" project.nsi
         {{end}}
     vars:
       PROJECT_ROOT: '{{.TASKFILE_DIR}}/../..'
       ARCH: '{{.ARCH | default ARCH}}'
+      # 产物面向用户的命名：amd64 -> x64（386 走独立 create:nsis:installer:386 输出 x32）
+      INSTALLER_ARCH: '{{if eq .ARCH "amd64"}}x64{{else}}{{.ARCH}}{{end}}'
       OUTPUT: '{{.OUTPUT | default (printf "%s/%s.exe" .BIN_DIR .APP_NAME)}}'
       ARG_FLAG: '{{if eq .ARCH "amd64"}}AMD64{{else}}ARM64{{end}}'
 
