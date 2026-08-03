@@ -42,12 +42,12 @@ type assetSpec struct {
 }
 
 var releaseAssets = []assetSpec{
-	{platform: "darwin-arm64", suffix: ".tar.gz"},
-	{platform: "darwin-amd64", suffix: ".tar.gz"},
-	{platform: "windows-amd64", suffix: ".zip"},
+	{platform: "macos-arm64", suffix: ".tar.gz"},
+	{platform: "macos-x64", suffix: ".tar.gz"},
+	{platform: "windows-x64", suffix: ".zip"},
 	{platform: "windows-arm64", suffix: ".zip"},
-	{platform: "windows-386", suffix: ".zip"},
-	{platform: "linux-amd64", suffix: ".tar.gz"},
+	{platform: "windows-x32", suffix: ".zip"},
+	{platform: "linux-x64", suffix: ".tar.gz"},
 }
 
 func main() {

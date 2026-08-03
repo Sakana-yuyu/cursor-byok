@@ -50,6 +50,26 @@ info:
 > **Windows 用户注意**：安装时若被 SmartScreen 拦截，点击「更多信息」->「仍要运行」即可。
 ```
 
+**release-notes.md 必须包含「下载哪个文件？（按系统选择）」段落**，逐系统推荐下载文件名，并说明如何判断系统位数。完整模板见 v0.0.79 的 release-notes.md。
+
+### 发布产物命名规范（不可随意更改）
+
+用户可见的产物名 / update.json 平台 key 使用面向用户的命名，禁止出现 `386`/`amd64`/`darwin` 等技术代号：
+
+| 平台 | 产物前缀（文件名 / update.json key） | 备注 |
+| --- | --- | --- |
+| Windows 64 位 | `windows-x64` | 绝大多数 Windows |
+| Windows ARM64 | `windows-arm64` | 骁龙/麒麟 ARM 电脑 |
+| Windows 32 位 | `windows-x32` | 极老电脑，`386` 是内部值 |
+| macOS Apple Silicon | `macos-arm64` | M1/M2/M3/M4 |
+| macOS Intel | `macos-x64` | |
+| Linux 64 位 | `linux-x64` | |
+
+约束：
+- **内部实现可保留技术值**（GOARCH `386`、task 名 `build:windows:386`、NSIS 脚本 `project-386.nsi`），但**产物文件名、update.json 平台 key、release 资产名必须用上表命名**
+- 改动命名必须**五处同步**：`Taskfile.yml` 产物名、`.github/workflows/build.yml`（matrix artifact / copy_asset / jq 平台校验）、`scripts/release/main.go` 的 `releaseAssets`、`internal/updater/manager.go` 的 `currentPlatformKey()`、`release-notes.md` 推荐下载名
+- NSIS 打包的 makensis `File` 指令**不支持 `..` 段或混合分隔符路径**（报 `no files found`）；必须先复制二进制到 `build/windows/nsis/` 再用本地文件名，参考 `create:nsis:installer` 的复制步骤
+
 ### 4. 提交并创建 tag
 
 **⚠️ 创建 tag 前必须自检版本号一致性**——否则会触发 `missing build asset` 报错（release job 按 tag 算版本号找文件名，build job 按 config.yml 构建文件名，macOS/Linux 产物名含版本号，对不上就失败）：

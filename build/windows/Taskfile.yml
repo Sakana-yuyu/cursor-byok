@@ -86,22 +86,25 @@ tasks:
             ref: .SCAN
     cmds:
       - wails3 generate webview2bootstrapper -dir "{{.PROJECT_ROOT}}/build/windows/nsis"
+      # makensis 的 File 指令无法解析带 `..` 段或混合分隔符的路径
+      # （File: ..\..\bin/x.exe -> no files found），因此先把二进制复制到脚本目录，
+      # File 使用无 `..` 的本地文件名。
       - |
         {{if eq OS "windows"}}
-        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DOUTPUT_INSTALLER="cursor-byok-windows-{{.ARCH}}-installer.exe" -DARG_WAILS_{{.ARG_FLAG}}_BINARY="..\..\{{.OUTPUT}}" project.nsi
+        powershell -NoProfile -Command "Copy-Item -Force '..\\..\\{{.OUTPUT}}' 'app-windows-{{.ARCH}}.exe'"
+        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DOUTPUT_INSTALLER="cursor-byok-windows-{{.ARCH}}-installer.exe" -DARG_WAILS_{{.ARG_FLAG}}_BINARY="app-windows-{{.ARCH}}.exe" project.nsi
         {{else}}
-        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DOUTPUT_INSTALLER="cursor-byok-windows-{{.ARCH}}-installer.exe" -DARG_WAILS_{{.ARG_FLAG}}_BINARY="../../{{.OUTPUT}}" project.nsi
+        cp -f '../../{{.OUTPUT}}' 'app-windows-{{.ARCH}}.exe'
+        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DOUTPUT_INSTALLER="cursor-byok-windows-{{.ARCH}}-installer.exe" -DARG_WAILS_{{.ARG_FLAG}}_BINARY="app-windows-{{.ARCH}}.exe" project.nsi
         {{end}}
     vars:
-      # makensis 的 File 指令无法解析带 `..` 段的绝对路径（File: .../../../bin/x.exe -> no files found），
-      # 因此二进制路径使用相对脚本目录（build/windows/nsis）的 `..\..\bin\...` 写法（NSIS 原生支持）。
       PROJECT_ROOT: '{{.TASKFILE_DIR}}/../..'
       ARCH: '{{.ARCH | default ARCH}}'
       OUTPUT: '{{.OUTPUT | default (printf "%s/%s.exe" .BIN_DIR .APP_NAME)}}'
       ARG_FLAG: '{{if eq .ARCH "amd64"}}AMD64{{else}}ARM64{{end}}'
 
   create:nsis:installer:386:
-    summary: 生成 Windows 386 NSIS 安装包（使用独立脚本，不依赖 wails_tools.nsh）
+    summary: 生成 Windows x32 (32位) NSIS 安装包（使用独立脚本，不依赖 wails_tools.nsh）
     internal: true
     dir: '{{.TASKFILE_DIR}}/nsis'
     deps:
@@ -114,11 +117,14 @@ tasks:
             ref: .SCAN
     cmds:
       - wails3 generate webview2bootstrapper -dir "{{.PROJECT_ROOT}}/build/windows/nsis"
+      # 与 create:nsis:installer 相同：先复制二进制到脚本目录，File 使用本地文件名。
       - |
         {{if eq OS "windows"}}
-        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DARG_WAILS_386_BINARY="..\..\{{.OUTPUT}}" project-386.nsi
+        powershell -NoProfile -Command "Copy-Item -Force '..\\..\\{{.OUTPUT}}' 'app-windows-x32.exe'"
+        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DARG_WAILS_386_BINARY="app-windows-x32.exe" project-386.nsi
         {{else}}
-        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DARG_WAILS_386_BINARY="../../{{.OUTPUT}}" project-386.nsi
+        cp -f '../../{{.OUTPUT}}' 'app-windows-x32.exe'
+        makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DARG_WAILS_386_BINARY="app-windows-x32.exe" project-386.nsi
         {{end}}
     vars:
       PROJECT_ROOT: '{{.TASKFILE_DIR}}/../..'

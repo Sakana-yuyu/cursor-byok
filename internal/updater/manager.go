@@ -503,22 +503,22 @@ func currentPlatformKey() (string, error) {
 	case "darwin":
 		switch runtime.GOARCH {
 		case "arm64":
-			return "darwin-arm64", nil
+			return "macos-arm64", nil
 		case "amd64":
-			return "darwin-amd64", nil
+			return "macos-x64", nil
 		}
 	case "windows":
 		switch runtime.GOARCH {
 		case "amd64":
-			return "windows-amd64", nil
+			return "windows-x64", nil
 		case "arm64":
 			return "windows-arm64", nil
 		case "386":
-			return "windows-386", nil
+			return "windows-x32", nil
 		}
 	case "linux":
 		if runtime.GOARCH == "amd64" {
-			return "linux-amd64", nil
+			return "linux-x64", nil
 		}
 	}
 	return "", fmt.Errorf("unsupported platform for updater: %s/%s", runtime.GOOS, runtime.GOARCH)
