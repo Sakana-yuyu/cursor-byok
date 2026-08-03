@@ -10,6 +10,7 @@ package bridge
 import (
 	"bytes"
 	"context"
+	modeladapter "cursor/internal/backend/agent/model"
 	"cursor/internal/backend/forwarder"
 	serverconfig "cursor/internal/backend/server/config"
 	"encoding/json"
@@ -121,9 +122,10 @@ func callChatCompletion(adapter serverconfig.ModelAdapterConfig, systemPrompt, u
 		return "", fmt.Errorf("模型通道 baseURL 为空")
 	}
 	endpoint := base + "/chat/completions"
-	// 若显式配置了 chat/completions 风格端点则优先使用；responses 端点不支持此最小实现，回退默认。
+	// 复用主流程的端点拼接规则：baseURL 以 /vN 结尾时剥离 endpoint 的 /vN/ 版本前缀，
+	// 避免 baseURL=/v1 + endpoint=/v1/chat/completions 拼出 /v1/v1/chat/completions 这类 404 路径。
 	if ep := strings.TrimSpace(adapter.OpenAIEndpoint); strings.Contains(ep, "chat/completions") {
-		endpoint = base + "/" + strings.TrimLeft(ep, "/")
+		endpoint = modeladapter.OpenAIEndpointURL(base, ep)
 	}
 
 	payload, err := json.Marshal(summaryRequest{

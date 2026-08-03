@@ -84,6 +84,12 @@ func completedOpenAIToolArgsJSON(accumulator *openAIToolAccumulator) ([]byte, er
 	}
 	var value map[string]any
 	if err := json.Unmarshal([]byte(trimmed), &value); err != nil {
+		// 容错恢复：部分上游模型流式输出工具参数时会重复拼接多份对象草稿
+		// （{"paths":[...]}{"paths":[...]}），且 Windows 路径等反斜杠漏转义。
+		// 取最后一个完整对象并修复非法转义后重试；恢复失败再报原始解析错误。
+		if recovered, rerr := recoverOpenAIToolArgsJSON(trimmed); rerr == nil {
+			return recovered, nil
+		}
 		toolName := strings.TrimSpace(accumulator.Name)
 		if toolName == "" {
 			toolName = "tool"
@@ -98,6 +104,58 @@ func completedOpenAIToolArgsJSON(accumulator *openAIToolAccumulator) ([]byte, er
 		return nil, fmt.Errorf("openai returned non-object tool input for %s", toolName)
 	}
 	return []byte(trimmed), nil
+}
+
+// recoverOpenAIToolArgsJSON 尝试修复畸形工具参数 JSON。
+func recoverOpenAIToolArgsJSON(input string) ([]byte, error) {
+	candidates := make([]string, 0, 4)
+	candidates = append(candidates, input)
+	// 场景一：多份对象重复拼接，取最后一个 '{' 开始的片段
+	if strings.Contains(input, "}{") {
+		if last := strings.LastIndex(input, "{"); last >= 0 {
+			candidates = append(candidates, input[last:])
+		}
+	}
+	for _, candidate := range candidates {
+		for _, text := range []string{candidate, repairOpenAIToolArgsEscapes(candidate)} {
+			var value map[string]any
+			if err := json.Unmarshal([]byte(text), &value); err == nil && value != nil {
+				return []byte(text), nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("unrecoverable malformed tool input")
+}
+
+// repairOpenAIToolArgsEscapes 修复 JSON 字符串里漏转义的反斜杠：
+// 反斜杠后跟非合法转义字符（如 Windows 路径 "e:\MyProject" 的 \M）时补一个反斜杠。
+func repairOpenAIToolArgsEscapes(input string) string {
+	var b strings.Builder
+	b.Grow(len(input) + 8)
+	for i := 0; i < len(input); i++ {
+		ch := input[i]
+		if ch == '\\' && i+1 < len(input) {
+			next := input[i+1]
+			if isJSONEscapeChar(next) {
+				b.WriteByte(ch)
+				b.WriteByte(next)
+				i++
+				continue
+			}
+			b.WriteString(`\\`)
+			continue
+		}
+		b.WriteByte(ch)
+	}
+	return b.String()
+}
+
+func isJSONEscapeChar(ch byte) bool {
+	switch ch {
+	case '"', '\\', '/', 'b', 'f', 'n', 'r', 't', 'u':
+		return true
+	}
+	return false
 }
 
 type openAIImageGenerationAccumulator struct {

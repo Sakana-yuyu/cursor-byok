@@ -43,10 +43,13 @@ type historyContextFile struct {
 	Items []historyContextItem `json:"items"`
 }
 
+// historyContextItem 对应会话目录下的 context.json 条目。
+// 新格式用户消息内容在 payload.text，旧格式在 content。
 type historyContextItem struct {
 	Role    string          `json:"role"`
 	Kind    string          `json:"kind"`
 	Content json.RawMessage `json:"content"`
+	Payload json.RawMessage `json:"payload"`
 }
 
 // scanHistorySessions 扫描 history 根目录，返回所有会话的展示元数据。
@@ -103,6 +106,8 @@ func readHistoryState(path string) *historyStateFile {
 }
 
 // readHistoryTitle 从 context.json 提取首条用户消息的前缀作为会话标题。
+// 兼容新旧格式：新格式用户消息内容在 payload.text，旧格式在 content。
+// request_context 等注入条目不含用户文本，自然跳过。
 func readHistoryTitle(path string) string {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -116,27 +121,49 @@ func readHistoryTitle(path string) string {
 		if strings.TrimSpace(item.Role) != "user" {
 			continue
 		}
-		if text := extractHistoryText(item.Content); text != "" {
+		if text := extractHistoryText(item); text != "" {
 			return truncateHistoryTitle(text)
 		}
 	}
 	return ""
 }
 
-// extractHistoryText 从 content 字段提取纯文本：支持 string 或 content parts 数组。
-func extractHistoryText(content json.RawMessage) string {
-	if len(content) == 0 {
+// extractHistoryText 从用户条目提取纯文本：优先新格式 payload.text，兼容旧格式 content。
+func extractHistoryText(item historyContextItem) string {
+	if text := extractHistoryTextSource(item.Payload); text != "" {
+		return text
+	}
+	return extractHistoryTextSource(item.Content)
+}
+
+// extractHistoryTextSource 解析文本来源字段：支持 {"text": ...} 包装或裸 string/parts 数组。
+func extractHistoryTextSource(source json.RawMessage) string {
+	if len(source) == 0 {
+		return ""
+	}
+	var wrapper struct {
+		Text json.RawMessage `json:"text"`
+	}
+	if err := json.Unmarshal(source, &wrapper); err == nil && len(wrapper.Text) > 0 {
+		return extractHistoryTextPart(wrapper.Text)
+	}
+	return extractHistoryTextPart(source)
+}
+
+// extractHistoryTextPart 解析单个文本值：string 或 [{type:"text",text:...}] parts 数组。
+func extractHistoryTextPart(source json.RawMessage) string {
+	if len(source) == 0 {
 		return ""
 	}
 	var plain string
-	if err := json.Unmarshal(content, &plain); err == nil {
+	if err := json.Unmarshal(source, &plain); err == nil {
 		return strings.TrimSpace(plain)
 	}
 	var parts []struct {
 		Type string `json:"type"`
 		Text string `json:"text"`
 	}
-	if err := json.Unmarshal(content, &parts); err == nil {
+	if err := json.Unmarshal(source, &parts); err == nil {
 		var builder strings.Builder
 		for _, part := range parts {
 			if strings.TrimSpace(part.Type) != "text" {

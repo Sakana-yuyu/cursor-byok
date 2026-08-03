@@ -42,6 +42,15 @@ func (catalog *DefaultToolCatalog) Load(mode agentv1.AgentMode, subagentTypeName
 		if !isToolAllowedInMode(mode, subagentTypeName, name) {
 			continue
 		}
+		// inspect 子代理（Task 子会话 + PLAN 模式）的 Shell 描述改写为受控只读语义，
+		// 并从 schema 删除 notify_on_output/profile：模型看不到的字段就不会填写，
+		// 服务端剥离逻辑只兜底旧缓存请求。
+		if name == "Shell" && isChildConversationSubagentTypeName(subagentTypeName) && normalizeMode(mode) == agentv1.AgentMode_AGENT_MODE_PLAN {
+			item, err = rewriteReadonlyShellTool(item)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
 		filtered = append(filtered, item)
 		names = append(names, name)
 	}
@@ -306,6 +315,49 @@ func mapPromptMode(mode agentv1.AgentMode) (promptassets.Mode, error) {
 	default:
 		return "", fmt.Errorf("unsupported prompt asset mode: %s", mode.String())
 	}
+}
+
+// rewriteReadonlyShellTool 把 inspect child 的 Shell 描述改写为受控白名单语义，与服务端校验保持一致；
+// 同时从 schema 删除 notify_on_output/profile：模型看不到的字段就不会填写，
+// 服务端剥离逻辑只兜底旧缓存请求（曾因 schema 宣告 + 服务端拒绝的矛盾导致模型无限重试 Skipped）。
+func rewriteReadonlyShellTool(item json.RawMessage) (json.RawMessage, error) {
+	var tool map[string]any
+	if err := json.Unmarshal(item, &tool); err != nil {
+		return nil, fmt.Errorf("decode Shell tool descriptor: %w", err)
+	}
+	function, _ := tool["function"].(map[string]any)
+	if function == nil {
+		return nil, fmt.Errorf("Shell tool descriptor function is missing")
+	}
+	function["description"] = "Restricted read-only Shell for inspect subagents. Server-enforced whitelist: a single simple command only (no pipes, redirection, variables, or command substitution; double or single quotes around arguments such as paths with spaces are allowed), working_directory must stay inside the workspace, and only a short foreground window is allowed (no backgrounding). Allowed commands: read-only git evidence (status/diff/log/show/blame/rev-parse/merge-base/ls-tree/ls-files/grep/describe/shortlog/cherry/count-objects, stash list, reflog show, plus flag-only tag/branch/remote listings; --no-pager --no-optional-locks are injected automatically), process/port queries (tasklist, netstat, ps, ss, lsof), and file hashing (sha256sum/sha1sum/md5sum/shasum, certutil -hashfile). Anything else is rejected before dispatch; do not attempt network access, builds, tests, script interpreters, or writes. Independent read-only checks should be issued as multiple Shell calls batched in the same reply."
+	if parameters, ok := function["parameters"].(map[string]any); ok {
+		if properties, ok := parameters["properties"].(map[string]any); ok {
+			delete(properties, "notify_on_output")
+			delete(properties, "profile")
+		}
+		if required, ok := parameters["required"].([]any); ok {
+			parameters["required"] = removeSchemaFields(required, "notify_on_output", "profile")
+		}
+	}
+	return json.Marshal(tool)
+}
+
+// removeSchemaFields 从 required 列表中移除指定字段，与 appendRequiredSchemaFields 对称。
+func removeSchemaFields(required []any, fields ...string) []any {
+	drop := make(map[string]struct{}, len(fields))
+	for _, field := range fields {
+		drop[field] = struct{}{}
+	}
+	result := make([]any, 0, len(required))
+	for _, field := range required {
+		if text, ok := field.(string); ok {
+			if _, found := drop[text]; found {
+				continue
+			}
+		}
+		result = append(result, field)
+	}
+	return result
 }
 
 // extractToolName 从原始 tool descriptor JSON 中提取函数名。

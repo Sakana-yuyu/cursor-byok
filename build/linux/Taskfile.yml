@@ -14,7 +14,7 @@ tasks:
     internal: true
     vars:
       TARGET_ARCH: '{{.ARCH | default ARCH}}'
-      BUILD_FLAGS: '{{if eq .DEV "true"}}{{if .EXTRA_TAGS}}-tags {{.EXTRA_TAGS}} {{end}}-buildvcs=false -gcflags=all="-l" -ldflags="-X cursor/internal/buildinfo.Version={{.APP_VERSION}}"{{else}}-tags production{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}} -trimpath -buildvcs=false -ldflags="-w -s -X cursor/internal/buildinfo.Version={{.APP_VERSION}}"{{end}}'
+      BUILD_FLAGS: '{{if eq .DEV "true"}}{{if .EXTRA_TAGS}}-tags {{.EXTRA_TAGS}} {{end}}-buildvcs=false -gcflags=all="-l" -ldflags="-X cursor/internal/buildinfo.Version={{.APP_VERSION}} -X cursor/internal/buildinfo.Commit={{.GIT_COMMIT}}"{{else}}-tags production{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}} -trimpath -buildvcs=false -ldflags="-w -s -X cursor/internal/buildinfo.Version={{.APP_VERSION}} -X cursor/internal/buildinfo.Commit={{.GIT_COMMIT}}"{{end}}'
       HAS_CC:
         sh: '(command -v gcc >/dev/null 2>&1 || command -v clang >/dev/null 2>&1) && echo "true" || echo "false"'
     preconditions:
@@ -62,7 +62,7 @@ tasks:
     cmds:
       - go build {{.BUILD_FLAGS}} -o "{{.OUTPUT}}"
     vars:
-      BUILD_FLAGS: '{{if eq .DEV "true"}}{{if .EXTRA_TAGS}}-tags {{.EXTRA_TAGS}} {{end}}-buildvcs=false -gcflags=all="-l" -ldflags="-X cursor/internal/buildinfo.Version={{.APP_VERSION}}"{{else}}-tags production{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}} -trimpath -buildvcs=false -ldflags="-w -s -X cursor/internal/buildinfo.Version={{.APP_VERSION}}"{{end}}'
+      BUILD_FLAGS: '{{if eq .DEV "true"}}{{if .EXTRA_TAGS}}-tags {{.EXTRA_TAGS}} {{end}}-buildvcs=false -gcflags=all="-l" -ldflags="-X cursor/internal/buildinfo.Version={{.APP_VERSION}} -X cursor/internal/buildinfo.Commit={{.GIT_COMMIT}}"{{else}}-tags production{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}} -trimpath -buildvcs=false -ldflags="-w -s -X cursor/internal/buildinfo.Version={{.APP_VERSION}} -X cursor/internal/buildinfo.Commit={{.GIT_COMMIT}}"{{end}}'
       BINARY_NAME: '{{.BINARY_NAME | default .APP_NAME}}'
       DEFAULT_OUTPUT: '{{.BIN_DIR}}/{{.BINARY_NAME}}'
       OUTPUT: '{{.OUTPUT | default .DEFAULT_OUTPUT}}'
@@ -92,7 +92,7 @@ tasks:
       - sh: docker image inspect {{.CROSS_IMAGE}} >/dev/null 2>&1
         msg: "未找到 Docker 镜像 '{{.CROSS_IMAGE}}'，请先执行 task setup:docker。"
     cmds:
-      - docker run --rm --platform "{{.DOCKER_PLATFORM}}" --entrypoint /bin/sh -v "{{.PROJECT_ROOT}}:/app" {{.GO_CACHE_MOUNT}} {{.REPLACE_MOUNTS}} -e GOPATH=/go -e GOMODCACHE=/go/pkg/mod -e APP_NAME="{{.APP_NAME}}" -e EXTRA_LDFLAGS="-X cursor/internal/buildinfo.Version={{.APP_VERSION}}" -e GO_BUILD_LOG_MODE="{{.GO_BUILD_LOG_MODE}}" {{if .EXTRA_TAGS}}-e EXTRA_TAGS="{{.EXTRA_TAGS}}"{{end}} "{{.CROSS_IMAGE}}" /app/build/docker/build-linux.sh
+      - docker run --rm --platform "{{.DOCKER_PLATFORM}}" --entrypoint /bin/sh -v "{{.PROJECT_ROOT}}:/app" {{.GO_CACHE_MOUNT}} {{.REPLACE_MOUNTS}} -e GOPATH=/go -e GOMODCACHE=/go/pkg/mod -e APP_NAME="{{.APP_NAME}}" -e EXTRA_LDFLAGS="-X cursor/internal/buildinfo.Version={{.APP_VERSION}} -X cursor/internal/buildinfo.Commit={{.GIT_COMMIT}}" -e GO_BUILD_LOG_MODE="{{.GO_BUILD_LOG_MODE}}" {{if .EXTRA_TAGS}}-e EXTRA_TAGS="{{.EXTRA_TAGS}}"{{end}} "{{.CROSS_IMAGE}}" /app/build/docker/build-linux.sh
       - docker run --rm --platform "{{.DOCKER_PLATFORM}}" --entrypoint chown -v "{{.PROJECT_ROOT}}:/app" "{{.CROSS_IMAGE}}" -R $(id -u):$(id -g) /app/bin
       - mkdir -p "{{.BIN_DIR}}"
       - mv "bin/{{.APP_NAME}}-linux-{{.DOCKER_ARCH}}" "{{.OUTPUT}}"

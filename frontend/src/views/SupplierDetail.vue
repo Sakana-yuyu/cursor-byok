@@ -752,9 +752,6 @@ async function removeAdapters(targets) {
 
 onMounted(async () => {
   await reloadUserConfig({ modelAdaptersOnly: true }).catch(() => {});
-  if (route.query.edit === "1" && !bulkEditExpanded.value) {
-    toggleBulkEdit();
-  }
   if (supplierMeta.value && !balanceState.loaded && !balanceState.loading) void loadBalance();
 });
 
@@ -801,6 +798,18 @@ function toggleBulkEdit() {
     balanceSyncState.ok = false;
   }
 }
+
+// 编辑入口：ModelConfig 点击「编辑」跳转 /supplier?edit=1 时展开批量编辑面板。
+// 用 watch 而非 onMounted：同一路由组件实例在 query 变化时被复用，onMounted 不会再次执行。
+watch(
+  () => route.query.edit,
+  (edit) => {
+    if (edit === "1" && !bulkEditExpanded.value) {
+      toggleBulkEdit();
+    }
+  },
+  { immediate: true },
+);
 
 function parseBalanceHeaders(value) {
   const text = String(value || "").trim();
@@ -932,10 +941,10 @@ async function saveBulkEdit(force = false) {
       <div class="flex flex-col gap-4 pb-2">
         <!-- 顶部：返回 + 供应商信息 -->
         <div class="flex items-center justify-between gap-3 border-b border-[#343434] pb-3">
-          <div class="flex items-center gap-3">
-            <button type="button" class="text-[#8f8f8f] hover:text-white" @click="router.back()">← 返回</button>
-            <div>
-              <h2 class="text-base font-medium text-white">{{ title }}</h2>
+          <div class="flex min-w-0 items-center gap-3">
+            <button type="button" class="shrink-0 whitespace-nowrap text-[#8f8f8f] hover:text-white" @click="router.back()">← 返回</button>
+            <div class="min-w-0">
+              <h2 class="truncate text-base font-medium text-white">{{ title }}</h2>
               <div class="center-row flex-wrap gap-2 text-xs text-[#8f8f8f]">
                 <span>{{ formatHost(subtitle) }} · {{ supplierAdapters.length }} 个模型</span>
                 <span v-if="healthStats.ok > 0" class="rounded-full bg-[#10AD5D]/15 px-2 py-0.5 text-[#6ee7a5]">可用 {{ healthStats.ok }}</span>

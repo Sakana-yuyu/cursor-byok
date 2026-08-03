@@ -5,7 +5,7 @@ import FullScreenModal from "@/components/ui/FullScreenModal.vue";
 import { useMessage } from "@/composables/useMessage";
 import { cancelDelegationTask, getDelegationTaskSnapshots } from "@/services/runtimeControlApi";
 import { toUserError } from "@/state/appState";
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 
 const state = reactive({ items: [], error: "", canceling: {} });
 const message = useMessage();
@@ -13,7 +13,7 @@ let refreshTimer = 0;
 let refreshBusy = false;
 let generation = 0;
 
-// 轮换展示：最多保留 4 条，一次显示一条，定时轮换。
+// 平铺展示：最多保留 4 条，按可取消优先、新任务在前排序。
 const visibleItems = computed(() =>
   [...state.items]
     .sort((left, right) => {
@@ -22,47 +22,9 @@ const visibleItems = computed(() =>
     })
     .slice(0, 4),
 );
-const currentItem = computed(() => visibleItems.value[currentIndex.value] || null);
 const activeCount = computed(() => state.items.filter((item) => item.cancelable).length);
-const currentIndex = ref(0);
-const rotating = ref(true);
 const detailVisible = ref(false);
 const detailItem = ref(null);
-let rotateTimer = 0;
-const ROTATE_INTERVAL_MS = 4000;
-
-// 任务列表变化时重置轮换索引，避免越界或停留在已消失的任务上。
-watch(visibleItems, () => {
-  if (currentIndex.value >= visibleItems.value.length) {
-    currentIndex.value = 0;
-  }
-});
-
-function startRotating() {
-  stopRotating();
-  if (!rotating.value || visibleItems.value.length <= 1) return;
-  rotateTimer = window.setInterval(() => {
-    if (visibleItems.value.length > 1) {
-      currentIndex.value = (currentIndex.value + 1) % visibleItems.value.length;
-    }
-  }, ROTATE_INTERVAL_MS);
-}
-function stopRotating() {
-  if (rotateTimer) {
-    window.clearInterval(rotateTimer);
-    rotateTimer = 0;
-  }
-}
-
-function rotatePrev() {
-  if (visibleItems.value.length <= 1) return;
-  currentIndex.value = (currentIndex.value - 1 + visibleItems.value.length) % visibleItems.value.length;
-}
-
-function rotateNext() {
-  if (visibleItems.value.length <= 1) return;
-  currentIndex.value = (currentIndex.value + 1) % visibleItems.value.length;
-}
 
 function openDetail(item) {
   detailItem.value = item;
@@ -202,12 +164,10 @@ async function handleCancel(item) {
 onMounted(() => {
   void refresh();
   refreshTimer = window.setInterval(() => void refresh(), 1500);
-  startRotating();
 });
 
 onUnmounted(() => {
   window.clearInterval(refreshTimer);
-  stopRotating();
 });
 </script>
 
@@ -228,109 +188,66 @@ onUnmounted(() => {
         </span>
       </div>
       <div v-if="state.error" class="break-words rounded-[6px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-xs text-[#fca5a5]">{{ state.error }}</div>
-      <div v-if="visibleItems.length" class="flex min-w-0 items-stretch gap-2">
-        <button
-          type="button"
-          class="flex w-7 shrink-0 cursor-pointer items-center justify-center rounded-[7px] border border-white/10 bg-black/15 text-[#a3a3a3] transition-all hover:border-[#10AD5D]/40 hover:bg-black/25 hover:text-white active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-white/10 disabled:hover:bg-black/15 disabled:hover:text-[#a3a3a3]"
-          :disabled="visibleItems.length <= 1"
-          aria-label="上一个任务"
-          title="上一个任务"
-          @click="rotatePrev"
-        >
-          <span class="icon-[mdi--chevron-left] text-[16px]" aria-hidden="true" />
-        </button>
-
+      <div v-if="visibleItems.length" class="grid grid-cols-1 gap-2 lg:grid-cols-2">
         <div
-          class="relative flex h-[136px] min-w-0 flex-1 cursor-pointer flex-col overflow-hidden rounded-[7px] border border-white/10 bg-black/15 transition-colors hover:border-[#10AD5D]/35 hover:bg-black/25"
-          @mouseenter="rotating = false; stopRotating()"
-          @mouseleave="rotating = true; startRotating()"
-          @click="openDetail(currentItem)"
+          v-for="item in visibleItems"
+          :key="item.id"
+          class="task-strip-in group relative flex min-w-0 cursor-pointer flex-col overflow-hidden rounded-[7px] border border-white/10 bg-black/15 p-2.5 pl-3.5 transition-colors hover:border-[#10AD5D]/35 hover:bg-black/25"
+          @click="openDetail(item)"
           :title="'点击查看任务详情'"
         >
-          <span
-            class="absolute inset-y-0 left-0 w-[3px] transition-colors"
-            :class="currentItem ? statusAccentClass(currentItem) : 'bg-[#3f3f3f]'"
-            aria-hidden="true"
-          />
-          <template v-if="currentItem">
-            <div :key="currentItem.id" class="task-strip-in flex min-w-0 flex-1 flex-col pl-3.5 pr-3 pt-2.5">
-              <div class="flex min-w-0 items-center gap-2">
-                <div class="min-w-0 flex-1 truncate text-[13px] font-medium text-white" :title="taskDescription(currentItem)">
-                  {{ taskDescription(currentItem) }}
-                </div>
-                <span
-                  class="center-row shrink-0 gap-1 rounded-[5px] border border-white/10 bg-white/5 px-1.5 py-0.5 text-[11px] text-[#a3a3a3]"
-                  :title="taskModel(currentItem)"
-                >
-                  <span class="icon-[mdi--robot-outline] text-[12px] text-[#737373]" aria-hidden="true" />
-                  <span class="max-w-[160px] truncate">{{ taskModel(currentItem) }}</span>
-                </span>
-                <Button
-                  v-if="currentItem.cancelable"
-                  variant="text"
-                  class="!text-[12px]"
-                  :disabled="Boolean(state.canceling[currentItem.id])"
-                  @click.stop="handleCancel(currentItem)"
-                >
-                  {{ state.canceling[currentItem.id] ? "取消中..." : "取消" }}
-                </Button>
-              </div>
-              <div class="mt-1.5 flex min-w-0 items-center gap-2">
-                <span
-                  class="center-row shrink-0 gap-1.5 rounded-full border px-2 py-[2px] text-[11px] font-medium"
-                  :class="statusPillClass(currentItem)"
-                  :title="taskStateLabel(currentItem)"
-                >
-                  <span class="size-1.5 rounded-full" :class="statusAccentClass(currentItem)" aria-hidden="true" />
-                  {{ taskStateLabel(currentItem) }}
-                </span>
-                <span class="center-row shrink-0 gap-1 text-[11px] text-[#737373]" :title="executionModeLabel(currentItem)">
-                  <span :class="executionModeIcon(currentItem)" class="text-[12px]" aria-hidden="true" />
-                  {{ executionModeLabel(currentItem) }}
-                </span>
-              </div>
-              <div v-if="currentItem.isSupervised" class="mt-1.5 flex min-w-0 flex-wrap items-center gap-1">
-                <span
-                  v-for="part in supervisionParts(currentItem)"
-                  :key="part"
-                  class="shrink-0 rounded-[4px] bg-white/5 px-1.5 py-[2px] text-[10px] text-[#858585]"
-                >
-                  {{ part }}
-                </span>
-              </div>
-              <div
-                v-if="currentItem.progressSummary"
-                class="mt-1.5 line-clamp-2 break-words text-[11px] leading-[15px] text-[#858585]"
-                :title="currentItem.progressSummary"
-              >
-                {{ currentItem.progressSummary }}
-              </div>
+          <span class="absolute inset-y-0 left-0 w-[3px]" :class="statusAccentClass(item)" aria-hidden="true" />
+          <div class="flex min-w-0 items-center gap-2">
+            <div class="min-w-0 flex-1 truncate text-[13px] font-medium text-white" :title="taskDescription(item)">
+              {{ taskDescription(item) }}
             </div>
-          </template>
-          <div class="mt-auto flex shrink-0 items-center justify-center gap-1.5 pb-2 pt-1.5">
-            <button
-              v-for="(item, index) in visibleItems"
-              :key="item.id"
-              type="button"
-              class="h-2 rounded-full transition-all duration-300"
-              :class="index === currentIndex ? 'w-5 bg-[#10AD5D]' : 'w-2 bg-[#3f3f3f] hover:bg-[#5a5a5a]'"
-              :aria-label="`查看任务 ${index + 1}`"
-              @click.stop="currentIndex = index"
-            />
-            <span class="ml-1 text-[10px] tabular-nums text-[#666]">{{ currentIndex + 1 }}/{{ visibleItems.length }}</span>
+            <span
+              class="center-row hidden shrink-0 gap-1 rounded-[5px] border border-white/10 bg-white/5 px-1.5 py-0.5 text-[11px] text-[#a3a3a3] sm:flex"
+              :title="taskModel(item)"
+            >
+              <span class="icon-[mdi--robot-outline] text-[12px] text-[#737373]" aria-hidden="true" />
+              <span class="max-w-[140px] truncate">{{ taskModel(item) }}</span>
+            </span>
+            <span
+              class="center-row shrink-0 gap-1.5 rounded-full border px-2 py-[2px] text-[11px] font-medium"
+              :class="statusPillClass(item)"
+              :title="taskStateLabel(item)"
+            >
+              <span class="size-1.5 rounded-full" :class="statusAccentClass(item)" aria-hidden="true" />
+              {{ taskStateLabel(item) }}
+            </span>
+            <Button
+              v-if="item.cancelable"
+              variant="text"
+              class="!text-[12px]"
+              :disabled="Boolean(state.canceling[item.id])"
+              @click.stop="handleCancel(item)"
+            >
+              {{ state.canceling[item.id] ? "取消中..." : "取消" }}
+            </Button>
+          </div>
+          <div class="mt-1 flex min-w-0 items-center gap-2 text-[11px] text-[#737373]">
+            <span class="center-row shrink-0 gap-1" :title="executionModeLabel(item)">
+              <span :class="executionModeIcon(item)" class="text-[12px]" aria-hidden="true" />
+              {{ executionModeLabel(item) }}
+            </span>
+            <template v-if="item.isSupervised">
+              <span
+                v-for="part in supervisionParts(item)"
+                :key="part"
+                class="shrink-0 rounded-[4px] bg-white/5 px-1.5 py-[2px] text-[10px] text-[#858585]"
+              >
+                {{ part }}
+              </span>
+            </template>
+            <span v-if="item.progressSummary" class="min-w-0 flex-1 truncate text-[#858585]" :title="item.progressSummary">
+              {{ item.progressSummary }}
+            </span>
           </div>
         </div>
-
-        <button
-          type="button"
-          class="flex w-7 shrink-0 cursor-pointer items-center justify-center rounded-[7px] border border-white/10 bg-black/15 text-[#a3a3a3] transition-all hover:border-[#10AD5D]/40 hover:bg-black/25 hover:text-white active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-white/10 disabled:hover:bg-black/15 disabled:hover:text-[#a3a3a3]"
-          :disabled="visibleItems.length <= 1"
-          aria-label="下一个任务"
-          title="下一个任务"
-          @click="rotateNext"
-        >
-          <span class="icon-[mdi--chevron-right] text-[16px]" aria-hidden="true" />
-        </button>
+      </div>
+      <div v-if="state.items.length > visibleItems.length" class="text-center text-[11px] text-[#666]">
+        还有 {{ state.items.length - visibleItems.length }} 个任务未显示
       </div>
     </div>
   </Card>

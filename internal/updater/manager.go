@@ -212,9 +212,20 @@ func (m *Manager) fetchUpdateInfo(ctx context.Context) (*UpdateInfo, error) {
 		return nil, err
 	}
 
+	return updateInfoFromManifest(data, platformKey)
+}
+
+func updateInfoFromManifest(data manifest, platformKey string) (*UpdateInfo, error) {
 	asset, ok := data.Platforms[platformKey]
 	if !ok {
+		if strings.HasPrefix(platformKey, "linux-") {
+			// Linux 更新资产未发布时静默跳过，避免将"暂未提供"误报为更新失败。
+			return nil, nil
+		}
 		return nil, errNoSupportedAsset
+	}
+	if err := validateManifestAsset(asset); err != nil {
+		return nil, err
 	}
 
 	return &UpdateInfo{
@@ -225,6 +236,26 @@ func (m *Manager) fetchUpdateInfo(ctx context.Context) (*UpdateInfo, error) {
 		PlatformKey:  platformKey,
 		Asset:        asset,
 	}, nil
+}
+
+// validateManifestAsset 校验 update.json 中平台资产字段的完整性，
+// 防止损坏/错误的 manifest 把空 URL 或非法校验和交给下载与安装流程。
+func validateManifestAsset(asset manifestPlatform) error {
+	if strings.TrimSpace(asset.URL) == "" {
+		return errors.New("update asset URL is empty")
+	}
+	if asset.Size <= 0 {
+		return errors.New("update asset size must be positive")
+	}
+
+	checksum := strings.TrimSpace(asset.Checksum)
+	if !strings.HasPrefix(checksum, "sha256:") || len(strings.TrimPrefix(checksum, "sha256:")) != sha256.Size*2 {
+		return errors.New("update asset checksum must be a sha256 digest")
+	}
+	if _, err := hex.DecodeString(strings.TrimPrefix(checksum, "sha256:")); err != nil {
+		return fmt.Errorf("invalid update asset checksum: %w", err)
+	}
+	return nil
 }
 
 func (m *Manager) downloadUpdate(ctx context.Context, info *UpdateInfo) (string, error) {

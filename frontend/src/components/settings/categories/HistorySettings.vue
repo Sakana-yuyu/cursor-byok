@@ -43,19 +43,24 @@ const groupedTree = computed(() => {
     days.get(dayKey).push(session);
   }
   const sortedYears = [...years.entries()].sort(([left], [right]) => right.localeCompare(left));
+  const countSessions = (daysMap) =>
+    [...daysMap.values()].reduce((sum, list) => sum + list.length, 0);
   return sortedYears.map(([year, monthsMap]) => ({
     key: year,
     label: year,
+    sessionCount: countSessions(monthsMap),
     months: [...monthsMap.entries()]
       .sort(([left], [right]) => right.localeCompare(left))
       .map(([month, daysMap]) => ({
         key: month,
         label: month,
+        sessionCount: countSessions(daysMap),
         days: [...daysMap.entries()]
           .sort(([left], [right]) => right.localeCompare(left))
           .map(([day, items]) => ({
             key: day,
             label: day,
+            sessionCount: items.length,
             sessions: items.sort((left, right) =>
               Number(right.updatedAtUnixMs || 0) - Number(left.updatedAtUnixMs || 0),
             ),
@@ -214,49 +219,52 @@ onMounted(() => {
         <div v-for="year in groupedTree" :key="year.key" class="rounded-[8px] border border-white/10 bg-black/15">
           <button
             type="button"
-            class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-white"
+            class="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-medium text-white transition-colors hover:bg-white/5"
             @click="toggleCollapsed(year.key)"
           >
             <span
-              class="icon-[mdi--chevron-down] text-[14px] text-[#858585] transition-transform"
-              :class="isCollapsed(year.key) ? '-rotate-90' : ''"
+              class="icon-[mdi--folder] text-[18px] text-[#d4a34a]"
+              :class="isCollapsed(year.key) ? 'icon-[mdi--folder]' : 'icon-[mdi--folder-open]'"
               aria-hidden="true"
             />
-            {{ year.label }}
+            <span class="min-w-0 truncate">{{ year.label }}</span>
+            <span class="ml-auto shrink-0 text-[11px] tabular-nums text-[#666]">{{ year.sessionCount }}</span>
           </button>
           <div v-if="!isCollapsed(year.key)" class="space-y-2 border-t border-white/10 px-3 py-2">
             <div v-for="month in year.months" :key="month.key" class="rounded-[6px] bg-white/[0.03]">
               <button
                 type="button"
-                class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-[#d4d4d4]"
+                class="flex w-full items-center gap-2.5 py-1.5 pl-6 pr-3 text-left text-xs text-[#d4d4d4] transition-colors hover:bg-white/5"
                 @click="toggleCollapsed(month.key)"
               >
                 <span
-                  class="icon-[mdi--chevron-down] text-[13px] text-[#858585] transition-transform"
-                  :class="isCollapsed(month.key) ? '-rotate-90' : ''"
+                  class="icon-[mdi--folder] text-[16px] text-[#d4a34a]"
+                  :class="isCollapsed(month.key) ? 'icon-[mdi--folder]' : 'icon-[mdi--folder-open]'"
                   aria-hidden="true"
                 />
-                {{ formatMonthLabel(month.label) }}
+                <span class="min-w-0 truncate">{{ formatMonthLabel(month.label) }}</span>
+                <span class="ml-auto shrink-0 text-[10px] tabular-nums text-[#666]">{{ month.sessionCount }}</span>
               </button>
               <div v-if="!isCollapsed(month.key)" class="space-y-1.5 px-2 pb-2">
                 <div v-for="day in month.days" :key="day.key" class="rounded-[6px] bg-white/[0.03]">
                   <button
                     type="button"
-                    class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-[#a3a3a3]"
+                    class="flex w-full items-center gap-2.5 py-1.5 pl-10 pr-3 text-left text-xs text-[#a3a3a3] transition-colors hover:bg-white/5"
                     @click="toggleCollapsed(day.key)"
                   >
                     <span
-                      class="icon-[mdi--chevron-down] text-[13px] text-[#858585] transition-transform"
-                      :class="isCollapsed(day.key) ? '-rotate-90' : ''"
+                      class="icon-[mdi--folder] text-[14px] text-[#d4a34a]"
+                      :class="isCollapsed(day.key) ? 'icon-[mdi--folder]' : 'icon-[mdi--folder-open]'"
                       aria-hidden="true"
                     />
-                    {{ formatDayLabel(day.label) }}
+                    <span class="min-w-0 truncate">{{ formatDayLabel(day.label) }}</span>
+                    <span class="ml-auto shrink-0 text-[10px] tabular-nums text-[#666]">{{ day.sessionCount }}</span>
                   </button>
                   <div v-if="!isCollapsed(day.key)" class="space-y-1 px-1 pb-1.5">
                     <label
                       v-for="session in day.sessions"
                       :key="session.id"
-                      class="flex cursor-pointer items-center gap-2 rounded-[6px] border border-white/5 bg-black/15 px-3 py-2 hover:border-white/15"
+                      class="flex cursor-pointer items-center gap-2.5 rounded-[6px] border border-white/5 bg-black/15 py-2 pl-14 pr-3 hover:border-white/15"
                     >
                       <input
                         type="checkbox"
@@ -264,6 +272,7 @@ onMounted(() => {
                         :checked="selectedIDs.has(session.id)"
                         @change="toggleSession(session.id)"
                       />
+                      <span class="icon-[mdi--file-document-outline] shrink-0 text-[15px] text-[#737373]" aria-hidden="true" />
                       <div class="min-w-0 flex-1">
                         <div class="flex min-w-0 items-center gap-2">
                           <span class="min-w-0 flex-1 truncate text-xs text-white" :title="sessionTitle(session)">

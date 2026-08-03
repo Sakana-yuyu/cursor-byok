@@ -318,7 +318,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 893,
+          "line": 912,
           "column": 32
         }
       ]
@@ -354,12 +354,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 806,
+          "line": 825,
           "column": 19
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 895,
+          "line": 914,
           "column": 19
         },
         {
@@ -992,7 +992,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 743,
+          "line": 762,
           "column": 16
         }
       ]
@@ -1372,7 +1372,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 920,
+          "line": 939,
           "column": 32
         }
       ]
@@ -2610,7 +2610,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 652,
+          "line": 671,
           "column": 30
         }
       ]
@@ -3384,7 +3384,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 920,
+          "line": 939,
           "column": 32
         }
       ]
@@ -3799,7 +3799,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 813,
+          "line": 832,
           "column": 32
         }
       ]
@@ -3886,7 +3886,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 854,
+          "line": 873,
           "column": 22
         }
       ]
@@ -3947,7 +3947,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 407,
+          "line": 426,
           "column": 10
         }
       ]
@@ -4087,7 +4087,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 938,
+          "line": 957,
           "column": 7
         }
       ]
@@ -4136,7 +4136,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 913,
+          "line": 932,
           "column": 32
         }
       ]
@@ -4184,7 +4184,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 769,
+          "line": 788,
           "column": 22
         }
       ]
@@ -4503,7 +4503,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 902,
+          "line": 921,
           "column": 32
         }
       ]
@@ -4631,7 +4631,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 366,
+          "line": 382,
           "column": 23
         }
       ]
@@ -5057,12 +5057,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 816,
+          "line": 835,
           "column": 22
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 905,
+          "line": 924,
           "column": 22
         }
       ]
@@ -5726,7 +5726,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 937,
+          "line": 956,
           "column": 19
         }
       ]
@@ -5815,7 +5815,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 399,
+          "line": 418,
           "column": 12
         }
       ]
@@ -5888,7 +5888,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 860,
+          "line": 879,
           "column": 92
         },
         {
@@ -5987,7 +5987,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 611,
+          "line": 630,
           "column": 7
         }
       ]
@@ -6799,7 +6799,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 923,
+          "line": 942,
           "column": 22
         }
       ]
@@ -6951,7 +6951,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 664,
+          "line": 683,
           "column": 19
         }
       ]
@@ -7486,7 +7486,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 521,
+          "line": 540,
           "column": 21
         }
       ]
@@ -7527,7 +7527,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 363,
+          "line": 379,
           "column": 23
         }
       ]
@@ -8191,7 +8191,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 739,
+          "line": 758,
           "column": 70
         }
       ]
@@ -8261,12 +8261,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 779,
+          "line": 798,
           "column": 67
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 867,
+          "line": 886,
           "column": 67
         }
       ]
@@ -8331,7 +8331,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 437,
+          "line": 456,
           "column": 25
         }
       ]
@@ -9065,7 +9065,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 405,
+          "line": 424,
           "column": 12
         }
       ]
@@ -9296,7 +9296,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 610,
+          "line": 629,
           "column": 7
         },
         {
@@ -9570,7 +9570,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 649,
+          "line": 668,
           "column": 54
         }
       ]
@@ -9875,7 +9875,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 703,
+          "line": 722,
           "column": 15
         }
       ]
@@ -10268,7 +10268,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 646,
+          "line": 665,
           "column": 25
         }
       ]
@@ -10321,7 +10321,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 937,
+          "line": 956,
           "column": 19
         },
         {
@@ -10486,12 +10486,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 816,
+          "line": 835,
           "column": 22
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 905,
+          "line": 924,
           "column": 22
         }
       ]
@@ -10520,7 +10520,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 923,
+          "line": 942,
           "column": 22
         },
         {
@@ -10591,7 +10591,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 620,
+          "line": 639,
           "column": 15
         }
       ]
@@ -10769,7 +10769,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 772,
+          "line": 791,
           "column": 69
         }
       ]
@@ -10803,7 +10803,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 695,
+          "line": 714,
           "column": 17
         }
       ]
@@ -10815,7 +10815,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 402,
+          "line": 421,
           "column": 12
         }
       ]
@@ -10837,17 +10837,17 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 660,
+          "line": 679,
           "column": 19
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 773,
+          "line": 792,
           "column": 28
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 861,
+          "line": 880,
           "column": 28
         },
         {
@@ -11151,7 +11151,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 693,
+          "line": 712,
           "column": 17
         }
       ]
@@ -11187,7 +11187,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 824,
+          "line": 843,
           "column": 32
         }
       ]
@@ -11575,7 +11575,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 556,
+          "line": 575,
           "column": 21
         }
       ]
@@ -11700,22 +11700,22 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 720,
+          "line": 739,
           "column": 15
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 728,
+          "line": 747,
           "column": 15
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 793,
+          "line": 812,
           "column": 21
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 882,
+          "line": 901,
           "column": 21
         },
         {
@@ -11812,7 +11812,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 923,
+          "line": 942,
           "column": 22
         }
       ]
@@ -12323,7 +12323,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 658,
+          "line": 677,
           "column": 19
         }
       ]
@@ -12650,7 +12650,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 453,
+          "line": 472,
           "column": 21
         }
       ]
@@ -13543,7 +13543,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 804,
+          "line": 823,
           "column": 32
         }
       ]
@@ -13798,7 +13798,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 486,
+          "line": 505,
           "column": 21
         }
       ]
@@ -13871,12 +13871,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 673,
+          "line": 692,
           "column": 17
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 674,
+          "line": 693,
           "column": 17
         },
         {
@@ -13994,7 +13994,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 743,
+          "line": 762,
           "column": 16
         }
       ]
@@ -14153,7 +14153,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 857,
+          "line": 876,
           "column": 89
         }
       ]
@@ -14192,17 +14192,17 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 659,
+          "line": 678,
           "column": 19
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 773,
+          "line": 792,
           "column": 28
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 861,
+          "line": 880,
           "column": 28
         },
         {
@@ -14378,7 +14378,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 858,
+          "line": 877,
           "column": 86
         }
       ]
@@ -15179,7 +15179,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 738,
+          "line": 757,
           "column": 154
         }
       ]
@@ -15319,7 +15319,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 923,
+          "line": 942,
           "column": 22
         }
       ]
@@ -16117,7 +16117,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 470,
+          "line": 489,
           "column": 23
         }
       ]

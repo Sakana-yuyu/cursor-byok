@@ -241,6 +241,7 @@ func discoverMCPTools(ctx context.Context, server normalizedMCPServer) ([]*agent
 	defer cancel()
 
 	cmd := exec.CommandContext(discoveryCtx, server.Command, server.Args...)
+	cmd.SysProcAttr = hiddenWindowAttr()
 	if cwd := strings.TrimSpace(server.Cwd); cwd != "" {
 		cmd.Dir = cwd
 	}

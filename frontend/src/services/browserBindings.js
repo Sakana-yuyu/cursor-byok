@@ -694,3 +694,9 @@ export const DisconnectMCPServer = (_workspaceRoot, identifier) => {
   return Promise.resolve(clone(server));
 };
 export const CancelMCPServerConnection = (_identifier, _attemptID) => Promise.resolve(true);
+export const GetCursorAccountStatus = () =>
+  Promise.resolve({ state: "signed_out", authId: "", email: "", error: "" });
+export const StartCursorAccountLogin = () =>
+  Promise.resolve({ state: "waiting", authId: "", email: "", error: "浏览器预览模式：模拟登录中" });
+export const DisconnectCursorAccount = () =>
+  Promise.resolve({ state: "signed_out", authId: "", email: "", error: "" });

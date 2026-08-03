@@ -296,7 +296,7 @@ const title = computed(() => {
   return isQuickMode.value ? "快速添加模型" : "编辑模型配置";
 });
 
-// 高级设置分区：默认收起，存量非默认配置自动展开
+// 高级设置分区：始终默认收起，用户手动展开。
 const advancedExpanded = ref(false);
 
 function hasBalanceQueryHeadersOverride(value) {
@@ -406,9 +406,6 @@ async function loadContext() {
     draft.type = "openai";
   } finally {
     loading.value = false;
-    if (hasAdvancedOverrides.value) {
-      advancedExpanded.value = true;
-    }
   }
 }
 
@@ -827,12 +824,28 @@ onMounted(async () => {
             </div>
             <label class="flex flex-col gap-1 md:col-span-2">
               <span class="text-sm text-[#d4d4d4]">供应商模板</span>
-              <Select
-                :model-value="draft.supplierID"
-                :options="supplierOptions"
-                button-class="h-9 text-sm"
-                @update:model-value="handleSupplierChange"
-              />
+              <div class="grid max-h-56 grid-cols-2 gap-1.5 overflow-y-auto pr-0.5 sm:grid-cols-3 lg:grid-cols-4">
+                <button
+                  v-for="option in supplierOptions"
+                  :key="option.value"
+                  type="button"
+                  class="flex min-w-0 items-center gap-1.5 rounded-[6px] border px-2 py-1.5 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35"
+                  :class="draft.supplierID === option.value
+                    ? 'border-[#10AD5D] bg-[#10AD5D]/10 text-white'
+                    : 'border-white/10 bg-black/15 text-[#a3a3a3] hover:border-white/25 hover:text-white'"
+                  :title="option.label"
+                  @click="handleSupplierChange(option.value)"
+                >
+                  <img
+                    v-if="option.iconURL"
+                    :src="option.iconURL"
+                    :alt="option.label"
+                    :class="['size-4 shrink-0 object-contain', option.iconLight ? 'brightness-0 invert' : '']"
+                    loading="lazy"
+                  />
+                  <span class="min-w-0 truncate">{{ option.label }}</span>
+                </button>
+              </div>
               <span class="text-xs text-[#8f8f8f]">
                 选择固定供应商会自动填充接口地址、协议和常用模型；仍可在下方覆盖。
               </span>
@@ -914,7 +927,28 @@ onMounted(async () => {
             <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
           <label class="flex flex-col gap-1 md:col-span-2">
             <span class="text-sm text-[#d4d4d4]">供应商模板</span>
-            <Select :model-value="draft.supplierID" :options="supplierOptions" @update:model-value="handleSupplierChange" />
+            <div class="grid max-h-56 grid-cols-2 gap-1.5 overflow-y-auto pr-0.5 sm:grid-cols-3 lg:grid-cols-4">
+              <button
+                v-for="option in supplierOptions"
+                :key="option.value"
+                type="button"
+                class="flex min-w-0 items-center gap-1.5 rounded-[6px] border px-2 py-1.5 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35"
+                :class="draft.supplierID === option.value
+                  ? 'border-[#10AD5D] bg-[#10AD5D]/10 text-white'
+                  : 'border-white/10 bg-black/15 text-[#a3a3a3] hover:border-white/25 hover:text-white'"
+                :title="option.label"
+                @click="handleSupplierChange(option.value)"
+              >
+                <img
+                  v-if="option.iconURL"
+                  :src="option.iconURL"
+                  :alt="option.label"
+                  :class="['size-4 shrink-0 object-contain', option.iconLight ? 'brightness-0 invert' : '']"
+                  loading="lazy"
+                />
+                <span class="min-w-0 truncate">{{ option.label }}</span>
+              </button>
+            </div>
             <span class="text-xs text-[#8f8f8f]">选择固定供应商会自动填充接口地址、协议和常用模型；仍可在下方覆盖。</span>
           </label>
 
@@ -1209,9 +1243,10 @@ onMounted(async () => {
         </div>
         </div>
 
+        <div class="overflow-hidden rounded-[8px] border border-[#343434] bg-[#252525]">
         <button
           type="button"
-          class="center-row w-full justify-between gap-3 rounded-[8px] border border-[#343434] bg-[#252525] px-3 py-2 text-left transition-colors hover:border-[#4a4a4a] focus:outline-none focus:ring-1 focus:ring-[#10AD5D]"
+          class="center-row w-full justify-between gap-3 px-3 py-2 text-left transition-colors hover:bg-white/5 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[#10AD5D]"
           :aria-expanded="advancedExpanded"
           aria-controls="model-editor-advanced-settings"
           @click="advancedExpanded = !advancedExpanded"
@@ -1236,7 +1271,7 @@ onMounted(async () => {
         <div
           v-if="advancedExpanded"
           id="model-editor-advanced-settings"
-          class="flex flex-col gap-3 rounded-[8px] border border-[#343434] bg-[#252525] p-3"
+          class="flex flex-col gap-3 border-t border-[#343434] p-3"
         >
           <div>
             <div class="text-sm font-medium text-[#e5e5e5]">协议与高级参数</div>
@@ -1363,9 +1398,6 @@ onMounted(async () => {
 
         <div class="rounded-[8px] border border-[#343434] bg-[#252525] p-3">
           <div class="mb-2 text-sm text-[#d4d4d4]">余额 / 套餐查询</div>
-          <p class="mb-3 text-xs leading-5 text-[#8f8f8f]">
-            对齐 cc-switch：自定义、通用模板、New API、Token Plan 与官方余额查询分别使用对应的请求方式。
-          </p>
           <label class="mb-3 flex flex-col gap-1">
             <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
               <Tooltip :content="fieldTips.balanceProfile" />
@@ -1479,6 +1511,7 @@ onMounted(async () => {
               class="min-h-[96px] w-full resize-none rounded-[6px] border border-[#3f3f3f] bg-[#1f1f1f] px-3 py-2 font-mono text-xs text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
             />
           </label>
+        </div>
         </div>
         </div>
 

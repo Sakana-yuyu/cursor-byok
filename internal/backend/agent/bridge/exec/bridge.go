@@ -871,10 +871,14 @@ func (bridge *Bridge) openTask(openContext OpenExecContext, toolCall runtimecore
 	if subagentType == "" {
 		return nil, runtimecore.PendingExec{}, fmt.Errorf("task subagent_type is required")
 	}
+	capability, err := runtimecore.ResolveTaskSubagentCapabilityFromArgs(args)
+	if err != nil {
+		return nil, runtimecore.PendingExec{}, fmt.Errorf("invalid Task authorization: %w", err)
+	}
 	messageID := bridge.nextID()
 	now := time.Now().UTC()
 	execID := fmt.Sprintf("exec-subagent-%d", now.UnixNano())
-	readonly := readBoolArg(args, "readonly", "readOnly")
+	readonly := capability.Readonly
 	runInBackground := readBoolArg(args, "run_in_background", "runInBackground")
 	interrupt := readBoolArg(args, "interrupt")
 	parentConversationID := strings.TrimSpace(openContext.ConversationID)
@@ -2089,7 +2093,7 @@ func buildReadLintsCompletedToolCall(argsJSON []byte, result *agentv1.Diagnostic
 // buildTaskCompletedToolCall 构造 Task 对应的完成态 ToolCall。
 func buildTaskCompletedToolCall(argsJSON []byte, result *agentv1.SubagentResult) *agentv1.ToolCall {
 	args, _ := decodeArgsMap(argsJSON)
-	readonly := readBoolArg(args, "readonly", "readOnly")
+	capability, _ := runtimecore.ResolveTaskSubagentCapabilityFromArgs(args)
 	taskArgs := &agentv1.TaskArgs{
 		Description:  strings.TrimSpace(readStringArg(args, "description")),
 		Prompt:       strings.TrimSpace(readStringArg(args, "prompt")),
@@ -2097,7 +2101,7 @@ func buildTaskCompletedToolCall(argsJSON []byte, result *agentv1.SubagentResult)
 		Model:        stringPtr(strings.TrimSpace(readStringArg(args, "model"))),
 		Resume:       stringPtr(strings.TrimSpace(readStringArg(args, "resume"))),
 		Attachments:  readStringSliceArg(args, "attachments"),
-		Mode:         taskModeFromReadonly(readonly),
+		Mode:         taskModeFromReadonly(capability.Readonly),
 	}
 	if agentID := strings.TrimSpace(readStringArg(args, "agentId", "agent_id")); agentID != "" {
 		taskArgs.AgentId = &agentID

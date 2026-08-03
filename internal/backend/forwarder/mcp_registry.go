@@ -587,6 +587,7 @@ func mcpRuntimeTransport(config MCPServerConfig) (mcp.Transport, *mcpStderrBuffe
 			return nil, nil, err
 		}
 		cmd := exec.Command(resolved, config.Args...)
+		cmd.SysProcAttr = hiddenWindowAttr()
 		if cwd := strings.TrimSpace(config.Cwd); cwd != "" {
 			cmd.Dir = cwd
 		}

@@ -8,7 +8,9 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -17,10 +19,45 @@ import (
 
 const (
 	windowsRootStoreName  = "Root"
-	windowsCertutilExe    = "certutil.exe"
-	windowsPowerShellExe  = "powershell.exe"
 	windowsUserCancelCode = 1223
 )
+
+// windowsSystemExecutable 基于 SystemRoot/windir 定位 Windows 系统工具绝对路径，
+// 避免依赖 PATH 查找（PATH 可被环境变量注入劫持，影响提权安全）。
+func windowsSystemExecutable(parts ...string) (string, error) {
+	roots := []string{
+		strings.TrimSpace(os.Getenv("SystemRoot")),
+		strings.TrimSpace(os.Getenv("windir")),
+	}
+
+	var lastErr error
+	for _, root := range roots {
+		if root == "" {
+			continue
+		}
+		if !filepath.IsAbs(root) {
+			lastErr = fmt.Errorf("Windows 系统目录不是绝对路径: %s", root)
+			continue
+		}
+
+		path := filepath.Join(append([]string{root}, parts...)...)
+		info, err := os.Stat(path)
+		if err != nil {
+			lastErr = fmt.Errorf("访问 Windows 系统工具 %s 失败: %w", path, err)
+			continue
+		}
+		if info.IsDir() {
+			lastErr = fmt.Errorf("Windows 系统工具路径指向目录: %s", path)
+			continue
+		}
+		return path, nil
+	}
+
+	if lastErr != nil {
+		return "", lastErr
+	}
+	return "", fmt.Errorf("无法确定 Windows 系统目录，请检查 SystemRoot 或 windir 环境变量")
+}
 
 // getCertThumbprint 获取证书的SHA1指纹，用于唯一标识证书
 func getCertThumbprint(certPEM []byte) (string, error) {
@@ -52,7 +89,12 @@ func isCACertInstalled(certPEM []byte) (bool, error) {
 		return false, fmt.Errorf("获取证书指纹失败: %w", err)
 	}
 
-	cmd := exec.Command(windowsCertutilExe, "-verifystore", windowsRootStoreName, thumbprint)
+	certutilPath, err := windowsSystemExecutable("System32", "certutil.exe")
+	if err != nil {
+		return false, fmt.Errorf("定位 certutil 失败: %w", err)
+	}
+
+	cmd := exec.Command(certutilPath, "-verifystore", windowsRootStoreName, thumbprint)
 	cmd.SysProcAttr = hideWindow()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -81,6 +123,15 @@ func quotePowerShellLiteral(value string) string {
 }
 
 func runElevatedCertutil(args ...string) error {
+	certutilPath, err := windowsSystemExecutable("System32", "certutil.exe")
+	if err != nil {
+		return fmt.Errorf("定位 certutil 失败: %w", err)
+	}
+	powerShellPath, err := windowsSystemExecutable("System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+	if err != nil {
+		return fmt.Errorf("定位 Windows PowerShell 失败: %w", err)
+	}
+
 	quotedArgs := make([]string, 0, len(args))
 	for _, arg := range args {
 		quotedArgs = append(quotedArgs, quotePowerShellLiteral(arg))
@@ -88,12 +139,12 @@ func runElevatedCertutil(args ...string) error {
 
 	script := fmt.Sprintf(
 		"$process = Start-Process -FilePath %s -ArgumentList @(%s) -Verb RunAs -WindowStyle Hidden -Wait -PassThru; exit $process.ExitCode",
-		quotePowerShellLiteral(windowsCertutilExe),
+		quotePowerShellLiteral(certutilPath),
 		strings.Join(quotedArgs, ","),
 	)
 
 	cmd := exec.Command(
-		windowsPowerShellExe,
+		powerShellPath,
 		"-NoProfile",
 		"-NonInteractive",
 		"-ExecutionPolicy",

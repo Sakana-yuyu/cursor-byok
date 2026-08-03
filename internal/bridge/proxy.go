@@ -828,7 +828,11 @@ func (s *ProxyService) ConnectMCPServer(workspaceRoot string, identifier string,
 		return forwarder.MCPServerSnapshotItem{}, err
 	}
 	settings := skillMCPScanSettings(cfg.SkillMCPScan)
-	configs := forwarder.ScanMCPServerConfigs(workspaceRoot, settings)
+	// 显式连接即用户信任该 server：不受扫描总开关影响（总开关只控制是否注入 agent 会话），
+	// 但仍尊重 mcp.json 配置级 enabled 与 DisabledMCPServers 显式禁用。
+	connectSettings := settings
+	connectSettings.Enabled = true
+	configs := forwarder.ScanMCPServerConfigs(workspaceRoot, connectSettings)
 	registry := forwarder.SharedMCPRuntimeRegistry()
 	forwarder.SyncMCPRuntimeForWorkspace(registry, workspaceRoot, enabledMCPConfigs(configs))
 	target, ok := findEnabledMCPServerConfig(configs, forwarder.MCPRuntimeScope(workspaceRoot), identifier)

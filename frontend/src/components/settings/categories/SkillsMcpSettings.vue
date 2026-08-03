@@ -322,6 +322,11 @@ async function handleMcpToggle(server, enabled) {
   const itemState = ensureMcpState(itemKey);
   const previousValue = isMcpEnabled(identifier);
   state.disabledMcpServers = setDisabledMapEntry(state.disabledMcpServers, itemKey, !enabled);
+  // 启用任一 MCP server 隐含开启扫描总开关，避免 UI 显示已启用而后端扫描仍全部禁用。
+  const scanWasOff = !state.enabled;
+  if (enabled && scanWasOff) {
+    state.enabled = true;
+  }
   itemState.busy = true;
   itemState.error = "";
   itemState.retry = () => handleMcpToggle(server, enabled);
@@ -332,6 +337,9 @@ async function handleMcpToggle(server, enabled) {
       itemState.error = "";
     } catch (error) {
       state.disabledMcpServers = setDisabledMapEntry(state.disabledMcpServers, itemKey, !previousValue);
+      if (scanWasOff) {
+        state.enabled = false;
+      }
       itemState.error = toUserError(error);
       throw error;
     } finally {
@@ -353,11 +361,19 @@ async function handleMcpConnection(server) {
   }
   const disconnect = server?.status === "connected";
   const attemptID = `mcp-connect-${Date.now()}-${mcpAttemptSequence += 1}`;
+  // 连接隐含开启扫描总开关：快照刷新会用当前 settings 重建 runtime，总开关关闭时刚建立的连接会被清掉。
+  const scanWasOff = !state.enabled;
+  if (!disconnect && scanWasOff) {
+    state.enabled = true;
+  }
   itemState.busy = true;
   itemState.error = "";
   itemState.retry = () => handleMcpConnection(server);
 
   try {
+    if (scanWasOff && !disconnect) {
+      await persistScanConfig(`skills-mcp.connect-${itemKey}`);
+    }
     if (disconnect) {
       await disconnectMCPRuntimeServer(identifier, WORKSPACE_ROOT);
       message.success("已断开连接");
@@ -366,6 +382,9 @@ async function handleMcpConnection(server) {
       message.success("连接成功");
     }
   } catch (error) {
+    if (scanWasOff && !disconnect) {
+      state.enabled = false;
+    }
     itemState.error = toUserError(error);
   } finally {
     itemState.busy = false;
@@ -412,6 +431,20 @@ function formatMcpStatus(status) {
 // skillSummaryOf 返回技能的中文简介（无则空串）。
 function skillSummaryOf(name) {
   return state.skillSummaries[normalizeConfigKey(name)] || "";
+}
+
+// skillDiagnosticMessage 返回技能的首个诊断消息（无则空串）。
+function skillDiagnosticMessage(skill) {
+  const first = Array.isArray(skill?.diagnostics) ? skill.diagnostics[0] : null;
+  return first?.message || "";
+}
+
+// skillInvalidReason 无效技能（目录缺失 SKILL.md 或 manifest 校验失败）的原因文本。
+function skillInvalidReason(skill) {
+  if (skill?.valid !== false) {
+    return "";
+  }
+  return skillDiagnosticMessage(skill) || "SKILL.md 缺失或无效";
 }
 
 // mcpSummaryOf 返回 MCP server 的中文简介（无则空串）。
@@ -532,7 +565,11 @@ async function generateAllSummaries() {
     return;
   }
   const kind = state.activeTab === "mcp" ? "mcp" : "skill";
-  const items = kind === "mcp" ? filteredMcpServers.value : filteredSkills.value;
+  // 无效技能（目录缺 SKILL.md 或 manifest 无效）无法生成简介，跳过并在结果中提示。
+  const items = kind === "mcp"
+    ? filteredMcpServers.value
+    : filteredSkills.value.filter((skill) => skill?.valid !== false);
+  const skippedCount = filteredSkills.value.length - items.length;
   if (!items.length) {
     return;
   }
@@ -553,7 +590,11 @@ async function generateAllSummaries() {
       }
       summaryBatchState.done += 1;
     }
-    message.success(`已为 ${items.length} 个条目生成简介`);
+    message.success(
+      skippedCount > 0
+        ? `已为 ${items.length} 个条目生成简介（跳过 ${skippedCount} 个无效技能）`
+        : `已为 ${items.length} 个条目生成简介`,
+    );
   } catch (error) {
     summaryBatchState.error = toUserError(error);
     message.error(summaryBatchState.error);
@@ -572,7 +613,8 @@ const filteredSkills = computed(() => state.skills.filter((skill) => {
     skill?.fullPath,
   ]) && matchesStatusFilter({
     enabled,
-    error: itemState.error,
+    // 无效技能（目录缺 SKILL.md 等）归入「错误」筛选，便于定位坏条目。
+    error: itemState.error || skillInvalidReason(skill),
   });
 }));
 
@@ -761,6 +803,13 @@ onMounted(() => {
                   <h3 class="min-w-0 text-sm font-medium text-white" :title="skill.name">
                     {{ skill.name }}
                   </h3>
+                  <span
+                    v-if="skill.valid === false"
+                    class="rounded-full border border-[#4b1d1d] bg-[#2a1313] px-2 py-0.5 text-[11px] text-[#f2a7a7]"
+                    title="该目录缺少有效的 SKILL.md，不会被技能扫描启用"
+                  >
+                    无效
+                  </span>
                   <span class="rounded-full border border-[#3b3b3b] px-2 py-0.5 text-[11px] text-[#8f8f8f]">
                     {{ skill.source || "other" }}
                   </span>
@@ -768,6 +817,13 @@ onMounted(() => {
                 <p class="break-words text-xs leading-5 text-[#8f8f8f]">
                   {{ skill.description || "暂无描述" }}
                 </p>
+                <div
+                  v-if="skillInvalidReason(skill)"
+                  class="rounded-[6px] border border-[#4b1d1d] bg-[#2a1313]/60 px-2.5 py-1.5 text-xs leading-5 text-[#f2a7a7]"
+                >
+                  <span class="mr-1.5 font-medium">无效原因</span>
+                  {{ skillInvalidReason(skill) }}
+                </div>
                 <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#737373]">
                   <span class="truncate" :title="skill.fullPath">{{ skill.fullPath || "未提供路径" }}</span>
                   <span>{{ isSkillEnabled(skill.name) ? "已启用" : "已停用" }}</span>
@@ -800,7 +856,8 @@ onMounted(() => {
                 <button
                   type="button"
                   class="shrink-0 rounded-[6px] border border-[#3b3b3b] bg-[#202020] px-2.5 py-1 text-xs text-[#c7c7c7] transition-colors hover:border-[#10AD5D]/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35 disabled:cursor-not-allowed disabled:opacity-50"
-                  :disabled="ensureSkillState(normalizeConfigKey(skill.name)).busy || snapshotState.refreshing"
+                  :disabled="skill.valid === false || ensureSkillState(normalizeConfigKey(skill.name)).busy || snapshotState.refreshing"
+                  :title="skill.valid === false ? '该目录缺少有效的 SKILL.md，无法编辑' : `编辑技能 ${skill.name}`"
                   :aria-label="`编辑技能 ${skill.name}`"
                   @click="openSkillEditor(skill)"
                 >
@@ -809,7 +866,8 @@ onMounted(() => {
                 <button
                   type="button"
                   class="shrink-0 rounded-[6px] border border-[#3b3b3b] bg-[#202020] px-2.5 py-1 text-xs text-[#c7c7c7] transition-colors hover:border-[#10AD5D]/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35 disabled:cursor-not-allowed disabled:opacity-50"
-                  :disabled="ensureSkillState(normalizeConfigKey(skill.name)).busy || snapshotState.refreshing"
+                  :disabled="skill.valid === false || ensureSkillState(normalizeConfigKey(skill.name)).busy || snapshotState.refreshing"
+                  :title="skill.valid === false ? '该目录缺少有效的 SKILL.md，无法生成简介' : `为技能 ${skill.name} 生成简介`"
                   :aria-label="`为技能 ${skill.name} 生成简介`"
                   @click="generateSummary('skill', skill.name)"
                 >
@@ -820,7 +878,7 @@ onMounted(() => {
                   label=""
                   :enabled="isSkillEnabled(skill.name)"
                   :busy="ensureSkillState(normalizeConfigKey(skill.name)).busy"
-                  :disabled="ensureSkillState(normalizeConfigKey(skill.name)).busy || snapshotState.refreshing"
+                  :disabled="skill.valid === false || ensureSkillState(normalizeConfigKey(skill.name)).busy || snapshotState.refreshing"
                   :aria-label="`切换技能 ${skill.name}`"
                   @change="(value) => handleSkillToggle(skill, value)"
                 />

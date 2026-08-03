@@ -1460,6 +1460,12 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 		return nil
 	}
 	markExecCompleted(stream, pending)
+	// Shell 指纹熔断：terminal 拒绝事件计入本轮账本，达到阈值后开路。
+	if strings.TrimSpace(pending.ExecKind) == "shell" {
+		if err := service.recordShellRejection(stream, pending, intent.ExecClientMessage); err != nil {
+			return err
+		}
+	}
 	if strings.TrimSpace(pending.ExecKind) == "subagent" {
 		status := delegation.TaskCompleted
 		progress := "Cursor 子代理已完成"
@@ -2322,6 +2328,27 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 	if err := providerLoopInterruptErr(nil, stream, invocation.ModelCallID); err != nil {
 		return err
 	}
+	// Shell 指纹熔断：本轮内同一确定性拒绝达到阈值后，Shell 对剩余轮次不可用。
+	if strings.TrimSpace(invocation.ToolName) == "Shell" {
+		circuit := currentTurnShellCircuit(stream)
+		if circuit.Open {
+			stream.mu.Lock()
+			stream.ToolInvocationCount++
+			stream.UpdatedAt = time.Now().UTC()
+			stream.mu.Unlock()
+			if err := service.recordShellCircuitLocalBlock(stream, invocation, circuit); err != nil {
+				return err
+			}
+			cause := fmt.Errorf("Shell is unavailable for the rest of this turn after a %s rejection; use a non-Shell tool or finish with the blocker", circuit.RejectionClass)
+			if err := service.completePreDispatchToolError(stream, invocation, nil, false, false, cause); err != nil {
+				return err
+			}
+			if circuit.LocalBlocks+1 >= shellCircuitLocalBlockLimit {
+				return providerTerminalError{cause: fmt.Errorf("Shell circuit stopped the provider loop after %d local blocks", circuit.LocalBlocks+1)}
+			}
+			return nil
+		}
+	}
 	invocation = service.rewriteDirectMCPToolInvocation(stream, invocation)
 	invocation = service.normalizeCallMCPToolInvocation(stream, invocation)
 	trimmedToolName := strings.TrimSpace(invocation.ToolName)
@@ -2383,6 +2410,23 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 	}
 	if !isToolAllowedInMode(mode, subagentTypeName, trimmedToolName) {
 		return service.completePreDispatchToolError(stream, invocation, nil, false, false, fmt.Errorf("tool invocation is not enabled in mode %s: %s", mode.String(), invocation.ToolName))
+	}
+	// inspect 子代理（Task 子会话 + PLAN 模式）的 Shell 调用在服务端强制只读白名单，
+	// 校验失败直接拒绝，不依赖提示词描述；校验通过时注入 --no-pager 等保护参数。
+	if trimmedToolName == "Shell" && isChildConversationSubagentTypeName(subagentTypeName) && normalizeMode(mode) == agentv1.AgentMode_AGENT_MODE_PLAN {
+		rewritten, policyErr := service.enforceReadonlyShellPolicy(stream, invocation)
+		if policyErr != nil {
+			opened, recordErr := service.recordPreDispatchShellRejection(stream, invocation, policyErr)
+			if recordErr != nil {
+				return recordErr
+			}
+			if opened {
+				// 第二次同指纹失败：附上明确纠正指引并开路，后续同类调用被 circuit.Open 分支拦截。
+				policyErr = fmt.Errorf("%s. Do not retry this Shell command this turn — the same deterministic validation error will repeat and Shell is now blocked; use Read/Grep/Glob instead or report the blocker", policyErr.Error())
+			}
+			return service.completePreDispatchToolError(stream, invocation, nil, false, false, policyErr)
+		}
+		invocation = rewritten
 	}
 	var err error
 	invocation, err = service.sanitizeCreatePlanInvocationForCurrentPlan(stream, invocation)
