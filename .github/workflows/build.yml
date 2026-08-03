@@ -564,9 +564,13 @@ jobs:
           jq -e --arg version "$VERSION" '
             .version == $version and
             (.platforms | keys | sort) == [
+              "linux-amd64",
               "linux-x64",
+              "macos-amd64",
               "macos-arm64",
               "macos-x64",
+              "windows-386",
+              "windows-amd64",
               "windows-arm64",
               "windows-x32",
               "windows-x64"

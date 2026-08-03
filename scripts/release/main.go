@@ -50,6 +50,17 @@ var releaseAssets = []assetSpec{
 	{platform: "linux-x64", suffix: ".tar.gz"},
 }
 
+// legacyPlatformAlias 把新命名平台 key 映射回旧客户端（0.0.77 及更早）硬编码的 key。
+// 旧客户端按旧 key（windows-386 / windows-amd64 / macos-amd64 / linux-amd64）查找
+// update.json 的 platforms；新版本只产出新命名（x32/x64/macos/linux-x64）资产，
+// 若不写入旧 key 别名，旧客户端会因找不到平台 key 而无法自动升级、只能手动下载。
+var legacyPlatformAlias = map[string]string{
+	"macos-x64":   "macos-amd64",
+	"windows-x64": "windows-amd64",
+	"windows-x32": "windows-386",
+	"linux-x64":   "linux-amd64",
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		exitf("usage: go run ./scripts/release <version|notes|manifest> [flags]")
@@ -156,6 +167,10 @@ func runManifest(args []string) {
 			exitErr(err)
 		}
 		manifest.Platforms[spec.platform] = asset
+		// 旧平台 key 别名指向同一资产，保证旧版本客户端自动升级不中断。
+		if legacy, ok := legacyPlatformAlias[spec.platform]; ok {
+			manifest.Platforms[legacy] = asset
+		}
 	}
 
 	if err := os.MkdirAll(filepath.Dir(*outputPath), 0o755); err != nil {
