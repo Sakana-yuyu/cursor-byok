@@ -40,10 +40,13 @@ var commitLanguageHardPrompts = map[string]string{
 }
 
 // commitLanguageHardPrompt 按语言代码返回强制指令；auto 或未知名回退到中文。
+// 空语言（前端未开启提交本地化开关、或 auto 未解析出具体语言）同样回退中文：
+// 静态 prompt 只有 "by default" 弱约束，不足以对抗 Recent commit messages 中的
+// 英文历史示例，必须注入强制指令才能保证默认输出中文。
 func commitLanguageHardPrompt(language string) string {
 	lang := strings.ToLower(strings.TrimSpace(language))
 	if lang == "" {
-		return ""
+		return commitLanguageHardPrompts["zh-cn"]
 	}
 	if prompt, ok := commitLanguageHardPrompts[lang]; ok {
 		return prompt
@@ -51,7 +54,7 @@ func commitLanguageHardPrompt(language string) string {
 	if lang == "auto" {
 		return commitLanguageHardPrompts["zh-cn"]
 	}
-	return ""
+	return commitLanguageHardPrompts["zh-cn"]
 }
 
 // WriteGitCommitMessage handles Cursor's SCM "Generate Commit Message" action.

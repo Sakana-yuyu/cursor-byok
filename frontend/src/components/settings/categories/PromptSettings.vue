@@ -30,13 +30,25 @@ const message = useMessage();
 const { locale: interfaceLocale } = useLocale();
 
 // Git 提交文本本地化语言选项；auto 表示跟随界面语言。
+// 值统一使用小写（zh-cn/en-us/ja-jp/ru-ru）：后端 normalizeConfig 会把语言
+// 强制小写持久化，若这里用大写（zh-CN），加载时大小写敏感匹配会失败并被重置
+// 回 auto——即「选择其他语言无法生效」的根因。
 const commitLanguageOptions = [
   { value: "auto", label: "跟随界面语言" },
-  { value: "zh-CN", label: "简体中文" },
-  { value: "en-US", label: "English" },
-  { value: "ja-JP", label: "日本語" },
-  { value: "ru-RU", label: "Русский" },
+  { value: "zh-cn", label: "简体中文" },
+  { value: "en-us", label: "English" },
+  { value: "ja-jp", label: "日本語" },
+  { value: "ru-ru", label: "Русский" },
 ];
+
+// normalizeCommitMessageLanguage 把后端返回的语言值归一化为选项中的值。
+// 兼容旧配置可能残留的大写写法（zh-CN/en-US）与后端小写归一化（zh-cn/en-us）：
+// 大小写不敏感匹配，匹配不到（未知语言）时回退 auto。
+function normalizeCommitMessageLanguage(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  const option = commitLanguageOptions.find((item) => String(item.value || "").trim().toLowerCase() === normalized);
+  return option ? option.value : "auto";
+}
 
 // interfaceLocaleToCode 把界面语言代码归一化为后端可用的语言代码。
 function interfaceLocaleToCode(localeValue) {
@@ -123,9 +135,7 @@ function applyPromptStatus(status) {
     enabled: Boolean(value.enabled),
     softwareChineseEnabled: Boolean(value.softwareChineseEnabled),
     commitMessageEnabled: Boolean(value.commitMessageEnabled),
-    commitMessageLanguage: commitLanguageOptions.some((option) => option.value === value.commitMessageLanguage)
-      ? value.commitMessageLanguage
-      : "auto",
+    commitMessageLanguage: normalizeCommitMessageLanguage(value.commitMessageLanguage),
     customEnabled: Boolean(value.customEnabled),
     customContent: value.customContent || "",
     mode: value.mode === "append" ? "append" : "replace",
