@@ -29,6 +29,7 @@ import {
   stopProxyService,
   testModelAdapter,
   repairProxySettings,
+  restartCursor,
 } from "@/services/clientApi";
 
 const APP_STATE_STORAGE_KEY = "cursor-client:runtime-state:v2";
@@ -2428,6 +2429,15 @@ export async function openLocalLogsDirectory() {
 export async function repairProxyAction() {
   try {
     const result = await repairProxySettings();
+    return { ok: true, result: result || {}, error: "" };
+  } catch (error) {
+    return { ok: false, result: null, error: toUserError(error) };
+  }
+}
+
+export async function restartCursorAction(manualPath = "") {
+  try {
+    const result = await restartCursor("", manualPath);
     return { ok: true, result: result || {}, error: "" };
   } catch (error) {
     return { ok: false, result: null, error: toUserError(error) };

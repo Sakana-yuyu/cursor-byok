@@ -71,7 +71,7 @@ func (s *ProxyService) RepairProxySettings() (ProxyRepairResult, error) {
 		SettingsApplied: applied,
 		SettingsPath:    settingsPath,
 		ProxyURL:        proxyURL,
-		CursorRunning:   isCursorProcessRunning(),
+		CursorRunning:   IsCursorProcessRunning(),
 		Details:         details,
 	}
 	if verifyErr != nil {
@@ -93,8 +93,8 @@ func (s *ProxyService) RepairProxySettings() (ProxyRepairResult, error) {
 	return result, nil
 }
 
-// isCursorProcessRunning 检测 Cursor 进程是否正在运行。
-func isCursorProcessRunning() bool {
+// IsCursorProcessRunning 检测 Cursor 进程是否正在运行。
+func IsCursorProcessRunning() bool {
 	switch goruntime.GOOS {
 	case "windows":
 		out, err := exec.Command("tasklist", "/FI", "IMAGENAME eq Cursor.exe", "/NH").Output()

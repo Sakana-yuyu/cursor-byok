@@ -307,6 +307,7 @@ export function refreshPromptInjectionCatalog() { return desktopOrMock(undefined
 
 export function detectCursorPath(manualPath = "") { return desktopOrMock("", "@bindings/cursor/internal/bridge/windowservice.js", "DetectCursorPath", [manualPath || ""]); }
 export function launchCursor(workspaceDir, manualPath = "") { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "LaunchCursor", [workspaceDir || "", manualPath || ""]); }
+export function restartCursor(workspaceDir, manualPath = "") { return desktopOrMock({}, "@bindings/cursor/internal/bridge/windowservice.js", "RestartCursor", [workspaceDir || "", manualPath || ""]); }
 
 // Skills & MCP 跨工具扫描：快照 / 重新扫描 / 保存开关配置。
 // 注意：这些 binding 由 wails 工具链自动生成；新增方法需在下次 wails dev/build 时重新生成 bindings。

@@ -878,3 +878,83 @@ func (s *WindowService) LaunchCursor(workspaceDir, manualPath string) error {
 	logger.Infof("launch cursor ok: path=%s", cursorPath)
 	return nil
 }
+
+// CursorRestartResult 描述一次「重启 Cursor」的执行结果。
+type CursorRestartResult struct {
+	// WasRunning 表示重启前是否检测到 Cursor 正在运行。
+	WasRunning bool `json:"wasRunning"`
+	// Killed 表示是否已结束（或尝试结束）既有 Cursor 进程。
+	Killed bool `json:"killed"`
+	// Relaunched 表示是否已重新启动 Cursor。
+	Relaunched bool `json:"relaunched"`
+	// CursorPath 表示检测到的 Cursor 可执行文件路径。
+	CursorPath string `json:"cursorPath"`
+	// Details 表示重启过程的步骤摘要。
+	Details []string `json:"details"`
+}
+
+// cursorRestartKillTimeout 是结束进程后等待 Cursor 完全退出的最长总时长。
+const cursorRestartKillTimeout = 15 * time.Second
+
+// RestartCursor 重启 Cursor 编辑器：先结束所有既有 Cursor 进程，等待其退出，
+// 再重新启动。调用方（前端）负责二次确认，本方法直接执行。
+func (s *WindowService) RestartCursor(workspaceDir, manualPath string) (CursorRestartResult, error) {
+	details := make([]string, 0, 4)
+	appendDetail := func(text string) { details = append(details, text) }
+
+	result := CursorRestartResult{Details: details}
+
+	wasRunning := client.IsCursorProcessRunning()
+	result.WasRunning = wasRunning
+	if wasRunning {
+		appendDetail("检测到 Cursor 正在运行，正在关闭…")
+		if err := killCursorProcesses(); err != nil {
+			logger.Errorf("restart cursor: kill failed: %v", err)
+			result.Details = details
+			return result, fmt.Errorf("关闭 Cursor 失败: %w", err)
+		}
+		result.Killed = true
+		appendDetail("已发出关闭命令，等待进程退出…")
+		// 轮询等待 Cursor 完全退出，避免在新进程启动前旧进程仍占用资源。
+		deadline := time.Now().Add(cursorRestartKillTimeout)
+		for time.Now().Before(deadline) {
+			if !client.IsCursorProcessRunning() {
+				break
+			}
+			time.Sleep(300 * time.Millisecond)
+		}
+		if client.IsCursorProcessRunning() {
+			logger.Errorf("restart cursor: cursor still running after %s", cursorRestartKillTimeout)
+			result.Details = details
+			return result, fmt.Errorf("Cursor 未能在 %s 内退出，请手动关闭后重试", cursorRestartKillTimeout)
+		}
+		appendDetail("Cursor 已退出")
+	} else {
+		appendDetail("未检测到运行中的 Cursor")
+	}
+
+	// 检测路径并重新启动。
+	cursorPath := s.DetectCursorPath(manualPath)
+	if cursorPath == "" {
+		if strings.TrimSpace(manualPath) != "" {
+			result.Details = details
+			return result, fmt.Errorf("指定的 Cursor 路径无效：%s", strings.TrimSpace(manualPath))
+		}
+		result.Details = details
+		return result, fmt.Errorf("未检测到 Cursor 安装路径，请在设置中指定 Cursor.exe")
+	}
+	result.CursorPath = cursorPath
+
+	logger.Infof("restart cursor: relaunch path=%s workspace=%q", cursorPath, workspaceDir)
+	if err := launchCursorProcess(cursorPath, workspaceDir); err != nil {
+		logger.Errorf("restart cursor: relaunch failed: path=%s err=%v", cursorPath, err)
+		result.Details = details
+		return result, fmt.Errorf("重新启动 Cursor 失败: %w", err)
+	}
+	result.Relaunched = true
+	appendDetail("Cursor 已重新启动")
+	logger.Infof("restart cursor ok: path=%s", cursorPath)
+
+	result.Details = details
+	return result, nil
+}
