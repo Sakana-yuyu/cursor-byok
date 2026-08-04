@@ -35,13 +35,13 @@ Cursor 本身负责优秀的编辑器与 Agent 体验，Cursor助手负责把模
 
 | 图标 | 能力 | 说明 |
 | :---: | --- | --- |
-| <img src="https://cdn.simpleicons.org/openai/10A37F" width="22" alt="OpenAI" /> | 多供应商接入 | OpenAI 兼容接口、Anthropic 原生协议、Gemini 原生协议与常见第三方网关。 |
+| <img src="frontend/public/supplier-icons/openai.svg" width="22" height="22" alt="OpenAI" /> | 多供应商接入 | OpenAI 兼容接口、Anthropic 原生协议、Gemini 原生协议与常见第三方网关。 |
 | <img src="https://cdn.simpleicons.org/serverless/10AD5D" width="22" alt="Gateway" /> | 本地代理网关 | 在本机完成 Cursor 与模型供应商之间的请求转发和流式事件转换。 |
 | <img src="https://cdn.simpleicons.org/googleanalytics/4285F4" width="22" alt="Metrics" /> | 用量与费用统计 | 查看请求数、输入/输出 token、缓存命中率、站点消耗和估算费用。 |
 | <img src="https://cdn.simpleicons.org/robotframework/10AD5D" width="22" alt="Agent" /> | Agent 与 Multitask | 支持 Explorer 子代理、视觉委派、监督状态和 Cursor Task 状态同步。 |
 | <img src="https://cdn.simpleicons.org/icloud/4F46E5" width="22" alt="Catalog" /> | 模型目录与自动匹配 | 拉取供应商模型目录，自动匹配上下文窗口，并支持模型可用性探测。 |
 | <img src="https://cdn.simpleicons.org/bugcrowd/F59E0B" width="22" alt="Debug" /> | Debug 与诊断 | 保存脱敏后的请求链路、provider pass、工具调用和终态信息，方便定位问题。 |
-| <img src="https://cdn.simpleicons.org/shield/16A34A" width="22" alt="Privacy" /> | 本地凭据管理 | API Key 与余额查询凭据由本地配置管理；发布到云端的源码不包含用户凭据。 |
+| <img src="frontend/public/supplier-icons/privacy-shield.svg" width="22" height="22" alt="Privacy" /> | 本地凭据管理 | API Key 与余额查询凭据由本地配置管理；发布到云端的源码不包含用户凭据。 |
 
 ### 支持的平台
 
