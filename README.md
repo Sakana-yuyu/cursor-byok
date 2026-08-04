@@ -196,11 +196,19 @@ Linux.do 发布文案位于 docs/promotion/linuxdo-post.md，欢迎反馈安装�
 
 <!-- contributors-start -->
 <table><tr>
-<td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://secure.gravatar.com/avatar/e91e20e8d5f83234900a3878086e1fe7?d=identicon&s=80" width="48" height="48" alt="呆呆可达鸭鸭" title="呆呆可达鸭鸭 (230 次提交)"/></a></td>
-<td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://avatars.githubusercontent.com/u/41898282?v=4&s=80" width="48" height="48" alt="github-actions[bot]" title="github-actions[bot] (16 次提交)"/></a></td>
+<td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://secure.gravatar.com/avatar/e91e20e8d5f83234900a3878086e1fe7?d=identicon&s=80" width="48" height="48" alt="呆呆可达鸭鸭" title="呆呆可达鸭鸭 (234 次提交)"/></a></td>
+<td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://avatars.githubusercontent.com/u/41898282?v=4&s=80" width="48" height="48" alt="github-actions[bot]" title="github-actions[bot] (17 次提交)"/></a></td>
 <td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://secure.gravatar.com/avatar/e32a23a62c503dd189268d84dbd12c2d?d=identicon&s=80" width="48" height="48" alt="hudawang" title="hudawang (7 次提交)"/></a></td>
 <td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://secure.gravatar.com/avatar/4fa4116634f7a272554140a170e7e300?d=identicon&s=80" width="48" height="48" alt="DedSecer" title="DedSecer (5 次提交)"/></a></td>
 <td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://secure.gravatar.com/avatar/92ab25d105c69286f299bdc514bef2ca?d=identicon&s=80" width="48" height="48" alt="philau2512" title="philau2512 (3 次提交)"/></a></td>
 <td><a href="https://github.com/kael-odin"><img src="https://avatars.githubusercontent.com/kael-odin?v=4&s=80" width="48" height="48" alt="kael-odin" title="kael-odin (3 次提交)"/></a></td>
+<td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://secure.gravatar.com/avatar/3f43639246884941cd37c80aaf1c8293?d=identicon&s=80" width="48" height="48" alt="上玄" title="上玄 (2 次提交)"/></a></td>
+<td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://secure.gravatar.com/avatar/2d94f41c79230c6c7afb2023d8250167?d=identicon&s=80" width="48" height="48" alt="杨超" title="杨超 (1 次提交)"/></a></td>
+<td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://avatars.githubusercontent.com/u/266937838?v=4&s=80" width="48" height="48" alt="octo-patch" title="octo-patch (1 次提交)"/></a></td>
+<td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://secure.gravatar.com/avatar/a86b8f4b14ce67e4e6a4f3b25612e99c?d=identicon&s=80" width="48" height="48" alt="lixingcheng" title="lixingcheng (1 次提交)"/></a></td>
+<td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://secure.gravatar.com/avatar/edd1b95493e930ffec5730df1d8ae4d7?d=identicon&s=80" width="48" height="48" alt="lixiangwuxian" title="lixiangwuxian (1 次提交)"/></a></td>
+<td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://secure.gravatar.com/avatar/eaa039f995d17d9c5bc80586f4523276?d=identicon&s=80" width="48" height="48" alt="aike1202" title="aike1202 (1 次提交)"/></a></td>
+<td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://secure.gravatar.com/avatar/3972eaf41431b5a058211d1262fbd2a3?d=identicon&s=80" width="48" height="48" alt="TigerWang" title="TigerWang (1 次提交)"/></a></td>
+<td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://secure.gravatar.com/avatar/38f67cb0e7464d31dc810917801e61ae?d=identicon&s=80" width="48" height="48" alt="GGHansome" title="GGHansome (1 次提交)"/></a></td>
 </tr></table>
 <!-- contributors-end -->
