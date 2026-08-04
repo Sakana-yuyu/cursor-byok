@@ -174,7 +174,9 @@ Cursor助手会在用户数据目录生成 CA 证书，并在需要时引导宿�
 - <img src="https://cdn.simpleicons.org/github/111827" width="16" alt="GitHub" /> [GitHub Releases](https://github.com/Sakana-yuyu/cursor-byok/releases)
 - <img src="https://cdn.simpleicons.org/telegram/26A5E4" width="16" alt="Telegram" /> [Telegram 群组](https://t.me/cursor_byok)
 - <img src="https://cdn.simpleicons.org/discourse/111827" width="16" alt="Linux.do" /> [Linux.do 社区](https://linux.do/)
-- <img src="https://cdn.simpleicons.org/bilibili/00A1D6" width="16" alt="Bilibili" /> [作者更新与视频](https://space.bilibili.com/311706663/upload/video)
+- <img src="https://cdn.simpleicons.org/bilibili/00A1D6" width="16" alt="Bilibili" /> [原作者地址（作者主页）](https://space.bilibili.com/311706663/upload/video)
+
+> 原作者地址说明：上方 Bilibili 链接是项目原作者公开的作者主页，保留该地址用于作者署名、更新动态和视频内容；项目代码、发行版和社区反馈入口由本仓库维护。
 
 Linux.do 发布文案位于 docs/promotion/linuxdo-post.md，欢迎反馈安装体验、供应商适配和 Cursor 本地模式问题。
 
