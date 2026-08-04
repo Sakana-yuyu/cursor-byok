@@ -9,6 +9,7 @@ import {
   DeleteHistorySessions,
   ClearHistory,
   DeleteHistoryDebugLogs,
+  PurgeAllHistoryDebugLogs,
   GetHistoryDebugUsage,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
 import { getDelegationConfig as getDelegationConfigBinding, saveDelegationConfig as saveDelegationConfigBinding } from "@/services/clientApi";
@@ -177,8 +178,15 @@ export function clearHistory() {
   return ClearHistory().then((count) => Number(count || 0));
 }
 
+// deleteHistoryDebugLogs 清理指定会话的调试日志，返回释放的字节数。
 export function deleteHistoryDebugLogs(sessionIDs) {
-  return DeleteHistoryDebugLogs(Array.isArray(sessionIDs) ? sessionIDs : []);
+  return DeleteHistoryDebugLogs(Array.isArray(sessionIDs) ? sessionIDs : []).then((bytes) => Number(bytes || 0));
+}
+
+// purgeAllHistoryDebugLogs 清理全部调试日志（含无会话归属的孤儿日志），返回释放的字节数。
+// 由后端统一遍历目录，前端不需要先列出会话 ID，避免漏掉非 UUID 会话与孤儿日志。
+export function purgeAllHistoryDebugLogs() {
+  return PurgeAllHistoryDebugLogs().then((bytes) => Number(bytes || 0));
 }
 
 export function getHistoryDebugUsage() {

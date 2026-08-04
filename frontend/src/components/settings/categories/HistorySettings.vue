@@ -186,8 +186,8 @@ async function handleCleanSelectedDebug() {
   if (selectedCount.value === 0 || cleaningDebug.value) return;
   cleaningDebug.value = true;
   try {
-    await deleteHistoryDebugLogs([...selectedIDs]);
-    message.success("已清理所选调试日志");
+    const freed = await deleteHistoryDebugLogs([...selectedIDs]);
+    message.success(freed > 0 ? `已清理所选调试日志，释放 ${formatSize(freed)}` : "所选会话没有调试日志");
     selectedIDs.clear();
     await refresh();
   } catch (cleanError) {
@@ -249,11 +249,14 @@ onMounted(() => {
         </div>
       </div>
 
-      <div v-if="error" class="rounded-[8px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-sm text-[#fca5a5]">
-        {{ error }}
+      <div v-if="error" class="flex flex-wrap items-center justify-between gap-2 rounded-[8px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-sm text-[#fca5a5]">
+        <span class="min-w-0">{{ error }}</span>
+        <Button variant="default" :disabled="loading" @click="refresh">
+          {{ loading ? "重试中..." : "重试" }}
+        </Button>
       </div>
 
-      <div v-if="!loading && sessions.length === 0" class="rounded-[8px] border border-white/10 bg-black/15 px-4 py-6 text-center text-sm text-[#858585]">
+      <div v-if="!loading && !error && sessions.length === 0" class="rounded-[8px] border border-white/10 bg-black/15 px-4 py-6 text-center text-sm text-[#858585]">
         暂无历史记录
       </div>
 

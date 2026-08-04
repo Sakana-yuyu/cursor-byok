@@ -1167,7 +1167,12 @@ function applyProxyState(raw) {
   const state = raw && typeof raw === "object" ? raw : {};
   appState.backendRunning = asBoolean(state.backendRunning);
   appState.proxyRunning = asBoolean(state.proxyRunning ?? state.running);
-  appState.serviceRunning = appState.proxyRunning;
+  // serviceRunning 表示「服务完整可用」＝ backend 与代理同时在跑。此前它只等于
+  // proxyRunning，于是 backend 挂掉、代理还在时首页仍显示绿灯「服务运行中」，
+  // 而用户的请求其实已经失败了。两者状态不一致时用 servicePartiallyRunning
+  // 表达，界面据此给出黄灯而不是假的绿灯。
+  appState.serviceRunning = appState.backendRunning && appState.proxyRunning;
+  appState.servicePartiallyRunning = appState.backendRunning !== appState.proxyRunning;
   appState.serviceLastError = asString(state.lastError);
   appState.backendListenAddr = asString(state.backendListenAddr);
   appState.proxyListenAddr = asString(state.proxyListenAddr || state.listenAddr);
@@ -1364,10 +1369,15 @@ export const appState = reactive({
   serviceRunning: asBoolean(cachedState.serviceRunning),
   backendRunning: asBoolean(cachedState.backendRunning),
   proxyRunning: asBoolean(cachedState.proxyRunning),
+  // servicePartiallyRunning 表示 backend 与代理只起来了一个，属于不可用的中间态。
+  servicePartiallyRunning: false,
   serviceBusy: false,
   serviceLastError: asString(cachedState.serviceLastError),
   // 调试日志总占用字节数；超阈值时首页显示清理提醒（0 表示未统计/无占用）。
   debugLogBytes: asNumber(cachedState.debugLogBytes),
+  // 调试日志占用统计失败原因。非空表示占用数字不可信（可能过期），首页据此提示读取失败。
+  // 不做持久化：进程重启后应重新统计，而不是沿用上次的错误。
+  debugLogUsageError: "",
   serviceListenAddr: asString(cachedState.serviceListenAddr),
   backendListenAddr: asString(cachedState.backendListenAddr),
   proxyListenAddr: asString(cachedState.proxyListenAddr),
@@ -1509,16 +1519,22 @@ export const appViewState = reactive({
     if (appState.backendRunning) {
       return "后端已启动，代理未启动";
     }
+    if (appState.proxyRunning) {
+      return "代理已启动，后端未启动";
+    }
     return "服务未启动";
   }),
   serviceStatusClass: computed(() =>
     appState.serviceRunning ? "text-[#22c55e]" : "text-[#f59e0b]",
   ),
+  // serviceButtonText 的「关闭服务」覆盖半启动态：只起来一个组件时也要能关，
+  // 否则用户会卡在既不能启动也不能关闭的状态里。
   serviceButtonText: computed(() => {
+    const anyRunning = appState.serviceRunning || appState.servicePartiallyRunning;
     if (appState.serviceBusy) {
-      return appState.serviceRunning ? "关闭中..." : "启动中...";
+      return anyRunning ? "关闭中..." : "启动中...";
     }
-    return appState.serviceRunning ? "关闭服务" : "启动服务";
+    return anyRunning ? "关闭服务" : "启动服务";
   }),
 });
 
@@ -2356,11 +2372,15 @@ export async function syncServiceState() {
   return state;
 }
 
+// refreshDebugLogUsage 刷新调试日志占用统计。
+// 读取失败时保留上一次的有效值并单独记录错误，绝不把「读不到」当成「占用为 0」——
+// 后者会让首页的清理提醒凭空消失，用户以为磁盘已经干净了。
 export async function refreshDebugLogUsage() {
   try {
     appState.debugLogBytes = Math.max(0, Number(await getHistoryDebugUsage()) || 0);
-  } catch {
-    appState.debugLogBytes = 0;
+    appState.debugLogUsageError = "";
+  } catch (error) {
+    appState.debugLogUsageError = toUserError(error);
   }
   return appState.debugLogBytes;
 }
@@ -2429,7 +2449,9 @@ export async function stopService() {
 }
 
 export async function toggleService() {
-  if (appState.serviceRunning) {
+  // 半启动态（backend 与代理只起来一个）也走关闭，先回到干净的未启动状态，
+  // 否则对着一个不可用的中间态点「启动服务」不会有任何改善。
+  if (appState.serviceRunning || appState.servicePartiallyRunning) {
     return stopService();
   }
   return startService();

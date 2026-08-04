@@ -31,6 +31,9 @@ type debugWriteJob struct {
 	dir      string
 	filename string
 	payload  []byte
+	// epoch 是入队时的清理世代号。若落盘时世代号已推进（期间发生过清理），
+	// 这条事件会被丢弃，避免把刚删掉的 debug 目录重建回来。
+	epoch uint64
 }
 
 // debugQueueCapacity 是 debug 写盘队列容量。写盘是尽力而为的证据层，队列满时丢弃
@@ -195,7 +198,7 @@ func (recorder *debugRecorder) appendJSONL(ctx context.Context, requestID string
 	}
 	// 异步落盘：序列化后的 payload 投递到后台 worker，主链路（BidiAppend / provider
 	// 事件流 / RunSSE）不再被磁盘 IO 阻塞，也不被全局互斥串行化。
-	recorder.enqueue(debugWriteJob{dir: dir, filename: filename, payload: payload})
+	recorder.enqueue(debugWriteJob{dir: dir, filename: filename, payload: payload, epoch: debugPurge.currentEpoch()})
 }
 
 // enqueue 把一条 debug 事件投递到写盘队列；队列满时丢弃并限频提示。
@@ -217,20 +220,30 @@ func (recorder *debugRecorder) enqueue(job debugWriteJob) {
 // writeLoop 是 debug 落盘 worker：单 goroutine 串行写文件，天然保序。
 func (recorder *debugRecorder) writeLoop() {
 	for job := range recorder.queue {
-		if err := os.MkdirAll(job.dir, 0o755); err != nil {
-			continue
-		}
-		path := filepath.Join(job.dir, job.filename)
-		file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-		if err != nil {
-			continue
-		}
-		_, _ = file.Write(append(job.payload, '\n'))
-		_ = file.Close()
-		// 写完检查大小，超上限则裁剪保留尾部（最新 = 最可能含错误的部分）。
-		// 在 worker goroutine 内执行，不阻塞主链路。
-		recorder.rotateIfNeeded(context.Background(), path)
+		recorder.writeJob(job)
 	}
+}
+
+// writeJob 落盘一条 debug 事件。写盘期间持有清理闸门的读锁，保证不会与
+// 「清理调试日志」并发；世代号落后的事件直接丢弃，不再重建已删除的目录。
+func (recorder *debugRecorder) writeJob(job debugWriteJob) {
+	if !debugPurge.beginWrite(job.epoch) {
+		return
+	}
+	defer debugPurge.endWrite()
+	if err := os.MkdirAll(job.dir, 0o755); err != nil {
+		return
+	}
+	path := filepath.Join(job.dir, job.filename)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return
+	}
+	_, _ = file.Write(append(job.payload, '\n'))
+	_ = file.Close()
+	// 写完检查大小，超上限则裁剪保留尾部（最新 = 最可能含错误的部分）。
+	// 在 worker goroutine 内执行，不阻塞主链路。
+	recorder.rotateIfNeeded(context.Background(), path)
 }
 
 // rotateIfNeeded 在文件超过配置的字节上限时，保留尾部 reserve 字节并丢弃头部，

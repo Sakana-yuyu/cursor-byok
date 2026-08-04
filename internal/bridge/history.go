@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"cursor/internal/appdata"
+	"cursor/internal/backend/forwarder"
 	"cursor/internal/historymetrics"
 )
 
@@ -237,64 +238,142 @@ func deleteHistorySessions(sessionIDs []string) error {
 		return nil
 	}
 	root := appdata.HistoryRootPath()
-	var firstErr error
-	for _, rawID := range sessionIDs {
-		id := strings.TrimSpace(rawID)
-		if !historySessionIDPattern.MatchString(id) {
-			if firstErr == nil {
-				firstErr = fmt.Errorf("invalid session id: %q", rawID)
+	// 会话目录里含 debug 子目录，同样要在暂停落盘的窗口内删除，否则已入队的事件
+	// 会把目录重建成「只有 debug、没有 state.json」的残留会话。
+	return forwarder.PurgeDebugLogs(func() error {
+		var firstErr error
+		for _, rawID := range sessionIDs {
+			id := strings.TrimSpace(rawID)
+			if !historySessionIDPattern.MatchString(id) {
+				if firstErr == nil {
+					firstErr = fmt.Errorf("invalid session id: %q", rawID)
+				}
+				continue
 			}
+			if err := os.RemoveAll(filepath.Join(root, id)); err != nil && firstErr == nil {
+				firstErr = fmt.Errorf("remove session %s: %w", id, err)
+			}
+		}
+		return firstErr
+	})
+}
+
+// historyOrphanDebugDirName 是无会话归属的 debug 日志目录（forwarder 在拿不到
+// conversation id 时把事件写到 _debug/orphan/<requestID>）。
+const historyOrphanDebugDirName = "_debug"
+
+// historyDebugDirs 列出 history 根目录下所有 debug 日志目录，统计与清理共用同一套
+// 遍历逻辑，避免两边口径不一致导致「统计为 0 但磁盘仍被占用」。
+//
+// 覆盖三类：
+//   - UUID 命名的会话目录下的 debug/；
+//   - 非 UUID 会话目录下的 debug/（forwarder 只对 conversation id 做字符替换，
+//     并未强制 UUID，所以确实会出现这种目录）；
+//   - _debug/（无会话归属的孤儿日志）。
+//
+// 目录名直接来自 ReadDir，不含用户输入，因此没有路径穿越风险；非目录项（如
+// usage.json）与符号链接（IsDir 为 false）被跳过，清理不会越出 history 根目录。
+func historyDebugDirs() ([]string, error) {
+	return historyDebugDirsIn(appdata.HistoryRootPath())
+}
+
+// historyDebugDirsIn 是 historyDebugDirs 的可测形式：root 由调用方给出。
+func historyDebugDirsIn(root string) ([]string, error) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read history root: %w", err)
+	}
+	dirs := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
 			continue
 		}
-		if err := os.RemoveAll(filepath.Join(root, id)); err != nil && firstErr == nil {
-			firstErr = fmt.Errorf("remove session %s: %w", id, err)
+		name := entry.Name()
+		if name == historyOrphanDebugDirName {
+			dirs = append(dirs, filepath.Join(root, name))
+			continue
 		}
+		dirs = append(dirs, filepath.Join(root, name, "debug"))
 	}
-	return firstErr
+	return dirs, nil
 }
 
 // deleteHistoryDebugLogs 只删除指定会话的 debug 子目录，保留 state.json/context.json。
 // 用于「清理调试日志」释放磁盘但保留会话记录。ID 必须是标准 UUID。
-func deleteHistoryDebugLogs(sessionIDs []string) error {
+// 返回释放的字节数。
+func deleteHistoryDebugLogs(sessionIDs []string) (int64, error) {
 	if len(sessionIDs) == 0 {
-		return nil
+		return 0, nil
 	}
 	root := appdata.HistoryRootPath()
-	var firstErr error
-	for _, rawID := range sessionIDs {
-		id := strings.TrimSpace(rawID)
-		if !historySessionIDPattern.MatchString(id) {
-			if firstErr == nil {
-				firstErr = fmt.Errorf("invalid session id: %q", rawID)
+	var freed int64
+	// 在暂停 debug 落盘的窗口内删除，否则清理前已入队的事件会把目录重建回来。
+	err := forwarder.PurgeDebugLogs(func() error {
+		var firstErr error
+		for _, rawID := range sessionIDs {
+			id := strings.TrimSpace(rawID)
+			if !historySessionIDPattern.MatchString(id) {
+				if firstErr == nil {
+					firstErr = fmt.Errorf("invalid session id: %q", rawID)
+				}
+				continue
 			}
-			continue
+			debugDir := filepath.Join(root, id, "debug")
+			size := dirSize(debugDir)
+			if err := os.RemoveAll(debugDir); err != nil {
+				if firstErr == nil {
+					firstErr = fmt.Errorf("remove debug logs for session %s: %w", id, err)
+				}
+				continue
+			}
+			freed += size
 		}
-		debugDir := filepath.Join(root, id, "debug")
-		if err := os.RemoveAll(debugDir); err != nil && firstErr == nil {
-			firstErr = fmt.Errorf("remove debug logs for session %s: %w", id, err)
-		}
-	}
-	return firstErr
+		return firstErr
+	})
+	return freed, err
 }
 
-// historyDebugUsage 统计所有会话的 debug 子目录总占用字节数。
+// purgeAllHistoryDebugLogs 清理全部调试日志（含孤儿日志），保留会话本体。
+// 返回释放的字节数。供首页「清理调试日志」一键调用，前端不需要先枚举会话。
+func purgeAllHistoryDebugLogs() (int64, error) {
+	dirs, err := historyDebugDirs()
+	if err != nil {
+		return 0, err
+	}
+	if len(dirs) == 0 {
+		return 0, nil
+	}
+	var freed int64
+	err = forwarder.PurgeDebugLogs(func() error {
+		var firstErr error
+		for _, dir := range dirs {
+			size := dirSize(dir)
+			if err := os.RemoveAll(dir); err != nil {
+				if firstErr == nil {
+					firstErr = fmt.Errorf("remove debug logs %s: %w", filepath.Base(filepath.Dir(dir)), err)
+				}
+				continue
+			}
+			freed += size
+		}
+		return firstErr
+	})
+	return freed, err
+}
+
+// historyDebugUsage 统计所有调试日志的总占用字节数（含孤儿日志）。
 // 用于首页全局提醒（debug 日志占用过大时提示用户清理）。
 func historyDebugUsage() (int64, error) {
-	root := appdata.HistoryRootPath()
-	entries, err := os.ReadDir(root)
+	dirs, err := historyDebugDirs()
 	if err != nil {
-		if os.IsNotExist(err) {
-			return 0, nil
-		}
-		return 0, fmt.Errorf("read history root: %w", err)
+		return 0, err
 	}
 	var total int64
-	for _, entry := range entries {
-		name := entry.Name()
-		if !entry.IsDir() || !historySessionIDPattern.MatchString(name) {
-			continue
-		}
-		total += dirSize(filepath.Join(root, name, "debug"))
+	for _, dir := range dirs {
+		total += dirSize(dir)
 	}
 	return total, nil
 }
@@ -311,24 +390,28 @@ func clearHistory() (int, error) {
 		return 0, fmt.Errorf("read history root: %w", err)
 	}
 	deleted := 0
-	var firstErr error
-	for _, entry := range entries {
-		name := entry.Name()
-		if name == "usage.json" {
-			// usage.json 由 forwarder 进程内 store 持有，删除文件会被内存数据重写，
-			// 改为原子重置，避免并发写冲突。
-			continue
-		}
-		if err := os.RemoveAll(filepath.Join(root, name)); err != nil {
-			if firstErr == nil {
-				firstErr = fmt.Errorf("remove %s: %w", name, err)
+	// 同 deleteHistorySessions：在暂停 debug 落盘的窗口内删除，避免残留 debug 目录。
+	firstErr := forwarder.PurgeDebugLogs(func() error {
+		var removeErr error
+		for _, entry := range entries {
+			name := entry.Name()
+			if name == "usage.json" {
+				// usage.json 由 forwarder 进程内 store 持有，删除文件会被内存数据重写，
+				// 改为原子重置，避免并发写冲突。
+				continue
 			}
-			continue
+			if err := os.RemoveAll(filepath.Join(root, name)); err != nil {
+				if removeErr == nil {
+					removeErr = fmt.Errorf("remove %s: %w", name, err)
+				}
+				continue
+			}
+			if entry.IsDir() && historySessionIDPattern.MatchString(name) {
+				deleted++
+			}
 		}
-		if entry.IsDir() && historySessionIDPattern.MatchString(name) {
-			deleted++
-		}
-	}
+		return removeErr
+	})
 	if err := historymetrics.ResetUsageFile(appdata.UsageFilePath()); err != nil && firstErr == nil {
 		firstErr = err
 	}

@@ -162,11 +162,18 @@ func (s *ProxyService) ClearHistory() (int, error) {
 }
 
 // DeleteHistoryDebugLogs 只删除指定会话的调试日志（debug 子目录），保留会话本体。
-func (s *ProxyService) DeleteHistoryDebugLogs(sessionIDs []string) error {
+// 返回释放的字节数。
+func (s *ProxyService) DeleteHistoryDebugLogs(sessionIDs []string) (int64, error) {
 	return deleteHistoryDebugLogs(sessionIDs)
 }
 
-// GetHistoryDebugUsage 返回所有会话的调试日志总占用字节数。
+// PurgeAllHistoryDebugLogs 清理全部调试日志（含无会话归属的孤儿日志），保留会话本体。
+// 返回释放的字节数。前端无需先枚举会话 ID。
+func (s *ProxyService) PurgeAllHistoryDebugLogs() (int64, error) {
+	return purgeAllHistoryDebugLogs()
+}
+
+// GetHistoryDebugUsage 返回所有调试日志的总占用字节数（含孤儿日志）。
 func (s *ProxyService) GetHistoryDebugUsage() (int64, error) {
 	return historyDebugUsage()
 }

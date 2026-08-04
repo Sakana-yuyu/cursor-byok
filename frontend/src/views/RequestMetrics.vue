@@ -343,9 +343,12 @@ onUnmounted(() => {
 
     <div
       v-if="error"
-      class="shrink-0 rounded-[8px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-sm text-[#fca5a5]"
+      class="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-[8px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-sm text-[#fca5a5]"
     >
-      {{ error }}
+      <span class="min-w-0">{{ error }}</span>
+      <Button variant="default" :disabled="loading" @click="refresh({ keepPage: true })">
+        {{ loading ? "重试中..." : "重试" }}
+      </Button>
     </div>
 
     <div class="min-h-0 flex-1 overflow-auto rounded-[10px] border border-[#343434] bg-[#1e1e1e] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">

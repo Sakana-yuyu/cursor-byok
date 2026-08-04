@@ -67,3 +67,56 @@ func TestReadHistoryTitle(t *testing.T) {
 		})
 	}
 }
+
+// TestHistoryDebugDirsIn 覆盖统计/清理共用的 debug 目录遍历：
+// UUID 会话、非 UUID 会话、孤儿日志目录都要收录，普通文件要跳过。
+func TestHistoryDebugDirsIn(t *testing.T) {
+	root := t.TempDir()
+	const uuidSession = "11111111-2222-3333-4444-555555555555"
+	mustMkdirAll(t, filepath.Join(root, uuidSession, "debug"))
+	mustMkdirAll(t, filepath.Join(root, "legacy-conversation", "debug"))
+	mustMkdirAll(t, filepath.Join(root, historyOrphanDebugDirName, "orphan", "req-1"))
+	if err := os.WriteFile(filepath.Join(root, "usage.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	dirs, err := historyDebugDirsIn(root)
+	if err != nil {
+		t.Fatalf("historyDebugDirsIn: %v", err)
+	}
+	got := make(map[string]bool, len(dirs))
+	for _, dir := range dirs {
+		got[dir] = true
+	}
+	want := []string{
+		filepath.Join(root, uuidSession, "debug"),
+		filepath.Join(root, "legacy-conversation", "debug"),
+		filepath.Join(root, historyOrphanDebugDirName),
+	}
+	for _, dir := range want {
+		if !got[dir] {
+			t.Fatalf("missing debug dir %q in %v", dir, dirs)
+		}
+	}
+	if got[filepath.Join(root, "usage.json", "debug")] {
+		t.Fatalf("usage.json must not be treated as a session dir: %v", dirs)
+	}
+}
+
+// TestHistoryDebugDirsInMissingRoot 未初始化的 history 目录不应报错。
+func TestHistoryDebugDirsInMissingRoot(t *testing.T) {
+	dirs, err := historyDebugDirsIn(filepath.Join(t.TempDir(), "absent"))
+	if err != nil {
+		t.Fatalf("historyDebugDirsIn on missing root: %v", err)
+	}
+	if len(dirs) != 0 {
+		t.Fatalf("want no dirs, got %v", dirs)
+	}
+}
+
+func mustMkdirAll(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -365,7 +365,7 @@ function nextID() {
 }
 
 export const IsWindows = () => Promise.resolve(false);
-export const GetState = () => Promise.resolve(browserPreviewMockProxyState());
+export const GetState = () => Promise.resolve(previewProxyState());
 export const LoadUserConfig = () => Promise.resolve(clone(previewConfig));
 export const GetDelegationConfig = () => Promise.resolve(clone(previewConfig.delegation));
 export const SaveDelegationConfig = (value) => {
@@ -398,8 +398,28 @@ export const AutoMatchContextWindows = (force = false) => {
 };
 export const DiagnoseModelAdapters = () => Promise.resolve({ total: previewConfig.modelAdapters.length, issues: [] });
 export const ApplyDiagnosticFixes = () => Promise.resolve({ total: previewConfig.modelAdapters.length, issues: [] });
-export const StartProxy = () => Promise.resolve(browserPreviewMockProxyState());
-export const StopProxy = () => Promise.resolve(browserPreviewMockProxyState());
+// previewProxyRunning 让预览模式的启停真的改变状态。此前 StartProxy/StopProxy
+// 都返回同一份「未运行」快照，界面点了启动却始终显示未运行，看起来像启动失败。
+let previewProxyRunning = false;
+
+function previewProxyState() {
+  const state = browserPreviewMockProxyState();
+  return {
+    ...state,
+    serviceRunning: previewProxyRunning,
+    backendRunning: previewProxyRunning,
+    proxyRunning: previewProxyRunning,
+  };
+}
+
+export const StartProxy = () => {
+  previewProxyRunning = true;
+  return Promise.resolve(previewProxyState());
+};
+export const StopProxy = () => {
+  previewProxyRunning = false;
+  return Promise.resolve(previewProxyState());
+};
 export const RepairProxySettings = () => Promise.resolve({ settingsApplied: true, settingsPath: "", proxyURL: "http://127.0.0.1:18080", cursorRunning: false, needsCursorRestart: false, details: ["浏览器预览模式：模拟修复成功"] });
 export const GetAdRuntime = () => Promise.resolve({ available: false, slots: [], window: {} });
 export const OpenExternalURL = () => Promise.resolve();
@@ -412,7 +432,9 @@ export const GetModelEditorContext = () => Promise.resolve(clone(editorContext))
 export const OpenConfigWindow = () => Promise.resolve();
 export const OpenFooterAuthorHome = () => Promise.resolve();
 export const OpenHistoryWindow = () => Promise.resolve();
-export const ExportLogs = () => Promise.resolve("");
+// 浏览器预览没有本地文件系统，无法真的打包日志。返回空路径会被上层当成
+// 「导出成功但路径为空」，这里显式失败，界面才会给出可理解的提示。
+export const ExportLogs = () => Promise.reject(new Error("浏览器预览模式不支持导出日志 ZIP，请在桌面客户端中使用"));
 export const OpenModelConfigWindow = () => Promise.resolve();
 export const OpenMetricsDetailWindow = () => Promise.resolve();
 export const OpenRequestMetricsWindow = () => Promise.resolve();
@@ -597,7 +619,9 @@ export const GetDelegationTaskSnapshots = () => {
     durationMs: item.status === "running" ? Math.max(0, now - item.startedAtUnixMs) : item.durationMs,
   }))));
 };
-export const GetHistorySessions = () => Promise.resolve([
+// previewHistorySessions 是可变的预览数据。此前删除/清理都返回成功但数据不变，
+// 占用统计还是写死的常量，界面上「清理成功」之后占用一点没少，等于假成功。
+const previewHistorySessions = [
   {
     id: "preview-session-2026-07-31-001",
     title: "优化站点消耗卡片布局",
@@ -702,11 +726,50 @@ export const GetHistorySessions = () => Promise.resolve([
     status: "completed",
     requestId: "",
   },
-]);
-export const DeleteHistorySessions = () => Promise.resolve();
-export const ClearHistory = () => Promise.resolve(0);
-export const DeleteHistoryDebugLogs = () => Promise.resolve();
-export const GetHistoryDebugUsage = () => Promise.resolve(128 * 1024 * 1024);
+];
+
+// previewOrphanDebugBytes 模拟无会话归属的孤儿调试日志，只有「清理全部」才会释放它，
+// 这样预览模式也能体现出后端统一遍历与逐会话清理的差异。
+let previewOrphanDebugBytes = 24 * 1024 * 1024;
+
+function clearPreviewSessionDebug(session) {
+  const freed = Number(session.debugSizeBytes || 0);
+  session.debugSizeBytes = 0;
+  session.hasDebug = false;
+  return freed;
+}
+
+export const GetHistorySessions = () => Promise.resolve(clone(previewHistorySessions));
+export const DeleteHistorySessions = (sessionIDs) => {
+  const ids = new Set(Array.isArray(sessionIDs) ? sessionIDs : []);
+  for (let index = previewHistorySessions.length - 1; index >= 0; index -= 1) {
+    if (ids.has(previewHistorySessions[index].id)) previewHistorySessions.splice(index, 1);
+  }
+  return Promise.resolve();
+};
+export const ClearHistory = () => {
+  const removed = previewHistorySessions.length;
+  previewHistorySessions.length = 0;
+  previewOrphanDebugBytes = 0;
+  return Promise.resolve(removed);
+};
+export const DeleteHistoryDebugLogs = (sessionIDs) => {
+  const ids = new Set(Array.isArray(sessionIDs) ? sessionIDs : []);
+  let freed = 0;
+  for (const session of previewHistorySessions) {
+    if (ids.has(session.id)) freed += clearPreviewSessionDebug(session);
+  }
+  return Promise.resolve(freed);
+};
+export const PurgeAllHistoryDebugLogs = () => {
+  let freed = previewOrphanDebugBytes;
+  previewOrphanDebugBytes = 0;
+  for (const session of previewHistorySessions) freed += clearPreviewSessionDebug(session);
+  return Promise.resolve(freed);
+};
+export const GetHistoryDebugUsage = () => Promise.resolve(
+  previewHistorySessions.reduce((total, session) => total + Number(session.debugSizeBytes || 0), previewOrphanDebugBytes),
+);
 export const CancelDelegationTask = (taskID) => {
   const task = previewDelegationTasks.find((item) => item.id === taskID && item.cancelable);
   if (!task) return Promise.resolve(false);
