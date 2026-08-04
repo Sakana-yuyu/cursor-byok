@@ -23,14 +23,13 @@ func (s *ProxyService) ApplyCursorSettings() error {
 	}
 
 	switch goruntime.GOOS {
-	case "windows":
+	case "windows", "darwin":
 		if err := cursor.EnsureCACertInstalled(s.caCertPEM, caCertPath); err != nil {
 			return fmt.Errorf("install ca cert: %w", err)
 		}
-	case "darwin":
-		if err := cursor.EnsureCACertInstalled(s.caCertPEM, caCertPath); err != nil {
-			return fmt.Errorf("install ca cert: %w", err)
-		}
+		// Node 默认不读系统证书库（含 Windows 的 LocalMachine\Root），
+		// 必须显式写入 NODE_EXTRA_CA_CERTS，否则 Cursor 的云端请求会报
+		// "self signed certificate in certificate chain"。
 		if err := cursor.SetSystemNodeExtraCACerts(caCertPath); err != nil {
 			return fmt.Errorf("set node extra ca certs: %w", err)
 		}
@@ -45,7 +44,7 @@ func (s *ProxyService) ApplyCursorSettings() error {
 
 // ClearCursorSettings 用于处理与 ClearCursorSettings 相关的逻辑。
 func (s *ProxyService) ClearCursorSettings() error {
-	if goruntime.GOOS == "darwin" {
+	if goruntime.GOOS == "darwin" || goruntime.GOOS == "windows" {
 		if err := cursor.ClearSystemNodeExtraCACerts(); err != nil {
 			return err
 		}

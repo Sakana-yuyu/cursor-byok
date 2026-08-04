@@ -87,6 +87,16 @@ func SetSystemNodeExtraCACerts(caCertPath string) error {
 	case "linux":
 		// Linux 发行版环境变量持久化方式差异较大，这里先确保当前进程生效。
 		logger.Infof("setSystemNodeExtraCACerts: linux detected, applied to current process only")
+	case "windows":
+		// setx 只影响「此后新启动」的进程（例如重启后的 Cursor），
+		// 不会改变已运行进程的环境，因此当前进程靠上面的 os.Setenv 生效。
+		// setx 会把变量写入用户环境变量（HKCU\Environment），最长 1024 字符。
+		cmd := exec.Command("setx", nodeExtraCACertsEnvName, caCertPath)
+		cmd.Stderr = nil
+		if out, err := cmd.Output(); err != nil {
+			return fmt.Errorf("写入 Windows 用户环境变量失败: %v: %s", err, strings.TrimSpace(string(out)))
+		}
+		logger.Infof("setSystemNodeExtraCACerts: windows user env persisted via setx, restart Cursor to take effect")
 	default:
 		return fmt.Errorf("不支持的系统: %s", runtime.GOOS)
 	}
@@ -95,20 +105,32 @@ func SetSystemNodeExtraCACerts(caCertPath string) error {
 	return nil
 }
 
+// nodeExtraCACertsEnvName 是 Node.js 读取额外受信任 CA 的环境变量名。
+const nodeExtraCACertsEnvName = "NODE_EXTRA_CA_CERTS"
+
 // ClearSystemNodeExtraCACerts 用于处理与 ClearSystemNodeExtraCACerts 相关的逻辑。
 func ClearSystemNodeExtraCACerts() error {
-	if err := os.Unsetenv("NODE_EXTRA_CA_CERTS"); err != nil {
+	if err := os.Unsetenv(nodeExtraCACertsEnvName); err != nil {
 		return fmt.Errorf("清理进程环境变量失败: %w", err)
 	}
 
 	switch runtime.GOOS {
 	case "darwin":
-		out, err := exec.Command("launchctl", "unsetenv", "NODE_EXTRA_CA_CERTS").CombinedOutput()
+		out, err := exec.Command("launchctl", "unsetenv", nodeExtraCACertsEnvName).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("清理 macOS 用户环境变量失败: %v: %s", err, strings.TrimSpace(string(out)))
 		}
 	case "linux":
 		logger.Infof("clearSystemNodeExtraCACerts: linux detected, cleared in current process only")
+	case "windows":
+		// 删除用户环境变量（HKCU\Environment）。即使不存在也按成功处理。
+		cmd := exec.Command("reg", "delete", `HKCU\Environment`, "/v", nodeExtraCACertsEnvName, "/f")
+		cmd.Stderr = nil
+		if out, err := cmd.Output(); err != nil {
+			// 注册表项不存在属于正常情况，不当作错误。
+			logger.Infof("clearSystemNodeExtraCACerts: reg delete returned err (likely absent): %v: %s", err, strings.TrimSpace(string(out)))
+		}
+		logger.Infof("clearSystemNodeExtraCACerts: windows user env removed, restart Cursor to take effect")
 	default:
 		return fmt.Errorf("不支持的系统: %s", runtime.GOOS)
 	}
