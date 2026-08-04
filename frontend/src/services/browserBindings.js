@@ -604,9 +604,12 @@ export const GetHistorySessions = () => Promise.resolve([
     createdAtUnixMs: Date.UTC(2026, 6, 31, 9, 12, 0),
     updatedAtUnixMs: Date.UTC(2026, 6, 31, 9, 40, 0),
     sizeBytes: 128 * 1024,
+    debugSizeBytes: 0,
     subagentType: "",
     mode: "agent",
     hasDebug: false,
+    status: "completed",
+    requestId: "",
   },
   {
     id: "preview-session-2026-07-31-002",
@@ -614,9 +617,12 @@ export const GetHistorySessions = () => Promise.resolve([
     createdAtUnixMs: Date.UTC(2026, 6, 31, 14, 5, 0),
     updatedAtUnixMs: Date.UTC(2026, 6, 31, 15, 2, 0),
     sizeBytes: 356 * 1024,
+    debugSizeBytes: 52 * 1024 * 1024,
     subagentType: "debug",
     mode: "debug",
     hasDebug: true,
+    status: "provider_error",
+    requestId: "a1b2c3d4-5678-90ab-cdef-1234567890ab",
   },
   {
     id: "preview-session-2026-07-30-001",
@@ -624,9 +630,12 @@ export const GetHistorySessions = () => Promise.resolve([
     createdAtUnixMs: Date.UTC(2026, 6, 30, 10, 30, 0),
     updatedAtUnixMs: Date.UTC(2026, 6, 30, 11, 15, 0),
     sizeBytes: 96 * 1024,
+    debugSizeBytes: 0,
     subagentType: "",
     mode: "agent",
     hasDebug: false,
+    status: "completed",
+    requestId: "",
   },
   {
     id: "preview-session-2026-07-30-002",
@@ -634,9 +643,25 @@ export const GetHistorySessions = () => Promise.resolve([
     createdAtUnixMs: Date.UTC(2026, 6, 30, 16, 20, 0),
     updatedAtUnixMs: Date.UTC(2026, 6, 30, 16, 55, 0),
     sizeBytes: 210 * 1024,
+    debugSizeBytes: 18 * 1024 * 1024,
     subagentType: "generalPurpose",
     mode: "agent",
+    hasDebug: true,
+    status: "failed",
+    requestId: "b2c3d4e5-6789-01ab-cdef-234567890abc",
+  },
+  {
+    id: "preview-session-2026-07-29-001",
+    title: "模型适配器测试被用户取消",
+    createdAtUnixMs: Date.UTC(2026, 6, 29, 11, 0, 0),
+    updatedAtUnixMs: Date.UTC(2026, 6, 29, 11, 20, 0),
+    sizeBytes: 64 * 1024,
+    debugSizeBytes: 0,
+    subagentType: "",
+    mode: "agent",
     hasDebug: false,
+    status: "canceled",
+    requestId: "",
   },
   {
     id: "preview-session-2026-06-15-001",
@@ -644,9 +669,12 @@ export const GetHistorySessions = () => Promise.resolve([
     createdAtUnixMs: Date.UTC(2026, 5, 15, 9, 0, 0),
     updatedAtUnixMs: Date.UTC(2026, 5, 15, 12, 45, 0),
     sizeBytes: 812 * 1024,
+    debugSizeBytes: 0,
     subagentType: "generalPurpose",
     mode: "multitask",
     hasDebug: false,
+    status: "completed",
+    requestId: "",
   },
   {
     id: "preview-session-2026-06-15-002",
@@ -654,9 +682,12 @@ export const GetHistorySessions = () => Promise.resolve([
     createdAtUnixMs: Date.UTC(2026, 5, 15, 14, 30, 0),
     updatedAtUnixMs: Date.UTC(2026, 5, 15, 16, 10, 0),
     sizeBytes: 460 * 1024,
+    debugSizeBytes: 0,
     subagentType: "",
     mode: "agent",
     hasDebug: false,
+    status: "completed",
+    requestId: "",
   },
   {
     id: "preview-session-2025-12-03-001",
@@ -664,13 +695,18 @@ export const GetHistorySessions = () => Promise.resolve([
     createdAtUnixMs: Date.UTC(2025, 11, 3, 10, 0, 0),
     updatedAtUnixMs: Date.UTC(2025, 11, 3, 10, 50, 0),
     sizeBytes: 1_024 * 1024,
+    debugSizeBytes: 0,
     subagentType: "generalPurpose",
     mode: "ask",
     hasDebug: false,
+    status: "completed",
+    requestId: "",
   },
 ]);
 export const DeleteHistorySessions = () => Promise.resolve();
 export const ClearHistory = () => Promise.resolve(0);
+export const DeleteHistoryDebugLogs = () => Promise.resolve();
+export const GetHistoryDebugUsage = () => Promise.resolve(128 * 1024 * 1024);
 export const CancelDelegationTask = (taskID) => {
   const task = previewDelegationTasks.find((item) => item.id === taskID && item.cancelable);
   if (!task) return Promise.resolve(false);

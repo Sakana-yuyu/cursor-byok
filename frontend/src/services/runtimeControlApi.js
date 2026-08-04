@@ -8,6 +8,8 @@ import {
   GetHistorySessions,
   DeleteHistorySessions,
   ClearHistory,
+  DeleteHistoryDebugLogs,
+  GetHistoryDebugUsage,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
 import { getDelegationConfig as getDelegationConfigBinding, saveDelegationConfig as saveDelegationConfigBinding } from "@/services/clientApi";
 
@@ -151,10 +153,13 @@ function normalizeHistorySession(session) {
     createdAtUnixMs: Number(raw.createdAtUnixMs || 0),
     updatedAtUnixMs: Number(raw.updatedAtUnixMs || 0),
     sizeBytes: Number(raw.sizeBytes || 0),
+    debugSizeBytes: Number(raw.debugSizeBytes || 0),
     subagentType: String(raw.subagentType || "").trim(),
     mode: String(raw.mode || "").trim(),
     title: String(raw.title || "").trim(),
     hasDebug: Boolean(raw.hasDebug),
+    status: String(raw.status || "").trim(),
+    requestId: String(raw.requestId || "").trim(),
   };
 }
 
@@ -170,4 +175,12 @@ export function deleteHistorySessions(sessionIDs) {
 
 export function clearHistory() {
   return ClearHistory().then((count) => Number(count || 0));
+}
+
+export function deleteHistoryDebugLogs(sessionIDs) {
+  return DeleteHistoryDebugLogs(Array.isArray(sessionIDs) ? sessionIDs : []);
+}
+
+export function getHistoryDebugUsage() {
+  return GetHistoryDebugUsage().then((bytes) => Number(bytes || 0));
 }

@@ -31,6 +31,7 @@ import {
   repairProxySettings,
   restartCursor,
 } from "@/services/clientApi";
+import { getHistoryDebugUsage } from "@/services/runtimeControlApi";
 
 const APP_STATE_STORAGE_KEY = "cursor-client:runtime-state:v2";
 const GENERIC_SERVICE_ERROR = "服务错误";
@@ -77,6 +78,7 @@ const UPDATE_ERROR_EVENT = "update:error";
 const MODEL_ADAPTER_TEST_UPDATED_EVENT = "model-adapter-test:updated";
 const SUPPORTED_MODEL_ADAPTER_TEST_STATUSES = new Set(["idle", "running", "success", "error"]);
 const HOME_METRICS_MIN_LOADING_MS = 600;
+export const DEBUG_LOG_WARNING_BYTES = 100 * 1024 * 1024;
 
 function asString(value) {
   if (typeof value === "string") {
@@ -1364,6 +1366,8 @@ export const appState = reactive({
   proxyRunning: asBoolean(cachedState.proxyRunning),
   serviceBusy: false,
   serviceLastError: asString(cachedState.serviceLastError),
+  // 调试日志总占用字节数；超阈值时首页显示清理提醒（0 表示未统计/无占用）。
+  debugLogBytes: asNumber(cachedState.debugLogBytes),
   serviceListenAddr: asString(cachedState.serviceListenAddr),
   backendListenAddr: asString(cachedState.backendListenAddr),
   proxyListenAddr: asString(cachedState.proxyListenAddr),
@@ -2347,9 +2351,18 @@ export async function duplicateModelAdapterAt(index) {
 }
 
 export async function syncServiceState() {
-  const state = await getProxyState();
+  const [state] = await Promise.all([getProxyState(), refreshDebugLogUsage()]);
   applyProxyState(state);
   return state;
+}
+
+export async function refreshDebugLogUsage() {
+  try {
+    appState.debugLogBytes = Math.max(0, Number(await getHistoryDebugUsage()) || 0);
+  } catch {
+    appState.debugLogBytes = 0;
+  }
+  return appState.debugLogBytes;
 }
 
 export async function syncHomeMetrics() {

@@ -15,14 +15,20 @@ import (
 
 // HistorySession 单个历史会话的展示元数据（桌面 UI 历史管理）。
 type HistorySession struct {
-	ID            string `json:"id"`
-	CreatedAtUnix int64  `json:"createdAtUnixMs"`
-	UpdatedAtUnix int64  `json:"updatedAtUnixMs"`
-	SizeBytes     int64  `json:"sizeBytes"`
-	SubagentType  string `json:"subagentType,omitempty"`
-	Mode          string `json:"mode,omitempty"`
-	Title         string `json:"title,omitempty"`
-	HasDebug      bool   `json:"hasDebug,omitempty"`
+	ID             string `json:"id"`
+	CreatedAtUnix  int64  `json:"createdAtUnixMs"`
+	UpdatedAtUnix  int64  `json:"updatedAtUnixMs"`
+	SizeBytes      int64  `json:"sizeBytes"`
+	DebugSizeBytes int64  `json:"debugSizeBytes"`
+	SubagentType   string `json:"subagentType,omitempty"`
+	Mode           string `json:"mode,omitempty"`
+	Title          string `json:"title,omitempty"`
+	HasDebug       bool   `json:"hasDebug,omitempty"`
+	// Status 来自 state.json 的 current_loop_status：
+	// idle/completed/failed/provider_error/canceled/waiting_tool/running 等。
+	Status string `json:"status,omitempty"`
+	// RequestID 来自 state.json 的 current_request_id，最近一次请求的 ID，方便排查 debug 日志。
+	RequestID string `json:"requestId,omitempty"`
 }
 
 // historySessionIDPattern 只接受标准 UUID 目录名，防止删除/扫描时路径穿越。
@@ -32,10 +38,12 @@ const historyTitleMaxRunes = 40
 
 // historyStateFile 对应会话目录下的 state.json 元数据。
 type historyStateFile struct {
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
-	SubagentTypeName string    `json:"subagent_type_name"`
-	Mode             string    `json:"mode"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	SubagentTypeName  string    `json:"subagent_type_name"`
+	Mode              string    `json:"mode"`
+	CurrentLoopStatus string    `json:"current_loop_status"`
+	CurrentRequestID  string    `json:"current_request_id"`
 }
 
 // historyContextFile 对应会话目录下的 context.json（取首条用户消息做标题）。
@@ -86,10 +94,17 @@ func scanHistorySession(dir, id string) HistorySession {
 		}
 		session.SubagentType = strings.TrimSpace(state.SubagentTypeName)
 		session.Mode = strings.TrimSpace(state.Mode)
+		session.Status = strings.TrimSpace(state.CurrentLoopStatus)
+		session.RequestID = strings.TrimSpace(state.CurrentRequestID)
 	}
 	session.Title = readHistoryTitle(filepath.Join(dir, "context.json"))
-	session.HasDebug = dirHasFiles(filepath.Join(dir, "debug"))
-	session.SizeBytes = dirSize(dir)
+	debugDir := filepath.Join(dir, "debug")
+	session.HasDebug = dirHasFiles(debugDir)
+	session.DebugSizeBytes = dirSize(debugDir)
+	session.SizeBytes = dirSize(dir) - session.DebugSizeBytes
+	if session.SizeBytes < 0 {
+		session.SizeBytes = 0
+	}
 	return session
 }
 
@@ -236,6 +251,52 @@ func deleteHistorySessions(sessionIDs []string) error {
 		}
 	}
 	return firstErr
+}
+
+// deleteHistoryDebugLogs 只删除指定会话的 debug 子目录，保留 state.json/context.json。
+// 用于「清理调试日志」释放磁盘但保留会话记录。ID 必须是标准 UUID。
+func deleteHistoryDebugLogs(sessionIDs []string) error {
+	if len(sessionIDs) == 0 {
+		return nil
+	}
+	root := appdata.HistoryRootPath()
+	var firstErr error
+	for _, rawID := range sessionIDs {
+		id := strings.TrimSpace(rawID)
+		if !historySessionIDPattern.MatchString(id) {
+			if firstErr == nil {
+				firstErr = fmt.Errorf("invalid session id: %q", rawID)
+			}
+			continue
+		}
+		debugDir := filepath.Join(root, id, "debug")
+		if err := os.RemoveAll(debugDir); err != nil && firstErr == nil {
+			firstErr = fmt.Errorf("remove debug logs for session %s: %w", id, err)
+		}
+	}
+	return firstErr
+}
+
+// historyDebugUsage 统计所有会话的 debug 子目录总占用字节数。
+// 用于首页全局提醒（debug 日志占用过大时提示用户清理）。
+func historyDebugUsage() (int64, error) {
+	root := appdata.HistoryRootPath()
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("read history root: %w", err)
+	}
+	var total int64
+	for _, entry := range entries {
+		name := entry.Name()
+		if !entry.IsDir() || !historySessionIDPattern.MatchString(name) {
+			continue
+		}
+		total += dirSize(filepath.Join(root, name, "debug"))
+	}
+	return total, nil
 }
 
 // clearHistory 一键清理：删除全部会话目录与遗留目录（_debug 等），并把 usage.json 重置为空档。

@@ -3,9 +3,10 @@ import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
 import { useMessage } from "@/composables/useMessage";
 import { showModal } from "@/composables/useModal";
-import { clearHistory, deleteHistorySessions, getHistorySessions } from "@/services/runtimeControlApi";
+import { clearHistory, deleteHistoryDebugLogs, deleteHistorySessions, getHistorySessions } from "@/services/runtimeControlApi";
 import { toUserError } from "@/state/appState";
 import { computed, onMounted, reactive, ref } from "vue";
+import copyTextToClipboard from "copy-text-to-clipboard";
 
 const props = defineProps({
   autosave: {
@@ -21,10 +22,14 @@ const error = ref("");
 const selectedIDs = reactive(new Set());
 const deleting = ref(false);
 const clearing = ref(false);
+const cleaningDebug = ref(false);
 const collapsed = reactive(new Set());
 
 const totalSizeBytes = computed(() =>
   sessions.value.reduce((total, session) => total + Number(session.sizeBytes || 0), 0),
+);
+const totalDebugSizeBytes = computed(() =>
+  sessions.value.reduce((total, session) => total + Number(session.debugSizeBytes || 0), 0),
 );
 
 const groupedTree = computed(() => {
@@ -113,6 +118,27 @@ function sessionTitle(session) {
   return session.title || `对话 ${String(session.id).slice(0, 8)}`;
 }
 
+function statusInfo(session) {
+  const status = String(session.status || "").toLowerCase();
+  if (status === "provider_error") return { label: "错误", class: "border-[#7f1d1d] bg-[#451a1a] text-[#fca5a5]", row: "border-[#7f1d1d] bg-[#2a1313]" };
+  if (status === "failed") return { label: "失败", class: "border-[#7f1d1d] bg-[#451a1a] text-[#fca5a5]", row: "border-[#7f1d1d] bg-[#2a1313]" };
+  if (status === "canceled") return { label: "已取消", class: "border-[#525252] bg-[#303030] text-[#a3a3a3]", row: "border-[#404040] bg-[#202020]" };
+  if (["running", "waiting_tool"].includes(status)) return { label: "进行中", class: "border-[#1d4ed8] bg-[#172554] text-[#93c5fd]", row: "border-[#1e3a8a] bg-[#111c36]" };
+  return { label: "", class: "", row: "border-white/5 bg-black/15" };
+}
+
+function copyID(value, label) {
+  const text = String(value || "").trim();
+  if (!text) return;
+  copyTextToClipboard(text);
+  message.success(`已复制${label}`);
+}
+
+function shortID(value) {
+  const text = String(value || "");
+  return text.length > 12 ? `${text.slice(0, 8)}…${text.slice(-4)}` : text;
+}
+
 function toggleSession(id) {
   if (selectedIDs.has(id)) {
     selectedIDs.delete(id);
@@ -156,6 +182,21 @@ async function handleDeleteSelected() {
   }
 }
 
+async function handleCleanSelectedDebug() {
+  if (selectedCount.value === 0 || cleaningDebug.value) return;
+  cleaningDebug.value = true;
+  try {
+    await deleteHistoryDebugLogs([...selectedIDs]);
+    message.success("已清理所选调试日志");
+    selectedIDs.clear();
+    await refresh();
+  } catch (cleanError) {
+    error.value = toUserError(cleanError);
+  } finally {
+    cleaningDebug.value = false;
+  }
+}
+
 async function handleClearAll() {
   if (clearing.value) return;
   const confirmed = await showModal({
@@ -190,8 +231,9 @@ onMounted(() => {
         <div>
           <h2 class="text-sm font-medium text-white">历史与日志</h2>
           <p class="mt-1 text-xs text-[#858585]">
-            {{ sessions.length }} 个会话 · 占用 {{ formatSize(totalSizeBytes) }}
+            {{ sessions.length }} 个会话 · 会话历史 {{ formatSize(totalSizeBytes) }} · 调试日志 {{ formatSize(totalDebugSizeBytes) }}
           </p>
+          <p class="mt-1 text-[11px] text-[#666]">会话历史是对话记录；调试日志是用于错误排查的原始数据，可单独清理。</p>
         </div>
         <div class="flex items-center gap-2">
           <Button variant="default" :disabled="loading" @click="refresh">
@@ -264,7 +306,8 @@ onMounted(() => {
                     <label
                       v-for="session in day.sessions"
                       :key="session.id"
-                      class="flex cursor-pointer items-center gap-2.5 rounded-[6px] border border-white/5 bg-black/15 py-2 pl-14 pr-3 hover:border-white/15"
+                      class="flex cursor-pointer items-center gap-2.5 rounded-[6px] border py-2 pl-14 pr-3 hover:border-white/15"
+                      :class="statusInfo(session).row"
                     >
                       <input
                         type="checkbox"
@@ -284,14 +327,16 @@ onMounted(() => {
                           >
                             {{ session.subagentType }}
                           </span>
-                          <span class="shrink-0 text-[11px] text-[#858585]">{{ formatSize(session.sizeBytes) }}</span>
+                          <span class="shrink-0 text-[11px] text-[#858585]">历史 {{ formatSize(session.sizeBytes) }}</span><span v-if="session.debugSizeBytes" class="shrink-0 text-[11px] text-[#d4a34a]">日志 {{ formatSize(session.debugSizeBytes) }}</span>
                         </div>
                         <div class="mt-0.5 flex items-center gap-2 text-[11px] text-[#858585]">
                           <span>{{ formatTime(session.updatedAtUnixMs || session.createdAtUnixMs) }}</span>
+                          <span v-if="statusInfo(session).label" class="rounded-[4px] border px-1.5 py-0.5 text-[10px]" :class="statusInfo(session).class">{{ statusInfo(session).label }}</span>
                           <span v-if="session.hasDebug" class="rounded-[4px] bg-[#3a2c14] px-1.5 py-0.5 text-[10px] text-[#d4a34a]">
                             调试
                           </span>
-                          <span class="truncate text-[#5f5f5f]" :title="session.id">{{ session.id }}</span>
+                          <button type="button" class="center-row min-w-0 gap-1 truncate text-[#5f5f5f] hover:text-[#d4d4d4]" :title="`复制会话 ID：${session.id}`" @click.stop="copyID(session.id, '会话 ID')"><span class="truncate">{{ shortID(session.id) }}</span><span class="icon-[mdi--content-copy] shrink-0 text-[12px]" /></button>
+                          <button v-if="session.requestId" type="button" class="center-row min-w-0 gap-1 truncate text-[#5f5f5f] hover:text-[#d4d4d4]" :title="`复制请求 ID：${session.requestId}`" @click.stop="copyID(session.requestId, '请求 ID')"><span>请求 {{ shortID(session.requestId) }}</span><span class="icon-[mdi--content-copy] shrink-0 text-[12px]" /></button>
                         </div>
                       </div>
                     </label>
@@ -307,6 +352,9 @@ onMounted(() => {
         <span class="text-xs text-[#d4a34a]">已选中 {{ selectedCount }} 条</span>
         <Button variant="danger" :disabled="deleting" @click="handleDeleteSelected">
           {{ deleting ? "删除中..." : `删除所选 (${selectedCount})` }}
+        </Button>
+        <Button variant="default" :disabled="cleaningDebug" @click="handleCleanSelectedDebug">
+          {{ cleaningDebug ? "清理中..." : `清理调试日志 (${selectedCount})` }}
         </Button>
       </div>
     </div>

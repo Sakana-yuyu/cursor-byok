@@ -161,6 +161,16 @@ func (s *ProxyService) ClearHistory() (int, error) {
 	return clearHistory()
 }
 
+// DeleteHistoryDebugLogs 只删除指定会话的调试日志（debug 子目录），保留会话本体。
+func (s *ProxyService) DeleteHistoryDebugLogs(sessionIDs []string) error {
+	return deleteHistoryDebugLogs(sessionIDs)
+}
+
+// GetHistoryDebugUsage 返回所有会话的调试日志总占用字节数。
+func (s *ProxyService) GetHistoryDebugUsage() (int64, error) {
+	return historyDebugUsage()
+}
+
 // GetDelegationTaskSnapshots returns retained Multitask worker state.
 func (s *ProxyService) GetDelegationTaskSnapshots() []DelegationTaskSnapshot {
 	return s.core.GetDelegationTaskSnapshots()
