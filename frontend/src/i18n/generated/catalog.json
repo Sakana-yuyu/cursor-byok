@@ -533,7 +533,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 357,
+          "line": 366,
           "column": 14
         }
       ]
@@ -562,7 +562,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 175,
+          "line": 183,
           "column": 21
         }
       ]
@@ -798,7 +798,7 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 123,
+          "line": 125,
           "column": 52
         },
         {
@@ -903,8 +903,8 @@
       "refs": [
         {
           "file": "src/views/Diagnostics.vue",
-          "line": 41,
-          "column": 102
+          "line": 251,
+          "column": 104
         }
       ]
     },
@@ -1235,7 +1235,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 342,
+          "line": 351,
           "column": 205
         }
       ]
@@ -2286,7 +2286,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 204,
+          "line": 212,
           "column": 14
         }
       ]
@@ -2351,7 +2351,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 236,
+          "line": 244,
           "column": 51
         }
       ]
@@ -2745,7 +2745,7 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 124,
+          "line": 126,
           "column": 44
         },
         {
@@ -2912,6 +2912,18 @@
         }
       ]
     },
+    "2bb48cfcd147482a": {
+      "source": "会话 {0} 没有调试日志",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 800,
+          "column": 49
+        }
+      ]
+    },
     "2bd5443aae926b8e": {
       "source": "监督模型会检查子任务进度，在发现循环、偏离范围或缺少证据时进行纠偏。",
       "kind": "text",
@@ -3016,12 +3028,12 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 169,
+          "line": 177,
           "column": 17
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 206,
+          "line": 214,
           "column": 17
         },
         {
@@ -3120,7 +3132,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 166,
+          "line": 174,
           "column": 12
         }
       ]
@@ -3241,7 +3253,7 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 168,
+          "line": 176,
           "column": 18
         },
         {
@@ -3391,7 +3403,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 167,
+          "line": 175,
           "column": 14
         }
       ]
@@ -3835,7 +3847,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 342,
+          "line": 351,
           "column": 247
         }
       ]
@@ -3849,6 +3861,18 @@
           "file": "src/views/ModelConfig.vue",
           "line": 493,
           "column": 88
+        }
+      ]
+    },
+    "39fb6557cf251616": {
+      "source": "会话 ID（UUID）",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Diagnostics.vue",
+          "line": 172,
+          "column": 11
         }
       ]
     },
@@ -3936,6 +3960,18 @@
           "file": "src/components/HomeMetricsCard.vue",
           "line": 514,
           "column": 21
+        }
+      ]
+    },
+    "3b0d73f1b265c53a": {
+      "source": "按 requestID 过滤",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Diagnostics.vue",
+          "line": 179,
+          "column": 11
         }
       ]
     },
@@ -4045,7 +4081,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 134,
+          "line": 136,
           "column": 19
         }
       ]
@@ -4382,6 +4418,28 @@
         }
       ]
     },
+    "40ff6300f9817deb": {
+      "source": "诊断",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 350,
+          "column": 291
+        },
+        {
+          "file": "src/router/index.js",
+          "line": 67,
+          "column": 39
+        },
+        {
+          "file": "src/views/Diagnostics.vue",
+          "line": 147,
+          "column": 41
+        }
+      ]
+    },
     "4172af0cc5ec8526": {
       "source": "暂无描述",
       "kind": "text",
@@ -4401,7 +4459,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 360,
+          "line": 369,
           "column": 14
         }
       ]
@@ -4648,6 +4706,18 @@
         }
       ]
     },
+    "4649f036fe896bf5": {
+      "source": "该会话没有调试日志",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Diagnostics.vue",
+          "line": 203,
+          "column": 181
+        }
+      ]
+    },
     "4669785ade95898d": {
       "source": "删除中...",
       "kind": "text",
@@ -4655,7 +4725,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 357,
+          "line": 366,
           "column": 14
         },
         {
@@ -4853,6 +4923,18 @@
         }
       ]
     },
+    "4a6f0a0b410fb664": {
+      "source": "导出证据包",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Diagnostics.vue",
+          "line": 163,
+          "column": 16
+        }
+      ]
+    },
     "4ae1bfcb6bbe1c2e": {
       "source": "已覆盖",
       "kind": "text",
@@ -5002,17 +5084,17 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 40,
+          "line": 42,
           "column": 57
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 41,
+          "line": 43,
           "column": 92
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 42,
+          "line": 44,
           "column": 86
         },
         {
@@ -5175,7 +5257,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 234,
+          "line": 242,
           "column": 35
         }
       ]
@@ -5575,13 +5657,8 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/router/index.js",
-          "line": 67,
-          "column": 39
-        },
-        {
           "file": "src/views/Diagnostics.vue",
-          "line": 32,
+          "line": 237,
           "column": 43
         }
       ]
@@ -5832,8 +5909,8 @@
       "refs": [
         {
           "file": "src/views/Diagnostics.vue",
-          "line": 37,
-          "column": 95
+          "line": 242,
+          "column": 97
         },
         {
           "file": "src/views/ModelConfig.vue",
@@ -6003,8 +6080,8 @@
       "refs": [
         {
           "file": "src/views/Diagnostics.vue",
-          "line": 41,
-          "column": 45
+          "line": 251,
+          "column": 47
         }
       ]
     },
@@ -6400,7 +6477,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 240,
+          "line": 248,
           "column": 16
         },
         {
@@ -6861,8 +6938,8 @@
       "refs": [
         {
           "file": "src/views/Diagnostics.vue",
-          "line": 41,
-          "column": 68
+          "line": 251,
+          "column": 70
         }
       ]
     },
@@ -7388,7 +7465,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 190,
+          "line": 198,
           "column": 33
         }
       ]
@@ -7402,6 +7479,18 @@
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 1210,
           "column": 13
+        }
+      ]
+    },
+    "6df9a984e591ade8": {
+      "source": "读取尾部...",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Diagnostics.vue",
+          "line": 220,
+          "column": 68
         }
       ]
     },
@@ -7645,6 +7734,18 @@
           "file": "src/views/SupplierDetail.vue",
           "line": 1200,
           "column": 22
+        }
+      ]
+    },
+    "725418b8171f08ed": {
+      "source": "会话 {0} 没有调试日志，无法导出证据包",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 809,
+          "column": 58
         }
       ]
     },
@@ -8210,7 +8311,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 102,
+          "line": 104,
           "column": 31
         }
       ]
@@ -8306,7 +8407,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 333,
+          "line": 341,
           "column": 202
         }
       ]
@@ -8962,7 +9063,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 212,
+          "line": 220,
           "column": 21
         }
       ]
@@ -8986,7 +9087,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 232,
+          "line": 240,
           "column": 54
         },
         {
@@ -9020,7 +9121,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 341,
+          "line": 349,
           "column": 135
         }
       ]
@@ -9056,7 +9157,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 259,
+          "line": 267,
           "column": 166
         }
       ]
@@ -9556,7 +9657,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 190,
+          "line": 198,
           "column": 71
         }
       ]
@@ -9739,7 +9840,27 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 255,
+          "line": 263,
+          "column": 14
+        },
+        {
+          "file": "src/views/Diagnostics.vue",
+          "line": 187,
+          "column": 14
+        },
+        {
+          "file": "src/views/Diagnostics.vue",
+          "line": 194,
+          "column": 14
+        },
+        {
+          "file": "src/views/Diagnostics.vue",
+          "line": 224,
+          "column": 20
+        },
+        {
+          "file": "src/views/Diagnostics.vue",
+          "line": 248,
           "column": 14
         },
         {
@@ -10145,6 +10266,18 @@
         }
       ]
     },
+    "98057319c712ab54": {
+      "source": "(空)",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Diagnostics.vue",
+          "line": 227,
+          "column": 131
+        }
+      ]
+    },
     "9821b35b6259c23d": {
       "source": "模型组 {0} 名称",
       "kind": "template",
@@ -10234,12 +10367,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 203,
+          "line": 211,
           "column": 12
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 247,
+          "line": 255,
           "column": 16
         }
       ]
@@ -10524,6 +10657,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/views/Diagnostics.vue",
+          "line": 160,
+          "column": 16
+        },
+        {
           "file": "src/views/MetricsDetail.vue",
           "line": 414,
           "column": 69
@@ -10537,6 +10675,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 796,
           "column": 97
+        }
+      ]
+    },
+    "9de2d926b36337a3": {
+      "source": "{\"request_id\":\"a1b2c3d4-5678-90ab-cdef-1234567890ab\",\"role\":\"assistant\",\"delta\":\"模型返回异常状态 404\"}\n",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 779,
+          "column": 25
         }
       ]
     },
@@ -10857,7 +11007,7 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 125,
+          "line": 127,
           "column": 46
         },
         {
@@ -10874,7 +11024,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 338,
+          "line": 346,
           "column": 134
         }
       ]
@@ -10929,6 +11079,18 @@
           "file": "src/components/HomeMetricsCard.vue",
           "line": 585,
           "column": 23
+        }
+      ]
+    },
+    "a508b639c4a6433c": {
+      "source": "证据包已导出：",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Diagnostics.vue",
+          "line": 198,
+          "column": 139
         }
       ]
     },
@@ -11215,7 +11377,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 355,
+          "line": 364,
           "column": 46
         }
       ]
@@ -11227,7 +11389,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 341,
+          "line": 349,
           "column": 173
         }
       ]
@@ -11508,6 +11670,18 @@
         }
       ]
     },
+    "ab18ead8c7dbc9e3": {
+      "source": "按会话定位调试日志，查看尾部内容并导出证据包。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Diagnostics.vue",
+          "line": 156,
+          "column": 50
+        }
+      ]
+    },
     "ab761e5dba774d10": {
       "source": "未发现协议配置问题。",
       "kind": "text",
@@ -11515,8 +11689,8 @@
       "refs": [
         {
           "file": "src/views/Diagnostics.vue",
-          "line": 42,
-          "column": 124
+          "line": 252,
+          "column": 126
         }
       ]
     },
@@ -11693,7 +11867,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 240,
+          "line": 248,
           "column": 16
         },
         {
@@ -11751,7 +11925,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 333,
+          "line": 341,
           "column": 77
         }
       ]
@@ -11789,6 +11963,18 @@
           "file": "src/views/Home.vue",
           "line": 192,
           "column": 1107
+        }
+      ]
+    },
+    "b1a977cdc77cdb28": {
+      "source": "未找到会话 {0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 808,
+          "column": 49
         }
       ]
     },
@@ -12201,7 +12387,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 255,
+          "line": 263,
           "column": 14
         },
         {
@@ -12240,6 +12426,26 @@
           "column": 11
         },
         {
+          "file": "src/views/Diagnostics.vue",
+          "line": 187,
+          "column": 14
+        },
+        {
+          "file": "src/views/Diagnostics.vue",
+          "line": 194,
+          "column": 14
+        },
+        {
+          "file": "src/views/Diagnostics.vue",
+          "line": 224,
+          "column": 20
+        },
+        {
+          "file": "src/views/Diagnostics.vue",
+          "line": 248,
+          "column": 14
+        },
+        {
           "file": "src/views/Home.vue",
           "line": 192,
           "column": 6620
@@ -12270,6 +12476,18 @@
           "file": "src/views/SupplierDetail.vue",
           "line": 1005,
           "column": 18
+        }
+      ]
+    },
+    "b8d3c81cc2f25a68": {
+      "source": "会话证据",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Diagnostics.vue",
+          "line": 155,
+          "column": 43
         }
       ]
     },
@@ -12335,6 +12553,18 @@
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
           "line": 981,
           "column": 22
+        }
+      ]
+    },
+    "b9d014e4aee2d659": {
+      "source": "加载调试日志...",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Diagnostics.vue",
+          "line": 202,
+          "column": 80
         }
       ]
     },
@@ -13027,6 +13257,18 @@
         }
       ]
     },
+    "c60d8322d91bcd6a": {
+      "source": "列出调试日志",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Diagnostics.vue",
+          "line": 160,
+          "column": 16
+        }
+      ]
+    },
     "c611bf78c9d35f15": {
       "source": "请求费用",
       "kind": "text",
@@ -13118,7 +13360,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 118,
+          "line": 120,
           "column": 27
         }
       ]
@@ -13270,7 +13512,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 205,
+          "line": 213,
           "column": 18
         }
       ]
@@ -13548,7 +13790,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 803,
+          "line": 842,
           "column": 69
         }
       ]
@@ -14389,7 +14631,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 342,
+          "line": 351,
           "column": 160
         }
       ]
@@ -14484,8 +14726,8 @@
         },
         {
           "file": "src/views/Diagnostics.vue",
-          "line": 36,
-          "column": 69
+          "line": 241,
+          "column": 71
         }
       ]
     },
@@ -14560,6 +14802,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/views/Diagnostics.vue",
+          "line": 163,
+          "column": 16
+        },
+        {
           "file": "src/views/Home.vue",
           "line": 192,
           "column": 5150
@@ -14621,7 +14868,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 126,
+          "line": 128,
           "column": 69
         }
       ]
@@ -15017,8 +15264,8 @@
       "refs": [
         {
           "file": "src/views/Diagnostics.vue",
-          "line": 33,
-          "column": 47
+          "line": 238,
+          "column": 49
         }
       ]
     },
@@ -15089,7 +15336,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 107,
+          "line": 109,
           "column": 31
         }
       ]
@@ -15258,6 +15505,18 @@
         }
       ]
     },
+    "e645404787be7478": {
+      "source": "浏览器预览模式不支持导出证据包 ZIP，请在桌面客户端中使用",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 810,
+          "column": 35
+        }
+      ]
+    },
     "e6faccfddce722e8": {
       "source": "缓存读取：{0}",
       "kind": "template",
@@ -15393,8 +15652,8 @@
       "refs": [
         {
           "file": "src/views/Diagnostics.vue",
-          "line": 46,
-          "column": 148
+          "line": 256,
+          "column": 150
         }
       ]
     },
@@ -15496,6 +15755,18 @@
           "file": "src/components/DelegationRuntimePanel.vue",
           "line": 369,
           "column": 13
+        }
+      ]
+    },
+    "ea42f655421727a4": {
+      "source": "模型协议诊断与会话排查证据。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Diagnostics.vue",
+          "line": 148,
+          "column": 45
         }
       ]
     },
@@ -15728,7 +15999,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 234,
+          "line": 242,
           "column": 79
         }
       ]
@@ -15832,7 +16103,7 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 355,
+          "line": 364,
           "column": 70
         },
         {
@@ -16083,6 +16354,18 @@
         }
       ]
     },
+    "f3eb3ded18e10cdf": {
+      "source": "在诊断中打开该会话的调试日志",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 350,
+          "column": 151
+        }
+      ]
+    },
     "f3f7f9ecdd8d232d": {
       "source": "自定义请求头",
       "kind": "text",
@@ -16313,12 +16596,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 247,
+          "line": 255,
           "column": 16
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 360,
+          "line": 369,
           "column": 14
         },
         {
@@ -16780,6 +17063,18 @@
           "file": "src/components/DelegationRuntimePanel.vue",
           "line": 64,
           "column": 15
+        }
+      ]
+    },
+    "fc5e897787ed8b48": {
+      "source": "debug 文件 {0} 不在白名单内",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 802,
+          "column": 46
         }
       ]
     },

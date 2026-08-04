@@ -64,7 +64,7 @@ const router = createRouter({
     {
       path: "/diagnostics",
       component: Diagnostics,
-      meta: { showIcon: false, title: "模型协议诊断", directlyClose: true },
+      meta: { showIcon: false, title: "诊断", directlyClose: true },
     },
     {
       path: "/settings",

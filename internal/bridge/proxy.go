@@ -178,6 +178,24 @@ func (s *ProxyService) GetHistoryDebugUsage() (int64, error) {
 	return historyDebugUsage()
 }
 
+// ExportSessionDebugBundle 把指定会话的排查证据（state.json、context.json、debug/*）
+// 打包成 zip，返回 zip 文件路径。会话目录或 debug 子目录不存在时返回明确错误。
+func (s *ProxyService) ExportSessionDebugBundle(sessionID string) (string, error) {
+	return exportSessionDebugBundle(sessionID)
+}
+
+// ListSessionDebugFiles 列出指定会话 debug 子目录下的文件元信息（名字/大小/mtime）。
+// debug 目录不存在时返回空切片。
+func (s *ProxyService) ListSessionDebugFiles(sessionID string) ([]SessionDebugFile, error) {
+	return listSessionDebugFiles(sessionID)
+}
+
+// ReadSessionDebugTail 只读指定会话 debug 文件的尾部内容。
+// filename 必须命中固定白名单，否则拒绝；maxBytes<=0 时使用默认 64KiB。
+func (s *ProxyService) ReadSessionDebugTail(sessionID, filename string, maxBytes int64) (string, error) {
+	return readSessionDebugTail(sessionID, filename, maxBytes)
+}
+
 // GetDelegationTaskSnapshots returns retained Multitask worker state.
 func (s *ProxyService) GetDelegationTaskSnapshots() []DelegationTaskSnapshot {
 	return s.core.GetDelegationTaskSnapshots()

@@ -770,6 +770,45 @@ export const PurgeAllHistoryDebugLogs = () => {
 export const GetHistoryDebugUsage = () => Promise.resolve(
   previewHistorySessions.reduce((total, session) => total + Number(session.debugSizeBytes || 0), previewOrphanDebugBytes),
 );
+
+// previewSessionDebugFiles 为带调试日志的预览会话提供可读的 debug 文件清单与尾部内容，
+// 让诊断页在浏览器预览模式下也能演示「列出文件 -> 查看尾部 -> 导出证据包」的完整链路。
+// 文件内容内嵌示例 requestID，便于演示按 requestID 过滤。
+const previewDebugFileTail = {
+  "bidi.raw.jsonl": '{"request_id":"a1b2c3d4-5678-90ab-cdef-1234567890ab","dir":"recv","ts":"2026-07-31T15:01:42Z"}\n{"request_id":"a1b2c3d4-5678-90ab-cdef-1234567890ab","dir":"send","ts":"2026-07-31T15:01:43Z","status":500}\n',
+  "bidi.decoded.jsonl": '{"request_id":"a1b2c3d4-5678-90ab-cdef-1234567890ab","role":"assistant","delta":"模型返回异常状态 404"}\n',
+  "runtime.jsonl": '{"request_id":"a1b2c3d4-5678-90ab-cdef-1234567890ab","event":"provider_error","message":"upstream returned 404"}\n',
+  "runsse.jsonl": '{"request_id":"a1b2c3d4-5678-90ab-cdef-1234567890ab","chunk":"data: {\\\"error\\\":\\\"model not found\\\"}\\n\\n"}\n',
+  "provider.jsonl": '{"request_id":"a1b2c3d4-5678-90ab-cdef-1234567890ab","ok":false,"status":404,"body":"model not found"}\n',
+};
+
+function previewSessionDebugFiles(sessionID) {
+  const session = previewHistorySessions.find((item) => item.id === sessionID && item.hasDebug);
+  if (!session) return [];
+  const baseTime = session.updatedAtUnixMs || Date.now();
+  const names = ["bidi.raw.jsonl", "bidi.decoded.jsonl", "runtime.jsonl", "runsse.jsonl", "provider.jsonl"];
+  return names.map((name, index) => ({
+    name,
+    sizeBytes: 256 + index * 128,
+    modTimeUnixMs: baseTime - index * 1000,
+  }));
+}
+
+export const ListSessionDebugFiles = (sessionID) => Promise.resolve(clone(previewSessionDebugFiles(sessionID)));
+export const ReadSessionDebugTail = (sessionID, filename) => {
+  const session = previewHistorySessions.find((item) => item.id === sessionID && item.hasDebug);
+  if (!session) return Promise.reject(new Error(`会话 ${sessionID} 没有调试日志`));
+  const tail = previewDebugFileTail[filename];
+  if (!tail) return Promise.reject(new Error(`debug 文件 ${filename} 不在白名单内`));
+  return Promise.resolve(tail);
+};
+// 浏览器预览没有本地文件系统，无法真的打包证据包。诚实失败，避免空路径被当成成功。
+export const ExportSessionDebugBundle = (sessionID) => {
+  const session = previewHistorySessions.find((item) => item.id === sessionID);
+  if (!session) return Promise.reject(new Error(`未找到会话 ${sessionID}`));
+  if (!session.hasDebug) return Promise.reject(new Error(`会话 ${sessionID} 没有调试日志，无法导出证据包`));
+  return Promise.reject(new Error("浏览器预览模式不支持导出证据包 ZIP，请在桌面客户端中使用"));
+};
 export const CancelDelegationTask = (taskID) => {
   const task = previewDelegationTasks.find((item) => item.id === taskID && item.cancelable);
   if (!task) return Promise.resolve(false);

@@ -11,6 +11,9 @@ import {
   DeleteHistoryDebugLogs,
   PurgeAllHistoryDebugLogs,
   GetHistoryDebugUsage,
+  ExportSessionDebugBundle,
+  ListSessionDebugFiles,
+  ReadSessionDebugTail,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
 import { getDelegationConfig as getDelegationConfigBinding, saveDelegationConfig as saveDelegationConfigBinding } from "@/services/clientApi";
 
@@ -191,4 +194,32 @@ export function purgeAllHistoryDebugLogs() {
 
 export function getHistoryDebugUsage() {
   return GetHistoryDebugUsage().then((bytes) => Number(bytes || 0));
+}
+
+function normalizeSessionDebugFile(file) {
+  const raw = file && typeof file === "object" ? file : {};
+  return {
+    name: String(raw.name || ""),
+    sizeBytes: Number(raw.sizeBytes || 0),
+    modTimeUnixMs: Number(raw.modTimeUnixMs || 0),
+  };
+}
+
+// listSessionDebugFiles 列出指定会话 debug 子目录下的文件元信息。
+// debug 目录不存在时后端返回空切片。
+export function listSessionDebugFiles(sessionID) {
+  return ListSessionDebugFiles(String(sessionID || "")).then((items) => (
+    Array.isArray(items) ? items.map((item) => normalizeSessionDebugFile(item)) : []
+  ));
+}
+
+// readSessionDebugTail 读取指定会话 debug 文件的尾部内容。
+// maxBytes<=0 时后端使用默认 64KiB。
+export function readSessionDebugTail(sessionID, filename, maxBytes = 0) {
+  return ReadSessionDebugTail(String(sessionID || ""), String(filename || ""), Number(maxBytes || 0)).then((text) => String(text || ""));
+}
+
+// exportSessionDebugBundle 打包指定会话的排查证据为 zip，返回 zip 文件路径。
+export function exportSessionDebugBundle(sessionID) {
+  return ExportSessionDebugBundle(String(sessionID || "")).then((path) => String(path || ""));
 }

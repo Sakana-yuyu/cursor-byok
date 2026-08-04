@@ -1,16 +1,20 @@
 package bridge
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
 	"cursor/internal/appdata"
 	"cursor/internal/backend/forwarder"
+	"cursor/internal/client"
 	"cursor/internal/historymetrics"
 )
 
@@ -416,4 +420,227 @@ func clearHistory() (int, error) {
 		firstErr = err
 	}
 	return deleted, firstErr
+}
+
+// SessionDebugFile 是 debug 子目录下单个调试日志文件的展示元数据。
+type SessionDebugFile struct {
+	Name        string `json:"name"`
+	SizeBytes   int64  `json:"sizeBytes"`
+	ModTimeUnix int64  `json:"modTimeUnixMs"`
+}
+
+// sessionDebugFileWhitelist 是允许读取尾部的 debug 文件名白名单。
+// 与 internal/backend/forwarder/debug_recorder.go 写入的固定文件名保持一致，
+// 拒绝任意路径拼接，防止通过 filename 参数穿越到会话目录之外。
+var sessionDebugFileWhitelist = map[string]bool{
+	"bidi.raw.jsonl":     true,
+	"bidi.decoded.jsonl": true,
+	"runtime.jsonl":      true,
+	"runsse.jsonl":       true,
+	"provider.jsonl":     true,
+}
+
+// readSessionDebugTailDefault 是 maxBytes<=0 时读取尾部的默认字节数。
+const readSessionDebugTailDefault int64 = 64 * 1024
+
+// validateSessionID 校验 sessionID 是标准 UUID，防止路径穿越。
+func validateSessionID(sessionID string) (string, error) {
+	id := strings.TrimSpace(sessionID)
+	if !historySessionIDPattern.MatchString(id) {
+		return "", fmt.Errorf("invalid session id: %q", sessionID)
+	}
+	return id, nil
+}
+
+// exportSessionDebugBundleIn 是 exportSessionDebugBundle 的可测形式：
+// historyRoot 与 logsRoot 由调用方给出，便于用 t.TempDir() 构造隔离环境。
+// 只读遍历，不进 PurgeDebugLogs 闸门（读操作不该阻塞落盘）。
+// 目标会话目录或 debug 子目录不存在时返回明确错误，不返回空路径。
+func exportSessionDebugBundleIn(historyRoot, logsRoot, sessionID string) (string, error) {
+	id, err := validateSessionID(sessionID)
+	if err != nil {
+		return "", err
+	}
+	sessionDir := filepath.Join(historyRoot, id)
+	if info, statErr := os.Stat(sessionDir); statErr != nil || !info.IsDir() {
+		return "", fmt.Errorf("session directory not found: %s", id)
+	}
+	debugDir := filepath.Join(sessionDir, "debug")
+	if info, statErr := os.Stat(debugDir); statErr != nil || !info.IsDir() {
+		return "", fmt.Errorf("debug directory not found for session %s", id)
+	}
+
+	if err := os.MkdirAll(logsRoot, 0o755); err != nil {
+		return "", fmt.Errorf("create logs directory: %w", err)
+	}
+	short := id
+	if len(short) > 8 {
+		short = short[:8]
+	}
+	zipName := fmt.Sprintf("session-%s-%s.zip", short, time.Now().Format("20060102-150405"))
+	zipPath := filepath.Join(logsRoot, zipName)
+
+	zipFile, err := os.Create(zipPath)
+	if err != nil {
+		return "", fmt.Errorf("create bundle file: %w", err)
+	}
+	defer func() { _ = zipFile.Close() }()
+
+	zipWriter := zip.NewWriter(zipFile)
+
+	// 打包会话目录下的 state.json、context.json 与 debug/*。
+	// 不递归整个会话目录（避免把临时文件、残留目录都塞进证据包），
+	// 而是显式枚举排查证据所需的三类文件。
+	entries := []string{"state.json", "context.json"}
+	for _, name := range entries {
+		src := filepath.Join(sessionDir, name)
+		if _, statErr := os.Stat(src); statErr != nil {
+			continue
+		}
+		if err := appendFileToZip(zipWriter, sessionDir, name, src); err != nil {
+			_ = zipWriter.Close()
+			_ = os.Remove(zipPath)
+			return "", fmt.Errorf("pack %s: %w", name, err)
+		}
+	}
+
+	debugEntries, readErr := os.ReadDir(debugDir)
+	if readErr != nil {
+		_ = zipWriter.Close()
+		_ = os.Remove(zipPath)
+		return "", fmt.Errorf("read debug dir: %w", readErr)
+	}
+	for _, entry := range debugEntries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if err := appendFileToZip(zipWriter, debugDir, filepath.Join("debug", name), filepath.Join(debugDir, name)); err != nil {
+			_ = zipWriter.Close()
+			_ = os.Remove(zipPath)
+			return "", fmt.Errorf("pack debug/%s: %w", name, err)
+		}
+	}
+
+	if err := zipWriter.Close(); err != nil {
+		_ = os.Remove(zipPath)
+		return "", fmt.Errorf("close bundle: %w", err)
+	}
+	return zipPath, nil
+}
+
+// appendFileToZip 把单个文件写入 zip，archiveName 是 zip 内的相对路径。
+func appendFileToZip(zipWriter *zip.Writer, baseDir, archiveName, srcPath string) error {
+	writer, err := zipWriter.Create(filepath.ToSlash(archiveName))
+	if err != nil {
+		return err
+	}
+	file, err := os.Open(srcPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = file.Close() }()
+	if _, err := io.Copy(writer, file); err != nil {
+		return err
+	}
+	return nil
+}
+
+// listSessionDebugFilesIn 是 listSessionDebugFiles 的可测形式。
+// debug 目录不存在返回空切片 + nil（落盘 worker 并发删除后的瞬时状态视为正常空）。
+func listSessionDebugFilesIn(historyRoot, sessionID string) ([]SessionDebugFile, error) {
+	id, err := validateSessionID(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	debugDir := filepath.Join(historyRoot, id, "debug")
+	entries, err := os.ReadDir(debugDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []SessionDebugFile{}, nil
+		}
+		return nil, fmt.Errorf("read debug dir: %w", err)
+	}
+	files := make([]SessionDebugFile, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		info, infoErr := entry.Info()
+		if infoErr != nil {
+			continue
+		}
+		files = append(files, SessionDebugFile{
+			Name:        entry.Name(),
+			SizeBytes:   info.Size(),
+			ModTimeUnix: info.ModTime().UnixMilli(),
+		})
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
+	return files, nil
+}
+
+// readSessionDebugTailIn 是 readSessionDebugTail 的可测形式。
+// filename 必须命中白名单，否则拒绝；只读文件尾部 maxBytes 字节。
+// 文件不存在返回明确错误。
+func readSessionDebugTailIn(historyRoot, sessionID, filename string, maxBytes int64) (string, error) {
+	id, err := validateSessionID(sessionID)
+	if err != nil {
+		return "", err
+	}
+	name := strings.TrimSpace(filename)
+	if !sessionDebugFileWhitelist[name] {
+		return "", fmt.Errorf("debug file %q is not allowed", filename)
+	}
+	if maxBytes <= 0 {
+		maxBytes = readSessionDebugTailDefault
+	}
+	path := filepath.Join(historyRoot, id, "debug", name)
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("debug file not found: %s", name)
+		}
+		return "", fmt.Errorf("stat debug file: %w", err)
+	}
+
+	// 文件小于阈值时整体读取；否则定位到尾部 maxBytes 处读取，保留最新内容
+	// （rotateIfNeeded 保留尾部策略与「读尾部」语义一致，最新部分最可能含错误）。
+	if info.Size() <= maxBytes {
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return "", fmt.Errorf("read debug file: %w", readErr)
+		}
+		return string(data), nil
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("open debug file: %w", err)
+	}
+	defer func() { _ = file.Close() }()
+	if _, err := file.Seek(-maxBytes, io.SeekEnd); err != nil {
+		return "", fmt.Errorf("seek debug file: %w", err)
+	}
+	buf := make([]byte, maxBytes)
+	n, err := io.ReadFull(file, buf)
+	if err != nil && err != io.ErrUnexpectedEOF && err != io.EOF {
+		return "", fmt.Errorf("read debug tail: %w", err)
+	}
+	return string(buf[:n]), nil
+}
+
+// exportSessionDebugBundle 把指定会话的排查证据打包成 zip，返回 zip 路径。
+func exportSessionDebugBundle(sessionID string) (string, error) {
+	return exportSessionDebugBundleIn(appdata.HistoryRootPath(), client.ResolveLogsRootPath(), sessionID)
+}
+
+// listSessionDebugFiles 列出指定会话 debug 子目录下的文件元信息。
+func listSessionDebugFiles(sessionID string) ([]SessionDebugFile, error) {
+	return listSessionDebugFilesIn(appdata.HistoryRootPath(), sessionID)
+}
+
+// readSessionDebugTail 读取指定会话 debug 文件的尾部内容。
+func readSessionDebugTail(sessionID, filename string, maxBytes int64) (string, error) {
+	return readSessionDebugTailIn(appdata.HistoryRootPath(), sessionID, filename, maxBytes)
 }

@@ -6,6 +6,7 @@ import { showModal } from "@/composables/useModal";
 import { clearHistory, deleteHistoryDebugLogs, deleteHistorySessions, getHistorySessions } from "@/services/runtimeControlApi";
 import { toUserError } from "@/state/appState";
 import { computed, onMounted, reactive, ref } from "vue";
+import { useRouter } from "vue-router";
 import copyTextToClipboard from "copy-text-to-clipboard";
 
 const props = defineProps({
@@ -16,6 +17,7 @@ const props = defineProps({
 });
 
 const message = useMessage();
+const router = useRouter();
 const sessions = ref([]);
 const loading = ref(false);
 const error = ref("");
@@ -132,6 +134,12 @@ function copyID(value, label) {
   if (!text) return;
   copyTextToClipboard(text);
   message.success(`已复制${label}`);
+}
+
+function openInDiagnostics(sessionID) {
+  const id = String(sessionID || "").trim();
+  if (!id) return;
+  void router.push({ path: "/diagnostics", query: { session: id } });
 }
 
 function shortID(value) {
@@ -339,6 +347,7 @@ onMounted(() => {
                             调试
                           </span>
                           <button type="button" class="center-row min-w-0 gap-1 truncate text-[#5f5f5f] hover:text-[#d4d4d4]" :title="`复制会话 ID：${session.id}`" @click.stop="copyID(session.id, '会话 ID')"><span class="truncate">{{ shortID(session.id) }}</span><span class="icon-[mdi--content-copy] shrink-0 text-[12px]" /></button>
+                          <button v-if="session.hasDebug" type="button" class="center-row min-w-0 gap-1 truncate text-[#5f5f5f] hover:text-[#d4d4d4]" title="在诊断中打开该会话的调试日志" @click.stop="openInDiagnostics(session.id)"><span class="icon-[mdi--bug-check-outline] shrink-0 text-[12px]" /><span>诊断</span></button>
                           <button v-if="session.requestId" type="button" class="center-row min-w-0 gap-1 truncate text-[#5f5f5f] hover:text-[#d4d4d4]" :title="`复制请求 ID：${session.requestId}`" @click.stop="copyID(session.requestId, '请求 ID')"><span>请求 {{ shortID(session.requestId) }}</span><span class="icon-[mdi--content-copy] shrink-0 text-[12px]" /></button>
                         </div>
                       </div>
