@@ -133,10 +133,25 @@ func writeVisionTempImage(payload []byte, mime string) (string, error) {
 		return "", fmt.Errorf("create vision temp dir: %w", err)
 	}
 	ext := imageFileExtension(mime)
-	name := fmt.Sprintf("img-%d%s", time.Now().UnixNano(), ext)
-	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, payload, 0o600); err != nil {
+	// 用 CreateTemp 保证并发落地（browser 多截图、多图并行识图）时文件名唯一：
+	// 旧实现按 UnixNano 命名，同纳秒并发写入会互相覆盖，导致图片路径指向错误内容。
+	file, err := os.CreateTemp(dir, "img-*"+ext)
+	if err != nil {
+		return "", fmt.Errorf("create vision temp image: %w", err)
+	}
+	path := file.Name()
+	if _, err := file.Write(payload); err != nil {
+		file.Close()
+		os.Remove(path)
 		return "", fmt.Errorf("write vision temp image: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		os.Remove(path)
+		return "", fmt.Errorf("close vision temp image: %w", err)
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		os.Remove(path)
+		return "", fmt.Errorf("chmod vision temp image: %w", err)
 	}
 	return path, nil
 }

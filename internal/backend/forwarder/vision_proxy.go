@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -99,16 +100,19 @@ func normalizeVisionProxyMode(value string) string {
 
 // needsVisionProxy 判断是否需要对当前 provider pass 执行视觉委派。
 // 条件：视觉委派已启用 && 配置了识图模型 && 主模型明确不支持视觉 && 消息含图片。
+// 视觉能力判定同时检查模型 ID 与显示名：客户端传入的 displayName/渠道名可能匹配不上
+// 能力目录（如 "GPT-5.6 Luna" vs "gpt-5.6-luna"），任一命中即视为支持视觉，避免
+// 多模态模型被误判为纯文本而重复走委派。
 // 图片 content part 是否存在按 Type 判断：历史恢复后图片字节可能丢失（只剩空 part），
 // synthesize 内部会通过会话内落地文件缓存补回路径或替换为强引导占位，不会空转，
 // 因此这里不需要校验 Image 是否可用——任何图片 part 都必须进入识图流程，否则
 // "正常开发中给图 + 叙述需求"的场景会静默不触发。
-func (service *Service) needsVisionProxy(modelName string, messages []modeladapter.Message) bool {
+func (service *Service) needsVisionProxy(modelID string, modelName string, messages []modeladapter.Message) bool {
 	config := service.resolveVisionProxyConfig()
 	if !config.enabled {
 		return false
 	}
-	if supportsVision(modelName) {
+	if supportsVision(modelID) || supportsVision(modelName) {
 		return false
 	}
 	return messagesContainImage(messages)
@@ -214,6 +218,13 @@ func (service *Service) synthesizeImageDescriptions(ctx context.Context, request
 		// 没有任何可识别的图片：把空图片替换为强引导占位，让模型明确知道"有图
 		// 但读不到"并采取行动（要求重发/描述），而不是静默跳过。
 		return service.placeholderUnavailableImages(messages)
+	}
+	// 会话级归档预检：全部图片已识图过（被打断后继续 / 历史恢复场景）时，
+	// 直接替换为归档文本并返回，不注册视觉委派运行、不调用识图模型——
+	// 用户"继续"时是纯引用上下文，不应再次出现委派。
+	if service.visionAllArchived(conversationID, messages) {
+		vdbg("[pass] all images archived -> reuse context request_id=%s conv=%s images=%d", requestID, conversationID, imageCount)
+		return service.visionReplaceFromArchive(conversationID, messages)
 	}
 	startedAt := time.Now()
 	log.Printf("forwarder vision proxy pass started request_model=%s vision_model=%s mode=%s images=%d",
@@ -417,6 +428,18 @@ func (service *Service) synthesizeMessageImages(ctx context.Context, requestID s
 				vdbg("[goro] CTX_ERR idx=%d err=%v", p.index, ctxErr)
 				return
 			}
+			// 会话级图片归档：同一会话内同一张图（按内容哈希）已识图过时，
+			// 直接复用归档文本替换图片 part，不再调识图模型，也不再让图片字节
+			// 反复进入 provider 上下文（历史恢复/被打断后继续场景的关键兜底）。
+			archiveKeys := service.visionArchiveKeys(conversationID, p.image)
+			if text, ok := service.lookupVisionArchive(conversationID, archiveKeys); ok {
+				service.visionRunImageDone(requestID, nil)
+				mu.Lock()
+				replaced[p.index] = modeladapter.NewTextContentPart(text)
+				mu.Unlock()
+				vdbg("[goro] ARCHIVE_HIT idx=%d keys=%d text_len=%d", p.index, len(archiveKeys), len(text))
+				return
+			}
 			key := visionCacheKey(requestID, p.image)
 			vdbg("[goro] describe idx=%d key=%q", p.index, key)
 			description, err := service.cachedVisionDescribe(ctx, key, p.image, config, userContext)
@@ -444,6 +467,8 @@ func (service *Service) synthesizeMessageImages(ctx context.Context, requestID s
 				replaced[p.index] = modeladapter.NewTextContentPart(
 					fmt.Sprintf("%s · 由 %s 提供）]\n%s", visionProxyResultPrefix, config.visionName, description),
 				)
+				// 识图成功即归档，后续 turn 直接引用，防重复委派与上下文膨胀。
+				service.storeVisionArchive(conversationID, archiveKeys, replaced[p.index].Text)
 			}
 			mu.Unlock()
 		}(item)
@@ -641,6 +666,265 @@ func visionCacheKey(requestID string, image *modeladapter.ImageContent) string {
 	}
 	sum := sha256.Sum256(image.Data)
 	return strings.TrimSpace(requestID) + "#" + hex.EncodeToString(sum[:12])
+}
+
+// ---- 会话级图片识图归档 ----
+
+const (
+	// visionArchiveMaxEntries 会话级图片识图归档上限；超限时清空整体（防进程内无限增长）。
+	visionArchiveMaxEntries = 1024
+)
+
+// visionArchiveEntry 归档一条图片识图结果。
+type visionArchiveEntry struct {
+	text string
+	at   time.Time
+}
+
+// visionArchiveDiskFile 是落盘格式：imageHash -> 识图结果。
+// 文件位于 history/<conversationID>/vision-archive.json，进程重启后仍可命中，
+// 避免同一会话的图片在每次重启后被重新识图。
+type visionArchiveDiskFile struct {
+	Entries map[string]visionArchiveDiskEntry `json:"entries"`
+}
+
+type visionArchiveDiskEntry struct {
+	Text string    `json:"text"`
+	At   time.Time `json:"at"`
+}
+
+const visionArchiveFileName = "vision-archive.json"
+
+// visionArchivePath 返回会话级识图归档的落盘路径。
+func (service *Service) visionArchivePath(conversationID string) string {
+	if service == nil || service.store == nil {
+		return ""
+	}
+	normalized := strings.TrimSpace(conversationID)
+	if normalized == "" {
+		return ""
+	}
+	return filepath.Join(service.store.conversationDir(normalized), visionArchiveFileName)
+}
+
+// ensureVisionArchiveLoaded 懒加载该会话的磁盘归档进内存；已加载或读取失败时静默返回。
+// 读取失败（文件损坏/缺失）不阻断流程：归档仅是加速，缺失时按未归档处理一次即可。
+func (service *Service) ensureVisionArchiveLoaded(conversationID string) {
+	if service == nil {
+		return
+	}
+	normalized := strings.TrimSpace(conversationID)
+	if normalized == "" {
+		return
+	}
+	path := service.visionArchivePath(normalized)
+	if path == "" {
+		return
+	}
+	service.visionArchiveMu.Lock()
+	defer service.visionArchiveMu.Unlock()
+	if service.visionArchiveLoaded == nil {
+		service.visionArchiveLoaded = make(map[string]struct{})
+	}
+	if _, ok := service.visionArchiveLoaded[normalized]; ok {
+		return
+	}
+	service.visionArchiveLoaded[normalized] = struct{}{}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return // 文件不存在或不可读：按空归档处理
+	}
+	var diskFile visionArchiveDiskFile
+	if err := json.Unmarshal(data, &diskFile); err != nil {
+		log.Printf("forwarder vision archive decode failed conv=%s error=%v", normalized, err)
+		return
+	}
+	if service.visionArchive == nil {
+		service.visionArchive = make(map[string]visionArchiveEntry)
+	}
+	for imageHash, entry := range diskFile.Entries {
+		if strings.TrimSpace(entry.Text) == "" {
+			continue
+		}
+		service.visionArchive[normalized+"#"+imageHash] = visionArchiveEntry{
+			text: strings.TrimSpace(entry.Text),
+			at:   entry.At,
+		}
+	}
+}
+
+// persistVisionArchive 把该会话的归档条目写盘（尽力而为，失败仅记日志不阻断）。
+func (service *Service) persistVisionArchive(conversationID string) {
+	if service == nil {
+		return
+	}
+	normalized := strings.TrimSpace(conversationID)
+	if normalized == "" {
+		return
+	}
+	path := service.visionArchivePath(normalized)
+	if path == "" {
+		return
+	}
+	service.visionArchiveMu.Lock()
+	diskFile := visionArchiveDiskFile{Entries: make(map[string]visionArchiveDiskEntry, 8)}
+	prefix := normalized + "#"
+	for key, entry := range service.visionArchive {
+		if !strings.HasPrefix(key, prefix) {
+			continue
+		}
+		imageHash := strings.TrimPrefix(key, prefix)
+		diskFile.Entries[imageHash] = visionArchiveDiskEntry{Text: entry.text, At: entry.at}
+	}
+	service.visionArchiveMu.Unlock()
+	if len(diskFile.Entries) == 0 {
+		return
+	}
+	data, err := json.Marshal(diskFile)
+	if err != nil {
+		log.Printf("forwarder vision archive marshal failed conv=%s error=%v", normalized, err)
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return
+	}
+	tempPath := path + ".tmp"
+	if err := os.WriteFile(tempPath, data, 0o600); err != nil {
+		return
+	}
+	if err := os.Rename(tempPath, path); err != nil {
+		_ = os.Remove(tempPath)
+	}
+}
+
+// lookupVisionArchive 查询会话级识图归档；候选键任一命中即返回已归档的识图结果文本。
+func (service *Service) lookupVisionArchive(conversationID string, keys []string) (string, bool) {
+	if service == nil || len(keys) == 0 {
+		return "", false
+	}
+	service.ensureVisionArchiveLoaded(conversationID)
+	service.visionArchiveMu.Lock()
+	defer service.visionArchiveMu.Unlock()
+	for _, key := range keys {
+		entry, ok := service.visionArchive[key]
+		if ok && strings.TrimSpace(entry.text) != "" {
+			return entry.text, true
+		}
+	}
+	return "", false
+}
+
+// storeVisionArchive 写入会话级识图归档；空 key 或空文本不写。
+// 同一张图的所有候选键都写入，保证后续以任意形态出现都能命中；同时落盘，
+// 使进程重启后（同会话、同图片内容）仍可命中归档。
+func (service *Service) storeVisionArchive(conversationID string, keys []string, text string) {
+	if service == nil || len(keys) == 0 || strings.TrimSpace(text) == "" {
+		return
+	}
+	service.visionArchiveMu.Lock()
+	if service.visionArchive == nil {
+		service.visionArchive = make(map[string]visionArchiveEntry)
+	}
+	if limit := service.visionArchiveLimit; limit > 0 && len(service.visionArchive) >= limit {
+		service.visionArchive = make(map[string]visionArchiveEntry)
+		service.visionArchiveLoaded = make(map[string]struct{})
+	}
+	entry := visionArchiveEntry{text: strings.TrimSpace(text), at: time.Now().UTC()}
+	for _, key := range keys {
+		service.visionArchive[key] = entry
+	}
+	service.visionArchiveMu.Unlock()
+	service.persistVisionArchive(conversationID)
+}
+
+// visionAllArchived 判断消息中的所有图片是否都已在会话归档中（无需再调识图模型）。
+// 用于「被打断后继续 / 历史恢复」时跳过视觉委派：图片之前已识图过，直接引用归档结果。
+func (service *Service) visionAllArchived(conversationID string, messages []modeladapter.Message) bool {
+	if service == nil {
+		return false
+	}
+	found := false
+	for _, msg := range messages {
+		for _, part := range msg.ContentParts {
+			if !modeladapter.IsImageContentPart(part) || part.Image == nil {
+				continue
+			}
+			if len(part.Image.Data) == 0 && strings.TrimSpace(part.Image.Path) == "" {
+				continue
+			}
+			found = true
+			if _, ok := service.lookupVisionArchive(conversationID, service.visionArchiveKeys(conversationID, part.Image)); !ok {
+				return false
+			}
+		}
+	}
+	return found
+}
+
+// visionArchiveKeys 生成会话级归档候选键：conversationID + 图片内容哈希。
+// 与 visionCacheKey 不同，它跨 request/turn 有效，是「被打断后继续 / 历史恢复」时
+// 直接引用已识图结果、避免重复委派的关键。同一张图在不同时刻可能以不同形态出现：
+//   - 首次上传：携带 Data 字节（可能同时有 Path）；
+//   - 历史恢复：字节丢失只剩 Path（checkpoint 不持久化图片字节）。
+//
+// 键选择规则（保证同一张图两种形态映射到同一键，且不同图片绝不串键）：
+//   - Data 非空：只用 Data 内容哈希（字节级唯一，最可靠）；
+//   - Data 为空：用 Path 指向的本地文件内容哈希；读不到内容时退回 Path 字符串哈希。
+//
+// 注意：Data 存在时绝不能把 Path 文件内容哈希加入候选键——落地临时文件可能因
+// 并发写入出现路径冲突（同名文件被覆盖），会导致不同图片共享同一 Path 内容哈希
+// 而误命中归档、串用识图结果。
+func (service *Service) visionArchiveKeys(conversationID string, image *modeladapter.ImageContent) []string {
+	if image == nil {
+		return nil
+	}
+	prefix := strings.TrimSpace(conversationID)
+	if prefix == "" {
+		return nil
+	}
+	if len(image.Data) > 0 {
+		sum := sha256.Sum256(image.Data)
+		return []string{prefix + "#" + hex.EncodeToString(sum[:])}
+	}
+	path := strings.TrimSpace(image.Path)
+	if path == "" {
+		return nil
+	}
+	if !strings.HasPrefix(path, "http://") && !strings.HasPrefix(path, "https://") {
+		if data, err := os.ReadFile(path); err == nil && len(data) > 0 {
+			sum := sha256.Sum256(data)
+			return []string{prefix + "#" + hex.EncodeToString(sum[:])}
+		}
+	}
+	sum := sha256.Sum256([]byte(path))
+	return []string{prefix + "#p:" + hex.EncodeToString(sum[:])}
+}
+
+// visionReplaceFromArchive 把消息中所有图片替换为会话归档中的识图结果文本。
+// 调用前必须已通过 visionAllArchived 确认所有图片均可命中归档。
+func (service *Service) visionReplaceFromArchive(conversationID string, messages []modeladapter.Message) []modeladapter.Message {
+	result := make([]modeladapter.Message, len(messages))
+	for i, msg := range messages {
+		if !modeladapter.MessageHasImage(msg) {
+			result[i] = msg
+			continue
+		}
+		replaced := make([]modeladapter.ContentPart, 0, len(msg.ContentParts))
+		for _, part := range msg.ContentParts {
+			if modeladapter.IsImageContentPart(part) && part.Image != nil {
+				if text, ok := service.lookupVisionArchive(conversationID, service.visionArchiveKeys(conversationID, part.Image)); ok {
+					replaced = append(replaced, modeladapter.NewTextContentPart(text))
+					continue
+				}
+			}
+			replaced = append(replaced, part)
+		}
+		next := msg
+		next.ContentParts = replaced
+		next.Content = modeladapter.CollapseTextContentParts(replaced)
+		result[i] = next
+	}
+	return result
 }
 
 // cachedVisionDescribe 带缓存执行识图调用。

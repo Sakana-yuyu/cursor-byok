@@ -323,6 +323,16 @@ type Service struct {
 	visionCache              map[string]visionCacheEntry
 	visionImageMu            sync.Mutex
 	visionImageFiles         map[string][]string
+	// visionArchiveMu 保护 visionArchive：会话级图片识图结果归档。
+	// key = conversationID#imageHash，命中后直接用归档文本替换图片 part，
+	// 不再重复调识图模型，也避免历史图片反复进入 provider 上下文。
+	// 归档同时落盘到 history/<conversationID>/vision-archive.json，
+	// 进程重启后（同会话、同图片内容）仍可命中；visionArchiveLoaded 记录
+	// 已懒加载过的会话，避免重复读盘。
+	visionArchiveMu      sync.Mutex
+	visionArchive        map[string]visionArchiveEntry
+	visionArchiveLimit   int
+	visionArchiveLoaded  map[string]struct{}
 	provider400RecoveryMu    sync.Mutex
 	provider400RecoveryTurns map[string]struct{}
 	// conversationActivityMu 保护 conversationLastActivity：
@@ -426,6 +436,8 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 		visionRuns:               make(map[string]*visionDelegationRun),
 		visionCache:              make(map[string]visionCacheEntry),
 		visionImageFiles:         make(map[string][]string),
+		visionArchive:            make(map[string]visionArchiveEntry),
+		visionArchiveLimit:       visionArchiveMaxEntries,
 		checkpointBlobs:          make(map[string]*checkpointBlobCacheEntry),
 		conversationLastActivity: make(map[string]time.Time),
 	}
@@ -473,6 +485,8 @@ func newServiceWithDependencies(store *ConversationFileStore, projector *History
 		visionRuns:               make(map[string]*visionDelegationRun),
 		visionCache:              make(map[string]visionCacheEntry),
 		visionImageFiles:         make(map[string][]string),
+		visionArchive:            make(map[string]visionArchiveEntry),
+		visionArchiveLimit:       visionArchiveMaxEntries,
 		checkpointBlobs:          make(map[string]*checkpointBlobCacheEntry),
 		conversationLastActivity: make(map[string]time.Time),
 	}
@@ -2029,8 +2043,8 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	// 此处持有 service.provider，可发起同步子调用；替换后不再含图片 ContentPart，
 	// 下游 router.stripImagesFromMessages 会原样放行，不会重复处理。
 	// 未启用视觉委派时，从工具清单剔除 see_image，避免模型调用一个不可用的工具。
-	if service.needsVisionProxy(modelName, compiled.Messages) {
-		vdbg("[service] needsVisionProxy true -> run vision pass msgs=%d model=%s", len(compiled.Messages), modelName)
+	if service.needsVisionProxy(modelID, modelName, compiled.Messages) {
+		vdbg("[service] needsVisionProxy true -> run vision pass msgs=%d model=%s model_id=%s", len(compiled.Messages), modelName, modelID)
 		visionCtx, visionCancel := context.WithCancel(context.Background())
 		compiled.Messages = service.synthesizeImageDescriptions(visionCtx, requestID, conversationID, compiled.Messages, modelName)
 		visionCancel()
