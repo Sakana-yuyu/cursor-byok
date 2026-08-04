@@ -37,7 +37,8 @@ func (s *ProxyService) RepairProxySettings() (ProxyRepairResult, error) {
 	appendDetail := func(text string) { details = append(details, text) }
 
 	state := s.GetState()
-	if s.proxy == nil || !state.ProxyRunning {
+	proxyWasRunning := s.proxy != nil && state.ProxyRunning
+	if !proxyWasRunning {
 		appendDetail("本地代理服务未运行，正在自动启动…")
 		started, err := s.StartProxy()
 		if err != nil {
@@ -45,6 +46,15 @@ func (s *ProxyService) RepairProxySettings() (ProxyRepairResult, error) {
 		}
 		state = started
 		appendDetail("本地代理服务已启动")
+		// StartProxy 内部已经调用过 ApplyCursorSettings（含 CA 信任建立），
+		// 这里不再重复执行，避免对系统证书库/环境变量做二次写入。
+	} else {
+		// 代理本来就在运行——这种情况才是「修复」的核心场景：
+		// 用户大概率是因为 CA 信任丢失才来点修复，所以这里强制重新建立信任 + 写配置。
+		if err := s.ApplyCursorSettings(); err != nil {
+			return ProxyRepairResult{Details: details}, fmt.Errorf("注入 Cursor 代理配置失败: %w", err)
+		}
+		appendDetail("已重新写入 Cursor 代理配置")
 	}
 
 	proxyURL := strings.TrimSpace(cursor.ProxyURLFromListenAddr(state.ProxyListenAddr))
@@ -55,11 +65,6 @@ func (s *ProxyService) RepairProxySettings() (ProxyRepairResult, error) {
 		return ProxyRepairResult{Details: details}, fmt.Errorf("无法获取本地代理监听地址")
 	}
 	appendDetail(fmt.Sprintf("代理地址：%s", proxyURL))
-
-	if err := s.ApplyCursorSettings(); err != nil {
-		return ProxyRepairResult{Details: details}, fmt.Errorf("注入 Cursor 代理配置失败: %w", err)
-	}
-	appendDetail("已重新写入 Cursor 代理配置")
 
 	applied, settingsPath, actualValue, verifyErr := cursor.VerifyUserProxySettings(proxyURL)
 	result := ProxyRepairResult{

@@ -11,6 +11,8 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
+	"fmt"
+	"log"
 	"math/big"
 	"net"
 	"os"
@@ -44,6 +46,13 @@ func NewManager(caCertPath, caKeyPath string) (*Manager, error) {
 
 // NewPersistentManager loads an existing local CA or creates one on first use.
 // The private key stays in the per-user data directory and is never part of the repository.
+//
+// 生成策略（确保「升级版本不重新生成 CA」）：
+//   - cert 与 key 都存在：直接复用，绝不重新生成（升级、重启均走这条路径）。
+//   - cert 与 key 都不存在：首次安装，生成新 CA 并落盘。
+//   - 仅存在其一（例如 key 被误删）：返回错误，【不会】静默覆盖——
+//     避免悄悄换一张新 CA 导致既有系统信任与 NODE_EXTRA_CA_CERTS 全部失效。
+//     用户知情后手动删除残留文件，下次启动才会在干净状态下重新生成。
 func NewPersistentManager(certPath, keyPath string) (*Manager, error) {
 	certPath = filepath.Clean(strings.TrimSpace(certPath))
 	keyPath = filepath.Clean(strings.TrimSpace(keyPath))
@@ -52,9 +61,14 @@ func NewPersistentManager(certPath, keyPath string) (*Manager, error) {
 	}
 	certPEM, certErr := os.ReadFile(certPath)
 	keyPEM, keyErr := os.ReadFile(keyPath)
+
+	// 路径 1：两份都在 → 复用，绝不重新生成。
 	if certErr == nil && keyErr == nil {
+		log.Printf("[certs] reuse existing CA cert=%s key=%s (no regeneration)", certPath, keyPath)
 		return NewManagerFromPEM(certPEM, keyPEM)
 	}
+
+	// 非「文件不存在」的读错误（权限等）直接上抛。
 	if certErr != nil && !errors.Is(certErr, os.ErrNotExist) {
 		return nil, certErr
 	}
@@ -62,6 +76,29 @@ func NewPersistentManager(certPath, keyPath string) (*Manager, error) {
 		return nil, keyErr
 	}
 
+	// 路径 2：只有一份存在 → 不静默覆盖，报错让用户知情。
+	certExists := certErr == nil
+	keyExists := keyErr == nil
+	if certExists != keyExists {
+		missing := "CA 私钥(key)"
+		if keyExists {
+			missing = "CA 证书(cert)"
+		}
+		return nil, fmt.Errorf(
+			"检测到 CA 材料不完整（%s 存在、%s 缺失），为避免覆盖既有 CA 导致信任失效，"+
+				"已中止启动。请备份后删除残留文件后重试：cert=%s key=%s",
+			func() string {
+				if certExists {
+					return "cert"
+				}
+				return "key"
+			}(),
+			missing, certPath, keyPath,
+		)
+	}
+
+	// 路径 3：两份都不存在 → 首次安装，生成新 CA。
+	log.Printf("[certs] first run, generating new CA cert=%s key=%s", certPath, keyPath)
 	certPEM, keyPEM, err := generateCAPEM()
 	if err != nil {
 		return nil, err
