@@ -1,6 +1,6 @@
 <script setup>
 import Button from "@/components/ui/Button.vue";
-import { computed } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from "vue";
 import { marked } from "marked";
 
 // 配置 marked
@@ -19,6 +19,13 @@ const props = defineProps({
   confirmDisabled: { type: Boolean, default: false },
   markdown: { type: Boolean, default: false },
 });
+
+// 稳定的唯一 id，供 aria-labelledby 指向标题元素。
+const titleId = useId();
+const dialogRef = ref(null);
+const confirmBtnRef = ref(null);
+// 打开对话框前的焦点元素，关闭后还原。用普通变量即可，不需响应式。
+let lastFocused = null;
 
 const renderedHtml = computed(() => {
   if (!props.markdown || !props.content) return "";
@@ -46,6 +53,84 @@ function handleCancel() {
 function onMaskClick() {
   handleCancel();
 }
+
+// 取得对话框内当前可聚焦元素列表，用于焦点陷阱的边界判定。
+// 排除 disabled 与 display:none 的元素，边界随 showCancel 动态变化。
+function getFocusable() {
+  const root = dialogRef.value;
+  if (!root) return [];
+  const nodes = root.querySelectorAll(
+    'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  );
+  return Array.from(nodes).filter((el) => {
+    if (el.hasAttribute("disabled")) return false;
+    if (el.getAttribute("tabindex") === "-1") return false;
+    return el.offsetParent !== null || el === document.activeElement;
+  });
+}
+
+function trapTab(event) {
+  const focusable = getFocusable();
+  if (focusable.length === 0) {
+    event.preventDefault();
+    dialogRef.value?.focus();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const active = document.activeElement;
+  if (event.shiftKey) {
+    if (active === first || !dialogRef.value?.contains(active)) {
+      event.preventDefault();
+      last.focus();
+    }
+  } else {
+    if (active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+}
+
+function onKeydown(event) {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    handleCancel();
+  } else if (event.key === "Tab") {
+    trapTab(event);
+  }
+}
+
+watch(
+  () => props.visible,
+  (val) => {
+    if (val) {
+      lastFocused = document.activeElement;
+      nextTick(() => {
+        // 优先聚焦确认按钮；被禁用或拿不到时退到对话框容器本身。
+        // Button 是组件，其根 button 元素挂在实例的 $el 上。
+        const confirmEl = confirmBtnRef.value?.$el ?? confirmBtnRef.value;
+        if (confirmEl && typeof confirmEl.focus === "function" && !confirmEl.disabled) {
+          confirmEl.focus();
+          if (document.activeElement === confirmEl) return;
+        }
+        dialogRef.value?.focus();
+      });
+    } else {
+      if (lastFocused && typeof lastFocused.focus === "function") {
+        lastFocused.focus();
+      }
+      lastFocused = null;
+    }
+  },
+);
+
+onBeforeUnmount(() => {
+  if (lastFocused && typeof lastFocused.focus === "function") {
+    lastFocused.focus();
+  }
+  lastFocused = null;
+});
 </script>
 
 <template>
@@ -58,13 +143,19 @@ function onMaskClick() {
       >
         <Transition name="modal-content">
           <div
+            ref="dialogRef"
             v-show="visible"
-            class="relative z-10 w-full max-w-[360px] overflow-hidden rounded-[8px] p-px shadow-[0_25px_50px_-12px_rgba(0,0,0,0.6)]"
+            class="relative z-10 w-full max-w-[360px] overflow-hidden rounded-[8px] p-px shadow-[0_25px_50px_-12px_rgba(0,0,0,0.6)] focus:outline-none"
             style="background: linear-gradient(to bottom, #656565 0%, #3A3A3A 10px, #3A3A3A 100%);"
+            role="dialog"
+            aria-modal="true"
+            :aria-labelledby="titleId"
+            tabindex="-1"
             @click.stop
+            @keydown="onKeydown"
           >
             <div class="rounded-[7px] bg-[#292929] p-5">
-              <h3 class="mb-3 text-base font-medium text-white">
+              <h3 :id="titleId" class="mb-3 text-base font-medium text-white">
                 {{ title }}
               </h3>
               <!-- markdown 模式用 v-html 渲染，普通模式保持 whitespace-pre-wrap -->
@@ -78,7 +169,7 @@ function onMaskClick() {
               </p>
               <div class="flex justify-end gap-2">
                 <Button v-if="showCancel" variant="default" @click="handleCancel">{{ cancelText }}</Button>
-                <Button variant="primary" :disabled="confirmDisabled" @click="handleConfirm">{{ confirmText }}</Button>
+                <Button ref="confirmBtnRef" variant="primary" :disabled="confirmDisabled" @click="handleConfirm">{{ confirmText }}</Button>
               </div>
             </div>
           </div>
