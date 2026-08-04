@@ -367,11 +367,14 @@ onUnmounted(() => {
           </tr>
         </thead>
         <tbody>
-          <tr v-if="loading && totalCount === 0">
+          <tr v-if="loading && displayRows.length === 0">
             <td colspan="12" class="p-10 text-center text-[#777]">正在读取请求明细…</td>
           </tr>
-          <tr v-else-if="!loading && totalCount === 0">
-            <td colspan="12" class="p-10 text-center text-[#777]">暂无已记录请求</td>
+          <tr v-else-if="!loading && displayRows.length === 0">
+            <td colspan="12" class="p-10 text-center text-[#777]">
+              暂无已记录请求
+              <span v-if="totalCount > 0" class="block pt-1 text-xs text-[#555]">记录可能刚被清空或刷新，可点击右上角「刷新」重试</span>
+            </td>
           </tr>
           <tr
             v-for="item in displayRows"

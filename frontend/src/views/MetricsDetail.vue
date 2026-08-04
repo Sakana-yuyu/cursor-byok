@@ -1,6 +1,6 @@
 <script setup>
 import Button from "@/components/ui/Button.vue";
-import { fetchProviderSpendSummary, fetchRecentRequestMetrics } from "@/services/clientApi";
+import { fetchProviderEvents, fetchProviderSpendSummary } from "@/services/clientApi";
 import { formatCompactInteger } from "@/utils/numberFormat";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
@@ -42,7 +42,7 @@ async function loadEvents() {
   loading.value = true;
   error.value = "";
   try {
-    const data = await fetchRecentRequestMetrics(0);
+    const data = await fetchProviderEvents(rangeStart.value, rangeEnd.value, "");
     const rows = Array.isArray(data) ? data : [];
     allEvents.value = rows.filter(isProviderCallEvent);
   } catch (e) {
@@ -306,9 +306,10 @@ watch([chartData, selectedModel, selectedRange], () => {
   renderChart();
 });
 
-// 站点消耗复用图表的时间范围，范围变化时同步刷新
+// 站点消耗与事件图表复用相同时间范围，范围变化时同步重载
 watch([rangeStart, rangeEnd], () => {
   loadSpend();
+  loadEvents();
 });
 
 onMounted(async () => {

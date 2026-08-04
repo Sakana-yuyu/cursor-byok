@@ -10,6 +10,7 @@ import {
   RepairProxySettings,
   GetDelegationConfig, SaveDelegationConfig,
   GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
+  EnableReaderMCP,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
 import { GetAdRuntime, OpenExternalURL } from "@bindings/cursor/internal/bridge/adservice.js";
 import {
@@ -21,6 +22,7 @@ import {
   GetRecentRequestMetrics,
   GetRecentRequestMetricsCount,
   GetRecentRequestMetricsAbnormalCount,
+  GetProviderEvents,
   ResetUsageMetrics,
 } from "@bindings/cursor/internal/bridge/metricsservice.js";
 import {
@@ -40,6 +42,7 @@ const desktopMethods = {
   CloseStatsOverlayWindow, SetMainWindowCloseAction, CloseApplication, GetModelEditorContext, TestModelAdapter, GetModelAdapterTestResults, GetRecentRequestMetrics,
   GetMetricsRangeSummary, GetMetricsTokenBuckets, GetProviderSpendSummary, GetLocalCacheStats,
   GetRecentRequestMetricsCount, GetRecentRequestMetricsAbnormalCount,
+  GetProviderEvents,
   ResetUsageMetrics,
   FetchModelCatalog, ProbeModelAdapter, QueryProviderBalance, GetPromptInjectionSettings,
   SavePromptInjectionSettings, RefreshPromptInjection,
@@ -50,6 +53,7 @@ const desktopMethods = {
   RepairProxySettings,
   GetDelegationConfig, SaveDelegationConfig,
   GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
+  EnableReaderMCP,
 };
 
 const API_LOG_PREFIX = "[clientApi]";
@@ -75,7 +79,10 @@ function withApiLogging(name, payload, runner) {
 
 function invoke(_modulePath, method, args = []) {
   const fn = desktopMethods[method];
-  return typeof fn === "function" ? Promise.resolve(fn(...args)) : Promise.resolve(undefined);
+  if (typeof fn !== "function") {
+    return Promise.reject(new Error(`${API_LOG_PREFIX} 未注册的绑定方法: ${method}`));
+  }
+  return Promise.resolve(fn(...args));
 }
 
 function desktopOrMock(mock, modulePath, method, args = []) {
@@ -196,6 +203,10 @@ export function probeModelAdapter(adapter) {
 
 export function fetchRecentRequestMetrics(limit = 0, offset = 0) {
   return desktopOrMock([], "@bindings/cursor/internal/bridge/metricsservice.js", "GetRecentRequestMetrics", [limit, offset]);
+}
+
+export function fetchProviderEvents(startUnixMs = 0, endUnixMs = 0, model = "") {
+  return desktopOrMock([], "@bindings/cursor/internal/bridge/metricsservice.js", "GetProviderEvents", [startUnixMs, endUnixMs, model]);
 }
 
 export function fetchRecentRequestMetricsCount() {

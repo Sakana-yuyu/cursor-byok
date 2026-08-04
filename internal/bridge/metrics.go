@@ -171,6 +171,12 @@ func (service *MetricsService) GetProviderSpendSummary(startUnixMs, endUnixMs in
 	return historymetrics.SummarizeProviderSpend(events), nil
 }
 
+// GetProviderEvents 按时间范围返回 provider_call 事件明细（与花费汇总同口径），
+// 供「会话分析」页图表按当前范围加载，避免全量拉取后前端过滤。
+func (service *MetricsService) GetProviderEvents(startUnixMs, endUnixMs int64, model string) ([]historymetrics.RequestMetric, error) {
+	return service.loadProviderEvents(startUnixMs, endUnixMs, strings.TrimSpace(model))
+}
+
 func (service *MetricsService) loadProviderEvents(startUnixMs, endUnixMs int64, model string) ([]historymetrics.RequestMetric, error) {
 	if err := appdata.EnsureAssistantHome(); err != nil {
 		return nil, err

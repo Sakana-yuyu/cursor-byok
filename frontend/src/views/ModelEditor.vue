@@ -5,6 +5,7 @@ import ModelAdapterTestCard from "@/components/ModelAdapterTestCard.vue";
 import Select from "@/components/ui/Select.vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
 import { getModelEditorContext } from "@/services/clientApi";
+import { showModal } from "@/composables/useModal";
 import { resolveModelContextWindow, resolveModelCapabilities } from "@/utils/modelContext";
 import { providerIcon, providerLabel, providerSelectOptions } from "@/utils/providerMeta";
 import { supplierSelectOptions, supplierTemplate } from "@/utils/supplierCatalog";
@@ -405,9 +406,22 @@ async function loadContext() {
     Object.assign(draft, createEmptyModelAdapter());
     draft.type = "openai";
   } finally {
+    initialDraftSnapshot.value = snapshotOfDraft();
     loading.value = false;
   }
 }
+
+// 草稿快照：用于取消/关闭时检测未保存修改。
+const initialDraftSnapshot = ref("");
+
+function snapshotOfDraft() {
+  return JSON.stringify(normalizeModelAdapter(draft));
+}
+
+const isDraftDirty = computed(() => {
+  if (loading.value || !initialDraftSnapshot.value) return false;
+  return snapshotOfDraft() !== initialDraftSnapshot.value;
+});
 
 async function persistDraft() {
   if (draft.protocolMode !== PROTOCOL_MODE_FIXED) {
@@ -441,6 +455,7 @@ async function persistDraft() {
   if (result.adapter) {
     Object.assign(draft, normalizeModelAdapter(result.adapter));
   }
+  initialDraftSnapshot.value = snapshotOfDraft();
   errorMessage.value = "";
   return {
     ok: true,
@@ -466,6 +481,17 @@ async function handleSave() {
 }
 
 async function handleCancel() {
+  if (isDraftDirty.value) {
+    const confirmed = await showModal({
+      title: "放弃修改",
+      content: "当前模型配置有未保存的修改，确定放弃并关闭吗？",
+      confirmText: "放弃修改",
+      cancelText: "继续编辑",
+    });
+    if (!confirmed) {
+      return;
+    }
+  }
   await closeEditor();
 }
 
