@@ -38,6 +38,7 @@ cursor-tab-server/cursor-tab-server-linux-amd64.tar
 # 本地运行状态与临时调试脚本
 .task/
 .reasonix/
+reasonix.toml
 scripts/_tmp_*
 scripts/_make_promo_media.ps1
 docs/assets/vite-preview*.log
@@ -73,3 +74,6 @@ __pycache__/
 *.user
 Thumbs.db
 .DS_Store
+
+# 逆向分析临时产物（@cometix/ccursor 分析）
+.analysis-tmp/
