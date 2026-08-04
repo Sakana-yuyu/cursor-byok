@@ -77,13 +77,12 @@ func Run(resources EmbeddedResources) error {
 	netproxy.InstallDefaultTransport()
 	appName := i18n.T(i18n.DefaultLocale, appNameKey)
 
-	embeddedCACertPEM := certs.EmbeddedCACertPEM()
-	logEmbeddedCAInfo(embeddedCACertPEM)
-
-	certManager, err := certs.NewEmbeddedManager()
+	certManager, err := certs.NewPersistentManager(appdata.CACertFilePath(), appdata.CAKeyFilePath())
 	if err != nil {
 		return err
 	}
+	embeddedCACertPEM := certManager.CACertPEM()
+	logEmbeddedCAInfo(embeddedCACertPEM)
 
 	defaultBackendBaseURL := "http://" + serverconfig.DefaultBackendListenAddr
 	proxyServer, err := mitm.NewProxyServer(serverconfig.DefaultProxyListenAddr, defaultBackendBaseURL, "", "", certManager)

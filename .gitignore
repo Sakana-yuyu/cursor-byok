@@ -35,8 +35,18 @@ cursor-tab-server/cursor-tab-server-linux-amd64.tar
 .worktrees/
 /gui-test-screenshots/
 
-# 运行时缓存（话题标题等本地状态）
+# 本地运行状态与临时调试脚本
+.task/
 .reasonix/
+scripts/_tmp_*
+scripts/_make_promo_media.ps1
+docs/assets/vite-preview*.log
+
+# 本地 CA 材料：运行时首次启动生成，禁止进入源码仓库
+internal/certs/ca.key
+internal/certs/ca.crt
+
+# 运行时缓存（话题标题等本地状态）
 
 # 本地构建/发布产物（防误提交；已跟踪文件不受影响）
 *.exe

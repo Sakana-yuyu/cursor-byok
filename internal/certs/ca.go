@@ -9,26 +9,16 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	_ "embed"
 	"encoding/pem"
 	"errors"
 	"math/big"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 )
-
-// embeddedCACertPEM 表示当前模块中的 embeddedCACertPEM 状态值。
-//
-//go:embed ca.crt
-var embeddedCACertPEM []byte
-
-// embeddedCAKeyPEM 表示当前模块中的 embeddedCAKeyPEM 状态值。
-//
-//go:embed ca.key
-var embeddedCAKeyPEM []byte
 
 // Manager 定义了当前模块中的 Manager 类型。
 type Manager struct {
@@ -52,19 +42,84 @@ func NewManager(caCertPath, caKeyPath string) (*Manager, error) {
 	return NewManagerFromPEM(certPEM, keyPEM)
 }
 
-// NewEmbeddedManager 用于处理与 NewEmbeddedManager 相关的逻辑。
-func NewEmbeddedManager() (*Manager, error) {
-	return NewManagerFromPEM(embeddedCACertPEM, embeddedCAKeyPEM)
+// NewPersistentManager loads an existing local CA or creates one on first use.
+// The private key stays in the per-user data directory and is never part of the repository.
+func NewPersistentManager(certPath, keyPath string) (*Manager, error) {
+	certPath = filepath.Clean(strings.TrimSpace(certPath))
+	keyPath = filepath.Clean(strings.TrimSpace(keyPath))
+	if certPath == "." || keyPath == "." || certPath == "" || keyPath == "" {
+		return nil, errors.New("CA paths are required")
+	}
+	certPEM, certErr := os.ReadFile(certPath)
+	keyPEM, keyErr := os.ReadFile(keyPath)
+	if certErr == nil && keyErr == nil {
+		return NewManagerFromPEM(certPEM, keyPEM)
+	}
+	if certErr != nil && !errors.Is(certErr, os.ErrNotExist) {
+		return nil, certErr
+	}
+	if keyErr != nil && !errors.Is(keyErr, os.ErrNotExist) {
+		return nil, keyErr
+	}
+
+	certPEM, keyPEM, err := generateCAPEM()
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Dir(certPath), 0o700); err != nil {
+		return nil, err
+	}
+	if err := writePrivateFile(certPath, certPEM); err != nil {
+		return nil, err
+	}
+	if err := writePrivateFile(keyPath, keyPEM); err != nil {
+		return nil, err
+	}
+	return NewManagerFromPEM(certPEM, keyPEM)
 }
 
-// EmbeddedCACertPEM 用于处理与 EmbeddedCACertPEM 相关的逻辑。
-func EmbeddedCACertPEM() []byte {
-	return cloneBytes(embeddedCACertPEM)
+// CACertPEM returns a copy of the public CA certificate used by this manager.
+func (m *Manager) CACertPEM() []byte {
+	if m == nil || m.caCert == nil {
+		return nil
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: m.caCert.Raw})
 }
 
-// EmbeddedCAKeyPEM 用于处理与 EmbeddedCAKeyPEM 相关的逻辑。
-func EmbeddedCAKeyPEM() []byte {
-	return cloneBytes(embeddedCAKeyPEM)
+func writePrivateFile(path string, data []byte) error {
+	return os.WriteFile(path, data, 0o600)
+}
+
+func generateCAPEM() ([]byte, []byte, error) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return nil, nil, err
+	}
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return nil, nil, err
+	}
+	now := time.Now()
+	template := &x509.Certificate{
+		SerialNumber: serial,
+		Subject: pkix.Name{
+			CommonName:   "Cursor Local Proxy CA",
+			Organization: []string{"Cursor Local Assistant"},
+		},
+		NotBefore:             now.Add(-time.Hour),
+		NotAfter:              now.AddDate(10, 0, 0),
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign | x509.KeyUsageDigitalSignature,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		MaxPathLen:            1,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		return nil, nil, err
+	}
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+	return certPEM, keyPEM, nil
 }
 
 // NewManagerFromPEM 用于处理与 NewManagerFromPEM 相关的逻辑。

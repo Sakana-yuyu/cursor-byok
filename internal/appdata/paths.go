@@ -81,3 +81,8 @@ func LogsRootPath() string {
 func CACertFilePath() string {
 	return filepath.Join(DataRootPath(), "ca.crt")
 }
+
+// CAKeyFilePath 返回仅保存在用户数据目录中的 CA 私钥路径。
+func CAKeyFilePath() string {
+	return filepath.Join(DataRootPath(), "ca.key")
+}

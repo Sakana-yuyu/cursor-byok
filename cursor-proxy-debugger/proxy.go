@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"cursor/internal/appdata"
 	"cursor/internal/certs"
 
 	"github.com/elazarl/goproxy"
@@ -43,7 +44,7 @@ func New(config Config) (*Server, error) {
 	if err := validateLoopbackAddress(config.UIAddr); err != nil {
 		return nil, err
 	}
-	manager, err := certs.NewEmbeddedManager()
+	manager, err := certs.NewPersistentManager(appdata.CACertFilePath(), appdata.CAKeyFilePath())
 	if err != nil {
 		return nil, fmt.Errorf("加载 MITM CA 失败：%w", err)
 	}

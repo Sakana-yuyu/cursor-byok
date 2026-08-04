@@ -8,7 +8,7 @@ const previewConfig = {
       groupName: "浏览器预览示例",
       type: "openai",
       baseURL: "https://api.openai.com/v1",
-      apiKey: "sk-browser-preview-demo",
+      apiKey: "browser-preview-demo-key",
       tooltipData: "浏览器预览示例模型",
       modelID: "gpt-4.1-mini",
       reasoningEffort: "medium",
@@ -37,7 +37,7 @@ const previewConfig = {
       protocolMode: "auto",
       protocolGroup: "gemini_native",
       baseURL: "https://generativelanguage.googleapis.com/v1beta",
-      apiKey: "AIza-browser-preview-demo",
+      apiKey: "browser-preview-gemini-key",
       tooltipData: "浏览器预览 Gemini 示例模型",
       modelID: "gemini-2.5-pro",
       reasoningEffort: "medium",
@@ -428,6 +428,8 @@ export const OpenModelEditorWindow = (index, adapterJSON) => {
   editorContext = { index: Number.isInteger(index) ? index : -1, adapterJSON: String(adapterJSON || "{}") };
   return Promise.resolve();
 };
+export const EnableReaderMCP = (_url, _apiKey, _model) =>
+  Promise.resolve({ identifier: "vision-reader", scriptPath: "", wasAdded: true });
 export const TestModelAdapter = (adapter) => Promise.resolve({ status: "success", adapterID: adapter?.id || "preview", summaryText: "浏览器预览模式：未发起请求" });
 export const GetModelAdapterTestResults = () => Promise.resolve([]);
 export const FetchModelCatalog = (request) => {
@@ -456,6 +458,7 @@ export const FetchModelCatalog = (request) => {
   });
 };
 export const GetRecentRequestMetrics = () => Promise.resolve([]);
+export const GetProviderEvents = () => Promise.resolve([]);
 export const GetRecentRequestMetricsCount = () => Promise.resolve(0);
 export const GetRecentRequestMetricsAbnormalCount = () => Promise.resolve(0);
 export const ResetUsageMetrics = () => Promise.resolve();
