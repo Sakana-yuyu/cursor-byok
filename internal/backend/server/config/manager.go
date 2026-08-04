@@ -334,6 +334,16 @@ func (manager *Manager) IsObservabilityLogEnabled(ctx context.Context) bool {
 	return manager.currentConfig().Log
 }
 
+// DebugLogMaxBytes 返回单个 debug jsonl 文件的字节上限（热加载生效）。
+// 0 表示用默认值，负数表示不限制。
+func (manager *Manager) DebugLogMaxBytes(ctx context.Context) int {
+	if manager == nil {
+		return 0
+	}
+	manager.reloadIfChanged(ctx)
+	return manager.currentConfig().DebugLogMaxBytes
+}
+
 func (manager *Manager) Subscribe(listener func(Config)) func() {
 	if manager == nil || listener == nil {
 		return func() {}

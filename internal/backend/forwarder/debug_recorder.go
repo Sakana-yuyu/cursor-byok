@@ -1,9 +1,11 @@
 package forwarder
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -19,6 +21,9 @@ import (
 
 type debugLogConfig interface {
 	IsObservabilityLogEnabled(context.Context) bool
+	// DebugLogMaxBytes 返回单个 debug jsonl 文件的字节上限。返回 0 表示用默认值，
+	// 负数表示不限制。 recorder 在写盘后据此裁剪文件，保留尾部（错误附近）。
+	DebugLogMaxBytes(context.Context) int
 }
 
 // debugWriteJob 是一次待落盘的 debug 日志事件。
@@ -42,6 +47,14 @@ type debugRecorder struct {
 }
 
 const maxDebugProtoPayloadBytes = 64 * 1024
+
+// 以下常量与 config 包的 Default* 保持一致。forwarder 通过 debugLogConfig 接口
+// 拿到运行时上限，这里只是「配置未提供/为 0」时的兜底默认值，避免 forwarder
+// 反向依赖 config 包。
+const (
+	configDefaultDebugLogMaxBytes = 50 * 1024 * 1024
+	configMinDebugLogReserveBytes = 256 * 1024
+)
 
 func newDebugRecorder(historyRoot string, broker *StreamBroker, config debugLogConfig) *debugRecorder {
 	return &debugRecorder{
@@ -207,13 +220,111 @@ func (recorder *debugRecorder) writeLoop() {
 		if err := os.MkdirAll(job.dir, 0o755); err != nil {
 			continue
 		}
-		file, err := os.OpenFile(filepath.Join(job.dir, job.filename), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+		path := filepath.Join(job.dir, job.filename)
+		file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 		if err != nil {
 			continue
 		}
 		_, _ = file.Write(append(job.payload, '\n'))
 		_ = file.Close()
+		// 写完检查大小，超上限则裁剪保留尾部（最新 = 最可能含错误的部分）。
+		// 在 worker goroutine 内执行，不阻塞主链路。
+		recorder.rotateIfNeeded(context.Background(), path)
 	}
+}
+
+// rotateIfNeeded 在文件超过配置的字节上限时，保留尾部 reserve 字节并丢弃头部，
+// 防止长会话的 debug 日志无限膨胀。裁剪从行边界开始（避免截断半行 JSON）。
+func (recorder *debugRecorder) rotateIfNeeded(ctx context.Context, path string) {
+	maxBytes := recorder.maxBytes(ctx)
+	if maxBytes <= 0 {
+		return
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Size() <= int64(maxBytes) {
+		return
+	}
+	reserve := debugLogReserveBytesFor(maxBytes)
+	trimDebugFileTail(path, reserve)
+}
+
+// maxBytes 解析配置的上限：0/正数直接用（0 视为默认值），负数表示不限制。
+func (recorder *debugRecorder) maxBytes(ctx context.Context) int {
+	if recorder == nil || recorder.config == nil {
+		return configDefaultDebugLogMaxBytes
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	value := recorder.config.DebugLogMaxBytes(ctx)
+	if value < 0 {
+		return -1 // 不限制
+	}
+	if value == 0 {
+		return configDefaultDebugLogMaxBytes
+	}
+	return value
+}
+
+// trimDebugFileTail 把文件裁剪到约 reserve 字节的尾部，从行边界开始切割。
+// 用流式读取避免把整个大文件（可能上 GB）读进内存。
+func trimDebugFileTail(path string, reserve int) {
+	if reserve <= 0 {
+		return
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	size := info.Size()
+	if size <= int64(reserve) {
+		return
+	}
+	// 从「文件末尾往前 reserve 字节」附近开始读，找到第一个行边界作为裁剪起点。
+	startOffset := size - int64(reserve)
+	tail, err := readTailFromLineBoundary(path, startOffset)
+	if err != nil || len(tail) == 0 {
+		return
+	}
+	// 覆盖写回尾部内容（O_TRUNC 清空再写）。
+	if err := os.WriteFile(path, tail, 0o644); err != nil {
+		log.Printf("debug log rotate failed: trim %s: %v", path, err)
+		return
+	}
+	log.Printf("debug log rotated: %s trimmed from %d to %d bytes", path, size, len(tail))
+}
+
+// readTailFromLineBoundary 从 offset 附近开始读取，跳过第一个不完整的行，
+// 返回完整的尾部行。用于裁剪时保证不截断半行 JSON。
+func readTailFromLineBoundary(path string, offset int64) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	if _, err := file.Seek(offset, io.SeekStart); err != nil {
+		return nil, err
+	}
+	remaining, err := io.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+	// 丢弃第一行（它很可能从中间被截断）。除非 offset=0（完整文件）。
+	if offset > 0 {
+		if nl := bytes.IndexByte(remaining, '\n'); nl >= 0 {
+			remaining = remaining[nl+1:]
+		}
+	}
+	return remaining, nil
+}
+
+// debugLogReserveBytesFor 根据上限计算保留尾部的字节数（上限的 10%，最少 MinDebugLogReserveBytes）。
+func debugLogReserveBytesFor(maxBytes int) int {
+	reserve := maxBytes / 10
+	if reserve < configMinDebugLogReserveBytes {
+		reserve = configMinDebugLogReserveBytes
+	}
+	return reserve
 }
 
 func (recorder *debugRecorder) debugDir(requestID string, conversationID string) string {

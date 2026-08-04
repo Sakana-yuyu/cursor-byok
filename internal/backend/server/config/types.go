@@ -20,6 +20,14 @@ const (
 	DefaultRoutingMode                      = "local"
 	DefaultProviderStreamIdleTimeoutSeconds = 90
 	MinProviderStreamIdleTimeoutSeconds     = 30
+	// DefaultDebugLogMaxBytes 表示单个 debug jsonl 文件的字节上限。超过该上限时
+	// 保留尾部（最新、最可能含错误）的部分，裁掉头部，避免长会话 debug 日志无限膨胀。
+	// 0 表示不限制。
+	DefaultDebugLogMaxBytes = 50 * 1024 * 1024
+	// DefaultDebugLogReserveBytes 表示触发裁剪后保留的尾部字节数（错误附近的窗口）。
+	DefaultDebugLogReserveBytes = 5 * 1024 * 1024
+	// MinDebugLogReserveBytes 表示保留尾部的最小值，防止用户配得太小导致几乎没有可排查内容。
+	MinDebugLogReserveBytes = 256 * 1024
 	// DefaultTurnStaleTimeoutSeconds 表示一轮回合进入「等待外部（工具/交互结果）」后，
 	// 在无任何进展时由 turn-staleness 看门狗触发自救的默认阈值，单位秒。
 	DefaultTurnStaleTimeoutSeconds = 120
@@ -140,6 +148,9 @@ type SkillMCPScanConfig struct {
 
 type Config struct {
 	Log                             bool                     `json:"log" yaml:"log"`
+	// DebugLogMaxBytes 限制每个 debug jsonl 文件的最大字节数；超过后保留尾部（错误附近）。
+	// 0 表示用默认值（50MB），负数表示不限制。热加载即时生效。
+	DebugLogMaxBytes                int                      `json:"debugLogMaxBytes" yaml:"debugLogMaxBytes"`
 	ProviderStreamIdleTimeout       int                      `json:"providerStreamIdleTimeout" yaml:"providerStreamIdleTimeout"`
 	TurnStaleTimeout                int                      `json:"turnStaleTimeout" yaml:"turnStaleTimeout"`
 	NativeDelegationProgressTimeout int                      `json:"nativeDelegationProgressTimeout" yaml:"nativeDelegationProgressTimeout"`
