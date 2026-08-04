@@ -7,8 +7,13 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 235,
+          "line": 229,
           "column": 61
+        },
+        {
+          "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
+          "line": 235,
+          "column": 11
         }
       ]
     },
@@ -53,6 +58,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/ui/ModelTreeMultiSelect.vue",
+          "line": 471,
+          "column": 30
+        },
         {
           "file": "src/components/ui/ModelTreeSelect.vue",
           "line": 438,
@@ -212,7 +222,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 189,
+          "line": 183,
           "column": 11
         }
       ]
@@ -1045,7 +1055,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 84,
+          "line": 85,
           "column": 49
         }
       ]
@@ -1926,7 +1936,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 222,
+          "line": 216,
           "column": 63
         }
       ]
@@ -3236,7 +3246,7 @@
         },
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 96,
+          "line": 97,
           "column": 108
         }
       ]
@@ -4633,7 +4643,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 156,
+          "line": 150,
           "column": 49
         }
       ]
@@ -5807,7 +5817,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 105,
+          "line": 106,
           "column": 12
         },
         {
@@ -5926,7 +5936,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 108,
+          "line": 109,
           "column": 12
         }
       ]
@@ -6739,7 +6749,7 @@
         },
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 111,
+          "line": 112,
           "column": 12
         },
         {
@@ -6788,6 +6798,11 @@
       "kind": "template",
       "placeholders": 1,
       "refs": [
+        {
+          "file": "src/components/ui/ModelTreeMultiSelect.vue",
+          "line": 53,
+          "column": 79
+        },
         {
           "file": "src/components/ui/ModelTreeSelect.vue",
           "line": 54,
@@ -8011,7 +8026,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 228,
+          "line": 222,
           "column": 13
         }
       ]
@@ -8209,6 +8224,18 @@
           "file": "src/views/SupplierDetail.vue",
           "line": 949,
           "column": 82
+        }
+      ]
+    },
+    "7b2fafc5d7ec952b": {
+      "source": "取消全选 {0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/ui/ModelTreeMultiSelect.vue",
+          "line": 487,
+          "column": 30
         }
       ]
     },
@@ -9261,6 +9288,18 @@
         }
       ]
     },
+    "8abf541e00f95230": {
+      "source": "全选 {0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/ui/ModelTreeMultiSelect.vue",
+          "line": 487,
+          "column": 30
+        }
+      ]
+    },
     "8b4753f91171eb35": {
       "source": "按中转站汇总全量历史用量与花费 · 仅计入已配置价格的请求",
       "kind": "text",
@@ -9739,8 +9778,20 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 140,
+          "line": 134,
           "column": 17
+        }
+      ]
+    },
+    "9235ed68ee49baea": {
+      "source": "已选 {0} 个",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/ui/ModelTreeMultiSelect.vue",
+          "line": 123,
+          "column": 10
         }
       ]
     },
@@ -9995,7 +10046,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 178,
+          "line": 172,
           "column": 19
         }
       ]
@@ -10172,6 +10223,11 @@
           "column": 45
         },
         {
+          "file": "src/components/ui/ModelTreeMultiSelect.vue",
+          "line": 55,
+          "column": 35
+        },
+        {
           "file": "src/components/ui/ModelTreeSelect.vue",
           "line": 56,
           "column": 35
@@ -10261,7 +10317,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 172,
+          "line": 166,
           "column": 19
         }
       ]
@@ -10285,7 +10341,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 202,
+          "line": 196,
           "column": 22
         }
       ]
@@ -10907,7 +10963,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 262,
+          "line": 241,
           "column": 61
         }
       ]
@@ -11496,12 +11552,12 @@
         },
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 152,
+          "line": 146,
           "column": 16
         },
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 190,
+          "line": 184,
           "column": 11
         }
       ]
@@ -11548,9 +11604,9 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 239,
-          "column": 11
+          "file": "src/components/ui/ModelTreeMultiSelect.vue",
+          "line": 537,
+          "column": 1
         }
       ]
     },
@@ -11626,7 +11682,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 211,
+          "line": 205,
           "column": 63
         }
       ]
@@ -11906,6 +11962,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/ui/ModelTreeMultiSelect.vue",
+          "line": 471,
+          "column": 30
+        },
         {
           "file": "src/components/ui/ModelTreeSelect.vue",
           "line": 438,
@@ -12417,7 +12478,7 @@
         },
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 286,
+          "line": 265,
           "column": 11
         },
         {
@@ -12765,7 +12826,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 227,
+          "line": 221,
           "column": 13
         }
       ]
@@ -12777,7 +12838,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 140,
+          "line": 134,
           "column": 17
         }
       ]
@@ -12999,7 +13060,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 157,
+          "line": 151,
           "column": 17
         }
       ]
@@ -13778,7 +13839,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 203,
+          "line": 197,
           "column": 9
         }
       ]
@@ -13951,7 +14012,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 188,
+          "line": 182,
           "column": 11
         }
       ]
@@ -14161,7 +14222,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 166,
+          "line": 160,
           "column": 19
         }
       ]
@@ -14755,7 +14816,7 @@
         },
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 100,
+          "line": 101,
           "column": 99
         }
       ]
@@ -14938,6 +14999,23 @@
         }
       ]
     },
+    "de36c1b4dd3fb659": {
+      "source": "选择可用模型",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
+          "line": 234,
+          "column": 11
+        },
+        {
+          "file": "src/components/ui/ModelTreeMultiSelect.vue",
+          "line": 15,
+          "column": 41
+        }
+      ]
+    },
     "de8184da1ef88d03": {
       "source": "已配置",
       "kind": "text",
@@ -15081,7 +15159,7 @@
         },
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 152,
+          "line": 146,
           "column": 16
         }
       ]
@@ -15129,7 +15207,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
-          "line": 215,
+          "line": 209,
           "column": 13
         }
       ]

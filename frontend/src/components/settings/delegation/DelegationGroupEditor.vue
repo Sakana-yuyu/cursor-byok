@@ -1,6 +1,7 @@
 <script setup>
 import Input from "@/components/ui/Input.vue";
 import ModelTreeSelect from "@/components/ui/ModelTreeSelect.vue";
+import ModelTreeMultiSelect from "@/components/ui/ModelTreeMultiSelect.vue";
 import Select from "@/components/ui/Select.vue";
 import Switch from "@/components/ui/Switch.vue";
 import DelegationIconButton from "@/components/settings/delegation/DelegationIconButton.vue";
@@ -117,13 +118,6 @@ function permissionEnabled(permission) {
   return permission.tools.every((tool) => props.group.toolPermissions?.[tool] !== false);
 }
 
-function handleModelToggle(modelID, event) {
-  emit("toggle:model", {
-    modelID,
-    enabled: Boolean(event?.target?.checked),
-  });
-}
-
 function handlePermissionToggle(permission, enabled) {
   emit("toggle:permission", {
     permission,
@@ -231,31 +225,16 @@ function handlePermissionToggle(permission, enabled) {
         </div>
       </div>
 
-      <div class="space-y-3 border-t border-white/10 pt-3">
+      <div class="space-y-2 border-t border-white/10 pt-3">
         <div class="text-[11px] font-medium text-[#8f8f8f]">可用模型</div>
-        <div
-          v-if="!modelAdapters.length"
-          class="rounded-[6px] border border-dashed border-[#444] px-3 py-4 text-xs text-[#858585]"
-        >
-          暂无可用模型，请先在模型配置中添加模型适配器。
-        </div>
-        <div v-else class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          <label
-            v-for="adapter in modelAdapters"
-            :key="adapter.id"
-            class="flex min-w-0 items-center gap-2 rounded-[6px] border border-white/6 bg-black/10 px-2.5 py-2 text-xs text-[#d4d4d4]"
-          >
-            <input
-              type="checkbox"
-              :checked="group.modelIDs.includes(adapter.id)"
-              :disabled="busy"
-              @change="handleModelToggle(adapter.id, $event)"
-            />
-            <span class="min-w-0 truncate" :title="adapter.displayName || adapter.modelID">
-              {{ adapter.displayName || adapter.modelID }}
-            </span>
-          </label>
-        </div>
+        <ModelTreeMultiSelect
+          :model-value="group.modelIDs"
+          :adapters="modelAdapters"
+          :disabled="busy"
+          placeholder="选择可用模型"
+          aria-label="可用模型"
+          @toggle="({ modelID, enabled }) => emit('toggle:model', { modelID, enabled })"
+        />
       </div>
 
       <div class="space-y-3 border-t border-white/10 pt-3">
