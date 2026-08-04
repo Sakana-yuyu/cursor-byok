@@ -5,9 +5,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"html"
+	"math"
 	"strings"
 	"time"
 
+	"cursor/internal/modelcontext"
 	legacyruntime "cursor/internal/runtime"
 )
 
@@ -690,7 +692,7 @@ func buildAvailableModelEntries(adapters []legacyruntime.ModelAdapterConfig) []m
 			modelDisplayName = modelID
 		}
 		defaultThinkingEffort := defaultThinkingEffortForAdapter(adapter)
-		output = append(output, map[string]any{
+		entry := map[string]any{
 			"clientDisplayName":                  displayName,
 			"defaultOn":                          true,
 			"degradationStatus":                  "DEGRADATION_STATUS_UNSPECIFIED",
@@ -715,9 +717,52 @@ func buildAvailableModelEntries(adapters []legacyruntime.ModelAdapterConfig) []m
 				"markdownContent": tooltipData,
 			},
 			"variants": buildThinkingEffortVariants(adapter.Type, channelID, modelDisplayName, tooltipData, defaultThinkingEffort),
-		})
+		}
+		// 还原原生模型选择器元数据：上下文窗口（含 max 模式）、自动上下文上限、
+		// 展示价格、长上下文标记与「用户自建」标记。数据源优先 adapter 显式配置，
+		// 其次内置 modelcontext 目录（models.json 规则），缺失时省略对应字段。
+		contextTokens := resolveAvailableModelContextTokens(adapter)
+		if contextTokens > 0 && contextTokens <= math.MaxInt32 {
+			entry["contextTokenLimit"] = contextTokens
+			entry["contextTokenLimitForMaxMode"] = contextTokens
+			entry["autoContextMaxTokens"] = contextTokens
+			entry["supportsAutoContext"] = true
+		} else {
+			// 未知上下文时不声明自动上下文能力，避免字段自相矛盾。
+			entry["supportsAutoContext"] = false
+		}
+		entry["isLongContextOnly"] = false
+		entry["isUserAdded"] = true
+		if price := resolveAvailableModelDisplayPrice(adapter); price > 0 {
+			entry["price"] = price
+		}
+		output = append(output, entry)
 	}
 	return output
+}
+
+// resolveAvailableModelContextTokens 返回模型在 AvailableModels 中上报的上下文窗口
+// token 数：优先 adapter 显式配置的 ContextWindowTokens，其次内置 modelcontext 目录
+// （models.json 的 pattern 规则，first-match-wins）。未知模型返回 0，调用方省略字段。
+func resolveAvailableModelContextTokens(adapter legacyruntime.ModelAdapterConfig) int {
+	if adapter.ContextWindowTokens > 0 {
+		return adapter.ContextWindowTokens
+	}
+	return modelcontext.WindowTokens(adapter.ModelID)
+}
+
+// resolveAvailableModelDisplayPrice 返回模型选择器中展示的价格（每百万 token，
+// 供应商原始币种）。仅当价格确知时返回 > 0：优先 adapter 手动/catalog 价格，
+// 其次 modelcontext 内置官方价格；未知返回 0（不设置 price 字段，避免误导）。
+func resolveAvailableModelDisplayPrice(adapter legacyruntime.ModelAdapterConfig) float64 {
+	if adapter.Pricing != nil && adapter.Pricing.Input != nil && *adapter.Pricing.Input > 0 {
+		return *adapter.Pricing.Input
+	}
+	pricing := modelcontext.BuiltinPricingForAdapter(adapter.ModelID, adapter.SupplierID, adapter.Type, adapter.BaseURL)
+	if pricing != nil && pricing.Input != nil && *pricing.Input > 0 {
+		return *pricing.Input
+	}
+	return 0
 }
 
 func buildCLIModelDetails(adapters []legacyruntime.ModelAdapterConfig) []map[string]any {

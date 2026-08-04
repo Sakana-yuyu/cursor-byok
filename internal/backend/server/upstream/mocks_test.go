@@ -2,11 +2,14 @@ package upstream
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"net/http"
 	"reflect"
 	"testing"
 
 	"cursor/gen/agentv1"
+	"cursor/gen/aiserverv1"
 	legacyruntime "cursor/internal/runtime"
 
 	"google.golang.org/protobuf/proto"
@@ -158,5 +161,192 @@ func TestEncodeEmptyMockPayloads(t *testing.T) {
 				t.Fatalf("encode %s with payload %v: %v", tc.typeName, tc.payload, err)
 			}
 		})
+	}
+}
+
+func float64Ptr(v float64) *float64 { return &v }
+
+// mockCompatCase 描述 host.go 中一个 MockProtoAction 路由的（builder, proto 响应类型）映射。
+// 该表与 internal/backend/host.go 的路由注册一一对应；新增 mock 路由时必须同步。
+type mockCompatCase struct {
+	name     string
+	typeName string
+	builder  func(*RequestContext) (map[string]any, error)
+}
+
+// mockCompatRoutes 汇总 host.go 中全部本地 mock proto 路由。
+// 表的目的是把「builder 输出 ↔ 当前 gen/ 生成 proto」的兼容性固化为回归测试：
+// Cursor 升级重新生成 proto 后，若 mock 输出的字段名/类型与新版 proto 不匹配，
+// encodeMockProto（DiscardUnknown:false）会立即报错，测试失败并指明路由名。
+var mockCompatRoutes = []mockCompatCase{
+	{"server_time", "aiserver.v1.ServerTimeResponse", ServerTimeMockBuilder},
+	{"server_config", "aiserver.v1.GetServerConfigResponse", ServerConfigMockBuilder},
+	{"server_config_service_get_server_config", "aiserver.v1.GetServerConfigResponse", ServerConfigMockBuilder},
+	{"available_models", "aiserver.v1.AvailableModelsResponse", AvailableModelsMockBuilder},
+	{"usable_models", "aiserver.v1.GetUsableModelsResponse", UsableModelsMockBuilder},
+	{"default_model_for_cli", "aiserver.v1.GetDefaultModelForCliResponse", DefaultModelForCliMockBuilder},
+	{"default_model", "aiserver.v1.GetDefaultModelResponse", DefaultModelMockBuilder},
+	{"default_model_nudge", "aiserver.v1.GetDefaultModelNudgeDataResponse", DefaultModelNudgeMockBuilder},
+	{"bootstrap_statsig", "aiserver.v1.BootstrapStatsigResponse", BootstrapStatsigMockBuilder},
+	{"first_window_statsig_decision", "aiserver.v1.GetFirstWindowStatsigDecisionResponse", FirstWindowStatsigDecisionMockBuilder},
+	{"analytics_submit_logs", "aiserver.v1.SubmitLogsResponse", SubmitLogsMockBuilder},
+	{"analytics_track_events", "aiserver.v1.TrackEventsResponse", EmptyMockBuilder},
+	{"dashboard_current_period_usage", "aiserver.v1.GetCurrentPeriodUsageResponse", DashboardCurrentPeriodUsageMockBuilder},
+	{"dashboard_get_teams", "aiserver.v1.GetTeamsResponse", DashboardTeamsMockBuilder},
+	{"dashboard_get_managed_skills", "aiserver.v1.GetManagedSkillsResponse", DashboardManagedSkillsMockBuilder},
+	{"dashboard_get_team_admin_settings_or_empty", "aiserver.v1.GetTeamAdminSettingsResponse", EmptyMockBuilder},
+	{"dashboard_get_team_repos_or_empty", "aiserver.v1.GetTeamReposResponse", EmptyMockBuilder},
+	{"dashboard_get_global_commands", "aiserver.v1.GetGlobalCommandsResponse", EmptyMockBuilder},
+	{"dashboard_get_cli_download_url", "aiserver.v1.GetCliDownloadUrlResponse", EmptyMockBuilder},
+	{"dashboard_get_me", "aiserver.v1.GetMeResponse", DashboardGetMeMockBuilder},
+	{"dashboard_user_privacy_mode", "aiserver.v1.GetUserPrivacyModeResponse", DashboardUserPrivacyModeMockBuilder},
+	{"dashboard_plan_info", "aiserver.v1.GetPlanInfoResponse", DashboardPlanInfoMockBuilder},
+	{"dashboard_usage_limit_status", "aiserver.v1.GetUsageLimitStatusAndActiveGrantsResponse", DashboardUsageLimitStatusAndActiveGrantsMockBuilder},
+	{"dashboard_is_on_new_pricing", "aiserver.v1.IsOnNewPricingResponse", DashboardIsOnNewPricingMockBuilder},
+}
+
+func newAuthRequestContext() *RequestContext {
+	reqCtx := newRequestContextWithAdapters([]legacyruntime.ModelAdapterConfig{
+		{ID: "channel-a", DisplayName: "Channel A", ModelID: "claude-sonnet-4-5", ContextWindowTokens: 200000, Pricing: &legacyruntime.ModelPricing{Input: float64Ptr(3.0)}},
+	})
+	// GetMe / BootstrapStatsig 等 builder 从 authorization 头解析 authID。
+	// 注意：MIMEHeader.Get 会 canonicalize 键为 "Authorization"，必须用规范键构造，
+	// 否则 Header.Get("authorization") 永远 miss，JWT 解析路径测不到。
+	payload := base64.RawURLEncoding.EncodeToString([]byte(`{"sub":"local-test-user"}`))
+	reqCtx.Headers = http.Header{"Authorization": []string{"Bearer eyJhbGciOiJub25lIn0." + payload + ".sig"}}
+	return reqCtx
+}
+
+func TestDashboardGetMeResolvesAuthIDFromAuthorizationHeader(t *testing.T) {
+	reqCtx := newAuthRequestContext()
+	payload, err := DashboardGetMeMockBuilder(reqCtx)
+	if err != nil {
+		t.Fatalf("builder: %v", err)
+	}
+	// 必须从 Authorization 头的 JWT sub 解析出 local-test-user；
+	// 若 Header 键构造错误（小写 key 被 MIMEHeader canonicalize miss），
+	// 会回退到 localUltraPaymentID，此断言即失败。
+	if got := payload["authId"]; got != "local-test-user" {
+		t.Fatalf("authId: got %q, want local-test-user", got)
+	}
+}
+
+func TestAllMockBuildersCompatibleWithCurrentProto(t *testing.T) {
+	reqCtx := newAuthRequestContext()
+	for _, tc := range mockCompatRoutes {
+		t.Run(tc.name, func(t *testing.T) {
+			payload, err := tc.builder(reqCtx)
+			if err != nil {
+				t.Fatalf("builder 执行失败: %v", err)
+			}
+			if _, err := encodeMockProto(tc.typeName, payload); err != nil {
+				t.Fatalf("builder 输出与当前 proto 不兼容（Cursor 升级后字段不匹配会在此报警）: %v", err)
+			}
+		})
+	}
+}
+
+func TestAvailableModelsPayloadDecodesWithAdapters(t *testing.T) {
+	reqCtx := newAuthRequestContext()
+	payload, err := AvailableModelsMockBuilder(reqCtx)
+	if err != nil {
+		t.Fatalf("builder: %v", err)
+	}
+	encoded, err := encodeMockProto("aiserver.v1.AvailableModelsResponse", payload)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	response := &aiserverv1.AvailableModelsResponse{}
+	if err := proto.Unmarshal(encoded, response); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(response.GetModels()) != 1 {
+		t.Fatalf("model count: got %d, want 1", len(response.GetModels()))
+	}
+	model := response.GetModels()[0]
+	if model.GetName() != "channel-a" {
+		t.Fatalf("model name: got %q, want channel-a", model.GetName())
+	}
+	if model.GetContextTokenLimit() != 200000 {
+		t.Fatalf("contextTokenLimit: got %d, want 200000", model.GetContextTokenLimit())
+	}
+	if model.GetPrice() != 3.0 {
+		t.Fatalf("price: got %v, want 3.0", model.GetPrice())
+	}
+}
+
+func TestBuildAvailableModelEntriesEnrichesNativeMetadata(t *testing.T) {
+	adapters := []legacyruntime.ModelAdapterConfig{
+		{
+			ID:                  "channel-a",
+			DisplayName:         "Channel A",
+			ModelID:             "claude-sonnet-4-5",
+			ContextWindowTokens: 200000,
+			Pricing:             &legacyruntime.ModelPricing{Input: float64Ptr(3.0), Output: float64Ptr(15.0), Currency: "USD"},
+		},
+		{ID: "channel-b", DisplayName: "Channel B", ModelID: "unknown-model-xyz", ContextWindowTokens: 0, Pricing: nil},
+	}
+	entries := buildAvailableModelEntries(adapters)
+	if len(entries) != 2 {
+		t.Fatalf("entry count: got %d, want 2", len(entries))
+	}
+	entryA := entries[0]
+	if got, ok := entryA["contextTokenLimit"].(int); !ok || got != 200000 {
+		t.Fatalf("contextTokenLimit: got %#v, want 200000", entryA["contextTokenLimit"])
+	}
+	if got, ok := entryA["contextTokenLimitForMaxMode"].(int); !ok || got != 200000 {
+		t.Fatalf("contextTokenLimitForMaxMode: got %#v, want 200000", entryA["contextTokenLimitForMaxMode"])
+	}
+	if got, ok := entryA["autoContextMaxTokens"].(int); !ok || got != 200000 {
+		t.Fatalf("autoContextMaxTokens: got %#v, want 200000", entryA["autoContextMaxTokens"])
+	}
+	if price, ok := entryA["price"].(float64); !ok || price != 3.0 {
+		t.Fatalf("price: got %#v, want 3.0", entryA["price"])
+	}
+	if isUserAdded, ok := entryA["isUserAdded"].(bool); !ok || !isUserAdded {
+		t.Fatalf("isUserAdded: got %#v, want true", entryA["isUserAdded"])
+	}
+	if supportsAutoContext, ok := entryA["supportsAutoContext"].(bool); !ok || !supportsAutoContext {
+		t.Fatalf("supportsAutoContext: got %#v, want true", entryA["supportsAutoContext"])
+	}
+	// 未知模型（无上下文窗口、无价格）不得设置误导性字段。
+	entryB := entries[1]
+	for _, field := range []string{"contextTokenLimit", "contextTokenLimitForMaxMode", "autoContextMaxTokens", "price"} {
+		if _, exists := entryB[field]; exists {
+			t.Fatalf("entry for unknown model must not set %q, got %#v", field, entryB[field])
+		}
+	}
+	// 增强字段必须能被当前 proto 严格解码（未知字段会直接报错），
+	// 防止新增的 map 字段名与 aisserver.v1.AvailableModelsResponse 不一致。
+	payload := map[string]any{"models": entries}
+	encoded, err := encodeMockProto("aiserver.v1.AvailableModelsResponse", payload)
+	if err != nil {
+		t.Fatalf("encode available models payload: %v", err)
+	}
+	response := &aiserverv1.AvailableModelsResponse{}
+	if err := proto.Unmarshal(encoded, response); err != nil {
+		t.Fatalf("decode available models with aisserver proto: %v", err)
+	}
+	if len(response.GetModels()) != 2 {
+		t.Fatalf("decoded model count: got %d, want 2", len(response.GetModels()))
+	}
+	decoded := response.GetModels()[0]
+	if decoded.GetContextTokenLimit() != 200000 {
+		t.Fatalf("decoded contextTokenLimit: got %d, want 200000", decoded.GetContextTokenLimit())
+	}
+	if decoded.GetContextTokenLimitForMaxMode() != 200000 {
+		t.Fatalf("decoded contextTokenLimitForMaxMode: got %d, want 200000", decoded.GetContextTokenLimitForMaxMode())
+	}
+	if decoded.GetAutoContextMaxTokens() != 200000 {
+		t.Fatalf("decoded autoContextMaxTokens: got %d, want 200000", decoded.GetAutoContextMaxTokens())
+	}
+	if decoded.GetPrice() != 3.0 {
+		t.Fatalf("decoded price: got %v, want 3.0", decoded.GetPrice())
+	}
+	if !decoded.GetIsUserAdded() {
+		t.Fatal("decoded isUserAdded: want true")
+	}
+	if !decoded.GetSupportsAutoContext() {
+		t.Fatal("decoded supportsAutoContext: want true")
 	}
 }

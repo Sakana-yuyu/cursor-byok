@@ -419,6 +419,8 @@ func newProtoMessage(typeName string) (proto.Message, error) {
 		return &aiserverv1.GetTeamsResponse{}, nil
 	case "aiserver.v1.GetMeResponse":
 		return &aiserverv1.GetMeResponse{}, nil
+	case "aiserver.v1.GetManagedSkillsResponse":
+		return &aiserverv1.GetManagedSkillsResponse{}, nil
 	case "aiserver.v1.GetUserPrivacyModeResponse":
 		return &aiserverv1.GetUserPrivacyModeResponse{}, nil
 	case "aiserver.v1.GetPlanInfoResponse":
