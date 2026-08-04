@@ -899,7 +899,7 @@ function normalizeDelegation(source) {
     const defaultModelID = asString(group.defaultModelID || group.defaultModelId);
     return {
       id: asString(group.id) || `delegation-group-${index + 1}`,
-      name: asString(group.name) || `委派模型组 ${index + 1}`,
+      name: asString(group.name) || String(`委派模型组 ${index + 1}`),
       enabled: asBoolean(group.enabled, true),
       modelIDs,
       defaultModelID: modelIDs.includes(defaultModelID) ? defaultModelID : (modelIDs[0] || ""),

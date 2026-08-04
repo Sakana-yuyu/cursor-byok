@@ -6900,22 +6900,22 @@
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 194,
-          "column": 40
+          "column": 47
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 853,
-          "column": 11
+          "column": 18
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 1010,
-          "column": 36
+          "column": 43
         },
         {
           "file": "src/state/appState.js",
           "line": 902,
-          "column": 37
+          "column": 44
         }
       ]
     },

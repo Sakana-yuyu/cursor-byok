@@ -191,7 +191,7 @@ function groupImmediateAutosaveKey(groupID, action) {
 
 function normalizeGroupNameDraft(groupID, value) {
   const fallbackIndex = currentGroupIndex(groupID) + 1;
-  return String(value || "").trim() || `委派模型组 ${fallbackIndex > 0 ? fallbackIndex : 1}`;
+  return String(value || "").trim() || String(`委派模型组 ${fallbackIndex > 0 ? fallbackIndex : 1}`);
 }
 
 function normalizeMaxConcurrencyValue(value, committedValue) {
@@ -850,7 +850,7 @@ function handleAddGroup() {
   const nextIndex = appState.delegation.groups.length + 1;
   const group = {
     id: `delegation-group-${Date.now()}`,
-    name: `委派模型组 ${nextIndex}`,
+    name: String(`委派模型组 ${nextIndex}`),
     enabled: true,
     modelIDs: [],
     defaultModelID: "",
@@ -1007,7 +1007,7 @@ async function handleDeleteGroup(groupID) {
 
   const confirmed = await showModal({
     title: "删除模型组",
-    content: `确定删除“${group.name || `委派模型组 ${groupIndex + 1}`}”吗？`,
+    content: `确定删除“${group.name || String(`委派模型组 ${groupIndex + 1}`)}”吗？`,
     confirmText: "删除",
     cancelText: "取消",
   });
