@@ -36,11 +36,11 @@
 
 ### 任务
 
-- [ ] Task 2.1：后端按会话导出证据包。新增 `ExportSessionDebugBundle(sessionID string) (string, error)`，打包 `history/<id>/` 下的 `state.json`、`context.json` 与 `debug/*`。沿用 `historySessionIDPattern` 的 UUID 校验拒绝路径穿越，路径口径复用阶段一的 `historyDebugDirsIn`。只读遍历，不进 `forwarder.PurgeDebugLogs` 闸门（导出不该阻塞落盘）。目标目录为空时返回明确错误而不是空路径，沿用阶段一的诚实失败约定。
-- [ ] Task 2.2：后端 debug 文件清单与尾部读取。`ListSessionDebugFiles(sessionID)` 返回文件名、大小、mtime；`ReadSessionDebugTail(sessionID, filename string, maxBytes int64)` 只读文件尾部（最新的部分最可能含错误，与 `rotateIfNeeded` 保留尾部的策略一致）。`filename` 必须按白名单校验（`bidi.raw.jsonl`、`bidi.decoded.jsonl`、`runtime.jsonl`、`runsse.jsonl`、`provider.jsonl`），拒绝任意路径拼接。
-- [ ] Task 2.3：诊断工作台承接会话排查。`Diagnostics.vue` 拆成两块（模型协议诊断 / 会话证据），或改为 tab 结构，保留现有协议诊断能力不回退。历史页在「复制会话 ID」旁增加「在诊断中打开」入口，带 sessionID 跳转。
-- [ ] Task 2.4：debug 文件查看器。列出文件与大小、按 requestID 过滤、查看尾部内容、导出单会话证据包。错误横幅带就地重试（沿用阶段一样式）。浏览器预览 mock 必须是可变的真实行为，不能假成功（沿用 Task 1.4 的约定）。
-- [ ] Task 2.5：i18n 扫描补齐 en-US / ja-JP / ru-RU，全量验证。
+- [x] Task 2.1：后端按会话导出证据包。新增 `ExportSessionDebugBundle(sessionID string) (string, error)`，打包 `history/<id>/` 下的 `state.json`、`context.json` 与 `debug/*`。沿用 `historySessionIDPattern` 的 UUID 校验拒绝路径穿越，路径口径复用阶段一的 `historyDebugDirsIn`。只读遍历，不进 `forwarder.PurgeDebugLogs` 闸门（导出不该阻塞落盘）。目标目录为空时返回明确错误而不是空路径，沿用阶段一的诚实失败约定。`（commit 78f17ff）`
+- [x] Task 2.2：后端 debug 文件清单与尾部读取。`ListSessionDebugFiles(sessionID)` 返回文件名、大小、mtime；`ReadSessionDebugTail(sessionID, filename string, maxBytes int64)` 只读文件尾部（最新的部分最可能含错误，与 `rotateIfNeeded` 保留尾部的策略一致）。`filename` 必须按白名单校验（`bidi.raw.jsonl`、`bidi.decoded.jsonl`、`runtime.jsonl`、`runsse.jsonl`、`provider.jsonl`），拒绝任意路径拼接。`（commit 78f17ff）`
+- [x] Task 2.3：诊断工作台承接会话排查。`Diagnostics.vue` 拆成两块（模型协议诊断 / 会话证据），或改为 tab 结构，保留现有协议诊断能力不回退。历史页在「复制会话 ID」旁增加「在诊断中打开」入口，带 sessionID 跳转。`（commit 78f17ff）`
+- [x] Task 2.4：debug 文件查看器。列出文件与大小、按 requestID 过滤、查看尾部内容、导出单会话证据包。错误横幅带就地重试（沿用阶段一样式）。浏览器预览 mock 必须是可变的真实行为，不能假成功（沿用 Task 1.4 的约定）。`（commit 78f17ff）`
+- [x] Task 2.5：i18n 扫描补齐 en-US / ja-JP / ru-RU，全量验证。`（commit 78f17ff）`
 
 ### 验收标准
 
@@ -68,10 +68,13 @@
 
 ### 任务
 
-- [ ] Task 3.1：Modal 语义与焦点管理。补 `role="dialog"` / `aria-modal="true"` / `aria-labelledby`（指向标题）；Escape 触发 cancel；打开时焦点移入对话框；关闭后恢复到打开前的焦点元素；Tab 在对话框内循环。保留现有遮罩 `@click.self` 关闭与过渡动画。
-- [ ] Task 3.2：ActionMenu 键盘可达。触发器改为可聚焦元素并补 `aria-haspopup` / `aria-expanded` / `aria-controls`；Enter/Space 打开、方向键在菜单项间移动、Escape 关闭并把焦点还给触发器。保留现有 document click 外部关闭行为与 `matchTrigger` 宽度逻辑。
-- [ ] Task 3.3：回归调用方。枚举 Modal 与 ActionMenu 的全部调用点逐个验证，确认 confirm/cancel 语义、遮罩关闭、菜单项点击关闭都没有被改坏。浏览器预览下人工过一遍键盘操作。
-- [ ] Task 3.4：i18n 补齐 + 全量验证。
+- [x] Task 3.1：Modal 语义与焦点管理。补 `role="dialog"` / `aria-modal="true"` / `aria-labelledby`（指向标题）；Escape 触发 cancel；打开时焦点移入对话框；关闭后恢复到打开前的焦点元素；Tab 在对话框内循环。保留现有遮罩 `@click.self` 关闭与过渡动画。`（commit 41fbc73）`
+- [x] Task 3.2：ActionMenu 键盘可达。触发器改为可聚焦元素并补 `aria-haspopup` / `aria-expanded` / `aria-controls`；Enter/Space 打开、方向键在菜单项间移动、Escape 关闭并把焦点还给触发器。保留现有 document click 外部关闭行为与 `matchTrigger` 宽度逻辑。`（commit 41fbc73）`
+- [x] Task 3.3：回归调用方。枚举 Modal 与 ActionMenu 的全部调用点逐个验证，确认 confirm/cancel 语义、遮罩关闭、菜单项点击关闭都没有被改坏。浏览器预览下人工过一遍键盘操作。
+  - Modal 调用点：全局确认框（`useModal`，App.vue 挂载，9 个调用方：Home / MainLayout / ModelConfig / ModelEditor / SupplierDetail / CursorAccountCard / AdvancedSettings / HistorySettings / DelegationSettings）+ 更新提示框（markdown 模式）。confirm→`resolveModal(true)`、cancel（含 Escape/遮罩/取消按钮）→`resolveModal(false)`，语义无回退。
+  - ActionMenu 调用点：Home.vue 两处（split-button「重启 Cursor」+「更多」菜单）。菜单项均 `role="menuitem"` 且先 `close()` 再执行动作，`confirmDisabled` / `showCancel` 路径无回退。
+  - 键盘回归记录见 `docs/tasks/2026-08-05-project-review-and-task-list.md` 验收记录。
+- [x] Task 3.4：i18n 补齐 + 全量验证。`（commit 41fbc73）`
 
 ### 验收标准
 
