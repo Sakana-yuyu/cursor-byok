@@ -447,6 +447,7 @@ export const CloseApplication = () => Promise.resolve();
 export const DetectCursorPath = (manualPath = "") => Promise.resolve(manualPath || "C:\\Program Files\\Cursor\\Cursor.exe");
 export const LaunchCursor = () => Promise.resolve();
 export const RestartCursor = () => Promise.resolve({ wasRunning: false, killed: false, relaunched: true, cursorPath: "C:\\Program Files\\Cursor\\Cursor.exe", details: ["浏览器预览模式：模拟重启"] });
+export const IsCursorRunning = () => Promise.resolve(false);
 export const OpenModelEditorWindow = (index, adapterJSON) => {
   editorContext = { index: Number.isInteger(index) ? index : -1, adapterJSON: String(adapterJSON || "{}") };
   return Promise.resolve();

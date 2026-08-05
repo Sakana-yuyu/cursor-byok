@@ -3,6 +3,7 @@ package forwarder
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -178,6 +179,103 @@ func (service *Service) syncSummarySnapshot(stream *ActiveStream, conversation *
 		return nil
 	}
 	return service.syncConversationRecord(conversation.ConversationID, conversation)
+}
+
+// emitTurnSummary 在单个 turn 完成时向 RunSSE 流注入会话摘要事件
+// （SummaryStarted → Summary → SummaryCompleted），与官方控制面行为对齐：
+// Cursor 客户端左侧会话列表的标题摘要（latestConversationSummary.summary.summary）
+// 正是消费 RunSSE 流里的 SummaryUpdate 事件得到的。此前本项目只在触发上下文压缩
+// （compaction）时才发送摘要事件，普通 turn 完成后客户端拿不到摘要，左侧显示
+// "No summary available"。同一 turn 多次 provider pass 只发一次（SummaryEmittedTurn 去重）。
+func (service *Service) emitTurnSummary(stream *ActiveStream, requestID string, modelCallID string) error {
+	if service == nil || stream == nil || strings.TrimSpace(requestID) == "" || strings.TrimSpace(modelCallID) == "" {
+		return nil
+	}
+	stream.mu.Lock()
+	if stream.SummaryEmittedTurn == stream.TurnSeq {
+		stream.mu.Unlock()
+		return nil
+	}
+	turnSeq := stream.TurnSeq
+	userText := strings.TrimSpace(stream.LatestUserText)
+	accumulatedText := strings.TrimSpace(stream.ProviderAccumulatedText)
+	stream.mu.Unlock()
+	conversation, _, _, err := service.snapshotCheckpointConversation(stream)
+	if err != nil {
+		// 摘要是锦上添花的事件，快照失败不应把已完成并落库的 turn 判失败。
+		log.Printf("forwarder emit summary skip request_id=%s err=%v", strings.TrimSpace(requestID), err)
+		return nil
+	}
+	if conversation == nil {
+		return nil
+	}
+	summaryText := buildTurnSummaryText(userText, accumulatedText, conversation)
+	if strings.TrimSpace(summaryText) == "" {
+		return nil
+	}
+	// 三个事件全部成功发布后再标记已发送；中途失败不置位，
+	// 允许重试时重新走一遍（Publish 为 append 语义，重复无副作用）。
+	if err := service.broker.Publish(stream.RequestID, StreamEvent{Message: buildSummaryStartedMessage()}); err != nil {
+		log.Printf("forwarder emit summary publish failed request_id=%s err=%v", strings.TrimSpace(requestID), err)
+		return nil
+	}
+	if err := service.broker.Publish(stream.RequestID, StreamEvent{Message: buildSummaryMessage(summaryText)}); err != nil {
+		log.Printf("forwarder emit summary publish failed request_id=%s err=%v", strings.TrimSpace(requestID), err)
+		return nil
+	}
+	if err := service.broker.Publish(stream.RequestID, StreamEvent{Message: buildSummaryCompletedMessage(requestID)}); err != nil {
+		log.Printf("forwarder emit summary publish failed request_id=%s err=%v", strings.TrimSpace(requestID), err)
+		return nil
+	}
+	stream.mu.Lock()
+	stream.SummaryEmittedTurn = turnSeq
+	stream.mu.Unlock()
+	return nil
+}
+
+// buildTurnSummaryText 用当前 turn 的快照生成摘要文本：
+// 用户最后一条消息为主体，附上助手最新回复的片段；两者都做长度截断，
+// 避免左侧列表被长文本撑爆。纯本地规则生成，不额外消耗模型调用。
+func buildTurnSummaryText(userText string, accumulatedText string, conversation *ConversationFile) string {
+	if conversation == nil {
+		return ""
+	}
+	userText = strings.TrimSpace(userText)
+	assistantText := strings.TrimSpace(accumulatedText)
+	if assistantText == "" {
+		for index := len(conversation.Entries) - 1; index >= 0; index-- {
+			entry := conversation.Entries[index]
+			if strings.TrimSpace(entry.Kind) != "assistant_text" {
+				continue
+			}
+			var payload assistantTextPayload
+			if err := json.Unmarshal(entry.Payload, &payload); err == nil {
+				assistantText = strings.TrimSpace(payload.Text)
+			}
+			break
+		}
+	}
+	userText = truncateRunes(userText, 96)
+	assistantText = truncateRunes(assistantText, 128)
+	if userText == "" {
+		return assistantText
+	}
+	if assistantText == "" {
+		return userText
+	}
+	return userText + "：" + assistantText
+}
+
+// truncateRunes 按 rune 数量截断字符串，避免截断多字节字符产生乱码。
+func truncateRunes(text string, maxRunes int) string {
+	if maxRunes <= 0 || text == "" {
+		return ""
+	}
+	runes := []rune(text)
+	if len(runes) <= maxRunes {
+		return text
+	}
+	return string(runes[:maxRunes]) + "…"
 }
 
 func (service *Service) projectSummaryInputHistoryMessages(conversation *ConversationFile) ([]modeladapter.Message, error) {

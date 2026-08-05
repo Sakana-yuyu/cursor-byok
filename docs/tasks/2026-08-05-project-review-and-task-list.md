@@ -52,8 +52,8 @@
 
 ### 残留风险（非确定性缺陷）
 
-- auth 恢复后 Cursor 可能需进程重启才生效（类似 settings.json 的「运行中需重启」）；当前无同等检测/引导
-- `SaveUserConfig` 在 `LoadUserConfig` 失败（`oldErr != nil`）时跳过恢复
+- auth 恢复后 Cursor 可能需进程重启才生效（类似 settings.json 的「运行中需重启」）——已处理：切直连模式时探测运行态并引导重启（P2-1）
+- `SaveUserConfig` 在 `LoadUserConfig` 失败（`oldErr != nil`）时跳过恢复——已处理（P2-2）
 
 ### 已核对、无缺陷项
 
@@ -95,8 +95,11 @@
 
 ### P2 — 可选后续
 
-- [ ] **Task P2-1**：auth 恢复后引导重启 Cursor（对齐「修复代理后重启」交互）——未做，需要 UI 交互设计决策
-- [x] **Task P2-2**：`SaveUserConfig` 在 `LoadUserConfig` 失败时的恢复兜底（commit `26e0fc9`，待定，见验收记录）
+- [x] **Task P2-1**：auth 恢复后引导重启 Cursor（对齐「修复代理后重启」交互）
+  - 设计决策：覆盖切直连（upstream）路径；停止服务/退出不弹（停止常为临时操作，退出时弹窗无意义）
+  - 实现：后端 `WindowService.IsCursorRunning`（复用 `client.IsCursorProcessRunning` 探测）；前端切直连成功且 Cursor 运行中时弹「已恢复官方登录态」确认框，确认后以 skipConfirm 路径重启
+  - 验收：`go build ./...`、`go vet`、`wails3 generate bindings`（97 methods）、`npm run build` 全绿；浏览器预览 mock 返回 false 不触发引导
+- [x] **Task P2-2**：`SaveUserConfig` 在 `LoadUserConfig` 失败时的恢复兜底（commit `42107bf`，见验收记录）
 - [x] **Task P2-3**：删除 `hello.txt`
 
 ---
@@ -153,7 +156,8 @@ wails3 generate bindings
 | P1-1 | 2026-08-05 | —（随文档 commit） | 2026-08-04 文档 2.1–2.5、3.1–3.4 勾选，3.3 补回归记录 |
 | P1-2 | 2026-08-05 | —（随文档 commit） | 静态枚举 + Edge headless CDP 键盘实测 21 项断言全通过；CDP 合成 Enter 不触发按钮默认激活（headless 限制，组件显式处理路径全部正常） |
 | P1-3 | 2026-08-05 | —（随文档 commit） | 监督式委派计划全部 step 勾选 + 顶部「已实现」声明 |
-| P2-2 | 2026-08-05 | 待提交 | `SaveUserConfig` 去掉 `oldErr == nil` 条件，LoadUserConfig 失败时同样尝试恢复官方态 |
+| P2-2 | 2026-08-05 | `42107bf` | `SaveUserConfig` 去掉 `oldErr == nil` 条件，LoadUserConfig 失败时同样尝试恢复官方态 |
+| P2-1 | 2026-08-05 | 待提交 | 切直连且 Cursor 运行中时引导重启（`WindowService.IsCursorRunning` + Home.vue 确认框，对齐修复代理交互）；go build/vet、bindings 97 methods、npm build 全绿 |
 | P2-3 | 2026-08-05 | — | `hello.txt` 已删除（垃圾文件） |
 
 ## 手工验收指引（P0-6，需真实 Cursor 环境，无法自动化）

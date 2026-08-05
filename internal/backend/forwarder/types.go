@@ -184,6 +184,9 @@ type ActiveStream struct {
 	ProviderFinishReason                        string
 	ProviderUsage                               turnUsageSnapshot
 	ProviderTerminalToolInvocation              bool
+	// SummaryEmittedTurn 记录最近一次已向 RunSSE 流发送会话摘要事件的 turnSeq，
+	// 用于同一 turn 多次 provider pass 时去重（摘要每轮只发一次，内容取最终快照）。
+	SummaryEmittedTurn int64
 	// Wire-level checkpoint dedupe/rate limiting; persisted history is untouched.
 	LastCheckpointWireHash        string
 	LastCheckpointSentAt          time.Time

@@ -19,7 +19,10 @@ import (
 	"time"
 
 	"cursor/gen/aiserverv1"
+	"cursor/internal/appdata"
 	"cursor/internal/backend/server/upstream"
+	"cursor/internal/cursor"
+	"cursor/internal/logger"
 
 	"github.com/google/uuid"
 	"github.com/pkg/browser"
@@ -82,6 +85,10 @@ type Manager struct {
 	loginGeneration uint64
 
 	refreshMu sync.Mutex
+	// saveMu 串行化 save 写入（固定 .tmp 文件名并发竞争防护）。
+	saveMu sync.Mutex
+	// importOffMarkerPath 可覆盖的「主动断开」标记路径；空值使用默认 appdata 路径（测试注入用）。
+	importOffMarkerPath string
 }
 
 func NewManager(path string, client *http.Client) *Manager {
@@ -214,6 +221,10 @@ func (manager *Manager) Disconnect() (Status, error) {
 		manager.lastError = fmt.Sprintf("清除 Cursor 账号凭据失败: %v", err)
 		manager.mu.Unlock()
 		return manager.Status(), err
+	}
+	// 标记「主动断开」，阻止下次启动自动导入；手动 PKCE 登录会清除该标记。
+	if markerErr := writeAutoImportOffMarker(manager.markerPath()); markerErr != nil {
+		logger.Errorf("writeAutoImportOffMarker failed: %v", markerErr)
 	}
 	return manager.Status(), nil
 }
@@ -448,7 +459,90 @@ func (manager *Manager) load() error {
 	return nil
 }
 
+// autoImportOffMarkerName 标记用户主动断开官方账号，阻止后续启动自动导入。
+// 手动 PKCE 登录成功（commitCredentials）时删除该标记。
+const autoImportOffMarkerName = "cursor-account.auto-import-off"
+
+func autoImportOffMarkerPath() string {
+	return filepath.Join(appdata.DataRootPath(), autoImportOffMarkerName)
+}
+
+func (manager *Manager) markerPath() string {
+	if manager != nil && strings.TrimSpace(manager.importOffMarkerPath) != "" {
+		return manager.importOffMarkerPath
+	}
+	return autoImportOffMarkerPath()
+}
+
+func writeAutoImportOffMarker(markerPath string) error {
+	if strings.TrimSpace(markerPath) == "" {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(markerPath), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(markerPath, []byte("1\n"), 0o600)
+}
+
+// ImportFromCursorBackup 从 cursor-byok 在注入模拟账号前备份的官方账号文件
+// （cursor-auth-backup.json，字段 cursorAuth/accessToken 等）自动导入登录态，
+// 免去用户在助手界面再次 PKCE 登录。仅在当前未登录且未标记「主动断开」时导入；
+// 已登录（手动 PKCE 登录）时保持现状不覆盖。导入的 accessToken 若过期，
+// Authorization 会用 refreshToken 自动刷新。
+func (manager *Manager) ImportFromCursorBackup(backupPath string) (bool, error) {
+	if manager == nil || strings.TrimSpace(backupPath) == "" {
+		return false, nil
+	}
+	if _, err := os.Stat(manager.markerPath()); err == nil {
+		return false, nil // 用户主动断开过官方账号，不再自动导入
+	}
+	data, err := os.ReadFile(backupPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	var backup map[string]any
+	if err := json.Unmarshal(data, &backup); err != nil {
+		return false, fmt.Errorf("解析官方账号备份失败: %w", err)
+	}
+	accessToken, refreshToken, email := cursor.ReadCursorAuthBackupValues(backup)
+	if strings.TrimSpace(accessToken) == "" {
+		return false, nil
+	}
+
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	if manager.state == StateSignedIn && strings.TrimSpace(manager.credentials.AccessToken) != "" {
+		return false, nil
+	}
+	// 取消进行中的 PKCE 登录：pollLogin 后续的 commit/finishWithError 因
+	// loginGeneration 不匹配而成为 no-op，避免导入结果被旧登录流程覆盖。
+	if manager.loginCancel != nil {
+		manager.loginCancel()
+		manager.loginCancel = nil
+	}
+	manager.loginGeneration++
+	creds := credentials{
+		AccessToken:  strings.TrimSpace(accessToken),
+		RefreshToken: strings.TrimSpace(refreshToken),
+		Email:        strings.TrimSpace(email),
+	}
+	if err := manager.save(creds); err != nil {
+		manager.state = StateError
+		manager.lastError = fmt.Sprintf("保存自动导入的 Cursor 凭据失败: %v", err)
+		return false, err
+	}
+	manager.credentials = creds
+	manager.state = StateSignedIn
+	manager.lastError = ""
+	return true, nil
+}
+
 func (manager *Manager) save(value credentials) error {
+	manager.saveMu.Lock()
+	defer manager.saveMu.Unlock()
 	if manager.path == "" {
 		return fmt.Errorf("Cursor 账号凭据路径为空")
 	}
@@ -500,6 +594,10 @@ func (manager *Manager) commitCredentials(generation uint64, value credentials) 
 		manager.state = StateError
 		manager.lastError = fmt.Sprintf("保存 Cursor 登录凭据失败: %v", err)
 		return err
+	}
+	// 手动 PKCE 登录成功，清除「主动断开」标记，恢复自动导入。
+	if markerErr := os.Remove(manager.markerPath()); markerErr != nil && !errors.Is(markerErr, os.ErrNotExist) {
+		logger.Errorf("removeAutoImportOffMarker failed: %v", markerErr)
 	}
 	manager.credentials = value
 	manager.state = StateSignedIn

@@ -958,3 +958,9 @@ func (s *WindowService) RestartCursor(workspaceDir, manualPath string) (CursorRe
 	result.Details = details
 	return result, nil
 }
+
+// IsCursorRunning 探测 Cursor 进程是否正在运行。供前端在恢复官方登录态等
+// 「完全退出后重新打开才生效」的场景，决定是否需要引导用户重启 Cursor。
+func (s *WindowService) IsCursorRunning() bool {
+	return client.IsCursorProcessRunning()
+}

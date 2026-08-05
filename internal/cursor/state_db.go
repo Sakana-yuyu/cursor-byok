@@ -166,6 +166,32 @@ func cursorAuthBackupPath() string {
 	return filepath.Join(appdata.DataRootPath(), cursorAuthBackupFileName)
 }
 
+// CursorAuthBackupPath 返回官方账号备份文件路径（导出版，供账号自动导入使用）。
+func CursorAuthBackupPath() string {
+	return cursorAuthBackupPath()
+}
+
+// ReadCursorAuthBackupValues 从官方账号备份映射中提取 accessToken/refreshToken/email。
+// 键名契约（cursorAuth/accessToken 等）由此包统一维护，供 cursoraccount 自动导入消费。
+func ReadCursorAuthBackupValues(backup map[string]any) (accessToken string, refreshToken string, email string) {
+	if backup == nil {
+		return "", "", ""
+	}
+	for _, key := range cursorAuthBackupKeys {
+		text, _ := backup[key].(string)
+		text = strings.TrimSpace(text)
+		switch key {
+		case "cursorAuth/accessToken":
+			accessToken = text
+		case "cursorAuth/refreshToken":
+			refreshToken = text
+		case "cursorAuth/cachedEmail":
+			email = text
+		}
+	}
+	return accessToken, refreshToken, email
+}
+
 // cursorAuthBackupHasRealValue 判断备份中是否存在任一非空官方值。
 func cursorAuthBackupHasRealValue(backup map[string]any) bool {
 	for _, key := range cursorAuthBackupKeys {

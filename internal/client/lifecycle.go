@@ -92,6 +92,17 @@ func (s *ProxyService) StartProxy() (ProxyState, error) {
 		// 不阻断启动，仅记录日志
 	}
 
+	// 自动拉取 Cursor 客户端已登录的官方账号（注入前已备份到 cursor-auth-backup.json），
+	// 免去用户在助手界面重复 PKCE 登录；插件市场/Skills/MCP registry 等控制面请求即可直接用。
+	if s.cursorAccount != nil {
+		imported, importErr := s.cursorAccount.ImportFromCursorBackup(cursor.CursorAuthBackupPath())
+		if importErr != nil {
+			logger.Errorf("importCursorAccountFromBackup failed: %v", importErr)
+		} else if imported {
+			logger.Infof("importCursorAccountFromBackup: 已自动导入 Cursor 客户端官方账号")
+		}
+	}
+
 	if s.proxy != nil && !s.proxy.IsRunning() {
 		logger.Infof("starting mitm proxy listen_addr=%s", s.proxy.Snapshot().ListenAddr)
 		if err := s.proxy.Start(); err != nil {

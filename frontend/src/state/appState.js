@@ -30,6 +30,7 @@ import {
   testModelAdapter,
   repairProxySettings,
   restartCursor,
+  isCursorRunning,
 } from "@/services/clientApi";
 import { getHistoryDebugUsage } from "@/services/runtimeControlApi";
 
@@ -2476,6 +2477,15 @@ export async function restartCursorAction(manualPath = "") {
     return { ok: true, result: result || {}, error: "" };
   } catch (error) {
     return { ok: false, result: null, error: toUserError(error) };
+  }
+}
+
+export async function isCursorRunningAction() {
+  try {
+    const running = await isCursorRunning();
+    return { ok: true, running: Boolean(running), error: "" };
+  } catch (error) {
+    return { ok: false, running: false, error: toUserError(error) };
   }
 }
 

@@ -86,6 +86,7 @@ var agentModeToolNames = map[string]struct{}{
 	"CreatePr":                {},
 	"UpdatePr":                {},
 	"SeeImage":                {},
+	"send_final_summary":      {},
 }
 
 var multitaskModeToolNames = map[string]struct{}{

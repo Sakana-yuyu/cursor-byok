@@ -988,5 +988,23 @@
         ]
       }
     }
+  },
+  {
+    "function": {
+      "description": "Record the final summary of this completed turn. Call this tool ONCE at the very end of the turn, after all work and tool calls are finished and just before producing your final reply text, to write a concise summary of what was accomplished in this turn. The summary text you provide is shown in the user's conversation history list, so keep it to one or two short sentences describing the outcome (e.g. 'Fixed the login bug by adding token refresh').",
+      "name": "send_final_summary",
+      "parameters": {
+        "properties": {
+          "final_summary": {
+            "description": "One or two sentence summary of what was accomplished in this turn",
+            "type": "string"
+          }
+        },
+        "required": [
+          "final_summary"
+        ],
+        "type": "object"
+      }
+    }
   }
 ]

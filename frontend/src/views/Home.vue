@@ -6,9 +6,10 @@ import ActionMenu from "@/components/ui/ActionMenu.vue";
 import HomeMetricsCard from "@/components/HomeMetricsCard.vue";
 import StationSpendCard from "@/components/StationSpendCard.vue";
 import DelegationTaskStrip from "@/components/DelegationTaskStrip.vue";
+import CursorAccountCard from "@/components/CursorAccountCard.vue";
 import { useMessage } from "@/composables/useMessage";
 import { showModal } from "@/composables/useModal";
-import { appState, appViewState, DEBUG_LOG_WARNING_BYTES, getCursorManualPath, openModelConfigWindow, openMetricsDetailWindow, openRequestMetricsWindow, openLocalLogsDirectory, exportLogsAction, repairProxyAction, restartCursorAction, saveRoutingMode, syncServiceState, refreshDebugLogUsage, toUserError, toggleService } from "@/state/appState";
+import { appState, appViewState, DEBUG_LOG_WARNING_BYTES, getCursorManualPath, openModelConfigWindow, openMetricsDetailWindow, openRequestMetricsWindow, openLocalLogsDirectory, exportLogsAction, repairProxyAction, restartCursorAction, isCursorRunningAction, saveRoutingMode, syncServiceState, refreshDebugLogUsage, toUserError, toggleService } from "@/state/appState";
 import { purgeAllHistoryDebugLogs } from "@/services/runtimeControlApi";
 import { launchCursor } from "@/services/clientApi";
 import { isBrowserPreview } from "@/services/runtimeAdapter";
@@ -95,7 +96,17 @@ async function handleExportLogs() {
   }
 }
 async function handleOpenLogsDirectory() { try { await openLocalLogsDirectory(); } catch (error) { await showActionError("打开失败", toUserError(error)); } }
-async function handleDirectModeChange(enabled) { if (enabled && !(await showModal({ title: "开启直连模式", content: "直连模式会绕过本地代理服务，Cursor 将直接连接官方服务，可能产生官方账号计费。确定开启吗？", confirmText: "开启直连", cancelText: "取消" }))) return; const result = await saveRoutingMode(enabled ? "upstream" : "local"); if (!result.ok) { await showActionError("切换失败", result.error); return; } message.success(enabled ? "已切换到直连 Cursor 模式" : "已切换到本地服务模式"); }
+async function handleDirectModeChange(enabled) { if (enabled && !(await showModal({ title: "开启直连模式", content: "直连模式会绕过本地代理服务，Cursor 将直接连接官方服务，可能产生官方账号计费。确定开启吗？", confirmText: "开启直连", cancelText: "取消" }))) return; const result = await saveRoutingMode(enabled ? "upstream" : "local"); if (!result.ok) { await showActionError("切换失败", result.error); return; }
+  // 切直连时后端已恢复官方登录态（state.vscdb），但运行中的 Cursor 不会重新读取
+  // 状态库，需重启才生效。对齐「修复代理后重启」交互：检测到运行中则引导重启。
+  if (enabled) {
+    const probe = await isCursorRunningAction();
+    if (probe.ok && probe.running) {
+      if (await showModal({ title: "已恢复官方登录态", content: "已切换到直连模式并恢复 Cursor 官方登录态。检测到 Cursor 正在运行，重启后官方登录态才会完全生效。立即重启 Cursor 吗？", confirmText: "立即重启", cancelText: "稍后重启" })) await handleRestartCursor({ skipConfirm: true });
+      return;
+    }
+  }
+  message.success(enabled ? "已切换到直连 Cursor 模式" : "已切换到本地服务模式"); }
 async function handleLaunchCursor() {
   if (launchingCursor.value) return;
   launchingCursor.value = true;
@@ -195,6 +206,9 @@ onMounted(() => { void syncServiceState().catch(() => {}); });
       <Card><div class="flex flex-col gap-4"><div class="border-t border-[#343434] pt-4"><HomeMetricsCard @refresh="handleMetricsRefresh" /><div class="mt-4"><StationSpendCard ref="stationSpendCard" /></div></div></div></Card>
       <div class="mt-4">
         <DelegationTaskStrip />
+      </div>
+      <div class="mt-4">
+        <CursorAccountCard />
       </div>
     </div>
   </div>

@@ -30,7 +30,7 @@ import {
   GetModelEditorContext, OpenConfigWindow, OpenFooterAuthorHome, OpenHistoryWindow,
   OpenMetricsDetailWindow, OpenRequestMetricsWindow, OpenStatsOverlayWindow, UpdateStatsOverlayWindow, SetStatsOverlayAlwaysOnTop,
   CloseStatsOverlayWindow, OpenModelConfigWindow, OpenModelEditorWindow, ExportLogs,
-  SetMainWindowCloseAction, CloseApplication, DetectCursorPath, LaunchCursor, RestartCursor,
+  SetMainWindowCloseAction, CloseApplication, DetectCursorPath, LaunchCursor, RestartCursor, IsCursorRunning,
 } from "@bindings/cursor/internal/bridge/windowservice.js";
 import { isBrowserPreview, browserPreviewMockMetrics, browserPreviewMockProxyState } from "@/services/runtimeAdapter";
 
@@ -47,7 +47,7 @@ const desktopMethods = {
   FetchModelCatalog, ProbeModelAdapter, QueryProviderBalance, GetPromptInjectionSettings,
   SavePromptInjectionSettings, RefreshPromptInjection,
   RefreshPromptInjectionCatalog, ExportLogs, AutoMatchContextWindows, DiagnoseModelAdapters, ApplyDiagnosticFixes,
-  DetectCursorPath, LaunchCursor, RestartCursor, GetSkillsMCPScanSnapshot, RefreshSkillsMCPScan, SaveSkillsMCPScanConfig,
+  DetectCursorPath, LaunchCursor, RestartCursor, IsCursorRunning, GetSkillsMCPScanSnapshot, RefreshSkillsMCPScan, SaveSkillsMCPScanConfig,
   ReadSkillFile, SaveSkillFile, GenerateSkillSummary,
   QueryAllProviderBalances,
   RepairProxySettings,
@@ -308,6 +308,7 @@ export function refreshPromptInjectionCatalog() { return desktopOrMock(undefined
 export function detectCursorPath(manualPath = "") { return desktopOrMock("", "@bindings/cursor/internal/bridge/windowservice.js", "DetectCursorPath", [manualPath || ""]); }
 export function launchCursor(workspaceDir, manualPath = "") { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "LaunchCursor", [workspaceDir || "", manualPath || ""]); }
 export function restartCursor(workspaceDir, manualPath = "") { return desktopOrMock({}, "@bindings/cursor/internal/bridge/windowservice.js", "RestartCursor", [workspaceDir || "", manualPath || ""]); }
+export function isCursorRunning() { return desktopOrMock(false, "@bindings/cursor/internal/bridge/windowservice.js", "IsCursorRunning"); }
 
 // Skills & MCP 跨工具扫描：快照 / 重新扫描 / 保存开关配置。
 // 注意：这些 binding 由 wails 工具链自动生成；新增方法需在下次 wails dev/build 时重新生成 bindings。

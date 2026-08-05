@@ -1011,6 +1011,9 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 	if err := service.syncSummaryCarryForward(conversationID, requestID, modelCallID); err != nil {
 		return service.failStreamIfNonTerminal(stream, "unknown", err)
 	}
+	if err := service.emitTurnSummary(stream, requestID, modelCallID); err != nil {
+		return service.failStreamIfNonTerminal(stream, "unknown", err)
+	}
 
 	pendingCount := pendingBridgeCount(stream)
 	if pendingCount > 0 {
