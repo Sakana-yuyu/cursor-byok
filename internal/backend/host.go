@@ -39,6 +39,12 @@ type Host struct {
 	// agentModule 持有当前已挂载的 forwarder 服务，关闭时需要先主动收口活动流。
 	agentModule *forwarder.Module
 
+	// officialRequestIDs 记录被判定为「Cursor 官方模型」的 agent 请求（request_id → 登记时间）。
+	// 混合模式：客户端 BidiAppend 首个 run_request 的 model 属于官方目录时登记，
+	// RunSSE/BidiAppend 据此把请求端到端透传官方 api2.cursor.sh（真实官方 token），
+	// 其余模型走本地 forwarder（自定义后端）。带 30 分钟 TTL 自动清理防泄漏。
+	officialRequestIDs sync.Map
+
 	lastRunErr error
 
 	mux http.Handler
@@ -344,10 +350,11 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 	host.listenAddr = cfg.BackendListenAddr
 	agentModule := forwarder.NewModule(appdata.HistoryRootPath(), host.configs)
 	host.agentModule = agentModule
+	hybridMode := cfg.Routing.HybridMode
 	legacyBidiAppendProcedure := "/aiserver.v1.BidiService/BidiAppend"
 	legacyRunSSEProcedure := "/agent.v1.AgentService/RunSSE"
 	routeDeps := upstream.Dependencies{
-		SystemSettingService: &serverSystemSettings{configs: host.configs},
+		SystemSettingService: &serverSystemSettings{configs: host.configs, hybridMode: hybridMode},
 		HTTPClient:           netproxy.NewHTTPClient(30000 * time.Second),
 	}
 
@@ -366,12 +373,12 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 		server.POST(legacyBidiAppendProcedure,
 			server.Name("bidi_append"),
 			server.ConnectUnary(),
-			server.Local(server.HTTPHandlerAction(agentModule.LocalBidiHandler)),
+			server.Local(hybridBidiHandler(hybridMode, host, agentModule, routeDeps)),
 		),
 		server.POST(legacyRunSSEProcedure,
 			server.Name("run_sse"),
 			server.ConnectStream(),
-			server.Local(server.HTTPHandlerAction(agentModule.LocalRunSSE)),
+			server.Local(hybridRunSSEHandler(hybridMode, host, agentModule, routeDeps)),
 		),
 		server.POST("/aiserver.v1.AiService/ServerTime",
 			server.Name("server_time"),
@@ -416,12 +423,7 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 		server.POST("/aiserver.v1.AiService/GetUsableModels",
 			server.Name("usable_models"),
 			server.ConnectUnary(),
-			server.Local(upstream.MockProtoAction(routeDeps, upstream.CompatRouteConfig{
-				Name:          "usable_models",
-				StatusCode:    http.StatusOK,
-				MockProtoType: "aiserver.v1.GetUsableModelsResponse",
-				MockBuilder:   upstream.UsableModelsMockBuilder,
-			})),
+			server.Local(hybridUsableModelsAction(hybridMode, host, routeDeps)),
 		),
 		server.POST("/aiserver.v1.AiService/GetDefaultModelForCli",
 			server.Name("default_model_for_cli"),
@@ -889,6 +891,9 @@ func cursorControlPlaneAction(
 
 type serverSystemSettings struct {
 	configs *serverconfig.Manager
+	// hybridMode 是 rebuild 时的快照（与路由闭包同源），避免运行中改配置
+	// 不 rebuild 时 mock 与路由读到不一致的值产生「半生效」窗口。
+	hybridMode bool
 }
 
 func (settings *serverSystemSettings) ResolveModelAdapters(ctx context.Context) ([]legacyruntime.ModelAdapterConfig, error) {
@@ -897,4 +902,11 @@ func (settings *serverSystemSettings) ResolveModelAdapters(ctx context.Context) 
 		return nil, err
 	}
 	return snapshot.ModelAdapters, nil
+}
+
+func (settings *serverSystemSettings) HybridModeEnabled(ctx context.Context) (bool, error) {
+	if settings == nil {
+		return false, nil
+	}
+	return settings.hybridMode, nil
 }

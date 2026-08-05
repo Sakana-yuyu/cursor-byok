@@ -106,6 +106,9 @@ type ModelAdapterConfig struct {
 
 type RoutingConfig struct {
 	Mode string `json:"mode" yaml:"mode"`
+	// HybridMode 混合模式：在本地代理下同时启用 Cursor 官方模型（透传官方执行，
+	// 官方账号计费）。默认关闭，需在主页单独开启。
+	HybridMode bool `json:"hybridMode" yaml:"hybridMode"`
 }
 
 type HomeMetricsConfig struct {
@@ -224,6 +227,7 @@ func NormalizeConfig(input Config) (Config, error) {
 	if output.Routing.Mode == "" {
 		output.Routing.Mode = DefaultRoutingMode
 	}
+	output.Routing.HybridMode = input.Routing.HybridMode
 	adapters, err := NormalizeModelAdapterConfigs(input.ModelAdapters)
 	if err != nil {
 		return Config{}, err

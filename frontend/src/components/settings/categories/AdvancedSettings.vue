@@ -7,6 +7,7 @@ import { useMessage } from "@/composables/useMessage";
 import { showModal } from "@/composables/useModal";
 import {
   appState,
+  saveDebugLogEnabled,
   saveLocalResponseCacheEnabled,
   saveLocalResponseCacheSettings,
   saveRoutingMode,
@@ -30,6 +31,14 @@ const cacheEnabledDraft = ref(Boolean(appState.localResponseCache?.enabled));
 const cachePersistDraft = ref(appState.localResponseCache?.persist !== false);
 const ttlSecondsDraft = ref("");
 const maxEntriesDraft = ref("");
+
+const debugLogDraft = ref(Boolean(appState.debugLogEnabled));
+
+const debugLogState = reactive({
+  busy: false,
+  error: "",
+  retry: null,
+});
 
 const directModeState = reactive({
   busy: false,
@@ -73,6 +82,16 @@ watch(
   (value) => {
     if (!directModeState.busy) {
       directModeDraft.value = value === "upstream";
+    }
+  },
+  { immediate: true },
+);
+
+watch(
+  () => appState.debugLogEnabled,
+  (value) => {
+    if (!debugLogState.busy) {
+      debugLogDraft.value = Boolean(value);
     }
   },
   { immediate: true },
@@ -138,6 +157,29 @@ async function handleDirectModeChange(enabled) {
     directModeState.error = toUserError(error);
   } finally {
     directModeState.busy = false;
+  }
+}
+
+async function handleDebugLogChange(enabled) {
+  const nextValue = Boolean(enabled);
+  const previousValue = debugLogDraft.value;
+  debugLogDraft.value = nextValue;
+  debugLogState.retry = () => handleDebugLogChange(nextValue);
+  debugLogState.error = "";
+  debugLogState.busy = true;
+  try {
+    await props.autosave.run("advanced.debug-log", async () => {
+      const result = await saveDebugLogEnabled(nextValue);
+      if (!result?.ok) {
+        throw new Error(result?.error || "保存失败");
+      }
+      message.success(nextValue ? "已开启调试日志" : "已关闭调试日志（即时生效）");
+    });
+  } catch (error) {
+    debugLogDraft.value = previousValue;
+    debugLogState.error = toUserError(error);
+  } finally {
+    debugLogState.busy = false;
   }
 }
 
@@ -254,6 +296,26 @@ function handleCacheFieldInput(field, state, valueRef, value) {
           :disabled="directModeBusy"
           aria-label="直连模式"
           @change="handleDirectModeChange"
+        />
+      </SettingsRow>
+    </SettingsSection>
+
+    <SettingsSection title="调试日志">
+      <SettingsRow
+        label="记录调试日志"
+        description="把对话级调试日志写入磁盘（history 目录，单个 jsonl 文件上限 50MB）。关闭后立即停止写入，不再产生大体积日志。"
+        :busy="debugLogState.busy"
+        :error="debugLogState.error"
+        @retry="debugLogState.retry?.()"
+      >
+        <Switch
+          compact
+          label=""
+          :enabled="debugLogDraft"
+          :busy="debugLogState.busy"
+          :disabled="debugLogState.busy"
+          aria-label="记录调试日志"
+          @change="handleDebugLogChange"
         />
       </SettingsRow>
     </SettingsSection>

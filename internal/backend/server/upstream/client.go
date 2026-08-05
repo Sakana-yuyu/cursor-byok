@@ -56,6 +56,29 @@ func ForwardToUpstream(reqCtx *RequestContext, options ForwardOptions) (*Forward
 	}
 	defer upstreamResponse.Body.Close()
 
+	if options.CaptureResponse != nil {
+		captured, readErr := io.ReadAll(upstreamResponse.Body)
+		if readErr != nil {
+			return nil, readErr
+		}
+		// 先完整读取响应体再写响应头，避免读取失败时已写 200 + 官方 header，
+		// 调用方回退本地 mock 时产生双重响应（content-type 冲突/superfluous WriteHeader）。
+		copyResponseHeadersToClient(reqCtx.ResponseWriter.Header(), upstreamResponse.Header)
+		reqCtx.ResponseWriter.WriteHeader(upstreamResponse.StatusCode)
+		options.CaptureResponse(captured)
+		written, copyErr := copyResponse(reqCtx.ResponseWriter, bytes.NewReader(captured))
+		meta := &ForwardMeta{
+			StatusCode:   upstreamResponse.StatusCode,
+			Status:       upstreamResponse.Status,
+			ContentType:  upstreamResponse.Header.Get("content-type"),
+			ResponseSize: written,
+		}
+		if copyErr != nil {
+			return meta, copyErr
+		}
+		return meta, nil
+	}
+
 	copyResponseHeadersToClient(reqCtx.ResponseWriter.Header(), upstreamResponse.Header)
 	reqCtx.ResponseWriter.WriteHeader(upstreamResponse.StatusCode)
 
