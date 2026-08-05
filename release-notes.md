@@ -1,33 +1,27 @@
-## v0.0.81
-
-### 修复
-- **图片识图重复委派**：发图识别后被中断、回复「继续」时，历史中的图片会再次触发视觉委派（每次等待 80 秒识图）；现已按图片内容哈希建立会话级识图归档，识别过的图片直接引用归档结果继续任务，不再重复委派、不再把前文图片反复送入上下文
-- **识图归档落盘**：识图结果归档持久化到会话目录，升级/重启应用后同一会话的图片仍可命中归档，无需重新识别
-- **多模态模型误判走委派**：切换到本身支持识图的模型（如 gpt-5.6-luna、claude、gemini 等）后仍会触发视觉委派；现已同时按模型 ID 与显示名判定视觉能力，多模态模型直接由自身识图，不再委派
-- **临时图片文件并发覆盖**：多图并行识别时落地临时文件可能因同名互相覆盖导致识图结果串图；改用系统唯一命名创建临时文件
-- **绑定方法静默失败**：前端调用未注册的后端绑定方法时静默返回 undefined（如读图 MCP 启用入口）；现在缺失方法直接报错，并补齐读图 MCP 绑定注册
-- **模型编辑器取消丢失修改**：编辑一半点「取消」或关闭窗口时未保存的修改直接丢失；现增加未保存提醒确认
-- **请求明细空页误判**：记录被清空或并发删除后当前页无数据时显示空白表格；现正确显示空态与刷新提示
-- **会话分析范围口径**：时间范围切换时事件图表与站点花费口径不统一（事件仍按全量拉取）；现按当前范围同步加载事件与花费
+## v0.0.82
 
 ### 新功能
-- **上游 CLI 端点覆盖**：合并上游新增的 cursor-agent CLI 本地模式端点支持（GetServerConfig、模型列表、仪表盘与遥测端点），CLI 会话不再因 404 中断
-- **CLI 模型详情**：CLI 模型列表返回完整模型详情（模型 ID、展示名与凭据信息），支持 CLI 侧模型选择
+- **官方模型混合模式**：开启后可在本地代理下同时使用 Cursor 官方模型——模型选择器出现官方模型列表（GPT-5.x / Claude Opus / Sonnet / Grok 等），选择官方模型时请求透传官方执行（消耗官方账号额度），其余模型继续走你的自定义中转配置；官方模型目录会随账号登录自动刷新
+- **官方账号自动导入**：服务启动时自动读取已备份的官方登录态（免手动 PKCE 登录），断开账号后不会重复导入
+- **Agent 会话摘要**：任务回合结束时按官方时序注入会话摘要事件，长任务续跑上下文更完整
+- **跨工具扫描面扩展**：技能与 MCP 扫描新增 Trae（`.trae/skills`）、Windsurf（`.windsurf/skills`、`~/.codeium/windsurf`）、Gemini CLI（`~/.gemini/skills`）、GitHub Copilot / VS Code（`~/.copilot/skills`、`.vscode/mcp.json`）、Cline（`.cline/skills`）等来源，其他工具里配好的技能/MCP 也能在 Cursor 中调用
+- **调试日志开关**：高级设置新增「记录调试日志」开关，关闭后立即停止写入，避免日志目录无限膨胀
 
 ### 优化
-- **模型配置交互加固**：CLI local-mode 端点 mock 配置齐全，配合 3 分钟断连宽限与重连复用，网络抖动后任务自动续跑
-- **新增回归测试**：覆盖识图归档命中/跨进程恢复、多模态免委派、归档引用不调识图模型等核心逻辑
+- **切直连引导重启**：切到直连模式且 Cursor 正在运行时，自动提示重启使官方登录态完整生效（与「修复代理后重启」同一交互模式）
+- **账号恢复兜底**：配置读取异常时同样尝试恢复官方登录态，避免残留模拟账号导致官方连接 401
+- **技能来源分类展示**：技能管理页按来源工具分类显示扫描结果
 
 ### 下载哪个文件？（按系统选择）
 
 > 名字里的 x64 / x32 / arm64 表示 CPU 架构，认准自己系统的类型下载即可。
 
-- **Windows 64 位（绝大多数 Windows 电脑）**：下载 `cursor-byok-0.0.81-windows-x64-installer.exe`（安装版，推荐）或 `cursor-byok-0.0.81-windows-x64.zip`（绿色版）
-- **Windows ARM64（骁龙/麒麟等 ARM 处理器的 Win 电脑）**：下载 `cursor-byok-0.0.81-windows-arm64-installer.exe` 或 `cursor-byok-0.0.81-windows-arm64.zip`
-- **Windows 32 位（很老的低配电脑才需要）**：下载 `cursor-byok-0.0.81-windows-x32-installer.exe` 或 `cursor-byok-0.0.81-windows-x32.zip`
-- **macOS Apple Silicon（M1/M2/M3/M4 芯片）**：下载 `cursor-byok-0.0.81-macos-arm64.dmg`
-- **macOS Intel**：下载 `cursor-byok-0.0.81-macos-x64.dmg`
-- **Linux 64 位**：下载 `cursor-byok-0.0.81-linux-x64.tar.gz`
+- **Windows 64 位（绝大多数 Windows 电脑）**：下载 `cursor-byok-0.0.82-windows-x64-installer.exe`（安装版，推荐）或 `cursor-byok-0.0.82-windows-x64.zip`（绿色版）
+- **Windows ARM64（骁龙/麒麟等 ARM 处理器的 Win 电脑）**：下载 `cursor-byok-0.0.82-windows-arm64-installer.exe` 或 `cursor-byok-0.0.82-windows-arm64.zip`
+- **Windows 32 位（很老的低配电脑才需要）**：下载 `cursor-byok-0.0.82-windows-x32-installer.exe` 或 `cursor-byok-0.0.82-windows-x32.zip`
+- **macOS Apple Silicon（M1/M2/M3/M4 芯片）**：下载 `cursor-byok-0.0.82-macos-arm64.dmg`
+- **macOS Intel**：下载 `cursor-byok-0.0.82-macos-x64.dmg`
+- **Linux 64 位**：下载 `cursor-byok-0.0.82-linux-x64.tar.gz`
 
 **如何判断自己的 Windows 是多少位**：右键「此电脑」→「属性」，看「系统类型」显示"64 位操作系统"就下载 x64，显示"32 位"才下载 x32。macOS 可在「关于本机」查看芯片是 Apple 还是 Intel。
 
