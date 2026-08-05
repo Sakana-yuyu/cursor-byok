@@ -31,12 +31,14 @@ import (
 type MCPSource string
 
 const (
-	MCPSourceCursor MCPSource = "cursor" // ~/.cursor/mcp.json 或 <ws>/.cursor/mcp.json
-	MCPSourceClaude MCPSource = "claude" // ~/.claude.json、~/.claude/settings.json、<ws>/.mcp.json
-	MCPSourceShared MCPSource = "shared" // <ws>/.agents/mcp.json 或 ~/.agents/mcp.json
-	MCPSourceZCode  MCPSource = "zcode"  // ~/.zcode/cli/config.json、<ws>/.zcode/config.json（嵌套 mcp.servers）
-	MCPSourceCodex  MCPSource = "codex"  // ~/.codex/config.toml 的 [mcp_servers.*]
-	MCPSourceCline  MCPSource = "cline"  // cline_mcp_settings.json
+	MCPSourceCursor   MCPSource = "cursor"   // ~/.cursor/mcp.json 或 <ws>/.cursor/mcp.json
+	MCPSourceClaude   MCPSource = "claude"   // ~/.claude.json、~/.claude/settings.json、<ws>/.mcp.json
+	MCPSourceShared   MCPSource = "shared"   // <ws>/.agents/mcp.json 或 ~/.agents/mcp.json
+	MCPSourceZCode    MCPSource = "zcode"    // ~/.zcode/cli/config.json、<ws>/.zcode/config.json（嵌套 mcp.servers）
+	MCPSourceCodex    MCPSource = "codex"    // ~/.codex/config.toml 的 [mcp_servers.*]
+	MCPSourceCline    MCPSource = "cline"    // cline_mcp_settings.json
+	MCPSourceWindsurf MCPSource = "windsurf" // <ws>/.windsurf/mcp_config.json 或 ~/.codeium/windsurf/mcp_config.json
+	MCPSourceVSCode   MCPSource = "vscode"   // <ws>/.vscode/mcp.json 或 ~/.vscode/mcp.json（VS Code 原生 MCP）
 )
 
 // mcpScanCache 缓存一次 MCP 扫描结果（同 skill 扫描，按 mtime 失效）。
@@ -331,16 +333,40 @@ func orderedMCPConfigFiles(workspaceRoot string) []mcpConfigFile {
 	if cline := clineMCPSettingsPath(); cline != "" {
 		addJSON(cline, MCPSourceCline, MCPConfigScopeUser, false)
 	}
+	// Windsurf（mcp_config.json，mcpServers 键）
+	if ws != "" {
+		addJSON(filepath.Join(ws, ".windsurf", "mcp_config.json"), MCPSourceWindsurf, MCPConfigScopeWorkspace, false)
+	}
+	if home != "" {
+		addJSON(filepath.Join(home, ".codeium", "windsurf", "mcp_config.json"), MCPSourceWindsurf, MCPConfigScopeUser, false)
+	}
+	// VS Code 原生 MCP（servers 键，与 mcpServers 不同）
+	if ws != "" {
+		files = append(files, mcpConfigFile{Path: filepath.Join(ws, ".vscode", "mcp.json"), Source: MCPSourceVSCode, Scope: MCPConfigScopeWorkspace, Parser: parseVSCodeMCPJSON})
+	}
+	if home != "" {
+		files = append(files, mcpConfigFile{Path: filepath.Join(home, ".vscode", "mcp.json"), Source: MCPSourceVSCode, Scope: MCPConfigScopeUser, Parser: parseVSCodeMCPJSON})
+	}
 	return files
 }
 
-// parseMCPJSON 解析顶层 { "mcpServers": { ... } } 格式（Cursor/Claude/Cline/共享）。
+// parseMCPJSON 解析顶层 { "mcpServers": { ... } } 格式（Cursor/Claude/Cline/Windsurf/共享）。
 func parseMCPJSON(data []byte) (map[string]normalizedMCPServer, error) {
+	return parseMCPJSONUnderKey(data, "mcpServers")
+}
+
+// parseVSCodeMCPJSON 解析 VS Code 原生 MCP 的 { "servers": { ... } } 格式（.vscode/mcp.json）。
+func parseVSCodeMCPJSON(data []byte) (map[string]normalizedMCPServer, error) {
+	return parseMCPJSONUnderKey(data, "servers")
+}
+
+// parseMCPJSONUnderKey 解析顶层对象下指定 key 的 servers 映射。
+func parseMCPJSONUnderKey(data []byte, key string) (map[string]normalizedMCPServer, error) {
 	var root map[string]json.RawMessage
 	if err := json.Unmarshal(data, &root); err != nil {
 		return nil, err
 	}
-	raw, ok := root["mcpServers"]
+	raw, ok := root[key]
 	if !ok {
 		return nil, nil
 	}
@@ -894,7 +920,7 @@ func mcpURLOrigin(raw string) string {
 
 func mcpSourceKind(source MCPSource) string {
 	switch source {
-	case MCPSourceCursor, MCPSourceClaude, MCPSourceShared, MCPSourceZCode, MCPSourceCodex, MCPSourceCline:
+	case MCPSourceCursor, MCPSourceClaude, MCPSourceShared, MCPSourceZCode, MCPSourceCodex, MCPSourceCline, MCPSourceWindsurf, MCPSourceVSCode:
 		return string(source)
 	default:
 		return "other"

@@ -2,8 +2,9 @@
 //
 // 原生 Cursor 只扫描 ~/.cursor/skills 和 RequestContext 带来的 descriptor；BYOK 场景下
 // 客户端往往不填 descriptor，导致系统提示里 <agent_skills> 为空，模型无从得知可用技能。
-// 本扫描器汇总主流编码工具（Cursor / Claude Code / Codex / ZCode / 共享 .agents / 旧 BYOK）
-// 的技能目录，按 name 去重，作为 RequestContext.SkillOptions 的补充来源注入。
+// 本扫描器汇总主流编码工具（Cursor / Trae / Windsurf / Claude Code / Codex / Gemini /
+// Copilot / Cline / ZCode / 共享 .agents / 旧 BYOK）的技能目录，按 name 去重，
+// 作为 RequestContext.SkillOptions 的补充来源注入。
 //
 // 扫描结果仍交给 SkillStore 的稀疏激活（BM25 Top-K）筛选，不全量注入，遵守 prefix-cache-stability。
 package forwarder
@@ -23,8 +24,13 @@ type SkillSource string
 
 const (
 	SkillSourceCursor      SkillSource = "cursor"       // ~/.cursor/skills 或 <ws>/.cursor/skills
+	SkillSourceTrae        SkillSource = "trae"         // ~/.trae/skills 或 <ws>/.trae/skills
+	SkillSourceWindsurf    SkillSource = "windsurf"     // ~/.codeium/windsurf/skills 或 <ws>/.windsurf/skills
 	SkillSourceClaude      SkillSource = "claude"       // ~/.claude/skills 或 <ws>/.claude/skills
 	SkillSourceCodex       SkillSource = "codex"        // ~/.codex/skills
+	SkillSourceGemini      SkillSource = "gemini"       // ~/.gemini/skills
+	SkillSourceCopilot     SkillSource = "copilot"      // ~/.copilot/skills（VS Code / GitHub Copilot）
+	SkillSourceCline       SkillSource = "cline"        // ~/.cline/skills 或 <ws>/.cline/skills
 	SkillSourceShared      SkillSource = "shared"       // ~/.agents/skills 或 <ws>/.agents/skills（跨工具共享标准）
 	SkillSourceZCode       SkillSource = "zcode"        // ~/.zcode/skills 或 <ws>/.zcode/skills
 	SkillSourceZCodePlugin SkillSource = "zcode-plugin" // ~/.zcode/cli/plugins/cache/*/*/skills
@@ -103,7 +109,8 @@ type skillScanRoot struct {
 }
 
 // orderedSkillScanRoots 按优先级返回所有待扫描目录（高优先级在前，去重时先到先得）。
-// 顺序：Cursor 全局/项目 → Claude → Codex → 共享 .agents → ZCode → ZCode 插件 → 旧 BYOK。
+// 顺序：Cursor → Trae → Windsurf → Claude → Codex → Gemini → Copilot → Cline →
+// 共享 .agents → ZCode → ZCode 插件 → 旧 BYOK。
 func orderedSkillScanRoots(workspaceRoot string) []skillScanRoot {
 	home, _ := os.UserHomeDir()
 	home = strings.TrimSpace(home)
@@ -124,6 +131,20 @@ func orderedSkillScanRoots(workspaceRoot string) []skillScanRoot {
 	if ws != "" {
 		add(filepath.Join(ws, ".cursor", "skills"), SkillSourceCursor)
 	}
+	// Trae（IDE，技能放项目 .trae/skills，全局目录兼容）
+	if home != "" {
+		add(filepath.Join(home, ".trae", "skills"), SkillSourceTrae)
+	}
+	if ws != "" {
+		add(filepath.Join(ws, ".trae", "skills"), SkillSourceTrae)
+	}
+	// Windsurf（IDE，全局在 ~/.codeium/windsurf/skills，项目在 .windsurf/skills）
+	if home != "" {
+		add(filepath.Join(home, ".codeium", "windsurf", "skills"), SkillSourceWindsurf)
+	}
+	if ws != "" {
+		add(filepath.Join(ws, ".windsurf", "skills"), SkillSourceWindsurf)
+	}
 	// Claude Code
 	if home != "" {
 		add(filepath.Join(home, ".claude", "skills"), SkillSourceClaude)
@@ -134,6 +155,21 @@ func orderedSkillScanRoots(workspaceRoot string) []skillScanRoot {
 	// Codex / GPT
 	if home != "" {
 		add(filepath.Join(home, ".codex", "skills"), SkillSourceCodex)
+	}
+	// Gemini CLI
+	if home != "" {
+		add(filepath.Join(home, ".gemini", "skills"), SkillSourceGemini)
+	}
+	// GitHub Copilot / VS Code
+	if home != "" {
+		add(filepath.Join(home, ".copilot", "skills"), SkillSourceCopilot)
+	}
+	// Cline
+	if home != "" {
+		add(filepath.Join(home, ".cline", "skills"), SkillSourceCline)
+	}
+	if ws != "" {
+		add(filepath.Join(ws, ".cline", "skills"), SkillSourceCline)
 	}
 	// 共享标准 .agents（跨工具）
 	if home != "" {
