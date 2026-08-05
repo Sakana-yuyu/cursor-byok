@@ -1,6 +1,7 @@
 package client
 
 import (
+	"errors"
 	"fmt"
 	goruntime "runtime"
 
@@ -11,6 +12,11 @@ import (
 func (s *ProxyService) ApplyCursorSettings() error {
 	if s == nil || s.proxy == nil {
 		return fmt.Errorf("proxy is not initialized")
+	}
+	// 降级启动（CA 异常，certManager=nil）时 caCertPEM 为空，
+	// 绝不能拿空 PEM 去写 CA 证书文件——否则会覆盖真实 CA 证书。
+	if len(s.caCertPEM) == 0 {
+		return errors.New("CA 证书材料缺失（应用已降级启动，本地代理不可用）")
 	}
 	s.caFileMu.Lock()
 	caCertPath, err := cursor.EnsureCACertFile(s.caCertPEM, s.caFilePath)

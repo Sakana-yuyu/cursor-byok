@@ -454,6 +454,8 @@ export const OpenModelEditorWindow = (index, adapterJSON) => {
 };
 export const EnableReaderMCP = (_url, _apiKey, _model) =>
   Promise.resolve({ identifier: "vision-reader", scriptPath: "", wasAdded: true });
+export const RepairCACorruption = () =>
+  Promise.resolve({ repaired: true, backupPath: "", detail: "浏览器预览模式：模拟修复" });
 export const TestModelAdapter = (adapter) => Promise.resolve({ status: "success", adapterID: adapter?.id || "preview", summaryText: "浏览器预览模式：未发起请求" });
 export const GetModelAdapterTestResults = () => Promise.resolve([]);
 export const FetchModelCatalog = (request) => {

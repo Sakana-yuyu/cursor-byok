@@ -77,11 +77,18 @@ func Run(resources EmbeddedResources) error {
 	netproxy.InstallDefaultTransport()
 	appName := i18n.T(i18n.DefaultLocale, appNameKey)
 
-	certManager, err := certs.NewPersistentManager(appdata.CACertFilePath(), appdata.CAKeyFilePath())
-	if err != nil {
-		return err
+	certManager, certErr := certs.NewPersistentManager(appdata.CACertFilePath(), appdata.CAKeyFilePath())
+	if certErr != nil {
+		// 降级启动：CA 任何初始化失败都不中止应用——GUI 必须能打开，
+		// 本地代理停用（MITM disabled）；材料不完整时首页提供「一键修复」入口，
+		// 其余错误同样展示在首页，避免「应用打不开、无法自救」的死锁。
+		logger.Errorf("CA init failed, degraded startup (MITM disabled): %v", certErr)
+		certManager = nil
 	}
-	embeddedCACertPEM := certManager.CACertPEM()
+	var embeddedCACertPEM []byte
+	if certManager != nil {
+		embeddedCACertPEM = certManager.CACertPEM()
+	}
 	logEmbeddedCAInfo(embeddedCACertPEM)
 
 	defaultBackendBaseURL := "http://" + serverconfig.DefaultBackendListenAddr
@@ -90,6 +97,9 @@ func Run(resources EmbeddedResources) error {
 		return err
 	}
 	proxyService := bridge.NewProxyService(proxyServer, certManager, embeddedCACertPEM)
+	if certErr != nil {
+		proxyService.MarkCAIncomplete(certErr.Error())
+	}
 	adAssetBaseURL := defaultBackendBaseURL
 	if cfg, err := proxyService.LoadUserConfig(); err == nil {
 		adAssetBaseURL = browserReachableLoopbackBaseURL(cfg.BackendListenAddr)

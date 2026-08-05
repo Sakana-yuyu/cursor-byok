@@ -94,7 +94,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 118,
+          "line": 119,
           "column": 56
         }
       ]
@@ -106,7 +106,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1590,
+          "line": 1596,
           "column": 14
         }
       ]
@@ -357,6 +357,18 @@
         }
       ]
     },
+    "04cc3ca0dab3ecd9": {
+      "source": "CA 材料完整，无需修复。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 189,
+          "column": 29
+        }
+      ]
+    },
     "04f632dd4f034d5e": {
       "source": "{0} 的上下文窗口必须为正整数",
       "kind": "template",
@@ -364,7 +376,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 806,
+          "line": 807,
           "column": 14
         }
       ]
@@ -442,7 +454,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 71,
+          "line": 72,
           "column": 12
         }
       ]
@@ -490,7 +502,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 571,
+          "line": 573,
           "column": 41
         }
       ]
@@ -543,7 +555,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 124,
+          "line": 125,
           "column": 21
         }
       ]
@@ -572,7 +584,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 100,
+          "line": 101,
           "column": 111
         }
       ]
@@ -637,7 +649,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 693,
+          "line": 695,
           "column": 12
         }
       ]
@@ -673,7 +685,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 572,
+          "line": 574,
           "column": 21
         }
       ]
@@ -709,7 +721,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 247,
           "column": 3253
         }
       ]
@@ -721,7 +733,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 48,
+          "line": 49,
           "column": 27
         }
       ]
@@ -786,7 +798,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 758,
+          "line": 759,
           "column": 14
         }
       ]
@@ -937,7 +949,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 126,
+          "line": 127,
           "column": 27
         }
       ]
@@ -954,7 +966,7 @@
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 603,
+          "line": 605,
           "column": 78
         }
       ]
@@ -1180,7 +1192,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 526,
+          "line": 528,
           "column": 117
         }
       ]
@@ -1370,8 +1382,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 212,
-          "column": 6881
+          "line": 247,
+          "column": 7351
         }
       ]
     },
@@ -1382,7 +1394,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 247,
           "column": 1087
         }
       ]
@@ -1435,7 +1447,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 115,
+          "line": 116,
           "column": 107
         }
       ]
@@ -1495,7 +1507,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 118,
+          "line": 119,
           "column": 29
         }
       ]
@@ -1591,7 +1603,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 610,
+          "line": 612,
           "column": 90
         }
       ]
@@ -1603,7 +1615,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1644,
+          "line": 1650,
           "column": 38
         }
       ]
@@ -1615,7 +1627,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 433,
+          "line": 434,
           "column": 14
         }
       ]
@@ -1627,7 +1639,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 91,
+          "line": 92,
           "column": 38
         }
       ]
@@ -1651,7 +1663,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1543,
+          "line": 1549,
           "column": 34
         }
       ]
@@ -1738,7 +1750,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 880,
+          "line": 881,
           "column": 12
         }
       ]
@@ -1810,7 +1822,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2122,
+          "line": 2128,
           "column": 32
         }
       ]
@@ -1920,6 +1932,23 @@
           "file": "src/views/ModelConfig.vue",
           "line": 473,
           "column": 180
+        }
+      ]
+    },
+    "1de56261d103b725": {
+      "source": "浏览器预览模式：模拟修复",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 458,
+          "column": 61
+        },
+        {
+          "file": "src/services/clientApi.js",
+          "line": 339,
+          "column": 66
         }
       ]
     },
@@ -2049,7 +2078,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 539,
+          "line": 541,
           "column": 16
         }
       ]
@@ -2107,7 +2136,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 680,
+          "line": 682,
           "column": 12
         }
       ]
@@ -2192,7 +2221,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1607,
+          "line": 1613,
           "column": 40
         }
       ]
@@ -2274,7 +2303,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 527,
+          "line": 528,
           "column": 36
         },
         {
@@ -2308,7 +2337,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 100,
+          "line": 101,
           "column": 92
         }
       ]
@@ -2380,7 +2409,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 106,
+          "line": 107,
           "column": 36
         }
       ]
@@ -2445,22 +2474,22 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 76,
+          "line": 77,
           "column": 184
         },
         {
           "file": "src/views/Home.vue",
-          "line": 77,
+          "line": 78,
           "column": 187
         },
         {
           "file": "src/views/Home.vue",
-          "line": 78,
+          "line": 79,
           "column": 178
         },
         {
           "file": "src/views/Home.vue",
-          "line": 99,
+          "line": 100,
           "column": 122
         },
         {
@@ -2593,7 +2622,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 149,
+          "line": 150,
           "column": 29
         }
       ]
@@ -2675,7 +2704,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1531,
+          "line": 1537,
           "column": 12
         }
       ]
@@ -2745,7 +2774,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 100,
+          "line": 101,
           "column": 176
         }
       ]
@@ -2781,7 +2810,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 815,
+          "line": 816,
           "column": 14
         }
       ]
@@ -2842,7 +2871,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 654,
+          "line": 656,
           "column": 12
         }
       ]
@@ -2989,7 +3018,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 801,
+          "line": 803,
           "column": 49
         }
       ]
@@ -3066,6 +3095,18 @@
         }
       ]
     },
+    "2c7a3fb23a6aab72": {
+      "source": "\n\n请重启应用，本地代理将恢复正常。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 187,
+          "column": 18
+        }
+      ]
+    },
     "2cd0f3be8738a86c": {
       "source": "取消",
       "kind": "text",
@@ -3133,23 +3174,28 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 1649,
+          "line": 1655,
           "column": 12
         },
         {
           "file": "src/views/Home.vue",
-          "line": 100,
+          "line": 101,
           "column": 196
         },
         {
           "file": "src/views/Home.vue",
-          "line": 111,
+          "line": 112,
           "column": 230
         },
         {
           "file": "src/views/Home.vue",
-          "line": 141,
+          "line": 142,
           "column": 19
+        },
+        {
+          "file": "src/views/Home.vue",
+          "line": 171,
+          "column": 17
         },
         {
           "file": "src/views/ModelConfig.vue",
@@ -3209,6 +3255,18 @@
           "file": "src/components/settings/categories/HistorySettings.vue",
           "line": 174,
           "column": 12
+        }
+      ]
+    },
+    "2cf07a618a8a8a43": {
+      "source": "修复完成",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 191,
+          "column": 30
         }
       ]
     },
@@ -3289,8 +3347,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 212,
-          "column": 7316
+          "line": 247,
+          "column": 7786
         }
       ]
     },
@@ -3365,7 +3423,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 247,
           "column": 502
         }
       ]
@@ -3442,8 +3500,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 212,
-          "column": 6834
+          "line": 247,
+          "column": 7304
         }
       ]
     },
@@ -3490,22 +3548,22 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 781,
+          "line": 782,
           "column": 16
         },
         {
           "file": "src/state/appState.js",
-          "line": 787,
+          "line": 788,
           "column": 16
         },
         {
           "file": "src/state/appState.js",
-          "line": 793,
+          "line": 794,
           "column": 16
         },
         {
           "file": "src/state/appState.js",
-          "line": 799,
+          "line": 800,
           "column": 16
         }
       ]
@@ -3589,12 +3647,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 457,
+          "line": 459,
           "column": 133
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 189,
+          "line": 191,
           "column": 119
         }
       ]
@@ -3642,12 +3700,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 199,
+          "line": 234,
           "column": 64
         },
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 247,
           "column": 3150
         }
       ]
@@ -3719,7 +3777,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 154,
+          "line": 155,
           "column": 52
         }
       ]
@@ -3808,7 +3866,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1634,
+          "line": 1640,
           "column": 14
         }
       ]
@@ -3844,7 +3902,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 247,
           "column": 4442
         }
       ]
@@ -3999,8 +4057,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 212,
-          "column": 6985
+          "line": 247,
+          "column": 7455
         }
       ]
     },
@@ -4185,7 +4243,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 70,
+          "line": 71,
           "column": 12
         }
       ]
@@ -4362,7 +4420,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1588,
+          "line": 1594,
           "column": 5
         }
       ]
@@ -4430,12 +4488,12 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 94,
+          "line": 95,
           "column": 109
         },
         {
           "file": "src/views/Home.vue",
-          "line": 199,
+          "line": 234,
           "column": 89
         },
         {
@@ -4476,7 +4534,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 610,
+          "line": 612,
           "column": 21
         }
       ]
@@ -4601,6 +4659,18 @@
           "file": "src/components/ModelAdapterTestCard.vue",
           "line": 140,
           "column": 74
+        }
+      ]
+    },
+    "42d66c5651dcd1f5": {
+      "source": "本地 CA 异常（证书/密钥缺失其一或无法读取），本地代理已停用。修复将备份残留文件并重新生成 CA，完成后需重启应用生效。继续吗？",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 169,
+          "column": 14
         }
       ]
     },
@@ -4906,7 +4976,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 761,
+          "line": 762,
           "column": 14
         }
       ]
@@ -4940,7 +5010,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 575,
+          "line": 577,
           "column": 27
         }
       ]
@@ -5186,7 +5256,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 149,
+          "line": 150,
           "column": 12
         }
       ]
@@ -5273,6 +5343,23 @@
           "file": "src/views/SupplierDetail.vue",
           "line": 535,
           "column": 22
+        }
+      ]
+    },
+    "4eac6bb79f0885c8": {
+      "source": "一键修复",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 170,
+          "column": 18
+        },
+        {
+          "file": "src/views/Home.vue",
+          "line": 247,
+          "column": 6983
         }
       ]
     },
@@ -5549,12 +5636,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 510,
+          "line": 512,
           "column": 159
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 274,
+          "line": 276,
           "column": 128
         }
       ]
@@ -5607,12 +5694,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 156,
+          "line": 157,
           "column": 60
         },
         {
           "file": "src/views/Home.vue",
-          "line": 184,
+          "line": 219,
           "column": 63
         }
       ]
@@ -5793,7 +5880,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 115,
+          "line": 116,
           "column": 34
         }
       ]
@@ -5817,7 +5904,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 156,
+          "line": 157,
           "column": 30
         }
       ]
@@ -5841,7 +5928,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 94,
+          "line": 95,
           "column": 34
         }
       ]
@@ -5865,7 +5952,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 140,
+          "line": 141,
           "column": 20
         }
       ]
@@ -5894,7 +5981,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 198,
+          "line": 233,
           "column": 16
         }
       ]
@@ -6131,7 +6218,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 436,
+          "line": 437,
           "column": 12
         }
       ]
@@ -6203,12 +6290,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 106,
+          "line": 107,
           "column": 164
         },
         {
           "file": "src/views/Home.vue",
-          "line": 115,
+          "line": 116,
           "column": 172
         }
       ]
@@ -6273,7 +6360,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 247,
           "column": 1871
         }
       ]
@@ -6351,7 +6438,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 193,
+          "line": 228,
           "column": 66
         }
       ]
@@ -6387,12 +6474,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 111,
+          "line": 112,
           "column": 92
         },
         {
           "file": "src/views/Home.vue",
-          "line": 111,
+          "line": 112,
           "column": 208
         }
       ]
@@ -6430,6 +6517,18 @@
           "file": "src/utils/supplierCatalog.js",
           "line": 212,
           "column": 24
+        }
+      ]
+    },
+    "5f4fb6ab36d6ba09": {
+      "source": "修复 CA 证书",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 168,
+          "column": 12
         }
       ]
     },
@@ -6498,7 +6597,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1581,
+          "line": 1587,
           "column": 7
         }
       ]
@@ -6510,7 +6609,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 247,
           "column": 5988
         }
       ]
@@ -6656,7 +6755,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 610,
+          "line": 612,
           "column": 159
         }
       ]
@@ -6834,7 +6933,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 46,
+          "line": 47,
           "column": 69
         }
       ]
@@ -6962,7 +7061,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 744,
+          "line": 745,
           "column": 20
         }
       ]
@@ -7010,7 +7109,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 452,
+          "line": 453,
           "column": 14
         }
       ]
@@ -7081,7 +7180,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 903,
+          "line": 904,
           "column": 44
         }
       ]
@@ -7117,7 +7216,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1557,
+          "line": 1563,
           "column": 14
         }
       ]
@@ -7129,7 +7228,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2199,
+          "line": 2205,
           "column": 32
         }
       ]
@@ -7141,7 +7240,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1526,
+          "line": 1532,
           "column": 14
         }
       ]
@@ -7182,7 +7281,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 755,
+          "line": 756,
           "column": 14
         }
       ]
@@ -7238,7 +7337,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 506,
+          "line": 507,
           "column": 48
         }
       ]
@@ -7378,7 +7477,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 247,
           "column": 1054
         }
       ]
@@ -7426,7 +7525,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 154,
+          "line": 155,
           "column": 34
         }
       ]
@@ -7484,7 +7583,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 61,
+          "line": 62,
           "column": 29
         }
       ]
@@ -7523,17 +7622,17 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 38,
+          "line": 39,
           "column": 31
         },
         {
           "file": "src/views/Home.vue",
-          "line": 74,
+          "line": 75,
           "column": 98
         },
         {
           "file": "src/views/Home.vue",
-          "line": 74,
+          "line": 75,
           "column": 116
         },
         {
@@ -7567,7 +7666,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 515,
+          "line": 517,
           "column": 16
         }
       ]
@@ -7668,7 +7767,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 247,
           "column": 6344
         }
       ]
@@ -7692,7 +7791,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 87,
+          "line": 88,
           "column": 29
         }
       ]
@@ -7728,7 +7827,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1549,
+          "line": 1555,
           "column": 20
         }
       ]
@@ -7822,12 +7921,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 106,
+          "line": 107,
           "column": 144
         },
         {
           "file": "src/views/Home.vue",
-          "line": 115,
+          "line": 116,
           "column": 152
         }
       ]
@@ -7928,7 +8027,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 810,
+          "line": 812,
           "column": 58
         }
       ]
@@ -8084,7 +8183,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 531,
+          "line": 533,
           "column": 16
         }
       ]
@@ -8149,7 +8248,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 187,
+          "line": 222,
           "column": 69
         }
       ]
@@ -8323,7 +8422,7 @@
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 603,
+          "line": 605,
           "column": 71
         }
       ]
@@ -8420,7 +8519,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 237,
+          "line": 238,
           "column": 12
         },
         {
@@ -8495,7 +8594,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 628,
+          "line": 630,
           "column": 12
         }
       ]
@@ -8555,7 +8654,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 94,
+          "line": 95,
           "column": 89
         }
       ]
@@ -8663,7 +8762,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1633,
+          "line": 1639,
           "column": 38
         }
       ]
@@ -8675,7 +8774,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 75,
+          "line": 76,
           "column": 116
         }
       ]
@@ -8772,7 +8871,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 1616,
+          "line": 1622,
           "column": 16
         }
       ]
@@ -8842,7 +8941,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 247,
           "column": 1924
         }
       ]
@@ -8941,7 +9040,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 192,
+          "line": 227,
           "column": 18
         }
       ]
@@ -8965,8 +9064,13 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 247,
           "column": 5554
+        },
+        {
+          "file": "src/views/Home.vue",
+          "line": 247,
+          "column": 6983
         }
       ]
     },
@@ -9283,7 +9387,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1523,
+          "line": 1529,
           "column": 14
         }
       ]
@@ -9615,7 +9719,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 247,
           "column": 5163
         },
         {
@@ -9632,7 +9736,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 179,
+          "line": 214,
           "column": 11
         }
       ]
@@ -9836,7 +9940,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 773,
+          "line": 774,
           "column": 14
         }
       ]
@@ -9865,7 +9969,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 594,
+          "line": 596,
           "column": 14
         }
       ]
@@ -9983,7 +10087,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 91,
+          "line": 92,
           "column": 29
         }
       ]
@@ -10007,7 +10111,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2162,
+          "line": 2168,
           "column": 32
         }
       ]
@@ -10019,7 +10123,7 @@
       "refs": [
         {
           "file": "src/services/clientApi.js",
-          "line": 83,
+          "line": 85,
           "column": 37
         }
       ]
@@ -10060,7 +10164,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 614,
+          "line": 616,
           "column": 35
         }
       ]
@@ -10097,8 +10201,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 212,
-          "column": 7458
+          "line": 247,
+          "column": 7928
         },
         {
           "file": "src/views/RequestMetrics.vue",
@@ -10215,7 +10319,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 706,
+          "line": 708,
           "column": 12
         }
       ]
@@ -10251,7 +10355,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 184,
+          "line": 219,
           "column": 32
         }
       ]
@@ -10534,12 +10638,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2443,
+          "line": 2449,
           "column": 32
         },
         {
           "file": "src/state/appState.js",
-          "line": 2464,
+          "line": 2470,
           "column": 32
         }
       ]
@@ -10645,7 +10749,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 139,
+          "line": 140,
           "column": 16
         }
       ]
@@ -10770,7 +10874,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 547,
+          "line": 549,
           "column": 16
         }
       ]
@@ -10799,7 +10903,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 110,
+          "line": 111,
           "column": 29
         }
       ]
@@ -10871,7 +10975,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1645,
+          "line": 1651,
           "column": 14
         }
       ]
@@ -10922,7 +11026,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 780,
+          "line": 782,
           "column": 25
         }
       ]
@@ -11079,7 +11183,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 803,
+          "line": 804,
           "column": 14
         }
       ]
@@ -11091,12 +11195,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1559,
+          "line": 1565,
           "column": 12
         },
         {
           "file": "src/state/appState.js",
-          "line": 1626,
+          "line": 1632,
           "column": 87
         }
       ]
@@ -11195,7 +11299,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2375,
+          "line": 2381,
           "column": 14
         }
       ]
@@ -11290,7 +11394,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 719,
+          "line": 721,
           "column": 12
         }
       ]
@@ -11338,12 +11442,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 590,
+          "line": 592,
           "column": 47
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 602,
+          "line": 604,
           "column": 49
         }
       ]
@@ -11774,7 +11878,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 523,
+          "line": 525,
           "column": 16
         }
       ]
@@ -11827,7 +11931,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 776,
+          "line": 777,
           "column": 14
         }
       ]
@@ -11875,7 +11979,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 46,
+          "line": 47,
           "column": 33
         }
       ]
@@ -11938,7 +12042,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1608,
+          "line": 1614,
           "column": 16
         }
       ]
@@ -11979,6 +12083,18 @@
         }
       ]
     },
+    "ad1cafee0ef40257": {
+      "source": "已备份残留文件并重新生成 CA。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 185,
+          "column": 17
+        }
+      ]
+    },
     "ad39472b9f18abaf": {
       "source": "混合模式会在本地代理下同时启用 Cursor 官方模型：模型选择器出现官方模型列表，选官方模型时请求透传官方执行（消耗官方账号额度，官方可能风控）。确定开启吗？",
       "kind": "text",
@@ -11986,7 +12102,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 111,
+          "line": 112,
           "column": 111
         }
       ]
@@ -12191,7 +12307,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 550,
+          "line": 552,
           "column": 114
         }
       ]
@@ -12215,7 +12331,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 247,
           "column": 1107
         }
       ]
@@ -12227,7 +12343,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 809,
+          "line": 811,
           "column": 49
         }
       ]
@@ -12302,7 +12418,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 667,
+          "line": 669,
           "column": 12
         }
       ]
@@ -12391,7 +12507,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 110,
+          "line": 111,
           "column": 50
         }
       ]
@@ -12425,7 +12541,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 247,
           "column": 5554
         }
       ]
@@ -12449,7 +12565,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1615,
+          "line": 1621,
           "column": 40
         }
       ]
@@ -12533,7 +12649,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 106,
+          "line": 107,
           "column": 57
         }
       ]
@@ -12713,8 +12829,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 212,
-          "column": 7458
+          "line": 247,
+          "column": 7928
         },
         {
           "file": "src/views/ModelConfig.vue",
@@ -12788,7 +12904,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 516,
+          "line": 517,
           "column": 14
         }
       ]
@@ -12925,7 +13041,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 94,
+          "line": 95,
           "column": 51
         }
       ]
@@ -13212,7 +13328,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1529,
+          "line": 1535,
           "column": 14
         }
       ]
@@ -13470,7 +13586,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2218,
+          "line": 2224,
           "column": 32
         }
       ]
@@ -13853,17 +13969,17 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 2346,
+          "line": 2352,
           "column": 28
         },
         {
           "file": "src/state/appState.js",
-          "line": 2348,
+          "line": 2354,
           "column": 38
         },
         {
           "file": "src/state/appState.js",
-          "line": 2383,
+          "line": 2389,
           "column": 93
         },
         {
@@ -13892,7 +14008,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 183,
+          "line": 218,
           "column": 18
         }
       ]
@@ -13928,12 +14044,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1541,
+          "line": 1547,
           "column": 38
         },
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 247,
           "column": 3150
         }
       ]
@@ -14056,7 +14172,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 843,
+          "line": 845,
           "column": 69
         }
       ]
@@ -14109,7 +14225,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 555,
+          "line": 557,
           "column": 16
         }
       ]
@@ -14145,7 +14261,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 428,
+          "line": 429,
           "column": 12
         }
       ]
@@ -14157,7 +14273,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 180,
+          "line": 215,
           "column": 11
         }
       ]
@@ -14292,12 +14408,12 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 100,
+          "line": 101,
           "column": 324
         },
         {
           "file": "src/views/Home.vue",
-          "line": 111,
+          "line": 112,
           "column": 334
         }
       ]
@@ -14352,6 +14468,18 @@
           "file": "src/layouts/MainLayout.vue",
           "line": 150,
           "column": 19
+        }
+      ]
+    },
+    "d1cc29a096cb8c0c": {
+      "source": "本地 CA 异常，本地代理已停用",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 247,
+          "column": 6830
         }
       ]
     },
@@ -14425,7 +14553,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 746,
+          "line": 747,
           "column": 14
         }
       ]
@@ -14507,7 +14635,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 2243,
+          "line": 2249,
           "column": 14
         }
       ]
@@ -14519,7 +14647,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 247,
           "column": 502
         }
       ]
@@ -14543,12 +14671,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 240,
+          "line": 241,
           "column": 38
         },
         {
           "file": "src/state/appState.js",
-          "line": 270,
+          "line": 271,
           "column": 50
         }
       ]
@@ -14560,7 +14688,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 609,
+          "line": 611,
           "column": 50
         }
       ]
@@ -14659,7 +14787,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 442,
+          "line": 443,
           "column": 49
         },
         {
@@ -14784,7 +14912,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 531,
+          "line": 532,
           "column": 36
         },
         {
@@ -14825,12 +14953,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 193,
+          "line": 228,
           "column": 36
         },
         {
           "file": "src/views/Home.vue",
-          "line": 199,
+          "line": 234,
           "column": 34
         }
       ]
@@ -14842,8 +14970,20 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 187,
+          "line": 222,
           "column": 31
+        }
+      ]
+    },
+    "d864f68a548ad771": {
+      "source": "\n\n备份文件：{0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 186,
+          "column": 36
         }
       ]
     },
@@ -14977,7 +15117,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 295,
+          "line": 296,
           "column": 18
         },
         {
@@ -15055,7 +15195,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 770,
+          "line": 771,
           "column": 14
         }
       ]
@@ -15067,7 +15207,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 752,
+          "line": 753,
           "column": 14
         }
       ]
@@ -15079,7 +15219,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 182,
+          "line": 217,
           "column": 38
         }
       ]
@@ -15096,7 +15236,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 247,
           "column": 5988
         }
       ]
@@ -15132,7 +15272,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1587,
+          "line": 1593,
           "column": 5
         }
       ]
@@ -15238,6 +15378,18 @@
         }
       ]
     },
+    "de32e20193ad1042": {
+      "source": "知道了",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 191,
+          "column": 60
+        }
+      ]
+    },
     "de36c1b4dd3fb659": {
       "source": "选择可用模型",
       "kind": "text",
@@ -15332,7 +15484,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 513,
+          "line": 514,
           "column": 14
         }
       ]
@@ -15535,7 +15687,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 247,
           "column": 4852
         },
         {
@@ -15605,7 +15757,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 764,
+          "line": 765,
           "column": 14
         }
       ]
@@ -15617,7 +15769,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 767,
+          "line": 768,
           "column": 14
         }
       ]
@@ -15689,7 +15841,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1611,
+          "line": 1617,
           "column": 40
         }
       ]
@@ -15829,7 +15981,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 115,
+          "line": 116,
           "column": 63
         }
       ]
@@ -15841,7 +15993,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 811,
+          "line": 813,
           "column": 35
         }
       ]
@@ -15952,7 +16104,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 610,
+          "line": 612,
           "column": 170
         }
       ]
@@ -15964,7 +16116,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 247,
           "column": 1904
         }
       ]
@@ -16198,7 +16350,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 246,
+          "line": 247,
           "column": 10
         }
       ]
@@ -16222,7 +16374,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1612,
+          "line": 1618,
           "column": 16
         }
       ]
@@ -16478,7 +16630,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 193,
+          "line": 228,
           "column": 93
         }
       ]
@@ -16490,7 +16642,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 603,
+          "line": 605,
           "column": 21
         }
       ]
@@ -16502,7 +16654,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 247,
           "column": 4025
         }
       ]
@@ -16538,7 +16690,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 64,
+          "line": 65,
           "column": 21
         }
       ]
@@ -16625,7 +16777,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 641,
+          "line": 643,
           "column": 12
         }
       ]
@@ -16726,7 +16878,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 449,
+          "line": 450,
           "column": 14
         }
       ]
@@ -16738,7 +16890,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 542,
+          "line": 544,
           "column": 139
         }
       ]
@@ -16750,7 +16902,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1543,
+          "line": 1549,
           "column": 25
         }
       ]
@@ -16896,12 +17048,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 809,
+          "line": 810,
           "column": 14
         },
         {
           "file": "src/state/appState.js",
-          "line": 812,
+          "line": 813,
           "column": 14
         }
       ]
@@ -16947,8 +17099,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 212,
-          "column": 6985
+          "line": 247,
+          "column": 7455
         }
       ]
     },
@@ -17288,7 +17440,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 1638,
+          "line": 1644,
           "column": 12
         },
         {
@@ -17354,7 +17506,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1541,
+          "line": 1547,
           "column": 27
         }
       ]
@@ -17414,7 +17566,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 803,
+          "line": 805,
           "column": 46
         }
       ]
@@ -17462,12 +17614,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 138,
+          "line": 139,
           "column": 14
         },
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 247,
           "column": 4025
         }
       ]
@@ -17491,7 +17643,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 168,
+          "line": 178,
+          "column": 29
+        },
+        {
+          "file": "src/views/Home.vue",
+          "line": 203,
           "column": 29
         }
       ]
@@ -17503,7 +17660,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 749,
+          "line": 750,
           "column": 14
         }
       ]

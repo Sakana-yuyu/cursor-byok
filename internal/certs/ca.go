@@ -44,15 +44,47 @@ func NewManager(caCertPath, caKeyPath string) (*Manager, error) {
 	return NewManagerFromPEM(certPEM, keyPEM)
 }
 
+// IncompleteCAError 表示本地 CA 材料不完整（cert/key 仅存在其一）。
+// 属于可恢复错误：应用降级启动后，用户可经「一键修复」重新生成 CA。
+type IncompleteCAError struct {
+	CertPath string
+	KeyPath  string
+	// CertExists 表示残留的是证书（true）还是私钥（false）。
+	CertExists bool
+}
+
+func (e *IncompleteCAError) Error() string {
+	if e == nil {
+		return "incomplete CA material"
+	}
+	present := "CA 私钥(key)"
+	missing := "CA 证书(cert)"
+	if e.CertExists {
+		present = "CA 证书(cert)"
+		missing = "CA 私钥(key)"
+	}
+	return fmt.Sprintf(
+		"检测到 CA 材料不完整（%s 存在、%s 缺失），为避免覆盖既有 CA 导致信任失效，"+
+			"本地代理已停用，请在应用中执行「一键修复」重新生成：cert=%s key=%s",
+		present, missing, e.CertPath, e.KeyPath,
+	)
+}
+
+// IsIncompleteCA 判断错误是否为 CA 材料不完整（可修复）。
+func IsIncompleteCA(err error) bool {
+	var target *IncompleteCAError
+	return errors.As(err, &target)
+}
+
 // NewPersistentManager loads an existing local CA or creates one on first use.
 // The private key stays in the per-user data directory and is never part of the repository.
 //
 // 生成策略（确保「升级版本不重新生成 CA」）：
 //   - cert 与 key 都存在：直接复用，绝不重新生成（升级、重启均走这条路径）。
 //   - cert 与 key 都不存在：首次安装，生成新 CA 并落盘。
-//   - 仅存在其一（例如 key 被误删）：返回错误，【不会】静默覆盖——
+//   - 仅存在其一（例如 key 被误删）：返回 *IncompleteCAError，【不会】静默覆盖——
 //     避免悄悄换一张新 CA 导致既有系统信任与 NODE_EXTRA_CA_CERTS 全部失效。
-//     用户知情后手动删除残留文件，下次启动才会在干净状态下重新生成。
+//     调用方应降级启动并引导用户执行 RepairIncompleteCA 后重启应用。
 func NewPersistentManager(certPath, keyPath string) (*Manager, error) {
 	certPath = filepath.Clean(strings.TrimSpace(certPath))
 	keyPath = filepath.Clean(strings.TrimSpace(keyPath))
@@ -76,43 +108,128 @@ func NewPersistentManager(certPath, keyPath string) (*Manager, error) {
 		return nil, keyErr
 	}
 
-	// 路径 2：只有一份存在 → 不静默覆盖，报错让用户知情。
+	// 路径 2：只有一份存在 → 不静默覆盖，报错让用户知情并引导修复。
 	certExists := certErr == nil
 	keyExists := keyErr == nil
 	if certExists != keyExists {
-		missing := "CA 私钥(key)"
-		if keyExists {
-			missing = "CA 证书(cert)"
+		return nil, &IncompleteCAError{
+			CertPath:  certPath,
+			KeyPath:   keyPath,
+			CertExists: certExists,
 		}
-		return nil, fmt.Errorf(
-			"检测到 CA 材料不完整（%s 存在、%s 缺失），为避免覆盖既有 CA 导致信任失效，"+
-				"已中止启动。请备份后删除残留文件后重试：cert=%s key=%s",
-			func() string {
-				if certExists {
-					return "cert"
-				}
-				return "key"
-			}(),
-			missing, certPath, keyPath,
-		)
 	}
 
 	// 路径 3：两份都不存在 → 首次安装，生成新 CA。
 	log.Printf("[certs] first run, generating new CA cert=%s key=%s", certPath, keyPath)
-	certPEM, keyPEM, err := generateCAPEM()
+	if err := writeGeneratedCA(certPath, keyPath); err != nil {
+		return nil, err
+	}
+	certPEM, keyPEM, err := readWrittenCAPEM(certPath, keyPath)
 	if err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(filepath.Dir(certPath), 0o700); err != nil {
-		return nil, err
-	}
-	if err := writePrivateFile(certPath, certPEM); err != nil {
-		return nil, err
-	}
-	if err := writePrivateFile(keyPath, keyPEM); err != nil {
-		return nil, err
-	}
 	return NewManagerFromPEM(certPEM, keyPEM)
+}
+
+// writeGeneratedCA 生成新 CA 并落盘（首次安装与修复共用）。
+// 每个文件先写同目录临时文件再 rename（原子替换）；key 写入失败时回滚已落盘的 cert，
+// 避免留下「cert/key 仅存其一」的不完整状态。
+func writeGeneratedCA(certPath, keyPath string) error {
+	certPEM, keyPEM, err := generateCAPEM()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(certPath), 0o700); err != nil {
+		return err
+	}
+	if err := writePrivateFileAtomic(certPath, certPEM); err != nil {
+		return err
+	}
+	if err := writePrivateFileAtomic(keyPath, keyPEM); err != nil {
+		_ = os.Remove(certPath) // 回滚：避免留下只有 cert 的半截状态
+		return err
+	}
+	return nil
+}
+
+// writePrivateFileAtomic 原子写入：同目录临时文件 + rename。
+// 直接 os.WriteFile 若在写入中途被中断（进程崩溃/被杀软拦截）会留下半截文件，
+// 这正是历史上「cert/key 仅存其一」存量状态的来源之一。
+func writePrivateFileAtomic(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".ca-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath) // rename 成功后为 no-op
+	if err := tmp.Chmod(0o600); err != nil {
+		tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
+}
+
+// readWrittenCAPEM 读取刚写入的 CA 材料。生成成功但读取失败属于内部错误，上传具体
+// 文件路径，避免静默吞错后让 NewManagerFromPEM 报出难以定位的解析错误。
+func readWrittenCAPEM(certPath, keyPath string) ([]byte, []byte, error) {
+	certPEM, err := os.ReadFile(certPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read generated CA cert: %w", err)
+	}
+	keyPEM, err := os.ReadFile(keyPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read generated CA key: %w", err)
+	}
+	return certPEM, keyPEM, nil
+}
+
+// RepairIncompleteCA 修复 CA 材料不完整：把残留文件备份改名（.corrupt-<时间戳>.bak），
+// 再重新生成 CA 落盘。仅在材料不完整（IsIncompleteCA）时调用；两份齐全时不做任何事。
+// 注意：重新生成后旧 CA 的系统信任/NODE_EXTRA_CA_CERTS 指向会失效，调用方应引导
+// 用户重新信任并重启应用。
+func RepairIncompleteCA(certPath, keyPath string) (backupPath string, err error) {
+	certPath = filepath.Clean(strings.TrimSpace(certPath))
+	keyPath = filepath.Clean(strings.TrimSpace(keyPath))
+
+	// 双份齐全：无需修复（不覆盖既有 CA）。
+	if _, certErr := os.Stat(certPath); certErr == nil {
+		if _, keyErr := os.Stat(keyPath); keyErr == nil {
+			return "", nil
+		}
+	}
+
+	// 备份残留文件（仅改名的文件，其他状态不动）。
+	backup := ""
+	for _, path := range []string{certPath, keyPath} {
+		if _, statErr := os.Stat(path); statErr != nil {
+			continue
+		}
+		renamed := fmt.Sprintf("%s.corrupt-%d.bak", path, time.Now().Unix())
+		if err := os.Rename(path, renamed); err != nil {
+			return "", fmt.Errorf("备份残留 CA 文件失败 %s: %w", path, err)
+		}
+		backup = renamed
+	}
+	log.Printf("[certs] incomplete CA repaired: backup=%s cert=%s key=%s", backup, certPath, keyPath)
+	if err := writeGeneratedCA(certPath, keyPath); err != nil {
+		return backup, err
+	}
+	return backup, nil
 }
 
 // CACertPEM returns a copy of the public CA certificate used by this manager.
@@ -121,10 +238,6 @@ func (m *Manager) CACertPEM() []byte {
 		return nil
 	}
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: m.caCert.Raw})
-}
-
-func writePrivateFile(path string, data []byte) error {
-	return os.WriteFile(path, data, 0o600)
 }
 
 func generateCAPEM() ([]byte, []byte, error) {

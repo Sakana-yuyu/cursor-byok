@@ -31,6 +31,7 @@ import {
   repairProxySettings,
   restartCursor,
   isCursorRunning,
+  repairCACorruption,
 } from "@/services/clientApi";
 import { getHistoryDebugUsage } from "@/services/runtimeControlApi";
 
@@ -1189,6 +1190,9 @@ function applyProxyState(raw) {
   appState.netProxyHttps = asString(state.netProxyHttps);
   appState.netProxyPacIgnored = asBoolean(state.netProxyPacIgnored);
   appState.netProxyDescription = asString(state.netProxyDescription);
+  // CA 材料不完整（cert/key 仅存其一）时本地代理停用，首页展示「一键修复」入口。
+  appState.caIncomplete = asBoolean(state.caIncomplete);
+  appState.caError = asString(state.caError);
 }
 
 function handleProxyStateEvent(event) {
@@ -1396,6 +1400,8 @@ export const appState = reactive({
   netProxyHttps: asString(cachedState.netProxyHttps),
   netProxyPacIgnored: asBoolean(cachedState.netProxyPacIgnored),
   netProxyDescription: asString(cachedState.netProxyDescription),
+  caIncomplete: asBoolean(cachedState.caIncomplete),
+  caError: asString(cachedState.caError),
 
   configSaving: false,
   configReady: false,
@@ -2492,6 +2498,15 @@ export async function openLocalLogsDirectory() {
 export async function repairProxyAction() {
   try {
     const result = await repairProxySettings();
+    return { ok: true, result: result || {}, error: "" };
+  } catch (error) {
+    return { ok: false, result: null, error: toUserError(error) };
+  }
+}
+
+export async function repairCACorruptionAction() {
+  try {
+    const result = await repairCACorruption();
     return { ok: true, result: result || {}, error: "" };
   } catch (error) {
     return { ok: false, result: null, error: toUserError(error) };

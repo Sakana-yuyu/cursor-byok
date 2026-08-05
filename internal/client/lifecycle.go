@@ -50,6 +50,10 @@ type ProxyState struct {
 	NetProxyDescription string `json:"netProxyDescription"`
 	// LastError 表示当前声明中的 LastError。
 	LastError string `json:"lastError"`
+	// CAIncomplete 表示本地 CA 材料不完整（cert/key 仅存其一），本地代理已停用。
+	CAIncomplete bool `json:"caIncomplete"`
+	// CAError 表示 CA 材料不完整的原始错误信息。
+	CAError string `json:"caError"`
 }
 
 // StartProxy 用于处理与 StartProxy 相关的逻辑。
@@ -64,6 +68,13 @@ func (s *ProxyService) StartProxy() (ProxyState, error) {
 	cfg, err := s.LoadUserConfig()
 	if err != nil {
 		return fail("load_user_config", err)
+	}
+	// CA 初始化失败时本地代理不可用（MITM 停用），快速失败并引导修复。
+	s.mu.RLock()
+	caIncomplete := s.caIncomplete
+	s.mu.RUnlock()
+	if caIncomplete {
+		return fail("ca_incomplete", errors.New("本地 CA 异常，本地代理不可用，请在首页执行「一键修复」后重启应用"))
 	}
 	if err := s.ensureBackendHost(); err != nil {
 		return fail("ensure_backend_host", err)
@@ -189,6 +200,8 @@ func (s *ProxyService) GetState() ProxyState {
 	s.mu.RLock()
 	lastError := s.lastError
 	cursorSettingsApplied := s.cursorSettingsApplied
+	caIncomplete := s.caIncomplete
+	caError := s.caError
 	s.mu.RUnlock()
 	backendListenAddr := ""
 	backendRunning := false
@@ -214,6 +227,8 @@ func (s *ProxyService) GetState() ProxyState {
 		NetProxyPACIgnored:    netProxy.PACIgnored,
 		NetProxyDescription:   netProxy.Description,
 		LastError:             lastError,
+		CAIncomplete:          caIncomplete,
+		CAError:               caError,
 	}
 }
 

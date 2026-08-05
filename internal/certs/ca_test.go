@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -37,5 +38,130 @@ func TestNewPersistentManagerGeneratesAndReusesLocalCA(t *testing.T) {
 	}
 	if string(second.CACertPEM()) != string(firstCert) {
 		t.Fatal("second manager did not reuse the existing CA certificate")
+	}
+}
+
+// TestIncompleteCAIsRecoverable 验证 cert 残留 key 缺失时返回可修复错误，且
+// RepairIncompleteCA 备份残留并重建后，应用可正常复用新 CA。
+func TestIncompleteCAIsRecoverable(t *testing.T) {
+	root := t.TempDir()
+	certPath := filepath.Join(root, "data", "ca.crt")
+	keyPath := filepath.Join(root, "data", "ca.key")
+
+	if _, err := NewPersistentManager(certPath, keyPath); err != nil {
+		t.Fatalf("seed manager: %v", err)
+	}
+	if err := os.Remove(keyPath); err != nil {
+		t.Fatalf("remove key: %v", err)
+	}
+
+	_, err := NewPersistentManager(certPath, keyPath)
+	if !IsIncompleteCA(err) {
+		t.Fatalf("want IncompleteCAError, got %T: %v", err, err)
+	}
+
+	backup, err := RepairIncompleteCA(certPath, keyPath)
+	if err != nil {
+		t.Fatalf("repair: %v", err)
+	}
+	if backup == "" {
+		t.Fatal("expected a backup path after repair")
+	}
+	if _, statErr := os.Stat(backup); statErr != nil {
+		t.Fatalf("backup file missing: %v", statErr)
+	}
+	repaired, err := NewPersistentManager(certPath, keyPath)
+	if err != nil {
+		t.Fatalf("manager after repair: %v", err)
+	}
+	if len(repaired.CACertPEM()) == 0 {
+		t.Fatal("repaired CA certificate is empty")
+	}
+}
+
+// TestRepairIncompleteCADoesNothingWhenComplete 验证材料齐全时修复不动作。
+func TestRepairIncompleteCADoesNothingWhenComplete(t *testing.T) {
+	root := t.TempDir()
+	certPath := filepath.Join(root, "data", "ca.crt")
+	keyPath := filepath.Join(root, "data", "ca.key")
+
+	if _, err := NewPersistentManager(certPath, keyPath); err != nil {
+		t.Fatalf("seed manager: %v", err)
+	}
+	backup, err := RepairIncompleteCA(certPath, keyPath)
+	if err != nil {
+		t.Fatalf("repair: %v", err)
+	}
+	if backup != "" {
+		t.Fatalf("expected no backup when complete, got %q", backup)
+	}
+}
+
+// TestIncompleteCAErrorMessage 验证错误文案的方向：cert 残留 → 缺失描述为私钥；
+// key 残留 → 缺失描述为证书。文案反了会误导用户删错文件。
+func TestIncompleteCAErrorMessage(t *testing.T) {
+	root := t.TempDir()
+
+	t.Run("cert left key missing", func(t *testing.T) {
+		certPath := filepath.Join(root, "cert-left", "ca.crt")
+		keyPath := filepath.Join(root, "cert-left", "ca.key")
+		if _, err := NewPersistentManager(certPath, keyPath); err != nil {
+			t.Fatalf("seed manager: %v", err)
+		}
+		if err := os.Remove(keyPath); err != nil {
+			t.Fatalf("remove key: %v", err)
+		}
+		_, err := NewPersistentManager(certPath, keyPath)
+		if !IsIncompleteCA(err) {
+			t.Fatalf("want IncompleteCAError, got %T: %v", err, err)
+		}
+		msg := err.Error()
+		if !strings.Contains(msg, "CA 证书(cert) 存在") || !strings.Contains(msg, "CA 私钥(key) 缺失") {
+			t.Fatalf("wrong direction in message: %s", msg)
+		}
+	})
+
+	t.Run("key left cert missing", func(t *testing.T) {
+		certPath := filepath.Join(root, "key-left", "ca.crt")
+		keyPath := filepath.Join(root, "key-left", "ca.key")
+		if _, err := NewPersistentManager(certPath, keyPath); err != nil {
+			t.Fatalf("seed manager: %v", err)
+		}
+		if err := os.Remove(certPath); err != nil {
+			t.Fatalf("remove cert: %v", err)
+		}
+		_, err := NewPersistentManager(certPath, keyPath)
+		if !IsIncompleteCA(err) {
+			t.Fatalf("want IncompleteCAError, got %T: %v", err, err)
+		}
+		msg := err.Error()
+		if !strings.Contains(msg, "CA 私钥(key) 存在") || !strings.Contains(msg, "CA 证书(cert) 缺失") {
+			t.Fatalf("wrong direction in message: %s", msg)
+		}
+	})
+}
+
+// TestWriteGeneratedCAAtomicNoTempLeftover 验证原子写入后：两文件齐全可解析、
+// 目录中不残留 .tmp 临时文件。
+func TestWriteGeneratedCAAtomicNoTempLeftover(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "data")
+	certPath := filepath.Join(dir, "ca.crt")
+	keyPath := filepath.Join(dir, "ca.key")
+
+	if err := writeGeneratedCA(certPath, keyPath); err != nil {
+		t.Fatalf("writeGeneratedCA: %v", err)
+	}
+	if _, err := NewPersistentManager(certPath, keyPath); err != nil {
+		t.Fatalf("manager over generated material: %v", err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read dir: %v", err)
+	}
+	for _, entry := range entries {
+		if strings.Contains(entry.Name(), ".tmp") {
+			t.Fatalf("leftover temp file: %s", entry.Name())
+		}
 	}
 }

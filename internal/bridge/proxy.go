@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"context"
+	"cursor/internal/appdata"
 	"cursor/internal/backend/forwarder"
 	serverconfig "cursor/internal/backend/server/config"
 	"cursor/internal/certs"
@@ -233,6 +234,53 @@ func (s *ProxyService) GetState() ProxyState {
 // RepairProxySettings 一键修复 Cursor 代理配置（重新注入 settings.json 并校验）。
 func (s *ProxyService) RepairProxySettings() (client.ProxyRepairResult, error) {
 	return s.core.RepairProxySettings()
+}
+
+// CARepairResult 是一次「一键修复 CA」的执行结果。
+type CARepairResult struct {
+	// Repaired 表示是否实际重建了 CA（false 表示材料齐全，无需修复）。
+	Repaired bool `json:"repaired"`
+	// BackupPath 表示残留文件的备份路径（空表示无需备份）。
+	BackupPath string `json:"backupPath"`
+	// Detail 表示执行摘要。
+	Detail string `json:"detail"`
+}
+
+// RepairCACorruption 一键修复 CA 材料不完整：把残留文件备份改名后重新生成 CA 落盘。
+// 修复后需重启应用使新 CA 生效（本地代理与 MITM 在启动时构建）。
+func (s *ProxyService) RepairCACorruption() (CARepairResult, error) {
+	if s == nil {
+		return CARepairResult{}, errors.New("proxy service is not initialized")
+	}
+	backup, err := certs.RepairIncompleteCA(appdata.CACertFilePath(), appdata.CAKeyFilePath())
+	if err != nil {
+		return CARepairResult{}, fmt.Errorf("repair CA: %w", err)
+	}
+	if backup == "" {
+		return CARepairResult{
+			Repaired: false,
+			Detail:   "CA 材料完整，无需修复",
+		}, nil
+	}
+	return CARepairResult{
+		Repaired:   true,
+		BackupPath: backup,
+		Detail:     "已备份残留文件并重新生成 CA，重启应用后生效",
+	}, nil
+}
+
+// MarkCAIncomplete 记录 CA 初始化失败状态（应用降级启动时由 runner 调用），
+// 本地代理因此停用，前端据此展示「一键修复」入口。
+// 参数为错误信息字符串（error 类型参数会触发 wails bindings 生成器崩溃）。
+func (s *ProxyService) MarkCAIncomplete(message string) {
+	if s == nil {
+		return
+	}
+	var err error
+	if strings.TrimSpace(message) != "" {
+		err = errors.New(message)
+	}
+	s.core.MarkCAIncomplete(err)
 }
 
 // ClearLastError 用于处理与 ClearLastError 相关的逻辑。

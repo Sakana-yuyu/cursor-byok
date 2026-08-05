@@ -47,6 +47,10 @@ type ProxyService struct {
 	lastError string
 	// cursorSettingsApplied 表示当前是否已完成宿主代理设置注入。
 	cursorSettingsApplied bool
+	// caIncomplete 表示本地 CA 材料不完整（cert/key 仅存其一），本地代理已降级停用。
+	caIncomplete bool
+	// caError 表示 CA 材料不完整的原始错误信息。
+	caError string
 
 	// configMu 表示当前声明中的 configMu。
 	configMu sync.Mutex
@@ -75,6 +79,21 @@ type ProxyService struct {
 	modelCatalogCache *metadataCache[ModelCatalogResult]
 	// providerBalanceCache 缓存余额查询结果，减少重复网络调用。
 	providerBalanceCache *metadataCache[ProviderBalance]
+}
+
+// MarkCAIncomplete 记录 CA 材料不完整状态（应用降级启动时由 runner 调用）。
+// 本地代理因此停用，前端据此展示「一键修复」入口。
+func (s *ProxyService) MarkCAIncomplete(err error) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.caIncomplete = true
+	s.caError = ""
+	if err != nil {
+		s.caError = err.Error()
+	}
+	s.mu.Unlock()
 }
 
 // NewProxyService 用于处理与 NewProxyService 相关的逻辑。

@@ -11,6 +11,7 @@ import {
   GetDelegationConfig, SaveDelegationConfig,
   GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
   EnableReaderMCP,
+  RepairCACorruption,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
 import { GetAdRuntime, OpenExternalURL } from "@bindings/cursor/internal/bridge/adservice.js";
 import {
@@ -54,6 +55,7 @@ const desktopMethods = {
   GetDelegationConfig, SaveDelegationConfig,
   GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
   EnableReaderMCP,
+  RepairCACorruption,
 };
 
 const API_LOG_PREFIX = "[clientApi]";
@@ -332,6 +334,9 @@ export function generateSkillSummary(kind, key, workspaceRoot = "") {
 }
 export function enableReaderMCP(url, apiKey, model) {
   return desktopOrMock({ identifier: "vision-reader", scriptPath: "", wasAdded: true }, "@bindings/cursor/internal/bridge/proxyservice.js", "EnableReaderMCP", [url || "", apiKey || "", model || ""]);
+}
+export function repairCACorruption() {
+  return desktopOrMock({ repaired: true, backupPath: "", detail: "浏览器预览模式：模拟修复" }, "@bindings/cursor/internal/bridge/proxyservice.js", "RepairCACorruption");
 }
 
 export function repairProxySettings() {
