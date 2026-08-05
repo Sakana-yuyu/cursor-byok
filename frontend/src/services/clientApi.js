@@ -30,7 +30,7 @@ import {
   GetModelEditorContext, OpenConfigWindow, OpenFooterAuthorHome, OpenHistoryWindow,
   OpenMetricsDetailWindow, OpenRequestMetricsWindow, OpenStatsOverlayWindow, UpdateStatsOverlayWindow, SetStatsOverlayAlwaysOnTop,
   CloseStatsOverlayWindow, OpenModelConfigWindow, OpenModelEditorWindow, ExportLogs,
-  SetMainWindowCloseAction, CloseApplication, DetectCursorPath, LaunchCursor,
+  SetMainWindowCloseAction, CloseApplication, DetectCursorPath, LaunchCursor, RestartCursor,
 } from "@bindings/cursor/internal/bridge/windowservice.js";
 import { isBrowserPreview, browserPreviewMockMetrics, browserPreviewMockProxyState } from "@/services/runtimeAdapter";
 
@@ -47,7 +47,7 @@ const desktopMethods = {
   FetchModelCatalog, ProbeModelAdapter, QueryProviderBalance, GetPromptInjectionSettings,
   SavePromptInjectionSettings, RefreshPromptInjection,
   RefreshPromptInjectionCatalog, ExportLogs, AutoMatchContextWindows, DiagnoseModelAdapters, ApplyDiagnosticFixes,
-  DetectCursorPath, LaunchCursor, GetSkillsMCPScanSnapshot, RefreshSkillsMCPScan, SaveSkillsMCPScanConfig,
+  DetectCursorPath, LaunchCursor, RestartCursor, GetSkillsMCPScanSnapshot, RefreshSkillsMCPScan, SaveSkillsMCPScanConfig,
   ReadSkillFile, SaveSkillFile, GenerateSkillSummary,
   QueryAllProviderBalances,
   RepairProxySettings,
