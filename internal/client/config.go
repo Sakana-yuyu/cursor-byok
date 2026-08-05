@@ -2,9 +2,11 @@ package client
 
 import (
 	"context"
+	"fmt"
 
 	"cursor/internal/appdata"
 	serverconfig "cursor/internal/backend/server/config"
+	"cursor/internal/cursor"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -41,6 +43,7 @@ func (s *ProxyService) SaveUserConfig(cfg UserConfig) error {
 	if app != nil {
 		ctx = app.Context()
 	}
+	oldConfig, oldErr := s.LoadUserConfig()
 	var (
 		normalized UserConfig
 		err        error
@@ -54,6 +57,14 @@ func (s *ProxyService) SaveUserConfig(cfg UserConfig) error {
 	}
 	if err != nil {
 		return err
+	}
+	// 直连模式（routingMode=upstream）：Cursor 直连官方，必须恢复官方登录态，
+	// 否则 state.vscdb 中的模拟账号残留会导致官方连接 401/账号异常。
+	// 恢复失败向上传播：配置虽已保存，但账号态未恢复，不能让调用方误以为一切正常。
+	if normalized.Routing.Mode == "upstream" && oldErr == nil && oldConfig.Routing.Mode != "upstream" {
+		if err := cursor.RestoreCursorUserInfo(); err != nil {
+			return fmt.Errorf("restore cursor user info: %w", err)
+		}
 	}
 	s.emitUserConfigChanged(normalized)
 	return nil

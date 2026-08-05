@@ -52,6 +52,13 @@ func (s *ProxyService) ClearCursorSettings() error {
 	if err := cursor.ClearUserProxySettings(); err != nil {
 		return err
 	}
+	// 恢复 Cursor 官方登录态：清除注入的模拟账号（state.vscdb cursorAuth/*）。
+	// 停止服务/退出/直连官方时必须执行，否则模拟 token 残留导致官方连接 401。
+	// 恢复失败不可静默成功——上层需据此提示用户手动处理，否则直连官方会 401。
+	if err := cursor.RestoreCursorUserInfo(); err != nil {
+		s.setCursorSettingsApplied(false)
+		return fmt.Errorf("restore cursor user info: %w", err)
+	}
 	s.setCursorSettingsApplied(false)
 	return nil
 }
