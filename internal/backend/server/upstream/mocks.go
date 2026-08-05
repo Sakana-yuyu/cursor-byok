@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"html"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -692,6 +694,9 @@ func buildAvailableModelEntries(adapters []legacyruntime.ModelAdapterConfig) []m
 			modelDisplayName = modelID
 		}
 		defaultThinkingEffort := defaultThinkingEffortForAdapter(adapter)
+		// 上下文窗口与 tooltip markdown 需在 entry 构建前算出（tooltip 展示用）。
+		contextTokens := resolveAvailableModelContextTokens(adapter)
+		tooltipMarkdown := buildModelTooltipMarkdown(tooltipData, adapter, contextTokens)
 		entry := map[string]any{
 			"clientDisplayName":                  displayName,
 			"defaultOn":                          true,
@@ -711,17 +716,16 @@ func buildAvailableModelEntries(adapters []legacyruntime.ModelAdapterConfig) []m
 			"supportsThinking":                   true,
 			"tagline":                            thinkingEffortDisplayName(defaultThinkingEffort),
 			"tooltipData": map[string]any{
-				"markdownContent": tooltipData,
+				"markdownContent": tooltipMarkdown,
 			},
 			"tooltipDataForMaxMode": map[string]any{
-				"markdownContent": tooltipData,
+				"markdownContent": tooltipMarkdown,
 			},
-			"variants": buildThinkingEffortVariants(adapter.Type, channelID, modelDisplayName, tooltipData, defaultThinkingEffort),
+			"variants": buildThinkingEffortVariants(adapter.Type, channelID, modelDisplayName, tooltipMarkdown, defaultThinkingEffort),
 		}
 		// 还原原生模型选择器元数据：上下文窗口（含 max 模式）、自动上下文上限、
 		// 展示价格、长上下文标记与「用户自建」标记。数据源优先 adapter 显式配置，
 		// 其次内置 modelcontext 目录（models.json 规则），缺失时省略对应字段。
-		contextTokens := resolveAvailableModelContextTokens(adapter)
 		if contextTokens > 0 && contextTokens <= math.MaxInt32 {
 			entry["contextTokenLimit"] = contextTokens
 			entry["contextTokenLimitForMaxMode"] = contextTokens
@@ -763,6 +767,88 @@ func resolveAvailableModelDisplayPrice(adapter legacyruntime.ModelAdapterConfig)
 		return *pricing.Input
 	}
 	return 0
+}
+
+// resolveModelMaxOutputTokens 返回模型允许的最大输出 token 数：优先 adapter
+// 显式配置（MaxCompletionTokens / AnthropicMaxTokens），其次 modelcontext 目录。
+// 未知返回 0（tooltip 中省略该行）。
+func resolveModelMaxOutputTokens(adapter legacyruntime.ModelAdapterConfig) int {
+	if adapter.MaxCompletionTokens > 0 {
+		return adapter.MaxCompletionTokens
+	}
+	if adapter.AnthropicMaxTokens > 0 {
+		return adapter.AnthropicMaxTokens
+	}
+	return modelcontext.MaxOutputTokens(adapter.ModelID)
+}
+
+// resolveModelDisplayCurrency 返回模型展示价格的币种代码（USD/CNY）；未知回退 USD。
+func resolveModelDisplayCurrency(adapter legacyruntime.ModelAdapterConfig) string {
+	if adapter.Pricing != nil && strings.TrimSpace(adapter.Pricing.Currency) != "" {
+		return strings.ToUpper(strings.TrimSpace(adapter.Pricing.Currency))
+	}
+	if pricing := modelcontext.BuiltinPricingForAdapter(adapter.ModelID, adapter.SupplierID, adapter.Type, adapter.BaseURL); pricing != nil && strings.TrimSpace(pricing.Currency) != "" {
+		return strings.ToUpper(strings.TrimSpace(pricing.Currency))
+	}
+	return "USD"
+}
+
+// buildModelTooltipMarkdown 在用户备注基础上追加模型元数据（上下文窗口/最大输出/
+// 输入价格），使模型选择器展开详情可见这些信息。Cursor UI 渲染的是
+// tooltipData.markdownContent，contextTokenLimit/price 等 proto 字段仅供内部逻辑
+// 使用、不会直接展示。未知元数据对应行省略。
+//
+// 换行约定：行间使用 markdown 硬换行（行尾两个空格 + \n），保证渲染时每行独立；
+// 末尾追加空行（\n\n），避免 Cursor 客户端在 tooltip 之后追加内容（如基于 price
+// 字段渲染的输出价格行）与最后一行粘连。
+func buildModelTooltipMarkdown(remark string, adapter legacyruntime.ModelAdapterConfig, contextTokens int) string {
+	var lines []string
+	if contextTokens > 0 {
+		lines = append(lines, fmt.Sprintf("**上下文窗口：** %s tokens", formatTokenCount(contextTokens)))
+	}
+	if maxOutput := resolveModelMaxOutputTokens(adapter); maxOutput > 0 {
+		lines = append(lines, fmt.Sprintf("**最大输出：** %s tokens", formatTokenCount(maxOutput)))
+	}
+	if price := resolveAvailableModelDisplayPrice(adapter); price > 0 {
+		lines = append(lines, fmt.Sprintf("**输入价格：** %s / 1M tokens", formatModelPrice(price, resolveModelDisplayCurrency(adapter))))
+	}
+	if len(lines) == 0 {
+		return strings.TrimSpace(remark)
+	}
+	details := strings.Join(lines, "  \n") + "\n\n"
+	if markdown := strings.TrimSpace(remark); markdown != "" {
+		return markdown + "\n\n---\n\n" + details
+	}
+	return details
+}
+
+// formatTokenCount 把 token 数格式化为千分位文本（1000000 → 1,000,000）。
+func formatTokenCount(n int) string {
+	digits := strconv.Itoa(n)
+	if n < 0 {
+		return digits
+	}
+	var out strings.Builder
+	for i, c := range digits {
+		if i > 0 && (len(digits)-i)%3 == 0 {
+			out.WriteByte(',')
+		}
+		out.WriteRune(c)
+	}
+	return out.String()
+}
+
+// formatModelPrice 按币种格式化每百万 token 价格（0.14 USD → $0.14）。
+func formatModelPrice(price float64, currency string) string {
+	text := strconv.FormatFloat(price, 'f', -1, 64)
+	switch strings.ToUpper(strings.TrimSpace(currency)) {
+	case "CNY":
+		return "¥" + text
+	case "JPY", "KRW":
+		return currency + " " + text
+	default:
+		return "$" + text
+	}
 }
 
 func buildCLIModelDetails(adapters []legacyruntime.ModelAdapterConfig) []map[string]any {

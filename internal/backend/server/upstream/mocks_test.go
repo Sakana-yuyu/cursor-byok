@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 
 	"cursor/gen/agentv1"
@@ -281,6 +282,7 @@ func TestBuildAvailableModelEntriesEnrichesNativeMetadata(t *testing.T) {
 			ID:                  "channel-a",
 			DisplayName:         "Channel A",
 			ModelID:             "claude-sonnet-4-5",
+			TooltipData:         "我的渠道备注",
 			ContextWindowTokens: 200000,
 			Pricing:             &legacyruntime.ModelPricing{Input: float64Ptr(3.0), Output: float64Ptr(15.0), Currency: "USD"},
 		},
@@ -348,5 +350,77 @@ func TestBuildAvailableModelEntriesEnrichesNativeMetadata(t *testing.T) {
 	}
 	if !decoded.GetSupportsAutoContext() {
 		t.Fatal("decoded supportsAutoContext: want true")
+	}
+	// tooltip 是模型选择器展开详情的实际渲染载体：必须包含上下文窗口与价格行，
+	// 用户备注保留在前，元数据行以分隔线追加在后。
+	tooltipA, ok := entryA["tooltipData"].(map[string]any)["markdownContent"].(string)
+	if !ok {
+		t.Fatalf("tooltipData.markdownContent: got %#v", entryA["tooltipData"])
+	}
+	for _, want := range []string{"200,000", "**输入价格：** $3"} {
+		if !strings.Contains(tooltipA, want) {
+			t.Fatalf("tooltip 缺少 %q，实际内容:\n%s", want, tooltipA)
+		}
+	}
+	if !strings.HasPrefix(tooltipA, "我的渠道备注") {
+		t.Fatalf("tooltip 应以用户备注开头，实际内容:\n%s", tooltipA)
+	}
+}
+
+func TestBuildModelTooltipMarkdown(t *testing.T) {
+	adapter := legacyruntime.ModelAdapterConfig{
+		ModelID:             "model-x",
+		ContextWindowTokens: 1000000,
+		MaxCompletionTokens: 65536,
+		Pricing:             &legacyruntime.ModelPricing{Input: float64Ptr(0.14), Currency: "USD"},
+	}
+	got := buildModelTooltipMarkdown("来自 provider", adapter, 1000000)
+	for _, want := range []string{"来自 provider", "**上下文窗口：** 1,000,000 tokens", "**最大输出：** 65,536 tokens", "**输入价格：** $0.14 / 1M tokens"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("tooltip 缺少 %q，实际内容:\n%s", want, got)
+		}
+	}
+	// 行间用硬换行（行尾两空格 + \n）、末尾空行结尾：防止 Cursor 客户端
+	// 在 tooltip 后追加内容（如输出价格行）时与最后一行粘连。
+	for _, line := range []string{"**上下文窗口：** 1,000,000 tokens", "**最大输出：** 65,536 tokens", "**输入价格：** $0.14 / 1M tokens"} {
+		if !strings.Contains(got, line+"  \n") && !strings.HasSuffix(got, line+"\n\n") {
+			t.Fatalf("元数据行 %q 未以硬换行/尾空行结束，实际内容:\n%q", line, got)
+		}
+	}
+	if !strings.HasSuffix(got, "\n\n") {
+		t.Fatalf("tooltip 应以空行结尾（避免追加内容粘连），实际内容:\n%q", got)
+	}
+
+	// 无备注 + 无元数据 → 空字符串
+	if empty := buildModelTooltipMarkdown("", legacyruntime.ModelAdapterConfig{ModelID: "unknown"}, 0); empty != "" {
+		t.Fatalf("未知模型 tooltip 应为空，got %q", empty)
+	}
+
+	// CNY 币种
+	cny := legacyruntime.ModelAdapterConfig{
+		ModelID: "model-cny", ContextWindowTokens: 128000,
+		Pricing: &legacyruntime.ModelPricing{Input: float64Ptr(12.0), Currency: "CNY"},
+	}
+	gotCNY := buildModelTooltipMarkdown("", cny, 128000)
+	if !strings.Contains(gotCNY, "¥12") {
+		t.Fatalf("CNY 价格格式错误，实际内容:\n%s", gotCNY)
+	}
+}
+
+func TestFormatTokenCount(t *testing.T) {
+	cases := []struct {
+		in   int
+		want string
+	}{
+		{0, "0"},
+		{999, "999"},
+		{1000, "1,000"},
+		{1000000, "1,000,000"},
+		{200000, "200,000"},
+	}
+	for _, tc := range cases {
+		if got := formatTokenCount(tc.in); got != tc.want {
+			t.Fatalf("formatTokenCount(%d): got %q, want %q", tc.in, got, tc.want)
+		}
 	}
 }
