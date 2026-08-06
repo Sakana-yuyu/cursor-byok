@@ -140,6 +140,7 @@ type ActiveStream struct {
 	LatestUserText               string
 	Status                       StreamStatus
 	ThinkingEffort               string
+	CustomSystemPrompt           string
 	MaxMode                      bool
 	SubagentModelOverrides       map[string]runtimecore.SubagentModelOverrideSelection
 	SelectedSubagentModels       []*agentv1.RequestedModel
@@ -505,6 +506,7 @@ type InboundIntent struct {
 	ModelID                      string
 	ModelName                    string
 	ThinkingEffort               string
+	CustomSystemPrompt           string
 	MaxMode                      bool
 	Mode                         agentv1.AgentMode
 	HasExplicitMode              bool

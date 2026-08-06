@@ -13,7 +13,7 @@ import (
 )
 
 type PromptCompiler interface {
-	Compile(conversation *ConversationFile, mode agentv1.AgentMode, latestUserText string, modelName string) (CompiledConversation, error)
+	Compile(conversation *ConversationFile, mode agentv1.AgentMode, latestUserText string, modelName string, customSystemPrompt string) (CompiledConversation, error)
 	DerivePromptContexts(conversation *ConversationFile, mode agentv1.AgentMode, latestUserText string) ([]PromptContextMessage, error)
 }
 
@@ -45,7 +45,9 @@ func NewPromptCompiler(projector *HistoryProjector, catalog ToolCatalog, reminde
 }
 
 // Compile 生成当前 turn 应发送给 provider 的消息和工具集合。
-func (compiler *DefaultPromptCompiler) Compile(conversation *ConversationFile, mode agentv1.AgentMode, latestUserText string, modelName string) (CompiledConversation, error) {
+// customSystemPrompt 是客户端 run_request 附带的额外系统提示词（已过护栏），
+// 追加在共享规则/技能之后，避免影响无自定义提示词时的前缀稳定性。
+func (compiler *DefaultPromptCompiler) Compile(conversation *ConversationFile, mode agentv1.AgentMode, latestUserText string, modelName string, customSystemPrompt string) (CompiledConversation, error) {
 	if compiler == nil || compiler.projector == nil || compiler.catalog == nil {
 		return CompiledConversation{}, fmt.Errorf("prompt compiler dependencies are not initialized")
 	}
@@ -107,6 +109,9 @@ func (compiler *DefaultPromptCompiler) Compile(conversation *ConversationFile, m
 	}
 	if strings.TrimSpace(globalSkillsPrompt) != "" {
 		systemParts = append(systemParts, globalSkillsPrompt)
+	}
+	if strings.TrimSpace(customSystemPrompt) != "" {
+		systemParts = append(systemParts, strings.TrimSpace(customSystemPrompt))
 	}
 	systemText := strings.TrimSpace(strings.Join(filterNonEmpty(systemParts), "\n\n"))
 	if compiler.injection != nil {

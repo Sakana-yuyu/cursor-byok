@@ -129,6 +129,7 @@ func normalizeRealtimeRequestContextForStorage(requestContext *agentv1.RequestCo
 		normalized.McpFileSystemOptions = &agentv1.McpFileSystemOptions{WorkspaceProjectDir: workspaceRoot}
 	}
 	normalized.Rules = guardCursorRules(filterNonSkillRules(requestContext.GetRules()))
+	normalized.NonFileRules = guardCursorRules(requestContext.GetNonFileRules())
 	if fileContents := normalizeRealtimeFileContents(requestContext.GetFileContents()); len(fileContents) > 0 {
 		normalized.FileContents = fileContents
 	}

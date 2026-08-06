@@ -1383,6 +1383,11 @@ func (service *Service) handleTimerEvent(stream *ActiveStream, payload *streamTi
 		return service.recoverStaleExecWithoutTerminal(stream, payload.ExecID, payload.MessageID, payload.Reason)
 	case streamTimerTurnStale:
 		return service.handleTurnStaleTimeout(stream, payload)
+	case streamTimerCheckpointBlobs:
+		// checkpoint blob 同步超时：Cursor 断连/blob 确认丢失时，若无人处理，
+		// stream 会永久卡在 TurnPhaseCheckpointing，终态 endstream 永不发出，
+		// 客户端只能等到连接断开报 RetriableError: Canceled。这里必须显式收口。
+		return service.handleCheckpointBlobTimeout(stream)
 	case streamTimerOrphanCancel:
 		stream.mu.Lock()
 		subscriberCount := len(stream.Subscribers)

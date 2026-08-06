@@ -286,6 +286,55 @@ func TestCheckpointBlobSyncTimeoutFailsStreamWithoutPublishingDanglingCheckpoint
 	}
 }
 
+func TestCheckpointBlobSyncTimerDispatchFailsStreamOnTimeout(t *testing.T) {
+	service, stream := testCheckpointBlobService(t)
+	projection, err := service.projector.ProjectCheckpointProjection(testConversation([]HistoryEntry{
+		testUserMessageEntry(t, 1, "request-1", "hello"),
+	}))
+	if err != nil {
+		t.Fatalf("projection: %v", err)
+	}
+	if err := service.queueCheckpointProjection(stream, projection, checkpointTerminalAction{kind: checkpointTerminalActionNone}); err != nil {
+		t.Fatalf("queue checkpoint: %v", err)
+	}
+	key := providerTimerKey(streamTimerCheckpointBlobs, "")
+	stream.mu.Lock()
+	token := stream.TimerTokens[key]
+	stream.mu.Unlock()
+	if token == 0 {
+		t.Fatal("checkpoint blob timeout timer was not scheduled")
+	}
+	// 通过 handleTimerEvent 走完整定时器分发链路（而非直接调用
+	// handleCheckpointBlobTimeout），锁住「超时必须显式收口」的行为，
+	// 防止未来再次把该分支漏接导致任务永久卡在 checkpointing。
+	if err := service.handleTimerEvent(stream, &streamTimerEvent{
+		Key:   key,
+		Kind:  streamTimerCheckpointBlobs,
+		Token: token,
+	}); err != nil {
+		t.Fatalf("handleTimerEvent: %v", err)
+	}
+	events, err := service.broker.ReadFromCursor(stream.RequestID, 0)
+	if err != nil {
+		t.Fatalf("read timeout events: %v", err)
+	}
+	var failed, dangling bool
+	for _, event := range events {
+		if event.Message.GetConversationCheckpointUpdate() != nil {
+			dangling = true
+		}
+		if event.End && event.TerminalErrorCode == "checkpoint_sync_error" {
+			failed = true
+		}
+	}
+	if dangling {
+		t.Fatal("timed-out Blob dependency published a dangling checkpoint")
+	}
+	if !failed {
+		t.Fatal("checkpoint blob timeout was not routed to explicit stream failure")
+	}
+}
+
 func TestCheckpointBlobSyncReusesConversationCacheAcrossRequests(t *testing.T) {
 	service, firstStream := testCheckpointBlobService(t)
 	projection, err := service.projector.ProjectCheckpointProjection(testConversation([]HistoryEntry{
