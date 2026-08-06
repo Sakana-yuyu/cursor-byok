@@ -2,16 +2,12 @@ package forwarder
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"strings"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
-	"cursor/gen/agentv1"
 	runtimecore "cursor/internal/backend/agent/core"
 	modeladapter "cursor/internal/backend/agent/model"
 )
@@ -827,67 +823,6 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 	}
 }
 
-func (service *Service) rewriteTaskToolCallModelForDisplay(stream *ActiveStream, toolCall *agentv1.ToolCall) *agentv1.ToolCall {
-	if service == nil || stream == nil || toolCall == nil {
-		return toolCall
-	}
-	taskToolCall := toolCall.GetTaskToolCall()
-	if taskToolCall == nil || taskToolCall.GetArgs() == nil {
-		return toolCall
-	}
-	subagentType := taskSubagentTypeNameForDisplay(taskToolCall.GetArgs().GetSubagentType())
-	stream.mu.Lock()
-	parentModelID := strings.TrimSpace(stream.ModelID)
-	overrides := cloneSubagentModelOverrides(stream.SubagentModelOverrides)
-	stream.mu.Unlock()
-	effectiveModelID := effectiveTaskDisplayModelID(subagentType, parentModelID, overrides)
-	if effectiveModelID == "" {
-		return toolCall
-	}
-	cloned, ok := proto.Clone(toolCall).(*agentv1.ToolCall)
-	if !ok || cloned == nil {
-		return toolCall
-	}
-	clonedTaskToolCall := cloned.GetTaskToolCall()
-	if clonedTaskToolCall == nil || clonedTaskToolCall.GetArgs() == nil {
-		return toolCall
-	}
-	clonedTaskToolCall.Args.Model = &effectiveModelID
-	return cloned
-}
-
-func taskSubagentTypeNameForDisplay(subagentType *agentv1.SubagentType) string {
-	if subagentType == nil || subagentType.GetType() == nil {
-		return ""
-	}
-	switch item := subagentType.GetType().(type) {
-	case *agentv1.SubagentType_Explore:
-		return "explore"
-	case *agentv1.SubagentType_BrowserUse:
-		return "browser-use"
-	case *agentv1.SubagentType_Shell:
-		return "shell"
-	case *agentv1.SubagentType_Custom:
-		return strings.TrimSpace(item.Custom.GetName())
-	default:
-		return ""
-	}
-}
-
-func effectiveTaskDisplayModelID(subagentType string, parentModelID string, overrides map[string]runtimecore.SubagentModelOverrideSelection) string {
-	if override, _, ok := runtimecore.LookupSubagentModelOverride(overrides, subagentType); ok {
-		switch strings.TrimSpace(override.Selection) {
-		case "model":
-			return strings.TrimSpace(override.ModelID)
-		case "inherit":
-			return strings.TrimSpace(parentModelID)
-		case "disabled":
-			return ""
-		}
-	}
-	// 没有 override 时 fallback 到父进程模型，与 openTask 的行为保持一致。
-	return strings.TrimSpace(parentModelID)
-}
 
 func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *streamProviderEvent) error {
 	if stream == nil || payload == nil {
@@ -1117,152 +1052,6 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 	return nil
 }
 
-// isMaxOutputTokensTruncation 判断 provider 流式收口原因是否表示被输出预算截断（而非模型主动结束）。
-// 与 provider_cache.go 的 isTruncationFinishReason 语义一致，但范围收窄到恢复能获益的截断原因：
-// max_output_tokens / length / incomplete。content_filter 是策略拦截而非预算截断，恢复无益，故排除。
-func isMaxOutputTokensTruncation(reason string) bool {
-	switch strings.TrimSpace(reason) {
-	case "max_output_tokens", "length", "incomplete":
-		return true
-	default:
-		return false
-	}
-}
-
-// handleMaxOutputTokensRecovery 在 provider 流式被输出预算截断、整回合无可见输出时，
-// 追加一条 prompt_context 提示消息引导模型重新产出可见回复/工具调用，并续写一轮 provider pass。
-// 返回 (true, nil) 表示已挂起恢复（调用方应直接 return）；返回 (false, nil) 表示不适用或本回合已恢复过，
-// 调用方走正常收口。镜像 handleSubagentEmptyStopAfterToolResult 的结构与幂等去重。
-func (service *Service) handleMaxOutputTokensRecovery(stream *ActiveStream, conversationID string, turnSeq int64, requestID string, modelCallID string, providerPass int, finishReason string) (bool, error) {
-	if stream == nil {
-		return false, nil
-	}
-	conversation, _, _, err := service.snapshotCheckpointConversation(stream)
-	if err != nil {
-		return true, err
-	}
-	if conversation == nil {
-		return false, nil
-	}
-	// 幂等去重：本回合已追加过该提示则不再恢复，避免无限循环。
-	if currentTurnHasPromptContextSource(conversation, turnSeq, promptContextSourceMaxOutputTokensRecovery) {
-		return false, nil
-	}
-	reminder := newPromptContextReminder(promptContextSourceMaxOutputTokensRecovery, maxOutputTokensRecoveryText())
-	if _, err := service.appendConversationEntries(stream, conversationID, []HistoryEntry{
-		newPromptContextEntry(turnSeq, requestID, reminder),
-	}); err != nil {
-		return true, err
-	}
-	if service.debug != nil {
-		service.debug.LogRuntime(context.Background(), requestID, conversationID, "max_output_tokens_recovery_triggered", map[string]any{
-			"provider_pass": providerPass,
-			"finish_reason": strings.TrimSpace(finishReason),
-		})
-	}
-	log.Printf("forwarder max_output_tokens recovery request_id=%s pass=%d finish_reason=%s",
-		strings.TrimSpace(requestID), providerPass, strings.TrimSpace(finishReason))
-	if err := service.syncSummaryCarryForward(conversationID, requestID, modelCallID); err != nil {
-		return true, err
-	}
-	if err := service.publishCheckpoint(requestID, conversationID); err != nil {
-		return true, err
-	}
-	if err := service.requestProviderAction(stream, providerActionResume); err != nil {
-		return true, err
-	}
-	return true, nil
-}
-
-// maxOutputTokensRecoveryText 是 max_output_tokens 截断恢复追加的 prompt_context 提示文案。
-// 参考 Reasonix emptyFinalRetryMessage：明确告知模型上一轮被截断、要求给出可见回复而非只输出思考。
-func maxOutputTokensRecoveryText() string {
-	return "上一轮回复因输出 token 上限被截断（max_output_tokens），只产出了思考过程，没有可见正文或工具调用。请基于本轮任务直接给出简洁的可见回复，或发起必要的工具调用，不要只输出思考内容。"
-}
-
-const subagentEmptyStopErrorText = "subagent returned empty response after tool result"
-
-func (service *Service) handleSubagentEmptyStopAfterToolResult(stream *ActiveStream, conversationID string, turnSeq int64, requestID string, modelCallID string, finishReason string, accumulatedText string) (bool, error) {
-	if stream == nil || strings.TrimSpace(finishReason) != "stop" || strings.TrimSpace(accumulatedText) != "" {
-		return false, nil
-	}
-	conversation, _, _, err := service.snapshotCheckpointConversation(stream)
-	if err != nil {
-		return true, err
-	}
-	if conversation == nil || !isChildConversationSubagentTypeName(conversation.SubagentTypeName) || !currentTurnHasToolResult(conversation, turnSeq) {
-		return false, nil
-	}
-	if currentTurnHasPromptContextSource(conversation, turnSeq, promptContextSourceSubagentEmptyStopRecovery) {
-		service.setTurnPhase(stream, TurnPhaseFailed)
-		return true, service.failStream(stream, "empty_response", errors.New(subagentEmptyStopErrorText))
-	}
-	context := newPromptContextReminder(promptContextSourceSubagentEmptyStopRecovery, subagentEmptyStopRecoveryText())
-	if _, err := service.appendConversationEntries(stream, conversationID, []HistoryEntry{
-		newPromptContextEntry(turnSeq, requestID, context),
-	}); err != nil {
-		return true, err
-	}
-	if err := service.syncSummaryCarryForward(conversationID, requestID, modelCallID); err != nil {
-		return true, err
-	}
-	if err := service.publishCheckpoint(requestID, conversationID); err != nil {
-		return true, err
-	}
-	if err := service.requestProviderAction(stream, providerActionResume); err != nil {
-		return true, err
-	}
-	return true, nil
-}
-
-func subagentEmptyStopRecoveryText() string {
-	return "During this subagent turn, a prior provider pass stopped after tool results without visible assistant output. Continue from the latest tool result and return a concise investigation result for the parent. Only call another allowed read-only tool if necessary."
-}
-
-func currentTurnHasToolResult(conversation *ConversationFile, turnSeq int64) bool {
-	if conversation == nil || turnSeq <= 0 {
-		return false
-	}
-	for _, entry := range conversation.Entries {
-		if entry.TurnSeq == turnSeq && strings.TrimSpace(entry.Kind) == "tool_result" {
-			return true
-		}
-	}
-	return false
-}
-
-func currentTurnHasPromptContextSource(conversation *ConversationFile, turnSeq int64, source string) bool {
-	if conversation == nil || turnSeq <= 0 || strings.TrimSpace(source) == "" {
-		return false
-	}
-	for _, entry := range conversation.Entries {
-		if entry.TurnSeq != turnSeq || strings.TrimSpace(entry.Kind) != "prompt_context" {
-			continue
-		}
-		var payload promptContextEntryPayload
-		if err := json.Unmarshal(entry.Payload, &payload); err != nil {
-			continue
-		}
-		if strings.TrimSpace(payload.Source) == strings.TrimSpace(source) {
-			return true
-		}
-	}
-	return false
-}
-
-func hasPendingAwaitingUserInteraction(stream *ActiveStream) bool {
-	if stream == nil {
-		return false
-	}
-	stream.mu.Lock()
-	defer stream.mu.Unlock()
-	for _, pending := range stream.PendingInteractions {
-		if !shouldAutoResumeAfterInteraction(pending) {
-			return true
-		}
-	}
-	return false
-}
 
 func providerTimerKey(kind streamTimerKind, execID string) string {
 	if strings.TrimSpace(execID) == "" {
