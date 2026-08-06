@@ -68,3 +68,35 @@ export function humanizeProviderError(error) {
   // 无法归类：回退原始信息，避免丢失排查线索（限制长度）。
   return text.length > 160 ? `${text.slice(0, 160)}…` : text;
 }
+
+// ---- toUserError：由 appState.js 逐字归位（依赖 asString/extractErrorMessage 一并搬移）----
+
+const GENERIC_SERVICE_ERROR = "服务错误";
+
+function asString(value) {
+  if (typeof value === "string") {
+    return value.trim();
+  }
+  if (value instanceof String) {
+    return value.toString().trim();
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return "";
+}
+
+function extractErrorMessage(error) {
+  if (typeof error === "string") {
+    return error.trim();
+  }
+  if (error && typeof error === "object") {
+    return asString(error.message) || asString(error.error);
+  }
+  return "";
+}
+
+export function toUserError(error) {
+  const message = extractErrorMessage(error);
+  return message || GENERIC_SERVICE_ERROR;
+}

@@ -4,6 +4,8 @@ import dayjs from "dayjs";
 import { getLocale } from "@/i18n/runtime";
 import { contextWindowTokensForModel } from "@/utils/modelContext";
 import { adapterMatchesSupplierIdentity } from "@/utils/supplierGrouping";
+// toUserError 定义已归位 utils/errorHumanizer.js，此处转发保持既有调用方零改动。
+export { toUserError } from "@/utils/errorHumanizer";
 import {
   checkForUpdates,
   getAppVersion,
@@ -1351,16 +1353,6 @@ function handleUpdateErrorEvent(event) {
   }
 }
 
-function extractErrorMessage(error) {
-  if (typeof error === "string") {
-    return error.trim();
-  }
-  if (error && typeof error === "object") {
-    return asString(error.message) || asString(error.error);
-  }
-  return "";
-}
-
 const cachedState = loadCachedState();
 const cachedConfig = normalizeConfig(cachedState);
 
@@ -2574,11 +2566,6 @@ export async function confirmUpdatePrompt() {
     appState.updateError = message;
     openUpdatePrompt("error", { error: message });
   }
-}
-
-export function toUserError(error) {
-  const message = extractErrorMessage(error);
-  return message || GENERIC_SERVICE_ERROR;
 }
 
 export async function bootstrapAppState() {
