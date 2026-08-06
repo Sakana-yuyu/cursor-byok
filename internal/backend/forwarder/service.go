@@ -790,6 +790,7 @@ func (service *Service) decodeInboundIntent(requestID string, message *agentv1.A
 		}
 		intent.ModelID = extractRequestedModelID(message)
 		intent.ThinkingEffort = extractRuntimeThinkingEffort(message)
+		intent.CustomSystemPrompt = truncatePromptGuardText("run_request.custom_system_prompt", runRequest.GetCustomSystemPrompt(), promptGuardCustomSystemPromptChars)
 		intent.MaxMode = extractRequestedMaxMode(message)
 		intent.SubagentTypeName = strings.TrimSpace(runRequest.GetSubagentTypeName())
 		intent.SelectedSubagentModels = cloneSelectedSubagentModels(runRequest.GetSelectedSubagentModels())
@@ -1034,6 +1035,7 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 	clearPendingProviderCompletion(stream)
 	stream.mu.Lock()
 	stream.ThinkingEffort = strings.TrimSpace(intent.ThinkingEffort)
+	stream.CustomSystemPrompt = strings.TrimSpace(intent.CustomSystemPrompt)
 	stream.MaxMode = intent.MaxMode
 	stream.SubagentModelOverrides = cloneSubagentModelOverrides(intent.SubagentModelOverrides)
 	stream.SelectedSubagentModels = cloneSelectedSubagentModels(intent.SelectedSubagentModels)
@@ -1969,7 +1971,7 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 		service.setTurnPhase(stream, TurnPhaseFailed)
 		return service.failStream(stream, "unknown", err)
 	}
-	compiled, err := service.compiler.Compile(conversation, mode, latestUserText, modelName)
+	compiled, err := service.compiler.Compile(conversation, mode, latestUserText, modelName, stream.CustomSystemPrompt)
 	if err != nil {
 		service.setTurnPhase(stream, TurnPhaseFailed)
 		return service.failStream(stream, "unknown", err)
@@ -2012,7 +2014,7 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 			service.setTurnPhase(stream, TurnPhaseFailed)
 			return service.failStream(stream, "unknown", freshErr)
 		}
-		recompiled, recompileErr := service.compiler.Compile(freshConversation, mode, latestUserText, modelName)
+		recompiled, recompileErr := service.compiler.Compile(freshConversation, mode, latestUserText, modelName, stream.CustomSystemPrompt)
 		if recompileErr != nil {
 			service.setTurnPhase(stream, TurnPhaseFailed)
 			return service.failStream(stream, "unknown", recompileErr)
@@ -3423,7 +3425,7 @@ func (service *Service) checkpointCompiledConversation(stream *ActiveStream, con
 		return CompiledConversation{}, false
 	}
 	_, modelName, latestUserText, mode := checkpointPromptContext(stream)
-	compiled, err := service.compiler.Compile(conversation, mode, latestUserText, modelName)
+	compiled, err := service.compiler.Compile(conversation, mode, latestUserText, modelName, stream.CustomSystemPrompt)
 	if err != nil {
 		log.Printf("forwarder checkpoint token estimate failed request_id=%s conversation_id=%s err=%v", strings.TrimSpace(activeStreamRequestID(stream)), strings.TrimSpace(conversation.ConversationID), err)
 		return CompiledConversation{}, false

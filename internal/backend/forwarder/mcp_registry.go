@@ -72,6 +72,7 @@ type mcpRuntimeEntry struct {
 	connectedAt                time.Time
 	lastCheckedAt              time.Time
 	updatedAt                  time.Time
+	lastConnectAttemptAt       time.Time
 	generation                 uint64
 	activeCapabilityOperations int
 	capabilityBatchFailed      bool
@@ -204,6 +205,7 @@ func (registry *MCPRuntimeRegistry) Connect(ctx context.Context, scope string, i
 	now := time.Now().UTC()
 	entry.lastCheckedAt = now
 	entry.updatedAt = now
+	entry.lastConnectAttemptAt = now
 	config := cloneMCPServerConfig(entry.config)
 	registry.mu.Unlock()
 
@@ -251,6 +253,37 @@ func (registry *MCPRuntimeRegistry) Connect(ctx context.Context, scope string, i
 		_ = oldSession.Close()
 	}
 	return nil
+}
+
+// mcpAutoConnectCooldown 是磁盘扫描发现的 server 自动预连接失败后的冷却期：
+// 冷却期内不在 enrich 热路径重复尝试，避免每次 run 都阻塞等待连接超时。
+const mcpAutoConnectCooldown = 30 * time.Second
+
+// TryAutoConnect 对未连接（或冷却期已过）的 server 发起连接，用于 enrich 热路径
+// 自动拉取工具 schema。幂等：已连接且已有 tools 时直接返回；失败静默返回，
+// 不影响请求主流程，下次尝试需等待冷却期。
+func (registry *MCPRuntimeRegistry) TryAutoConnect(ctx context.Context, scope string, identifier string) error {
+	if registry == nil {
+		return nil
+	}
+	scope = normalizeMCPRuntimeScope(scope)
+	id := strings.ToLower(strings.TrimSpace(identifier))
+	registry.mu.Lock()
+	entry, ok := registry.entries[mcpRuntimeEntryKey(scope, id)]
+	if !ok {
+		registry.mu.Unlock()
+		return nil
+	}
+	if entry.status == MCPRuntimeConnected && entry.session != nil && len(entry.tools) > 0 {
+		registry.mu.Unlock()
+		return nil
+	}
+	if !entry.lastConnectAttemptAt.IsZero() && time.Since(entry.lastConnectAttemptAt) < mcpAutoConnectCooldown {
+		registry.mu.Unlock()
+		return nil
+	}
+	registry.mu.Unlock()
+	return registry.Connect(ctx, scope, id)
 }
 
 func (registry *MCPRuntimeRegistry) Disconnect(scope string, identifier string) error {

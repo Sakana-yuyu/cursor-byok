@@ -34,6 +34,7 @@ const (
 	promptGuardAgentSkillContentChars   = 6000
 	promptGuardAgentSkillsMaxCount      = 16
 	promptGuardRealtimeTextChars        = 12000
+	promptGuardCustomSystemPromptChars = 32000
 	promptGuardCompiledMessageChars     = 120000
 )
 
@@ -61,6 +62,7 @@ func guardRequestContextForStorage(requestContext *agentv1.RequestContext) {
 		return
 	}
 	requestContext.Rules = guardCursorRules(requestContext.GetRules())
+	requestContext.NonFileRules = guardCursorRules(requestContext.GetNonFileRules())
 	requestContext.FileContents = guardStringMap(
 		requestContext.GetFileContents(),
 		"request_context.file_contents",

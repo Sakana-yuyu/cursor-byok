@@ -259,7 +259,7 @@ func buildRequestContextStaticSections(requestContext *agentv1.RequestContext) [
 	if requestContext == nil {
 		return nil
 	}
-	sections := make([]string, 0, 5)
+	sections := make([]string, 0, 6)
 	if userInfo := buildRequestContextUserInfoSection(requestContext); userInfo != "" {
 		sections = append(sections, userInfo)
 	}
@@ -269,6 +269,9 @@ func buildRequestContextStaticSections(requestContext *agentv1.RequestContext) [
 	if rules := buildRequestContextRulesSection(requestContext); rules != "" {
 		sections = append(sections, rules)
 	}
+	if subagents := buildRequestContextCustomSubagentsSection(requestContext); subagents != "" {
+		sections = append(sections, subagents)
+	}
 	if skills := buildRequestContextAgentSkillsSection(requestContext); skills != "" {
 		sections = append(sections, skills)
 	}
@@ -276,6 +279,59 @@ func buildRequestContextStaticSections(requestContext *agentv1.RequestContext) [
 		sections = append(sections, mcp)
 	}
 	return sections
+}
+
+// promptSectionCharLimit 是自定义子代理描述等单条 prompt 片段的最大字符数。
+const promptSectionCharLimit = 800
+
+// truncatePromptSection 按 rune 截断 prompt 片段并追加截断标记。
+func truncatePromptSection(text string, limit int) string {
+	if limit <= 0 {
+		return ""
+	}
+	runes := []rune(text)
+	if len(runes) <= limit {
+		return text
+	}
+	notice := "\n\n[truncated]"
+	keep := limit - len([]rune(notice))
+	if keep <= 0 {
+		return string(runes[:limit])
+	}
+	return string(runes[:keep]) + notice
+}
+
+// buildRequestContextCustomSubagentsSection 构造 <custom_subagents> 片段。
+// 只输出 name/description/工具摘要供模型选择，prompt 全文由 Task 工具执行时
+// 客户端按名加载，避免把子代理系统提示词灌入主上下文。
+func buildRequestContextCustomSubagentsSection(requestContext *agentv1.RequestContext) string {
+	if requestContext == nil || len(requestContext.GetCustomSubagents()) == 0 {
+		return ""
+	}
+	lines := []string{
+		"<custom_subagents>",
+		"The following custom subagents are available. Use the Task tool with the matching subagent type name when a task fits their purpose.",
+		"",
+	}
+	for _, subagent := range requestContext.GetCustomSubagents() {
+		if subagent == nil {
+			continue
+		}
+		name := strings.TrimSpace(subagent.GetName())
+		if name == "" {
+			continue
+		}
+		entry := "- " + name
+		if description := strings.TrimSpace(subagent.GetDescription()); description != "" {
+			entry += ": " + truncatePromptSection(description, promptSectionCharLimit)
+		}
+		if tools := subagent.GetTools(); len(tools) > 0 {
+			entry += " (tools: " + strings.Join(tools, ", ") + ")"
+		}
+		lines = append(lines, entry)
+	}
+	lines = append(lines, "</custom_subagents>")
+	return strings.Join(lines, "\n")
 }
 
 func buildRequestContextRealtimeSections(requestContext *agentv1.RequestContext) []string {
@@ -424,8 +480,10 @@ func buildRequestContextAgentSkillsSection(requestContext *agentv1.RequestContex
 }
 
 // buildRequestContextRulesSection 构造 <rules> 片段。
+// 同时消费 rules（文件规则）与 non_file_rules（用户全局等非文件规则），按内容去重。
 func buildRequestContextRulesSection(requestContext *agentv1.RequestContext) string {
-	if requestContext == nil || len(requestContext.GetRules()) == 0 {
+	if requestContext == nil ||
+		(len(requestContext.GetRules()) == 0 && len(requestContext.GetNonFileRules()) == 0) {
 		return ""
 	}
 	ruleLines := []string{
@@ -434,6 +492,7 @@ func buildRequestContextRulesSection(requestContext *agentv1.RequestContext) str
 		"",
 		`<user_rules description="These are rules set by the user that you should follow if appropriate.">`,
 	}
+	seen := make(map[string]struct{})
 	for _, rule := range requestContext.GetRules() {
 		if rule == nil {
 			continue
@@ -442,6 +501,24 @@ func buildRequestContextRulesSection(requestContext *agentv1.RequestContext) str
 		if content == "" {
 			continue
 		}
+		if _, dup := seen[content]; dup {
+			continue
+		}
+		seen[content] = struct{}{}
+		ruleLines = append(ruleLines, "<user_rule>"+content+"</user_rule>")
+	}
+	for _, rule := range requestContext.GetNonFileRules() {
+		if rule == nil {
+			continue
+		}
+		content := strings.TrimSpace(rule.GetContent())
+		if content == "" {
+			continue
+		}
+		if _, dup := seen[content]; dup {
+			continue
+		}
+		seen[content] = struct{}{}
 		ruleLines = append(ruleLines, "<user_rule>"+content+"</user_rule>")
 	}
 	ruleLines = append(ruleLines, "</user_rules>", "</rules>")

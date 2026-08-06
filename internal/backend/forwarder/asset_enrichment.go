@@ -5,6 +5,7 @@
 package forwarder
 
 import (
+	"context"
 	"strings"
 
 	"cursor/gen/agentv1"
@@ -59,6 +60,9 @@ func (service *Service) enrichRequestContextWithScannedAssets(intent *InboundInt
 	workspaceRoot := resolveWorkspaceRootFromIntent(intent)
 	preserveRequestContextWorkspaceRoot(intent, workspaceRoot)
 
+	// AGENTS.md/CLAUDE.md/GEMINI.md 兜底注入：客户端 rules 不完整时补充。
+	service.enrichRequestContextWithAgentsFiles(intent)
+
 	// Keep compiler-side scan settings synchronized even when scanning is disabled.
 	if service.skillsStore() != nil {
 		service.skillsStore().SetScanSettings(settings.Enabled, settings.SkillSources, settings.DisabledSkills)
@@ -73,6 +77,14 @@ func (service *Service) enrichRequestContextWithScannedAssets(intent *InboundInt
 	mcpConfigs := ScanMCPServerConfigs(workspaceRoot, settings)
 	if service.mcpRuntime != nil {
 		SyncMCPRuntimeForWorkspace(service.mcpRuntime, workspaceRoot, enabledMCPServerConfigs(mcpConfigs))
+		// 自动预连接磁盘发现的 stdio server 拉取工具 schema（幂等+冷却，失败静默），
+		// 让模型在 prompt 中看到完整工具/参数定义而非只有 server 名。
+		for _, config := range enabledMCPServerConfigs(mcpConfigs) {
+			if strings.TrimSpace(config.Command) == "" {
+				continue
+			}
+			_ = service.mcpRuntime.TryAutoConnect(context.Background(), normalizeMCPRuntimeScope(config.RuntimeScope), config.Identifier)
+		}
 	}
 	mcpServers := mcpDescriptorsWithRuntime(mcpConfigs, service.mcpRuntime)
 
