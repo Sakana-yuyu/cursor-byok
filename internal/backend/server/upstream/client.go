@@ -345,10 +345,15 @@ func handleMockAuthStripeProfile(reqCtx *RequestContext, route *Route) error {
 
 func handleMockAuthPoll(reqCtx *RequestContext, route *Route) error {
 	_ = route
+	_, token := effectiveAccountCredentials(reqCtx)
+	authID := authIDFromJWT(token)
+	if authID == "" {
+		authID = "local_auth"
+	}
 	responseBody, err := marshalJSONBody(map[string]any{
-		"accessToken":  legacyruntime.InjectAuthToken,
-		"refreshToken": legacyruntime.InjectAuthToken,
-		"authId":       "local_auth",
+		"accessToken":  token,
+		"refreshToken": token,
+		"authId":       authID,
 	})
 	if err != nil {
 		return err
@@ -361,7 +366,8 @@ func handleMockAuthPoll(reqCtx *RequestContext, route *Route) error {
 
 func handleMockAuthEmail(reqCtx *RequestContext, route *Route) error {
 	_ = route
-	responseBody := encodeAuthGetEmailResponse(legacyruntime.InjectAccountEmail)
+	email, _ := effectiveAccountCredentials(reqCtx)
+	responseBody := encodeAuthGetEmailResponse(email)
 	reqCtx.ResponseWriter.Header().Set("content-type", "application/proto")
 	reqCtx.ResponseWriter.Header().Set("content-length", strconv.Itoa(len(responseBody)))
 	reqCtx.ResponseWriter.WriteHeader(http.StatusOK)

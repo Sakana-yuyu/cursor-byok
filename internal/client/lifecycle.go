@@ -97,8 +97,18 @@ func (s *ProxyService) StartProxy() (ProxyState, error) {
 		return fail("ensure_proxy", err)
 	}
 
-	// 启动时注入账号信息
-	if err := cursor.InjectCursorUserInfo(localruntime.InjectAccountEmail, localruntime.InjectAuthToken); err != nil {
+	// 启动时注入账号信息。混合模式下客户端必须使用真实官方账号（与透传官方
+	// 请求的 token 一致，官方才接受）；否则注入本地模拟账号。
+	injectEmail, injectToken := localruntime.InjectAccountEmail, localruntime.InjectAuthToken
+	if cfg.Routing.HybridMode {
+		if creds, ok := localruntime.ReadOfficialAccountCredentials(); ok {
+			injectEmail, injectToken = creds.Email, creds.AccessToken
+			logger.Infof("hybrid mode: injecting official account email=%s into Cursor", creds.Email)
+		} else {
+			logger.Infof("hybrid mode enabled but no official account credentials found, fallback to local mock account")
+		}
+	}
+	if err := cursor.InjectCursorUserInfo(injectEmail, injectToken); err != nil {
 		logger.Errorf("injectCursorUserInfo failed: %v", err)
 		// 不阻断启动，仅记录日志
 	}

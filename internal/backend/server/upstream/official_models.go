@@ -1,14 +1,17 @@
 package upstream
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 
 	"google.golang.org/protobuf/proto"
 
-	"cursor/gen/aiserverv1"
+	"cursor/gen/agentv1"
 )
 
 // officialModelInfo 描述一个 Cursor 官方模型（混合模式下可选并透传官方执行）。
@@ -59,17 +62,42 @@ type officialUsableModel struct {
 	MaxMode        bool   `json:"maxMode"`
 }
 
+// officialModelsResponseMaxBytes 解压后的官方模型响应大小上限（防异常膨胀）。
+const officialModelsResponseMaxBytes = 8 << 20
+
 // RefreshOfficialModelsFromResponse 从官方 GetUsableModels 响应刷新动态
-// 官方模型目录。兼容 JSON（当前官方实际编码）与 binary proto（Connect 客户端
-// 默认 Accept application/proto 时）。解析失败返回错误并保持既有目录不变。
+// 官方模型目录。兼容 JSON 与 binary proto（实测：Accept application/proto 时
+// 官方返回 agent.v1.GetUsableModelsResponse 二进制，ModelDetails 字段为
+// model_id/display_model_id/display_name/display_name_short/max_mode）。
+// 官方可能对带 Accept-Encoding: gzip 的请求返回 gzip 压缩体（透传时请求头显式
+// 含 Accept-Encoding，Go Transport 不会自动解压），此处先解压再解析。
+// 解析失败返回错误并保持既有目录不变。
 func RefreshOfficialModelsFromResponse(body []byte) error {
-	// 先试 JSON（官方 GetUsableModels 当前返回 JSON：modelId/displayModelId/displayName）。
+	// 先处理 gzip 压缩体（魔数 0x1f 0x8b）。
+	if len(body) >= 2 && body[0] == 0x1f && body[1] == 0x8b {
+		reader, err := gzip.NewReader(bytes.NewReader(body))
+		if err != nil {
+			return fmt.Errorf("解压官方模型响应失败: %w", err)
+		}
+		defer reader.Close()
+		body, err = io.ReadAll(io.LimitReader(reader, officialModelsResponseMaxBytes+1))
+		if err != nil {
+			return fmt.Errorf("读取解压后的官方模型响应失败: %w", err)
+		}
+		if len(body) > officialModelsResponseMaxBytes {
+			return fmt.Errorf("解压后的官方模型响应超过 %d 字节上限", officialModelsResponseMaxBytes)
+		}
+	}
+	// 先试 JSON（官方 GetUsableModels 在 Accept application/json 时返回
+	// JSON：modelId/displayModelId/displayName）。
 	var payload officialUsableModelsPayload
 	if err := json.Unmarshal(body, &payload); err == nil && len(payload.Models) > 0 {
 		return refreshOfficialModelsFromList(payload.Models)
 	}
-	// 再试 binary proto（GetUsableModelsResponse.Models 为 ModelDetails）。
-	protoMsg := &aiserverv1.GetUsableModelsResponse{}
+	// 再试 binary proto。必须用 agent.v1（官方实际编码）解析：aiserver.v1 的
+	// ModelDetails 字段结构不同（model_name/api_key/…），wire type 不匹配会导致
+	// proto.Unmarshal 报错、动态目录永远刷新失败。
+	protoMsg := &agentv1.GetUsableModelsResponse{}
 	if err := proto.Unmarshal(body, protoMsg); err == nil {
 		models := protoMsg.GetModels()
 		if len(models) == 0 {
@@ -77,14 +105,19 @@ func RefreshOfficialModelsFromResponse(body []byte) error {
 		}
 		converted := make([]officialUsableModel, 0, len(models))
 		for _, model := range models {
-			name := strings.TrimSpace(model.GetModelName())
+			name := strings.TrimSpace(model.GetModelId())
 			if name == "" {
 				continue
+			}
+			displayName := strings.TrimSpace(model.GetDisplayName())
+			if displayName == "" {
+				displayName = name
 			}
 			converted = append(converted, officialUsableModel{
 				ModelID:        name,
 				DisplayModelID: name,
-				DisplayName:    name,
+				DisplayName:    displayName,
+				MaxMode:        model.GetMaxMode(),
 			})
 		}
 		if len(converted) > 0 {
@@ -174,12 +207,19 @@ func splitOfficialModelVariant(modelID string) string {
 	return modelID
 }
 
-// IsOfficialModel 判断模型 ID 是否属于当前生效的官方模型目录
-// （动态刷新后的真实官方列表 + 内置兜底，忽略 variant 后缀）。
+// IsOfficialModel 判断模型 ID 的请求是否应走官方透传：命中当前生效的官方
+// 模型目录（动态刷新后的真实官方列表 + 内置兜底，忽略 variant 后缀），或为
+// auto/default 占位 ID（Cursor 客户端 Auto 模式的 run_request 携带
+// model_id="default"，官方 GetUsableModels 也返回 modelId="default" 条目；
+// 混合模式下 auto 对话应透传官方解析，而非落入本地 BYOK 渠道）。
 func IsOfficialModel(modelID string) bool {
 	base := splitOfficialModelVariant(modelID)
+	base = strings.TrimSpace(base)
 	if base == "" {
 		return false
+	}
+	if base == "default" || base == "auto" {
+		return true
 	}
 	officialModels.mu.RLock()
 	defer officialModels.mu.RUnlock()
@@ -247,6 +287,59 @@ func OfficialModelEntries() []map[string]any {
 	return output
 }
 
+// officialModelRefs 返回当前生效官方模型目录的模型 ID 列表（透传官方执行）。
+// 混合模式下 AvailableModels 的默认/回退模型配置必须引用官方列表，
+// 避免 defaultModel 指向已被模型列表排除的 BYOK 自定义模型。
+func officialModelRefs() []string {
+	officialModels.mu.RLock()
+	models := append([]officialModelInfo(nil), officialModels.models...)
+	officialModels.mu.RUnlock()
+	refs := make([]string, 0, len(models))
+	for _, model := range models {
+		if modelID := strings.TrimSpace(model.ModelID); modelID != "" {
+			refs = append(refs, modelID)
+		}
+	}
+	return refs
+}
+
+// firstOfficialModelRef 返回官方模型目录第一个模型 ID（无则空串），
+// 用作混合模式下的默认模型。
+func firstOfficialModelRef() string {
+	refs := officialModelRefs()
+	if len(refs) == 0 {
+		return ""
+	}
+	return refs[0]
+}
+
+// buildOfficialCLIModelDetails 构建官方模型在 GetUsableModels / CLI 默认模型
+// 响应中的条目，字段与官方透传响应对齐（modelId/displayModelId/displayName/
+// maxMode）；无本地 apiKeyCredentials——官方模型走官方账号透传，不携带本地密钥。
+func buildOfficialCLIModelDetails() []map[string]any {
+	officialModels.mu.RLock()
+	models := append([]officialModelInfo(nil), officialModels.models...)
+	officialModels.mu.RUnlock()
+	output := make([]map[string]any, 0, len(models))
+	for _, model := range models {
+		modelID := strings.TrimSpace(model.ModelID)
+		if modelID == "" {
+			continue
+		}
+		displayName := strings.TrimSpace(model.DisplayName)
+		if displayName == "" {
+			displayName = modelID
+		}
+		output = append(output, map[string]any{
+			"modelId":        modelID,
+			"displayModelId": modelID,
+			"displayName":    displayName,
+			"maxMode":        false,
+		})
+	}
+	return output
+}
+
 func officialModelTooltip(model officialModelInfo) string {
 	var builder strings.Builder
 	builder.WriteString("**")
@@ -273,10 +366,10 @@ func officialModelTooltip(model officialModelInfo) string {
 
 func buildOfficialModelVariants(model officialModelInfo) []map[string]any {
 	variant := map[string]any{
-		"displayName":              model.DisplayName,
-		"displayNameOutsidePicker": model.DisplayName,
-		"isDefaultNonMaxConfig":    true,
-		"isMaxMode":                false,
+		"displayName":                 model.DisplayName,
+		"displayNameOutsidePicker":    model.DisplayName,
+		"isDefaultNonMaxConfig":       true,
+		"isMaxMode":                   false,
 		"variantStringRepresentation": model.ModelID,
 	}
 	return []map[string]any{variant}

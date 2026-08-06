@@ -459,6 +459,13 @@ func buildAvailableModelsPayload(reqCtx *RequestContext) (map[string]any, error)
 	if len(modelRefs) > 0 {
 		defaultModel = modelRefs[0]
 	}
+	if hybridMode {
+		// 混合模式：模型列表只含官方模型（buildAvailableModelEntries 跳过自定义
+		// adapter），默认模型与回退模型列表也必须取官方，避免 defaultModel 指向
+		// 不在列表中的 BYOK 自定义模型（否则 auto 对话可能选中不可见模型）。
+		modelRefs = officialModelRefs()
+		defaultModel = firstOfficialModelRef()
+	}
 	modelEntries := buildAvailableModelEntries(adapters, hybridMode)
 	return map[string]any{
 		"backgroundComposerModelConfig": map[string]any{
@@ -500,8 +507,18 @@ func buildDefaultModelNudgeDataPayload(reqCtx *RequestContext) (map[string]any, 
 	if err != nil {
 		return nil, err
 	}
+	hybridMode, err := readHybridModeFromDeps(reqCtx)
+	if err != nil {
+		return nil, err
+	}
+	modelRefs := collectModelAdapterRefs(adapters)
+	if hybridMode {
+		// 混合模式：模型列表只含官方模型，nudge 数据也不能引用已剔除的自定义
+		// adapter（否则客户端拿到不存在的 refs）。
+		modelRefs = officialModelRefs()
+	}
 	return map[string]any{
-		"modelsWithNoDefaultSwitch": collectModelAdapterRefs(adapters),
+		"modelsWithNoDefaultSwitch": modelRefs,
 		"nudgeDate":                 "0",
 	}, nil
 }
@@ -511,6 +528,15 @@ func buildUsableModelsPayload(reqCtx *RequestContext) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	hybridMode, err := readHybridModeFromDeps(reqCtx)
+	if err != nil {
+		return nil, err
+	}
+	if hybridMode {
+		// 混合模式：GetUsableModels 回退（官方账号未登录/透传失败）也只输出官方
+		// 模型，保证 auto 对话的可用模型列表不含 BYOK 自定义模型。
+		return map[string]any{"models": buildOfficialCLIModelDetails()}, nil
+	}
 	return map[string]any{"models": buildCLIModelDetails(adapters)}, nil
 }
 
@@ -519,7 +545,15 @@ func buildDefaultModelForCliPayload(reqCtx *RequestContext) (map[string]any, err
 	if err != nil {
 		return nil, err
 	}
+	hybridMode, err := readHybridModeFromDeps(reqCtx)
+	if err != nil {
+		return nil, err
+	}
 	models := buildCLIModelDetails(adapters)
+	if hybridMode {
+		// 混合模式：CLI 默认模型必须是官方模型（官方目录第一个）。
+		models = buildOfficialCLIModelDetails()
+	}
 	if len(models) == 0 {
 		return map[string]any{"model": map[string]any{}}, nil
 	}
@@ -531,7 +565,15 @@ func buildDefaultModelPayload(reqCtx *RequestContext) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	hybridMode, err := readHybridModeFromDeps(reqCtx)
+	if err != nil {
+		return nil, err
+	}
 	defaultModel := firstModelAdapterRef(adapters)
+	if hybridMode {
+		// 混合模式：默认模型必须是官方模型（官方目录第一个），禁止返回自定义模型。
+		defaultModel = firstOfficialModelRef()
+	}
 	return map[string]any{"model": defaultModel, "thinkingModel": defaultModel}, nil
 }
 
@@ -602,6 +644,15 @@ func buildDashboardGetMePayload(reqCtx *RequestContext) (map[string]any, error) 
 	if reqCtx != nil {
 		authID = authIDFromBearer(reqCtx.Headers.Get("authorization"))
 	}
+	email := legacyruntime.InjectAccountEmail
+	if hybridMode, err := readHybridModeFromDeps(reqCtx); err == nil && hybridMode {
+		if creds, ok := legacyruntime.ReadOfficialAccountCredentials(); ok {
+			email = creds.Email
+			if authID == "" {
+				authID = authIDFromJWT(creds.AccessToken)
+			}
+		}
+	}
 	if authID == "" {
 		authID = authIDFromJWT(legacyruntime.InjectAuthToken)
 	}
@@ -612,7 +663,7 @@ func buildDashboardGetMePayload(reqCtx *RequestContext) (map[string]any, error) 
 	return map[string]any{
 		"authId":            authID,
 		"userId":            localUltraDashboardUserID,
-		"email":             legacyruntime.InjectAccountEmail,
+		"email":             email,
 		"firstName":         "Cursor",
 		"lastName":          "Local",
 		"createdAt":         time.Now().UTC().Format(time.RFC3339),
@@ -691,74 +742,93 @@ func readHybridModeFromDeps(reqCtx *RequestContext) (bool, error) {
 	return enabled, nil
 }
 
+// effectiveAccountCredentials 返回当前生效的账号凭据：混合模式且有真实官方
+// 账号时用真实账号（与注入客户端的保持一致，客户端会话特征与透传官方请求的
+// token 才匹配），否则回退本地模拟账号（cursor@ai.com + fake token）。
+func effectiveAccountCredentials(reqCtx *RequestContext) (email, token string) {
+	email, token = legacyruntime.InjectAccountEmail, legacyruntime.InjectAuthToken
+	hybridMode, err := readHybridModeFromDeps(reqCtx)
+	if err == nil && hybridMode {
+		if creds, ok := legacyruntime.ReadOfficialAccountCredentials(); ok {
+			return creds.Email, creds.AccessToken
+		}
+	}
+	return email, token
+}
+
 func buildAvailableModelEntries(adapters []legacyruntime.ModelAdapterConfig, hybridMode bool) []map[string]any {
 	if len(adapters) == 0 && !hybridMode {
 		return []map[string]any{}
 	}
 	output := make([]map[string]any, 0, len(adapters)+len(OfficialModelEntries()))
-	for _, adapter := range adapters {
-		channelID := strings.TrimSpace(adapter.ID)
-		displayName := strings.TrimSpace(adapter.DisplayName)
-		modelID := strings.TrimSpace(adapter.ModelID)
-		tooltipData := strings.TrimSpace(adapter.TooltipData)
-		if channelID == "" || modelID == "" {
-			continue
+	// 混合模式：模型列表只输出官方模型（透传官方执行），BYOK 自定义模型不再
+	// 植入模型列表，保证 auto 对话只会在官方模型中选。
+	if !hybridMode {
+		for _, adapter := range adapters {
+			channelID := strings.TrimSpace(adapter.ID)
+			displayName := strings.TrimSpace(adapter.DisplayName)
+			modelID := strings.TrimSpace(adapter.ModelID)
+			tooltipData := strings.TrimSpace(adapter.TooltipData)
+			if channelID == "" || modelID == "" {
+				continue
+			}
+			modelDisplayName := displayName
+			if modelDisplayName == "" {
+				modelDisplayName = modelID
+			}
+			defaultThinkingEffort := defaultThinkingEffortForAdapter(adapter)
+			// 上下文窗口与 tooltip markdown 需在 entry 构建前算出（tooltip 展示用）。
+			contextTokens := resolveAvailableModelContextTokens(adapter)
+			tooltipMarkdown := buildModelTooltipMarkdown(tooltipData, adapter, contextTokens)
+			entry := map[string]any{
+				"clientDisplayName":                  displayName,
+				"defaultOn":                          true,
+				"degradationStatus":                  "DEGRADATION_STATUS_UNSPECIFIED",
+				"inputboxShortModelName":             displayName,
+				"isRecommendedForBackgroundComposer": false,
+				"name":                               channelID,
+				"namedModelSectionIndex":             1,
+				"parameterDefinitions":               buildThinkingEffortParameterDefinitions(adapter.Type),
+				"serverModelName":                    channelID,
+				"supportsAgent":                      true,
+				"supportsImages":                     true,
+				"supportsMaxMode":                    false,
+				"supportsNonMaxMode":                 true,
+				"supportsPlanMode":                   true,
+				"supportsSandboxing":                 true,
+				"supportsThinking":                   true,
+				"tagline":                            thinkingEffortDisplayName(defaultThinkingEffort),
+				"tooltipData": map[string]any{
+					"markdownContent": tooltipMarkdown,
+				},
+				"tooltipDataForMaxMode": map[string]any{
+					"markdownContent": tooltipMarkdown,
+				},
+				"variants": buildThinkingEffortVariants(adapter.Type, channelID, modelDisplayName, tooltipMarkdown, defaultThinkingEffort),
+			}
+			// 还原原生模型选择器元数据：上下文窗口（含 max 模式）、自动上下文上限、
+			// 展示价格、长上下文标记与「用户自建」标记。数据源优先 adapter 显式配置，
+			// 其次内置 modelcontext 目录（models.json 规则），缺失时省略对应字段。
+			if contextTokens > 0 && contextTokens <= math.MaxInt32 {
+				entry["contextTokenLimit"] = contextTokens
+				entry["contextTokenLimitForMaxMode"] = contextTokens
+				entry["autoContextMaxTokens"] = contextTokens
+				entry["supportsAutoContext"] = true
+			} else {
+				// 未知上下文时不声明自动上下文能力，避免字段自相矛盾。
+				entry["supportsAutoContext"] = false
+			}
+			entry["isLongContextOnly"] = false
+			entry["isUserAdded"] = true
+			if price := resolveAvailableModelDisplayPrice(adapter); price > 0 {
+				entry["price"] = price
+			}
+			output = append(output, entry)
 		}
-		modelDisplayName := displayName
-		if modelDisplayName == "" {
-			modelDisplayName = modelID
-		}
-		defaultThinkingEffort := defaultThinkingEffortForAdapter(adapter)
-		// 上下文窗口与 tooltip markdown 需在 entry 构建前算出（tooltip 展示用）。
-		contextTokens := resolveAvailableModelContextTokens(adapter)
-		tooltipMarkdown := buildModelTooltipMarkdown(tooltipData, adapter, contextTokens)
-		entry := map[string]any{
-			"clientDisplayName":                  displayName,
-			"defaultOn":                          true,
-			"degradationStatus":                  "DEGRADATION_STATUS_UNSPECIFIED",
-			"inputboxShortModelName":             displayName,
-			"isRecommendedForBackgroundComposer": false,
-			"name":                               channelID,
-			"namedModelSectionIndex":             1,
-			"parameterDefinitions":               buildThinkingEffortParameterDefinitions(adapter.Type),
-			"serverModelName":                    channelID,
-			"supportsAgent":                      true,
-			"supportsImages":                     true,
-			"supportsMaxMode":                    false,
-			"supportsNonMaxMode":                 true,
-			"supportsPlanMode":                   true,
-			"supportsSandboxing":                 true,
-			"supportsThinking":                   true,
-			"tagline":                            thinkingEffortDisplayName(defaultThinkingEffort),
-			"tooltipData": map[string]any{
-				"markdownContent": tooltipMarkdown,
-			},
-			"tooltipDataForMaxMode": map[string]any{
-				"markdownContent": tooltipMarkdown,
-			},
-			"variants": buildThinkingEffortVariants(adapter.Type, channelID, modelDisplayName, tooltipMarkdown, defaultThinkingEffort),
-		}
-		// 还原原生模型选择器元数据：上下文窗口（含 max 模式）、自动上下文上限、
-		// 展示价格、长上下文标记与「用户自建」标记。数据源优先 adapter 显式配置，
-		// 其次内置 modelcontext 目录（models.json 规则），缺失时省略对应字段。
-		if contextTokens > 0 && contextTokens <= math.MaxInt32 {
-			entry["contextTokenLimit"] = contextTokens
-			entry["contextTokenLimitForMaxMode"] = contextTokens
-			entry["autoContextMaxTokens"] = contextTokens
-			entry["supportsAutoContext"] = true
-		} else {
-			// 未知上下文时不声明自动上下文能力，避免字段自相矛盾。
-			entry["supportsAutoContext"] = false
-		}
-		entry["isLongContextOnly"] = false
-		entry["isUserAdded"] = true
-		if price := resolveAvailableModelDisplayPrice(adapter); price > 0 {
-			entry["price"] = price
-		}
-		output = append(output, entry)
 	}
-	// 混合模式：追加 Cursor 官方模型条目（透传官方执行，官方账号计费）。
-	// 仅当 hybridMode 开启时合并展示，避免未开启时模型选择器混入官方模型。
+	// 混合模式：输出 Cursor 官方模型条目（透传官方执行，官方账号计费）。
+	// hybridMode 开启时模型选择器只显示官方模型；未开启时保持自定义模型原样
+	//（不混入官方条目）。
 	if hybridMode {
 		output = append(output, OfficialModelEntries()...)
 	}

@@ -80,8 +80,8 @@ func TestBuildBootstrapStatsigConfigJSONDisablesAlwaysLocalDecompositionGate(t *
 }
 
 type fakeSystemSettingService struct {
-	adapters    []legacyruntime.ModelAdapterConfig
-	hybridMode  bool
+	adapters   []legacyruntime.ModelAdapterConfig
+	hybridMode bool
 }
 
 func (f *fakeSystemSettingService) ResolveModelAdapters(context.Context) ([]legacyruntime.ModelAdapterConfig, error) {
@@ -92,12 +92,19 @@ func (f *fakeSystemSettingService) HybridModeEnabled(context.Context) (bool, err
 	return f.hybridMode, nil
 }
 
-func newRequestContextWithAdapters(adapters []legacyruntime.ModelAdapterConfig) *RequestContext {
+func newRequestContextWithHybridMode(adapters []legacyruntime.ModelAdapterConfig, hybridMode bool) *RequestContext {
 	return &RequestContext{
 		Deps: &Dependencies{
-			SystemSettingService: &fakeSystemSettingService{adapters: adapters, hybridMode: true},
+			SystemSettingService: &fakeSystemSettingService{adapters: adapters, hybridMode: hybridMode},
 		},
 	}
+}
+
+func newRequestContextWithAdapters(adapters []legacyruntime.ModelAdapterConfig) *RequestContext {
+	// 默认构造带 adapters 的上下文时 hybridMode=true（既有测试语义：
+	// 混合模式下模型列表只含官方模型）。需要非 hybrid 的用例显式调用
+	// newRequestContextWithHybridMode(adapters, false)。
+	return newRequestContextWithHybridMode(adapters, true)
 }
 
 func TestEncodeDefaultModelForCliUsesAgentModelDetailsWireFormat(t *testing.T) {
@@ -119,16 +126,23 @@ func TestEncodeDefaultModelForCliUsesAgentModelDetailsWireFormat(t *testing.T) {
 	if model == nil {
 		t.Fatal("decoded default model is nil")
 	}
-	if model.GetModelId() != "channel-a" || model.GetDisplayModelId() != "channel-a" {
-		t.Fatalf("decoded channel IDs: model=%q display=%q", model.GetModelId(), model.GetDisplayModelId())
+	// 混合模式下 CLI 默认模型必须是官方模型（目录第一个），不得是自定义 channel。
+	wantModelID := firstOfficialModelRef()
+	if wantModelID == "" {
+		t.Fatal("expected non-empty official model ref")
 	}
-	if credentials := model.GetApiKeyCredentials(); credentials == nil || credentials.GetApiKey() != "provider-secret" || credentials.GetBaseUrl() != "https://provider.example/v1" {
-		t.Fatalf("decoded relay credentials: %#v", credentials)
+	if model.GetModelId() != wantModelID || model.GetDisplayModelId() != wantModelID {
+		t.Fatalf("decoded model IDs: model=%q display=%q, want %q", model.GetModelId(), model.GetDisplayModelId(), wantModelID)
+	}
+	// 官方模型无本地 apiKeyCredentials（透传官方执行，不携带本地密钥）。
+	if model.GetApiKeyCredentials() != nil {
+		t.Fatalf("official model must not carry local credentials, got %#v", model.GetApiKeyCredentials())
 	}
 }
 
 func TestEncodeDefaultModelForCliEmptyAdaptersYieldsEmptyModel(t *testing.T) {
-	payload, err := buildDefaultModelForCliPayload(newRequestContextWithAdapters(nil))
+	// 非混合模式 + 无自定义 adapter → 空 model。
+	payload, err := buildDefaultModelForCliPayload(newRequestContextWithHybridMode(nil, false))
 	if err != nil {
 		t.Fatalf("build default model for cli: %v", err)
 	}
@@ -253,7 +267,9 @@ func TestAllMockBuildersCompatibleWithCurrentProto(t *testing.T) {
 }
 
 func TestAvailableModelsPayloadDecodesWithAdapters(t *testing.T) {
-	reqCtx := newAuthRequestContext()
+	reqCtx := newRequestContextWithAdapters([]legacyruntime.ModelAdapterConfig{
+		{ID: "channel-a", DisplayName: "Channel A", ModelID: "claude-sonnet-4-5", ContextWindowTokens: 200000, Pricing: &legacyruntime.ModelPricing{Input: float64Ptr(3.0)}},
+	})
 	payload, err := AvailableModelsMockBuilder(reqCtx)
 	if err != nil {
 		t.Fatalf("builder: %v", err)
@@ -266,18 +282,29 @@ func TestAvailableModelsPayloadDecodesWithAdapters(t *testing.T) {
 	if err := proto.Unmarshal(encoded, response); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(response.GetModels()) != 1+len(OfficialModelEntries()) {
-		t.Fatalf("model count: got %d, want %d (1 custom + %d official)", len(response.GetModels()), 1+len(OfficialModelEntries()), len(OfficialModelEntries()))
+	// 混合模式（reqCtx hybrid=true）：模型列表只含官方模型，不含自定义 adapter。
+	officialCount := len(OfficialModelEntries())
+	if len(response.GetModels()) != officialCount {
+		t.Fatalf("model count: got %d, want %d (official only in hybrid mode)", len(response.GetModels()), officialCount)
+	}
+	for _, model := range response.GetModels() {
+		if model.GetName() == "channel-a" {
+			t.Fatal("custom adapter channel-a must not appear in hybrid mode")
+		}
 	}
 	model := response.GetModels()[0]
-	if model.GetName() != "channel-a" {
-		t.Fatalf("model name: got %q, want channel-a", model.GetName())
+	wantName := firstOfficialModelRef()
+	if wantName == "" {
+		t.Fatal("expected non-empty official model ref")
 	}
-	if model.GetContextTokenLimit() != 200000 {
-		t.Fatalf("contextTokenLimit: got %d, want 200000", model.GetContextTokenLimit())
+	if model.GetName() != wantName {
+		t.Fatalf("model name: got %q, want %q", model.GetName(), wantName)
 	}
-	if model.GetPrice() != 3.0 {
-		t.Fatalf("price: got %v, want 3.0", model.GetPrice())
+	if model.GetContextTokenLimit() <= 0 {
+		t.Fatalf("official model contextTokenLimit: got %d, want > 0", model.GetContextTokenLimit())
+	}
+	if model.GetPrice() <= 0 {
+		t.Fatalf("official model price: got %v, want > 0", model.GetPrice())
 	}
 }
 
@@ -293,9 +320,9 @@ func TestBuildAvailableModelEntriesEnrichesNativeMetadata(t *testing.T) {
 		},
 		{ID: "channel-b", DisplayName: "Channel B", ModelID: "unknown-model-xyz", ContextWindowTokens: 0, Pricing: nil},
 	}
-	entries := buildAvailableModelEntries(adapters, true)
-	if len(entries) != 2+len(OfficialModelEntries()) {
-		t.Fatalf("entry count: got %d, want %d (2 custom + %d official)", len(entries), 2+len(OfficialModelEntries()), len(OfficialModelEntries()))
+	entries := buildAvailableModelEntries(adapters, false)
+	if len(entries) != 2 {
+		t.Fatalf("entry count: got %d, want 2 (custom only in non-hybrid mode)", len(entries))
 	}
 	entryA := entries[0]
 	if got, ok := entryA["contextTokenLimit"].(int); !ok || got != 200000 {
@@ -334,8 +361,8 @@ func TestBuildAvailableModelEntriesEnrichesNativeMetadata(t *testing.T) {
 	if err := proto.Unmarshal(encoded, response); err != nil {
 		t.Fatalf("decode available models with aisserver proto: %v", err)
 	}
-	if len(response.GetModels()) != 2+len(OfficialModelEntries()) {
-		t.Fatalf("decoded model count: got %d, want %d (2 custom + %d official)", len(response.GetModels()), 2+len(OfficialModelEntries()), len(OfficialModelEntries()))
+	if len(response.GetModels()) != 2 {
+		t.Fatalf("decoded model count: got %d, want 2 (custom only in non-hybrid mode)", len(response.GetModels()))
 	}
 	decoded := response.GetModels()[0]
 	if decoded.GetContextTokenLimit() != 200000 {
@@ -427,5 +454,144 @@ func TestFormatTokenCount(t *testing.T) {
 		if got := formatTokenCount(tc.in); got != tc.want {
 			t.Fatalf("formatTokenCount(%d): got %q, want %q", tc.in, got, tc.want)
 		}
+	}
+}
+
+func TestAvailableModelsPayloadHybridModeExcludesCustomAdapters(t *testing.T) {
+	adapters := []legacyruntime.ModelAdapterConfig{{ID: "channel-a", DisplayName: "Channel A", ModelID: "claude-sonnet-4-5"}}
+	// hybrid 开启：响应模型列表不含任何自定义 adapter channelID。
+	hybridPayload, err := AvailableModelsMockBuilder(newRequestContextWithHybridMode(adapters, true))
+	if err != nil {
+		t.Fatalf("hybrid builder: %v", err)
+	}
+	hybridModels, _ := hybridPayload["models"].([]map[string]any)
+	if len(hybridModels) != len(OfficialModelEntries()) {
+		t.Fatalf("hybrid model count: got %d, want %d (official only)", len(hybridModels), len(OfficialModelEntries()))
+	}
+	for _, entry := range hybridModels {
+		if name, _ := entry["name"].(string); name == "channel-a" {
+			t.Fatal("hybrid AvailableModels must not contain custom adapter channel-a")
+		}
+	}
+	// 默认模型与回退列表也必须指向官方模型（不得指向不在列表中的自定义模型）。
+	composerConfig, _ := hybridPayload["composerModelConfig"].(map[string]any)
+	if defaultModel, _ := composerConfig["defaultModel"].(string); defaultModel != firstOfficialModelRef() {
+		t.Fatalf("hybrid defaultModel: got %q, want %q", defaultModel, firstOfficialModelRef())
+	}
+	for _, field := range []string{"bestOfNDefaultModels", "fallbackModels"} {
+		refs, _ := composerConfig[field].([]string)
+		for _, ref := range refs {
+			if ref == "channel-a" {
+				t.Fatalf("hybrid %s must not reference custom adapter, got %v", field, refs)
+			}
+		}
+	}
+	// hybrid 关闭：恢复为自定义 + 官方混合（现状回归，非 hybrid 行为不变）。
+	plainPayload, err := AvailableModelsMockBuilder(newRequestContextWithHybridMode(adapters, false))
+	if err != nil {
+		t.Fatalf("non-hybrid builder: %v", err)
+	}
+	plainModels, _ := plainPayload["models"].([]map[string]any)
+	foundCustom := false
+	for _, entry := range plainModels {
+		if name, _ := entry["name"].(string); name == "channel-a" {
+			foundCustom = true
+		}
+	}
+	if !foundCustom {
+		t.Fatal("non-hybrid AvailableModels must still contain custom adapter channel-a")
+	}
+}
+
+func TestUsableModelsPayloadHybridModeOnlyOfficial(t *testing.T) {
+	adapters := []legacyruntime.ModelAdapterConfig{{ID: "channel-a", APIKey: "secret", BaseURL: "https://provider.example/v1"}}
+	// hybrid 开启：GetUsableModels 回退响应只含官方模型（无本地凭据）。
+	hybridPayload, err := buildUsableModelsPayload(newRequestContextWithHybridMode(adapters, true))
+	if err != nil {
+		t.Fatalf("hybrid builder: %v", err)
+	}
+	hybridModels, _ := hybridPayload["models"].([]map[string]any)
+	if len(hybridModels) != len(officialModelRefs()) {
+		t.Fatalf("hybrid usable model count: got %d, want %d (official only)", len(hybridModels), len(officialModelRefs()))
+	}
+	for _, model := range hybridModels {
+		if modelID, _ := model["modelId"].(string); modelID == "channel-a" {
+			t.Fatal("hybrid usable models must not contain custom adapter channel-a")
+		}
+		if _, hasCreds := model["apiKeyCredentials"]; hasCreds {
+			t.Fatal("official usable model must not carry local apiKeyCredentials")
+		}
+	}
+	if first, _ := hybridModels[0]["modelId"].(string); first != firstOfficialModelRef() {
+		t.Fatalf("first hybrid usable model: got %q, want %q", first, firstOfficialModelRef())
+	}
+	// hybrid 关闭：只输出自定义模型（现状回归）。
+	plainPayload, err := buildUsableModelsPayload(newRequestContextWithHybridMode(adapters, false))
+	if err != nil {
+		t.Fatalf("non-hybrid builder: %v", err)
+	}
+	plainModels, _ := plainPayload["models"].([]map[string]any)
+	if len(plainModels) != 1 || plainModels[0]["modelId"] != "channel-a" {
+		t.Fatalf("non-hybrid usable models: got %v, want only channel-a", plainModels)
+	}
+}
+
+func TestDefaultModelPayloadHybridModeOfficial(t *testing.T) {
+	adapters := []legacyruntime.ModelAdapterConfig{{ID: "channel-a"}, {ID: "channel-b"}}
+	hybridPayload, err := buildDefaultModelPayload(newRequestContextWithHybridMode(adapters, true))
+	if err != nil {
+		t.Fatalf("hybrid builder: %v", err)
+	}
+	if model, _ := hybridPayload["model"].(string); model != firstOfficialModelRef() {
+		t.Fatalf("hybrid default model: got %q, want %q", model, firstOfficialModelRef())
+	}
+	// hybrid 关闭：默认模型为自定义第一个（现状回归）。
+	plainPayload, err := buildDefaultModelPayload(newRequestContextWithHybridMode(adapters, false))
+	if err != nil {
+		t.Fatalf("non-hybrid builder: %v", err)
+	}
+	if model, _ := plainPayload["model"].(string); model != "channel-a" {
+		t.Fatalf("non-hybrid default model: got %q, want channel-a", model)
+	}
+}
+
+func TestDefaultModelForCliPayloadNonHybridReturnsFirstCustom(t *testing.T) {
+	adapters := []legacyruntime.ModelAdapterConfig{{ID: "channel-a", APIKey: "secret", BaseURL: "https://provider.example/v1"}}
+	payload, err := buildDefaultModelForCliPayload(newRequestContextWithHybridMode(adapters, false))
+	if err != nil {
+		t.Fatalf("builder: %v", err)
+	}
+	model, _ := payload["model"].(map[string]any)
+	if modelID, _ := model["modelId"].(string); modelID != "channel-a" {
+		t.Fatalf("non-hybrid CLI default model: got %q, want channel-a", modelID)
+	}
+}
+
+func TestDefaultModelNudgeHybridModeUsesOfficialRefs(t *testing.T) {
+	adapters := []legacyruntime.ModelAdapterConfig{{ID: "channel-a"}, {ID: "channel-b"}}
+	hybridPayload, err := buildDefaultModelNudgeDataPayload(newRequestContextWithHybridMode(adapters, true))
+	if err != nil {
+		t.Fatalf("hybrid builder: %v", err)
+	}
+	refs, _ := hybridPayload["modelsWithNoDefaultSwitch"].([]string)
+	if len(refs) == 0 {
+		t.Fatal("hybrid nudge refs must be non-empty (official models)")
+	}
+	for _, ref := range refs {
+		if ref == "channel-a" || ref == "channel-b" {
+			t.Fatalf("hybrid nudge refs must not contain custom adapters, got %v", refs)
+		}
+	}
+	if !IsOfficialModel(refs[0]) {
+		t.Fatalf("hybrid nudge first ref %q is not an official model", refs[0])
+	}
+	// 非 hybrid 回归：返回自定义 refs。
+	plainPayload, err := buildDefaultModelNudgeDataPayload(newRequestContextWithHybridMode(adapters, false))
+	if err != nil {
+		t.Fatalf("non-hybrid builder: %v", err)
+	}
+	plainRefs, _ := plainPayload["modelsWithNoDefaultSwitch"].([]string)
+	if len(plainRefs) != 2 || plainRefs[0] != "channel-a" {
+		t.Fatalf("non-hybrid nudge refs: got %v, want [channel-a channel-b]", plainRefs)
 	}
 }

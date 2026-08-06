@@ -2,6 +2,7 @@ package backend
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -27,7 +28,7 @@ func encodeBidiAppendBody(t *testing.T, requestID string, message *agentv1.Agent
 		t.Fatal(err)
 	}
 	appendReq := &aiserverv1.BidiAppendRequest{
-		RequestId:  &aiserverv1.BidiRequestId{RequestId: requestID},
+		RequestId:   &aiserverv1.BidiRequestId{RequestId: requestID},
 		AppendSeqno: 1,
 		Data:        hex.EncodeToString(data),
 	}
@@ -98,6 +99,36 @@ func TestDecodeBidiAppendRequestMeta(t *testing.T) {
 		requestID, modelID := decodeBidiAppendRequestMeta([]byte("not-proto"))
 		if requestID != "" || modelID != "" {
 			t.Fatalf("expected empty meta for invalid body, got %q/%q", requestID, modelID)
+		}
+	})
+
+	t.Run("gzip_compressed_body", func(t *testing.T) {
+		// Cursor 客户端 BidiAppend 请求体可能 gzip 压缩（Content-Encoding: gzip）。
+		// 回归：外层路由判定须自行解压，否则 request_id/model 解析为空，
+		// 官方模型请求落入本地渠道报 "model channel not available"。
+		message := &agentv1.AgentClientMessage{
+			Message: &agentv1.AgentClientMessage_RunRequest{
+				RunRequest: &agentv1.AgentRunRequest{
+					ConversationId: proto.String("conv-gz"),
+					RequestedModel: &agentv1.RequestedModel{ModelId: "composer-2.5"},
+				},
+			},
+		}
+		body := encodeBidiAppendBody(t, "req-gz", message)
+		var buf bytes.Buffer
+		gzWriter := gzip.NewWriter(&buf)
+		if _, err := gzWriter.Write(body); err != nil {
+			t.Fatal(err)
+		}
+		if err := gzWriter.Close(); err != nil {
+			t.Fatal(err)
+		}
+		requestID, modelID := decodeBidiAppendRequestMeta(buf.Bytes())
+		if requestID != "req-gz" {
+			t.Fatalf("requestID: got %q, want req-gz", requestID)
+		}
+		if modelID != "composer-2.5" {
+			t.Fatalf("modelID: got %q, want composer-2.5", modelID)
 		}
 	})
 }
@@ -286,10 +317,10 @@ func TestOfficialBidiAppendRegistration(t *testing.T) {
 		}
 	})
 
-	t.Run("forward_failure_writes_error_response", func(t *testing.T) {
+	t.Run("official_forward_async_immediate_ack", func(t *testing.T) {
 		host := buildTestHost()
 		host.controlPlaneAuth = &fakeAuthProvider{signedIn: true, authorization: "fake-token"}
-		// 已登记官方 → 透传；fake client 返回错误 → 应写 502 而非挂起。
+		// 已登记官方 → 立即受理（200 空响应），异步透传失败仅记日志不阻塞客户端。
 		host.officialRequestIDs.Store("req-fail", time.Now())
 		inner := http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Fatal("should not reach local") })
 		deps := upstream.Dependencies{HTTPClient: &errHTTPClient{}}
@@ -297,8 +328,11 @@ func TestOfficialBidiAppendRegistration(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/bidi", bytes.NewReader(body))
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
-		if rec.Code != http.StatusBadGateway {
-			t.Fatalf("expected 502, got %d", rec.Code)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 immediate ack, got %d", rec.Code)
+		}
+		if len(rec.Body.Bytes()) != 0 {
+			t.Fatalf("expected empty ack body, got %d bytes", len(rec.Body.Bytes()))
 		}
 	})
 }
