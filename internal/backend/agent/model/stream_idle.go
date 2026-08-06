@@ -28,12 +28,17 @@ type providerStreamIdleWatchdog struct {
 	cancel  context.CancelCauseFunc
 	timeout time.Duration
 	timer   *time.Timer
+	// cancelDone 在监听 parent 取消的 goroutine 退出时关闭，供 Stop 等待，避免 goroutine 泄漏。
+	cancelDone chan struct{}
 
 	mu       sync.Mutex
 	body     io.Closer
 	stopped  bool
 	timedOut bool
-	err      error
+	// canceledByParent 标记因 parent ctx 取消而主动关闭 body（用户中止请求），
+	// 与 timedOut 区分：前者不应报「静默超时」错误，只是及时释放连接。
+	canceledByParent bool
+	err              error
 }
 
 func newProviderStreamIdleWatchdog(parent context.Context, timeout time.Duration) (context.Context, *providerStreamIdleWatchdog) {
@@ -43,13 +48,42 @@ func newProviderStreamIdleWatchdog(parent context.Context, timeout time.Duration
 	timeout = normalizeProviderStreamIdleTimeoutDuration(timeout)
 	ctx, cancel := context.WithCancelCause(parent)
 	watchdog := &providerStreamIdleWatchdog{
-		ctx:     ctx,
-		cancel:  cancel,
-		timeout: timeout,
-		err:     providerStreamIdleTimeoutError(timeout),
+		ctx:         ctx,
+		cancel:      cancel,
+		timeout:     timeout,
+		err:         providerStreamIdleTimeoutError(timeout),
+		cancelDone:  make(chan struct{}),
 	}
 	watchdog.timer = time.AfterFunc(watchdog.timeout, watchdog.expire)
+	// 监听 parent 取消：用户中止请求时立即关闭响应体，让阻塞中的 scanner.Scan() 返回，
+	// 而不必等到 30s 的 chunkTimeout 才释放上游连接与连接池槽位。
+	// 监听 parent（而非 watchdog.ctx）是为了避免正常 Stop() 的 cancel(nil) 误触发本路径。
+	go watchdog.watchParentCancel(parent)
 	return ctx, watchdog
+}
+
+// watchParentCancel 在 parent ctx 取消时关闭已 Attach 的 body。
+// 用 mu 与 stopped 协调，保证 body 只被关闭一次；与 expire 路径互斥。
+func (watchdog *providerStreamIdleWatchdog) watchParentCancel(parent context.Context) {
+	defer close(watchdog.cancelDone)
+	select {
+	case <-parent.Done():
+	case <-watchdog.ctx.Done():
+		// watchdog 自身 ctx 已结束（Stop 或 expire），无需再监听。
+		return
+	}
+	watchdog.mu.Lock()
+	if watchdog.stopped || watchdog.timedOut {
+		watchdog.mu.Unlock()
+		return
+	}
+	// 标记并由本路径关闭 body；不设置 timedOut，避免误报静默超时错误。
+	watchdog.canceledByParent = true
+	body := watchdog.body
+	watchdog.mu.Unlock()
+	if body != nil {
+		_ = body.Close()
+	}
 }
 
 func (watchdog *providerStreamIdleWatchdog) AttachBody(body io.Closer) {
@@ -93,6 +127,11 @@ func (watchdog *providerStreamIdleWatchdog) Stop() {
 	}
 	watchdog.mu.Unlock()
 	watchdog.cancel(nil)
+	// 等待监听 parent 取消的 goroutine 退出，避免泄漏。
+	// cancel(nil) 让 watchdog.ctx.Done() 触发该 goroutine 的第二个 select case 而返回。
+	if watchdog.cancelDone != nil {
+		<-watchdog.cancelDone
+	}
 }
 
 func (watchdog *providerStreamIdleWatchdog) Err() error {

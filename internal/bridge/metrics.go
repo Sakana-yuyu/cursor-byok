@@ -91,6 +91,15 @@ func (service *MetricsService) GetRecentRequestMetricsAbnormalCount() (int, erro
 	return historymetrics.LoadRecentRequestAbnormalCount(appdata.UsageFilePath())
 }
 
+// GetRecentRequestMetricsDegradedCount 返回 provider_call 事件的降级数（degraded 非空），
+// 供「请求明细」页展示跨分页的降级总数，与异常计数同口径。
+func (service *MetricsService) GetRecentRequestMetricsDegradedCount() (int, error) {
+	if err := appdata.EnsureAssistantHome(); err != nil {
+		return 0, err
+	}
+	return historymetrics.LoadRecentRequestDegradedCount(appdata.UsageFilePath())
+}
+
 // GetMetricsRangeSummary 按时间范围与模型过滤后汇总 token（仅 provider_call）。
 // startUnixMs/endUnixMs 为毫秒时间戳；<=0 表示不限制该端。model 为空表示全部模型。
 // 轮次计数来自 turn_finalized 事件（与 token 分离），按相同时间范围聚合。

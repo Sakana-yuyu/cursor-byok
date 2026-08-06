@@ -62,6 +62,10 @@ async function handleRetryDebugUsage() {
       return;
     }
     message.success("已重新统计调试日志占用");
+  } catch (error) {
+    // 与同处横幅的 handleClearDebugLogs 对齐：refreshDebugLogUsage 抛错时
+    // 不能让 rejection 直接冒泡到点击处理器，需提示用户。
+    await showActionError("读取失败", toUserError(error));
   } finally {
     debugUsageRetrying.value = false;
   }

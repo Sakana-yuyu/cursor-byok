@@ -87,6 +87,9 @@ type usageFileEvent struct {
 	BaseURL          string    `json:"base_url,omitempty"`
 	GroupName        string    `json:"group_name,omitempty"`
 	ErrorCode        string    `json:"error_code,omitempty"`
+	Degraded         string    `json:"degraded,omitempty"`
+	TTFTMS           int64     `json:"ttft_ms,omitempty"`
+	DurationMS       int64     `json:"duration_ms,omitempty"`
 	InputTokens      int64     `json:"input_tokens"`
 	OutputTokens     int64     `json:"output_tokens"`
 	CacheReadTokens  int64     `json:"cache_read_tokens"`

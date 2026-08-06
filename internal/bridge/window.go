@@ -726,6 +726,12 @@ func (s *WindowService) ExportLogs() (string, error) {
 		if relErr != nil {
 			return relErr
 		}
+		// 跳过历史导出的 export-*.zip，避免每次导出都把之前所有导出包重新打包
+		// 进去（嵌套 zip 且无界增长）。relPath 走的是 OS 分隔符，做归一化判断。
+		base := filepath.Base(relPath)
+		if strings.HasPrefix(base, "export-") && strings.HasSuffix(base, ".zip") {
+			return nil
+		}
 		writer, createErr := zipWriter.Create(relPath)
 		if createErr != nil {
 			return createErr

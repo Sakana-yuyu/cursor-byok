@@ -230,7 +230,20 @@ func channelFailureCooldown(err error) time.Duration {
 	switch status {
 	case 401, 402, 403:
 		return 10 * time.Minute
-	case 429, 500, 502, 503, 504:
+	case 429:
+		// 尊重上游 Retry-After 限流信号，钳制到 [1min, 10min]：
+		// 下限避免过短冷却在限流期间反复撞墙；上限避免异常大值让渠道长期不可用。
+		if retryAfter := ParseRetryAfterHeader(statusErr.Headers); retryAfter > 0 {
+			if retryAfter < channelFailureCooldownMin {
+				return channelFailureCooldownMin
+			}
+			if retryAfter > channelFailureCooldownMax {
+				return channelFailureCooldownMax
+			}
+			return retryAfter
+		}
+		return time.Minute
+	case 500, 502, 503, 504:
 		return time.Minute
 	default:
 		return 0

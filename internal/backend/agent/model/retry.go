@@ -9,7 +9,6 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -25,8 +24,6 @@ const (
 	providerRetryBaseDelay = 200 * time.Millisecond
 	// providerRetryMaxDelay 表示指数退避的最大间隔。
 	providerRetryMaxDelay = 5 * time.Second
-	// providerRetryMaxRetryAfter 表示 Retry-After 允许等待的上限，避免异常大的值阻塞请求。
-	providerRetryMaxRetryAfter = 30 * time.Second
 	// providerRetrySummaryHeader 是内部头，用于把重试摘要透传给 http_error.go；不会回发给上游或模型。
 	providerRetrySummaryHeader = "X-Zcode-Provider-Retry-Summary"
 )
@@ -95,7 +92,7 @@ func doProviderRequestWithRetry(
 			}
 			lastErr = err
 			lastStatus = 0
-			nextDelay = providerRetryBackoff(attempt, 0)
+			nextDelay = providerRetryBackoff(attempt)
 			continue
 		}
 
@@ -111,7 +108,8 @@ func doProviderRequestWithRetry(
 			annotateProviderRetrySummary(resp, attempt)
 			return resp, nil
 		}
-		nextDelay = providerRetryBackoff(attempt, parseRetryAfter(resp))
+		// 注意：Retry-After 的解析与遵循由 router 的渠道冷却（channelFailureCooldown）负责，
+		// 此处不再在不可达分支里重复解析（providerRetryMaxAttempts=1 时 attempt>0 分支无法到达）。
 		_ = resp.Body.Close()
 	}
 
@@ -129,48 +127,15 @@ func isTransientProviderStatus(status int) bool {
 	return status >= 500 && status <= 599
 }
 
-// providerRetryBackoff 计算下一次重试前的等待时长；优先遵循 Retry-After，否则指数退避加抖动。
-func providerRetryBackoff(attempt int, retryAfter time.Duration) time.Duration {
-	if retryAfter > 0 {
-		if retryAfter > providerRetryMaxRetryAfter {
-			return providerRetryMaxRetryAfter
-		}
-		return retryAfter
-	}
+// providerRetryBackoff 计算下一次重试前的等待时长（指数退避加抖动）。
+// Retry-After 的遵循由 router 的渠道冷却负责（见 ParseRetryAfterHeader），此处只负责纯退避。
+func providerRetryBackoff(attempt int) time.Duration {
 	backoff := providerRetryBaseDelay << attempt
 	if backoff <= 0 || backoff > providerRetryMaxDelay {
 		backoff = providerRetryMaxDelay
 	}
 	jitter := time.Duration(rand.Int63n(int64(backoff)/2 + 1))
 	return backoff/2 + jitter
-}
-
-// parseRetryAfter 解析 429 响应上的 Retry-After 头，支持秒数与 HTTP 日期两种形式。
-func parseRetryAfter(resp *http.Response) time.Duration {
-	if resp == nil {
-		return 0
-	}
-	if ms := strings.TrimSpace(resp.Header.Get("retry-after-ms")); ms != "" {
-		if milliseconds, err := strconv.Atoi(ms); err == nil && milliseconds > 0 {
-			return time.Duration(milliseconds) * time.Millisecond
-		}
-	}
-	raw := strings.TrimSpace(resp.Header.Get("Retry-After"))
-	if raw == "" {
-		return 0
-	}
-	if seconds, err := strconv.Atoi(raw); err == nil {
-		if seconds <= 0 {
-			return 0
-		}
-		return time.Duration(seconds) * time.Second
-	}
-	if when, err := http.ParseTime(raw); err == nil {
-		if delta := time.Until(when); delta > 0 {
-			return delta
-		}
-	}
-	return 0
 }
 
 // sleepWithContext 在等待退避时长期间尊重 ctx 取消/超时。

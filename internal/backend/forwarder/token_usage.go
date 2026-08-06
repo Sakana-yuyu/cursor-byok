@@ -30,6 +30,9 @@ type turnUsageSnapshot struct {
 	BaseURL           string
 	GroupName         string
 	ErrorCode         string
+	// Degraded 标记「能返回但体验降级」的请求原因（移植自 cursor2api 的 degraded 诊断）。
+	// 空串表示正常；取值见 degradedReason* 常量。
+	Degraded          string
 	InputTokens       int64
 	OutputTokens      int64
 	CacheReadTokens   int64
@@ -37,6 +40,29 @@ type turnUsageSnapshot struct {
 	UsagePresent      bool
 	CacheReadPresent  bool
 	CacheWritePresent bool
+}
+
+// degradedReason* 是 provider_call 事件的 degraded 取值：请求「成功返回」但质量/可信度降级，
+// 与 status=provider_error（失败）区分开，供请求明细展示。
+const (
+	// degradedReasonSyntheticShellResult：shell 工具超时/断流后注入了合成 <shell-incomplete> 结果，
+	// 模型看到的并非真实执行结果（工具「假成功」）。
+	degradedReasonSyntheticShellResult = "synthetic_shell_result"
+)
+
+// consumeStreamDegradedReason 读取并清零流上的 degraded 标记，返回本次要透传的原因。
+// 标记为「一次性消费」：只对紧随其后的那一次 provider_call 生效，避免同回合后续请求重复标注。
+func consumeStreamDegradedReason(stream *ActiveStream) string {
+	if stream == nil {
+		return ""
+	}
+	stream.mu.Lock()
+	defer stream.mu.Unlock()
+	if !stream.ShellSyntheticRecoveryInTurn {
+		return ""
+	}
+	stream.ShellSyntheticRecoveryInTurn = false
+	return degradedReasonSyntheticShellResult
 }
 
 func (snapshot turnUsageSnapshot) hasAny() bool {
@@ -333,6 +359,7 @@ func (service *Service) recordTurnUsageSnapshot(stream *ActiveStream, conversati
 	modelName := ""
 	startedAt := time.Time{}
 	lastEventAt := time.Now().UTC()
+	var timing *providerCallTiming
 	if stream != nil {
 		stream.mu.Lock()
 		modelID = strings.TrimSpace(stream.ModelID)
@@ -341,6 +368,7 @@ func (service *Service) recordTurnUsageSnapshot(stream *ActiveStream, conversati
 		if !stream.UpdatedAt.IsZero() {
 			lastEventAt = stream.UpdatedAt
 		}
+		timing = stream.LastProviderTiming
 		stream.mu.Unlock()
 	}
 	if strings.TrimSpace(modelName) == "" {
@@ -385,6 +413,20 @@ func (service *Service) recordTurnUsageSnapshot(stream *ActiveStream, conversati
 	}
 	effectiveModelCallID := firstNonEmpty(strings.TrimSpace(modelCallID), strings.TrimSpace(requestID))
 	normalizedStatus := normalizeUsageProviderStatus(status, usage.UsagePresent)
+	// 消费本回合的降级标记（shell 合成恢复等「假成功」场景，只标记紧随其后的这一次调用）：
+	// 仅 completed 时写入；失败时同样清零丢弃——失败本身是更严重的异常（前端异常优先展示），
+	// 且避免标记写进 provider_error 事件造成计数口径混乱，或残留到下一轮。
+	if degraded := consumeStreamDegradedReason(stream); degraded != "" {
+		if normalizedStatus == "completed" && usage.Degraded == "" {
+			usage.Degraded = degraded
+		}
+	}
+	// 时序只在正常完成的调用上有意义：失败/无 usage 时保留零值。
+	var ttftMS, durationMS int64
+	if timing != nil && normalizedStatus == "completed" {
+		ttftMS = timing.TTFTMS
+		durationMS = timing.DurationMS
+	}
 	if service.usageStore != nil {
 		if err := service.usageStore.UpsertEvent(usageFileEvent{
 			EventID:          usageEventID(requestID, effectiveModelCallID),
@@ -405,6 +447,9 @@ func (service *Service) recordTurnUsageSnapshot(stream *ActiveStream, conversati
 			BaseURL:          channelBaseURL,
 			GroupName:        channelGroupName,
 			ErrorCode:        errorCode,
+			Degraded:         strings.TrimSpace(usage.Degraded),
+			TTFTMS:           ttftMS,
+			DurationMS:       durationMS,
 			InputTokens:      usage.InputTokens,
 			OutputTokens:     usage.OutputTokens,
 			CacheReadTokens:  usage.CacheReadTokens,
@@ -426,6 +471,7 @@ func (service *Service) recordTurnUsageSnapshot(stream *ActiveStream, conversati
 				Model:       modelName,
 				Status:      strings.TrimSpace(status),
 				ErrorText:   strings.TrimSpace(errorText),
+				Degraded:    strings.TrimSpace(usage.Degraded),
 				UpdatedAt:   lastEventAt,
 			}
 			return nil
@@ -473,6 +519,7 @@ func upsertStandaloneUsageSnapshot(store *UsageFileStore, requestID, modelCallID
 		BaseURL:          strings.TrimSpace(usage.BaseURL),
 		GroupName:        strings.TrimSpace(usage.GroupName),
 		ErrorCode:        errorCode,
+		Degraded:         strings.TrimSpace(usage.Degraded),
 		InputTokens:      usage.InputTokens,
 		OutputTokens:     usage.OutputTokens,
 		CacheReadTokens:  usage.CacheReadTokens,

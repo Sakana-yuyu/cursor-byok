@@ -491,18 +491,82 @@ func (store *responseCacheStore) flushToDisk() {
 // providerCacheKeyShape 是参与哈希的请求归一化视图，只包含决定输出的字段。
 // 刻意排除每次调用都不同的标识（RequestID/RunID/ModelCallID/ConversationID）与
 // 非确定性的观测/工件指针，以保证 byte-identical 的请求得到一致缓存键。
+//
+// Messages 不直接使用 modeladapter.Message，而走 normalizedCacheMessage 视图：
+// 后者剔除 provider 每次调用都会变化但又不影响请求语义的字段
+// （ReasoningSignature/ReasoningSignatureSource、OpenAIResponsesReasoningID/Status/Summary、
+// ToolCall 的 ID/OpenAIResponsesID/OpenAIResponsesCallID/OpenAIResponsesStatus）。
+// 这些字段是 provider 对某一次特定调用的临时背书/标识，不是请求的语义内容；
+// 若不剔除，只要历史里出现过 thinking 或工具调用，缓存 key 每次都不同，命中率趋近于 0。
+// 归一化只影响 key 计算，缓存的回放内容仍是完整的原始事件序列（含正确 signature）。
 type providerCacheKeyShape struct {
-	ModelID            string                 `json:"model_id"`
-	Mode               int32                  `json:"mode"`
-	ThinkingEffort     string                 `json:"thinking_effort"`
-	Messages           []modeladapter.Message `json:"messages"`
-	StableMessageCount int                    `json:"stable_message_count"`
-	Tools              []json.RawMessage      `json:"tools"`
-	MaxTokens          int                    `json:"max_tokens"`
+	ModelID            string                  `json:"model_id"`
+	Mode               int32                   `json:"mode"`
+	ThinkingEffort     string                  `json:"thinking_effort"`
+	Messages           []normalizedCacheMessage `json:"messages"`
+	StableMessageCount int                     `json:"stable_message_count"`
+	Tools              []json.RawMessage       `json:"tools"`
+	MaxTokens          int                     `json:"max_tokens"`
 	// RequestKnobs 包含动态估算字段（compiled_prompt_tokens_estimate 等），导致每次请求 key 不同
 	// CompileSummary 每次 compile 可能变化
 	// 移除这两个字段以提高缓存命中率
 	RequestBodyOverride map[string]any `json:"request_body_override"`
+}
+
+// normalizedCacheMessage 是参与缓存键计算的消息归一化视图。
+// 只保留决定请求语义的字段：Role、正文 Content、结构化 ContentParts、推理正文 ReasoningContent，
+// 以及工具调用的语义部分（Function.Name/Arguments、ToolCallID 关联、tool 名称）。
+// 刻意省略 provider 临时背书类字段（见 providerCacheKeyShape 注释）。
+type normalizedCacheMessage struct {
+	Role             string                         `json:"role"`
+	Content          string                         `json:"content"`
+	ContentParts     []modeladapter.ContentPart     `json:"content_parts,omitempty"`
+	ReasoningContent string                         `json:"reasoning_content,omitempty"`
+	ToolCalls        []normalizedCacheToolCall      `json:"tool_calls,omitempty"`
+	ToolCallID       string                         `json:"tool_call_id,omitempty"`
+	Name             string                         `json:"name,omitempty"`
+}
+
+// normalizedCacheToolCall 保留工具调用的语义字段，剔除 provider 临时 ID/状态。
+type normalizedCacheToolCall struct {
+	Index    int                             `json:"index,omitempty"`
+	Type     string                          `json:"type"`
+	Function modeladapter.ToolCallFunctionShape `json:"function"`
+}
+
+// normalizeMessagesForCacheKey 把原始消息列表转成参与缓存键的归一化视图，
+// 剔除每次调用都变化但不影响语义的 provider 临时字段。
+func normalizeMessagesForCacheKey(messages []modeladapter.Message) []normalizedCacheMessage {
+	if len(messages) == 0 {
+		return nil
+	}
+	out := make([]normalizedCacheMessage, len(messages))
+	for i, msg := range messages {
+		normalized := normalizedCacheMessage{
+			Role:             msg.Role,
+			Content:          msg.Content,
+			ReasoningContent: msg.ReasoningContent,
+			ToolCallID:       msg.ToolCallID,
+			Name:             msg.Name,
+		}
+		// ContentParts 含文本/图片等语义内容，整体保留（图片数据本身就是语义）。
+		if len(msg.ContentParts) > 0 {
+			normalized.ContentParts = msg.ContentParts
+		}
+		if len(msg.ToolCalls) > 0 {
+			calls := make([]normalizedCacheToolCall, len(msg.ToolCalls))
+			for j, call := range msg.ToolCalls {
+				calls[j] = normalizedCacheToolCall{
+					Index:    call.Index,
+					Type:     call.Type,
+					Function: call.Function,
+				}
+			}
+			normalized.ToolCalls = calls
+		}
+		out[i] = normalized
+	}
+	return out
 }
 
 // normalizeCacheMaxTokens 把 max_tokens 归一化到 1024 分桶：同一请求因预算恢复/调整
@@ -521,7 +585,7 @@ func providerCacheKey(req ProviderRequest) string {
 		ModelID:            req.ModelID,
 		Mode:               int32(req.Mode),
 		ThinkingEffort:     req.ThinkingEffort,
-		Messages:           req.Messages,
+		Messages:           normalizeMessagesForCacheKey(req.Messages),
 		StableMessageCount: req.StableMessageCount,
 		Tools:              req.Tools,
 		MaxTokens:          normalizeCacheMaxTokens(req.MaxTokens),

@@ -307,6 +307,21 @@ const balancePrimary = computed(() => {
   return parts.join(" / ");
 });
 
+// 低余额告警阈值（按货币，移植自 new-api 的渠道余额阈值联动；百分比模式按 5% 判低）。
+const BALANCE_ALERT_THRESHOLDS = { USD: 2, CNY: 10, EUR: 2, JPY: 200, HKD: 15 };const balanceAlert = computed(() => {
+  const data = balanceState.data;
+  if (!data || !data.supported || data.unlimited) return null;
+  const remaining = data.remaining != null && Number.isFinite(Number(data.remaining)) ? Number(data.remaining) : null;
+  if (remaining == null) return null;
+  if (data.currency === "%") {
+    if (remaining < 5) return { text: `剩余 ${remaining.toFixed(0)}%，额度偏低` };
+    return null;
+  }
+  const threshold = BALANCE_ALERT_THRESHOLDS[String(data.currency || "USD").toUpperCase()] ?? 5;
+  if (remaining < threshold) return { text: `余额不足 ${formatMoney(threshold, data.currency)}` };
+  return null;
+});
+
 async function loadBalance(forceRefresh = false) {
   const meta = supplierMeta.value;
   if (!meta || balanceState.loading) return;
@@ -411,14 +426,19 @@ function buildProbeAdapter(model) {
 async function handleProbeCatalog() {
   if (!catalogModels.value.length) return;
   await catalogProbe.probeAll(catalogModels.value, buildProbeAdapter, { concurrency: 3 });
-  // 探测完成后仅保留可用模型的勾选
-  const next = new Set();
+  // 探测完成后仅移除明确失败的模型，绝不重新勾选用户已手动取消的项，
+  // 否则会用探测结果覆盖用户的 deliberate 选择。
+  const failed = new Set();
   for (const model of catalogModels.value) {
-    if (catalogProbe.statusOf(model.id) === "ok") {
-      next.add(catalogSelectionKey(model.id));
+    if (catalogProbe.statusOf(model.id) === "fail") {
+      failed.add(catalogSelectionKey(model.id));
     }
   }
-  selectedCatalogModels.value = next;
+  if (failed.size) {
+    selectedCatalogModels.value = new Set(
+      [...selectedCatalogModels.value].filter((key) => !failed.has(key)),
+    );
+  }
 }
 
 function catalogSelectionKey(modelID) {
@@ -722,8 +742,9 @@ async function deleteSelectedAdapters() {
     cancelText: "取消",
   });
   if (!confirmed) return;
-  await removeAdapters(targets);
-  selectedAdapterIDs.value = new Set();
+  const result = await removeAdapters(targets);
+  // 仅在删除成功时清空选择；失败时保留选中项，便于用户重试。
+  if (result?.ok) selectedAdapterIDs.value = new Set();
 }
 
 async function deleteFailedAdapters() {
@@ -741,13 +762,14 @@ async function deleteFailedAdapters() {
 
 async function removeAdapters(targets) {
   const list = Array.isArray(targets) ? targets.filter(Boolean) : [];
-  if (list.length === 0) return;
+  if (list.length === 0) return { ok: true };
   // 一次性原子删除，避免逐个删除的多次落盘与中途失败的半删状态
   const result = await deleteModelAdaptersBatch(list);
   if (!result.ok) {
     await showModal({ title: "删除失败", content: String(result.error || "操作失败").trim() });
   }
   await reloadUserConfig({ modelAdaptersOnly: true });
+  return result;
 }
 
 onMounted(async () => {
@@ -963,9 +985,9 @@ async function saveBulkEdit(force = false) {
                 <template v-else-if="balanceState.data && balanceState.data.supported">
                   <span
                     class="center-row gap-1 rounded-full px-2 py-0.5"
-                    :class="balanceState.stale ? 'bg-[#a3a3a3]/15 text-[#c9c9c9]' : 'bg-[#10AD5D]/15 text-[#6ee7a5]'"
-                    :title="balanceState.data.unlimited ? '该账户额度不限' : balanceSecondary"
-                  >{{ balancePrimary }}<span v-if="balanceState.stale" class="text-[11px] text-[#8f8f8f]">（可能过期）</span></span>
+                    :class="balanceAlert ? 'bg-[#f87171]/15 text-[#fca5a5]' : (balanceState.stale ? 'bg-[#a3a3a3]/15 text-[#c9c9c9]' : 'bg-[#10AD5D]/15 text-[#6ee7a5]')"
+                    :title="balanceState.data.unlimited ? '该账户额度不限' : (balanceAlert ? balanceAlert.text : balanceSecondary)"
+                  ><span v-if="balanceAlert" class="text-[11px]">⚠</span>{{ balancePrimary }}<span v-if="balanceState.stale" class="text-[11px] text-[#8f8f8f]">（可能过期）</span></span>
                   <span v-if="!balanceState.data.unlimited && balanceSecondary" class="hidden text-[#666] sm:inline">{{ balanceSecondary }}</span>
                 </template>
                 <span

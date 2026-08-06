@@ -1,7 +1,7 @@
 <script setup>
 import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
-import { fetchRecentRequestMetrics, fetchRecentRequestMetricsCount, fetchRecentRequestMetricsAbnormalCount } from "@/services/clientApi";
+import { fetchRecentRequestMetrics, fetchRecentRequestMetricsCount, fetchRecentRequestMetricsAbnormalCount, fetchRecentRequestMetricsDegradedCount } from "@/services/clientApi";
 import { appState, reloadUserConfig } from "@/state/appState";
 import { providerIcon, providerLabel } from "@/utils/providerMeta";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
@@ -45,6 +45,12 @@ function goToPage(p) {
 const pagedItems = computed(() => rows.value);
 
 const formatTime = (value) => (value ? new Date(value).toLocaleString() : "-");
+const formatDuration = (value) => {
+  const ms = Number(value || 0);
+  if (ms <= 0) return "-";
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+};
 const formatRate = (value) => (value == null ? "-" : `${(Number(value) * 100).toFixed(1)}%`);
 const formatNumber = (value) => Number(value || 0).toLocaleString();
 
@@ -71,13 +77,28 @@ function isAbnormalRow(row) {
 
 const abnormalCount = ref(0);
 
+// 降级（degraded）原因 -> 中文说明；请求成功返回但体验/可信度降级（移植自 cursor2api 的 degraded 诊断）。
+const DEGRADED_LABELS = {
+  synthetic_shell_result: "shell 命令超时/断流，注入合成结果，命令可能未完整执行",
+};
+function degradedForRow(row) {
+  const key = String(row?.degraded || "").trim();
+  return key ? { key, label: DEGRADED_LABELS[key] || key } : null;
+}
+
+// 全量降级计数（跨分页，服务端口径：degraded 只写在正常完成的调用上），
+// 与全量异常计数同口径展示，刷新时随数据一起加载。
+const degradedCount = ref(0);
+
 function statusTone(row) {
   if (isAbnormalRow(row)) {
     const status = String(row?.status || "").trim();
-    if (status === "provider_error") return { bg: "#3a1414", text: "#fca5a5", label: "错误" };
-    return { bg: "#3a2a14", text: "#fbbf24", label: "无用量" };
+    if (status === "provider_error") return { bg: "#3a1414", text: "#fca5a5", label: "错误", reason: "" };
+    return { bg: "#3a2a14", text: "#fbbf24", label: "无用量", reason: "" };
   }
-  return { bg: "#143524", text: "#86efac", label: normalizeUsageStatusLabel(row?.status) };
+  const degraded = degradedForRow(row);
+  if (degraded) return { bg: "#3a3a14", text: "#fde047", label: "降级", reason: degraded.label };
+  return { bg: "#143524", text: "#86efac", label: normalizeUsageStatusLabel(row?.status), reason: "" };
 }
 
 const hasUsageRows = computed(() => visibleRows.value.some((row) => row.usagePresent));
@@ -249,12 +270,14 @@ async function refresh({ keepPage = false } = {}) {
   loading.value = true;
   error.value = "";
   try {
-    const [count, abnormal] = await Promise.all([
+    const [count, abnormal, degraded] = await Promise.all([
       fetchRecentRequestMetricsCount(),
       fetchRecentRequestMetricsAbnormalCount(),
+      fetchRecentRequestMetricsDegradedCount(),
     ]);
     totalCount.value = count;
     abnormalCount.value = abnormal;
+    degradedCount.value = degraded;
     if (!keepPage) page.value = 1;
     if (page.value > totalPages.value) page.value = totalPages.value;
     const offset = (page.value - 1) * pageSize.value;
@@ -321,6 +344,7 @@ onUnmounted(() => {
         <p class="mt-1 text-sm text-[#8f8f8f]">
           按请求查看 token 分类、缓存命中率与计费信息。
           <span v-if="abnormalCount > 0" class="text-[#fbbf24]">异常 {{ abnormalCount }} 条</span>
+          <span v-if="degradedCount > 0" class="text-[#fde047]">降级 {{ degradedCount }} 条</span>
           <span v-else-if="hasUsageRows" class="text-[#6ee7a5]">已记录 usage</span>
         </p>
       </div>
@@ -357,6 +381,7 @@ onUnmounted(() => {
           <tr class="border-b border-[#343434]">
             <th class="p-3 font-medium">状态</th>
             <th class="p-3 font-medium">时间</th>
+            <th class="p-3 font-medium">耗时</th>
             <th class="p-3 font-medium">供应商</th>
             <th class="p-3 font-medium">错误码</th>
             <th class="p-3 font-medium">模型</th>
@@ -371,10 +396,10 @@ onUnmounted(() => {
         </thead>
         <tbody>
           <tr v-if="loading && displayRows.length === 0">
-            <td colspan="12" class="p-10 text-center text-[#777]">正在读取请求明细…</td>
+            <td colspan="13" class="p-10 text-center text-[#777]">正在读取请求明细…</td>
           </tr>
           <tr v-else-if="!loading && displayRows.length === 0">
-            <td colspan="12" class="p-10 text-center text-[#777]">
+            <td colspan="13" class="p-10 text-center text-[#777]">
               暂无已记录请求
               <span v-if="totalCount > 0" class="block pt-1 text-xs text-[#555]">记录可能刚被清空或刷新，可点击右上角「刷新」重试</span>
             </td>
@@ -388,12 +413,21 @@ onUnmounted(() => {
               <span
                 class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px]"
                 :style="{ backgroundColor: item.tone.bg, color: item.tone.text }"
+                :title="item.tone.reason || undefined"
               >
                 {{ item.tone.label }}
               </span>
             </td>
             <td class="whitespace-nowrap p-3 text-[#a3a3a3]" style="font-family: var(--font-num)">
               {{ formatTime(item.row.at) }}
+            </td>
+            <td class="whitespace-nowrap p-3 text-[#a3a3a3]" style="font-family: var(--font-num)">
+              <template v-if="item.row.durationMs > 0">
+                <span :title="`首字延迟 ${formatDuration(item.row.ttftMs)}`">首字 {{ formatDuration(item.row.ttftMs) }}</span>
+                <span class="text-[#666]"> · </span>
+                <span :title="`整体耗时 ${formatDuration(item.row.durationMs)}`">总 {{ formatDuration(item.row.durationMs) }}</span>
+              </template>
+              <span v-else class="text-[#666]">-</span>
             </td>
             <td class="p-3">
               <span

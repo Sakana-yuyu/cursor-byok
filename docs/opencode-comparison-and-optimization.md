@@ -127,7 +127,7 @@
 
 | # | opencode 机制（参考） | cursor-byok 现状 | 建议 | 目标文件 | 优先级 |
 |---|---|---|---|---|---|
-| C1 | 声明式 `Agent.Info`（agent.ts:35-56：name/mode/model/prompt/steps/permission） | 子代理仅 `subagent_type` 字符串 + `LookupSubagentModelOverride`（agent/core/types.go:27）；mode 为 proto 枚举（:345） | 引入轻量"子代理注册表"（配置或代码声明）：name → {prompt 片段, 模型覆盖, 工具白名单, maxSteps}，Task 工具按名字查表，替代散落的字符串分支；保持向后兼容（缺省走现有逻辑） | backend/agent/core/types.go、forwarder/delegation_local.go、config/types.go | 中 |
+| C1 | 声明式 `Agent.Info`（agent.ts:35-56：name/mode/model/prompt/steps/permission） | 子代理仅 `subagent_type` 字符串 + `LookupSubagentModelOverride`（agent/core/types.go:27）；mode 为 proto 枚举（:345） | ✅ 已实施：代码声明式注册表（`agent/core/subagent_registry.go`，explore/generalPurpose/browserUse 内置角色）+ 配置驱动覆盖（`DelegationConfig.SubagentProfiles`，读时合并：覆盖 > 内置，空片段=禁用注入）+ 委派设置页「子代理角色」区块（增删/编辑/自动保存）；仅作用于本地委派路径，Cursor 原生子代理由客户端管理；工具白名单/maxSteps 仍为预留字段 | backend/agent/core/subagent_registry.go、server/config/delegation.go、forwarder/delegation_cursor.go、DelegationSettings.vue | 已完成（白名单/maxSteps 预留） |
 | C2 | step 级 checkpoint + patch 回滚（snapshot/index.ts:36-45、revert.ts:38-88、processor.ts:435-484） | turn 级会话回退（rewind.go:38,220） | 评估是否将现有 rewind 升级为 step 粒度（每个 provider pass 记录文件变更集）；成本高，建议作为远期项，先出设计再决定 | forwarder/rewind.go、step/recorder.go | 低（远期） |
 
 ---

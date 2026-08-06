@@ -107,7 +107,7 @@ func firstSubagentOverrides(values ...map[string]runtimecore.SubagentModelOverri
 	return nil
 }
 
-func buildDelegatedCursorTaskRequest(stream *ActiveStream, pending runtimecore.PendingExec, invocation runtimecore.ToolInvocation, executionMode string, modelGroupID string) delegation.TaskRequest {
+func buildDelegatedCursorTaskRequest(stream *ActiveStream, pending runtimecore.PendingExec, invocation runtimecore.ToolInvocation, executionMode string, modelGroupID string, subagentProfiles map[string]string) delegation.TaskRequest {
 	openContext := buildExecOpenContextForStream(stream, nil)
 	args, _ := runtimecore.DecodeArgsMap(invocation.ArgsJSON)
 	parentModel := ""
@@ -116,6 +116,9 @@ func buildDelegatedCursorTaskRequest(stream *ActiveStream, pending runtimecore.P
 		parentModel = firstNonEmpty(stream.ModelName, stream.ModelID)
 		stream.mu.Unlock()
 	}
+	subagentType := delegatedTaskSubagentType(invocation.ArgsJSON)
+	// C1 子代理注册表：按 subagent_type 注入角色片段（配置覆盖 > 内置；缺省类型原样透传）。
+	prompt := runtimecore.ApplySubagentPromptFragment(subagentType, runtimecore.ReadStringArg(args, "prompt"), subagentProfiles)
 	return delegation.TaskRequest{
 		ParentRequest:                activeStreamRequestID(stream),
 		ParentExecID:                 strings.TrimSpace(pending.ExecID),
@@ -123,8 +126,8 @@ func buildDelegatedCursorTaskRequest(stream *ActiveStream, pending runtimecore.P
 		ConversationID:               openContext.ConversationID,
 		RootConversationID:           openContext.RootConversationID,
 		ArgsJSON:                     append([]byte(nil), invocation.ArgsJSON...),
-		SubagentType:                 delegatedTaskSubagentType(invocation.ArgsJSON),
-		Prompt:                       strings.TrimSpace(runtimecore.ReadStringArg(args, "prompt")),
+		SubagentType:                 subagentType,
+		Prompt:                       strings.TrimSpace(prompt),
 		Description:                  strings.TrimSpace(runtimecore.ReadStringArg(args, "description")),
 		Readonly:                     runtimecore.ReadBoolArg(args, "readonly", "readOnly"),
 		RunInBackground:              runtimecore.ReadBoolArg(args, "run_in_background", "runInBackground"),

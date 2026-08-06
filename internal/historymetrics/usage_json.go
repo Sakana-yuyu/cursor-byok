@@ -42,6 +42,9 @@ type usageFileEvent struct {
 	BaseURL          string    `json:"base_url"`
 	GroupName        string    `json:"group_name"`
 	ErrorCode        string    `json:"error_code"`
+	Degraded         string    `json:"degraded,omitempty"`
+	TTFTMS           int64     `json:"ttft_ms,omitempty"`
+	DurationMS       int64     `json:"duration_ms,omitempty"`
 	InputTokens      int64     `json:"input_tokens"`
 	OutputTokens     int64     `json:"output_tokens"`
 	CacheReadTokens  int64     `json:"cache_read_tokens"`
@@ -112,6 +115,9 @@ func LoadRecentRequestMetrics(path string, limit int, offset int, includeCacheWr
 			BaseURL:          baseURL,
 			GroupName:        strings.TrimSpace(event.GroupName),
 			ErrorCode:        strings.TrimSpace(event.ErrorCode),
+			Degraded:         strings.TrimSpace(event.Degraded),
+			TTFTMS:           event.TTFTMS,
+			DurationMS:       event.DurationMS,
 			InputTokens:      event.InputTokens,
 			OutputTokens:     event.OutputTokens,
 			CacheReadTokens:  event.CacheReadTokens,
@@ -183,6 +189,35 @@ func LoadRecentTurnEvents(path string) ([]RequestMetric, error) {
 		})
 	}
 	return result, nil
+}
+
+// LoadRecentRequestDegradedCount 返回 usage.json 中 provider_call 事件的降级数，
+// 供「请求明细」页展示跨分页的降级总数（与 LoadRecentRequestAbnormalCount 同口径：
+// 仅统计 provider_call；degraded 只写在正常完成的调用上，异常行不计入）。
+func LoadRecentRequestDegradedCount(path string) (int, error) {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("read usage file: %w", err)
+	}
+	var doc struct {
+		RecentEvents []usageFileEvent `json:"recent_events"`
+	}
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return 0, fmt.Errorf("decode usage file: %w", err)
+	}
+	count := 0
+	for _, event := range doc.RecentEvents {
+		if !IsProviderCall(event.Kind) {
+			continue
+		}
+		if strings.TrimSpace(event.Degraded) != "" {
+			count++
+		}
+	}
+	return count, nil
 }
 
 // LoadRecentRequestAbnormalCount 返回 usage.json 中 provider_call 事件的全量异常数，

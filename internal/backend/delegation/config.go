@@ -36,6 +36,9 @@ type RuntimeConfig struct {
 	VisionDelegationEnabled bool
 	VisionModelID           string
 	VisionMode              string
+	// SubagentProfiles 子代理角色覆盖：subagentType → 自定义角色片段（空串 = 不注入）。
+	// 只影响本地委派（BYOK worker）路径的角色注入，Cursor 原生子代理由客户端管理。
+	SubagentProfiles map[string]string
 }
 
 type RuntimeConfigProvider interface {
@@ -86,6 +89,7 @@ func NormalizeRuntimeConfig(config RuntimeConfig) RuntimeConfig {
 		config.Groups = cloned
 	}
 	config.ModelNames = cloneRuntimeStringMap(config.ModelNames)
+	config.SubagentProfiles = cloneRuntimeStringMap(config.SubagentProfiles)
 	return config
 }
 

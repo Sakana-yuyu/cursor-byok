@@ -35,6 +35,9 @@ type RequestMetric struct {
 	BaseURL          string    `json:"baseUrl"`
 	GroupName        string    `json:"groupName"`
 	ErrorCode        string    `json:"errorCode"`
+	Degraded         string    `json:"degraded"`
+	TTFTMS           int64     `json:"ttftMs"`
+	DurationMS       int64     `json:"durationMs"`
 	InputTokens      int64     `json:"inputTokens"`
 	OutputTokens     int64     `json:"outputTokens"`
 	CacheReadTokens  int64     `json:"cacheReadTokens"`

@@ -99,6 +99,9 @@ const groupStates = reactive({});
 const groupNameDrafts = reactive({});
 const expandedGroupStates = reactive({});
 const maxConcurrencyDraft = ref("");
+const groupCreating = ref(false);
+// 创建组 ID 的递增序号，避免同毫秒内多次点击产生 Date.now() 碰撞。
+let groupCreateSeq = 0;
 
 let delegationSaveTail = Promise.resolve();
 let maxConcurrencyDraftRevision = 0;
@@ -399,6 +402,7 @@ function delegationSnapshot(value = appState.delegation) {
     groups: Array.isArray(source.groups) ? cloneConfigValue(source.groups) : [],
     supervision: normalizeSupervision(source.supervision),
     visionDelegation: normalizeVisionDelegation(source.visionDelegation),
+    subagentProfiles: normalizeSubagentProfileRows(source.subagentProfiles),
   };
 }
 
@@ -416,7 +420,55 @@ function reconcileSavedDelegation(savedValue, submitted, current) {
     submitted.visionDelegation,
     current.visionDelegation,
   );
+  reconciled.subagentProfiles = normalizeSubagentProfileRows(reconciled.subagentProfiles);
   return delegationSnapshot(reconciled);
+}
+
+// --- 子代理角色（本地委派角色覆盖，subagentType → 角色片段） ---
+// 覆盖优先于内置注册表；片段留空 = 禁用该类型注入。仅影响本地委派（BYOK worker）路径，
+// Cursor 原生子代理由客户端管理。
+const subagentProfileRows = ref([]);
+
+function normalizeSubagentProfileRows(rows) {
+  const seen = new Set();
+  const result = [];
+  for (const item of Array.isArray(rows) ? rows : []) {
+    const subagentType = String(item?.subagentType || "").trim();
+    if (!subagentType || seen.has(subagentType)) continue;
+    seen.add(subagentType);
+    result.push({ subagentType, promptFragment: String(item?.promptFragment || "").trim() });
+  }
+  return result;
+}
+
+function syncSubagentProfileRowsFromState() {
+  subagentProfileRows.value = normalizeSubagentProfileRows(appState.delegation?.subagentProfiles);
+}
+
+// 初始化时从 appState 同步一次；编辑期 rows 是唯一编辑源（persistSubagentProfiles 写回 appState），
+// 不监听外部变化重载，避免用户编辑中其他字段保存触发 reconcile 时输入被重置。
+syncSubagentProfileRowsFromState();
+
+function addSubagentProfileRow() {
+  subagentProfileRows.value.push({ subagentType: "", promptFragment: "" });
+}
+
+function removeSubagentProfileRow(index) {
+  subagentProfileRows.value.splice(index, 1);
+  void persistSubagentProfiles();
+}
+
+// 编辑后保存：把当前行写回 appState 并走既有委派保存通道（autosave + 串行队列）。
+async function persistSubagentProfiles() {
+  appState.delegation.subagentProfiles = normalizeSubagentProfileRows(subagentProfileRows.value);
+  await props.autosave.run("delegation.subagent-profiles", async () => {
+    await serializeDelegationSave();
+  });
+}
+
+// blur/change 时保存对应行（长文本片段避免逐键触发）。
+function flushSubagentProfileRow() {
+  void persistSubagentProfiles();
 }
 
 async function persistDelegationConfig() {
@@ -476,7 +528,9 @@ async function saveSupervisionField(field, value) {
   } catch (error) {
     if (state.revision === revision) {
       supervisionConfig[field] = previous;
-      appState.delegation.supervision = { ...supervisionConfig };
+      // 不要用 supervisionConfig 整体覆盖——它仍持有其他字段的未提交草稿，
+      // 会抹掉 persistDelegationConfig catch 中已完成的精确对账。只回退本字段。
+      appState.delegation.supervision = { ...appState.delegation.supervision, [field]: previous };
     }
     state.error = toUserError(error);
     supervisionSaveState.error = state.error;
@@ -639,7 +693,9 @@ async function saveVisionField(field, value) {
   } catch (error) {
     if (state.revision === revision) {
       visionConfig[field] = previous;
-      appState.delegation.visionDelegation = { ...visionConfig };
+      // 与 saveSupervisionField 同理：仅回退本字段，避免抹掉 persistDelegationConfig
+      // catch 中的精确对账结果。
+      appState.delegation.visionDelegation = { ...appState.delegation.visionDelegation, [field]: previous };
     }
     state.error = toUserError(error);
   } finally {
@@ -844,12 +900,15 @@ async function retryGroupName(groupID) {
 }
 
 function handleAddGroup() {
-  if (!appState.configReady) {
+  if (!appState.configReady || groupCreating.value) {
     return;
   }
+  groupCreating.value = true;
+  // 序号递增确保即使同毫秒内多次调用也得到唯一 ID。
+  const id = `delegation-group-${Date.now()}-${++groupCreateSeq}`;
   const nextIndex = appState.delegation.groups.length + 1;
   const group = {
-    id: `delegation-group-${Date.now()}`,
+    id,
     name: String(`委派模型组 ${nextIndex}`),
     enabled: true,
     modelIDs: [],
@@ -860,7 +919,9 @@ function handleAddGroup() {
   appState.delegation.groups.push(group);
   expandedGroupStates[group.id] = true;
   clearGroupErrors(group.id);
-  void persistGroupImmediate(group.id, "create");
+  void persistGroupImmediate(group.id, "create").finally(() => {
+    groupCreating.value = false;
+  });
 }
 
 function handleGroupEnabledChange(groupID, enabled) {
@@ -1429,7 +1490,7 @@ watch(
         <div class="text-sm text-[#8f8f8f]">
           当前共 {{ appState.delegation.groups.length }} 个模型组
         </div>
-        <Button variant="default" :disabled="!appState.configReady" @click="handleAddGroup">
+        <Button variant="default" :disabled="!appState.configReady || groupCreating" @click="handleAddGroup">
           新增模型组
         </Button>
       </div>
@@ -1469,6 +1530,62 @@ watch(
           @delete="handleDeleteGroup(group.id)"
           @retry="retryGroup(group.id)"
         />
+      </div>
+    </SettingsSection>
+
+    <SettingsSection
+      title="子代理角色"
+      description="本地委派（BYOK worker）按 subagent_type 注入的角色约束：自定义片段覆盖内置角色，留空表示对该类型禁用注入；仅影响本地委派路径，Cursor 原生子代理由客户端管理。编辑失焦或增删时自动保存。"
+      collapsible
+      :default-expanded="false"
+    >
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div class="text-sm text-[#8f8f8f]">
+          内置角色：<span class="text-[#a3a3a3]">explore</span>（代码库探索）、<span class="text-[#a3a3a3]">generalPurpose</span>（通用编码）、<span class="text-[#a3a3a3]">browserUse</span>（浏览器自动化）——配置后覆盖内置。
+        </div>
+        <Button variant="default" :disabled="!appState.configReady" @click="addSubagentProfileRow">
+          新增角色
+        </Button>
+      </div>
+
+      <div
+        v-if="!subagentProfileRows.length"
+        class="rounded-[8px] border border-dashed border-[#444] px-3 py-5 text-sm text-[#858585]"
+      >
+        尚未配置自定义子代理角色，本地委派使用内置角色。
+      </div>
+
+      <div v-else class="space-y-3">
+        <div
+          v-for="(row, index) in subagentProfileRows"
+          :key="index"
+          class="rounded-[8px] border border-[#343434] bg-[#232323] p-3"
+        >
+          <div class="flex items-center justify-between gap-3">
+            <label class="w-48 shrink-0 text-xs text-[#a3a3a3]">
+              子代理类型
+              <input
+                v-model="row.subagentType"
+                class="mt-1 h-8 w-full rounded-[6px] border border-[#3f3f3f] bg-[#1e1e1e] px-2 text-xs text-white outline-none transition-colors focus:border-[#10AD5D]"
+                placeholder="如 explore / generalPurpose"
+                @change="flushSubagentProfileRow"
+              />
+            </label>
+            <Button variant="text" class="shrink-0" @click="removeSubagentProfileRow(index)">
+              删除
+            </Button>
+          </div>
+          <label class="mt-2 block text-xs text-[#a3a3a3]">
+            角色片段（留空 = 禁用注入）
+            <textarea
+              v-model="row.promptFragment"
+              rows="3"
+              class="mt-1 w-full resize-y rounded-[6px] border border-[#3f3f3f] bg-[#1e1e1e] px-2 py-1.5 text-xs leading-5 text-white outline-none transition-colors focus:border-[#10AD5D]"
+              placeholder="描述该类型子代理的工作方式与约束，将拼接到 Task prompt 之后"
+              @change="flushSubagentProfileRow"
+            ></textarea>
+          </label>
+        </div>
       </div>
     </SettingsSection>
 

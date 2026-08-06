@@ -23,6 +23,7 @@ import {
   GetRecentRequestMetrics,
   GetRecentRequestMetricsCount,
   GetRecentRequestMetricsAbnormalCount,
+  GetRecentRequestMetricsDegradedCount,
   GetProviderEvents,
   ResetUsageMetrics,
 } from "@bindings/cursor/internal/bridge/metricsservice.js";
@@ -42,7 +43,7 @@ const desktopMethods = {
   OpenMetricsDetailWindow, OpenRequestMetricsWindow, OpenStatsOverlayWindow, UpdateStatsOverlayWindow, SetStatsOverlayAlwaysOnTop,
   CloseStatsOverlayWindow, SetMainWindowCloseAction, CloseApplication, GetModelEditorContext, TestModelAdapter, GetModelAdapterTestResults, GetRecentRequestMetrics,
   GetMetricsRangeSummary, GetMetricsTokenBuckets, GetProviderSpendSummary, GetLocalCacheStats,
-  GetRecentRequestMetricsCount, GetRecentRequestMetricsAbnormalCount,
+  GetRecentRequestMetricsCount, GetRecentRequestMetricsAbnormalCount, GetRecentRequestMetricsDegradedCount,
   GetProviderEvents,
   ResetUsageMetrics,
   FetchModelCatalog, ProbeModelAdapter, QueryProviderBalance, GetPromptInjectionSettings,
@@ -218,6 +219,11 @@ export function fetchRecentRequestMetricsCount() {
 // 全量异常请求数（跨分页），用于「请求明细」页异常总数展示。
 export function fetchRecentRequestMetricsAbnormalCount() {
   return desktopOrMock(0, "@bindings/cursor/internal/bridge/metricsservice.js", "GetRecentRequestMetricsAbnormalCount");
+}
+
+// 全量降级请求数（跨分页），用于「请求明细」页降级总数展示（与异常计数同口径）。
+export function fetchRecentRequestMetricsDegradedCount() {
+  return desktopOrMock(0, "@bindings/cursor/internal/bridge/metricsservice.js", "GetRecentRequestMetricsDegradedCount");
 }
 
 export function fetchMetricsRangeSummary(startUnixMs = 0, endUnixMs = 0, model = "") {

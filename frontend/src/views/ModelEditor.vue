@@ -465,11 +465,17 @@ async function persistDraft() {
 }
 
 async function closeEditor() {
-  if (isBrowserPreview) {
-    await router.push("/model-config");
-    return;
+  try {
+    if (isBrowserPreview) {
+      await router.push("/model-config");
+      return;
+    }
+    await runtimeWindow.Close();
+  } catch (error) {
+    // 窗口关闭或导航失败不应让 rejection 冒泡到点击处理器造成未处理异常，
+    // 记录到错误提示即可；用户仍可通过原生关闭按钮离开。
+    errorMessage.value = toUserError(error) || "关闭窗口失败";
   }
-  await runtimeWindow.Close();
 }
 
 async function handleSave() {
@@ -1077,7 +1083,7 @@ onMounted(async () => {
                 @update:model-value="handleSupplierPreset"
               />
               <Button
-                v-if="!manualAddMode && isQuickMode"
+                v-if="!manualAddMode && !isQuickMode"
                 variant="default"
                 :disabled="!draft.baseURL || !draft.apiKey"
                 @click="openCatalogPage"

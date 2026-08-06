@@ -78,6 +78,7 @@ type ConversationProviderCall struct {
 	Model       string    `json:"model,omitempty"`
 	Status      string    `json:"status,omitempty"`
 	ErrorText   string    `json:"error_text,omitempty"`
+	Degraded    string    `json:"degraded,omitempty"`
 	UpdatedAt   time.Time `json:"updated_at,omitempty"`
 }
 
@@ -126,6 +127,14 @@ type StreamSubscriber struct {
 type manualCompactionDirective struct {
 	Requested   bool
 	Instruction string
+}
+
+// providerCallTiming 记录一次 provider 调用的时序摘要，随 provider_call 事件落库，
+// 供请求明细展示首字延迟（TTFB）与整体耗时（移植自 cursor2api 的请求阶段耗时时间线）。
+type providerCallTiming struct {
+	TTFTMS       int64  `json:"ttft_ms"`
+	DurationMS   int64  `json:"duration_ms"`
+	FinishReason string `json:"finish_reason,omitempty"`
 }
 
 type ActiveStream struct {
@@ -212,6 +221,13 @@ type ActiveStream struct {
 	// MaxTokensRecoveryAttempts 记录本回合因 max_tokens 超限触发降级重试的次数，
 	// 用于限制重试次数避免无限循环。
 	MaxTokensRecoveryAttempts int
+	// ShellSyntheticRecoveryInTurn 标记本回合发生过 shell 合成结果恢复（<shell-incomplete>），
+	// 下一次 provider_call 记录 usage 时消费并标记 degraded（工具「假成功」，见 token_usage.go）。
+	ShellSyntheticRecoveryInTurn bool
+	// LastProviderTiming 记录最近一次 provider 调用的时序（TTFB/总耗时/结束原因），
+	// 由 artifactRecorder.RecordLLMSummary 写入、recordTurnUsageSnapshot 读取落库。
+	// 每次新调用开始（RecordLLMRequest）时清空，避免失败路径读到上一 pass 的旧值。
+	LastProviderTiming *providerCallTiming
 	// StaleToolResultSnipApplied 标记本 provider pass 在压缩评估阶段已对陈旧工具结果做过持久化 snip/prune。
 	// driveProvider 据此在 maybeCompactBeforeProvider 返回「不压缩」后重新快照+编译一次，
 	// 让后续 provider 请求用上 snip 后的新鲜历史（参考 tool_result_snip.go）。

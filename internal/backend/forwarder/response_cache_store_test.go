@@ -1,6 +1,7 @@
 package forwarder
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -102,4 +103,76 @@ func TestResponseCacheStoreCorruptFile(t *testing.T) {
 	// 损坏文件不应阻止后续写入
 	store.put("k", &responseCacheEntry{events: []modeladapter.ModelEvent{{Kind: modeladapter.ModelEventKindTurnFinished}}, expiresAt: time.Now().Add(time.Hour)}, 10)
 	store.flushToDisk()
+}
+
+// TestProviderCacheKeyNormalizationStability 验证缓存键对 provider 临时字段免疫：
+// 两条语义相同、仅 ReasoningSignature / ToolCall ID / OpenAIResponsesReasoningID 不同的消息，
+// 必须产出相同的缓存键；否则历史里一出现 thinking/工具调用，命中率就会塌缩到 0。
+func TestProviderCacheKeyNormalizationStability(t *testing.T) {
+	base := ProviderRequest{
+		ModelID:        "claude-test",
+		Mode:           0,
+		ThinkingEffort: "high",
+		Messages: []modeladapter.Message{
+			{Role: "user", Content: "hello"},
+			{
+				Role:             "assistant",
+				ReasoningContent: "thinking about it",
+				Content:          "answer",
+				ToolCalls: []modeladapter.ToolCallDescriptor{
+					{
+						Index: 0,
+						Type:  "function",
+						Function: modeladapter.ToolCallFunctionShape{
+							Name:      "search",
+							Arguments: `{"q":"x"}`,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// 副本：注入 provider 每次调用都会变化的临时字段。
+	variant := base
+	variant.Messages = make([]modeladapter.Message, len(base.Messages))
+	copy(variant.Messages, base.Messages)
+	variant.Messages[1] = modeladapter.Message{
+		Role:                        base.Messages[1].Role,
+		ReasoningContent:            base.Messages[1].ReasoningContent,
+		Content:                     base.Messages[1].Content,
+		ReasoningSignature:          "sig-abc-123", // provider 每次签发不同
+		ReasoningSignatureSource:    "anthropic",
+		OpenAIResponsesReasoningID:  "resp_xyz",
+		OpenAIResponsesReasoningStatus: "completed",
+		OpenAIResponsesReasoningSummary: json.RawMessage(`["summary"]`),
+		ToolCalls: []modeladapter.ToolCallDescriptor{{
+			Index:                 0,
+			Type:                  "function",
+			Function:              base.Messages[1].ToolCalls[0].Function,
+			ID:                    "call_001",       // provider 生成的临时 ID
+			OpenAIResponsesID:     "respitem_001",   // provider 临时 ID
+			OpenAIResponsesCallID: "callclient_001", // provider 临时 ID
+			OpenAIResponsesStatus: "completed",
+		}},
+	}
+
+	keyBase := providerCacheKey(base)
+	keyVariant := providerCacheKey(variant)
+	if keyBase == "" {
+		t.Fatal("base key 不应为空")
+	}
+	if keyBase != keyVariant {
+		t.Fatalf("归一化失效：语义相同的请求得到不同缓存键\nbase=%s\nvariant=%s", keyBase, keyVariant)
+	}
+
+	// 真正改变语义（推理正文），key 必须随之变化。
+	semanticVariant := base
+	semanticVariant.Messages = make([]modeladapter.Message, len(base.Messages))
+	copy(semanticVariant.Messages, base.Messages)
+	semanticVariant.Messages[1] = base.Messages[1]
+	semanticVariant.Messages[1].ReasoningContent = "thinking about something DIFFERENT"
+	if keySemantic := providerCacheKey(semanticVariant); keySemantic == keyBase {
+		t.Fatal("改变推理正文必须改变缓存键，否则归一化过度")
+	}
 }

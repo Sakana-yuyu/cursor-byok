@@ -53,6 +53,8 @@ func newArtifactRecorder(store *ConversationFileStore, broker *StreamBroker, deb
 }
 
 func (recorder *artifactRecorder) RecordLLMRequest(requestID string, _ string, modelCallID string, payload map[string]any) (string, error) {
+	// 新一次 provider 调用开始：清掉上一 pass 的时序，避免失败路径读到旧值。
+	recorder.clearStreamProviderTiming(requestID)
 	session, err := recorder.ensureSession(requestID, modelCallID)
 	if err != nil {
 		return "", err
@@ -90,6 +92,8 @@ func (recorder *artifactRecorder) AppendLLMResponseChunk(requestID string, runID
 }
 
 func (recorder *artifactRecorder) RecordLLMSummary(requestID string, _ string, modelCallID string, payload map[string]any) (string, error) {
+	// 流式调用结束：把 TTFB/总耗时/结束原因暂存到 stream，供 recordTurnUsageSnapshot 落库。
+	recorder.storeStreamProviderTiming(requestID, payload)
 	session, err := recorder.ensureSession(requestID, modelCallID)
 	if err != nil {
 		return "", err
@@ -142,6 +146,39 @@ func (recorder *artifactRecorder) ClearActiveArtifacts(requestID string, modelCa
 	recorder.mu.Lock()
 	delete(recorder.sessions, artifactSessionKey(requestID, modelCallID))
 	recorder.mu.Unlock()
+}
+
+// storeStreamProviderTiming 把 summary payload 中的时序写入对应 stream，供 usage 记录读取。
+// 失败/找不到 stream 时静默跳过（usage 记录会缺时序字段，不影响请求本身）。
+func (recorder *artifactRecorder) storeStreamProviderTiming(requestID string, payload map[string]any) {
+	if recorder == nil || recorder.broker == nil || len(payload) == 0 {
+		return
+	}
+	stream, ok := recorder.broker.Get(strings.TrimSpace(requestID))
+	if !ok || stream == nil {
+		return
+	}
+	stream.mu.Lock()
+	stream.LastProviderTiming = &providerCallTiming{
+		TTFTMS:       nonNegativeInt64(readInt64Value(payload["ttft_ms"])),
+		DurationMS:   nonNegativeInt64(readInt64Value(payload["duration_ms"])),
+		FinishReason: strings.TrimSpace(readStringValue(payload["finish_reason"])),
+	}
+	stream.mu.Unlock()
+}
+
+// clearStreamProviderTiming 在每次 provider 调用开始时清空时序，避免读到上一 pass 的旧值。
+func (recorder *artifactRecorder) clearStreamProviderTiming(requestID string) {
+	if recorder == nil || recorder.broker == nil {
+		return
+	}
+	stream, ok := recorder.broker.Get(strings.TrimSpace(requestID))
+	if !ok || stream == nil {
+		return
+	}
+	stream.mu.Lock()
+	stream.LastProviderTiming = nil
+	stream.mu.Unlock()
 }
 
 func (recorder *artifactRecorder) ensureSession(requestID string, modelCallID string) (artifactSession, error) {

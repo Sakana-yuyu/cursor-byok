@@ -755,9 +755,7 @@ export function validateModelAdapters(source) {
     if (!adapter.apiKey) {
       return `${prefix} 的访问密钥不能为空`;
     }
-    if (!adapter.tooltipData) {
-      return `${prefix} 的悬停提示不能为空`;
-    }
+    // 备注（tooltipData）在编辑器中标注为可选，不应阻止保存。
     if (!adapter.modelID) {
       return `${prefix} 的模型标识不能为空`;
     }
@@ -914,6 +912,7 @@ function normalizeDelegation(source) {
   const maxConcurrency = asPositiveInteger(raw.maxConcurrency);
   const supervisionRaw = raw.supervision && typeof raw.supervision === "object" ? raw.supervision : {};
   const visionRaw = raw.visionDelegation && typeof raw.visionDelegation === "object" ? raw.visionDelegation : {};
+  const subagentProfileRows = normalizeSubagentProfiles(raw.subagentProfiles);
   const positiveOrDefault = (value, fallback) => {
     const parsed = asPositiveInteger(value);
     return parsed > 0 ? parsed : fallback;
@@ -941,7 +940,18 @@ function normalizeDelegation(source) {
       visionModelID,
       mode: ["auto", "describe", "ocr"].includes(visionMode) ? visionMode : "auto",
     },
+    subagentProfiles: subagentProfileRows,
   };
+}
+
+// normalizeSubagentProfiles 归一子代理角色覆盖（subagentType → 角色片段），丢弃空类型。
+function normalizeSubagentProfiles(input) {
+  return asArray(input)
+    .map((item) => ({
+      subagentType: asString(item?.subagentType).trim(),
+      promptFragment: asString(item?.promptFragment).trim(),
+    }))
+    .filter((item) => item.subagentType !== "");
 }
 
 function normalizeDelegationForAdapters(source, adapters) {

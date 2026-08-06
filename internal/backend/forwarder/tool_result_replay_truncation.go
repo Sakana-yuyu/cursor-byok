@@ -372,9 +372,22 @@ func truncateProjectedReplayTextMiddle(toolName string, text string, limit int) 
 		if keep <= 0 {
 			return truncateProjectedUTF8(text, limit)
 		}
-		headLimit := keep / 2
-		tailLimit := keep - headLimit
+		// 头尾预算按工具类型差异化分配（移植自 cursor2api）：定位/列表类结果开头是关键信息，
+		// shell 输出错误与退出码在尾部；其余工具保持 50/50。
+		headLimit := keep * toolReplayHeadRatio(toolName) / 100
+		if headLimit < 1 {
+			headLimit = 1
+		}
 		head := truncateProjectedUTF8(text, headLimit)
+		if head == "" && headLimit > 0 {
+			// 头部预算在多字节字符边界上拿不到任何字节：预算全部让给尾部，
+			// 避免 head+tail < keep 造成 showing 数字与实保留量偏差。
+			headLimit = 0
+		}
+		tailLimit := keep - headLimit
+		if tailLimit < 0 {
+			tailLimit = 0
+		}
 		tail := truncateProjectedUTF8Suffix(text, tailLimit)
 		kept := len(head) + len(tail)
 		nextNotice := fmt.Sprintf("\n\n[truncated: %s result exceeded %d bytes; omitted middle; showing %d of %d bytes]\n\n", toolName, limit, kept, original)
@@ -383,6 +396,22 @@ func truncateProjectedReplayTextMiddle(toolName string, text string, limit int) 
 			return output
 		}
 		notice = nextNotice
+	}
+}
+
+// toolReplayHeadRatio 返回工具结果截断时「头部」占保留预算的百分比（尾部 = 100% - 该值）。
+// 默认 50/50；按工具类型差异化，尽量在有限预算内保住该类结果的高价值端。
+func toolReplayHeadRatio(toolName string) int {
+	name := strings.TrimSpace(toolName)
+	switch {
+	case name == "Read", name == "Grep", name == "WebSearch", name == "WebFetch":
+		// 定位/列表类：开头含文件头、命中列表、摘要，头部价值最高。
+		return 70
+	case name == "Shell" || strings.HasPrefix(name, "Shell "):
+		// 命令输出：报错、退出码、堆栈通常在尾部。
+		return 25
+	default:
+		return 50
 	}
 }
 

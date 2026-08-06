@@ -5,8 +5,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
+)
+
+// channelFailureCooldownMin/Max 用于把 429 的 Retry-After 钳制到合理区间，
+// 既尊重上游限流信号，又避免异常大的值让渠道长时间不可用。
+const (
+	channelFailureCooldownMin = time.Minute
+	channelFailureCooldownMax = 10 * time.Minute
 )
 
 const (
@@ -28,6 +36,9 @@ type HTTPStatusError struct {
 	Message string
 	// Body 保存去除首尾空白后的原始响应体；Message 可能已经提取了 JSON 中的 message。
 	Body string
+	// Headers 保留上游响应头快照，供调用方读取 Retry-After 等控制头。
+	// 可能为空 map（在响应头本身缺失时）。零值安全。
+	Headers http.Header
 }
 
 // Error 返回可读错误信息，保持与历史错误字符串完全一致以兼容旧解析逻辑。
@@ -54,6 +65,20 @@ func buildHTTPStatusError(prefix string, resp *http.Response) error {
 		return fmt.Errorf("%s response is nil", strings.TrimSpace(prefix))
 	}
 
+	// 快照响应头，供调用方（如 router 的渠道冷却）读取 Retry-After 等控制头。
+	// Clone 一份避免持有上游响应对象的生命周期。
+	headers := resp.Header.Clone()
+
+	// makeStatusErr 统一构造 HTTPStatusError，确保所有分支都带上 Headers 快照。
+	makeStatusErr := func(message string, body string) error {
+		return &HTTPStatusError{
+			StatusCode: resp.StatusCode,
+			Message:    message,
+			Body:       body,
+			Headers:    headers,
+		}
+	}
+
 	// 在独立 goroutine 里设置超时关闭 body 的定时器。
 	// 如果 ReadAll 在超时内完成，停止定时器；否则定时器关闭 body 解除阻塞。
 	bodyClosed := false
@@ -69,15 +94,15 @@ func buildHTTPStatusError(prefix string, resp *http.Response) error {
 		// 超时关闭的 body：io.ReadAll 返回的错误通常是 "read on closed body" 之类，
 		// 我们用明确的超时错误替换，让日志可诊断。
 		if retrySummary := ProviderRetryAttemptSummary(resp); retrySummary != "" {
-			return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d %s body_read_timeout=%v", strings.TrimSpace(prefix), resp.StatusCode, retrySummary, err), Body: strings.TrimSpace(string(limitedBody))}
+			return makeStatusErr(fmt.Sprintf("%s status=%d %s body_read_timeout=%v", strings.TrimSpace(prefix), resp.StatusCode, retrySummary, err), strings.TrimSpace(string(limitedBody)))
 		}
-		return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d body_read_timeout=%v", strings.TrimSpace(prefix), resp.StatusCode, err), Body: strings.TrimSpace(string(limitedBody))}
+		return makeStatusErr(fmt.Sprintf("%s status=%d body_read_timeout=%v", strings.TrimSpace(prefix), resp.StatusCode, err), strings.TrimSpace(string(limitedBody)))
 	}
 	if err != nil {
 		if retrySummary := ProviderRetryAttemptSummary(resp); retrySummary != "" {
-			return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d %s body_read_error=%v", strings.TrimSpace(prefix), resp.StatusCode, retrySummary, err), Body: strings.TrimSpace(string(limitedBody))}
+			return makeStatusErr(fmt.Sprintf("%s status=%d %s body_read_error=%v", strings.TrimSpace(prefix), resp.StatusCode, retrySummary, err), strings.TrimSpace(string(limitedBody)))
 		}
-		return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d body_read_error=%v", strings.TrimSpace(prefix), resp.StatusCode, err), Body: strings.TrimSpace(string(limitedBody))}
+		return makeStatusErr(fmt.Sprintf("%s status=%d body_read_error=%v", strings.TrimSpace(prefix), resp.StatusCode, err), strings.TrimSpace(string(limitedBody)))
 	}
 	retrySummary := ProviderRetryAttemptSummary(resp)
 	rawBodyText := strings.TrimSpace(string(limitedBody))
@@ -91,14 +116,14 @@ func buildHTTPStatusError(prefix string, resp *http.Response) error {
 
 	if bodyText == "" {
 		if retrySummary != "" {
-			return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d %s", strings.TrimSpace(prefix), resp.StatusCode, retrySummary), Body: rawBodyText}
+			return makeStatusErr(fmt.Sprintf("%s status=%d %s", strings.TrimSpace(prefix), resp.StatusCode, retrySummary), rawBodyText)
 		}
-		return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d", strings.TrimSpace(prefix), resp.StatusCode), Body: rawBodyText}
+		return makeStatusErr(fmt.Sprintf("%s status=%d", strings.TrimSpace(prefix), resp.StatusCode), rawBodyText)
 	}
 	if retrySummary != "" {
-		return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d %s body=%s", strings.TrimSpace(prefix), resp.StatusCode, retrySummary, bodyText), Body: rawBodyText}
+		return makeStatusErr(fmt.Sprintf("%s status=%d %s body=%s", strings.TrimSpace(prefix), resp.StatusCode, retrySummary, bodyText), rawBodyText)
 	}
-	return &HTTPStatusError{StatusCode: resp.StatusCode, Message: fmt.Sprintf("%s status=%d body=%s", strings.TrimSpace(prefix), resp.StatusCode, bodyText), Body: rawBodyText}
+	return makeStatusErr(fmt.Sprintf("%s status=%d body=%s", strings.TrimSpace(prefix), resp.StatusCode, bodyText), rawBodyText)
 }
 
 // ChannelError 包装底层 provider 错误并携带命中渠道的身份信息，
@@ -165,4 +190,33 @@ func extractFriendlyErrorMessage(bodyText string) string {
 
 	// 其他情况返回原始 message（比完整 JSON 更清晰）
 	return message
+}
+
+// ParseRetryAfterHeader 从响应头解析 Retry-After，支持 retry-after-ms、秒数与 HTTP 日期三种形式。
+// 解析失败或非正值时返回 0。供 router 的渠道冷却复用，避免在固定 1 分钟冷却上忽略上游限流信号。
+func ParseRetryAfterHeader(h http.Header) time.Duration {
+	if h == nil {
+		return 0
+	}
+	if ms := strings.TrimSpace(h.Get("retry-after-ms")); ms != "" {
+		if milliseconds, err := strconv.Atoi(ms); err == nil && milliseconds > 0 {
+			return time.Duration(milliseconds) * time.Millisecond
+		}
+	}
+	raw := strings.TrimSpace(h.Get("Retry-After"))
+	if raw == "" {
+		return 0
+	}
+	if seconds, err := strconv.Atoi(raw); err == nil {
+		if seconds <= 0 {
+			return 0
+		}
+		return time.Duration(seconds) * time.Second
+	}
+	if when, err := http.ParseTime(raw); err == nil {
+		if delta := time.Until(when); delta > 0 {
+			return delta
+		}
+	}
+	return 0
 }

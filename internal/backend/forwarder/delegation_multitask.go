@@ -151,7 +151,7 @@ func (service *Service) tryStartDelegatedTask(stream *ActiveStream, invocation r
 		StreamState:              "opened",
 		OpenedAt:                 now,
 	}
-	base := buildDelegatedCursorTaskRequest(stream, pending, invocation, delegation.ExecutionModeAuto, "")
+	base := buildDelegatedCursorTaskRequest(stream, pending, invocation, delegation.ExecutionModeAuto, "", service.multitaskDelegation.runtimeConfig().SubagentProfiles)
 	base.ID = pending.ExecID
 	base.Mode = agentv1.AgentMode_AGENT_MODE_AGENT
 	base.ModelName = modelName

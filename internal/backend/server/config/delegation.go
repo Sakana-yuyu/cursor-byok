@@ -53,6 +53,13 @@ type VisionDelegationConfig struct {
 	Mode          string `json:"mode,omitempty" yaml:"mode,omitempty"`
 }
 
+// SubagentProfileOverride 用户自定义的子代理角色片段：按 subagent_type 覆盖内置注册表
+// （runtimecore 的 builtinSubagentProfiles）。PromptFragment 为空表示不注入。
+type SubagentProfileOverride struct {
+	SubagentType   string `json:"subagentType" yaml:"subagentType"`
+	PromptFragment string `json:"promptFragment,omitempty" yaml:"promptFragment,omitempty"`
+}
+
 // DelegationConfig 控制 Multitask 委派总开关、并发度和模型组。
 type DelegationConfig struct {
 	Enabled          bool                        `json:"enabled" yaml:"enabled"`
@@ -60,19 +67,43 @@ type DelegationConfig struct {
 	Groups           []DelegationModelGroup      `json:"groups,omitempty" yaml:"groups,omitempty"`
 	Supervision      DelegationSupervisionConfig `json:"supervision,omitempty" yaml:"supervision,omitempty"`
 	VisionDelegation VisionDelegationConfig      `json:"visionDelegation,omitempty" yaml:"visionDelegation,omitempty"`
+	// SubagentProfiles 子代理角色覆盖（subagentType → 自定义角色片段），读时合并进注册表。
+	SubagentProfiles []SubagentProfileOverride `json:"subagentProfiles,omitempty" yaml:"subagentProfiles,omitempty"`
 }
 
 func cloneDelegationConfig(input DelegationConfig) DelegationConfig {
 	output := input
 	if len(input.Groups) == 0 {
 		output.Groups = nil
-		return output
+	} else {
+		output.Groups = make([]DelegationModelGroup, 0, len(input.Groups))
+		for _, group := range input.Groups {
+			output.Groups = append(output.Groups, cloneDelegationGroup(group))
+		}
 	}
-	output.Groups = make([]DelegationModelGroup, 0, len(input.Groups))
-	for _, group := range input.Groups {
-		output.Groups = append(output.Groups, cloneDelegationGroup(group))
-	}
+	output.SubagentProfiles = normalizeSubagentProfileOverrides(input.SubagentProfiles)
 	return output
+}
+
+func normalizeSubagentProfileOverrides(input []SubagentProfileOverride) []SubagentProfileOverride {
+	seen := make(map[string]struct{}, len(input))
+	result := make([]SubagentProfileOverride, 0, len(input))
+	for _, item := range input {
+		item.SubagentType = strings.TrimSpace(item.SubagentType)
+		item.PromptFragment = strings.TrimSpace(item.PromptFragment)
+		if item.SubagentType == "" {
+			continue
+		}
+		if _, exists := seen[item.SubagentType]; exists {
+			continue
+		}
+		seen[item.SubagentType] = struct{}{}
+		result = append(result, item)
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
 
 func cloneDelegationGroup(input DelegationModelGroup) DelegationModelGroup {
@@ -95,6 +126,7 @@ func normalizeDelegationConfig(input DelegationConfig, adapters []ModelAdapterCo
 		Groups:           make([]DelegationModelGroup, 0, len(input.Groups)),
 		Supervision:      normalizeDelegationSupervision(input.Supervision, availableModels, nil),
 		VisionDelegation: normalizeDelegationVision(input.VisionDelegation, availableModels),
+		SubagentProfiles: normalizeSubagentProfileOverrides(input.SubagentProfiles),
 	}
 	if output.MaxConcurrency <= 0 {
 		output.MaxConcurrency = DefaultDelegationMaxConcurrency

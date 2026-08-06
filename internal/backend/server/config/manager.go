@@ -141,6 +141,7 @@ func (manager *Manager) DelegationRuntimeConfig() delegation.RuntimeConfig {
 		VisionDelegationEnabled: current.VisionDelegation.Enabled,
 		VisionModelID:           strings.TrimSpace(current.VisionDelegation.VisionModelID),
 		VisionMode:              strings.TrimSpace(current.VisionDelegation.Mode),
+		SubagentProfiles:        delegationSubagentProfileMap(current.SubagentProfiles),
 	}
 	for _, adapter := range config.ModelAdapters {
 		adapterID := strings.TrimSpace(adapter.ID)
@@ -170,6 +171,25 @@ func firstNonEmptyConfigValue(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// delegationSubagentProfileMap 把子代理角色覆盖列表归一为 map（subagentType → 片段）。
+func delegationSubagentProfileMap(items []SubagentProfileOverride) map[string]string {
+	if len(items) == 0 {
+		return nil
+	}
+	result := make(map[string]string, len(items))
+	for _, item := range items {
+		subagentType := strings.TrimSpace(item.SubagentType)
+		if subagentType == "" {
+			continue
+		}
+		result[subagentType] = strings.TrimSpace(item.PromptFragment)
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
 
 // SkillMCPScanEnabled 返回 Skills/MCP 扫描总开关（满足 forwarder.scanConfig 接口）。

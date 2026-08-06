@@ -413,7 +413,7 @@ func (registry *MCPRuntimeRegistry) ResolveScope(preferredScope string, identifi
 }
 
 func (registry *MCPRuntimeRegistry) CallTool(ctx context.Context, scope, identifier, name string, arguments map[string]any) (*mcp.CallToolResult, error) {
-	operation, err := registry.beginCapabilityOperation(scope, identifier)
+	operation, err := registry.beginCapabilityOperation(ctx, scope, identifier)
 	if err != nil {
 		return nil, err
 	}
@@ -429,7 +429,7 @@ func (registry *MCPRuntimeRegistry) CallTool(ctx context.Context, scope, identif
 }
 
 func (registry *MCPRuntimeRegistry) ListResources(ctx context.Context, scope, identifier string) ([]*mcp.Resource, error) {
-	operation, err := registry.beginCapabilityOperation(scope, identifier)
+	operation, err := registry.beginCapabilityOperation(ctx, scope, identifier)
 	if err != nil {
 		return nil, err
 	}
@@ -461,7 +461,7 @@ func (registry *MCPRuntimeRegistry) ListResources(ctx context.Context, scope, id
 }
 
 func (registry *MCPRuntimeRegistry) ReadResource(ctx context.Context, scope, identifier, uri string) (*mcp.ReadResourceResult, error) {
-	operation, err := registry.beginCapabilityOperation(scope, identifier)
+	operation, err := registry.beginCapabilityOperation(ctx, scope, identifier)
 	if err != nil {
 		return nil, err
 	}
@@ -511,7 +511,11 @@ func (registry *MCPRuntimeRegistry) Close() {
 	registry.mu.Unlock()
 }
 
-func (registry *MCPRuntimeRegistry) beginCapabilityOperation(scope string, identifier string) (mcpCapabilityOperation, error) {
+// beginCapabilityOperation 获取一次工具调用的会话句柄。
+// 当 server 未连接（断线、进程重启等）且自动重连冷却期已过时，先尝试一次惰性重连，
+// 让工具调用在短暂断线后自愈，而非直接失败要求用户手动重连。
+// 重连受 mcpAutoConnectCooldown 冷却约束，避免每次调用都阻塞等待连接超时。
+func (registry *MCPRuntimeRegistry) beginCapabilityOperation(ctx context.Context, scope string, identifier string) (mcpCapabilityOperation, error) {
 	if registry == nil {
 		return mcpCapabilityOperation{}, fmt.Errorf("mcp runtime registry is nil")
 	}
@@ -521,8 +525,20 @@ func (registry *MCPRuntimeRegistry) beginCapabilityOperation(scope string, ident
 	registry.mu.Lock()
 	entry, ok := registry.entries[key]
 	if !ok || entry.status != MCPRuntimeConnected || entry.session == nil {
+		// 惰性重连：仅在冷却期外尝试一次，失败则回退到原有错误路径。
+		// 复用 TryAutoConnect 的冷却语义，避免在 server 持续不可用时每次工具调用都卡住一个连接超时。
+		canAutoReconnect := ok &&
+			ctx != nil &&
+			(entry.lastConnectAttemptAt.IsZero() || time.Since(entry.lastConnectAttemptAt) >= mcpAutoConnectCooldown)
+		registry.mu.Unlock()
+		if canAutoReconnect {
+			// Connect 会自管 entry 状态与冷却时间戳；忽略其错误，重新进入 begin 取最新状态。
+			_ = registry.Connect(ctx, scope, id)
+			return registry.beginCapabilityOperation(ctx, scope, identifier)
+		}
 		err := fmt.Errorf("mcp server %q is not connected in runtime scope %q", identifier, scope)
-		if ok {
+		registry.mu.Lock()
+		if entry, ok := registry.entries[key]; ok {
 			now := time.Now().UTC()
 			entry.capabilityStatus = entry.status
 			entry.lastError = sanitizeMCPRuntimeError(err, entry.config)

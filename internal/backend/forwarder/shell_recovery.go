@@ -149,6 +149,11 @@ func (service *Service) recoverShellWithoutTerminal(stream *ActiveStream, pendin
 	}
 	pending.ShellRecoveryScheduled = true
 	markExecCompleted(stream, pending)
+	// 合成结果注入属于「工具假成功」：标记 degraded，由下一次 provider_call 记录 usage 时消费（token_usage.go）。
+	stream.mu.Lock()
+	stream.ShellSyntheticRecoveryInTurn = true
+	stream.UpdatedAt = time.Now().UTC()
+	stream.mu.Unlock()
 	resultPayload := buildSyntheticShellResultPayload(pending, reason)
 	log.Printf(
 		"forwarder synthetic shell recovery request_id=%s tool_call_id=%s message_id=%d exec_id=%s reason=%s stream_state=%s",
