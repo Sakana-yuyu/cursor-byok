@@ -43,6 +43,15 @@ scripts/_tmp_*
 scripts/_make_promo_media.ps1
 docs/assets/vite-preview*.log
 
+# 一次性本地构建脚本（含本机绝对路径，已从版本库剔除）
+/_build_*.ps1
+
+# 逆向提取的 Cursor 专有资产（提示词/工具定义原文，不进仓库；分析笔记见 docs/native-prompts/）
+prompt/native/
+
+# 旧版 Wails bindings 生成物残留（当前生成到 frontend/bindings/）
+build/frontend/bindings/
+
 # 本地 CA 材料：运行时首次启动生成，禁止进入源码仓库
 internal/certs/ca.key
 internal/certs/ca.crt
