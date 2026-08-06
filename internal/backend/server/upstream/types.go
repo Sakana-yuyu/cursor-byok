@@ -18,8 +18,6 @@ const (
 
 type SystemSettingService interface {
 	ResolveModelAdapters(context.Context) ([]legacyruntime.ModelAdapterConfig, error)
-	// HybridModeEnabled 返回混合模式开关状态（官方模型透传是否启用）。
-	HybridModeEnabled(context.Context) (bool, error)
 }
 
 // AuthorizationProvider supplies the independent Cursor account used only by
@@ -57,9 +55,6 @@ type RequestContext struct {
 type ForwardOptions struct {
 	BodyOverride []byte
 	PatchHeaders func(headers http.Header)
-	// CaptureResponse 在把官方响应透传给客户端的同时，把完整响应体交给回调
-	//（如刷新动态官方模型目录）。nil 表示不捕获。
-	CaptureResponse func(body []byte)
 }
 
 type ForwardMeta struct {

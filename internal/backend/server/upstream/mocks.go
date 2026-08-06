@@ -450,16 +450,12 @@ func buildAvailableModelsPayload(reqCtx *RequestContext) (map[string]any, error)
 	if err != nil {
 		return nil, err
 	}
-	hybridMode, err := readHybridModeFromDeps(reqCtx)
-	if err != nil {
-		return nil, err
-	}
 	modelRefs := collectModelAdapterRefs(adapters)
 	defaultModel := ""
 	if len(modelRefs) > 0 {
 		defaultModel = modelRefs[0]
 	}
-	modelEntries := buildAvailableModelEntries(adapters, hybridMode)
+	modelEntries := buildAvailableModelEntries(adapters)
 	return map[string]any{
 		"backgroundComposerModelConfig": map[string]any{
 			"bestOfNDefaultModels": append([]string(nil), modelRefs...),
@@ -680,22 +676,11 @@ func loadConfiguredModelAdapters(reqCtx *RequestContext) ([]legacyruntime.ModelA
 	return reqCtx.Deps.SystemSettingService.ResolveModelAdapters(ctx)
 }
 
-func readHybridModeFromDeps(reqCtx *RequestContext) (bool, error) {
-	if reqCtx == nil || reqCtx.Deps == nil || reqCtx.Deps.SystemSettingService == nil {
-		return false, nil
-	}
-	enabled, err := reqCtx.Deps.SystemSettingService.HybridModeEnabled(context.Background())
-	if err != nil {
-		return false, err
-	}
-	return enabled, nil
-}
-
-func buildAvailableModelEntries(adapters []legacyruntime.ModelAdapterConfig, hybridMode bool) []map[string]any {
-	if len(adapters) == 0 && !hybridMode {
+func buildAvailableModelEntries(adapters []legacyruntime.ModelAdapterConfig) []map[string]any {
+	if len(adapters) == 0 {
 		return []map[string]any{}
 	}
-	output := make([]map[string]any, 0, len(adapters)+len(OfficialModelEntries()))
+	output := make([]map[string]any, 0, len(adapters))
 	for _, adapter := range adapters {
 		channelID := strings.TrimSpace(adapter.ID)
 		displayName := strings.TrimSpace(adapter.DisplayName)
@@ -756,11 +741,6 @@ func buildAvailableModelEntries(adapters []legacyruntime.ModelAdapterConfig, hyb
 			entry["price"] = price
 		}
 		output = append(output, entry)
-	}
-	// 混合模式：追加 Cursor 官方模型条目（透传官方执行，官方账号计费）。
-	// 仅当 hybridMode 开启时合并展示，避免未开启时模型选择器混入官方模型。
-	if hybridMode {
-		output = append(output, OfficialModelEntries()...)
 	}
 	return output
 }

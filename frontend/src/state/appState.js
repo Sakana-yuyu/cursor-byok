@@ -1000,7 +1000,6 @@ function normalizeConfig(source) {
     modelAdapters: dedupeModelAdapters(raw.modelAdapters),
     routing: {
       mode: normalizeRouteMode(routing.mode ?? raw.routingMode),
-      hybridMode: asBoolean(routing.hybridMode),
     },
     homeMetrics: {
       includeCacheWriteInHitRate: asBoolean(homeMetrics.includeCacheWriteInHitRate),
@@ -1362,7 +1361,6 @@ export const appState = reactive({
   configBackendListenAddr: cachedConfig.backendListenAddr,
   configProxyListenAddr: cachedConfig.proxyListenAddr,
   routingMode: cachedConfig.routing.mode,
-  hybridModeEnabled: cachedConfig.routing.hybridMode,
   includeCacheWriteInHitRate: cachedConfig.homeMetrics.includeCacheWriteInHitRate,
   localResponseCache: cachedConfig.localResponseCache,
   delegation: cachedConfig.delegation,
@@ -1721,7 +1719,6 @@ export async function persistUserConfig() {
     modelAdapters: normalizeModelAdapters(appState.modelAdapters),
     routing: {
       mode: appState.routingMode,
-      hybridMode: appState.hybridModeEnabled,
     },
     autoMatchContextWindow: appState.autoMatchContextWindow,
     homeMetrics: {
@@ -1997,18 +1994,6 @@ export async function saveDebugLogEnabled(enabled) {
   return persistConfigPayload({
     ...currentConfig,
     log: !!enabled,
-  });
-}
-
-export async function saveHybridMode(enabled) {
-  const currentConfig = await loadPersistedUserConfig();
-  return persistConfigPayload({
-    ...currentConfig,
-    routing: {
-      ...(currentConfig.routing ?? {}),
-      mode: normalizeRouteMode(currentConfig.routing?.mode ?? "local"),
-      hybridMode: !!enabled,
-    },
   });
 }
 

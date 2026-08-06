@@ -80,22 +80,17 @@ func TestBuildBootstrapStatsigConfigJSONDisablesAlwaysLocalDecompositionGate(t *
 }
 
 type fakeSystemSettingService struct {
-	adapters    []legacyruntime.ModelAdapterConfig
-	hybridMode  bool
+	adapters []legacyruntime.ModelAdapterConfig
 }
 
 func (f *fakeSystemSettingService) ResolveModelAdapters(context.Context) ([]legacyruntime.ModelAdapterConfig, error) {
 	return f.adapters, nil
 }
 
-func (f *fakeSystemSettingService) HybridModeEnabled(context.Context) (bool, error) {
-	return f.hybridMode, nil
-}
-
 func newRequestContextWithAdapters(adapters []legacyruntime.ModelAdapterConfig) *RequestContext {
 	return &RequestContext{
 		Deps: &Dependencies{
-			SystemSettingService: &fakeSystemSettingService{adapters: adapters, hybridMode: true},
+			SystemSettingService: &fakeSystemSettingService{adapters: adapters},
 		},
 	}
 }
@@ -266,8 +261,8 @@ func TestAvailableModelsPayloadDecodesWithAdapters(t *testing.T) {
 	if err := proto.Unmarshal(encoded, response); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(response.GetModels()) != 1+len(OfficialModelEntries()) {
-		t.Fatalf("model count: got %d, want %d (1 custom + %d official)", len(response.GetModels()), 1+len(OfficialModelEntries()), len(OfficialModelEntries()))
+	if len(response.GetModels()) != 1 {
+		t.Fatalf("model count: got %d, want 1", len(response.GetModels()))
 	}
 	model := response.GetModels()[0]
 	if model.GetName() != "channel-a" {
@@ -293,9 +288,9 @@ func TestBuildAvailableModelEntriesEnrichesNativeMetadata(t *testing.T) {
 		},
 		{ID: "channel-b", DisplayName: "Channel B", ModelID: "unknown-model-xyz", ContextWindowTokens: 0, Pricing: nil},
 	}
-	entries := buildAvailableModelEntries(adapters, true)
-	if len(entries) != 2+len(OfficialModelEntries()) {
-		t.Fatalf("entry count: got %d, want %d (2 custom + %d official)", len(entries), 2+len(OfficialModelEntries()), len(OfficialModelEntries()))
+	entries := buildAvailableModelEntries(adapters)
+	if len(entries) != 2 {
+		t.Fatalf("entry count: got %d, want 2", len(entries))
 	}
 	entryA := entries[0]
 	if got, ok := entryA["contextTokenLimit"].(int); !ok || got != 200000 {
@@ -334,8 +329,8 @@ func TestBuildAvailableModelEntriesEnrichesNativeMetadata(t *testing.T) {
 	if err := proto.Unmarshal(encoded, response); err != nil {
 		t.Fatalf("decode available models with aisserver proto: %v", err)
 	}
-	if len(response.GetModels()) != 2+len(OfficialModelEntries()) {
-		t.Fatalf("decoded model count: got %d, want %d (2 custom + %d official)", len(response.GetModels()), 2+len(OfficialModelEntries()), len(OfficialModelEntries()))
+	if len(response.GetModels()) != 2 {
+		t.Fatalf("decoded model count: got %d, want 2", len(response.GetModels()))
 	}
 	decoded := response.GetModels()[0]
 	if decoded.GetContextTokenLimit() != 200000 {
