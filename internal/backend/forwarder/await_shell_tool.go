@@ -426,14 +426,14 @@ func parseTerminalShellMetadata(lines []string, snapshot *terminalShellFileSnaps
 		case "command":
 			snapshot.Command = value
 		case "started_at":
-			snapshot.StartedAt = parseTerminalShellTime(value)
+			snapshot.StartedAt = parseRFC3339Time(value)
 		case "exit_code":
 			if parsed, err := strconv.ParseInt(value, 10, 32); err == nil {
 				exitCode := int32(parsed)
 				snapshot.ExitCode = &exitCode
 			}
 		case "ended_at":
-			snapshot.EndedAt = parseTerminalShellTime(value)
+			snapshot.EndedAt = parseRFC3339Time(value)
 		}
 	}
 }
@@ -444,14 +444,6 @@ func parseTerminalShellMetadataValue(value string) string {
 		return unquoted
 	}
 	return trimmed
-}
-
-func parseTerminalShellTime(value string) time.Time {
-	parsed, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(value))
-	if err != nil {
-		return time.Time{}
-	}
-	return parsed.UTC()
 }
 
 func terminalMetadataBlockHasKey(lines []string, key string) bool {
