@@ -205,7 +205,7 @@ func TestSnipDelegatedOversizedToolResults(t *testing.T) {
 		t.Fatalf("SnipCount = %d, want 1", stats.SnipCount)
 	}
 	// 第一条 tool（Read）被截断；最后一条 tool（Shell）不截断
-	if out[3].Content != big {
+	if out[3].Content == big {
 		t.Fatal("oldest oversized tool result should be snipped")
 	}
 	if len(out[3].Content) > delegatedSnipTargetBytes+len(delegatedToolResultOmittedText("Read")) {
@@ -695,12 +695,12 @@ type localDelegatedAgentAdapter struct {
 		if err != nil {
 			if delegatedContextOverflowError(err) && overflowRetries < delegatedCompactionRetryLimit {
 				overflowRetries++
-				compactedMessages, compacted := compactDelegatedMessagesBeforePass(adapter, request, conversation, messages, providerPass)
-				if compacted && !sameDelegatedMessages(compactedMessages, messages) {
-					log.Printf("forwarder delegated context overflow retry task_id=%s provider_pass=%d retry=%d/%d", strings.TrimSpace(identity.taskID), providerPass, overflowRetries, delegatedCompactionRetryLimit)
+				compactedMessages := compactDelegatedMessagesBeforePass(adapter, request, conversation, messages, providerPass)
+				if !sameDelegatedMessages(compactedMessages, messages) {
 					messages = compactedMessages
-					continue
 				}
+				log.Printf("forwarder delegated context overflow retry task_id=%s provider_pass=%d retry=%d/%d", strings.TrimSpace(identity.taskID), providerPass, overflowRetries, delegatedCompactionRetryLimit)
+				continue
 			}
 			/* 原失败分支保持不变 */
 			delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusFailed, providerPass, nil, nil, "delegated provider failed", delegation.SanitizeSupervisorText(err.Error(), request.WorkspaceHint))
