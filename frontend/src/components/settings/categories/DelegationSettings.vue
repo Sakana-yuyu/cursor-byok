@@ -3,6 +3,7 @@ import DelegationRuntimePanel from "@/components/DelegationRuntimePanel.vue";
 import SettingsRow from "@/components/settings/SettingsRow.vue";
 import SettingsSection from "@/components/settings/SettingsSection.vue";
 import DelegationGroupEditor from "@/components/settings/delegation/DelegationGroupEditor.vue";
+import DelegationSupervisionPanel from "@/components/settings/delegation/DelegationSupervisionPanel.vue";
 import Button from "@/components/ui/Button.vue";
 import Input from "@/components/ui/Input.vue";
 import ModelTreeSelect from "@/components/ui/ModelTreeSelect.vue";
@@ -120,12 +121,6 @@ const workerGroupOptions = computed(() => [
     label: group.name || group.id,
   })),
 ]);
-
-const supervisionSaveError = computed(() => (
-  supervisionSaveState.error
-  || Object.values(supervisionFieldStates).map((state) => state.error).find(Boolean)
-  || ""
-));
 
 function supervisionFieldBusy(field) {
   const state = ensureSupervisionFieldState(field);
@@ -1035,228 +1030,23 @@ watch(
       :default-expanded="false"
     >
       <div class="space-y-8">
-        <SettingsSection
-          title="监督策略"
-          description="由更强的模型负责规划、检查和纠偏，委派模型负责执行。仅对 Multitask 生效，关闭后保持原有委派流程。"
-        >
-      <SettingsRow
-        label="启用监督委派"
-        description="监督模型会检查子任务进度，在发现循环、偏离范围或缺少证据时进行纠偏。"
-        :busy="supervisionFieldBusy('enabled')"
-        :error="supervisionLoadState.error || supervisionFieldError('enabled')"
-        @retry="retrySupervision('enabled')"
-      >
-        <Switch
-          compact
-          label=""
-          enabled-text="已开启"
-          disabled-text="已关闭"
-          :enabled="supervisionConfig.enabled"
-          :disabled="supervisionFieldBusy('enabled') || !supervisionLoaded"
-          aria-label="启用监督委派"
-          @change="(value) => handleSupervisionToggle('enabled', value)"
+        <DelegationSupervisionPanel
+          :config="supervisionConfig"
+          :number-drafts="supervisionNumberDrafts"
+          :field-states="supervisionFieldStates"
+          :load-state="supervisionLoadState"
+          :save-state="supervisionSaveState"
+          :loaded="supervisionLoaded"
+          :model-adapters="appState.modelAdapters"
+          :worker-group-options="workerGroupOptions"
+          @toggle-field="(field, value) => handleSupervisionToggle(field, value)"
+          @select-field="(field, value) => handleSupervisionSelect(field, value)"
+          @update-limit-draft="(field, value) => handleSupervisionLimitInput(field, value)"
+          @queue-limit="(field) => queueSupervisionLimitSave(field)"
+          @flush-limit="(field) => flushSupervisionLimit(field)"
+          @retry-field="(field) => retrySupervisionField(field)"
+          @retry="retrySupervision"
         />
-      </SettingsRow>
-
-      <SettingsRow
-        label="监督模型"
-        description="默认跟随主模型；也可以指定一个更强的已配置模型作为顾问。"
-        :busy="supervisionFieldBusy('supervisorModelID')"
-        :error="supervisionFieldError('supervisorModelID')"
-        @retry="retrySupervisionField('supervisorModelID')"
-      >
-        <div class="w-[280px] max-w-full">
-          <ModelTreeSelect
-            :model-value="supervisionConfig.supervisorModelID"
-            :adapters="appState.modelAdapters"
-            :fallback-option="{ value: '', label: '跟随主模型' }"
-            :disabled="supervisionFieldBusy('supervisorModelID') || !supervisionConfig.enabled"
-            aria-label="监督模型"
-            @change="(value) => handleSupervisionSelect('supervisorModelID', value)"
-          />
-        </div>
-      </SettingsRow>
-
-      <SettingsRow
-        label="复核模型"
-        description="监督模型完成初审后使用的复核模型，默认跟随监督模型。"
-        :busy="supervisionFieldBusy('reviewerModelID')"
-        :error="supervisionFieldError('reviewerModelID')"
-        @retry="retrySupervisionField('reviewerModelID')"
-      >
-        <div class="w-[280px] max-w-full">
-          <ModelTreeSelect
-            :model-value="supervisionConfig.reviewerModelID"
-            :adapters="appState.modelAdapters"
-            :fallback-option="{ value: '', label: '跟随 Supervisor' }"
-            :disabled="supervisionFieldBusy('reviewerModelID') || !supervisionConfig.enabled"
-            aria-label="复核模型"
-            @change="(value) => handleSupervisionSelect('reviewerModelID', value)"
-          />
-        </div>
-      </SettingsRow>
-
-      <SettingsRow
-        label="执行模型组"
-        description="指定监督模式优先使用的执行组；留空时按现有委派组选择逻辑运行。"
-        :busy="supervisionFieldBusy('workerGroupID')"
-        :error="supervisionFieldError('workerGroupID')"
-        @retry="retrySupervisionField('workerGroupID')"
-      >
-        <div class="w-[280px] max-w-full">
-          <Select
-            :model-value="supervisionConfig.workerGroupID"
-            :options="workerGroupOptions"
-            :disabled="supervisionFieldBusy('workerGroupID') || !supervisionConfig.enabled"
-            aria-label="监督执行模型组"
-            @change="(value) => handleSupervisionSelect('workerGroupID', value)"
-          />
-        </div>
-      </SettingsRow>
-
-      <SettingsRow
-        label="监督上限"
-        description="限制单个子任务可纠偏、重试和循环监督的次数，防止异常任务长期占用资源。"
-      >
-        <div class="grid w-full max-w-[520px] grid-cols-1 gap-3 lg:grid-cols-3">
-          <div class="min-w-0 space-y-1">
-            <label class="block space-y-1 text-xs text-[#8f8f8f]">
-              <span>最大纠偏</span>
-              <Input
-                :model-value="supervisionNumberDrafts.maxCorrections"
-                type="number"
-                min="1"
-                :disabled="supervisionFieldBusy('maxCorrections') || !supervisionConfig.enabled"
-                aria-label="最大纠偏次数"
-                @update:model-value="(value) => handleSupervisionLimitInput('maxCorrections', value)"
-                @blur="queueSupervisionLimitSave('maxCorrections'); flushSupervisionLimit('maxCorrections')"
-              />
-            </label>
-            <button
-              v-if="supervisionFieldError('maxCorrections')"
-              type="button"
-              class="text-left text-xs leading-5 text-[#f2a7a7]"
-              @click="retrySupervisionField('maxCorrections')"
-            >
-              {{ supervisionFieldError('maxCorrections') }} · 重试
-            </button>
-          </div>
-          <div class="min-w-0 space-y-1">
-            <label class="block space-y-1 text-xs text-[#8f8f8f]">
-              <span>最大重试</span>
-              <Input
-                :model-value="supervisionNumberDrafts.maxRetries"
-                type="number"
-                min="1"
-                :disabled="supervisionFieldBusy('maxRetries') || !supervisionConfig.enabled"
-                aria-label="最大重试次数"
-                @update:model-value="(value) => handleSupervisionLimitInput('maxRetries', value)"
-                @blur="queueSupervisionLimitSave('maxRetries'); flushSupervisionLimit('maxRetries')"
-              />
-            </label>
-            <button
-              v-if="supervisionFieldError('maxRetries')"
-              type="button"
-              class="text-left text-xs leading-5 text-[#f2a7a7]"
-              @click="retrySupervisionField('maxRetries')"
-            >
-              {{ supervisionFieldError('maxRetries') }} · 重试
-            </button>
-          </div>
-          <div class="min-w-0 space-y-1">
-            <label class="block space-y-1 text-xs text-[#8f8f8f]">
-              <span>最大监督轮次</span>
-              <Input
-                :model-value="supervisionNumberDrafts.maxRounds"
-                type="number"
-                min="1"
-                :disabled="supervisionFieldBusy('maxRounds') || !supervisionConfig.enabled"
-                aria-label="最大监督轮次"
-                @update:model-value="(value) => handleSupervisionLimitInput('maxRounds', value)"
-                @blur="queueSupervisionLimitSave('maxRounds'); flushSupervisionLimit('maxRounds')"
-              />
-            </label>
-            <button
-              v-if="supervisionFieldError('maxRounds')"
-              type="button"
-              class="text-left text-xs leading-5 text-[#f2a7a7]"
-              @click="retrySupervisionField('maxRounds')"
-            >
-              {{ supervisionFieldError('maxRounds') }} · 重试
-            </button>
-          </div>
-        </div>
-      </SettingsRow>
-
-      <SettingsRow
-        label="监督处置"
-        description="允许监督模型在执行偏离时改派模型、升级复核，或在监督服务不可用时阻止任务继续。"
-      >
-        <div class="grid w-full max-w-[560px] grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          <div class="min-h-[68px] min-w-0 rounded-[6px] border border-white/8 bg-black/10 px-3 py-2.5">
-            <Switch
-              compact
-              class="w-full"
-              label="允许改派"
-              :enabled="supervisionConfig.allowReassign"
-              :disabled="supervisionFieldBusy('allowReassign') || !supervisionConfig.enabled"
-              aria-label="允许监督模型改派任务"
-              @change="(value) => handleSupervisionToggle('allowReassign', value)"
-            />
-            <button
-              v-if="supervisionFieldError('allowReassign')"
-              type="button"
-              class="text-left text-xs leading-5 text-[#f2a7a7]"
-              @click="retrySupervisionField('allowReassign')"
-            >
-              {{ supervisionFieldError('allowReassign') }} · 重试
-            </button>
-          </div>
-          <div class="min-h-[68px] min-w-0 rounded-[6px] border border-white/8 bg-black/10 px-3 py-2.5">
-            <Switch
-              compact
-              class="w-full"
-              label="允许升级"
-              :enabled="supervisionConfig.allowEscalate"
-              :disabled="supervisionFieldBusy('allowEscalate') || !supervisionConfig.enabled"
-              aria-label="允许监督模型升级复核"
-              @change="(value) => handleSupervisionToggle('allowEscalate', value)"
-            />
-            <button
-              v-if="supervisionFieldError('allowEscalate')"
-              type="button"
-              class="text-left text-xs leading-5 text-[#f2a7a7]"
-              @click="retrySupervisionField('allowEscalate')"
-            >
-              {{ supervisionFieldError('allowEscalate') }} · 重试
-            </button>
-          </div>
-          <div class="min-h-[68px] min-w-0 rounded-[6px] border border-white/8 bg-black/10 px-3 py-2.5">
-            <Switch
-              compact
-              class="w-full"
-              label="严格不可用处理"
-              :enabled="supervisionConfig.strictUnavailable"
-              :disabled="supervisionFieldBusy('strictUnavailable') || !supervisionConfig.enabled"
-              aria-label="监督模型不可用时停止任务"
-              @change="(value) => handleSupervisionToggle('strictUnavailable', value)"
-            />
-            <button
-              v-if="supervisionFieldError('strictUnavailable')"
-              type="button"
-              class="text-left text-xs leading-5 text-[#f2a7a7]"
-              @click="retrySupervisionField('strictUnavailable')"
-            >
-              {{ supervisionFieldError('strictUnavailable') }} · 重试
-            </button>
-          </div>
-        </div>
-      </SettingsRow>
-
-      <div v-if="supervisionSaveState.success && !supervisionSaveError" class="mt-3 text-xs text-[#10AD5D]">
-        监督策略已保存
-      </div>
-    </SettingsSection>
 
     <SettingsSection
       title="视觉委派（统一读图入口）"
