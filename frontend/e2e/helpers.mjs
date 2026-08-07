@@ -78,87 +78,51 @@ export function basePreviewConfig({ delegation } = {}) {
       enabled: true,
       maxConcurrency: 4,
       groups: [],
-      supervision: {
-        enabled: false,
-        supervisorModelID: "",
-        reviewerModelID: "",
-        workerGroupID: "",
-        maxCorrections: 2,
-        maxRetries: 1,
-        maxRounds: 8,
-        allowReassign: false,
-        allowEscalate: false,
-        strictUnavailable: false,
-      },
+      supervision: { enabled: false, supervisorModelID: "", reviewerModelID: "", workerGroupID: "", maxCorrections: 2, maxRetries: 1, maxRounds: 8, allowReassign: false, allowEscalate: false, strictUnavailable: false },
       visionDelegation: { enabled: false, visionModelID: "", mode: "auto" },
     },
   };
 }
 
 export function supportedBalance(overrides = {}) {
-  return {
-    supported: true,
-    source: "newapi",
-    currency: "USD",
-    total: 100,
-    used: 23.5,
-    remaining: 76.5,
-    planName: "",
-    message: "",
-    ...overrides,
-  };
+  return { supported: true, source: "newapi", currency: "USD", total: 100, used: 23.5, remaining: 76.5, planName: "", message: "", ...overrides };
 }
 
 export function transientBalanceFailure(overrides = {}) {
-  return {
-    supported: false,
-    source: "",
-    currency: "USD",
-    total: null,
-    used: null,
-    remaining: null,
-    message: "E2E 注入：余额查询瞬时失败",
-    transient: true,
-    ...overrides,
-  };
+  return { supported: false, source: "", currency: "USD", total: null, used: null, remaining: null, message: "E2E 注入：余额查询瞬时失败", transient: true, ...overrides };
 }
 
 export function testResultSuccess(overrides = {}) {
-  return {
-    status: "success",
-    summaryText: "E2E 注入：测试通过",
-    testedAt: "2026-01-01T00:00:00.000Z",
-    tokensPerSecond: 42,
-    ...overrides,
-  };
+  return { status: "success", summaryText: "E2E 注入：测试通过", testedAt: "2026-01-01T00:00:00.000Z", tokensPerSecond: 42, ...overrides };
 }
 
-export async function seedPreviewTestPlan(page, plan) {
+export async function seedPreviewTestPlan(page, plan, config = null) {
   await page.addInitScript(
-    ({ key, value }) => {
+    ({ key, value, configKey, configValue }) => {
       try {
         localStorage.setItem(key, JSON.stringify(value));
-        localStorage.removeItem("cursor-byok.browser-preview.config");
+        if (configValue) localStorage.setItem(configKey, JSON.stringify(configValue));
+        else localStorage.removeItem(configKey);
       } catch {
         // 无存储时不阻塞用例
       }
     },
-    { key: TEST_PLAN_KEY, value: plan ?? {} },
+    { key: TEST_PLAN_KEY, value: plan ?? {}, configKey: CONFIG_STORAGE_KEY, configValue: config },
   );
 }
 
-export async function openSupplierPage(page, { plan } = {}) {
-  await seedPreviewTestPlan(page, plan);
+export async function openSupplierPage(page, { plan, config } = {}) {
+  await seedPreviewTestPlan(page, plan, config);
   await page.goto("/supplier?mode=name&groupName=%E6%B5%8F%E8%A7%88%E5%99%A8%E9%A2%84%E8%A7%88%E7%A4%BA%E4%BE%8B");
 }
 
-export async function openModelEditorPage(page, { plan } = {}) {
-  await seedPreviewTestPlan(page, plan);
+export async function openModelEditorPage(page, { plan, config } = {}) {
+  await seedPreviewTestPlan(page, plan, config);
   await page.goto("/model-editor");
 }
 
-export async function openDelegationSettingsPage(page, { plan } = {}) {
-  await seedPreviewTestPlan(page, plan);
+export async function openDelegationSettingsPage(page, { plan, config } = {}) {
+  await seedPreviewTestPlan(page, plan, config);
   await page.goto("/settings?category=delegation");
 }
 
