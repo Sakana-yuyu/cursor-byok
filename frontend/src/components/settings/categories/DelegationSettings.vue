@@ -11,6 +11,25 @@ import Switch from "@/components/ui/Switch.vue";
 import { showModal } from "@/composables/useModal";
 import { saveDelegationConfig } from "@/services/runtimeControlApi";
 import { appState, toUserError } from "@/state/appState";
+// 委派配置的纯函数与默认常量已归位 utils/delegationSettings.js，此处 import 保持调用零改动。
+import {
+  DEFAULT_SUPERVISION,
+  clearStateError,
+  cloneConfigValue,
+  createDraftState,
+  createImmediateState,
+  groupImmediateAutosaveKey,
+  groupNameAutosaveKey,
+  normalizeMaxConcurrencyValue,
+  normalizeSubagentProfileRows,
+  normalizeSupervision,
+  normalizeSupervisionLimit,
+  normalizeVisionDelegation,
+  reconcileSavedObject,
+  retryState,
+  toggleModel,
+  togglePermission,
+} from "@/utils/delegationSettings";
 import { computed, reactive, ref, watch } from "vue";
 
 const props = defineProps({
@@ -24,19 +43,6 @@ const DELEGATION_ENABLED_KEY = "delegation.enabled";
 const DELEGATION_MAX_CONCURRENCY_KEY = "delegation.max-concurrency";
 const DELEGATION_SUPERVISION_KEY = "delegation.supervision";
 const DELEGATION_VISION_KEY = "delegation.vision";
-
-const DEFAULT_SUPERVISION = {
-  enabled: false,
-  supervisorModelID: "",
-  reviewerModelID: "",
-  workerGroupID: "",
-  maxCorrections: 2,
-  maxRetries: 1,
-  maxRounds: 8,
-  allowReassign: false,
-  allowEscalate: false,
-  strictUnavailable: false,
-};
 
 const DEFAULT_VISION_DELEGATION = {
   enabled: false,
@@ -143,22 +149,6 @@ watch(
   { immediate: true },
 );
 
-function createImmediateState() {
-  return {
-    busy: false,
-    error: "",
-    retry: null,
-  };
-}
-
-function createDraftState() {
-  return {
-    busy: false,
-    queued: false,
-    error: "",
-  };
-}
-
 function ensureGroupState(groupID) {
   if (!groupStates[groupID]) {
     groupStates[groupID] = reactive({
@@ -170,12 +160,6 @@ function ensureGroupState(groupID) {
   return groupStates[groupID];
 }
 
-function retryState(state) {
-  if (typeof state.retry === "function") {
-    void state.retry();
-  }
-}
-
 function currentGroupIndex(groupID) {
   return appState.delegation.groups.findIndex((group) => group.id === groupID);
 }
@@ -184,24 +168,9 @@ function getGroupByID(groupID) {
   return appState.delegation.groups.find((group) => group.id === groupID) || null;
 }
 
-function groupNameAutosaveKey(groupID) {
-  return `delegation.group.${groupID}.name`;
-}
-
-function groupImmediateAutosaveKey(groupID, action) {
-  return `delegation.group.${groupID}.${action}`;
-}
-
 function normalizeGroupNameDraft(groupID, value) {
   const fallbackIndex = currentGroupIndex(groupID) + 1;
   return String(value || "").trim() || String(`委派模型组 ${fallbackIndex > 0 ? fallbackIndex : 1}`);
-}
-
-function normalizeMaxConcurrencyValue(value, committedValue) {
-  const parsed = Number.parseInt(String(value || "").trim(), 10);
-  const currentValue = Number(committedValue || 0);
-  const fallback = currentValue > 0 ? currentValue : 4;
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 function groupNameDraftValue(groupID) {
@@ -251,61 +220,9 @@ function reinsertDeletedGroup(group, previousIndex, previousGroupID, nextGroupID
   groups.splice(Math.min(previousIndex, groups.length), 0, group);
 }
 
-function togglePermission(group, permission, enabled) {
-  const next = { ...(group.toolPermissions || {}) };
-  for (const tool of permission.tools) {
-    if (enabled) {
-      delete next[tool];
-    } else {
-      next[tool] = false;
-    }
-  }
-  group.toolPermissions = next;
-}
-
-function toggleModel(group, modelID, enabled) {
-  const next = new Set(group.modelIDs || []);
-  if (enabled) {
-    next.add(modelID);
-  } else {
-    next.delete(modelID);
-  }
-  group.modelIDs = [...next];
-  if (!group.modelIDs.includes(group.defaultModelID)) {
-    group.defaultModelID = group.modelIDs[0] || "";
-  }
-  if (group.modelIDs.length === 0) {
-    group.enabled = false;
-  }
-}
-
-function clearStateError(state) {
-  state.error = "";
-}
-
 function clearGroupErrors(groupID) {
   const state = ensureGroupState(groupID);
   state.immediate.error = "";
-}
-
-function normalizeSupervision(value) {
-  const raw = value && typeof value === "object" ? value : {};
-  const positive = (input, fallback) => {
-    const parsed = Number.parseInt(input, 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-  };
-  return {
-    enabled: Boolean(raw.enabled),
-    supervisorModelID: String(raw.supervisorModelID || raw.supervisorModelId || "").trim(),
-    reviewerModelID: String(raw.reviewerModelID || raw.reviewerModelId || "").trim(),
-    workerGroupID: String(raw.workerGroupID || raw.workerGroupId || "").trim(),
-    maxCorrections: positive(raw.maxCorrections, 2),
-    maxRetries: positive(raw.maxRetries, 1),
-    maxRounds: positive(raw.maxRounds, 8),
-    allowReassign: Boolean(raw.allowReassign),
-    allowEscalate: Boolean(raw.allowEscalate),
-    strictUnavailable: Boolean(raw.strictUnavailable),
-  };
 }
 
 function applySupervision(value) {
@@ -347,52 +264,6 @@ function supervisionForPersistence() {
   return next;
 }
 
-function cloneConfigValue(value) {
-  if (Array.isArray(value)) {
-    return value.map((item) => cloneConfigValue(item));
-  }
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, cloneConfigValue(item)]),
-    );
-  }
-  return value;
-}
-
-function configValuesEqual(left, right) {
-  if (Object.is(left, right)) return true;
-  if (Array.isArray(left) || Array.isArray(right)) {
-    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
-    return left.every((item, index) => configValuesEqual(item, right[index]));
-  }
-  if (!left || !right || typeof left !== "object" || typeof right !== "object") return false;
-  const leftKeys = Object.keys(left);
-  const rightKeys = Object.keys(right);
-  if (leftKeys.length !== rightKeys.length) return false;
-  return leftKeys.every((key) => (
-    Object.prototype.hasOwnProperty.call(right, key)
-    && configValuesEqual(left[key], right[key])
-  ));
-}
-
-function reconcileSavedObject(savedValue, submittedValue, currentValue) {
-  const saved = savedValue && typeof savedValue === "object" ? savedValue : {};
-  const submitted = submittedValue && typeof submittedValue === "object" ? submittedValue : {};
-  const current = currentValue && typeof currentValue === "object" ? currentValue : {};
-  const keys = new Set([...Object.keys(saved), ...Object.keys(submitted), ...Object.keys(current)]);
-  const reconciled = {};
-  for (const key of keys) {
-    if (!configValuesEqual(current[key], submitted[key])) {
-      reconciled[key] = cloneConfigValue(current[key]);
-      continue;
-    }
-    if (Object.prototype.hasOwnProperty.call(saved, key)) {
-      reconciled[key] = cloneConfigValue(saved[key]);
-    }
-  }
-  return reconciled;
-}
-
 function delegationSnapshot(value = appState.delegation) {
   const source = value && typeof value === "object" ? value : {};
   return {
@@ -428,18 +299,6 @@ function reconcileSavedDelegation(savedValue, submitted, current) {
 // 覆盖优先于内置注册表；片段留空 = 禁用该类型注入。仅影响本地委派（BYOK worker）路径，
 // Cursor 原生子代理由客户端管理。
 const subagentProfileRows = ref([]);
-
-function normalizeSubagentProfileRows(rows) {
-  const seen = new Set();
-  const result = [];
-  for (const item of Array.isArray(rows) ? rows : []) {
-    const subagentType = String(item?.subagentType || "").trim();
-    if (!subagentType || seen.has(subagentType)) continue;
-    seen.add(subagentType);
-    result.push({ subagentType, promptFragment: String(item?.promptFragment || "").trim() });
-  }
-  return result;
-}
 
 function syncSubagentProfileRowsFromState() {
   subagentProfileRows.value = normalizeSubagentProfileRows(appState.delegation?.subagentProfiles);
@@ -547,14 +406,6 @@ function handleSupervisionSelect(field, value) {
   void saveSupervisionField(field, String(value || ""));
 }
 
-function normalizeSupervisionLimit(field, value) {
-  const fallback = field === "maxCorrections"
-    ? DEFAULT_SUPERVISION.maxCorrections
-    : field === "maxRetries" ? DEFAULT_SUPERVISION.maxRetries : DEFAULT_SUPERVISION.maxRounds;
-  const parsed = Number.parseInt(String(value || "").trim(), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
 function handleSupervisionLimitInput(field, value) {
   supervisionNumberDrafts[field] = value;
   supervisionSaveState.error = "";
@@ -614,17 +465,6 @@ function retrySupervisionField(field) {
 }
 
 // ---- 视觉委派（vision delegation）----
-
-function normalizeVisionDelegation(value) {
-  const raw = value && typeof value === "object" ? value : {};
-  const visionModelID = String(raw.visionModelID || raw.visionModelId || "").trim();
-  const mode = String(raw.mode || "").trim().toLowerCase();
-  return {
-    enabled: visionModelID !== "" && Boolean(raw.enabled),
-    visionModelID,
-    mode: ["auto", "describe", "ocr"].includes(mode) ? mode : "auto",
-  };
-}
 
 function applyVisionDelegation(value) {
   const normalized = normalizeVisionDelegation(value);
