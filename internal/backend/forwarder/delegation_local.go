@@ -123,6 +123,9 @@ func (adapter *localDelegatedAgentAdapter) Execute(ctx context.Context, request 
 					messages = compactedMessages
 				}
 				log.Printf("forwarder delegated context overflow retry task_id=%s provider_pass=%d retry=%d/%d", strings.TrimSpace(identity.taskID), providerPass, overflowRetries, delegatedCompactionRetryLimit)
+				// continue 会执行 for 的 post 语句 providerPass++，这里先 -- 抵消，
+				// 使重试回到同一 provider_pass（retry 日志的 pass 与实际重试 pass 对齐）。
+				providerPass--
 				continue
 			}
 			delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusFailed, providerPass, nil, nil, "delegated provider failed", delegation.SanitizeSupervisorText(err.Error(), request.WorkspaceHint))
