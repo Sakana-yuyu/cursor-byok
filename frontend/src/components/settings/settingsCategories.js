@@ -10,7 +10,7 @@ export const SETTINGS_GROUPS = [
   {
     key: "service",
     label: "服务与模型",
-    categories: ["cursor-service", "delegation", "skills-mcp", "prompts"],
+    categories: ["cursor-service", "delegation", "goal", "skills-mcp", "prompts"],
   },
   {
     key: "view",
@@ -42,6 +42,12 @@ export const SETTINGS_CATEGORIES = [
     value: "delegation",
     label: "模型与委派",
     description: "模型分组、任务委托与视觉委派。",
+  },
+  {
+    id: "goal",
+    value: "goal",
+    label: "Goal",
+    description: "目标循环执行的预算与完成判定。",
   },
   {
     id: "skills-mcp",

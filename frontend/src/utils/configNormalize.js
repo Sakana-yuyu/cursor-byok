@@ -25,6 +25,21 @@ export function normalizeLocalResponseCache(source) {
   };
 }
 
+// normalizeGoal 归一化 goal 循环执行配置（与后端 GoalConfig 字段对齐）。
+export function normalizeGoal(source) {
+  const raw = source && typeof source === "object" ? source : {};
+  return {
+    enabled: asBoolean(raw.enabled),
+    maxProviderPasses: asPositiveInteger(raw.maxProviderPasses),
+    maxDurationSeconds: asPositiveInteger(raw.maxDurationSeconds),
+    maxCostUsd: typeof raw.maxCostUsd === "number" && Number.isFinite(raw.maxCostUsd) ? raw.maxCostUsd : 0,
+    selfCheckPasses: asPositiveInteger(raw.selfCheckPasses),
+    verifyMaxRetries: asPositiveInteger(raw.verifyMaxRetries),
+    errorMaxRetries: asPositiveInteger(raw.errorMaxRetries),
+    progressInterval: asPositiveInteger(raw.progressInterval),
+  };
+}
+
 export function normalizeDelegation(source) {
   const raw = source && typeof source === "object" ? source : {};
   const groups = asArray(raw.groups).map((item, index) => {
@@ -151,6 +166,7 @@ export function normalizeConfig(source) {
     // 本地响应缓存配置：保留在归一化白名单中，避免任何一次配置保存把它清空回默认值
     localResponseCache: normalizeLocalResponseCache(raw.localResponseCache),
     delegation: normalizeDelegation(raw.delegation),
+    goal: normalizeGoal(raw.goal),
     lastAgentModelHash: asString(raw.lastAgentModelHash),
   };
 }

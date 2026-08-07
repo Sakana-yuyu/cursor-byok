@@ -8,6 +8,7 @@ import OverlaySettings from "@/components/settings/categories/OverlaySettings.vu
 import PromptSettings from "@/components/settings/categories/PromptSettings.vue";
 import SkillsMcpSettings from "@/components/settings/categories/SkillsMcpSettings.vue";
 import HistorySettings from "@/components/settings/categories/HistorySettings.vue";
+import GoalSettings from "@/components/settings/categories/GoalSettings.vue";
 import SettingsSidebar from "@/components/settings/SettingsSidebar.vue";
 import { useSettingsAutosave } from "@/composables/useSettingsAutosave";
 import {
@@ -53,6 +54,7 @@ const categoryComponents = {
   "cursor-service": CursorServiceSettings,
   overlay: OverlaySettings,
   delegation: DelegationSettings,
+  goal: GoalSettings,
   "skills-mcp": SkillsMcpSettings,
   prompts: PromptSettings,
   advanced: AdvancedSettings,
