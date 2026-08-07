@@ -20,63 +20,18 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 	startedAt := time.Now().UTC()
 	finishedAt := time.Time{}
 	overrideBody := cloneRequestBodyOverride(req.RequestBodyOverride)
-	var body any = overrideBody
+	var bodyMap map[string]any
 	if len(overrideBody) == 0 {
-		instructions, input, err := normalizeOpenAIResponsesInput(req.Messages)
+		built, err := buildOpenAIResponsesBodyMap(req, modelID, promptCacheKeyMaximumLength)
 		if err != nil {
 			finishedAt = time.Now().UTC()
 			recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))
 			return err
 		}
-		requestBody := openAIResponsesRequestBody{
-			Model:        modelID,
-			Instructions: instructions,
-			Input:        input,
-			Stream:       true,
-			Store:        false,
-		}
-		if shouldSendOpenAIMaxOutputTokens(modelID) {
-			requestBody.MaxOutputTokens = req.MaxTokens
-		}
-		if key := openAIPromptCacheKey(req, modelID, promptCacheKeyMaximumLength); key != "" {
-			requestBody.PromptCacheKey = key
-		}
-		if len(req.Tools) > 0 {
-			tools, err := normalizeOpenAIResponsesTools(req.Tools)
-			if err != nil {
-				finishedAt = time.Now().UTC()
-				recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))
-				return err
-			}
-			if shouldExposeOpenAIResponsesImageGeneration(req, tools) {
-				tools = ensureOpenAIResponsesImageGenerationTool(tools)
-				if req.RequestKnobs != nil {
-					req.RequestKnobs["openai_responses_image_generation_tool"] = "auto"
-				}
-			}
-			requestBody.Tools = tools
-		}
-		if effort := strings.TrimSpace(req.ReasoningEffort); effort != "" {
-			requestBody.Reasoning = &openAIResponsesReasoning{
-				Effort:  effort,
-				Summary: "auto",
-			}
-			// 同时请求明文 reasoning.summary 与 reasoning.encrypted_content：
-			// - reasoning.summary 让 provider 返回可读思维链（response.reasoning_summary_text.delta
-			//   走 thinking_delta 转发，Cursor 显示思维链而非 "Thinking is encrypted"）。
-			// - reasoning.encrypted_content 保留 reasoning signature，供工具调用（委派 worker）
-			//   的 prefix-cache 稳定，避免缓存命中率下降。
-			requestBody.Include = []string{"reasoning.summary", "reasoning.encrypted_content"}
-		}
-		body = requestBody
+		bodyMap = built
 	} else {
 		applyOpenAIPromptCacheKeyOverride(overrideBody, req, modelID, promptCacheKeyMaximumLength)
-	}
-	bodyMap, err := requestBodyToMap(body)
-	if err != nil {
-		finishedAt = time.Now().UTC()
-		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))
-		return err
+		bodyMap = overrideBody
 	}
 	applyOpenAIThinkingDisable(bodyMap, req, baseURL, modelID, req.OpenAIEndpoint)
 	applyOpenAIParallelToolCalls(bodyMap, modelID)
@@ -88,12 +43,10 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 	normalizeOpenAIResponsesRequestToolSchemas(bodyMap)
 	applyOpenAIResponsesCompatibility(bodyMap, baseURL, modelID, manualPromptCacheKey)
 
-	body = bodyMap
-
 	requestURL := OpenAIEndpointURL(baseURL, req.OpenAIEndpoint)
-	recordLLMRequestArtifact(req, "openai", modelID, "POST", requestURL, body)
+	recordLLMRequestArtifact(req, "openai", modelID, "POST", requestURL, bodyMap)
 
-	payload, err := json.Marshal(body)
+	payload, err := json.Marshal(bodyMap)
 	if err != nil {
 		finishedAt = time.Now().UTC()
 		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))

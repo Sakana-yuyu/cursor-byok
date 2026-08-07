@@ -1,11 +1,13 @@
 package forwarder
 
 import (
+	"bytes"
 	"context"
 	"cursor/internal/logger"
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	runtimecore "cursor/internal/backend/agent/core"
@@ -360,6 +362,15 @@ func (service *Service) ensureStreamActor(stream *ActiveStream) (chan streamComm
 	return mailbox, done, nil
 }
 
+// streamCommandResultPool 复用 postStreamCommandWait 每事件创建的 result channel，
+// 消除高频 provider 事件（text/thinking delta）下每次 make(chan error, 1) 的堆分配。
+// channel 容量固定为 1，归还前必须 drain，避免 done 分支中 actor 已写入的残留值污染复用。
+var streamCommandResultPool = sync.Pool{
+	New: func() any {
+		return make(chan error, 1)
+	},
+}
+
 func (service *Service) postStreamCommandWait(stream *ActiveStream, command streamCommand) error {
 	if stream == nil {
 		return nil
@@ -368,22 +379,35 @@ func (service *Service) postStreamCommandWait(stream *ActiveStream, command stre
 	if err != nil {
 		return err
 	}
-	result := make(chan error, 1)
+	result := streamCommandResultPool.Get().(chan error)
+	// 防御性 drain：正常归还前已清空，此处兜底保证复用 channel 干净。
+	select {
+	case <-result:
+	default:
+	}
 	envelope := streamCommandEnvelope{
 		command: command,
 		result:  result,
 	}
 	select {
 	case <-done:
+		streamCommandResultPool.Put(result)
 		return errProviderLoopInterrupted
 	case mailbox <- envelope:
 	}
+	var commandErr error
 	select {
 	case <-done:
-		return errProviderLoopInterrupted
-	case err := <-result:
-		return err
+		commandErr = errProviderLoopInterrupted
+	case commandErr = <-result:
 	}
+	// drain 残留：done 分支可能恰好发生在 actor 已写入 result 之后。
+	select {
+	case <-result:
+	default:
+	}
+	streamCommandResultPool.Put(result)
+	return commandErr
 }
 
 func (service *Service) postStreamCommandAsync(stream *ActiveStream, command streamCommand) error {
@@ -619,8 +643,6 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 	conversationID := stream.ConversationID
 	turnSeq := stream.TurnSeq
 	modelCallID := stream.CurrentModelCallID
-	accumulatedText := stream.ProviderAccumulatedText
-	accumulatedReasoning := stream.ProviderAccumulatedReasoning
 	accumulatedReasoningSignature := stream.ProviderAccumulatedReasoningSignature
 	accumulatedReasoningSignatureSource := stream.ProviderAccumulatedReasoningSignatureSource
 	accumulatedReasoningItemID := stream.ProviderAccumulatedReasoningItemID
@@ -631,14 +653,14 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 	switch event.Kind {
 	case modeladapter.ModelEventKindTextDelta:
 		stream.mu.Lock()
-		stream.ProviderAccumulatedText += event.Text
+		stream.ProviderAccumulatedText = append(stream.ProviderAccumulatedText, event.Text...)
 		stream.UpdatedAt = time.Now().UTC()
 		stream.mu.Unlock()
 		service.markConversationActivity(conversationID)
 		return service.broker.Publish(requestID, StreamEvent{Message: buildTextDeltaMessage(event.Text)})
 	case modeladapter.ModelEventKindThinkingDelta:
 		stream.mu.Lock()
-		stream.ProviderAccumulatedReasoning += event.Text
+		stream.ProviderAccumulatedReasoning = append(stream.ProviderAccumulatedReasoning, event.Text...)
 		stream.ProviderThinkingDeltaCount++
 		deltaCount := stream.ProviderThinkingDeltaCount
 		accumulatedLength := len(stream.ProviderAccumulatedReasoning)
@@ -672,7 +694,7 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 			stream.ProviderAccumulatedReasoningItemID = strings.TrimSpace(event.ProviderItemID)
 			stream.ProviderAccumulatedReasoningStatus = strings.TrimSpace(event.ProviderStatus)
 			stream.ProviderAccumulatedReasoningSummary = append([]byte(nil), event.ProviderSummary...)
-			shouldEmitSyntheticThinking = strings.TrimSpace(stream.ProviderAccumulatedReasoning) == "" &&
+			shouldEmitSyntheticThinking = len(bytes.TrimSpace(stream.ProviderAccumulatedReasoning)) == 0 &&
 				strings.TrimSpace(event.ThinkingSignatureSource) == modeladapter.ReasoningSignatureSourceOpenAIResponses
 			if shouldEmitSyntheticThinking {
 				encryptedOnlyThinking = true
@@ -716,7 +738,7 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 					"provider_pass":      currentProviderPass(stream),
 					"completed_count":    completedCount,
 					"suppressed_count":   suppressedCount,
-					"has_reasoning_text": strings.TrimSpace(stream.ProviderAccumulatedReasoning) != "",
+					"has_reasoning_text": len(bytes.TrimSpace(stream.ProviderAccumulatedReasoning)) != 0,
 					"has_signature":      strings.TrimSpace(event.ThinkingSignature) != "",
 				})
 			}
@@ -762,6 +784,10 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 			Message: buildToolCallDeltaMessage(event.ToolCallID, modelCallID, event.ToolCallDelta),
 		})
 	case modeladapter.ModelEventKindToolLikeCompleted:
+		stream.mu.Lock()
+		accumulatedText := string(stream.ProviderAccumulatedText)
+		accumulatedReasoning := string(stream.ProviderAccumulatedReasoning)
+		stream.mu.Unlock()
 		reasoningForTool := accumulatedReasoning
 		reasoningSignatureForTool := accumulatedReasoningSignature
 		reasoningSignatureSourceForTool := accumulatedReasoningSignatureSource
@@ -785,7 +811,7 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 		invocation.ReasoningProviderSummary = reasoningSummaryForTool
 		invocation.ModelCallID = modelCallID
 		stream.mu.Lock()
-		stream.ProviderAccumulatedText = ""
+		stream.ProviderAccumulatedText = nil
 		stream.UpdatedAt = time.Now().UTC()
 		stream.mu.Unlock()
 		return service.handleToolInvocation(stream, invocation)
@@ -833,8 +859,8 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 	conversationID := stream.ConversationID
 	turnSeq := stream.TurnSeq
 	modelCallID := stream.CurrentModelCallID
-	accumulatedText := stream.ProviderAccumulatedText
-	accumulatedReasoning := stream.ProviderAccumulatedReasoning
+	accumulatedText := string(stream.ProviderAccumulatedText)
+	accumulatedReasoning := string(stream.ProviderAccumulatedReasoning)
 	accumulatedReasoningSignature := stream.ProviderAccumulatedReasoningSignature
 	accumulatedReasoningSignatureSource := stream.ProviderAccumulatedReasoningSignatureSource
 	accumulatedReasoningItemID := stream.ProviderAccumulatedReasoningItemID
@@ -852,8 +878,8 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 	stream.ProviderActive = false
 	stream.ProviderCancel = nil
 	stream.PendingProviderAction = providerActionNone
-	stream.ProviderAccumulatedText = ""
-	stream.ProviderAccumulatedReasoning = ""
+	stream.ProviderAccumulatedText = nil
+	stream.ProviderAccumulatedReasoning = nil
 	stream.ProviderAccumulatedReasoningSignature = ""
 	stream.ProviderAccumulatedReasoningSignatureSource = ""
 	stream.ProviderAccumulatedReasoningItemID = ""

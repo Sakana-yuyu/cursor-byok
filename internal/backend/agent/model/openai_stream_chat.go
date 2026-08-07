@@ -20,37 +20,20 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 	startedAt := time.Now().UTC()
 	finishedAt := time.Time{}
 	overrideBody := cloneRequestBodyOverride(req.RequestBodyOverride)
-	var body any = overrideBody
+	var bodyMap map[string]any
 	if len(overrideBody) == 0 {
-		normalizedMessages, err := normalizeOpenAIProviderMessages(req.Messages, strings.TrimSpace(req.ReasoningEffort) != "", isKimiOpenAIRequest(baseURL, modelID))
+		built, err := buildOpenAIChatBodyMap(req, baseURL, modelID, promptCacheKeyMaximumLength)
 		if err != nil {
 			finishedAt = time.Now().UTC()
 			recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))
 			return err
 		}
-		requestBody := openAIChatRequestBody(req, modelID, promptCacheKeyMaximumLength)
-		requestBody.Messages = normalizedMessages
-		if len(req.Tools) > 0 {
-			tools, err := normalizeOpenAIChatTools(req.Tools)
-			if err != nil {
-				finishedAt = time.Now().UTC()
-				recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))
-				return err
-			}
-			requestBody.Tools = tools
-		}
-		body = requestBody
+		bodyMap = built
 	} else {
 		if !openAIChatRequestGroupUsesCompatShape(req.OpenAIRequestGroup) {
-
 			applyOpenAIPromptCacheKeyOverride(overrideBody, req, modelID, promptCacheKeyMaximumLength)
 		}
-	}
-	bodyMap, err := requestBodyToMap(body)
-	if err != nil {
-		finishedAt = time.Now().UTC()
-		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))
-		return err
+		bodyMap = overrideBody
 	}
 	applyOpenAIThinkingDisable(bodyMap, req, baseURL, modelID, req.OpenAIEndpoint)
 	if err := ApplyOpenAIExtraParams(bodyMap, req.OpenAIExtraParamsEnabled, req.OpenAIExtraParamsJSON); err != nil {
@@ -64,11 +47,10 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		applyOpenAIServiceTier(bodyMap, req)
 	}
 
-	body = bodyMap
 	requestURL := OpenAIEndpointURL(baseURL, req.OpenAIEndpoint)
-	recordLLMRequestArtifact(req, "openai", modelID, "POST", requestURL, body)
+	recordLLMRequestArtifact(req, "openai", modelID, "POST", requestURL, bodyMap)
 
-	payload, err := json.Marshal(body)
+	payload, err := json.Marshal(bodyMap)
 	if err != nil {
 		finishedAt = time.Now().UTC()
 		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))

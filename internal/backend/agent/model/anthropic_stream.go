@@ -94,6 +94,9 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 		body["system"] = anthropicProviderSystemBlocks(systemParts)
 		frontier := buildAnthropicCacheFrontier(body, stableMessageCount)
 		req.RequestKnobs = annotateAnthropicRequestKnobs(req.RequestKnobs, body, frontier)
+		// 注意：此处 clone 不可省略——它把 []anthropicTool/[]anthropicMessage
+		// 等类型化 slice 经 marshal+unmarshal 转为 []any，applyAnthropicCacheBreakpoints
+		// 依赖 .([]any) 断言；省略会导致 tools/system/messages 的 cache breakpoint 失效。
 		body = cloneRequestBodyOverride(body)
 		applyAnthropicCacheBreakpoints(body, frontier.BreakpointPositions)
 		frontier.BreakpointCount = len(frontier.BreakpointPositions)

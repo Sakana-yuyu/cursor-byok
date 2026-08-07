@@ -723,6 +723,156 @@ func openAIChatRequestBody(req StreamRequest, modelID string, promptCacheKeyMaxi
 	return requestBody
 }
 
+// toJSONAnySlice 将 []map[string]any 转为 json.Unmarshal 到 map[string]any 后
+// 的等价 []any 形态（元素保持 map[string]any 引用），保证下游 apply 函数的
+// 类型断言（.([]any) / .(map[string]any)）行为与 requestBodyToMap 往返后一致。
+// 输入为 nil 时返回 nil（对应 json 中的 null），与无 omitempty 字段的输出一致。
+func toJSONAnySlice(items []map[string]any) []any {
+	if items == nil {
+		return nil
+	}
+	out := make([]any, 0, len(items))
+	for _, item := range items {
+		out = append(out, item)
+	}
+	return out
+}
+
+// rawMessagesToJSONAny 将 []json.RawMessage 逐个解码为 json.Unmarshal 后的
+// 等价 any 形态（工具描述经 json 往返后为 []any），供直接构造请求体 map 使用。
+func rawMessagesToJSONAny(items []json.RawMessage) ([]any, error) {
+	if items == nil {
+		return nil, nil
+	}
+	out := make([]any, 0, len(items))
+	for _, item := range items {
+		var value any
+		if err := json.Unmarshal(item, &value); err != nil {
+			return nil, fmt.Errorf("decode raw tool descriptor: %w", err)
+		}
+		out = append(out, value)
+	}
+	return out, nil
+}
+
+// normalizeOpenAIChatMessageToolCallsJSONShape 把 normalizeOpenAIProviderMessages
+// 产出的 messages 中 tool_calls（[]providerToolCallDescriptor 强类型 slice）就地转成
+// json.Unmarshal 到 map 后的 []any 形态。原 requestBodyToMap 路径经 marshal+unmarshal
+// 会把 tool_calls 元素变为 map[string]any（键按字典序），而直接构造 map 时若保持
+// struct slice 会按字段声明序序列化，导致请求体字节与旧路径不一致。此函数仅处理
+// tool_calls 小字段，messages 主体保持零拷贝。
+func normalizeOpenAIChatMessageToolCallsJSONShape(messages []map[string]any) {
+	for _, message := range messages {
+		raw, ok := message["tool_calls"]
+		if !ok {
+			continue
+		}
+		payload, err := json.Marshal(raw)
+		if err != nil {
+			continue
+		}
+		var decoded []any
+		if err := json.Unmarshal(payload, &decoded); err != nil {
+			continue
+		}
+		message["tool_calls"] = decoded
+	}
+}
+
+// buildOpenAIResponsesBodyMap 直接构造 OpenAI Responses 请求体的 map[string]any
+// 形态（与 json.Marshal(openAIResponsesRequestBody) 后 Unmarshal 的结果等价），
+// 消除 requestBodyToMap 的 marshal+unmarshal 双序列化开销。
+// 注意保持无 omitempty 字段（model/input/stream/store）与 omitempty 字段
+// （instructions/max_output_tokens/reasoning/include/prompt_cache_key/tools）
+// 的输出语义：input 为 nil 时仍写入 key（值为 null），供 applyOpenAIParallelToolCalls
+// 的 body["input"] 存在性判断保持原行为。
+func buildOpenAIResponsesBodyMap(req StreamRequest, modelID string, promptCacheKeyMaximumLength int) (map[string]any, error) {
+	instructions, input, err := normalizeOpenAIResponsesInput(req.Messages)
+	if err != nil {
+		return nil, err
+	}
+	body := map[string]any{
+		"model":  modelID,
+		"input":  toJSONAnySlice(input),
+		"stream": true,
+		"store":  false,
+	}
+	if instructions != "" {
+		body["instructions"] = instructions
+	}
+	if shouldSendOpenAIMaxOutputTokens(modelID) && req.MaxTokens != 0 {
+		body["max_output_tokens"] = req.MaxTokens
+	}
+	if key := openAIPromptCacheKey(req, modelID, promptCacheKeyMaximumLength); key != "" {
+		body["prompt_cache_key"] = key
+	}
+	if len(req.Tools) > 0 {
+		tools, err := normalizeOpenAIResponsesTools(req.Tools)
+		if err != nil {
+			return nil, err
+		}
+		if shouldExposeOpenAIResponsesImageGeneration(req, tools) {
+			tools = ensureOpenAIResponsesImageGenerationTool(tools)
+			if req.RequestKnobs != nil {
+				req.RequestKnobs["openai_responses_image_generation_tool"] = "auto"
+			}
+		}
+		body["tools"] = toJSONAnySlice(tools)
+	}
+	if effort := strings.TrimSpace(req.ReasoningEffort); effort != "" {
+		body["reasoning"] = map[string]any{"effort": effort, "summary": "auto"}
+		body["include"] = []any{"reasoning.summary", "reasoning.encrypted_content"}
+	}
+	return body, nil
+}
+
+// buildOpenAIChatBodyMap 直接构造 OpenAI Chat 请求体的 map[string]any 形态
+// （与 json.Marshal(openAIRequestBody) 后 Unmarshal 的结果等价），消除
+// requestBodyToMap 的 marshal+unmarshal 双序列化开销。
+// 保持无 omitempty 字段（model/messages/stream/stream_options）的输出语义：
+// messages 为 nil 时仍写入 key（值为 null），stream_options 在 compat shape
+// 下为 nil（对应原 struct 中 nil map 输出 null）。
+func buildOpenAIChatBodyMap(req StreamRequest, baseURL string, modelID string, promptCacheKeyMaximumLength int) (map[string]any, error) {
+	normalizedMessages, err := normalizeOpenAIProviderMessages(req.Messages, strings.TrimSpace(req.ReasoningEffort) != "", isKimiOpenAIRequest(baseURL, modelID))
+	if err != nil {
+		return nil, err
+	}
+	normalizeOpenAIChatMessageToolCallsJSONShape(normalizedMessages)
+	body := map[string]any{
+		"model":    modelID,
+		"messages": toJSONAnySlice(normalizedMessages),
+		"stream":   true,
+	}
+	if shouldSendOpenAIMaxOutputTokens(modelID) && req.MaxTokens != 0 {
+		body["max_tokens"] = req.MaxTokens
+	}
+	if openAIChatRequestGroupUsesCompatShape(req.OpenAIRequestGroup) {
+		body["stream_options"] = nil
+	} else {
+		body["stream_options"] = map[string]any{"include_usage": true}
+		if key := openAIPromptCacheKey(req, modelID, promptCacheKeyMaximumLength); key != "" {
+			body["prompt_cache_key"] = key
+		}
+		if strings.TrimSpace(req.ReasoningEffort) != "" {
+			body["reasoning_effort"] = req.ReasoningEffort
+		}
+	}
+	if len(req.Tools) > 0 {
+		tools, err := normalizeOpenAIChatTools(req.Tools)
+		if err != nil {
+			return nil, err
+		}
+		if len(tools) > 0 {
+			rawTools, err := rawMessagesToJSONAny(tools)
+			if err != nil {
+				return nil, err
+			}
+			body["tools"] = rawTools
+		}
+	}
+	return body, nil
+}
+
 
 
 func trailingTagPrefixLength(text string, tag string) int {

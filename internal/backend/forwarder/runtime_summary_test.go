@@ -77,7 +77,7 @@ func TestEmitTurnSummary(t *testing.T) {
 		t.Fatal("stream is nil")
 	}
 	stream.CheckpointConversation = &ConversationFile{ConversationID: convID, Mode: "agent"}
-	stream.ProviderAccumulatedText = "已完成登录功能。"
+	stream.ProviderAccumulatedText = []byte("已完成登录功能。")
 
 	if err := service.emitTurnSummary(stream, reqID, "call-1"); err != nil {
 		t.Fatal(err)
@@ -125,7 +125,7 @@ func TestEmitTurnSummary(t *testing.T) {
 	// 新 turn 应重新发送。
 	stream.TurnSeq = 8
 	stream.SummaryEmittedTurn = 7
-	stream.ProviderAccumulatedText = "第二轮完成。"
+	stream.ProviderAccumulatedText = []byte("第二轮完成。")
 	if err := service.emitTurnSummary(stream, reqID, "call-2"); err != nil {
 		t.Fatal(err)
 	}

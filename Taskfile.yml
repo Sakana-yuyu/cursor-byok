@@ -239,6 +239,22 @@ tasks:
     cmds:
       - go build -o ./bin/cursor-proxy-debugger ./cmd/cursor-proxy-debugger
 
+  bench:
+    summary: 运行请求构造/事件分发/文本累积热点 benchmark（含内存分配统计）
+    cmds:
+      - go test -run '^$' -bench 'Benchmark(OpenAI|Anthropic|StreamCommand|TextAccumulation)' -benchmem -count=1 ./internal/backend/agent/model/ ./internal/backend/forwarder/
+
+  bench:full:
+    summary: 运行全部 benchmark（全量测试文件中的 Bench 函数）
+    cmds:
+      - go test -run '^$' -bench . -benchmem ./...
+
+  profile:
+    summary: 对热点 benchmark 生成 CPU profile（输出 .analysis-tmp/cpu.out，可用 go tool pprof 分析）
+    cmds:
+      - mkdir -p .analysis-tmp
+      - go test -run '^$' -bench 'Benchmark(OpenAIResponsesBodyPipeline|TextAccumulationConcat)' -benchtime=1000x -cpuprofile .analysis-tmp/cpu.out ./internal/backend/agent/model/ ./internal/backend/forwarder/
+
   ads:install:
     summary: 安装广告页依赖
     dir: '{{.TASKFILE_DIR}}/ads-page'

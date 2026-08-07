@@ -181,8 +181,8 @@ type ActiveStream struct {
 	DelegationRunTerminals                      map[string]*agentv1.SubagentRunState
 	TimerTokens                                 map[string]uint64
 	StreamTimers                                map[string]*time.Timer
-	ProviderAccumulatedText                     string
-	ProviderAccumulatedReasoning                string
+	ProviderAccumulatedText                     []byte
+	ProviderAccumulatedReasoning                []byte
 	ProviderAccumulatedReasoningSignature       string
 	ProviderAccumulatedReasoningSignatureSource string
 	ProviderAccumulatedReasoningItemID          string

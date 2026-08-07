@@ -198,7 +198,7 @@ func (service *Service) emitTurnSummary(stream *ActiveStream, requestID string, 
 	}
 	turnSeq := stream.TurnSeq
 	userText := strings.TrimSpace(stream.LatestUserText)
-	accumulatedText := strings.TrimSpace(stream.ProviderAccumulatedText)
+	accumulatedText := strings.TrimSpace(string(stream.ProviderAccumulatedText))
 	stream.mu.Unlock()
 	conversation, _, _, err := service.snapshotCheckpointConversation(stream)
 	if err != nil {
