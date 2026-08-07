@@ -388,6 +388,39 @@ func openAIThinkingDisableKind(baseURL string, modelID string, endpoint string) 
 	return classifyProviderCompatibility(baseURL, modelID).ThinkingDisableKind
 }
 
+// openAIModelSupportsParallelToolCalls 判断该模型是否已知支持 Responses parallel_tool_calls。
+// 仅对已验证的 gpt-5.6 系列开启；未知兼容端点保持原行为（不发送该字段）。
+func openAIModelSupportsParallelToolCalls(modelID string) bool {
+	return strings.Contains(strings.ToLower(strings.TrimSpace(modelID)), "gpt-5.6")
+}
+
+// applyOpenAIParallelToolCalls 在 Responses 请求（含 input 且 tools 非空）上开启并行工具调用。
+// 不覆盖用户通过 extra params 显式设置的值。
+func applyOpenAIParallelToolCalls(body map[string]any, modelID string) {
+	if !openAIModelSupportsParallelToolCalls(modelID) {
+		return
+	}
+	if _, isResponsesRequest := body["input"]; !isResponsesRequest {
+		return
+	}
+	if _, explicit := body["parallel_tool_calls"]; explicit {
+		return
+	}
+	switch tools := body["tools"].(type) {
+	case []any:
+		if len(tools) == 0 {
+			return
+		}
+	case []map[string]any:
+		if len(tools) == 0 {
+			return
+		}
+	default:
+		return
+	}
+	body["parallel_tool_calls"] = true
+}
+
 func openAIModelSupportsReasoningNone(model string) bool {
 	model = strings.ToLower(strings.TrimSpace(model))
 	if strings.HasPrefix(model, "gpt-6") {
