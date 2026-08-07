@@ -1,6 +1,7 @@
 package forwarder
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -203,4 +204,39 @@ func replaceUserMessageText(message *agentv1.UserMessage, text string) *agentv1.
 	cloned := proto.Clone(message).(*agentv1.UserMessage)
 	cloned.Text = text
 	return cloned
+}
+
+// goalSystemPromptFragment 生成 goal 模式的系统指令段，追加在
+// customSystemPrompt 位置（systemParts 末尾），避免影响前缀稳定性。
+func goalSystemPromptFragment(goal *GoalState, cfg GoalRuntimeConfig) string {
+	if goal == nil || strings.TrimSpace(goal.GoalText) == "" {
+		return ""
+	}
+	parts := []string{
+		"你当前处于 GOAL 模式。你的目标（GOAL）：",
+		goal.GoalText,
+		"",
+		"执行要求：",
+		"0. 先拆解目标：把目标拆成 3-8 个可验证的步骤清单（在回复中列出），逐项完成并标记。",
+		"1. 自主决策：持续调用工具推进目标，不要轻易停下或询问用户；只有真正无法继续时才停下并说明卡点。",
+		"2. 循环执行：一轮结束（没有工具调用）不代表完成。请自检目标是否达成：未达成则继续执行下一轮，直到目标真正达成。",
+		"3. 失败重试：工具执行失败时分析原因、换一种方式重试，不要直接放弃。",
+		"4. 进度汇报：每完成一个阶段，用简短一句话汇报当前进度。",
+		"5. 完成标准：目标的所有要求都满足后才算完成。完成时输出以 [goal:complete] 开头（单独一行）的最终完成报告，说明你做了什么、验证了什么、结果如何；不要在没有真正完成时输出该标记。",
+	}
+	if cfg.MaxProviderPasses > 0 {
+		parts = append(parts, fmt.Sprintf("6. 预算：本 goal 最多执行 %d 轮 provider 调用，请高效推进，优先完成最关键步骤。", cfg.MaxProviderPasses))
+	}
+	return strings.Join(parts, "\n")
+}
+
+// joinNonEmpty 用空行连接非空片段。
+func joinNonEmpty(parts ...string) string {
+	var nonEmpty []string
+	for _, p := range parts {
+		if strings.TrimSpace(p) != "" {
+			nonEmpty = append(nonEmpty, strings.TrimSpace(p))
+		}
+	}
+	return strings.Join(nonEmpty, "\n\n")
 }

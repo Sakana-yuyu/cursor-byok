@@ -1,6 +1,7 @@
 package forwarder
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -71,5 +72,32 @@ func TestGoalSnapshotsEmpty(t *testing.T) {
 	snaps := service.GoalSnapshots()
 	if len(snaps) != 0 {
 		t.Fatalf("expected empty snapshots, got %d", len(snaps))
+	}
+}
+
+func TestGoalSystemPromptFragment(t *testing.T) {
+	goal := &GoalState{GoalText: "修复全部测试"}
+	cfg := defaultGoalRuntimeConfig()
+	cfg.MaxProviderPasses = 10
+	frag := goalSystemPromptFragment(goal, cfg)
+	for _, want := range []string{"GOAL", "修复全部测试", "10 轮", "自检", "失败", "完成报告"} {
+		if !strings.Contains(frag, want) {
+			t.Fatalf("fragment missing %q: %s", want, frag)
+		}
+	}
+	if frag := goalSystemPromptFragment(nil, cfg); frag != "" {
+		t.Fatalf("nil goal must produce empty fragment, got %q", frag)
+	}
+	if frag := goalSystemPromptFragment(&GoalState{GoalText: "  "}, cfg); frag != "" {
+		t.Fatalf("blank goal must produce empty fragment, got %q", frag)
+	}
+}
+
+func TestJoinNonEmpty(t *testing.T) {
+	if got := joinNonEmpty("a", "", "b", "  "); got != "a\n\nb" {
+		t.Fatalf("joinNonEmpty = %q, want %q", got, "a\n\nb")
+	}
+	if got := joinNonEmpty("", ""); got != "" {
+		t.Fatalf("joinNonEmpty all empty = %q, want empty", got)
 	}
 }

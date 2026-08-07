@@ -1731,10 +1731,17 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	maxMode := stream.MaxMode
 	mode := stream.Mode
 	latestUserText := stream.LatestUserText
+	goal := stream.Goal
+	customSystemPrompt := stream.CustomSystemPrompt
 	thinkingCompletedPublished := stream.ProviderSyntheticThinkingPublished
 	thinkingDeltaCount := stream.ProviderThinkingDeltaCount
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
+	if goal != nil {
+		if frag := goalSystemPromptFragment(goal, service.currentGoalConfig()); frag != "" {
+			customSystemPrompt = joinNonEmpty(customSystemPrompt, frag)
+		}
+	}
 	log.Printf("forwarder provider pass started request_id=%s model_call_id=%s provider_pass=%d thinking_completed=%t thinking_delta_count=%d", strings.TrimSpace(requestID), strings.TrimSpace(modelCallID), currentPass, thinkingCompletedPublished, thinkingDeltaCount)
 	if service.debug != nil {
 		service.debug.LogRuntime(context.Background(), requestID, conversationID, "provider_pass_started", map[string]any{
@@ -1760,7 +1767,7 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 		service.setTurnPhase(stream, TurnPhaseFailed)
 		return service.failStream(stream, "unknown", err)
 	}
-	compiled, err := service.compiler.Compile(conversation, mode, latestUserText, modelName, stream.CustomSystemPrompt)
+	compiled, err := service.compiler.Compile(conversation, mode, latestUserText, modelName, customSystemPrompt)
 	if err != nil {
 		service.setTurnPhase(stream, TurnPhaseFailed)
 		return service.failStream(stream, "unknown", err)
@@ -1803,7 +1810,7 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 			service.setTurnPhase(stream, TurnPhaseFailed)
 			return service.failStream(stream, "unknown", freshErr)
 		}
-		recompiled, recompileErr := service.compiler.Compile(freshConversation, mode, latestUserText, modelName, stream.CustomSystemPrompt)
+		recompiled, recompileErr := service.compiler.Compile(freshConversation, mode, latestUserText, modelName, customSystemPrompt)
 		if recompileErr != nil {
 			service.setTurnPhase(stream, TurnPhaseFailed)
 			return service.failStream(stream, "unknown", recompileErr)
