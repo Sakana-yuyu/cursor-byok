@@ -3,7 +3,10 @@ package forwarder
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
+
+	modeladapter "cursor/internal/backend/agent/model"
 )
 
 func TestDelegatedContextBudgetForWindow(t *testing.T) {
@@ -23,6 +26,61 @@ func TestDelegatedContextBudgetForWindow(t *testing.T) {
 				t.Fatalf("delegatedContextBudgetForWindow(%d) = %d, want %d", tc.window, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestDelegatedToolResultOmittedText(t *testing.T) {
+	got := delegatedToolResultOmittedText("Read")
+	if !strings.Contains(got, "Read") || !strings.Contains(got, "输出过长已省略") {
+		t.Fatalf("unexpected omitted text: %q", got)
+	}
+}
+
+func TestSnipDelegatedOversizedToolResults(t *testing.T) {
+	big := strings.Repeat("x", 40*1024)
+	messages := []modeladapter.Message{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: "task prompt"},
+		{Role: "assistant", Content: "let me read", ToolCalls: []modeladapter.ToolCallDescriptor{{ID: "c1"}}},
+		{Role: "tool", Content: big, ToolCallID: "c1", Name: "Read"},
+		{Role: "assistant", Content: "done", ToolCalls: []modeladapter.ToolCallDescriptor{{ID: "c2"}}},
+		{Role: "tool", Content: "small result", ToolCallID: "c2", Name: "Shell"},
+	}
+	// 预算极小，强制压缩（但最近一轮不 snip）
+	stats := &delegatedCompactionStats{}
+	out, changed := snipDelegatedOversizedToolResults(messages, 100, stats)
+	if !changed {
+		t.Fatal("expected compaction to happen")
+	}
+	if stats.SnipCount != 1 {
+		t.Fatalf("SnipCount = %d, want 1", stats.SnipCount)
+	}
+	// 第一条 tool（Read）被截断；最后一条 tool（Shell）不截断
+	if out[3].Content == big {
+		t.Fatal("oldest oversized tool result should be snipped")
+	}
+	if len(out[3].Content) > delegatedSnipTargetBytes+len(delegatedToolResultOmittedText("Read")) {
+		t.Fatalf("snipped content too long: %d", len(out[3].Content))
+	}
+	if !strings.Contains(out[3].Content, "输出过长已省略") {
+		t.Fatal("snipped content missing omitted marker")
+	}
+	if out[5].Content != "small result" {
+		t.Fatal("recent turn tool result must not be snipped")
+	}
+}
+
+func TestSnipNoOpWithinBudget(t *testing.T) {
+	messages := []modeladapter.Message{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: "task"},
+	}
+	out, changed := snipDelegatedOversizedToolResults(messages, 1_000_000, nil)
+	if changed {
+		t.Fatal("expected no change within budget")
+	}
+	if len(out) != len(messages) {
+		t.Fatal("messages length changed unexpectedly")
 	}
 }
 
