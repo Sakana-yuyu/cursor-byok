@@ -38,3 +38,38 @@ func TestDefaultGoalRuntimeConfig(t *testing.T) {
 		t.Fatalf("unlimited/defaults wrong: %+v", cfg)
 	}
 }
+
+func TestParseGoalCommand(t *testing.T) {
+	cases := []struct {
+		name       string
+		input      string
+		wantText   string
+		wantStrict bool
+		wantGoal   bool
+	}{
+		{"slash goal", "/goal 修复登录 bug", "修复登录 bug", false, true},
+		{"hash goal", "#goal 跑通全部单测", "跑通全部单测", false, true},
+		{"uppercase", "/GOAL 重构模块", "重构模块", false, true},
+		{"strict", "/goal --strict 实现支付流程", "实现支付流程", true, true},
+		{"goal empty", "/goal   ", "", false, false},
+		{"no prefix", "修复登录 bug", "", false, false},
+		{"prefix in middle", "请 /goal 修复", "", false, false},
+		{"goal colon", "goal: 整理依赖", "整理依赖", false, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotText, gotStrict, gotGoal := parseGoalCommand(tc.input)
+			if gotText != tc.wantText || gotStrict != tc.wantStrict || gotGoal != tc.wantGoal {
+				t.Fatalf("parseGoalCommand(%q) = (%q, %v, %v), want (%q, %v, %v)", tc.input, gotText, gotStrict, gotGoal, tc.wantText, tc.wantStrict, tc.wantGoal)
+			}
+		})
+	}
+}
+
+func TestGoalSnapshotsEmpty(t *testing.T) {
+	service := &Service{goals: make(map[string]*GoalState)}
+	snaps := service.GoalSnapshots()
+	if len(snaps) != 0 {
+		t.Fatalf("expected empty snapshots, got %d", len(snaps))
+	}
+}

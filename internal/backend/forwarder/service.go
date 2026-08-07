@@ -719,6 +719,15 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 	if err := service.prepareStreamForForcedTurn(intent); err != nil {
 		return err
 	}
+	if !intent.GoalMode {
+		if goalText, strict, isGoal := parseGoalCommand(userMessageText(intent.UserMessage)); isGoal {
+			intent.GoalMode = true
+			intent.GoalText = goalText
+			intent.GoalStrict = strict
+			// 剥离前缀，避免 goal 目标文本被当作指令重复注入。
+			intent.UserMessage = replaceUserMessageText(intent.UserMessage, goalText)
+		}
+	}
 	if service.shouldReuseActiveRun(intent) {
 		log.Printf("forwarder duplicate run reused request_id=%s conversation_id=%s", strings.TrimSpace(intent.RequestID), strings.TrimSpace(intent.ConversationID))
 		return nil
@@ -796,6 +805,16 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 	}
 	if stream == nil {
 		return fmt.Errorf("open stream failed")
+	}
+	if intent.GoalMode {
+		goalState := newGoalState(intent.ConversationID, intent.GoalText, intent.GoalStrict)
+		stream.Goal = goalState
+		service.registerGoal(intent.ConversationID, goalState)
+		if service.debug != nil {
+			service.debug.LogRuntime(context.Background(), intent.RequestID, intent.ConversationID, "goal_started", map[string]any{
+				"goal_text": intent.GoalText,
+			})
+		}
 	}
 	if err := service.replaceCheckpointConversation(stream, conversation); err != nil {
 		return err

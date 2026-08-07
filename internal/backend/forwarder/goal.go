@@ -3,6 +3,9 @@ package forwarder
 import (
 	"strings"
 	"time"
+
+	agentv1 "cursor/gen/agentv1"
+	"google.golang.org/protobuf/proto"
 )
 
 // GoalStatus 是 goal 会话的终态/运行态枚举。只在内存维护（MVP），不持久化。
@@ -161,4 +164,43 @@ func (service *Service) currentGoalConfig() GoalRuntimeConfig {
 		return defaultGoalRuntimeConfig()
 	}
 	return service.goalConfig.GoalRuntimeConfig()
+}
+
+// goalCommandPrefixes 是 /goal 文本命令的识别前缀。命中后前缀与可选的 --strict
+// flag 被剥离，剩余文本作为 goal 目标写入 GoalState（前端面板复用同一解析）。
+// --strict 借鉴 Reasonix 的 /goal --strict：校验不通过不允许覆盖/兜底。
+var goalCommandPrefixes = []string{"/goal", "#goal", "goal:"}
+
+// parseGoalCommand 识别 /goal 文本命令。返回 (目标文本, strict, 是否命中)。
+func parseGoalCommand(text string) (goalText string, strict bool, isGoal bool) {
+	trimmed := strings.TrimSpace(text)
+	lower := strings.ToLower(trimmed)
+	for _, prefix := range goalCommandPrefixes {
+		if strings.HasPrefix(lower, prefix) {
+			rest := strings.TrimSpace(trimmed[len(prefix):])
+			if rest == "" {
+				return "", false, false
+			}
+			restLower := strings.ToLower(rest)
+			if strings.HasPrefix(restLower, "--strict") {
+				rest = strings.TrimSpace(rest[len("--strict"):])
+				if rest == "" {
+					return "", true, false
+				}
+				return rest, true, true
+			}
+			return rest, false, true
+		}
+	}
+	return "", false, false
+}
+
+// replaceUserMessageText 返回替换 text 后的 UserMessage 副本。
+func replaceUserMessageText(message *agentv1.UserMessage, text string) *agentv1.UserMessage {
+	if message == nil {
+		return &agentv1.UserMessage{Text: text}
+	}
+	cloned := proto.Clone(message).(*agentv1.UserMessage)
+	cloned.Text = text
+	return cloned
 }

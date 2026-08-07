@@ -140,6 +140,8 @@ type providerCallTiming struct {
 type ActiveStream struct {
 	mu sync.Mutex
 
+	// Goal 挂载 goal 会话状态；nil = 非 goal 会话（全路径旁路）。
+	Goal                         *GoalState
 	RequestID                    string
 	ConversationID               string
 	TurnSeq                      int64
@@ -547,6 +549,10 @@ type InboundIntent struct {
 	IgnoredReason                string
 	Prewarm                      bool
 	ManualCompaction             manualCompactionDirective
+	// GoalMode 标记该 run 以 goal 模式执行（/goal 前缀或前端面板发起）。
+	GoalMode   bool
+	GoalText   string
+	GoalStrict bool // /goal --strict 标记（借鉴 Reasonix Strict 模式）
 }
 
 // normalizeMode 对外部传入的 mode 做最小归一化，但不再静默降级。
