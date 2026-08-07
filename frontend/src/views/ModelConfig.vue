@@ -324,22 +324,42 @@ async function handleDiagnose() {
     }
 
     const issues = diagResult?.issues || [];
+    // 区分两类问题：协议不匹配可一键修正；目录未覆盖只能提示（能力未知，交给用户补填）
+    const mismatchIssues = issues.filter((i) => i.category === "provider_mismatch");
+    const uncoveredIssues = issues.filter((i) => i.category === "catalog_uncovered");
+
     if (issues.length === 0) {
-      await showModal({ title: "诊断完成", content: `已检查 ${diagResult?.total ?? 0} 个模型，未发现协议配置问题。\n\n${alignSummary}` });
+      await showModal({ title: "诊断完成", content: `已检查 ${diagResult?.total ?? 0} 个模型，未发现问题。\n\n${alignSummary}` });
       return;
     }
-    const sample = issues.slice(0, 5).map((i) => `· ${i.modelID}：${i.currentValue} → ${i.suggestedValue}`);
-    const more = issues.length > 5 ? `\n……等共 ${issues.length} 个问题` : "";
+
+    let content = "";
+    if (uncoveredIssues.length > 0) {
+      const uncoveredSample = uncoveredIssues.slice(0, 5).map((i) => `· ${i.modelID}`).join("\n");
+      const uncoveredMore = uncoveredIssues.length > 5 ? `\n……等共 ${uncoveredIssues.length} 个` : "";
+      content += `检测到 ${uncoveredIssues.length} 个模型不在内置能力目录中（能力未知，图片不会直传；可在模型编辑页手动补充能力）：\n\n${uncoveredSample}${uncoveredMore}\n\n`;
+    }
+    if (mismatchIssues.length > 0) {
+      const sample = mismatchIssues.slice(0, 5).map((i) => `· ${i.modelID}：${i.currentValue} → ${i.suggestedValue}`).join("\n");
+      const more = mismatchIssues.length > 5 ? `\n……等共 ${mismatchIssues.length} 个问题` : "";
+      content += `检测到 ${mismatchIssues.length} 个模型的协议配置可能不匹配（如 Claude/Gemini 被配为 OpenAI 协议，导致缓存失效）：\n\n${sample}${more}`;
+    }
+    content += `\n\n${alignSummary}`;
+
+    if (mismatchIssues.length === 0) {
+      await showModal({ title: "诊断完成", content });
+      return;
+    }
     const confirmed = await showModal({
       title: "发现协议配置问题",
-      content: `检测到 ${issues.length} 个模型的协议配置可能不匹配（如 Claude/Gemini 被配为 OpenAI 协议，导致缓存失效）：\n\n${sample.join("\n")}${more}\n\n是否一键修正为原生协议？\n\n${alignSummary}`,
+      content: content + "\n\n是否一键修正为原生协议？",
       confirmText: "一键修正",
       cancelText: "取消",
     });
     if (!confirmed) return;
-    await applyDiagnosticFixes(issues.map((i) => i.channelId));
+    await applyDiagnosticFixes(mismatchIssues.map((i) => i.channelId));
     await reloadUserConfig({ modelAdaptersOnly: true });
-    await showModal({ title: "修正完成", content: `已修正 ${issues.length} 个模型的协议配置。\n\n${alignSummary}` });
+    await showModal({ title: "修正完成", content: `已修正 ${mismatchIssues.length} 个模型的协议配置。\n\n${alignSummary}` });
   } catch (error) {
     await showActionError("诊断失败", toUserError(error));
   } finally {

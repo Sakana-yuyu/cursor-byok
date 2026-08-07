@@ -58,6 +58,9 @@ func TestCapabilitiesKnownModels(t *testing.T) {
 		{"deepseek-v4-pro", false, false, true, 1_000_000},
 		// Kimi K2.6 — 不支持视觉
 		{"kimi-k2.6", false, false, true, 256_000},
+		// Kimi 3.0 / K3 — 多模态，支持视觉（回归：曾误判为纯文本导致图片被剥离）
+		{"kimi-3.0", true, false, true, 256_000},
+		{"kimi-k3", true, false, true, 256_000},
 		// GLM-5.2 — 支持视觉
 		{"glm-5.2", true, true, true, 200_000},
 		// MiMo — 支持思考
@@ -95,6 +98,60 @@ func TestCapabilitiesKnownModels(t *testing.T) {
 func TestCapabilitiesUnknownModel(t *testing.T) {
 	if got := Capabilities("unknown-model-xyz"); got != nil {
 		t.Errorf("Capabilities(unknown) = %v, want nil", got)
+	}
+}
+
+func TestLookup(t *testing.T) {
+	covered := Lookup("claude-sonnet-4.6")
+	if !covered.Covered {
+		t.Fatalf("Lookup(claude-sonnet-4.6).Covered = false, want true")
+	}
+	if covered.NormalizedID != "claude-sonnet-4.6" {
+		t.Errorf("Lookup().NormalizedID = %q, want %q", covered.NormalizedID, "claude-sonnet-4.6")
+	}
+	if covered.Capability == nil {
+		t.Fatalf("Lookup(claude-sonnet-4.6).Capability = nil, want non-nil")
+	}
+
+	// 带前缀/大小写/下划线的模型名应标准化后命中
+	withPrefix := Lookup("  Models/CLAUDE_SONNET-4.6 ")
+	if !withPrefix.Covered {
+		t.Errorf("Lookup(%q).Covered = false, want true", "  Models/CLAUDE_SONNET-4.6 ")
+	}
+	if withPrefix.NormalizedID != "claude-sonnet-4.6" {
+		t.Errorf("Lookup().NormalizedID = %q, want %q", withPrefix.NormalizedID, "claude-sonnet-4.6")
+	}
+
+	uncovered := Lookup("brand-new-model-xyz")
+	if uncovered.Covered {
+		t.Errorf("Lookup(unknown).Covered = true, want false")
+	}
+	if uncovered.NormalizedID != "brand-new-model-xyz" {
+		t.Errorf("Lookup(unknown).NormalizedID = %q, want %q", uncovered.NormalizedID, "brand-new-model-xyz")
+	}
+	if uncovered.Capability != nil {
+		t.Errorf("Lookup(unknown).Capability = %v, want nil", uncovered.Capability)
+	}
+
+	// 空/空白输入：不覆盖且无标准化 ID
+	empty := Lookup("   ")
+	if empty.Covered || empty.NormalizedID != "" || empty.Capability != nil {
+		t.Errorf("Lookup(blank) = %+v, want empty result", empty)
+	}
+}
+
+func TestNormalizeModelID(t *testing.T) {
+	cases := map[string]string{
+		"  CLAUDE_SONNET-4.6 ": "claude-sonnet-4.6",
+		"models/gpt-4o":        "gpt-4o",
+		"provider/gemini-2.5-pro": "gemini-2.5-pro",
+		"kimi-k3":              "kimi-k3",
+		"":                     "",
+	}
+	for input, want := range cases {
+		if got := NormalizeModelID(input); got != want {
+			t.Errorf("NormalizeModelID(%q) = %q, want %q", input, got, want)
+		}
 	}
 }
 

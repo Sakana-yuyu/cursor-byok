@@ -3,13 +3,17 @@ import Button from "@/components/ui/Button.vue";
 import { applyDiagnosticFixes, diagnoseModelAdapters } from "@/services/clientApi";
 import { exportSessionDebugBundle, listSessionDebugFiles, readSessionDebugTail } from "@/services/runtimeControlApi";
 import { toUserError } from "@/state/appState";
-import { onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 
 const result = ref({ total: 0, issues: [] });
 const loading = ref(false);
 const fixing = ref(false);
 const error = ref("");
+// 是否存在可自动修正（provider_mismatch）的问题：catalog_uncovered 只能提示不能修正
+const hasFixableIssues = computed(() =>
+  result.value.issues.some((issue) => issue.category === "provider_mismatch"),
+);
 
 async function scan() {
   loading.value = true;
@@ -19,9 +23,12 @@ async function scan() {
 }
 async function fixAll() {
   if (!result.value.issues.length) return;
+  // 只修正可自动修正的类别（provider_mismatch）；catalog_uncovered 无法自动修正。
+  const fixable = result.value.issues.filter((issue) => issue.category === "provider_mismatch");
+  if (!fixable.length) return;
   fixing.value = true;
   error.value = "";
-  try { result.value = await applyDiagnosticFixes(result.value.issues.map((issue) => issue.channelId)); }
+  try { result.value = await applyDiagnosticFixes(fixable.map((issue) => issue.channelId)); }
   catch (err) { error.value = String(err); }
   finally { fixing.value = false; }
 }
@@ -235,11 +242,11 @@ onMounted(() => {
       <div class="mb-4 flex items-center justify-between gap-4">
         <div>
           <h2 class="text-sm font-medium">模型协议诊断</h2>
-          <p class="mt-1 text-xs text-zinc-400">检查已导入模型的协议配置是否与模型类型匹配。</p>
+          <p class="mt-1 text-xs text-zinc-400">检查已导入模型的协议配置与能力目录覆盖情况。</p>
         </div>
         <div class="flex gap-2">
           <Button variant="default" :disabled="loading" @click="scan">重新扫描</Button>
-          <Button variant="primary" :disabled="fixing || !result.issues.length" @click="fixAll">一键修正</Button>
+          <Button variant="primary" :disabled="fixing || !hasFixableIssues" @click="fixAll">一键修正协议</Button>
         </div>
       </div>
       <div v-if="error" class="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-[8px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-sm text-[#fca5a5]">
@@ -249,12 +256,13 @@ onMounted(() => {
         </Button>
       </div>
       <div class="mb-4 text-sm text-zinc-400">已检查 {{ result.total }} 个模型，发现 {{ result.issues.length }} 个问题。</div>
-      <div v-if="!result.issues.length && !loading" class="border border-emerald-900 bg-emerald-950/30 p-5 text-emerald-300">未发现协议配置问题。</div>
+      <div v-if="!result.issues.length && !loading" class="border border-emerald-900 bg-emerald-950/30 p-5 text-emerald-300">未发现问题。</div>
       <div v-else class="space-y-3">
-        <article v-for="issue in result.issues" :key="issue.channelId + issue.modelID" class="border border-zinc-800 bg-zinc-900/60 p-4">
+        <article v-for="issue in result.issues" :key="issue.channelId + issue.modelID + issue.category" class="border p-4" :class="issue.category === 'catalog_uncovered' ? 'border-amber-900/50 bg-amber-950/20' : 'border-zinc-800 bg-zinc-900/60'">
           <div class="flex items-start justify-between gap-4">
             <div><h3 class="font-medium">{{ issue.displayName || issue.modelID }}</h3><p class="mt-1 text-xs text-zinc-500">{{ issue.modelID }} · {{ issue.groupName || "未分组" }}</p></div>
-            <span class="text-xs text-amber-300">{{ issue.currentValue }} -> {{ issue.suggestedValue }}</span>
+            <span v-if="issue.category === 'catalog_uncovered'" class="shrink-0 text-xs text-amber-300">目录未覆盖</span>
+            <span v-else class="shrink-0 text-xs text-amber-300">{{ issue.currentValue }} -> {{ issue.suggestedValue }}</span>
           </div>
           <p class="mt-3 text-sm text-zinc-300">{{ issue.message }}</p>
         </article>

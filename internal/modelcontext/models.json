@@ -623,6 +623,26 @@
       }
     },
     {
+      "pattern": "^kimi-?3(?:-|\\.|$)",
+      "displayName": "Kimi 3.0",
+      "contextWindowTokens": 256000,
+      "maxOutputTokens": 16384,
+      "supportsVision": true,
+      "supportsAudio": false,
+      "supportsTools": true,
+      "supportsThinking": false
+    },
+    {
+      "pattern": "^kimi-?k3(?:-|\\.|$)",
+      "displayName": "Kimi K3",
+      "contextWindowTokens": 256000,
+      "maxOutputTokens": 16384,
+      "supportsVision": true,
+      "supportsAudio": false,
+      "supportsTools": true,
+      "supportsThinking": false
+    },
+    {
       "pattern": "^kimi-?k?2[.-]?6(?:-|$)",
       "displayName": "Kimi K2.6",
       "contextWindowTokens": 256000,

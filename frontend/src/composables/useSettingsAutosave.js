@@ -160,8 +160,14 @@ export function useSettingsAutosave() {
   });
 
   onScopeDispose(() => {
-    for (const entry of entries.values()) {
-      clearTimer(entry);
+    for (const [key, entry] of entries.entries()) {
+      if (entry.timerID !== null && typeof entry.lastSave === "function") {
+        // 卸载前把未落盘的防抖保存立即发出，避免切页/切分类时静默丢弃。
+        // Wails/HTTP 调用不依赖组件生命周期，fire-and-forget 可正常完成。
+        void run(key, entry.lastSave).catch(() => {});
+      } else {
+        clearTimer(entry);
+      }
     }
   });
 

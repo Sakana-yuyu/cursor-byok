@@ -8,6 +8,13 @@ defineProps({
     type: Object,
     default: null,
   },
+  // covered=false 表示模型未命中内置能力目录（能力未知）。与 null capabilities
+  // 的区别：capabilities 为 null 时可能是「还没输入模型 ID」，covered 是父级
+  // 基于「已输入但未命中」的显式判定，避免空输入时误报。
+  covered: {
+    type: Boolean,
+    default: true,
+  },
   detectedContextWindow: {
     type: Object,
     default: null,
@@ -64,6 +71,12 @@ const emit = defineEmits(["update:modelValue", "select-tier", "open-vision-setti
       <span class="inline-flex items-center gap-0.5 rounded-full border border-[#3f3f3f] bg-[#2a2a2a] px-2 py-0.5 text-[11px] text-[#a3a3a3]">
         最大输出 {{ (capabilities.maxOutputTokens / 1000).toFixed(0) }}K
       </span>
+    </div>
+
+    <!-- 未覆盖模型提示：能力未知，保守运行 + 引导补填 -->
+    <div v-if="!covered" class="rounded-[6px] border border-amber-800/40 bg-amber-900/20 px-3 py-2 text-[11px] leading-5 text-amber-200">
+      该模型不在内置能力目录中，能力（视觉/工具/上下文窗口等）未知。当前按保守策略运行：图片不会直传给该模型。
+      如需启用视觉等能力，请手动填写上方上下文窗口，并在「高级设置」中按需配置；也可在诊断页触发「自动配对」尝试从供应商目录补全。
     </div>
 
     <div v-if="capabilities && capabilities.supportsVision === false" class="rounded-[6px] border border-yellow-800/40 bg-yellow-900/20 px-3 py-1.5 text-[11px] text-yellow-200">

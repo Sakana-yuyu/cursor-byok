@@ -55,7 +55,6 @@ const MODEL_CAPABILITIES = [
   { pattern: /^gpt-?4o(?:-|$)/,
     displayName: "GPT-4o", contextWindowTokens: 128_000, maxOutputTokens: 16_384,
     supportsVision: true, supportsAudio: false, supportsTools: true, supportsThinking: false },
-// PLACEHOLDER_CAPABILITIES_CONTINUED
   { pattern: /^o[13]-mini(?:-|$)/,
     displayName: "OpenAI o-mini", contextWindowTokens: 128_000, maxOutputTokens: 65_536,
     supportsVision: true, supportsAudio: false, supportsTools: true, supportsThinking: true },
@@ -129,6 +128,12 @@ const MODEL_CAPABILITIES = [
     supportsVision: false, supportsAudio: false, supportsTools: true, supportsThinking: false },
 
   // ─── Kimi / Moonshot ──────────────────────────────────────────────────────
+  { pattern: /^kimi-?3(?:-|\.|$)/,
+    displayName: "Kimi 3.0", contextWindowTokens: 256_000, maxOutputTokens: 16_384,
+    supportsVision: true, supportsAudio: false, supportsTools: true, supportsThinking: false },
+  { pattern: /^kimi-?k3(?:-|\.|$)/,
+    displayName: "Kimi K3", contextWindowTokens: 256_000, maxOutputTokens: 16_384,
+    supportsVision: true, supportsAudio: false, supportsTools: true, supportsThinking: false },
   { pattern: /^kimi-?k?2[.-]?6(?:-|$)/,
     displayName: "Kimi K2.6", contextWindowTokens: 256_000, maxOutputTokens: 16_384,
     supportsVision: false, supportsAudio: false, supportsTools: true, supportsThinking: false },
@@ -184,7 +189,6 @@ const MODEL_CAPABILITIES = [
     supportsVision: false, supportsAudio: false, supportsTools: true, supportsThinking: false },
 ];
 
-// PLACEHOLDER_FUNCTIONS
 function normalizeModelID(value) {
   return String(value || "")
     .trim()
@@ -222,6 +226,17 @@ export function contextWindowTokensForModel(modelID, explicitValue) {
   const parsed = Number(explicitValue);
   if (Number.isInteger(parsed) && parsed > 0) return parsed;
   return resolveModelCapabilities(modelID)?.contextWindowTokens || 0;
+}
+
+/**
+ * isModelCovered — 报告模型 ID 是否命中内置能力目录。
+ * 与后端 modelcontext.Lookup 的判定口径一致（同一份规则数据源）。
+ * 未覆盖 ≠ 不支持：表示能力未知，需要用户补填或目录补录。
+ */
+export function isModelCovered(modelID) {
+  const normalized = normalizeModelID(modelID);
+  if (!normalized) return false;
+  return MODEL_CAPABILITIES.some(({ pattern }) => pattern.test(normalized));
 }
 
 export const MODEL_CONTEXT_DATA_SOURCE = DATA_SOURCE;

@@ -12,7 +12,7 @@ import {
   GetGoals, StartGoal, StopGoal,
   GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
   EnableReaderMCP,
-  RepairCACorruption,
+  RepairCACorruption, GetCARepairStatus,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
 import { GetAdRuntime, OpenExternalURL } from "@bindings/cursor/internal/bridge/adservice.js";
 import {
@@ -58,7 +58,7 @@ const desktopMethods = {
   GetGoals, StartGoal, StopGoal,
   GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
   EnableReaderMCP,
-  RepairCACorruption,
+  RepairCACorruption, GetCARepairStatus,
 };
 
 const API_LOG_PREFIX = "[clientApi]";

@@ -173,7 +173,7 @@ func (s *ProxyService) DeleteHistorySessions(sessionIDs []string) error {
 // ClearHistory removes every history session plus orphan debug data and resets usage stats.
 // Returns the number of removed session directories.
 func (s *ProxyService) ClearHistory() (int, error) {
-	return clearHistory()
+	return clearHistory(s.ResetUsageMetrics)
 }
 
 // DeleteHistoryDebugLogs 只删除指定会话的调试日志（debug 子目录），保留会话本体。

@@ -10,7 +10,7 @@ import Select from "@/components/ui/Select.vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
 import { getModelEditorContext } from "@/services/clientApi";
 import { showModal } from "@/composables/useModal";
-import { resolveModelContextWindow, resolveModelCapabilities } from "@/utils/modelContext";
+import { isModelCovered, resolveModelContextWindow, resolveModelCapabilities } from "@/utils/modelContext";
 import { providerIcon, providerLabel, providerSelectOptions } from "@/utils/providerMeta";
 import { supplierSelectOptions, supplierTemplate } from "@/utils/supplierCatalog";
 import {
@@ -229,6 +229,8 @@ function clearPricing() {
 
 const detectedCapabilities = computed(() => resolveModelCapabilities(draft.modelID));
 const detectedContextWindow = computed(() => resolveModelContextWindow(draft.modelID));
+// 已输入模型 ID 但目录未命中 → 未覆盖（区别于空输入时的 null）
+const modelCovered = computed(() => !String(draft.modelID || "").trim() || isModelCovered(draft.modelID));
 
 // 上下文窗口快捷档位
 const activeContextTier = computed(() => {
@@ -1007,6 +1009,7 @@ onMounted(async () => {
           <ModelCapabilitiesSection
             v-model="contextWindowTokensInput"
             :capabilities="detectedCapabilities"
+            :covered="modelCovered"
             :detected-context-window="detectedContextWindow"
             :active-tier="activeContextTier"
             :recommended-tier="recommendedContextTier"

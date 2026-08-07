@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"cursor/internal/modelchannel"
+	"cursor/internal/modelcontext"
 )
 
 // DiagnosticSeverity 表示诊断问题的严重程度。
@@ -28,6 +29,10 @@ const (
 	// DiagnosticCategoryProviderMismatch 表示模型族与配置的 provider 协议族不匹配
 	// （如 claude 配成 openai）。这是缓存失效的根因。
 	DiagnosticCategoryProviderMismatch DiagnosticCategory = "provider_mismatch"
+	// DiagnosticCategoryCatalogUncovered 表示该模型不在内置能力目录中，能力未知。
+	// 这类问题无法自动修正：需要用户补填能力覆盖（视觉/工具/窗口等），或等目录补录。
+	// 运行时按保守策略处理（图片占位、保留渠道配置）。
+	DiagnosticCategoryCatalogUncovered DiagnosticCategory = "catalog_uncovered"
 )
 
 // DiagnosticIssue 描述一条配置诊断问题及其建议修正。
@@ -69,6 +74,7 @@ type DiagnosticResult struct {
 // 当前检测规则：
 //   - claude-* 模型但 type!=anthropic → 建议改 anthropic（前缀缓存依赖 cache_control）
 //   - gemini-* 模型但 type!=gemini   → 建议改 gemini（原生协议）
+//   - 模型不在内置能力目录（catalog 未覆盖）→ 提示用户补填能力，无法自动修正
 func DiagnoseModelAdapters(adapters []ModelAdapterConfig) DiagnosticResult {
 	result := DiagnosticResult{Total: len(adapters)}
 	for i := range adapters {
@@ -77,28 +83,42 @@ func DiagnoseModelAdapters(adapters []ModelAdapterConfig) DiagnosticResult {
 		if modelID == "" {
 			continue
 		}
+		channelID := strings.TrimSpace(adapter.ID)
 		// 仅当 provider 推断与当前 type 不一致，且当前 type 是 openai 时才报问题。
 		// 不覆盖用户显式配置的 anthropic/gemini type（即使模型名不匹配也不报，尊重用户意图）。
-		if adapter.Type != "openai" {
-			continue
+		if adapter.Type == "openai" {
+			suggested := modelchannel.InferProviderType(modelID, adapter.Type)
+			if suggested != adapter.Type {
+				result.Issues = append(result.Issues, DiagnosticIssue{
+					Index:          i,
+					Severity:       DiagnosticSeverityWarning,
+					Category:       DiagnosticCategoryProviderMismatch,
+					ChannelID:      channelID,
+					DisplayName:    strings.TrimSpace(adapter.DisplayName),
+					GroupName:      strings.TrimSpace(adapter.GroupName),
+					ModelID:        modelID,
+					Field:          "type",
+					CurrentValue:   adapter.Type,
+					SuggestedValue: suggested,
+					Message:        providerMismatchMessage(adapter.Type, suggested, modelID),
+				})
+			}
 		}
-		suggested := modelchannel.InferProviderType(modelID, adapter.Type)
-		if suggested == adapter.Type {
-			continue // 无需修正
+		// 目录覆盖检查：与协议无关，所有 adapter 都检查。未覆盖时给出可操作提示，
+		// 但不提供自动修正（能力未知不能瞎猜，交给用户补填或目录补录）。
+		if lookup := modelcontext.Lookup(modelID); !lookup.Covered {
+			result.Issues = append(result.Issues, DiagnosticIssue{
+				Index:       i,
+				Severity:    DiagnosticSeverityWarning,
+				Category:    DiagnosticCategoryCatalogUncovered,
+				ChannelID:   channelID,
+				DisplayName: strings.TrimSpace(adapter.DisplayName),
+				GroupName:   strings.TrimSpace(adapter.GroupName),
+				ModelID:     modelID,
+				Field:       "catalog",
+				Message:     catalogUncoveredMessage(modelID),
+			})
 		}
-		result.Issues = append(result.Issues, DiagnosticIssue{
-			Index:          i,
-			Severity:       DiagnosticSeverityWarning,
-			Category:       DiagnosticCategoryProviderMismatch,
-			ChannelID:      strings.TrimSpace(adapter.ID),
-			DisplayName:    strings.TrimSpace(adapter.DisplayName),
-			GroupName:      strings.TrimSpace(adapter.GroupName),
-			ModelID:        modelID,
-			Field:          "type",
-			CurrentValue:   adapter.Type,
-			SuggestedValue: suggested,
-			Message:        providerMismatchMessage(adapter.Type, suggested, modelID),
-		})
 	}
 	return result
 }
@@ -142,4 +162,8 @@ func providerMismatchMessage(current, suggested, modelID string) string {
 	default:
 		return modelID + " 的协议配置（" + current + "）可能不匹配，建议改为 " + suggested + "。"
 	}
+}
+
+func catalogUncoveredMessage(modelID string) string {
+	return modelID + " 不在内置模型能力目录中，其能力（视觉/工具/上下文窗口等）未知。当前按保守策略运行：图片不会直传给该模型；如需启用视觉等能力，请在模型编辑页手动补充能力配置。"
 }

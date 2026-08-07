@@ -1,6 +1,8 @@
 package client
 
 import (
+	"strings"
+
 	serverconfig "cursor/internal/backend/server/config"
 )
 
@@ -35,7 +37,12 @@ func (s *ProxyService) ApplyDiagnosticFixes(channelIDs []string) (serverconfig.D
 		if len(issueResult.Issues) == 0 {
 			continue
 		}
-		issue := issueResult.Issues[0]
+		// 只修正可自动修正的类别（provider_mismatch）；catalog_uncovered 无法自动修正，
+		// 交给用户手动补填能力或目录补录，不能把空建议值当修正写入配置。
+		issue, ok := findFixableIssue(issueResult.Issues)
+		if !ok {
+			continue
+		}
 		if _, ok := selected[adapter.ID]; !ok {
 			continue
 		}
@@ -45,4 +52,15 @@ func (s *ProxyService) ApplyDiagnosticFixes(channelIDs []string) (serverconfig.D
 		return serverconfig.DiagnosticResult{}, err
 	}
 	return serverconfig.DiagnoseModelAdapters(cfg.ModelAdapters), nil
+}
+
+// findFixableIssue 返回第一个可自动修正的 issue（provider_mismatch）。
+// catalog_uncovered 等类别没有 SuggestedValue，不能自动修正。
+func findFixableIssue(issues []serverconfig.DiagnosticIssue) (serverconfig.DiagnosticIssue, bool) {
+	for _, issue := range issues {
+		if issue.Category == serverconfig.DiagnosticCategoryProviderMismatch && strings.TrimSpace(issue.SuggestedValue) != "" {
+			return issue, true
+		}
+	}
+	return serverconfig.DiagnosticIssue{}, false
 }

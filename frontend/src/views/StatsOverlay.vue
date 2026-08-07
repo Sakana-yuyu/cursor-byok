@@ -42,22 +42,38 @@ const draggable = computed(() => (dockLocked.value ? "no-drag" : "drag"));
 
 async function toggleDockLock() {
   const next = !dockLocked.value;
-  await setStatsOverlayPreferences({ dockLocked: next });
+  try {
+    await setStatsOverlayPreferences({ dockLocked: next });
+  } catch (error) {
+    console.error("[StatsOverlay] toggle dock lock failed", error);
+  }
 }
 
 async function toggleSnapCollapse() {
   const next = !snapCollapse.value;
-  await setStatsOverlayPreferences({ snapCollapse: next });
+  try {
+    await setStatsOverlayPreferences({ snapCollapse: next });
+  } catch (error) {
+    console.error("[StatsOverlay] toggle snap collapse failed", error);
+  }
 }
 
 async function handleHideOverlay() {
   finishMorph();
-  await hideStatsOverlay();
+  try {
+    await hideStatsOverlay();
+  } catch (error) {
+    console.error("[StatsOverlay] hide overlay failed", error);
+  }
 }
 
 async function handleCloseApplication() {
   finishMorph();
-  await closeApplication();
+  try {
+    await closeApplication();
+  } catch (error) {
+    console.error("[StatsOverlay] close application failed", error);
+  }
 }
 
 function clearMorphTimer() {

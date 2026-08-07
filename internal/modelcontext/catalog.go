@@ -118,7 +118,7 @@ func mustLoadCapabilityRules() []capabilityRule {
 // 注：原手写规则数组已迁移至 models.json（go:embed 加载）；以下 lookup 函数签名不变，调用方无感知。
 // Capabilities 根据模型 ID 返回能力元数据；未知模型返回 nil。
 func Capabilities(modelID string) *Capability {
-	normalized := normalizeModelID(modelID)
+	normalized := NormalizeModelID(modelID)
 	if normalized == "" {
 		return nil
 	}
@@ -129,6 +129,51 @@ func Capabilities(modelID string) *Capability {
 		}
 	}
 	return nil
+}
+
+// LookupResult 是一次目录查询的结果：区分「已覆盖（目录命中）」「未覆盖（未知模型）」。
+// Covered=false 表示目录中没有该模型的任何规则，调用方应按保守策略处理（图片占位、
+// 保留渠道配置），并向用户暴露可操作的覆盖路径。
+type LookupResult struct {
+	// Covered 表示目录是否命中该模型。
+	Covered bool
+	// NormalizedID 是标准化后的模型 ID（小写、去前缀、空格/下划线转连字符）。
+	NormalizedID string
+	// Capability 是命中的能力元数据；未覆盖时为 nil。
+	Capability *Capability
+}
+
+// Lookup 根据模型 ID 查询目录并返回结构化结果，未覆盖时 Covered=false。
+// 与 Capabilities 的区别：Lookup 显式携带 covered 状态与标准化 ID，便于诊断与
+// 审计区分「已确认不支持」与「未知」，避免把未知模型误判为不支持视觉/工具。
+func Lookup(modelID string) LookupResult {
+	normalized := NormalizeModelID(modelID)
+	if normalized == "" {
+		return LookupResult{NormalizedID: ""}
+	}
+	for i := range capabilityRules {
+		if capabilityRules[i].pattern.MatchString(normalized) {
+			c := capabilityRules[i].capability
+			return LookupResult{
+				Covered:      true,
+				NormalizedID: normalized,
+				Capability:   &c,
+			}
+		}
+	}
+	return LookupResult{Covered: false, NormalizedID: normalized}
+}
+
+// NormalizeModelID 对模型 ID 做统一标准化：小写、去 models/ 前缀、去路径段、
+// 空格/下划线转连字符。导出供诊断与前端查询复用，保证判定口径一致。
+func NormalizeModelID(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	normalized = strings.TrimPrefix(normalized, "models/")
+	if index := strings.LastIndex(normalized, "/"); index >= 0 {
+		normalized = normalized[index+1:]
+	}
+	normalized = strings.NewReplacer(" ", "-", "_", "-").Replace(normalized)
+	return normalized
 }
 
 // SupportsVision 报告模型是否支持图片输入。
@@ -146,7 +191,7 @@ func SupportsVision(modelID string) *bool {
 // WindowTokens 根据模型 ID 返回上下文窗口大小；未知模型返回 0。
 // 保留向后兼容。
 func WindowTokens(modelID string) int {
-	c := Capabilities(normalizeModelID(modelID))
+	c := Capabilities(NormalizeModelID(modelID))
 	if c == nil {
 		return 0
 	}
@@ -219,7 +264,7 @@ func BuiltinPricingCurrencyForAdapter(supplierID, provider, baseURL string) stri
 // volcengineBuiltinPricing 只收录本轮从火山方舟官方价格表逐项核对的固定段价格。
 // 其它模型的官方价格可能随输入长度分段或套餐变化，交由调用方使用 CNY 均价估算。
 func volcengineBuiltinPricing(modelID string) *BuiltinPricing {
-	normalized := normalizeModelID(modelID)
+	normalized := NormalizeModelID(modelID)
 	switch {
 	case strings.HasPrefix(normalized, "doubao-seed-2-1-pro") || strings.HasPrefix(normalized, "doubao-seed-2.1-pro"):
 		return &BuiltinPricing{Input: p(3.0), Output: p(15.0), CacheRead: p(1.2), Currency: "CNY", Source: "official"}
@@ -231,7 +276,7 @@ func volcengineBuiltinPricing(modelID string) *BuiltinPricing {
 // opencodeZenBuiltinPricing mirrors the current official pricing table at
 // https://opencode.ai/docs/zen. Prices are USD per 1M tokens.
 func opencodeZenBuiltinPricing(modelID string) *BuiltinPricing {
-	switch normalized := normalizeModelID(modelID); normalized {
+	switch normalized := NormalizeModelID(modelID); normalized {
 	case "big-pickle", "deepseek-v4-flash-free", "mimo-v2.5-free", "laguna-s-2.1-free", "ling-3.0-flash-free", "north-mini-code-free", "nemotron-3-ultra-free":
 		return pricingUSD(0, 0, 0)
 	case "minimax-m3", "minimax-m2.7", "minimax-m2.5":
@@ -322,7 +367,7 @@ func opencodeZenBuiltinPricing(modelID string) *BuiltinPricing {
 // opencodeGoBuiltinPricing mirrors the current official pricing table at
 // https://opencode.ai/docs/go. Prices are USD per 1M tokens.
 func opencodeGoBuiltinPricing(modelID string) *BuiltinPricing {
-	switch normalized := normalizeModelID(modelID); normalized {
+	switch normalized := NormalizeModelID(modelID); normalized {
 	case "grok-4.5":
 		return pricingUSD(2.00, 6.00, 0.30)
 	case "gpt-5.6-luna":
@@ -412,7 +457,6 @@ func AverageBuiltinPricing(currency string) *BuiltinPricing {
 
 // p 是构造 *float64 的简写辅助函数。
 func p(v float64) *float64 { return &v }
-
 // pricing 构造 BuiltinPricing 的简写辅助函数。
 func pricing(input, output, cacheRead float64) *BuiltinPricing {
 	return pricingUSD(input, output, cacheRead)
@@ -454,14 +498,4 @@ func Resolve(modelID string, explicitTokens int) int {
 		return explicitTokens
 	}
 	return WindowTokens(modelID)
-}
-
-func normalizeModelID(value string) string {
-	normalized := strings.ToLower(strings.TrimSpace(value))
-	normalized = strings.TrimPrefix(normalized, "models/")
-	if index := strings.LastIndex(normalized, "/"); index >= 0 {
-		normalized = normalized[index+1:]
-	}
-	normalized = strings.NewReplacer(" ", "-", "_", "-").Replace(normalized)
-	return normalized
 }

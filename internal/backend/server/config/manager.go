@@ -20,6 +20,10 @@ const configHotReloadMinInterval = 500 * time.Millisecond
 type Manager struct {
 	store            *Store
 	current          atomic.Pointer[Config]
+	// saveMu 串行化「读快照→修改→整包落盘」周期，防止后台持久化任务
+	// （PersistChannelContextWindow / max_tokens cap / LastAgentModelHash / delegation）
+	// 与用户 SaveUserConfig 并发时用旧快照覆盖对方改动（lost-update）。
+	saveMu           sync.Mutex
 	listenersMu      sync.RWMutex
 	listeners        []func(Config)
 	reloadMu         sync.Mutex
@@ -77,6 +81,13 @@ func (manager *Manager) Save(ctx context.Context, cfg Config) (Config, error) {
 	if manager == nil || manager.store == nil {
 		return Config{}, fmt.Errorf("config manager is not initialized")
 	}
+	manager.saveMu.Lock()
+	defer manager.saveMu.Unlock()
+	return manager.saveLocked(ctx, cfg)
+}
+
+// saveLocked 在 saveMu 持有期间执行落盘与状态更新（公开 Save 与读-改-写持久化方法共用）。
+func (manager *Manager) saveLocked(ctx context.Context, cfg Config) (Config, error) {
 	normalized, err := manager.store.Save(ctx, cfg)
 	if err != nil {
 		return Config{}, err
@@ -110,12 +121,14 @@ func (manager *Manager) SaveDelegationConfig(ctx context.Context, cfg Delegation
 	if manager == nil {
 		return DelegationConfig{}, fmt.Errorf("config manager is not initialized")
 	}
+	manager.saveMu.Lock()
+	defer manager.saveMu.Unlock()
 	current, err := manager.Load(ctx)
 	if err != nil {
 		return cloneDelegationConfig(DefaultConfig().Delegation), err
 	}
 	current.Delegation = cloneDelegationConfig(cfg)
-	normalized, err := manager.Save(ctx, current)
+	normalized, err := manager.saveLocked(ctx, current)
 	if err != nil {
 		return cloneDelegationConfig(DefaultConfig().Delegation), err
 	}
@@ -273,6 +286,8 @@ func (manager *Manager) PersistChannelMaxTokensCap(ctx context.Context, channelI
 	if channelID == "" || maxTokens <= 0 {
 		return nil
 	}
+	manager.saveMu.Lock()
+	defer manager.saveMu.Unlock()
 	current := manager.Current()
 	matched := false
 	for i := range current.ModelAdapters {
@@ -292,7 +307,7 @@ func (manager *Manager) PersistChannelMaxTokensCap(ctx context.Context, channelI
 	if !matched {
 		return nil
 	}
-	_, err := manager.Save(ctx, current)
+	_, err := manager.saveLocked(ctx, current)
 	return err
 }
 
@@ -307,6 +322,8 @@ func (manager *Manager) PersistChannelContextWindow(ctx context.Context, channel
 	if channelID == "" || contextWindowTokens <= 0 {
 		return nil
 	}
+	manager.saveMu.Lock()
+	defer manager.saveMu.Unlock()
 	current := manager.Current()
 	matched := false
 	for i := range current.ModelAdapters {
@@ -324,7 +341,7 @@ func (manager *Manager) PersistChannelContextWindow(ctx context.Context, channel
 	if !matched {
 		return nil
 	}
-	_, err := manager.Save(ctx, current)
+	_, err := manager.saveLocked(ctx, current)
 	return err
 }
 
@@ -333,12 +350,14 @@ func (manager *Manager) SaveLastAgentModelHash(ctx context.Context, value string
 		return fmt.Errorf("config manager is not initialized")
 	}
 	normalizedValue := strings.TrimSpace(value)
+	manager.saveMu.Lock()
+	defer manager.saveMu.Unlock()
 	current := manager.Current()
 	if strings.TrimSpace(current.LastAgentModelHash) == normalizedValue {
 		return nil
 	}
 	current.LastAgentModelHash = normalizedValue
-	_, err := manager.Save(ctx, current)
+	_, err := manager.saveLocked(ctx, current)
 	return err
 }
 

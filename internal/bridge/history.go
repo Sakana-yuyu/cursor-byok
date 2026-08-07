@@ -383,8 +383,9 @@ func historyDebugUsage() (int64, error) {
 }
 
 // clearHistory 一键清理：删除全部会话目录与遗留目录（_debug 等），并把 usage.json 重置为空档。
-// 返回删除的会话目录数。
-func clearHistory() (int, error) {
+// 返回删除的会话目录数。resetUsage 优先复用 forwarder 带锁的用量重置（丢弃 pending 事件），
+// 避免与进程内 UsageFileStore 的防抖写并发导致重置后旧数据写回；为空时回退到直接重置文件。
+func clearHistory(resetUsage func() error) (int, error) {
 	root := appdata.HistoryRootPath()
 	entries, err := os.ReadDir(root)
 	if err != nil {
@@ -416,7 +417,11 @@ func clearHistory() (int, error) {
 		}
 		return removeErr
 	})
-	if err := historymetrics.ResetUsageFile(appdata.UsageFilePath()); err != nil && firstErr == nil {
+	if resetUsage != nil {
+		if err := resetUsage(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	} else if err := historymetrics.ResetUsageFile(appdata.UsageFilePath()); err != nil && firstErr == nil {
 		firstErr = err
 	}
 	return deleted, firstErr

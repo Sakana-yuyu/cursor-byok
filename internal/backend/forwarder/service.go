@@ -68,7 +68,10 @@ type Service struct {
 	broker                 *StreamBroker
 	recorder               *artifactRecorder
 	debug                  *debugRecorder
-	execBridge             execbridge.ExecBridge
+	// catalogUncoveredReported 记录已上报过「目录未覆盖」审计事件的模型名，
+	// 避免每个请求重复刷日志（进程内一次即可，覆盖后由用户配置/目录补录解决）。
+	catalogUncoveredReported sync.Map
+	execBridge               execbridge.ExecBridge
 	interactionBridge      interactionbridge.InteractionBridge
 	appendSeq              *appendSequenceTracker
 	runQueue               *runQueue
@@ -1900,8 +1903,33 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 		"tool_count":             len(compiled.Tools),
 		"compile_summary_length": len(compiled.CompileSummary),
 	})
+	// 目录未覆盖审计：模型名不在内置能力目录时记录一次（进程内按模型名去重）。
+	// 只做观测，不改变请求内容、渠道选择或预算；供用户排查「能力未知的模型」入口。
+	service.auditCatalogUncovered(context.Background(), requestID, conversationID, modelName)
 	go service.runProviderStream(stream, currentToken, ctx, providerRequest)
 	return nil
+}
+
+// auditCatalogUncovered 在 provider 请求准备完成后，检查真实模型名是否命中内置能力目录。
+// 未命中时写一条去重的 runtime 审计事件，提示「目录未覆盖，能力未知」。
+func (service *Service) auditCatalogUncovered(ctx context.Context, requestID string, conversationID string, modelName string) {
+	modelKey := strings.TrimSpace(modelName)
+	if modelKey == "" {
+		return
+	}
+	if lookup := modelcontext.Lookup(modelKey); lookup.Covered {
+		return
+	}
+	normalizedID := modelcontext.NormalizeModelID(modelKey)
+	if _, already := service.catalogUncoveredReported.LoadOrStore(modelKey, struct{}{}); already {
+		return
+	}
+	service.debug.LogRuntime(ctx, requestID, conversationID, "catalog_uncovered", map[string]any{
+		"model_name":       modelKey,
+		"normalized_model": normalizedID,
+		"hint":             "模型不在内置能力目录中，能力未知；保守运行（图片不直传），可在模型编辑页补填能力",
+	})
+	logger.Infof("forwarder catalog_uncovered model_name=%s request_id=%s", modelKey, strings.TrimSpace(requestID))
 }
 
 func (service *Service) resolveProviderOutputBudget(modelID string, modelName string, conversation *ConversationFile, compiled CompiledConversation) (int, map[string]any) {
