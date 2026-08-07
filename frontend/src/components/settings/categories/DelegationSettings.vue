@@ -1,14 +1,12 @@
 <script setup>
 import DelegationRuntimePanel from "@/components/DelegationRuntimePanel.vue";
-import SettingsRow from "@/components/settings/SettingsRow.vue";
 import SettingsSection from "@/components/settings/SettingsSection.vue";
+import DelegationGlobalControlsPanel from "@/components/settings/delegation/DelegationGlobalControlsPanel.vue";
 import DelegationGroupEditor from "@/components/settings/delegation/DelegationGroupEditor.vue";
 import DelegationSupervisionPanel from "@/components/settings/delegation/DelegationSupervisionPanel.vue";
 import DelegationVisionPanel from "@/components/settings/delegation/DelegationVisionPanel.vue";
 import SubagentProfilesPanel from "@/components/settings/delegation/SubagentProfilesPanel.vue";
 import Button from "@/components/ui/Button.vue";
-import Input from "@/components/ui/Input.vue";
-import Switch from "@/components/ui/Switch.vue";
 import { showModal } from "@/composables/useModal";
 import { saveDelegationConfig } from "@/services/runtimeControlApi";
 import { appState, toUserError } from "@/state/appState";
@@ -978,50 +976,18 @@ watch(
 
 <template>
   <div class="space-y-8">
-    <SettingsSection
-      title="委派配置"
-      description="全局开关和并发限制会立即写回本地配置，页面顶部会显示统一的保存状态。"
-    >
-      <SettingsRow
-        label="启用 Multitask 委派"
-        description="使用已配置模型并行处理子任务，失败的子任务不会阻塞其他任务。"
-        :busy="delegationEnabledState.busy"
-        :error="delegationEnabledState.error"
-        @retry="retryState(delegationEnabledState)"
-      >
-        <Switch
-          compact
-          label=""
-          enabled-text="已开启"
-          disabled-text="已关闭"
-          :enabled="appState.delegation.enabled"
-          :disabled="delegationEnabledState.busy || !appState.configReady"
-          aria-label="启用 Multitask 委派"
-          @change="handleEnabledChange"
-        />
-      </SettingsRow>
-
-      <SettingsRow
-        label="最大并发数"
-        description="限制同一时刻可运行的委派任务数量。输入后 500ms 自动保存，失焦或回车会立即提交。"
-        :busy="maxConcurrencyState.busy || maxConcurrencyState.queued"
-        :error="maxConcurrencyState.error"
-        @retry="retryMaxConcurrency"
-      >
-        <div class="w-[220px] max-w-full">
-          <Input
-            :model-value="maxConcurrencyDraft"
-            type="number"
-            min="1"
-            :disabled="maxConcurrencyState.busy || !appState.configReady"
-            aria-label="最大并发数"
-            @update:model-value="handleMaxConcurrencyInput"
-            @blur="flushMaxConcurrency"
-            @keydown.enter.prevent="flushMaxConcurrency"
-          />
-        </div>
-      </SettingsRow>
-    </SettingsSection>
+    <DelegationGlobalControlsPanel
+      :enabled="appState.delegation.enabled"
+      :enabled-state="delegationEnabledState"
+      :max-concurrency-draft="maxConcurrencyDraft"
+      :max-concurrency-state="maxConcurrencyState"
+      :config-ready="appState.configReady"
+      @change:enabled="handleEnabledChange"
+      @retry:enabled="retryState(delegationEnabledState)"
+      @update:max-concurrency="handleMaxConcurrencyInput"
+      @flush:max-concurrency="flushMaxConcurrency"
+      @retry:max-concurrency="retryMaxConcurrency"
+    />
 
     <SettingsSection
       title="高级委派"
