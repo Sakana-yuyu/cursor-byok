@@ -26,15 +26,16 @@ const (
 type LocalDelegatedToolExecutor func(context.Context, delegation.TaskRequest, runtimecore.ToolInvocation) (string, error)
 
 type localDelegatedAgentAdapter struct {
-	store         *ConversationFileStore
-	usageStore    *UsageFileStore
-	compiler      PromptCompiler
-	provider      ProviderGateway
-	recorder      modeladapter.LLMArtifactObserver
-	resolveBudget func(string, string, *ConversationFile, CompiledConversation) (int, map[string]any)
-	toolExecutor  LocalDelegatedToolExecutor
-	maxPasses     int
-	sequence      atomic.Uint64
+	store                *ConversationFileStore
+	usageStore           *UsageFileStore
+	compiler             PromptCompiler
+	provider             ProviderGateway
+	recorder             modeladapter.LLMArtifactObserver
+	resolveBudget        func(string, string, *ConversationFile, CompiledConversation) (int, map[string]any)
+	toolExecutor         LocalDelegatedToolExecutor
+	maxPasses            int
+	sequence             atomic.Uint64
+	resolveContextWindow func(string) uint32
 }
 
 func newLocalDelegatedAgentAdapter(service *Service) *localDelegatedAgentAdapter {
@@ -42,14 +43,15 @@ func newLocalDelegatedAgentAdapter(service *Service) *localDelegatedAgentAdapter
 		return nil
 	}
 	return &localDelegatedAgentAdapter{
-		store:         service.store,
-		usageStore:    service.usageStore,
-		compiler:      service.compiler,
-		provider:      service.provider,
-		recorder:      service.recorder,
-		resolveBudget: service.resolveProviderOutputBudget,
-		toolExecutor:  service.executeLocalDelegatedTool,
-		maxPasses:     defaultLocalDelegationMaxProviderPasses,
+		store:                service.store,
+		usageStore:           service.usageStore,
+		compiler:             service.compiler,
+		provider:             service.provider,
+		recorder:             service.recorder,
+		resolveBudget:        service.resolveProviderOutputBudget,
+		toolExecutor:         service.executeLocalDelegatedTool,
+		maxPasses:            defaultLocalDelegationMaxProviderPasses,
+		resolveContextWindow: service.resolveContextWindowTokens,
 	}
 }
 
@@ -101,14 +103,28 @@ func (adapter *localDelegatedAgentAdapter) Execute(ctx context.Context, request 
 	if maxPasses <= 0 {
 		maxPasses = defaultLocalDelegationMaxProviderPasses
 	}
+	overflowRetries := 0
 	for providerPass := 1; providerPass <= maxPasses; providerPass++ {
 		if err := ctx.Err(); err != nil {
 			delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusCanceled, providerPass, nil, nil, "delegated worker canceled", "")
 			return delegation.TaskResult{Error: err, ToolCallCount: toolCallCount, Metadata: identity.metadata(providerPass)}
 		}
 		delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusRunning, providerPass, nil, nil, "delegated worker is running", "")
+
+		// 主动阈值压缩：每轮 pass 前检查，超预算则压缩（snip + 丢弃早期消息）。
+		messages = compactDelegatedMessagesBeforePass(adapter, request, conversation, messages, providerPass)
+
 		pass, err := adapter.runProviderPass(ctx, request, identity, conversation, compiled, messages, providerPass)
 		if err != nil {
+			if delegatedContextOverflowError(err) && overflowRetries < delegatedCompactionRetryLimit {
+				overflowRetries++
+				compactedMessages := compactDelegatedMessagesBeforePass(adapter, request, conversation, messages, providerPass)
+				if !sameDelegatedMessages(compactedMessages, messages) {
+					messages = compactedMessages
+				}
+				log.Printf("forwarder delegated context overflow retry task_id=%s provider_pass=%d retry=%d/%d", strings.TrimSpace(identity.taskID), providerPass, overflowRetries, delegatedCompactionRetryLimit)
+				continue
+			}
 			delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusFailed, providerPass, nil, nil, "delegated provider failed", delegation.SanitizeSupervisorText(err.Error(), request.WorkspaceHint))
 			return delegation.TaskResult{Error: err, Output: strings.TrimSpace(pass.text), ToolCallCount: toolCallCount, Metadata: identity.metadata(providerPass)}
 		}
@@ -976,4 +992,38 @@ func localDelegationCheckpointTargetPath(toolName string, args map[string]any) s
 	default:
 		return runtimecore.ReadStringArg(args, "path", "file_path", "filePath", "Path", "FilePath")
 	}
+}
+
+// compactDelegatedMessagesBeforePass 执行主动阈值压缩并打日志，返回压缩后的 messages。
+func compactDelegatedMessagesBeforePass(adapter *localDelegatedAgentAdapter, request delegation.TaskRequest, conversation *ConversationFile, messages []modeladapter.Message, providerPass int) []modeladapter.Message {
+	if adapter == nil {
+		return messages
+	}
+	window := int64(0)
+	if adapter.resolveContextWindow != nil {
+		window = int64(adapter.resolveContextWindow(strings.TrimSpace(request.ModelID)))
+	}
+	budget := delegatedContextBudgetForWindow(window)
+	if budget <= 0 {
+		return messages
+	}
+	stats := &delegatedCompactionStats{}
+	out, changed := maybeCompactDelegatedMessages(messages, budget, stats)
+	if changed {
+		log.Printf("forwarder delegated context compacted task_id=%s provider_pass=%d snip=%d dropped=%d msgs=%d->%d tokens=%d->%d",
+			strings.TrimSpace(request.ID), providerPass, stats.SnipCount, stats.DroppedCount, len(messages), len(out), stats.BeforeTokens, stats.AfterTokens)
+	}
+	return out
+}
+
+func sameDelegatedMessages(a, b []modeladapter.Message) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Role != b[i].Role || a[i].Content != b[i].Content || a[i].ToolCallID != b[i].ToolCallID {
+			return false
+		}
+	}
+	return true
 }
