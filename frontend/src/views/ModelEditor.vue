@@ -1,9 +1,9 @@
 <script setup>
 import Button from "@/components/ui/Button.vue";
 import Input from "@/components/ui/Input.vue";
-import ModelAdapterTestCard from "@/components/ModelAdapterTestCard.vue";
 import ModelCapabilitiesSection from "@/components/model-editor/ModelCapabilitiesSection.vue";
 import ModelPricingSection from "@/components/model-editor/ModelPricingSection.vue";
+import ModelTestResultSection from "@/components/model-editor/ModelTestResultSection.vue";
 import Select from "@/components/ui/Select.vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
 import { getModelEditorContext } from "@/services/clientApi";
@@ -1409,19 +1409,11 @@ onMounted(async () => {
           />
         </label>
 
-        <ModelAdapterTestCard
+        <ModelTestResultSection
           :result="localTestFailure ? { status: 'error', error: '测试失败', summaryText: '测试失败', rawResponse: modelTestSummary } : activeModelTestResult"
           :stale="modelTestResultStale"
-          :show-metrics="true"
-          empty-text="尚未测试 — 点击右上角「保存并测试」检测该模型是否可用"
+          :error="errorMessage"
         />
-
-        <div
-          v-if="errorMessage"
-          class="rounded-[8px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-sm text-[#fca5a5]"
-        >
-          {{ errorMessage }}
-        </div>
         </div>
         </template>
       </div>
