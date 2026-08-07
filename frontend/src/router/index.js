@@ -11,7 +11,6 @@ import MetricsDetail from "@/views/MetricsDetail.vue";
 import StatsOverlay from "@/views/StatsOverlay.vue";
 import Diagnostics from "@/views/Diagnostics.vue";
 import Settings from "@/views/Settings.vue";
-import Goal from "@/views/Goal.vue";
 
 const router = createRouter({
   history: isBrowserPreview ? createWebHistory() : createWebHashHistory(),
@@ -71,11 +70,6 @@ const router = createRouter({
       path: "/settings",
       component: Settings,
       meta: { showIcon: false, title: "设置", directlyClose: false },
-    },
-    {
-      path: "/goal",
-      component: Goal,
-      meta: { showIcon: false, title: "目标", directlyClose: true },
     },
 
   ],

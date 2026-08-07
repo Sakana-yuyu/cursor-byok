@@ -1,20 +1,12 @@
 <script setup>
 import SettingsPageHeader from "@/components/settings/SettingsPageHeader.vue";
-import AdvancedSettings from "@/components/settings/categories/AdvancedSettings.vue";
-import CursorServiceSettings from "@/components/settings/categories/CursorServiceSettings.vue";
-import DelegationSettings from "@/components/settings/categories/DelegationSettings.vue";
-import GeneralSettings from "@/components/settings/categories/GeneralSettings.vue";
-import OverlaySettings from "@/components/settings/categories/OverlaySettings.vue";
-import PromptSettings from "@/components/settings/categories/PromptSettings.vue";
-import SkillsMcpSettings from "@/components/settings/categories/SkillsMcpSettings.vue";
-import HistorySettings from "@/components/settings/categories/HistorySettings.vue";
-import GoalSettings from "@/components/settings/categories/GoalSettings.vue";
 import SettingsSidebar from "@/components/settings/SettingsSidebar.vue";
 import { useSettingsAutosave } from "@/composables/useSettingsAutosave";
 import {
   SETTINGS_CATEGORIES,
   normalizeSettingsCategory,
   readStoredSettingsCategory,
+  resolveSettingsCategoryComponent,
   writeStoredSettingsCategory,
 } from "@/components/settings/settingsCategories";
 import { computed, ref, watch } from "vue";
@@ -32,6 +24,16 @@ function settingsCategoryFromRoute(value) {
 
 const initialCategory = settingsCategoryFromRoute(route.query.category);
 const selectedCategory = ref(initialCategory || readStoredSettingsCategory());
+const moreExpanded = ref(false);
+
+function syncMoreExpanded(categoryID) {
+  const category = SETTINGS_CATEGORIES.find((item) => item.id === normalizeSettingsCategory(categoryID));
+  if (category?.nav === "more") {
+    moreExpanded.value = true;
+  }
+}
+
+syncMoreExpanded(selectedCategory.value);
 
 watch(selectedCategory, (value) => {
   const normalized = normalizeSettingsCategory(value);
@@ -40,6 +42,7 @@ watch(selectedCategory, (value) => {
     return;
   }
   writeStoredSettingsCategory(normalized);
+  syncMoreExpanded(normalized);
 });
 
 watch(() => route.query.category, (value) => {
@@ -49,27 +52,14 @@ watch(() => route.query.category, (value) => {
   }
 });
 
-const categoryComponents = {
-  general: GeneralSettings,
-  "cursor-service": CursorServiceSettings,
-  overlay: OverlaySettings,
-  delegation: DelegationSettings,
-  goal: GoalSettings,
-  "skills-mcp": SkillsMcpSettings,
-  prompts: PromptSettings,
-  advanced: AdvancedSettings,
-  history: HistorySettings,
-};
-
 const activeCategory = computed(() => {
   const categoryID = normalizeSettingsCategory(selectedCategory.value);
   return SETTINGS_CATEGORIES.find((item) => item.id === categoryID) ?? SETTINGS_CATEGORIES[0];
 });
 
-const activeCategoryComponent = computed(() => {
-  const categoryID = normalizeSettingsCategory(selectedCategory.value);
-  return categoryComponents[categoryID] ?? null;
-});
+const activeCategoryComponent = computed(() =>
+  resolveSettingsCategoryComponent(activeCategory.value.id),
+);
 
 function handleBack() {
   const previousPath = String(window.history.state?.back || "").trim();
@@ -92,6 +82,7 @@ function handleBack() {
     <div class="mx-auto flex min-h-0 w-full max-w-[1080px] flex-1 flex-col gap-5 px-4 py-5 sm:flex-row sm:gap-8 sm:px-6">
       <SettingsSidebar
         v-model="selectedCategory"
+        v-model:more-expanded="moreExpanded"
         :categories="SETTINGS_CATEGORIES"
         class="shrink-0 sm:sticky sm:top-0 sm:self-start"
       />

@@ -373,19 +373,19 @@ onUnmounted(() => {
       <table class="w-full min-w-[1360px] border-collapse text-left text-sm">
         <thead class="sticky top-0 z-10 bg-[#262626]/95 text-xs text-[#8f8f8f] backdrop-blur-sm">
           <tr class="border-b border-[#343434]">
-            <th class="p-3 font-medium">状态</th>
-            <th class="p-3 font-medium">时间</th>
-            <th class="p-3 font-medium">耗时</th>
-            <th class="p-3 font-medium">供应商</th>
-            <th class="p-3 font-medium">错误码</th>
             <th class="p-3 font-medium">模型</th>
             <th class="p-3 font-medium text-[#60a5fa]">输入</th>
             <th class="p-3 font-medium text-[#f59e0b]">输出</th>
+            <th class="p-3 font-medium">缓存率</th>
+            <th class="p-3 font-medium">请求费用</th>
+            <th class="p-3 font-medium">状态</th>
+            <th class="p-3 font-medium">时间</th>
             <th class="p-3 font-medium text-[#34d399]">缓存读取</th>
             <th class="p-3 font-medium text-[#c084fc]">缓存写入</th>
             <th class="p-3 font-medium">总 tokens</th>
-            <th class="p-3 font-medium">缓存率</th>
-            <th class="p-3 font-medium">请求费用</th>
+            <th class="p-3 font-medium">耗时</th>
+            <th class="p-3 font-medium">供应商</th>
+            <th class="p-3 font-medium">错误码</th>
           </tr>
         </thead>
         <tbody>
@@ -403,6 +403,23 @@ onUnmounted(() => {
             :key="item.row.eventId"
             class="border-t border-[#2f2f2f] text-[#d4d4d4] transition-colors hover:bg-[#262626]/80"
           >
+            <td class="max-w-[260px] p-3" :title="item.model.title">
+              <div class="truncate text-[#e5e5e5]">{{ item.model.displayModel }}</div>
+              <div v-if="item.model.secondary" class="mt-0.5 truncate text-[11px] text-[#8f8f8f]">{{ item.model.secondary }}</div>
+            </td>
+            <td class="p-3 font-medium text-[#60a5fa]" style="font-family: var(--font-num)">
+              {{ formatNumber(item.row.inputTokens) }}
+            </td>
+            <td class="p-3 font-medium text-[#f59e0b]" style="font-family: var(--font-num)">
+              {{ formatNumber(item.row.outputTokens) }}
+            </td>
+            <td class="p-3 font-medium" :class="rateTone(item.row.cacheRate)" style="font-family: var(--font-num)">
+              {{ formatRate(item.row.cacheRate) }}
+            </td>
+            <td class="p-3 text-[#cfcfcf]" style="font-family: var(--font-num)">
+              <div>{{ item.cost }}</div>
+              <div v-if="item.pricingSource" class="mt-0.5 text-[10px] text-[#8f8f8f]">{{ item.pricingSource }}</div>
+            </td>
             <td class="p-3">
               <span
                 class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px]"
@@ -415,6 +432,13 @@ onUnmounted(() => {
             <td class="whitespace-nowrap p-3 text-[#a3a3a3]" style="font-family: var(--font-num)">
               {{ formatTime(item.row.at) }}
             </td>
+            <td class="p-3 font-medium text-[#34d399]" style="font-family: var(--font-num)">
+              {{ formatNumber(item.row.cacheReadTokens) }}
+            </td>
+            <td class="p-3 font-medium text-[#c084fc]" style="font-family: var(--font-num)">
+              {{ formatNumber(item.row.cacheWriteTokens) }}
+            </td>
+            <td class="p-3" style="font-family: var(--font-num)">{{ formatNumber(item.row.totalTokens) }}</td>
             <td class="whitespace-nowrap p-3 text-[#a3a3a3]" style="font-family: var(--font-num)">
               <template v-if="item.row.durationMs > 0">
                 <span :title="`首字延迟 ${formatDuration(item.row.ttftMs)}`">首字 {{ formatDuration(item.row.ttftMs) }}</span>
@@ -441,30 +465,6 @@ onUnmounted(() => {
                 {{ item.errorCode }}
               </span>
               <span v-else class="text-[#666]">-</span>
-            </td>
-            <td class="max-w-[260px] p-3" :title="item.model.title">
-              <div class="truncate text-[#e5e5e5]">{{ item.model.displayModel }}</div>
-              <div v-if="item.model.secondary" class="mt-0.5 truncate text-[11px] text-[#8f8f8f]">{{ item.model.secondary }}</div>
-            </td>
-            <td class="p-3 font-medium text-[#60a5fa]" style="font-family: var(--font-num)">
-              {{ formatNumber(item.row.inputTokens) }}
-            </td>
-            <td class="p-3 font-medium text-[#f59e0b]" style="font-family: var(--font-num)">
-              {{ formatNumber(item.row.outputTokens) }}
-            </td>
-            <td class="p-3 font-medium text-[#34d399]" style="font-family: var(--font-num)">
-              {{ formatNumber(item.row.cacheReadTokens) }}
-            </td>
-            <td class="p-3 font-medium text-[#c084fc]" style="font-family: var(--font-num)">
-              {{ formatNumber(item.row.cacheWriteTokens) }}
-            </td>
-            <td class="p-3" style="font-family: var(--font-num)">{{ formatNumber(item.row.totalTokens) }}</td>
-            <td class="p-3 font-medium" :class="rateTone(item.row.cacheRate)" style="font-family: var(--font-num)">
-              {{ formatRate(item.row.cacheRate) }}
-            </td>
-            <td class="p-3 text-[#cfcfcf]" style="font-family: var(--font-num)">
-              <div>{{ item.cost }}</div>
-              <div v-if="item.pricingSource" class="mt-0.5 text-[10px] text-[#8f8f8f]">{{ item.pricingSource }}</div>
             </td>
           </tr>
         </tbody>

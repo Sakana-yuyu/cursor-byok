@@ -253,7 +253,7 @@ usePolling(
           :class="route.path === '/settings' ? 'cursor-default opacity-60' : 'cursor-pointer'"
           @click="openSettingsWorkspace"
         >
-          <span class="icon-[mdi--menu] text-[15px]" aria-hidden="true"></span>
+          <span class="icon-[mdi--cog-outline] text-[15px]" aria-hidden="true"></span>
         </button>
         <button
           type="button"

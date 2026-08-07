@@ -234,7 +234,7 @@ onMounted(() => {
 
 <template>
   <Card>
-    <div class="min-w-0 space-y-4">
+    <div class="flex h-[min(42rem,calc(100dvh-14rem))] min-h-0 min-w-0 flex-col gap-4">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 class="text-sm font-medium text-white">历史与日志</h2>
@@ -268,7 +268,7 @@ onMounted(() => {
         暂无历史记录
       </div>
 
-      <div v-else class="space-y-3">
+      <div v-else class="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1">
         <div v-for="year in groupedTree" :key="year.key" class="rounded-[8px] border border-white/10 bg-black/15">
           <button
             type="button"
@@ -360,7 +360,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <div v-if="selectedCount > 0" class="flex items-center justify-between gap-3 rounded-[8px] border border-[#3a2c14] bg-[#2a2413] px-3 py-2">
+      <div v-if="selectedCount > 0" class="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-[8px] border border-[#3a2c14] bg-[#2a2413] px-3 py-2">
         <span class="text-xs text-[#d4a34a]">已选中 {{ selectedCount }} 条</span>
         <Button variant="danger" :disabled="deleting" @click="handleDeleteSelected">
           {{ deleting ? "删除中..." : `删除所选 (${selectedCount})` }}
