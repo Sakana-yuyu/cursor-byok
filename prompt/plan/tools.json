@@ -46,6 +46,18 @@
               "reason"
             ],
             "type": "object"
+          },
+          "profile": {
+            "description": "Optional shell interpreter profile. auto preserves Cursor's default shell selection; cmd and wsl are Windows-only; git-bash uses Git for Windows Bash on Windows and system Bash on macOS/Linux; explicit profiles fail if unavailable.",
+            "enum": [
+              "auto",
+              "powershell",
+              "pwsh",
+              "cmd",
+              "git-bash",
+              "wsl"
+            ],
+            "type": "string"
           }
         },
         "required": [
@@ -148,7 +160,7 @@
   },
   {
     "function": {
-      "description": "A powerful search tool built on ripgrep\nUsage:\n- Prefer using Grep for search tasks when you know the exact symbols or strings to search for. Whenever possible, use this tool instead of invoking grep or rg as a terminal command. The Grep tool has been optimized for speed and file restrictions inside Cursor.\n- Supports full regex syntax (e.g., \"log.*Error\", \"function\\s+\\w+\")\n- Filter files with glob parameter (e.g., \".js\", \"**/.tsx\") or type parameter (e.g., \"js\", \"py\", \"rust\")\n- Output modes: \"content\" shows matching lines (default), \"files_with_matches\" shows only file paths, \"count\" shows match counts\n- Pattern syntax: Uses ripgrep (not grep) - literal braces need escaping (use interface\\{\\} to find interface{} in Go code)\n- Multiline matching: By default patterns match within single lines only. For cross-line patterns like struct \\{[\\s\\S]*?field, use multiline: true\n- Results are capped to several thousand output lines for responsiveness; when truncation occurs, the results report \"at least\" counts, but are otherwise accurate.\n- Content output formatting closely follows ripgrep output format: '-' for context lines, ':' for match lines, and all context/match lines below each file group.",
+      "description": "A powerful search tool built on ripgrep\nUsage:\n- Prefer using Grep for search tasks when you know the exact symbols or strings to search for. Whenever possible, use this tool instead of invoking grep or rg as a terminal command. The Grep tool has been optimized for speed and file restrictions inside Cursor.\n- Supports full regex syntax (e.g., \"log.*Error\", \"function\\s+\\w+\")\n- Filter files with glob parameter (e.g., \".js\", \"**/.tsx\") or type parameter (e.g., \"js\", \"py\", \"rust\")\n- Output modes: \"content\" shows matching lines (default), \"files_with_matches\" shows only file paths, \"count\" shows match counts\n- Pattern syntax: Uses ripgrep (not grep) - literal braces need escaping (use interface\\{\\} to find interface{} in Go code)\n- Multiline matching: By default patterns match within single lines only. For cross-line patterns like struct \\{[\\s\\S]*?field, use multiline: true\n- Results are capped to several thousand output lines for responsiveness; when truncation occurs, the results report \"at least\" counts, but are otherwise accurate.\n- Content output formatting closely follows ripgrep output format: '-' for context lines, ':' for match lines, and all context/match lines below each file group. You have the capability to call multiple tools in a single response. It is always better to speculatively run multiple potentially useful searches as a batch; only search sequentially when a later query depends on an earlier result.",
       "name": "Grep",
       "parameters": {
         "properties": {
@@ -245,7 +257,7 @@
   },
   {
     "function": {
-      "description": "Lists files and directories under a directory path.\n\nUse this tool when you need directory structure, especially top-level project layout or immediate children of a folder. Do not use Glob(\"*\") or recursive Glob patterns to list a directory; use Ls instead.\n\nYou may provide ignore globs for large or irrelevant directories such as .git, node_modules, dist, build, .cursor-local-assistant-v2/history, or logs.",
+      "description": "Lists files and directories under a directory path.\n\nUse this tool when you need directory structure, especially top-level project layout or immediate children of a folder. Do not use Glob(\"*\") or recursive Glob patterns to list a directory; use Ls instead.\n\nYou may provide ignore globs for large or irrelevant directories such as .git, node_modules, dist, build, .cursor-local-assistant-v2/history, or logs. You have the capability to call multiple tools in a single response. Batch independent directory listings together with other read-only calls in the same reply.",
       "name": "Ls",
       "parameters": {
         "properties": {
@@ -620,7 +632,11 @@
           },
           "mode": {
             "type": "string",
-            "enum": ["auto", "describe", "ocr"],
+            "enum": [
+              "auto",
+              "describe",
+              "ocr"
+            ],
             "description": "Recognition mode. 'auto' (default): structured description + OCR text. 'describe': only describe the scene/layout. 'ocr': only transcribe visible text/tables as Markdown."
           },
           "question": {
@@ -628,7 +644,32 @@
             "description": "Optional question about the image; the vision model will answer it after describing/reading the image."
           }
         },
-        "required": ["image_path"]
+        "required": [
+          "image_path"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "SubagentAwait",
+      "description": "Poll a detached subagent by agent_id. A still-running response is not a final result; use the returned completion or error before continuing.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string",
+            "description": "The detached subagent identifier returned by Task."
+          },
+          "timeout_ms": {
+            "type": "number",
+            "description": "Maximum wait in milliseconds."
+          }
+        },
+        "required": [
+          "agent_id"
+        ]
       }
     }
   }

@@ -400,6 +400,10 @@ func buildStartedToolCall(invocation runtimecore.ToolInvocation) *agentv1.ToolCa
 			} `json:"notify_on_output,omitempty"`
 		}
 		_ = json.Unmarshal(invocation.ArgsJSON, &input)
+		var outputNotification []byte
+		if config := buildShellOutputNotificationConfig(input.NotifyOnOutput); config != nil {
+			outputNotification, _ = proto.Marshal(config)
+		}
 		return &agentv1.ToolCall{
 			Tool: &agentv1.ToolCall_ShellToolCall{
 				ShellToolCall: &agentv1.ShellToolCall{
@@ -408,7 +412,7 @@ func buildStartedToolCall(invocation runtimecore.ToolInvocation) *agentv1.ToolCa
 						WorkingDirectory:   strings.TrimSpace(input.WorkingDirectory),
 						ToolCallId:         invocation.CallID,
 						Description:        stringPtr(strings.TrimSpace(input.Description)),
-						OutputNotification: buildShellOutputNotificationConfig(input.NotifyOnOutput),
+						OutputNotification: outputNotification,
 					},
 				},
 			},

@@ -279,26 +279,28 @@ func (service *Service) BidiAppend(ctx context.Context, req *connect.Request[ais
 	}
 	appendSeqno := req.Msg.GetAppendSeqno()
 	dataHex := req.Msg.GetData()
+	dataBinary := req.Msg.GetDataBinary()
+	debugData := protocol.BidiAppendDebugData(dataHex, dataBinary)
 	appendTicket, staleAppend, err := service.appendSeq.Acquire(ctx, requestID, appendSeqno)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeCanceled, err)
 	}
 	if staleAppend {
 		log.Printf("forwarder ignored stale bidi append request_id=%s append_seqno=%d", requestID, appendSeqno)
-		service.debug.LogBidiRaw(ctx, requestID, "", appendSeqno, dataHex, "stale", nil)
+		service.debug.LogBidiRaw(ctx, requestID, "", appendSeqno, debugData, "stale", nil)
 		return connect.NewResponse(&aiserverv1.BidiAppendResponse{}), nil
 	}
 	defer appendTicket.Release()
-	message, clientKind, err := protocol.DecodeAgentClientMessage(dataHex)
+	message, clientKind, canonicalHex, err := protocol.DecodeBidiAppendAgentClientMessage(dataHex, dataBinary)
 	if err != nil {
-		service.debug.LogBidiRaw(ctx, requestID, "", appendSeqno, dataHex, "decode_error", map[string]any{
+		service.debug.LogBidiRaw(ctx, requestID, "", appendSeqno, debugData, "decode_error", map[string]any{
 			"error": err.Error(),
 		})
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 	intent, err := service.decodeInboundIntent(requestID, message, clientKind)
 	if err != nil {
-		service.debug.LogBidiRaw(ctx, requestID, "", appendSeqno, dataHex, "intent_error", map[string]any{
+		service.debug.LogBidiRaw(ctx, requestID, "", appendSeqno, debugData, "intent_error", map[string]any{
 			"client_kind": strings.TrimSpace(clientKind),
 			"error":       err.Error(),
 		})
@@ -307,7 +309,7 @@ func (service *Service) BidiAppend(ctx context.Context, req *connect.Request[ais
 		})
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
-	service.debug.LogBidiRaw(ctx, requestID, intent.ConversationID, appendSeqno, dataHex, "accepted", map[string]any{
+	service.debug.LogBidiRaw(ctx, requestID, intent.ConversationID, appendSeqno, canonicalHex, "accepted", map[string]any{
 		"client_kind": strings.TrimSpace(clientKind),
 	})
 	service.debug.LogBidiDecoded(ctx, requestID, intent.ConversationID, appendSeqno, clientKind, message, intent, nil)
@@ -1351,7 +1353,8 @@ func execMessageHasEffectiveProgress(message *agentv1.ExecClientMessage, result 
 		message.GetMcpResult() != nil ||
 		message.GetFetchResult() != nil ||
 		message.GetExecuteHookResult() != nil ||
-		message.GetWriteShellStdinResult() != nil
+		message.GetWriteShellStdinResult() != nil ||
+		message.GetSubagentAwaitResult() != nil
 }
 
 // handleExecControl 处理执行桥控制面结果，例如 stream_close 或 throw。
@@ -2178,16 +2181,21 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 	stream.UpdatedAt = time.Now().UTC()
 	// B1 doom loop 检测：以（工具名+规范化参数）签名对连续相同调用计数。
 	// 签名变化即重置；达到硬阈值时中断本轮，达到警告阈值时注入提示。
+	// 轮询型工具（SubagentAwait/AwaitShell）按设计就会以相同参数反复调用，
+	// 不参与计数，否则会误杀正在等待长任务子代理的正常轮询。
 	doomLoopCount := 0
-	if stream.lastDoomLoopSignature != signature {
-		stream.doomLoopCounts = map[string]int{}
-		stream.lastDoomLoopSignature = signature
+	countsDoomLoop := !isPollingAwaitTool(trimmedToolName)
+	if countsDoomLoop {
+		if stream.lastDoomLoopSignature != signature {
+			stream.doomLoopCounts = map[string]int{}
+			stream.lastDoomLoopSignature = signature
+		}
+		if stream.doomLoopCounts == nil {
+			stream.doomLoopCounts = map[string]int{}
+		}
+		stream.doomLoopCounts[signature]++
+		doomLoopCount = stream.doomLoopCounts[signature]
 	}
-	if stream.doomLoopCounts == nil {
-		stream.doomLoopCounts = map[string]int{}
-	}
-	stream.doomLoopCounts[signature]++
-	doomLoopCount = stream.doomLoopCounts[signature]
 	stream.mu.Unlock()
 	if doomLoopCount >= doomLoopHardLimit {
 		return service.completePreDispatchToolError(stream, invocation, nil, false, false,
@@ -4208,6 +4216,8 @@ func deriveToolNameFromPendingExec(pending runtimecore.PendingExec) string {
 		return "ComputerUse"
 	case "force_background_subagent":
 		return "ForceBackgroundSubagent"
+	case "subagent_await":
+		return "SubagentAwait"
 	default:
 		return ""
 	}
@@ -4253,6 +4263,8 @@ func execKindFromToolName(name string) (string, bool) {
 		return "computer_use", true
 	case "ForceBackgroundSubagent":
 		return "force_background_subagent", true
+	case "SubagentAwait":
+		return "subagent_await", true
 	default:
 		return "", false
 	}
@@ -4261,7 +4273,19 @@ func execKindFromToolName(name string) (string, bool) {
 func isExecTool(name string) bool {
 	switch strings.TrimSpace(name) {
 	case "Read", "Write", "PatchEdit", "Delete", "Shell", "WriteShellStdin", "ForceBackgroundShell", "Grep", "Glob", "Ls", "ReadLints", "CallMcpTool", "FetchMcpResource", "Task",
-		"Fetch", "RecordScreen", "ComputerUse", "ForceBackgroundSubagent":
+		"Fetch", "RecordScreen", "ComputerUse", "ForceBackgroundSubagent", "SubagentAwait":
+		return true
+	default:
+		return false
+	}
+}
+
+// isPollingAwaitTool 判断工具是否为轮询型 await 工具。这类工具按设计会以相同参数
+// 反复调用（轮询一个仍在运行的子代理 / shell），不应参与 doom-loop 计数，否则会
+// 误杀正在等待长任务的正常轮询。
+func isPollingAwaitTool(name string) bool {
+	switch strings.TrimSpace(name) {
+	case "SubagentAwait", "AwaitShell":
 		return true
 	default:
 		return false

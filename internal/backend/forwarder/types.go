@@ -178,7 +178,7 @@ type ActiveStream struct {
 	// subagent_runs_by_parent_tool_call_id 同步给 Cursor 客户端，客户端 UI
 	// 据此把 Task 卡片渲染为 succeeded/error/aborted；运行中的委派则由
 	// attachDelegationRunStates 从 PendingExecs 推导为 RUNNING。
-	DelegationRunTerminals                      map[string]*agentv1.SubagentRun
+	DelegationRunTerminals                      map[string]*agentv1.SubagentRunState
 	TimerTokens                                 map[string]uint64
 	StreamTimers                                map[string]*time.Timer
 	ProviderAccumulatedText                     string

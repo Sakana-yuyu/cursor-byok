@@ -83,6 +83,7 @@ var agentModeToolNames = map[string]struct{}{
 	"RecordScreen":            {},
 	"ComputerUse":             {},
 	"ForceBackgroundSubagent": {},
+	"SubagentAwait":           {},
 	"CreatePr":                {},
 	"UpdatePr":                {},
 	"SeeImage":                {},
@@ -115,6 +116,7 @@ var multitaskModeToolNames = map[string]struct{}{
 	"RecordScreen":            {},
 	"ComputerUse":             {},
 	"ForceBackgroundSubagent": {},
+	"SubagentAwait":           {},
 	"CreatePr":                {},
 	"UpdatePr":                {},
 	"SeeImage":                {},
@@ -144,6 +146,7 @@ var debugModeToolNames = map[string]struct{}{
 	"RecordScreen":            {},
 	"ComputerUse":             {},
 	"ForceBackgroundSubagent": {},
+	"SubagentAwait":           {},
 	"CreatePr":                {},
 	"UpdatePr":                {},
 }
@@ -172,6 +175,7 @@ var askModeToolNames = map[string]struct{}{
 	"RecordScreen":            {},
 	"ComputerUse":             {},
 	"ForceBackgroundSubagent": {},
+	"SubagentAwait":           {},
 	"CreatePr":                {},
 	"UpdatePr":                {},
 	"SeeImage":                {},
@@ -196,6 +200,7 @@ var planModeToolNames = map[string]struct{}{
 	"WebFetch":             {},
 	"WebSearch":            {},
 	"SeeImage":             {},
+	"SubagentAwait":        {},
 }
 
 var childConversationDisallowedAgentToolNames = map[string]struct{}{

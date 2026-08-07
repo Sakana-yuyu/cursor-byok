@@ -107,6 +107,8 @@ func (bridge *Bridge) OpenExec(openContext OpenExecContext, toolCall runtimecore
 		return bridge.openComputerUse(toolCall)
 	case "force_background_subagent":
 		return bridge.openForceBackgroundSubagent(toolCall)
+	case "subagent_await":
+		return bridge.openSubagentAwait(toolCall)
 	default:
 		return nil, runtimecore.PendingExec{}, fmt.Errorf("unsupported exec tool: %s", toolCall.ToolName)
 	}
@@ -272,6 +274,15 @@ func (bridge *Bridge) ApplyExecClientMessage(msg *agentv1.ExecClientMessage, pen
 		result.ToolResultPayload = summarizeSubagentResult(msg.GetSubagentResult())
 		result.ToolCall = buildTaskCompletedToolCall(pending.ArgsJSON, msg.GetSubagentResult())
 		result.IsTerminal = true
+		return result, nil
+	case "subagent_await":
+		awaitResult := msg.GetSubagentAwaitResult()
+		if awaitResult == nil {
+			return result, nil
+		}
+		result.ToolResultPayload = summarizeSubagentAwaitResult(awaitResult)
+		// still_running 不是终态：模型只能续租/继续等待，不能把它当作子代理结果。
+		result.IsTerminal = awaitResult.GetStillRunning() == nil
 		return result, nil
 	case "write_shell_stdin":
 		writeResult := msg.GetWriteShellStdinResult()

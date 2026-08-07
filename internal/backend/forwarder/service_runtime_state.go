@@ -23,7 +23,7 @@ func attachDelegationRunStates(stream *ActiveStream, state *agentv1.Conversation
 		return
 	}
 	stream.mu.Lock()
-	runs := make(map[string]*agentv1.SubagentRun)
+	runs := make(map[string]*agentv1.SubagentRunState)
 	for _, pending := range stream.PendingExecs {
 		execKind := strings.TrimSpace(pending.ExecKind)
 		if execKind != "delegation_aggregate" && execKind != "subagent" {
@@ -37,7 +37,7 @@ func attachDelegationRunStates(stream *ActiveStream, state *agentv1.Conversation
 		if execKind == "subagent" {
 			title = "Cursor 子代理"
 		}
-		runs[toolCallID] = &agentv1.SubagentRun{
+		runs[toolCallID] = &agentv1.SubagentRunState{
 			ParentToolCallId: toolCallID,
 			SubagentId:       stringPtr(delegationSubagentID(toolCallID)),
 			Environment:      agentv1.SubagentExecutionEnvironment_SUBAGENT_EXECUTION_ENVIRONMENT_LOCAL,
@@ -64,7 +64,7 @@ func (service *Service) recordDelegationRunTerminal(stream *ActiveStream, pendin
 	}
 	now := uint64(time.Now().UTC().UnixMilli())
 	completionReason := agentv1.BackgroundTaskCompletionReason_BACKGROUND_TASK_COMPLETION_REASON_TASK_FINISHED
-	run := &agentv1.SubagentRun{
+	run := &agentv1.SubagentRunState{
 		ParentToolCallId:     strings.TrimSpace(pending.ToolCallID),
 		SubagentId:           stringPtr(delegationSubagentID(pending.ToolCallID)),
 		Environment:          agentv1.SubagentExecutionEnvironment_SUBAGENT_EXECUTION_ENVIRONMENT_LOCAL,
@@ -78,7 +78,7 @@ func (service *Service) recordDelegationRunTerminal(stream *ActiveStream, pendin
 	}
 	stream.mu.Lock()
 	if stream.DelegationRunTerminals == nil {
-		stream.DelegationRunTerminals = make(map[string]*agentv1.SubagentRun)
+		stream.DelegationRunTerminals = make(map[string]*agentv1.SubagentRunState)
 	}
 	stream.DelegationRunTerminals[strings.TrimSpace(pending.ToolCallID)] = run
 	stream.mu.Unlock()
