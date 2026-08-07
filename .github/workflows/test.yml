@@ -1,0 +1,52 @@
+name: Frontend verification
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  frontend:
+    name: Frontend lint / build / e2e
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Enable Yarn classic and reset registry
+        shell: bash
+        run: |
+          printf 'registry "https://registry.npmjs.org/"\nnetwork-timeout 300000\n' > frontend/.yarnrc
+          if [ -f frontend/yarn.lock ]; then
+            sed -i 's|registry.npmmirror.com|registry.npmjs.org|g' frontend/yarn.lock || true
+          fi
+          npm install -g yarn@1.22.22
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: yarn install --frozen-lockfile
+
+      - name: Lint
+        working-directory: frontend
+        run: yarn lint
+
+      - name: Build
+        working-directory: frontend
+        run: yarn build
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run button-level E2E tests
+        working-directory: frontend
+        run: npx playwright test --reporter=line

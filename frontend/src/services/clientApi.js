@@ -62,6 +62,19 @@ const desktopMethods = {
 const API_LOG_PREFIX = "[clientApi]";
 const PROXY_SERVICE_NAME = "cursor/internal/bridge.ProxyService";
 
+// 浏览器预览测试计划：E2E 通过 localStorage 注入确定性 mock 响应。
+// 仅浏览器预览模式读取；桌面模式始终走真实绑定。
+function readBrowserPreviewTestPlan() {
+  if (!isBrowserPreview) return {};
+  try {
+    const raw = localStorage.getItem("cursor-byok.browser-preview.test-plan");
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 function logSuccess(name, payload, result) {
   console.log(`${API_LOG_PREFIX} ${name} response`, { payload, result });
 }
@@ -189,7 +202,17 @@ export function getModelEditorContext() {
 }
 
 export function testModelAdapter(adapter) {
-  if (isBrowserPreview) return Promise.resolve({ status: "success", adapterID: adapter?.id || "preview", summaryText: "浏览器预览模式：未发起请求" });
+  if (isBrowserPreview) {
+    // 浏览器预览：优先使用测试计划注入的测试结果，保证测试结果展示/失败分支可回归。
+    const plan = readBrowserPreviewTestPlan();
+    const override = plan?.testResult;
+    const value = typeof override === "function" ? override(adapter) : override;
+    if (value && typeof value === "object") {
+      // 注入结果归属当前被测模型（adapterID 优先采用注入值，缺省跟随 adapter.id）
+      return Promise.resolve({ ...value, adapterID: value.adapterID || adapter?.id || "" });
+    }
+    return Promise.resolve({ status: "success", adapterID: adapter?.id || "preview", summaryText: "浏览器预览模式：未发起请求" });
+  }
   return withApiLogging("TestModelAdapter", adapter, () => invoke("@bindings/cursor/internal/bridge/proxyservice.js", "TestModelAdapter", [adapter]));
 }
 
@@ -279,6 +302,11 @@ export function applyDiagnosticFixes(channelIDs) {
 // 查询中转站余额/额度；失败时后端返回结构化的 { supported:false, message } 结果。
 export function queryProviderBalance(request) {
   if (isBrowserPreview) {
+    // 浏览器预览：优先使用测试计划注入的余额响应，保证余额展示/过期分支可回归。
+    const plan = readBrowserPreviewTestPlan();
+    const override = plan?.balance;
+    const value = typeof override === "function" ? override(request) : override;
+    if (value && typeof value === "object") return Promise.resolve(value);
     return Promise.resolve({ supported: false, source: "", currency: "USD", total: null, used: null, remaining: null, message: "浏览器预览模式：未查询余额", transient: false });
   }
   return withApiLogging("QueryProviderBalance", request, () => invoke("@bindings/cursor/internal/bridge/proxyservice.js", "QueryProviderBalance", [request]));

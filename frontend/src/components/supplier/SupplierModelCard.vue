@@ -49,7 +49,7 @@ const emit = defineEmits(["toggle-select", "test", "edit", "duplicate", "delete"
 </script>
 
 <template>
-  <Card :class="selectionMode && selected ? 'border-[#10AD5D]/50' : ''">
+  <Card :class="selectionMode && selected ? 'border-[#10AD5D]/50' : ''" data-testid="model-card">
     <div class="flex h-full min-h-[154px] flex-col justify-between gap-3">
       <div class="flex flex-col gap-2.5">
         <div class="flex items-start justify-between gap-3">

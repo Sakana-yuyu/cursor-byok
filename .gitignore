@@ -18,6 +18,10 @@ server-go/log/
 ads-server-linux-amd64.tar
 cmd/ads-server/*.db
 cmd/ads-server/*.db-*
+
+# Playwright E2E 产物
+frontend/test-results/
+frontend/playwright-report/
 cmd/ads-server/*.sqlite
 cmd/ads-server/*.sqlite-*
 cmd/ads-server/data/

@@ -87,6 +87,42 @@ const previewConfig = {
 };
 
 const PREVIEW_CONFIG_STORAGE_KEY = "cursor-byok.browser-preview.config";
+// E2E 测试控制：测试通过 addInitScript 预置该 localStorage 键，mock 据此注入
+// 确定性的余额/测试结果/保存失败响应，避免测试依赖默认随机状态。
+const PREVIEW_TEST_PLAN_KEY = "cursor-byok.browser-preview.test-plan";
+
+function readPreviewTestPlan() {
+  try {
+    const raw = localStorage.getItem(PREVIEW_TEST_PLAN_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+const previewTestPlan = readPreviewTestPlan();
+
+function previewTestBalance(adapter) {
+  const override = readPreviewTestPlan()?.balance;
+  if (override == null) return null;
+  const value = typeof override === "function" ? override(adapter) : override;
+  return value && typeof value === "object" ? value : null;
+}
+
+function previewTestResult(adapter) {
+  const override = readPreviewTestPlan()?.testResult;
+  if (override == null) return null;
+  const value = typeof override === "function" ? override(adapter) : override;
+  return value && typeof value === "object" ? value : null;
+}
+
+function previewTestFailSaveConfig() {
+  return Boolean(readPreviewTestPlan()?.saveConfigFailure);
+}
+
+function previewTestFailDelegationSave() {
+  return Boolean(readPreviewTestPlan()?.delegationSaveFailure);
+}
 
 function previewAdapterForStorage(adapter) {
   if (!adapter || typeof adapter !== "object") {
@@ -135,6 +171,14 @@ function persistPreviewConfig() {
   }
 }
 let editorContext = { index: -1, adapterJSON: "{}" };
+// E2E 测试可通过测试计划预置编辑器上下文（编辑既有模型 / 快速添加两种形态）。
+if (previewTestPlan?.editorContext && typeof previewTestPlan.editorContext === "object") {
+  const seeded = previewTestPlan.editorContext;
+  editorContext = {
+    index: Number.isInteger(seeded.index) ? seeded.index : -1,
+    adapterJSON: typeof seeded.adapterJSON === "string" ? seeded.adapterJSON : "{}",
+  };
+}
 let previewDelegationTasks = [
   {
     id: "preview-task-running",
@@ -369,11 +413,17 @@ export const GetState = () => Promise.resolve(previewProxyState());
 export const LoadUserConfig = () => Promise.resolve(clone(previewConfig));
 export const GetDelegationConfig = () => Promise.resolve(clone(previewConfig.delegation));
 export const SaveDelegationConfig = (value) => {
+  if (previewTestFailDelegationSave()) {
+    return Promise.reject(new Error("E2E 注入：委派配置保存失败"));
+  }
   previewConfig.delegation = clone(value || {});
   persistPreviewConfig();
   return Promise.resolve(clone(previewConfig.delegation));
 };
 export const SaveUserConfig = (value) => {
+  if (previewTestFailSaveConfig()) {
+    return Promise.reject(new Error("E2E 注入：配置保存失败"));
+  }
   const next = value && typeof value === "object" ? clone(value) : {};
   previewConfig.modelAdapters = Array.isArray(next.modelAdapters)
     ? next.modelAdapters.map((adapter) => ({ ...adapter, id: adapter.id || nextID() }))
@@ -456,7 +506,11 @@ export const EnableReaderMCP = (_url, _apiKey, _model) =>
   Promise.resolve({ identifier: "vision-reader", scriptPath: "", wasAdded: true });
 export const RepairCACorruption = () =>
   Promise.resolve({ repaired: true, backupPath: "", detail: "浏览器预览模式：模拟修复" });
-export const TestModelAdapter = (adapter) => Promise.resolve({ status: "success", adapterID: adapter?.id || "preview", summaryText: "浏览器预览模式：未发起请求" });
+export const TestModelAdapter = (adapter) => {
+  const override = previewTestResult(adapter);
+  if (override) return Promise.resolve(clone(override));
+  return Promise.resolve({ status: "success", adapterID: adapter?.id || "preview", summaryText: "浏览器预览模式：未发起请求" });
+};
 export const GetModelAdapterTestResults = () => Promise.resolve([]);
 export const FetchModelCatalog = (request) => {
   const type = String(request?.type || "").toLowerCase();
@@ -487,6 +541,7 @@ export const GetRecentRequestMetrics = () => Promise.resolve([]);
 export const GetProviderEvents = () => Promise.resolve([]);
 export const GetRecentRequestMetricsCount = () => Promise.resolve(0);
 export const GetRecentRequestMetricsAbnormalCount = () => Promise.resolve(0);
+export const GetRecentRequestMetricsDegradedCount = () => Promise.resolve(0);
 export const ResetUsageMetrics = () => Promise.resolve();
 export const GetMetricsRangeSummary = () => Promise.resolve({
   requestCount: 0,
@@ -509,7 +564,11 @@ export const GetProviderSpendSummary = () => Promise.resolve([
   { station: "https://api.volces.com", provider: "doubao-seed-1.6", providerCalls: 38, inputTokens: 1450000, outputTokens: 218000, cacheReadTokens: 420000, cacheWriteTokens: 110000, totalTokens: 2198000, estimatedCostUsd: 0.74, currency: "USD", pricingSource: "catalog" },
 ]);
 export const GetLocalCacheStats = () => Promise.resolve({ hits: 0, misses: 0, savedInputTokens: 0, savedOutputTokens: 0 });
-export const QueryProviderBalance = () => Promise.resolve({ supported: false, source: "", currency: "USD", total: null, used: null, remaining: null, message: "浏览器预览模式：未查询余额", transient: false });
+export const QueryProviderBalance = (adapter) => {
+  const override = previewTestBalance(adapter);
+  if (override) return Promise.resolve(clone(override));
+  return Promise.resolve({ supported: false, source: "", currency: "USD", total: null, used: null, remaining: null, message: "浏览器预览模式：未查询余额", transient: false });
+};
 export const QueryAllProviderBalances = () => Promise.resolve([
   {
     adapterId: "preview-demo-openai",

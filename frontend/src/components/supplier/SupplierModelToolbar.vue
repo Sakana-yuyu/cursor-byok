@@ -56,6 +56,7 @@ const emit = defineEmits(["update:search", "update:statusFilter", "update:sortMo
         v-if="search"
         type="button"
         class="absolute right-2 top-1/2 -translate-y-1/2 text-[#737373] hover:text-white"
+        aria-label="清除搜索"
         @click="emit('update:search', '')"
       >
         <span class="icon-[mdi--close-circle] text-[14px]"></span>

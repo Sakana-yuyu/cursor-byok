@@ -9,6 +9,8 @@
     "build:dev": "node ./scripts/run-vite-build.mjs --scan --minify false --mode development",
     "build": "node ./scripts/run-vite-build.mjs --scan --mode production",
     "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
     "lint": "eslint src scripts plugins",
     "i18n:scan": "node --input-type=module -e \"import { syncCatalogFiles } from './plugins/static-i18n-plugin.js'; import path from 'path'; syncCatalogFiles(path.resolve('.')); console.log('i18n catalog synced');\""
   },
@@ -29,6 +31,7 @@
   },
   "devDependencies": {
     "@iconify/tailwind": "^1.2.0",
+    "@playwright/test": "^1.62.1",
     "@vitejs/plugin-vue": "^6.0.1",
     "@vitejs/plugin-vue-jsx": "^5.1.1",
     "autoprefixer": "^10.5.0",
