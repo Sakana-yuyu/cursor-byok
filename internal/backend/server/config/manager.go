@@ -11,6 +11,7 @@ import (
 
 	"cursor/internal/backend/delegation"
 	"cursor/internal/backend/forwarder"
+	"cursor/internal/historymetrics"
 	legacyruntime "cursor/internal/runtime"
 )
 
@@ -119,6 +120,30 @@ func (manager *Manager) SaveDelegationConfig(ctx context.Context, cfg Delegation
 		return cloneDelegationConfig(DefaultConfig().Delegation), err
 	}
 	return cloneDelegationConfig(normalized.Delegation), nil
+}
+
+// PricingRates 返回当前配置中各模型适配器的价格条目快照，供费用估算使用。
+func (manager *Manager) PricingRates() []historymetrics.PriceRate {
+	if manager == nil {
+		return nil
+	}
+	rates := make([]historymetrics.PriceRate, 0)
+	for _, adapter := range manager.Current().ModelAdapters {
+		pricing := adapter.Pricing
+		if pricing == nil {
+			continue
+		}
+		rates = append(rates, historymetrics.PriceRate{
+			Model:      adapter.ModelID,
+			Provider:   adapter.Type,
+			BaseURL:    adapter.BaseURL,
+			Input:      pricing.Input,
+			Output:     pricing.Output,
+			CacheRead:  pricing.CacheRead,
+			CacheWrite: pricing.CacheWrite,
+		})
+	}
+	return rates
 }
 
 // GoalRuntimeConfig 返回 goal 循环执行的运行时配置（forwarder 消费）。

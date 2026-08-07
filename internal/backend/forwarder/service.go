@@ -76,6 +76,7 @@ type Service struct {
 	localDelegation          *localDelegatedAgentAdapter
 	delegationConfig         delegation.RuntimeConfigProvider
 	goalConfig               goalConfigProvider
+	usageCostEstimator       goalUsageCostEstimator
 	goalsMu                  sync.RWMutex
 	goals                    map[string]*GoalState // conversationID → goal 状态，保留最近 100 条
 	multitaskDelegation      *multitaskDelegationCoordinator
@@ -189,6 +190,7 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 		scanConfig:               scanConfig,
 		delegationConfig:         delegationConfig,
 		goalConfig:               goalCfg,
+		usageCostEstimator:       &defaultUsageCostEstimator{lookup: newPricingLookupFromConfig(resolver)},
 		goals:                    make(map[string]*GoalState),
 		mcpRuntime:               SharedMCPRuntimeRegistry(),
 		broker:                   broker,

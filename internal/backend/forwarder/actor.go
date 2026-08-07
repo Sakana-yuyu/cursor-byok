@@ -928,6 +928,16 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 		}
 		var providerErr providerTerminalError
 		if errors.As(payload.Err, &providerErr) {
+			// goal 模式：provider 错误先自动重试（有限次数），不要直接判失败。
+			if stream.Goal != nil {
+				retried, retryErr := service.handleGoalProviderError(stream, conversationID, turnSeq, requestID, modelCallID, providerPass, payload.Err)
+				if retryErr != nil {
+					return service.failStreamIfNonTerminal(stream, "unknown", retryErr)
+				}
+				if retried {
+					return nil
+				}
+			}
 			service.setTurnPhase(stream, TurnPhaseFailed)
 			return service.closeStreamWithProviderError(stream, conversationID, turnSeq, requestID, accumulatedText, accumulatedReasoning, accumulatedReasoningSignature, accumulatedReasoningSignatureSource, accumulatedReasoningItemID, accumulatedReasoningStatus, accumulatedReasoningSummary, usage, providerErr, !hadToolInvocation)
 		}
@@ -1007,6 +1017,17 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 			return service.failStreamIfNonTerminal(stream, "unknown", err)
 		}
 		return nil
+	}
+
+	// goal 模式：无工具调用不直接收口，先做目标自检 / 预算判定 / 校验。
+	if stream.Goal != nil {
+		handled, err := service.handleGoalPassFinished(stream, conversationID, turnSeq, requestID, modelCallID, providerPass, finishReason, accumulatedText, hadToolInvocation)
+		if err != nil {
+			return service.failStreamIfNonTerminal(stream, "unknown", err)
+		}
+		if handled {
+			return nil
+		}
 	}
 
 	if (hadToolInvocation || shouldResumeAfterToolResults(finishReason)) && !terminalToolInvocation {

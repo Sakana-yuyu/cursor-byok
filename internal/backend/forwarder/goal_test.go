@@ -3,6 +3,7 @@ package forwarder
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewGoalState(t *testing.T) {
@@ -99,5 +100,113 @@ func TestJoinNonEmpty(t *testing.T) {
 	}
 	if got := joinNonEmpty("", ""); got != "" {
 		t.Fatalf("joinNonEmpty all empty = %q, want empty", got)
+	}
+}
+
+func TestGoalBudgetExceeded(t *testing.T) {
+	cfg := defaultGoalRuntimeConfig()
+	cfg.MaxProviderPasses = 5
+	goal := &GoalState{ProviderPasses: 4}
+	if exceeded, _ := goalBudgetExceeded(goal, cfg); exceeded {
+		t.Fatal("pass 4 of 5 must not exceed")
+	}
+	goal.ProviderPasses = 5
+	if exceeded, reason := goalBudgetExceeded(goal, cfg); !exceeded || reason == "" {
+		t.Fatalf("pass 5 of 5 must exceed, got exceeded=%v reason=%q", exceeded, reason)
+	}
+	unlimited := defaultGoalRuntimeConfig()
+	unlimited.MaxProviderPasses = 0 // 0 = 不限
+	goal.ProviderPasses = 999
+	if exceeded, _ := goalBudgetExceeded(goal, unlimited); exceeded {
+		t.Fatal("unlimited passes must never exceed")
+	}
+	durCfg := defaultGoalRuntimeConfig()
+	durCfg.MaxDuration = time.Minute
+	old := &GoalState{StartedAt: time.Now().UTC().Add(-2 * time.Minute), ProviderPasses: 1}
+	if exceeded, _ := goalBudgetExceeded(old, durCfg); !exceeded {
+		t.Fatal("started 2m ago with 1m budget must exceed")
+	}
+}
+
+func TestGoalIdleReminder(t *testing.T) {
+	goal := &GoalState{GoalText: "修复测试"}
+	msg := goalIdleReminder(goal, 1)
+	if msg.Source != promptContextSourceGoalIdle {
+		t.Fatalf("source = %q", msg.Source)
+	}
+	if !strings.Contains(msg.Message.Content, "修复测试") {
+		t.Fatalf("reminder missing goal text: %q", msg.Message.Content)
+	}
+	if !strings.Contains(msg.Message.Content, "连续 1 轮") {
+		t.Fatalf("reminder missing idle count: %q", msg.Message.Content)
+	}
+	escalated := goalIdleReminder(goal, goalStalePivotThreshold)
+	if !strings.Contains(escalated.Message.Content, "换策略") {
+		t.Fatalf("escalated reminder missing pivot instruction: %q", escalated.Message.Content)
+	}
+}
+
+func TestGoalVerifyFeedbackReminder(t *testing.T) {
+	goal := &GoalState{GoalText: "修复测试"}
+	msg := goalVerifyFeedbackReminder(goal, "仍有 3 个用例失败")
+	if msg.Source != promptContextSourceGoalVerifyFeedback {
+		t.Fatalf("source = %q", msg.Source)
+	}
+	if !strings.Contains(msg.Message.Content, "仍有 3 个用例失败") {
+		t.Fatalf("feedback missing report: %q", msg.Message.Content)
+	}
+}
+
+func TestParseVerifyDecision(t *testing.T) {
+	cases := []struct {
+		name       string
+		output     string
+		wantVer    bool
+		wantReport string
+	}{
+		{"verified", "VERIFIED\n测试全部通过，无回归。", true, "测试全部通过，无回归。"},
+		{"not verified", "NOT_VERIFIED\n仍有 3 个用例失败。", false, "仍有 3 个用例失败。"},
+		{"lowercase", "verified\nok", true, "ok"},
+		{"blank", "", false, ""},
+		{"no marker", "测试全部通过", false, "测试全部通过"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotVer, gotReport := parseVerifyDecision(tc.output)
+			if gotVer != tc.wantVer || gotReport != tc.wantReport {
+				t.Fatalf("parseVerifyDecision(%q) = (%v, %q), want (%v, %q)", tc.output, gotVer, gotReport, tc.wantVer, tc.wantReport)
+			}
+		})
+	}
+}
+
+func TestGoalVerifyPrompt(t *testing.T) {
+	p := goalVerifyPrompt(&GoalState{GoalText: "跑通全部单测"})
+	for _, want := range []string{"VERIFIED", "NOT_VERIFIED", "跑通全部单测", "只读"} {
+		if !strings.Contains(p, want) {
+			t.Fatalf("verify prompt missing %q", want)
+		}
+	}
+}
+
+func TestTruncateText(t *testing.T) {
+	if got := truncateText("你好世界", 2); got != "你好…" {
+		t.Fatalf("truncateText = %q", got)
+	}
+	if got := truncateText("abc", 10); got != "abc" {
+		t.Fatalf("truncateText short = %q", got)
+	}
+	if got := truncateText("", 5); got != "" {
+		t.Fatalf("truncateText empty = %q", got)
+	}
+}
+
+func TestGoalErrorRetryReminder(t *testing.T) {
+	reminder := goalErrorRetryReminder("upstream 429")
+	if !strings.Contains(reminder.Message.Content, "429") {
+		t.Fatalf("reminder missing error text: %q", reminder.Message.Content)
+	}
+	if !strings.Contains(reminder.Message.Content, "继续") {
+		t.Fatalf("reminder missing retry instruction: %q", reminder.Message.Content)
 	}
 }
