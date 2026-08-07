@@ -4,8 +4,42 @@ import dayjs from "dayjs";
 import { getLocale } from "@/i18n/runtime";
 import { contextWindowTokensForModel } from "@/utils/modelContext";
 import { adapterMatchesSupplierIdentity } from "@/utils/supplierGrouping";
+// 基础类型转换与协议元数据已归位 utils/valueCast.js / utils/protocolMeta.js：
+// 内部继续使用的符号在此 import，对外暴露的常量/函数通过下方 export from 转发。
+import {
+  asArray,
+  asBoolean,
+  asNumber,
+  asPositiveInteger,
+  asPositiveIntegerString,
+  asString,
+  formatReleaseDate,
+} from "@/utils/valueCast";
+import {
+  ANTHROPIC_THINKING_EFFORT_DEFAULT,
+  normalizeOpenAIEndpoint,
+  normalizeOpenAIRequestGroup,
+  normalizeProtocolGroup,
+  normalizeProtocolMode,
+} from "@/utils/protocolMeta";
 // toUserError 定义已归位 utils/errorHumanizer.js，此处转发保持既有调用方零改动。
 export { toUserError } from "@/utils/errorHumanizer";
+export {
+  ANTHROPIC_THINKING_EFFORT_DEFAULT,
+  OPENAI_ENDPOINT_CHAT_COMPLETIONS,
+  OPENAI_ENDPOINT_CUSTOM,
+  OPENAI_ENDPOINT_RESPONSES,
+  OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS,
+  OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS_COMPAT,
+  OPENAI_REQUEST_GROUP_RESPONSES,
+  PROTOCOL_GROUP_ANTHROPIC_MESSAGES,
+  PROTOCOL_GROUP_GEMINI_NATIVE,
+  PROTOCOL_MODE_AUTO,
+  PROTOCOL_MODE_FIXED,
+  classifyModelProtocol,
+  inferProviderType,
+  normalizeProtocolMode,
+} from "@/utils/protocolMeta";
 import {
   checkForUpdates,
   getAppVersion,
@@ -42,17 +76,6 @@ const GENERIC_SERVICE_ERROR = "服务错误";
 const SUPPORTED_MODEL_ADAPTER_TYPES = new Set(["openai", "anthropic", "gemini"]);
 const SUPPORTED_REASONING_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 const SUPPORTED_ANTHROPIC_THINKING_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
-export const ANTHROPIC_THINKING_EFFORT_DEFAULT = "xhigh";
-export const OPENAI_ENDPOINT_RESPONSES = "/v1/responses";
-export const OPENAI_ENDPOINT_CHAT_COMPLETIONS = "/v1/chat/completions";
-export const OPENAI_ENDPOINT_CUSTOM = "/custom";
-export const OPENAI_REQUEST_GROUP_RESPONSES = "responses";
-export const OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS = "chat_completions";
-export const OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS_COMPAT = "chat_completions_compat";
-export const PROTOCOL_MODE_AUTO = "auto";
-export const PROTOCOL_MODE_FIXED = "fixed";
-export const PROTOCOL_GROUP_ANTHROPIC_MESSAGES = "messages";
-export const PROTOCOL_GROUP_GEMINI_NATIVE = "gemini_native";
 export const OPENAI_EXTRA_PARAMS_DEFAULT_JSON = `{
 }`;
 export const EXTRA_PARAMS_DEFAULT_JSON = `{
@@ -61,13 +84,6 @@ export const CUSTOM_HEADERS_DEFAULT_JSON = `{
 }`;
 export const BALANCE_QUERY_HEADERS_DEFAULT_JSON = `{
 }`;
-const SUPPORTED_OPENAI_ENDPOINTS = new Set([OPENAI_ENDPOINT_RESPONSES, OPENAI_ENDPOINT_CHAT_COMPLETIONS, OPENAI_ENDPOINT_CUSTOM]);
-const SUPPORTED_OPENAI_REQUEST_GROUPS = new Set([
-  OPENAI_REQUEST_GROUP_RESPONSES,
-  OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS,
-  OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS_COMPAT,
-]);
-const SUPPORTED_PROTOCOL_MODES = new Set([PROTOCOL_MODE_AUTO, PROTOCOL_MODE_FIXED]);
 const SUPPORTED_ROUTE_MODES = new Set(["local", "upstream"]);
 export const ROUTE_MODE_OPTIONS = [
   { label: "本地服务模式", value: "local" },
@@ -83,80 +99,6 @@ const MODEL_ADAPTER_TEST_UPDATED_EVENT = "model-adapter-test:updated";
 const SUPPORTED_MODEL_ADAPTER_TEST_STATUSES = new Set(["idle", "running", "success", "error"]);
 const HOME_METRICS_MIN_LOADING_MS = 600;
 export const DEBUG_LOG_WARNING_BYTES = 100 * 1024 * 1024;
-
-function asString(value) {
-  if (typeof value === "string") {
-    return value.trim();
-  }
-  if (value instanceof String) {
-    return value.toString().trim();
-  }
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-  return "";
-}
-
-function asBoolean(value, fallback = false) {
-  if (typeof value === "boolean") {
-    return value;
-  }
-  if (typeof value === "number") {
-    return value !== 0;
-  }
-  const normalized = asString(value).toLowerCase();
-  if (!normalized) {
-    return fallback;
-  }
-  return normalized === "true" || normalized === "1" || normalized === "yes";
-}
-
-function asArray(value) {
-  return Array.isArray(value) ? value : [];
-}
-
-function asPositiveIntegerString(value) {
-  const text = asString(value);
-  if (!text) {
-    return "";
-  }
-  if (!/^\d+$/.test(text)) {
-    return "";
-  }
-  return Number(text) > 0 ? text : "";
-}
-
-function asPositiveInteger(value) {
-  const text = asPositiveIntegerString(value);
-  if (!text) {
-    return 0;
-  }
-  return Number(text);
-}
-
-function asNumber(value, fallback = 0) {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  const text = asString(value);
-  if (!text) {
-    return fallback;
-  }
-  const parsed = Number(text);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function formatReleaseDate(value) {
-  const text = asString(value);
-  if (!text) {
-    return "未知";
-  }
-  const parsed = dayjs(text);
-  if (!parsed.isValid()) {
-    return text;
-  }
-  return parsed.format("YYYY-MM-DD HH:mm");
-}
 
 function normalizeBaseURL(value) {
   const text = asString(value);
@@ -326,104 +268,6 @@ export function createEmptyModelAdapter() {
   };
 }
 
-// normalizeOpenAIEndpoint 归一化 endpoint 路径。
-// 支持三个预设值：/v1/responses、/v1/chat/completions、/custom（自定义路径）。
-// 选 /custom 时，用户需在接口地址栏填写完整请求 URL。
-function normalizeOpenAIEndpoint(value) {
-  const text = asString(value).toLowerCase();
-  if (!text) {
-    return OPENAI_ENDPOINT_RESPONSES;
-  }
-  return SUPPORTED_OPENAI_ENDPOINTS.has(text) ? text : "";
-}
-
-function isValidOpenAIEndpoint(value) {
-  return normalizeOpenAIEndpoint(value) !== "";
-}
-
-// normalizeOpenAIRequestGroup 归一化 OpenAI 请求分组/协议形态。
-// 与后端 modelchannel.NormalizeOpenAIRequestGroup 行为一致：
-// - 非 openai 类型返回空串；
-// - group 为空时按 endpoint 推导默认值（responses 端点 → responses，其余 → chat_completions）；
-// - group 命中三选一返回原值；其余返回空串（视为非法）。
-function normalizeOpenAIRequestGroup(type, endpoint, group) {
-  if (asString(type).toLowerCase() !== "openai") {
-    return "";
-  }
-  const normalized = asString(group).trim();
-  if (!normalized) {
-    return normalizeOpenAIEndpoint(endpoint) === OPENAI_ENDPOINT_RESPONSES
-      ? OPENAI_REQUEST_GROUP_RESPONSES
-      : OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS;
-  }
-  return SUPPORTED_OPENAI_REQUEST_GROUPS.has(normalized) ? normalized : "";
-}
-
-function isValidOpenAIRequestGroup(type, endpoint, group) {
-  return normalizeOpenAIRequestGroup(type, endpoint, group) !== "";
-}
-
-export function normalizeProtocolMode(value) {
-  const normalized = asString(value).toLowerCase();
-  if (!normalized) return PROTOCOL_MODE_AUTO;
-  return SUPPORTED_PROTOCOL_MODES.has(normalized) ? normalized : "";
-}
-
-// inferProviderType 根据模型名推断最合适的 provider 协议族，避免把本应走原生协议的模型
-// （claude、gemini）错误套用渠道级 openai 协议（导致 claude 缓存失效）。
-// 规则：claude-* → anthropic、gemini-* → gemini、其余 → fallback（通常为渠道当前 type）。
-// 与后端 modelchannel.InferProviderType 镜像，务必保持一致。
-export function inferProviderType(modelID, fallback = "openai") {
-  const model = asString(modelID).toLowerCase().trim();
-  if (model.startsWith("claude")) return "anthropic";
-  if (model.startsWith("gemini")) return "gemini";
-  const fb = asString(fallback).toLowerCase().trim();
-  if (fb === "anthropic" || fb === "gemini" || fb === "openai") return fb;
-  return "openai";
-}
-
-export function classifyModelProtocol(type, modelID, baseURL, endpoint, configuredGroup = "") {
-  const provider = asString(type).toLowerCase();
-  if (provider === "anthropic") return PROTOCOL_GROUP_ANTHROPIC_MESSAGES;
-  if (provider === "gemini") return PROTOCOL_GROUP_GEMINI_NATIVE;
-  if (provider !== "openai") return "";
-  const configured = asString(configuredGroup).toLowerCase();
-  if (SUPPORTED_OPENAI_REQUEST_GROUPS.has(configured)) return configured;
-  const normalizedEndpoint = normalizeOpenAIEndpoint(endpoint);
-  const normalizedBaseURL = asString(baseURL).toLowerCase();
-  const model = asString(modelID).toLowerCase();
-  if (normalizedBaseURL.endsWith("/responses")) {
-    return OPENAI_REQUEST_GROUP_RESPONSES;
-  }
-  if (normalizedBaseURL.endsWith("/chat/completions")) {
-    return OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS;
-  }
-  if (normalizedBaseURL.includes("api.openai.com") || /^(gpt-|o1|o3|o4)/.test(model)) {
-    return OPENAI_REQUEST_GROUP_RESPONSES;
-  }
-  if (model) return OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS;
-  return normalizedEndpoint === OPENAI_ENDPOINT_RESPONSES
-    ? OPENAI_REQUEST_GROUP_RESPONSES
-    : OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS;
-}
-
-function normalizeProtocolGroup(mode, type, modelID, baseURL, endpoint, configuredGroup) {
-  const provider = asString(type).toLowerCase();
-  const normalizedMode = normalizeProtocolMode(mode);
-  const configured = asString(configuredGroup).toLowerCase();
-  if (!normalizedMode) return "";
-  if (provider === "anthropic") return configured && configured !== PROTOCOL_GROUP_ANTHROPIC_MESSAGES
-    ? ""
-    : PROTOCOL_GROUP_ANTHROPIC_MESSAGES;
-  if (provider === "gemini") return configured && configured !== PROTOCOL_GROUP_GEMINI_NATIVE
-    ? ""
-    : PROTOCOL_GROUP_GEMINI_NATIVE;
-  if (provider !== "openai") return "";
-  if (normalizedMode === PROTOCOL_MODE_FIXED) {
-    return SUPPORTED_OPENAI_REQUEST_GROUPS.has(configured) ? configured : "";
-  }
-  return classifyModelProtocol(provider, modelID, baseURL, endpoint, configured);
-}
 
 function validateJSONObject(value, label) {
   const text = asString(value);
