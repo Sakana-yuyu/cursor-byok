@@ -28,8 +28,6 @@ const (
 	configurableChannelContextWindowTokens = 200_000
 	// configurableChannelMaxTokens 表示当前声明中的 configurableChannelMaxTokens。
 	configurableChannelMaxTokens = 65_536
-	// configurableChannelThinkingBudgetTokens 表示当前声明中的 configurableChannelThinkingBudgetTokens。
-	configurableChannelThinkingBudgetTokens = 4_096
 	// configurableChannelAnthropicThinkingEffort 表示 Anthropic adaptive thinking 默认强度。
 	configurableChannelAnthropicThinkingEffort = "xhigh"
 )
@@ -502,7 +500,6 @@ func (s *FixedChannelService) SelectChannelForModel(ctx context.Context, modelID
 			AnthropicMaxTokens:          configurableChannelMaxTokens,
 			AnthropicThinkingEffort:     configurableChannelAnthropicThinkingEffort,
 			ThinkingEnabled:             true,
-			ThinkingBudgetTokens:        configurableChannelThinkingBudgetTokens,
 			Pricing:                     adapter.Pricing,
 			FastMode:                    adapter.FastMode,
 			OpenAIServiceTier:           strings.TrimSpace(adapter.OpenAIServiceTier),

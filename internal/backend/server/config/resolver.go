@@ -12,7 +12,6 @@ const (
 	defaultChannelTimeoutMS           = int((2 * 60 * 60) * 1000)
 	defaultChannelContextWindowTokens = 200_000
 	defaultChannelMaxTokens           = 65_536
-	defaultChannelThinkingBudget      = 4_096
 	defaultChannelAnthropicEffort     = "xhigh"
 )
 
@@ -107,7 +106,6 @@ func resolveModelAdapterChannel(adapters []ModelAdapterConfig, requestedModel st
 		AnthropicMaxTokens:          defaultChannelMaxTokens,
 		AnthropicThinkingEffort:     defaultChannelAnthropicEffort,
 		ThinkingEnabled:             true,
-		ThinkingBudgetTokens:        defaultChannelThinkingBudget,
 		Pricing:                     matched.Pricing,
 		FastMode:                    matched.FastMode,
 		OpenAIServiceTier:           strings.TrimSpace(matched.OpenAIServiceTier),
