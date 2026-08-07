@@ -3,6 +3,7 @@ import Button from "@/components/ui/Button.vue";
 import Input from "@/components/ui/Input.vue";
 import ModelBehaviorFields from "@/components/model-editor/ModelBehaviorFields.vue";
 import ModelCapabilitiesSection from "@/components/model-editor/ModelCapabilitiesSection.vue";
+import ModelIdentityFields from "@/components/model-editor/ModelIdentityFields.vue";
 import ModelPricingSection from "@/components/model-editor/ModelPricingSection.vue";
 import ModelTestResultSection from "@/components/model-editor/ModelTestResultSection.vue";
 import Select from "@/components/ui/Select.vue";
@@ -151,7 +152,6 @@ const supplierModelOptions = computed(() => {
   return Array.from(models).map((model) => ({ label: model, value: model }));
 });
 const supplierPresetOptions = computed(() => (supplierTemplate(draft.supplierID).presets || []).map((item) => ({ label: item.label, value: item.model })));
-const supplierHasPresets = computed(() => supplierPresetOptions.value.length > 0);
 
 const editorIndex = ref(-1);
 const router = useRouter();
@@ -982,68 +982,23 @@ onMounted(async () => {
               <div class="mt-0.5 text-xs leading-5 text-[#8f8f8f]">用于区分模型、渠道分组和供应商预设。</div>
             </div>
             <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <label class="flex flex-col gap-1">
-            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
-              <Tooltip :content="fieldTips.displayName" />
-              <span>显示名称</span>
-            </span>
-            <input
-              v-model="draft.displayName"
-              type="text"
-              class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
-            />
-          </label>
-
-          <label class="flex flex-col gap-1">
-            <span class="text-sm text-[#d4d4d4]">用户分组名称</span>
-            <input
-              v-model="draft.groupName"
-              type="text"
-              placeholder="可选，用于「按渠道」列表汇总"
-              class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
-            />
-            <span class="text-xs text-[#8f8f8f]">留空时列表里显示为「默认分组」；与模型配置页的名称分组对应。</span>
-          </label>
-
-          <label class="flex flex-col gap-1">
-            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
-              <Tooltip :content="fieldTips.modelID" />
-              <span>模型标识</span>
-            </span>
-            <div class="flex gap-2">
-              <input
-                v-model="draft.modelID"
-                type="text"
-                placeholder="例如：gpt-4.1"
-                class="h-9 min-w-0 flex-1 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
-              />
-              <Select
-                v-if="supplierModelOptions.length"
-                class="w-48 shrink-0"
-                :model-value="draft.modelID"
-                :options="supplierModelOptions"
-                @update:model-value="draft.modelID = $event"
-              />
-              <Select
-                v-if="supplierHasPresets"
-                class="w-36 shrink-0"
-                :model-value="draft.modelID"
-                :options="supplierPresetOptions"
-                @update:model-value="handleSupplierPreset"
-              />
-              <Button
-                v-if="!manualAddMode && !isQuickMode"
-                variant="default"
-                :disabled="!draft.baseURL || !draft.apiKey"
-                @click="openCatalogPage"
-              >
-                拉取模型
-              </Button>
-            </div>
-            <div v-if="catalogError" class="mt-1 text-xs text-[#fca5a5]">
-              {{ catalogError }}
-            </div>
-          </label>
+          <ModelIdentityFields
+            :display-name="draft.displayName"
+            :group-name="draft.groupName"
+            :model-i-d="draft.modelID"
+            :supplier-model-options="supplierModelOptions"
+            :supplier-preset-options="supplierPresetOptions"
+            :manual-add-mode="manualAddMode"
+            :quick-mode="isQuickMode"
+            :can-fetch-catalog="Boolean(draft.baseURL && draft.apiKey)"
+            :catalog-error="catalogError"
+            :field-tips="fieldTips"
+            @update:display-name="draft.displayName = $event"
+            @update:group-name="draft.groupName = $event"
+            @update:model-i-d="draft.modelID = $event"
+            @select-preset="handleSupplierPreset"
+            @fetch-catalog="openCatalogPage"
+          />
           <div class="md:col-span-2 border-t border-[#343434] pt-3">
             <div class="text-sm font-medium text-[#e5e5e5]">模型能力与行为</div>
             <div class="mt-0.5 text-xs leading-5 text-[#8f8f8f]">上下文、图片能力、推理强度和价格会影响模型的实际使用方式。</div>
