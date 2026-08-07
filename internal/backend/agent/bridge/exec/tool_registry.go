@@ -23,6 +23,7 @@ var toolRegistry = map[string]string{
 	"RecordScreen":            "record_screen",
 	"ComputerUse":             "computer_use",
 	"ForceBackgroundSubagent": "force_background_subagent",
+	"SubagentAwait":           "subagent_await",
 }
 
 func canonicalToolKind(name string) string {
