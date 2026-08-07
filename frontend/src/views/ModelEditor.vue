@@ -2,6 +2,7 @@
 import Button from "@/components/ui/Button.vue";
 import Input from "@/components/ui/Input.vue";
 import ModelAdapterTestCard from "@/components/ModelAdapterTestCard.vue";
+import ModelPricingSection from "@/components/model-editor/ModelPricingSection.vue";
 import Select from "@/components/ui/Select.vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
 import { getModelEditorContext } from "@/services/clientApi";
@@ -1123,50 +1124,16 @@ onMounted(async () => {
             </div>
           </label>
 
-          <div class="rounded-[8px] border border-[#343434] bg-[#252525] p-3 md:col-span-2">
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <div class="text-sm text-[#d4d4d4]">价格（每百万 token）</div>
-                <div class="mt-1 text-xs text-[#8f8f8f]">
-                  用于请求明细和首页成本估算；留空时自动使用内置官方价。
-                  <span v-if="draft.pricing?.source === 'manual'" class="text-[#6ee7a5]">· 手动配价</span>
-                  <span v-else-if="draft.pricing?.source === 'catalog'" class="text-[#6ee7a5]">· 中转站探测价</span>
-                  <span v-else-if="draft.pricing?.source" class="text-[#6ee7a5]">· {{ draft.pricing.source }}</span>
-                  <span v-else class="text-[#8f8f8f]">· 未配置（将使用内置官方价）</span>
-                </div>
-              </div>
-              <button
-                v-if="pricingKnown"
-                type="button"
-                class="shrink-0 text-xs text-[#fca5a5] hover:text-white"
-                @click="clearPricing"
-              >
-                清除价格
-              </button>
-            </div>
-            <div class="mt-3 grid grid-cols-2 gap-3 md:grid-cols-5">
-              <label class="flex flex-col gap-1">
-                <span class="text-xs text-[#a3a3a3]">输入</span>
-                <input v-model="pricingInput" type="text" inputmode="decimal" placeholder="0.00" class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
-              </label>
-              <label class="flex flex-col gap-1">
-                <span class="text-xs text-[#a3a3a3]">输出</span>
-                <input v-model="pricingOutput" type="text" inputmode="decimal" placeholder="0.00" class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
-              </label>
-              <label class="flex flex-col gap-1">
-                <span class="text-xs text-[#a3a3a3]">缓存读取</span>
-                <input v-model="pricingCacheRead" type="text" inputmode="decimal" placeholder="0.00" class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
-              </label>
-              <label class="flex flex-col gap-1">
-                <span class="text-xs text-[#a3a3a3]">缓存写入</span>
-                <input v-model="pricingCacheWrite" type="text" inputmode="decimal" placeholder="0.00" class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
-              </label>
-              <label class="flex flex-col gap-1">
-                <span class="text-xs text-[#a3a3a3]">币种</span>
-                <input v-model="pricingCurrency" type="text" maxlength="8" placeholder="USD" class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm uppercase text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
-              </label>
-            </div>
-          </div>
+          <ModelPricingSection
+            v-model:input="pricingInput"
+            v-model:output="pricingOutput"
+            v-model:cache-read="pricingCacheRead"
+            v-model:cache-write="pricingCacheWrite"
+            v-model:currency="pricingCurrency"
+            :known="pricingKnown"
+            :source="draft.pricing?.source || ''"
+            @clear="clearPricing"
+          />
 
           <label v-if="draft.type === 'openai' || draft.type === 'gemini'" class="flex flex-col gap-1">
             <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
