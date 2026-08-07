@@ -218,6 +218,9 @@ func TestNewPersistentManagerRegeneratesOnMismatch(t *testing.T) {
 	if len(mgr.CACertPEM()) == 0 {
 		t.Fatal("regenerated manager returned empty cert")
 	}
+	if mgr.RepairedAt.IsZero() {
+		t.Fatal("regenerated manager must mark RepairedAt for front-end restart hint")
+	}
 	// 新落盘的一对必须匹配，且旧被覆盖的 cert 已被备份（.corrupt-*.bak）。
 	onDiskCert, err := os.ReadFile(certPath)
 	if err != nil {

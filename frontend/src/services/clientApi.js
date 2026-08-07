@@ -374,6 +374,9 @@ export function enableReaderMCP(url, apiKey, model) {
 export function repairCACorruption() {
   return desktopOrMock({ repaired: true, backupPath: "", detail: "浏览器预览模式：模拟修复" }, "@bindings/cursor/internal/bridge/proxyservice.js", "RepairCACorruption");
 }
+export function getCARepairStatus() {
+  return desktopOrMock({ repaired: false, repairedAt: "", detail: "" }, "@bindings/cursor/internal/bridge/proxyservice.js", "GetCARepairStatus");
+}
 
 export function repairProxySettings() {
   return withApiLogging("RepairProxySettings", undefined, () => desktopOrMock(undefined, "@bindings/cursor/internal/bridge/proxyservice.js", "RepairProxySettings"));

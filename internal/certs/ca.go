@@ -34,6 +34,10 @@ type Manager struct {
 	mu sync.Mutex
 	// cache 表示当前声明中的 cache。
 	cache map[string]*tls.Certificate
+
+	// RepairedAt 记录本次进程内 CA 材料被自动修复（cert/key 失配重建）的时间；
+	// 零值表示未发生自动修复。bridge/前端据此提示用户重启 Cursor 使新 CA 生效。
+	RepairedAt time.Time
 }
 
 // NewManager 用于处理与 NewManager 相关的逻辑。
@@ -115,7 +119,14 @@ func NewPersistentManager(certPath, keyPath string) (*Manager, error) {
 			if readErr != nil {
 				return nil, readErr
 			}
-			return NewManagerFromPEM(certPEM, keyPEM)
+			repaired, newErr := NewManagerFromPEM(certPEM, keyPEM)
+			if newErr != nil {
+				return nil, newErr
+			}
+			// 标记自动修复时间：新 CA 已重新落盘并会在启动流程中重装信任，
+			// 但 Cursor 客户端必须重启才能重新连接（Electron 缓存旧连接）。
+			repaired.RepairedAt = time.Now().UTC()
+			return repaired, nil
 		}
 		log.Printf("[certs] reuse existing CA cert=%s key=%s (no regeneration)", certPath, keyPath)
 		return NewManagerFromPEM(certPEM, keyPEM)

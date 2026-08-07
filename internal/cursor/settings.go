@@ -69,7 +69,7 @@ func SetSystemNodeExtraCACerts(caCertPath string) error {
 	case "darwin":
 		out, err := exec.Command("launchctl", "setenv", "NODE_EXTRA_CA_CERTS", caCertPath).CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("写入 macOS 用户环境变量失败: %v: %s", err, strings.TrimSpace(string(out)))
+			return fmt.Errorf("写入 macOS 用户环境变量失败: %w: %s", err, strings.TrimSpace(string(out)))
 		}
 	case "linux":
 		// Linux 发行版环境变量持久化方式差异较大，这里先确保当前进程生效。
@@ -81,7 +81,7 @@ func SetSystemNodeExtraCACerts(caCertPath string) error {
 		cmd := exec.Command("setx", nodeExtraCACertsEnvName, caCertPath)
 		cmd.Stderr = nil
 		if out, err := cmd.Output(); err != nil {
-			return fmt.Errorf("写入 Windows 用户环境变量失败: %v: %s", err, strings.TrimSpace(string(out)))
+			return fmt.Errorf("写入 Windows 用户环境变量失败: %w: %s", err, strings.TrimSpace(string(out)))
 		}
 		logger.Infof("setSystemNodeExtraCACerts: windows user env persisted via setx, restart Cursor to take effect")
 	default:
@@ -105,7 +105,7 @@ func ClearSystemNodeExtraCACerts() error {
 	case "darwin":
 		out, err := exec.Command("launchctl", "unsetenv", nodeExtraCACertsEnvName).CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("清理 macOS 用户环境变量失败: %v: %s", err, strings.TrimSpace(string(out)))
+			return fmt.Errorf("清理 macOS 用户环境变量失败: %w: %s", err, strings.TrimSpace(string(out)))
 		}
 	case "linux":
 		logger.Infof("clearSystemNodeExtraCACerts: linux detected, cleared in current process only")

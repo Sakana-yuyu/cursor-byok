@@ -20,6 +20,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 )
 
 //go:embed vision_mcp_server.py
@@ -109,6 +110,10 @@ type ProxyService struct {
 	mcpConnectMu    sync.Mutex
 	mcpConnects     map[string]mcpConnectHandle
 	mcpConnectSeq   uint64
+
+	// caRepairedAt 记录本次启动 CA 材料被自动修复（cert/key 失配重建）的时间；
+	// 零值表示未发生自动修复，前端据此展示「重启 Cursor」提示。
+	caRepairedAt time.Time
 }
 
 type mcpConnectHandle struct {
@@ -128,7 +133,16 @@ func NewProxyService(proxy *mitm.ProxyServer, certManager *certs.Manager, caCert
 		core:            client.NewProxyService(proxy, certManager, caCertPEM),
 		promptInjection: manager,
 		mcpConnects:     make(map[string]mcpConnectHandle),
+		caRepairedAt:    certManagerRepairedAt(certManager),
 	}
+}
+
+// certManagerRepairedAt 读取 certManager 的自动修复标记（certManager 可能为 nil）。
+func certManagerRepairedAt(certManager *certs.Manager) time.Time {
+	if certManager == nil {
+		return time.Time{}
+	}
+	return certManager.RepairedAt
 }
 
 // StartProxy 用于处理与 StartProxy 相关的逻辑。
@@ -261,6 +275,16 @@ type CARepairResult struct {
 	Detail string `json:"detail"`
 }
 
+// CARepairStatus 是前端查询「本次启动 CA 是否被自动修复」的状态（只读）。
+type CARepairStatus struct {
+	// Repaired 表示本次启动检测到 CA 材料异常并已自动修复（cert/key 失配重建）。
+	Repaired bool `json:"repaired"`
+	// RepairedAt 表示自动修复发生的时间（RFC3339，空表示未修复）。
+	RepairedAt string `json:"repairedAt"`
+	// Detail 表示给用户看的提示文案。
+	Detail string `json:"detail"`
+}
+
 // RepairCACorruption 一键修复 CA 材料不完整：把残留文件备份改名后重新生成 CA 落盘。
 // 修复后需重启应用使新 CA 生效（本地代理与 MITM 在启动时构建）。
 func (s *ProxyService) RepairCACorruption() (CARepairResult, error) {
@@ -282,6 +306,20 @@ func (s *ProxyService) RepairCACorruption() (CARepairResult, error) {
 		BackupPath: backup,
 		Detail:     "已备份残留文件并重新生成 CA，重启应用后生效",
 	}, nil
+}
+
+// GetCARepairStatus 返回本次启动 CA 是否被自动修复（失配重建）的状态。
+// 自动修复只发生在启动时（NewPersistentManager 检测到 cert/key 失配），
+// 新 CA 已重新落盘并重装信任，但 Cursor 客户端需重启才能重新连接。
+func (s *ProxyService) GetCARepairStatus() CARepairStatus {
+	if s == nil || s.caRepairedAt.IsZero() {
+		return CARepairStatus{Repaired: false}
+	}
+	return CARepairStatus{
+		Repaired:   true,
+		RepairedAt: s.caRepairedAt.Format(time.RFC3339),
+		Detail:     "检测到本地 CA 异常，已自动修复，请重启 Cursor 使连接生效",
+	}
 }
 
 // MarkCAIncomplete 记录 CA 初始化失败状态（应用降级启动时由 runner 调用），

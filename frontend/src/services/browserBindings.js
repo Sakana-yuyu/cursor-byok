@@ -509,6 +509,8 @@ export const EnableReaderMCP = (_url, _apiKey, _model) =>
   Promise.resolve({ identifier: "vision-reader", scriptPath: "", wasAdded: true });
 export const RepairCACorruption = () =>
   Promise.resolve({ repaired: true, backupPath: "", detail: "浏览器预览模式：模拟修复" });
+export const GetCARepairStatus = () =>
+  Promise.resolve({ repaired: false, repairedAt: "", detail: "" });
 export const TestModelAdapter = (adapter) => {
   const override = previewTestResult(adapter);
   if (override) return Promise.resolve(clone(override));
