@@ -396,7 +396,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 564,
+          "line": 565,
           "column": 79
         },
         {
@@ -661,7 +661,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 327,
+          "line": 328,
           "column": 32
         }
       ]
@@ -750,7 +750,7 @@
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 555,
+          "line": 549,
           "column": 35
         }
       ]
@@ -1233,7 +1233,7 @@
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 549,
+          "line": 543,
           "column": 35
         }
       ]
@@ -1423,7 +1423,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 544,
+          "line": 538,
           "column": 57
         }
       ]
@@ -1894,7 +1894,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 462,
+          "line": 463,
           "column": 163
         }
       ]
@@ -1930,7 +1930,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 459,
+          "line": 460,
           "column": 180
         }
       ]
@@ -2102,7 +2102,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 327,
+          "line": 328,
           "column": 49
         }
       ]
@@ -2298,7 +2298,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 572,
+          "line": 566,
           "column": 39
         }
       ]
@@ -2687,7 +2687,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 390,
+          "line": 391,
           "column": 85
         }
       ]
@@ -2699,7 +2699,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 319,
+          "line": 320,
           "column": 25
         }
       ]
@@ -3240,12 +3240,12 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 336,
+          "line": 337,
           "column": 19
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 361,
+          "line": 362,
           "column": 17
         },
         {
@@ -3442,7 +3442,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 360,
+          "line": 361,
           "column": 18
         },
         {
@@ -3522,7 +3522,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 522,
+          "line": 516,
           "column": 17
         }
       ]
@@ -4038,7 +4038,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 479,
+          "line": 480,
           "column": 88
         }
       ]
@@ -4185,7 +4185,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 317,
+          "line": 318,
           "column": 22
         }
       ]
@@ -4236,7 +4236,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 551,
+          "line": 552,
           "column": 81
         }
       ]
@@ -4490,7 +4490,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 432,
+          "line": 433,
           "column": 17
         }
       ]
@@ -4679,7 +4679,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 358,
+          "line": 359,
           "column": 12
         }
       ]
@@ -4938,7 +4938,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 570,
+          "line": 571,
           "column": 27
         }
       ]
@@ -5022,12 +5022,12 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 334,
+          "line": 328,
           "column": 12
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 358,
+          "line": 352,
           "column": 12
         }
       ]
@@ -5365,7 +5365,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 498,
+          "line": 499,
           "column": 89
         },
         {
@@ -5883,7 +5883,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 333,
+          "line": 334,
           "column": 14
         }
       ]
@@ -6204,7 +6204,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 335,
+          "line": 336,
           "column": 20
         }
       ]
@@ -6537,7 +6537,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 503,
+          "line": 497,
           "column": 17
         }
       ]
@@ -6703,7 +6703,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 497,
+          "line": 498,
           "column": 29
         }
       ]
@@ -7126,7 +7126,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 341,
+          "line": 342,
           "column": 30
         }
       ]
@@ -7566,7 +7566,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 546,
+          "line": 540,
           "column": 35
         }
       ]
@@ -7665,7 +7665,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 526,
+          "line": 527,
           "column": 25
         }
       ]
@@ -7835,7 +7835,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 514,
+          "line": 515,
           "column": 84
         },
         {
@@ -7936,7 +7936,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 334,
+          "line": 335,
           "column": 16
         }
       ]
@@ -8090,7 +8090,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 398,
+          "line": 399,
           "column": 17
         }
       ]
@@ -8102,7 +8102,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 561,
+          "line": 562,
           "column": 19
         }
       ]
@@ -8287,7 +8287,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 331,
+          "line": 332,
           "column": 38
         }
       ]
@@ -8610,17 +8610,17 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 390,
+          "line": 391,
           "column": 160
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 479,
+          "line": 480,
           "column": 121
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 492,
+          "line": 493,
           "column": 77
         },
         {
@@ -8782,7 +8782,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 522,
+          "line": 516,
           "column": 17
         }
       ]
@@ -9228,7 +9228,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 389,
+          "line": 390,
           "column": 134
         }
       ]
@@ -9471,12 +9471,12 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 529,
+          "line": 523,
           "column": 9
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 530,
+          "line": 524,
           "column": 9
         }
       ]
@@ -9855,12 +9855,12 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 533,
+          "line": 534,
           "column": 93
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 533,
+          "line": 534,
           "column": 93
         },
         {
@@ -10061,7 +10061,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 413,
+          "line": 414,
           "column": 15
         }
       ]
@@ -10381,7 +10381,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 516,
+          "line": 517,
           "column": 129
         }
       ]
@@ -10488,7 +10488,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 503,
+          "line": 497,
           "column": 17
         }
       ]
@@ -10785,7 +10785,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 369,
+          "line": 370,
           "column": 67
         },
         {
@@ -11819,12 +11819,12 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 537,
+          "line": 531,
           "column": 9
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 538,
+          "line": 532,
           "column": 9
         }
       ]
@@ -11993,7 +11993,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 335,
+          "line": 329,
           "column": 12
         }
       ]
@@ -13145,7 +13145,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 537,
+          "line": 538,
           "column": 25
         },
         {
@@ -13622,7 +13622,7 @@
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 552,
+          "line": 546,
           "column": 35
         }
       ]
@@ -13699,7 +13699,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 389,
+          "line": 390,
           "column": 49
         }
       ]
@@ -13769,7 +13769,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 372,
+          "line": 373,
           "column": 29
         },
         {
@@ -13791,7 +13791,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 570,
+          "line": 571,
           "column": 27
         }
       ]
@@ -14294,7 +14294,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 510,
+          "line": 511,
           "column": 89
         }
       ]
@@ -14447,7 +14447,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 322,
+          "line": 323,
           "column": 22
         }
       ]
@@ -14779,7 +14779,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 341,
+          "line": 342,
           "column": 47
         }
       ]
@@ -15206,7 +15206,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 548,
+          "line": 549,
           "column": 21
         }
       ]
@@ -15466,17 +15466,17 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 332,
+          "line": 326,
           "column": 12
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 356,
+          "line": 350,
           "column": 12
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 562,
+          "line": 556,
           "column": 87
         }
       ]
@@ -15631,7 +15631,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 518,
+          "line": 519,
           "column": 43
         }
       ]
@@ -15715,7 +15715,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 436,
+          "line": 437,
           "column": 89
         }
       ]
@@ -16041,7 +16041,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 359,
+          "line": 360,
           "column": 14
         }
       ]
@@ -16152,7 +16152,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 436,
+          "line": 437,
           "column": 89
         }
       ]
@@ -16284,7 +16284,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 559,
+          "line": 553,
           "column": 66
         }
       ]
@@ -16395,7 +16395,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 437,
+          "line": 438,
           "column": 93
         },
         {
@@ -16453,7 +16453,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 554,
+          "line": 548,
           "column": 32
         }
       ]
@@ -16617,7 +16617,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 446,
+          "line": 447,
           "column": 43
         }
       ]
@@ -17051,7 +17051,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 460,
+          "line": 461,
           "column": 40
         }
       ]
@@ -17208,7 +17208,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 422,
+          "line": 423,
           "column": 17
         }
       ]
@@ -17683,7 +17683,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 533,
+          "line": 534,
           "column": 93
         }
       ]
@@ -17724,7 +17724,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 513,
+          "line": 514,
           "column": 60
         }
       ]
@@ -17825,7 +17825,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 575,
+          "line": 576,
           "column": 73
         }
       ]
@@ -17878,7 +17878,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 453,
+          "line": 454,
           "column": 13
         }
       ]
@@ -17914,7 +17914,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 343,
+          "line": 344,
           "column": 27
         }
       ]

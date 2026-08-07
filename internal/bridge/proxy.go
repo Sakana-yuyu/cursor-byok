@@ -382,7 +382,8 @@ func (s *ProxyService) FetchModelCatalog(request ModelCatalogRequest) (ModelCata
 }
 
 // AutoMatchContextWindows 自动为所有已存储模型适配器配对正确的上下文窗口：
-// 目录命中则覆盖，目录未命中则探测 provider /models 回填。供前端「一键自动配对」按钮调用。
+// 目录命中仅下调（保留用户手动设置的更小窗口），目录未命中则探测 provider /models 回填。
+// 供前端「一键自动配对」按钮调用。
 // force=true 时无视 autoMatchContextWindow 开关强制执行（供「一键诊断优化」手动触发）。
 func (s *ProxyService) AutoMatchContextWindows(ctx context.Context, force bool) (AutoMatchResult, error) {
 	return s.core.AutoMatchContextWindows(ctx, force)

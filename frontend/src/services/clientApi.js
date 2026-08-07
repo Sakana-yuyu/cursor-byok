@@ -282,7 +282,7 @@ export function fetchModelCatalog(request) {
   return withApiLogging("FetchModelCatalog", request, () => invoke("@bindings/cursor/internal/bridge/proxyservice.js", "FetchModelCatalog", [request]));
 }
 
-// 一键自动配对所有模型适配器的上下文窗口：目录命中则覆盖，目录未命中则探测 provider /models 回填。
+// 一键自动配对所有模型适配器的上下文窗口：目录命中仅下调（保留用户手动设置的更小窗口），目录未命中则探测 provider /models 回填。
 // force=true 时无视 autoMatchContextWindow 开关强制执行（「一键诊断优化」手动触发用）。
 export function autoMatchContextWindows(force = false) {
   if (isBrowserPreview) {

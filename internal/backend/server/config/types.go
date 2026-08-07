@@ -46,7 +46,7 @@ const (
 	// DefaultLocalResponseCacheMaxEntries 表示本地响应缓存的默认最大条目数（LRU 淘汰）。
 	DefaultLocalResponseCacheMaxEntries = 2048
 	// DefaultAutoMatchContextWindow 表示是否在启动时/手动触发时自动为所有模型适配器
-	// 配对正确的上下文窗口（目录命中则覆盖，目录无则探测 provider /models 回填）。
+	// 配对正确的上下文窗口（目录命中仅下调修正过大值，目录无则探测 provider /models 回填）。
 	DefaultAutoMatchContextWindow = true
 	// DefaultSkillMCPScanEnabled 表示是否默认开启跨工具 Skills/MCP 自动扫描与注入。
 	// 开启时扫描主流编码工具的技能/MCP 配置，合并进 RequestContext，还原原生注入。

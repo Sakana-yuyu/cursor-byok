@@ -3,6 +3,7 @@ import StatsOverlayChart from "@/components/charts/StatsOverlayChart.vue";
 import { getHomeMetricsSummary, fetchLocalCacheStats, setStatsOverlayAlwaysOnTop, updateStatsOverlayLayout } from "@/services/clientApi";
 import { getStatsOverlayPreferences, setStatsOverlayPreferences, hideStatsOverlay, closeApplication, appState } from "@/state/appState";
 import { usePolling } from "@/composables/usePolling";
+import { formatCompactInteger } from "@/utils/numberFormat";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 
 const summary = ref({});
@@ -242,13 +243,6 @@ function syncNativeWindowSize() {
   void updateStatsOverlayLayout(dsl);
 }
 
-function formatCompact(value) {
-  const n = Number(value || 0);
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
-  if (n >= 1_000) return (n / 1_000).toFixed(1) + "K";
-  return String(Math.round(n));
-}
-
 function formatRate(value) {
   if (value == null) return "—";
   return (Number(value) * 100).toFixed(1) + "%";
@@ -330,9 +324,9 @@ const orbIndex = ref(0);
 // 轮换项：命中率（进度环跟随填充）/ Token / 轮次 / 本地缓存（绝对值，环显示满圈装饰）
 const orbMetrics = computed(() => [
   { label: "命中率", value: formatRate(displayRate.value), ratio: displayRate.value, good: displayRate.value != null && displayRate.value > 0.3 },
-  { label: "Token", value: formatCompact(totalTokens.value), ratio: null, good: false },
-  { label: "轮次", value: formatCompact(turnsTotal.value), ratio: null, good: false },
-  { label: "本地缓存", value: formatCompact(localCacheHits.value), ratio: null, good: false },
+  { label: "Token", value: formatCompactInteger(totalTokens.value), ratio: null, good: false },
+  { label: "轮次", value: formatCompactInteger(turnsTotal.value), ratio: null, good: false },
+  { label: "本地缓存", value: formatCompactInteger(localCacheHits.value), ratio: null, good: false },
 ]);
 const orbCurrent = computed(() => orbMetrics.value[orbIndex.value % orbMetrics.value.length]);
 // 当前列表项的进度环 dasharray：命中率按比例，其余指标满圈展示
@@ -354,8 +348,8 @@ let pillCycleTimer = null;
 const pillIndex = ref(0);
 const pillMetrics = computed(() => [
   { label: "命中率", value: formatRate(displayRate.value), good: displayRate.value != null && displayRate.value > 0.3 },
-  { label: "Token", value: formatCompact(totalTokens.value), good: false },
-  { label: "轮次", value: formatCompact(turnsTotal.value), good: false },
+  { label: "Token", value: formatCompactInteger(totalTokens.value), good: false },
+  { label: "轮次", value: formatCompactInteger(turnsTotal.value), good: false },
 ]);
 const pillCurrent = computed(() => pillMetrics.value[pillIndex.value % 3]);
 function startPillCycle() {
@@ -546,10 +540,10 @@ onUnmounted(() => {
         <div class="metric-label">缓存命中</div><div class="metric-value" :class="{ 'is-good': cacheHitRate != null && cacheHitRate > 0.3 }">{{ formatRate(cacheHitRate) }}</div>
       </div>
       <div class="metric-card" :title="promptTitle">
-        <div class="metric-label">Token 消耗</div><div class="metric-value">{{ formatCompact(totalTokens) }}</div>
+        <div class="metric-label">Token 消耗</div><div class="metric-value">{{ formatCompactInteger(totalTokens) }}</div>
       </div>
       <div class="metric-card" :title="turnsTitle">
-        <div class="metric-label">对话轮次</div><div class="metric-value">{{ formatCompact(turnsTotal) }}</div>
+        <div class="metric-label">对话轮次</div><div class="metric-value">{{ formatCompactInteger(turnsTotal) }}</div>
       </div>
       <div class="metric-card" title="基于内置官方价格估算">
         <div class="metric-label">价值估算</div><div class="metric-value metric-value--good">—</div>
@@ -562,10 +556,10 @@ onUnmounted(() => {
         <div class="gauge-center"><strong>{{ formatRate(displayRate) }}</strong><span>命中率</span></div>
       </div>
       <div class="telemetry-grid">
-        <div><span>Tokens</span><strong>{{ formatCompact(totalTokens) }}</strong></div>
-        <div><span>Turns</span><strong>{{ formatCompact(turnsTotal) }}</strong></div>
-        <div><span>Local hits</span><strong>{{ formatCompact(localCacheHits) }}</strong></div>
-        <div><span>Prompt</span><strong>{{ formatCompact(promptTokens) }}</strong></div>
+        <div><span>Tokens</span><strong>{{ formatCompactInteger(totalTokens) }}</strong></div>
+        <div><span>Turns</span><strong>{{ formatCompactInteger(turnsTotal) }}</strong></div>
+        <div><span>Local hits</span><strong>{{ formatCompactInteger(localCacheHits) }}</strong></div>
+        <div><span>Prompt</span><strong>{{ formatCompactInteger(promptTokens) }}</strong></div>
       </div>
     </section>
 

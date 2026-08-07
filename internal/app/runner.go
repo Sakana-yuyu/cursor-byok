@@ -398,7 +398,7 @@ func Run(resources EmbeddedResources) error {
 				}
 			})
 			// 启动时自动配对上下文窗口（受 autoMatchContextWindow 开关控制）：
-			// 目录命中则覆盖为真实窗口，目录未命中则探测 provider /models 回填。
+			// 目录命中仅下调（用户手动设置的更小窗口保留），目录未命中则探测 provider /models 回填。
 			// 失败仅记日志、不阻断启动。force=false：启动路径受开关控制，手动「一键诊断优化」才走 force。
 			autoMatchOnce.Do(func() {
 				if matchResult, matchErr := proxyService.AutoMatchContextWindows(context.Background(), false); matchErr != nil {

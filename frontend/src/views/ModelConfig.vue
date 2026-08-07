@@ -300,7 +300,8 @@ const diagnosing = ref(false);
 //  - 协议诊断：扫描已导入模型的协议配置，发现 claude/gemini 被误配为 openai 等问题，
 //    弹窗确认后一键修正为原生协议（anthropic/gemini）。
 //  - 上下文对齐：force 触发 autoMatchContextWindows（无视 autoMatchContextWindow 开关），
-//    目录命中覆盖为真实窗口（如 gpt-5.6-luna=272K），目录未命中则探测 provider /models 回填。
+//    目录命中仅下调为真实窗口（如 gpt-5.6-luna=272K，用户手动设置的更小窗口保留），
+//    目录未命中则探测 provider /models 回填。
 // 两项都完成后刷新配置并汇总展示。
 async function handleDiagnose() {
   if (diagnosing.value) return;

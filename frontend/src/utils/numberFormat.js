@@ -1,10 +1,12 @@
 const INTEGER_FORMATTER = new Intl.NumberFormat("en-US");
 
 const COMPACT_UNITS = [
-  { value: 1000000000000, suffix: "T" },
-  { value: 1000000000, suffix: "B" },
-  { value: 1000000, suffix: "M" },
-  { value: 1000, suffix: "K" },
+  { value: 1e18, suffix: "E" },
+  { value: 1e15, suffix: "P" },
+  { value: 1e12, suffix: "T" },
+  { value: 1e9, suffix: "B" },
+  { value: 1e6, suffix: "M" },
+  { value: 1e3, suffix: "K" },
 ];
 
 function normalizeInteger(value) {

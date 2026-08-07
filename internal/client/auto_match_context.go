@@ -1,8 +1,9 @@
 // auto_match_context.go 实现自动为所有已存储模型适配器配对正确上下文窗口（contextWindowTokens）的能力。
 //
 // 配对策略（与用户确认一致）：
-//   - 目录命中（modelcontext.Capabilities 知道该模型）：强制覆盖为目录真实窗口值，
-//     修正用户误填的过大值（如把 1M 改回 200K），根治 context_length_exceeded。
+//   - 目录命中（modelcontext.Capabilities 知道该模型）：仅下调不覆盖——用户主动设置更小值
+//     （如把 1M 限制为 200K 控制上下文/费用）时保留用户设置，避免自动配对吞掉手动配置；
+//     仅在用户值缺失（<=0）或大于目录真实窗口时收敛到目录值（修正误填过大值，根治 context_length_exceeded）。
 //   - 目录未命中（中转自定义模型，如 gpt-5.6-luna）：保留原值，并探测 provider 的 /models
 //     接口，若能拿到该模型的真实窗口则回填；拿不到则保持不变。
 //
@@ -56,7 +57,8 @@ type AutoMatchDetail struct {
 	After int `json:"after"`
 }
 
-// AutoMatchContextWindows 执行一次自动配对：目录命中则覆盖，目录未命中则探测 provider /models 回填。
+// AutoMatchContextWindows 执行一次自动配对：目录命中仅下调（用户手动设置的更小窗口保留），
+// 目录未命中则探测 provider /models 回填。
 // force=true 时无视 config.AutoMatchContextWindow 开关强制执行（供「一键诊断优化」手动触发）；
 // force=false 时受开关控制，开关关闭则返回 Enabled=false。仅当有改动时才会落盘（SaveUserConfig），避免无谓写盘。
 func (s *ProxyService) AutoMatchContextWindows(ctx context.Context, force bool) (AutoMatchResult, error) {
@@ -97,11 +99,15 @@ func (s *ProxyService) AutoMatchContextWindows(ctx context.Context, force bool) 
 			After:       before,
 		}
 		if cap := modelcontext.Capabilities(modelID); cap != nil && cap.ContextWindowTokens > 0 {
-			// 目录命中：强制覆盖（含修正过大值）。
-			adapters[i].ContextWindowTokens = cap.ContextWindowTokens
-			detail.After = cap.ContextWindowTokens
-			detail.Source = "catalog"
-			result.FromCatalog++
+			// 目录命中：仅下调不覆盖。用户主动设置更小值（如限制上下文/控制费用）时
+			// 保留用户设置；仅在用户值缺失（<=0）或大于目录真实窗口时收敛到目录值，
+			// 防止误填过大值触发 context_length_exceeded。
+			if adapters[i].ContextWindowTokens <= 0 || cap.ContextWindowTokens < adapters[i].ContextWindowTokens {
+				adapters[i].ContextWindowTokens = cap.ContextWindowTokens
+				detail.After = cap.ContextWindowTokens
+				detail.Source = "catalog"
+				result.FromCatalog++
+			}
 		} else {
 			// 目录未命中：放入待探测桶，稍后由 provider /models 兜底。
 			key := probeBucketKey(adapters[i])
