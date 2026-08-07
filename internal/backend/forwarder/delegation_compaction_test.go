@@ -106,3 +106,79 @@ func TestDelegatedContextOverflowError(t *testing.T) {
 		}
 	}
 }
+
+func TestDropDelegatedEarlyMessages(t *testing.T) {
+	messages := []modeladapter.Message{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: "task prompt"},
+		{Role: "assistant", Content: "a1", ToolCalls: []modeladapter.ToolCallDescriptor{{ID: "c1"}}},
+		{Role: "tool", Content: "r1", ToolCallID: "c1", Name: "Shell"},
+		{Role: "assistant", Content: "a2", ToolCalls: []modeladapter.ToolCallDescriptor{{ID: "c2"}}},
+		{Role: "tool", Content: "r2", ToolCallID: "c2", Name: "Shell"},
+		{Role: "assistant", Content: "a3", ToolCalls: []modeladapter.ToolCallDescriptor{{ID: "c3"}}},
+		{Role: "tool", Content: "r3", ToolCallID: "c3", Name: "Shell"},
+		{Role: "assistant", Content: "a4", ToolCalls: []modeladapter.ToolCallDescriptor{{ID: "c4"}}},
+		{Role: "tool", Content: "r4", ToolCallID: "c4", Name: "Shell"},
+		{Role: "assistant", Content: "a5", ToolCalls: []modeladapter.ToolCallDescriptor{{ID: "c5"}}},
+		{Role: "tool", Content: "r5", ToolCallID: "c5", Name: "Shell"},
+	}
+	stats := &delegatedCompactionStats{}
+	out, changed := dropDelegatedEarlyMessages(messages, 10, stats)
+	if !changed {
+		t.Fatal("expected drop to happen")
+	}
+	if stats.DroppedCount == 0 {
+		t.Fatal("DroppedCount should be > 0")
+	}
+	// system 与首条 user 必须保留
+	if out[0].Role != "system" || out[1].Role != "user" {
+		t.Fatalf("system/user must be preserved, got roles %q %q", out[0].Role, out[1].Role)
+	}
+	// 剩余消息必须保持 tool 前有对应 assistant（成对性）
+	for i := 1; i < len(out); i++ {
+		if out[i].Role == "tool" && out[i-1].Role != "assistant" {
+			t.Fatalf("tool message at %d not preceded by assistant", i)
+		}
+	}
+	// 最近 4 轮保留：a2/a3/a4/a5 及其 tool 都在
+	kept := 0
+	for _, m := range out {
+		if m.Role == "assistant" {
+			kept++
+		}
+	}
+	if kept != 4 {
+		t.Fatalf("expected 4 assistant turns kept, got %d", kept)
+	}
+	last := out[len(out)-1]
+	if last.Role != "tool" || last.Content != "r5" {
+		t.Fatalf("recent turn must be preserved, got %+v", last)
+	}
+}
+
+func TestMaybeCompactDelegatedMessages(t *testing.T) {
+	big := strings.Repeat("y", 20*1024)
+	messages := []modeladapter.Message{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: "task"},
+		{Role: "assistant", Content: "a1", ToolCalls: []modeladapter.ToolCallDescriptor{{ID: "c1"}}},
+		{Role: "tool", Content: big, ToolCallID: "c1", Name: "Read"},
+		{Role: "assistant", Content: "a2", ToolCalls: []modeladapter.ToolCallDescriptor{{ID: "c2"}}},
+		{Role: "tool", Content: "r2", ToolCallID: "c2", Name: "Shell"},
+	}
+	stats := &delegatedCompactionStats{}
+	out, changed := maybeCompactDelegatedMessages(messages, 100, stats)
+	if !changed {
+		t.Fatal("expected compaction")
+	}
+	if len(out) < 2 || out[0].Role != "system" {
+		t.Fatal("system message must remain")
+	}
+	if stats.SnipCount == 0 && stats.DroppedCount == 0 {
+		t.Fatal("expected snip or drop to have run")
+	}
+	// budget<=0 时不压缩
+	if _, c := maybeCompactDelegatedMessages(messages, 0, nil); c {
+		t.Fatal("budget<=0 must not compact")
+	}
+}

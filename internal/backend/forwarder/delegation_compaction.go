@@ -101,3 +101,75 @@ func snipDelegatedOversizedToolResults(messages []modeladapter.Message, budget i
 	}
 	return messages, changed
 }
+
+const delegatedCompactionKeepTurns = 4
+
+// dropDelegatedEarlyMessages 从最旧开始成对丢弃 assistant+tool 消息，直到预算内。
+// 索引 0（system）与索引 1（首条 user）永不丢弃；保留最近 delegatedCompactionKeepTurns 轮。
+func dropDelegatedEarlyMessages(messages []modeladapter.Message, budget int64, stats *delegatedCompactionStats) ([]modeladapter.Message, bool) {
+	if budget <= 0 || len(messages) <= 2 {
+		return messages, false
+	}
+	changed := false
+	if stats != nil && stats.BeforeTokens == 0 {
+		stats.BeforeTokens = estimateModelMessagesTokens(messages)
+	}
+	// 计算保留起点 keepStart：从尾部数第 delegatedCompactionKeepTurns 个 assistant 的索引。
+	// 不足该轮数则 keepStart 保持 0（无可丢区间）。
+	keepStart := 0
+	seenTurns := 0
+	for i := len(messages) - 1; i >= 0; i-- {
+		if strings.TrimSpace(messages[i].Role) == "assistant" {
+			seenTurns++
+			if seenTurns == delegatedCompactionKeepTurns {
+				keepStart = i
+				break
+			}
+		}
+	}
+	for estimateModelMessagesTokens(messages) > budget {
+		dropped := false
+		for i := 2; i < keepStart; i++ { // 索引 0=system、1=首条 user 永不丢
+			if strings.TrimSpace(messages[i].Role) != "assistant" {
+				continue
+			}
+			if i+1 >= len(messages) || strings.TrimSpace(messages[i+1].Role) != "tool" {
+				continue
+			}
+			messages = append(messages[:i], messages[i+2:]...)
+			dropped = true
+			changed = true
+			if stats != nil {
+				stats.DroppedCount++
+			}
+			if keepStart >= 2 {
+				keepStart -= 2 // 删除发生在保留起点之前，起点前移 2
+			}
+			break
+		}
+		if !dropped {
+			break
+		}
+	}
+	if stats != nil {
+		stats.AfterTokens = estimateModelMessagesTokens(messages)
+	}
+	return messages, changed
+}
+
+// maybeCompactDelegatedMessages 是主动阈值压缩组合入口：snip → drop。
+func maybeCompactDelegatedMessages(messages []modeladapter.Message, budget int64, stats *delegatedCompactionStats) ([]modeladapter.Message, bool) {
+	if budget <= 0 || len(messages) == 0 {
+		return messages, false
+	}
+	changed := false
+	var out []modeladapter.Message
+	out, snipChanged := snipDelegatedOversizedToolResults(messages, budget, stats)
+	changed = changed || snipChanged
+	if estimateModelMessagesTokens(out) > budget {
+		var dropChanged bool
+		out, dropChanged = dropDelegatedEarlyMessages(out, budget, stats)
+		changed = changed || dropChanged
+	}
+	return out, changed
+}
