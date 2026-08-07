@@ -1,5 +1,6 @@
 <script setup>
 import Button from "@/components/ui/Button.vue";
+import SupplierBalanceStatus from "@/components/supplier/SupplierBalanceStatus.vue";
 import SupplierModelCard from "@/components/supplier/SupplierModelCard.vue";
 import SupplierModelToolbar from "@/components/supplier/SupplierModelToolbar.vue";
 import { showModal } from "@/composables/useModal";
@@ -897,32 +898,17 @@ async function saveBulkEdit(force = false) {
                 <span class="rounded-full bg-[#3f3f3f]/60 px-2 py-0.5 text-[#a3a3a3]">
                   用量 {{ supplierCapability.usage.status === 'none' ? '暂无自动查询' : supplierCapability.usage.source || supplierCapability.usage.status }}
                 </span>
-                <!-- 余额 / 额度 -->
-                <span v-if="balanceState.loading" class="center-row gap-1 text-[#8f8f8f]">
-                  <span class="icon-[mdi--loading] animate-spin text-[13px]"></span>查询余额…
-                </span>
-                <template v-else-if="balanceState.data && balanceState.data.supported">
-                  <span
-                    class="center-row gap-1 rounded-full px-2 py-0.5"
-                    :class="balanceAlert ? 'bg-[#f87171]/15 text-[#fca5a5]' : (balanceState.stale ? 'bg-[#a3a3a3]/15 text-[#c9c9c9]' : 'bg-[#10AD5D]/15 text-[#6ee7a5]')"
-                    :title="balanceState.data.unlimited ? '该账户额度不限' : (balanceAlert ? balanceAlert.text : balanceSecondary)"
-                  ><span v-if="balanceAlert" class="text-[11px]">⚠</span>{{ balancePrimary }}<span v-if="balanceState.stale" class="text-[11px] text-[#8f8f8f]">（可能过期）</span></span>
-                  <span v-if="!balanceState.data.unlimited && balanceSecondary" class="hidden text-[#666] sm:inline">{{ balanceSecondary }}</span>
-                </template>
-                <span
-                  v-else-if="balanceState.loaded"
-                  class="text-[#737373]"
-                  :title="(balanceState.data && balanceState.data.message) || '余额不可用'"
-                  >{{ balanceState.data?.source === 'none' || balanceState.data?.message === '暂无自动查询' ? '暂无自动查询' : '余额不可用' }}</span>
-                <button
-                  v-if="supplierMeta && !balanceState.loading"
-                  type="button"
-                  class="center-row text-[#8f8f8f] transition-colors hover:text-white"
-                  title="刷新余额"
-                  @click="loadBalance(true)"
-                >
-                  <span class="icon-[mdi--refresh] text-[13px]"></span>
-                </button>
+                <SupplierBalanceStatus
+                  :loading="balanceState.loading"
+                  :loaded="balanceState.loaded"
+                  :data="balanceState.data"
+                  :stale="balanceState.stale"
+                  :alert="balanceAlert"
+                  :primary-text="balancePrimary"
+                  :secondary-text="balanceSecondary"
+                  :can-refresh="Boolean(supplierMeta)"
+                  @refresh="loadBalance(true)"
+                />
               </div>
             </div>
           </div>
