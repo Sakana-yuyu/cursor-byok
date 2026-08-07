@@ -112,19 +112,20 @@ func (adapter *localDelegatedAgentAdapter) Execute(ctx context.Context, request 
 		delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusRunning, providerPass, nil, nil, "delegated worker is running", "")
 
 		// 主动阈值压缩：每轮 pass 前检查，超预算则压缩（snip + 丢弃早期消息）。
-		messages = compactDelegatedMessagesBeforePass(adapter, request, conversation, messages, providerPass)
+		messages = compactDelegatedMessagesBeforePass(adapter, request, messages, providerPass)
 
 		pass, err := adapter.runProviderPass(ctx, request, identity, conversation, compiled, messages, providerPass)
 		if err != nil {
 			if delegatedContextOverflowError(err) && overflowRetries < delegatedCompactionRetryLimit {
 				overflowRetries++
-				compactedMessages := compactDelegatedMessagesBeforePass(adapter, request, conversation, messages, providerPass)
+				compactedMessages := compactDelegatedMessagesBeforePass(adapter, request, messages, providerPass)
 				if !sameDelegatedMessages(compactedMessages, messages) {
 					messages = compactedMessages
 				}
-				log.Printf("forwarder delegated context overflow retry task_id=%s provider_pass=%d retry=%d/%d", strings.TrimSpace(identity.taskID), providerPass, overflowRetries, delegatedCompactionRetryLimit)
-				// continue 会执行 for 的 post 语句 providerPass++，这里先 -- 抵消，
-				// 使重试回到同一 provider_pass（retry 日志的 pass 与实际重试 pass 对齐）。
+				log.Printf("forwarder delegated context overflow retry task_id=%s provider_pass=%d retry=%d/%d", strings.TrimSpace(request.ID), providerPass, overflowRetries, delegatedCompactionRetryLimit)
+				// providerPass-- 抵消 for post 语句的 providerPass++，使重试复用同一 provider_pass。
+				// 重试轮会照常执行循环顶部的主动压缩与 checkpoint；不要在此循环内添加
+				// providerPass <= 0 的防护逻辑，那会过早终止重试轮。
 				providerPass--
 				continue
 			}
@@ -998,7 +999,7 @@ func localDelegationCheckpointTargetPath(toolName string, args map[string]any) s
 }
 
 // compactDelegatedMessagesBeforePass 执行主动阈值压缩并打日志，返回压缩后的 messages。
-func compactDelegatedMessagesBeforePass(adapter *localDelegatedAgentAdapter, request delegation.TaskRequest, conversation *ConversationFile, messages []modeladapter.Message, providerPass int) []modeladapter.Message {
+func compactDelegatedMessagesBeforePass(adapter *localDelegatedAgentAdapter, request delegation.TaskRequest, messages []modeladapter.Message, providerPass int) []modeladapter.Message {
 	if adapter == nil {
 		return messages
 	}

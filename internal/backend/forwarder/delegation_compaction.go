@@ -106,6 +106,7 @@ const delegatedCompactionKeepTurns = 4
 
 // dropDelegatedEarlyMessages 从最旧开始成对丢弃 assistant+tool 消息，直到预算内。
 // 索引 0（system）与索引 1（首条 user）永不丢弃；保留最近 delegatedCompactionKeepTurns 轮。
+// 注意：调用方必须使用返回的切片；底层数组可能已被原地修改（append 覆盖）。
 func dropDelegatedEarlyMessages(messages []modeladapter.Message, budget int64, stats *delegatedCompactionStats) ([]modeladapter.Message, bool) {
 	if budget <= 0 || len(messages) <= 2 {
 		return messages, false
