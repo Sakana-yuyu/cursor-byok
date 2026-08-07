@@ -1,6 +1,7 @@
 package certs
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/ed25519"
@@ -96,6 +97,26 @@ func NewPersistentManager(certPath, keyPath string) (*Manager, error) {
 
 	// 路径 1：两份都在 → 复用，绝不重新生成。
 	if certErr == nil && keyErr == nil {
+		// 复用前校验 cert/key 是否属于同一密钥对：loadCAFromPEM 只分别解析，
+		// 不校验配对（tls 签名时才暴露）。若 ca.crt 曾被单独覆盖（如
+		// EnsureCACertFile 用独立 PEM 覆盖写），会得到「cert/key 不匹配」，
+		// 直接复用会导致 MITM 签名全挂、Cursor 一直 reconnecting。
+		// 此时备份残留并重新生成一对匹配的 CA。
+		if !certKeyMatch(certPEM, keyPEM) {
+			backup, backupErr := backupCAFiles(certPath, keyPath)
+			if backupErr != nil {
+				return nil, backupErr
+			}
+			log.Printf("[certs] CA cert/key mismatch, regenerating backup=%s cert=%s key=%s", backup, certPath, keyPath)
+			if writeErr := writeGeneratedCA(certPath, keyPath); writeErr != nil {
+				return nil, writeErr
+			}
+			certPEM, keyPEM, readErr := readWrittenCAPEM(certPath, keyPath)
+			if readErr != nil {
+				return nil, readErr
+			}
+			return NewManagerFromPEM(certPEM, keyPEM)
+		}
 		log.Printf("[certs] reuse existing CA cert=%s key=%s (no regeneration)", certPath, keyPath)
 		return NewManagerFromPEM(certPEM, keyPEM)
 	}
@@ -214,16 +235,9 @@ func RepairIncompleteCA(certPath, keyPath string) (backupPath string, err error)
 	}
 
 	// 备份残留文件（仅改名的文件，其他状态不动）。
-	backup := ""
-	for _, path := range []string{certPath, keyPath} {
-		if _, statErr := os.Stat(path); statErr != nil {
-			continue
-		}
-		renamed := fmt.Sprintf("%s.corrupt-%d.bak", path, time.Now().Unix())
-		if err := os.Rename(path, renamed); err != nil {
-			return "", fmt.Errorf("备份残留 CA 文件失败 %s: %w", path, err)
-		}
-		backup = renamed
+	backup, err := backupCAFiles(certPath, keyPath)
+	if err != nil {
+		return "", err
 	}
 	log.Printf("[certs] incomplete CA repaired: backup=%s cert=%s key=%s", backup, certPath, keyPath)
 	if err := writeGeneratedCA(certPath, keyPath); err != nil {
@@ -460,4 +474,54 @@ func cloneBytes(src []byte) []byte {
 	dst := make([]byte, len(src))
 	copy(dst, src)
 	return dst
+}
+
+// certKeyMatch 校验 cert PEM 与 key PEM 是否属于同一密钥对。
+// loadCAFromPEM 只分别解析 cert/key，不校验配对；tls 签名时才会暴露
+// 「PrivateKey doesn't match parent's PublicKey」。在复用/加载前先做
+// 公钥比对，避免 ca.crt 被单独覆盖后带病启动。
+func certKeyMatch(certPEM, keyPEM []byte) bool {
+	cert, key, err := loadCAFromPEM(certPEM, keyPEM)
+	if err != nil {
+		return false
+	}
+	certPub := cert.PublicKey
+	switch keyImpl := key.(type) {
+	case *rsa.PrivateKey:
+		rsaCertPub, ok := certPub.(*rsa.PublicKey)
+		if !ok {
+			return false
+		}
+		return rsaCertPub.N.Cmp(keyImpl.PublicKey.N) == 0 && rsaCertPub.E == keyImpl.PublicKey.E
+	case *ecdsa.PrivateKey:
+		ecdsaCertPub, ok := certPub.(*ecdsa.PublicKey)
+		if !ok {
+			return false
+		}
+		return ecdsaCertPub.X.Cmp(keyImpl.PublicKey.X) == 0 && ecdsaCertPub.Y.Cmp(keyImpl.PublicKey.Y) == 0
+	case ed25519.PrivateKey:
+		edCertPub, ok := certPub.(ed25519.PublicKey)
+		if !ok {
+			return false
+		}
+		return bytes.Equal(edCertPub, keyImpl.Public().(ed25519.PublicKey))
+	}
+	return false
+}
+
+// backupCAFiles 把存在的 CA 材料改名备份（.corrupt-<时间戳>.bak），返回备份路径。
+// 与 RepairIncompleteCA / NewPersistentManager 的不匹配重建共用。
+func backupCAFiles(certPath, keyPath string) (string, error) {
+	backup := ""
+	for _, path := range []string{certPath, keyPath} {
+		if _, statErr := os.Stat(path); statErr != nil {
+			continue
+		}
+		renamed := fmt.Sprintf("%s.corrupt-%d.bak", path, time.Now().Unix())
+		if err := os.Rename(path, renamed); err != nil {
+			return "", fmt.Errorf("备份 CA 文件失败 %s: %w", path, err)
+		}
+		backup = renamed
+	}
+	return backup, nil
 }

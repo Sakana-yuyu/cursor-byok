@@ -165,3 +165,73 @@ func TestWriteGeneratedCAAtomicNoTempLeftover(t *testing.T) {
 		}
 	}
 }
+
+// TestCertKeyMatch 验证 cert/key 配对校验：同源返回 true，换 key 或坏材料返回 false。
+func TestCertKeyMatch(t *testing.T) {
+	certPEM, keyPEM, err := generateCAPEM()
+	if err != nil {
+		t.Fatalf("generate CAPEM: %v", err)
+	}
+	if !certKeyMatch(certPEM, keyPEM) {
+		t.Fatal("same-sourced cert/key must match")
+	}
+
+	otherCertPEM, _, err := generateCAPEM()
+	if err != nil {
+		t.Fatalf("generate other CAPEM: %v", err)
+	}
+	if certKeyMatch(otherCertPEM, keyPEM) {
+		t.Fatal("cert from a different key pair must not match")
+	}
+
+	if certKeyMatch([]byte("not a pem"), keyPEM) {
+		t.Fatal("invalid cert PEM must not match")
+	}
+}
+
+// TestNewPersistentManagerRegeneratesOnMismatch 回归 v0.0.84 reconnecting bug：
+// ca.crt 被单独覆盖（与 ca.key 失配）后，NewPersistentManager 复用路径曾直接带病
+// 加载，导致 MITM 签名失败（x509: provided PrivateKey doesn't match parent's
+// PublicKey）；现在应备份残留并重新生成一对匹配的 CA。
+func TestNewPersistentManagerRegeneratesOnMismatch(t *testing.T) {
+	root := t.TempDir()
+	certPath := filepath.Join(root, "data", "ca.crt")
+	keyPath := filepath.Join(root, "data", "ca.key")
+
+	if _, err := NewPersistentManager(certPath, keyPath); err != nil {
+		t.Fatalf("initial manager: %v", err)
+	}
+
+	// 模拟「ca.crt 被单独覆盖」：用另一对密钥的 cert 覆盖 ca.crt，保留原 ca.key。
+	otherCertPEM, _, err := generateCAPEM()
+	if err != nil {
+		t.Fatalf("generate other CAPEM: %v", err)
+	}
+	if err := os.WriteFile(certPath, otherCertPEM, 0o644); err != nil {
+		t.Fatalf("overwrite ca.crt: %v", err)
+	}
+
+	mgr, err := NewPersistentManager(certPath, keyPath)
+	if err != nil {
+		t.Fatalf("manager after mismatch: %v", err)
+	}
+	if len(mgr.CACertPEM()) == 0 {
+		t.Fatal("regenerated manager returned empty cert")
+	}
+	// 新落盘的一对必须匹配，且旧被覆盖的 cert 已被备份（.corrupt-*.bak）。
+	onDiskCert, err := os.ReadFile(certPath)
+	if err != nil {
+		t.Fatalf("read regenerated ca.crt: %v", err)
+	}
+	onDiskKey, err := os.ReadFile(keyPath)
+	if err != nil {
+		t.Fatalf("read regenerated ca.key: %v", err)
+	}
+	if !certKeyMatch(onDiskCert, onDiskKey) {
+		t.Fatal("regenerated ca.crt/ca.key must match")
+	}
+	matches, _ := filepath.Glob(filepath.Join(root, "data", "*.corrupt-*.bak"))
+	if len(matches) == 0 {
+		t.Fatal("expected corrupted CA material to be backed up as .corrupt-*.bak")
+	}
+}

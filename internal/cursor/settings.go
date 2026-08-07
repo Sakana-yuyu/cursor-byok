@@ -30,22 +30,16 @@ var injectedCursorSettingsKeys = []string{
 // EnsureCACertFile 用于处理与 EnsureCACertFile 相关的逻辑。
 func EnsureCACertFile(certPEM []byte, currentPath string) (string, error) {
 	certPath := appdata.CACertFilePath()
-	if samePath(strings.TrimSpace(currentPath), certPath) {
-		if _, err := os.Stat(certPath); err == nil {
-			logger.Infof("ensureCACertFile: reusing path=%s", certPath)
-			return certPath, nil
-		}
+	// 已存在：复用，绝不覆盖。data/ca.crt 是 MITM 的配对材料（与 ca.key
+	// 同源）；用独立传入的 certPEM 覆盖会破坏配对，导致 MITM 签名失败、
+	// Cursor 一直 reconnecting（配对校验见 certs.certKeyMatch）。
+	if _, err := os.Stat(certPath); err == nil {
+		logger.Infof("ensureCACertFile: reuse existing path=%s", certPath)
+		return certPath, nil
 	}
 
 	if err := os.MkdirAll(filepath.Dir(certPath), 0o755); err != nil {
 		return "", fmt.Errorf("创建证书配置目录失败: %w", err)
-	}
-
-	if existing, err := os.ReadFile(certPath); err == nil && bytes.Equal(existing, certPEM) {
-		logger.Infof("ensureCACertFile: unchanged path=%s", certPath)
-		return certPath, nil
-	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return "", fmt.Errorf("读取内置 CA 证书失败: %w", err)
 	}
 
 	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
@@ -59,13 +53,6 @@ func EnsureCACertFile(certPEM []byte, currentPath string) (string, error) {
 		len(certPEM),
 	)
 	return certPath, nil
-}
-
-func samePath(left string, right string) bool {
-	if strings.TrimSpace(left) == "" || strings.TrimSpace(right) == "" {
-		return false
-	}
-	return filepath.Clean(left) == filepath.Clean(right)
 }
 
 // SetSystemNodeExtraCACerts 用于处理与 SetSystemNodeExtraCACerts 相关的逻辑。
