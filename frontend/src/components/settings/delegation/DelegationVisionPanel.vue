@@ -7,7 +7,7 @@ import Switch from "@/components/ui/Switch.vue";
 
 // 视觉委派面板：仅负责展示与上报用户意图。
 // 配置真相、加载/字段状态、模型有效性校验、保存与字段级回滚全部由父组件持有。
-defineProps({
+const props = defineProps({
   config: {
     type: Object,
     required: true,
@@ -37,12 +37,12 @@ defineProps({
 const emit = defineEmits(["toggle-field", "select-field", "retry-field"]);
 
 function fieldBusy(field) {
-  const state = fieldStates[field];
-  return loadState.busy || Boolean(state?.busy);
+  const state = props.fieldStates[field];
+  return props.loadState.busy || Boolean(state?.busy);
 }
 
 function fieldError(field) {
-  return fieldStates[field]?.error || "";
+  return props.fieldStates[field]?.error || "";
 }
 
 function fieldRetry(field) {

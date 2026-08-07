@@ -37,10 +37,14 @@ import {
 import {
   buildModelAdapterIdentityKey,
   buildModelAdapterTestRequestHash,
+  dedupeModelAdapters,
+  mergeDuplicateModelAdapter,
   normalizeBaseURL,
   normalizeModelAdapter,
   normalizeModelAdapterTestResult,
   normalizeModelAdapterTestResults,
+  normalizeModelAdapters,
+  validateModelAdapters,
 } from "@/utils/modelAdapter";
 // config 归一化域已归位 utils/configNormalize.js：
 // normalizeConfig / normalizeDelegation / normalizeRouteMode / validateConfigPayload 等
@@ -73,6 +77,7 @@ export {
   validateModelAdapters,
 } from "@/utils/modelAdapter";
 // toUserError 定义已归位 utils/errorHumanizer.js，此处转发保持既有调用方零改动。
+import { toUserError } from "@/utils/errorHumanizer";
 export { toUserError } from "@/utils/errorHumanizer";
 export {
   ANTHROPIC_THINKING_EFFORT_DEFAULT,

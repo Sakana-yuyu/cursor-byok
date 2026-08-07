@@ -20,7 +20,7 @@ const SUPPORTED_OPENAI_REQUEST_GROUPS = new Set([
   OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS,
   OPENAI_REQUEST_GROUP_CHAT_COMPLETIONS_COMPAT,
 ]);
-const SUPPORTED_PROTOCOL_MODES = new Set([PROTOCOL_MODE_AUTO, PROTOCOL_MODE_FIXED]);
+export const SUPPORTED_PROTOCOL_MODES = new Set([PROTOCOL_MODE_AUTO, PROTOCOL_MODE_FIXED]);
 
 // normalizeOpenAIEndpoint 归一化 endpoint 路径。
 // 支持三个预设值：/v1/responses、/v1/chat/completions、/custom（自定义路径）。

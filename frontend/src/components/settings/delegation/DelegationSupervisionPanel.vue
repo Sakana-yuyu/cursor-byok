@@ -8,7 +8,7 @@ import Switch from "@/components/ui/Switch.vue";
 
 // 监督策略面板：仅负责展示与上报用户意图。
 // 配置真相、字段级忙碌/错误/重试状态、autosave 调度与串行保存队列全部由父组件持有。
-defineProps({
+const props = defineProps({
   config: {
     type: Object,
     required: true,
@@ -54,12 +54,12 @@ const emit = defineEmits([
 ]);
 
 function fieldBusy(field) {
-  const state = fieldStates[field];
-  return loadState.busy || Boolean(state?.busy || state?.queued);
+  const state = props.fieldStates[field];
+  return props.loadState.busy || Boolean(state?.busy || state?.queued);
 }
 
 function fieldError(field) {
-  return fieldStates[field]?.error || "";
+  return props.fieldStates[field]?.error || "";
 }
 
 function fieldRetry(field) {
@@ -67,11 +67,11 @@ function fieldRetry(field) {
 }
 
 function hasFieldError() {
-  return Object.values(fieldStates).some((state) => state?.error);
+  return Object.values(props.fieldStates).some((state) => state?.error);
 }
 
 function hasSaveError() {
-  return Boolean(saveState.error) || hasFieldError();
+  return Boolean(props.saveState.error) || hasFieldError();
 }
 </script>
 

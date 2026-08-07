@@ -5,7 +5,13 @@ import {
   OPENAI_ENDPOINT_RESPONSES,
   OPENAI_REQUEST_GROUP_RESPONSES,
   PROTOCOL_MODE_AUTO,
+  SUPPORTED_PROTOCOL_MODES,
+  isValidOpenAIEndpoint,
+  isValidOpenAIRequestGroup,
   normalizeOpenAIEndpoint,
+  normalizeOpenAIRequestGroup,
+  normalizeProtocolGroup,
+  normalizeProtocolMode,
 } from "./protocolMeta";
 import {
   BALANCE_QUERY_HEADERS_DEFAULT_JSON,
@@ -344,7 +350,7 @@ export function normalizeModelAdapters(source) {
   return asArray(source).map((item) => normalizeModelAdapter(item));
 }
 
-function mergeDuplicateModelAdapter(existing, incoming) {
+export function mergeDuplicateModelAdapter(existing, incoming) {
   const existingHasBalanceHeaders = Object.keys(existing.balanceQueryHeaders || {}).length > 0;
   const incomingBalanceHeadersJSON = incoming.balanceQueryHeadersJSON || balanceQueryHeadersToJSON(incoming.balanceQueryHeaders);
   return {
