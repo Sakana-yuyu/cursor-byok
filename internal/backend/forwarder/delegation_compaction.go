@@ -104,7 +104,10 @@ func snipDelegatedOversizedToolResults(messages []modeladapter.Message, budget i
 
 const delegatedCompactionKeepTurns = 4
 
-// dropDelegatedEarlyMessages 从最旧开始成对丢弃 assistant+tool 消息，直到预算内。
+// dropDelegatedEarlyMessages 从最旧开始按轮成组丢弃 assistant 及其后所有连续
+// role==tool 消息，直到预算内。一条 assistant 可能带多个 ToolCalls（并行工具调用），
+// 对应其后多条连续 tool 消息，必须整组删除，否则会残留孤立 tool 消息导致
+// provider 报 "tool result without matching tool_use"。
 // 索引 0（system）与索引 1（首条 user）永不丢弃；保留最近 delegatedCompactionKeepTurns 轮。
 // 注意：调用方必须使用返回的切片；底层数组可能已被原地修改（append 覆盖）。
 func dropDelegatedEarlyMessages(messages []modeladapter.Message, budget int64, stats *delegatedCompactionStats) ([]modeladapter.Message, bool) {
@@ -134,17 +137,27 @@ func dropDelegatedEarlyMessages(messages []modeladapter.Message, budget int64, s
 			if strings.TrimSpace(messages[i].Role) != "assistant" {
 				continue
 			}
-			if i+1 >= len(messages) || strings.TrimSpace(messages[i+1].Role) != "tool" {
+			// 找到该 assistant 之后所有连续 role==tool 消息的最后一个索引 end
+			// （一轮并行调用多个工具 = 1 条 assistant + N 条连续 tool）。
+			end := i + 1
+			for end < len(messages) && strings.TrimSpace(messages[end].Role) == "tool" {
+				end++
+			}
+			end-- // 最后一个连续 tool 索引；若无 tool（end==i）则不构成可丢轮
+			if end == i {
 				continue
 			}
-			messages = append(messages[:i], messages[i+2:]...)
+			messages = append(messages[:i], messages[end+1:]...)
 			dropped = true
 			changed = true
 			if stats != nil {
 				stats.DroppedCount++
 			}
-			if keepStart >= 2 {
-				keepStart -= 2 // 删除发生在保留起点之前，起点前移 2
+			removed := end - i + 1
+			if keepStart >= removed {
+				keepStart -= removed // 删除发生在保留起点之前，起点前移 removed
+			} else {
+				keepStart = 0
 			}
 			break
 		}

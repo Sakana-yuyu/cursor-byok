@@ -156,6 +156,67 @@ func TestDropDelegatedEarlyMessages(t *testing.T) {
 	}
 }
 
+func TestDropDelegatedEarlyMessagesParallelTools(t *testing.T) {
+	// 轮 1 为并行工具调用：1 条 assistant（2 个 ToolCalls）+ 2 条连续 tool 消息。
+	// 丢弃该轮时必须整组删除，否则会残留孤立 tool 消息。
+	messages := []modeladapter.Message{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: "task prompt"},
+		{Role: "assistant", Content: "a1", ToolCalls: []modeladapter.ToolCallDescriptor{{ID: "c1a"}, {ID: "c1b"}}},
+		{Role: "tool", Content: "r1a", ToolCallID: "c1a", Name: "Shell"},
+		{Role: "tool", Content: "r1b", ToolCallID: "c1b", Name: "Read"},
+		{Role: "assistant", Content: "a2", ToolCalls: []modeladapter.ToolCallDescriptor{{ID: "c2"}}},
+		{Role: "tool", Content: "r2", ToolCallID: "c2", Name: "Shell"},
+		{Role: "assistant", Content: "a3", ToolCalls: []modeladapter.ToolCallDescriptor{{ID: "c3"}}},
+		{Role: "tool", Content: "r3", ToolCallID: "c3", Name: "Shell"},
+		{Role: "assistant", Content: "a4", ToolCalls: []modeladapter.ToolCallDescriptor{{ID: "c4"}}},
+		{Role: "tool", Content: "r4", ToolCallID: "c4", Name: "Shell"},
+		{Role: "assistant", Content: "a5", ToolCalls: []modeladapter.ToolCallDescriptor{{ID: "c5"}}},
+		{Role: "tool", Content: "r5", ToolCallID: "c5", Name: "Shell"},
+	}
+	stats := &delegatedCompactionStats{}
+	out, changed := dropDelegatedEarlyMessages(messages, 10, stats)
+	if !changed {
+		t.Fatal("expected drop to happen")
+	}
+	if stats.DroppedCount == 0 {
+		t.Fatal("DroppedCount should be > 0")
+	}
+	// system 与首条 user 必须保留
+	if out[0].Role != "system" || out[1].Role != "user" {
+		t.Fatalf("system/user must be preserved, got roles %q %q", out[0].Role, out[1].Role)
+	}
+	// 任意 role=tool 消息的前一条必须是 assistant：无孤立 tool 残留
+	for i := 1; i < len(out); i++ {
+		if out[i].Role == "tool" && out[i-1].Role != "assistant" {
+			t.Fatalf("orphan tool message at %d (prev=%q)", i, out[i-1].Role)
+		}
+	}
+	// 并行轮（a1 + r1a + r1b）必须整组消失
+	for _, m := range out {
+		if m.Content == "a1" || m.ToolCallID == "c1a" || m.ToolCallID == "c1b" {
+			t.Fatalf("parallel turn must be dropped entirely, got %+v", m)
+		}
+		if len(m.ToolCalls) > 1 {
+			t.Fatalf("parallel turn assistant must be gone, got %+v", m)
+		}
+	}
+	// 保留最近 4 轮（a2/a3/a4/a5 及其 tool）
+	kept := 0
+	for _, m := range out {
+		if m.Role == "assistant" {
+			kept++
+		}
+	}
+	if kept != 4 {
+		t.Fatalf("expected 4 assistant turns kept, got %d", kept)
+	}
+	last := out[len(out)-1]
+	if last.Role != "tool" || last.Content != "r5" {
+		t.Fatalf("recent turn must be preserved, got %+v", last)
+	}
+}
+
 func TestMaybeCompactDelegatedMessages(t *testing.T) {
 	big := strings.Repeat("y", 20*1024)
 	messages := []modeladapter.Message{
