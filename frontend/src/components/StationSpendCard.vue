@@ -7,7 +7,8 @@ import {
   loadSupplierGroupMode,
   normalizeSupplierBaseURL,
 } from "@/utils/supplierGrouping";
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, ref } from "vue";
+import { usePolling } from "@/composables/usePolling";
 
 // 全量历史按中转站聚合花费，给首页一眼可见「哪个中转站用了多少额度」。
 const rows = ref([]);
@@ -18,7 +19,6 @@ const error = ref("");
 const balances = ref([]);
 const balancesLoading = ref(false);
 const balancesError = ref("");
-let timer = null;
 
 // 余额分组展示模式：复用模型配置供应商的分组语义（名称分组 / 连接分组）。
 const balanceGroupMode = ref(loadSupplierGroupMode());
@@ -207,26 +207,13 @@ async function loadBalances() {
 
 // 每分钟刷新一次，与首页其余统计节奏一致
 const REFRESH_INTERVAL_MS = 60_000;
-function startAutoRefresh() {
-  stopAutoRefresh();
-  timer = setInterval(() => {
+usePolling(
+  () => {
     void load();
     void loadBalances();
-  }, REFRESH_INTERVAL_MS);
-}
-function stopAutoRefresh() {
-  if (timer) {
-    clearInterval(timer);
-    timer = null;
-  }
-}
-
-onMounted(() => {
-  void load();
-  void loadBalances();
-  startAutoRefresh();
-});
-onBeforeUnmount(stopAutoRefresh);
+  },
+  { intervalMs: REFRESH_INTERVAL_MS },
+);
 
 defineExpose({ refresh: load, refreshBalances: loadBalances });
 </script>

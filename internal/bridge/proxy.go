@@ -7,13 +7,13 @@ import (
 	serverconfig "cursor/internal/backend/server/config"
 	"cursor/internal/certs"
 	"cursor/internal/client"
+	"cursor/internal/logger"
 	"cursor/internal/mitm"
 	"cursor/internal/promptinject"
 	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -245,7 +245,7 @@ func (s *ProxyService) SaveDelegationConfig(cfg DelegationConfig) (DelegationCon
 		return saved, err
 	}
 	if err := s.syncVisionReaderFromDelegation(saved); err != nil {
-		log.Printf("proxy sync vision reader mcp failed: %v", err)
+		logger.Errorf("proxy sync vision reader mcp failed: %v", err)
 	}
 	return saved, nil
 }
@@ -463,7 +463,7 @@ func (s *ProxyService) QueryAllProviderBalances() []ProviderBalanceSummaryItem {
 			defer wg.Done()
 			defer func() {
 				if r := recover(); r != nil {
-					log.Printf("bridge query provider balance panic recovered adapter_id=%s panic=%v",
+					logger.Infof("bridge query provider balance panic recovered adapter_id=%s panic=%v",
 						strings.TrimSpace(adapter.ID), r)
 				}
 			}()
@@ -502,17 +502,17 @@ func (s *ProxyService) queryProviderBalanceSafe(adapter serverconfig.ModelAdapte
 		}
 	}()
 	return s.core.QueryProviderBalance(ProviderBalanceRequest{
-		Type:                     adapter.Type,
-		SupplierID:               adapter.SupplierID,
-		BaseURL:                  adapter.BaseURL,
-		APIKey:                   adapter.APIKey,
-		BalanceProfile:           adapter.BalanceProfile,
-		BalanceAccessToken:       adapter.BalanceAccessToken,
-		BalanceUserID:            adapter.BalanceUserID,
+		Type:                      adapter.Type,
+		SupplierID:                adapter.SupplierID,
+		BaseURL:                   adapter.BaseURL,
+		APIKey:                    adapter.APIKey,
+		BalanceProfile:            adapter.BalanceProfile,
+		BalanceAccessToken:        adapter.BalanceAccessToken,
+		BalanceUserID:             adapter.BalanceUserID,
 		BalanceCodingPlanProvider: adapter.BalanceCodingPlanProvider,
-		BalanceQueryURL:          adapter.BalanceQueryURL,
-		BalanceQueryField:        adapter.BalanceQueryField,
-		BalanceQueryHeaders:      adapter.BalanceQueryHeaders,
+		BalanceQueryURL:           adapter.BalanceQueryURL,
+		BalanceQueryField:         adapter.BalanceQueryField,
+		BalanceQueryHeaders:       adapter.BalanceQueryHeaders,
 	})
 }
 

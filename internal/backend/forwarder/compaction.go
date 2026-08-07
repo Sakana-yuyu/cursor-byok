@@ -4,15 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-
 	"cursor/gen/agentv1"
 	modeladapter "cursor/internal/backend/agent/model"
+	"cursor/internal/logger"
 	promptassets "cursor/prompt"
+	"github.com/google/uuid"
 )
 
 const (
@@ -438,7 +437,7 @@ func (service *Service) runPendingCompaction(stream *ActiveStream, token uint64,
 			Err:         err,
 		},
 	}); postErr != nil && !errors.Is(postErr, errProviderLoopInterrupted) {
-		log.Printf("forwarder compaction completion post failed request_id=%s token=%d err=%v", strings.TrimSpace(stream.RequestID), token, postErr)
+		logger.Errorf("forwarder compaction completion post failed request_id=%s token=%d err=%v", strings.TrimSpace(stream.RequestID), token, postErr)
 		_ = service.failStreamIfNonTerminal(stream, "unknown", postErr)
 	}
 }

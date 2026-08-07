@@ -37,7 +37,9 @@ func main() {
 	fmt.Printf("代理地址: http://%s\n", server.ProxyAddr())
 	fmt.Printf("调试界面: %s\n", server.UIURL())
 	if openBrowser {
-		_ = browser.OpenURL(server.UIURL())
+		if err := browser.OpenURL(server.UIURL()); err != nil {
+			fmt.Printf("自动打开浏览器失败，请手动访问调试界面: %s（%v）\n", server.UIURL(), err)
+		}
 	}
 
 	signals := make(chan os.Signal, 1)

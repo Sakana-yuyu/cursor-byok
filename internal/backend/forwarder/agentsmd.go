@@ -5,12 +5,12 @@
 package forwarder
 
 import (
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"cursor/gen/agentv1"
+	"cursor/internal/logger"
 )
 
 // agentsFilesCandidates 是 workspace 根目录需要兜底扫描的通用 agent 说明文件。
@@ -80,7 +80,7 @@ func logAgentsFilesInjection(requestID string, conversationID string, count int)
 	if count <= 0 {
 		return
 	}
-	log.Printf(
+	logger.Infof(
 		"forwarder agents files injected request_id=%s conversation_id=%s files=%d",
 		strings.TrimSpace(requestID),
 		strings.TrimSpace(conversationID),

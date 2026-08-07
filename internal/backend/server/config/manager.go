@@ -3,7 +3,6 @@ package config
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -12,6 +11,7 @@ import (
 	"cursor/internal/backend/delegation"
 	"cursor/internal/backend/forwarder"
 	"cursor/internal/historymetrics"
+	"cursor/internal/logger"
 	legacyruntime "cursor/internal/runtime"
 )
 
@@ -170,7 +170,8 @@ func (manager *Manager) GoalRuntimeConfig() forwarder.GoalRuntimeConfig {
 	return cfg
 }
 
-func (manager *Manager) DelegationRuntimeConfig() delegation.RuntimeConfig {	config := manager.Current()
+func (manager *Manager) DelegationRuntimeConfig() delegation.RuntimeConfig {
+	config := manager.Current()
 	current := config.Delegation
 	result := delegation.RuntimeConfig{
 		Enabled:                 current.Enabled,
@@ -502,7 +503,7 @@ func (manager *Manager) reloadIfChanged(ctx context.Context) {
 	if err != nil {
 		errText := err.Error()
 		if errText != manager.reloadError {
-			log.Printf("config hot reload skipped path=%s error=%v", manager.store.Path(), err)
+			logger.Errorf("config hot reload skipped path=%s error=%v", manager.store.Path(), err)
 			manager.reloadError = errText
 		}
 		manager.reloadMu.Unlock()

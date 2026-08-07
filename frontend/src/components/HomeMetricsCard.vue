@@ -6,7 +6,8 @@ import { fetchLocalCacheStats, fetchMetricsRangeSummary, fetchRecentRequestMetri
 import { appState, saveIncludeCacheWriteInHitRate, saveLocalResponseCacheEnabled, openMetricsDetailWindow } from "@/state/appState";
 import { formatCompactInteger, formatInteger } from "@/utils/numberFormat";
 import { isBrowserPreview } from "@/services/runtimeAdapter";
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { usePolling } from "@/composables/usePolling";
+import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
 const emit = defineEmits(["refresh", "open-ad"]);
@@ -452,30 +453,7 @@ watch([selectedRange, customStart, customEnd], () => {
   void loadEvents();
 });
 
-let autoRefreshTimer = null;
-
-function startAutoRefresh() {
-  if (autoRefreshTimer) return;
-  autoRefreshTimer = setInterval(() => {
-    void loadEvents();
-  }, AUTO_REFRESH_INTERVAL_MS);
-}
-
-function stopAutoRefresh() {
-  if (autoRefreshTimer) {
-    clearInterval(autoRefreshTimer);
-    autoRefreshTimer = null;
-  }
-}
-
-onMounted(() => {
-  void loadEvents();
-  startAutoRefresh();
-});
-
-onUnmounted(() => {
-  stopAutoRefresh();
-});
+usePolling(loadEvents, { intervalMs: AUTO_REFRESH_INTERVAL_MS });
 </script>
 
 <template>

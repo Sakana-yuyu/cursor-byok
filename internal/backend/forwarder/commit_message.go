@@ -4,18 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 
 	"connectrpc.com/connect"
-	"github.com/google/uuid"
-	"google.golang.org/protobuf/encoding/protojson"
-
 	"cursor/gen/agentv1"
 	"cursor/gen/aiserverv1"
 	modeladapter "cursor/internal/backend/agent/model"
 	"cursor/internal/logger"
 	promptassets "cursor/prompt"
+	"github.com/google/uuid"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 const (
@@ -157,7 +155,7 @@ func (service *Service) WriteGitCommitMessage(ctx context.Context, req *connect.
 		"artifact_sse":     artifactPaths.ResponsePath,
 		"artifact_summary": artifactPaths.SummaryPath,
 	}); err != nil {
-		log.Printf("forwarder failed to write commit message final log request_id=%s error=%v", requestID, err)
+		logger.Errorf("forwarder failed to write commit message final log request_id=%s error=%v", requestID, err)
 	}
 	return connect.NewResponse(&aiserverv1.WriteGitCommitMessageResponse{
 		CommitMessage: commitMessage,
@@ -219,7 +217,7 @@ func (service *Service) resolveCommitMessageModelID(ctx context.Context) (string
 	channel, err := service.resolver.SelectChannelForModel(ctx, hash)
 	if err != nil || channel == nil || strings.TrimSpace(channel.ID) != hash {
 		if err != nil {
-			log.Printf("forwarder commit message ignored invalid last agent model hash=%s error=%v", hash, err)
+			logger.Errorf("forwarder commit message ignored invalid last agent model hash=%s error=%v", hash, err)
 		}
 		return "", "default_fallback", hash
 	}
@@ -241,7 +239,7 @@ func commitMessageConnectError(recorder *commitMessageLogRecorder, code connect.
 		"code":  code.String(),
 		"error": err.Error(),
 	}); logErr != nil {
-		log.Printf("forwarder failed to write commit message error log error=%v original_error=%v", logErr, err)
+		logger.Errorf("forwarder failed to write commit message error log error=%v original_error=%v", logErr, err)
 	}
 	return connect.NewError(code, err)
 }

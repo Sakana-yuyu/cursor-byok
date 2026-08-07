@@ -4,12 +4,12 @@ package forwarder
 
 import (
 	"context"
-	"log"
 	"strings"
 	"time"
 
 	"cursor/gen/agentv1"
 	runtimecore "cursor/internal/backend/agent/core"
+	"cursor/internal/logger"
 )
 
 // attachDelegationRunStates 把本地委派（delegation_aggregate）的运行状态写入
@@ -82,7 +82,7 @@ func (service *Service) recordDelegationRunTerminal(stream *ActiveStream, pendin
 	}
 	stream.DelegationRunTerminals[strings.TrimSpace(pending.ToolCallID)] = run
 	stream.mu.Unlock()
-	log.Printf("forwarder delegation run terminal recorded request_id=%s conversation_id=%s exec_id=%s tool_call_id=%s status=%s completion_reason=%s detail=%q",
+	logger.Infof("forwarder delegation run terminal recorded request_id=%s conversation_id=%s exec_id=%s tool_call_id=%s status=%s completion_reason=%s detail=%q",
 		strings.TrimSpace(stream.RequestID), strings.TrimSpace(stream.ConversationID), strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID), status.String(), completionReason.String(), strings.TrimSpace(detail))
 	if service != nil && service.debug != nil {
 		service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "delegation_run_terminal_recorded", map[string]any{
@@ -115,7 +115,7 @@ func (service *Service) checkpointCompiledConversation(stream *ActiveStream, con
 	_, modelName, latestUserText, mode := checkpointPromptContext(stream)
 	compiled, err := service.compiler.Compile(conversation, mode, latestUserText, modelName, stream.CustomSystemPrompt)
 	if err != nil {
-		log.Printf("forwarder checkpoint token estimate failed request_id=%s conversation_id=%s err=%v", strings.TrimSpace(activeStreamRequestID(stream)), strings.TrimSpace(conversation.ConversationID), err)
+		logger.Errorf("forwarder checkpoint token estimate failed request_id=%s conversation_id=%s err=%v", strings.TrimSpace(activeStreamRequestID(stream)), strings.TrimSpace(conversation.ConversationID), err)
 		return CompiledConversation{}, false
 	}
 	return guardCompiledConversationForProvider(compiled), true

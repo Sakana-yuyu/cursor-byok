@@ -16,9 +16,10 @@ import {
 } from "@/state/appState";
 import { closeApplication as closeApplicationNative } from "@/services/clientApi";
 import { isWindows } from "@/utils/isWindows";
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useLocale } from "@/i18n/runtime";
+import { usePolling } from "@/composables/usePolling";
 import Logo from "@/assets/logo.png";
 
 const route = useRoute();
@@ -62,7 +63,6 @@ const localizedAuthorInfo = computed(() => {
 });
 const usageDocsURL = "https://docs.leokun.cn";
 const githubRepoURL = "https://github.com/Sakana-yuyu/cursor-byok";
-let proxyStateTimer = null;
 const proxyStatePollIntervalMs = 10000;
 const netProxyEndpoint = computed(
   () => appState.netProxyHttps || appState.netProxyHttp || "",
@@ -201,19 +201,15 @@ onMounted(() => {
   Object.assign(appState.statsOverlayPreferences, getStatsOverlayPreferences());
   void loadFooterAuthorInfo();
   void syncMaximiseState();
-  proxyStateTimer = window.setInterval(() => {
+});
+usePolling(
+  () => {
     if (showFooter.value) {
       void syncServiceState().catch(() => {});
     }
-  }, proxyStatePollIntervalMs);
-});
-
-onUnmounted(() => {
-  if (proxyStateTimer) {
-    window.clearInterval(proxyStateTimer);
-    proxyStateTimer = null;
-  }
-});
+  },
+  { intervalMs: proxyStatePollIntervalMs },
+);
 </script>
 
 <template>

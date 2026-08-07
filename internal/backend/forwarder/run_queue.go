@@ -7,9 +7,10 @@
 package forwarder
 
 import (
-	"log"
 	"strings"
 	"sync"
+
+	"cursor/internal/logger"
 )
 
 // runQueue 是按会话维度的 run intent 队列，FIFO。同一会话可排队多条，
@@ -119,10 +120,10 @@ func (service *Service) drainRunQueue(conversationID string) {
 	if !ok {
 		return
 	}
-	log.Printf("forwarder run queue drained request_id=%s conversation_id=%s",
+	logger.Infof("forwarder run queue drained request_id=%s conversation_id=%s",
 		strings.TrimSpace(intent.RequestID), conversationID)
 	if err := service.handleRunIntent(intent); err != nil {
-		log.Printf("forwarder run queue dispatch failed request_id=%s conversation_id=%s err=%v",
+		logger.Errorf("forwarder run queue dispatch failed request_id=%s conversation_id=%s err=%v",
 			strings.TrimSpace(intent.RequestID), conversationID, err)
 		// 该条失败不卡住队列：递归排空下一条。
 		service.drainRunQueue(conversationID)

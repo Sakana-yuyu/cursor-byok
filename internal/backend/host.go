@@ -323,14 +323,12 @@ func (host *Host) HealthCheck(ctx context.Context) error {
 	if err != nil {
 		inProcessErr := host.InProcessHealthCheck()
 		if inProcessErr == nil {
-			logger.Errorf("内置后端进程内健康检查成功，但 loopback 访问失败 base_url=%s err=%v", host.BaseURL(), err)
 			return fmt.Errorf("内置后端进程内健康检查成功，但本机 loopback 访问失败: %w", err)
 		}
-		logger.Errorf("内置后端 loopback 与进程内健康检查均失败 loopback_err=%v in_process_err=%v", err, inProcessErr)
 		if runErr := host.LastRunError(); runErr != nil {
 			return runErr
 		}
-		return err
+		return fmt.Errorf("内置后端 loopback 与进程内健康检查均失败: %w (in-process: %v)", err, inProcessErr)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {

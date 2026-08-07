@@ -2,12 +2,13 @@ package forwarder
 
 import (
 	"errors"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"cursor/internal/logger"
 )
 
 const historyMaintenanceLockStaleAfter = 30 * time.Minute
@@ -19,7 +20,7 @@ func (service *Service) startHistoryMaintenance() {
 	}
 	go func() {
 		if err := service.runHistoryMaintenance(); err != nil {
-			log.Printf("forwarder history maintenance failed: %v", err)
+			logger.Errorf("forwarder history maintenance failed: %v", err)
 		}
 	}()
 }
@@ -66,7 +67,7 @@ func cleanupRootLegacyHistoryArtifact(historyRoot string, name string) {
 		return
 	}
 	if err := os.RemoveAll(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		log.Printf("forwarder root legacy cleanup failed path=%s err=%v", path, err)
+		logger.Errorf("forwarder root legacy cleanup failed path=%s err=%v", path, err)
 	}
 }
 
@@ -101,7 +102,7 @@ func (service *Service) cleanupConversationLegacyArtifacts(conversationDir strin
 	} {
 		path := filepath.Join(conversationDir, name)
 		if err := os.RemoveAll(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			log.Printf("forwarder legacy cleanup failed path=%s err=%v", path, err)
+			logger.Errorf("forwarder legacy cleanup failed path=%s err=%v", path, err)
 		}
 	}
 	entries, err := os.ReadDir(conversationDir)
@@ -120,7 +121,7 @@ func (service *Service) cleanupConversationLegacyArtifacts(conversationDir strin
 		}
 		path := filepath.Join(conversationDir, entry.Name())
 		if err := os.RemoveAll(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			log.Printf("forwarder numeric legacy cleanup failed path=%s err=%v", path, err)
+			logger.Errorf("forwarder numeric legacy cleanup failed path=%s err=%v", path, err)
 		}
 	}
 }
@@ -134,7 +135,7 @@ func cleanupStaleHistoryTempArtifact(path string) {
 		return
 	}
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		log.Printf("forwarder temp cleanup failed path=%s err=%v", path, err)
+		logger.Errorf("forwarder temp cleanup failed path=%s err=%v", path, err)
 	}
 }
 

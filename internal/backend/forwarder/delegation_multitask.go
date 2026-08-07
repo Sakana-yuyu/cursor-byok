@@ -2,10 +2,10 @@ package forwarder
 
 import (
 	"context"
+	"cursor/internal/logger"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"runtime"
 	"strings"
 	"sync"
@@ -130,11 +130,11 @@ func (service *Service) tryStartDelegatedTask(stream *ActiveStream, invocation r
 	maxMode := stream.MaxMode
 	stream.mu.Unlock()
 	if mode != agentv1.AgentMode_AGENT_MODE_MULTITASK {
-		log.Printf("forwarder delegation start skipped request_id=%s reason=mode_not_multitask mode=%s provider_pass=%d", strings.TrimSpace(stream.RequestID), mode.String(), providerPass)
+		logger.Infof("forwarder delegation start skipped request_id=%s reason=mode_not_multitask mode=%s provider_pass=%d", strings.TrimSpace(stream.RequestID), mode.String(), providerPass)
 		return false, nil
 	}
 	if hasActiveDelegationAggregate(stream) {
-		log.Printf("forwarder delegation start rejected request_id=%s reason=active_aggregate provider_pass=%d", strings.TrimSpace(stream.RequestID), providerPass)
+		logger.Errorf("forwarder delegation start rejected request_id=%s reason=active_aggregate provider_pass=%d", strings.TrimSpace(stream.RequestID), providerPass)
 		return false, fmt.Errorf("a delegated task batch is already running for this turn")
 	}
 	now := time.Now().UTC()
@@ -164,7 +164,7 @@ func (service *Service) tryStartDelegatedTask(stream *ActiveStream, invocation r
 		if err != nil {
 			reason = err.Error()
 		}
-		log.Printf("forwarder delegation start result request_id=%s exec_id=%s reason=%s started=%t provider_pass=%d", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), reason, started, providerPass)
+		logger.Infof("forwarder delegation start result request_id=%s exec_id=%s reason=%s started=%t provider_pass=%d", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), reason, started, providerPass)
 		if service.debug != nil {
 			service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "delegation_start_result", map[string]any{"exec_id": pending.ExecID, "started": started, "provider_pass": providerPass, "reason": reason})
 		}
@@ -174,7 +174,7 @@ func (service *Service) tryStartDelegatedTask(stream *ActiveStream, invocation r
 	// 该消息会启动一个独立的 Cursor 原生子代理，原生子代理初始化失败时客户端会
 	// 取消整个前台 turn。Task UI 状态只通过 checkpoint 中的
 	// subagent_runs_by_parent_tool_call_id 和最终 tool_call_completed 同步。
-	log.Printf("forwarder delegation aggregate started request_id=%s exec_id=%s tool_call_id=%s provider_pass=%d ui_transport=checkpoint",
+	logger.Infof("forwarder delegation aggregate started request_id=%s exec_id=%s tool_call_id=%s provider_pass=%d ui_transport=checkpoint",
 		strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID), pending.ProviderPass)
 	service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "delegation_aggregate_started", map[string]any{
 		"exec_id":            strings.TrimSpace(pending.ExecID),
@@ -192,7 +192,7 @@ func (service *Service) tryStartDelegatedTask(stream *ActiveStream, invocation r
 		markExecCompleted(stream, pending)
 		return false, err
 	}
-	log.Printf("forwarder delegation initial checkpoint published request_id=%s exec_id=%s tool_call_id=%s",
+	logger.Infof("forwarder delegation initial checkpoint published request_id=%s exec_id=%s tool_call_id=%s",
 		strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID))
 	service.keepDelegationTaskAlive(stream, pending)
 	return true, nil
@@ -356,7 +356,7 @@ func (service *Service) keepDelegationTaskAlive(stream *ActiveStream, pending ru
 			// 瞬时失败只计数，连续多次失败才放弃，避免一次抖动导致卡片回退 stopped。
 			if err := service.publishCheckpoint(requestID, stream.ConversationID); err != nil {
 				consecutiveFailures++
-				log.Printf("forwarder delegation progress checkpoint failed request_id=%s exec_id=%s failures=%d err=%v", requestID, execID, consecutiveFailures, err)
+				logger.Errorf("forwarder delegation progress checkpoint failed request_id=%s exec_id=%s failures=%d err=%v", requestID, execID, consecutiveFailures, err)
 				if consecutiveFailures >= 3 {
 					return
 				}
@@ -437,8 +437,8 @@ func (service *Service) handleDelegationResult(stream *ActiveStream, payload *st
 	}
 	var resultSummary delegatedAggregateResult
 	_ = json.Unmarshal([]byte(resultPayload), &resultSummary)
-	log.Printf("forwarder delegation terminal handling request_id=%s exec_id=%s tool_call_id=%s payload_bytes=%d pending_found=%t", strings.TrimSpace(stream.RequestID), strings.TrimSpace(payload.ExecID), strings.TrimSpace(payload.ToolCallID), len(resultPayload), ok)
-	log.Printf("forwarder delegation terminal received request_id=%s exec_id=%s tool_call_id=%s provider_pass=%d result_status=%s succeeded=%d failed=%d canceled=%d",
+	logger.Infof("forwarder delegation terminal handling request_id=%s exec_id=%s tool_call_id=%s payload_bytes=%d pending_found=%t", strings.TrimSpace(stream.RequestID), strings.TrimSpace(payload.ExecID), strings.TrimSpace(payload.ToolCallID), len(resultPayload), ok)
+	logger.Errorf("forwarder delegation terminal received request_id=%s exec_id=%s tool_call_id=%s provider_pass=%d result_status=%s succeeded=%d failed=%d canceled=%d",
 		strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID), pending.ProviderPass, strings.TrimSpace(resultSummary.Status), resultSummary.Succeeded, resultSummary.Failed, resultSummary.Canceled)
 	service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "delegation_terminal_received", map[string]any{
 		"exec_id":       strings.TrimSpace(pending.ExecID),
@@ -454,7 +454,7 @@ func (service *Service) handleDelegationResult(stream *ActiveStream, payload *st
 	// 同步给 Cursor 客户端（Task 卡片从 stopped/运行中恢复为 succeeded/error）。
 	service.recordDelegationRunTerminal(stream, pending, delegationResultRunStatus(resultPayload), delegationResultRunTitle(resultPayload), delegationResultRunDetail(resultPayload))
 	if err := service.appendToolResult(stream, pending.ToolCallID, "Task", pending.ArgsJSON, resultPayload, pending.ReasoningContent, nil); err != nil {
-		log.Printf("forwarder delegation terminal append tool result failed request_id=%s exec_id=%s tool_call_id=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID), err)
+		logger.Errorf("forwarder delegation terminal append tool result failed request_id=%s exec_id=%s tool_call_id=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID), err)
 		return err
 	}
 	// 构造完整的 Task tool call（含 TaskResult）随 tool_call_completed 发送给 Cursor 客户端。
@@ -466,7 +466,7 @@ func (service *Service) handleDelegationResult(stream *ActiveStream, payload *st
 		durationMS = 1
 	}
 	completedToolCall := buildDelegationCompletedTaskToolCall(pending.ArgsJSON, resultPayload, agentID, uint64(durationMS))
-	log.Printf("forwarder delegation terminal task result ready request_id=%s exec_id=%s tool_call_id=%s agent_id=%s status=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID), agentID, strings.TrimSpace(resultSummary.Status))
+	logger.Infof("forwarder delegation terminal task result ready request_id=%s exec_id=%s tool_call_id=%s agent_id=%s status=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID), agentID, strings.TrimSpace(resultSummary.Status))
 	if err := service.publishToolCallCompleted(stream.RequestID, pending.ToolCallID, pending.ModelCallID, completedToolCall); err != nil {
 		return err
 	}
@@ -532,7 +532,7 @@ func buildDelegationCompletedTaskToolCall(argsJSON []byte, resultPayload string,
 				},
 			},
 		}
-		log.Printf("forwarder delegation completed TaskResult request_result_status=%s worker_count=%d step_count=%d output_chars=%d",
+		logger.Infof("forwarder delegation completed TaskResult request_result_status=%s worker_count=%d step_count=%d output_chars=%d",
 			status, len(summary.Tasks), len(steps), conversationStepsTextChars(steps))
 	} else {
 		errorText := strings.TrimSpace(summary.Error)
@@ -695,17 +695,17 @@ func (coordinator *multitaskDelegationCoordinator) Start(stream *ActiveStream, p
 		return false, fmt.Errorf("multitask delegation coordinator is closed")
 	}
 	config := coordinator.runtimeConfig()
-	log.Printf("forwarder delegation start evaluating request_id=%s exec_id=%s enabled=%t supervision=%t strict=%t groups=%d worker_group=%s max_concurrency=%d", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), config.Enabled, config.SupervisionEnabled, config.StrictUnavailable, len(config.Groups), strings.TrimSpace(config.WorkerGroupID), config.MaxConcurrency)
+	logger.Infof("forwarder delegation start evaluating request_id=%s exec_id=%s enabled=%t supervision=%t strict=%t groups=%d worker_group=%s max_concurrency=%d", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), config.Enabled, config.SupervisionEnabled, config.StrictUnavailable, len(config.Groups), strings.TrimSpace(config.WorkerGroupID), config.MaxConcurrency)
 	coordinator.ensureScheduler(config.MaxConcurrency)
 	useSupervision, supervisionErr := coordinator.shouldUseSupervision(base, config)
 	if supervisionErr != nil {
-		log.Printf("forwarder delegation start blocked request_id=%s exec_id=%s reason=supervision_unavailable err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), supervisionErr)
+		logger.Infof("forwarder delegation start blocked request_id=%s exec_id=%s reason=supervision_unavailable err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), supervisionErr)
 		coordinator.startMu.Unlock()
 		return false, supervisionErr
 	}
 	workers := coordinator.enabledWorkers(base, config)
 	if len(workers) == 0 {
-		log.Printf("forwarder delegation start skipped request_id=%s exec_id=%s reason=no_enabled_workers enabled=%t groups=%d", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), config.Enabled, len(config.Groups))
+		logger.Infof("forwarder delegation start skipped request_id=%s exec_id=%s reason=no_enabled_workers enabled=%t groups=%d", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), config.Enabled, len(config.Groups))
 		coordinator.startMu.Unlock()
 		return false, nil
 	}
@@ -713,20 +713,20 @@ func (coordinator *multitaskDelegationCoordinator) Start(stream *ActiveStream, p
 	scheduler := coordinator.scheduler
 	coordinator.mu.RUnlock()
 	if scheduler == nil {
-		log.Printf("forwarder delegation start blocked request_id=%s exec_id=%s reason=scheduler_nil", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID))
+		logger.Infof("forwarder delegation start blocked request_id=%s exec_id=%s reason=scheduler_nil", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID))
 		coordinator.startMu.Unlock()
 		return false, fmt.Errorf("delegation scheduler is nil")
 	}
 	scheduler.ReserveRetentionMargin(len(workers))
 	if useSupervision {
 		if coordinator.supervisor == nil {
-			log.Printf("forwarder delegation start blocked request_id=%s exec_id=%s reason=supervisor_nil", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID))
+			logger.Infof("forwarder delegation start blocked request_id=%s exec_id=%s reason=supervisor_nil", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID))
 			coordinator.startMu.Unlock()
 			return false, fmt.Errorf("supervisor coordinator is unavailable")
 		}
 		stream.mu.Lock()
 		if delegatedStartupCanceledLocked(stream, pending.ProviderPass) {
-			log.Printf("forwarder delegation start canceled request_id=%s exec_id=%s reason=startup_canceled provider_pass=%d", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), pending.ProviderPass)
+			logger.Infof("forwarder delegation start canceled request_id=%s exec_id=%s reason=startup_canceled provider_pass=%d", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), pending.ProviderPass)
 			stream.mu.Unlock()
 			coordinator.startMu.Unlock()
 			return false, fmt.Errorf("delegation aggregate startup canceled for provider pass %d: %w", pending.ProviderPass, errProviderLoopInterrupted)
@@ -737,7 +737,7 @@ func (coordinator *multitaskDelegationCoordinator) Start(stream *ActiveStream, p
 		_, err := coordinator.supervisor.Start(stream, pending, base, workers, config)
 		coordinator.startMu.Unlock()
 		if err != nil {
-			log.Printf("forwarder delegation supervisor start failed request_id=%s exec_id=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), err)
+			logger.Errorf("forwarder delegation supervisor start failed request_id=%s exec_id=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), err)
 			coordinator.CancelAggregate(pending.ExecID)
 			markExecCompleted(stream, pending)
 			return false, err
@@ -756,7 +756,7 @@ func (coordinator *multitaskDelegationCoordinator) Start(stream *ActiveStream, p
 	}
 	stream.mu.Lock()
 	if delegatedStartupCanceledLocked(stream, pending.ProviderPass) {
-		log.Printf("forwarder delegation start canceled request_id=%s exec_id=%s reason=startup_canceled provider_pass=%d", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), pending.ProviderPass)
+		logger.Infof("forwarder delegation start canceled request_id=%s exec_id=%s reason=startup_canceled provider_pass=%d", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), pending.ProviderPass)
 		stream.mu.Unlock()
 		coordinator.startMu.Unlock()
 		cancel()
@@ -764,7 +764,7 @@ func (coordinator *multitaskDelegationCoordinator) Start(stream *ActiveStream, p
 	}
 	coordinator.mu.Lock()
 	if _, exists := coordinator.aggregates[aggregateID]; exists {
-		log.Printf("forwarder delegation start rejected request_id=%s exec_id=%s reason=aggregate_already_exists", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID))
+		logger.Errorf("forwarder delegation start rejected request_id=%s exec_id=%s reason=aggregate_already_exists", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID))
 		coordinator.mu.Unlock()
 		stream.mu.Unlock()
 		coordinator.startMu.Unlock()
@@ -777,7 +777,7 @@ func (coordinator *multitaskDelegationCoordinator) Start(stream *ActiveStream, p
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
 	coordinator.startMu.Unlock()
-	log.Printf("forwarder delegation aggregate registered request_id=%s exec_id=%s worker_count=%d supervision=%t provider_pass=%d", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), len(workers), useSupervision, pending.ProviderPass)
+	logger.Infof("forwarder delegation aggregate registered request_id=%s exec_id=%s worker_count=%d supervision=%t provider_pass=%d", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), len(workers), useSupervision, pending.ProviderPass)
 
 	for _, worker := range workers {
 		stream.mu.Lock()
@@ -793,7 +793,7 @@ func (coordinator *multitaskDelegationCoordinator) Start(stream *ActiveStream, p
 		}
 	}
 	snapshot := aggregate.finishStartup()
-	log.Printf("forwarder delegation aggregate startup finished request_id=%s exec_id=%s worker_ids=%d submission_errors=%d canceled=%t", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), len(snapshot.workerIDs), len(snapshot.submissionErrors), snapshot.canceled)
+	logger.Errorf("forwarder delegation aggregate startup finished request_id=%s exec_id=%s worker_ids=%d submission_errors=%d canceled=%t", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), len(snapshot.workerIDs), len(snapshot.submissionErrors), snapshot.canceled)
 	go coordinator.awaitAggregate(stream, pending, aggregate, snapshot)
 	return true, nil
 }
@@ -855,7 +855,7 @@ func (coordinator *multitaskDelegationCoordinator) awaitAggregate(stream *Active
 				return
 			}
 			waitErr := fmt.Errorf("delegation aggregate %q wait failed: %w", strings.TrimSpace(aggregate.id), err)
-			log.Printf(
+			logger.Errorf(
 				"forwarder delegation aggregate wait failed request_id=%s aggregate_id=%s exec_id=%s err=%v",
 				strings.TrimSpace(activeStreamRequestID(stream)),
 				strings.TrimSpace(aggregate.id),
@@ -886,7 +886,7 @@ func (coordinator *multitaskDelegationCoordinator) awaitAggregate(stream *Active
 		},
 	})
 	if postErr != nil {
-		log.Printf(
+		logger.Errorf(
 			"forwarder delegation aggregate post failed request_id=%s aggregate_id=%s exec_id=%s err=%v",
 			strings.TrimSpace(activeStreamRequestID(stream)),
 			strings.TrimSpace(aggregate.id),
@@ -955,7 +955,7 @@ func (coordinator *multitaskDelegationCoordinator) CancelAggregate(aggregateID s
 	if _, file, line, ok := runtime.Caller(1); ok {
 		caller = fmt.Sprintf("%s:%d", file, line)
 	}
-	log.Printf("forwarder delegation cancel aggregate requested aggregate_id=%s aggregate_found=%t caller=%s", strings.TrimSpace(aggregateID), aggregate != nil, caller)
+	logger.Infof("forwarder delegation cancel aggregate requested aggregate_id=%s aggregate_found=%t caller=%s", strings.TrimSpace(aggregateID), aggregate != nil, caller)
 	if aggregate == nil {
 		if coordinator.supervisor != nil {
 			coordinator.supervisor.Cancel(aggregateID)
@@ -997,7 +997,7 @@ func (coordinator *multitaskDelegationCoordinator) CancelStream(stream *ActiveSt
 	if _, file, line, ok := runtime.Caller(1); ok {
 		caller = fmt.Sprintf("%s:%d", file, line)
 	}
-	log.Printf("forwarder delegation cancel stream request_id=%s provider_pass=%d aggregate_count=%d reason=stream_cancel caller=%s", strings.TrimSpace(stream.RequestID), providerPass, len(execIDs), caller)
+	logger.Infof("forwarder delegation cancel stream request_id=%s provider_pass=%d aggregate_count=%d reason=stream_cancel caller=%s", strings.TrimSpace(stream.RequestID), providerPass, len(execIDs), caller)
 	for _, execID := range execIDs {
 		coordinator.CancelAggregate(execID)
 	}

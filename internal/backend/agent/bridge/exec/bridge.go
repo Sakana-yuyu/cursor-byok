@@ -3,14 +3,13 @@ package execbridge
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"sync/atomic"
 	"time"
 
-
 	"cursor/gen/agentv1"
 	runtimecore "cursor/internal/backend/agent/core"
+	"cursor/internal/logger"
 )
 
 // ExecApplyResult 表示一次执行桥结果归一化后的最小产物。
@@ -387,12 +386,12 @@ func (bridge *Bridge) ApplyExecClientMessage(msg *agentv1.ExecClientMessage, pen
 		case nil:
 			// 未知字段在 protobuf 解码后可能表现为空 oneof；它不是终态，
 			// 继续等待后续 shell 事件或 watchdog 收口。
-			log.Printf("exec bridge ignored empty shell stream event exec_id=%s tool_call_id=%s", strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID))
+			logger.Infof("exec bridge ignored empty shell stream event exec_id=%s tool_call_id=%s", strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID))
 			return result, nil
 		default:
 			// 客户端协议可能领先于本仓库 proto（例如未来新增的 shell 流事件）。
 			// 未知事件按非终态忽略，等待后续事件或 watchdog 收口，避免整个请求被打断。
-			log.Printf("exec bridge ignored unsupported shell stream event exec_id=%s tool_call_id=%s event_type=%T", strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID), event)
+			logger.Infof("exec bridge ignored unsupported shell stream event exec_id=%s tool_call_id=%s event_type=%T", strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID), event)
 			return result, nil
 		}
 	default:
@@ -455,12 +454,8 @@ func (bridge *Bridge) nextID() uint32 {
 	return current
 }
 
-
-
 // openTask 构造 Task 对应的执行桥请求。
 
 // openGrep 构造 Grep 对应的执行桥请求。
 
-
 // buildReadCompletedToolCall 构造 Read 对应的完成态 ToolCall。
-

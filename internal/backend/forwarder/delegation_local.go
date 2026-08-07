@@ -2,9 +2,9 @@ package forwarder
 
 import (
 	"context"
+	"cursor/internal/logger"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -122,7 +122,7 @@ func (adapter *localDelegatedAgentAdapter) Execute(ctx context.Context, request 
 				if !sameDelegatedMessages(compactedMessages, messages) {
 					messages = compactedMessages
 				}
-				log.Printf("forwarder delegated context overflow retry task_id=%s provider_pass=%d retry=%d/%d", strings.TrimSpace(request.ID), providerPass, overflowRetries, delegatedCompactionRetryLimit)
+				logger.Infof("forwarder delegated context overflow retry task_id=%s provider_pass=%d retry=%d/%d", strings.TrimSpace(request.ID), providerPass, overflowRetries, delegatedCompactionRetryLimit)
 				// providerPass-- 抵消 for post 语句的 providerPass++，使重试复用同一 provider_pass。
 				// 重试轮会照常执行循环顶部的主动压缩与 checkpoint；不要在此循环内添加
 				// providerPass <= 0 的防护逻辑，那会过早终止重试轮。
@@ -278,7 +278,7 @@ func (adapter *localDelegatedAgentAdapter) runProviderPass(ctx context.Context, 
 		cancelFirstEvent()
 	}()
 	var firstEvent atomic.Bool
-	log.Printf(
+	logger.Infof(
 		"forwarder local delegated provider starting task_id=%s model_id=%s provider_pass=%d",
 		strings.TrimSpace(identity.taskID),
 		strings.TrimSpace(request.ModelID),
@@ -331,14 +331,14 @@ func (adapter *localDelegatedAgentAdapter) runProviderPass(ctx context.Context, 
 		errorText = err.Error()
 	}
 	if recordErr := upsertStandaloneUsageSnapshot(adapter.usageStore, identity.requestID, modelCallID, map[bool]string{true: "completed", false: "provider_error"}[err == nil], usage, errorText); recordErr != nil {
-		log.Printf("forwarder local delegated usage persistence failed task_id=%s err=%v", strings.TrimSpace(identity.taskID), recordErr)
+		logger.Errorf("forwarder local delegated usage persistence failed task_id=%s err=%v", strings.TrimSpace(identity.taskID), recordErr)
 	}
 	pass := localProviderPass{text: textBuilder.String(), invocations: invocations}
 	if err != nil {
 		if !firstEvent.Load() && firstEventCtx.Err() != nil && ctx.Err() == nil {
 			err = fmt.Errorf("delegated provider produced no event within %s: %w", localDelegationFirstEventTimeout, firstEventCtx.Err())
 		}
-		log.Printf(
+		logger.Errorf(
 			"forwarder local delegated provider failed task_id=%s model_id=%s provider_pass=%d first_event=%t err=%v",
 			strings.TrimSpace(identity.taskID),
 			strings.TrimSpace(request.ModelID),
@@ -348,7 +348,7 @@ func (adapter *localDelegatedAgentAdapter) runProviderPass(ctx context.Context, 
 		)
 		return pass, err
 	}
-	log.Printf(
+	logger.Infof(
 		"forwarder local delegated provider completed task_id=%s model_id=%s provider_pass=%d first_event=%t tool_calls=%d",
 		strings.TrimSpace(identity.taskID),
 		strings.TrimSpace(request.ModelID),
@@ -1014,7 +1014,7 @@ func compactDelegatedMessagesBeforePass(adapter *localDelegatedAgentAdapter, req
 	stats := &delegatedCompactionStats{}
 	out, changed := maybeCompactDelegatedMessages(messages, budget, stats)
 	if changed {
-		log.Printf("forwarder delegated context compacted task_id=%s provider_pass=%d snip=%d dropped=%d msgs=%d->%d tokens=%d->%d",
+		logger.Infof("forwarder delegated context compacted task_id=%s provider_pass=%d snip=%d dropped=%d msgs=%d->%d tokens=%d->%d",
 			strings.TrimSpace(request.ID), providerPass, stats.SnipCount, stats.DroppedCount, len(messages), len(out), stats.BeforeTokens, stats.AfterTokens)
 	}
 	return out

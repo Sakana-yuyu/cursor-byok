@@ -9,6 +9,7 @@ import {
   startCursorAccountLogin,
 } from "@/services/clientApi";
 import { toUserError } from "@/state/appState";
+import { usePolling } from "@/composables/usePolling";
 import { Browser } from "@wailsio/runtime";
 import { computed, onMounted, onUnmounted, ref } from "vue";
 
@@ -21,7 +22,6 @@ const cursorAccountStatus = ref({
   error: "",
 });
 const cursorAccountBusy = ref(false);
-let cursorAccountTimer = null;
 
 const cursorAccountSignedIn = computed(
   () => cursorAccountStatus.value.state === "signed_in",
@@ -86,21 +86,20 @@ async function handleCursorAccountDisconnect() {
   }
 }
 
-onMounted(async () => {
-  await refreshCursorAccountStatus().catch(() => {});
-  cursorAccountTimer = window.setInterval(() => {
+// 挂载后立即无条件刷新一次；等待登录完成期间按 1.5s 轮询。
+const { start: startAccountPolling, stop: stopAccountPolling } = usePolling(
+  () => {
     if (cursorAccountWaiting.value) {
       void refreshCursorAccountStatus().catch(() => {});
     }
-  }, 1500);
+  },
+  { intervalMs: 1500, immediate: false },
+);
+onMounted(() => {
+  void refreshCursorAccountStatus().catch(() => {});
+  startAccountPolling();
 });
-
-onUnmounted(() => {
-  if (cursorAccountTimer) {
-    window.clearInterval(cursorAccountTimer);
-    cursorAccountTimer = null;
-  }
-});
+onUnmounted(stopAccountPolling);
 </script>
 
 <template>

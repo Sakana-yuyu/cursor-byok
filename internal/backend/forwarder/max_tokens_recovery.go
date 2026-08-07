@@ -9,13 +9,13 @@ package forwarder
 import (
 	"context"
 	"errors"
-	"log"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	modeladapter "cursor/internal/backend/agent/model"
+	"cursor/internal/logger"
 )
 
 // maxTokensRecoveryAttempts 是单轮回合因 max_tokens 超限触发降级重试的次数上限。
@@ -78,7 +78,7 @@ func (service *Service) recoverFromMaxTokensExceeded(stream *ActiveStream, reque
 	existingCap := stream.MaxTokensRecoveryCap
 	stream.mu.Unlock()
 	if attempts >= maxTokensRecoveryAttempts {
-		log.Printf("forwarder max_tokens recovery exhausted request_id=%s attempts=%d",
+		logger.Infof("forwarder max_tokens recovery exhausted request_id=%s attempts=%d",
 			strings.TrimSpace(requestID), attempts)
 		return false, nil
 	}
@@ -107,7 +107,7 @@ func (service *Service) recoverFromMaxTokensExceeded(stream *ActiveStream, reque
 
 	if service.maxTokensPersister != nil {
 		if err := service.maxTokensPersister.PersistChannelMaxTokensCap(context.Background(), channelErr.ChannelID, limit); err != nil {
-			log.Printf("forwarder persist max_tokens cap failed request_id=%s channel_id=%s: %v", strings.TrimSpace(requestID), channelErr.ChannelID, err)
+			logger.Errorf("forwarder persist max_tokens cap failed request_id=%s channel_id=%s: %v", strings.TrimSpace(requestID), channelErr.ChannelID, err)
 		}
 	}
 
@@ -117,7 +117,7 @@ func (service *Service) recoverFromMaxTokensExceeded(stream *ActiveStream, reque
 		"recovery_cap": limit,
 		"cause":        cause.Error(),
 	})
-	log.Printf("forwarder max_tokens recovery retry request_id=%s attempt=%d/%d recovery_cap=%d",
+	logger.Infof("forwarder max_tokens recovery retry request_id=%s attempt=%d/%d recovery_cap=%d",
 		strings.TrimSpace(requestID), newAttempts, maxTokensRecoveryAttempts, limit)
 
 	// 重入 driveProvider：它会在 resolveProviderOutputBudget 之后读取 MaxTokensRecoveryCap 覆盖预算。

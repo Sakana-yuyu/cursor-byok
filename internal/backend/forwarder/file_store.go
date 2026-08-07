@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -17,6 +16,7 @@ import (
 	"time"
 
 	"cursor/gen/agentv1"
+	"cursor/internal/logger"
 )
 
 const (
@@ -491,7 +491,7 @@ func (store *ConversationFileStore) syncCursorTranscriptBestEffort(conversationI
 		return
 	}
 	if err := store.syncCursorTranscript(conversationID, conversation, folder); err != nil {
-		log.Printf("forwarder transcript sync failed conversation_id=%s err=%v", strings.TrimSpace(conversationID), err)
+		logger.Errorf("forwarder transcript sync failed conversation_id=%s err=%v", strings.TrimSpace(conversationID), err)
 	}
 }
 
@@ -524,13 +524,13 @@ func (store *ConversationFileStore) SyncAllCursorTranscriptsBestEffort() {
 	}
 	conversationIDs, err := store.ListConversationIDs()
 	if err != nil {
-		log.Printf("forwarder transcript backfill scan failed err=%v", err)
+		logger.Errorf("forwarder transcript backfill scan failed err=%v", err)
 		return
 	}
 	for _, conversationID := range conversationIDs {
 		conversation, err := store.LoadConversation(conversationID)
 		if err != nil {
-			log.Printf("forwarder transcript backfill load failed conversation_id=%s err=%v", conversationID, err)
+			logger.Errorf("forwarder transcript backfill load failed conversation_id=%s err=%v", conversationID, err)
 			continue
 		}
 		if conversation == nil || conversation.AgentTranscriptsFolder == "" {
@@ -541,7 +541,7 @@ func (store *ConversationFileStore) SyncAllCursorTranscriptsBestEffort() {
 			continue
 		}
 		if err := store.syncCursorTranscriptWithLatestStatus(conversationID, conversation, conversation.AgentTranscriptsFolder, true); err != nil {
-			log.Printf("forwarder transcript backfill failed conversation_id=%s err=%v", conversationID, err)
+			logger.Errorf("forwarder transcript backfill failed conversation_id=%s err=%v", conversationID, err)
 		}
 	}
 }

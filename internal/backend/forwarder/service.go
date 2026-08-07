@@ -4,10 +4,10 @@ package forwarder
 import (
 	"context"
 	"crypto/sha256"
+	"cursor/internal/logger"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"sort"
 	"strings"
 	"sync"
@@ -49,55 +49,55 @@ const (
 )
 
 type Service struct {
-	store                    *ConversationFileStore
-	usageStore               *UsageFileStore
-	codebaseIndexStore       *CodebaseIndexStore
-	docsIndexStore           *DocsIndexStore
-	rules                    *UserRuleStore
-	projector                *HistoryProjector
-	compiler                 PromptCompiler
-	toolCatalog              *DefaultToolCatalog
-	promptInjection          *promptinject.Manager
-	provider                 ProviderGateway
-	resolver                 modeladapter.ChannelResolver
-	modelMemory              agentModelMemory
-	maxTokensPersister       maxTokensConfigPersister
-	contextWindowPersister   contextWindowPersister
-	scanConfig               skillMCPScanConfigProvider
-	mcpRuntime               *MCPRuntimeRegistry
-	broker                   *StreamBroker
-	recorder                 *artifactRecorder
-	debug                    *debugRecorder
-	execBridge               execbridge.ExecBridge
-	interactionBridge        interactionbridge.InteractionBridge
-	appendSeq                *appendSequenceTracker
-	runQueue                 *runQueue
-	cursorDelegation         *cursorDelegationBridge
-	localDelegation          *localDelegatedAgentAdapter
-	delegationConfig         delegation.RuntimeConfigProvider
-	goalConfig               goalConfigProvider
-	usageCostEstimator       goalUsageCostEstimator
-	goalsMu                  sync.RWMutex
-	goals                    map[string]*GoalState // conversationID → goal 状态，保留最近 100 条
-	multitaskDelegation      *multitaskDelegationCoordinator
-	delegationRuntimeMu      sync.Mutex
-	nativeDelegations        map[string]*nativeDelegationRuntime
-	visionRunsMu             sync.Mutex
-	visionRuns               map[string]*visionDelegationRun
-	visionCacheMu            sync.Mutex
-	visionCache              map[string]visionCacheEntry
-	visionImageMu            sync.Mutex
-	visionImageFiles         map[string][]string
+	store                  *ConversationFileStore
+	usageStore             *UsageFileStore
+	codebaseIndexStore     *CodebaseIndexStore
+	docsIndexStore         *DocsIndexStore
+	rules                  *UserRuleStore
+	projector              *HistoryProjector
+	compiler               PromptCompiler
+	toolCatalog            *DefaultToolCatalog
+	promptInjection        *promptinject.Manager
+	provider               ProviderGateway
+	resolver               modeladapter.ChannelResolver
+	modelMemory            agentModelMemory
+	maxTokensPersister     maxTokensConfigPersister
+	contextWindowPersister contextWindowPersister
+	scanConfig             skillMCPScanConfigProvider
+	mcpRuntime             *MCPRuntimeRegistry
+	broker                 *StreamBroker
+	recorder               *artifactRecorder
+	debug                  *debugRecorder
+	execBridge             execbridge.ExecBridge
+	interactionBridge      interactionbridge.InteractionBridge
+	appendSeq              *appendSequenceTracker
+	runQueue               *runQueue
+	cursorDelegation       *cursorDelegationBridge
+	localDelegation        *localDelegatedAgentAdapter
+	delegationConfig       delegation.RuntimeConfigProvider
+	goalConfig             goalConfigProvider
+	usageCostEstimator     goalUsageCostEstimator
+	goalsMu                sync.RWMutex
+	goals                  map[string]*GoalState // conversationID → goal 状态，保留最近 100 条
+	multitaskDelegation    *multitaskDelegationCoordinator
+	delegationRuntimeMu    sync.Mutex
+	nativeDelegations      map[string]*nativeDelegationRuntime
+	visionRunsMu           sync.Mutex
+	visionRuns             map[string]*visionDelegationRun
+	visionCacheMu          sync.Mutex
+	visionCache            map[string]visionCacheEntry
+	visionImageMu          sync.Mutex
+	visionImageFiles       map[string][]string
 	// visionArchiveMu 保护 visionArchive：会话级图片识图结果归档。
 	// key = conversationID#imageHash，命中后直接用归档文本替换图片 part，
 	// 不再重复调识图模型，也避免历史图片反复进入 provider 上下文。
 	// 归档同时落盘到 history/<conversationID>/vision-archive.json，
 	// 进程重启后（同会话、同图片内容）仍可命中；visionArchiveLoaded 记录
 	// 已懒加载过的会话，避免重复读盘。
-	visionArchiveMu      sync.Mutex
-	visionArchive        map[string]visionArchiveEntry
-	visionArchiveLimit   int
-	visionArchiveLoaded  map[string]struct{}
+	visionArchiveMu          sync.Mutex
+	visionArchive            map[string]visionArchiveEntry
+	visionArchiveLimit       int
+	visionArchiveLoaded      map[string]struct{}
 	provider400RecoveryMu    sync.Mutex
 	provider400RecoveryTurns map[string]struct{}
 	// conversationActivityMu 保护 conversationLastActivity：
@@ -173,34 +173,34 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 	}
 	debug := newDebugRecorder(historyRoot, broker, debugConfig)
 	service := &Service{
-		store:                    store,
-		usageStore:               NewUsageFileStore(historyRoot),
-		codebaseIndexStore:       NewCodebaseIndexStore(appdata.CodebaseIndexRootPath()),
-		docsIndexStore:           NewDocsIndexStore(appdata.DocsIndexRootPath()),
-		rules:                    rules,
-		projector:                projector,
-		compiler:                 NewPromptCompiler(projector, toolCatalog, NewReminderInjector(), rules, skills, promptInjection),
-		toolCatalog:              toolCatalog,
-		promptInjection:          promptInjection,
-		provider:                 NewProviderGateway(resolver),
-		resolver:                 resolver,
-		modelMemory:              modelMemory,
-		maxTokensPersister:       maxTokensPersister,
-		contextWindowPersister:   ctxWindowPersister,
-		scanConfig:               scanConfig,
-		delegationConfig:         delegationConfig,
-		goalConfig:               goalCfg,
-		usageCostEstimator:       &defaultUsageCostEstimator{lookup: newPricingLookupFromConfig(resolver)},
-		goals:                    make(map[string]*GoalState),
-		mcpRuntime:               SharedMCPRuntimeRegistry(),
-		broker:                   broker,
-		recorder:                 newArtifactRecorder(store, broker, debug),
-		debug:                    debug,
-		execBridge:               execbridge.NewBridge(),
-		interactionBridge:        interactionbridge.NewBridge(),
-		appendSeq:                newAppendSequenceTracker(),
-		runQueue:                 newRunQueue(),
-		nativeDelegations:        make(map[string]*nativeDelegationRuntime),
+		store:                  store,
+		usageStore:             NewUsageFileStore(historyRoot),
+		codebaseIndexStore:     NewCodebaseIndexStore(appdata.CodebaseIndexRootPath()),
+		docsIndexStore:         NewDocsIndexStore(appdata.DocsIndexRootPath()),
+		rules:                  rules,
+		projector:              projector,
+		compiler:               NewPromptCompiler(projector, toolCatalog, NewReminderInjector(), rules, skills, promptInjection),
+		toolCatalog:            toolCatalog,
+		promptInjection:        promptInjection,
+		provider:               NewProviderGateway(resolver),
+		resolver:               resolver,
+		modelMemory:            modelMemory,
+		maxTokensPersister:     maxTokensPersister,
+		contextWindowPersister: ctxWindowPersister,
+		scanConfig:             scanConfig,
+		delegationConfig:       delegationConfig,
+		goalConfig:             goalCfg,
+		usageCostEstimator:     &defaultUsageCostEstimator{lookup: newPricingLookupFromConfig(resolver)},
+		goals:                  make(map[string]*GoalState),
+		mcpRuntime:             SharedMCPRuntimeRegistry(),
+		broker:                 broker,
+		recorder:               newArtifactRecorder(store, broker, debug),
+		debug:                  debug,
+		execBridge:             execbridge.NewBridge(),
+		interactionBridge:      interactionbridge.NewBridge(),
+		appendSeq:              newAppendSequenceTracker(),
+		runQueue:               newRunQueue(),
+		nativeDelegations:      make(map[string]*nativeDelegationRuntime),
 		// 视觉委派相关的三个 map 必须在构造时初始化：
 		// 缺失会导致 beginVisionRun 向 nil map 写入，触发
 		// "assignment to entry in nil map" panic，杀死整个 Wails 主进程
@@ -286,7 +286,7 @@ func (service *Service) BidiAppend(ctx context.Context, req *connect.Request[ais
 		return nil, connect.NewError(connect.CodeCanceled, err)
 	}
 	if staleAppend {
-		log.Printf("forwarder ignored stale bidi append request_id=%s append_seqno=%d", requestID, appendSeqno)
+		logger.Infof("forwarder ignored stale bidi append request_id=%s append_seqno=%d", requestID, appendSeqno)
 		service.debug.LogBidiRaw(ctx, requestID, "", appendSeqno, debugData, "stale", nil)
 		return connect.NewResponse(&aiserverv1.BidiAppendResponse{}), nil
 	}
@@ -733,7 +733,7 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 		}
 	}
 	if service.shouldReuseActiveRun(intent) {
-		log.Printf("forwarder duplicate run reused request_id=%s conversation_id=%s", strings.TrimSpace(intent.RequestID), strings.TrimSpace(intent.ConversationID))
+		logger.Infof("forwarder duplicate run reused request_id=%s conversation_id=%s", strings.TrimSpace(intent.RequestID), strings.TrimSpace(intent.ConversationID))
 		return nil
 	}
 	intent.UserMessage = normalizeUserMessageForStorage(intent.UserMessage)
@@ -946,7 +946,7 @@ func (service *Service) Shutdown(ctx context.Context) error {
 	if len(requestIDs) == 0 {
 		return nil
 	}
-	log.Printf("forwarder shutdown canceling active streams count=%d", len(requestIDs))
+	logger.Infof("forwarder shutdown canceling active streams count=%d", len(requestIDs))
 	var firstErr error
 	for _, requestID := range requestIDs {
 		if err := ctx.Err(); err != nil {
@@ -980,7 +980,7 @@ func (service *Service) Shutdown(ctx context.Context) error {
 		}
 		cancel()
 		if err != nil && !errors.Is(err, errProviderLoopInterrupted) {
-			log.Printf("forwarder shutdown cancel failed request_id=%s err=%v", strings.TrimSpace(requestID), err)
+			logger.Errorf("forwarder shutdown cancel failed request_id=%s err=%v", strings.TrimSpace(requestID), err)
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -998,7 +998,7 @@ func (service *Service) Shutdown(ctx context.Context) error {
 			// broker.Cancel 仅在 stream 已不在 broker 中时返回 error（已被 actor 移除），
 			// 这种情况下 TurnEnded 已 Publish 到已关闭的订阅也不会被消费——属正常，不记错误。
 			if !errors.Is(cancelErr, errStreamNotActive) {
-				log.Printf("forwarder shutdown force cancel failed request_id=%s err=%v", strings.TrimSpace(requestID), cancelErr)
+				logger.Errorf("forwarder shutdown force cancel failed request_id=%s err=%v", strings.TrimSpace(requestID), cancelErr)
 				if firstErr == nil {
 					firstErr = cancelErr
 				}
@@ -1084,7 +1084,7 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 		}
 	}
 	stream.mu.Unlock()
-	log.Printf("forwarder cancel intent received request_id=%s conversation_id=%s reason=%q phase=%s status=%s provider_active=%t pending_execs=%d active_delegations=%d",
+	logger.Infof("forwarder cancel intent received request_id=%s conversation_id=%s reason=%q phase=%s status=%s provider_active=%t pending_execs=%d active_delegations=%d",
 		strings.TrimSpace(intent.RequestID), conversationID, strings.TrimSpace(intent.CancelReason), phase, status, providerActive, pendingExecCount, activeDelegationCount)
 	service.debug.LogRuntime(context.Background(), intent.RequestID, conversationID, "cancel_intent_received", map[string]any{
 		"reason":                     strings.TrimSpace(intent.CancelReason),
@@ -1128,7 +1128,7 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 			"replay_policy": cancelReplayPolicyForReason(cancelReason),
 		})
 		if _, err := service.appendConversationEntries(stream, stream.ConversationID, []HistoryEntry{cancelEntry}); err != nil {
-			log.Printf("forwarder cancellation metadata persistence failed request_id=%s conversation_id=%s err=%v", stream.RequestID, stream.ConversationID, err)
+			logger.Errorf("forwarder cancellation metadata persistence failed request_id=%s conversation_id=%s err=%v", stream.RequestID, stream.ConversationID, err)
 			if memoryErr := service.appendCheckpointEntries(stream, []HistoryEntry{cancelEntry}); memoryErr != nil {
 				return memoryErr
 			}
@@ -1258,7 +1258,7 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 					"contexts":     hookAdditionalContextsToRecords(result.HookAdditionalContexts),
 				}),
 			}); err != nil {
-				log.Printf("forwarder shell hook context metadata failed request_id=%s tool_call_id=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ToolCallID), err)
+				logger.Errorf("forwarder shell hook context metadata failed request_id=%s tool_call_id=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ToolCallID), err)
 			}
 		}
 		// 只有真实执行数据才算有效进展；摘要/heartbeat 不能延长 watchdog。
@@ -1526,7 +1526,7 @@ func (service *Service) recoverNonStreamingExecAfterStreamClose(stream *ActiveSt
 	markExecCompleted(stream, pending)
 	toolName := strings.TrimSpace(deriveToolNameFromPendingExec(pending))
 	resultPayload := fmt.Sprintf("%s transport closed before terminal result arrived", firstNonEmpty(toolName, pending.ExecKind, "tool"))
-	log.Printf("forwarder synthetic exec recovery request_id=%s tool_call_id=%s message_id=%d exec_id=%s exec_kind=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ToolCallID), pending.MessageID, strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ExecKind))
+	logger.Infof("forwarder synthetic exec recovery request_id=%s tool_call_id=%s message_id=%d exec_id=%s exec_kind=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ToolCallID), pending.MessageID, strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ExecKind))
 	if toolName != "" {
 		if err := service.appendToolResult(stream, pending.ToolCallID, toolName, pending.ArgsJSON, resultPayload, pending.ReasoningContent, nil); err != nil {
 			return err
@@ -1567,7 +1567,7 @@ func (service *Service) observeShellStreamClose(stream *ActiveStream, pending ru
 	if recentState == "transport_closed" || recentState == "exited" || recentState == "backgrounded" || recentState == "rejected" || recentState == "permission_denied" || recentState == "sandbox_unsupported" {
 		return
 	}
-	log.Printf(
+	logger.Infof(
 		"forwarder shell stream closed without terminal event request_id=%s tool_call_id=%s message_id=%d exec_id=%s stream_state=%s chunk_count=%d",
 		strings.TrimSpace(stream.RequestID),
 		strings.TrimSpace(current.ToolCallID),
@@ -1591,7 +1591,7 @@ func (service *Service) observeShellStreamClose(stream *ActiveStream, pending ru
 			"stderr_buffer_bytes": len(current.StderrBuffer),
 		}),
 	}); err != nil {
-		log.Printf("forwarder shell stream close metadata failed request_id=%s tool_call_id=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(current.ToolCallID), err)
+		logger.Errorf("forwarder shell stream close metadata failed request_id=%s tool_call_id=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(current.ToolCallID), err)
 	}
 	service.scheduleShellTransportCloseRecovery(stream.RequestID, current)
 }
@@ -1747,7 +1747,7 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 			customSystemPrompt = joinNonEmpty(customSystemPrompt, frag)
 		}
 	}
-	log.Printf("forwarder provider pass started request_id=%s model_call_id=%s provider_pass=%d thinking_completed=%t thinking_delta_count=%d", strings.TrimSpace(requestID), strings.TrimSpace(modelCallID), currentPass, thinkingCompletedPublished, thinkingDeltaCount)
+	logger.Infof("forwarder provider pass started request_id=%s model_call_id=%s provider_pass=%d thinking_completed=%t thinking_delta_count=%d", strings.TrimSpace(requestID), strings.TrimSpace(modelCallID), currentPass, thinkingCompletedPublished, thinkingDeltaCount)
 	if service.debug != nil {
 		service.debug.LogRuntime(context.Background(), requestID, conversationID, "provider_pass_started", map[string]any{
 			"model_call_id":                strings.TrimSpace(modelCallID),
@@ -2047,12 +2047,12 @@ func (service *Service) maybeSaveLastAgentModelHash(conversation *ConversationFi
 	channel, err := service.resolver.SelectChannelForModel(context.Background(), strings.TrimSpace(modelID))
 	if err != nil || channel == nil || strings.TrimSpace(channel.ID) == "" {
 		if err != nil {
-			log.Printf("forwarder skipped last agent model hash update model_id=%s error=%v", strings.TrimSpace(modelID), err)
+			logger.Errorf("forwarder skipped last agent model hash update model_id=%s error=%v", strings.TrimSpace(modelID), err)
 		}
 		return
 	}
 	if err := service.modelMemory.SaveLastAgentModelHash(context.Background(), strings.TrimSpace(channel.ID)); err != nil {
-		log.Printf("forwarder failed to save last agent model hash channel_id=%s error=%v", strings.TrimSpace(channel.ID), err)
+		logger.Errorf("forwarder failed to save last agent model hash channel_id=%s error=%v", strings.TrimSpace(channel.ID), err)
 	}
 }
 
@@ -2117,7 +2117,7 @@ func (service *Service) runProviderStream(stream *ActiveStream, token uint64, ct
 			"provider_token": token,
 			"error":          postErr.Error(),
 		})
-		log.Printf(
+		logger.Errorf(
 			"forwarder provider completion post failed request_id=%s model_call_id=%s provider_token=%d err=%v",
 			strings.TrimSpace(request.RequestID),
 			strings.TrimSpace(request.ModelCallID),
@@ -2215,7 +2215,7 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 		delegationSupervision = config.SupervisionEnabled
 		delegationGroups = len(config.Groups)
 	}
-	log.Printf("forwarder tool invocation request_id=%s conversation_id=%s mode=%s tool=%s call_id=%s model_call_id=%s provider_pass=%d multitask_coordinator=%t delegation_enabled=%t supervision_enabled=%t delegation_groups=%d",
+	logger.Infof("forwarder tool invocation request_id=%s conversation_id=%s mode=%s tool=%s call_id=%s model_call_id=%s provider_pass=%d multitask_coordinator=%t delegation_enabled=%t supervision_enabled=%t delegation_groups=%d",
 		strings.TrimSpace(stream.RequestID), strings.TrimSpace(stream.ConversationID), mode.String(), trimmedToolName, strings.TrimSpace(invocation.CallID), strings.TrimSpace(invocation.ModelCallID), providerPass, service != nil && service.multitaskDelegation != nil, delegationEnabled, delegationSupervision, delegationGroups)
 	if service != nil && service.debug != nil {
 		service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "tool_invocation_routed", map[string]any{
@@ -2309,9 +2309,9 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 		return providerLoopInterruptErr(nil, stream, invocation.ModelCallID)
 	}
 	if autoStarted, autoErr := service.maybeStartAutomaticMultitaskDelegation(stream, invocation); autoErr != nil {
-		log.Printf("forwarder automatic multitask delegation ignored request_id=%s tool=%s reason=%v", strings.TrimSpace(stream.RequestID), trimmedToolName, autoErr)
+		logger.Infof("forwarder automatic multitask delegation ignored request_id=%s tool=%s reason=%v", strings.TrimSpace(stream.RequestID), trimmedToolName, autoErr)
 	} else if autoStarted {
-		log.Printf("forwarder automatic multitask delegation started request_id=%s trigger_tool=%s", strings.TrimSpace(stream.RequestID), trimmedToolName)
+		logger.Infof("forwarder automatic multitask delegation started request_id=%s trigger_tool=%s", strings.TrimSpace(stream.RequestID), trimmedToolName)
 	}
 	if startedToolCall != nil {
 		if err := ensureLoopActive(); err != nil {
@@ -2346,7 +2346,7 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 			return service.completePreDispatchToolError(stream, invocation, startedToolCall, startedToolCall != nil, startedEmitted, err)
 		}
 		if delegatedTaskStarted {
-			log.Printf("forwarder task dispatch order request_id=%s tool_call_id=%s order=aggregate_started_then_checkpoint_then_started", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID))
+			logger.Infof("forwarder task dispatch order request_id=%s tool_call_id=%s order=aggregate_started_then_checkpoint_then_started", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID))
 			if service.debug != nil {
 				service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "task_dispatch_order", map[string]any{
 					"tool_call_id": strings.TrimSpace(invocation.CallID),
@@ -2366,7 +2366,7 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 				return service.completePreDispatchToolError(stream, invocation, startedToolCall, startedToolCall != nil, startedEmitted, err)
 			}
 			nativeTaskOpened = true
-			log.Printf("forwarder task dispatch order request_id=%s tool_call_id=%s order=native_exec_registered_then_checkpoint_then_started exec_id=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID), strings.TrimSpace(nativeTaskPending.ExecID))
+			logger.Infof("forwarder task dispatch order request_id=%s tool_call_id=%s order=native_exec_registered_then_checkpoint_then_started exec_id=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID), strings.TrimSpace(nativeTaskPending.ExecID))
 			if service.debug != nil {
 				service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "task_dispatch_order", map[string]any{
 					"tool_call_id": strings.TrimSpace(invocation.CallID),
@@ -2381,23 +2381,23 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 			return err
 		}
 		if trimmedToolName == "Task" {
-			log.Printf("forwarder task tool_call_started publishing request_id=%s tool_call_id=%s model_call_id=%s agent_id=%s args_bytes=%d", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID), strings.TrimSpace(invocation.ModelCallID), delegationSubagentID(invocation.CallID), len(invocation.ArgsJSON))
+			logger.Infof("forwarder task tool_call_started publishing request_id=%s tool_call_id=%s model_call_id=%s agent_id=%s args_bytes=%d", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID), strings.TrimSpace(invocation.ModelCallID), delegationSubagentID(invocation.CallID), len(invocation.ArgsJSON))
 		}
 		if err := service.broker.Publish(stream.RequestID, StreamEvent{
 			Message: buildToolCallStartedMessage(invocation.CallID, invocation.ModelCallID, startedToolCall),
 		}); err != nil {
 			if trimmedToolName == "Task" {
-				log.Printf("forwarder task tool_call_started publish failed request_id=%s tool_call_id=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID), err)
+				logger.Errorf("forwarder task tool_call_started publish failed request_id=%s tool_call_id=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID), err)
 			}
 			return err
 		}
 		startedEmitted = true
 		if trimmedToolName == "Task" && (delegatedTaskStarted || nativeTaskOpened) {
 			if err := service.publishCheckpointForce(stream.RequestID, stream.ConversationID); err != nil {
-				log.Printf("forwarder task post-start checkpoint failed request_id=%s tool_call_id=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID), err)
+				logger.Errorf("forwarder task post-start checkpoint failed request_id=%s tool_call_id=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID), err)
 				return err
 			}
-			log.Printf("forwarder task post-start checkpoint published request_id=%s tool_call_id=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID))
+			logger.Infof("forwarder task post-start checkpoint published request_id=%s tool_call_id=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID))
 		}
 	}
 	if isImmediateNativeInvocation {
@@ -2422,7 +2422,7 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 		// subagent for the same tool call and can leave the foreground turn stuck
 		// in Stopped after the native watchdog fires.
 		if trimmedToolName == "Task" && delegatedTaskStarted {
-			log.Printf("forwarder task local aggregate dispatch complete request_id=%s tool_call_id=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID))
+			logger.Infof("forwarder task local aggregate dispatch complete request_id=%s tool_call_id=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID))
 			return nil
 		}
 		if trimmedToolName == "Task" && !delegatedTaskStarted && !nativeTaskOpened {
@@ -2557,7 +2557,7 @@ func (service *Service) openNativeTaskExec(stream *ActiveStream, invocation runt
 		service.scheduleShellForegroundRecovery(stream.RequestID, pendingExec)
 		service.scheduleExecWatchdog(stream.RequestID, pendingExec)
 	}
-	log.Printf("forwarder native task pre-start registered request_id=%s conversation_id=%s tool_call_id=%s exec_id=%s exec_kind=%s message_id=%d", strings.TrimSpace(stream.RequestID), strings.TrimSpace(stream.ConversationID), strings.TrimSpace(pendingExec.ToolCallID), strings.TrimSpace(pendingExec.ExecID), strings.TrimSpace(pendingExec.ExecKind), pendingExec.MessageID)
+	logger.Infof("forwarder native task pre-start registered request_id=%s conversation_id=%s tool_call_id=%s exec_id=%s exec_kind=%s message_id=%d", strings.TrimSpace(stream.RequestID), strings.TrimSpace(stream.ConversationID), strings.TrimSpace(pendingExec.ToolCallID), strings.TrimSpace(pendingExec.ExecID), strings.TrimSpace(pendingExec.ExecKind), pendingExec.MessageID)
 	if service.debug != nil {
 		service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "native_task_prestart_registered", map[string]any{
 			"tool_call_id": strings.TrimSpace(pendingExec.ToolCallID),
@@ -2573,7 +2573,7 @@ func (service *Service) openNativeTaskExec(stream *ActiveStream, invocation runt
 		service.updateNativeDelegationStatus(pendingExec.ExecID, delegation.TaskFailed, "Cursor 子代理启动状态同步失败", err.Error())
 		return nil, runtimecore.PendingExec{}, err
 	}
-	log.Printf("forwarder native task pre-start checkpoint published request_id=%s tool_call_id=%s exec_id=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pendingExec.ToolCallID), strings.TrimSpace(pendingExec.ExecID))
+	logger.Infof("forwarder native task pre-start checkpoint published request_id=%s tool_call_id=%s exec_id=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pendingExec.ToolCallID), strings.TrimSpace(pendingExec.ExecID))
 	return serverMessage, pendingExec, nil
 }
 
@@ -2619,7 +2619,7 @@ func (service *Service) recordExecDispatchMetadata(stream *ActiveStream, pending
 			"opened_at":       pending.OpenedAt,
 		}),
 	}); err != nil {
-		log.Printf("forwarder exec dispatch metadata failed request_id=%s tool_call_id=%s message_id=%d err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ToolCallID), pending.MessageID, err)
+		logger.Errorf("forwarder exec dispatch metadata failed request_id=%s tool_call_id=%s message_id=%d err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ToolCallID), pending.MessageID, err)
 	}
 }
 
@@ -2687,12 +2687,12 @@ func (service *Service) publishToolCallCompleted(requestID string, toolCallID st
 			resultKind = "error"
 		}
 	}
-	log.Printf("forwarder tool_call_completed publishing request_id=%s tool_call_id=%s model_call_id=%s task_result=%s agent_id=%s conversation_steps=%d", strings.TrimSpace(requestID), strings.TrimSpace(toolCallID), strings.TrimSpace(modelCallID), resultKind, strings.TrimSpace(agentID), stepCount)
+	logger.Infof("forwarder tool_call_completed publishing request_id=%s tool_call_id=%s model_call_id=%s task_result=%s agent_id=%s conversation_steps=%d", strings.TrimSpace(requestID), strings.TrimSpace(toolCallID), strings.TrimSpace(modelCallID), resultKind, strings.TrimSpace(agentID), stepCount)
 	err := service.broker.Publish(requestID, StreamEvent{
 		Message: buildToolCallCompletedMessage(toolCallID, modelCallID, toolCall),
 	})
 	if err != nil {
-		log.Printf("forwarder tool_call_completed publish failed request_id=%s tool_call_id=%s model_call_id=%s err=%v", strings.TrimSpace(requestID), strings.TrimSpace(toolCallID), strings.TrimSpace(modelCallID), err)
+		logger.Errorf("forwarder tool_call_completed publish failed request_id=%s tool_call_id=%s model_call_id=%s err=%v", strings.TrimSpace(requestID), strings.TrimSpace(toolCallID), strings.TrimSpace(modelCallID), err)
 	}
 	return err
 }
@@ -2878,7 +2878,7 @@ func (service *Service) finishDeferredTurnAfterInteraction(stream *ActiveStream,
 			ProviderPass:   pending.ProviderPass,
 		}
 		stream.mu.Unlock()
-		log.Printf(
+		logger.Infof(
 			"forwarder missing deferred turn completion snapshot request_id=%s tool_call_id=%s interaction_kind=%s provider_pass=%d",
 			strings.TrimSpace(completion.RequestID),
 			strings.TrimSpace(pending.ToolCallID),
@@ -2922,7 +2922,7 @@ func (service *Service) completeSuccessfulTurn(stream *ActiveStream, completion 
 		return fmt.Errorf("record completed turn finalized: %w", err)
 	}
 	if err := service.syncSummaryCarryForward(conversationID, requestID, modelCallID); err != nil {
-		log.Printf(
+		logger.Errorf(
 			"forwarder summary sync after turn completion failed request_id=%s model_call_id=%s err=%v",
 			strings.TrimSpace(requestID),
 			strings.TrimSpace(modelCallID),
@@ -2963,10 +2963,10 @@ func (service *Service) failStreamIfNonTerminal(stream *ActiveStream, terminalCo
 	terminal := isTerminalStreamStatus(stream.Status)
 	stream.mu.Unlock()
 	if terminal {
-		log.Printf("forwarder fail_stream_if_non_terminal skipped request_id=%s terminal_code=%s cause=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(terminalCode), cause)
+		logger.Infof("forwarder fail_stream_if_non_terminal skipped request_id=%s terminal_code=%s cause=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(terminalCode), cause)
 		return nil
 	}
-	log.Printf("forwarder fail_stream_if_non_terminal firing request_id=%s terminal_code=%s cause=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(terminalCode), cause)
+	logger.Infof("forwarder fail_stream_if_non_terminal firing request_id=%s terminal_code=%s cause=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(terminalCode), cause)
 	return service.failStream(stream, terminalCode, cause)
 }
 
@@ -3038,7 +3038,7 @@ func (service *Service) publishCheckpointWithOptionsAndAction(requestID string, 
 				terminalDelegationRuns++
 			}
 		}
-		log.Printf("forwarder delegation checkpoint publishing request_id=%s conversation_id=%s active_runs=%d terminal_runs=%d pending_execs=%d pending_interactions=%d",
+		logger.Infof("forwarder delegation checkpoint publishing request_id=%s conversation_id=%s active_runs=%d terminal_runs=%d pending_execs=%d pending_interactions=%d",
 			strings.TrimSpace(requestID), strings.TrimSpace(stream.ConversationID), activeDelegationRuns, terminalDelegationRuns, len(pendingExecs), len(pendingInteractions))
 		if service.debug != nil {
 			service.debug.LogRuntime(context.Background(), requestID, stream.ConversationID, "delegation_checkpoint_publishing", map[string]any{
@@ -3054,7 +3054,7 @@ func (service *Service) publishCheckpointWithOptionsAndAction(requestID string, 
 			if run == nil {
 				continue
 			}
-			log.Printf("forwarder delegation checkpoint run request_id=%s map_key=%s parent_tool_call_id=%s subagent_id=%s status=%s env=%s", strings.TrimSpace(requestID), strings.TrimSpace(key), strings.TrimSpace(run.GetParentToolCallId()), strings.TrimSpace(run.GetSubagentId()), run.GetStatus().String(), run.GetEnvironment().String())
+			logger.Infof("forwarder delegation checkpoint run request_id=%s map_key=%s parent_tool_call_id=%s subagent_id=%s status=%s env=%s", strings.TrimSpace(requestID), strings.TrimSpace(key), strings.TrimSpace(run.GetParentToolCallId()), strings.TrimSpace(run.GetSubagentId()), run.GetStatus().String(), run.GetEnvironment().String())
 		}
 	}
 	message := buildCheckpointMessage(projection.State)
@@ -3075,7 +3075,7 @@ func (service *Service) publishCheckpointWithOptionsAndAction(requestID string, 
 		}
 		stream.CheckpointPublishPending = false
 		stream.mu.Unlock()
-		log.Printf("forwarder checkpoint skipped request_id=%s reason=duplicate hash=%s wire_size=%d", strings.TrimSpace(requestID), wireHash[:12], wireSize)
+		logger.Infof("forwarder checkpoint skipped request_id=%s reason=duplicate hash=%s wire_size=%d", strings.TrimSpace(requestID), wireHash[:12], wireSize)
 		if service.debug != nil {
 			service.debug.LogRuntime(context.Background(), requestID, stream.ConversationID, "checkpoint_skipped_duplicate", map[string]any{
 				"wire_hash": wireHash, "wire_size": wireSize, "pending_exec_count": len(pendingExecs),
@@ -3100,12 +3100,12 @@ func (service *Service) publishCheckpointWithOptionsAndAction(requestID string, 
 					})
 				}
 				if err := service.publishCheckpoint(requestID, ""); err != nil {
-					log.Printf("forwarder checkpoint delayed publish failed request_id=%s err=%v", strings.TrimSpace(requestID), err)
+					logger.Errorf("forwarder checkpoint delayed publish failed request_id=%s err=%v", strings.TrimSpace(requestID), err)
 				}
 			})
 		}
 		stream.mu.Unlock()
-		log.Printf("forwarder checkpoint skipped request_id=%s reason=rate_limited hash=%s wire_size=%d elapsed=%s min_interval=%s", strings.TrimSpace(requestID), wireHash[:12], wireSize, now.Sub(lastSentAt).Round(time.Millisecond), checkpointMinSendInterval)
+		logger.Infof("forwarder checkpoint skipped request_id=%s reason=rate_limited hash=%s wire_size=%d elapsed=%s min_interval=%s", strings.TrimSpace(requestID), wireHash[:12], wireSize, now.Sub(lastSentAt).Round(time.Millisecond), checkpointMinSendInterval)
 		if service.debug != nil {
 			service.debug.LogRuntime(context.Background(), requestID, stream.ConversationID, "checkpoint_skipped_rate_limited", map[string]any{
 				"wire_hash": wireHash, "wire_size": wireSize, "elapsed_since_last": now.Sub(lastSentAt).String(), "min_interval": checkpointMinSendInterval.String(), "pending_exec_count": len(pendingExecs),
@@ -3121,7 +3121,7 @@ func (service *Service) publishCheckpointWithOptionsAndAction(requestID string, 
 		stream.CheckpointPublishTimer = nil
 	}
 	stream.mu.Unlock()
-	log.Printf("forwarder checkpoint queued request_id=%s hash=%s wire_size=%d force=%t pending_execs=%d pending_interactions=%d", strings.TrimSpace(requestID), wireHash[:12], wireSize, force, len(pendingExecs), len(pendingInteractions))
+	logger.Infof("forwarder checkpoint queued request_id=%s hash=%s wire_size=%d force=%t pending_execs=%d pending_interactions=%d", strings.TrimSpace(requestID), wireHash[:12], wireSize, force, len(pendingExecs), len(pendingInteractions))
 	if service.debug != nil {
 		service.debug.LogRuntime(context.Background(), requestID, stream.ConversationID, "checkpoint_queued", map[string]any{
 			"wire_hash": wireHash, "wire_size": wireSize, "force": force, "pending_exec_count": len(pendingExecs), "pending_interaction_count": len(pendingInteractions),
@@ -3192,7 +3192,7 @@ func (service *Service) failActiveStream(stream *ActiveStream, conversationID st
 	phase := stream.Phase
 	status := stream.Status
 	stream.mu.Unlock()
-	log.Printf("forwarder fail_active_stream request_id=%s conversation_id=%s model_call_id=%s terminal_code=%s phase=%s status=%s pending_execs=%d message=%q", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), strings.TrimSpace(terminalCode), phase, status, activePending, strings.TrimSpace(terminalMessage))
+	logger.Infof("forwarder fail_active_stream request_id=%s conversation_id=%s model_call_id=%s terminal_code=%s phase=%s status=%s pending_execs=%d message=%q", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), strings.TrimSpace(terminalCode), phase, status, activePending, strings.TrimSpace(terminalMessage))
 	service.clearProvider400Recovery(requestID, stream.TurnSeq)
 	clearPendingProviderCompletion(stream)
 	stream.mu.Lock()
@@ -4099,7 +4099,6 @@ func recentlyCompletedExecExists(stream *ActiveStream, messageID uint32) bool {
 	}
 	return true
 }
-
 
 func readStringAny(value any) string {
 	text, ok := value.(string)

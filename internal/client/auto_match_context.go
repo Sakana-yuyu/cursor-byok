@@ -13,10 +13,10 @@ package client
 
 import (
 	"context"
-	"log"
 	"strings"
 
 	"cursor/internal/backend/server/config"
+	"cursor/internal/logger"
 	"cursor/internal/modelcontext"
 )
 
@@ -124,7 +124,7 @@ func (s *ProxyService) AutoMatchContextWindows(ctx context.Context, force bool) 
 		catalog, err := s.fetchCatalogForAutoMatch(ctx, representative)
 		if err != nil {
 			// 探测失败不阻断整体流程：这些适配器保持原值（unchanged）。
-			log.Printf("auto match context window: probe failed group_key=%s error=%v", key, err)
+			logger.Errorf("auto match context window: probe failed group_key=%s error=%v", key, err)
 			continue
 		}
 		// 建立模型 ID → contextWindowTokens / pricing 的快速查找（大小写不敏感、去 models/ 前缀）。
@@ -183,7 +183,7 @@ func (s *ProxyService) AutoMatchContextWindows(ctx context.Context, force bool) 
 	if err := s.SaveUserConfig(cfg); err != nil {
 		return result, err
 	}
-	log.Printf("auto match context window: matched total=%d from_catalog=%d from_probe=%d unchanged=%d",
+	logger.Infof("auto match context window: matched total=%d from_catalog=%d from_probe=%d unchanged=%d",
 		result.Total, result.FromCatalog, result.FromProbe, result.Unchanged)
 	return result, nil
 }

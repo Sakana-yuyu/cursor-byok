@@ -2,10 +2,11 @@ package forwarder
 
 import (
 	"context"
-	"log"
 	"strings"
 	"sync"
 	"time"
+
+	"cursor/internal/logger"
 )
 
 const appendSequenceRetention = 10 * time.Minute
@@ -104,7 +105,7 @@ func (tracker *appendSequenceTracker) Reset(requestID string) {
 		}
 		old.mu.Unlock()
 	}
-	log.Printf("forwarder reset append sequence on demand request_id=%s", requestID)
+	logger.Infof("forwarder reset append sequence on demand request_id=%s", requestID)
 }
 
 func (state *appendSequenceState) acquire(ctx context.Context, requestID string, appendSeq int64) (bool, error) {
@@ -137,7 +138,7 @@ func (state *appendSequenceState) acquire(ctx context.Context, requestID string,
 			state.next = 1
 			state.processing = true
 			state.mu.Unlock()
-			log.Printf("forwarder reset append sequence request_id=%s previous_next=%d append_seqno=1", requestID, prevNext)
+			logger.Infof("forwarder reset append sequence request_id=%s previous_next=%d append_seqno=1", requestID, prevNext)
 			return false, nil
 		}
 

@@ -6,9 +6,10 @@ package forwarder
 
 import (
 	"context"
-	"log"
 	"strings"
 	"time"
+
+	"cursor/internal/logger"
 )
 
 // contextOverflowMaxCompactionRetries 是单轮回合因 context_length_exceeded 触发强制压缩重试的次数上限。
@@ -30,7 +31,7 @@ func (service *Service) recoverFromContextOverflow(stream *ActiveStream, convers
 	modelID := stream.ModelID
 	stream.mu.Unlock()
 	if attempts >= contextOverflowMaxCompactionRetries {
-		log.Printf("forwarder context overflow recovery exhausted request_id=%s attempts=%d",
+		logger.Infof("forwarder context overflow recovery exhausted request_id=%s attempts=%d",
 			strings.TrimSpace(requestID), attempts)
 		return false, nil
 	}
@@ -67,7 +68,7 @@ func (service *Service) recoverFromContextOverflow(stream *ActiveStream, convers
 	}
 	if plan == nil {
 		// 已无可压缩内容：再压也无意义，交给正常失败路径。
-		log.Printf("forwarder context overflow recovery skipped (nothing to compact) request_id=%s attempts=%d",
+		logger.Infof("forwarder context overflow recovery skipped (nothing to compact) request_id=%s attempts=%d",
 			strings.TrimSpace(requestID), attempts)
 		return false, nil
 	}
@@ -88,7 +89,7 @@ func (service *Service) recoverFromContextOverflow(stream *ActiveStream, convers
 		"context_window":      plan.ContextWindowSize,
 		"messages_to_compact": plan.MessagesToCompact,
 	})
-	log.Printf("forwarder context overflow recovery trigger compaction request_id=%s attempt=%d/%d messages_to_compact=%d",
+	logger.Infof("forwarder context overflow recovery trigger compaction request_id=%s attempt=%d/%d messages_to_compact=%d",
 		strings.TrimSpace(requestID), newAttempts, contextOverflowMaxCompactionRetries, plan.MessagesToCompact)
 
 	if err := service.beginPendingCompaction(stream, plan); err != nil {
@@ -135,7 +136,7 @@ func (service *Service) maybeHalveContextWindowForOverflow(stream *ActiveStream,
 		return
 	}
 	if err := service.contextWindowPersister.PersistChannelContextWindow(context.Background(), channelID, halved); err != nil {
-		log.Printf("forwarder context window halve persist failed request_id=%s channel_id=%s: %v",
+		logger.Errorf("forwarder context window halve persist failed request_id=%s channel_id=%s: %v",
 			strings.TrimSpace(requestID), channelID, err)
 		return
 	}
@@ -146,6 +147,6 @@ func (service *Service) maybeHalveContextWindowForOverflow(stream *ActiveStream,
 		"after":          halved,
 		"floor":          contextWindowHalveFloor,
 	})
-	log.Printf("forwarder context window halved request_id=%s channel_id=%s model_id=%s %d -> %d",
+	logger.Infof("forwarder context window halved request_id=%s channel_id=%s model_id=%s %d -> %d",
 		strings.TrimSpace(requestID), channelID, strings.TrimSpace(modelID), currentWindow, halved)
 }

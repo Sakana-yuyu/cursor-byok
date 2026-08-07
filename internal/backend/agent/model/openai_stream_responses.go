@@ -7,13 +7,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"cursor/gen/agentv1"
 	runtimecore "cursor/internal/backend/agent/core"
+	"cursor/internal/logger"
 )
 
 func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamRequest, baseURL string, apiKey string, modelID string, promptCacheKeyMaximumLength int, manualPromptCacheKey bool, sink func(ModelEvent) error) error {
@@ -518,9 +518,9 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			if err := emitReasoningSummary(summary); err != nil {
 				return err
 			}
-			log.Printf("openai responses reasoning summary item request_id=%s model_call_id=%s item_id=%s summary_bytes=%d forwarded_bytes=%d", strings.TrimSpace(req.RequestID), strings.TrimSpace(req.ModelCallID), strings.TrimSpace(providerItemID), len(summary), len(reasoningSummaryForwarded))
+			logger.Infof("openai responses reasoning summary item request_id=%s model_call_id=%s item_id=%s summary_bytes=%d forwarded_bytes=%d", strings.TrimSpace(req.RequestID), strings.TrimSpace(req.ModelCallID), strings.TrimSpace(providerItemID), len(summary), len(reasoningSummaryForwarded))
 		} else if strings.TrimSpace(signature) != "" {
-			log.Printf("openai responses reasoning summary unavailable request_id=%s model_call_id=%s item_id=%s encrypted=true", strings.TrimSpace(req.RequestID), strings.TrimSpace(req.ModelCallID), strings.TrimSpace(providerItemID))
+			logger.Infof("openai responses reasoning summary unavailable request_id=%s model_call_id=%s item_id=%s encrypted=true", strings.TrimSpace(req.RequestID), strings.TrimSpace(req.ModelCallID), strings.TrimSpace(providerItemID))
 		}
 		trimmedSignature := strings.TrimSpace(signature)
 		if trimmedSignature == "" || trimmedSignature == emittedReasoningSignature {

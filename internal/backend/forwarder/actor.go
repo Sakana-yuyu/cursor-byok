@@ -2,9 +2,9 @@ package forwarder
 
 import (
 	"context"
+	"cursor/internal/logger"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -135,7 +135,7 @@ func (service *Service) dispatchInboundIntent(intent InboundIntent) error {
 	// 等当前 turn 终态后再排空。必须在 streamForIntent 之前拦截，避免提前 OpenStream 新 requestID。
 	if strings.TrimSpace(intent.Kind) == "run" && service.activeConversationHasSubagents(intent.ConversationID) {
 		service.runQueue.Enqueue(intent.ConversationID, intent)
-		log.Printf("forwarder run queued behind subagent request_id=%s conversation_id=%s queue_len=%d",
+		logger.Infof("forwarder run queued behind subagent request_id=%s conversation_id=%s queue_len=%d",
 			strings.TrimSpace(intent.RequestID), strings.TrimSpace(intent.ConversationID), service.runQueue.Len(intent.ConversationID))
 		return nil
 	}
@@ -395,12 +395,12 @@ func (service *Service) postStreamCommandAsync(stream *ActiveStream, command str
 		return err
 	}
 	if command.Kind == streamCommandDelegationResult || command.Kind == streamCommandCancel {
-		log.Printf("forwarder stream command enqueue request_id=%s kind=%s exec_id=%s tool_call_id=%s reason=%s", strings.TrimSpace(stream.RequestID), command.Kind, delegationExecID(command), delegationToolCallID(command), strings.TrimSpace(command.Reason))
+		logger.Infof("forwarder stream command enqueue request_id=%s kind=%s exec_id=%s tool_call_id=%s reason=%s", strings.TrimSpace(stream.RequestID), command.Kind, delegationExecID(command), delegationToolCallID(command), strings.TrimSpace(command.Reason))
 	}
 	envelope := streamCommandEnvelope{command: command}
 	select {
 	case <-done:
-		log.Printf("forwarder stream command enqueue rejected request_id=%s kind=%s reason=actor_done", strings.TrimSpace(stream.RequestID), command.Kind)
+		logger.Errorf("forwarder stream command enqueue rejected request_id=%s kind=%s reason=actor_done", strings.TrimSpace(stream.RequestID), command.Kind)
 		return errProviderLoopInterrupted
 	case mailbox <- envelope:
 		return nil
@@ -645,7 +645,7 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 		stream.UpdatedAt = time.Now().UTC()
 		stream.mu.Unlock()
 		service.markConversationActivity(conversationID)
-		log.Printf("forwarder thinking delta request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d delta_count=%d accumulated_bytes=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), currentProviderPass(stream), deltaCount, accumulatedLength)
+		logger.Infof("forwarder thinking delta request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d delta_count=%d accumulated_bytes=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), currentProviderPass(stream), deltaCount, accumulatedLength)
 		if service.debug != nil {
 			service.debug.LogRuntime(context.Background(), requestID, conversationID, "thinking_delta_forwarded", map[string]any{
 				"model_call_id":     strings.TrimSpace(modelCallID),
@@ -705,7 +705,7 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 			stream.ProviderThinkingSuppressedCount++
 			suppressedCount := stream.ProviderThinkingSuppressedCount
 			stream.mu.Unlock()
-			log.Printf("forwarder thinking completion suppressed request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d completed_count=%d suppressed_count=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), currentProviderPass(stream), completedCount, suppressedCount)
+			logger.Infof("forwarder thinking completion suppressed request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d completed_count=%d suppressed_count=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), currentProviderPass(stream), completedCount, suppressedCount)
 			if service.debug != nil {
 				eventName := "thinking_completed_suppressed"
 				if encryptedOnlyThinking {
@@ -722,7 +722,7 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 			}
 			return nil
 		}
-		log.Printf("forwarder thinking completion forwarded request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d completed_count=%d synthetic=%t duration_ms=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), currentProviderPass(stream), completedCount, shouldEmitSyntheticThinking, completedDuration)
+		logger.Infof("forwarder thinking completion forwarded request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d completed_count=%d synthetic=%t duration_ms=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), currentProviderPass(stream), completedCount, shouldEmitSyntheticThinking, completedDuration)
 		if service.debug != nil {
 			service.debug.LogRuntime(context.Background(), requestID, conversationID, "thinking_completed_forwarded", map[string]any{
 				"model_call_id":   strings.TrimSpace(modelCallID),
@@ -823,7 +823,6 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 	}
 }
 
-
 func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *streamProviderEvent) error {
 	if stream == nil || payload == nil {
 		return nil
@@ -867,7 +866,7 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 	status := stream.Status
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
-	log.Printf("forwarder provider pass done request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d thinking_delta_count=%d thinking_completed_count=%d thinking_suppressed_count=%d had_tool=%t finish_reason=%s", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), providerPass, thinkingDeltaCount, thinkingCompletedCount, thinkingSuppressedCount, hadToolInvocation, strings.TrimSpace(finishReason))
+	logger.Infof("forwarder provider pass done request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d thinking_delta_count=%d thinking_completed_count=%d thinking_suppressed_count=%d had_tool=%t finish_reason=%s", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), providerPass, thinkingDeltaCount, thinkingCompletedCount, thinkingSuppressedCount, hadToolInvocation, strings.TrimSpace(finishReason))
 	if service.debug != nil {
 		service.debug.LogRuntime(context.Background(), requestID, conversationID, "provider_pass_done", map[string]any{
 			"model_call_id":             strings.TrimSpace(modelCallID),
@@ -919,7 +918,7 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 						"condition":     "pre_output_and_no_tool_invocation",
 					})
 				}
-				log.Printf("forwarder provider 400 recovery request_id=%s reason=%s pass=%d", strings.TrimSpace(requestID), string(reason), providerPass)
+				logger.Infof("forwarder provider 400 recovery request_id=%s reason=%s pass=%d", strings.TrimSpace(requestID), string(reason), providerPass)
 				if err := service.requestProviderAction(stream, providerActionResume); err != nil {
 					return service.failStreamIfNonTerminal(stream, "unknown", err)
 				}
@@ -1073,7 +1072,6 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 	return nil
 }
 
-
 func providerTimerKey(kind streamTimerKind, execID string) string {
 	if strings.TrimSpace(execID) == "" {
 		return string(kind)
@@ -1109,7 +1107,7 @@ func (service *Service) scheduleStreamTimer(stream *ActiveStream, key string, de
 				Reason:    strings.TrimSpace(reason),
 			},
 		}); err != nil && !errors.Is(err, errProviderLoopInterrupted) {
-			log.Printf("forwarder timer post failed request_id=%s key=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(key), err)
+			logger.Errorf("forwarder timer post failed request_id=%s key=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(key), err)
 		}
 	})
 	stream.StreamTimers[key] = timer
@@ -1213,11 +1211,11 @@ func (service *Service) handleTimerEvent(stream *ActiveStream, payload *streamTi
 		// 订阅；彻底清理交给 turn-stale 看门狗与 broker retention 兜底，避免网络
 		// 波动几秒就误杀长任务。定时器已在 handleTimerEvent 开头清理，不续排。
 		if providerActive || pendingWork > 0 || service.hasActiveDelegation(stream) {
-			log.Printf("forwarder orphan cancel deferred active turn request_id=%s subscriber_count=%d provider_active=%t pending=%d",
+			logger.Infof("forwarder orphan cancel deferred active turn request_id=%s subscriber_count=%d provider_active=%t pending=%d",
 				strings.TrimSpace(stream.RequestID), subscriberCount, providerActive, pendingWork)
 			return nil
 		}
-		log.Printf("forwarder orphan canceling disconnected request request_id=%s subscriber_count=%d active_delegation=%t",
+		logger.Infof("forwarder orphan canceling disconnected request request_id=%s subscriber_count=%d active_delegation=%t",
 			strings.TrimSpace(stream.RequestID), subscriberCount, hasActiveDelegationAggregate(stream))
 		return service.handleCancelIntent(InboundIntent{
 			Kind:         "cancel",
@@ -1274,7 +1272,7 @@ func (service *Service) cancelOtherConversationActors(conversationID string, kee
 				CancelReason: reason,
 			},
 		}); err != nil && !errors.Is(err, errProviderLoopInterrupted) {
-			log.Printf("forwarder cancel superseded stream failed request_id=%s err=%v", strings.TrimSpace(requestID), err)
+			logger.Errorf("forwarder cancel superseded stream failed request_id=%s err=%v", strings.TrimSpace(requestID), err)
 		}
 	}
 }

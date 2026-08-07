@@ -2,6 +2,7 @@
 import StatsOverlayChart from "@/components/charts/StatsOverlayChart.vue";
 import { getHomeMetricsSummary, fetchLocalCacheStats, setStatsOverlayAlwaysOnTop, updateStatsOverlayLayout } from "@/services/clientApi";
 import { getStatsOverlayPreferences, setStatsOverlayPreferences, hideStatsOverlay, closeApplication, appState } from "@/state/appState";
+import { usePolling } from "@/composables/usePolling";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 
 const summary = ref({});
@@ -14,9 +15,7 @@ const isHovering = ref(false); // 鼠标悬停状态
 const isMorphing = ref(false); // 胶囊与面板之间的过渡状态
 const morphDirection = ref(null); // 'in' | 'out'
 const snapEdge = ref(null); // 吸附边缘: 'left' | 'right' | 'top' | 'bottom' | null
-let timer = null;
 let updatedTimer = null;
-let positionTimer = null;
 let hoverCollapseTimer = null;
 let morphTimer = null;
 let lastSavedX = null;
@@ -443,18 +442,16 @@ onMounted(() => {
   if (typeof saved.x === "number") lastSavedX = saved.x;
   if (typeof saved.y === "number") lastSavedY = saved.y;
   void load();
-  timer = setInterval(load, REFRESH_MS);
-  positionTimer = setInterval(checkPosition, POSITION_CHECK_MS);
   startOrbCycle();
   startPillCycle();
   // 初始同步一次原生窗口尺寸，确保窗口矩形紧贴实际内容
   syncNativeWindowSize();
 });
+usePolling(load, { intervalMs: REFRESH_MS });
+usePolling(checkPosition, { intervalMs: POSITION_CHECK_MS });
 
 onUnmounted(() => {
-  if (timer) clearInterval(timer);
   if (updatedTimer) clearTimeout(updatedTimer);
-  if (positionTimer) clearInterval(positionTimer);
   clearHoverCollapseTimer();
   clearMorphTimer();
   stopOrbCycle();

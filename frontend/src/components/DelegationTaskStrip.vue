@@ -3,13 +3,13 @@ import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
 import FullScreenModal from "@/components/ui/FullScreenModal.vue";
 import { useMessage } from "@/composables/useMessage";
+import { usePolling } from "@/composables/usePolling";
 import { cancelDelegationTask, getDelegationTaskSnapshots } from "@/services/runtimeControlApi";
 import { toUserError } from "@/state/appState";
-import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 
 const state = reactive({ items: [], error: "", canceling: {} });
 const message = useMessage();
-let refreshTimer = 0;
 let refreshBusy = false;
 let generation = 0;
 
@@ -161,14 +161,7 @@ async function handleCancel(item) {
   }
 }
 
-onMounted(() => {
-  void refresh();
-  refreshTimer = window.setInterval(() => void refresh(), 1500);
-});
-
-onUnmounted(() => {
-  window.clearInterval(refreshTimer);
-});
+usePolling(refresh, { intervalMs: 1500 });
 </script>
 
 <template>

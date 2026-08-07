@@ -3,13 +3,12 @@ package forwarder
 import (
 	"encoding/hex"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"cursor/gen/agentv1"
+	"cursor/internal/logger"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -324,7 +323,7 @@ func (service *Service) discardPendingCheckpoint(stream *ActiveStream, cause err
 	stream.mu.Unlock()
 	clearStreamTimer(stream, providerTimerKey(streamTimerCheckpointBlobs, ""))
 	if cause != nil {
-		log.Printf("forwarder pending checkpoint discarded request_id=%s conversation_id=%s err=%v", stream.RequestID, stream.ConversationID, cause)
+		logger.Infof("forwarder pending checkpoint discarded request_id=%s conversation_id=%s err=%v", stream.RequestID, stream.ConversationID, cause)
 	}
 }
 
@@ -341,7 +340,7 @@ func (service *Service) abandonPendingCheckpoint(stream *ActiveStream, cause err
 	stream.mu.Unlock()
 	clearStreamTimer(stream, providerTimerKey(streamTimerCheckpointBlobs, ""))
 	if cause != nil {
-		log.Printf("forwarder checkpoint blob sync abandoned request_id=%s conversation_id=%s err=%v", stream.RequestID, stream.ConversationID, cause)
+		logger.Infof("forwarder checkpoint blob sync abandoned request_id=%s conversation_id=%s err=%v", stream.RequestID, stream.ConversationID, cause)
 	}
 	if pending != nil {
 		return service.failTerminalCheckpointSync(stream, cause)

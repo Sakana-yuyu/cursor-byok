@@ -3,12 +3,12 @@ package forwarder
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
 	"cursor/gen/agentv1"
 	modeladapter "cursor/internal/backend/agent/model"
+	"cursor/internal/logger"
 )
 
 func newRuntimeConversation(conversationID string, mode agentv1.AgentMode) (*ConversationFile, error) {
@@ -203,7 +203,7 @@ func (service *Service) emitTurnSummary(stream *ActiveStream, requestID string, 
 	conversation, _, _, err := service.snapshotCheckpointConversation(stream)
 	if err != nil {
 		// 摘要是锦上添花的事件，快照失败不应把已完成并落库的 turn 判失败。
-		log.Printf("forwarder emit summary skip request_id=%s err=%v", strings.TrimSpace(requestID), err)
+		logger.Infof("forwarder emit summary skip request_id=%s err=%v", strings.TrimSpace(requestID), err)
 		return nil
 	}
 	if conversation == nil {
@@ -216,15 +216,15 @@ func (service *Service) emitTurnSummary(stream *ActiveStream, requestID string, 
 	// 三个事件全部成功发布后再标记已发送；中途失败不置位，
 	// 允许重试时重新走一遍（Publish 为 append 语义，重复无副作用）。
 	if err := service.broker.Publish(stream.RequestID, StreamEvent{Message: buildSummaryStartedMessage()}); err != nil {
-		log.Printf("forwarder emit summary publish failed request_id=%s err=%v", strings.TrimSpace(requestID), err)
+		logger.Errorf("forwarder emit summary publish failed request_id=%s err=%v", strings.TrimSpace(requestID), err)
 		return nil
 	}
 	if err := service.broker.Publish(stream.RequestID, StreamEvent{Message: buildSummaryMessage(summaryText)}); err != nil {
-		log.Printf("forwarder emit summary publish failed request_id=%s err=%v", strings.TrimSpace(requestID), err)
+		logger.Errorf("forwarder emit summary publish failed request_id=%s err=%v", strings.TrimSpace(requestID), err)
 		return nil
 	}
 	if err := service.broker.Publish(stream.RequestID, StreamEvent{Message: buildSummaryCompletedMessage(requestID)}); err != nil {
-		log.Printf("forwarder emit summary publish failed request_id=%s err=%v", strings.TrimSpace(requestID), err)
+		logger.Errorf("forwarder emit summary publish failed request_id=%s err=%v", strings.TrimSpace(requestID), err)
 		return nil
 	}
 	stream.mu.Lock()

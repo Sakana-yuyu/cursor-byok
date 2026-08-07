@@ -3,6 +3,7 @@ import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
 import DelegationIconButton from "@/components/settings/delegation/DelegationIconButton.vue";
 import { useMessage } from "@/composables/useMessage";
+import { usePolling } from "@/composables/usePolling";
 import {
   cancelDelegationTask,
   cancelMCPRuntimeConnection,
@@ -29,8 +30,6 @@ const canceledMCPAttempts = reactive({});
 const cancelingMCPAttempts = reactive({});
 const workspaceRoot = ref(window.localStorage.getItem("cursor-byok-mcp-workspace-root") || "");
 const refreshBusy = computed(() => taskState.busy || mcpState.busy);
-let taskRefreshTimer = 0;
-let mcpRefreshTimer = 0;
 let attemptSequence = 0;
 let taskGeneration = 0;
 let mcpWorkspaceGeneration = 0;
@@ -338,17 +337,15 @@ function handleWorkspaceRootChange() {
 onMounted(() => {
   disposed = false;
   void refreshRuntime();
-  taskRefreshTimer = window.setInterval(() => void refreshTasks(true), 1500);
-  mcpRefreshTimer = window.setInterval(() => void refreshMCPServers(true), 5000);
 });
+usePolling(() => void refreshTasks(true), { intervalMs: 1500 });
+usePolling(() => void refreshMCPServers(true), { intervalMs: 5000 });
 
 onUnmounted(() => {
   disposed = true;
   taskGeneration += 1;
   mcpWorkspaceGeneration += 1;
   mcpRefreshSequence += 1;
-  window.clearInterval(taskRefreshTimer);
-  window.clearInterval(mcpRefreshTimer);
   for (const attempt of Object.values(mcpAttempts)) {
     void cancelMCPRuntimeConnection(attempt.identifier, attempt.attemptID);
   }

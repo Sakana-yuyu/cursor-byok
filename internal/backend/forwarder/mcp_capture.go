@@ -8,16 +8,16 @@
 //     便于定位执行层失败根因（目前执行仍依赖 Cursor 客户端）。
 //
 // 捕获走两路：debugRecorder.LogRuntime（结构化 JSONL，log:true 时开启，可按 conversationId 查询）
-// + log.Printf（无条件 app.log 一行），与现有 MCP/tool 诊断代码的日志惯例一致。
+// + logger.Infof（无条件 app.log 一行），与现有 MCP/tool 诊断代码的日志惯例一致。
 package forwarder
 
 import (
 	"context"
-	"log"
 	"strings"
 
 	"cursor/gen/agentv1"
 	runtimecore "cursor/internal/backend/agent/core"
+	"cursor/internal/logger"
 )
 
 // captureMCPSchemaGap 在 enrich 注入 MCP descriptor 后，记录哪些 server 缺少 tool schema。
@@ -51,7 +51,7 @@ func (service *Service) captureMCPSchemaGap(requestID, conversationID string, de
 		"total_servers":          len(descriptors),
 		"note":                   "注入的 MCP server 缺少 tool schema（磁盘配置不含 input_schema），模型仅知 server 名",
 	})
-	log.Printf("forwarder mcp schema gap request_id=%s conversation_id=%s missing=%d/%d servers=%s",
+	logger.Infof("forwarder mcp schema gap request_id=%s conversation_id=%s missing=%d/%d servers=%s",
 		strings.TrimSpace(requestID), strings.TrimSpace(conversationID), len(missing), len(descriptors), strings.Join(missing, ","))
 }
 
@@ -75,7 +75,7 @@ func (service *Service) captureMCPExecResult(intent InboundIntent, pending runti
 	service.debug.LogRuntime(context.Background(), intent.RequestID, intent.ConversationID, "mcp_exec_result", fields)
 	// 失败模式额外打一行无条件 app.log，便于无 log:true 时也能排查。
 	if outcome != "success" {
-		log.Printf("forwarder mcp exec %s request_id=%s conversation_id=%s server=%s tool=%s payload=%s",
+		logger.Infof("forwarder mcp exec %s request_id=%s conversation_id=%s server=%s tool=%s payload=%s",
 			outcome, strings.TrimSpace(intent.RequestID), strings.TrimSpace(intent.ConversationID), server, toolName,
 			truncateForLog(strings.TrimSpace(result.ToolResultPayload), 200))
 	}

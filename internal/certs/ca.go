@@ -13,12 +13,13 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"log"
 	"math/big"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"cursor/internal/logger"
 	"sync"
 	"time"
 )
@@ -111,7 +112,7 @@ func NewPersistentManager(certPath, keyPath string) (*Manager, error) {
 			if backupErr != nil {
 				return nil, backupErr
 			}
-			log.Printf("[certs] CA cert/key mismatch, regenerating backup=%s cert=%s key=%s", backup, certPath, keyPath)
+			logger.Infof("[certs] CA cert/key mismatch, regenerating backup=%s cert=%s key=%s", backup, certPath, keyPath)
 			if writeErr := writeGeneratedCA(certPath, keyPath); writeErr != nil {
 				return nil, writeErr
 			}
@@ -128,7 +129,7 @@ func NewPersistentManager(certPath, keyPath string) (*Manager, error) {
 			repaired.RepairedAt = time.Now().UTC()
 			return repaired, nil
 		}
-		log.Printf("[certs] reuse existing CA cert=%s key=%s (no regeneration)", certPath, keyPath)
+		logger.Infof("[certs] reuse existing CA cert=%s key=%s (no regeneration)", certPath, keyPath)
 		return NewManagerFromPEM(certPEM, keyPEM)
 	}
 
@@ -145,14 +146,14 @@ func NewPersistentManager(certPath, keyPath string) (*Manager, error) {
 	keyExists := keyErr == nil
 	if certExists != keyExists {
 		return nil, &IncompleteCAError{
-			CertPath:  certPath,
-			KeyPath:   keyPath,
+			CertPath:   certPath,
+			KeyPath:    keyPath,
 			CertExists: certExists,
 		}
 	}
 
 	// 路径 3：两份都不存在 → 首次安装，生成新 CA。
-	log.Printf("[certs] first run, generating new CA cert=%s key=%s", certPath, keyPath)
+	logger.Infof("[certs] first run, generating new CA cert=%s key=%s", certPath, keyPath)
 	if err := writeGeneratedCA(certPath, keyPath); err != nil {
 		return nil, err
 	}
@@ -250,7 +251,7 @@ func RepairIncompleteCA(certPath, keyPath string) (backupPath string, err error)
 	if err != nil {
 		return "", err
 	}
-	log.Printf("[certs] incomplete CA repaired: backup=%s cert=%s key=%s", backup, certPath, keyPath)
+	logger.Infof("[certs] incomplete CA repaired: backup=%s cert=%s key=%s", backup, certPath, keyPath)
 	if err := writeGeneratedCA(certPath, keyPath); err != nil {
 		return backup, err
 	}

@@ -6,17 +6,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"cursor/gen/agentv1"
+	"cursor/internal/logger"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
-
-	"cursor/gen/agentv1"
 )
 
 type debugLogConfig interface {
@@ -213,7 +212,7 @@ func (recorder *debugRecorder) enqueue(job debugWriteJob) {
 	select {
 	case recorder.queue <- job:
 	default:
-		log.Printf("debug recorder queue full, dropping %s event", job.filename)
+		logger.Infof("debug recorder queue full, dropping %s event", job.filename)
 	}
 }
 
@@ -301,10 +300,10 @@ func trimDebugFileTail(path string, reserve int) {
 	}
 	// 覆盖写回尾部内容（O_TRUNC 清空再写）。
 	if err := os.WriteFile(path, tail, 0o644); err != nil {
-		log.Printf("debug log rotate failed: trim %s: %v", path, err)
+		logger.Errorf("debug log rotate failed: trim %s: %v", path, err)
 		return
 	}
-	log.Printf("debug log rotated: %s trimmed from %d to %d bytes", path, size, len(tail))
+	logger.Infof("debug log rotated: %s trimmed from %d to %d bytes", path, size, len(tail))
 }
 
 // readTailFromLineBoundary 从 offset 附近开始读取，跳过第一个不完整的行，

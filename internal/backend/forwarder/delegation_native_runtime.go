@@ -2,13 +2,13 @@ package forwarder
 
 import (
 	"context"
-	"log"
 	"strings"
 	"time"
 
 	"cursor/gen/agentv1"
 	runtimecore "cursor/internal/backend/agent/core"
 	"cursor/internal/backend/delegation"
+	"cursor/internal/logger"
 )
 
 const nativeDelegationRetention = 10 * time.Minute
@@ -70,7 +70,7 @@ func (service *Service) registerNativeDelegation(stream *ActiveStream, pending r
 	if strings.TrimSpace(pending.ExecID) == "" || parentRequestID == "" {
 		return
 	}
-	log.Printf("forwarder native delegation identity request_id=%s exec_id=%s tool_call_id=%s model_id=%s model_name=%s worker_role=%s source=config_or_resolver",
+	logger.Infof("forwarder native delegation identity request_id=%s exec_id=%s tool_call_id=%s model_id=%s model_name=%s worker_role=%s source=config_or_resolver",
 		parentRequestID, strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID), strings.TrimSpace(modelID), strings.TrimSpace(modelName), strings.TrimSpace(workerRole))
 	if service.debug != nil {
 		service.debug.LogRuntime(context.Background(), parentRequestID, stream.ConversationID, "native_delegation_identity_resolved", map[string]any{
@@ -359,7 +359,7 @@ func (service *Service) updateNativeDelegationStatus(execID string, status deleg
 	requestID := item.ParentRequestID
 	snapshot := *item
 	service.delegationRuntimeMu.Unlock()
-	log.Printf("forwarder native delegation status request_id=%s conversation_id=%s exec_id=%s tool_call_id=%s model_id=%s model_name=%s status=%s error=%s",
+	logger.Errorf("forwarder native delegation status request_id=%s conversation_id=%s exec_id=%s tool_call_id=%s model_id=%s model_name=%s status=%s error=%s",
 		strings.TrimSpace(requestID), strings.TrimSpace(snapshot.ConversationID), strings.TrimSpace(execID), strings.TrimSpace(snapshot.ToolCallID), strings.TrimSpace(snapshot.ModelID), strings.TrimSpace(snapshot.ModelName), strings.TrimSpace(string(status)), strings.TrimSpace(errorText))
 	if service.debug != nil {
 		service.debug.LogRuntime(context.Background(), requestID, snapshot.ConversationID, "native_delegation_status", map[string]any{

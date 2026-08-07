@@ -3,7 +3,6 @@ package forwarder
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	modeladapter "cursor/internal/backend/agent/model"
 	"cursor/internal/backend/delegation"
 	"cursor/internal/historymetrics"
+	"cursor/internal/logger"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 )
@@ -394,7 +394,7 @@ func (service *Service) goalVerifyCompletion(stream *ActiveStream, goal *GoalSta
 		if goal.Strict {
 			return false, "（strict 模式要求真实校验子代理，但委派不可用）", nil
 		}
-		log.Printf("forwarder goal verify skipped (delegation unavailable) request_id=%s", strings.TrimSpace(stream.RequestID))
+		logger.Infof("forwarder goal verify skipped (delegation unavailable) request_id=%s", strings.TrimSpace(stream.RequestID))
 		return true, "（无校验子代理可用，采用模型自检结论）", nil
 	}
 	taskID := "goal-verify-" + uuid.NewString()

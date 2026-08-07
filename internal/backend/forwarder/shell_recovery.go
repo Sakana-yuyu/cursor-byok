@@ -2,11 +2,11 @@ package forwarder
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
 	runtimecore "cursor/internal/backend/agent/core"
+	"cursor/internal/logger"
 )
 
 const shellTerminalRecoveryGrace = 1500 * time.Millisecond
@@ -155,7 +155,7 @@ func (service *Service) recoverShellWithoutTerminal(stream *ActiveStream, pendin
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
 	resultPayload := buildSyntheticShellResultPayload(pending, reason)
-	log.Printf(
+	logger.Infof(
 		"forwarder synthetic shell recovery request_id=%s tool_call_id=%s message_id=%d exec_id=%s reason=%s stream_state=%s",
 		strings.TrimSpace(stream.RequestID),
 		strings.TrimSpace(pending.ToolCallID),

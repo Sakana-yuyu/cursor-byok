@@ -471,6 +471,10 @@ func disableCursorStatsigGates(ctx context.Context, tx *sql.Tx) error {
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return fmt.Errorf("解析 Cursor Statsig bootstrap 失败: %w", err)
 	}
+	if payload == nil {
+		// DB 值可能为 JSON null，Unmarshal 后保持 nil，写入会 panic。
+		payload = map[string]any{}
+	}
 
 	featureGates, _ := payload["feature_gates"].(map[string]any)
 	if featureGates == nil {

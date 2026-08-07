@@ -4,6 +4,7 @@ import Card from "@/components/ui/Card.vue";
 import { fetchRecentRequestMetrics, fetchRecentRequestMetricsCount, fetchRecentRequestMetricsAbnormalCount, fetchRecentRequestMetricsDegradedCount } from "@/services/clientApi";
 import { appState, reloadUserConfig } from "@/state/appState";
 import { providerIcon, providerLabel } from "@/utils/providerMeta";
+import { usePolling } from "@/composables/usePolling";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
@@ -296,24 +297,17 @@ watch([page, pageSize], () => {
 
 // 自动刷新：页面可见时定时同步使用信息，避免手动点刷新
 const AUTO_REFRESH_INTERVAL_MS = 5000;
-let autoRefreshTimer = null;
 
 function autoRefresh() {
   if (document.hidden || loading.value) return;
   void refresh({ keepPage: true });
 }
 
-function startAutoRefresh() {
-  stopAutoRefresh();
-  autoRefreshTimer = setInterval(autoRefresh, AUTO_REFRESH_INTERVAL_MS);
-}
-
-function stopAutoRefresh() {
-  if (autoRefreshTimer) {
-    clearInterval(autoRefreshTimer);
-    autoRefreshTimer = null;
-  }
-}
+const { start: startAutoRefresh, stop: stopAutoRefresh } = usePolling(autoRefresh, {
+  intervalMs: AUTO_REFRESH_INTERVAL_MS,
+  immediate: false,
+  autostart: false,
+});
 
 function handleVisibilityChange() {
   if (!document.hidden) autoRefresh();

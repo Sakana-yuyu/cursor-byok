@@ -6,8 +6,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 	"strings"
+
+	"cursor/internal/logger"
 )
 
 // isMaxOutputTokensTruncation 判断 provider 流式收口原因是否表示被输出预算截断（而非模型主动结束）。
@@ -53,7 +54,7 @@ func (service *Service) handleMaxOutputTokensRecovery(stream *ActiveStream, conv
 			"finish_reason": strings.TrimSpace(finishReason),
 		})
 	}
-	log.Printf("forwarder max_output_tokens recovery request_id=%s pass=%d finish_reason=%s",
+	logger.Infof("forwarder max_output_tokens recovery request_id=%s pass=%d finish_reason=%s",
 		strings.TrimSpace(requestID), providerPass, strings.TrimSpace(finishReason))
 	if err := service.syncSummaryCarryForward(conversationID, requestID, modelCallID); err != nil {
 		return true, err

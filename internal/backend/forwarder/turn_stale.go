@@ -13,11 +13,11 @@ package forwarder
 
 import (
 	"context"
-	"log"
 	"strings"
 	"time"
 
 	runtimecore "cursor/internal/backend/agent/core"
+	"cursor/internal/logger"
 )
 
 // turnStaleMinDelay 是看门狗允许的最小触发间隔，作为防御性下限（与 config 层 clamp 互不依赖）。
@@ -106,7 +106,7 @@ func (service *Service) handleTurnStaleTimeout(stream *ActiveStream, payload *st
 			"grace_seconds": turnStaleGraceSeconds,
 			"pending_execs": pendingExecCount,
 		})
-		log.Printf("forwarder turn stale realign request_id=%s pending_execs=%d grace_seconds=%d",
+		logger.Infof("forwarder turn stale realign request_id=%s pending_execs=%d grace_seconds=%d",
 			strings.TrimSpace(requestID), pendingExecCount, turnStaleGraceSeconds)
 		// 用宽限期长度重新调度看门狗。
 		service.scheduleTurnStaleWatchdog(stream)
@@ -165,7 +165,7 @@ func (service *Service) forceCompleteTurnStale(stream *ActiveStream, requestID s
 				"exec_watchdog_timeout": longRunningExecTimeout.String(),
 			})
 		}
-		log.Printf(
+		logger.Infof(
 			"forwarder turn stale deferred long-running execs request_id=%s deferred_execs=%d recovered_execs=%d timeout=%s",
 			strings.TrimSpace(requestID),
 			len(protectedExecs),
@@ -205,7 +205,7 @@ func (service *Service) forceCompleteTurnStale(stream *ActiveStream, requestID s
 	service.debug.LogRuntime(context.Background(), requestID, conversationID, "turn_stale_force_complete", map[string]any{
 		"recovered_execs": pendingExecCount,
 	})
-	log.Printf(
+	logger.Infof(
 		"forwarder turn stale force complete request_id=%s recovered_execs=%d",
 		strings.TrimSpace(requestID),
 		pendingExecCount,

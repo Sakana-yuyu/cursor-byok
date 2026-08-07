@@ -2,10 +2,10 @@ package forwarder
 
 import (
 	"context"
+	"cursor/internal/logger"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"runtime"
 	"sort"
 	"strings"
@@ -159,12 +159,12 @@ func (coordinator *SupervisorCoordinator) Start(stream *ActiveStream, pending ru
 		return "", fmt.Errorf("supervisor coordinator is unavailable")
 	}
 	aggregateID := strings.TrimSpace(pending.ExecID)
-	log.Printf("forwarder supervisor start evaluating request_id=%s aggregate_id=%s provider_pass=%d worker_count=%d strict=%t", strings.TrimSpace(activeStreamRequestID(stream)), aggregateID, pending.ProviderPass, len(workers), config.StrictUnavailable)
+	logger.Infof("forwarder supervisor start evaluating request_id=%s aggregate_id=%s provider_pass=%d worker_count=%d strict=%t", strings.TrimSpace(activeStreamRequestID(stream)), aggregateID, pending.ProviderPass, len(workers), config.StrictUnavailable)
 	if aggregateID == "" {
 		return "", fmt.Errorf("delegation aggregate exec id is required")
 	}
 	if !supervisedParentExecStillCurrent(stream, pending) {
-		log.Printf("forwarder supervisor start rejected request_id=%s aggregate_id=%s reason=parent_not_current stage=pre_context", strings.TrimSpace(activeStreamRequestID(stream)), aggregateID)
+		logger.Errorf("forwarder supervisor start rejected request_id=%s aggregate_id=%s reason=parent_not_current stage=pre_context", strings.TrimSpace(activeStreamRequestID(stream)), aggregateID)
 		return "", fmt.Errorf("delegation aggregate startup canceled for provider pass %d: %w", pending.ProviderPass, errProviderLoopInterrupted)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -187,26 +187,26 @@ func (coordinator *SupervisorCoordinator) Start(stream *ActiveStream, pending ru
 
 	coordinator.mu.Lock()
 	if coordinator.closed {
-		log.Printf("forwarder supervisor start rejected request_id=%s aggregate_id=%s reason=coordinator_closed", strings.TrimSpace(activeStreamRequestID(stream)), aggregateID)
+		logger.Errorf("forwarder supervisor start rejected request_id=%s aggregate_id=%s reason=coordinator_closed", strings.TrimSpace(activeStreamRequestID(stream)), aggregateID)
 		coordinator.mu.Unlock()
 		cancel()
 		return "", fmt.Errorf("supervisor coordinator is closed")
 	}
 	if !supervisedParentExecStillCurrent(stream, pending) {
-		log.Printf("forwarder supervisor start rejected request_id=%s aggregate_id=%s reason=parent_not_current stage=registered", strings.TrimSpace(activeStreamRequestID(stream)), aggregateID)
+		logger.Errorf("forwarder supervisor start rejected request_id=%s aggregate_id=%s reason=parent_not_current stage=registered", strings.TrimSpace(activeStreamRequestID(stream)), aggregateID)
 		coordinator.mu.Unlock()
 		cancel()
 		return "", fmt.Errorf("delegation aggregate startup canceled for provider pass %d: %w", pending.ProviderPass, errProviderLoopInterrupted)
 	}
 	if _, exists := coordinator.aggregates[aggregateID]; exists {
-		log.Printf("forwarder supervisor start rejected request_id=%s aggregate_id=%s reason=aggregate_already_exists", strings.TrimSpace(activeStreamRequestID(stream)), aggregateID)
+		logger.Errorf("forwarder supervisor start rejected request_id=%s aggregate_id=%s reason=aggregate_already_exists", strings.TrimSpace(activeStreamRequestID(stream)), aggregateID)
 		coordinator.mu.Unlock()
 		cancel()
 		return "", fmt.Errorf("supervised aggregate %q already exists", aggregateID)
 	}
 	coordinator.aggregates[aggregateID] = aggregate
 	coordinator.mu.Unlock()
-	log.Printf("forwarder supervisor aggregate registered request_id=%s aggregate_id=%s worker_count=%d provider_pass=%d", strings.TrimSpace(activeStreamRequestID(stream)), aggregateID, len(workers), pending.ProviderPass)
+	logger.Infof("forwarder supervisor aggregate registered request_id=%s aggregate_id=%s worker_count=%d provider_pass=%d", strings.TrimSpace(activeStreamRequestID(stream)), aggregateID, len(workers), pending.ProviderPass)
 	go aggregate.run()
 	go aggregate.dispatchInitialWorkers()
 	return aggregateID, nil
@@ -220,7 +220,7 @@ func (coordinator *SupervisorCoordinator) Cancel(aggregateID string) {
 	aggregate := coordinator.aggregates[strings.TrimSpace(aggregateID)]
 	coordinator.mu.RUnlock()
 	if aggregate == nil {
-		log.Printf("forwarder supervisor cancel ignored aggregate_id=%s reason=aggregate_not_found", strings.TrimSpace(aggregateID))
+		logger.Infof("forwarder supervisor cancel ignored aggregate_id=%s reason=aggregate_not_found", strings.TrimSpace(aggregateID))
 		return
 	}
 	caller := "unknown"
@@ -233,7 +233,7 @@ func (coordinator *SupervisorCoordinator) Cancel(aggregateID string) {
 		streamRequestID = activeStreamRequestID(aggregate.stream)
 		parentCurrent = aggregate.parentExecStillCurrent()
 	}
-	log.Printf("forwarder supervisor cancel requested aggregate_id=%s request_id=%s parent_exec_current=%t reason=explicit_cancel caller=%s", strings.TrimSpace(aggregateID), strings.TrimSpace(streamRequestID), parentCurrent, caller)
+	logger.Infof("forwarder supervisor cancel requested aggregate_id=%s request_id=%s parent_exec_current=%t reason=explicit_cancel caller=%s", strings.TrimSpace(aggregateID), strings.TrimSpace(streamRequestID), parentCurrent, caller)
 	aggregate.cancelTasks()
 }
 
@@ -393,7 +393,7 @@ func (aggregate *supervisedAggregate) submitAttempt(task *supervisedTaskState, r
 		ProviderPass: aggregate.pending.ProviderPass,
 		Round:        round,
 	})
-	log.Printf(
+	logger.Infof(
 		"forwarder supervised task submitted request_id=%s aggregate_id=%s task_id=%s logical_id=%s round=%d reason=%s",
 		strings.TrimSpace(activeStreamRequestID(aggregate.stream)),
 		strings.TrimSpace(aggregate.id),
@@ -460,15 +460,15 @@ func (aggregate *supervisedAggregate) run() {
 		return
 	}
 	defer aggregate.coordinator.removeAggregate(aggregate.id, aggregate)
-	log.Printf("forwarder supervisor aggregate run started request_id=%s aggregate_id=%s provider_pass=%d", strings.TrimSpace(activeStreamRequestID(aggregate.stream)), strings.TrimSpace(aggregate.id), aggregate.pending.ProviderPass)
+	logger.Infof("forwarder supervisor aggregate run started request_id=%s aggregate_id=%s provider_pass=%d", strings.TrimSpace(activeStreamRequestID(aggregate.stream)), strings.TrimSpace(aggregate.id), aggregate.pending.ProviderPass)
 	for {
 		if aggregate.ctx.Err() != nil {
-			log.Printf("forwarder supervisor aggregate run exiting aggregate_id=%s reason=context_done", strings.TrimSpace(aggregate.id))
+			logger.Infof("forwarder supervisor aggregate run exiting aggregate_id=%s reason=context_done", strings.TrimSpace(aggregate.id))
 			aggregate.cancelTasks()
 			return
 		}
 		if aggregate.allTasksCompleted() {
-			log.Printf("forwarder supervisor aggregate all tasks completed aggregate_id=%s", strings.TrimSpace(aggregate.id))
+			logger.Infof("forwarder supervisor aggregate all tasks completed aggregate_id=%s", strings.TrimSpace(aggregate.id))
 			aggregate.finish()
 			return
 		}
@@ -723,7 +723,7 @@ func (aggregate *supervisedAggregate) reviewTask(reviewContext context.Context, 
 				At:     time.Now().UTC(),
 			}
 		}
-		log.Printf(
+		logger.Errorf(
 			"forwarder supervisor review degraded aggregate_id=%s logical_id=%s task_id=%s round=%d worker_status=%s strict=%t error_type=%T error=%s decision=%s",
 			strings.TrimSpace(identity.AggregateID),
 			strings.TrimSpace(identity.LogicalID),
@@ -1281,7 +1281,7 @@ func (aggregate *supervisedAggregate) finish() {
 		},
 	})
 	if postErr != nil {
-		log.Printf(
+		logger.Errorf(
 			"forwarder supervised delegation aggregate post failed request_id=%s aggregate_id=%s exec_id=%s err=%v",
 			strings.TrimSpace(activeStreamRequestID(aggregate.stream)),
 			strings.TrimSpace(aggregate.id),
@@ -1380,7 +1380,7 @@ func (aggregate *supervisedAggregate) cancelTasks() {
 		callerFile = file
 		callerLine = line
 	}
-	log.Printf(
+	logger.Infof(
 		"forwarder supervised aggregate canceling aggregate_id=%s request_id=%s parent_exec_current=%t caller=%s:%d",
 		strings.TrimSpace(aggregate.id),
 		strings.TrimSpace(activeStreamRequestID(aggregate.stream)),
@@ -2035,17 +2035,17 @@ func supervisedParentExecStillCurrent(stream *ActiveStream, pending runtimecore.
 	stream.mu.Lock()
 	defer stream.mu.Unlock()
 	if isTerminalStreamStatus(stream.Status) {
-		log.Printf("forwarder parent exec current=false reason=terminal_status request_id=%s exec_id=%s status=%s phase=%s provider_pass=%d pending_count=%d current_model_call_id=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), stream.Status, stream.Phase, stream.ProviderPassCount, len(stream.PendingExecs), strings.TrimSpace(stream.CurrentModelCallID))
+		logger.Infof("forwarder parent exec current=false reason=terminal_status request_id=%s exec_id=%s status=%s phase=%s provider_pass=%d pending_count=%d current_model_call_id=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), stream.Status, stream.Phase, stream.ProviderPassCount, len(stream.PendingExecs), strings.TrimSpace(stream.CurrentModelCallID))
 		return false
 	}
 	switch stream.Phase {
 	case TurnPhaseCanceled, TurnPhaseCompleted, TurnPhaseFailed:
-		log.Printf("forwarder parent exec current=false reason=terminal_phase request_id=%s exec_id=%s status=%s phase=%s provider_pass=%d pending_count=%d current_model_call_id=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), stream.Status, stream.Phase, stream.ProviderPassCount, len(stream.PendingExecs), strings.TrimSpace(stream.CurrentModelCallID))
+		logger.Infof("forwarder parent exec current=false reason=terminal_phase request_id=%s exec_id=%s status=%s phase=%s provider_pass=%d pending_count=%d current_model_call_id=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), stream.Status, stream.Phase, stream.ProviderPassCount, len(stream.PendingExecs), strings.TrimSpace(stream.CurrentModelCallID))
 		return false
 	}
 	current, ok := stream.PendingExecs[strings.TrimSpace(pending.ExecID)]
 	if !ok || strings.TrimSpace(current.ExecKind) != "delegation_aggregate" {
-		log.Printf("forwarder parent exec current=false reason=pending_identity_missing request_id=%s exec_id=%s status=%s phase=%s provider_pass=%d pending_count=%d current_model_call_id=%s found=%t current_exec_kind=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), stream.Status, stream.Phase, stream.ProviderPassCount, len(stream.PendingExecs), strings.TrimSpace(stream.CurrentModelCallID), ok, strings.TrimSpace(current.ExecKind))
+		logger.Infof("forwarder parent exec current=false reason=pending_identity_missing request_id=%s exec_id=%s status=%s phase=%s provider_pass=%d pending_count=%d current_model_call_id=%s found=%t current_exec_kind=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), stream.Status, stream.Phase, stream.ProviderPassCount, len(stream.PendingExecs), strings.TrimSpace(stream.CurrentModelCallID), ok, strings.TrimSpace(current.ExecKind))
 		return false
 	}
 	// ProviderPass identifies the provider attempt that opened the exec, but it

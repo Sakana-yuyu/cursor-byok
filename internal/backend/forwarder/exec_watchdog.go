@@ -3,12 +3,12 @@ package forwarder
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
 	runtimecore "cursor/internal/backend/agent/core"
 	"cursor/internal/backend/delegation"
+	"cursor/internal/logger"
 )
 
 const (
@@ -102,7 +102,7 @@ func (service *Service) recoverExecWithoutTerminal(stream *ActiveStream, pending
 		service.updateNativeDelegationStatus(pending.ExecID, delegation.TaskTimedOut, "Cursor 子代理超时", strings.TrimSpace(reason))
 	}
 	resultPayload := buildSyntheticExecResultPayload(pending, reason)
-	log.Printf(
+	logger.Infof(
 		"forwarder synthetic exec recovery request_id=%s tool_call_id=%s exec_id=%s exec_kind=%s reason=%s",
 		strings.TrimSpace(stream.RequestID),
 		strings.TrimSpace(pending.ToolCallID),

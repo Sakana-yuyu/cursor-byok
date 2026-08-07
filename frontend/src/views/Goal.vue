@@ -4,7 +4,8 @@ import Card from "@/components/ui/Card.vue";
 import Select from "@/components/ui/Select.vue";
 import { getGoals, startGoal, stopGoal } from "@/services/clientApi";
 import { appState } from "@/state/appState";
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { usePolling } from "@/composables/usePolling";
+import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 
 const router = useRouter();
@@ -76,14 +77,7 @@ async function handleStop(conversationID) {
   }
 }
 
-let pollTimer = null;
-onMounted(() => {
-  void refreshGoals();
-  pollTimer = window.setInterval(() => void refreshGoals(), 3000);
-});
-onBeforeUnmount(() => {
-  if (pollTimer) window.clearInterval(pollTimer);
-});
+usePolling(refreshGoals, { intervalMs: 3000 });
 </script>
 
 <template>

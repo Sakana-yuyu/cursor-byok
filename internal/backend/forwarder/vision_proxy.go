@@ -3,11 +3,11 @@ package forwarder
 import (
 	"context"
 	"crypto/sha256"
+	"cursor/internal/logger"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -46,7 +46,7 @@ const (
 func vdbg(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	fmt.Fprintln(os.Stderr, "[VDBG] "+msg)
-	log.Printf("vision debug: %s", msg)
+	logger.Infof("vision debug: %s", msg)
 }
 
 // visionProxyConfig 是从 delegation 运行时配置派生的视觉委派参数。
@@ -227,7 +227,7 @@ func (service *Service) synthesizeImageDescriptions(ctx context.Context, request
 		return service.visionReplaceFromArchive(conversationID, messages)
 	}
 	startedAt := time.Now()
-	log.Printf("forwarder vision proxy pass started request_model=%s vision_model=%s mode=%s images=%d",
+	logger.Infof("forwarder vision proxy pass started request_model=%s vision_model=%s mode=%s images=%d",
 		strings.TrimSpace(modelName), config.visionName, config.mode, imageCount)
 	service.beginVisionRun(requestID, config, imageCount, service.visionPassIntent(messages))
 
@@ -267,7 +267,7 @@ func (service *Service) synthesizeImageDescriptions(ctx context.Context, request
 	}
 	vdbg("[pass] result residual_images=%d", remain)
 
-	log.Printf("forwarder vision proxy pass completed request_model=%s vision_model=%s images=%d elapsed_ms=%d",
+	logger.Infof("forwarder vision proxy pass completed request_model=%s vision_model=%s images=%d elapsed_ms=%d",
 		strings.TrimSpace(modelName), config.visionName, imageCount, time.Since(startedAt).Milliseconds())
 	return result
 }
@@ -405,7 +405,7 @@ func (service *Service) synthesizeMessageImages(ctx context.Context, requestID s
 			vdbg("[goro] start idx=%d", p.index)
 			defer func() {
 				if r := recover(); r != nil {
-					log.Printf("forwarder vision proxy image panic recovered request_id=%s panic=%v", strings.TrimSpace(requestID), r)
+					logger.Infof("forwarder vision proxy image panic recovered request_id=%s panic=%v", strings.TrimSpace(requestID), r)
 					service.visionRunImageDone(requestID, fmt.Errorf("vision proxy panic: %v", r))
 					mu.Lock()
 					replaced[p.index] = modeladapter.NewTextContentPart(
@@ -451,7 +451,7 @@ func (service *Service) synthesizeMessageImages(ctx context.Context, requestID s
 			}
 			mu.Lock()
 			if err != nil {
-				log.Printf("forwarder vision proxy image failed vision_model=%s error=%v", config.visionName, err)
+				logger.Errorf("forwarder vision proxy image failed vision_model=%s error=%v", config.visionName, err)
 				// 委派失败时保留图片本地路径占位（MCP 兜底衔接）：让纯文本主模型仍能
 				// 通过读图 MCP 工具读取该路径。路径无法落地时退化为纯失败说明。
 				if path, pathErr := modeladapter.ImageLocalPath(ctx, p.image); pathErr == nil && strings.TrimSpace(path) != "" {
@@ -736,7 +736,7 @@ func (service *Service) ensureVisionArchiveLoaded(conversationID string) {
 	}
 	var diskFile visionArchiveDiskFile
 	if err := json.Unmarshal(data, &diskFile); err != nil {
-		log.Printf("forwarder vision archive decode failed conv=%s error=%v", normalized, err)
+		logger.Errorf("forwarder vision archive decode failed conv=%s error=%v", normalized, err)
 		return
 	}
 	if service.visionArchive == nil {
@@ -782,7 +782,7 @@ func (service *Service) persistVisionArchive(conversationID string) {
 	}
 	data, err := json.Marshal(diskFile)
 	if err != nil {
-		log.Printf("forwarder vision archive marshal failed conv=%s error=%v", normalized, err)
+		logger.Errorf("forwarder vision archive marshal failed conv=%s error=%v", normalized, err)
 		return
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -969,7 +969,7 @@ func (service *Service) handleSeeImageToolInvocation(stream *ActiveStream, invoc
 	// 这里把 panic 收口为工具结果文本，保证对话可继续。
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("forwarder see_image tool panic recovered request_id=%s panic=%v",
+			logger.Infof("forwarder see_image tool panic recovered request_id=%s panic=%v",
 				strings.TrimSpace(stream.RequestID), r)
 			service.visionRunImageDone(strings.TrimSpace(stream.RequestID), fmt.Errorf("see_image panic: %v", r))
 			service.finishVisionRun(strings.TrimSpace(stream.RequestID), delegation.TaskFailed)
