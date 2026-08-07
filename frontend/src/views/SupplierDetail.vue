@@ -26,6 +26,18 @@ import { useModelProbe } from "@/composables/useModelProbe";
 import { providerIcon, providerSelectOptions } from "@/utils/providerMeta";
 import { supplierSelectOptions, supplierTemplate, supplierModelCatalog, supplierUsageRequest } from "@/utils/supplierCatalog";
 import { formatMoney } from "@/utils/format";
+// 展示/协议/余额相关纯函数已归位 utils/supplierDetail.js，此处 import 保持调用零改动。
+import {
+  OPENAI_ENDPOINT_RESPONSES,
+  balanceSourceLabel,
+  formatHost,
+  formatOpenAIRequestGroup,
+  maskSecret,
+  parseBalanceHeaders,
+  protocolGroupForType,
+  resolvedOpenAIEndpoint,
+  resolvedOpenAIRequestGroup,
+} from "@/utils/supplierDetail";
 import {
   SUPPLIER_GROUP_MODE_CONNECTION,
   SUPPLIER_GROUP_MODE_NAME,
@@ -36,11 +48,6 @@ import {
 } from "@/utils/supplierGrouping";
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-
-const OPENAI_ENDPOINT_RESPONSES = "/v1/responses";
-const OPENAI_ENDPOINT_CHAT = "/v1/chat/completions";
-const PROTOCOL_GROUP_ANTHROPIC_MESSAGES = "messages";
-const PROTOCOL_GROUP_GEMINI_NATIVE = "gemini_native";
 
 const route = useRoute();
 const router = useRouter();
@@ -93,43 +100,6 @@ const subtitle = computed(() => {
   }
   return queryBaseURL.value;
 });
-
-function formatHost(value) {
-  const text = String(value || "").trim();
-  if (!text) return "-";
-  try { return new URL(text).host || text; } catch { return text.replace(/^https?:\/\//, ""); }
-}
-function maskSecret(value) {
-  const text = String(value || "").trim();
-  if (!text) return "-";
-  if (text.length <= 8) return `${"*".repeat(Math.max(text.length - 2, 0))}${text.slice(-2)}`;
-  return `${text.slice(0, 4)}****${text.slice(-4)}`;
-}
-
-function formatOpenAIRequestGroup(group, endpoint) {
-  const normalizedGroup = String(group || "").trim();
-  if (normalizedGroup === "responses") return "Responses";
-  if (normalizedGroup === "chat_completions") return "Chat Completions";
-  if (normalizedGroup === "chat_completions_compat") return "Chat Completions / Compat";
-  return String(endpoint || "").trim() === OPENAI_ENDPOINT_RESPONSES ? "Responses" : "Chat Completions";
-}
-
-function defaultOpenAIRequestGroup(endpoint) {
-  return String(endpoint || "").trim() === OPENAI_ENDPOINT_RESPONSES ? "responses" : "chat_completions";
-}
-
-function resolvedOpenAIEndpoint(adapter) {
-  return String(adapter?.openAIEndpoint || "").trim() || OPENAI_ENDPOINT_RESPONSES;
-}
-
-function resolvedOpenAIRequestGroup(adapter) {
-  return String(adapter?.protocolGroup || adapter?.openAIRequestGroup || "").trim() || defaultOpenAIRequestGroup(resolvedOpenAIEndpoint(adapter));
-}
-
-function transportBadgeText(adapter) {
-  if (adapter?.type !== "openai") return "";
-  return `${resolvedOpenAIEndpoint(adapter)} · ${formatOpenAIRequestGroup(resolvedOpenAIRequestGroup(adapter), resolvedOpenAIEndpoint(adapter))}`;
-}
 
 // 该供应商下的模型（按路由 mode：name / connection / legacy）
 const supplierAdapters = computed(() =>
@@ -237,21 +207,6 @@ const supplierCapability = computed(() => {
 // data：当前用于展示的余额（成功值，或瞬时失败时保留的上次成功值）。
 // stale：为 true 表示 data 是被保留的上次成功值，当前查询是瞬时失败（数据可能过期）。
 const balanceState = reactive({ loading: false, loaded: false, data: null, stale: false });
-
-function balanceSourceLabel(source) {
-  if (source === "openai_billing") return "openai billing";
-  if (source === "sub2api_usage") return "sub2api usage";
-  if (source === "newapi") return "New API";
-  if (source === "token_plan") return "Token Plan";
-  if (source === "configured") return "自定义查询";
-  if (source === "deepseek") return "DeepSeek";
-  if (source === "stepfun") return "阶跃星辰";
-  if (source === "siliconflow") return "SiliconFlow";
-  if (source === "openrouter") return "OpenRouter";
-  if (source === "novita") return "Novita";
-  if (source === "moonshot") return "Moonshot / Kimi";
-  return String(source || "").trim();
-}
 
 const balanceSecondary = computed(() => {
   const data = balanceState.data;
@@ -377,14 +332,6 @@ const selectedCatalogModels = ref(new Set());
 
 // 可用性探测
 const catalogProbe = useModelProbe();
-
-function protocolGroupForType(type, modelID = "", baseURL = "") {
-  if (type === "anthropic") return PROTOCOL_GROUP_ANTHROPIC_MESSAGES;
-  if (type === "gemini") return PROTOCOL_GROUP_GEMINI_NATIVE;
-  // openai 类型按模型名与 baseURL 推断协议分组（responses / chat_completions），
-  // 与 ModelCatalog.vue 保持一致，避免导入后 protocolGroup 为空导致分组丢失。
-  return classifyModelProtocol(type, modelID, baseURL, "", "");
-}
 
 function buildProbeAdapter(model) {
   if (!supplierMeta.value) return { ...createEmptyModelAdapter(), modelID: model.id, tooltipData: `探测 ${model.id}` };
@@ -818,20 +765,6 @@ watch(
   },
   { immediate: true },
 );
-
-function parseBalanceHeaders(value) {
-  const text = String(value || "").trim();
-  if (!text) return undefined;
-  try {
-    const parsed = JSON.parse(text);
-    if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
-      throw new Error("请求头必须是 JSON 对象");
-    }
-    return parsed;
-  } catch (error) {
-    throw new Error(`查询请求头格式错误：${error?.message || "请输入 JSON 对象"}`);
-  }
-}
 
 async function testBulkEditBalance() {
   if (balanceTestState.loading) return;
