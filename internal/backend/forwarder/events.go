@@ -692,6 +692,15 @@ func buildStartedToolCall(invocation runtimecore.ToolInvocation) *agentv1.ToolCa
 				},
 			},
 		}
+	case "send_final_summary":
+		args, _ := decodeSendFinalSummaryArgs(invocation.ArgsJSON)
+		return &agentv1.ToolCall{
+			Tool: &agentv1.ToolCall_SendFinalSummaryToolCall{
+				SendFinalSummaryToolCall: &agentv1.SendFinalSummaryToolCall{
+					Args: args,
+				},
+			},
+		}
 	default:
 		return nil
 	}

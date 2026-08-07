@@ -2222,8 +2222,16 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 	}
 	stream.mu.Unlock()
 	if doomLoopCount >= doomLoopHardLimit {
-		return service.completePreDispatchToolError(stream, invocation, nil, false, false,
+		err := service.completePreDispatchToolError(stream, invocation, nil, false, false,
 			fmt.Errorf("检测到 %s 以相同参数连续调用 %d 次，已中断本轮：请先阅读之前的工具结果并改变策略", trimmedToolName, doomLoopCount))
+		if err != nil {
+			return err
+		}
+		// 相同调用达到硬上限说明模型/缓存已进入确定性死循环，继续 resume 只会
+		// 反复命中同一响应（本地响应缓存回放时尤其如此）。标记终结工具调用，
+		// 让本轮在 provider pass 收口时直接结束而不是再次 resume。
+		markProviderTerminalToolInvocation(stream)
+		return nil
 	}
 	if doomLoopCount == doomLoopThreshold {
 		stream.mu.Lock()
@@ -2311,7 +2319,15 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 				available = fmt.Sprintf("（可用工具：%s）", strings.Join(names, ", "))
 			}
 		}
-		return service.completePreDispatchToolError(stream, invocation, nil, false, false, fmt.Errorf("unsupported tool invocation: %s%s", invocation.ToolName, available))
+		err := service.completePreDispatchToolError(stream, invocation, nil, false, false, fmt.Errorf("unsupported tool invocation: %s%s", invocation.ToolName, available))
+		if err != nil {
+			return err
+		}
+		// unsupported tool 是确定性不可恢复错误：模型若再次尝试同一工具（本地缓存
+		// 回放时必然如此）会形成无限 resume 死循环。标记终结工具调用，让本轮在
+		// provider pass 收口时直接结束，把错误结果留给用户，而不是空转数百轮。
+		markProviderTerminalToolInvocation(stream)
+		return nil
 	}
 	var subagentOverrides map[string]runtimecore.SubagentModelOverrideSelection
 	if isExecInvocation {

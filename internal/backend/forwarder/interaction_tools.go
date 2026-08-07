@@ -1,6 +1,7 @@
 package forwarder
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -285,7 +286,7 @@ type generateImageToolCarrier struct {
 
 func isImmediateNativeTool(name string) bool {
 	switch strings.TrimSpace(name) {
-	case "GenerateImage", "AwaitShell", "SeeImage":
+	case "GenerateImage", "AwaitShell", "SeeImage", "send_final_summary":
 		return true
 	default:
 		return false
@@ -300,6 +301,8 @@ func (service *Service) handleImmediateNativeToolInvocation(stream *ActiveStream
 		return service.handleAwaitShellToolInvocation(stream, invocation)
 	case "SeeImage":
 		return service.handleSeeImageToolInvocation(stream, invocation)
+	case "send_final_summary":
+		return service.handleSendFinalSummaryToolInvocation(stream, invocation)
 	default:
 		return fmt.Errorf("unsupported immediate native tool: %s", invocation.ToolName)
 	}
@@ -419,6 +422,78 @@ func buildGenerateImageToolCall(args *agentv1.GenerateImageArgs, result *agentv1
 	return &agentv1.ToolCall{
 		Tool: &agentv1.ToolCall_GenerateImageToolCall{
 			GenerateImageToolCall: &agentv1.GenerateImageToolCall{
+				Args:   args,
+				Result: result,
+			},
+		},
+	}
+}
+
+// handleSendFinalSummaryToolInvocation 处理 Cursor 终结工具 send_final_summary：
+// 模型用它声明"任务完成并发送最终总结"。forwarder 把 final_summary 参数作为
+// 可见文本增量转发给客户端，完成工具调用，并把本工具标记为终结工具调用——
+// 之后 provider pass 收口时不再 resume（避免 unsupported 错误导致无限循环）。
+func (service *Service) handleSendFinalSummaryToolInvocation(stream *ActiveStream, invocation runtimecore.ToolInvocation) error {
+	args, decodeErr := decodeSendFinalSummaryArgs(invocation.ArgsJSON)
+	if decodeErr != nil {
+		result, payload := buildSendFinalSummaryErrorResult(decodeErr.Error())
+		return service.completeImmediateToolResult(stream, invocation, payload, buildSendFinalSummaryToolCall(args, result))
+	}
+	summary := strings.TrimSpace(args.GetFinalSummary())
+	if summary != "" {
+		if err := service.broker.Publish(stream.RequestID, StreamEvent{Message: buildTextDeltaMessage(summary)}); err != nil {
+			return err
+		}
+	}
+	result, payload := buildSendFinalSummarySuccessResult(summary)
+	if err := service.completeImmediateToolResult(stream, invocation, payload, buildSendFinalSummaryToolCall(args, result)); err != nil {
+		return err
+	}
+	markProviderTerminalToolInvocation(stream)
+	return nil
+}
+
+type sendFinalSummaryArgsJSON struct {
+	FinalSummary string `json:"final_summary"`
+}
+
+func decodeSendFinalSummaryArgs(raw []byte) (*agentv1.SendFinalSummaryArgs, error) {
+	args := &agentv1.SendFinalSummaryArgs{}
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return args, nil
+	}
+	var decoded sendFinalSummaryArgsJSON
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return args, fmt.Errorf("decode send_final_summary args failed: %w", err)
+	}
+	if summary := strings.TrimSpace(decoded.FinalSummary); summary != "" {
+		args.FinalSummary = stringPtr(summary)
+	}
+	return args, nil
+}
+
+func buildSendFinalSummarySuccessResult(summary string) (*agentv1.SendFinalSummaryResult, string) {
+	result := &agentv1.SendFinalSummaryResult{
+		Result: &agentv1.SendFinalSummaryResult_Success{
+			Success: &agentv1.SendFinalSummarySuccess{FinalSummary: summary},
+		},
+	}
+	return result, summary
+}
+
+func buildSendFinalSummaryErrorResult(errText string) (*agentv1.SendFinalSummaryResult, string) {
+	result := &agentv1.SendFinalSummaryResult{
+		Result: &agentv1.SendFinalSummaryResult_Error{
+			Error: &agentv1.SendFinalSummaryError{Error: errText},
+		},
+	}
+	return result, errText
+}
+
+func buildSendFinalSummaryToolCall(args *agentv1.SendFinalSummaryArgs, result *agentv1.SendFinalSummaryResult) *agentv1.ToolCall {
+	return &agentv1.ToolCall{
+		Tool: &agentv1.ToolCall_SendFinalSummaryToolCall{
+			SendFinalSummaryToolCall: &agentv1.SendFinalSummaryToolCall{
 				Args:   args,
 				Result: result,
 			},
