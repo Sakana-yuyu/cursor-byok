@@ -75,6 +75,9 @@ type Service struct {
 	cursorDelegation         *cursorDelegationBridge
 	localDelegation          *localDelegatedAgentAdapter
 	delegationConfig         delegation.RuntimeConfigProvider
+	goalConfig               goalConfigProvider
+	goalsMu                  sync.RWMutex
+	goals                    map[string]*GoalState // conversationID → goal 状态，保留最近 100 条
 	multitaskDelegation      *multitaskDelegationCoordinator
 	delegationRuntimeMu      sync.Mutex
 	nativeDelegations        map[string]*nativeDelegationRuntime
@@ -163,6 +166,10 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 	if candidate, ok := resolver.(delegation.RuntimeConfigProvider); ok {
 		delegationConfig = candidate
 	}
+	var goalCfg goalConfigProvider
+	if candidate, ok := resolver.(goalConfigProvider); ok {
+		goalCfg = candidate
+	}
 	debug := newDebugRecorder(historyRoot, broker, debugConfig)
 	service := &Service{
 		store:                    store,
@@ -181,6 +188,8 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 		contextWindowPersister:   ctxWindowPersister,
 		scanConfig:               scanConfig,
 		delegationConfig:         delegationConfig,
+		goalConfig:               goalCfg,
+		goals:                    make(map[string]*GoalState),
 		mcpRuntime:               SharedMCPRuntimeRegistry(),
 		broker:                   broker,
 		recorder:                 newArtifactRecorder(store, broker, debug),

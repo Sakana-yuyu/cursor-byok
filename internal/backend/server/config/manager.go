@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"cursor/internal/backend/delegation"
+	"cursor/internal/backend/forwarder"
 	legacyruntime "cursor/internal/runtime"
 )
 
@@ -120,8 +121,31 @@ func (manager *Manager) SaveDelegationConfig(ctx context.Context, cfg Delegation
 	return cloneDelegationConfig(normalized.Delegation), nil
 }
 
-func (manager *Manager) DelegationRuntimeConfig() delegation.RuntimeConfig {
-	config := manager.Current()
+// GoalRuntimeConfig 返回 goal 循环执行的运行时配置（forwarder 消费）。
+func (manager *Manager) GoalRuntimeConfig() forwarder.GoalRuntimeConfig {
+	cfg := forwarder.GoalRuntimeConfig{
+		MaxProviderPasses: 30,
+		SelfCheckPasses:   2,
+		VerifyMaxRetries:  3,
+		ErrorMaxRetries:   3,
+		ProgressInterval:  5,
+	}
+	if manager == nil {
+		return cfg
+	}
+	current := manager.Current().Goal
+	cfg.Enabled = current.Enabled
+	cfg.MaxProviderPasses = current.MaxProviderPasses
+	cfg.MaxDuration = time.Duration(current.MaxDurationSeconds) * time.Second
+	cfg.MaxCostUSD = current.MaxCostUSD
+	cfg.SelfCheckPasses = current.SelfCheckPasses
+	cfg.VerifyMaxRetries = current.VerifyMaxRetries
+	cfg.ErrorMaxRetries = current.ErrorMaxRetries
+	cfg.ProgressInterval = current.ProgressInterval
+	return cfg
+}
+
+func (manager *Manager) DelegationRuntimeConfig() delegation.RuntimeConfig {	config := manager.Current()
 	current := config.Delegation
 	result := delegation.RuntimeConfig{
 		Enabled:                 current.Enabled,

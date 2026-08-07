@@ -163,6 +163,7 @@ type Config struct {
 	LocalResponseCache              LocalResponseCacheConfig `json:"localResponseCache" yaml:"localResponseCache"`
 	SkillMCPScan                    SkillMCPScanConfig       `json:"skillMcpScan" yaml:"skillMcpScan"`
 	Delegation                      DelegationConfig         `json:"delegation" yaml:"delegation"`
+	Goal                            GoalConfig               `json:"goal" yaml:"goal"`
 	LastAgentModelHash              string                   `json:"lastAgentModelHash" yaml:"lastAgentModelHash"`
 }
 
@@ -196,6 +197,7 @@ func DefaultConfig() Config {
 				Mode:    VisionModeAuto,
 			},
 		},
+		Goal: DefaultGoalConfig(),
 	}
 }
 
@@ -230,7 +232,51 @@ func NormalizeConfig(input Config) (Config, error) {
 	}
 	output.ModelAdapters = adapters
 	output.Delegation = normalizeDelegationConfig(input.Delegation, adapters)
+	output.Goal = normalizeGoalConfig(input.Goal)
 	return output, nil
+}
+
+// GoalConfig 是 goal 循环执行（codex-style goal）的持久化配置。
+type GoalConfig struct {
+	Enabled            bool    `json:"enabled" yaml:"enabled"`
+	MaxProviderPasses  int     `json:"maxProviderPasses" yaml:"max_provider_passes"`
+	MaxDurationSeconds int     `json:"maxDurationSeconds" yaml:"max_duration_seconds"`
+	MaxCostUSD         float64 `json:"maxCostUsd" yaml:"max_cost_usd"`
+	SelfCheckPasses    int     `json:"selfCheckPasses" yaml:"self_check_passes"`
+	VerifyMaxRetries   int     `json:"verifyMaxRetries" yaml:"verify_max_retries"`
+	ErrorMaxRetries    int     `json:"errorMaxRetries" yaml:"error_max_retries"`
+	ProgressInterval   int     `json:"progressInterval" yaml:"progress_interval"`
+}
+
+// DefaultGoalConfig 返回 goal 配置默认值。
+func DefaultGoalConfig() GoalConfig {
+	return GoalConfig{
+		MaxProviderPasses: 30,
+		SelfCheckPasses:   2,
+		VerifyMaxRetries:  3,
+		ErrorMaxRetries:   3,
+		ProgressInterval:  5,
+	}
+}
+
+// normalizeGoalConfig 对 goal 配置做边界归一化。
+func normalizeGoalConfig(c GoalConfig) GoalConfig {
+	if c.MaxProviderPasses < 0 {
+		c.MaxProviderPasses = 30
+	}
+	if c.SelfCheckPasses < 1 {
+		c.SelfCheckPasses = 2
+	}
+	if c.VerifyMaxRetries < 0 {
+		c.VerifyMaxRetries = 3
+	}
+	if c.ErrorMaxRetries < 0 {
+		c.ErrorMaxRetries = 3
+	}
+	if c.ProgressInterval < 1 {
+		c.ProgressInterval = 5
+	}
+	return c
 }
 
 func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterConfig, error) {
