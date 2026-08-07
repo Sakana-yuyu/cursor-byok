@@ -260,6 +260,37 @@ func (s *ProxyService) GetState() ProxyState {
 	return s.core.GetState()
 }
 
+// PrepareCursorLaunch ensures local-mode Cursor starts only after the proxy
+// listener, backend, and Cursor proxy configuration are all ready. Upstream
+// mode deliberately bypasses this requirement because it does not use BYOK.
+func (s *ProxyService) PrepareCursorLaunch() error {
+	if s == nil || s.core == nil {
+		return errors.New("本地代理服务未初始化")
+	}
+	cfg, err := s.core.LoadUserConfig()
+	if err != nil {
+		return fmt.Errorf("读取本地代理配置失败: %w", err)
+	}
+	if cfg.Routing.Mode == "upstream" {
+		return nil
+	}
+	if isCursorProxyReady(s.core.GetState()) {
+		return nil
+	}
+	state, err := s.core.StartProxy()
+	if err != nil {
+		return fmt.Errorf("启动本地代理失败: %w", err)
+	}
+	if !isCursorProxyReady(state) {
+		return errors.New("本地代理启动后未完成监听或 Cursor 配置校验")
+	}
+	return nil
+}
+
+func isCursorProxyReady(state client.ProxyState) bool {
+	return state.BackendRunning && state.ProxyRunning && state.CursorSettingsApplied
+}
+
 // RepairProxySettings 一键修复 Cursor 代理配置（重新注入 settings.json 并校验）。
 func (s *ProxyService) RepairProxySettings() (client.ProxyRepairResult, error) {
 	return s.core.RepairProxySettings()

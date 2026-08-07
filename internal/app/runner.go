@@ -118,6 +118,7 @@ func Run(resources EmbeddedResources) error {
 		return priceRatesFromAdapters(cfg.ModelAdapters)
 	}, proxyService.ResetUsageMetrics)
 	windowService := bridge.NewWindowService()
+	windowService.SetCursorLaunchPreflight(proxyService.PrepareCursorLaunch)
 	adCore := ads.NewService(ads.Options{
 		StoreRoot:    appdata.AdsRootPath(),
 		HTTPClient:   netproxy.NewHTTPClient(30 * time.Second),
@@ -397,17 +398,6 @@ func Run(resources EmbeddedResources) error {
 						syncResult.Total, syncResult.Written, syncResult.Skipped, syncResult.Failed)
 				}
 			})
-			// 启动时自动配对上下文窗口（受 autoMatchContextWindow 开关控制）：
-			// 目录命中仅下调（用户手动设置的更小窗口保留），目录未命中则探测 provider /models 回填。
-			// 失败仅记日志、不阻断启动。force=false：启动路径受开关控制，手动「一键诊断优化」才走 force。
-			autoMatchOnce.Do(func() {
-				if matchResult, matchErr := proxyService.AutoMatchContextWindows(context.Background(), false); matchErr != nil {
-					logger.Errorf("自动配对上下文窗口失败: %v", matchErr)
-				} else if matchResult.Enabled {
-					logger.Infof("自动配对上下文窗口完成: total=%d from_catalog=%d from_probe=%d unchanged=%d changed=%t",
-						matchResult.Total, matchResult.FromCatalog, matchResult.FromProbe, matchResult.Unchanged, matchResult.Changed)
-				}
-			})
 			if _, err := proxyService.StartProxy(); err != nil {
 				logger.Errorf("自动启动服务失败: %v", err)
 			} else {
@@ -416,6 +406,17 @@ func Run(resources EmbeddedResources) error {
 					refreshAdRuntime()
 				}
 				logger.Infof("代理已自动启动: %s", state.ProxyListenAddr)
+				// 自动配对需要访问供应商模型目录，不能占用本地代理的启动关键路径。
+				go func() {
+					autoMatchOnce.Do(func() {
+						if matchResult, matchErr := proxyService.AutoMatchContextWindows(context.Background(), false); matchErr != nil {
+							logger.Errorf("自动配对上下文窗口失败: %v", matchErr)
+						} else if matchResult.Enabled {
+							logger.Infof("自动配对上下文窗口完成: total=%d from_catalog=%d from_probe=%d unchanged=%d changed=%t",
+								matchResult.Total, matchResult.FromCatalog, matchResult.FromProbe, matchResult.Unchanged, matchResult.Changed)
+						}
+					})
+				}()
 			}
 		}()
 	})

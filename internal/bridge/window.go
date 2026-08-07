@@ -42,12 +42,31 @@ type WindowService struct {
 	editorCtx             *modelEditorContext
 	locale                string
 	mainWindowCloseAction string
+	cursorLaunchPreflight func() error
 	mu                    sync.RWMutex
 }
 
 // NewWindowService 用于处理与 NewWindowService 相关的逻辑。
 func NewWindowService() *WindowService {
 	return &WindowService{locale: i18n.DefaultLocale, mainWindowCloseAction: "tray"}
+}
+
+// SetCursorLaunchPreflight installs the local-mode readiness check that must
+// complete before this service starts a new Cursor process.
+func (s *WindowService) SetCursorLaunchPreflight(preflight func() error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cursorLaunchPreflight = preflight
+}
+
+func (s *WindowService) ensureCursorLaunchReady() error {
+	s.mu.RLock()
+	preflight := s.cursorLaunchPreflight
+	s.mu.RUnlock()
+	if preflight == nil {
+		return nil
+	}
+	return preflight()
 }
 
 // SetLocale updates the locale used for subsequently created native windows.
@@ -877,6 +896,9 @@ func (s *WindowService) LaunchCursor(workspaceDir, manualPath string) error {
 	}
 
 	logger.Infof("launch cursor: path=%s workspace=%q", cursorPath, workspaceDir)
+	if err := s.ensureCursorLaunchReady(); err != nil {
+		return fmt.Errorf("本地代理尚未就绪，未启动 Cursor: %w", err)
+	}
 	if err := launchCursorProcess(cursorPath, workspaceDir); err != nil {
 		logger.Errorf("launch cursor failed: path=%s err=%v", cursorPath, err)
 		return fmt.Errorf("启动 Cursor 失败: %w", err)
@@ -950,6 +972,11 @@ func (s *WindowService) RestartCursor(workspaceDir, manualPath string) (CursorRe
 		return result, fmt.Errorf("未检测到 Cursor 安装路径，请在设置中指定 Cursor.exe")
 	}
 	result.CursorPath = cursorPath
+
+	if err := s.ensureCursorLaunchReady(); err != nil {
+		result.Details = details
+		return result, fmt.Errorf("本地代理尚未就绪，未重新启动 Cursor: %w", err)
+	}
 
 	logger.Infof("restart cursor: relaunch path=%s workspace=%q", cursorPath, workspaceDir)
 	if err := launchCursorProcess(cursorPath, workspaceDir); err != nil {

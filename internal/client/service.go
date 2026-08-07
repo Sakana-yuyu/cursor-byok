@@ -41,6 +41,10 @@ type ProxyService struct {
 	// cursorAccount 持有仅供插件、Skills 和 MCP 控制面使用的真实 Cursor 身份。
 	cursorAccount *cursoraccount.Manager
 
+	// lifecycleMu serializes start/stop transitions so a Cursor launch cannot
+	// observe a partially started proxy while the automatic startup is running.
+	lifecycleMu sync.Mutex
+
 	// mu 表示当前声明中的 mu。
 	mu sync.RWMutex
 	// lastError 表示当前声明中的 lastError。

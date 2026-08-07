@@ -58,6 +58,9 @@ type ProxyState struct {
 
 // StartProxy 用于处理与 StartProxy 相关的逻辑。
 func (s *ProxyService) StartProxy() (ProxyState, error) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+
 	logger.Infof("start service requested config_path=%s logs_root=%s", s.configPath, s.logsRoot)
 	fail := func(step string, err error) (ProxyState, error) {
 		logger.Errorf("start service failed step=%s err=%v", step, err)
@@ -149,6 +152,9 @@ func (s *ProxyService) StartProxy() (ProxyState, error) {
 
 // StopProxy 用于处理与 StopProxy 相关的逻辑。
 func (s *ProxyService) StopProxy() (ProxyState, error) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+
 	logger.Infof("stop service requested")
 	fail := func(step string, err error) (ProxyState, error) {
 		logger.Errorf("stop service failed step=%s err=%v", step, err)
