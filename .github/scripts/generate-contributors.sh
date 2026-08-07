@@ -14,9 +14,9 @@ START="<!-- contributors-start -->"
 END="<!-- contributors-end -->"
 
 # 排除名单：不在 Contributors 里展示的提交者。
-# 默认排除上游原作者，避免暴露本仓库是 fork（用 GitHub user 或 email 匹配，大小写不敏感、去空白）。
-# 用环境变量 CONTRIBUTOR_EXCLUDE 覆盖（空格分隔），如 CONTRIBUTOR_EXCLUDE="leookun someone"。
-EXCLUDE_DEFAULT="leookun"
+# 默认空 = 展示全部提交者（含上游原作者 leookun）。
+# 用环境变量 CONTRIBUTOR_EXCLUDE 覆盖（空格分隔），如 CONTRIBUTOR_EXCLUDE="someone"。
+EXCLUDE_DEFAULT=""
 EXCLUDE="${CONTRIBUTOR_EXCLUDE:-$EXCLUDE_DEFAULT}"
 exclude_match() {
   local needle="$1"
