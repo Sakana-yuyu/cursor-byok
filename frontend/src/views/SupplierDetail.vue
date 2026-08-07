@@ -1,6 +1,7 @@
 <script setup>
 import Button from "@/components/ui/Button.vue";
 import SupplierModelCard from "@/components/supplier/SupplierModelCard.vue";
+import SupplierModelToolbar from "@/components/supplier/SupplierModelToolbar.vue";
 import { showModal } from "@/composables/useModal";
 import {
   appState,
@@ -1169,58 +1170,21 @@ async function saveBulkEdit(force = false) {
         </div>
 
         <!-- 搜索 / 过滤 / 排序 工具条 -->
-        <div v-if="supplierAdapters.length > 0" class="flex flex-wrap items-center gap-2">
-          <div class="relative">
-            <span class="icon-[mdi--magnify] pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[16px] text-[#737373]"></span>
-            <input
-              v-model="modelSearch"
-              type="text"
-              placeholder="搜索模型名 / 标识"
-              class="h-8 w-52 rounded-[8px] border border-[#3f3f3f] bg-[#232323] pl-7 pr-7 text-[12px] text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
-            />
-            <button
-              v-if="modelSearch"
-              type="button"
-              class="absolute right-2 top-1/2 -translate-y-1/2 text-[#737373] hover:text-white"
-              @click="modelSearch = ''"
-            >
-              <span class="icon-[mdi--close-circle] text-[14px]"></span>
-            </button>
-          </div>
-          <div class="inline-flex rounded-[8px] border border-[#3f3f3f] bg-[#232323] p-0.5 text-[12px]" role="group" aria-label="状态过滤">
-            <button
-              v-for="opt in statusFilterOptions"
-              :key="opt.value"
-              type="button"
-              class="rounded-[6px] px-2.5 py-1 transition-colors"
-              :class="statusFilter === opt.value ? 'bg-[#10AD5D]/25 text-[#6ee7a5]' : 'text-[#a3a3a3] hover:text-white'"
-              @click="statusFilter = opt.value"
-            >
-              {{ opt.label }}
-            </button>
-          </div>
-          <div class="inline-flex rounded-[8px] border border-[#3f3f3f] bg-[#232323] p-0.5 text-[12px]" role="group" aria-label="排序方式">
-            <button
-              v-for="opt in sortModeOptions"
-              :key="opt.value"
-              type="button"
-              class="rounded-[6px] px-2.5 py-1 transition-colors"
-              :class="sortMode === opt.value ? 'bg-[#10AD5D]/25 text-[#6ee7a5]' : 'text-[#a3a3a3] hover:text-white'"
-              @click="sortMode = opt.value"
-            >
-              {{ opt.label }}
-            </button>
-          </div>
-          <span class="text-[12px] text-[#737373]">显示 {{ visibleAdapters.length }}/{{ supplierAdapters.length }}</span>
-          <Button
-            v-if="healthStats.fail > 0"
-            variant="text"
-            class="ml-auto text-[#f87171] hover:text-[#fca5a5]"
-            @click="deleteFailedAdapters"
-          >
-            <span class="icon-[mdi--trash-can-outline] mr-1 text-[14px]"></span>删除失败模型 ({{ healthStats.fail }})
-          </Button>
-        </div>
+        <SupplierModelToolbar
+          v-if="supplierAdapters.length > 0"
+          :search="modelSearch"
+          :status-filter="statusFilter"
+          :sort-mode="sortMode"
+          :status-filter-options="statusFilterOptions"
+          :sort-mode-options="sortModeOptions"
+          :visible-count="visibleAdapters.length"
+          :total-count="supplierAdapters.length"
+          :failed-count="healthStats.fail"
+          @update:search="(value) => (modelSearch = value)"
+          @update:status-filter="(value) => (statusFilter = value)"
+          @update:sort-mode="(value) => (sortMode = value)"
+          @delete-failed="deleteFailedAdapters"
+        />
 
         <!-- 多选批量操作条 -->
         <div v-if="selectionMode" class="center-row flex-wrap justify-between gap-2 rounded-[8px] border border-[#10AD5D]/30 bg-[#10AD5D]/5 px-3 py-2">
