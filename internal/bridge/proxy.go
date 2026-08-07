@@ -202,6 +202,21 @@ func (s *ProxyService) GetDelegationTaskSnapshots() []DelegationTaskSnapshot {
 	return s.core.GetDelegationTaskSnapshots()
 }
 
+// GetGoals 返回当前 forwarder 的 goal 状态快照。
+func (s *ProxyService) GetGoals() []forwarder.GoalSnapshot {
+	return s.core.GetGoals()
+}
+
+// StartGoal 以 goal 模式启动新会话，返回 conversationID。
+func (s *ProxyService) StartGoal(goalText, modelID string) (string, error) {
+	return s.core.StartGoal(goalText, modelID)
+}
+
+// StopGoal 停止指定会话的 goal 执行。
+func (s *ProxyService) StopGoal(conversationID string) error {
+	return s.core.StopGoal(conversationID)
+}
+
 // GetDelegationConfig returns the normalized delegation settings subtree.
 func (s *ProxyService) GetDelegationConfig() (DelegationConfig, error) {
 	return s.core.GetDelegationConfig()

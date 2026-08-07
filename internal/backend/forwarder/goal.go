@@ -638,6 +638,66 @@ func errTextOf(err error) string {
 	return err.Error()
 }
 
+// StartGoalStream 以 goal 模式启动一个新会话（前端 Goal 面板入口）。
+// 复用 handleRunIntent 路径：构造最小 run intent 并标记 GoalMode。
+// 返回 conversationID；modelID 为空时报错（前端必须选择模型）。
+func (service *Service) StartGoalStream(goalText, modelID string) (string, error) {
+	if service == nil {
+		return "", fmt.Errorf("service unavailable")
+	}
+	if strings.TrimSpace(goalText) == "" {
+		return "", fmt.Errorf("goal text is required")
+	}
+	if strings.TrimSpace(modelID) == "" {
+		return "", fmt.Errorf("model id is required")
+	}
+	conversationID := uuid.NewString()
+	intent := InboundIntent{
+		RequestID:      uuid.NewString(),
+		ConversationID: conversationID,
+		UserMessage:    &agentv1.UserMessage{Text: strings.TrimSpace(goalText)},
+		ModelID:        strings.TrimSpace(modelID),
+		ModelName:      strings.TrimSpace(modelID),
+		Mode:           agentv1.AgentMode_AGENT_MODE_AGENT,
+		GoalMode:       true,
+		GoalText:       strings.TrimSpace(goalText),
+	}
+	if err := service.handleRunIntent(intent); err != nil {
+		return "", err
+	}
+	return conversationID, nil
+}
+
+// StopGoalStream 停止指定会话的 goal 执行（复用取消路径）。
+func (service *Service) StopGoalStream(conversationID string) error {
+	if service == nil || strings.TrimSpace(conversationID) == "" {
+		return fmt.Errorf("conversation id is required")
+	}
+	var stream *ActiveStream
+	for _, requestID := range service.broker.OtherConversationRequestIDs(conversationID, "") {
+		if candidate, ok := service.broker.Get(requestID); ok {
+			stream = candidate
+			break
+		}
+	}
+	if stream == nil {
+		// 无活动流：把内存里的 goal 状态标记为 stopped。
+		service.goalsMu.Lock()
+		if goal, ok := service.goals[conversationID]; ok && goal.Status == GoalStatusRunning {
+			goal.Status = GoalStatusStopped
+			goal.StopReason = "用户手动停止"
+			goal.UpdatedAt = time.Now().UTC()
+		}
+		service.goalsMu.Unlock()
+		return nil
+	}
+	return service.handleCancelIntent(InboundIntent{
+		RequestID:      stream.RequestID,
+		ConversationID: conversationID,
+		CancelReason:   "用户手动停止 goal",
+	})
+}
+
 // handleGoalProviderError 在 goal 模式下把 provider 错误转为"注入错误摘要 + 续跑重试"，
 // 超过 ErrorMaxRetries 才放行给 failStream。返回 (true, nil) 表示已重试（调用方 return）。
 func (service *Service) handleGoalProviderError(stream *ActiveStream, conversationID string, turnSeq int64, requestID, modelCallID string, providerPass int, err error) (bool, error) {

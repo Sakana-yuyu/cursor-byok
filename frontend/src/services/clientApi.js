@@ -9,6 +9,7 @@ import {
   QueryAllProviderBalances,
   RepairProxySettings,
   GetDelegationConfig, SaveDelegationConfig,
+  GetGoals, StartGoal, StopGoal,
   GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
   EnableReaderMCP,
   RepairCACorruption,
@@ -54,6 +55,7 @@ const desktopMethods = {
   QueryAllProviderBalances,
   RepairProxySettings,
   GetDelegationConfig, SaveDelegationConfig,
+  GetGoals, StartGoal, StopGoal,
   GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
   EnableReaderMCP,
   RepairCACorruption,
@@ -383,4 +385,16 @@ export function getDelegationConfig() {
 
 export function saveDelegationConfig(config) {
   return desktopOrMock(() => SaveDelegationConfig(config), "@bindings/cursor/internal/bridge/proxyservice.js", "SaveDelegationConfig", [config]);
+}
+
+export function getGoals() {
+  return desktopOrMock(() => GetGoals(), "@bindings/cursor/internal/bridge/proxyservice.js", "GetGoals");
+}
+
+export function startGoal(goalText, modelID) {
+  return desktopOrMock(() => StartGoal(goalText, modelID), "@bindings/cursor/internal/bridge/proxyservice.js", "StartGoal", [goalText, modelID]);
+}
+
+export function stopGoal(conversationID) {
+  return desktopOrMock(() => StopGoal(conversationID), "@bindings/cursor/internal/bridge/proxyservice.js", "StopGoal", [conversationID]);
 }

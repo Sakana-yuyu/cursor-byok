@@ -115,6 +115,48 @@ func (host *Host) CancelDelegationTask(taskID string) bool {
 	return module.Service.CancelDelegationTask(taskID)
 }
 
+// GoalSnapshots 返回当前 forwarder 的 goal 状态快照。
+func (host *Host) GoalSnapshots() []forwarder.GoalSnapshot {
+	if host == nil {
+		return nil
+	}
+	host.runMu.RLock()
+	module := host.agentModule
+	host.runMu.RUnlock()
+	if module == nil || module.Service == nil {
+		return nil
+	}
+	return module.Service.GoalSnapshots()
+}
+
+// StartGoal 以 goal 模式启动新会话，返回 conversationID。
+func (host *Host) StartGoal(goalText, modelID string) (string, error) {
+	if host == nil {
+		return "", fmt.Errorf("backend unavailable")
+	}
+	host.runMu.RLock()
+	module := host.agentModule
+	host.runMu.RUnlock()
+	if module == nil || module.Service == nil {
+		return "", fmt.Errorf("forwarder unavailable")
+	}
+	return module.Service.StartGoalStream(goalText, modelID)
+}
+
+// StopGoal 停止指定会话的 goal 执行。
+func (host *Host) StopGoal(conversationID string) error {
+	if host == nil {
+		return fmt.Errorf("backend unavailable")
+	}
+	host.runMu.RLock()
+	module := host.agentModule
+	host.runMu.RUnlock()
+	if module == nil || module.Service == nil {
+		return fmt.Errorf("forwarder unavailable")
+	}
+	return module.Service.StopGoalStream(conversationID)
+}
+
 func (host *Host) GetDelegationConfig(ctx context.Context) (serverconfig.DelegationConfig, error) {
 	if host == nil || host.configs == nil {
 		return serverconfig.DefaultConfig().Delegation, nil

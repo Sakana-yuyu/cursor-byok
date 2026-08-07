@@ -420,6 +420,9 @@ export const SaveDelegationConfig = (value) => {
   persistPreviewConfig();
   return Promise.resolve(clone(previewConfig.delegation));
 };
+export const GetGoals = () => Promise.resolve([]);
+export const StartGoal = (_goalText, _modelID) => Promise.resolve("mock-goal-" + Date.now());
+export const StopGoal = (_conversationID) => Promise.resolve(null);
 export const SaveUserConfig = (value) => {
   if (previewTestFailSaveConfig()) {
     return Promise.reject(new Error("E2E 注入：配置保存失败"));
