@@ -1,6 +1,7 @@
 <script setup>
 import Button from "@/components/ui/Button.vue";
 import Input from "@/components/ui/Input.vue";
+import ModelBehaviorFields from "@/components/model-editor/ModelBehaviorFields.vue";
 import ModelCapabilitiesSection from "@/components/model-editor/ModelCapabilitiesSection.vue";
 import ModelPricingSection from "@/components/model-editor/ModelPricingSection.vue";
 import ModelTestResultSection from "@/components/model-editor/ModelTestResultSection.vue";
@@ -1071,55 +1072,20 @@ onMounted(async () => {
             @clear="clearPricing"
           />
 
-          <label v-if="draft.type === 'openai' || draft.type === 'gemini'" class="flex flex-col gap-1">
-            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
-              <Tooltip :content="fieldTips.maxCompletionTokens" />
-              <span>最大输出 Token</span>
-            </span>
-            <input
-              v-model="maxCompletionTokensInput"
-              type="text"
-              inputmode="numeric"
-              placeholder="例如：65536（留空用默认值）"
-              class="h-9 min-w-0 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
-            />
-          </label>
-
-          <label v-if="draft.type === 'anthropic'" class="flex flex-col gap-1">
-            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
-              <Tooltip :content="fieldTips.anthropicMaxTokens" />
-              <span>最大输出 Token</span>
-            </span>
-            <input
-              v-model="anthropicMaxTokensInput"
-              type="text"
-              inputmode="numeric"
-              placeholder="例如：65536（留空用默认值）"
-              class="h-9 min-w-0 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
-            />
-          </label>
-
-          <label v-if="draft.type === 'openai' || draft.type === 'gemini'" class="flex flex-col gap-1">
-            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
-              <Tooltip :content="fieldTips.reasoningEffort" />
-              <span>推理强度</span>
-            </span>
-            <Select
-              v-model="draft.reasoningEffort"
-              :options="reasoningEffortOptions"
-            />
-          </label>
-
-          <label v-if="draft.type === 'anthropic'" class="flex flex-col gap-1">
-            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
-              <Tooltip :content="fieldTips.anthropicThinkingEffort" />
-              <span>思考强度</span>
-            </span>
-            <Select
-              v-model="draft.anthropicThinkingEffort"
-              :options="anthropicThinkingEffortOptions"
-            />
-          </label>
+          <ModelBehaviorFields
+            :type="draft.type"
+            :max-completion-tokens="maxCompletionTokensInput"
+            :anthropic-max-tokens="anthropicMaxTokensInput"
+            :reasoning-effort="draft.reasoningEffort"
+            :anthropic-thinking-effort="draft.anthropicThinkingEffort"
+            :reasoning-effort-options="reasoningEffortOptions"
+            :anthropic-thinking-effort-options="anthropicThinkingEffortOptions"
+            :field-tips="fieldTips"
+            @update:max-completion-tokens="maxCompletionTokensInput = $event"
+            @update:anthropic-max-tokens="anthropicMaxTokensInput = $event"
+            @update:reasoning-effort="draft.reasoningEffort = $event"
+            @update:anthropic-thinking-effort="draft.anthropicThinkingEffort = $event"
+          />
 
         </div>
         </div>
