@@ -54,6 +54,10 @@ import {
   normalizeRouteMode,
   validateConfigPayload,
 } from "@/utils/configNormalize";
+// Cursor 手动路径偏好已归位 utils/cursorLaunch.js；命名生成域已归位
+// utils/displayName.js，此处 import / export 转发保持既有调用方零改动。
+import { buildNextDisplayName } from "@/utils/displayName";
+export { getCursorManualPath, setCursorManualPath } from "@/utils/cursorLaunch";
 export {
   OPENAI_EXTRA_PARAMS_DEFAULT_JSON,
   EXTRA_PARAMS_DEFAULT_JSON,
@@ -1088,30 +1092,6 @@ export async function closeApplication() {
   await closeApplicationNative();
 }
 
-const CURSOR_LAUNCH_PREFERENCES_KEY = "cursor-byok.cursor-launch.preferences";
-
-function normalizeCursorManualPath(value) {
-  return asString(value).replace(/^"|"$/g, "").trim();
-}
-
-export function getCursorManualPath() {
-  try {
-    const stored = localStorage.getItem(CURSOR_LAUNCH_PREFERENCES_KEY);
-    const parsed = stored ? JSON.parse(stored) : {};
-    return normalizeCursorManualPath(parsed?.manualPath);
-  } catch {
-    return "";
-  }
-}
-
-export function setCursorManualPath(manualPath) {
-  const normalized = normalizeCursorManualPath(manualPath);
-  try {
-    localStorage.setItem(CURSOR_LAUNCH_PREFERENCES_KEY, JSON.stringify({ manualPath: normalized }));
-  } catch { /* localStorage 不可用时仅保留当前调用结果 */ }
-  return normalized;
-}
-
 export async function openMetricsDetailWindow() {
   await openMetricsDetail();
 }
@@ -1470,32 +1450,6 @@ export async function deleteModelAdaptersBySupplier(baseURLOrIdentity, groupName
     },
     { modelAdaptersOnly: true },
   );
-}
-
-function splitDisplayNameSeed(value) {
-  const text = asString(value);
-  const match = text.match(/^(.*?)(?:\s*[-+](\d+))?$/);
-  if (!match) {
-    return { base: text || "模型", number: 0 };
-  }
-  const base = asString(match[1]) || "模型";
-  const number = match[2] ? Number(match[2]) : 0;
-  return { base, number: Number.isFinite(number) ? number : 0 };
-}
-
-function buildNextDisplayName(existingAdapters, sourceName) {
-  const { base } = splitDisplayNameSeed(sourceName);
-  let next = 1;
-  const taken = new Set(
-    normalizeModelAdapters(existingAdapters)
-      .map((adapter) => adapter.displayName)
-      .filter(Boolean),
-  );
-
-  while (taken.has(`${base}-${next}`)) {
-    next += 1;
-  }
-  return `${base}-${next}`;
 }
 
 export async function duplicateModelAdapterAt(index) {
