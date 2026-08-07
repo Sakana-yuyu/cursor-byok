@@ -13,7 +13,7 @@ import (
 )
 
 type PromptCompiler interface {
-	Compile(conversation *ConversationFile, mode agentv1.AgentMode, latestUserText string, modelName string, customSystemPrompt string) (CompiledConversation, error)
+	Compile(conversation *ConversationFile, mode agentv1.AgentMode, latestUserText string, modelName string, customSystemPrompt string, goalMode bool) (CompiledConversation, error)
 	DerivePromptContexts(conversation *ConversationFile, mode agentv1.AgentMode, latestUserText string) ([]PromptContextMessage, error)
 }
 
@@ -47,7 +47,9 @@ func NewPromptCompiler(projector *HistoryProjector, catalog ToolCatalog, reminde
 // Compile 生成当前 turn 应发送给 provider 的消息和工具集合。
 // customSystemPrompt 是客户端 run_request 附带的额外系统提示词（已过护栏），
 // 追加在共享规则/技能之后，避免影响无自定义提示词时的前缀稳定性。
-func (compiler *DefaultPromptCompiler) Compile(conversation *ConversationFile, mode agentv1.AgentMode, latestUserText string, modelName string, customSystemPrompt string) (CompiledConversation, error) {
+// goalMode 为 true 时，强制注入 goal-loop 技能（如果扫描可见且未被禁用），
+// 保证 /goal 命令剥离前缀后仍能稳定命中 Goal 工作流约束。
+func (compiler *DefaultPromptCompiler) Compile(conversation *ConversationFile, mode agentv1.AgentMode, latestUserText string, modelName string, customSystemPrompt string, goalMode bool) (CompiledConversation, error) {
 	if compiler == nil || compiler.projector == nil || compiler.catalog == nil {
 		return CompiledConversation{}, fmt.Errorf("prompt compiler dependencies are not initialized")
 	}
@@ -97,7 +99,7 @@ func (compiler *DefaultPromptCompiler) Compile(conversation *ConversationFile, m
 		if workspaceErr != nil {
 			return CompiledConversation{}, workspaceErr
 		}
-		globalSkillsPrompt, globalSkillsCount, err = compiler.skills.buildActivatedSkillsPromptSectionForWorkspaceExcluding(workspaceRoot, latestUserText, conversation, explicitSkillPaths)
+		globalSkillsPrompt, globalSkillsCount, err = compiler.skills.buildActivatedSkillsPromptSectionForWorkspaceExcluding(workspaceRoot, latestUserText, conversation, explicitSkillPaths, goalMode)
 		if err != nil {
 			return CompiledConversation{}, err
 		}

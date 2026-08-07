@@ -273,12 +273,18 @@ func (s *SkillStore) BuildActivatedSkillsPromptSection(queryText string, convers
 	return s.BuildActivatedSkillsPromptSectionForWorkspace("", queryText, conversation)
 }
 
-// BuildActivatedSkillsPromptSectionForWorkspace sparsely activates skills for an explicit workspace.
-func (s *SkillStore) BuildActivatedSkillsPromptSectionForWorkspace(workspaceRoot string, queryText string, conversation *ConversationFile) (string, int, error) {
-	return s.buildActivatedSkillsPromptSectionForWorkspaceExcluding(workspaceRoot, queryText, conversation, nil)
+// BuildActivatedSkillsPromptSectionGoal 与 BuildActivatedSkillsPromptSection 相同，
+// 但强制注入 goal-loop 技能（若扫描可见且未被禁用），供 /goal 会话使用。
+func (s *SkillStore) BuildActivatedSkillsPromptSectionGoal(queryText string, conversation *ConversationFile) (string, int, error) {
+	return s.buildActivatedSkillsPromptSectionForWorkspaceExcluding("", queryText, conversation, nil, true)
 }
 
-func (s *SkillStore) buildActivatedSkillsPromptSectionForWorkspaceExcluding(workspaceRoot string, queryText string, conversation *ConversationFile, excludedPaths map[string]struct{}) (string, int, error) {
+// BuildActivatedSkillsPromptSectionForWorkspace sparsely activates skills for an explicit workspace.
+func (s *SkillStore) BuildActivatedSkillsPromptSectionForWorkspace(workspaceRoot string, queryText string, conversation *ConversationFile) (string, int, error) {
+	return s.buildActivatedSkillsPromptSectionForWorkspaceExcluding(workspaceRoot, queryText, conversation, nil, false)
+}
+
+func (s *SkillStore) buildActivatedSkillsPromptSectionForWorkspaceExcluding(workspaceRoot string, queryText string, conversation *ConversationFile, excludedPaths map[string]struct{}, goalMode bool) (string, int, error) {
 	if s == nil {
 		return "", 0, nil
 	}
@@ -297,7 +303,7 @@ func (s *SkillStore) buildActivatedSkillsPromptSectionForWorkspaceExcluding(work
 		parentActivated = s.readParentActivatedSkills(conversation)
 	}
 
-	activated := s.activator.activateForWorkspaceExcluding(workspaceRoot, queryText, parentActivated, excludedPaths)
+	activated := s.activator.activateForWorkspaceExcluding(workspaceRoot, queryText, parentActivated, excludedPaths, goalMode)
 	if len(activated) == 0 {
 		return "", 0, nil
 	}

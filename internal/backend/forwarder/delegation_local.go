@@ -77,7 +77,7 @@ func (adapter *localDelegatedAgentAdapter) Execute(ctx context.Context, request 
 	if mode == agentv1.AgentMode_AGENT_MODE_UNSPECIFIED {
 		mode = agentv1.AgentMode_AGENT_MODE_AGENT
 	}
-	compiled, err := adapter.compiler.Compile(conversation, mode, strings.TrimSpace(request.Prompt), strings.TrimSpace(request.ModelName), "")
+	compiled, err := adapter.compiler.Compile(conversation, mode, strings.TrimSpace(request.Prompt), strings.TrimSpace(request.ModelName), "", false)
 	if err != nil {
 		delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusFailed, 1, nil, nil, "delegated worker prompt compilation failed", delegation.SanitizeSupervisorText(err.Error(), request.WorkspaceHint))
 		return delegation.TaskResult{Error: err, Metadata: identity.metadata(0)}

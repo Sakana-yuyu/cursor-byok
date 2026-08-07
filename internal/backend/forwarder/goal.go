@@ -202,6 +202,22 @@ func parseGoalCommand(text string) (goalText string, strict bool, isGoal bool) {
 	return "", false, false
 }
 
+// applyGoalCommandIfEnabled 在 goal 开关（goal.enabled）开启时识别 /goal 与
+// /goal --strict 文本命令：命中后标记 GoalMode 并剥离前缀；开关关闭时原样
+// 保留消息内容，按普通对话处理。
+func applyGoalCommandIfEnabled(intent *InboundIntent, enabled bool) {
+	if intent == nil || intent.GoalMode || !enabled {
+		return
+	}
+	if goalText, strict, isGoal := parseGoalCommand(userMessageText(intent.UserMessage)); isGoal {
+		intent.GoalMode = true
+		intent.GoalText = goalText
+		intent.GoalStrict = strict
+		// 剥离前缀，避免 goal 目标文本被当作指令重复注入。
+		intent.UserMessage = replaceUserMessageText(intent.UserMessage, goalText)
+	}
+}
+
 // replaceUserMessageText 返回替换 text 后的 UserMessage 副本。
 func replaceUserMessageText(message *agentv1.UserMessage, text string) *agentv1.UserMessage {
 	if message == nil {

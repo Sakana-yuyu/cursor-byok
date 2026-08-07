@@ -15,7 +15,7 @@ import (
 
 type fakeDelegatedCompiler struct{}
 
-func (fakeDelegatedCompiler) Compile(_ *ConversationFile, _ agentv1.AgentMode, _ string, _ string, _ string) (CompiledConversation, error) {
+func (fakeDelegatedCompiler) Compile(_ *ConversationFile, _ agentv1.AgentMode, _ string, _ string, _ string, _ bool) (CompiledConversation, error) {
 	return CompiledConversation{
 		Messages: []modeladapter.Message{{Role: "system", Content: "sys"}},
 		Tools:    []json.RawMessage{},

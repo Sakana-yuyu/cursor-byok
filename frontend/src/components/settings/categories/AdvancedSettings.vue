@@ -8,6 +8,7 @@ import { showModal } from "@/composables/useModal";
 import {
   appState,
   saveDebugLogEnabled,
+  saveGoalSettings,
   saveLocalResponseCacheEnabled,
   saveLocalResponseCacheSettings,
   saveRoutingMode,
@@ -34,7 +35,15 @@ const maxEntriesDraft = ref("");
 
 const debugLogDraft = ref(Boolean(appState.debugLogEnabled));
 
+const goalEnabledDraft = ref(Boolean(appState.goal?.enabled));
+
 const debugLogState = reactive({
+  busy: false,
+  error: "",
+  retry: null,
+});
+
+const goalEnabledState = reactive({
   busy: false,
   error: "",
   retry: null,
@@ -74,6 +83,7 @@ const cacheEnabled = computed(() => cacheEnabledDraft.value);
 const directModeBusy = computed(() => directModeState.busy || appState.configSaving);
 const cacheEnabledBusy = computed(() => cacheEnabledState.busy || appState.configSaving);
 const cachePersistBusy = computed(() => cachePersistState.busy || appState.configSaving);
+const goalEnabledBusy = computed(() => goalEnabledState.busy || appState.configSaving);
 const ttlBusy = computed(() => ttlSecondsState.busy || ttlSecondsState.queued || appState.configSaving);
 const maxEntriesBusy = computed(() => maxEntriesState.busy || maxEntriesState.queued || appState.configSaving);
 
@@ -92,6 +102,16 @@ watch(
   (value) => {
     if (!debugLogState.busy) {
       debugLogDraft.value = Boolean(value);
+    }
+  },
+  { immediate: true },
+);
+
+watch(
+  () => appState.goal,
+  (value) => {
+    if (!goalEnabledState.busy) {
+      goalEnabledDraft.value = Boolean(value?.enabled);
     }
   },
   { immediate: true },
@@ -180,6 +200,29 @@ async function handleDebugLogChange(enabled) {
     debugLogState.error = toUserError(error);
   } finally {
     debugLogState.busy = false;
+  }
+}
+
+async function handleGoalEnabledChange(enabled) {
+  const nextValue = Boolean(enabled);
+  const previousValue = goalEnabledDraft.value;
+  goalEnabledDraft.value = nextValue;
+  goalEnabledState.retry = () => handleGoalEnabledChange(nextValue);
+  goalEnabledState.error = "";
+  goalEnabledState.busy = true;
+  try {
+    await props.autosave.run("advanced.goal-enabled", async () => {
+      const result = await saveGoalSettings({ enabled: nextValue });
+      if (!result?.ok) {
+        throw new Error(result?.error || "保存失败");
+      }
+      message.success(nextValue ? "已启用 Goal 命令" : "已关闭 Goal 命令（/goal 按普通对话处理）");
+    });
+  } catch (error) {
+    goalEnabledDraft.value = Boolean(appState.goal?.enabled ?? previousValue);
+    goalEnabledState.error = toUserError(error);
+  } finally {
+    goalEnabledState.busy = false;
   }
 }
 
@@ -397,6 +440,26 @@ function handleCacheFieldInput(field, state, valueRef, value) {
           </div>
         </SettingsRow>
       </template>
+    </SettingsSection>
+
+    <SettingsSection title="Goal 命令">
+      <SettingsRow
+        label="启用 Goal 命令"
+        description="开启后 /goal 与 /goal --strict 由系统识别并进入 Goal 执行；关闭时当作普通对话。"
+        :busy="goalEnabledBusy"
+        :error="goalEnabledState.error"
+        @retry="retryState(goalEnabledState)"
+      >
+        <Switch
+          compact
+          label=""
+          :enabled="goalEnabledDraft"
+          :busy="goalEnabledBusy"
+          :disabled="goalEnabledBusy"
+          aria-label="启用 Goal 命令"
+          @change="handleGoalEnabledChange"
+        />
+      </SettingsRow>
     </SettingsSection>
   </div>
 </template>

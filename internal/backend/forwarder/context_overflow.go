@@ -56,7 +56,7 @@ func (service *Service) recoverFromContextOverflow(stream *ActiveStream, convers
 	if err != nil {
 		return false, err
 	}
-	compiled, err := service.compiler.Compile(conversation, mode, latestUserText, modelName, stream.CustomSystemPrompt)
+	compiled, err := service.compiler.Compile(conversation, mode, latestUserText, modelName, stream.CustomSystemPrompt, stream.Goal != nil)
 	if err != nil {
 		return false, err
 	}

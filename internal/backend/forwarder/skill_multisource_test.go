@@ -82,6 +82,28 @@ func TestOrderedSkillScanRootsEmptyWorkspace(t *testing.T) {
 	}
 }
 
+func TestProjectGoalSkillIsDiscoverable(t *testing.T) {
+	workspaceRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatalf("resolve workspace root: %v", err)
+	}
+	root := filepath.Join(workspaceRoot, ".agents", "skills")
+	skills, diagnostics := scanOneSkillRootWithDiagnostics(root, SkillSourceShared)
+	if len(diagnostics) > 0 {
+		t.Fatalf("project skills contain validation diagnostics: %+v", diagnostics)
+	}
+
+	for _, skill := range skills {
+		if skill.Name == "goal-loop" {
+			if !strings.Contains(skill.Description, "/goal") {
+				t.Fatalf("goal-loop description must expose /goal trigger, got %q", skill.Description)
+			}
+			return
+		}
+	}
+	t.Fatalf("goal-loop skill missing from %q", root)
+}
+
 // TestParseVSCodeMCPJSON 验证 VS Code 原生 MCP 的 servers 键解析。
 func TestParseVSCodeMCPJSON(t *testing.T) {
 	data := []byte(`{"servers": {"local-tools": {"command": "node", "args": ["server.js"]}}}`)

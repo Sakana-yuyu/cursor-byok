@@ -727,13 +727,9 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 		return err
 	}
 	if !intent.GoalMode {
-		if goalText, strict, isGoal := parseGoalCommand(userMessageText(intent.UserMessage)); isGoal {
-			intent.GoalMode = true
-			intent.GoalText = goalText
-			intent.GoalStrict = strict
-			// 剥离前缀，避免 goal 目标文本被当作指令重复注入。
-			intent.UserMessage = replaceUserMessageText(intent.UserMessage, goalText)
-		}
+		// 仅当 goal.enabled 开启时才识别 /goal 与 /goal --strict；
+		// 关闭时消息原样保留，按普通对话处理。
+		applyGoalCommandIfEnabled(&intent, service.currentGoalConfig().Enabled)
 	}
 	if service.shouldReuseActiveRun(intent) {
 		logger.Infof("forwarder duplicate run reused request_id=%s conversation_id=%s", strings.TrimSpace(intent.RequestID), strings.TrimSpace(intent.ConversationID))
@@ -860,8 +856,8 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 		stream.CurrentProviderToken = 0
 		stream.CurrentCompactionToken = 0
 	}
-	stream.ProviderAccumulatedText = ""
-	stream.ProviderAccumulatedReasoning = ""
+	stream.ProviderAccumulatedText = nil
+	stream.ProviderAccumulatedReasoning = nil
 	stream.ProviderAccumulatedReasoningSignature = ""
 	stream.ProviderAccumulatedReasoningSignatureSource = ""
 	stream.ProviderAccumulatedReasoningItemID = ""
@@ -1713,8 +1709,8 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	stream.CurrentModelCallID = uuid.NewString()
 	stream.CurrentProviderToken++
 	currentToken := stream.CurrentProviderToken
-	stream.ProviderAccumulatedText = ""
-	stream.ProviderAccumulatedReasoning = ""
+	stream.ProviderAccumulatedText = nil
+	stream.ProviderAccumulatedReasoning = nil
 	stream.ProviderAccumulatedReasoningSignature = ""
 	stream.ProviderAccumulatedReasoningSignatureSource = ""
 	stream.ProviderAccumulatedReasoningItemID = ""
@@ -1775,7 +1771,7 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 		service.setTurnPhase(stream, TurnPhaseFailed)
 		return service.failStream(stream, "unknown", err)
 	}
-	compiled, err := service.compiler.Compile(conversation, mode, latestUserText, modelName, customSystemPrompt)
+	compiled, err := service.compiler.Compile(conversation, mode, latestUserText, modelName, customSystemPrompt, stream.Goal != nil)
 	if err != nil {
 		service.setTurnPhase(stream, TurnPhaseFailed)
 		return service.failStream(stream, "unknown", err)
@@ -1818,7 +1814,7 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 			service.setTurnPhase(stream, TurnPhaseFailed)
 			return service.failStream(stream, "unknown", freshErr)
 		}
-		recompiled, recompileErr := service.compiler.Compile(freshConversation, mode, latestUserText, modelName, customSystemPrompt)
+		recompiled, recompileErr := service.compiler.Compile(freshConversation, mode, latestUserText, modelName, customSystemPrompt, stream.Goal != nil)
 		if recompileErr != nil {
 			service.setTurnPhase(stream, TurnPhaseFailed)
 			return service.failStream(stream, "unknown", recompileErr)

@@ -152,7 +152,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 379,
+          "line": 387,
           "column": 41
         }
       ]
@@ -287,12 +287,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 344,
+          "line": 387,
           "column": 11
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 356,
+          "line": 399,
           "column": 13
         }
       ]
@@ -352,7 +352,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 187,
+          "line": 186,
           "column": 29
         }
       ]
@@ -567,7 +567,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 123,
+          "line": 122,
           "column": 21
         }
       ]
@@ -591,12 +591,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 136,
+          "line": 156,
           "column": 16
         },
         {
           "file": "src/views/Home.vue",
-          "line": 107,
+          "line": 106,
           "column": 111
         }
       ]
@@ -738,7 +738,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 247,
+          "line": 246,
           "column": 2415
         }
       ]
@@ -803,7 +803,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 422,
+          "line": 446,
           "column": 31
         }
       ]
@@ -966,7 +966,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 125,
+          "line": 124,
           "column": 27
         }
       ]
@@ -1060,7 +1060,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 362,
+          "line": 405,
           "column": 11
         }
       ]
@@ -1334,7 +1334,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 37,
+          "line": 52,
           "column": 12
         }
       ]
@@ -1346,7 +1346,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 56,
+          "line": 68,
           "column": 18
         }
       ]
@@ -1411,8 +1411,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 247,
-          "column": 7486
+          "line": 246,
+          "column": 7182
         }
       ]
     },
@@ -1423,7 +1423,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 247,
+          "line": 246,
           "column": 1087
         }
       ]
@@ -1464,7 +1464,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 283,
+          "line": 326,
           "column": 22
         }
       ]
@@ -1644,7 +1644,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 98,
+          "line": 97,
           "column": 38
         }
       ]
@@ -1844,18 +1844,6 @@
         }
       ]
     },
-    "1be4713bbaf99bfa": {
-      "source": "发起 Goal",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Goal.vue",
-          "line": 98,
-          "column": 52
-        }
-      ]
-    },
     "1bf566d136bbb1c1": {
       "source": "已开启调试日志",
       "kind": "text",
@@ -1863,7 +1851,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 176,
+          "line": 196,
           "column": 35
         }
       ]
@@ -2025,7 +2013,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 384,
+          "line": 383,
           "column": 56
         }
       ]
@@ -2078,7 +2066,7 @@
       "refs": [
         {
           "file": "src/router/index.js",
-          "line": 42,
+          "line": 41,
           "column": 39
         },
         {
@@ -2226,7 +2214,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 382,
+          "line": 377,
           "column": 56
         }
       ]
@@ -2361,12 +2349,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 135,
+          "line": 155,
           "column": 14
         },
         {
           "file": "src/views/Home.vue",
-          "line": 107,
+          "line": 106,
           "column": 92
         }
       ]
@@ -2438,20 +2426,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 113,
+          "line": 112,
           "column": 36
-        }
-      ]
-    },
-    "230867fec6ecd705": {
-      "source": "配置 goal 模式的预算与完成判定",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/GoalSettings.vue",
-          "line": 81,
-          "column": 38
         }
       ]
     },
@@ -2530,12 +2506,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 85,
-          "column": 163
-        },
-        {
-          "file": "src/views/Home.vue",
-          "line": 106,
+          "line": 105,
           "column": 122
         },
         {
@@ -2552,18 +2523,6 @@
           "file": "src/views/SupplierDetail.vue",
           "line": 554,
           "column": 30
-        }
-      ]
-    },
-    "246ba9975b75a05c": {
-      "source": "启用前端面板发起",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/GoalSettings.vue",
-          "line": 82,
-          "column": 26
         }
       ]
     },
@@ -2680,7 +2639,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 148,
+          "line": 147,
           "column": 29
         }
       ]
@@ -2839,12 +2798,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 137,
+          "line": 157,
           "column": 20
         },
         {
           "file": "src/views/Home.vue",
-          "line": 107,
+          "line": 106,
           "column": 176
         }
       ]
@@ -2921,11 +2880,6 @@
           "file": "src/components/supplier/SupplierModelCard.vue",
           "line": 74,
           "column": 16
-        },
-        {
-          "file": "src/views/Goal.vue",
-          "line": 35,
-          "column": 15
         },
         {
           "file": "src/views/SupplierDetail.vue",
@@ -3057,7 +3011,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 387,
+          "line": 379,
           "column": 41
         }
       ]
@@ -3177,7 +3131,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 185,
+          "line": 184,
           "column": 18
         }
       ]
@@ -3204,7 +3158,7 @@
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 138,
+          "line": 158,
           "column": 19
         },
         {
@@ -3254,17 +3208,17 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 107,
+          "line": 106,
           "column": 196
         },
         {
           "file": "src/views/Home.vue",
-          "line": 140,
+          "line": 139,
           "column": 19
         },
         {
           "file": "src/views/Home.vue",
-          "line": 169,
+          "line": 168,
           "column": 17
         },
         {
@@ -3335,7 +3289,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 189,
+          "line": 188,
           "column": 30
         }
       ]
@@ -3417,8 +3371,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 247,
-          "column": 7921
+          "line": 246,
+          "column": 7617
         }
       ]
     },
@@ -3498,7 +3452,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 247,
+          "line": 246,
           "column": 502
         }
       ]
@@ -3575,8 +3529,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 247,
-          "column": 7439
+          "line": 246,
+          "column": 7135
         }
       ]
     },
@@ -3775,12 +3729,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 232,
+          "line": 231,
           "column": 64
         },
         {
           "file": "src/views/Home.vue",
-          "line": 247,
+          "line": 246,
           "column": 2312
         }
       ]
@@ -3852,7 +3806,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 153,
+          "line": 152,
           "column": 52
         }
       ]
@@ -3977,7 +3931,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 247,
+          "line": 246,
           "column": 3604
         }
       ]
@@ -4132,8 +4086,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 247,
-          "column": 7590
+          "line": 246,
+          "column": 7286
         }
       ]
     },
@@ -4277,7 +4231,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 382,
+          "line": 425,
           "column": 11
         }
       ]
@@ -4575,18 +4529,18 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 101,
+          "line": 100,
           "column": 109
         },
         {
           "file": "src/views/Home.vue",
-          "line": 232,
+          "line": 231,
           "column": 89
         },
         {
           "file": "src/views/Home.vue",
-          "line": 247,
-          "column": 7144
+          "line": 246,
+          "column": 6840
         },
         {
           "file": "src/views/SupplierDetail.vue",
@@ -4655,7 +4609,7 @@
         },
         {
           "file": "src/router/index.js",
-          "line": 68,
+          "line": 67,
           "column": 39
         },
         {
@@ -4761,7 +4715,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 167,
+          "line": 166,
           "column": 14
         }
       ]
@@ -5061,18 +5015,6 @@
         }
       ]
     },
-    "491693a0ac3fd230": {
-      "source": "预算超限",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Goal.vue",
-          "line": 36,
-          "column": 24
-        }
-      ]
-    },
     "4923eeb7bd75cccd": {
       "source": "{0} 的模型标识不能为空",
       "kind": "template",
@@ -5191,7 +5133,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 306,
+          "line": 349,
           "column": 9
         }
       ]
@@ -5220,7 +5162,7 @@
         },
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 61,
+          "line": 73,
           "column": 12
         }
       ]
@@ -5321,7 +5263,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 392,
+          "line": 435,
           "column": 15
         }
       ]
@@ -5374,11 +5316,6 @@
           "file": "src/utils/valueCast.js",
           "line": 69,
           "column": 12
-        },
-        {
-          "file": "src/views/Goal.vue",
-          "line": 38,
-          "column": 28
         }
       ]
     },
@@ -5474,13 +5411,13 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 168,
+          "line": 167,
           "column": 18
         },
         {
           "file": "src/views/Home.vue",
-          "line": 247,
-          "column": 6449
+          "line": 246,
+          "column": 6145
         }
       ]
     },
@@ -5581,18 +5518,6 @@
         }
       ]
     },
-    "5026a63b58cdf048": {
-      "source": "执行中",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Goal.vue",
-          "line": 33,
-          "column": 16
-        }
-      ]
-    },
     "51194c3ad014fb29": {
       "source": "需重测",
       "kind": "text",
@@ -5663,7 +5588,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 286,
+          "line": 329,
           "column": 9
         }
       ]
@@ -5757,7 +5682,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 43,
+          "line": 59,
           "column": 12
         }
       ]
@@ -5798,7 +5723,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 38,
+          "line": 54,
           "column": 18
         }
       ]
@@ -5827,12 +5752,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 155,
+          "line": 154,
           "column": 60
         },
         {
           "file": "src/views/Home.vue",
-          "line": 217,
+          "line": 216,
           "column": 63
         }
       ]
@@ -6037,7 +5962,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 155,
+          "line": 154,
           "column": 30
         }
       ]
@@ -6061,7 +5986,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 101,
+          "line": 100,
           "column": 34
         }
       ]
@@ -6085,7 +6010,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 139,
+          "line": 138,
           "column": 20
         }
       ]
@@ -6114,20 +6039,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 231,
+          "line": 230,
           "column": 16
-        }
-      ]
-    },
-    "57060c88a36bf3d0": {
-      "source": "目标",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/router/index.js",
-          "line": 78,
-          "column": 39
         }
       ]
     },
@@ -6334,7 +6247,7 @@
         },
         {
           "file": "src/router/index.js",
-          "line": 22,
+          "line": 21,
           "column": 38
         }
       ]
@@ -6430,20 +6343,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 113,
+          "line": 112,
           "column": 164
-        }
-      ]
-    },
-    "5b50d7c4b5950dc5": {
-      "source": "系统",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/settingsCategories.js",
-          "line": 22,
-          "column": 12
         }
       ]
     },
@@ -6561,7 +6462,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 226,
+          "line": 225,
           "column": 66
         }
       ]
@@ -6585,7 +6486,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 176,
+          "line": 196,
           "column": 47
         }
       ]
@@ -6633,7 +6534,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 166,
+          "line": 165,
           "column": 12
         }
       ]
@@ -6660,18 +6561,6 @@
         }
       ]
     },
-    "5f79dc758bc77938": {
-      "source": "暂无 goal 记录，发起后这里会实时显示进度。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Goal.vue",
-          "line": 115,
-          "column": 182
-        }
-      ]
-    },
     "5f8faa43a270fcb3": {
       "source": "实时统计",
       "kind": "text",
@@ -6679,7 +6568,7 @@
       "refs": [
         {
           "file": "src/router/index.js",
-          "line": 63,
+          "line": 62,
           "column": 39
         }
       ]
@@ -6727,8 +6616,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 247,
-          "column": 5454
+          "line": 246,
+          "column": 5150
         }
       ]
     },
@@ -6827,7 +6716,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 385,
+          "line": 384,
           "column": 56
         }
       ]
@@ -7039,7 +6928,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 74,
+          "line": 89,
           "column": 18
         }
       ]
@@ -7095,32 +6984,32 @@
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 174,
+          "line": 194,
           "column": 42
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 197,
+          "line": 217,
           "column": 42
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 219,
+          "line": 240,
           "column": 42
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 241,
+          "line": 262,
+          "column": 42
+        },
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 284,
           "column": 44
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
           "line": 233,
-          "column": 42
-        },
-        {
-          "file": "src/components/settings/categories/GoalSettings.vue",
-          "line": 48,
           "column": 42
         },
         {
@@ -7162,7 +7051,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 376,
+          "line": 381,
           "column": 41
         }
       ]
@@ -7261,7 +7150,7 @@
         },
         {
           "file": "src/router/index.js",
-          "line": 37,
+          "line": 36,
           "column": 39
         },
         {
@@ -7595,18 +7484,6 @@
         }
       ]
     },
-    "696b85f601472513": {
-      "source": "· 费用 $",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Goal.vue",
-          "line": 129,
-          "column": 101
-        }
-      ]
-    },
     "698ae0907a5bdb75": {
       "source": "缓存命中",
       "kind": "text",
@@ -7626,17 +7503,17 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 285,
+          "line": 328,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 297,
+          "line": 340,
           "column": 11
         },
         {
           "file": "src/views/Home.vue",
-          "line": 247,
+          "line": 246,
           "column": 1054
         }
       ]
@@ -7650,18 +7527,6 @@
           "file": "src/views/ModelGroups.vue",
           "line": 64,
           "column": 43
-        }
-      ]
-    },
-    "69c36fc5a8f35a49": {
-      "source": "选择执行模型",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Goal.vue",
-          "line": 106,
-          "column": 61
         }
       ]
     },
@@ -7696,7 +7561,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 153,
+          "line": 152,
           "column": 34
         }
       ]
@@ -7859,7 +7724,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 12,
+          "line": 23,
           "column": 12
         }
       ]
@@ -7929,6 +7794,18 @@
         }
       ]
     },
+    "6dd4af23e22bb8f2": {
+      "source": "Goal 命令",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 445,
+          "column": 22
+        }
+      ]
+    },
     "6df9a984e591ade8": {
       "source": "读取尾部...",
       "kind": "text",
@@ -7948,8 +7825,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 247,
-          "column": 5810
+          "line": 246,
+          "column": 5506
         }
       ]
     },
@@ -7972,7 +7849,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 94,
+          "line": 93,
           "column": 29
         }
       ]
@@ -8071,6 +7948,18 @@
         }
       ]
     },
+    "6fc1c7b963980b18": {
+      "source": "开启后 /goal 与 /goal --strict 由系统识别并进入 Goal 执行；关闭时当作普通对话。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 448,
+          "column": 9
+        }
+      ]
+    },
     "6fc38ef3602fe789": {
       "source": "上下文",
       "kind": "text",
@@ -8090,7 +7979,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 113,
+          "line": 112,
           "column": 144
         }
       ]
@@ -8164,6 +8053,18 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 640,
           "column": 15
+        }
+      ]
+    },
+    "71b0e868e6f9179c": {
+      "source": "已关闭 Goal 命令（/goal 按普通对话处理）",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 219,
+          "column": 51
         }
       ]
     },
@@ -8424,7 +8325,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 220,
+          "line": 219,
           "column": 69
         }
       ]
@@ -8516,7 +8417,7 @@
         },
         {
           "file": "src/router/index.js",
-          "line": 52,
+          "line": 51,
           "column": 39
         }
       ]
@@ -8540,7 +8441,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 17,
+          "line": 29,
           "column": 12
         }
       ]
@@ -8842,7 +8743,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 101,
+          "line": 100,
           "column": 89
         }
       ]
@@ -8940,18 +8841,6 @@
           "file": "src/views/SupplierDetail.vue",
           "line": 977,
           "column": 36
-        }
-      ]
-    },
-    "7e32eb296f27eefb": {
-      "source": "让 Agent 带目标循环执行，直到任务真正完成；进度与结果实时可见。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Goal.vue",
-          "line": 88,
-          "column": 43
         }
       ]
     },
@@ -9095,12 +8984,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 325,
+          "line": 368,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 337,
+          "line": 380,
           "column": 11
         }
       ]
@@ -9228,18 +9117,6 @@
         }
       ]
     },
-    "816dd150cc03bdd9": {
-      "source": "Goal 循环执行",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/GoalSettings.vue",
-          "line": 81,
-          "column": 20
-        }
-      ]
-    },
     "816fe4c2dafdaaad": {
       "source": "识图模式",
       "kind": "text",
@@ -9264,7 +9141,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 225,
+          "line": 224,
           "column": 18
         }
       ]
@@ -9288,13 +9165,13 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 247,
-          "column": 5020
+          "line": 246,
+          "column": 4716
         },
         {
           "file": "src/views/Home.vue",
-          "line": 247,
-          "column": 6449
+          "line": 246,
+          "column": 6145
         }
       ]
     },
@@ -9307,18 +9184,6 @@
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
           "line": 470,
           "column": 25
-        }
-      ]
-    },
-    "827506adfd17db4f": {
-      "source": "完成自检轮数",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/GoalSettings.vue",
-          "line": 94,
-          "column": 18
         }
       ]
     },
@@ -9365,7 +9230,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 31,
+          "line": 45,
           "column": 12
         }
       ]
@@ -9449,18 +9314,6 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 485,
           "column": 40
-        }
-      ]
-    },
-    "847144129c60097c": {
-      "source": "最大 provider pass 数",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/GoalSettings.vue",
-          "line": 85,
-          "column": 18
         }
       ]
     },
@@ -9640,6 +9493,18 @@
         }
       ]
     },
+    "86ffbbfc5084e14c": {
+      "source": "更多设置",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/settingsCategories.js",
+          "line": 35,
+          "column": 12
+        }
+      ]
+    },
     "876056ff40e2e6a1": {
       "source": "历史与日志",
       "kind": "text",
@@ -9652,7 +9517,7 @@
         },
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 73,
+          "line": 87,
           "column": 12
         }
       ]
@@ -9664,7 +9529,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 420,
+          "line": 444,
           "column": 31
         }
       ]
@@ -9777,7 +9642,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 7,
+          "line": 17,
           "column": 12
         }
       ]
@@ -9864,7 +9729,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 377,
+          "line": 382,
           "column": 41
         }
       ]
@@ -9969,18 +9834,18 @@
         },
         {
           "file": "src/router/index.js",
-          "line": 27,
+          "line": 26,
           "column": 39
         },
         {
           "file": "src/router/index.js",
-          "line": 32,
+          "line": 31,
           "column": 39
         },
         {
           "file": "src/views/Home.vue",
-          "line": 247,
-          "column": 4629
+          "line": 246,
+          "column": 4325
         },
         {
           "file": "src/views/ModelGroups.vue",
@@ -9996,7 +9861,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 211,
           "column": 11
         }
       ]
@@ -10061,6 +9926,18 @@
         }
       ]
     },
+    "8d746a3e6dc1a417": {
+      "source": "已启用 Goal 命令",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 219,
+          "column": 35
+        }
+      ]
+    },
     "8da7f18d3cbd7912": {
       "source": "留空/0 = 默认 30 天",
       "kind": "text",
@@ -10068,25 +9945,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 373,
+          "line": 416,
           "column": 15
-        }
-      ]
-    },
-    "8dca786a39eb0f2c": {
-      "source": "目标执行（Goal）",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Goal.vue",
-          "line": 87,
-          "column": 54
-        },
-        {
-          "file": "src/views/Home.vue",
-          "line": 247,
-          "column": 4312
         }
       ]
     },
@@ -10364,7 +10224,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 98,
+          "line": 97,
           "column": 29
         }
       ]
@@ -10376,7 +10236,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 62,
+          "line": 75,
           "column": 18
         }
       ]
@@ -10417,7 +10277,7 @@
         },
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 55,
+          "line": 66,
           "column": 12
         }
       ]
@@ -10478,8 +10338,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 247,
-          "column": 8063
+          "line": 246,
+          "column": 7759
         },
         {
           "file": "src/views/RequestMetrics.vue",
@@ -10644,7 +10504,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 217,
+          "line": 216,
           "column": 32
         }
       ]
@@ -10656,7 +10516,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 80,
+          "line": 96,
           "column": 18
         }
       ]
@@ -11062,7 +10922,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 138,
+          "line": 137,
           "column": 16
         }
       ]
@@ -11134,8 +10994,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 247,
-          "column": 6783
+          "line": 246,
+          "column": 6479
         }
       ]
     },
@@ -11223,12 +11083,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 154,
+          "line": 174,
           "column": 33
         },
         {
           "file": "src/views/Home.vue",
-          "line": 117,
+          "line": 116,
           "column": 29
         }
       ]
@@ -11252,7 +11112,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 380,
+          "line": 388,
           "column": 41
         }
       ]
@@ -11619,7 +11479,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 422,
+          "line": 446,
           "column": 78
         }
       ]
@@ -12058,6 +11918,23 @@
         }
       ]
     },
+    "a6966e1ff91acef6": {
+      "source": "启用 Goal 命令",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 447,
+          "column": 9
+        },
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 459,
+          "column": 11
+        }
+      ]
+    },
     "a6bf6336ceb337fe": {
       "source": "本地缓存",
       "kind": "text",
@@ -12461,7 +12338,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 183,
+          "line": 182,
           "column": 17
         }
       ]
@@ -12485,7 +12362,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 67,
+          "line": 80,
           "column": 12
         }
       ]
@@ -12690,7 +12567,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 247,
+          "line": 246,
           "column": 1107
         }
       ]
@@ -12861,12 +12738,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 154,
+          "line": 174,
           "column": 54
         },
         {
           "file": "src/views/Home.vue",
-          "line": 117,
+          "line": 116,
           "column": 50
         }
       ]
@@ -12900,8 +12777,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 247,
-          "column": 5020
+          "line": 246,
+          "column": 4716
         }
       ]
     },
@@ -13020,7 +12897,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 113,
+          "line": 112,
           "column": 57
         }
       ]
@@ -13200,8 +13077,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 247,
-          "column": 8063
+          "line": 246,
+          "column": 7759
         },
         {
           "file": "src/views/ModelConfig.vue",
@@ -13412,7 +13289,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 101,
+          "line": 100,
           "column": 51
         }
       ]
@@ -13571,18 +13448,6 @@
         }
       ]
     },
-    "bde182b0ec0ca674": {
-      "source": "费用上限（USD，0=不限）",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/GoalSettings.vue",
-          "line": 91,
-          "column": 18
-        }
-      ]
-    },
     "bdf3801c24d8f850": {
       "source": "本地缓存命中 {0} · {1}",
       "kind": "template",
@@ -13592,18 +13457,6 @@
           "file": "src/components/HomeMetricsCard.vue",
           "line": 371,
           "column": 10
-        }
-      ]
-    },
-    "be24dbefce1e8102": {
-      "source": "· 自检",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Goal.vue",
-          "line": 129,
-          "column": 74
         }
       ]
     },
@@ -14065,7 +13918,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 388,
+          "line": 380,
           "column": 41
         }
       ]
@@ -14202,7 +14055,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 68,
+          "line": 82,
           "column": 18
         }
       ]
@@ -14391,7 +14244,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 381,
+          "line": 376,
           "column": 41
         }
       ]
@@ -14415,7 +14268,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 216,
+          "line": 215,
           "column": 18
         }
       ]
@@ -14456,7 +14309,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 247,
+          "line": 246,
           "column": 2312
         }
       ]
@@ -14521,18 +14374,6 @@
           "file": "src/views/ModelEditor.vue",
           "line": 1083,
           "column": 66
-        }
-      ]
-    },
-    "ca4d973c0b006b75": {
-      "source": "停止",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Goal.vue",
-          "line": 135,
-          "column": 127
         }
       ]
     },
@@ -14603,12 +14444,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 305,
+          "line": 348,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 317,
+          "line": 360,
           "column": 11
         }
       ]
@@ -14632,7 +14473,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 44,
+          "line": 61,
           "column": 18
         }
       ]
@@ -14692,7 +14533,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 213,
+          "line": 212,
           "column": 11
         }
       ]
@@ -14745,7 +14586,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 386,
+          "line": 385,
           "column": 41
         }
       ]
@@ -14817,7 +14658,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 151,
+          "line": 171,
           "column": 42
         },
         {
@@ -14827,7 +14668,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 107,
+          "line": 106,
           "column": 324
         }
       ]
@@ -14892,8 +14733,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 247,
-          "column": 6296
+          "line": 246,
+          "column": 5992
         }
       ]
     },
@@ -15073,7 +14914,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 247,
+          "line": 246,
           "column": 502
         }
       ]
@@ -15143,7 +14984,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 363,
+          "line": 406,
           "column": 11
         }
       ]
@@ -15277,11 +15118,6 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/views/Goal.vue",
-          "line": 92,
-          "column": 61
-        },
-        {
           "file": "src/views/ModelGroups.vue",
           "line": 68,
           "column": 61
@@ -15319,7 +15155,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 79,
+          "line": 94,
           "column": 12
         }
       ]
@@ -15396,12 +15232,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 226,
+          "line": 225,
           "column": 36
         },
         {
           "file": "src/views/Home.vue",
-          "line": 232,
+          "line": 231,
           "column": 34
         }
       ]
@@ -15413,7 +15249,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 220,
+          "line": 219,
           "column": 31
         }
       ]
@@ -15425,7 +15261,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 184,
+          "line": 183,
           "column": 36
         }
       ]
@@ -15553,18 +15389,6 @@
         }
       ]
     },
-    "dab8d84fed2a8284": {
-      "source": "已启用前端面板发起",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/GoalSettings.vue",
-          "line": 82,
-          "column": 26
-        }
-      ]
-    },
     "daede9881787abe7": {
       "source": "备注",
       "kind": "text",
@@ -15674,7 +15498,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 215,
+          "line": 214,
           "column": 38
         }
       ]
@@ -15691,8 +15515,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 247,
-          "column": 5454
+          "line": 246,
+          "column": 5150
         }
       ]
     },
@@ -15756,18 +15580,6 @@
         }
       ]
     },
-    "dcac2e420841836c": {
-      "source": "最大时长（秒，0=不限）",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/GoalSettings.vue",
-          "line": 88,
-          "column": 18
-        }
-      ]
-    },
     "dd0961b1c2c305d0": {
       "source": "监督处置",
       "kind": "text",
@@ -15799,7 +15611,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 303,
+          "line": 346,
           "column": 22
         }
       ]
@@ -15828,7 +15640,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 420,
+          "line": 444,
           "column": 74
         }
       ]
@@ -15864,7 +15676,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 189,
+          "line": 188,
           "column": 60
         }
       ]
@@ -15910,7 +15722,7 @@
         },
         {
           "file": "src/router/index.js",
-          "line": 73,
+          "line": 72,
           "column": 39
         }
       ]
@@ -15987,12 +15799,12 @@
       "refs": [
         {
           "file": "src/components/settings/SettingsSidebar.vue",
-          "line": 49,
+          "line": 78,
           "column": 9
         },
         {
           "file": "src/components/settings/SettingsSidebar.vue",
-          "line": 55,
+          "line": 84,
           "column": 10
         }
       ]
@@ -16067,30 +15879,6 @@
           "file": "src/views/SupplierDetail.vue",
           "line": 866,
           "column": 14
-        }
-      ]
-    },
-    "e062d602fed49747": {
-      "source": "最近进展：",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Goal.vue",
-          "line": 131,
-          "column": 81
-        }
-      ]
-    },
-    "e066997db862d405": {
-      "source": "· 工具调用",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Goal.vue",
-          "line": 129,
-          "column": 46
         }
       ]
     },
@@ -16185,12 +15973,12 @@
       "refs": [
         {
           "file": "src/router/index.js",
-          "line": 57,
+          "line": 56,
           "column": 39
         },
         {
           "file": "src/views/Home.vue",
-          "line": 247,
+          "line": 246,
           "column": 4014
         },
         {
@@ -16465,18 +16253,6 @@
         }
       ]
     },
-    "e5dd3cb6a017027d": {
-      "source": "Goal 设置",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Goal.vue",
-          "line": 91,
-          "column": 83
-        }
-      ]
-    },
     "e645404787be7478": {
       "source": "浏览器预览模式不支持导出证据包 ZIP，请在桌面客户端中使用",
       "kind": "text",
@@ -16564,7 +16340,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 378,
+          "line": 386,
           "column": 41
         }
       ]
@@ -17063,18 +16839,6 @@
         }
       ]
     },
-    "ef6862c6e8ec4b75": {
-      "source": "输入目标，例如：跑通全部测试并修复失败用例",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Goal.vue",
-          "line": 103,
-          "column": 11
-        }
-      ]
-    },
     "ef812e1a53e6c892": {
       "source": "模型目录 URL（可选）",
       "kind": "text",
@@ -17148,18 +16912,6 @@
         }
       ]
     },
-    "f006455e3baf2b0b": {
-      "source": "已停止",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Goal.vue",
-          "line": 37,
-          "column": 16
-        }
-      ]
-    },
     "f020e4630a54d322": {
       "source": "正在加载",
       "kind": "text",
@@ -17179,7 +16931,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 226,
+          "line": 225,
           "column": 93
         }
       ]
@@ -17203,13 +16955,13 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 247,
+          "line": 246,
           "column": 3187
         },
         {
           "file": "src/views/Home.vue",
-          "line": 247,
-          "column": 6972
+          "line": 246,
+          "column": 6668
         }
       ]
     },
@@ -17301,11 +17053,6 @@
           "column": 14
         },
         {
-          "file": "src/views/Goal.vue",
-          "line": 34,
-          "column": 18
-        },
-        {
           "file": "src/views/RequestMetrics.vue",
           "line": 179,
           "column": 14
@@ -17324,7 +17071,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 32,
+          "line": 47,
           "column": 18
         }
       ]
@@ -17379,18 +17126,6 @@
           "file": "src/utils/modelEditorMeta.js",
           "line": 46,
           "column": 20
-        }
-      ]
-    },
-    "f3896438e87d1f7c": {
-      "source": "目标循环执行的预算与完成判定。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/settingsCategories.js",
-          "line": 50,
-          "column": 18
         }
       ]
     },
@@ -17670,8 +17405,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 247,
-          "column": 7590
+          "line": 246,
+          "column": 7286
         }
       ]
     },
@@ -17818,18 +17553,6 @@
         }
       ]
     },
-    "f7d5b61de2fd0fc8": {
-      "source": "开始执行",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Goal.vue",
-          "line": 107,
-          "column": 80
-        }
-      ]
-    },
     "f807f8072fa4444c": {
       "source": "自动识别会根据供应商、模型名称和接口地址选择协议；固定协议会严格使用你指定的协议，测速不会自动覆盖。",
       "kind": "text",
@@ -17885,7 +17608,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 345,
+          "line": 388,
           "column": 11
         }
       ]
@@ -17974,7 +17697,7 @@
       "refs": [
         {
           "file": "src/router/index.js",
-          "line": 47,
+          "line": 46,
           "column": 39
         }
       ]
@@ -17998,7 +17721,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 326,
+          "line": 369,
           "column": 9
         }
       ]
@@ -18077,7 +17800,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 383,
+          "line": 378,
           "column": 56
         }
       ]
@@ -18209,18 +17932,18 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 137,
+          "line": 136,
           "column": 14
         },
         {
           "file": "src/views/Home.vue",
-          "line": 247,
+          "line": 246,
           "column": 3187
         },
         {
           "file": "src/views/Home.vue",
-          "line": 247,
-          "column": 6972
+          "line": 246,
+          "column": 6668
         }
       ]
     },
@@ -18243,12 +17966,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 176,
+          "line": 175,
           "column": 29
         },
         {
           "file": "src/views/Home.vue",
-          "line": 201,
+          "line": 200,
           "column": 29
         }
       ]

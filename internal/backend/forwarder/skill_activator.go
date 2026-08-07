@@ -27,6 +27,7 @@ const (
 	activatedSkillsThreshold = 0.0 // BM25 得分阈值；0 表示只要有共享词即候选
 	activatedSkillsMaxInject = 4   // 最终注入上限（含常驻元技能）
 	metaSkillAlwaysOnName    = "find-skills"
+	goalLoopSkillName        = "goal-loop" // /goal 命令对应的强制注入技能
 )
 
 // bm25 经验参数。
@@ -377,18 +378,20 @@ func NewSkillActivator(store *SkillStore) *SkillActivator {
 
 // Activate 返回仅含用户级技能来源的激活列表，保持旧调用兼容。
 func (a *SkillActivator) Activate(queryText string, parentActivated []string) []GlobalSkill {
-	return a.ActivateForWorkspace("", queryText, parentActivated)
+	return a.ActivateForWorkspace("", queryText, parentActivated, false)
 }
 
 // ActivateForWorkspace 返回应注入的技能列表（顺序：元技能优先，再按相关性降序）。
 // parentActivated 是父会话最近激活的技能名集合（子代理保底用），可为空。
+// goalMode 为 true 时强制注入 goal-loop 技能（若扫描可见），保证 /goal 请求
+// 在命令前缀被剥离后仍能稳定命中 Goal 工作流约束。
 // 结果含常驻元技能 find-skills（若存在）+ Top-K 打分技能，去重后截断到 activatedSkillsMaxInject。
-func (a *SkillActivator) ActivateForWorkspace(workspaceRoot string, queryText string, parentActivated []string) []GlobalSkill {
-	return a.activateForWorkspaceExcluding(workspaceRoot, queryText, parentActivated, nil)
+func (a *SkillActivator) ActivateForWorkspace(workspaceRoot string, queryText string, parentActivated []string, goalMode bool) []GlobalSkill {
+	return a.activateForWorkspaceExcluding(workspaceRoot, queryText, parentActivated, nil, goalMode)
 }
 
 // activateForWorkspaceExcluding excludes skills already supplied explicitly by the client.
-func (a *SkillActivator) activateForWorkspaceExcluding(workspaceRoot string, queryText string, parentActivated []string, excludedPaths map[string]struct{}) []GlobalSkill {
+func (a *SkillActivator) activateForWorkspaceExcluding(workspaceRoot string, queryText string, parentActivated []string, excludedPaths map[string]struct{}, goalMode bool) []GlobalSkill {
 	if a == nil || a.store == nil {
 		return nil
 	}
@@ -413,6 +416,20 @@ func (a *SkillActivator) activateForWorkspaceExcluding(workspaceRoot string, que
 			metaNames[strings.ToLower(s.Name)] = struct{}{}
 		} else {
 			others = append(others, s)
+		}
+	}
+
+	// Goal 模式的强制激活：goal-loop 直接从扫描候选里取出，跳过 BM25 打分。
+	// 扫描已按用户配置过滤（禁用技能不会出现在 candidates），因此这里只负责稳定命中。
+	var forced []GlobalSkill
+	forcedNames := make(map[string]struct{})
+	if goalMode {
+		for _, s := range skills {
+			if strings.EqualFold(s.Name, goalLoopSkillName) {
+				forced = append(forced, s)
+				forcedNames[strings.ToLower(s.Name)] = struct{}{}
+				break
+			}
 		}
 	}
 
@@ -461,10 +478,19 @@ func (a *SkillActivator) activateForWorkspaceExcluding(workspaceRoot string, que
 		topK = len(results)
 	}
 
-	// 合并：元技能 + Top-K，去重。
-	seen := make(map[string]struct{}, topK+len(meta)+1)
-	activated := make([]GlobalSkill, 0, topK+len(meta)+1)
+	// 合并：元技能 + 强制技能（goal-loop）+ Top-K，去重。
+	// 强制技能不挤占元技能名额，但计入最终注入上限。
+	seen := make(map[string]struct{}, topK+len(meta)+len(forced)+1)
+	activated := make([]GlobalSkill, 0, topK+len(meta)+len(forced)+1)
 	for _, s := range meta {
+		key := strings.ToLower(s.Name)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		activated = append(activated, s)
+	}
+	for _, s := range forced {
 		key := strings.ToLower(s.Name)
 		if _, ok := seen[key]; ok {
 			continue

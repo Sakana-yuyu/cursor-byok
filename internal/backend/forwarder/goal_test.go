@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	agentv1 "cursor/gen/agentv1"
 )
 
 func TestNewGoalState(t *testing.T) {
@@ -63,6 +65,51 @@ func TestParseGoalCommand(t *testing.T) {
 			gotText, gotStrict, gotGoal := parseGoalCommand(tc.input)
 			if gotText != tc.wantText || gotStrict != tc.wantStrict || gotGoal != tc.wantGoal {
 				t.Fatalf("parseGoalCommand(%q) = (%q, %v, %v), want (%q, %v, %v)", tc.input, gotText, gotStrict, gotGoal, tc.wantText, tc.wantStrict, tc.wantGoal)
+			}
+		})
+	}
+}
+
+// TestApplyGoalCommandIfEnabled 覆盖 goal 开关语义：
+// enabled=false 时 /goal 与 /goal --strict 均不被识别，消息原样保留（普通对话）；
+// enabled=true 时正常识别并剥离前缀。
+func TestApplyGoalCommandIfEnabled(t *testing.T) {
+	cases := []struct {
+		name         string
+		text         string
+		enabled      bool
+		alreadyGoal  bool
+		wantGoalMode bool
+		wantText     string
+		wantStrict   bool
+		wantMsg      string // 期望保留在 UserMessage 中的文本（关闭/未命中时）
+	}{
+		{"disabled slash goal", "/goal 修复登录 bug", false, false, false, "", false, "/goal 修复登录 bug"},
+		{"disabled strict goal", "/goal --strict 实现支付流程", false, false, false, "", false, "/goal --strict 实现支付流程"},
+		{"disabled plain message", "修复登录 bug", false, false, false, "", false, "修复登录 bug"},
+		{"enabled slash goal", "/goal 修复登录 bug", true, false, true, "修复登录 bug", false, "修复登录 bug"},
+		{"enabled strict goal", "/goal --strict 实现支付流程", true, false, true, "实现支付流程", true, "实现支付流程"},
+		{"enabled plain message", "修复登录 bug", true, false, false, "", false, "修复登录 bug"},
+		{"already goal mode", "/goal 修复登录 bug", true, true, true, "", false, "/goal 修复登录 bug"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			intent := &InboundIntent{
+				GoalMode: tc.alreadyGoal,
+				UserMessage: &agentv1.UserMessage{Text: tc.text},
+			}
+			applyGoalCommandIfEnabled(intent, tc.enabled)
+			if intent.GoalMode != tc.wantGoalMode {
+				t.Fatalf("GoalMode = %v, want %v", intent.GoalMode, tc.wantGoalMode)
+			}
+			if intent.GoalText != tc.wantText {
+				t.Fatalf("GoalText = %q, want %q", intent.GoalText, tc.wantText)
+			}
+			if intent.GoalStrict != tc.wantStrict {
+				t.Fatalf("GoalStrict = %v, want %v", intent.GoalStrict, tc.wantStrict)
+			}
+			if gotMsg := userMessageText(intent.UserMessage); gotMsg != tc.wantMsg {
+				t.Fatalf("UserMessage = %q, want %q", gotMsg, tc.wantMsg)
 			}
 		})
 	}
