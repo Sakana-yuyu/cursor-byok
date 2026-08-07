@@ -2,6 +2,7 @@
 import Button from "@/components/ui/Button.vue";
 import Input from "@/components/ui/Input.vue";
 import ModelAdapterTestCard from "@/components/ModelAdapterTestCard.vue";
+import ModelCapabilitiesSection from "@/components/model-editor/ModelCapabilitiesSection.vue";
 import ModelPricingSection from "@/components/model-editor/ModelPricingSection.vue";
 import Select from "@/components/ui/Select.vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
@@ -1047,82 +1048,17 @@ onMounted(async () => {
             <div class="mt-0.5 text-xs leading-5 text-[#8f8f8f]">上下文、图片能力、推理强度和价格会影响模型的实际使用方式。</div>
           </div>
 
-          <label class="flex flex-col gap-1 md:col-span-2">
-            <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
-              <Tooltip :content="fieldTips.contextWindowTokens" />
-              <span>上下文窗口</span>
-            </span>
-
-            <!-- 模型能力徽章 -->
-            <div v-if="detectedCapabilities" class="flex flex-wrap items-center gap-1.5">
-              <span v-if="detectedCapabilities.supportsVision" class="inline-flex items-center gap-0.5 rounded-full border border-[#3f3f3f] bg-[#2a2a2a] px-2 py-0.5 text-[11px] text-[#86efac]">
-                <span class="icon-[mdi--eye-outline] text-[12px]"></span>视觉
-              </span>
-              <span v-if="detectedCapabilities.supportsThinking" class="inline-flex items-center gap-0.5 rounded-full border border-[#3f3f3f] bg-[#2a2a2a] px-2 py-0.5 text-[11px] text-[#93c5fd]">
-                <span class="icon-[mdi--brain] text-[12px]"></span>思考
-              </span>
-              <span v-if="detectedCapabilities.supportsTools" class="inline-flex items-center gap-0.5 rounded-full border border-[#3f3f3f] bg-[#2a2a2a] px-2 py-0.5 text-[11px] text-[#fcd34d]">
-                <span class="icon-[mdi--tools] text-[12px]"></span>工具
-              </span>
-              <span v-if="detectedCapabilities.supportsAudio" class="inline-flex items-center gap-0.5 rounded-full border border-[#3f3f3f] bg-[#2a2a2a] px-2 py-0.5 text-[11px] text-[#c4b5fd]">
-                <span class="icon-[mdi--microphone-outline] text-[12px]"></span>音频
-              </span>
-              <span class="inline-flex items-center gap-0.5 rounded-full border border-[#3f3f3f] bg-[#2a2a2a] px-2 py-0.5 text-[11px] text-[#a3a3a3]">
-                上下文 {{ (detectedCapabilities.contextWindowTokens / 1000).toFixed(0) }}K
-              </span>
-              <span class="inline-flex items-center gap-0.5 rounded-full border border-[#3f3f3f] bg-[#2a2a2a] px-2 py-0.5 text-[11px] text-[#a3a3a3]">
-                最大输出 {{ (detectedCapabilities.maxOutputTokens / 1000).toFixed(0) }}K
-              </span>
-            </div>
-
-            <div v-if="detectedCapabilities && detectedCapabilities.supportsVision === false" class="rounded-[6px] border border-yellow-800/40 bg-yellow-900/20 px-3 py-1.5 text-[11px] text-yellow-200">
-              此模型不支持图片输入。图片将按视觉委派设置转交给已配置的识图模型；未配置时保留文字占位说明。
-            </div>
-
-            <div v-if="detectedCapabilities && detectedCapabilities.supportsVision === false" class="mt-1.5 rounded-[6px] border border-[#343434] bg-[#252525] px-3 py-2 text-[11px] text-[#a3a3a3]">
-              读图能力已统一到「设置 → 模型与委派 → 高级委派 → 视觉委派」。请在那里选择一个支持视觉输入的模型并启用视觉委派；无需在当前模型中重复配置读图 MCP。
-              <button
-                type="button"
-                class="ml-1 text-[#93c5fd] underline decoration-[#93c5fd]/50 underline-offset-2 hover:text-white"
-                @click="router.push({ path: '/settings', query: { category: 'delegation' } })"
-              >
-                打开视觉委派设置
-              </button>
-            </div>
-
-            <!-- 快捷档位按钮 -->
-            <div class="inline-flex flex-wrap rounded-[8px] border border-[#3f3f3f] bg-[#232323] p-0.5 text-[12px]" role="group" aria-label="上下文窗口档位">
-              <button
-                v-for="tier in CONTEXT_TIERS"
-                :key="tier.tokens"
-                type="button"
-                class="relative rounded-[6px] px-2.5 py-1 font-medium transition-colors"
-                :class="[
-                  activeContextTier?.tokens === tier.tokens
-                    ? 'bg-[#10AD5D]/25 text-[#6ee7a5]'
-                    : 'text-[#a3a3a3] hover:text-white',
-                ]"
-                @click="selectContextTier(tier)"
-              >
-                {{ tier.label }}
-                <span
-                  v-if="recommendedContextTier?.tokens === tier.tokens && activeContextTier?.tokens !== tier.tokens"
-                  class="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[#10AD5D]"
-                ></span>
-              </button>
-            </div>
-
-            <input
-              v-model="contextWindowTokensInput"
-              type="text"
-              inputmode="numeric"
-              placeholder="例如：200000（留空用默认值）"
-              class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
-            />
-            <div v-if="detectedContextWindow" class="text-xs text-[#6ee7a5]">
-              已按模型名识别 {{ detectedContextWindow.tokens.toLocaleString() }} tokens（{{ detectedContextWindow.source }}），可直接覆盖。
-            </div>
-          </label>
+          <ModelCapabilitiesSection
+            v-model="contextWindowTokensInput"
+            :capabilities="detectedCapabilities"
+            :detected-context-window="detectedContextWindow"
+            :active-tier="activeContextTier"
+            :recommended-tier="recommendedContextTier"
+            :context-tiers="CONTEXT_TIERS"
+            :field-tips="fieldTips"
+            @select-tier="selectContextTier"
+            @open-vision-settings="router.push({ path: '/settings', query: { category: 'delegation' } })"
+          />
 
           <ModelPricingSection
             v-model:input="pricingInput"
