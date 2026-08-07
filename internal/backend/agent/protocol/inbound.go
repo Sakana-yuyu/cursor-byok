@@ -2,6 +2,7 @@
 package protocol
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -45,11 +46,59 @@ func DecodeAgentClientMessage(hexData string) (*agentv1.AgentClientMessage, stri
 	if err != nil {
 		return nil, "", fmt.Errorf("bidi append data is not valid hex: %w", err)
 	}
+	return DecodeAgentClientMessageBytes(payload)
+}
+
+// DecodeAgentClientMessageBytes 直接解析 BidiAppendRequest.data_binary 原始字节。
+func DecodeAgentClientMessageBytes(payload []byte) (*agentv1.AgentClientMessage, string, error) {
+	if len(payload) == 0 {
+		return nil, "", nil
+	}
 	clientMessage := &agentv1.AgentClientMessage{}
 	if err := proto.Unmarshal(payload, clientMessage); err != nil {
 		return nil, "", fmt.Errorf("decode agent client message failed: %w", err)
 	}
 	return clientMessage, detectClientMessageKind(clientMessage), nil
+}
+
+// DecodeBidiAppendAgentClientMessage 同时兼容旧版 hex data 与新版 data_binary。
+// 两个字段同时存在时必须表示同一份 protobuf payload，避免按字段优先级静默吞掉冲突。
+func DecodeBidiAppendAgentClientMessage(dataHex string, dataBinary []byte) (*agentv1.AgentClientMessage, string, string, error) {
+	trimmedHex := strings.TrimSpace(dataHex)
+	var hexPayload []byte
+	if trimmedHex != "" {
+		decoded, err := hex.DecodeString(trimmedHex)
+		if err != nil {
+			return nil, "", "", fmt.Errorf("bidi append data is not valid hex: %w", err)
+		}
+		hexPayload = decoded
+	}
+	var payload []byte
+	switch {
+	case len(dataBinary) > 0 && len(hexPayload) > 0:
+		if !bytes.Equal(hexPayload, dataBinary) {
+			return nil, "", "", fmt.Errorf("bidi append data and data_binary conflict")
+		}
+		payload = dataBinary
+	case len(dataBinary) > 0:
+		payload = dataBinary
+	default:
+		payload = hexPayload
+	}
+	canonicalHex := hex.EncodeToString(payload)
+	message, kind, err := DecodeAgentClientMessageBytes(payload)
+	if err != nil {
+		return nil, "", canonicalHex, err
+	}
+	return message, kind, canonicalHex, nil
+}
+
+// BidiAppendDebugData 返回统一的低敏 debug 表示，不对 payload 做解码。
+func BidiAppendDebugData(dataHex string, dataBinary []byte) string {
+	if len(dataBinary) > 0 {
+		return hex.EncodeToString(dataBinary)
+	}
+	return strings.TrimSpace(dataHex)
 }
 
 // MapClientMessageToCommandKind 将上行协议消息映射为运行时命令类型。
