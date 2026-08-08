@@ -1726,7 +1726,6 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	stream.ProviderFinishReason = ""
 	stream.ProviderUsage = turnUsageSnapshot{}
 	stream.ToolInvocationCount = 0
-	stream.StaleToolResultSnipApplied = false
 	modelCallID := stream.CurrentModelCallID
 	conversationID := stream.ConversationID
 	requestID := stream.RequestID
@@ -1826,45 +1825,6 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 			service.setTurnPhase(stream, TurnPhaseIdle)
 		}
 		return nil
-	}
-	// 陈旧工具结果 snip/prune 救回：若压缩评估阶段已持久化缩短陈旧工具结果，则前面的
-	// conversation/compiled 是 snip 之前的快照，需基于已更新的 checkpoint 重新快照+编译，
-	// 让后续 provider 请求使用 snip 后的新鲜历史（参考 tool_result_snip.go）。
-	if stream.staleToolResultSnipAppliedLocked() {
-		freshConversation, _, _, freshErr := service.snapshotCheckpointConversation(stream)
-		if freshErr != nil {
-			service.setTurnPhase(stream, TurnPhaseFailed)
-			return service.failStream(stream, "unknown", freshErr)
-		}
-		recompiled, recompileErr := service.compiler.Compile(freshConversation, mode, latestUserText, modelName, customSystemPrompt, stream.Goal != nil)
-		if recompileErr != nil {
-			service.setTurnPhase(stream, TurnPhaseFailed)
-			return service.failStream(stream, "unknown", recompileErr)
-		}
-		canonicalConversation = freshConversation
-		conversation = freshConversation
-		compiled = guardCompiledConversationForProvider(recompiled)
-		canonicalCompiled = compiled
-		activeContextProjection = nil
-		projectionSidecarHit = false
-		projectionInvalidationReason = ""
-		if !manualCompactionRequested && service.contextProjectionPressureExceeded(stream, freshConversation, canonicalCompiled) {
-			projectedConversation, projectionState, active, invalidationReason := service.prepareConversationContextProjectionState(freshConversation, contextProjectionModelKey(stream))
-			if active {
-				projectedCompiled, compileErr := service.compiler.Compile(projectedConversation, mode, latestUserText, modelName, customSystemPrompt, stream.Goal != nil)
-				if compileErr != nil {
-					service.setTurnPhase(stream, TurnPhaseFailed)
-					return service.failStream(stream, "unknown", compileErr)
-				}
-				conversation = projectedConversation
-				compiled = guardCompiledConversationForProvider(projectedCompiled)
-				compiled.StableMessageCount = contextProjectionStableMessageCount(projectionState, compiled.StableMessageCount)
-				activeContextProjection = projectionState
-				projectionSidecarHit = true
-			} else {
-				projectionInvalidationReason = invalidationReason
-			}
-		}
 	}
 	if err := service.syncSummarySnapshot(stream, canonicalConversation, requestID, modelCallID); err != nil {
 		service.setTurnPhase(stream, TurnPhaseFailed)
