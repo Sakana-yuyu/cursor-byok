@@ -158,10 +158,13 @@ type ActiveStream struct {
 	SelectedSubagentModelDetails []*agentv1.ModelDetails
 	ManualCompaction             manualCompactionDirective
 
-	CurrentModelCallID             string
-	ProviderActive                 bool
-	ProviderCancel                 func()
-	ProviderPassCount              int
+	CurrentModelCallID string
+	ProviderActive     bool
+	ProviderCancel     func()
+	ProviderPassCount  int
+	// ProviderTurnStartedAt 记录当前回合（handleRunIntent）的起始时间，
+	// 用于非 goal 回合的墙钟时长兜底（见 driveProvider 的预算检查）。
+	ProviderTurnStartedAt          time.Time
 	MultitaskStartupCanceled       bool
 	MultitaskCanceledProviderPass  int
 	ToolInvocationCount            int

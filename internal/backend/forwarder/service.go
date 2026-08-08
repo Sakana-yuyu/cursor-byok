@@ -873,6 +873,7 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 	stream.ProviderUsage = turnUsageSnapshot{}
 	stream.ToolInvocationCount = 0
 	stream.AutoMultitaskDelegationStarted = false
+	stream.ProviderTurnStartedAt = time.Now().UTC()
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
 	service.setTurnPhase(stream, TurnPhaseIdle)
@@ -1701,6 +1702,14 @@ func (service *Service) cancelScheduledProviderResume(stream *ActiveStream) {
 	clearStreamTimer(stream, providerTimerKey(streamTimerProviderResume, ""))
 }
 
+// parentAgentProviderPassSafetyLimit 是父 agent（非 goal）单次回合 provider pass 的硬上限。
+// goal 模式拥有独立的预算体系（goalBudgetExceeded），不受此限制。
+// 正常 agent 回合的工具调用循环远低于该值；达到上限说明模型陷入死循环，兜底收口防止无限空转。
+const parentAgentProviderPassSafetyLimit = 200
+
+// parentAgentProviderTurnDurationLimit 是父 agent 单次回合的墙钟时长兜底（自 handleRunIntent 起算）。
+const parentAgentProviderTurnDurationLimit = 3 * time.Hour
+
 // driveProvider 由 actor 触发一次 provider pass，并把真实流包装成 provider_event 回投 mailbox。
 func (service *Service) driveProvider(stream *ActiveStream) error {
 	if stream == nil {
@@ -1710,6 +1719,17 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	if stream.ProviderActive || stream.Status == StreamStatusCanceled || stream.Status == StreamStatusCompleted || stream.Status == StreamStatusFailed {
 		stream.mu.Unlock()
 		return nil
+	}
+	// 非 goal 回合的安全预算兜底：防止模型陷入工具调用死循环无限空转。
+	if stream.Goal == nil {
+		if stream.ProviderPassCount >= parentAgentProviderPassSafetyLimit {
+			stream.mu.Unlock()
+			return service.closeStreamWithTurnBudgetExceeded(stream, fmt.Sprintf("达到单回合 provider 调用上限 %d，疑似死循环，已安全停止", parentAgentProviderPassSafetyLimit))
+		}
+		if !stream.ProviderTurnStartedAt.IsZero() && time.Since(stream.ProviderTurnStartedAt) >= parentAgentProviderTurnDurationLimit {
+			stream.mu.Unlock()
+			return service.closeStreamWithTurnBudgetExceeded(stream, fmt.Sprintf("达到单回合时长上限 %s，已安全停止", parentAgentProviderTurnDurationLimit))
+		}
 	}
 	stream.ProviderPassCount++
 	currentPass := stream.ProviderPassCount
@@ -2990,6 +3010,32 @@ func (service *Service) closeStreamWithProviderError(
 		return err
 	}
 	return service.failActiveStream(stream, conversationID, requestID, modelCallID, "provider_error", errorText)
+}
+
+// closeStreamWithTurnBudgetExceeded 在非 goal 回合触发 provider pass / 时长硬上限时安全收口。
+// 防死循环兜底：正常 agent 回合的工具循环远低于上限；超过说明模型陷入死循环，结束回合并告知用户。
+func (service *Service) closeStreamWithTurnBudgetExceeded(stream *ActiveStream, reason string) error {
+	if stream == nil {
+		return nil
+	}
+	stream.mu.Lock()
+	requestID := stream.RequestID
+	conversationID := stream.ConversationID
+	turnSeq := stream.TurnSeq
+	modelCallID := stream.CurrentModelCallID
+	stream.mu.Unlock()
+	logger.Infof("forwarder turn budget exceeded request_id=%s conversation_id=%s reason=%q", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), reason)
+	if _, err := service.appendConversationEntries(stream, conversationID, []HistoryEntry{
+		newMetadataEntry(turnSeq, requestID, "turn_budget_exceeded", map[string]any{
+			"reason": reason,
+		}),
+	}); err != nil {
+		return err
+	}
+	if err := service.recordTurnFinalizedSnapshot(stream, conversationID, turnSeq, requestID, "turn_budget_exceeded", reason); err != nil {
+		return err
+	}
+	return service.failActiveStream(stream, conversationID, requestID, modelCallID, "turn_budget_exceeded", reason)
 }
 
 func takePendingProviderCompletion(stream *ActiveStream) (pendingTurnCompletion, bool) {
