@@ -305,6 +305,9 @@ func (adapter *GeminiAdapter) streamGeminiEvents(resp *http.Response, req Stream
 	lastText := ""
 	lastThinking := ""
 	emittedTools := map[string]struct{}{}
+	// sawTerminalCandidate 标记是否收到带 finishReason 的完整候选。
+	// Gemini 原生协议完整响应必然带 finishReason；EOF 前从未出现则说明流被截断。
+	sawTerminalCandidate := false
 	markFirst := func() {
 		if firstEventAt.IsZero() {
 			firstEventAt = time.Now().UTC()
@@ -358,6 +361,7 @@ func (adapter *GeminiAdapter) streamGeminiEvents(resp *http.Response, req Stream
 		candidate := chunk.Candidates[0]
 		if candidate.FinishReason != "" {
 			finishReason = geminiFinishReason(candidate.FinishReason)
+			sawTerminalCandidate = true
 		}
 		textSnapshot := bytes.Buffer{}
 		thinkingSnapshot := bytes.Buffer{}
@@ -415,6 +419,15 @@ func (adapter *GeminiAdapter) streamGeminiEvents(resp *http.Response, req Stream
 	}
 	if chunkTimedOut {
 		return inputTokens, outputTokens, cacheReadTokens, finishReason, firstEventAt, streamChunkTimeoutError()
+	}
+	if !sawTerminalCandidate {
+		if lastText == "" && lastThinking == "" && len(emittedTools) == 0 {
+			// 流提前结束且无任何输出：视为瞬时空响应，交回 router 重试。
+			return inputTokens, outputTokens, cacheReadTokens, finishReason, firstEventAt, fmt.Errorf("gemini stream ended before terminal candidate (no output)")
+		}
+		// 有部分输出但没有终态候选：诚实报告截断。内容已向客户端转发，
+		// 附加 ErrMidStreamInterrupted 标记避免 router 整体重试造成重复输出。
+		return inputTokens, outputTokens, cacheReadTokens, finishReason, firstEventAt, midStreamInterruptedError(fmt.Errorf("gemini stream truncated before terminal candidate"))
 	}
 	if lastThinking != "" {
 		if err := sink(ModelEvent{Kind: ModelEventKindThinkingCompleted, OccurredAt: time.Now().UTC(), Provider: "gemini", Model: modelID}); err != nil {

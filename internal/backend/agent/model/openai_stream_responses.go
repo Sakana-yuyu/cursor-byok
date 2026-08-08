@@ -814,7 +814,13 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		return fail(streamChunkTimeoutError())
 	}
 	if !streamTerminated {
-		return fail(fmt.Errorf("provider stream ended before terminal event"))
+		// 部分 OpenAI 兼容中转在完整输出后直接关闭 SSE，不发 response.completed。
+		// 流正常结束（无读错误、无逐块超时）时视为正常收口：补发 TurnFinished。
+		if scanner.Err() == nil && !chunkTimedOut {
+			turnFinishedPending = true
+		} else {
+			return fail(fmt.Errorf("provider stream ended before terminal event"))
+		}
 	}
 	if err := flushTaggedContentTail(); err != nil {
 		return fail(err)

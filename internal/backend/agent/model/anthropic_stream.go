@@ -541,7 +541,38 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 			return fail(streamChunkTimeoutError())
 		}
 		if !messageStopped {
-			return fail(fmt.Errorf("anthropic stream ended before message_stop"))
+			// 部分 Anthropic 兼容网关在完整输出后直接关闭 SSE，不发 message_stop。
+			// 流正常结束（无读错误、无逐块超时）时视为正常收口：补发 TurnFinished。
+			if scanner.Err() == nil && !chunkTimedOut {
+				if finishReason == "" {
+					finishReason = "stop"
+				}
+				if err := flushTaggedTextTail(); err != nil {
+					return fail(err)
+				}
+				if err := flushThinkingCompleted(); err != nil {
+					return fail(err)
+				}
+				if err := wrappedSink(ModelEvent{
+					Kind:              ModelEventKindTurnFinished,
+					OccurredAt:        time.Now().UTC(),
+					Provider:          "anthropic",
+					Model:             currentModel,
+					InputTokens:       inputTokens,
+					OutputTokens:      outputTokens,
+					CacheReadTokens:   cacheReadTokens,
+					CacheWriteTokens:  cacheWriteTokens,
+					UsagePresent:      usagePresent,
+					CacheReadPresent:  cacheReadPresent,
+					CacheWritePresent: cacheWritePresent,
+					FinishReason:      finishReason,
+				}); err != nil {
+					return fail(err)
+				}
+				messageStopped = true
+			} else {
+				return fail(fmt.Errorf("anthropic stream ended before message_stop"))
+			}
 		}
 		if err := flushTaggedTextTail(); err != nil {
 			return fail(err)

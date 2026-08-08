@@ -520,7 +520,15 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		return fail(streamChunkTimeoutError())
 	}
 	if !streamTerminated {
-		return fail(fmt.Errorf("provider stream ended before terminal event"))
+		// 部分 OpenAI 兼容中转在完整输出后直接关闭 SSE，不发 [DONE]/finish_reason。
+		// 流正常结束（无读错误、无逐块超时）时视为正常收口：补发 TurnFinished，
+		// 避免回合被误判失败并被 router 整体重试（内容已完整展示，重试会重复输出）。
+		if scanner.Err() == nil && !chunkTimedOut {
+			finishReason = "stop"
+			turnFinishedPending = true
+		} else {
+			return fail(fmt.Errorf("provider stream ended before terminal event"))
+		}
 	}
 	if err := flushTaggedContentTail(); err != nil {
 		return fail(err)
