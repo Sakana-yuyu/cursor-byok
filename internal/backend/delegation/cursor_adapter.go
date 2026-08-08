@@ -210,34 +210,6 @@ func (adapter *CursorAdapter) ExecuteTool(ctx context.Context, request TaskReque
 	return adapter.awaitInvocation(ctx, waiter)
 }
 
-// ExecuteToolAsync 与 ExecuteTool 语义一致，但终态结果通过 onResult 回调异步
-// 返回，不阻塞调用方 goroutine。waiter 注册/派发失败时直接返回 error 且不
-// 调用 onResult。ctx 取消时内部会取消已派发的 exec 并把取消结果交给 onResult。
-func (adapter *CursorAdapter) ExecuteToolAsync(ctx context.Context, request TaskRequest, invocation runtimecore.ToolInvocation, onResult func(TaskResult)) error {
-	if adapter == nil {
-		return fmt.Errorf("cursor adapter is nil")
-	}
-	if onResult == nil {
-		return fmt.Errorf("cursor adapter async result callback is nil")
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	waiter, err := adapter.openInvocation(ctx, request, invocation, strings.TrimSpace(invocation.ToolName) == "Task")
-	if err != nil {
-		return err
-	}
-	go func() {
-		select {
-		case result := <-waiter.resultCh:
-			onResult(cloneTaskResult(result))
-		case <-ctx.Done():
-			onResult(adapter.cancelTask(waiter.taskID, ctx.Err()))
-		}
-	}()
-	return nil
-}
-
 func (adapter *CursorAdapter) openInvocation(ctx context.Context, request TaskRequest, invocation runtimecore.ToolInvocation, expectSubagent bool) (*cursorTaskWaiter, error) {
 	if adapter == nil {
 		return nil, fmt.Errorf("cursor adapter is nil")

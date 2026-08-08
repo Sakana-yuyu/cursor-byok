@@ -145,8 +145,6 @@ type Scheduler struct {
 	tasks            map[string]*taskState
 	activeExecutions map[string]struct{}
 	closed           bool
-	events           chan TaskSnapshot
-	eventsClosed     bool
 	stateChanged     chan struct{}
 	taskSequence     atomic.Uint64
 	eventSequence    atomic.Uint64
@@ -168,7 +166,6 @@ type taskState struct {
 
 type Config struct {
 	MaxConcurrency int
-	EventBuffer    int
 	RetentionLimit int
 	RetentionAge   time.Duration
 }
@@ -178,10 +175,6 @@ func NewScheduler(cfg Config, executor Executor) *Scheduler {
 	if maxConcurrency <= 0 {
 		maxConcurrency = DefaultMaxConcurrency
 	}
-	eventBuffer := cfg.EventBuffer
-	if eventBuffer <= 0 {
-		eventBuffer = 128
-	}
 	retentionLimit := cfg.RetentionLimit
 	if retentionLimit <= 0 {
 		retentionLimit = DefaultRetentionLimit
@@ -189,9 +182,6 @@ func NewScheduler(cfg Config, executor Executor) *Scheduler {
 	retentionAge := cfg.RetentionAge
 	if retentionAge <= 0 {
 		retentionAge = DefaultRetentionAge
-	}
-	if eventBuffer < retentionLimit {
-		eventBuffer = retentionLimit
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Scheduler{
@@ -205,7 +195,6 @@ func NewScheduler(cfg Config, executor Executor) *Scheduler {
 		retentionAge:     retentionAge,
 		tasks:            make(map[string]*taskState),
 		activeExecutions: make(map[string]struct{}),
-		events:           make(chan TaskSnapshot, eventBuffer),
 		stateChanged:     make(chan struct{}),
 	}
 }
@@ -287,7 +276,6 @@ func (s *Scheduler) run(state *taskState) {
 			delete(s.activeExecutions, state.snapshot.ID)
 		}
 		s.pruneTerminalTasksLocked()
-		s.purgeBufferedEventsLocked()
 		s.mu.Unlock()
 	}()
 	queueCtx := state.ctx
@@ -623,8 +611,8 @@ func (s *Scheduler) Result(taskID string) (TaskResult, bool) {
 }
 
 // WaitForTaskUpdate waits for a newer immutable snapshot for one task. It uses
-// the scheduler state-change signal instead of consuming the shared Events
-// channel, so multiple supervised aggregates can observe progress independently.
+// the scheduler state-change signal, so multiple supervised aggregates can
+// observe progress independently.
 func (s *Scheduler) WaitForTaskUpdate(ctx context.Context, taskID string, afterSequence uint64) (TaskSnapshot, error) {
 	if s == nil {
 		return TaskSnapshot{}, fmt.Errorf("delegation scheduler is nil")
@@ -674,13 +662,6 @@ func (s *Scheduler) Snapshots() []TaskSnapshot {
 		return items[i].QueuedAt.Before(items[j].QueuedAt)
 	})
 	return items
-}
-
-func (s *Scheduler) Events() <-chan TaskSnapshot {
-	if s == nil {
-		return nil
-	}
-	return s.events
 }
 
 func (s *Scheduler) WaitForTerminal(ctx context.Context, taskIDs []string) error {
@@ -767,9 +748,6 @@ func (s *Scheduler) Close() {
 			s.publishLocked(&state.snapshot)
 		}
 		s.pruneTerminalTasksLocked()
-		s.purgeBufferedEventsLocked()
-		s.eventsClosed = true
-		close(s.events)
 		s.mu.Unlock()
 		s.cancel()
 	})
@@ -781,25 +759,6 @@ func (s *Scheduler) publishLocked(snapshot *TaskSnapshot) {
 	}
 	s.decorateSnapshotLocked(snapshot)
 	s.notifyStateChangedLocked()
-	if s.eventsClosed {
-		return
-	}
-	event := cloneTaskSnapshot(*snapshot)
-	select {
-	case s.events <- event:
-	default:
-		if !isTerminalStatus(event.Status) {
-			return
-		}
-		s.purgeBufferedEventsLocked()
-		if len(s.events) >= cap(s.events) {
-			s.evictOldestNonTerminalEventLocked()
-		}
-		select {
-		case s.events <- event:
-		default:
-		}
-	}
 }
 
 func (s *Scheduler) finishFromContext(state *taskState, cause error) {
@@ -877,49 +836,6 @@ func (s *Scheduler) liveTaskCountLocked() int {
 // 收尾的 runner），用于 Submit 的排队上限判断。调用方必须已持有 s.mu。
 func (s *Scheduler) pendingTaskCountLocked() int {
 	return s.liveTaskCountLocked()
-}
-
-func (s *Scheduler) purgeBufferedEventsLocked() {
-	if s.eventsClosed || len(s.events) == 0 {
-		return
-	}
-	buffered := make([]TaskSnapshot, 0, len(s.events))
-	for {
-		select {
-		case event := <-s.events:
-			if _, retained := s.tasks[event.ID]; retained {
-				buffered = append(buffered, event)
-			}
-		default:
-			for _, event := range buffered {
-				s.events <- event
-			}
-			return
-		}
-	}
-}
-
-func (s *Scheduler) evictOldestNonTerminalEventLocked() {
-	if s.eventsClosed || len(s.events) == 0 {
-		return
-	}
-	buffered := make([]TaskSnapshot, 0, len(s.events))
-	dropped := false
-	for {
-		select {
-		case event := <-s.events:
-			if !dropped && !isTerminalStatus(event.Status) {
-				dropped = true
-				continue
-			}
-			buffered = append(buffered, event)
-		default:
-			for _, event := range buffered {
-				s.events <- event
-			}
-			return
-		}
-	}
 }
 
 func isTerminalStatus(status TaskStatus) bool {

@@ -290,24 +290,6 @@ func MessagesContainImage(messages []Message) bool {
 	return false
 }
 
-// CountImageParts 统计消息列表中图片内容块的总数。
-func CountImageParts(messages []Message) int {
-	total := 0
-	for _, message := range messages {
-		for _, part := range message.ContentParts {
-			if normalizeContentPartType(part.Type) == contentPartTypeImage {
-				total++
-			}
-		}
-	}
-	return total
-}
-
-// ResolveImageContent 是 resolveImageContent 的导出封装，供跨包调用。
-func ResolveImageContent(image *ImageContent) ([]byte, string, error) {
-	return resolveImageContent(image)
-}
-
 // NormalizeImageMIMEType 是 normalizeImageMIMEType 的导出封装，供跨包调用。
 func NormalizeImageMIMEType(mimeType string, path string, payload []byte) string {
 	return normalizeImageMIMEType(mimeType, path, payload)
