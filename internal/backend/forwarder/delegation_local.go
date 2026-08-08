@@ -599,7 +599,7 @@ func filterDelegatedTools(tools []json.RawMessage, permissions map[string]bool, 
 		if len(toolWhitelist) > 0 {
 			allowed := false
 			for _, whitelisted := range toolWhitelist {
-				if trimmedName == whitelisted {
+				if trimmedName == strings.TrimSpace(whitelisted) {
 					allowed = true
 					break
 				}
