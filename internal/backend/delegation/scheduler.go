@@ -70,14 +70,16 @@ type TaskRequest struct {
 	ExecutionMode                string
 	WorkspaceHint                string
 	ToolPermission               map[string]bool
-	RuntimeSupervisionRound      int
-	RuntimeCorrectionCount       int
-	RuntimeRetryCount            int
-	RuntimeReassignCount         int
-	RuntimeEscalateCount         int
-	RuntimeSupervisionIssue      SupervisionIssueCode
-	RuntimeProgressSummary       string
-	ModelParams                  []*agentv1.RequestedModel_ModelParameterValue
+	// ToolWhitelist 可选工具白名单（空 = 不限制）。来自 SubagentProfile，由 filterDelegatedTools 强制。
+	ToolWhitelist           []string
+	RuntimeSupervisionRound int
+	RuntimeCorrectionCount  int
+	RuntimeRetryCount       int
+	RuntimeReassignCount    int
+	RuntimeEscalateCount    int
+	RuntimeSupervisionIssue SupervisionIssueCode
+	RuntimeProgressSummary  string
+	ModelParams             []*agentv1.RequestedModel_ModelParameterValue
 	// QueueTimeout bounds how long a worker can wait for a scheduler slot. It
 	// protects later delegation batches from being held behind stalled workers.
 	QueueTimeout time.Duration

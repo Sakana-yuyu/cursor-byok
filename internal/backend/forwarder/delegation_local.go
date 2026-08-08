@@ -96,7 +96,7 @@ func (adapter *localDelegatedAgentAdapter) Execute(ctx context.Context, request 
 		delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusFailed, 1, nil, nil, "delegated worker MCP discovery failed", delegation.SanitizeSupervisorText(err.Error(), request.WorkspaceHint))
 		return delegation.TaskResult{Error: err, Metadata: identity.metadata(0)}
 	}
-	compiled.Tools, err = filterDelegatedTools(compiled.Tools, request.ToolPermission, mcpToolNames)
+	compiled.Tools, err = filterDelegatedTools(compiled.Tools, request.ToolPermission, mcpToolNames, request.ToolWhitelist)
 	if err != nil {
 		delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusFailed, 1, nil, nil, "delegated worker tool filtering failed", delegation.SanitizeSupervisorText(err.Error(), request.WorkspaceHint))
 		return delegation.TaskResult{Error: err, Metadata: identity.metadata(0)}
@@ -573,7 +573,7 @@ func (adapter *localDelegatedAgentAdapter) executeTool(ctx context.Context, requ
 	return limitProjectedToolResultReplay(invocation.ToolName, strings.TrimSpace(output), strings.TrimSpace(output), false, false)
 }
 
-func filterDelegatedTools(tools []json.RawMessage, permissions map[string]bool, mcpToolNames map[string]struct{}) ([]json.RawMessage, error) {
+func filterDelegatedTools(tools []json.RawMessage, permissions map[string]bool, mcpToolNames map[string]struct{}, toolWhitelist []string) ([]json.RawMessage, error) {
 	if len(tools) == 0 {
 		return nil, nil
 	}
@@ -584,6 +584,20 @@ func filterDelegatedTools(tools []json.RawMessage, permissions map[string]bool, 
 			return nil, err
 		}
 		trimmedName := strings.TrimSpace(name)
+		// SubagentProfile.ToolWhitelist 白名单强制：非空时只保留白名单中的工具
+		//（白名单与 Task/Shell 拦截是叠加关系，两项都不满足即过滤）。
+		if len(toolWhitelist) > 0 {
+			allowed := false
+			for _, whitelisted := range toolWhitelist {
+				if trimmedName == whitelisted {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				continue
+			}
+		}
 		// Task 工具是主 agent 用来创建子代理/委派的入口。委派 worker 自身已经是
 		// 子代理，不能再嵌套调用 Task：若允许，worker 会把 Task 工具通过 cursor
 		// bridge 转发给 Cursor 客户端创建 subagent bubble，而客户端无法为本地委派

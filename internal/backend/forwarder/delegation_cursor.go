@@ -128,6 +128,11 @@ func buildDelegatedCursorTaskRequest(stream *ActiveStream, pending runtimecore.P
 	subagentType := delegatedTaskSubagentType(invocation.ArgsJSON)
 	// C1 子代理注册表：按 subagent_type 注入角色片段（配置覆盖 > 内置；缺省类型原样透传）。
 	prompt := runtimecore.ApplySubagentPromptFragment(subagentType, runtimecore.ReadStringArg(args, "prompt"), subagentProfiles)
+	// SubagentProfile.ToolWhitelist 注入：由 filterDelegatedTools 在 worker 侧强制。
+	var toolWhitelist []string
+	if profile, ok := runtimecore.LookupSubagentProfile(subagentType); ok {
+		toolWhitelist = profile.ToolWhitelist
+	}
 	return delegation.TaskRequest{
 		ParentRequest:                activeStreamRequestID(stream),
 		ParentExecID:                 strings.TrimSpace(pending.ExecID),
@@ -148,6 +153,7 @@ func buildDelegatedCursorTaskRequest(stream *ActiveStream, pending runtimecore.P
 		ModelGroupID:                 strings.TrimSpace(modelGroupID),
 		ExecutionMode:                strings.TrimSpace(executionMode),
 		WorkspaceHint:                openContext.WorkspaceHint,
+		ToolWhitelist:                toolWhitelist,
 	}
 }
 
