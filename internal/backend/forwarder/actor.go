@@ -65,6 +65,7 @@ type streamTimerKind string
 const (
 	streamTimerProviderResume       streamTimerKind = "provider_resume"
 	streamTimerNonStreamingRecovery streamTimerKind = "non_streaming_recovery"
+	streamTimerInteractionTimeout   streamTimerKind = "interaction_timeout"
 	streamTimerShellForeground      streamTimerKind = "shell_foreground"
 	streamTimerShellTransportClose  streamTimerKind = "shell_transport_close"
 	streamTimerCheckpointBlobs      streamTimerKind = "checkpoint_blobs"
@@ -1221,6 +1222,8 @@ func (service *Service) handleTimerEvent(stream *ActiveStream, payload *streamTi
 		return service.recoverShellWithoutTerminal(stream, current, shellRecoveryReasonTransportClosed)
 	case streamTimerExecWatchdog:
 		return service.recoverStaleExecWithoutTerminal(stream, payload.ExecID, payload.MessageID, payload.Reason)
+	case streamTimerInteractionTimeout:
+		return service.recoverStaleInteractionWithoutResponse(stream, payload)
 	case streamTimerTurnStale:
 		return service.handleTurnStaleTimeout(stream, payload)
 	case streamTimerCheckpointBlobs:

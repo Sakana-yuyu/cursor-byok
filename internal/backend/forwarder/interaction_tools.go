@@ -11,7 +11,13 @@ import (
 
 	"cursor/gen/agentv1"
 	runtimecore "cursor/internal/backend/agent/core"
+	"cursor/internal/logger"
 )
+
+// defaultInteractionTimeout 是等待用户输入类 interaction（AskQuestion 等）的兜底超时。
+// 客户端弹窗丢失/被关闭但未回 interaction 结果时，回合不能永久停在 awaiting_user，
+// 超时后合成 timeout 工具结果收口并让模型继续。
+const defaultInteractionTimeout = 15 * time.Minute
 
 func (service *Service) handleInteractionToolInvocation(stream *ActiveStream, invocation runtimecore.ToolInvocation) error {
 	if service == nil || stream == nil {
@@ -52,6 +58,17 @@ func (service *Service) handleInteractionToolInvocation(stream *ActiveStream, in
 		removePending()
 		return err
 	}
+	// 等待用户输入的 interaction 必须有时限兜底：客户端弹窗丢失/被关闭
+	// 但未回 InteractionResponse 时，回合会永久停在 awaiting_user。
+	service.scheduleStreamTimer(
+		stream,
+		providerTimerKey(streamTimerInteractionTimeout, pendingInteraction.InteractionID),
+		defaultInteractionTimeout,
+		streamTimerInteractionTimeout,
+		pendingInteraction.InteractionID,
+		0,
+		"等待用户输入超时",
+	)
 	return nil
 }
 
@@ -78,6 +95,7 @@ func (service *Service) handleInteractionResult(intent InboundIntent) error {
 		return err
 	}
 	markInteractionCompleted(stream, pending)
+	clearStreamTimer(stream, providerTimerKey(streamTimerInteractionTimeout, pending.InteractionID))
 	toolName := strings.TrimSpace(deriveToolNameFromPendingInteraction(pending))
 	if result.ToolCall != nil {
 		applySwitchModeMetadata(stream, result.ToolCall)
@@ -141,6 +159,7 @@ func (service *Service) ignoreStaleInteractionProviderPass(stream *ActiveStream,
 		return false
 	}
 	markInteractionCompleted(stream, pending)
+	clearStreamTimer(stream, providerTimerKey(streamTimerInteractionTimeout, pending.InteractionID))
 	if service != nil && service.debug != nil {
 		service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "stale_interaction_result_ignored", map[string]any{
 			"interaction_id": strings.TrimSpace(pending.InteractionID),
@@ -668,4 +687,89 @@ func (service *Service) completeImmediateToolResult(stream *ActiveStream, invoca
 		return err
 	}
 	return service.reconcileStream(stream)
+}
+
+// recoverStaleInteractionWithoutResponse 在 interaction 等待用户输入超时后强制收口：
+// 合成 timeout 工具结果注入模型，避免回合无限期停在 awaiting_user。
+func (service *Service) recoverStaleInteractionWithoutResponse(stream *ActiveStream, payload *streamTimerEvent) error {
+	if stream == nil || payload == nil {
+		return nil
+	}
+	interactionID := strings.TrimSpace(payload.ExecID)
+	if interactionID == "" {
+		return nil
+	}
+	stream.mu.Lock()
+	pending, found := stream.PendingInteractions[interactionID]
+	status := stream.Status
+	stream.mu.Unlock()
+	if !found || isTerminalStreamStatus(status) {
+		return nil
+	}
+	markInteractionCompleted(stream, pending)
+	reason := strings.TrimSpace(payload.Reason)
+	if reason == "" {
+		reason = "等待用户输入超时"
+	}
+	resultPayload := buildSyntheticInteractionTimeoutPayload(pending, reason)
+	toolName := deriveToolNameFromPendingInteraction(pending)
+	logger.Infof(
+		"forwarder synthetic interaction recovery request_id=%s tool_call_id=%s interaction_id=%s kind=%s reason=%s",
+		strings.TrimSpace(stream.RequestID),
+		strings.TrimSpace(pending.ToolCallID),
+		interactionID,
+		strings.TrimSpace(pending.InteractionKind),
+		reason,
+	)
+	if err := service.appendToolResult(stream, pending.ToolCallID, toolName, pending.ArgsJSON, resultPayload, pending.ReasoningContent, nil); err != nil {
+		return err
+	}
+	if _, err := service.appendConversationEntries(stream, stream.ConversationID, []HistoryEntry{
+		newMetadataEntry(stream.TurnSeq, stream.RequestID, "interaction_watchdog_recovery", map[string]any{
+			"tool_call_id":   pending.ToolCallID,
+			"interaction_id": interactionID,
+			"kind":           strings.TrimSpace(pending.InteractionKind),
+			"reason":         reason,
+		}),
+	}); err != nil {
+		return err
+	}
+	if err := service.syncSummaryCarryForward(stream.ConversationID, stream.RequestID, pending.ModelCallID); err != nil {
+		return err
+	}
+	if err := service.publishToolCallCompleted(stream.RequestID, pending.ToolCallID, pending.ModelCallID, nil); err != nil {
+		return err
+	}
+	if err := service.publishCheckpoint(stream.RequestID, stream.ConversationID); err != nil {
+		return err
+	}
+	if !shouldAutoResumeAfterInteraction(pending) {
+		rememberPendingProviderCompletion(stream, pendingTurnCompletion{
+			ConversationID: stream.ConversationID,
+			RequestID:      stream.RequestID,
+			TurnSeq:        stream.TurnSeq,
+			ModelCallID:    pending.ModelCallID,
+			ProviderPass:   pending.ProviderPass,
+			Disposition:    completionDispositionCompleteAfterExternal,
+		})
+	}
+	return service.reconcileStream(stream)
+}
+
+// buildSyntheticInteractionTimeoutPayload 构造 interaction 超时的 tool_result 文本。
+func buildSyntheticInteractionTimeoutPayload(pending runtimecore.PendingInteraction, reason string) string {
+	toolName := deriveToolNameFromPendingInteraction(pending)
+	detail := fmt.Sprintf("[interaction watchdog] %s timed out waiting for user response after %s (interaction_id=%s, reason=%s)", toolName, defaultInteractionTimeout, pending.InteractionID, reason)
+	summary := map[string]any{
+		"status":  "timeout",
+		"detail":  detail,
+		"reason":  reason,
+		"kind":    strings.TrimSpace(pending.InteractionKind),
+		"timeout": defaultInteractionTimeout.String(),
+	}
+	encoded, err := json.Marshal(summary)
+	if err != nil {
+		return detail
+	}
+	return string(encoded)
 }
