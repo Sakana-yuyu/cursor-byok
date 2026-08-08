@@ -134,18 +134,3 @@ func InferProviderType(modelID string, fallback string) string {
 	}
 	return "openai"
 }
-
-// InferProtocolGroupByModel 根据模型名推断协议组，绕过渠道级 type。
-// 当用户在一个 openai 渠道里拉取到 claude/gemini 模型时，用模型名纠正协议组，
-// 让请求走正确的原生协议（messages / gemini_native）而非 chat_completions。
-// 返回 ("", false) 表示模型未命中原生协议族，应沿用渠道级 type 推断。
-func InferProtocolGroupByModel(modelID string) (string, bool) {
-	model := strings.ToLower(strings.TrimSpace(modelID))
-	if strings.HasPrefix(model, "claude") {
-		return ProtocolGroupAnthropicMessages, true
-	}
-	if strings.HasPrefix(model, "gemini") {
-		return ProtocolGroupGeminiNative, true
-	}
-	return "", false
-}

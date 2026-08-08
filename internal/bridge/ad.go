@@ -12,7 +12,6 @@ import (
 )
 
 type AdRuntime = ads.Runtime
-type AdWindowConfig = ads.WindowConfig
 
 type AdService struct {
 	core *ads.Service

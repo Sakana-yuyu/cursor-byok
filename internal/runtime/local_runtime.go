@@ -1,12 +1,10 @@
 package runtime
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"cursor/internal/modelchannel"
 	"cursor/internal/modelcontext"
@@ -17,19 +15,6 @@ var (
 	ErrInvalidSystemSetting = errors.New("invalid system setting")
 	// ErrChannelNotAvailable 表示当前没有可用模型渠道。
 	ErrChannelNotAvailable = errors.New("model channel not available")
-	// ErrChannelRateLimited 表示当前模型渠道被限流。
-	ErrChannelRateLimited = errors.New("model channel rate limited")
-)
-
-const (
-	// configurableChannelTimeoutMS 表示当前声明中的 configurableChannelTimeoutMS。
-	configurableChannelTimeoutMS = int((2 * time.Hour) / time.Millisecond)
-	// configurableChannelContextWindowTokens 表示当前声明中的默认上下文窗口大小。
-	configurableChannelContextWindowTokens = 200_000
-	// configurableChannelMaxTokens 表示当前声明中的 configurableChannelMaxTokens。
-	configurableChannelMaxTokens = 65_536
-	// configurableChannelAnthropicThinkingEffort 表示 Anthropic adaptive thinking 默认强度。
-	configurableChannelAnthropicThinkingEffort = "xhigh"
 )
 
 type ModelPricing struct {
@@ -110,9 +95,6 @@ type RuntimeConfigSnapshot struct {
 	// ModelAdapters 表示当前声明中的 ModelAdapters。
 	ModelAdapters []ModelAdapterConfig
 }
-
-// RuntimeConfigProvider 定义了当前模块中的 RuntimeConfigProvider 类型。
-type RuntimeConfigProvider func(context.Context) (RuntimeConfigSnapshot, error)
 
 // NormalizeModelAdapterConfigs 用于处理与 NormalizeModelAdapterConfigs 相关的逻辑。
 func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterConfig, error) {
@@ -321,12 +303,8 @@ type ResolvedChannel struct {
 	Name string
 	// GroupName 表示当前声明中的 GroupName。
 	GroupName string
-	// Code 表示当前声明中的 Code。
-	Code string
 	// Provider 表示当前声明中的 Provider。
 	Provider string
-	// SupplierID 表示品牌供应商标识，仅用于展示和供应商专用能力。
-	SupplierID string
 	// ProtocolMode 表示协议选择模式。
 	ProtocolMode string
 	// ProtocolGroup 表示最终模型请求协议分组。
@@ -337,8 +315,6 @@ type ResolvedChannel struct {
 	APIKey string
 	// Model 表示当前声明中的 Model。
 	Model string
-	// TimeoutMS 表示当前声明中的 TimeoutMS。
-	TimeoutMS int
 	// ContextWindowTokens 表示当前声明中的 ContextWindowTokens。
 	ContextWindowTokens int
 	// MaxTokens 表示当前声明中的 MaxTokens。
@@ -365,236 +341,10 @@ type ResolvedChannel struct {
 	AnthropicMaxTokens int
 	// AnthropicThinkingEffort 表示 Anthropic adaptive thinking 的 output_config.effort。
 	AnthropicThinkingEffort string
-	// Pricing 表示该模型渠道的明确价格。
-	Pricing *ModelPricing
 	// FastMode 表示 OpenAI/GPT 是否请求 priority service tier。
 	FastMode bool
 	// OpenAIServiceTier 表示显式 OpenAI service tier。
 	OpenAIServiceTier string
-	// ThinkingEnabled 表示当前声明中的 ThinkingEnabled。
-	ThinkingEnabled bool
 	// ThinkingBudgetTokens 表示当前声明中的 ThinkingBudgetTokens。
 	ThinkingBudgetTokens int
-}
-
-// ChannelUsageRecordCreatePayload 定义了一次渠道使用记录的最小载荷。
-type ChannelUsageRecordCreatePayload struct {
-	// RequestID 表示当前声明中的 RequestID。
-	RequestID string
-	// ConversationID 表示当前声明中的 ConversationID。
-	ConversationID string
-	// RuntimeModelID 表示当前声明中的 RuntimeModelID。
-	RuntimeModelID string
-}
-
-// ChannelCallRecordCreatePayload 定义了一次渠道调用记录的最小载荷。
-type ChannelCallRecordCreatePayload struct {
-	// RequestID 表示当前声明中的 RequestID。
-	RequestID string
-	// ConversationID 表示当前声明中的 ConversationID。
-	ConversationID string
-	// ChannelID 表示当前声明中的 ChannelID。
-	ChannelID string
-	// ChannelName 表示当前声明中的 ChannelName。
-	ChannelName string
-	// GroupName 表示当前声明中的 GroupName。
-	GroupName string
-	// Provider 表示当前声明中的 Provider。
-	Provider string
-	// RuntimeModelID 表示当前声明中的 RuntimeModelID。
-	RuntimeModelID string
-	// ProviderModelID 表示当前声明中的 ProviderModelID。
-	ProviderModelID string
-	// StatusCode 表示当前声明中的 StatusCode。
-	StatusCode int
-	// Success 表示当前声明中的 Success。
-	Success bool
-	// DurationMS 表示当前声明中的 DurationMS。
-	DurationMS int64
-	// ErrorCode 表示当前声明中的 ErrorCode。
-	ErrorCode string
-	// ErrorMessage 表示当前声明中的 ErrorMessage。
-	ErrorMessage string
-}
-
-// FixedChannelService 定义了当前模块中的 FixedChannelService 类型。
-type FixedChannelService struct {
-	// channel 表示当前声明中的 channel。
-	channel ResolvedChannel
-	// configProvider 表示当前声明中的 configProvider。
-	configProvider RuntimeConfigProvider
-}
-
-// NewFixedChannelService 用于处理与 NewFixedChannelService 相关的逻辑。
-func NewFixedChannelService(channel ResolvedChannel, logsRoot string) *FixedChannelService {
-	_ = logsRoot
-	return &FixedChannelService{
-		channel: channel,
-	}
-}
-
-// NewConfigurableChannelService 用于处理与 NewConfigurableChannelService 相关的逻辑。
-func NewConfigurableChannelService(provider RuntimeConfigProvider, logsRoot string) *FixedChannelService {
-	_ = logsRoot
-	return &FixedChannelService{
-		configProvider: provider,
-	}
-}
-
-// SelectChannelForRequestBody 用于处理与 SelectChannelForRequestBody 相关的逻辑。
-func (s *FixedChannelService) SelectChannelForRequestBody(_ context.Context, _ []byte) (*ResolvedChannel, error) {
-	return s.SelectChannelForModel(context.Background(), "")
-}
-
-// SelectChannelForModel 用于处理与 SelectChannelForModel 相关的逻辑。
-func (s *FixedChannelService) SelectChannelForModel(ctx context.Context, modelID string) (*ResolvedChannel, error) {
-	if s == nil {
-		return nil, ErrChannelNotAvailable
-	}
-	if s.configProvider != nil {
-		cfg, err := s.configProvider(ctx)
-		if err != nil {
-			return nil, err
-		}
-		adapters, err := NormalizeModelAdapterConfigs(cfg.ModelAdapters)
-		if err != nil {
-			return nil, err
-		}
-		matchIndex, ok := modelchannel.ResolveAdapterIndex(
-			adapters,
-			modelID,
-			func(adapter ModelAdapterConfig) string { return adapter.ID },
-			func(adapter ModelAdapterConfig) string { return adapter.ModelID },
-			func(adapter ModelAdapterConfig) string {
-				return modelchannel.BuildLegacyChannelID(adapter.BaseURL, adapter.ModelID, adapter.APIKey, adapter.DisplayName)
-			},
-		)
-		if !ok {
-			return nil, ErrChannelNotAvailable
-		}
-		adapter := adapters[matchIndex]
-		resolved := ResolvedChannel{
-			ID:                          strings.TrimSpace(adapter.ID),
-			Name:                        strings.TrimSpace(adapter.DisplayName),
-			GroupName:                   strings.TrimSpace(adapter.GroupName),
-			Code:                        strings.TrimSpace(adapter.ID),
-			Provider:                    strings.TrimSpace(adapter.Type),
-			SupplierID:                  strings.TrimSpace(adapter.SupplierID),
-			ProtocolMode:                strings.TrimSpace(adapter.ProtocolMode),
-			ProtocolGroup:               strings.TrimSpace(adapter.ProtocolGroup),
-			BaseURL:                     strings.TrimSpace(adapter.BaseURL),
-			APIKey:                      strings.TrimSpace(adapter.APIKey),
-			Model:                       strings.TrimSpace(adapter.ModelID),
-			TimeoutMS:                   configurableChannelTimeoutMS,
-			ContextWindowTokens:         configurableChannelContextWindowTokens,
-			MaxTokens:                   configurableChannelMaxTokens,
-			ReasoningEffort:             strings.TrimSpace(adapter.ReasoningEffort),
-			OpenAIEndpoint:              strings.TrimSpace(adapter.OpenAIEndpoint),
-			OpenAIRequestGroup:          strings.TrimSpace(adapter.OpenAIRequestGroup),
-			OpenAIExtraParamsEnabled:    adapter.OpenAIExtraParamsEnabled,
-			OpenAIExtraParamsJSON:       strings.TrimSpace(adapter.OpenAIExtraParamsJSON),
-			CustomHeadersEnabled:        adapter.CustomHeadersEnabled,
-			CustomHeadersJSON:           strings.TrimSpace(adapter.CustomHeadersJSON),
-			AnthropicExtraParamsEnabled: adapter.AnthropicExtraParamsEnabled,
-			AnthropicExtraParamsJSON:    strings.TrimSpace(adapter.AnthropicExtraParamsJSON),
-			AnthropicMaxTokens:          configurableChannelMaxTokens,
-			AnthropicThinkingEffort:     configurableChannelAnthropicThinkingEffort,
-			ThinkingEnabled:             true,
-			Pricing:                     adapter.Pricing,
-			FastMode:                    adapter.FastMode,
-			OpenAIServiceTier:           strings.TrimSpace(adapter.OpenAIServiceTier),
-		}
-		if adapter.ContextWindowTokens > 0 {
-			resolved.ContextWindowTokens = adapter.ContextWindowTokens
-		}
-		if adapter.MaxCompletionTokens > 0 {
-			resolved.MaxTokens = adapter.MaxCompletionTokens
-		}
-		if adapter.ThinkingBudgetTokens > 0 {
-			resolved.ThinkingBudgetTokens = adapter.ThinkingBudgetTokens
-		}
-		if adapter.AnthropicMaxTokens > 0 {
-			resolved.AnthropicMaxTokens = adapter.AnthropicMaxTokens
-		}
-		if strings.TrimSpace(adapter.AnthropicThinkingEffort) != "" {
-			resolved.AnthropicThinkingEffort = strings.TrimSpace(adapter.AnthropicThinkingEffort)
-		}
-		return &resolved, nil
-	}
-	if strings.TrimSpace(s.channel.BaseURL) == "" || strings.TrimSpace(s.channel.APIKey) == "" {
-		return nil, ErrChannelNotAvailable
-	}
-	resolved := s.channel
-	return &resolved, nil
-}
-
-// RecordRunRequestUsage 用于处理与 RecordRunRequestUsage 相关的逻辑。
-func (s *FixedChannelService) RecordRunRequestUsage(_ context.Context, payload ChannelUsageRecordCreatePayload) error {
-	_ = s
-	_ = payload
-	return nil
-}
-
-// RecordChannelCall 用于处理与 RecordChannelCall 相关的逻辑。
-func (s *FixedChannelService) RecordChannelCall(_ context.Context, payload ChannelCallRecordCreatePayload) error {
-	_ = s
-	_ = payload
-	return nil
-}
-
-// LocalSystemSettingService 定义了当前模块中的 LocalSystemSettingService 类型。
-type LocalSystemSettingService struct {
-	// provider 表示当前声明中的 provider。
-	provider RuntimeConfigProvider
-}
-
-// NewLocalSystemSettingService 用于处理与 NewLocalSystemSettingService 相关的逻辑。
-func NewLocalSystemSettingService(provider RuntimeConfigProvider) *LocalSystemSettingService {
-	return &LocalSystemSettingService{provider: provider}
-}
-
-// ResolveFrontendBaseURL 用于处理与 ResolveFrontendBaseURL 相关的逻辑。
-func (s *LocalSystemSettingService) ResolveFrontendBaseURL(context.Context) (string, error) {
-	return "http://127.0.0.1", nil
-}
-
-// IsObservabilityLogEnabled 用于处理与 IsObservabilityLogEnabled 相关的逻辑。
-func (s *LocalSystemSettingService) IsObservabilityLogEnabled(ctx context.Context) bool {
-	cfg, err := s.load(ctx)
-	if err != nil {
-		return true
-	}
-	return cfg.ObservabilityLogEnabled
-}
-
-// IsAgentRuntimeModelEnabled 用于处理与 IsAgentRuntimeModelEnabled 相关的逻辑。
-func (s *LocalSystemSettingService) IsAgentRuntimeModelEnabled(context.Context) bool {
-	return true
-}
-
-// ResolveCursorServerBridge 用于处理与 ResolveCursorServerBridge 相关的逻辑。
-func (s *LocalSystemSettingService) ResolveCursorServerBridge(context.Context) (string, bool) {
-	return "", false
-}
-
-// LoadRuntimeConfigSnapshot 用于处理与 LoadRuntimeConfigSnapshot 相关的逻辑。
-func (s *LocalSystemSettingService) LoadRuntimeConfigSnapshot(ctx context.Context) (RuntimeConfigSnapshot, error) {
-	return s.load(ctx)
-}
-
-// ResolveModelAdapters 用于处理与 ResolveModelAdapters 相关的逻辑。
-func (s *LocalSystemSettingService) ResolveModelAdapters(ctx context.Context) ([]ModelAdapterConfig, error) {
-	cfg, err := s.load(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return NormalizeModelAdapterConfigs(cfg.ModelAdapters)
-}
-
-// load 用于处理与 load 相关的逻辑。
-func (s *LocalSystemSettingService) load(ctx context.Context) (RuntimeConfigSnapshot, error) {
-	if s == nil || s.provider == nil {
-		return RuntimeConfigSnapshot{}, nil
-	}
-	return s.provider(ctx)
 }

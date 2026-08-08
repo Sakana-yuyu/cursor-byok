@@ -40,7 +40,6 @@ const (
 type ModelAdapterTestStatus string
 
 const (
-	ModelAdapterTestStatusIdle    ModelAdapterTestStatus = "idle"
 	ModelAdapterTestStatusRunning ModelAdapterTestStatus = "running"
 	ModelAdapterTestStatusSuccess ModelAdapterTestStatus = "success"
 	ModelAdapterTestStatusError   ModelAdapterTestStatus = "error"

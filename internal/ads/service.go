@@ -248,18 +248,6 @@ func (service *Service) fetchSlotOnce(ctx context.Context, slot Slot) (FetchResu
 	return FetchResult{Hash: hash, Changed: true}, nil
 }
 
-func (service *Service) CurrentHash(ctx context.Context) (string, error) {
-	return service.currentHash(ctx, normalizeSlotID(""))
-}
-
-func (service *Service) currentHash(ctx context.Context, slotID string) (string, error) {
-	inspection := service.inspectSlotPackage(ctx, slotID)
-	if inspection.state != packageValid {
-		return "", nil
-	}
-	return strings.TrimSpace(inspection.pkg.Hash), nil
-}
-
 func (service *Service) GetRuntime(ctx context.Context) (Runtime, error) {
 	runtimeState := Runtime{
 		AssetBaseURL: service.currentAssetBaseURL(),

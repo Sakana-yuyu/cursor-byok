@@ -1,8 +1,6 @@
 package ads
 
 const (
-	// FetchURL 保留旧名称表示默认广告位地址。
-	FetchURL = "https://ads.leokun.cn/1"
 	// FetchURL     = "http://localhost:3000/ad.zip"
 	RoutePrefix  = "/ad"
 	EventUpdated = "ad:updated"

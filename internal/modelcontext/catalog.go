@@ -8,8 +8,6 @@ import (
 	"strings"
 )
 
-const DataSource = "主流大模型列表.xlsx"
-
 //go:embed models.json
 var modelsCatalogJSON []byte
 
@@ -49,15 +47,15 @@ type modelsCatalogDoc struct {
 
 // modelsCatalogRule 是 models.json 中单条规则的反序列化结构（pattern 为字符串，启动时编译为正则）。
 type modelsCatalogRule struct {
-	Pattern            string                  `json:"pattern"`
-	DisplayName        string                  `json:"displayName"`
-	ContextWindowTokens int                    `json:"contextWindowTokens"`
-	MaxOutputTokens    int                     `json:"maxOutputTokens"`
-	SupportsVision     bool                    `json:"supportsVision"`
-	SupportsAudio      bool                    `json:"supportsAudio"`
-	SupportsTools      bool                    `json:"supportsTools"`
-	SupportsThinking   bool                    `json:"supportsThinking"`
-	Pricing            *modelsCatalogPricing   `json:"pricing,omitempty"`
+	Pattern             string                `json:"pattern"`
+	DisplayName         string                `json:"displayName"`
+	ContextWindowTokens int                   `json:"contextWindowTokens"`
+	MaxOutputTokens     int                   `json:"maxOutputTokens"`
+	SupportsVision      bool                  `json:"supportsVision"`
+	SupportsAudio       bool                  `json:"supportsAudio"`
+	SupportsTools       bool                  `json:"supportsTools"`
+	SupportsThinking    bool                  `json:"supportsThinking"`
+	Pricing             *modelsCatalogPricing `json:"pricing,omitempty"`
 }
 
 // modelsCatalogPricing 是 models.json 中 pricing 子结构的反序列化结构。
@@ -457,6 +455,7 @@ func AverageBuiltinPricing(currency string) *BuiltinPricing {
 
 // p 是构造 *float64 的简写辅助函数。
 func p(v float64) *float64 { return &v }
+
 // pricing 构造 BuiltinPricing 的简写辅助函数。
 func pricing(input, output, cacheRead float64) *BuiltinPricing {
 	return pricingUSD(input, output, cacheRead)

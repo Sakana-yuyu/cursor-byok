@@ -57,7 +57,6 @@ type UpdateInfo struct {
 	Version      string
 	ReleaseDate  string
 	ReleaseNotes string
-	Mandatory    bool
 	PlatformKey  string
 	Asset        manifestPlatform
 }
@@ -232,7 +231,6 @@ func updateInfoFromManifest(data manifest, platformKey string) (*UpdateInfo, err
 		Version:      strings.TrimSpace(data.Version),
 		ReleaseDate:  strings.TrimSpace(data.ReleaseDate),
 		ReleaseNotes: strings.TrimSpace(data.ReleaseNotes),
-		Mandatory:    data.Mandatory,
 		PlatformKey:  platformKey,
 		Asset:        asset,
 	}, nil

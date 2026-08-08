@@ -298,24 +298,3 @@ func hostFromBaseURL(baseURL string) string {
 	}
 	return trimmed
 }
-
-// ListModels 返回事件中出现过的模型名（去重排序前由调用方处理排序）。
-func ListModels(events []RequestMetric) []string {
-	seen := make(map[string]struct{})
-	result := make([]string, 0)
-	for _, event := range events {
-		if !IsProviderCall(event.Kind) {
-			continue
-		}
-		model := strings.TrimSpace(event.Model)
-		if model == "" {
-			continue
-		}
-		if _, ok := seen[model]; ok {
-			continue
-		}
-		seen[model] = struct{}{}
-		result = append(result, model)
-	}
-	return result
-}

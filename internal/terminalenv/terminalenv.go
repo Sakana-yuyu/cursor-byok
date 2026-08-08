@@ -68,23 +68,6 @@ func Detect() Status {
 	return status
 }
 
-// PreferredWindowsPowerShell 返回 Windows 下推荐的 PowerShell 路径。
-// 优先 PowerShell 7（pwsh）；不可用时返回 Windows PowerShell 5.1（powershell.exe）。
-// available=false 表示两种都未检测到。
-func PreferredWindowsPowerShell() (string, bool) {
-	status := Detect()
-	if status.Platform != "windows" {
-		return "", false
-	}
-	if path := lookupExecutable("pwsh.exe", "pwsh"); path != "" {
-		return path, true
-	}
-	if path := lookupExecutable("powershell.exe", "powershell"); path != "" {
-		return path, true
-	}
-	return "", false
-}
-
 // detectWindows 探测 Windows 下的 PowerShell。
 // PowerShell 7 通过 PATH 中的 pwsh 定位；Windows PowerShell 5.1 走系统目录回退。
 func detectWindows(status *Status) {

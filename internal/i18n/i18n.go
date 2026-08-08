@@ -1,9 +1,7 @@
 package i18n
 
 import (
-	"context"
 	"errors"
-	"fmt"
 	"strings"
 )
 
@@ -106,18 +104,6 @@ func Display(locale string, err error) string {
 
 type localeContextKey struct{}
 
-func WithLocale(ctx context.Context, locale string) context.Context {
-	return context.WithValue(ctx, localeContextKey{}, Normalize(locale))
-}
-func LocaleFromContext(ctx context.Context) string {
-	if ctx != nil {
-		if locale, ok := ctx.Value(localeContextKey{}).(string); ok {
-			return Normalize(locale)
-		}
-	}
-	return DefaultLocale
-}
-
 // Normalize maps browser/system locale variants to the supported locale set.
 func Normalize(locale string) string {
 	switch strings.ToLower(strings.TrimSpace(strings.ReplaceAll(locale, "_", "-"))) {
@@ -145,9 +131,4 @@ func T(locale, key string) string {
 		}
 	}
 	return key
-}
-
-// FormatError keeps diagnostics available while producing a localized prefix.
-func FormatError(locale, key, code, detail string, cause error) error {
-	return WrapError(key, code, fmt.Sprint(detail), cause)
 }

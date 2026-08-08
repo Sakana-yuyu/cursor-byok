@@ -64,12 +64,6 @@ func Info(msg string, args ...any) {
 	slog.Info(msg, args...)
 }
 
-// Error 输出 error 级日志。
-func Error(msg string, args ...any) {
-	Init()
-	slog.Error(msg, args...)
-}
-
 // Infof 输出格式化的 info 级日志。
 func Infof(format string, args ...any) {
 	Init()

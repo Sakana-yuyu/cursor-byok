@@ -41,15 +41,6 @@ type Manager struct {
 	RepairedAt time.Time
 }
 
-// NewManager 用于处理与 NewManager 相关的逻辑。
-func NewManager(caCertPath, caKeyPath string) (*Manager, error) {
-	certPEM, keyPEM, err := loadCAPEMFromFiles(caCertPath, caKeyPath)
-	if err != nil {
-		return nil, err
-	}
-	return NewManagerFromPEM(certPEM, keyPEM)
-}
-
 // IncompleteCAError 表示本地 CA 材料不完整（cert/key 仅存在其一）。
 // 属于可恢复错误：应用降级启动后，用户可经「一键修复」重新生成 CA。
 type IncompleteCAError struct {

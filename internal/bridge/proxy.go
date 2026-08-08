@@ -77,9 +77,6 @@ type PromptInjectionConfig = promptinject.Config
 // PromptInjectionStatus 定义提示词注入状态。
 type PromptInjectionStatus = promptinject.Status
 
-// PromptInjectionTemplate 定义单个可独立开关的提示词模板。
-type PromptInjectionTemplate = promptinject.PromptTemplate
-
 // DelegationTaskSnapshot is the desktop-safe Multitask worker state.
 type DelegationTaskSnapshot = forwarder.DelegationTaskSnapshot
 

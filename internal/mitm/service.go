@@ -248,20 +248,6 @@ func (s *ProxyServer) UpdateBaseURL(baseURL string) error {
 	return nil
 }
 
-// ListenAndServe 用于处理与 ListenAndServe 相关的逻辑。
-func (s *ProxyServer) ListenAndServe() error {
-	if err := s.Start(); err != nil {
-		return err
-	}
-	s.runMu.RLock()
-	errCh := s.serveErrCh
-	s.runMu.RUnlock()
-	if errCh == nil {
-		return nil
-	}
-	return <-errCh
-}
-
 // Start 用于处理与 Start 相关的逻辑。
 func (s *ProxyServer) Start() error {
 	s.runMu.Lock()
@@ -605,7 +591,7 @@ func (s *ProxyServer) forwardToServerStreaming(incoming *http.Request) (*http.Re
 
 	return resp, nil
 }
-//
+
 // MITM 转发会先移除 hop-by-hop 头。对普通请求这没问题，但 Connect 流的
 // 结构化错误和结束状态可能通过 trailers 传递；如果这里丢掉 Trailer 头，
 // Cursor 只能看到一个不完整的长连接关闭，并显示为 Network disconnected。
