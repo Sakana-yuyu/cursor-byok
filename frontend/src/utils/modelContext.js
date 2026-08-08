@@ -238,5 +238,3 @@ export function isModelCovered(modelID) {
   if (!normalized) return false;
   return MODEL_CAPABILITIES.some(({ pattern }) => pattern.test(normalized));
 }
-
-export const MODEL_CONTEXT_DATA_SOURCE = DATA_SOURCE;

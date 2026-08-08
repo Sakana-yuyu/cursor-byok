@@ -363,10 +363,6 @@ export function supplierSelectOptions(currentID = "") {
   return options;
 }
 
-export function supplierLabel(id) {
-  return supplierTemplate(id)?.label || "自定义供应商";
-}
-
 export function supplierUsageStatus(id) {
   return supplierTemplate(id)?.usage || supplierTemplate("custom").usage;
 }
@@ -400,9 +396,4 @@ export function supplierUsageRequest(adapterOrID) {
 
 export function supplierModelCatalog(id) {
   return supplierTemplate(id)?.modelCatalog || supplierTemplate("custom").modelCatalog;
-}
-
-export function supplierCatalogURLs(id) {
-  const catalog = supplierModelCatalog(id);
-  return Array.isArray(catalog.urls) ? catalog.urls.slice() : [];
 }

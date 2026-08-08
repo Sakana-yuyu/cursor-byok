@@ -1,7 +1,6 @@
 import { classifyModelProtocol } from "@/utils/protocolMeta";
 
 export const OPENAI_ENDPOINT_RESPONSES = "/v1/responses";
-export const OPENAI_ENDPOINT_CHAT = "/v1/chat/completions";
 export const PROTOCOL_GROUP_ANTHROPIC_MESSAGES = "messages";
 export const PROTOCOL_GROUP_GEMINI_NATIVE = "gemini_native";
 
@@ -35,11 +34,6 @@ export function resolvedOpenAIEndpoint(adapter) {
 
 export function resolvedOpenAIRequestGroup(adapter) {
   return String(adapter?.protocolGroup || adapter?.openAIRequestGroup || "").trim() || defaultOpenAIRequestGroup(resolvedOpenAIEndpoint(adapter));
-}
-
-export function transportBadgeText(adapter) {
-  if (adapter?.type !== "openai") return "";
-  return `${resolvedOpenAIEndpoint(adapter)} · ${formatOpenAIRequestGroup(resolvedOpenAIRequestGroup(adapter), resolvedOpenAIEndpoint(adapter))}`;
 }
 
 export function balanceSourceLabel(source) {

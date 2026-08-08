@@ -827,11 +827,6 @@ export function getModelAdapterTestResult(adapter) {
   const requestHash = buildModelAdapterTestRequestHash(normalized);
   return Object.values(appState.modelAdapterTestResults).find((result) => result.requestHash === requestHash) ?? null;
 }
-
-export function isModelAdapterTestResultRunning(adapter) {
-  return getModelAdapterTestResult(adapter)?.status === "running";
-}
-
 export function isModelAdapterTestResultStale(adapter, result) {
   if (!result || !result.requestHash) {
     return false;
@@ -1425,18 +1420,6 @@ export async function deleteModelAdaptersBatch(targets) {
   );
   return result.ok ? { ...result, removed } : result;
 }
-
-export async function deleteAllModelAdapters() {
-  const currentConfig = await loadPersistedUserConfig();
-  return persistConfigPayload(
-    {
-      ...currentConfig,
-      modelAdapters: [],
-    },
-    { modelAdaptersOnly: true },
-  );
-}
-
 /**
  * 按供应商身份删除模型。
  * - 旧签名：deleteModelAdaptersBySupplier(baseURL, groupName) → 等同 legacy（baseURL+分组名）
@@ -1484,36 +1467,6 @@ export async function deleteModelAdaptersBySupplier(baseURLOrIdentity, groupName
     { modelAdaptersOnly: true },
   );
 }
-
-export async function duplicateModelAdapterAt(index) {
-  const currentConfig = await loadPersistedUserConfig();
-  const nextAdapters = normalizeModelAdapters(currentConfig.modelAdapters);
-
-  if (index < 0 || index >= nextAdapters.length) {
-    return {
-      ok: false,
-      error: "模型配置不存在，无法复制",
-    };
-  }
-
-  const source = normalizeModelAdapter(nextAdapters[index]);
-  const duplicate = {
-    ...source,
-    id: "",
-    displayName: buildNextDisplayName(nextAdapters, source.displayName || source.modelID || "模型"),
-  };
-
-  nextAdapters.splice(index + 1, 0, duplicate);
-
-  return persistConfigPayload(
-    {
-      ...currentConfig,
-      modelAdapters: nextAdapters,
-    },
-    { modelAdaptersOnly: true },
-  );
-}
-
 export async function syncServiceState() {
   const [state] = await Promise.all([getProxyState(), refreshDebugLogUsage()]);
   applyProxyState(state);

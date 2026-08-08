@@ -15,7 +15,7 @@ import {
   ListSessionDebugFiles,
   ReadSessionDebugTail,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
-import { getDelegationConfig as getDelegationConfigBinding, saveDelegationConfig as saveDelegationConfigBinding } from "@/services/clientApi";
+import { saveDelegationConfig as saveDelegationConfigBinding } from "@/services/clientApi";
 
 const DEFAULT_SUPERVISION = {
   enabled: false,
@@ -67,14 +67,6 @@ function normalizeVisionDelegationConfig(config) {
     visionModelID,
     mode: ["auto", "describe", "ocr"].includes(mode) ? mode : "auto",
   };
-}
-
-export function getDelegationConfig() {
-  return getDelegationConfigBinding().then((config) => ({
-    ...(config || {}),
-    supervision: normalizeSupervisionConfig(config?.supervision),
-    visionDelegation: normalizeVisionDelegationConfig(config?.visionDelegation),
-  }));
 }
 
 export function saveDelegationConfig(config) {

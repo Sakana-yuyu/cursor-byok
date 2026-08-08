@@ -9,9 +9,7 @@ import {
   QueryAllProviderBalances,
   RepairProxySettings,
   GetDelegationConfig, SaveDelegationConfig,
-  GetGoals, StartGoal, StopGoal,
   GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
-  EnableReaderMCP,
   RepairCACorruption, GetCARepairStatus,
   GetTerminalEnvironmentStatus, ApplyTerminalEnvironment,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
@@ -390,9 +388,6 @@ export function saveSkillFile(name, content, workspaceRoot = "") {
 export function generateSkillSummary(kind, key, workspaceRoot = "") {
   return desktopOrMock("", "@bindings/cursor/internal/bridge/proxyservice.js", "GenerateSkillSummary", [workspaceRoot, kind, key]);
 }
-export function enableReaderMCP(url, apiKey, model) {
-  return desktopOrMock({ identifier: "vision-reader", scriptPath: "", wasAdded: true }, "@bindings/cursor/internal/bridge/proxyservice.js", "EnableReaderMCP", [url || "", apiKey || "", model || ""]);
-}
 export function repairCACorruption() {
   return desktopOrMock({ repaired: true, backupPath: "", detail: "浏览器预览模式：模拟修复" }, "@bindings/cursor/internal/bridge/proxyservice.js", "RepairCACorruption");
 }
@@ -410,16 +405,4 @@ export function getDelegationConfig() {
 
 export function saveDelegationConfig(config) {
   return desktopOrMock(() => SaveDelegationConfig(config), "@bindings/cursor/internal/bridge/proxyservice.js", "SaveDelegationConfig", [config]);
-}
-
-export function getGoals() {
-  return desktopOrMock(() => GetGoals(), "@bindings/cursor/internal/bridge/proxyservice.js", "GetGoals");
-}
-
-export function startGoal(goalText, modelID) {
-  return desktopOrMock(() => StartGoal(goalText, modelID), "@bindings/cursor/internal/bridge/proxyservice.js", "StartGoal", [goalText, modelID]);
-}
-
-export function stopGoal(conversationID) {
-  return desktopOrMock(() => StopGoal(conversationID), "@bindings/cursor/internal/bridge/proxyservice.js", "StopGoal", [conversationID]);
 }

@@ -45,16 +45,6 @@ export const runtimeIsWindows = isBrowserPreview
   ? false
   : typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent);
 
-export function browserPreviewMockConfig() {
-  return {
-    modelAdapters: [],
-    backendListenAddr: "127.0.0.1:8787",
-    proxyListenAddr: "127.0.0.1:8788",
-    routing: { mode: "local" },
-    homeMetrics: { includeCacheWriteInHitRate: false },
-  };
-}
-
 export function browserPreviewMockProxyState() {
   return {
     serviceRunning: false,
