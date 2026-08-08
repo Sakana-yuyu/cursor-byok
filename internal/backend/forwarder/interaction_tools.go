@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +14,48 @@ import (
 	runtimecore "cursor/internal/backend/agent/core"
 	"cursor/internal/logger"
 )
+
+// handleAsyncAskQuestionCompletion 处理客户端的 AsyncAskQuestionCompletionAction：
+// 异步 AskQuestion UI 完成时答案随 ConversationAction 上行，这里复用 InteractionResponse
+// 路径完成对应 pending interaction，避免答案被丢弃、工具永久 pending。
+func (service *Service) handleAsyncAskQuestionCompletion(stream *ActiveStream, requestID string, completion *agentv1.AsyncAskQuestionCompletionAction) error {
+	if service == nil || stream == nil || completion == nil {
+		return nil
+	}
+	toolCallID := strings.TrimSpace(completion.GetOriginalToolCallId())
+	if toolCallID == "" {
+		logger.Infof("forwarder async ask_question completion missing tool_call_id request_id=%s", strings.TrimSpace(requestID))
+		return nil
+	}
+	var pending runtimecore.PendingInteraction
+	var found bool
+	stream.mu.Lock()
+	for _, item := range stream.PendingInteractions {
+		if strings.TrimSpace(item.ToolCallID) == toolCallID && strings.TrimSpace(item.InteractionKind) == "ask_question" {
+			pending = item
+			found = true
+			break
+		}
+	}
+	stream.mu.Unlock()
+	if !found {
+		logger.Infof("forwarder async ask_question completion without pending interaction tool_call_id=%s request_id=%s", toolCallID, strings.TrimSpace(requestID))
+		return nil
+	}
+	id, err := strconv.ParseUint(strings.TrimSpace(pending.InteractionID), 10, 32)
+	if err != nil {
+		return fmt.Errorf("invalid pending interaction id %q: %w", pending.InteractionID, err)
+	}
+	synthetic := &agentv1.InteractionResponse{
+		Id: uint32(id),
+		Result: &agentv1.InteractionResponse_AskQuestionInteractionResponse{
+			AskQuestionInteractionResponse: &agentv1.AskQuestionInteractionResponse{
+				Result: completion.GetResult(),
+			},
+		},
+	}
+	return service.handleInteractionResult(InboundIntent{RequestID: requestID, InteractionResponse: synthetic})
+}
 
 // defaultInteractionTimeout 是等待用户输入类 interaction（AskQuestion 等）的兜底超时。
 // 客户端弹窗丢失/被关闭但未回 interaction 结果时，回合不能永久停在 awaiting_user，

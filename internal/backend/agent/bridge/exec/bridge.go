@@ -152,9 +152,27 @@ func (bridge *Bridge) ApplyExecClientMessage(msg *agentv1.ExecClientMessage, pen
 		ToolCallID: pending.ToolCallID,
 		ExecID:     pending.ExecID,
 	}
+	// 客户端 allowlist precheck 结果：Cursor 客户端开启 Shell/MCP/WebFetch allowlist 时，
+	// 对 exec 请求先回 precheck 结果而非真实执行结果。allowlisted=false 表示被客户端
+	// 策略拦截（直接以明确终态收口，避免 pending 卡到 watchdog 数十秒级）；allowlisted=true
+	// 表示已放行但执行结果未回，保持挂起等待真实结果（exec watchdog 兜底）。
+	if precheck := msg.GetShellAllowlistPrecheckResult(); precheck != nil {
+		return applyAllowlistPrecheckResult(result, pending, "shell", precheck.GetAllowlisted())
+	}
+	if precheck := msg.GetMcpAllowlistPrecheckResult(); precheck != nil {
+		return applyAllowlistPrecheckResult(result, pending, "mcp", precheck.GetAllowlisted())
+	}
+	if precheck := msg.GetWebFetchAllowlistPrecheckResult(); precheck != nil {
+		return applyAllowlistPrecheckResult(result, pending, "web_fetch", precheck.GetAllowlisted())
+	}
 	switch pending.ExecKind {
 	case "read":
 		readResult := normalizeReadResultForModel(msg.GetReadResult())
+		if readResult == nil {
+			// redacted_read_result：客户端对敏感/secret 路径默认返回 redacted 读取结果，
+			// 与普通 ReadResult 同构，走同一收口路径。
+			readResult = normalizeReadResultForModel(msg.GetRedactedReadResult())
+		}
 		result.ToolResultPayload = summarizeReadResult(readResult)
 		result.ToolCall = buildReadCompletedToolCall(pending.ToolCallID, pending.ArgsJSON, readResult)
 		result.IsTerminal = true
@@ -459,3 +477,17 @@ func (bridge *Bridge) nextID() uint32 {
 // openGrep 构造 Grep 对应的执行桥请求。
 
 // buildReadCompletedToolCall 构造 Read 对应的完成态 ToolCall。
+
+// applyAllowlistPrecheckResult 处理客户端 allowlist precheck 结果。
+// allowlisted=false：执行被客户端策略拦截，直接以明确终态收口；
+// allowlisted=true：客户端已放行但尚未返回执行结果，保持挂起等待真实结果。
+func applyAllowlistPrecheckResult(result ExecApplyResult, pending runtimecore.PendingExec, execKind string, allowlisted bool) (ExecApplyResult, error) {
+	if !allowlisted {
+		reason := fmt.Sprintf("tool execution denied by client allowlist (exec_kind=%s, exec_id=%s)", execKind, pending.ExecID)
+		result.ToolResultPayload = fmt.Sprintf(`{"status":"denied","detail":%q,"exec_kind":%q,"allowlisted":false}`, reason, execKind)
+		result.IsTerminal = true
+		return result, nil
+	}
+	result.IsTerminal = false
+	return result, nil
+}

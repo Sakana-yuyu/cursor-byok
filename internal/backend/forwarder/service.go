@@ -1605,6 +1605,14 @@ func (service *Service) handleMetadataIntent(intent InboundIntent) error {
 		}
 		return nil
 	}
+	// AsyncAskQuestionCompletionAction：客户端异步 AskQuestion UI 完成时通过
+	// ConversationAction 回答案，而不是 InteractionResponse。不处理的话答案被丢弃、
+	// 工具永久 pending（只靠 interaction watchdog 收口）。
+	if intent.ClientMessage != nil {
+		if asyncCompletion := intent.ClientMessage.GetConversationAction().GetAsyncAskQuestionCompletionAction(); asyncCompletion != nil {
+			return service.handleAsyncAskQuestionCompletion(stream, intent.RequestID, asyncCompletion)
+		}
+	}
 	backgroundShellToolCallID, backgroundShellActionWasNew := observeBackgroundShellAction(stream, intent.ClientMessage)
 	observeBackgroundTaskCompletionAction(stream, intent.ClientMessage)
 	backgroundSubagentToolCallID, backgroundSubagentActionWasNew := observeBackgroundSubagentAction(stream, intent.ClientMessage)
