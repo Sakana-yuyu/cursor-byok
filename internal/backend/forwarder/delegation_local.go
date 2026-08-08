@@ -167,6 +167,16 @@ func (adapter *localDelegatedAgentAdapter) Execute(ctx context.Context, request 
 		historyMessages = append(historyMessages, buildDelegatedAssistantToolMessage(pass.text, pass.invocations))
 		for _, invocation := range pass.invocations {
 			toolCallCount++
+			// SubagentProfile.MaxSteps 限步：超过时优雅停止，返回部分结果（与 pass 超限处理一致）。
+			if request.MaxSteps > 0 && toolCallCount >= request.MaxSteps {
+				delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusCompleted, providerPass, nil, nil, "delegated worker reached step limit, returning partial results", fmt.Sprintf("step limit: %d", request.MaxSteps))
+				logger.Infof("forwarder local delegated worker reached step limit task_id=%s max_steps=%d tool_calls=%d", strings.TrimSpace(request.ID), request.MaxSteps, toolCallCount)
+				return delegation.TaskResult{
+					Output:        lastOutputText,
+					ToolCallCount: toolCallCount,
+					Metadata:      identity.metadata(providerPass),
+				}
+			}
 			toolSignature := delegation.NormalizeToolSignature(invocation.ToolName, invocation.ArgsJSON)
 			changedFiles := localDelegationCheckpointChangedFiles(invocation)
 			delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusRunning, providerPass, []string{toolSignature}, changedFiles, "delegated tool is running", "")

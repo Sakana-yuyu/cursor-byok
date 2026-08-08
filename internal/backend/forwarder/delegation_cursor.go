@@ -130,8 +130,11 @@ func buildDelegatedCursorTaskRequest(stream *ActiveStream, pending runtimecore.P
 	prompt := runtimecore.ApplySubagentPromptFragment(subagentType, runtimecore.ReadStringArg(args, "prompt"), subagentProfiles)
 	// SubagentProfile.ToolWhitelist 注入：由 filterDelegatedTools 在 worker 侧强制。
 	var toolWhitelist []string
+	// SubagentProfile.MaxSteps 注入：由 Execute 循环在 worker 侧强制。
+	var maxSteps int
 	if profile, ok := runtimecore.LookupSubagentProfile(subagentType); ok {
 		toolWhitelist = profile.ToolWhitelist
+		maxSteps = profile.MaxSteps
 	}
 	return delegation.TaskRequest{
 		ParentRequest:                activeStreamRequestID(stream),
@@ -154,6 +157,7 @@ func buildDelegatedCursorTaskRequest(stream *ActiveStream, pending runtimecore.P
 		ExecutionMode:                strings.TrimSpace(executionMode),
 		WorkspaceHint:                openContext.WorkspaceHint,
 		ToolWhitelist:                toolWhitelist,
+		MaxSteps:                     maxSteps,
 	}
 }
 

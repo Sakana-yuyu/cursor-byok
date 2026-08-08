@@ -71,7 +71,9 @@ type TaskRequest struct {
 	WorkspaceHint                string
 	ToolPermission               map[string]bool
 	// ToolWhitelist 可选工具白名单（空 = 不限制）。来自 SubagentProfile，由 filterDelegatedTools 强制。
-	ToolWhitelist           []string
+	ToolWhitelist []string
+	// MaxSteps 可选最大步数上限（0 = 不限制）。来自 SubagentProfile，由 Execute 循环强制。
+	MaxSteps                int
 	RuntimeSupervisionRound int
 	RuntimeCorrectionCount  int
 	RuntimeRetryCount       int
