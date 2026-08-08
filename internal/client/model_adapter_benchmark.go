@@ -24,6 +24,7 @@ import (
 	serverconfig "cursor/internal/backend/server/config"
 	"cursor/internal/logger"
 	"cursor/internal/modelchannel"
+	"cursor/internal/safego"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -478,7 +479,7 @@ func (s *ProxyService) persistModelAdapterTestResultsAsync(snapshot []ModelAdapt
 		item.RawResponse = ""
 		toWrite = append(toWrite, item)
 	}
-	go func() {
+	safego.Go("client:persist-test-results", func() {
 		path := appdata.ModelAdapterTestResultsFilePath()
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			logger.Errorf("persist model adapter test results mkdir failed path=%s err=%v", path, err)
@@ -500,7 +501,7 @@ func (s *ProxyService) persistModelAdapterTestResultsAsync(snapshot []ModelAdapt
 				logger.Errorf("persist model adapter test results rename failed path=%s err=%v", path, err2)
 			}
 		}
-	}()
+	})
 }
 
 func (s *ProxyService) snapshotModelAdapterTestResults() []ModelAdapterTestResult {

@@ -21,6 +21,7 @@ import (
 	"cursor/internal/logger"
 	"cursor/internal/netproxy"
 	legacyruntime "cursor/internal/runtime"
+	"cursor/internal/safego"
 )
 
 const healthPath = "/healthz"
@@ -259,19 +260,20 @@ func (host *Host) Start() error {
 	host.lastRunErr = nil
 	logger.Infof("内置后端监听成功 listen_addr=%s", host.listenAddr)
 
-	go func(serverInstance *http.Server, serverListener net.Listener) {
-		logger.Infof("内置后端开始提供服务 listen_addr=%s", serverListener.Addr().String())
-		if err := serverInstance.Serve(serverListener); err != nil && err != http.ErrServerClosed {
-			runErr := fmt.Errorf("内置后端在 %s 上异常退出: %w", serverListener.Addr().String(), err)
+	servingServer, servingListener := httpServer, listener
+	safego.Go("backend:http-serve", func() {
+		logger.Infof("内置后端开始提供服务 listen_addr=%s", servingListener.Addr().String())
+		if err := servingServer.Serve(servingListener); err != nil && err != http.ErrServerClosed {
+			runErr := fmt.Errorf("内置后端在 %s 上异常退出: %w", servingListener.Addr().String(), err)
 			host.runMu.Lock()
-			if host.httpServer == serverInstance {
+			if host.httpServer == servingServer {
 				host.httpServer = nil
 			}
 			host.lastRunErr = runErr
 			host.runMu.Unlock()
 			logger.Errorf("%v", runErr)
 		}
-	}(httpServer, listener)
+	})
 	return nil
 }
 

@@ -17,6 +17,7 @@ import (
 	"cursor/gen/agentv1"
 	runtimecore "cursor/internal/backend/agent/core"
 	"cursor/internal/logger"
+	"cursor/internal/safego"
 )
 
 const (
@@ -327,13 +328,14 @@ func (s *Scheduler) run(state *taskState) {
 	resultChannel := make(chan TaskResult, 1)
 	executorStarted = true
 	go s.watchEffectiveProgress(state)
-	go func(taskID string) {
+	executorTaskID := state.snapshot.ID
+	safego.Go("delegation:executor", func() {
 		result := s.executor(executionCtx, request)
 		s.mu.Lock()
-		delete(s.activeExecutions, taskID)
+		delete(s.activeExecutions, executorTaskID)
 		s.mu.Unlock()
 		resultChannel <- result
-	}(state.snapshot.ID)
+	})
 	var result TaskResult
 	select {
 	case result = <-resultChannel:

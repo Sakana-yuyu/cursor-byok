@@ -3,6 +3,7 @@ package forwarder
 import (
 	"context"
 	"cursor/internal/logger"
+	"cursor/internal/safego"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -415,7 +416,7 @@ func (aggregate *supervisedAggregate) startWait(task *supervisedTaskState, ident
 		checkpointInterval = task.contract.CheckpointInterval
 	}
 	aggregate.mu.Unlock()
-	go func() {
+	safego.Go("forwarder:checkpoint-heartbeat", func() {
 		lastSequence := uint64(0)
 		for {
 			afterSequence := lastSequence
@@ -452,7 +453,7 @@ func (aggregate *supervisedAggregate) startWait(task *supervisedTaskState, ident
 				aggregate.postEvent(supervisorAggregateEvent{kind: "worker_checkpoint", identity: identity, snapshot: snapshot, heartbeat: heartbeat})
 			}
 		}
-	}()
+	})
 }
 
 func (aggregate *supervisedAggregate) run() {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"cursor/internal/logger"
+	"cursor/internal/safego"
 )
 
 const historyMaintenanceLockStaleAfter = 30 * time.Minute
@@ -18,11 +19,11 @@ func (service *Service) startHistoryMaintenance() {
 	if service == nil || service.store == nil {
 		return
 	}
-	go func() {
+	safego.Go("forwarder:history-maintenance", func() {
 		if err := service.runHistoryMaintenance(); err != nil {
 			logger.Errorf("forwarder history maintenance failed: %v", err)
 		}
-	}()
+	})
 }
 
 func (service *Service) runHistoryMaintenance() error {

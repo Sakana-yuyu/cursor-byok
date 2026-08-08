@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"cursor/internal/logger"
+	"cursor/internal/safego"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -963,16 +964,18 @@ func (service *Service) Shutdown(ctx context.Context) error {
 		// 单个流取消不能无限占用关闭预算：actor 可能卡在 compile/provider 准备阶段。
 		cancelCtx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
 		errCh := make(chan error, 1)
-		go func(requestID string, stream *ActiveStream) {
-			errCh <- service.postStreamCommandWait(stream, streamCommand{
+		shutdownRequestID := requestID
+		shutdownStream := stream
+		safego.Go("forwarder:shutdown-cancel", func() {
+			errCh <- service.postStreamCommandWait(shutdownStream, streamCommand{
 				Kind: streamCommandCancel,
 				Intent: InboundIntent{
 					Kind:         "cancel",
-					RequestID:    requestID,
+					RequestID:    shutdownRequestID,
 					CancelReason: "[canceled] Local assistant service shutting down",
 				},
 			})
-		}(requestID, stream)
+		})
 		var err error
 		select {
 		case err = <-errCh:

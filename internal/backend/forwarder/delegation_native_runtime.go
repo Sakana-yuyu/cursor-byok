@@ -10,6 +10,7 @@ import (
 	runtimecore "cursor/internal/backend/agent/core"
 	"cursor/internal/backend/delegation"
 	"cursor/internal/logger"
+	"cursor/internal/safego"
 )
 
 const nativeDelegationRetention = 10 * time.Minute
@@ -262,7 +263,7 @@ func (service *Service) watchNativeDelegationProgress(requestID, execID string) 
 	if service == nil || strings.TrimSpace(requestID) == "" || strings.TrimSpace(execID) == "" {
 		return
 	}
-	go func() {
+	safego.Go("forwarder:native-delegation-watchdog", func() {
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
@@ -291,7 +292,7 @@ func (service *Service) watchNativeDelegationProgress(requestID, execID string) 
 			}
 			return
 		}
-	}()
+	})
 }
 
 // nativeDelegationProgressTimeout 解析当前 native 子代理「无有效进展」看门狗阈值，
@@ -346,7 +347,7 @@ func (service *Service) keepNativeDelegationAlive(requestID, execID string) {
 	if service == nil || strings.TrimSpace(requestID) == "" || strings.TrimSpace(execID) == "" {
 		return
 	}
-	go func() {
+	safego.Go("forwarder:native-delegation-progress", func() {
 		ticker := time.NewTicker(nativeDelegationProgressInterval)
 		defer ticker.Stop()
 		for range ticker.C {
@@ -359,7 +360,7 @@ func (service *Service) keepNativeDelegationAlive(requestID, execID string) {
 				service.publishNativeDelegationProgress(requestID, execID, summary)
 			}
 		}
-	}()
+	})
 }
 
 func (service *Service) updateNativeDelegationStatus(execID string, status delegation.TaskStatus, progress string, errorText string) {

@@ -30,6 +30,7 @@ import (
 	"cursor/internal/logger"
 	"cursor/internal/mitm"
 	"cursor/internal/netproxy"
+	"cursor/internal/safego"
 	"cursor/internal/updater"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -213,12 +214,12 @@ func Run(resources EmbeddedResources) error {
 		app.Event.Emit(ads.EventUpdated, runtimeState)
 	}
 	refreshAdAsync := func() {
-		go func() {
+		safego.Go("ad:refresh", func() {
 			refreshAd(context.Background())
-		}()
+		})
 	}
 	startAdRefreshLoop := func(ctx context.Context) {
-		go func() {
+		safego.Go("ad:refresh-loop", func() {
 			refreshAd(ctx)
 			ticker := time.NewTicker(adRefreshInterval)
 			defer ticker.Stop()
@@ -230,7 +231,7 @@ func Run(resources EmbeddedResources) error {
 					refreshAd(ctx)
 				}
 			}
-		}()
+		})
 	}
 
 	updateManager = updater.NewManager(app)
@@ -385,7 +386,7 @@ func Run(resources EmbeddedResources) error {
 		logger.Infof("应用版本：v%s", buildinfo.CurrentVersion())
 		updateManager.Start()
 		startAdRefreshLoop(adRefreshCtx)
-		go func() {
+		safego.Go("app:autostart", func() {
 			logger.Infof("application started, begin auto start service in background")
 			// 释放内置技能（find-skills + superpowers）到 ~/.cursor/skills/，
 			// 让 Cursor 客户端在所有项目的 / 菜单里列出。仅写入缺失/变化的文件，不删用户自加技能。
@@ -407,7 +408,7 @@ func Run(resources EmbeddedResources) error {
 				}
 				logger.Infof("代理已自动启动: %s", state.ProxyListenAddr)
 				// 自动配对需要访问供应商模型目录，不能占用本地代理的启动关键路径。
-				go func() {
+				safego.Go("app:auto-match", func() {
 					autoMatchOnce.Do(func() {
 						if matchResult, matchErr := proxyService.AutoMatchContextWindows(context.Background(), false); matchErr != nil {
 							logger.Errorf("自动配对上下文窗口失败: %v", matchErr)
@@ -416,9 +417,9 @@ func Run(resources EmbeddedResources) error {
 								matchResult.Total, matchResult.FromCatalog, matchResult.FromProbe, matchResult.Unchanged, matchResult.Changed)
 						}
 					})
-				}()
+				})
 			}
-		}()
+		})
 	})
 
 	startItem.OnClick(func(ctx *application.Context) {

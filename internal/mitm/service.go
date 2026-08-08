@@ -20,6 +20,7 @@ import (
 	"cursor/internal/certs"
 	"cursor/internal/logger"
 	"cursor/internal/netproxy"
+	"cursor/internal/safego"
 
 	"github.com/elazarl/goproxy"
 )
@@ -270,7 +271,7 @@ func (s *ProxyServer) Start() error {
 	s.httpServer = httpServer
 	s.serveErrCh = make(chan error, 1)
 
-	go func() {
+	safego.Go("mitm:http-serve", func() {
 		var serveErr error
 		err := httpServer.Serve(ln)
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -287,7 +288,7 @@ func (s *ProxyServer) Start() error {
 			s.httpServer = nil
 		}
 		s.runMu.Unlock()
-	}()
+	})
 
 	return nil
 }
@@ -551,7 +552,7 @@ func (s *ProxyServer) forwardToServerStreaming(incoming *http.Request) (*http.Re
 	resp.Header.Set("Content-Type", respContentType)
 
 	// 异步转发到 backend，body 结果写入 pipe
-	go func() {
+	safego.Go("mitm:stream-forward", func() {
 		defer pr.Close()
 
 		forwardURL := *endpoint
@@ -587,7 +588,7 @@ func (s *ProxyServer) forwardToServerStreaming(incoming *http.Request) (*http.Re
 			return
 		}
 		pw.Close()
-	}()
+	})
 
 	return resp, nil
 }

@@ -3,6 +3,7 @@ package forwarder
 import (
 	"context"
 	"cursor/internal/logger"
+	"cursor/internal/safego"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -349,7 +350,7 @@ func (service *Service) keepDelegationTaskAlive(stream *ActiveStream, pending ru
 	if requestID == "" || execID == "" || toolCallID == "" {
 		return
 	}
-	go func() {
+	safego.Go("forwarder:delegation-progress", func() {
 		ticker := time.NewTicker(delegationTaskProgressInterval)
 		defer ticker.Stop()
 		consecutiveFailures := 0
@@ -375,7 +376,7 @@ func (service *Service) keepDelegationTaskAlive(stream *ActiveStream, pending ru
 			}
 			consecutiveFailures = 0
 		}
-	}()
+	})
 }
 
 // delegationResultRunStatus 从委派结果 JSON 推导 SubagentRun 终态状态。
