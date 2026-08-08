@@ -13,7 +13,6 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"cursor/gen/agentv1"
-	promptengine "cursor/internal/backend/agent/prompt"
 )
 
 func buildCurrentTurnCompactionCandidate(entries []HistoryEntry, turnSeq int64, requestID string) (compactionCandidateTurn, bool) {
@@ -203,91 +202,6 @@ func summarizeCurrentTurnToolResultEntry(entry HistoryEntry) string {
 		return toolName + "=" + result
 	}
 	return toolName + "=completed"
-}
-
-func buildReplayMessagesFromAgentTurn(agentTurn *agentv1.AgentConversationTurnStructure) []promptengine.Message {
-	if agentTurn == nil {
-		return nil
-	}
-	messages := make([]promptengine.Message, 0, 4)
-	if rawUser := agentTurn.GetUserMessage(); len(rawUser) > 0 {
-		userMessage := &agentv1.UserMessage{}
-		if err := proto.Unmarshal(rawUser, userMessage); err == nil {
-			if replay, ok := promptengine.BuildUserMessageReplayMessage(userMessage); ok {
-				messages = append(messages, replay)
-			}
-		}
-	}
-	for _, rawStep := range agentTurn.GetSteps() {
-		if len(rawStep) == 0 {
-			continue
-		}
-		step := &agentv1.ConversationStep{}
-		if err := proto.Unmarshal(rawStep, step); err != nil {
-			continue
-		}
-		messages = append(messages, promptengine.BuildLegacyMessagesFromConversationStep(step)...)
-	}
-	return messages
-}
-
-func estimatePromptReplayMessagesTokens(messages []promptengine.Message) int64 {
-	total := int64(0)
-	for _, message := range messages {
-		total += estimateTextTokens(message.Role)
-		total += estimateTextTokens(message.Content)
-		total += estimatePromptContentPartsTokens(message.Content, message.ContentParts)
-		total += estimateTextTokens(message.ReasoningContent)
-		total += estimateTextTokens(message.ReasoningSignature)
-		total += estimateTextTokens(message.ToolCallID)
-		total += estimateTextTokens(message.Name)
-	}
-	return total
-}
-
-func buildCompactedTurnSummary(agentTurn *agentv1.AgentConversationTurnStructure) compactedTurnSummary {
-	if agentTurn == nil {
-		return compactedTurnSummary{}
-	}
-	item := compactedTurnSummary{}
-	if rawUser := agentTurn.GetUserMessage(); len(rawUser) > 0 {
-		userMessage := &agentv1.UserMessage{}
-		if err := proto.Unmarshal(rawUser, userMessage); err == nil {
-			item.UserText = truncateCompactionText(userMessage.GetText(), compactionTurnSnippetMaxChars/3)
-			if imageCount := len(userMessage.GetSelectedContext().GetSelectedImages()); imageCount > 0 {
-				suffix := fmt.Sprintf(" [attached_images=%d]", imageCount)
-				if strings.TrimSpace(item.UserText) == "" {
-					item.UserText = strings.TrimSpace(suffix)
-				} else {
-					item.UserText += suffix
-				}
-			}
-		}
-	}
-	for _, rawStep := range agentTurn.GetSteps() {
-		if len(rawStep) == 0 {
-			continue
-		}
-		step := &agentv1.ConversationStep{}
-		if err := proto.Unmarshal(rawStep, step); err != nil {
-			continue
-		}
-		switch message := step.GetMessage().(type) {
-		case *agentv1.ConversationStep_AssistantMessage:
-			if text := truncateCompactionText(message.AssistantMessage.GetText(), compactionTurnSnippetMaxChars/3); text != "" {
-				item.Steps = append(item.Steps, "assistant="+text)
-			}
-		case *agentv1.ConversationStep_ThinkingMessage:
-			if text := truncateCompactionText(message.ThinkingMessage.GetText(), compactionTurnSnippetMaxChars/4); text != "" {
-				item.Steps = append(item.Steps, "thinking="+text)
-			}
-		case *agentv1.ConversationStep_ToolCall:
-			if toolName, toolDetail := summarizeCompactedToolCall(message.ToolCall); toolName != "" {
-				item.Steps = append(item.Steps, toolName+"="+toolDetail)
-			}
-		}
-	}
-	return item
 }
 
 func rewriteAutoCompactionToolResultEntry(entry HistoryEntry, limitBytes int, minimal bool) (HistoryEntry, bool) {

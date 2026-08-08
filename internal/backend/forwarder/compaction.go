@@ -17,8 +17,6 @@ import (
 const (
 	compactionAutoReserveTokens      = 10000
 	compactionTriggerRemainingTokens = 8192
-	compactionPreferredTailTurns     = 4
-	compactionMinimumTailTurns       = 1
 	compactionReserveFloorTokens     = 8192
 	compactionSummaryMaxChars        = 12000
 	compactionSummaryOutputMaxTokens = 4096

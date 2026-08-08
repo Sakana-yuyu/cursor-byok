@@ -10,7 +10,6 @@ import (
 	"cursor/gen/agentv1"
 	"cursor/gen/aiserverv1"
 	modeladapter "cursor/internal/backend/agent/model"
-	promptengine "cursor/internal/backend/agent/prompt"
 )
 
 const (
@@ -89,29 +88,6 @@ func estimateTextTokens(text string) int64 {
 }
 
 func estimateModelContentPartsTokens(content string, parts []modeladapter.ContentPart) int64 {
-	if len(parts) == 0 {
-		return 0
-	}
-	total := int64(0)
-	countText := strings.TrimSpace(content) == ""
-	for _, part := range parts {
-		switch strings.TrimSpace(strings.ToLower(part.Type)) {
-		case "", "text":
-			if countText {
-				total += estimateTextTokens(part.Text)
-			}
-		case "image":
-			total += estimatedTokensPerImagePart
-			if part.Image != nil {
-				total += estimateTextTokens(part.Image.MIMEType)
-				total += estimateTextTokens(part.Image.Path)
-			}
-		}
-	}
-	return total
-}
-
-func estimatePromptContentPartsTokens(content string, parts []promptengine.ContentPart) int64 {
 	if len(parts) == 0 {
 		return 0
 	}
