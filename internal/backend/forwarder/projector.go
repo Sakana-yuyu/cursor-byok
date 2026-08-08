@@ -91,7 +91,7 @@ func (projector *HistoryProjector) ProjectPromptReplay(conversation *Conversatio
 			if strings.TrimSpace(message.Role) != "" {
 				messages = append(messages, message)
 			}
-		case "compaction_summary", "compacted_summary":
+		case "compaction_summary", "compacted_summary", "context_projection_summary":
 			summary, ok := decodeCompactionSummaryEntry(entry)
 			if ok {
 				messages = append(messages, modeladapter.Message{

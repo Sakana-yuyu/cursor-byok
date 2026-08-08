@@ -324,26 +324,35 @@ type pendingCheckpointPublish struct {
 }
 
 type PendingCompaction struct {
-	Trigger                   string
-	ContextTokens             int64
-	ContextWindowSize         int64
-	ContextUsagePercent       float64
-	ReserveTokens             int64
-	MessageCount              int32
-	MessagesToCompact         int32
-	CompactTurnCount          int32
-	IsFirstCompaction         bool
-	ExistingSummary           string
-	CompactedTurns            []compactedTurnSummary
-	ManualInstruction         string
-	RequestSource             string
-	CurrentTurnSeq            int64
-	CurrentRequestID          string
-	CurrentUserText           string
-	PreserveCurrentTurnInputs bool
-	HookMessage               string
-	SummaryModelCallID        string
-	StartedAt                 time.Time
+	Trigger                            string
+	ContextTokens                      int64
+	ContextWindowSize                  int64
+	ContextUsagePercent                float64
+	ReserveTokens                      int64
+	MessageCount                       int32
+	MessagesToCompact                  int32
+	CompactTurnCount                   int32
+	IsFirstCompaction                  bool
+	ExistingSummary                    string
+	CompactedTurns                     []compactedTurnSummary
+	ManualInstruction                  string
+	RequestSource                      string
+	CurrentTurnSeq                     int64
+	CurrentRequestID                   string
+	CurrentUserText                    string
+	PreserveCurrentTurnInputs          bool
+	HookMessage                        string
+	SummaryModelCallID                 string
+	StartedAt                          time.Time
+	ProjectionConversationID           string
+	ProjectionRootConversationID       string
+	ProjectionParentConversationID     string
+	ProjectionParentToolCallID         string
+	ProjectionModelKey                 string
+	ProjectionContextVersion           int64
+	ProjectionSummaryStartEntrySeq     int64
+	ProjectionCoveredEntrySeq          int64
+	ProjectionCoveredPrefixFingerprint string
 }
 
 type ProviderRequest struct {

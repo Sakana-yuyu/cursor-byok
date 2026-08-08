@@ -140,3 +140,35 @@ func TestProviderCacheKeyTextOnlyStable(t *testing.T) {
 		t.Fatal("相同纯文本请求指纹必须稳定")
 	}
 }
+
+func TestCacheKeyFingerprintTracksAllCacheKeySemantics(t *testing.T) {
+	kc := newCacheKeyCache(64)
+	base := ProviderRequest{
+		ModelID: "model-a",
+		Messages: []modeladapter.Message{{
+			Role: "assistant",
+			ToolCalls: []modeladapter.ToolCallDescriptor{{
+				Type: "function",
+				Function: modeladapter.ToolCallFunctionShape{
+					Name:      "search",
+					Arguments: `{"query":"one"}`,
+				},
+			}},
+		}},
+		MaxTokens: 4_000,
+	}
+	toolVariant := base
+	toolVariant.Messages = append([]modeladapter.Message(nil), base.Messages...)
+	toolVariant.Messages[0] = base.Messages[0]
+	toolVariant.Messages[0].ToolCalls = append([]modeladapter.ToolCallDescriptor(nil), base.Messages[0].ToolCalls...)
+	toolVariant.Messages[0].ToolCalls[0].Function.Arguments = `{"query":"two"}`
+	if kc.fingerprint(base) == kc.fingerprint(toolVariant) {
+		t.Fatal("different tool call semantics must produce different cache lookup fingerprints")
+	}
+
+	budgetVariant := base
+	budgetVariant.MaxTokens = 25_600
+	if kc.fingerprint(base) == kc.fingerprint(budgetVariant) {
+		t.Fatal("different output budgets must produce different cache lookup fingerprints")
+	}
+}

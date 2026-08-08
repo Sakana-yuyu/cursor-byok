@@ -1777,13 +1777,34 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 		return service.failStream(stream, "unknown", err)
 	}
 	compiled = guardCompiledConversationForProvider(compiled)
-	if compacted, compactErr := service.maybeCompactBeforeProvider(stream, conversation, compiled); compactErr != nil {
+	canonicalConversation := conversation
+	canonicalCompiled := compiled
+	_, manualCompactionRequested := streamManualCompactionDirective(stream)
+	var activeContextProjection *contextProjectionState
+	projectionSidecarHit := false
+	projectionInvalidationReason := ""
+	if !manualCompactionRequested && service.contextProjectionPressureExceeded(stream, canonicalConversation, canonicalCompiled) {
+		projectedConversation, projectionState, active, invalidationReason := service.prepareConversationContextProjectionState(canonicalConversation, contextProjectionModelKey(stream))
+		if active {
+			projectedCompiled, compileErr := service.compiler.Compile(projectedConversation, mode, latestUserText, modelName, customSystemPrompt, stream.Goal != nil)
+			if compileErr != nil {
+				service.setTurnPhase(stream, TurnPhaseFailed)
+				return service.failStream(stream, "unknown", compileErr)
+			}
+			conversation = projectedConversation
+			compiled = guardCompiledConversationForProvider(projectedCompiled)
+			compiled.StableMessageCount = contextProjectionStableMessageCount(projectionState, compiled.StableMessageCount)
+			activeContextProjection = projectionState
+			projectionSidecarHit = true
+		} else {
+			projectionInvalidationReason = invalidationReason
+		}
+	}
+	if compacted, compactErr := service.maybeCompactBeforeProvider(stream, canonicalConversation, compiled); compactErr != nil {
 		service.setTurnPhase(stream, TurnPhaseFailed)
 		return service.failStream(stream, "unknown", compactErr)
 	} else if compacted {
 		stream.mu.Lock()
-		stream.ProviderActive = false
-		stream.ProviderCancel = nil
 		stream.UpdatedAt = time.Now().UTC()
 		hasPendingCompaction := stream.PendingCompaction != nil
 		status := stream.Status
@@ -1819,27 +1840,36 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 			service.setTurnPhase(stream, TurnPhaseFailed)
 			return service.failStream(stream, "unknown", recompileErr)
 		}
+		canonicalConversation = freshConversation
 		conversation = freshConversation
 		compiled = guardCompiledConversationForProvider(recompiled)
+		canonicalCompiled = compiled
+		activeContextProjection = nil
+		projectionSidecarHit = false
+		projectionInvalidationReason = ""
+		if !manualCompactionRequested && service.contextProjectionPressureExceeded(stream, freshConversation, canonicalCompiled) {
+			projectedConversation, projectionState, active, invalidationReason := service.prepareConversationContextProjectionState(freshConversation, contextProjectionModelKey(stream))
+			if active {
+				projectedCompiled, compileErr := service.compiler.Compile(projectedConversation, mode, latestUserText, modelName, customSystemPrompt, stream.Goal != nil)
+				if compileErr != nil {
+					service.setTurnPhase(stream, TurnPhaseFailed)
+					return service.failStream(stream, "unknown", compileErr)
+				}
+				conversation = projectedConversation
+				compiled = guardCompiledConversationForProvider(projectedCompiled)
+				compiled.StableMessageCount = contextProjectionStableMessageCount(projectionState, compiled.StableMessageCount)
+				activeContextProjection = projectionState
+				projectionSidecarHit = true
+			} else {
+				projectionInvalidationReason = invalidationReason
+			}
+		}
 	}
-	if err := service.syncSummarySnapshot(stream, conversation, requestID, modelCallID); err != nil {
+	if err := service.syncSummarySnapshot(stream, canonicalConversation, requestID, modelCallID); err != nil {
 		service.setTurnPhase(stream, TurnPhaseFailed)
 		return service.failStream(stream, "unknown", err)
 	}
-	maxTokens, requestKnobs := service.resolveProviderOutputBudget(modelID, modelName, conversation, compiled)
-	// max_tokens 超限恢复：若本回合因中转站 400 触发过降级重试，用恢复上限覆盖预算，
-	// 确保重试请求的 max_tokens 不超过中转站真实限制。
-	stream.mu.Lock()
-	recoveryCap := stream.MaxTokensRecoveryCap
-	stream.mu.Unlock()
-	if recoveryCap > 0 && recoveryCap < maxTokens {
-		maxTokens = recoveryCap
-		if requestKnobs == nil {
-			requestKnobs = map[string]any{}
-		}
-		requestKnobs["max_tokens_recovery_cap"] = recoveryCap
-	}
-	service.maybeSaveLastAgentModelHash(conversation, modelID, mode, currentPass)
+	service.maybeSaveLastAgentModelHash(canonicalConversation, modelID, mode, currentPass)
 	// 视觉代理：主模型不支持图片输入时，自动把消息中的图片委派给识图模型，
 	// 用返回的画面描述 / OCR 文本替换图片块，使纯文本模型也能“看图”。
 	// 此处持有 service.provider，可发起同步子调用；替换后不再含图片 ContentPart，
@@ -1856,6 +1886,42 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	if !service.visionProxyEnabled() {
 		compiled.Tools = filterToolDescriptorByName(compiled.Tools, seeImageToolName)
 	}
+	maxTokens, requestKnobs := service.resolveProviderOutputBudget(modelID, modelName, conversation, compiled)
+	// max_tokens 超限恢复：若本回合因中转站 400 触发过降级重试，用恢复上限覆盖预算，
+	// 确保重试请求的 max_tokens 不超过中转站真实限制。
+	stream.mu.Lock()
+	recoveryCap := stream.MaxTokensRecoveryCap
+	stream.mu.Unlock()
+	if recoveryCap > 0 && recoveryCap < maxTokens {
+		maxTokens = recoveryCap
+		if requestKnobs == nil {
+			requestKnobs = map[string]any{}
+		}
+		requestKnobs["max_tokens_recovery_cap"] = recoveryCap
+	}
+	if err := validateProviderRequestContextBudget(conversation, compiled, maxTokens); err != nil {
+		service.setTurnPhase(stream, TurnPhaseFailed)
+		return service.failStream(stream, "unknown", err)
+	}
+	projectionDiagnostics := contextProjectionRequestDiagnostics(
+		"parent",
+		canonicalConversation,
+		activeContextProjection,
+		projectionSidecarHit,
+		projectionInvalidationReason,
+		canonicalCompiled,
+		compiled,
+		compactionContextWindowSize(conversation),
+		service.resolveCompactionReserveTokens(modelID),
+		maxTokens,
+		0,
+		1,
+	)
+	if requestKnobs == nil {
+		requestKnobs = map[string]any{}
+	}
+	requestKnobs["context_projection"] = projectionDiagnostics
+	service.debug.LogRuntime(context.Background(), requestID, conversationID, "context_projection_applied", projectionDiagnostics)
 	ctx, cancel := context.WithCancel(context.Background())
 	stream.mu.Lock()
 	stream.ProviderActive = true
@@ -1902,7 +1968,15 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	// 目录未覆盖审计：模型名不在内置能力目录时记录一次（进程内按模型名去重）。
 	// 只做观测，不改变请求内容、渠道选择或预算；供用户排查「能力未知的模型」入口。
 	service.auditCatalogUncovered(context.Background(), requestID, conversationID, modelName)
-	go service.runProviderStream(stream, currentToken, ctx, providerRequest)
+	var markProjectionApplied func()
+	if activeContextProjection != nil {
+		markProjectionApplied = func() {
+			if err := service.markContextProjectionApplied(canonicalConversation, activeContextProjection); err != nil {
+				logger.Errorf("forwarder context projection applied marker failed request_id=%s conversation_id=%s: %v", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), err)
+			}
+		}
+	}
+	go service.runProviderStream(stream, currentToken, ctx, providerRequest, markProjectionApplied)
 	return nil
 }
 
@@ -1932,9 +2006,6 @@ func (service *Service) resolveProviderOutputBudget(modelID string, modelName st
 	configuredMaxTokens := service.resolveConfiguredProviderMaxOutputTokens(modelID)
 	contextWindowTokens := compactionContextWindowSize(conversation)
 	estimatedPromptTokens := estimateCompiledPromptTokens(compiled)
-	if conversation != nil && int64(conversation.TokenDetailsUsedTokens) > estimatedPromptTokens {
-		estimatedPromptTokens = int64(conversation.TokenDetailsUsedTokens)
-	}
 	remainingTokens := int64(0)
 	requestMaxTokens := int64(configuredMaxTokens)
 	if requestMaxTokens <= 0 {
@@ -1984,6 +2055,39 @@ func (service *Service) resolveProviderOutputBudget(modelID string, modelName st
 		"provider_output_safety_tokens":     providerOutputSafetyTokens,
 	}
 	return maxTokens, withPreviousCacheFrontierHint(requestKnobs, conversation)
+}
+
+// validateProviderRequestContextBudget is the final preflight after every
+// request rewrite and output cap. The budget resolver intentionally retains a
+// one-token fallback for compatible providers; this guard prevents that
+// fallback from sending a request whose input plus required safety space is
+// already larger than the configured model window.
+func validateProviderRequestContextBudget(conversation *ConversationFile, compiled CompiledConversation, maxTokens int) error {
+	contextWindowTokens := compactionContextWindowSize(conversation)
+	if contextWindowTokens <= 0 {
+		return nil
+	}
+	estimatedPromptTokens := estimateCompiledPromptTokens(compiled)
+	if estimatedPromptTokens <= 0 {
+		return nil
+	}
+	if maxTokens < 1 {
+		maxTokens = 1
+	}
+	totalRequiredTokens := estimatedPromptTokens + int64(maxTokens) + providerOutputSafetyTokens
+	if totalRequiredTokens <= contextWindowTokens {
+		return nil
+	}
+	return compactionTerminalError{
+		code: compactionOverflowTerminalCode,
+		message: fmt.Sprintf(
+			"provider request exceeds context window after compaction (input=%d output=%d safety=%d window=%d)",
+			estimatedPromptTokens,
+			maxTokens,
+			providerOutputSafetyTokens,
+			contextWindowTokens,
+		),
+	}
 }
 
 func withPreviousCacheFrontierHint(requestKnobs map[string]any, conversation *ConversationFile) map[string]any {
@@ -2118,8 +2222,15 @@ func (service *Service) persistDerivedPromptContexts(stream *ActiveStream, conve
 	return conversation, err
 }
 
-func (service *Service) runProviderStream(stream *ActiveStream, token uint64, ctx context.Context, request ProviderRequest) {
+func (service *Service) runProviderStream(stream *ActiveStream, token uint64, ctx context.Context, request ProviderRequest, onProviderAccepted func()) {
+	var accepted sync.Once
+	markProviderAccepted := func() {
+		if onProviderAccepted != nil {
+			accepted.Do(onProviderAccepted)
+		}
+	}
 	err := service.provider.StartStream(ctx, request, func(event modeladapter.ModelEvent) error {
+		markProviderAccepted()
 		return service.postStreamCommandWait(stream, streamCommand{
 			Kind: streamCommandProviderEvent,
 			Provider: &streamProviderEvent{
@@ -2128,6 +2239,9 @@ func (service *Service) runProviderStream(stream *ActiveStream, token uint64, ct
 			},
 		})
 	})
+	if err == nil {
+		markProviderAccepted()
+	}
 	if postErr := service.postStreamCommandWait(stream, streamCommand{
 		Kind: streamCommandProviderEvent,
 		Provider: &streamProviderEvent{

@@ -17,7 +17,7 @@ func TestDelegatedContextBudgetForWindow(t *testing.T) {
 	}{
 		{"zero window disables proactive compaction", 0, 0},
 		{"negative window disables", -1, 0},
-		{"floor protection", 10_000, delegatedCompactionBudgetFloor},
+		{"floor does not exceed a small worker window", 10_000, 10_000 - providerOutputSafetyTokens},
 		{"normal budget", 272_000, int64(0.8*272_000) - 10_000},
 	}
 	for _, tc := range cases {
@@ -241,5 +241,96 @@ func TestMaybeCompactDelegatedMessages(t *testing.T) {
 	// budget<=0 时不压缩
 	if _, c := maybeCompactDelegatedMessages(messages, 0, nil); c {
 		t.Fatal("budget<=0 must not compact")
+	}
+}
+
+func TestBuildDelegatedMessageWindowDropsWholeParallelToolBatchAndLeavesInputUntouched(t *testing.T) {
+	large := strings.Repeat("x", 48*1024)
+	messages := []modeladapter.Message{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: "task"},
+		{Role: "user", Content: "older request"},
+		{Role: "assistant", Content: "old calls", ToolCalls: []modeladapter.ToolCallDescriptor{{ID: "old-a"}, {ID: "old-b"}}},
+		{Role: "tool", ToolCallID: "old-a", Name: "Read", Content: large},
+		{Role: "tool", ToolCallID: "old-b", Name: "Glob", Content: large},
+		{Role: "user", Content: "recent request"},
+		{Role: "assistant", Content: "recent call", ToolCalls: []modeladapter.ToolCallDescriptor{{ID: "recent"}}},
+		{Role: "tool", ToolCallID: "recent", Name: "Read", Content: "recent output"},
+	}
+
+	out, changed, err := buildDelegatedMessageWindow(messages, 100, nil)
+	if err != nil {
+		t.Fatalf("buildDelegatedMessageWindow() error = %v", err)
+	}
+	if !changed {
+		t.Fatal("expected window to change")
+	}
+	if messages[4].Content != large || messages[5].Content != large {
+		t.Fatal("windowing must operate on a clone, not mutate the worker input")
+	}
+	for _, message := range out {
+		if message.ToolCallID == "old-a" || message.ToolCallID == "old-b" || message.Content == "old calls" {
+			t.Fatalf("old parallel batch was split rather than dropped as a unit: %+v", message)
+		}
+	}
+	if err := validateDelegatedMessageStructure(out); err != nil {
+		t.Fatalf("window output lost structure: %v", err)
+	}
+}
+
+func TestBuildDelegatedMessageWindowFailsClosedForInvalidToolStructure(t *testing.T) {
+	tests := []struct {
+		name     string
+		messages []modeladapter.Message
+	}{
+		{
+			name: "orphan result",
+			messages: []modeladapter.Message{
+				{Role: "system", Content: "sys"},
+				{Role: "user", Content: "task"},
+				{Role: "tool", ToolCallID: "missing", Content: "result"},
+			},
+		},
+		{
+			name: "duplicate result",
+			messages: []modeladapter.Message{
+				{Role: "system", Content: "sys"},
+				{Role: "user", Content: "task"},
+				{Role: "assistant", ToolCalls: []modeladapter.ToolCallDescriptor{{ID: "call"}}},
+				{Role: "tool", ToolCallID: "call", Content: "first"},
+				{Role: "tool", ToolCallID: "call", Content: "second"},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, _, err := buildDelegatedMessageWindow(tt.messages, 100, nil); err == nil {
+				t.Fatal("expected invalid tool structure to fail closed")
+			}
+		})
+	}
+}
+
+func TestBuildDelegatedMessageWindowDropsACompletePlainTurn(t *testing.T) {
+	oldRequest := strings.Repeat("old request ", 4_000)
+	messages := []modeladapter.Message{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: "task"},
+		{Role: "user", Content: oldRequest},
+		{Role: "assistant", Content: "old answer"},
+		{Role: "user", Content: "current request"},
+	}
+
+	out, changed, err := buildDelegatedMessageWindow(messages, 200, nil)
+	if err != nil {
+		t.Fatalf("buildDelegatedMessageWindow() error = %v", err)
+	}
+	if !changed {
+		t.Fatal("expected old plain turn to be windowed")
+	}
+	for _, message := range out {
+		if message.Content == oldRequest || message.Content == "old answer" {
+			t.Fatalf("ordinary turn was split instead of dropped as a unit: %+v", message)
+		}
 	}
 }

@@ -36,28 +36,54 @@ const (
 )
 
 type compactionPlan struct {
-	Trigger                   string
-	ContextTokens             int64
-	ContextWindowSize         int64
-	ContextUsagePercent       float64
-	ReserveTokens             int64
-	MessageCount              int32
-	MessagesToCompact         int32
-	CompactTurnCount          int32
-	IsFirstCompaction         bool
-	ExistingSummary           string
-	CompactedTurns            []compactedTurnSummary
-	ManualInstruction         string
-	RequestSource             string
-	CurrentTurnSeq            int64
-	CurrentRequestID          string
-	CurrentUserText           string
-	PreserveCurrentTurnInputs bool
+	Trigger                            string
+	ContextTokens                      int64
+	ContextWindowSize                  int64
+	ContextUsagePercent                float64
+	ReserveTokens                      int64
+	MessageCount                       int32
+	MessagesToCompact                  int32
+	CompactTurnCount                   int32
+	IsFirstCompaction                  bool
+	ExistingSummary                    string
+	CompactedTurns                     []compactedTurnSummary
+	ManualInstruction                  string
+	RequestSource                      string
+	CurrentTurnSeq                     int64
+	CurrentRequestID                   string
+	CurrentUserText                    string
+	PreserveCurrentTurnInputs          bool
+	ProjectionConversationID           string
+	ProjectionRootConversationID       string
+	ProjectionParentConversationID     string
+	ProjectionParentToolCallID         string
+	ProjectionModelKey                 string
+	ProjectionContextVersion           int64
+	ProjectionSummaryStartEntrySeq     int64
+	ProjectionCoveredEntrySeq          int64
+	ProjectionCoveredPrefixFingerprint string
 }
 
 type compactedTurnSummary struct {
 	UserText string
 	Steps    []string
+}
+
+// contextProjectionArtifactObserver deliberately keeps automatic maintenance
+// out of canonical conversation metadata. Its summary call is still accounted
+// for by recordCompactionSummaryUsage.
+type contextProjectionArtifactObserver struct{}
+
+func (contextProjectionArtifactObserver) RecordLLMRequest(string, string, string, map[string]any) (string, error) {
+	return "", nil
+}
+
+func (contextProjectionArtifactObserver) AppendLLMResponseChunk(string, string, string, string) (string, error) {
+	return "", nil
+}
+
+func (contextProjectionArtifactObserver) RecordLLMSummary(string, string, string, map[string]any) (string, error) {
+	return "", nil
 }
 
 type compactionCandidateTurn struct {
@@ -150,40 +176,32 @@ func (service *Service) buildAutoCompactionPlan(stream *ActiveStream, conversati
 	// 使用 80% 的上下文窗口作为预算，留出安全余量防止估算偏差导致 context_length_exceeded。
 	budgetTokens := int64(float64(contextWindowSize)*0.8) - reserveTokens
 	preflightExceeded := estimatedCompiledTokens > 0 && estimatedCompiledTokens > budgetTokens
-	contextTokens := maxPositiveInt64(
-		conversation.AutoCompactionPromptTokens,
-		estimatedCompiledTokens,
-		int64(conversation.TokenDetailsUsedTokens),
-	)
+	contextTokens := estimatedCompiledTokens
+	if contextTokens <= 0 {
+		contextTokens = conversation.AutoCompactionPromptTokens
+	}
 	pendingExceeded := conversation.AutoCompactionPending && contextTokens > 0 && contextTokens > budgetTokens
 	if !pendingExceeded && !preflightExceeded {
 		return nil, nil
 	}
-	// 缓存优先的上下文维护（移植自 Reasonix）：在昂贵的 LLM 摘要压缩（会让 prompt cache 归零）
-	// 之前，先尝试持久化 snip/prune 陈旧的大工具结果。若仅靠缩短工具结果就能把上下文压回预算线下，
-	// 则跳过摘要压缩、直接保留部分缓存命中（两害相权取其轻）。详见 tool_result_snip.go。
-	if service.recoverBudgetBySnippingStaleToolResults(stream, conversation, contextTokens, budgetTokens) {
-		return nil, nil
+	// Automatic pressure handling is projection-only. Canonical tool-result snipping
+	// is deliberately reserved for an explicit maintenance action: changing entries
+	// here would invalidate the canonical history contract and prompt-cache prefix.
+	var existing *contextProjectionState
+	if service.store != nil {
+		existing, _ = service.store.LoadContextProjection(conversation.ConversationID)
+		if valid, _ := validateContextProjectionState(existing, conversation, contextProjectionModelKey(stream)); !valid {
+			existing = nil
+		}
 	}
-	usagePercent := 0.0
-	if contextWindowSize > 0 && contextTokens > 0 {
-		usagePercent = float64(contextTokens) / float64(contextWindowSize)
-	}
-	base := &compactionPlan{
-		Trigger:                   "auto",
-		ContextTokens:             contextTokens,
-		ContextWindowSize:         contextWindowSize,
-		ContextUsagePercent:       usagePercent,
-		ReserveTokens:             reserveTokens,
-		MessageCount:              clampInt64ToInt32(int64(len(compiled.Messages))),
-		IsFirstCompaction:         len(compactionSummaryTexts(conversation)) == 0,
-		ExistingSummary:           existingConversationSummaryText(conversation),
-		CurrentTurnSeq:            stream.TurnSeq,
-		CurrentRequestID:          strings.TrimSpace(stream.RequestID),
-		CurrentUserText:           strings.TrimSpace(stream.LatestUserText),
-		PreserveCurrentTurnInputs: true,
-	}
-	plan, err := service.buildAutoCompactionPlanFromHistory(base, conversation)
+	plan, err := buildContextProjectionSummaryPlan(
+		conversation,
+		contextProjectionModelKey(stream),
+		existing,
+		contextTokens,
+		contextWindowSize,
+		reserveTokens,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -200,9 +218,34 @@ func (service *Service) buildAutoCompactionPlan(stream *ActiveStream, conversati
 	return plan, nil
 }
 
-// buildForcedCompactionPlan 构造一个「强制触发」的压缩计划，用于 provider 已返回
-// context_length_exceeded 后的自救：跳过常规的阈值判断（因为阈值基于可能偏大的 contextWindowTokens），
-// 只要还有可压缩的历史轮次就生成计划。返回 nil 表示无可压缩内容（已是最简状态）。
+func (service *Service) contextProjectionPressureExceeded(stream *ActiveStream, conversation *ConversationFile, compiled CompiledConversation) bool {
+	if service == nil || stream == nil || conversation == nil {
+		return false
+	}
+	contextWindowSize := compactionContextWindowSize(conversation)
+	if contextWindowSize <= 0 {
+		return false
+	}
+	estimatedCompiledTokens := estimateCompiledPromptTokens(compiled)
+	reserveTokens := service.resolveCompactionReserveTokens(stream.ModelID)
+	if reserveTokens <= 0 {
+		reserveTokens = conversation.AutoCompactionReserveTokens
+	}
+	if reserveTokens <= 0 {
+		reserveTokens = compactionAutoReserveTokens
+	}
+	budgetTokens := int64(float64(contextWindowSize)*contextProjectionHardRatio) - reserveTokens
+	contextTokens := estimatedCompiledTokens
+	if contextTokens <= 0 {
+		contextTokens = conversation.AutoCompactionPromptTokens
+	}
+	return (estimatedCompiledTokens > 0 && estimatedCompiledTokens > budgetTokens) ||
+		(conversation.AutoCompactionPending && contextTokens > 0 && contextTokens > budgetTokens)
+}
+
+// buildForcedCompactionPlan constructs a sidecar projection after a provider reports
+// context_length_exceeded. Automatic recovery must never use the legacy compaction
+// path because that path rewrites canonical conversation entries.
 func (service *Service) buildForcedCompactionPlan(stream *ActiveStream, conversation *ConversationFile, compiled CompiledConversation) (*compactionPlan, error) {
 	if stream == nil || conversation == nil {
 		return nil, nil
@@ -222,33 +265,30 @@ func (service *Service) buildForcedCompactionPlan(stream *ActiveStream, conversa
 	if reserveTokens <= 0 {
 		reserveTokens = compactionAutoReserveTokens
 	}
-	usagePercent := 0.0
-	if contextWindowSize > 0 && contextTokens > 0 {
-		usagePercent = float64(contextTokens) / float64(contextWindowSize)
+	var existing *contextProjectionState
+	if service.store != nil {
+		existing, _ = service.store.LoadContextProjection(conversation.ConversationID)
+		if valid, _ := validateContextProjectionState(existing, conversation, contextProjectionModelKey(stream)); !valid {
+			existing = nil
+		}
 	}
-	base := &compactionPlan{
-		Trigger:                   "context_overflow",
-		ContextTokens:             contextTokens,
-		ContextWindowSize:         contextWindowSize,
-		ContextUsagePercent:       usagePercent,
-		ReserveTokens:             reserveTokens,
-		MessageCount:              clampInt64ToInt32(int64(len(compiled.Messages))),
-		IsFirstCompaction:         len(compactionSummaryTexts(conversation)) == 0,
-		ExistingSummary:           existingConversationSummaryText(conversation),
-		CurrentTurnSeq:            stream.TurnSeq,
-		CurrentRequestID:          strings.TrimSpace(stream.RequestID),
-		CurrentUserText:           strings.TrimSpace(stream.LatestUserText),
-		PreserveCurrentTurnInputs: false,
+	stream.mu.Lock()
+	overflowAttempts := stream.ContextOverflowCompactionAttempts
+	stream.mu.Unlock()
+	recentTailTurns := contextProjectionRecentTailTurns - overflowAttempts - 1
+	if recentTailTurns < 1 {
+		recentTailTurns = 1
 	}
-	// 强制压缩优先走历史轮次压缩；若历史无可压缩内容，回退到 legacy 提示资产压缩。
-	plan, err := service.buildAutoCompactionPlanFromHistory(base, conversation)
-	if err != nil {
-		return nil, err
-	}
-	if plan != nil {
-		return plan, nil
-	}
-	return service.buildLegacyCompactionPlan(base, conversation, false, 0)
+	return buildContextProjectionSummaryPlanWithRecentTail(
+		conversation,
+		contextProjectionModelKey(stream),
+		existing,
+		contextTokens,
+		contextWindowSize,
+		reserveTokens,
+		recentTailTurns,
+		true,
+	)
 }
 
 func (service *Service) resolveCompactionBaselineTokens(conversationID string, compiled CompiledConversation, conversation *ConversationFile) (int64, error) {
@@ -334,6 +374,16 @@ func (service *Service) beginPendingCompaction(stream *ActiveStream, plan *compa
 	if service == nil || stream == nil || plan == nil {
 		return nil
 	}
+	if plan.Trigger == contextProjectionTrigger {
+		pending := newPendingCompaction(plan)
+		stream.mu.Lock()
+		stream.PendingCompaction = pending
+		stream.PendingProviderAction = providerActionNone
+		stream.Phase = TurnPhaseCompacting
+		stream.UpdatedAt = time.Now().UTC()
+		stream.mu.Unlock()
+		return service.startPendingCompactionSummary(stream, pending)
+	}
 	request := buildPreCompactHookRequest(stream, plan)
 	serverMessage, pendingExec, err := service.execBridge.OpenExecuteHook(request, "execute_hook_pre_compact")
 	if err != nil {
@@ -406,11 +456,13 @@ func (service *Service) startPendingCompactionSummary(stream *ActiveStream, plan
 	stream.Phase = TurnPhaseCompacting
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
-	if _, err := service.appendConversationEntries(stream, stream.ConversationID, []HistoryEntry{
-		newCompactionRequestEntry(plan),
-	}); err != nil {
-		cancel()
-		return err
+	if plan.Trigger != contextProjectionTrigger {
+		if _, err := service.appendConversationEntries(stream, stream.ConversationID, []HistoryEntry{
+			newCompactionRequestEntry(plan),
+		}); err != nil {
+			cancel()
+			return err
+		}
 	}
 	go service.runPendingCompaction(stream, token, clonePendingCompaction(plan), summaryModelCallID, ctx)
 	return nil
@@ -460,6 +512,33 @@ func (service *Service) handleCompactionEvent(stream *ActiveStream, payload *str
 	stream.mu.Unlock()
 	if errors.Is(payload.Err, errProviderLoopInterrupted) || isTerminalStreamStatus(status) {
 		return nil
+	}
+	if payload.Plan != nil && payload.Plan.Trigger == contextProjectionTrigger {
+		if payload.Err != nil {
+			conversation, _, _, err := service.snapshotCheckpointConversation(stream)
+			if err != nil {
+				return service.failStream(stream, "unknown", err)
+			}
+			if err := service.completeContextProjectionRecentTailFallback(conversation, payload.Plan); err != nil {
+				service.setTurnPhase(stream, TurnPhaseFailed)
+				return service.failStream(stream, "unknown", fmt.Errorf("context projection summary failed (%v) and recent-tail fallback could not be saved: %w", payload.Err, err))
+			}
+			service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "context_projection_summary_fallback", map[string]any{
+				"mode":              contextProjectionModeRecentTail,
+				"covered_entry_seq": payload.Plan.ProjectionCoveredEntrySeq,
+				"cause":             payload.Err.Error(),
+			})
+			return service.requestProviderAction(stream, providerActionResume)
+		}
+		conversation, _, _, err := service.snapshotCheckpointConversation(stream)
+		if err != nil {
+			return service.failStream(stream, "unknown", err)
+		}
+		if err := service.completeContextProjectionSummary(conversation, payload.Plan, payload.SummaryText); err != nil {
+			service.setTurnPhase(stream, TurnPhaseFailed)
+			return service.failStream(stream, "unknown", err)
+		}
+		return service.requestProviderAction(stream, providerActionResume)
 	}
 	if payload.Err != nil {
 		if _, err := service.appendConversationEntries(stream, stream.ConversationID, []HistoryEntry{
@@ -691,8 +770,6 @@ func (service *Service) snapshotCompactionCandidate(stream *ActiveStream, conver
 	return nil, fmt.Errorf("conversation %q not found for compaction", strings.TrimSpace(conversationID))
 }
 
-
-
 type compactionTerminalError struct {
 	code    string
 	message string
@@ -769,6 +846,10 @@ func (service *Service) generateCompactionSummary(ctx context.Context, stream *A
 	}
 	accumulated := ""
 	usage := turnUsageSnapshot{}
+	observer := modeladapter.LLMArtifactObserver(service.recorder)
+	if plan.Trigger == contextProjectionTrigger {
+		observer = contextProjectionArtifactObserver{}
+	}
 	err = service.provider.StartStream(ctx, ProviderRequest{
 		RequestID:      stream.RequestID,
 		ConversationID: stream.ConversationID,
@@ -779,7 +860,7 @@ func (service *Service) generateCompactionSummary(ctx context.Context, stream *A
 		Messages:       messages,
 		MaxTokens:      compactionSummaryOutputMaxTokens,
 		CompileSummary: fmt.Sprintf("compaction trigger=%s source=%s turns=%d messages=%d", plan.Trigger, plan.RequestSource, plan.CompactTurnCount, plan.MessagesToCompact),
-		Observer:       service.recorder,
+		Observer:       observer,
 		ArtifactPaths:  &modeladapter.LLMArtifactPaths{},
 	}, func(event modeladapter.ModelEvent) error {
 		if err := providerLoopInterruptErr(ctx, stream, modelCallID); err != nil {
@@ -788,6 +869,9 @@ func (service *Service) generateCompactionSummary(ctx context.Context, stream *A
 		switch event.Kind {
 		case modeladapter.ModelEventKindTextDelta:
 			accumulated += event.Text
+			if plan.Trigger == contextProjectionTrigger {
+				return nil
+			}
 			if strings.TrimSpace(accumulated) == "" {
 				return nil
 			}
@@ -836,7 +920,7 @@ func (service *Service) generateCompactionSummary(ctx context.Context, stream *A
 					usage.ErrorCode = "provider_error"
 				}
 			}
-			if usageErr := service.recordTurnUsageSnapshot(stream, conversationID, turnSeq, requestID, modelCallID, "provider_error", usage, err.Error(), false); usageErr != nil {
+			if usageErr := service.recordCompactionSummaryUsage(stream, plan, conversationID, turnSeq, requestID, modelCallID, "provider_error", usage, err.Error()); usageErr != nil {
 				return "", fmt.Errorf("record compaction provider error usage: %w", usageErr)
 			}
 		}
@@ -847,9 +931,17 @@ func (service *Service) generateCompactionSummary(ctx context.Context, stream *A
 	requestID := stream.RequestID
 	turnSeq := stream.TurnSeq
 	stream.mu.Unlock()
-	if err := service.recordTurnUsageSnapshot(stream, conversationID, turnSeq, requestID, modelCallID, "completed", usage, "", false); err != nil {
+	if err := service.recordCompactionSummaryUsage(stream, plan, conversationID, turnSeq, requestID, modelCallID, "completed", usage, ""); err != nil {
 		return "", fmt.Errorf("record compaction provider usage: %w", err)
 	}
 	return strings.TrimSpace(accumulated), nil
 }
 
+// recordCompactionSummaryUsage keeps automatic projection maintenance outside
+// canonical conversation state while preserving provider usage accounting.
+func (service *Service) recordCompactionSummaryUsage(stream *ActiveStream, plan *PendingCompaction, conversationID string, turnSeq int64, requestID string, modelCallID string, status string, usage turnUsageSnapshot, errorText string) error {
+	if plan != nil && plan.Trigger == contextProjectionTrigger {
+		return upsertStandaloneUsageSnapshot(service.usageStore, requestID, modelCallID, status, usage, errorText)
+	}
+	return service.recordTurnUsageSnapshot(stream, conversationID, turnSeq, requestID, modelCallID, status, usage, errorText, false)
+}

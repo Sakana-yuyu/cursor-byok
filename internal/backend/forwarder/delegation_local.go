@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"sync/atomic"
@@ -21,6 +22,7 @@ import (
 const (
 	defaultLocalDelegationMaxProviderPasses = 32
 	localDelegationFirstEventTimeout        = 90 * time.Second
+	delegatedOverflowRetryBudgetFactor      = 0.8
 )
 
 type LocalDelegatedToolExecutor func(context.Context, delegation.TaskRequest, runtimecore.ToolInvocation) (string, error)
@@ -31,6 +33,7 @@ type localDelegatedAgentAdapter struct {
 	compiler             PromptCompiler
 	provider             ProviderGateway
 	recorder             modeladapter.LLMArtifactObserver
+	debug                *debugRecorder
 	resolveBudget        func(string, string, *ConversationFile, CompiledConversation) (int, map[string]any)
 	toolExecutor         LocalDelegatedToolExecutor
 	maxPasses            int
@@ -48,6 +51,7 @@ func newLocalDelegatedAgentAdapter(service *Service) *localDelegatedAgentAdapter
 		compiler:             service.compiler,
 		provider:             service.provider,
 		recorder:             service.recorder,
+		debug:                service.debug,
 		resolveBudget:        service.resolveProviderOutputBudget,
 		toolExecutor:         service.executeLocalDelegatedTool,
 		maxPasses:            defaultLocalDelegationMaxProviderPasses,
@@ -93,9 +97,9 @@ func (adapter *localDelegatedAgentAdapter) Execute(ctx context.Context, request 
 		delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusFailed, 1, nil, nil, "delegated worker tool filtering failed", delegation.SanitizeSupervisorText(err.Error(), request.WorkspaceHint))
 		return delegation.TaskResult{Error: err, Metadata: identity.metadata(0)}
 	}
-	messages := cloneDelegatedMessages(compiled.Messages)
+	historyMessages := cloneDelegatedMessages(compiled.Messages)
 	if prompt := strings.TrimSpace(request.Prompt); prompt != "" {
-		messages = append(messages, modeladapter.Message{Role: "user", Content: prompt})
+		historyMessages = append(historyMessages, modeladapter.Message{Role: "user", Content: prompt})
 	}
 
 	toolCallCount := 0
@@ -104,6 +108,7 @@ func (adapter *localDelegatedAgentAdapter) Execute(ctx context.Context, request 
 		maxPasses = defaultLocalDelegationMaxProviderPasses
 	}
 	overflowRetries := 0
+	previousSentInputTokens := int64(0)
 	for providerPass := 1; providerPass <= maxPasses; providerPass++ {
 		if err := ctx.Err(); err != nil {
 			delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusCanceled, providerPass, nil, nil, "delegated worker canceled", "")
@@ -111,18 +116,28 @@ func (adapter *localDelegatedAgentAdapter) Execute(ctx context.Context, request 
 		}
 		delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusRunning, providerPass, nil, nil, "delegated worker is running", "")
 
-		// 主动阈值压缩：每轮 pass 前检查，超预算则压缩（snip + 丢弃早期消息）。
-		messages = compactDelegatedMessagesBeforePass(adapter, request, messages, providerPass)
+		// 主动阈值压缩：溢出重试会降低比例，确保不会用同一窗口重复发送。
+		windowRatio := delegatedOverflowWindowRatio(overflowRetries)
+		passView, compactErr := compactDelegatedMessagesBeforePass(
+			adapter,
+			request,
+			historyMessages,
+			compiled.Tools,
+			providerPass,
+			windowRatio,
+			previousSentInputTokens,
+		)
+		if compactErr != nil {
+			delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusFailed, providerPass, nil, nil, "delegated worker context window invalid", delegation.SanitizeSupervisorText(compactErr.Error(), request.WorkspaceHint))
+			return delegation.TaskResult{Error: compactErr, ToolCallCount: toolCallCount, Metadata: identity.metadata(providerPass)}
+		}
 
-		pass, err := adapter.runProviderPass(ctx, request, identity, conversation, compiled, messages, providerPass)
+		pass, err := adapter.runProviderPass(ctx, request, identity, conversation, compiled, passView, providerPass, overflowRetries, windowRatio)
 		if err != nil {
 			if delegatedContextOverflowError(err) && overflowRetries < delegatedCompactionRetryLimit {
+				previousSentInputTokens = passView.InputTokens
 				overflowRetries++
-				compactedMessages := compactDelegatedMessagesBeforePass(adapter, request, messages, providerPass)
-				if !sameDelegatedMessages(compactedMessages, messages) {
-					messages = compactedMessages
-				}
-				logger.Infof("forwarder delegated context overflow retry task_id=%s provider_pass=%d retry=%d/%d", strings.TrimSpace(request.ID), providerPass, overflowRetries, delegatedCompactionRetryLimit)
+				logger.Infof("forwarder delegated context overflow retry task_id=%s provider_pass=%d retry=%d/%d window_ratio=%.3f", strings.TrimSpace(request.ID), providerPass, overflowRetries, delegatedCompactionRetryLimit, delegatedOverflowWindowRatio(overflowRetries))
 				// providerPass-- 抵消 for post 语句的 providerPass++，使重试复用同一 provider_pass。
 				// 重试轮会照常执行循环顶部的主动压缩与 checkpoint；不要在此循环内添加
 				// providerPass <= 0 的防护逻辑，那会过早终止重试轮。
@@ -132,19 +147,22 @@ func (adapter *localDelegatedAgentAdapter) Execute(ctx context.Context, request 
 			delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusFailed, providerPass, nil, nil, "delegated provider failed", delegation.SanitizeSupervisorText(err.Error(), request.WorkspaceHint))
 			return delegation.TaskResult{Error: err, Output: strings.TrimSpace(pass.text), ToolCallCount: toolCallCount, Metadata: identity.metadata(providerPass)}
 		}
+		overflowRetries = 0
+		previousSentInputTokens = 0
 		if len(pass.invocations) == 0 {
 			delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusCompleted, providerPass, nil, nil, "delegated worker completed", "")
 			return delegation.TaskResult{Output: strings.TrimSpace(pass.text), ToolCallCount: toolCallCount, Metadata: identity.metadata(providerPass)}
 		}
 
-		messages = append(messages, buildDelegatedAssistantToolMessage(pass.text, pass.invocations))
+		normalizeDelegatedToolInvocationIDs(pass.invocations)
+		historyMessages = append(historyMessages, buildDelegatedAssistantToolMessage(pass.text, pass.invocations))
 		for _, invocation := range pass.invocations {
 			toolCallCount++
 			toolSignature := delegation.NormalizeToolSignature(invocation.ToolName, invocation.ArgsJSON)
 			changedFiles := localDelegationCheckpointChangedFiles(invocation)
 			delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusRunning, providerPass, []string{toolSignature}, changedFiles, "delegated tool is running", "")
 			resultText := adapter.executeTool(ctx, request, conversation, invocation)
-			messages = append(messages, modeladapter.Message{
+			historyMessages = append(historyMessages, modeladapter.Message{
 				Role:       "tool",
 				Content:    resultText,
 				ToolCallID: strings.TrimSpace(invocation.CallID),
@@ -217,6 +235,13 @@ func (adapter *localDelegatedAgentAdapter) buildChildConversation(request delega
 	child.CurrentRequestID = identity.requestID
 	child.LatestRequestPrefix = nil
 	child.LastProviderCall = nil
+	// A local worker has an independent prompt. Parent usage may describe a full
+	// canonical conversation and must not constrain this worker's final window.
+	child.TokenDetailsUsedTokens = 0
+	child.TokenDetailsMaxTokens = 0
+	if adapter.resolveContextWindow != nil {
+		child.TokenDetailsMaxTokens = adapter.resolveContextWindow(strings.TrimSpace(request.ModelID))
+	}
 	return child, nil
 }
 
@@ -225,18 +250,68 @@ type localProviderPass struct {
 	invocations []runtimecore.ToolInvocation
 }
 
-func (adapter *localDelegatedAgentAdapter) runProviderPass(ctx context.Context, request delegation.TaskRequest, identity localDelegatedIdentity, conversation *ConversationFile, compiled CompiledConversation, messages []modeladapter.Message, providerPass int) (localProviderPass, error) {
+type delegatedProviderPassView struct {
+	HistoryMessages         []modeladapter.Message
+	Messages                []modeladapter.Message
+	Stats                   delegatedCompactionStats
+	BudgetTokens            int64
+	InputTokens             int64
+	PreviousSentInputTokens int64
+}
+
+func (adapter *localDelegatedAgentAdapter) runProviderPass(ctx context.Context, request delegation.TaskRequest, identity localDelegatedIdentity, conversation *ConversationFile, compiled CompiledConversation, view delegatedProviderPassView, providerPass int, overflowRetryOrdinal int, windowRatio float64) (localProviderPass, error) {
 	modelCallID := fmt.Sprintf("%s-model-%d", identity.taskID, providerPass)
 	maxTokens := providerDefaultMaxOutputTokens
 	requestKnobs := map[string]any{}
+	finalCompiled := compiled
+	finalCompiled.Messages = cloneDelegatedMessages(view.Messages)
 	if adapter.resolveBudget != nil {
-		maxTokens, requestKnobs = adapter.resolveBudget(request.ModelID, request.ModelName, conversation, compiled)
+		maxTokens, requestKnobs = adapter.resolveBudget(request.ModelID, request.ModelName, conversation, finalCompiled)
 	}
 	if requestKnobs == nil {
 		requestKnobs = make(map[string]any)
 	}
+	if err := validateProviderRequestContextBudget(conversation, finalCompiled, maxTokens); err != nil {
+		return localProviderPass{}, err
+	}
 	requestKnobs["delegated_task_id"] = identity.taskID
 	requestKnobs["delegated_provider_pass"] = providerPass
+	requestKnobs["delegated_context_window_ratio"] = windowRatio
+	window := int64(0)
+	if conversation != nil {
+		window = compactionContextWindowSize(conversation)
+	}
+	if window <= 0 && adapter.resolveContextWindow != nil {
+		window = int64(adapter.resolveContextWindow(strings.TrimSpace(request.ModelID)))
+	}
+	finalCompiled.StableMessageCount = delegatedStableMessageCount(compiled.StableMessageCount, compiled.Messages, view.Messages)
+	beforeCompiled := compiled
+	beforeCompiled.Messages = cloneDelegatedMessages(view.HistoryMessages)
+	projectionDiagnostics := contextProjectionRequestDiagnostics(
+		"worker",
+		conversation,
+		nil,
+		false,
+		"",
+		beforeCompiled,
+		finalCompiled,
+		window,
+		0,
+		maxTokens,
+		overflowRetryOrdinal,
+		windowRatio,
+	)
+	projectionDiagnostics["mode"] = "window"
+	projectionDiagnostics["window_budget_tokens"] = view.BudgetTokens
+	projectionDiagnostics["previous_sent_input_tokens"] = view.PreviousSentInputTokens
+	projectionDiagnostics["snipped_tool_results"] = view.Stats.SnipCount
+	projectionDiagnostics["dropped_groups"] = view.Stats.DroppedCount
+	projectionDiagnostics["before_group_count"] = view.Stats.BeforeGroupCount
+	projectionDiagnostics["after_group_count"] = view.Stats.AfterGroupCount
+	requestKnobs["context_projection"] = projectionDiagnostics
+	if adapter.debug != nil {
+		adapter.debug.LogRuntime(ctx, identity.requestID, identity.conversationID, "context_projection_applied", projectionDiagnostics)
+	}
 	providerRequest := ProviderRequest{
 		RequestID:          identity.requestID,
 		ConversationID:     identity.conversationID,
@@ -252,8 +327,8 @@ func (adapter *localDelegatedAgentAdapter) runProviderPass(ctx context.Context, 
 		Mode:               compiled.Mode,
 		ThinkingEffort:     strings.TrimSpace(request.ThinkingEffort),
 		MaxMode:            request.MaxMode,
-		Messages:           cloneDelegatedMessages(messages),
-		StableMessageCount: delegatedStableMessageCount(compiled.StableMessageCount, len(messages)),
+		Messages:           cloneDelegatedMessages(view.Messages),
+		StableMessageCount: finalCompiled.StableMessageCount,
 		Tools:              append([]json.RawMessage(nil), compiled.Tools...),
 		MaxTokens:          maxTokens,
 		RequestKnobs:       requestKnobs,
@@ -453,12 +528,19 @@ func delegatedToolAllowed(permissions map[string]bool, toolName string) bool {
 
 func buildDelegatedAssistantToolMessage(text string, invocations []runtimecore.ToolInvocation) modeladapter.Message {
 	message := modeladapter.Message{Role: "assistant", Content: strings.TrimSpace(text)}
+	if len(invocations) > 0 {
+		// The replay message owns the reasoning carrier for the following tool
+		// batch. Do not discard it while windowing delegated worker history.
+		message.ReasoningContent = strings.TrimSpace(invocations[0].ReasoningContent)
+		message.ReasoningSignature = strings.TrimSpace(invocations[0].ReasoningSignature)
+		message.ReasoningSignatureSource = strings.TrimSpace(invocations[0].ReasoningSignatureSource)
+		message.OpenAIResponsesReasoningID = strings.TrimSpace(invocations[0].ReasoningProviderItemID)
+		message.OpenAIResponsesReasoningStatus = strings.TrimSpace(invocations[0].ReasoningProviderStatus)
+		message.OpenAIResponsesReasoningSummary = append(json.RawMessage(nil), invocations[0].ReasoningProviderSummary...)
+	}
 	message.ToolCalls = make([]modeladapter.ToolCallDescriptor, 0, len(invocations))
-	for index, invocation := range invocations {
+	for _, invocation := range invocations {
 		callID := strings.TrimSpace(invocation.CallID)
-		if callID == "" {
-			callID = fmt.Sprintf("delegated-tool-%d", index+1)
-		}
 		message.ToolCalls = append(message.ToolCalls, modeladapter.ToolCallDescriptor{
 			ID:   callID,
 			Type: "function",
@@ -474,6 +556,21 @@ func buildDelegatedAssistantToolMessage(text string, invocations []runtimecore.T
 	return message
 }
 
+func normalizeDelegatedToolInvocationIDs(invocations []runtimecore.ToolInvocation) {
+	used := make(map[string]struct{}, len(invocations))
+	for index := range invocations {
+		callID := strings.TrimSpace(invocations[index].CallID)
+		if callID == "" {
+			callID = fmt.Sprintf("delegated-tool-%d", index+1)
+		}
+		if _, exists := used[callID]; exists {
+			callID = fmt.Sprintf("%s-%d", callID, index+1)
+		}
+		used[callID] = struct{}{}
+		invocations[index].CallID = callID
+	}
+}
+
 func cloneDelegatedMessages(source []modeladapter.Message) []modeladapter.Message {
 	if len(source) == 0 {
 		return nil
@@ -485,14 +582,34 @@ func cloneDelegatedMessages(source []modeladapter.Message) []modeladapter.Messag
 	return cloned
 }
 
-func delegatedStableMessageCount(compiledStable int, messageCount int) int {
-	if compiledStable < 0 {
+func delegatedStableMessageCount(compiledStable int, compiledMessages []modeladapter.Message, messages []modeladapter.Message) int {
+	if compiledStable <= 0 || len(compiledMessages) == 0 || len(messages) == 0 {
 		return 0
 	}
-	if compiledStable > messageCount {
-		return messageCount
+	// CompiledConversation.StableMessageCount is a replay count. It does not
+	// include the compiler's system prompt, so compare non-system messages on
+	// both sides and stop at the first window gap.
+	stableReplay := make([]modeladapter.Message, 0, compiledStable)
+	for _, message := range compiledMessages {
+		if strings.TrimSpace(message.Role) == "system" {
+			continue
+		}
+		if len(stableReplay) >= compiledStable {
+			break
+		}
+		stableReplay = append(stableReplay, message)
 	}
-	return compiledStable
+	matched := 0
+	for _, message := range messages {
+		if strings.TrimSpace(message.Role) == "system" {
+			continue
+		}
+		if matched >= len(stableReplay) || !reflect.DeepEqual(stableReplay[matched], message) {
+			break
+		}
+		matched++
+	}
+	return matched
 }
 
 func (service *Service) executeLocalDelegatedTool(ctx context.Context, request delegation.TaskRequest, invocation runtimecore.ToolInvocation) (string, error) {
@@ -999,35 +1116,71 @@ func localDelegationCheckpointTargetPath(toolName string, args map[string]any) s
 }
 
 // compactDelegatedMessagesBeforePass 执行主动阈值压缩并打日志，返回压缩后的 messages。
-func compactDelegatedMessagesBeforePass(adapter *localDelegatedAgentAdapter, request delegation.TaskRequest, messages []modeladapter.Message, providerPass int) []modeladapter.Message {
+func delegatedOverflowWindowRatio(retry int) float64 {
+	ratio := 1.0
+	for index := 0; index < retry; index++ {
+		ratio *= delegatedOverflowRetryBudgetFactor
+	}
+	return ratio
+}
+
+// compactDelegatedMessagesBeforePass returns a structural window for this pass.
+// Callers must abort rather than send a malformed tool/reasoning chain.
+func compactDelegatedMessagesBeforePass(adapter *localDelegatedAgentAdapter, request delegation.TaskRequest, historyMessages []modeladapter.Message, tools []json.RawMessage, providerPass int, windowRatio float64, previousSentInputTokens int64) (delegatedProviderPassView, error) {
+	view := delegatedProviderPassView{
+		HistoryMessages:         cloneDelegatedMessages(historyMessages),
+		PreviousSentInputTokens: previousSentInputTokens,
+	}
 	if adapter == nil {
-		return messages
+		view.Messages = cloneDelegatedMessages(historyMessages)
+		view.InputTokens = estimateCompiledPromptTokens(CompiledConversation{Messages: view.Messages, Tools: tools})
+		return view, nil
 	}
 	window := int64(0)
 	if adapter.resolveContextWindow != nil {
 		window = int64(adapter.resolveContextWindow(strings.TrimSpace(request.ModelID)))
 	}
 	budget := delegatedContextBudgetForWindow(window)
+	if budget > 0 && windowRatio > 0 && windowRatio < 1 {
+		budget = int64(float64(budget) * windowRatio)
+	}
+	if previousSentInputTokens > 0 {
+		retryInputBudget := int64(float64(previousSentInputTokens) * delegatedOverflowRetryBudgetFactor)
+		if retryInputBudget >= previousSentInputTokens {
+			retryInputBudget = previousSentInputTokens - 1
+		}
+		retryMessageBudget := retryInputBudget - estimateToolDescriptorsTokens(tools)
+		if retryMessageBudget < 1 {
+			retryMessageBudget = 1
+		}
+		if budget <= 0 || retryMessageBudget < budget {
+			budget = retryMessageBudget
+		}
+	}
 	if budget <= 0 {
-		return messages
+		view.Messages = cloneDelegatedMessages(historyMessages)
+		view.InputTokens = estimateCompiledPromptTokens(CompiledConversation{Messages: view.Messages, Tools: tools})
+		return view, nil
 	}
 	stats := &delegatedCompactionStats{}
-	out, changed := maybeCompactDelegatedMessages(messages, budget, stats)
-	if changed {
-		logger.Infof("forwarder delegated context compacted task_id=%s provider_pass=%d snip=%d dropped=%d msgs=%d->%d tokens=%d->%d",
-			strings.TrimSpace(request.ID), providerPass, stats.SnipCount, stats.DroppedCount, len(messages), len(out), stats.BeforeTokens, stats.AfterTokens)
+	out, changed, err := buildDelegatedMessageWindow(historyMessages, budget, stats)
+	if err != nil {
+		return delegatedProviderPassView{}, fmt.Errorf("build delegated context window: %w", err)
 	}
-	return out
+	view.Messages = out
+	view.Stats = *stats
+	view.BudgetTokens = budget
+	view.InputTokens = estimateCompiledPromptTokens(CompiledConversation{Messages: out, Tools: tools})
+	if previousSentInputTokens > 0 && view.InputTokens >= previousSentInputTokens {
+		return delegatedProviderPassView{}, fmt.Errorf("delegated context overflow cannot shrink the remaining structural window (previous=%d next=%d)", previousSentInputTokens, view.InputTokens)
+	}
+	if changed {
+		logger.Infof("forwarder delegated context compacted task_id=%s provider_pass=%d ratio=%.3f budget=%d snip=%d dropped=%d msgs=%d->%d tokens=%d->%d",
+			strings.TrimSpace(request.ID), providerPass, windowRatio, budget, stats.SnipCount, stats.DroppedCount, len(historyMessages), len(out), stats.BeforeTokens, stats.AfterTokens)
+	}
+	return view, nil
 }
 
 func sameDelegatedMessages(a, b []modeladapter.Message) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i].Role != b[i].Role || a[i].Content != b[i].Content || a[i].ToolCallID != b[i].ToolCallID {
-			return false
-		}
-	}
-	return true
+	return reflect.DeepEqual(a, b)
 }

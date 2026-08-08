@@ -39,74 +39,11 @@ func newCacheKeyCache(maxSize int) *cacheKeyCache {
 	}
 }
 
-// fingerprint 生成请求的轻量级指纹，避免对 Messages 做全量序列化。
-// 格式: modelID:mode:thinkingEffort:stableCount:maxTokens:tools:msgCount:<digest>:...
-//
-// 指纹必须与 providerCacheKey 的输入保持一一对应（同指纹 ⇒ 同 key），否则不同请求
-// 会碰撞出同一指纹、命中错误的缓存条目。因此每条消息都附带「Role + Content 文本 +
-// 全部 ContentPart（含图片 MIMEType/Data/Path）」的 SHA-256 摘要，工具与
-// RequestBodyOverride 同样参与。绝不能只按文本长度区分——视觉委派的识图消息
-// Content 为空、文本与图片都在 ContentParts 里，仅按长度做指纹会让不同图片碰撞到
-// 同一缓存条目，把上一张图的描述回放给当前图片（表现为"第二次说的还是第一张图"）。
+// fingerprint must have the same semantic shape as providerCacheKey. Keeping a
+// separate partial encoder here previously let tool calls and multi-digit budgets
+// collide, so the memoized lookup could return a key for another request.
 func (c *cacheKeyCache) fingerprint(req ProviderRequest) string {
-	// 预估长度避免多次扩容
-	buf := make([]byte, 0, 256)
-	buf = append(buf, req.ModelID...)
-	buf = append(buf, ':')
-	buf = append(buf, byte('0'+req.Mode))
-	buf = append(buf, ':')
-	buf = append(buf, req.ThinkingEffort...)
-	buf = append(buf, ':')
-	buf = append(buf, byte('0'+req.StableMessageCount/10), byte('0'+req.StableMessageCount%10))
-	buf = append(buf, ':')
-	// MaxTokens, Tools count, Messages count
-	buf = append(buf, byte('0'+req.MaxTokens/100), byte('0'+(req.MaxTokens/10)%10), byte('0'+req.MaxTokens%10))
-	buf = append(buf, ':')
-	buf = append(buf, byte('0'+len(req.Tools)/10), byte('0'+len(req.Tools)%10))
-	buf = append(buf, ':')
-	buf = append(buf, byte('0'+len(req.Messages)/10), byte('0'+len(req.Messages)%10))
-	// 各消息的内容摘要：确保不同内容（尤其不同图片）绝不碰撞出同一指纹。
-	for _, msg := range req.Messages {
-		buf = append(buf, ':')
-		buf = append(buf, messageContentDigest(msg)...)
-	}
-	for _, tool := range req.Tools {
-		sum := sha256.Sum256(tool)
-		buf = append(buf, ':')
-		buf = append(buf, hex.EncodeToString(sum[:4])...)
-	}
-	if req.RequestBodyOverride != nil {
-		if raw, err := json.Marshal(req.RequestBodyOverride); err == nil {
-			sum := sha256.Sum256(raw)
-			buf = append(buf, ':')
-			buf = append(buf, hex.EncodeToString(sum[:4])...)
-		} else {
-			buf = append(buf, ':', 'e', 'r', 'r')
-		}
-	}
-	return string(buf)
-}
-
-// messageContentDigest 生成一条消息的内容摘要：覆盖 Role、Content 文本与全部
-// ContentPart（文本内容，以及图片的 MIMEType/Data/Path）。返回 16 字符十六进制串。
-func messageContentDigest(msg modeladapter.Message) string {
-	h := sha256.New()
-	h.Write([]byte(msg.Role))
-	h.Write([]byte{0})
-	h.Write([]byte(msg.Content))
-	for _, part := range msg.ContentParts {
-		h.Write([]byte(part.Type))
-		h.Write([]byte{0})
-		h.Write([]byte(part.Text))
-		if part.Image != nil {
-			h.Write([]byte{1})
-			h.Write([]byte(part.Image.MIMEType))
-			h.Write(part.Image.Data)
-			h.Write([]byte(part.Image.Path))
-		}
-	}
-	sum := h.Sum(nil)
-	return hex.EncodeToString(sum[:8])
+	return providerCacheKey(req)
 }
 
 func (c *cacheKeyCache) get(req ProviderRequest) string {

@@ -1,6 +1,7 @@
 package forwarder
 
 import (
+	"fmt"
 	"strings"
 
 	modeladapter "cursor/internal/backend/agent/model"
@@ -23,6 +24,15 @@ func delegatedContextBudgetForWindow(window int64) int64 {
 	}
 	budget := int64(delegatedCompactionWindowRatio*float64(window)) - compactionAutoReserveTokens
 	if budget < delegatedCompactionBudgetFloor {
+		// The floor is a large-window quality guard, never permission to send an
+		// input that leaves no room for the provider output safety reserve.
+		maximumInputBudget := window - providerOutputSafetyTokens
+		if maximumInputBudget < 1 {
+			return 1
+		}
+		if maximumInputBudget < delegatedCompactionBudgetFloor {
+			return maximumInputBudget
+		}
 		return delegatedCompactionBudgetFloor
 	}
 	return budget
@@ -40,10 +50,12 @@ func delegatedContextOverflowError(err error) bool {
 }
 
 type delegatedCompactionStats struct {
-	SnipCount    int
-	DroppedCount int
-	BeforeTokens int64
-	AfterTokens  int64
+	SnipCount        int
+	DroppedCount     int
+	BeforeTokens     int64
+	AfterTokens      int64
+	BeforeGroupCount int
+	AfterGroupCount  int
 }
 
 func delegatedToolResultOmittedText(toolName string) string {
@@ -103,6 +115,192 @@ func snipDelegatedOversizedToolResults(messages []modeladapter.Message, budget i
 }
 
 const delegatedCompactionKeepTurns = 4
+
+type delegatedMessageGroup struct {
+	start     int
+	end       int
+	protected bool
+	hasTools  bool
+}
+
+// buildDelegatedMessageWindow clones and windows delegated-worker messages without
+// applying any replay normalization. Tool batches therefore either remain complete
+// or are rejected/dropped as one unit.
+func buildDelegatedMessageWindow(messages []modeladapter.Message, budget int64, stats *delegatedCompactionStats) ([]modeladapter.Message, bool, error) {
+	working := cloneDelegatedMessages(messages)
+	if budget <= 0 || len(working) == 0 {
+		return working, false, nil
+	}
+	groups, err := groupDelegatedMessages(working)
+	if err != nil {
+		return nil, false, err
+	}
+	if stats != nil {
+		stats.BeforeTokens = estimateModelMessagesTokens(working)
+		stats.BeforeGroupCount = len(groups)
+	}
+	changed := false
+
+	// Snip only optional older tool batches. The newest batch is protected as a
+	// complete group so a retry never damages the currently active tool chain.
+	for estimateModelMessagesTokens(working) > budget {
+		target := -1
+		for _, group := range groups {
+			if group.protected || !group.hasTools {
+				continue
+			}
+			for index := group.start; index <= group.end; index++ {
+				message := working[index]
+				if strings.TrimSpace(message.Role) == "tool" && len(message.Content) > delegatedSnipThresholdBytes {
+					target = index
+					break
+				}
+			}
+			if target >= 0 {
+				break
+			}
+		}
+		if target < 0 {
+			break
+		}
+		working[target].Content = working[target].Content[:delegatedSnipTargetBytes] + delegatedToolResultOmittedText(working[target].Name)
+		changed = true
+		if stats != nil {
+			stats.SnipCount++
+		}
+	}
+
+	keep := make([]bool, len(groups))
+	for index := range keep {
+		keep[index] = true
+	}
+	for estimateKeptDelegatedGroups(working, groups, keep) > budget {
+		dropped := false
+		for index, group := range groups {
+			if !keep[index] || group.protected {
+				continue
+			}
+			keep[index] = false
+			changed = true
+			dropped = true
+			if stats != nil {
+				stats.DroppedCount++
+			}
+			break
+		}
+		if !dropped {
+			break
+		}
+	}
+	out := make([]modeladapter.Message, 0, len(working))
+	for index, group := range groups {
+		if keep[index] {
+			out = append(out, working[group.start:group.end+1]...)
+		}
+	}
+	if err := validateDelegatedMessageStructure(out); err != nil {
+		return nil, false, err
+	}
+	if stats != nil {
+		stats.AfterTokens = estimateModelMessagesTokens(out)
+		stats.AfterGroupCount = len(groups) - stats.DroppedCount
+	}
+	return out, changed, nil
+}
+
+func groupDelegatedMessages(messages []modeladapter.Message) ([]delegatedMessageGroup, error) {
+	groups := make([]delegatedMessageGroup, 0, len(messages))
+	callIDs := make(map[string]struct{})
+	firstUser := -1
+	lastUser := -1
+	for index, message := range messages {
+		if strings.TrimSpace(message.Role) == "user" {
+			if firstUser < 0 {
+				firstUser = index
+			}
+			lastUser = index
+		}
+	}
+	for index := 0; index < len(messages); {
+		message := messages[index]
+		role := strings.TrimSpace(message.Role)
+		switch role {
+		case "tool":
+			return nil, fmt.Errorf("orphan delegated tool result %q", strings.TrimSpace(message.ToolCallID))
+		case "user":
+			end := index
+			// A non-tool turn starts at a user message and includes its assistant
+			// reply. Keep the initial task and latest current prompt protected,
+			// but never leave historical request/reply pairs half-visible.
+			if index+1 < len(messages) && strings.TrimSpace(messages[index+1].Role) == "assistant" && len(messages[index+1].ToolCalls) == 0 {
+				end = index + 1
+			}
+			groups = append(groups, delegatedMessageGroup{start: index, end: end, protected: index == firstUser || index == lastUser})
+			index = end + 1
+		case "assistant":
+			if len(message.ToolCalls) == 0 {
+				groups = append(groups, delegatedMessageGroup{start: index, end: index})
+				index++
+				continue
+			}
+			expected := make(map[string]struct{}, len(message.ToolCalls))
+			for _, call := range message.ToolCalls {
+				callID := strings.TrimSpace(call.ID)
+				if callID == "" {
+					return nil, fmt.Errorf("delegated assistant tool call is missing an id")
+				}
+				if _, exists := callIDs[callID]; exists {
+					return nil, fmt.Errorf("duplicate delegated tool call id %q", callID)
+				}
+				callIDs[callID] = struct{}{}
+				expected[callID] = struct{}{}
+			}
+			end := index
+			if index+1 < len(messages) && strings.TrimSpace(messages[index+1].Role) != "tool" {
+				return nil, fmt.Errorf("incomplete delegated tool batch after assistant message %d", index)
+			}
+			seen := make(map[string]struct{}, len(expected))
+			for end+1 < len(messages) && strings.TrimSpace(messages[end+1].Role) == "tool" {
+				end++
+				callID := strings.TrimSpace(messages[end].ToolCallID)
+				if _, exists := expected[callID]; !exists {
+					return nil, fmt.Errorf("delegated tool result %q does not match its assistant batch", callID)
+				}
+				if _, exists := seen[callID]; exists {
+					return nil, fmt.Errorf("duplicate delegated tool result %q", callID)
+				}
+				seen[callID] = struct{}{}
+			}
+			if len(seen) != len(expected) {
+				return nil, fmt.Errorf("incomplete delegated tool batch after assistant message %d", index)
+			}
+			groups = append(groups, delegatedMessageGroup{start: index, end: end, hasTools: true})
+			index = end + 1
+		default:
+			groups = append(groups, delegatedMessageGroup{start: index, end: index, protected: role == "system" || index == firstUser || index == lastUser})
+			index++
+		}
+	}
+	if len(groups) > 0 {
+		groups[len(groups)-1].protected = true
+	}
+	return groups, nil
+}
+
+func estimateKeptDelegatedGroups(messages []modeladapter.Message, groups []delegatedMessageGroup, keep []bool) int64 {
+	total := int64(0)
+	for index, group := range groups {
+		if keep[index] {
+			total += estimateModelMessagesTokens(messages[group.start : group.end+1])
+		}
+	}
+	return total
+}
+
+func validateDelegatedMessageStructure(messages []modeladapter.Message) error {
+	_, err := groupDelegatedMessages(messages)
+	return err
+}
 
 // dropDelegatedEarlyMessages 从最旧开始按轮成组丢弃 assistant 及其后所有连续
 // role==tool 消息，直到预算内。一条 assistant 可能带多个 ToolCalls（并行工具调用），
@@ -176,14 +374,9 @@ func maybeCompactDelegatedMessages(messages []modeladapter.Message, budget int64
 	if budget <= 0 || len(messages) == 0 {
 		return messages, false
 	}
-	changed := false
-	var out []modeladapter.Message
-	out, snipChanged := snipDelegatedOversizedToolResults(messages, budget, stats)
-	changed = changed || snipChanged
-	if estimateModelMessagesTokens(out) > budget {
-		var dropChanged bool
-		out, dropChanged = dropDelegatedEarlyMessages(out, budget, stats)
-		changed = changed || dropChanged
+	out, changed, err := buildDelegatedMessageWindow(messages, budget, stats)
+	if err != nil {
+		return messages, false
 	}
 	return out, changed
 }
