@@ -33,12 +33,6 @@ type CloudPromptMeta struct {
 	FetchedAt  time.Time `json:"fetchedAt"`
 }
 
-// CloudPrompt 是缓存的云端提示词。
-type CloudPrompt struct {
-	Meta    CloudPromptMeta
-	Content string
-}
-
 // FetchResult 是一次拉取的原始结果。
 type FetchResult struct {
 	Source     string
@@ -108,41 +102,6 @@ func Save(mode string, result FetchResult) error {
 	return os.WriteFile(metaFile, raw, 0o644)
 }
 
-// Load 读取指定 mode 的缓存提示词；不存在或正文为空时返回 nil。
-func Load(mode string) (*CloudPrompt, error) {
-	mode = strings.TrimSpace(mode)
-	if mode == "" {
-		return nil, nil
-	}
-	path, err := CachePath(mode)
-	if err != nil {
-		return nil, err
-	}
-	content, err := os.ReadFile(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	if strings.TrimSpace(string(content)) == "" {
-		return nil, nil
-	}
-	prompt := &CloudPrompt{Content: string(content)}
-	if raw, readErr := os.ReadFile(mustMetaPath(mode)); readErr == nil {
-		_ = json.Unmarshal(raw, &prompt.Meta)
-	}
-	return prompt, nil
-}
-
-func mustMetaPath(mode string) string {
-	meta, err := metaPath(mode)
-	if err != nil {
-		return ""
-	}
-	return meta
-}
-
 // Fetch 用官方账号直连 api2.cursor.sh 拉取指定 mode 的提示词。
 // 依次尝试 GetChatPrompt（手写）→ GetSimplePrompt → GetPassthroughPrompt，
 // 返回第一个成功的响应；全部失败时返回聚合错误。
@@ -159,15 +118,15 @@ func Fetch(ctx context.Context, mode string) (*FetchResult, error) {
 		return nil, fmt.Errorf("获取官方账号认证失败: %w", err)
 	}
 	header := map[string]string{
-		"Authorization":              authorization,
-		"x-cursor-checksum":          upstream.BuildCursorChecksum(authorization),
-		"User-Agent":                 "Cursor/3.14.7",
-		"x-cursor-client-version":    "3.14.7",
-		"x-cursor-client-commit":     "a758f2241ca99fecf380180b6cbdbbce0f1f42c0",
-		"x-cursor-client-type":       "ide",
-		"x-cursor-client-os":         "win32",
-		"x-cursor-client-arch":       "x64",
-		"x-cursor-client-os-version": "10.0.19045",
+		"Authorization":               authorization,
+		"x-cursor-checksum":           upstream.BuildCursorChecksum(authorization),
+		"User-Agent":                  "Cursor/3.14.7",
+		"x-cursor-client-version":     "3.14.7",
+		"x-cursor-client-commit":      "a758f2241ca99fecf380180b6cbdbbce0f1f42c0",
+		"x-cursor-client-type":        "ide",
+		"x-cursor-client-os":          "win32",
+		"x-cursor-client-arch":        "x64",
+		"x-cursor-client-os-version":  "10.0.19045",
 		"x-cursor-client-device-type": "desktop",
 		"x-cursor-timezone":           "Asia/Shanghai",
 		"x-new-onboarding-completed":  "true",

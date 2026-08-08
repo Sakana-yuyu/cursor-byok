@@ -303,22 +303,6 @@ func (store *ConversationFileStore) ReplaceEntries(conversationID string, entrie
 	return cloneConversationFile(conversation), nil
 }
 
-// GetConversationSummary 返回轻量会话摘要。
-func (store *ConversationFileStore) GetConversationSummary(conversationID string) (ConversationSummary, error) {
-	conversation, err := store.LoadConversation(conversationID)
-	if err != nil || conversation == nil {
-		return ConversationSummary{}, err
-	}
-	return ConversationSummary{
-		ConversationID: conversation.ConversationID,
-		Mode:           conversation.Mode,
-		EntriesCount:   len(conversation.Entries),
-		NextTurnSeq:    conversation.NextTurnSeq,
-		NextEntrySeq:   conversation.NextEntrySeq,
-		UpdatedAt:      conversation.UpdatedAt,
-	}, nil
-}
-
 // ListConversationIDs 返回 history 根目录下包含 state/context 的 conversation id。
 func (store *ConversationFileStore) ListConversationIDs() ([]string, error) {
 	if store == nil {

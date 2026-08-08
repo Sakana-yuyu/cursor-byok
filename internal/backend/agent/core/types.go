@@ -3,13 +3,8 @@ package runtimecore
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
-
-	"google.golang.org/protobuf/proto"
-
-	"cursor/gen/agentv1"
 )
 
 // SubagentModelOverrideSelection 表示父 run 对某类 subagent 的模型选择覆盖。
@@ -55,33 +50,6 @@ func subagentModelOverrideLookupKeys(subagentType string) []string {
 	return keys
 }
 
-type RunState string
-
-const (
-	// RunStateIdle 表示空闲态，此时 session 已存在但没有活跃 run。
-	RunStateIdle RunState = "IDLE"
-	// RunStateRestoring 表示恢复态，此时正在装载会话状态与最小恢复信息。
-	RunStateRestoring RunState = "RESTORING"
-	// RunStatePreparingModelInput 表示模型输入准备态。
-	RunStatePreparingModelInput RunState = "PREPARING_MODEL_INPUT"
-	// RunStateStreamingModel 表示模型流消费态。
-	RunStateStreamingModel RunState = "STREAMING_MODEL"
-	// RunStateWaitingExec 表示执行桥等待态。
-	RunStateWaitingExec RunState = "WAITING_EXEC"
-	// RunStateWaitingInteraction 表示交互桥等待态。
-	RunStateWaitingInteraction RunState = "WAITING_INTERACTION"
-	// RunStateApplyingExternalResult 表示外部结果回写态。
-	RunStateApplyingExternalResult RunState = "APPLYING_EXTERNAL_RESULT"
-	// RunStateCheckpointing 表示检查点写入态。
-	RunStateCheckpointing RunState = "CHECKPOINTING"
-	// RunStateCompleted 表示正常完成态。
-	RunStateCompleted RunState = "COMPLETED"
-	// RunStateCanceled 表示取消终态。
-	RunStateCanceled RunState = "CANCELED"
-	// RunStateFailed 表示失败终态。
-	RunStateFailed RunState = "FAILED"
-)
-
 // CommandKind 表示运行时接收的上行命令类型。
 type CommandKind string
 
@@ -105,110 +73,6 @@ const (
 	// CommandKindKVClientMessage 表示收到 `kv_client_message`，当前阶段只记录不推进状态。
 	CommandKindKVClientMessage CommandKind = "kv_client_message"
 )
-
-// Command 描述一次投递到运行时协调层的上行命令。
-type Command struct {
-	// Kind 指定该命令的运行时语义。
-	Kind CommandKind
-	// IsResume 标记当前命令是否为恢复型启动。
-	IsResume bool
-	// ClientKind 保留协议层顶级消息种类，便于观测与调试。
-	ClientKind string
-	// HistoryEntry 保存协议摘要文本，供当前 MVP 的合成回复使用。
-	HistoryEntry string
-	// ClientMessage 保存解码后的完整上行协议消息。
-	ClientMessage *agentv1.AgentClientMessage
-}
-
-// EventKind 表示一次可回放下行事件的业务类型。
-type EventKind string
-
-const (
-	// EventKindRunStarted 表示新 run 已创建并开始进入恢复路径。
-	EventKindRunStarted EventKind = "run_started"
-	// EventKindStepStarted 表示步骤开始事件。
-	EventKindStepStarted EventKind = "step_started"
-	// EventKindTextDelta 表示文本增量事件。
-	EventKindTextDelta EventKind = "text_delta"
-	// EventKindStepCompleted 表示步骤完成事件。
-	EventKindStepCompleted EventKind = "step_completed"
-	// EventKindTurnEnded 表示回合结束事件。
-	EventKindTurnEnded EventKind = "turn_ended"
-	// EventKindCheckpoint 表示会话检查点事件。
-	EventKindCheckpoint EventKind = "checkpoint"
-	// EventKindCanceled 表示取消事件。
-	EventKindCanceled EventKind = "canceled"
-	// EventKindHeartbeat 表示服务端心跳事件。
-	EventKindHeartbeat EventKind = "heartbeat"
-)
-
-// Event 表示一条可广播、可回放的下行事件记录。
-type Event struct {
-	// Seq 是请求维度内递增的事件序号。
-	Seq int64
-	// RequestID 是事件所属请求标识。
-	RequestID string
-	// RunID 是事件所属运行标识。
-	RunID string
-	// Kind 标识该事件的业务类型。
-	Kind EventKind
-	// Message 是要透传到 RunSSE 的协议消息体。
-	Message *agentv1.AgentServerMessage
-	// End 表示该事件会结束当前 SSE 读取。
-	End bool
-	// TerminalErrorCode 表示当前终态 SSE 需要返回的 connect error code，例如 canceled。
-	TerminalErrorCode string
-	// TerminalErrorMessage 表示当前终态 SSE 需要返回的错误消息。
-	TerminalErrorMessage string
-	// CreatedAt 是事件入库时间。
-	CreatedAt time.Time
-}
-
-// RunSnapshot 表示一次 run 的最小快照信息。
-type RunSnapshot struct {
-	// RunID 是运行唯一标识。
-	RunID string
-	// RequestID 是当前 run 绑定的请求标识。
-	RequestID string
-	// ConversationID 是当前 run 绑定的会话标识。
-	ConversationID string
-	// ModelID 表示当前运行使用的模型标识。
-	ModelID string
-	// State 表示该 run 当前所处状态。
-	State RunState
-	// Mode 表示该 run 当前使用的会话模式。
-	Mode agentv1.AgentMode
-	// Version 是运行时版本号，便于后续扩展乐观更新。
-	Version int64
-	// StartedAt 记录 run 启动时间。
-	StartedAt time.Time
-	// UpdatedAt 记录 run 最近一次状态更新时间。
-	UpdatedAt time.Time
-	// CurrentUserMessageText 保存当前 turn 的用户输入文本，直到本 turn 提交进 `turns`。
-	CurrentUserMessageText string
-	// CustomSystemPrompt 保存当前 run 附带的自定义系统提示词。
-	CustomSystemPrompt string
-	// RequestContextPayload 保存当前 run 的 request_context proto 序列化结果。
-	RequestContextPayload []byte
-	// IsPrewarm 标记当前 run 是否由 `prewarm_request` 触发。
-	IsPrewarm bool
-}
-
-// PendingAssistantOutput 表示尚未收口的一条 assistant 输出记录。
-type PendingAssistantOutput struct {
-	// RawMessage 保存原始序列化 assistant message。
-	RawMessage string
-	// Role 表示该记录的 role，当前常见值为 assistant。
-	Role string
-	// ContentKinds 记录内容块类型顺序，例如 text 或 tool-call。
-	ContentKinds []string
-	// ToolCallIDs 记录该输出中出现的全部 tool_call_id。
-	ToolCallIDs []string
-	// ToolNames 记录该输出中出现的全部工具名称。
-	ToolNames []string
-	// TextPreview 保存文本块的简要摘要。
-	TextPreview string
-}
 
 // PendingExec 表示一条尚未收口的执行桥记录。
 type PendingExec struct {
@@ -282,20 +146,6 @@ type PendingInteraction struct {
 	ArtifactPath string
 }
 
-// ActiveStep 表示当前正在推进、尚未收口的 step 元数据。
-type ActiveStep struct {
-	// StepID 是当前 step 唯一标识。
-	StepID uint64
-	// ModelCallID 是当前 step 绑定的模型调用标识。
-	ModelCallID string
-	// StartedAt 是当前 step 的开始时间。
-	StartedAt time.Time
-	// InputTokens 保存当前 step 已知的输入 token 数。
-	InputTokens int64
-	// OutputTokens 保存当前 step 已知的输出 token 数。
-	OutputTokens int64
-}
-
 // ExternalResultSummary 表示 APPLYING_EXTERNAL_RESULT 后继续下一轮编译所需的最小上下文。
 type ExternalResultSummary struct {
 	// Source 表示结果来源，例如 exec 或 interaction。
@@ -334,69 +184,4 @@ type ToolInvocation struct {
 	ProviderStatus string
 	// ModelCallID 表示本轮模型调用标识。
 	ModelCallID string
-}
-
-// NormalizeSupportedMode 规范化并校验当前支持的会话 mode。
-//
-// 当前默认口径：
-// 1. 未显式携带 mode 或值为 `AGENT_MODE_UNSPECIFIED` 时，按 `AGENT_MODE_AGENT` 处理；
-// 2. 仅允许 `AGENT_MODE_AGENT`、`AGENT_MODE_ASK`、`AGENT_MODE_PLAN`、`AGENT_MODE_DEBUG`、`AGENT_MODE_MULTITASK`；
-// 3. 其他 mode 一律报错，不允许静默回退。
-func NormalizeSupportedMode(mode agentv1.AgentMode) (agentv1.AgentMode, error) {
-	switch mode {
-	case agentv1.AgentMode_AGENT_MODE_UNSPECIFIED:
-		return agentv1.AgentMode_AGENT_MODE_AGENT, nil
-	case agentv1.AgentMode_AGENT_MODE_AGENT,
-		agentv1.AgentMode_AGENT_MODE_ASK,
-		agentv1.AgentMode_AGENT_MODE_PLAN,
-		agentv1.AgentMode_AGENT_MODE_DEBUG,
-		agentv1.AgentMode_AGENT_MODE_MULTITASK:
-		return mode, nil
-	default:
-		return agentv1.AgentMode_AGENT_MODE_UNSPECIFIED, fmt.Errorf("unsupported mode: %s", mode.String())
-	}
-}
-
-// CloneToolCallMap 深拷贝 tool_call 结果映射，避免共享 proto 指针。
-func CloneToolCallMap(items map[string]*agentv1.ToolCall) map[string]*agentv1.ToolCall {
-	if len(items) == 0 {
-		return make(map[string]*agentv1.ToolCall)
-	}
-
-	cloned := make(map[string]*agentv1.ToolCall, len(items))
-	for key, value := range items {
-		if value == nil {
-			cloned[key] = nil
-			continue
-		}
-		typed, ok := proto.Clone(value).(*agentv1.ToolCall)
-		if !ok {
-			cloned[key] = nil
-			continue
-		}
-		cloned[key] = typed
-	}
-	return cloned
-}
-
-// IsCurrentlySupportedTool 判断当前 Phase 5 稳定化版本是否真正支持该工具。
-//
-// 当前规则：
-// 1. 只返回 runtime/loop 当前已经具备完整推进链路的能力；
-// 2. 结果用于限制实际对模型暴露的工具集合，避免模型调用未实现能力后把整轮 run 直接打失败；
-// 3. 必须保持最小闭环优先，而不是优先暴露抓包里存在但服务端尚未支持的能力。
-func IsCurrentlySupportedTool(name string) bool {
-	switch strings.TrimSpace(name) {
-	case "Read", "Write", "PatchEdit", "Delete", "Shell", "AwaitShell", "WriteShellStdin", "ForceBackgroundShell",
-		"Glob", "Grep", "ReadLints",
-		"AskQuestion", "CreatePlan", "SwitchMode", "WebSearch", "WebFetch",
-		"TodoWrite", "Task",
-		"CallMcpTool", "FetchMcpResource",
-		"Fetch", "RecordScreen", "ComputerUse",
-		"ForceBackgroundSubagent",
-		"CreatePr", "UpdatePr":
-		return true
-	default:
-		return false
-	}
 }

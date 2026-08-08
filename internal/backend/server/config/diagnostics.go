@@ -18,8 +18,6 @@ type DiagnosticSeverity string
 const (
 	// DiagnosticSeverityWarning 表示会导致功能降级（如缓存失效）但不阻断使用的问题。
 	DiagnosticSeverityWarning DiagnosticSeverity = "warning"
-	// DiagnosticSeverityError 表示会导致请求失败或严重错误的问题。
-	DiagnosticSeverityError DiagnosticSeverity = "error"
 )
 
 // DiagnosticCategory 表示诊断问题的类别，用于前端分组展示与图标。

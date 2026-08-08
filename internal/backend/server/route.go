@@ -116,12 +116,6 @@ func ConnectStream() RouteOption {
 	}
 }
 
-func With(middlewares ...Middleware) RouteOption {
-	return func(route *Route) {
-		route.Middleware = append(route.Middleware, middlewares...)
-	}
-}
-
 func Local(action HandlerFunc) RouteOption {
 	return func(route *Route) {
 		route.Local = action

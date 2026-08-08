@@ -9,7 +9,6 @@ import (
 )
 
 const (
-	defaultChannelTimeoutMS           = int((2 * 60 * 60) * 1000)
 	defaultChannelContextWindowTokens = 200_000
 	defaultChannelMaxTokens           = 65_536
 	defaultChannelAnthropicEffort     = "xhigh"
@@ -83,9 +82,7 @@ func resolveModelAdapterChannel(adapters []ModelAdapterConfig, requestedModel st
 		ID:                          strings.TrimSpace(matched.ID),
 		Name:                        strings.TrimSpace(matched.DisplayName),
 		GroupName:                   strings.TrimSpace(matched.GroupName),
-		Code:                        strings.TrimSpace(matched.ID),
 		Provider:                    strings.TrimSpace(matched.Type),
-		SupplierID:                  strings.TrimSpace(matched.SupplierID),
 		ProtocolMode:                strings.TrimSpace(matched.ProtocolMode),
 		ProtocolGroup:               strings.TrimSpace(matched.ProtocolGroup),
 		BaseURL:                     strings.TrimSpace(matched.BaseURL),
@@ -99,14 +96,11 @@ func resolveModelAdapterChannel(adapters []ModelAdapterConfig, requestedModel st
 		CustomHeadersJSON:           strings.TrimSpace(matched.CustomHeadersJSON),
 		AnthropicExtraParamsEnabled: matched.AnthropicExtraParamsEnabled,
 		AnthropicExtraParamsJSON:    strings.TrimSpace(matched.AnthropicExtraParamsJSON),
-		TimeoutMS:                   defaultChannelTimeoutMS,
 		ContextWindowTokens:         defaultChannelContextWindowTokens,
 		MaxTokens:                   defaultChannelMaxTokens,
 		ReasoningEffort:             strings.TrimSpace(matched.ReasoningEffort),
 		AnthropicMaxTokens:          defaultChannelMaxTokens,
 		AnthropicThinkingEffort:     defaultChannelAnthropicEffort,
-		ThinkingEnabled:             true,
-		Pricing:                     matched.Pricing,
 		FastMode:                    matched.FastMode,
 		OpenAIServiceTier:           strings.TrimSpace(matched.OpenAIServiceTier),
 	}

@@ -166,10 +166,6 @@ type cursorExecTombstone struct {
 	createdAt       time.Time
 }
 
-func NewCursorAdapter(bridge execbridge.ExecBridge, publish CursorPublisher) *CursorAdapter {
-	return NewCursorAdapterWithProgress(bridge, publish, nil)
-}
-
 func NewCursorAdapterWithProgress(bridge execbridge.ExecBridge, publish CursorPublisher, progress CursorProgressPublisher) *CursorAdapter {
 	return &CursorAdapter{
 		execBridge:          bridge,

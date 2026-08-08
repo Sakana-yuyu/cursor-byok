@@ -371,16 +371,6 @@ func SnapshotSourcedSkills(workspaceRoot string) []SkillSnapshotItem {
 	return out
 }
 
-// SnapshotSkillDiagnostics returns invalid manifests without exposing them to prompt activation.
-func SnapshotSkillDiagnostics(workspaceRoot string) []SkillSnapshotItem {
-	sourced := ScanAllSkillDiagnostics(workspaceRoot)
-	out := make([]SkillSnapshotItem, 0, len(sourced))
-	for _, sk := range sourced {
-		out = append(out, skillDiagnosticSnapshotItem(sk))
-	}
-	return out
-}
-
 func skillDiagnosticSnapshotItem(sk SourcedGlobalSkill) SkillSnapshotItem {
 	return SkillSnapshotItem{
 		Name:        sk.Name,

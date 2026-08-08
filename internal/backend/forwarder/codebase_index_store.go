@@ -27,12 +27,6 @@ const (
 	repositoryIndexCopyStatusCompleted    = "copy_completed"
 )
 
-type CodebaseSearchBackend interface {
-	EnsureIndexed(record CodebaseIndexRecord) (CodebaseIndexRecord, error)
-	RegisterFile(indexID string, file CodebaseIndexFileRecord) (CodebaseIndexFileRecord, error)
-	ListFiles(indexID string) ([]CodebaseIndexFileRecord, error)
-}
-
 type CodebaseIndexStore struct {
 	mu          sync.Mutex
 	root        string

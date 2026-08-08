@@ -118,12 +118,6 @@ type normalizedMCPServer struct {
 	RawJSON map[string]any
 }
 
-// ScanAllMCPServers 扫描所有工具的 MCP 配置，按 ServerIdentifier 去重（先到先得），
-// 返回 *agentv1.McpDescriptor 列表。workspaceRoot 为空时仅扫描用户级配置。
-func ScanAllMCPServers(workspaceRoot string) []*agentv1.McpDescriptor {
-	return scanMCPServers(workspaceRoot, nil, nil)
-}
-
 func scanMCPServers(workspaceRoot string, enabledSources map[string]bool, disabledServers map[string]bool) []*agentv1.McpDescriptor {
 	settings := SkillMCPScanSettings{
 		Enabled:            true,
@@ -1021,10 +1015,6 @@ type MCPServerSnapshotItem struct {
 	LastCheckedAt     time.Time        `json:"lastCheckedAt,omitempty"`
 	SourceLabel       string           `json:"sourceLabel"`
 	RuntimeScope      string           `json:"runtimeScope"`
-}
-
-func SnapshotMCPServers(workspaceRoot string) []MCPServerSnapshotItem {
-	return SnapshotMCPServersWithSettings(workspaceRoot, SkillMCPScanSettings{Enabled: true})
 }
 
 func SnapshotMCPServersWithSettings(workspaceRoot string, settings SkillMCPScanSettings) []MCPServerSnapshotItem {

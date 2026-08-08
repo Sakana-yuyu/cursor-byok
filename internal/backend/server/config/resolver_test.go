@@ -23,9 +23,6 @@ func TestResolveModelAdapterChannelDefaultsToAdaptiveThinking(t *testing.T) {
 	if resolved.AnthropicThinkingEffort != "xhigh" {
 		t.Fatalf("AnthropicThinkingEffort = %q, want default %q", resolved.AnthropicThinkingEffort, "xhigh")
 	}
-	if !resolved.ThinkingEnabled {
-		t.Fatal("ThinkingEnabled = false, want true")
-	}
 }
 
 func TestResolveModelAdapterChannelKeepsExplicitThinkingOverrides(t *testing.T) {

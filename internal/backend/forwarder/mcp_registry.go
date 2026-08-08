@@ -383,17 +383,6 @@ func (registry *MCPRuntimeRegistry) Descriptor(scope string, identifier string) 
 	return descriptor, true
 }
 
-func (registry *MCPRuntimeRegistry) Descriptors(scope string) []*agentv1.McpDescriptor {
-	items := registry.Snapshot(scope)
-	result := make([]*agentv1.McpDescriptor, 0, len(items))
-	for _, item := range items {
-		if descriptor, ok := registry.Descriptor(scope, item.Identifier); ok {
-			result = append(result, descriptor)
-		}
-	}
-	return result
-}
-
 // ResolveScope prefers the requested workspace, then falls back to the shared user scope.
 func (registry *MCPRuntimeRegistry) ResolveScope(preferredScope string, identifier string) string {
 	preferredScope = normalizeMCPRuntimeScope(preferredScope)

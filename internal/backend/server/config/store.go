@@ -39,13 +39,6 @@ func (store *Store) Path() string {
 	return store.path
 }
 
-func (store *Store) LogsRoot() string {
-	if store == nil {
-		return ""
-	}
-	return store.logsRoot
-}
-
 func (store *Store) snapshot() fileSnapshot {
 	if store == nil || strings.TrimSpace(store.path) == "" {
 		return fileSnapshot{}
