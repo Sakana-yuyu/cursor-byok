@@ -1,5 +1,5 @@
 // compaction_algorithms.go 承载 compaction 域纯算法层：候选构建与选择、turn 摘要、
-// 摘要消息估计、tool_call 形状提取与规范化、输出文本截断。
+// tool_call 形状提取与规范化、输出文本截断。
 package forwarder
 
 import (
@@ -14,66 +14,6 @@ import (
 
 	"cursor/gen/agentv1"
 )
-
-func buildCurrentTurnCompactionCandidate(entries []HistoryEntry, turnSeq int64, requestID string) (compactionCandidateTurn, bool) {
-	if len(entries) == 0 || turnSeq <= 0 || strings.TrimSpace(requestID) == "" {
-		return compactionCandidateTurn{}, false
-	}
-	normalizedRequestID := strings.TrimSpace(requestID)
-	latestToolCallID := latestCompletedToolCallIDForTurn(entries, turnSeq, normalizedRequestID)
-	if latestToolCallID == "" {
-		return compactionCandidateTurn{}, false
-	}
-	preservedEntryIndexes := autoCompactionPreservedEntryIndexes(entries, turnSeq, normalizedRequestID, latestToolCallID)
-	summary := compactedTurnSummary{}
-	replayCount := int32(0)
-	estimatedTokens := int64(0)
-	removedToolHistory := false
-	for index, entry := range entries {
-		if entry.TurnSeq != turnSeq || strings.TrimSpace(entry.RequestID) != normalizedRequestID {
-			continue
-		}
-		if strings.TrimSpace(entry.Kind) == "user_message" && strings.TrimSpace(summary.UserText) == "" {
-			summary.UserText = currentTurnUserText(entry)
-		}
-		if _, ok := preservedEntryIndexes[index]; ok {
-			continue
-		}
-		switch strings.TrimSpace(entry.Kind) {
-		case "assistant_text":
-			if step := summarizeCurrentTurnAssistantEntry(entry); step != "" {
-				summary.Steps = append(summary.Steps, step)
-			}
-			replayCount++
-			estimatedTokens += estimateTextTokens(string(entry.Payload))
-		case "tool_call":
-			removedToolHistory = true
-			if step := summarizeCurrentTurnToolCallEntry(entry); step != "" {
-				summary.Steps = append(summary.Steps, step)
-			}
-			replayCount++
-			estimatedTokens += estimateTextTokens(string(entry.Payload))
-		case "tool_result":
-			removedToolHistory = true
-			if step := summarizeCurrentTurnToolResultEntry(entry); step != "" {
-				summary.Steps = append(summary.Steps, step)
-			}
-			replayCount++
-			estimatedTokens += estimateTextTokens(string(entry.Payload))
-		}
-	}
-	if !removedToolHistory || replayCount <= 0 {
-		return compactionCandidateTurn{}, false
-	}
-	if len(summary.Steps) == 0 {
-		summary.Steps = append(summary.Steps, "tool_history=earlier current-turn tool history compacted")
-	}
-	return compactionCandidateTurn{
-		Summary:         summary,
-		ReplayCount:     replayCount,
-		EstimatedTokens: estimatedTokens,
-	}, true
-}
 
 func buildContextCompactionCandidates(entries []HistoryEntry, currentTurnSeq int64, currentRequestID string) []compactionCandidateTurn {
 	if len(entries) == 0 {
