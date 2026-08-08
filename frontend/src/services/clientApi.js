@@ -54,9 +54,7 @@ const desktopMethods = {
   QueryAllProviderBalances,
   RepairProxySettings,
   GetDelegationConfig, SaveDelegationConfig,
-  GetGoals, StartGoal, StopGoal,
   GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
-  EnableReaderMCP,
   RepairCACorruption, GetCARepairStatus,
   GetTerminalEnvironmentStatus, ApplyTerminalEnvironment,
 };
