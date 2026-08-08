@@ -482,8 +482,10 @@ func (service *Service) nativeDelegationTask(execID string) (*nativeDelegationRu
 	if !ok || item == nil {
 		return nil, false
 	}
-	copy := *item
-	return &copy, true
+	// nativeDelegationRuntime 当前全部为值类型字段，浅拷贝安全。
+	// 若将来新增指针/切片/map 字段，需改为深拷贝，避免与 updateNativeDelegationStatus 的写产生数据竞争。
+	snapshot := *item
+	return &snapshot, true
 }
 
 func (service *Service) cancelNativeDelegation(execID string) bool {

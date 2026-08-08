@@ -223,7 +223,12 @@ func replaceUserMessageText(message *agentv1.UserMessage, text string) *agentv1.
 	if message == nil {
 		return &agentv1.UserMessage{Text: text}
 	}
-	cloned := proto.Clone(message).(*agentv1.UserMessage)
+	cloned, ok := proto.Clone(message).(*agentv1.UserMessage)
+	if !ok {
+		// Clone 理论上返回同类型；失败时退回构造新消息，避免运行时 panic
+		// 冒泡到 forwarder 导致所有活跃对话掉线。
+		return &agentv1.UserMessage{Text: text}
+	}
 	cloned.Text = text
 	return cloned
 }

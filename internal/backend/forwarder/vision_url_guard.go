@@ -135,7 +135,9 @@ func validateImageURLTargetWithLiteralLookup(target *url.URL, lookupHost func(ct
 	for _, addr := range addresses {
 		ip := addr.IP
 		if ip == nil {
-			continue
+			// 解析条目缺失可用 IP 视为不可信：与"无地址"分支对齐，
+			// 不能静默放行（否则任一私网地址可能借解析器异常绕过校验）。
+			return fmt.Errorf("fetch image url failed: no usable address for %q", host)
 		}
 		if !isPublicImageIP(ip) {
 			return fmt.Errorf("fetch image url failed: address %q is not public", ip.String())

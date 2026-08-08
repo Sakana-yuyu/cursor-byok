@@ -182,6 +182,11 @@ func supportsVision(modelName string) bool {
 //     出现顺序从「落地文件缓存」补回 Path，让后续 turn 仍能真实识图；
 //   - 补不回路径的图片替换为强引导占位文本（提示模型让用户重发或描述内容），
 //     绝不让图片静默丢失导致"模型没看图"。
+//
+// 注意：本函数会原地改写入参 messages 中图片 part 的 Path/描述字段（历史快照
+// 恢复阶段）。调用方传入的应为可变副本；当前唯一调用方传入的是 Compile 返回后
+// 立即重新赋值的 compiled.Messages，无别名风险。若新增调用方需复用 messages，
+// 应先 clone。
 func (service *Service) synthesizeImageDescriptions(ctx context.Context, requestID string, conversationID string, messages []modeladapter.Message, modelName string) []modeladapter.Message {
 	config := service.resolveVisionProxyConfig()
 	vdbg("[pass] enter request_id=%s conv=%s model=%s enabled=%v msgs=%d", requestID, conversationID, modelName, config.enabled, len(messages))

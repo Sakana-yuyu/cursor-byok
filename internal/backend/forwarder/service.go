@@ -2609,7 +2609,14 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 			stream.PendingExecs[pendingExec.ExecID] = pendingExec
 			stream.mu.Unlock()
 			if strings.TrimSpace(pendingExec.ExecKind) == "subagent" {
-				service.registerNativeDelegation(stream, pendingExec, serverMessage)
+				if !service.registerNativeDelegation(stream, pendingExec, serverMessage) {
+					// 并发槽位已满：放弃派发，清理 pendingExec 并把并发上限错误
+					// 交还给模型，阻止继续批量启动子代理。
+					stream.mu.Lock()
+					delete(stream.PendingExecs, pendingExec.ExecID)
+					stream.mu.Unlock()
+					return service.completePreDispatchToolError(stream, invocation, startedToolCall, startedToolCall != nil, startedEmitted, errNativeDelegationConcurrencyLimit)
+				}
 			}
 			service.scheduleShellForegroundRecovery(stream.RequestID, pendingExec)
 			service.scheduleExecWatchdog(stream.RequestID, pendingExec)
@@ -2706,7 +2713,14 @@ func (service *Service) openNativeTaskExec(stream *ActiveStream, invocation runt
 	stream.PendingExecs[pendingExec.ExecID] = pendingExec
 	stream.mu.Unlock()
 	if strings.TrimSpace(pendingExec.ExecKind) == "subagent" {
-		service.registerNativeDelegation(stream, pendingExec, serverMessage)
+		if !service.registerNativeDelegation(stream, pendingExec, serverMessage) {
+			// 并发槽位已满：清理已登记的 pendingExec 并返回错误，由调用方经
+			// completePreDispatchToolError 把并发上限错误交还给模型。
+			stream.mu.Lock()
+			delete(stream.PendingExecs, pendingExec.ExecID)
+			stream.mu.Unlock()
+			return nil, runtimecore.PendingExec{}, errNativeDelegationConcurrencyLimit
+		}
 	}
 	if strings.TrimSpace(pendingExec.ExecKind) == "subagent" {
 		service.scheduleShellForegroundRecovery(stream.RequestID, pendingExec)

@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+
+	"cursor/internal/processutil"
 )
 
 // Status 描述一次终端环境探测的结果。
@@ -165,6 +167,7 @@ func pythonLauncher() (string, string) {
 		return "", ""
 	}
 	cmd := exec.Command(pyPath, "-3", "-c", "import sys;print(sys.executable)")
+	processutil.HideWindow(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return "", ""
@@ -192,6 +195,7 @@ func lookupExecutable(names ...string) string {
 // pwshVersion 读取 pwsh 的版本号（第一行输出，如 "7.4.5"）。
 func pwshVersion(path string) string {
 	cmd := exec.Command(path, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "$PSVersionTable.PSVersion.ToString()")
+	processutil.HideWindow(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -202,6 +206,7 @@ func pwshVersion(path string) string {
 // pythonVersion 读取 python 的版本行（如 "Python 3.12.4"）。
 func pythonVersion(path string) string {
 	cmd := exec.Command(path, "--version")
+	processutil.HideWindow(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return ""

@@ -1008,6 +1008,11 @@ func (coordinator *multitaskDelegationCoordinator) collectAggregate(aggregate *d
 				break
 			}
 		}
+		// 所有失败 worker 的 Error 都为空时填兜底文案，保证顶层 error 非空，
+		// 子代理卡片不再显示空白错误，至少给出可定位的失败状态。
+		if result.Error == "" && result.Failed > 0 {
+			result.Error = fmt.Sprintf("委派 worker 失败（%d 个），但未捕获到具体错误文本", result.Failed)
+		}
 	}
 	return result
 }
