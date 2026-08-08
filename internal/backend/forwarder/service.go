@@ -2455,6 +2455,11 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 	bufferExecDispatch := isExecInvocation && shouldBufferExecDispatch(invocation.ToolName)
 	suppressStartedToolCall := shouldSuppressStartedToolCallAfterPartial(stream, trimmedToolName, invocation.CallID)
 	startedToolCall := buildStartedToolCall(invocation)
+	// Task 工具调用用父代理实际模型名覆盖 args 中的 model 别名（如 "fast"），
+	// 让 Cursor 客户端 Task 卡片显示真实模型名（如 gpt-5.3-codex-spark）而非别名。
+	if trimmedToolName == "Task" && startedToolCall != nil {
+		ensureTaskToolCallModel(startedToolCall, stream.ModelName)
+	}
 	startedEmitted := suppressStartedToolCall
 	delegatedTaskStarted := false
 	nativeTaskOpened := false
@@ -2578,6 +2583,14 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 		// in Stopped after the native watchdog fires.
 		if trimmedToolName == "Task" && delegatedTaskStarted {
 			logger.Infof("forwarder task local aggregate dispatch complete request_id=%s tool_call_id=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID))
+			// 发送首个 task tool_call_delta：Cursor 客户端在 delta 到达时创建
+			// 子代理 composer（subagentHandle），Task 卡片才从 loading/Stopped
+			// 变为运行中，并开始流式展示内嵌的 thinkingDelta 进度。
+			if err := service.broker.Publish(stream.RequestID, StreamEvent{
+				Message: buildTaskToolCallDeltaMessage(invocation.CallID, invocation.ModelCallID, buildThinkingDeltaInteraction(delegationStartupDeltaText(invocation.ArgsJSON), agentv1.ThinkingStyle_THINKING_STYLE_DEFAULT)),
+			}); err != nil {
+				logger.Errorf("forwarder task tool_call_delta initial publish failed request_id=%s tool_call_id=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID), err)
+			}
 			return nil
 		}
 		if trimmedToolName == "Task" && !delegatedTaskStarted && !nativeTaskOpened {

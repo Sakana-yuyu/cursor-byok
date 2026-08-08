@@ -21,6 +21,10 @@ import (
 const (
 	delegatedWorkerTimeout      = 30 * time.Minute
 	delegatedWorkerQueueTimeout = 90 * time.Second
+	// cursorBubbleFallbackWindow 是 cursor 执行模式因 Cursor 客户端无法创建
+	// 子代理 bubble 而降级到本地执行后，跳过 cursor 尝试的冷却窗口。窗口结束后
+	// 会再次尝试 cursor 模式，以便客户端升级/恢复后自动回到 Cursor 子会话执行。
+	cursorBubbleFallbackWindow = 15 * time.Minute
 )
 
 type streamDelegationResult struct {
@@ -71,8 +75,8 @@ type delegatedWorkerResult struct {
 }
 
 type delegatedAggregateResult struct {
-	AggregateID string                  `json:"aggregate_id"`
-	Status      string                  `json:"status"`
+	AggregateID string `json:"aggregate_id"`
+	Status      string `json:"status"`
 	// Error 是聚合级失败摘要：当至少一个 worker 失败时取首个失败 worker 的错误，
 	// 供 delegationResultRunDetail / TaskResult 失败分支向 Cursor UI 与模型透出真实原因。
 	Error     string                  `json:"error,omitempty"`
@@ -93,6 +97,10 @@ type multitaskDelegationCoordinator struct {
 	startMu    sync.Mutex
 	aggregates map[string]*delegatedAggregate
 	closed     bool
+	// cursorBubbleUnavailableUntil 记录 Cursor 客户端子代理 bubble 创建失败后
+	// 的冷却截止时间：期间 cursor 模式的 worker 直接走本地 adapter，避免每个
+	// worker 都空等 5 秒 bubble 超时后集体失败（Task 卡片全部 stopped/error）。
+	cursorBubbleUnavailableUntil time.Time
 }
 
 func newMultitaskDelegationCoordinator(service *Service, configProvider delegation.RuntimeConfigProvider) *multitaskDelegationCoordinator {
@@ -530,6 +538,25 @@ func setTaskToolCallIdentity(toolCall *agentv1.ToolCall, agentID string) {
 	args.AgentId = &agentID
 }
 
+// ensureTaskToolCallModel 用父代理的实际模型名覆盖 Task 工具调用 args 中的 model 字段。
+// args 中的 model 可能是别名（如 "fast"），用真实模型名（如 gpt-5.3-codex-spark）覆盖，
+// 让 Cursor 客户端 Task 卡片显示用户可读的真实模型名。
+func ensureTaskToolCallModel(toolCall *agentv1.ToolCall, model string) {
+	if toolCall == nil || toolCall.GetTaskToolCall() == nil {
+		return
+	}
+	args := toolCall.GetTaskToolCall().GetArgs()
+	if args == nil {
+		args = &agentv1.TaskArgs{}
+		toolCall.GetTaskToolCall().Args = args
+	}
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return
+	}
+	args.Model = &model
+}
+
 // clearTaskToolCallIdentity keeps locally aggregated Task cards from claiming
 // a Cursor-native child conversation that was never opened.
 func clearTaskToolCallIdentity(toolCall *agentv1.ToolCall) {
@@ -865,12 +892,77 @@ func (coordinator *multitaskDelegationCoordinator) executeWorker(ctx context.Con
 	mode := delegation.NormalizeExecutionMode(request.ExecutionMode)
 	switch mode {
 	case delegation.ExecutionModeCursor:
-		return coordinator.service.cursorDelegation.cursor.Execute(ctx, request)
+		if coordinator.cursorBubbleUnavailable() {
+			logger.Infof("forwarder delegated cursor skipped request_id=%s task_id=%s reason=bubble_fallback_active model_id=%s", strings.TrimSpace(request.ParentRequest), strings.TrimSpace(request.ID), strings.TrimSpace(request.ModelID))
+			return coordinator.service.localDelegation.Execute(ctx, request)
+		}
+		result := coordinator.service.cursorDelegation.cursor.Execute(ctx, request)
+		if delegationBubbleCreationTimeout(result) {
+			coordinator.markCursorBubbleUnavailable(request, result)
+			return coordinator.service.localDelegation.Execute(ctx, request)
+		}
+		return result
 	case delegation.ExecutionModeLocal, delegation.ExecutionModeAuto:
 		return coordinator.service.localDelegation.Execute(ctx, request)
 	default:
 		return delegation.TaskResult{Error: fmt.Errorf("unsupported delegation execution mode %q", request.ExecutionMode)}
 	}
+}
+
+// delegationBubbleCreationTimeout 判断 worker 是否因为 Cursor 客户端无法为
+// 派发的子代理 exec 创建 bubble 而失败（"Timeout waiting for bubble creation"）。
+// 该失败发生在派发阶段，worker 尚未开始任何工作，可安全降级到本地 adapter 重跑。
+func delegationBubbleCreationTimeout(result delegation.TaskResult) bool {
+	if result.Error == nil {
+		return false
+	}
+	return strings.Contains(result.Error.Error(), "Timeout waiting for bubble creation")
+}
+
+// cursorBubbleUnavailable 返回 cursor 模式是否处于 bubble 失败冷却期。
+func (coordinator *multitaskDelegationCoordinator) cursorBubbleUnavailable() bool {
+	if coordinator == nil {
+		return false
+	}
+	coordinator.mu.RLock()
+	defer coordinator.mu.RUnlock()
+	return !coordinator.cursorBubbleUnavailableUntil.IsZero() && time.Now().UTC().Before(coordinator.cursorBubbleUnavailableUntil)
+}
+
+// markCursorBubbleUnavailable 记录 Cursor 客户端 bubble 创建失败并进入冷却期，
+// 随后把当前 worker 降级到本地 adapter 执行。
+func (coordinator *multitaskDelegationCoordinator) markCursorBubbleUnavailable(request delegation.TaskRequest, result delegation.TaskResult) {
+	if coordinator == nil {
+		return
+	}
+	until := time.Now().UTC().Add(cursorBubbleFallbackWindow)
+	coordinator.mu.Lock()
+	coordinator.cursorBubbleUnavailableUntil = until
+	coordinator.mu.Unlock()
+	logger.Errorf("forwarder delegated cursor bubble failed request_id=%s task_id=%s err=%v fallback=local until=%s", strings.TrimSpace(request.ParentRequest), strings.TrimSpace(request.ID), result.Error, until.Format(time.RFC3339))
+	if coordinator.service != nil && coordinator.service.debug != nil {
+		coordinator.service.debug.LogRuntime(context.Background(), strings.TrimSpace(request.ParentRequest), strings.TrimSpace(request.ConversationID), "delegated_cursor_bubble_fallback", map[string]any{
+			"task_id":        strings.TrimSpace(request.ID),
+			"execution_mode": "cursor",
+			"fallback":       "local",
+			"until":          until.Format(time.RFC3339),
+			"error":          result.Error.Error(),
+		})
+	}
+}
+
+// delegationStartupDeltaText 生成委派启动时的首个 task tool_call_delta 文本，
+// 从 TaskArgs 的 description 提取任务标题，供子代理 composer 流式展示。
+func delegationStartupDeltaText(argsJSON []byte) string {
+	var taskArgs struct {
+		Description string `json:"description"`
+	}
+	_ = json.Unmarshal(argsJSON, &taskArgs)
+	title := strings.TrimSpace(taskArgs.Description)
+	if title == "" {
+		title = "委派任务"
+	}
+	return "任务已启动：" + title
 }
 
 func (coordinator *multitaskDelegationCoordinator) publishLocalWorkerProgress(request delegation.TaskRequest, text string) bool {
@@ -884,10 +976,26 @@ func (coordinator *multitaskDelegationCoordinator) publishLocalWorkerProgress(re
 	}
 	label := firstNonEmpty(strings.TrimSpace(request.Description), strings.TrimSpace(request.ModelName), strings.TrimSpace(request.ID), "worker")
 	message := fmt.Sprintf("【委派任务：%s】%s\n", label, text)
-	if err := coordinator.service.broker.Publish(requestID, StreamEvent{
-		Message: buildThinkingDeltaMessage(message, agentv1.ThinkingStyle_THINKING_STYLE_DEFAULT),
-	}); err != nil {
+	// 只通过 task_tool_call_delta（关联到 toolCallID）发布进度，不发布裸 thinkingDelta
+	// 到父级流（否则会混入父代理主对话流，客户端可能把父级流标识显示在子代理区域）。
+	toolCallID := strings.TrimSpace(request.ParentToolCall)
+	if toolCallID == "" {
 		return false
+	}
+	if err := coordinator.service.broker.Publish(requestID, StreamEvent{
+		Message: buildTaskToolCallDeltaMessage(toolCallID, "", buildThinkingDeltaInteraction(message, agentv1.ThinkingStyle_THINKING_STYLE_DEFAULT)),
+	}); err != nil {
+		logger.Infof("forwarder delegated worker progress delta publish failed request_id=%s tool_call_id=%s err=%v", requestID, toolCallID, err)
+	}
+	// 把可见进度挂到 stream 上，随下一次 checkpoint 的 run.detail 推送，
+	// 让 Task 卡片运行中持续显示实时进度（并打破 wire hash 去重）。
+	if stream, ok := coordinator.service.broker.Get(requestID); ok && stream != nil {
+		stream.mu.Lock()
+		if stream.DelegationRunProgress == nil {
+			stream.DelegationRunProgress = make(map[string]string)
+		}
+		stream.DelegationRunProgress[toolCallID] = text
+		stream.mu.Unlock()
 	}
 	return true
 }

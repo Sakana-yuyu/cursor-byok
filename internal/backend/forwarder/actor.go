@@ -707,20 +707,26 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 						completedDuration = 1
 					}
 				}
-				// An OpenAI Responses encrypted signature is replay metadata, not
-				// readable thinking. Never invent placeholder text for Cursor.
-				// Keep the signature for the next tool-call request and close the
-				// empty thinking block without publishing a fake delta.
-				shouldEmitSyntheticThinking = false
-				suppressThinkingCompleted = true
+				// OpenAI Responses 的加密签名是 replay 元数据，不是可读 thinking。
+				// 首次遇到时发布一条合成占位文本，让 Cursor 客户端有 thinking 指示
+				// （与上游 fork 体验对齐）；后续 encrypted-only 事件则抑制，避免重复噪音。
+				if !stream.ProviderSyntheticThinkingPublished {
+					stream.ProviderSyntheticThinkingPublished = true
+				} else {
+					shouldEmitSyntheticThinking = false
+					suppressThinkingCompleted = true
+				}
 			}
 			stream.UpdatedAt = time.Now().UTC()
 			stream.mu.Unlock()
 		}
 		if shouldEmitSyntheticThinking {
-			// Defensive guard: this path is intentionally unreachable after the
-			// encrypted-only handling above.
-			return nil
+			// encrypted-only 场景：首次发布合成占位文本，让用户看到 thinking 指示。
+			if err := service.broker.Publish(requestID, StreamEvent{
+				Message: buildThinkingDeltaMessage("模型正在加密推理中，请稍候……", event.ThinkingStyle),
+			}); err != nil {
+				return err
+			}
 		}
 		if suppressThinkingCompleted {
 			stream.mu.Lock()

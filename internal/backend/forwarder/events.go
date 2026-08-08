@@ -58,6 +58,56 @@ func buildThinkingDeltaMessage(text string, style agentv1.ThinkingStyle) *agentv
 	}
 }
 
+// buildTaskToolCallDeltaMessage 构造 Task 工具调用增量消息。Cursor 客户端在
+// task_tool_call_delta 到达时创建子代理 composer（subagentHandle），并把内嵌的
+// interaction_update 转发给该 composer 流式展示；没有 delta 时本地委派的 Task
+// 卡片没有子代理 composer，状态行会把 loading/running 渲染为 "Stopped"。
+func buildTaskToolCallDeltaMessage(callID string, modelCallID string, interaction *agentv1.InteractionUpdate) *agentv1.AgentServerMessage {
+	return &agentv1.AgentServerMessage{
+		Message: &agentv1.AgentServerMessage_InteractionUpdate{
+			InteractionUpdate: &agentv1.InteractionUpdate{
+				Message: &agentv1.InteractionUpdate_ToolCallDelta{
+					ToolCallDelta: &agentv1.ToolCallDeltaUpdate{
+						CallId:      callID,
+						ModelCallId: modelCallID,
+						ToolCallDelta: &agentv1.ToolCallDelta{
+							Delta: &agentv1.ToolCallDelta_TaskToolCallDelta{
+								TaskToolCallDelta: &agentv1.TaskToolCallDelta{
+									InteractionUpdate: interaction,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// buildThinkingDeltaInteraction 构造 thinkingDelta 形式的 interaction_update，
+// 供 Task 工具调用增量（tool_call_delta）内嵌，驱动子代理 composer 流式显示进度。
+func buildThinkingDeltaInteraction(text string, style agentv1.ThinkingStyle) *agentv1.InteractionUpdate {
+	styleCopy := style
+	return &agentv1.InteractionUpdate{
+		Message: &agentv1.InteractionUpdate_ThinkingDelta{
+			ThinkingDelta: &agentv1.ThinkingDeltaUpdate{
+				Text:          text,
+				ThinkingStyle: &styleCopy,
+			},
+		},
+	}
+}
+
+// buildTextDeltaInteraction 构造 textDelta 形式的 interaction_update，
+// 供 Task 工具调用增量（tool_call_delta）内嵌，驱动子代理 composer 流式显示文本输出。
+func buildTextDeltaInteraction(text string) *agentv1.InteractionUpdate {
+	return &agentv1.InteractionUpdate{
+		Message: &agentv1.InteractionUpdate_TextDelta{
+			TextDelta: &agentv1.TextDeltaUpdate{Text: text},
+		},
+	}
+}
+
 // buildThinkingCompletedMessage 构造思考阶段结束消息。
 func buildThinkingCompletedMessage(durationMS int32) *agentv1.AgentServerMessage {
 	return &agentv1.AgentServerMessage{

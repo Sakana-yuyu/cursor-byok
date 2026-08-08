@@ -178,7 +178,12 @@ type ActiveStream struct {
 	// subagent_runs_by_parent_tool_call_id 同步给 Cursor 客户端，客户端 UI
 	// 据此把 Task 卡片渲染为 succeeded/error/aborted；运行中的委派则由
 	// attachDelegationRunStates 从 PendingExecs 推导为 RUNNING。
-	DelegationRunTerminals                      map[string]*agentv1.SubagentRunState
+	DelegationRunTerminals map[string]*agentv1.SubagentRunState
+	// DelegationRunProgress 记录本地委派 worker 的最新可见进度（key=toolCallID）。
+	// attachDelegationRunStates 会把它写入 RUNNING run 的 detail 随 checkpoint 推送，
+	// 让 Cursor Task 卡片在运行期间持续显示实时进度；detail 变化会改变 wire hash，
+	// 避免周期性 checkpoint 被 duplicate 去重跳过（否则卡片停留在 stopped）。
+	DelegationRunProgress                       map[string]string
 	TimerTokens                                 map[string]uint64
 	StreamTimers                                map[string]*time.Timer
 	ProviderAccumulatedText                     []byte

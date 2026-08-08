@@ -3,8 +3,10 @@ package forwarder
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"cursor/gen/agentv1"
 	runtimecore "cursor/internal/backend/agent/core"
@@ -36,6 +38,40 @@ func TestHasDelegationAggregateForToolCallOnlyMatchesSameCall(t *testing.T) {
 	}
 	if !hasDelegationAggregateForToolCall(stream, "tc_automatic") {
 		t.Fatal("the same Task call must not start a duplicate aggregate")
+	}
+}
+
+// TestDelegationBubbleCreationTimeout 锁定 cursor 执行模式兜底判定：客户端
+// 返回 "Timeout waiting for bubble creation" 时视为可降级失败（发生在派发阶段，
+// worker 尚未工作），其余错误不触发降级。
+func TestDelegationBubbleCreationTimeout(t *testing.T) {
+	if !delegationBubbleCreationTimeout(delegation.TaskResult{Error: errors.New("Timeout waiting for bubble creation: composerId=abc, toolCallId=child-tool-1")}) {
+		t.Fatal("bubble creation timeout must be recognized as fallback failure")
+	}
+	if delegationBubbleCreationTimeout(delegation.TaskResult{Error: errors.New("delegated worker failed: boom")}) {
+		t.Fatal("unrelated worker error must not trigger fallback")
+	}
+	if delegationBubbleCreationTimeout(delegation.TaskResult{}) {
+		t.Fatal("nil error must not trigger fallback")
+	}
+}
+
+// TestCursorBubbleUnavailableLatch 锁定冷却门闩行为：首次 bubble 失败后进入
+// 冷却期，冷却期内不再尝试 cursor 派发，避免每个 worker 空等 5 秒后集体失败。
+func TestCursorBubbleUnavailableLatch(t *testing.T) {
+	coordinator := &multitaskDelegationCoordinator{}
+	if coordinator.cursorBubbleUnavailable() {
+		t.Fatal("fresh coordinator must not be in fallback window")
+	}
+	coordinator.markCursorBubbleUnavailable(delegation.TaskRequest{ParentRequest: "request-1", ID: "worker-1"}, delegation.TaskResult{Error: errors.New("Timeout waiting for bubble creation: composerId=abc, toolCallId=child-tool-1")})
+	if !coordinator.cursorBubbleUnavailable() {
+		t.Fatal("bubble failure must arm the fallback window")
+	}
+	coordinator.mu.Lock()
+	coordinator.cursorBubbleUnavailableUntil = time.Now().UTC().Add(-time.Minute)
+	coordinator.mu.Unlock()
+	if coordinator.cursorBubbleUnavailable() {
+		t.Fatal("expired fallback window must allow cursor attempts again")
 	}
 }
 
@@ -102,5 +138,43 @@ func TestCollectAggregateSurfacesFailedWorkerError(t *testing.T) {
 	completedPayload, _ := json.Marshal(completed)
 	if detail := delegationResultRunDetail(string(completedPayload)); detail != "" {
 		t.Fatalf("completed detail = %q, want empty", detail)
+	}
+}
+
+func TestBuildTaskToolCallDeltaMessageStructure(t *testing.T) {
+	msg := buildTaskToolCallDeltaMessage("tc_call_1", "model_call_1", buildThinkingDeltaInteraction("进度", agentv1.ThinkingStyle_THINKING_STYLE_DEFAULT))
+	iu := msg.GetInteractionUpdate()
+	if iu == nil {
+		t.Fatalf("missing interaction_update")
+	}
+	delta := iu.GetToolCallDelta()
+	if delta == nil {
+		t.Fatalf("missing tool_call_delta")
+	}
+	if got := delta.GetCallId(); got != "tc_call_1" {
+		t.Fatalf("call_id = %q, want tc_call_1", got)
+	}
+	if got := delta.GetModelCallId(); got != "model_call_1" {
+		t.Fatalf("model_call_id = %q, want model_call_1", got)
+	}
+	taskDelta := delta.GetToolCallDelta().GetTaskToolCallDelta()
+	if taskDelta == nil {
+		t.Fatalf("missing task_tool_call_delta")
+	}
+	inner := taskDelta.GetInteractionUpdate()
+	if inner == nil || inner.GetThinkingDelta() == nil {
+		t.Fatalf("missing nested thinking_delta interaction_update")
+	}
+	if got := inner.GetThinkingDelta().GetText(); got != "进度" {
+		t.Fatalf("nested thinking text = %q, want 进度", got)
+	}
+}
+
+func TestDelegationStartupDeltaText(t *testing.T) {
+	if got := delegationStartupDeltaText([]byte(`{"description":"并行审查","prompt":"x"}`)); got != "任务已启动：并行审查" {
+		t.Fatalf("startup text = %q", got)
+	}
+	if got := delegationStartupDeltaText([]byte(`{"prompt":"x"}`)); got != "任务已启动：委派任务" {
+		t.Fatalf("fallback startup text = %q", got)
 	}
 }

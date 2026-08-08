@@ -465,7 +465,24 @@ func buildContextProjectionSummaryPlanWithRecentTail(conversation *ConversationF
 	}
 	eligibleEnd := len(turns) - recentTailTurns
 	if eligibleStart >= eligibleEnd {
-		return nil, nil
+		// 自适应降级：当对话轮次太少（如子代理刚启动）导致默认 recentTailTurns
+		// 没有可压缩的轮次时，逐步减少保留的尾部轮次，直到至少有 1 轮可压缩。
+		// 最坏情况下只保留最后 1 轮（recentTailTurns=1），确保滑动窗口始终能工作，
+		// 而不是直接返回 nil 导致 compaction.go 报 context_overflow 错误。
+		minTail := 1
+		if recentTailTurns > minTail {
+			for adjustedTail := recentTailTurns - 1; adjustedTail >= minTail; adjustedTail-- {
+				adjustedEnd := len(turns) - adjustedTail
+				if eligibleStart < adjustedEnd {
+					recentTailTurns = adjustedTail
+					eligibleEnd = adjustedEnd
+					break
+				}
+			}
+		}
+		if eligibleStart >= eligibleEnd {
+			return nil, nil
+		}
 	}
 
 	reclaimTokens := contextTokens - hardBudget

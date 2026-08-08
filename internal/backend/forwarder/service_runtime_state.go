@@ -39,12 +39,16 @@ func attachDelegationRunStates(stream *ActiveStream, state *agentv1.Conversation
 		}
 		run := &agentv1.SubagentRunState{
 			ParentToolCallId: toolCallID,
-			Environment:      agentv1.SubagentExecutionEnvironment_SUBAGENT_EXECUTION_ENVIRONMENT_LOCAL,
-			Status:           agentv1.SubagentRunStatus_SUBAGENT_RUN_STATUS_RUNNING,
-			Title:            stringPtr(title),
+			// SubagentId 必须与 tool_call_started 的 TaskArgs.agent_id 一致
+			// （delegationSubagentID = "local-delegation:" + toolCallID），
+			// Cursor 客户端按 agent_id 关联 Task 卡片；缺失时卡片停留在 stopped。
+			SubagentId:  stringPtr(delegationSubagentID(toolCallID)),
+			Environment: agentv1.SubagentExecutionEnvironment_SUBAGENT_EXECUTION_ENVIRONMENT_LOCAL,
+			Status:      agentv1.SubagentRunStatus_SUBAGENT_RUN_STATUS_RUNNING,
+			Title:       stringPtr(title),
 		}
-		if execKind == "subagent" {
-			run.SubagentId = stringPtr(delegationSubagentID(toolCallID))
+		if progress := strings.TrimSpace(stream.DelegationRunProgress[toolCallID]); progress != "" {
+			run.Detail = stringPtr(progress)
 		}
 		runs[toolCallID] = run
 	}
@@ -75,9 +79,7 @@ func (service *Service) recordDelegationRunTerminal(stream *ActiveStream, pendin
 		CompletedTimestampMs: &now,
 		CompletionReason:     &completionReason,
 	}
-	if strings.TrimSpace(pending.ExecKind) == "subagent" {
-		run.SubagentId = stringPtr(delegationSubagentID(pending.ToolCallID))
-	}
+	run.SubagentId = stringPtr(delegationSubagentID(pending.ToolCallID))
 	if detail := strings.TrimSpace(detail); detail != "" {
 		run.Detail = stringPtr(detail)
 	}
@@ -86,6 +88,9 @@ func (service *Service) recordDelegationRunTerminal(stream *ActiveStream, pendin
 		stream.DelegationRunTerminals = make(map[string]*agentv1.SubagentRunState)
 	}
 	stream.DelegationRunTerminals[strings.TrimSpace(pending.ToolCallID)] = run
+	if stream.DelegationRunProgress != nil {
+		delete(stream.DelegationRunProgress, strings.TrimSpace(pending.ToolCallID))
+	}
 	stream.mu.Unlock()
 	logger.Infof("forwarder delegation run terminal recorded request_id=%s conversation_id=%s exec_id=%s tool_call_id=%s status=%s completion_reason=%s detail=%q",
 		strings.TrimSpace(stream.RequestID), strings.TrimSpace(stream.ConversationID), strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID), status.String(), completionReason.String(), strings.TrimSpace(detail))

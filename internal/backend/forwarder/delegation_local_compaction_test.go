@@ -35,6 +35,11 @@ type fakeDelegatedProvider struct {
 }
 
 func (f *fakeDelegatedProvider) StartStream(_ context.Context, req ProviderRequest, sink func(modeladapter.ModelEvent) error) error {
+	// 摘要请求不消耗 errorsBeforeSuccess 计数也不记录到 requests，
+	// 避免 LLM 摘要调用干扰溢出重试测试的 callCount 和 requests 断言。
+	if strings.Contains(req.CompileSummary, "compaction summary") {
+		return errors.New("openai responses stream error code=context_too_large: Your input exceeds the context window of this model")
+	}
 	f.callCount++
 	f.requests = append(f.requests, req)
 	if f.callCount <= f.errorsBeforeSuccess {

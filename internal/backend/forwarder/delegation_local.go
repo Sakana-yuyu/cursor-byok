@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	defaultLocalDelegationMaxProviderPasses = 32
+	defaultLocalDelegationMaxProviderPasses = 50
 	localDelegationFirstEventTimeout        = 90 * time.Second
 	delegatedOverflowRetryBudgetFactor      = 0.8
 	localDelegationVisibleUpdateMinBytes    = 320
@@ -36,6 +36,7 @@ type localDelegatedAgentAdapter struct {
 	provider             ProviderGateway
 	recorder             modeladapter.LLMArtifactObserver
 	debug                *debugRecorder
+	broker               *StreamBroker
 	resolveBudget        func(string, string, *ConversationFile, CompiledConversation) (int, map[string]any)
 	toolExecutor         LocalDelegatedToolExecutor
 	maxPasses            int
@@ -54,6 +55,7 @@ func newLocalDelegatedAgentAdapter(service *Service) *localDelegatedAgentAdapter
 		provider:             service.provider,
 		recorder:             service.recorder,
 		debug:                service.debug,
+		broker:               service.broker,
 		resolveBudget:        service.resolveProviderOutputBudget,
 		toolExecutor:         service.executeLocalDelegatedTool,
 		maxPasses:            defaultLocalDelegationMaxProviderPasses,
@@ -111,6 +113,9 @@ func (adapter *localDelegatedAgentAdapter) Execute(ctx context.Context, request 
 	}
 	overflowRetries := 0
 	previousSentInputTokens := int64(0)
+	// lastOutputText 跟踪最后一个成功 pass 的文本输出，pass 超限时作为部分结果返回，
+	// 避免丢弃已完成的调查成果导致整个 Task 被标记为 ERROR（客户端显示 "Stopped with error"）。
+	lastOutputText := ""
 	for providerPass := 1; providerPass <= maxPasses; providerPass++ {
 		if err := ctx.Err(); err != nil {
 			delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusCanceled, providerPass, nil, nil, "delegated worker canceled", "")
@@ -121,6 +126,7 @@ func (adapter *localDelegatedAgentAdapter) Execute(ctx context.Context, request 
 		// 主动阈值压缩：溢出重试会降低比例，确保不会用同一窗口重复发送。
 		windowRatio := delegatedOverflowWindowRatio(overflowRetries)
 		passView, compactErr := compactDelegatedMessagesBeforePass(
+			ctx,
 			adapter,
 			request,
 			historyMessages,
@@ -155,6 +161,7 @@ func (adapter *localDelegatedAgentAdapter) Execute(ctx context.Context, request 
 			delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusCompleted, providerPass, nil, nil, "delegated worker completed", "")
 			return delegation.TaskResult{Output: strings.TrimSpace(pass.text), ToolCallCount: toolCallCount, Metadata: identity.metadata(providerPass)}
 		}
+		lastOutputText = strings.TrimSpace(pass.text)
 
 		normalizeDelegatedToolInvocationIDs(pass.invocations)
 		historyMessages = append(historyMessages, buildDelegatedAssistantToolMessage(pass.text, pass.invocations))
@@ -172,9 +179,14 @@ func (adapter *localDelegatedAgentAdapter) Execute(ctx context.Context, request 
 			})
 		}
 	}
-	delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusFailed, maxPasses, nil, nil, "delegated worker exceeded provider pass limit", fmt.Sprintf("provider pass limit: %d", maxPasses))
+	// pass 超限：保留部分结果优雅返回，而非直接 ERROR。
+	// 上游 Cursor proto 无子代理 turn 上限也无 partial result 概念，这里作为 byok 扩展：
+	// 返回不带 Error 的 TaskResult（scheduler 标记 TaskCompleted），让父代理拿到已完成的
+	// 调查成果，Task 卡片显示成功而非 "Stopped with error"。detail 标注已达上限。
+	delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusCompleted, maxPasses, nil, nil, "delegated worker reached pass limit, returning partial results", fmt.Sprintf("provider pass limit: %d", maxPasses))
+	logger.Infof("forwarder local delegated worker reached pass limit task_id=%s max_passes=%d tool_calls=%d partial_output=%t", strings.TrimSpace(request.ID), maxPasses, toolCallCount, lastOutputText != "")
 	return delegation.TaskResult{
-		Error:         fmt.Errorf("local delegated agent exceeded %d provider passes", maxPasses),
+		Output:        lastOutputText,
 		ToolCallCount: toolCallCount,
 		Metadata:      identity.metadata(maxPasses),
 	}
@@ -351,6 +363,12 @@ func (adapter *localDelegatedAgentAdapter) runProviderPass(ctx context.Context, 
 		}
 	}
 	invocations := make([]runtimecore.ToolInvocation, 0, 4)
+	// reasoning 累加器：与父代理 actor.go 的 ProviderAccumulatedReasoning 等字段对应。
+	// 子代理没有 ActiveStream，用局部变量累积 thinking 文本与签名/载体，在
+	// ToolLikeCompleted 时复制到 invocation 供多轮 replay（buildDelegatedAssistantToolMessage 消费）。
+	var reasoningBuilder strings.Builder
+	var reasoningSignature, reasoningSignatureSource, reasoningItemID, reasoningStatus string
+	var reasoningSummary json.RawMessage
 	usage := turnUsageSnapshot{
 		Role:          "worker",
 		ParentModel:   strings.TrimSpace(request.ModelName),
@@ -378,16 +396,69 @@ func (adapter *localDelegatedAgentAdapter) runProviderPass(ctx context.Context, 
 		}
 		switch event.Kind {
 		case modeladapter.ModelEventKindTextDelta:
+			// 与父代理 actor.go:654-660 对齐：累积文本并转发到子代理 composer。
 			delegation.MarkWorkerProgress(ctx)
 			textBuilder.WriteString(event.Text)
 			visibleTextBuilder.WriteString(event.Text)
+			// 只通过 task_tool_call_delta（关联到 toolCallID）转发到子代理 composer，
+			// 不发布裸 textDelta 到父级流（否则会混入父代理主对话流，且客户端可能
+			// 把父级流的 request_id 显示在子代理卡片区域）。
+			if adapter.broker != nil {
+				requestID := strings.TrimSpace(request.ParentRequest)
+				toolCallID := strings.TrimSpace(request.ParentToolCall)
+				if requestID != "" && toolCallID != "" {
+					_ = adapter.broker.Publish(requestID, StreamEvent{
+						Message: buildTaskToolCallDeltaMessage(toolCallID, modelCallID, buildTextDeltaInteraction(event.Text)),
+					})
+				}
+			}
 			flushVisibleText(false)
+		case modeladapter.ModelEventKindThinkingDelta:
+			// 与父代理 actor.go:661-679 对齐：累积 reasoning 文本并转发到子代理 composer。
+			delegation.MarkWorkerProgress(ctx)
+			reasoningBuilder.WriteString(event.Text)
+			// 只通过 task_tool_call_delta（关联到 toolCallID）转发到子代理 composer，
+			// 不发布裸 thinkingDelta 到父级流（避免混入父代理主对话流）。
+			if adapter.broker != nil {
+				requestID := strings.TrimSpace(request.ParentRequest)
+				toolCallID := strings.TrimSpace(request.ParentToolCall)
+				if requestID != "" && toolCallID != "" {
+					_ = adapter.broker.Publish(requestID, StreamEvent{
+						Message: buildTaskToolCallDeltaMessage(toolCallID, modelCallID, buildThinkingDeltaInteraction(event.Text, event.ThinkingStyle)),
+					})
+				}
+			}
+		case modeladapter.ModelEventKindThinkingCompleted:
+			// 与父代理 actor.go:680-716 对齐：捕获签名/载体供 replay。
+			if strings.TrimSpace(event.ThinkingSignature) != "" {
+				reasoningSignature = strings.TrimSpace(event.ThinkingSignature)
+				reasoningSignatureSource = strings.TrimSpace(event.ThinkingSignatureSource)
+				reasoningItemID = strings.TrimSpace(event.ProviderItemID)
+				reasoningStatus = strings.TrimSpace(event.ProviderStatus)
+				reasoningSummary = append(json.RawMessage(nil), event.ProviderSummary...)
+			}
 		case modeladapter.ModelEventKindToolLikeCompleted:
 			delegation.MarkWorkerProgress(ctx)
 			if event.ToolInvocation != nil {
 				invocation := *event.ToolInvocation
 				invocation.ArgsJSON = append([]byte(nil), event.ToolInvocation.ArgsJSON...)
+				// 与父代理 actor.go:806-811 对齐：把累积的 reasoning 挂到 invocation 上，
+				// 供 buildDelegatedAssistantToolMessage 构建 replay 消息时携带。
+				invocation.ReasoningContent = reasoningBuilder.String()
+				invocation.ReasoningSignature = reasoningSignature
+				invocation.ReasoningSignatureSource = reasoningSignatureSource
+				invocation.ReasoningProviderItemID = reasoningItemID
+				invocation.ReasoningProviderStatus = reasoningStatus
+				invocation.ReasoningProviderSummary = append(json.RawMessage(nil), reasoningSummary...)
+				invocation.ModelCallID = modelCallID
 				invocations = append(invocations, invocation)
+				// 工具调用边界清空 reasoning 累加器（与父代理在 tool 调用时重置一致）。
+				reasoningBuilder.Reset()
+				reasoningSignature = ""
+				reasoningSignatureSource = ""
+				reasoningItemID = ""
+				reasoningStatus = ""
+				reasoningSummary = nil
 			}
 		case modeladapter.ModelEventKindProviderError:
 			if event.Err != nil {
@@ -396,6 +467,13 @@ func (adapter *localDelegatedAgentAdapter) runProviderPass(ctx context.Context, 
 			return fmt.Errorf("delegated provider error")
 		case modeladapter.ModelEventKindTurnFinished:
 			flushVisibleText(true)
+			// pass 结束时清空 reasoning 累加器（与父代理 actor.go:882 重置一致）。
+			reasoningBuilder.Reset()
+			reasoningSignature = ""
+			reasoningSignatureSource = ""
+			reasoningItemID = ""
+			reasoningStatus = ""
+			reasoningSummary = nil
 			usage.Provider = event.Provider
 			usage.Model = event.Model
 			usage.ProviderModel = event.Model
@@ -1153,7 +1231,7 @@ func delegatedOverflowWindowRatio(retry int) float64 {
 
 // compactDelegatedMessagesBeforePass returns a structural window for this pass.
 // Callers must abort rather than send a malformed tool/reasoning chain.
-func compactDelegatedMessagesBeforePass(adapter *localDelegatedAgentAdapter, request delegation.TaskRequest, historyMessages []modeladapter.Message, tools []json.RawMessage, providerPass int, windowRatio float64, previousSentInputTokens int64) (delegatedProviderPassView, error) {
+func compactDelegatedMessagesBeforePass(ctx context.Context, adapter *localDelegatedAgentAdapter, request delegation.TaskRequest, historyMessages []modeladapter.Message, tools []json.RawMessage, providerPass int, windowRatio float64, previousSentInputTokens int64) (delegatedProviderPassView, error) {
 	view := delegatedProviderPassView{
 		HistoryMessages:         cloneDelegatedMessages(historyMessages),
 		PreviousSentInputTokens: previousSentInputTokens,
@@ -1190,10 +1268,39 @@ func compactDelegatedMessagesBeforePass(adapter *localDelegatedAgentAdapter, req
 		return view, nil
 	}
 	stats := &delegatedCompactionStats{}
-	out, changed, err := buildDelegatedMessageWindow(historyMessages, budget, stats)
-	if err != nil {
-		return delegatedProviderPassView{}, fmt.Errorf("build delegated context window: %w", err)
+	var changed bool
+	// 非溢出重试时先尝试 LLM 摘要压缩（保留上下文不丢失）；
+	// 溢出重试时（previousSentInputTokens > 0）provider 已返回 context_too_large，
+	// LLM 摘要同样会超限，直接走结构化裁剪。
+	if previousSentInputTokens == 0 {
+		out, summaryChanged, summaryErr := compactDelegatedMessagesWithSummary(ctx, adapter, request, historyMessages, budget, 0)
+		if summaryErr == nil && (summaryChanged || estimateModelMessagesTokens(out) <= budget) {
+			changed = summaryChanged
+			stats.BeforeTokens = estimateModelMessagesTokens(historyMessages)
+			stats.AfterTokens = estimateModelMessagesTokens(out)
+			view.Messages = out
+			view.Stats = *stats
+			view.BudgetTokens = budget
+			view.InputTokens = estimateCompiledPromptTokens(CompiledConversation{Messages: out, Tools: tools})
+			if previousSentInputTokens > 0 && view.InputTokens >= previousSentInputTokens {
+				return delegatedProviderPassView{}, fmt.Errorf("delegated context overflow cannot shrink the remaining structural window (previous=%d next=%d)", previousSentInputTokens, view.InputTokens)
+			}
+			if changed {
+				logger.Infof("forwarder delegated context compacted (summary) task_id=%s provider_pass=%d ratio=%.3f budget=%d msgs=%d->%d tokens=%d->%d",
+					strings.TrimSpace(request.ID), providerPass, windowRatio, budget, len(historyMessages), len(out), stats.BeforeTokens, stats.AfterTokens)
+			}
+			return view, nil
+		}
+		if summaryErr != nil {
+			logger.Infof("forwarder delegated compaction summary failed task_id=%s err=%v, falling back to structural window", strings.TrimSpace(request.ID), summaryErr)
+		}
 	}
+	// LLM 摘要失败或溢出重试时，降级到结构化裁剪
+	out, structChanged, structErr := buildDelegatedMessageWindow(historyMessages, budget, stats)
+	if structErr != nil {
+		return delegatedProviderPassView{}, fmt.Errorf("build delegated context window: %w", structErr)
+	}
+	changed = structChanged
 	view.Messages = out
 	view.Stats = *stats
 	view.BudgetTokens = budget

@@ -206,13 +206,33 @@ func (service *Service) buildAutoCompactionPlan(stream *ActiveStream, conversati
 		return nil, err
 	}
 	if plan == nil && preflightExceeded {
-		return nil, compactionTerminalError{
-			code: compactionOverflowTerminalCode,
-			message: fmt.Sprintf(
-				"compiled prompt exceeds context budget before provider request (estimated=%d budget=%d)",
-				estimatedCompiledTokens,
-				budgetTokens,
-			),
+		// 滑动窗口压缩返回 nil（可能因轮次不足），但 prompt 确实超限。
+		// 用 force 模式重试：强制压缩，忽略 contextTokens <= hardBudget 的短路判断，
+		// 并让 buildContextProjectionSummaryPlanWithRecentTail 自适应减少尾部保留轮次。
+		// 这样即使子代理刚启动轮次很少，也能压缩出空间而非直接报错。
+		plan, err = buildContextProjectionSummaryPlanWithRecentTail(
+			conversation,
+			contextProjectionModelKey(stream),
+			existing,
+			contextTokens,
+			contextWindowSize,
+			reserveTokens,
+			contextProjectionRecentTailTurns,
+			true,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if plan == nil {
+			// force 重试仍返回 nil（轮次太少连 1 轮都无法压缩），才报错。
+			return nil, compactionTerminalError{
+				code: compactionOverflowTerminalCode,
+				message: fmt.Sprintf(
+					"compiled prompt exceeds context budget before provider request (estimated=%d budget=%d)",
+					estimatedCompiledTokens,
+					budgetTokens,
+				),
+			}
 		}
 	}
 	return plan, nil
