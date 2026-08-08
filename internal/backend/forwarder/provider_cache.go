@@ -203,6 +203,7 @@ type streamRecorder struct {
 	hasProviderError   bool
 	finishReason       string
 	hadAssistantOutput bool
+	hadToolCall        bool
 	maxInputTokens     int64
 	maxOutputTokens    int64
 }
@@ -222,7 +223,10 @@ func (recorder *streamRecorder) record(event modeladapter.ModelEvent) {
 		modeladapter.ModelEventKindToolCallDelta,
 		modeladapter.ModelEventKindToolLikeCompleted:
 		// 模型发起了工具调用，视为有效输出（工具调用结果回合也可能没有 TextDelta）。
+		// 但含工具调用的回合绝不允许写入本地响应缓存：命中回放会再次派发同一工具，
+		// 造成 shell/写文件等副作用重复执行。
 		recorder.hadAssistantOutput = true
+		recorder.hadToolCall = true
 	}
 	if event.ToolInvocation != nil {
 		recorder.hadAssistantOutput = true
@@ -246,6 +250,7 @@ func (recorder *streamRecorder) record(event modeladapter.ModelEvent) {
 func (recorder *streamRecorder) completedCleanly() bool {
 	return recorder.hasTurnFinished &&
 		!recorder.hasProviderError &&
+		!recorder.hadToolCall &&
 		!isTruncationFinishReason(recorder.finishReason) &&
 		recorder.hadAssistantOutput
 }
@@ -272,14 +277,14 @@ type responseCacheEntry struct {
 
 // responseCacheStore 是带 TTL 与 LRU 淘汰上限的内存响应缓存，可持久化到磁盘。
 type responseCacheStore struct {
-	mu         sync.Mutex
-	path       string // 磁盘持久化路径；空表示不持久化
+	mu          sync.Mutex
+	path        string               // 磁盘持久化路径；空表示不持久化
 	ttlProvider func() time.Duration // 当前 TTL（热加载），用于磁盘恢复时续期
-	loaded     bool
-	dirty      bool
-	saveTimer  *time.Timer
-	entries    map[string]*responseCacheEntry
-	order      []string // LRU 顺序：头部最久未使用，尾部最近使用
+	loaded      bool
+	dirty       bool
+	saveTimer   *time.Timer
+	entries     map[string]*responseCacheEntry
+	order       []string // LRU 顺序：头部最久未使用，尾部最近使用
 }
 
 func newResponseCacheStore(path string, ttlProvider func() time.Duration) *responseCacheStore {
@@ -437,13 +442,13 @@ func (store *responseCacheStore) flushToDisk() {
 // 若不剔除，只要历史里出现过 thinking 或工具调用，缓存 key 每次都不同，命中率趋近于 0。
 // 归一化只影响 key 计算，缓存的回放内容仍是完整的原始事件序列（含正确 signature）。
 type providerCacheKeyShape struct {
-	ModelID            string                  `json:"model_id"`
-	Mode               int32                   `json:"mode"`
-	ThinkingEffort     string                  `json:"thinking_effort"`
+	ModelID            string                   `json:"model_id"`
+	Mode               int32                    `json:"mode"`
+	ThinkingEffort     string                   `json:"thinking_effort"`
 	Messages           []normalizedCacheMessage `json:"messages"`
-	StableMessageCount int                     `json:"stable_message_count"`
-	Tools              []json.RawMessage       `json:"tools"`
-	MaxTokens          int                     `json:"max_tokens"`
+	StableMessageCount int                      `json:"stable_message_count"`
+	Tools              []json.RawMessage        `json:"tools"`
+	MaxTokens          int                      `json:"max_tokens"`
 	// RequestKnobs 包含动态估算字段（compiled_prompt_tokens_estimate 等），导致每次请求 key 不同
 	// CompileSummary 每次 compile 可能变化
 	// 移除这两个字段以提高缓存命中率
@@ -455,19 +460,19 @@ type providerCacheKeyShape struct {
 // 以及工具调用的语义部分（Function.Name/Arguments、ToolCallID 关联、tool 名称）。
 // 刻意省略 provider 临时背书类字段（见 providerCacheKeyShape 注释）。
 type normalizedCacheMessage struct {
-	Role             string                         `json:"role"`
-	Content          string                         `json:"content"`
-	ContentParts     []modeladapter.ContentPart     `json:"content_parts,omitempty"`
-	ReasoningContent string                         `json:"reasoning_content,omitempty"`
-	ToolCalls        []normalizedCacheToolCall      `json:"tool_calls,omitempty"`
-	ToolCallID       string                         `json:"tool_call_id,omitempty"`
-	Name             string                         `json:"name,omitempty"`
+	Role             string                     `json:"role"`
+	Content          string                     `json:"content"`
+	ContentParts     []modeladapter.ContentPart `json:"content_parts,omitempty"`
+	ReasoningContent string                     `json:"reasoning_content,omitempty"`
+	ToolCalls        []normalizedCacheToolCall  `json:"tool_calls,omitempty"`
+	ToolCallID       string                     `json:"tool_call_id,omitempty"`
+	Name             string                     `json:"name,omitempty"`
 }
 
 // normalizedCacheToolCall 保留工具调用的语义字段，剔除 provider 临时 ID/状态。
 type normalizedCacheToolCall struct {
-	Index    int                             `json:"index,omitempty"`
-	Type     string                          `json:"type"`
+	Index    int                                `json:"index,omitempty"`
+	Type     string                             `json:"type"`
 	Function modeladapter.ToolCallFunctionShape `json:"function"`
 }
 
