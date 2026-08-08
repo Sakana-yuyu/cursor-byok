@@ -916,10 +916,18 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 		return nil
 	}
 	if payload.Err != nil {
+		// 已实时推送给客户端的部分输出（文本/推理）在错误收口前必须先落盘，
+		// 避免 history 缺失客户端已展示的内容（失败后可回溯、可续接）。
+		flushPartialOutput := func() error {
+			return service.flushAssistantText(stream, conversationID, turnSeq, requestID, accumulatedText, accumulatedReasoning, accumulatedReasoningSignature, accumulatedReasoningSignatureSource, accumulatedReasoningItemID, accumulatedReasoningStatus, accumulatedReasoningSummary, false)
+		}
 		// 优先处理「上下文超限」：尝试强制压缩上下文并重试，而不是直接判失败。
 		// 这能挽救因 contextWindowTokens 配置偏大（或模型真实窗口小于配置）导致的 context_length_exceeded。
 		if isContextLengthExceededError(payload.Err) {
 			if recovered, err := service.recoverFromContextOverflow(stream, conversationID, requestID, accumulatedText, accumulatedReasoning); err != nil {
+				if flushErr := flushPartialOutput(); flushErr != nil {
+					return service.failStreamIfNonTerminal(stream, "unknown", flushErr)
+				}
 				return service.failStreamIfNonTerminal(stream, "unknown", err)
 			} else if recovered {
 				return nil
@@ -930,6 +938,9 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 		//（max_tokens 400 在首个 chunk 前返回，accumulatedText 必为空）。
 		if accumulatedText == "" && isMaxTokensExceededError(payload.Err) {
 			if recovered, err := service.recoverFromMaxTokensExceeded(stream, requestID, payload.Err); err != nil {
+				if flushErr := flushPartialOutput(); flushErr != nil {
+					return service.failStreamIfNonTerminal(stream, "unknown", flushErr)
+				}
 				return service.failStreamIfNonTerminal(stream, "unknown", err)
 			} else if recovered {
 				return nil
@@ -972,6 +983,9 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 			}
 			service.setTurnPhase(stream, TurnPhaseFailed)
 			return service.closeStreamWithProviderError(stream, conversationID, turnSeq, requestID, accumulatedText, accumulatedReasoning, accumulatedReasoningSignature, accumulatedReasoningSignatureSource, accumulatedReasoningItemID, accumulatedReasoningStatus, accumulatedReasoningSummary, usage, providerErr, !hadToolInvocation)
+		}
+		if flushErr := flushPartialOutput(); flushErr != nil {
+			return service.failStreamIfNonTerminal(stream, "unknown", flushErr)
 		}
 		service.setTurnPhase(stream, TurnPhaseFailed)
 		return service.failStream(stream, "unknown", payload.Err)
