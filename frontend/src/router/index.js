@@ -1,16 +1,19 @@
 import { createRouter, createWebHashHistory, createWebHistory } from "vue-router";
 import { isBrowserPreview } from "@/services/runtimeAdapter";
-import Home from "@/views/Home.vue";
-import ModelConfig from "@/views/ModelConfig.vue";
-import ModelEditor from "@/views/ModelEditor.vue";
-import ModelCatalog from "@/views/ModelCatalog.vue";
-import ModelGroups from "@/views/ModelGroups.vue";
-import RequestMetrics from "@/views/RequestMetrics.vue";
-import SupplierDetail from "@/views/SupplierDetail.vue";
-import MetricsDetail from "@/views/MetricsDetail.vue";
-import StatsOverlay from "@/views/StatsOverlay.vue";
-import Diagnostics from "@/views/Diagnostics.vue";
-import Settings from "@/views/Settings.vue";
+
+// 全部视图按路由懒加载：Settings 里的 md-editor、MetricsDetail/StatsOverlay 里的
+// echarts 等大依赖只在进入对应页面时才下载解析，显著降低首屏主包体积与启动耗时。
+const Home = () => import("@/views/Home.vue");
+const ModelConfig = () => import("@/views/ModelConfig.vue");
+const ModelEditor = () => import("@/views/ModelEditor.vue");
+const ModelCatalog = () => import("@/views/ModelCatalog.vue");
+const ModelGroups = () => import("@/views/ModelGroups.vue");
+const RequestMetrics = () => import("@/views/RequestMetrics.vue");
+const SupplierDetail = () => import("@/views/SupplierDetail.vue");
+const MetricsDetail = () => import("@/views/MetricsDetail.vue");
+const StatsOverlay = () => import("@/views/StatsOverlay.vue");
+const Diagnostics = () => import("@/views/Diagnostics.vue");
+const Settings = () => import("@/views/Settings.vue");
 
 const router = createRouter({
   history: isBrowserPreview ? createWebHistory() : createWebHashHistory(),

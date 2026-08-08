@@ -16,9 +16,18 @@ import {
   connectMCPRuntimeServer,
   disconnectMCPRuntimeServer,
 } from "@/services/runtimeControlApi";
-import MarkdownEditorModal from "@/components/ui/MarkdownEditorModal.vue";
 import { toUserError } from "@/state/appState";
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, defineAsyncComponent, onMounted, reactive, ref } from "vue";
+
+// md-editor-v3 体积大（含完整编辑器内核与语法高亮），只在真正打开编辑器弹窗时
+// 才异步加载，避免进入 Skills/MCP 设置页就下载解析 2MB+ 依赖。
+const MarkdownEditorModal = defineAsyncComponent(async () => {
+  const [mod] = await Promise.all([
+    import("@/components/ui/MarkdownEditorModal.vue"),
+    import("md-editor-v3/lib/style.css"),
+  ]);
+  return mod;
+});
 
 const props = defineProps({
   autosave: {

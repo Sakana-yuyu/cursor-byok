@@ -33,6 +33,24 @@ export default defineConfig(({ mode }) => {
   build: {
     target: ["es2019", "safari13"],
     cssTarget: "safari13",
+    rollupOptions: {
+      output: {
+        // 按供应商分包：把 echarts / md-editor / chart.js / vue 等大依赖拆出入口 chunk，
+        // 浏览器可长期缓存并按需加载，避免 4MB 级主包每次启动全量解析。
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("echarts")) return "vendor-echarts";
+          if (id.includes("md-editor-v3") || id.includes("codemirror") || id.includes("@lezer")) return "vendor-md-editor";
+          if (id.includes("chart.js") || id.includes("vue-chartjs")) return "vendor-chartjs";
+          if (id.includes("marked")) return "vendor-marked";
+          if (id.includes("@iconify")) return "vendor-iconify";
+          if (id.includes("@wailsio")) return "vendor-wails";
+          if (id.includes("vue-router") || id.includes("@vue") || id.includes("vue")) return "vendor-vue";
+          if (id.includes("dayjs") || id.includes("@floating-ui") || id.includes("copy-text-to-clipboard") || id.includes("resize-observer-polyfill")) return "vendor-utils";
+          return "vendor-misc";
+        },
+      },
+    },
   },
   plugins: [
     isDev &&

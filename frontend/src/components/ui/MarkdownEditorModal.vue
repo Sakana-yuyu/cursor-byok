@@ -1,6 +1,5 @@
 <script setup>
 import { MdEditor } from "md-editor-v3";
-import "md-editor-v3/lib/style.css";
 import Button from "@/components/ui/Button.vue";
 import { computed } from "vue";
 
