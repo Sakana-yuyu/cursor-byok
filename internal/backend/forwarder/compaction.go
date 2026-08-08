@@ -30,9 +30,7 @@ const (
 
 const (
 	compactionRequestSourcePromptAsset = "prompt_asset"
-	compactionRequestSourceCurrentTurn = "current_turn_compaction"
 	compactionOverflowTerminalCode     = "context_overflow_after_compaction"
-	compactionSummaryUserMessage       = "现在上下文已满，触发了压缩对话。请把我们到目前为止的对话历史整理成一个 Markdown 表格返回给我。你的回复会直接作为后续对话的压缩内容，请只保留继续协作必需的事实、约束、决定、文件路径、命令、报错、结果和待办。不要调用工具，不要输出表格外说明。"
 )
 
 type compactionPlan struct {
@@ -361,33 +359,6 @@ func (service *Service) buildLegacyCompactionPlan(base *compactionPlan, conversa
 	plan.CompactTurnCount = clampInt64ToInt32(int64(len(candidates)))
 	plan.CompactedTurns = compactedTurns
 	return &plan, nil
-}
-
-func (service *Service) buildAutoCompactionPlanFromHistory(base *compactionPlan, conversation *ConversationFile) (*compactionPlan, error) {
-	if conversation == nil || base == nil {
-		return nil, nil
-	}
-	legacyPlan, err := service.buildLegacyCompactionPlan(base, conversation, false, 0)
-	if err != nil {
-		return nil, err
-	}
-	currentCandidate, hasCurrentCandidate := buildCurrentTurnCompactionCandidate(checkpointProjectionEntries(conversation.Entries), base.CurrentTurnSeq, base.CurrentRequestID)
-	if !hasCurrentCandidate {
-		return legacyPlan, nil
-	}
-	if legacyPlan == nil {
-		plan := cloneCompactionPlanBase(base)
-		plan.RequestSource = compactionRequestSourceCurrentTurn
-		plan.MessagesToCompact = currentCandidate.ReplayCount
-		plan.CompactTurnCount = 1
-		plan.CompactedTurns = []compactedTurnSummary{currentCandidate.Summary}
-		return &plan, nil
-	}
-	legacyPlan.RequestSource = compactionRequestSourceCurrentTurn
-	legacyPlan.MessagesToCompact += currentCandidate.ReplayCount
-	legacyPlan.CompactTurnCount++
-	legacyPlan.CompactedTurns = append(legacyPlan.CompactedTurns, currentCandidate.Summary)
-	return legacyPlan, nil
 }
 
 func (service *Service) beginPendingCompaction(stream *ActiveStream, plan *compactionPlan) error {
