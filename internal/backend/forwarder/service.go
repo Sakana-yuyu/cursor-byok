@@ -1866,9 +1866,20 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	// 未启用视觉委派时，从工具清单剔除 see_image，避免模型调用一个不可用的工具。
 	if service.needsVisionProxy(modelID, modelName, compiled.Messages) {
 		vdbg("[service] needsVisionProxy true -> run vision pass msgs=%d model=%s model_id=%s", len(compiled.Messages), modelName, modelID)
+		// 视觉委派是同步 LLM 调用（synthesizeImageDescriptions 内部还有独立超时），
+		// 期间把取消句柄挂到 stream.ProviderCancel：shutdown / 并发新回合可直接中断识图，
+		// 避免 browser 多截图场景把对话拖到客户端超时判定掉线。
 		visionCtx, visionCancel := context.WithCancel(context.Background())
+		stream.mu.Lock()
+		stream.ProviderCancel = visionCancel
+		stream.mu.Unlock()
 		compiled.Messages = service.synthesizeImageDescriptions(visionCtx, requestID, conversationID, compiled.Messages, modelName)
 		visionCancel()
+		// 视觉 pass 已结束，且主模型请求尚未开始：直接清空取消句柄。
+		// （若 pass 期间被 forceCancelStreamProvider 并发清空过，这里同样置 nil，语义一致。）
+		stream.mu.Lock()
+		stream.ProviderCancel = nil
+		stream.mu.Unlock()
 	} else {
 		vdbg("[service] needsVisionProxy false enabled=%v", service.visionProxyEnabled())
 	}

@@ -46,6 +46,12 @@ func NewHTTPClient(timeout time.Duration) *http.Client {
 	}
 }
 
+// defaultResponseHeaderTimeout 是模型请求 HTTP 客户端等待响应头的兜底上限。
+// LLM 流式首 token 在排队/思考阶段可能较久，取 10 分钟：既能容忍正常首包延迟，
+// 又避免对端“已连接但永不响应”的悬挂请求无限占用连接（配合各 adapter 的
+// ProviderStreamIdleTimeout 流式空闲看门狗形成双层兜底）。
+const defaultResponseHeaderTimeout = 10 * time.Minute
+
 // NewTransport clones the given transport and installs proxy resolution on it.
 // When base is nil, it clones Go's original default transport.
 func NewTransport(base *http.Transport) *http.Transport {
@@ -54,6 +60,9 @@ func NewTransport(base *http.Transport) *http.Transport {
 		transport = base.Clone()
 	}
 	transport.Proxy = ProxyForRequest
+	if transport.ResponseHeaderTimeout <= 0 {
+		transport.ResponseHeaderTimeout = defaultResponseHeaderTimeout
+	}
 	proxyTransports.Store(transport, struct{}{})
 	return transport
 }
