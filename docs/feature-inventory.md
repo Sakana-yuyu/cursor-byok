@@ -81,14 +81,19 @@ cursor-byok 是 Cursor 客户端的本地代理（MITM + 后端 agent + 前端�
 | 交互等待超时 | 等待用户输入 15 分钟兜底收口 |
 | 视觉委派 | 主模型不支持图片时自动委派识图模型；同步 pass 挂接 stream 取消句柄 + 内置超时 |
 
-## 六、验证结果
+## 六、健壮性加固（第二轮 2026-08-09）
+
+- 新增 `internal/safego`：统一 panic 兜底封装，覆盖全部 15 处后台 goroutine（MITM 转发、delegation executor、checkpoint 心跳、历史维护、native 委派看门狗、shutdown 取消、广告刷新、自动启动等），未捕获 panic 不再拖垮整个进程。
+- 前端 `npm run lint` 恢复全绿：清理 `clientApi.js` 残留死导入（`GetGoals/StartGoal/StopGoal/EnableReaderMCP`，对应包装函数已在前轮删除）。
+
+## 七、验证结果
 
 - `go build ./...`、`go vet ./...`、`go test ./...`：全绿（2026-08-09）。
 - 前端 `npm run build`：通过；入口主包 4.25MB → 797KB（路由懒加载 + 供应商分包 + md-editor 按需加载）。
 - 死代码清理：前端删除孤儿组件/死导出，后端 34 文件删除 977 行未使用导出，全仓库零引用确认。
 - 每步独立提交（中文 message），历史可回溯；并行子代理只改文件、提交由主代理统一完成。
 
-## 七、遗留说明（非阻塞）
+## 八、遗留说明（非阻塞）
 
 - `@iconify/json` 未在 src 直接引用（tailwind 构建期使用），不进入运行时 bundle。
 - md-editor 异步块仍被 vite 预加载提示引用（本地磁盘读取成本极低），解析/执行已按需延迟。
