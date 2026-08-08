@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"cursor/internal/processutil"
 )
 
 // killCursorProcesses 结束所有 Cursor 编辑器进程（含其子进程）。
@@ -14,6 +16,7 @@ import (
 // 是否真的「无法结束」，因此按输出内容判断而非仅凭退出码。
 func killCursorProcesses() error {
 	cmd := exec.Command("taskkill", "/F", "/IM", "Cursor.exe", "/T")
+	processutil.HideWindow(cmd)
 	out, err := cmd.CombinedOutput()
 	// taskkill 在「没有匹配进程」时也会返回错误码，这不算失败。
 	if err != nil {

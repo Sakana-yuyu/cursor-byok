@@ -8,7 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"cursor/gen/agentv1"
 	modeladapter "cursor/internal/backend/agent/model"
+	promptengine "cursor/internal/backend/agent/prompt"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 const contextProjectionSchemaVersion = 1
@@ -589,6 +592,10 @@ func contextProjectionTurns(conversation *ConversationFile) ([]contextProjection
 		}
 		invalidReason := validateContextProjectionTurnToolChain(turnEntries)
 		if invalidReason != "" {
+			if isHistoricalInterruptedToolChain(invalidReason, turnSeq, conversation.CurrentTurnSeq) {
+				turns = append(turns, summarizeInterruptedContextProjectionTurn(turnSeq, turnEntries, invalidReason))
+				continue
+			}
 			turns = append(turns, contextProjectionTurn{
 				TurnSeq:       turnSeq,
 				StartEntrySeq: turnEntries[0].Seq,
@@ -615,6 +622,34 @@ func contextProjectionTurns(conversation *ConversationFile) ([]contextProjection
 		})
 	}
 	return turns, nil
+}
+
+func isHistoricalInterruptedToolChain(reason string, turnSeq int64, currentTurnSeq int64) bool {
+	return turnSeq > 0 && turnSeq < currentTurnSeq && strings.HasPrefix(strings.TrimSpace(reason), "incomplete tool chain for call ")
+}
+
+func summarizeInterruptedContextProjectionTurn(turnSeq int64, entries []HistoryEntry, reason string) contextProjectionTurn {
+	turn := contextProjectionTurn{
+		TurnSeq:       turnSeq,
+		StartEntrySeq: entries[0].Seq,
+		EndEntrySeq:   entries[len(entries)-1].Seq,
+	}
+	for _, entry := range entries {
+		if strings.TrimSpace(entry.Kind) != "user_message" {
+			continue
+		}
+		userMessage := &agentv1.UserMessage{}
+		if err := protojson.Unmarshal(entry.Payload, userMessage); err == nil {
+			if message, ok := promptengine.BuildUserMessageReplayMessage(userMessage); ok {
+				turn.Summary.UserText = strings.TrimSpace(message.Content)
+			}
+		}
+		break
+	}
+	turn.Summary.Steps = []string{"[interrupted tool chain] " + strings.TrimSpace(reason) + "; no terminal tool result was recorded."}
+	turn.ReplayCount = 1
+	turn.EstimatedTokens = estimateModelMessagesTokens([]modeladapter.Message{{Role: "assistant", Content: turn.Summary.Steps[0]}})
+	return turn
 }
 
 func contextProjectionImportedPrehistory(entries []HistoryEntry) (*contextProjectionTurn, error) {

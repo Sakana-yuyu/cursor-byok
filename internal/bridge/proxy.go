@@ -7,9 +7,11 @@ import (
 	serverconfig "cursor/internal/backend/server/config"
 	"cursor/internal/certs"
 	"cursor/internal/client"
+	"cursor/internal/cursor"
 	"cursor/internal/logger"
 	"cursor/internal/mitm"
 	"cursor/internal/promptinject"
+	"cursor/internal/terminalenv"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -258,6 +260,16 @@ func (s *ProxyService) CancelDelegationTask(taskID string) bool {
 // GetState 用于处理与 GetState 相关的逻辑。
 func (s *ProxyService) GetState() ProxyState {
 	return s.core.GetState()
+}
+
+// GetTerminalEnvironmentStatus returns the shell and Python 3 that Cursor will use.
+func (s *ProxyService) GetTerminalEnvironmentStatus() terminalenv.Status {
+	return terminalenv.Detect()
+}
+
+// ApplyTerminalEnvironment refreshes the managed terminal and Python settings.
+func (s *ProxyService) ApplyTerminalEnvironment() (terminalenv.Status, error) {
+	return cursor.EnsureTerminalEnvironmentSettings()
 }
 
 // PrepareCursorLaunch ensures local-mode Cursor starts only after the proxy

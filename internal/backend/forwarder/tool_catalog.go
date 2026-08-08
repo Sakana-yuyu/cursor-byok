@@ -205,6 +205,12 @@ var planModeToolNames = map[string]struct{}{
 
 var childConversationDisallowedAgentToolNames = map[string]struct{}{
 	"AskQuestion": {},
+	// A child Task conversation must not be able to create another child.
+	// Otherwise one model pass can recursively fan out into an unbounded
+	// delegation tree (the parent concurrency limit only limits active runs).
+	"Task":                    {},
+	"ForceBackgroundSubagent": {},
+	"SubagentAwait":           {},
 }
 
 func supportedToolNamesForMode(mode agentv1.AgentMode) map[string]struct{} {

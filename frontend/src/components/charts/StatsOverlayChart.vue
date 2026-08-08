@@ -252,23 +252,25 @@ onUnmounted(() => {
 .stats-overlay-chart {
   position: relative;
   width: 100%;
-  height: 58px;
+  height: 66px;
   min-width: 0;
-  flex: 0 0 58px;
-  overflow: visible;
+  flex: 0 0 66px;
+  display: grid;
+  grid-template-rows: 16px minmax(0, 1fr);
+  overflow: hidden;
   border: 1px solid rgba(110, 231, 165, 0.28);
   border-radius: 8px;
   background: rgba(110, 231, 165, 0.05);
 }
 
 .stats-overlay-chart__canvas {
-  position: absolute;
-  inset: 0;
+  grid-row: 2;
+  min-height: 0;
 }
 
 .stats-overlay-chart__empty {
   position: absolute;
-  inset: 0;
+  inset: 16px 0 0;
   display: grid;
   place-items: center;
   color: rgba(190, 220, 205, 0.52);
@@ -277,10 +279,11 @@ onUnmounted(() => {
 }
 
 .stats-overlay-chart__legend {
-  position: absolute;
-  top: 3px;
-  right: 5px;
+  grid-row: 1;
+  justify-self: end;
+  align-self: center;
   display: flex;
+  padding-right: 6px;
   gap: 6px;
   color: rgba(190, 220, 205, 0.68);
   font-size: 8px;

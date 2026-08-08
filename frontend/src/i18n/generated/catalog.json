@@ -149,11 +149,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 896,
           "column": 52
-        },
+        }
+      ]
+    },
+    "034036a4157b0b0d": {
+      "source": "自动选择当前系统可用的现代终端，并固定 Python 3 解释器路径。Windows 会优先使用 PowerShell 7。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
         {
-          "file": "src/views/RequestMetrics.vue",
-          "line": 387,
-          "column": 41
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 352,
+          "column": 9
         }
       ]
     },
@@ -164,7 +171,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 228,
+          "line": 260,
           "column": 15
         }
       ]
@@ -316,7 +323,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 317,
+          "line": 376,
           "column": 9
         }
       ]
@@ -364,7 +371,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 459,
+          "line": 460,
           "column": 14
         }
       ]
@@ -502,7 +509,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 637,
+          "line": 639,
           "column": 41
         }
       ]
@@ -550,12 +557,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 135,
+          "line": 142,
           "column": 23
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 189,
+          "line": 196,
           "column": 27
         }
       ]
@@ -569,18 +576,6 @@
           "file": "src/views/Home.vue",
           "line": 122,
           "column": 21
-        }
-      ]
-    },
-    "06dced8b80626e07": {
-      "source": "删除所选 ({0})",
-      "kind": "template",
-      "placeholders": 1,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 366,
-          "column": 14
         }
       ]
     },
@@ -608,7 +603,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 183,
+          "line": 203,
           "column": 21
         }
       ]
@@ -622,6 +617,18 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 473,
           "column": 15
+        }
+      ]
+    },
+    "07a354472ce83196": {
+      "source": "选择会话后可批量操作",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 420,
+          "column": 16
         }
       ]
     },
@@ -661,7 +668,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 759,
+          "line": 761,
           "column": 12
         }
       ]
@@ -702,7 +709,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 638,
+          "line": 640,
           "column": 21
         }
       ]
@@ -803,8 +810,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 446,
-          "column": 31
+          "line": 482,
+          "column": 51
         }
       ]
     },
@@ -844,13 +851,13 @@
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 298,
+          "line": 302,
           "column": 73
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 125,
-          "column": 52
+          "line": 126,
+          "column": 43
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
@@ -859,12 +866,12 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 97,
+          "line": 96,
           "column": 86
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 180,
+          "line": 212,
           "column": 19
         }
       ]
@@ -983,7 +990,7 @@
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 669,
+          "line": 671,
           "column": 78
         }
       ]
@@ -1024,8 +1031,20 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 287,
-          "column": 108
+          "line": 288,
+          "column": 1
+        }
+      ]
+    },
+    "0e353daae8b04bf5": {
+      "source": "终端环境",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 349,
+          "column": 22
         }
       ]
     },
@@ -1074,6 +1093,18 @@
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
           "line": 785,
           "column": 16
+        }
+      ]
+    },
+    "0ef703f76a8da8f6": {
+      "source": "个会话",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 270,
+          "column": 106
         }
       ]
     },
@@ -1185,8 +1216,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 82,
-          "column": 179
+          "line": 83,
+          "column": 1
         }
       ]
     },
@@ -1221,8 +1252,20 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 592,
+          "line": 594,
           "column": 117
+        }
+      ]
+    },
+    "117c113c3b45cf89": {
+      "source": "排队",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/DelegationTaskStrip.vue",
+          "line": 184,
+          "column": 83
         }
       ]
     },
@@ -1245,8 +1288,8 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 589,
-          "column": 123
+          "line": 590,
+          "column": 1
         }
       ]
     },
@@ -1298,8 +1341,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 351,
-          "column": 205
+          "line": 398,
+          "column": 210
         }
       ]
     },
@@ -1360,6 +1403,11 @@
           "file": "src/components/HomeMetricsCard.vue",
           "line": 527,
           "column": 19
+        },
+        {
+          "file": "src/views/RequestMetrics.vue",
+          "line": 387,
+          "column": 34
         }
       ]
     },
@@ -1454,6 +1502,18 @@
           "file": "src/views/StatsOverlay.vue",
           "line": 554,
           "column": 57
+        }
+      ]
+    },
+    "156219aa0cfeffa4": {
+      "source": "未检测到",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 359,
+          "column": 58
         }
       ]
     },
@@ -1572,7 +1632,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 278,
+          "line": 282,
           "column": 80
         }
       ]
@@ -1608,7 +1668,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 676,
+          "line": 678,
           "column": 90
         }
       ]
@@ -1707,18 +1767,6 @@
         }
       ]
     },
-    "1a46658cee3fb5bc": {
-      "source": "缓存率 = 缓存读取 ÷ (输入 + 缓存读取)",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/RequestMetrics.vue",
-          "line": 358,
-          "column": 35
-        }
-      ]
-    },
     "1ad1f0e94cf4757c": {
       "source": "选择固定供应商会自动填充接口地址、协议和常用模型；仍可在下方覆盖。",
       "kind": "text",
@@ -1793,6 +1841,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 132,
           "column": 12
+        }
+      ]
+    },
+    "1b590914091ca145": {
+      "source": "清空全部",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 292,
+          "column": 16
         }
       ]
     },
@@ -1911,8 +1971,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 483,
-          "column": 163
+          "line": 484,
+          "column": 1
         }
       ]
     },
@@ -1947,8 +2007,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 480,
-          "column": 180
+          "line": 481,
+          "column": 1
         }
       ]
     },
@@ -1959,12 +2019,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 511,
+          "line": 513,
           "column": 61
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 375,
+          "line": 397,
           "column": 66
         }
       ]
@@ -2005,16 +2065,6 @@
           "file": "src/views/MetricsDetail.vue",
           "line": 376,
           "column": 75
-        },
-        {
-          "file": "src/views/RequestMetrics.vue",
-          "line": 356,
-          "column": 88
-        },
-        {
-          "file": "src/views/RequestMetrics.vue",
-          "line": 383,
-          "column": 56
         }
       ]
     },
@@ -2107,7 +2157,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 605,
+          "line": 607,
           "column": 16
         }
       ]
@@ -2136,13 +2186,13 @@
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 40,
+          "line": 44,
           "column": 12
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 180,
-          "column": 29
+          "line": 184,
+          "column": 30
         }
       ]
     },
@@ -2153,7 +2203,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 746,
+          "line": 748,
           "column": 12
         }
       ]
@@ -2209,13 +2259,8 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 354,
-          "column": 88
-        },
-        {
-          "file": "src/views/RequestMetrics.vue",
-          "line": 377,
-          "column": 56
+          "line": 421,
+          "column": 62
         }
       ]
     },
@@ -2390,7 +2435,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 212,
+          "line": 232,
           "column": 14
         }
       ]
@@ -2457,18 +2502,6 @@
           "file": "src/views/ModelEditor.vue",
           "line": 976,
           "column": 60
-        }
-      ]
-    },
-    "23ed6959afac9b1f": {
-      "source": "会话历史是对话记录；调试日志是用于错误排查的原始数据，可单独清理。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 244,
-          "column": 51
         }
       ]
     },
@@ -2581,12 +2614,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 274,
+          "line": 309,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 282,
+          "line": 317,
           "column": 13
         }
       ]
@@ -2651,7 +2684,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 252,
+          "line": 259,
           "column": 23
         }
       ]
@@ -2738,7 +2771,7 @@
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 39,
+          "line": 43,
           "column": 11
         }
       ]
@@ -2839,7 +2872,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 468,
+          "line": 469,
           "column": 14
         }
       ]
@@ -2868,13 +2901,13 @@
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 42,
+          "line": 46,
           "column": 11
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
           "line": 126,
-          "column": 44
+          "column": 36
         },
         {
           "file": "src/components/supplier/SupplierModelCard.vue",
@@ -2900,7 +2933,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 720,
+          "line": 722,
           "column": 12
         }
       ]
@@ -3011,8 +3044,8 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 379,
-          "column": 41
+          "line": 423,
+          "column": 47
         }
       ]
     },
@@ -3047,7 +3080,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 867,
+          "line": 869,
           "column": 49
         }
       ]
@@ -3148,7 +3181,7 @@
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 219,
+          "line": 223,
           "column": 18
         },
         {
@@ -3168,12 +3201,12 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 177,
+          "line": 197,
           "column": 17
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 214,
+          "line": 234,
           "column": 17
         },
         {
@@ -3277,7 +3310,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 174,
+          "line": 194,
           "column": 12
         }
       ]
@@ -3410,7 +3443,7 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 176,
+          "line": 196,
           "column": 18
         },
         {
@@ -3565,7 +3598,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 175,
+          "line": 195,
           "column": 14
         }
       ]
@@ -3577,22 +3610,22 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 434,
+          "line": 435,
           "column": 16
         },
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 440,
+          "line": 441,
           "column": 16
         },
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 446,
+          "line": 447,
           "column": 16
         },
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 452,
+          "line": 453,
           "column": 16
         }
       ]
@@ -3640,7 +3673,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 286,
+          "line": 290,
           "column": 70
         }
       ]
@@ -3676,12 +3709,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 517,
+          "line": 519,
           "column": 97
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 216,
+          "line": 238,
           "column": 99
         }
       ]
@@ -3794,7 +3827,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 502,
+          "line": 504,
           "column": 169
         }
       ]
@@ -3958,7 +3991,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 219,
+          "line": 251,
           "column": 68
         }
       ]
@@ -4009,8 +4042,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 351,
-          "column": 247
+          "line": 398,
+          "column": 269
         }
       ]
     },
@@ -4085,6 +4118,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 430,
+          "column": 14
+        },
+        {
           "file": "src/views/Home.vue",
           "line": 246,
           "column": 7286
@@ -4108,8 +4146,8 @@
         },
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 162,
-          "column": 11
+          "line": 163,
+          "column": 1
         }
       ]
     },
@@ -4122,6 +4160,11 @@
           "file": "src/components/HomeMetricsCard.vue",
           "line": 492,
           "column": 21
+        },
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 283,
+          "column": 16
         }
       ]
     },
@@ -4197,12 +4240,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 298,
+          "line": 333,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 308,
+          "line": 343,
           "column": 11
         },
         {
@@ -4243,7 +4286,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 136,
+          "line": 156,
           "column": 19
         }
       ]
@@ -4422,12 +4465,12 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 219,
+          "line": 223,
           "column": 18
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 303,
+          "line": 307,
           "column": 14
         }
       ]
@@ -4473,8 +4516,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 453,
-          "column": 17
+          "line": 454,
+          "column": 1
         }
       ]
     },
@@ -4509,7 +4552,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 305,
+          "line": 309,
           "column": 56
         },
         {
@@ -4568,7 +4611,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 250,
+          "line": 254,
           "column": 5
         }
       ]
@@ -4580,7 +4623,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 676,
+          "line": 678,
           "column": 21
         }
       ]
@@ -4592,7 +4635,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 371,
+          "line": 430,
           "column": 13
         }
       ]
@@ -4604,8 +4647,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 350,
-          "column": 291
+          "line": 397,
+          "column": 273
         },
         {
           "file": "src/router/index.js",
@@ -4628,18 +4671,6 @@
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
           "line": 818,
           "column": 22
-        }
-      ]
-    },
-    "42216fd00fa3d06b": {
-      "source": "清理调试日志 ({0})",
-      "kind": "template",
-      "placeholders": 1,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 369,
-          "column": 14
         }
       ]
     },
@@ -4691,7 +4722,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 340,
+          "line": 397,
           "column": 65
         }
       ]
@@ -4753,6 +4784,18 @@
           "file": "src/views/SupplierDetail.vue",
           "line": 1244,
           "column": 169
+        }
+      ]
+    },
+    "435bf8a234fde6f2": {
+      "source": "删除所选",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 439,
+          "column": 14
         }
       ]
     },
@@ -4904,8 +4947,25 @@
       "refs": [
         {
           "file": "src/views/Diagnostics.vue",
-          "line": 210,
-          "column": 181
+          "line": 211,
+          "column": 1
+        }
+      ]
+    },
+    "465c03b272eafb2e": {
+      "source": "读取中",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/RequestMetrics.vue",
+          "line": 373,
+          "column": 22
+        },
+        {
+          "file": "src/views/RequestMetrics.vue",
+          "line": 374,
+          "column": 17
         }
       ]
     },
@@ -4914,11 +4974,6 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
-        {
-          "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 366,
-          "column": 14
-        },
         {
           "file": "src/views/ModelConfig.vue",
           "line": 591,
@@ -4969,7 +5024,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 110,
+          "line": 114,
           "column": 48
         }
       ]
@@ -5022,7 +5077,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 414,
+          "line": 415,
           "column": 14
         }
       ]
@@ -5056,7 +5111,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 641,
+          "line": 643,
           "column": 27
         }
       ]
@@ -5196,18 +5251,6 @@
         }
       ]
     },
-    "4bf73b9493a20ea7": {
-      "source": "有正在运行的任务",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/DelegationTaskStrip.vue",
-          "line": 177,
-          "column": 19
-        }
-      ]
-    },
     "4c0a929bb86ce912": {
       "source": "当前：{0}",
       "kind": "template",
@@ -5299,17 +5342,17 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 42,
+          "line": 41,
           "column": 57
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 43,
+          "line": 42,
           "column": 92
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 44,
+          "line": 43,
           "column": 86
         },
         {
@@ -5482,15 +5525,20 @@
         }
       ]
     },
-    "4f5f3eb552dcb687": {
-      "source": "个会话 · 会话历史",
+    "4f838809a0191dcd": {
+      "source": "浏览器预览模式：使用模拟环境。",
       "kind": "text",
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 242,
-          "column": 35
+          "file": "src/services/browserBindings.js",
+          "line": 477,
+          "column": 284
+        },
+        {
+          "file": "src/services/clientApi.js",
+          "line": 147,
+          "column": 24
         }
       ]
     },
@@ -5542,12 +5590,12 @@
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 101,
+          "line": 105,
           "column": 79
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 173,
+          "line": 177,
           "column": 54
         }
       ]
@@ -5694,12 +5742,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 575,
+          "line": 577,
           "column": 126
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 312,
+          "line": 334,
           "column": 128
         }
       ]
@@ -5813,7 +5861,7 @@
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 303,
+          "line": 307,
           "column": 14
         }
       ]
@@ -5851,6 +5899,18 @@
           "file": "src/views/ModelConfig.vue",
           "line": 332,
           "column": 49
+        }
+      ]
+    },
+    "54000b551cbaffa1": {
+      "source": "未检测到 Python 3",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 360,
+          "column": 85
         }
       ]
     },
@@ -6295,7 +6355,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 255,
+          "line": 262,
           "column": 21
         }
       ]
@@ -6423,7 +6483,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 256,
+          "line": 260,
           "column": 73
         }
       ]
@@ -6708,16 +6768,6 @@
           "file": "src/views/MetricsDetail.vue",
           "line": 380,
           "column": 75
-        },
-        {
-          "file": "src/views/RequestMetrics.vue",
-          "line": 357,
-          "column": 88
-        },
-        {
-          "file": "src/views/RequestMetrics.vue",
-          "line": 384,
-          "column": 56
         }
       ]
     },
@@ -6739,11 +6789,6 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 248,
-          "column": 16
-        },
-        {
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 570,
           "column": 22
@@ -6762,7 +6807,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 676,
+          "line": 678,
           "column": 159
         }
       ]
@@ -6834,8 +6879,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 127,
-          "column": 71
+          "line": 128,
+          "column": 1
         }
       ]
     },
@@ -6875,7 +6920,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 291,
+          "line": 326,
           "column": 53
         }
       ]
@@ -7009,7 +7054,7 @@
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 233,
+          "line": 240,
           "column": 42
         },
         {
@@ -7046,13 +7091,13 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 261,
+          "line": 265,
           "column": 72
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 381,
-          "column": 41
+          "line": 420,
+          "column": 47
         }
       ]
     },
@@ -7085,7 +7130,7 @@
         },
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 399,
+          "line": 400,
           "column": 20
         }
       ]
@@ -7216,7 +7261,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 83,
+          "line": 82,
           "column": 27
         }
       ]
@@ -7300,12 +7345,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 351,
+          "line": 410,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 364,
+          "line": 423,
           "column": 13
         }
       ]
@@ -7317,7 +7362,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 410,
+          "line": 411,
           "column": 14
         }
       ]
@@ -7426,7 +7471,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 281,
+          "line": 285,
           "column": 72
         }
       ]
@@ -7445,18 +7490,6 @@
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
           "line": 981,
           "column": 22
-        }
-      ]
-    },
-    "691dace3f979577f": {
-      "source": "读取中...",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/RequestMetrics.vue",
-          "line": 347,
-          "column": 14
         }
       ]
     },
@@ -7479,7 +7512,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 273,
+          "line": 308,
           "column": 9
         }
       ]
@@ -7712,7 +7745,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 581,
+          "line": 583,
           "column": 16
         }
       ]
@@ -7736,7 +7769,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 290,
+          "line": 294,
           "column": 73
         }
       ]
@@ -7777,7 +7810,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 198,
+          "line": 218,
           "column": 33
         }
       ]
@@ -7791,6 +7824,18 @@
           "file": "src/components/settings/delegation/DelegationSupervisionPanel.vue",
           "line": 152,
           "column": 11
+        }
+      ]
+    },
+    "6d7517e3b15854a7": {
+      "source": "等待记录",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/RequestMetrics.vue",
+          "line": 400,
+          "column": 47
         }
       ]
     },
@@ -7967,8 +8012,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 68,
-          "column": 144
+          "line": 69,
+          "column": 1
         }
       ]
     },
@@ -8039,8 +8084,37 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 86,
-          "column": 175
+          "line": 87,
+          "column": 1
+        }
+      ]
+    },
+    "717e73ed672ebc47": {
+      "source": "请求状态",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/RequestMetrics.vue",
+          "line": 395,
+          "column": 34
+        }
+      ]
+    },
+    "718b6372d7fb3883": {
+      "source": "清理中",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 292,
+          "column": 16
+        },
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 430,
+          "column": 14
         }
       ]
     },
@@ -8092,7 +8166,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 876,
+          "line": 878,
           "column": 58
         }
       ]
@@ -8140,7 +8214,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 299,
+          "line": 334,
           "column": 9
         }
       ]
@@ -8260,8 +8334,20 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 597,
+          "line": 599,
           "column": 16
+        }
+      ]
+    },
+    "76e08870f7e54a76": {
+      "source": "终端与 Python 环境已写入 Cursor，重新打开终端后生效。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 289,
+          "column": 21
         }
       ]
     },
@@ -8272,8 +8358,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 334,
-          "column": 115
+          "line": 366,
+          "column": 1
         }
       ]
     },
@@ -8477,8 +8563,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 77,
-          "column": 139
+          "line": 78,
+          "column": 1
         }
       ]
     },
@@ -8511,7 +8597,7 @@
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 669,
+          "line": 671,
           "column": 71
         }
       ]
@@ -8613,7 +8699,7 @@
         },
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 119,
+          "line": 120,
           "column": 12
         },
         {
@@ -8635,8 +8721,8 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 643,
-          "column": 61
+          "line": 644,
+          "column": 1
         }
       ]
     },
@@ -8683,8 +8769,20 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 694,
+          "line": 696,
           "column": 12
+        }
+      ]
+    },
+    "7c7a3cda2cb67d69": {
+      "source": "读",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/RequestMetrics.vue",
+          "line": 470,
+          "column": 62
         }
       ]
     },
@@ -8695,7 +8793,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 104,
+          "line": 103,
           "column": 31
         }
       ]
@@ -8791,8 +8889,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 341,
-          "column": 202
+          "line": 388,
+          "column": 142
         }
       ]
     },
@@ -8977,6 +9075,18 @@
         }
       ]
     },
+    "7f73b56732113f28": {
+      "source": "管理本地会话记录与调试数据",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 266,
+          "column": 60
+        }
+      ]
+    },
     "7f89dc0c14148753": {
       "source": "本地响应缓存",
       "kind": "text",
@@ -9006,6 +9116,18 @@
         }
       ]
     },
+    "7fa2f60480f5df2d": {
+      "source": "完成对话后，记录会显示在这里",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 308,
+          "column": 54
+        }
+      ]
+    },
     "7fcc0483145211ed": {
       "source": "E2E 注入：委派配置保存失败",
       "kind": "text",
@@ -9015,6 +9137,18 @@
           "file": "src/services/browserBindings.js",
           "line": 417,
           "column": 37
+        }
+      ]
+    },
+    "7fe8603c084eb991": {
+      "source": "费用",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/RequestMetrics.vue",
+          "line": 425,
+          "column": 47
         }
       ]
     },
@@ -9037,12 +9171,17 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 205,
+          "line": 135,
+          "column": 67
+        },
+        {
+          "file": "src/views/RequestMetrics.vue",
+          "line": 237,
           "column": 31
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 207,
+          "line": 239,
           "column": 50
         }
       ]
@@ -9054,7 +9193,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 254,
+          "line": 261,
           "column": 57
         }
       ]
@@ -9283,13 +9422,13 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 242,
-          "column": 105
+          "line": 247,
+          "column": 1
         },
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 358,
-          "column": 92
+          "line": 359,
+          "column": 1
         }
       ]
     },
@@ -9476,7 +9615,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 220,
+          "line": 240,
           "column": 21
         }
       ]
@@ -9512,8 +9651,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 240,
-          "column": 54
+          "line": 265,
+          "column": 78
         },
         {
           "file": "src/components/settings/settingsCategories.js",
@@ -9529,8 +9668,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 444,
-          "column": 31
+          "line": 480,
+          "column": 51
         }
       ]
     },
@@ -9541,12 +9680,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 316,
+          "line": 375,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 327,
+          "line": 386,
           "column": 13
         }
       ]
@@ -9558,8 +9697,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 349,
-          "column": 135
+          "line": 396,
+          "column": 140
         }
       ]
     },
@@ -9572,6 +9711,18 @@
           "file": "src/views/SupplierDetail.vue",
           "line": 1040,
           "column": 57
+        }
+      ]
+    },
+    "88cbba3e80d70c2d": {
+      "source": "正在检测本机终端和 Python 3。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 364,
+          "column": 52
         }
       ]
     },
@@ -9594,8 +9745,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 267,
-          "column": 166
+          "line": 307,
+          "column": 50
         }
       ]
     },
@@ -9608,6 +9759,18 @@
           "file": "src/components/settings/categories/OverlaySettings.vue",
           "line": 273,
           "column": 22
+        }
+      ]
+    },
+    "8989b881f3eb35e4": {
+      "source": "删除中",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 439,
+          "column": 14
         }
       ]
     },
@@ -9681,8 +9844,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 515,
-          "column": 11
+          "line": 533,
+          "column": 1
         }
       ]
     },
@@ -9717,20 +9880,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 227,
-          "column": 52
-        }
-      ]
-    },
-    "8b6ff498515bcc2f": {
-      "source": "时间",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/RequestMetrics.vue",
-          "line": 382,
-          "column": 41
+          "line": 228,
+          "column": 1
         }
       ]
     },
@@ -9812,7 +9963,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 476,
+          "line": 493,
           "column": 15
         }
       ]
@@ -9829,7 +9980,7 @@
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 335,
+          "line": 394,
           "column": 9
         },
         {
@@ -10053,7 +10204,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 345,
+          "line": 404,
           "column": 11
         }
       ]
@@ -10077,7 +10228,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 426,
+          "line": 427,
           "column": 14
         }
       ]
@@ -10106,7 +10257,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 660,
+          "line": 662,
           "column": 14
         }
       ]
@@ -10118,7 +10269,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 198,
+          "line": 218,
           "column": 71
         }
       ]
@@ -10152,8 +10303,8 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 593,
-          "column": 23
+          "line": 594,
+          "column": 1
         }
       ]
     },
@@ -10176,7 +10327,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 271,
+          "line": 306,
           "column": 22
         }
       ]
@@ -10260,7 +10411,7 @@
       "refs": [
         {
           "file": "src/services/clientApi.js",
-          "line": 101,
+          "line": 103,
           "column": 37
         }
       ]
@@ -10301,7 +10452,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 680,
+          "line": 682,
           "column": 35
         }
       ]
@@ -10311,11 +10462,6 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
-        {
-          "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 263,
-          "column": 14
-        },
         {
           "file": "src/views/Diagnostics.vue",
           "line": 194,
@@ -10343,7 +10489,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 368,
+          "line": 411,
           "column": 12
         }
       ]
@@ -10408,7 +10554,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 269,
+          "line": 273,
           "column": 72
         }
       ]
@@ -10432,7 +10578,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 287,
+          "line": 319,
           "column": 53
         }
       ]
@@ -10468,7 +10614,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 772,
+          "line": 774,
           "column": 12
         }
       ]
@@ -10492,8 +10638,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 393,
-          "column": 67
+          "line": 431,
+          "column": 66
         }
       ]
     },
@@ -10518,6 +10664,18 @@
           "file": "src/components/settings/settingsCategories.js",
           "line": 96,
           "column": 18
+        }
+      ]
+    },
+    "95433bb1bf554187": {
+      "source": "执行中 {0} · 排队 {1}",
+      "kind": "template",
+      "placeholders": 2,
+      "refs": [
+        {
+          "file": "src/components/DelegationTaskStrip.vue",
+          "line": 181,
+          "column": 19
         }
       ]
     },
@@ -10653,7 +10811,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 177,
+          "line": 181,
           "column": 19
         }
       ]
@@ -10838,6 +10996,18 @@
         }
       ]
     },
+    "98d890a70362bb00": {
+      "source": "Cursor 终端与 Python 3",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 351,
+          "column": 9
+        }
+      ]
+    },
     "98fd987d7d08f9eb": {
       "source": "单独控制每个模板是否参与注入，并按需预览内容。",
       "kind": "text",
@@ -10869,13 +11039,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 211,
+          "line": 231,
           "column": 12
-        },
-        {
-          "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 255,
-          "column": 16
         }
       ]
     },
@@ -10898,7 +11063,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 336,
+          "line": 395,
           "column": 23
         }
       ]
@@ -11011,6 +11176,18 @@
         }
       ]
     },
+    "9b4594c679e46c10": {
+      "source": "Usage 正常",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/RequestMetrics.vue",
+          "line": 399,
+          "column": 65
+        }
+      ]
+    },
     "9b7824cefa1e8b16": {
       "source": "放弃修改",
       "kind": "text",
@@ -11059,7 +11236,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 613,
+          "line": 615,
           "column": 16
         }
       ]
@@ -11105,18 +11282,6 @@
         }
       ]
     },
-    "9c7ff3321e0a46b9": {
-      "source": "错误码",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/RequestMetrics.vue",
-          "line": 388,
-          "column": 41
-        }
-      ]
-    },
     "9cf9a0cce3d1be02": {
       "source": "余额 / 套餐查询",
       "kind": "text",
@@ -11136,8 +11301,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 396,
-          "column": 68
+          "line": 435,
+          "column": 1
         }
       ]
     },
@@ -11211,7 +11376,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 846,
+          "line": 848,
           "column": 25
         }
       ]
@@ -11230,6 +11395,18 @@
           "file": "src/utils/supplierCatalog.js",
           "line": 367,
           "column": 41
+        }
+      ]
+    },
+    "9ec4b7239920e637": {
+      "source": "会话历史",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 271,
+          "column": 19
         }
       ]
     },
@@ -11262,13 +11439,13 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 101,
+          "line": 100,
           "column": 65
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 341,
-          "column": 65
+          "line": 398,
+          "column": 70
         }
       ]
     },
@@ -11308,12 +11485,12 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 240,
+          "line": 272,
           "column": 65
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 244,
+          "line": 276,
           "column": 81
         }
       ]
@@ -11390,8 +11567,20 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 456,
+          "line": 457,
           "column": 14
+        }
+      ]
+    },
+    "a13550662feade03": {
+      "source": "重新检测",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 367,
+          "column": 115
         }
       ]
     },
@@ -11479,8 +11668,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 446,
-          "column": 78
+          "line": 482,
+          "column": 98
         }
       ]
     },
@@ -11557,18 +11746,18 @@
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 43,
+          "line": 47,
           "column": 13
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 154,
+          "line": 158,
           "column": 21
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 127,
-          "column": 46
+          "line": 133,
+          "column": 14
         },
         {
           "file": "src/utils/errorHumanizer.js",
@@ -11589,15 +11778,15 @@
         }
       ]
     },
-    "a3ba53fadbaed9d7": {
-      "source": "调试",
+    "a3f9afd0aae36ddb": {
+      "source": "重试中",
       "kind": "text",
       "placeholders": 0,
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 346,
-          "column": 134
+          "line": 300,
+          "column": 14
         }
       ]
     },
@@ -11625,7 +11814,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 785,
+          "line": 787,
           "column": 12
         }
       ]
@@ -11661,8 +11850,8 @@
       "refs": [
         {
           "file": "src/views/Diagnostics.vue",
-          "line": 205,
-          "column": 139
+          "line": 206,
+          "column": 1
         }
       ]
     },
@@ -11673,12 +11862,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 656,
+          "line": 658,
           "column": 47
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 668,
+          "line": 670,
           "column": 49
         }
       ]
@@ -11719,8 +11908,8 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 459,
-          "column": 17
+          "line": 460,
+          "column": 1
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
@@ -11971,15 +12160,15 @@
         }
       ]
     },
-    "a737fd72b0160164": {
-      "source": "已选中",
-      "kind": "text",
-      "placeholders": 0,
+    "a728e278ed9d6f16": {
+      "source": "缓存读取 {0} · 缓存写入 {1}",
+      "kind": "template",
+      "placeholders": 2,
       "refs": [
         {
-          "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 364,
-          "column": 46
+          "file": "src/views/RequestMetrics.vue",
+          "line": 468,
+          "column": 130
         }
       ]
     },
@@ -11990,8 +12179,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 349,
-          "column": 173
+          "line": 396,
+          "column": 178
         }
       ]
     },
@@ -12019,6 +12208,18 @@
         }
       ]
     },
+    "a7f2e73d99c72057": {
+      "source": "当前页汇总",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/RequestMetrics.vue",
+          "line": 383,
+          "column": 34
+        }
+      ]
+    },
     "a8254fddb4676c65": {
       "source": "监督模型",
       "kind": "text",
@@ -12036,7 +12237,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 227,
+          "line": 259,
           "column": 17
         }
       ]
@@ -12114,7 +12315,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 277,
+          "line": 281,
           "column": 72
         }
       ]
@@ -12138,7 +12339,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 589,
+          "line": 591,
           "column": 16
         }
       ]
@@ -12191,7 +12392,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 429,
+          "line": 430,
           "column": 14
         }
       ]
@@ -12468,13 +12669,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 248,
+          "line": 283,
           "column": 16
-        },
-        {
-          "file": "src/views/RequestMetrics.vue",
-          "line": 347,
-          "column": 14
         }
       ]
     },
@@ -12524,18 +12720,6 @@
         }
       ]
     },
-    "b0385cfe4b424d83": {
-      "source": "历史",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 341,
-          "column": 77
-        }
-      ]
-    },
     "b069931fb5aab9da": {
       "source": "鉴权失败：Invalid API key",
       "kind": "text",
@@ -12543,7 +12727,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 616,
+          "line": 618,
           "column": 114
         }
       ]
@@ -12579,7 +12763,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 875,
+          "line": 877,
           "column": 49
         }
       ]
@@ -12654,7 +12838,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 733,
+          "line": 735,
           "column": 12
         }
       ]
@@ -12760,13 +12944,25 @@
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 109,
+          "line": 113,
           "column": 48
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 60,
           "column": 29
+        }
+      ]
+    },
+    "b4389eaffddcd2f4": {
+      "source": "模型 / 供应商",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/RequestMetrics.vue",
+          "line": 419,
+          "column": 47
         }
       ]
     },
@@ -12789,7 +12985,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 288,
+          "line": 323,
           "column": 76
         }
       ]
@@ -12827,6 +13023,18 @@
           "file": "src/components/HomeMetricsCard.vue",
           "line": 328,
           "column": 5
+        }
+      ]
+    },
+    "b5896e2e56d20d68": {
+      "source": "终端：",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 359,
+          "column": 45
         }
       ]
     },
@@ -12873,7 +13081,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 398,
+          "line": 436,
           "column": 82
         }
       ]
@@ -13017,7 +13225,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 263,
+          "line": 300,
           "column": 14
         },
         {
@@ -13087,7 +13295,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 368,
+          "line": 411,
           "column": 12
         }
       ]
@@ -13222,18 +13430,6 @@
         }
       ]
     },
-    "ba7637bd1cac402b": {
-      "source": "按请求查看 token 分类、缓存命中率与计费信息。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/RequestMetrics.vue",
-          "line": 338,
-          "column": 49
-        }
-      ]
-    },
     "bac4ff88b5c95a05": {
       "source": "打开视觉委派设置",
       "kind": "text",
@@ -13241,8 +13437,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 92,
-          "column": 9
+          "line": 93,
+          "column": 1
         }
       ]
     },
@@ -13494,7 +13690,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 219,
+          "line": 251,
           "column": 30
         }
       ]
@@ -13658,8 +13854,25 @@
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 153,
+          "line": 157,
           "column": 36
+        }
+      ]
+    },
+    "c14502512a67460c": {
+      "source": "刷新请求明细",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/RequestMetrics.vue",
+          "line": 373,
+          "column": 22
+        },
+        {
+          "file": "src/views/RequestMetrics.vue",
+          "line": 374,
+          "column": 17
         }
       ]
     },
@@ -13793,7 +14006,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 326,
+          "line": 385,
           "column": 13
         }
       ]
@@ -13894,7 +14107,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 226,
+          "line": 258,
           "column": 13
         }
       ]
@@ -13918,8 +14131,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 380,
-          "column": 41
+          "line": 391,
+          "column": 34
         }
       ]
     },
@@ -13983,18 +14196,6 @@
         }
       ]
     },
-    "c72f2396e9d3eba2": {
-      "source": "已记录 usage",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/RequestMetrics.vue",
-          "line": 342,
-          "column": 65
-        }
-      ]
-    },
     "c75bb65232483ae4": {
       "source": "对话 {0}",
       "kind": "template",
@@ -14002,7 +14203,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 120,
+          "line": 119,
           "column": 27
         }
       ]
@@ -14118,7 +14319,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 219,
+          "line": 251,
           "column": 46
         }
       ]
@@ -14154,7 +14355,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 213,
+          "line": 233,
           "column": 18
         }
       ]
@@ -14224,7 +14425,7 @@
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 105,
+          "line": 109,
           "column": 46
         },
         {
@@ -14241,11 +14442,6 @@
           "file": "src/utils/displayName.js",
           "line": 10,
           "column": 38
-        },
-        {
-          "file": "src/views/RequestMetrics.vue",
-          "line": 376,
-          "column": 41
         }
       ]
     },
@@ -14256,8 +14452,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 491,
-          "column": 11
+          "line": 509,
+          "column": 1
         }
       ]
     },
@@ -14336,7 +14532,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 219,
+          "line": 251,
           "column": 85
         }
       ]
@@ -14432,7 +14628,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 909,
+          "line": 911,
           "column": 69
         }
       ]
@@ -14485,7 +14681,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 621,
+          "line": 623,
           "column": 16
         }
       ]
@@ -14545,7 +14741,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 265,
+          "line": 269,
           "column": 72
         }
       ]
@@ -14557,8 +14753,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 328,
-          "column": 91
+          "line": 329,
+          "column": 1
         }
       ]
     },
@@ -14586,8 +14782,8 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 385,
-          "column": 41
+          "line": 424,
+          "column": 47
         }
       ]
     },
@@ -14663,7 +14859,7 @@
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 100,
+          "line": 107,
           "column": 42
         },
         {
@@ -14808,7 +15004,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 401,
+          "line": 402,
           "column": 14
         }
       ]
@@ -14938,12 +15134,12 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 122,
+          "line": 123,
           "column": 38
         },
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 152,
+          "line": 153,
           "column": 50
         }
       ]
@@ -14955,7 +15151,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 675,
+          "line": 677,
           "column": 50
         }
       ]
@@ -15095,8 +15291,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 71,
-          "column": 144
+          "line": 72,
+          "column": 1
         }
       ]
     },
@@ -15143,8 +15339,8 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 144,
-          "column": 53
+          "line": 145,
+          "column": 1
         }
       ]
     },
@@ -15273,7 +15469,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 165,
+          "line": 197,
           "column": 19
         }
       ]
@@ -15338,8 +15534,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 351,
-          "column": 160
+          "line": 398,
+          "column": 165
         }
       ]
     },
@@ -15396,7 +15592,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 177,
+          "line": 178,
           "column": 18
         },
         {
@@ -15474,7 +15670,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 423,
+          "line": 424,
           "column": 14
         }
       ]
@@ -15486,7 +15682,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 407,
+          "line": 408,
           "column": 14
         }
       ]
@@ -15527,8 +15723,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 539,
-          "column": 43
+          "line": 540,
+          "column": 1
         }
       ]
     },
@@ -15575,8 +15771,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 128,
-          "column": 69
+          "line": 140,
+          "column": 14
         }
       ]
     },
@@ -15613,6 +15809,16 @@
           "file": "src/components/settings/categories/AdvancedSettings.vue",
           "line": 346,
           "column": 22
+        },
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 272,
+          "column": 19
+        },
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 394,
+          "column": 1
         }
       ]
     },
@@ -15640,8 +15846,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 444,
-          "column": 74
+          "line": 480,
+          "column": 94
         }
       ]
     },
@@ -15746,8 +15952,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 331,
-          "column": 85
+          "line": 332,
+          "column": 1
         },
         {
           "file": "src/views/MetricsDetail.vue",
@@ -15842,6 +16048,18 @@
         {
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
           "line": 146,
+          "column": 16
+        }
+      ]
+    },
+    "dff3605d969cb455": {
+      "source": "个会话已选中",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 420,
           "column": 16
         }
       ]
@@ -15983,7 +16201,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 333,
+          "line": 364,
           "column": 56
         }
       ]
@@ -15995,12 +16213,12 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 98,
+          "line": 97,
           "column": 53
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 181,
+          "line": 213,
           "column": 13
         }
       ]
@@ -16036,7 +16254,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 417,
+          "line": 418,
           "column": 14
         }
       ]
@@ -16048,7 +16266,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 420,
+          "line": 421,
           "column": 14
         }
       ]
@@ -16084,7 +16302,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 109,
+          "line": 108,
           "column": 31
         }
       ]
@@ -16096,7 +16314,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 314,
+          "line": 373,
           "column": 22
         }
       ]
@@ -16173,7 +16391,7 @@
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 44,
+          "line": 48,
           "column": 14
         },
         {
@@ -16231,8 +16449,8 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 147,
-          "column": 81
+          "line": 148,
+          "column": 1
         }
       ]
     },
@@ -16260,7 +16478,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 877,
+          "line": 879,
           "column": 35
         }
       ]
@@ -16335,13 +16553,8 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 273,
+          "line": 277,
           "column": 72
-        },
-        {
-          "file": "src/views/RequestMetrics.vue",
-          "line": 386,
-          "column": 41
         }
       ]
     },
@@ -16376,7 +16589,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 676,
+          "line": 678,
           "column": 170
         }
       ]
@@ -16453,8 +16666,20 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 467,
-          "column": 43
+          "line": 468,
+          "column": 1
+        }
+      ]
+    },
+    "e92ff6d2feba5015": {
+      "source": "应用到 Cursor",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 368,
+          "column": 154
         }
       ]
     },
@@ -16571,7 +16796,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 352,
+          "line": 411,
           "column": 9
         }
       ]
@@ -16622,7 +16847,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 128,
+          "line": 129,
           "column": 10
         }
       ]
@@ -16781,18 +17006,6 @@
         }
       ]
     },
-    "eef8bbaaf763d982": {
-      "source": "· 调试日志",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 242,
-          "column": 79
-        }
-      ]
-    },
     "ef1ea78a1103def9": {
       "source": "跟随界面语言",
       "kind": "text",
@@ -16812,7 +17025,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 225,
+          "line": 257,
           "column": 13
         }
       ]
@@ -16829,7 +17042,7 @@
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 111,
+          "line": 115,
           "column": 10
         },
         {
@@ -16891,24 +17104,9 @@
           "column": 77
         },
         {
-          "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 364,
-          "column": 70
-        },
-        {
           "file": "src/views/RequestMetrics.vue",
-          "line": 335,
+          "line": 366,
           "column": 32
-        },
-        {
-          "file": "src/views/RequestMetrics.vue",
-          "line": 340,
-          "column": 88
-        },
-        {
-          "file": "src/views/RequestMetrics.vue",
-          "line": 341,
-          "column": 88
         }
       ]
     },
@@ -16943,7 +17141,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 669,
+          "line": 671,
           "column": 21
         }
       ]
@@ -17020,8 +17218,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 443,
-          "column": 17
+          "line": 444,
+          "column": 1
         }
       ]
     },
@@ -17032,7 +17230,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 243,
+          "line": 247,
           "column": 59
         }
       ]
@@ -17049,17 +17247,17 @@
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 41,
+          "line": 45,
           "column": 14
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 179,
+          "line": 211,
           "column": 14
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 185,
+          "line": 217,
           "column": 45
         }
       ]
@@ -17083,7 +17281,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 707,
+          "line": 709,
           "column": 12
         }
       ]
@@ -17095,7 +17293,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 190,
+          "line": 194,
           "column": 19
         }
       ]
@@ -17160,8 +17358,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 350,
-          "column": 151
+          "line": 397,
+          "column": 148
         }
       ]
     },
@@ -17196,7 +17394,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 608,
+          "line": 610,
           "column": 139
         }
       ]
@@ -17354,12 +17552,12 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 462,
+          "line": 463,
           "column": 14
         },
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 465,
+          "line": 466,
           "column": 14
         }
       ]
@@ -17393,16 +17591,6 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
-        {
-          "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 255,
-          "column": 16
-        },
-        {
-          "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 369,
-          "column": 14
-        },
         {
           "file": "src/views/Home.vue",
           "line": 246,
@@ -17441,7 +17629,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 490,
+          "line": 492,
           "column": 58
         }
       ]
@@ -17502,7 +17690,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 483,
+          "line": 500,
           "column": 15
         }
       ]
@@ -17596,7 +17784,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 294,
+          "line": 298,
           "column": 70
         }
       ]
@@ -17673,8 +17861,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 474,
-          "column": 13
+          "line": 475,
+          "column": 1
         }
       ]
     },
@@ -17795,13 +17983,8 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 355,
-          "column": 88
-        },
-        {
-          "file": "src/views/RequestMetrics.vue",
-          "line": 378,
-          "column": 56
+          "line": 422,
+          "column": 62
         }
       ]
     },
@@ -17884,7 +18067,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 869,
+          "line": 871,
           "column": 46
         }
       ]
@@ -17976,6 +18159,18 @@
         }
       ]
     },
+    "fde03543635d2a0a": {
+      "source": "时间 / 耗时",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/RequestMetrics.vue",
+          "line": 426,
+          "column": 47
+        }
+      ]
+    },
     "fde9b686fc6e4526": {
       "source": "{0} 的类型仅支持 OpenAI、Anthropic 或 Gemini",
       "kind": "template",
@@ -17983,7 +18178,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 404,
+          "line": 405,
           "column": 14
         }
       ]

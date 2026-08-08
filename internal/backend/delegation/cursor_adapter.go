@@ -24,6 +24,7 @@ type CursorProgressPublisher func(parentRequestID string, pending runtimecore.Pe
 
 type checkpointPublisherContextKey struct{}
 type progressPublisherContextKey struct{}
+type visibleUpdatePublisherContextKey struct{}
 
 func withWorkerCheckpointPublisher(ctx context.Context, publish func(WorkerCheckpoint) bool) context.Context {
 	if ctx == nil {
@@ -67,6 +68,32 @@ func MarkWorkerProgress(ctx context.Context) bool {
 		return false
 	}
 	return publish()
+}
+
+// WithWorkerVisibleUpdatePublisher attaches a bounded, user-visible worker
+// update channel. It is deliberately separate from checkpoints: callers must
+// pass only presentable progress, never private reasoning.
+func WithWorkerVisibleUpdatePublisher(ctx context.Context, publish func(string) bool) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if publish == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, visibleUpdatePublisherContextKey{}, publish)
+}
+
+// PublishWorkerVisibleUpdate sends a user-visible worker status/text update to
+// the parent projection transport. The adapter is responsible for coalescing.
+func PublishWorkerVisibleUpdate(ctx context.Context, text string) bool {
+	if ctx == nil || strings.TrimSpace(text) == "" {
+		return false
+	}
+	publish, ok := ctx.Value(visibleUpdatePublisherContextKey{}).(func(string) bool)
+	if !ok || publish == nil {
+		return false
+	}
+	return publish(text)
 }
 
 func PublishTaskCheckpoint(ctx context.Context, request TaskRequest, phase SupervisionStatus, step int, recentTools, changedFiles []string, progress, blocker string) bool {

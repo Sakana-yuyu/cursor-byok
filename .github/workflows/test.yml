@@ -50,3 +50,25 @@ jobs:
       - name: Run button-level E2E tests
         working-directory: frontend
         run: npx playwright test --reporter=line
+
+  go:
+    name: Go build / vet / test
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...

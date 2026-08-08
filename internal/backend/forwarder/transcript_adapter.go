@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"cursor/gen/agentv1"
 	modeladapter "cursor/internal/backend/agent/model"
@@ -151,8 +152,12 @@ func projectCursorTranscriptEntry(entry HistoryEntry) (cursorTranscriptLine, boo
 		if err := json.Unmarshal(entry.Payload, &payload); err != nil {
 			return cursorTranscriptLine{}, false, fmt.Errorf("decode transcript tool_call: %w", err)
 		}
+		toolCallPayload, err := normalizeLegacyTranscriptToolCall(payload.ToolCall)
+		if err != nil {
+			return cursorTranscriptLine{}, false, err
+		}
 		toolCall := &agentv1.ToolCall{}
-		if err := protojson.Unmarshal(payload.ToolCall, toolCall); err != nil {
+		if err := protojson.Unmarshal(toolCallPayload, toolCall); err != nil {
 			return cursorTranscriptLine{}, false, fmt.Errorf("decode transcript tool_call payload: %w", err)
 		}
 		descriptor, ok := promptengine.BuildToolCallReplayDescriptor(firstNonEmpty(payload.ToolCallID, entry.ToolCallID), toolCall)
@@ -169,6 +174,40 @@ func projectCursorTranscriptEntry(entry HistoryEntry) (cursorTranscriptLine, boo
 	default:
 		return cursorTranscriptLine{}, false, nil
 	}
+}
+
+// normalizeLegacyTranscriptToolCall upgrades history written before ShellArgs
+// changed outputNotification from a message to raw protobuf bytes. json.Marshal
+// encodes the bytes as the base64 form protojson expects.
+func normalizeLegacyTranscriptToolCall(payload []byte) ([]byte, error) {
+	var raw map[string]any
+	if err := json.Unmarshal(payload, &raw); err != nil {
+		return nil, fmt.Errorf("decode transcript tool_call payload: %w", err)
+	}
+	shellToolCall, _ := raw["shellToolCall"].(map[string]any)
+	args, _ := shellToolCall["args"].(map[string]any)
+	notification, legacy := args["outputNotification"].(map[string]any)
+	if !legacy {
+		return payload, nil
+	}
+	notificationJSON, err := json.Marshal(notification)
+	if err != nil {
+		return nil, fmt.Errorf("encode legacy shell output notification: %w", err)
+	}
+	config := &agentv1.ShellOutputNotificationConfig{}
+	if err := protojson.Unmarshal(notificationJSON, config); err != nil {
+		return nil, fmt.Errorf("decode legacy shell output notification: %w", err)
+	}
+	encoded, err := proto.Marshal(config)
+	if err != nil {
+		return nil, fmt.Errorf("encode legacy shell output notification: %w", err)
+	}
+	args["outputNotification"] = encoded
+	normalized, err := json.Marshal(raw)
+	if err != nil {
+		return nil, fmt.Errorf("encode normalized transcript tool_call: %w", err)
+	}
+	return normalized, nil
 }
 
 func projectCursorTranscriptModelMessage(message modeladapter.Message) (cursorTranscriptLine, bool, error) {

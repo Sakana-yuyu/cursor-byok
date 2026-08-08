@@ -6,6 +6,7 @@ import (
 	"cursor/internal/client"
 	"cursor/internal/i18n"
 	"cursor/internal/logger"
+	"cursor/internal/processutil"
 	"cursor/internal/updater"
 	"fmt"
 	"io"
@@ -399,7 +400,7 @@ func parseStatsOverlayLayout(value string) (statsOverlayLayout, bool) {
 func statsOverlayWindowSize(style string) (width, height int) {
 	switch style {
 	case statsOverlayStyleEngine:
-		return 240, 196
+		return 240, 220
 	case statsOverlayStyleOrb:
 		return 176, 220
 	default:
@@ -819,7 +820,9 @@ func cursorRegistryCandidates() []string {
 	}
 	var candidates []string
 	for _, key := range keys {
-		output, err := exec.Command("reg", "query", key, "/s", "/v", "InstallLocation").Output()
+		cmd := exec.Command("reg", "query", key, "/s", "/v", "InstallLocation")
+		processutil.HideWindow(cmd)
+		output, err := cmd.Output()
 		if err != nil {
 			continue
 		}

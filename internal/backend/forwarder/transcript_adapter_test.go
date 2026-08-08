@@ -133,6 +133,42 @@ func TestConversationFileStoreBackfillsTranscriptOnStartup(t *testing.T) {
 	}
 }
 
+func TestProjectCursorTranscriptAcceptsLegacyShellOutputNotificationObject(t *testing.T) {
+	conversation := transcriptTestConversation([]HistoryEntry{{
+		TurnSeq: 1,
+		Role:    "assistant",
+		Kind:    "tool_call",
+		Payload: []byte(`{
+			"tool_call_id": "call-1",
+			"tool_name": "Shell",
+			"tool_call": {
+				"shellToolCall": {
+					"args": {
+						"command": "echo done",
+						"toolCallId": "call-1",
+						"outputNotification": {
+							"pattern": "DONE",
+							"reason": "command completed"
+						}
+					}
+				}
+			}
+		}`),
+	}})
+
+	data, err := projectCursorTranscriptJSONL(conversation)
+	if err != nil {
+		t.Fatalf("projectCursorTranscriptJSONL() error = %v", err)
+	}
+	lines := decodeCursorTranscriptLines(t, data)
+	if len(lines) != 1 || lines[0].Message == nil || len(lines[0].Message.Content) != 1 {
+		t.Fatalf("transcript lines = %#v", lines)
+	}
+	if lines[0].Message.Content[0].Name != "Shell" {
+		t.Fatalf("tool name = %q, want Shell", lines[0].Message.Content[0].Name)
+	}
+}
+
 func TestNormalizeAgentTranscriptsFolderRejectsUnexpectedPaths(t *testing.T) {
 	root := t.TempDir()
 	if got := normalizeAgentTranscriptsFolder(filepath.Join(root, "agent-transcripts")); got == "" {

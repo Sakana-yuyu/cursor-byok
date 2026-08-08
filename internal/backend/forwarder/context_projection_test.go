@@ -1169,7 +1169,7 @@ func TestBuildAutoCompactionPlanDoesNotRewriteCanonicalToolResults(t *testing.T)
 	}
 }
 
-func TestBuildContextProjectionSummaryPlanRejectsIncompleteToolChain(t *testing.T) {
+func TestBuildContextProjectionSummaryPlanSummarizesInterruptedHistoricalToolChain(t *testing.T) {
 	conversation := contextProjectionTestConversation(t, 8)
 	conversation.CurrentTurnSeq = 8
 	conversation.CurrentRequestID = "request-8"
@@ -1184,8 +1184,14 @@ func TestBuildContextProjectionSummaryPlanRejectsIncompleteToolChain(t *testing.
 	conversation.Entries = entries
 
 	plan, err := buildContextProjectionSummaryPlan(conversation, "model-a", nil, 120_000, 160_000, 10_000)
-	if err == nil || !strings.Contains(err.Error(), "incomplete tool chain") {
-		t.Fatalf("buildContextProjectionSummaryPlan() = (%#v, %v), want incomplete tool chain error", plan, err)
+	if err != nil {
+		t.Fatalf("buildContextProjectionSummaryPlan() error = %v", err)
+	}
+	if plan == nil {
+		t.Fatal("buildContextProjectionSummaryPlan() = nil, want projection plan")
+	}
+	if !strings.Contains(strings.Join(plan.CompactedTurns[0].Steps, "\n"), "interrupted") {
+		t.Fatalf("projection summary = %#v, want interrupted tool-chain note", plan.CompactedTurns)
 	}
 }
 

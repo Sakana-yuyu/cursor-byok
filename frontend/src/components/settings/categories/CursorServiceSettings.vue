@@ -15,7 +15,7 @@ import {
   setCursorManualPath,
   toUserError,
 } from "@/state/appState";
-import { autoMatchContextWindows, detectCursorPath } from "@/services/clientApi";
+import { autoMatchContextWindows, applyTerminalEnvironment, detectCursorPath, getTerminalEnvironmentStatus } from "@/services/clientApi";
 import { isBrowserPreview } from "@/services/runtimeAdapter";
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
@@ -35,6 +35,7 @@ const message = useMessage();
 const routeModeDraft = ref(appState.routingMode);
 const manualPath = ref("");
 const detectedPath = ref("");
+const terminalEnvironment = ref(null);
 
 const routeModeState = reactive({
   busy: false,
@@ -61,6 +62,12 @@ const modelConfigState = reactive({
 });
 
 const contextMatchState = reactive({
+  busy: false,
+  error: "",
+  retry: null,
+});
+
+const terminalEnvironmentState = reactive({
   busy: false,
   error: "",
   retry: null,
@@ -260,9 +267,37 @@ async function handleContextMatchNow() {
   }
 }
 
+async function refreshTerminalEnvironment() {
+  terminalEnvironmentState.busy = true;
+  terminalEnvironmentState.error = "";
+  terminalEnvironmentState.retry = refreshTerminalEnvironment;
+  try {
+    terminalEnvironment.value = await getTerminalEnvironmentStatus();
+  } catch (error) {
+    terminalEnvironmentState.error = toUserError(error);
+  } finally {
+    terminalEnvironmentState.busy = false;
+  }
+}
+
+async function handleApplyTerminalEnvironment() {
+  terminalEnvironmentState.busy = true;
+  terminalEnvironmentState.error = "";
+  terminalEnvironmentState.retry = handleApplyTerminalEnvironment;
+  try {
+    terminalEnvironment.value = await applyTerminalEnvironment();
+    message.success("终端与 Python 环境已写入 Cursor，重新打开终端后生效。");
+  } catch (error) {
+    terminalEnvironmentState.error = toUserError(error);
+  } finally {
+    terminalEnvironmentState.busy = false;
+  }
+}
+
 onMounted(() => {
   manualPath.value = getCursorManualPath();
   void handleDetectCursorPath();
+  void refreshTerminalEnvironment();
 });
 </script>
 
@@ -308,6 +343,30 @@ onMounted(() => {
         >
           自动检测
         </Button>
+      </SettingsRow>
+    </SettingsSection>
+
+    <SettingsSection title="终端环境">
+      <SettingsRow
+        label="Cursor 终端与 Python 3"
+        description="自动选择当前系统可用的现代终端，并固定 Python 3 解释器路径。Windows 会优先使用 PowerShell 7。"
+        :busy="terminalEnvironmentState.busy"
+        :error="terminalEnvironmentState.error"
+        @retry="retryState(terminalEnvironmentState)"
+      >
+        <div class="w-full max-w-[460px] space-y-2">
+          <div v-if="terminalEnvironment" class="rounded-[6px] border border-white/10 bg-black/15 px-3 py-2 text-xs text-[#a3a3a3]">
+            <p><span class="text-[#737373]">终端：</span>{{ terminalEnvironment.shellName || "未检测到" }}<span v-if="terminalEnvironment.shellVersion"> · {{ terminalEnvironment.shellVersion }}</span></p>
+            <p class="mt-1 break-all"><span class="text-[#737373]">Python：</span>{{ terminalEnvironment.pythonPath || "未检测到 Python 3" }}<span v-if="terminalEnvironment.pythonVersion"> · {{ terminalEnvironment.pythonVersion }}</span></p>
+            <p v-if="terminalEnvironment.configurationNotice" class="mt-1 text-[#737373]">{{ terminalEnvironment.configurationNotice }}</p>
+            <p v-if="terminalEnvironment.upgradeRecommended" class="mt-2 text-[#f0c674]">{{ terminalEnvironment.upgradeMessage }}</p>
+          </div>
+          <p v-else class="text-xs text-[#737373]">正在检测本机终端和 Python 3。</p>
+        </div>
+        <div class="flex shrink-0 gap-2">
+          <Button variant="default" :disabled="terminalEnvironmentState.busy" @click="refreshTerminalEnvironment">重新检测</Button>
+          <Button variant="primary" :disabled="terminalEnvironmentState.busy || !terminalEnvironment?.shellPath" @click="handleApplyTerminalEnvironment">应用到 Cursor</Button>
+        </div>
       </SettingsRow>
     </SettingsSection>
 

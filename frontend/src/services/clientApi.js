@@ -13,6 +13,7 @@ import {
   GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
   EnableReaderMCP,
   RepairCACorruption, GetCARepairStatus,
+  GetTerminalEnvironmentStatus, ApplyTerminalEnvironment,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
 import { GetAdRuntime, OpenExternalURL } from "@bindings/cursor/internal/bridge/adservice.js";
 import {
@@ -59,6 +60,7 @@ const desktopMethods = {
   GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
   EnableReaderMCP,
   RepairCACorruption, GetCARepairStatus,
+  GetTerminalEnvironmentStatus, ApplyTerminalEnvironment,
 };
 
 const API_LOG_PREFIX = "[clientApi]";
@@ -131,6 +133,26 @@ export function disconnectCursorAccount() {
 
 export function getProxyState() {
   return withApiLogging("GetState", undefined, () => desktopOrMock(browserPreviewMockProxyState(), "@bindings/cursor/internal/bridge/proxyservice.js", "GetState"));
+}
+
+const BROWSER_TERMINAL_ENVIRONMENT = {
+  platform: "browser-preview",
+  shellPath: "/bin/zsh",
+  shellName: "zsh",
+  shellVersion: "",
+  pythonPath: "/usr/bin/python3",
+  pythonVersion: "Python 3",
+  upgradeRecommended: false,
+  upgradeMessage: "",
+  configurationNotice: "浏览器预览模式：使用模拟环境。",
+};
+
+export function getTerminalEnvironmentStatus() {
+  return withApiLogging("GetTerminalEnvironmentStatus", undefined, () => desktopOrMock(BROWSER_TERMINAL_ENVIRONMENT, "@bindings/cursor/internal/bridge/proxyservice.js", "GetTerminalEnvironmentStatus"));
+}
+
+export function applyTerminalEnvironment() {
+  return withApiLogging("ApplyTerminalEnvironment", undefined, () => desktopOrMock(BROWSER_TERMINAL_ENVIRONMENT, "@bindings/cursor/internal/bridge/proxyservice.js", "ApplyTerminalEnvironment"));
 }
 
 export function getHomeMetricsSummary() {

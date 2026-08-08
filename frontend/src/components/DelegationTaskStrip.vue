@@ -22,6 +22,10 @@ const visibleItems = computed(() =>
     })
     .slice(0, 4),
 );
+// 「运行中」只统计真正在执行的任务；queued 只是排队等待槽位，不算运行，
+// 否则一次批量派发会把排队任务全部显示成“运行中”，误导用户以为并发失控。
+const runningCount = computed(() => state.items.filter((item) => item?.status === "running").length);
+const queuedCount = computed(() => state.items.filter((item) => item?.status === "queued").length);
 const activeCount = computed(() => state.items.filter((item) => item.cancelable).length);
 const detailVisible = ref(false);
 const detailItem = ref(null);
@@ -174,10 +178,10 @@ usePolling(refresh, { intervalMs: 1500 });
         </div>
         <span
           class="center-row shrink-0 gap-1.5 rounded-full border border-white/10 bg-black/15 px-2.5 py-1 text-xs text-[#a3a3a3]"
-          :title="activeCount ? '有正在运行的任务' : '当前没有运行中的任务'"
+          :title="queuedCount ? `执行中 ${runningCount} · 排队 ${queuedCount}` : '当前没有运行中的任务'"
         >
-          <span class="size-1.5 rounded-full transition-colors" :class="activeCount ? 'animate-pulse bg-[#22c55e]' : 'bg-[#525252]'" />
-          {{ activeCount }} 运行中
+          <span class="size-1.5 rounded-full transition-colors" :class="runningCount ? 'animate-pulse bg-[#22c55e]' : 'bg-[#525252]'" />
+          {{ runningCount }} 运行中<template v-if="queuedCount"> · {{ queuedCount }} 排队</template>
         </span>
       </div>
       <div v-if="state.error" class="break-words rounded-[6px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-xs text-[#fca5a5]">{{ state.error }}</div>

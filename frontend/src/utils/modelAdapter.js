@@ -63,6 +63,7 @@ export function buildModelAdapterIdentityKey(adapter) {
     asString(adapter.modelID).toLowerCase(),
     asString(adapter.apiKey),
     adapter.type === "openai" ? normalizeOpenAIEndpoint(adapter.openAIEndpoint) : "",
+    asString(adapter.groupName).trim(),
   ].join("\n");
 }
 

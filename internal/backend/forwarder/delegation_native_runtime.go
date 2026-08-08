@@ -2,6 +2,7 @@ package forwarder
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -17,6 +18,16 @@ const nativeDelegationProgressInterval = 12 * time.Second
 // defaultNativeDelegationProgressTimeout 是 native Cursor 子代理「无有效进展」看门狗的兜底阈值，
 // 运行时由 config.nativeDelegationProgressTimeout 覆盖（默认 5 分钟，最小 1 分钟）。
 const defaultNativeDelegationProgressTimeout = 5 * time.Minute
+
+// defaultNativeDelegationConcurrencyLimit 是直接 Task→Cursor 原生子代理的全局并发上限。
+// 这类执行不进入 Multitask scheduler，此前完全不受限制：模型每个 provider pass 都能
+// 再批量启动子代理，数百个 Cursor 子会话同时运行会拖垮客户端与整机（曾出现 300+ 并发卡死）。
+// 上限优先取 delegation.maxConcurrency（与 Multitask 一致），未配置时回退本默认值。
+// 该值同时作为 nativeDelegationLimiter 的兜底上限。
+const defaultNativeDelegationConcurrencyLimit = 4
+
+// errNativeDelegationConcurrencyLimit 作为工具错误返回给模型，阻止继续批量派发子代理。
+var errNativeDelegationConcurrencyLimit = errors.New("子代理并发数已达上限：当前同时运行的 Cursor 子代理过多。请等待现有子代理完成后再启动新任务，或将并行任务合并为串行执行；不要再继续批量启动子代理")
 
 // nativeDelegationRuntime tracks direct Cursor Task -> subagent executions.
 // These executions do not enter the Multitask scheduler, but they still need
@@ -39,11 +50,16 @@ type nativeDelegationRuntime struct {
 	FinishedAt              time.Time
 	UpdatedAt               time.Time
 	LastEffectiveProgressAt time.Time
+	// holdsSlot 表示该任务已占用原生子代理并发信号量；terminal 时释放，防重复释放。
+	holdsSlot bool
 }
 
-func (service *Service) registerNativeDelegation(stream *ActiveStream, pending runtimecore.PendingExec, serverMessage *agentv1.AgentServerMessage) {
+// registerNativeDelegation 登记一个直接 Task→Cursor 原生子代理，并占用全局并发槽位。
+// 返回 false 表示已达并发上限，调用方必须放弃本次派发并把错误交还给模型，
+// 不能继续向客户端发送 ExecServerMessage(subagent_args)。
+func (service *Service) registerNativeDelegation(stream *ActiveStream, pending runtimecore.PendingExec, serverMessage *agentv1.AgentServerMessage) bool {
 	if service == nil || stream == nil || strings.TrimSpace(pending.ExecKind) != "subagent" {
-		return
+		return false
 	}
 	args, _ := runtimecore.DecodeArgsMap(pending.ArgsJSON)
 	now := time.Now().UTC()
@@ -68,7 +84,7 @@ func (service *Service) registerNativeDelegation(stream *ActiveStream, pending r
 	}
 	stream.mu.Unlock()
 	if strings.TrimSpace(pending.ExecID) == "" || parentRequestID == "" {
-		return
+		return false
 	}
 	logger.Infof("forwarder native delegation identity request_id=%s exec_id=%s tool_call_id=%s model_id=%s model_name=%s worker_role=%s source=config_or_resolver",
 		parentRequestID, strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID), strings.TrimSpace(modelID), strings.TrimSpace(modelName), strings.TrimSpace(workerRole))
@@ -82,6 +98,17 @@ func (service *Service) registerNativeDelegation(stream *ActiveStream, pending r
 		})
 	}
 	service.delegationRuntimeMu.Lock()
+	if !service.acquireNativeDelegationSlotLocked() {
+		service.delegationRuntimeMu.Unlock()
+		logger.Errorf("forwarder native delegation rejected request_id=%s exec_id=%s reason=concurrency_limit", parentRequestID, strings.TrimSpace(pending.ExecID))
+		if service.debug != nil {
+			service.debug.LogRuntime(context.Background(), parentRequestID, stream.ConversationID, "native_delegation_rejected", map[string]any{
+				"exec_id": strings.TrimSpace(pending.ExecID),
+				"reason":  "concurrency_limit",
+			})
+		}
+		return false
+	}
 	if service.nativeDelegations == nil {
 		service.nativeDelegations = make(map[string]*nativeDelegationRuntime)
 	}
@@ -105,11 +132,13 @@ func (service *Service) registerNativeDelegation(stream *ActiveStream, pending r
 		StartedAt:               now,
 		UpdatedAt:               now,
 		LastEffectiveProgressAt: now,
+		holdsSlot:               true,
 	}
 	service.delegationRuntimeMu.Unlock()
 	service.publishNativeDelegationProgress(parentRequestID, pending.ExecID, nativeDelegationStartSummary(description, modelName, workerRole))
 	service.keepNativeDelegationAlive(parentRequestID, pending.ExecID)
 	service.watchNativeDelegationProgress(parentRequestID, pending.ExecID)
+	return true
 }
 
 // resolveDelegationTaskModelName converts Cursor's runtime model identifier
@@ -355,6 +384,10 @@ func (service *Service) updateNativeDelegationStatus(execID string, status deleg
 	item.UpdatedAt = now
 	if delegatedStatusTerminal(status) {
 		item.FinishedAt = now
+		if item.holdsSlot {
+			item.holdsSlot = false
+			service.releaseNativeDelegationSlotLocked()
+		}
 	}
 	requestID := item.ParentRequestID
 	snapshot := *item
@@ -429,6 +462,10 @@ func (service *Service) pruneNativeDelegationsLocked(now time.Time) {
 	cutoff := now.Add(-nativeDelegationRetention)
 	for id, item := range service.nativeDelegations {
 		if item == nil || (delegatedStatusTerminal(item.Status) && item.UpdatedAt.Before(cutoff)) {
+			if item != nil && item.holdsSlot {
+				item.holdsSlot = false
+				service.releaseNativeDelegationSlotLocked()
+			}
 			delete(service.nativeDelegations, id)
 		}
 	}

@@ -8,7 +8,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -598,8 +600,24 @@ func buildVisionImageContent(image *modeladapter.ImageContent) (*modeladapter.Im
 	}, nil
 }
 
-func fetchImageURL(rawURL string) ([]byte, string, error) {
-	client := &http.Client{Timeout: visionProxyCallTimeout}
+func fetchImageURLLegacy(rawURL string) ([]byte, string, error) {
+	if err := validateImageURL(rawURL); err != nil {
+		return nil, "", err
+	}
+	client := &http.Client{
+		Timeout: visionProxyCallTimeout,
+		// 每次重定向后重新执行私网/环回校验，防止 DNS 重绑定与
+		// 重定向到内网地址（SSRF）。
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return fmt.Errorf("fetch image url failed: too many redirects")
+			}
+			if err := validateImageURL(req.URL.String()); err != nil {
+				return err
+			}
+			return nil
+		},
+	}
 	resp, err := client.Get(rawURL)
 	if err != nil {
 		return nil, "", fmt.Errorf("fetch image url failed: %w", err)
@@ -614,6 +632,52 @@ func fetchImageURL(rawURL string) ([]byte, string, error) {
 	}
 	mediaType := modeladapter.NormalizeImageMIMEType("", rawURL, data)
 	return data, mediaType, nil
+}
+
+// validateImageURL 校验图片 URL 只能指向可公开访问的 http/https 目标：
+// 拒绝非 http(s) scheme、带用户信息或空 host 的地址，以及所有解析到
+// 环回、私网、链路本地、未指定、组播或保留地址的目标（SSRF 防护）。
+// host 为裸 IP 时直接判定；为域名时由标准库连接 + CheckRedirect 在
+// 每跳复检兜底。
+func validateImageURL(rawURL string) error {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return fmt.Errorf("fetch image url failed: invalid url: %w", err)
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return fmt.Errorf("fetch image url failed: scheme %q is not allowed", parsed.Scheme)
+	}
+	if parsed.User != nil {
+		return fmt.Errorf("fetch image url failed: url must not contain userinfo")
+	}
+	if parsed.Host == "" {
+		return fmt.Errorf("fetch image url failed: url host is empty")
+	}
+	if ip := net.ParseIP(strings.TrimSpace(parsed.Hostname())); ip != nil {
+		if isPrivateOrReservedIP(ip) {
+			return fmt.Errorf("fetch image url failed: host %q is a private or reserved address", parsed.Hostname())
+		}
+	}
+	return nil
+}
+
+// isPrivateOrReservedIP 判断 IP 是否属于禁止访问的地址段。
+func isPrivateOrReservedIP(ip net.IP) bool {
+	if ip == nil {
+		return true
+	}
+	normalized := ip.To4()
+	if normalized == nil {
+		normalized = ip
+	}
+	return normalized.IsLoopback() ||
+		normalized.IsPrivate() ||
+		(len(normalized) == net.IPv6len && normalized[0]&0xfe == 0xfc) ||
+		normalized.IsLinkLocalUnicast() ||
+		normalized.IsLinkLocalMulticast() ||
+		normalized.IsUnspecified() ||
+		normalized.IsMulticast()
 }
 
 // buildVisionPrompt 根据识图模式生成发给识图模型的统一指令。
@@ -785,7 +849,7 @@ func (service *Service) persistVisionArchive(conversationID string) {
 		logger.Errorf("forwarder vision archive marshal failed conv=%s error=%v", normalized, err)
 		return
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return
 	}
 	tempPath := path + ".tmp"
@@ -963,7 +1027,8 @@ type seeImageToolArgs struct {
 
 // handleSeeImageToolInvocation 处理主模型显式调用的 see_image 工具。
 // 它读取一张本地图片（或 URL），调用识图模型识图，把文本作为工具结果回填给主模型。
-// 仿照 handleGenerateImageToolInvocation 的 immediate native 收口模式。
+// 注意：识图只是工具结果，主模型需要读取并继续，因此收口方式与 GenerateImage 不同——
+// 这里走 completeSeeImageTool 的非收口路径（不标记终端工具调用），回合正常 resume。
 func (service *Service) handleSeeImageToolInvocation(stream *ActiveStream, invocation runtimecore.ToolInvocation) (err error) {
 	// 工具调用链是同步执行的，任何 panic 都会冒泡崩掉 forwarder（所有活跃对话掉线）。
 	// 这里把 panic 收口为工具结果文本，保证对话可继续。
@@ -1022,7 +1087,10 @@ func (service *Service) completeSeeImageTool(stream *ActiveStream, invocation ru
 	if err := service.completeImmediateToolResult(stream, invocation, resultText, nil); err != nil {
 		return err
 	}
-	markProviderTerminalToolInvocation(stream)
+	// 这里不能调用 markProviderTerminalToolInvocation：识图文本只是工具结果，主模型必须
+	// 读取它并继续推进任务，因此回合需要正常 resume（与普通工具调用一致），而不是像
+	// GenerateImage/send_final_summary 那样收口。早期实现误照搬 GenerateImage 的收口模式，
+	// 导致识图后循环直接关闭、模型拿不到识别结果，表现为对话"断连"。
 	return nil
 }
 

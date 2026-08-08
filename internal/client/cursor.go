@@ -6,6 +6,7 @@ import (
 	goruntime "runtime"
 
 	"cursor/internal/cursor"
+	"cursor/internal/logger"
 )
 
 // ApplyCursorSettings 用于处理与 ApplyCursorSettings 相关的逻辑。
@@ -43,6 +44,11 @@ func (s *ProxyService) ApplyCursorSettings() error {
 
 	if err := cursor.WriteUserProxySettings(cursor.ProxyURLFromListenAddr(s.proxy.Snapshot().ListenAddr)); err != nil {
 		return err
+	}
+	// 终端预设独立于代理生命周期：即使用户稍后停止代理，Cursor 仍会保留
+	// 已选中的现代终端和 Python 3 路径。探测失败不能阻断代理可用性。
+	if _, err := cursor.EnsureTerminalEnvironmentSettings(); err != nil {
+		logger.Errorf("apply cursor terminal environment failed: %v", err)
 	}
 	s.setCursorSettingsApplied(true)
 	return nil

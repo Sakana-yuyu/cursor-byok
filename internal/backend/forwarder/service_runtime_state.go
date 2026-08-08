@@ -37,13 +37,16 @@ func attachDelegationRunStates(stream *ActiveStream, state *agentv1.Conversation
 		if execKind == "subagent" {
 			title = "Cursor 子代理"
 		}
-		runs[toolCallID] = &agentv1.SubagentRunState{
+		run := &agentv1.SubagentRunState{
 			ParentToolCallId: toolCallID,
-			SubagentId:       stringPtr(delegationSubagentID(toolCallID)),
 			Environment:      agentv1.SubagentExecutionEnvironment_SUBAGENT_EXECUTION_ENVIRONMENT_LOCAL,
 			Status:           agentv1.SubagentRunStatus_SUBAGENT_RUN_STATUS_RUNNING,
 			Title:            stringPtr(title),
 		}
+		if execKind == "subagent" {
+			run.SubagentId = stringPtr(delegationSubagentID(toolCallID))
+		}
+		runs[toolCallID] = run
 	}
 	for toolCallID, terminal := range stream.DelegationRunTerminals {
 		if terminal != nil && strings.TrimSpace(toolCallID) != "" {
@@ -66,12 +69,14 @@ func (service *Service) recordDelegationRunTerminal(stream *ActiveStream, pendin
 	completionReason := agentv1.BackgroundTaskCompletionReason_BACKGROUND_TASK_COMPLETION_REASON_TASK_FINISHED
 	run := &agentv1.SubagentRunState{
 		ParentToolCallId:     strings.TrimSpace(pending.ToolCallID),
-		SubagentId:           stringPtr(delegationSubagentID(pending.ToolCallID)),
 		Environment:          agentv1.SubagentExecutionEnvironment_SUBAGENT_EXECUTION_ENVIRONMENT_LOCAL,
 		Status:               status,
 		Title:                stringPtr(strings.TrimSpace(title)),
 		CompletedTimestampMs: &now,
 		CompletionReason:     &completionReason,
+	}
+	if strings.TrimSpace(pending.ExecKind) == "subagent" {
+		run.SubagentId = stringPtr(delegationSubagentID(pending.ToolCallID))
 	}
 	if detail := strings.TrimSpace(detail); detail != "" {
 		run.Detail = stringPtr(detail)
@@ -163,4 +168,3 @@ func activeStreamRequestID(stream *ActiveStream) string {
 	defer stream.mu.Unlock()
 	return stream.RequestID
 }
-

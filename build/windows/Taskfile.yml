@@ -193,7 +193,7 @@ tasks:
         platforms: [windows]
       - cmd: cp "{{.OUTPUT}}" "{{.STAGING_DIR}}/"
         platforms: [darwin, linux]
-      - cmd: powershell -NoProfile -Command "Compress-Archive -Path bin/.zip-{{.ARCH}}/* -DestinationPath bin/{{.ZIP_NAME}} -Force"
+      - cmd: powershell -NoProfile -Command "Add-Type -AssemblyName System.IO.Compression.FileSystem; if (Test-Path 'bin/{{.ZIP_NAME}}') { Remove-Item -Force 'bin/{{.ZIP_NAME}}' }; [System.IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path 'bin/.zip-{{.ARCH}}'), (Join-Path (Resolve-Path 'bin') '{{.ZIP_NAME}}'))"
         platforms: [windows]
       - cmd: (cd "{{.STAGING_DIR}}" && zip -qry "../{{.ZIP_NAME}}" .)
         platforms: [darwin, linux]

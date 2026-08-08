@@ -16,6 +16,8 @@ import (
 
 	"cursor/internal/appdata"
 	"cursor/internal/logger"
+	"cursor/internal/processutil"
+	"cursor/internal/terminalenv"
 )
 
 // injectedCursorSettingsKeys 表示当前模块中的 injectedCursorSettingsKeys 状态值。
@@ -79,6 +81,7 @@ func SetSystemNodeExtraCACerts(caCertPath string) error {
 		// 不会改变已运行进程的环境，因此当前进程靠上面的 os.Setenv 生效。
 		// setx 会把变量写入用户环境变量（HKCU\Environment），最长 1024 字符。
 		cmd := exec.Command("setx", nodeExtraCACertsEnvName, caCertPath)
+		processutil.HideWindow(cmd)
 		cmd.Stderr = nil
 		if out, err := cmd.Output(); err != nil {
 			return fmt.Errorf("写入 Windows 用户环境变量失败: %w: %s", err, strings.TrimSpace(string(out)))
@@ -112,6 +115,7 @@ func ClearSystemNodeExtraCACerts() error {
 	case "windows":
 		// 删除用户环境变量（HKCU\Environment）。即使不存在也按成功处理。
 		cmd := exec.Command("reg", "delete", `HKCU\Environment`, "/v", nodeExtraCACertsEnvName, "/f")
+		processutil.HideWindow(cmd)
 		cmd.Stderr = nil
 		if out, err := cmd.Output(); err != nil {
 			// 注册表项不存在属于正常情况，不当作错误。
@@ -186,6 +190,107 @@ func WriteUserProxySettings(proxyURL string) error {
 	}
 
 	logger.Infof("writeCursorUserProxySettings: path=%s proxy=%s", settingsPath, proxyURL)
+	return nil
+}
+
+// EnsureTerminalEnvironmentSettings writes a dedicated Cursor terminal profile
+// without tying it to proxy lifecycle cleanup. Existing unrelated settings stay
+// untouched; malformed settings are reported instead of being replaced.
+func EnsureTerminalEnvironmentSettings() (terminalenv.Status, error) {
+	status := terminalenv.Detect()
+	if err := status.Validate(); err != nil {
+		return status, err
+	}
+	settingsPath, err := resolveCursorSettingsPath()
+	if err != nil {
+		return status, err
+	}
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
+		return status, fmt.Errorf("创建 Cursor 配置目录失败: %w", err)
+	}
+
+	settings := make(map[string]any)
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return status, fmt.Errorf("读取 Cursor 配置失败: %w", err)
+		}
+	} else if len(bytes.TrimSpace(data)) > 0 {
+		settings, err = decodeCursorSettingsJSONC(data)
+		if err != nil {
+			return status, fmt.Errorf("Cursor 配置无法解析，未修改终端设置: %w", err)
+		}
+	}
+
+	applyTerminalEnvironmentSettings(settings, status)
+	if err := writeCursorSettings(settingsPath, settings); err != nil {
+		return status, err
+	}
+	logger.Infof("ensureTerminalEnvironmentSettings: path=%s shell=%s python=%s", settingsPath, status.ShellPath, status.PythonPath)
+	return status, nil
+}
+
+// applyTerminalEnvironmentSettings 注入 BYOK 终端 profile 与 UTF-8 环境变量。
+// 仅当用户未显式配置 python.defaultInterpreterPath 与
+// terminal.integrated.defaultProfile.windows 时才写入默认值，绝不覆盖用户已有配置。
+func applyTerminalEnvironmentSettings(settings map[string]any, status terminalenv.Status) {
+	if status.PythonPath != "" {
+		if _, exists := settings["python.defaultInterpreterPath"]; !exists {
+			settings["python.defaultInterpreterPath"] = status.PythonPath
+		}
+	}
+	switch status.Platform {
+	case "windows":
+		profileName := "Cursor BYOK PowerShell"
+		profiles := mergeCursorSettingsMap(settings["terminal.integrated.profiles.windows"])
+		profiles[profileName] = map[string]any{
+			"path": status.ShellPath,
+			"args": []string{"-NoLogo", "-NoExit", "-Command", "[Console]::InputEncoding=[Text.UTF8Encoding]::new();[Console]::OutputEncoding=[Text.UTF8Encoding]::new();$OutputEncoding=[Console]::OutputEncoding"},
+		}
+		settings["terminal.integrated.profiles.windows"] = profiles
+		if _, exists := settings["terminal.integrated.defaultProfile.windows"]; !exists {
+			settings["terminal.integrated.defaultProfile.windows"] = profileName
+		}
+		env := mergeCursorSettingsMap(settings["terminal.integrated.env.windows"])
+		env["PYTHONUTF8"] = "1"
+		env["PYTHONIOENCODING"] = "utf-8"
+		settings["terminal.integrated.env.windows"] = env
+	case "darwin":
+		env := mergeCursorSettingsMap(settings["terminal.integrated.env.osx"])
+		env["PYTHONUTF8"] = "1"
+		env["PYTHONIOENCODING"] = "utf-8"
+		settings["terminal.integrated.env.osx"] = env
+	default:
+		env := mergeCursorSettingsMap(settings["terminal.integrated.env.linux"])
+		env["PYTHONUTF8"] = "1"
+		env["PYTHONIOENCODING"] = "utf-8"
+		settings["terminal.integrated.env.linux"] = env
+	}
+}
+
+func mergeCursorSettingsMap(value any) map[string]any {
+	result := make(map[string]any)
+	if current, ok := value.(map[string]any); ok {
+		for key, entry := range current {
+			result[key] = entry
+		}
+	}
+	return result
+}
+
+func writeCursorSettings(settingsPath string, settings map[string]any) error {
+	encoded, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return fmt.Errorf("序列化 Cursor 配置失败: %w", err)
+	}
+	encoded = append(encoded, '\n')
+	tempPath := settingsPath + ".tmp"
+	if err := os.WriteFile(tempPath, encoded, 0o644); err != nil {
+		return fmt.Errorf("写入 Cursor 配置临时文件失败: %w", err)
+	}
+	if err := os.Rename(tempPath, settingsPath); err != nil {
+		return fmt.Errorf("保存 Cursor 配置失败: %w", err)
+	}
 	return nil
 }
 

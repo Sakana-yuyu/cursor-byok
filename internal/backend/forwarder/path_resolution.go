@@ -20,10 +20,21 @@ func updateStreamRequestContextData(stream *ActiveStream, requestContext *agentv
 		return
 	}
 
+	// 后续 resume/续跑请求常常不再携带完整 request_context（客户端只在首次 run 时
+	// 上传 workspace_paths）。若用空值直接覆盖 stream.WorkspacePaths，只读 Shell 策略
+	// 等以 workspace 为基准的校验会失去根路径，导致同一工作区内的 Shell 反复被判
+	// "must stay inside the workspace" 并触发熔断。因此 request_context 缺失时保留
+	// 已解析的 workspace 上下文，而不是清空。
+	preserveExisting := requestContext == nil || requestContext.GetEnv() == nil
+	if !preserveExisting {
+		env := requestContext.GetEnv()
+		preserveExisting = len(env.GetWorkspacePaths()) == 0 && strings.TrimSpace(env.GetProjectFolder()) == ""
+	}
+
 	var workspacePaths []string
 	var terminalsFolder string
 	var fileContents map[string]string
-	if requestContext != nil {
+	if !preserveExisting {
 		env := requestContext.GetEnv()
 		workspacePaths = compactWorkspacePaths(env.GetWorkspacePaths(), env.GetProjectFolder())
 		terminalsFolder = strings.TrimSpace(env.GetTerminalsFolder())
@@ -31,9 +42,11 @@ func updateStreamRequestContextData(stream *ActiveStream, requestContext *agentv
 	}
 
 	stream.mu.Lock()
-	stream.WorkspacePaths = workspacePaths
-	stream.TerminalsFolder = terminalsFolder
-	stream.RequestFileContents = fileContents
+	if !preserveExisting {
+		stream.WorkspacePaths = workspacePaths
+		stream.TerminalsFolder = terminalsFolder
+		stream.RequestFileContents = fileContents
+	}
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
 }
