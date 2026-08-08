@@ -625,7 +625,7 @@ func (adapter *OpenAIAdapter) runOpenAIStreamWithReconnect(ctx context.Context, 
 		}
 		if emitted {
 			if IsStreamConnectionReset(err) {
-				return fmt.Errorf("upstream stream interrupted mid-response (already forwarded partial content, will not reconnect to avoid duplicates): %w", err)
+				return midStreamInterruptedError(err)
 			}
 			return err
 		}

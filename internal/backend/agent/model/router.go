@@ -142,6 +142,11 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 			}
 			return streamErr
 		}
+		// 流已向客户端转发部分内容后中断：整体重试必然重复输出/重复工具调用，
+		// 直接返回当前错误，不做渠道冷却与 failover。
+		if errors.Is(streamErr, ErrMidStreamInterrupted) {
+			return streamErr
+		}
 		router.recordChannelFailure(channelID, streamErr)
 		if firstErr == nil {
 			firstErr = streamErr
