@@ -16,87 +16,6 @@ import (
 	promptengine "cursor/internal/backend/agent/prompt"
 )
 
-func selectTurnsForCompaction(candidates []compactionCandidateTurn, manual bool, reclaimTokens int64) (int, int32, []compactedTurnSummary) {
-	if len(candidates) <= compactionMinimumTailTurns {
-		return 0, 0, nil
-	}
-	preferredCompactCount := len(candidates) - compactionPreferredTailTurns
-	if preferredCompactCount < 0 {
-		preferredCompactCount = 0
-	}
-	maxCompactCount := preferredCompactCount
-	if maxCompactCount == 0 {
-		maxCompactCount = len(candidates) - compactionMinimumTailTurns
-	}
-	if maxCompactCount <= 0 {
-		return 0, 0, nil
-	}
-
-	selectedCount := 0
-	messageCount := int32(0)
-	summaries := make([]compactedTurnSummary, 0, maxCompactCount)
-	if manual {
-		for index := 0; index < maxCompactCount; index++ {
-			selectedCount++
-			messageCount += candidates[index].ReplayCount
-			summaries = append(summaries, candidates[index].Summary)
-		}
-		return selectedCount, messageCount, summaries
-	}
-
-	requiredTokens := reclaimTokens
-	if requiredTokens <= 0 {
-		requiredTokens = 1
-	}
-	reclaimedTokens := int64(0)
-	for index := 0; index < maxCompactCount; index++ {
-		selectedCount++
-		messageCount += candidates[index].ReplayCount
-		reclaimedTokens += candidates[index].EstimatedTokens
-		summaries = append(summaries, candidates[index].Summary)
-		if reclaimedTokens >= requiredTokens {
-			return selectedCount, messageCount, summaries
-		}
-	}
-	for index := maxCompactCount; index < len(candidates)-compactionMinimumTailTurns; index++ {
-		selectedCount++
-		messageCount += candidates[index].ReplayCount
-		reclaimedTokens += candidates[index].EstimatedTokens
-		summaries = append(summaries, candidates[index].Summary)
-		if reclaimedTokens >= requiredTokens {
-			return selectedCount, messageCount, summaries
-		}
-	}
-	if selectedCount <= 0 {
-		return 0, 0, nil
-	}
-	return selectedCount, messageCount, summaries
-}
-
-func buildCompactionCandidates(rawTurns [][]byte) ([]compactionCandidateTurn, error) {
-	candidates := make([]compactionCandidateTurn, 0, len(rawTurns))
-	for _, rawTurn := range rawTurns {
-		if len(rawTurn) == 0 {
-			continue
-		}
-		turn := &agentv1.ConversationTurnStructure{}
-		if err := proto.Unmarshal(rawTurn, turn); err != nil {
-			return nil, fmt.Errorf("decode compacted turn candidate: %w", err)
-		}
-		agentTurn := turn.GetAgentConversationTurn()
-		if agentTurn == nil {
-			continue
-		}
-		replayMessages := buildReplayMessagesFromAgentTurn(agentTurn)
-		candidates = append(candidates, compactionCandidateTurn{
-			Summary:         buildCompactedTurnSummary(agentTurn),
-			ReplayCount:     clampInt64ToInt32(int64(len(replayMessages))),
-			EstimatedTokens: estimatePromptReplayMessagesTokens(replayMessages),
-		})
-	}
-	return candidates, nil
-}
-
 func buildCurrentTurnCompactionCandidate(entries []HistoryEntry, turnSeq int64, requestID string) (compactionCandidateTurn, bool) {
 	if len(entries) == 0 || turnSeq <= 0 || strings.TrimSpace(requestID) == "" {
 		return compactionCandidateTurn{}, false
@@ -227,10 +146,6 @@ func buildContextTurnCompactionCandidate(entries []HistoryEntry) (compactionCand
 		ReplayCount:     replayCount,
 		EstimatedTokens: estimatedTokens,
 	}, true
-}
-
-func countCompactableContextTurns(entries []HistoryEntry, currentTurnSeq int64, currentRequestID string) int32 {
-	return clampInt64ToInt32(int64(len(buildContextCompactionCandidates(entries, currentTurnSeq, currentRequestID))))
 }
 
 func currentTurnUserText(entry HistoryEntry) string {
@@ -570,25 +485,6 @@ func encodeConversationSummaryBytes(summary string) []byte {
 	return payload
 }
 
-func decodeCompactedTurnSummaries(rawTurns [][]byte) ([]compactedTurnSummary, error) {
-	summaries := make([]compactedTurnSummary, 0, len(rawTurns))
-	for _, rawTurn := range rawTurns {
-		if len(rawTurn) == 0 {
-			continue
-		}
-		turn := &agentv1.ConversationTurnStructure{}
-		if err := proto.Unmarshal(rawTurn, turn); err != nil {
-			return nil, fmt.Errorf("decode compacted turn: %w", err)
-		}
-		agentTurn := turn.GetAgentConversationTurn()
-		if agentTurn == nil {
-			continue
-		}
-		summaries = append(summaries, buildCompactedTurnSummary(agentTurn))
-	}
-	return summaries, nil
-}
-
 func summarizeCompactedToolCall(toolCall *agentv1.ToolCall) (string, string) {
 	shape, ok := extractCompactToolCallShape(toolCall)
 	if !ok {
@@ -736,40 +632,6 @@ func extractCompactFieldJSON(message protoreflect.Message, fieldName string) (st
 		return "", false
 	}
 	return strings.TrimSpace(string(payload)), true
-}
-
-func buildCompactedConversationSummary(existingSummary string, turns []compactedTurnSummary) string {
-	parts := make([]string, 0, len(turns)+1)
-	if strings.TrimSpace(existingSummary) != "" {
-		parts = append(parts, strings.TrimSpace(existingSummary))
-	}
-	for index, item := range turns {
-		segments := make([]string, 0, 1+len(item.Steps))
-		if strings.TrimSpace(item.UserText) != "" {
-			segments = append(segments, "user="+strings.TrimSpace(item.UserText))
-		}
-		segments = append(segments, item.Steps...)
-		if len(segments) == 0 {
-			continue
-		}
-		parts = append(parts, fmt.Sprintf("%d. %s", index+1, strings.Join(segments, " | ")))
-	}
-	return truncateCompactionText(strings.Join(parts, "\n"), compactionSummaryMaxChars)
-}
-
-func estimateCompactedTurnSummariesTokens(rawTurns [][]byte) int64 {
-	summaries, err := decodeCompactedTurnSummaries(rawTurns)
-	if err != nil {
-		return 0
-	}
-	total := int64(0)
-	for _, item := range summaries {
-		total += estimateTextTokens(item.UserText)
-		for _, step := range item.Steps {
-			total += estimateTextTokens(step)
-		}
-	}
-	return total
 }
 
 func truncateCompactionText(text string, maxChars int) string {
