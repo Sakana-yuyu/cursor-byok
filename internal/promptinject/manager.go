@@ -34,6 +34,11 @@ const (
 	ModeReplace = "replace"
 	ModeAppend  = "append"
 
+	// Git 提交文本生成来源。
+	CommitSourceLocal  = "local"  // 本地 BYOK provider（语言硬约束生效）
+	CommitSourceLeokun = "leokun" // 转发原作者自建服务 https://tab.leokun.cn
+	CommitSourceCursor = "cursor" // 走 Cursor 官方 api2.cursor.sh（需登录账号）
+
 	managedBegin = "<!-- CODEX-X:INSTRUCTIONS:BEGIN -->"
 	managedEnd   = "<!-- CODEX-X:INSTRUCTIONS:END -->"
 
@@ -69,6 +74,11 @@ type Config struct {
 	CommitMessageEnabled          bool   `json:"commitMessageEnabled,omitempty"`
 	CommitMessageLanguage         string `json:"commitMessageLanguage,omitempty"`
 	CommitMessageLanguageResolved string `json:"commitMessageLanguageResolved,omitempty"`
+	// CommitMessageSource 决定 WriteGitCommitMessage 的生成来源：
+	// local=本地 BYOK provider（语言硬约束生效，跟随界面语言）；
+	// leokun=转发 https://tab.leokun.cn（原作者自建补全服务）；
+	// cursor=用已登录 Cursor 账号走 api2.cursor.sh 官方后端（未登录回退 leokun）。
+	CommitMessageSource string `json:"commitMessageSource,omitempty"`
 }
 
 // PromptTemplate is one independently persisted prompt injection entry.
@@ -121,6 +131,8 @@ func normalizeConfig(cfg Config) Config {
 	if cfg.CommitMessageLanguage == "" {
 		cfg.CommitMessageLanguage = "auto"
 	}
+	// 提交信息生成来源：非法/空值回退 local（本地 BYOK provider）。
+	cfg.CommitMessageSource = NormalizeCommitMessageSource(cfg.CommitMessageSource)
 	// Migrate the legacy single-template representation into the new list.
 	if len(cfg.Templates) == 0 && strings.TrimSpace(cfg.LocalContent) != "" {
 		name := cfg.SelectedTemplate
@@ -203,6 +215,35 @@ func (m *Manager) CommitMessageLanguage() string {
 		return strings.ToLower(strings.TrimSpace(cfg.CommitMessageLanguageResolved))
 	}
 	return lang
+}
+
+// CommitMessageSource 返回 Git 提交信息的生成来源（local/leokun/cursor）。
+// 来源选择独立于 CommitMessageEnabled 语言开关：无论是否开启语言本地化，
+// 都需要知道把 WriteGitCommitMessage 请求发给谁处理。
+func (m *Manager) CommitMessageSource() string {
+	m.mu.RLock()
+	cfg := m.cfg
+	m.mu.RUnlock()
+	if cfg.Mode == "" {
+		if _, err := m.Load(); err == nil {
+			m.mu.RLock()
+			cfg = m.cfg
+			m.mu.RUnlock()
+		}
+	}
+	return NormalizeCommitMessageSource(cfg.CommitMessageSource)
+}
+
+// NormalizeCommitMessageSource 把生成来源归一化为合法值，非法/空值回退 local。
+// 导出供路由分发处与配置读取共用同一份归一化逻辑。
+func NormalizeCommitMessageSource(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case CommitSourceLeokun, CommitSourceCursor:
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		// 空、auto、未知值统一回退 local。
+		return CommitSourceLocal
+	}
 }
 
 func (m *Manager) Save(cfg Config) (Status, error) {

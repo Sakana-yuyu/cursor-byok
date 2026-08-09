@@ -15,9 +15,9 @@ import {
   setCursorManualPath,
   toUserError,
 } from "@/state/appState";
-import { autoMatchContextWindows, applyTerminalEnvironment, detectCursorPath, getTerminalEnvironmentStatus } from "@/services/clientApi";
-import { isBrowserPreview } from "@/services/runtimeAdapter";
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { autoMatchContextWindows, applyTerminalEnvironment, detectCursorPath, getTerminalEnvironmentStatus, installTerminalDependency, TERMINAL_INSTALL_PROGRESS_EVENT } from "@/services/clientApi";
+import { isBrowserPreview, runtimeEvents } from "@/services/runtimeAdapter";
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
 const props = defineProps({
@@ -71,6 +71,29 @@ const terminalEnvironmentState = reactive({
   busy: false,
   error: "",
   retry: null,
+});
+
+// 依赖安装状态：独立跟踪 PowerShell / Python 两个目标的安装进度。
+// busy target 为 "" 表示空闲，"powershell"/"python" 表示正在安装该目标。
+const dependencyInstallState = reactive({
+  busy: "",
+  stage: "",
+  message: "",
+  error: "",
+});
+
+// 缺 PowerShell 7（含未检测到、或仅 5.1）时显示安装按钮。
+const needsPowerShell7 = computed(() => {
+  const env = terminalEnvironment.value;
+  if (!env) return false;
+  return env.shellName !== "PowerShell 7";
+});
+
+// 缺 Python 3 时显示安装按钮。
+const needsPython3 = computed(() => {
+  const env = terminalEnvironment.value;
+  if (!env) return false;
+  return !env.pythonPath;
 });
 
 const configuredAdapterCount = computed(() => appState.modelAdapters.length);
@@ -294,10 +317,60 @@ async function handleApplyTerminalEnvironment() {
   }
 }
 
+// handleInstallDependency 触发 winget 安装；RPC 立即返回，进度走事件回调刷新。
+// winget 安装系统级软件会弹 UAC，属正常行为。
+async function handleInstallDependency(target) {
+  if (dependencyInstallState.busy) {
+    return;
+  }
+  dependencyInstallState.busy = target;
+  dependencyInstallState.stage = "pending";
+  dependencyInstallState.message = target === "powershell" ? "准备安装 PowerShell 7..." : "准备安装 Python 3...";
+  dependencyInstallState.error = "";
+  try {
+    await installTerminalDependency(target);
+  } catch (error) {
+    dependencyInstallState.busy = "";
+    dependencyInstallState.error = toUserError(error);
+  }
+}
+
+// 安装进度事件回调：更新阶段文案；done 时刷新检测，error 时记录。
+function handleInstallProgressEvent(payload) {
+  const data = payload?.data ?? payload;
+  if (!data || typeof data !== "object") return;
+  dependencyInstallState.stage = data.stage || dependencyInstallState.stage;
+  if (typeof data.message === "string" && data.message) {
+    dependencyInstallState.message = data.message;
+  }
+  if (data.stage === "done") {
+    if (data.status) {
+      terminalEnvironment.value = data.status;
+    }
+    message.success(data.message || "安装完成。");
+    dependencyInstallState.busy = "";
+    // done 后仍异步刷新一次，确保检测口径最新（winget 装完后可能需重新探测）。
+    void refreshTerminalEnvironment();
+  } else if (data.stage === "error") {
+    dependencyInstallState.error = data.message || "安装失败。";
+    dependencyInstallState.busy = "";
+  }
+}
+
+let unsubscribeInstallProgress = null;
+
 onMounted(() => {
   manualPath.value = getCursorManualPath();
   void handleDetectCursorPath();
   void refreshTerminalEnvironment();
+  unsubscribeInstallProgress = runtimeEvents.On(TERMINAL_INSTALL_PROGRESS_EVENT, handleInstallProgressEvent);
+});
+
+onUnmounted(() => {
+  if (typeof unsubscribeInstallProgress === "function") {
+    unsubscribeInstallProgress();
+    unsubscribeInstallProgress = null;
+  }
 });
 </script>
 
@@ -362,6 +435,31 @@ onMounted(() => {
             <p v-if="terminalEnvironment.upgradeRecommended" class="mt-2 text-[#f0c674]">{{ terminalEnvironment.upgradeMessage }}</p>
           </div>
           <p v-else class="text-xs text-[#737373]">正在检测本机终端和 Python 3。</p>
+
+          <!-- 一键安装：缺失时显示，安装中显示进度，winget 会弹 UAC -->
+          <div v-if="needsPowerShell7 || needsPython3" class="space-y-2 rounded-[6px] border border-[#3f3f3f] bg-[#1b1b1b] px-3 py-2">
+            <div class="flex flex-wrap items-center gap-2">
+              <Button
+                v-if="needsPowerShell7"
+                variant="default"
+                :disabled="Boolean(dependencyInstallState.busy)"
+                @click="handleInstallDependency('powershell')"
+              >
+                安装 PowerShell 7
+              </Button>
+              <Button
+                v-if="needsPython3"
+                variant="default"
+                :disabled="Boolean(dependencyInstallState.busy)"
+                @click="handleInstallDependency('python')"
+              >
+                安装 Python 3
+              </Button>
+              <span v-if="dependencyInstallState.busy" class="text-xs text-[#10d06f]">{{ dependencyInstallState.message }}</span>
+            </div>
+            <p v-if="dependencyInstallState.error" class="break-all text-xs text-[#f87171]">{{ dependencyInstallState.error }}</p>
+            <p class="text-[11px] leading-4 text-[#777]">通过系统 winget 安装，安装时会弹出 UAC 提权确认，请点击「是」继续。</p>
+          </div>
         </div>
         <div class="flex shrink-0 gap-2">
           <Button variant="default" :disabled="terminalEnvironmentState.busy" @click="refreshTerminalEnvironment">重新检测</Button>

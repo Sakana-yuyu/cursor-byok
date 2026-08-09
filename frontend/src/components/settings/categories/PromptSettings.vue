@@ -56,6 +56,23 @@ function interfaceLocaleToCode(localeValue) {
   return value === "en-us" || value === "ja-jp" || value === "ru-ru" ? value : "zh-cn";
 }
 
+// Git 提交文本生成来源选项；决定 WriteGitCommitMessage 由谁处理。
+// local=本地 BYOK provider（语言硬约束在此生效，跟随界面语言）；
+// leokun=转发原作者自建服务 tab.leokun.cn；
+// cursor=走 Cursor 官方 api2.cursor.sh（需登录账号，未登录回退 leokun）。
+const commitSourceOptions = [
+  { value: "local", label: "本地模型" },
+  { value: "leokun", label: "Leokun（原默认）" },
+  { value: "cursor", label: "Cursor 直连" },
+];
+
+// normalizeCommitMessageSource 把后端返回的来源值归一化为选项值，非法/空值回退 local。
+function normalizeCommitMessageSource(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  const option = commitSourceOptions.find((item) => String(item.value || "").trim().toLowerCase() === normalized);
+  return option ? option.value : "local";
+}
+
 const promptPreview = ref(null);
 const promptRevision = ref(0);
 
@@ -64,6 +81,7 @@ const prompt = reactive({
   softwareChineseEnabled: false,
   commitMessageEnabled: false,
   commitMessageLanguage: "auto",
+  commitMessageSource: "local",
   customEnabled: false,
   customContent: "",
   mode: "replace",
@@ -136,6 +154,7 @@ function applyPromptStatus(status) {
     softwareChineseEnabled: Boolean(value.softwareChineseEnabled),
     commitMessageEnabled: Boolean(value.commitMessageEnabled),
     commitMessageLanguage: normalizeCommitMessageLanguage(value.commitMessageLanguage),
+    commitMessageSource: normalizeCommitMessageSource(value.commitMessageSource),
     customEnabled: Boolean(value.customEnabled),
     customContent: value.customContent || "",
     mode: value.mode === "append" ? "append" : "replace",
@@ -162,6 +181,7 @@ function buildPromptConfig() {
     commitMessageEnabled: prompt.commitMessageEnabled,
     commitMessageLanguage: prompt.commitMessageLanguage,
     commitMessageLanguageResolved: resolvedLanguage,
+    commitMessageSource: prompt.commitMessageSource,
     customEnabled: prompt.customEnabled,
     customContent: prompt.customContent,
     mode: prompt.mode,
@@ -312,6 +332,22 @@ function updateCommitMessageLanguage(value) {
     revision,
     onFailure: () => {
       prompt.commitMessageLanguage = previousValue;
+    },
+  });
+}
+
+// updateCommitMessageSource 更新提交文本生成来源（local/leokun/cursor）。
+// 切到非 local 时语言下拉失效：语言硬约束仅本地模型可控，leokun/cursor 的
+// 输出语言由对方服务决定，本地无法注入强制指令。
+function updateCommitMessageSource(value) {
+  const selected = normalizeCommitMessageSource(value);
+  const previousValue = prompt.commitMessageSource;
+  prompt.commitMessageSource = selected;
+  const revision = markPromptChanged();
+  void savePromptImmediately({
+    revision,
+    onFailure: () => {
+      prompt.commitMessageSource = previousValue;
     },
   });
 }
@@ -650,8 +686,23 @@ onMounted(() => {
             </SettingsRow>
 
             <SettingsRow
+              label="提交信息生成来源"
+              description="选择由谁生成 Git 提交信息。本地模型可控制输出语言；Leokun 与 Cursor 直连的输出语言由对应服务决定。"
+            >
+              <div class="w-[200px] max-w-full">
+                <Select
+                  :model-value="prompt.commitMessageSource"
+                  :options="commitSourceOptions"
+                  aria-label="提交信息生成来源"
+                  :disabled="promptControlsDisabled"
+                  @change="updateCommitMessageSource"
+                />
+              </div>
+            </SettingsRow>
+
+            <SettingsRow
               label="Git 提交文本本地化"
-              description="按所选语言生成提交信息；选择跟随界面语言时，提交信息语言会随界面语言切换自动同步。"
+              description="按所选语言生成提交信息；选择跟随界面语言时，提交信息语言会随界面语言切换自动同步。仅本地模型来源时生效。"
             >
               <div class="flex items-center gap-3">
                 <Switch
@@ -667,7 +718,7 @@ onMounted(() => {
                     :model-value="prompt.commitMessageLanguage"
                     :options="commitLanguageOptions"
                     aria-label="提交信息语言"
-                    :disabled="promptControlsDisabled || !prompt.commitMessageEnabled"
+                    :disabled="promptControlsDisabled || !prompt.commitMessageEnabled || prompt.commitMessageSource !== 'local'"
                     @change="updateCommitMessageLanguage"
                   />
                 </div>

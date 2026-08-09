@@ -159,7 +159,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 352,
+          "line": 425,
           "column": 9
         }
       ]
@@ -176,18 +176,6 @@
         }
       ]
     },
-    "0348d70ac1c7bddc": {
-      "source": "按所选语言生成提交信息；选择跟随界面语言时，提交信息语言会随界面语言切换自动同步。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 654,
-          "column": 15
-        }
-      ]
-    },
     "035a537b4f4679b5": {
       "source": "总 Token：{0}",
       "kind": "template",
@@ -197,6 +185,18 @@
           "file": "src/components/charts/StatsOverlayChart.vue",
           "line": 135,
           "column": 11
+        }
+      ]
+    },
+    "035e2c5b1fc410b5": {
+      "source": "原项目 cursor-byok 作者。提供 Git 提交信息生成服务（tab.leokun.cn）与代码补全能力，本项目在其基础上新增了本地模型 / Cursor 直连等可选来源。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AboutSettings.vue",
+          "line": 19,
+          "column": 13
         }
       ]
     },
@@ -323,7 +323,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 376,
+          "line": 474,
           "column": 9
         }
       ]
@@ -557,12 +557,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 142,
+          "line": 165,
           "column": 23
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 196,
+          "line": 219,
           "column": 27
         }
       ]
@@ -615,7 +615,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 473,
+          "line": 509,
           "column": 15
         }
       ]
@@ -883,7 +883,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 541,
+          "line": 577,
           "column": 38
         }
       ]
@@ -1043,7 +1043,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 349,
+          "line": 422,
           "column": 22
         }
       ]
@@ -1055,7 +1055,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 465,
+          "line": 501,
           "column": 160
         }
       ]
@@ -1334,6 +1334,18 @@
         }
       ]
     },
+    "12c0b7b5a59b6ef7": {
+      "source": "Leokun（原默认）",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 65,
+          "column": 29
+        }
+      ]
+    },
     "12da4865805c2364": {
       "source": "请求 ID",
       "kind": "text",
@@ -1377,7 +1389,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 52,
+          "line": 54,
           "column": 12
         }
       ]
@@ -1389,7 +1401,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 68,
+          "line": 72,
           "column": 18
         }
       ]
@@ -1512,7 +1524,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 359,
+          "line": 432,
           "column": 58
         }
       ]
@@ -1947,7 +1959,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 472,
+          "line": 508,
           "column": 15
         }
       ]
@@ -1988,6 +2000,18 @@
         }
       ]
     },
+    "1d53fec8eb9888e0": {
+      "source": "安装完成。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 350,
+          "column": 37
+        }
+      ]
+    },
     "1d7b3062a866bf83": {
       "source": "（浏览器自动化）——配置后覆盖内置。",
       "kind": "text",
@@ -2024,7 +2048,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 390,
+          "line": 398,
           "column": 66
         }
       ]
@@ -2142,6 +2166,18 @@
           "file": "src/services/browserBindings.js",
           "line": 607,
           "column": 16
+        }
+      ]
+    },
+    "1ed397ab7d187a2d": {
+      "source": "选择由谁生成 Git 提交信息。本地模型可控制输出语言；Leokun 与 Cursor 直连的输出语言由对应服务决定。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 690,
+          "column": 15
         }
       ]
     },
@@ -2592,12 +2628,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 309,
+          "line": 382,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 317,
+          "line": 390,
           "column": 13
         }
       ]
@@ -2662,7 +2698,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 259,
+          "line": 282,
           "column": 23
         }
       ]
@@ -2720,7 +2756,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 533,
+          "line": 569,
           "column": 19
         }
       ]
@@ -2773,7 +2809,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 577,
+          "line": 613,
           "column": 13
         }
       ]
@@ -3082,7 +3118,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 678,
+          "line": 729,
           "column": 15
         }
       ]
@@ -3540,6 +3576,18 @@
         }
       ]
     },
+    "3220df971cc9baaa": {
+      "source": "Cursor 直连",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 66,
+          "column": 29
+        }
+      ]
+    },
     "323390763224a8be": {
       "source": "打开本地配置文件所在目录",
       "kind": "text",
@@ -3687,7 +3735,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 234,
+          "line": 242,
           "column": 99
         }
       ]
@@ -3776,7 +3824,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 514,
+          "line": 550,
           "column": 19
         }
       ]
@@ -4150,7 +4198,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 669,
+          "line": 720,
           "column": 21
         }
       ]
@@ -4203,12 +4251,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 333,
+          "line": 406,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 343,
+          "line": 416,
           "column": 11
         },
         {
@@ -4329,7 +4377,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 396,
+          "line": 432,
           "column": 23
         }
       ]
@@ -4472,6 +4520,18 @@
         }
       ]
     },
+    "3ecd99e6e67d45a3": {
+      "source": "安装失败。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 355,
+          "column": 52
+        }
+      ]
+    },
     "3efbf8f8f96a78c4": {
       "source": "连接分组",
       "kind": "text",
@@ -4598,7 +4658,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 430,
+          "line": 528,
           "column": 13
         }
       ]
@@ -4835,6 +4895,18 @@
         }
       ]
     },
+    "44ac539067ed26a1": {
+      "source": "本地模型",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 64,
+          "column": 28
+        }
+      ]
+    },
     "451a805775b5da03": {
       "source": "未检查",
       "kind": "text",
@@ -4929,6 +5001,18 @@
           "file": "src/views/RequestMetrics.vue",
           "line": 374,
           "column": 17
+        }
+      ]
+    },
+    "46629908dc64af8d": {
+      "source": "默认提示词模板来源（MIT License，copyright 2026 yynxxxxx）。本仓库仅消费其公开示例目录，不执行或分发其代码。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AboutSettings.vue",
+          "line": 24,
+          "column": 13
         }
       ]
     },
@@ -5175,12 +5259,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 415,
+          "line": 451,
           "column": 7
         },
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 73,
+          "line": 78,
           "column": 12
         }
       ]
@@ -5209,7 +5293,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 639,
+          "line": 675,
           "column": 15
         }
       ]
@@ -5439,7 +5523,7 @@
         },
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 112,
+          "line": 130,
           "column": 23
         },
         {
@@ -5526,6 +5610,18 @@
           "file": "src/views/SupplierDetail.vue",
           "line": 926,
           "column": 18
+        }
+      ]
+    },
+    "5071432e61d71d4d": {
+      "source": "安装 PowerShell 7",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 447,
+          "column": 17
         }
       ]
     },
@@ -5693,7 +5789,24 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 59,
+          "line": 62,
+          "column": 12
+        }
+      ]
+    },
+    "52d25a9e30ba94f1": {
+      "source": "关于",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AboutSettings.vue",
+          "line": 32,
+          "column": 5
+        },
+        {
+          "file": "src/components/settings/settingsCategories.js",
+          "line": 110,
           "column": 12
         }
       ]
@@ -5710,7 +5823,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 330,
+          "line": 338,
           "column": 128
         }
       ]
@@ -5734,7 +5847,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 54,
+          "line": 56,
           "column": 18
         }
       ]
@@ -5872,7 +5985,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 360,
+          "line": 433,
           "column": 85
         }
       ]
@@ -5884,12 +5997,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 498,
+          "line": 534,
           "column": 15
         },
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 507,
+          "line": 543,
           "column": 19
         }
       ]
@@ -5997,7 +6110,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 647,
+          "line": 683,
           "column": 17
         }
       ]
@@ -6035,6 +6148,23 @@
           "file": "src/views/Home.vue",
           "line": 138,
           "column": 20
+        }
+      ]
+    },
+    "562c9582bd97607e": {
+      "source": "致谢与开源信息。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AboutSettings.vue",
+          "line": 33,
+          "column": 5
+        },
+        {
+          "file": "src/components/settings/settingsCategories.js",
+          "line": 112,
+          "column": 18
         }
       ]
     },
@@ -6147,7 +6277,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 118,
+          "line": 136,
           "column": 23
         }
       ]
@@ -6311,6 +6441,18 @@
         }
       ]
     },
+    "5a50d94d9d746ec2": {
+      "source": "按所选语言生成提交信息；选择跟随界面语言时，提交信息语言会随界面语言切换自动同步。仅本地模型来源时生效。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 705,
+          "column": 15
+        }
+      ]
+    },
     "5a90d6398d92a8bb": {
       "source": "上下文配对完成：共 {0} 个，已更新 {1} 个。{2}",
       "kind": "template",
@@ -6318,7 +6460,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 262,
+          "line": 285,
           "column": 21
         }
       ]
@@ -6668,17 +6810,17 @@
         },
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 430,
+          "line": 466,
           "column": 17
         },
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 562,
+          "line": 598,
           "column": 19
         },
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 610,
+          "line": 646,
           "column": 21
         }
       ]
@@ -6702,7 +6844,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 515,
+          "line": 551,
           "column": 19
         }
       ]
@@ -6753,7 +6895,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 570,
+          "line": 606,
           "column": 22
         },
         {
@@ -6782,7 +6924,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 120,
+          "line": 138,
           "column": 32
         }
       ]
@@ -6883,7 +7025,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 326,
+          "line": 399,
           "column": 53
         }
       ]
@@ -6936,7 +7078,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 89,
+          "line": 96,
           "column": 18
         }
       ]
@@ -7017,12 +7159,12 @@
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 240,
+          "line": 263,
           "column": 42
         },
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 223,
+          "line": 243,
           "column": 41
         },
         {
@@ -7308,12 +7450,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 410,
+          "line": 508,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 423,
+          "line": 521,
           "column": 13
         }
       ]
@@ -7463,7 +7605,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 470,
+          "line": 506,
           "column": 28
         }
       ]
@@ -7475,7 +7617,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 308,
+          "line": 381,
           "column": 9
         }
       ]
@@ -7720,7 +7862,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 23,
+          "line": 24,
           "column": 12
         }
       ]
@@ -7734,6 +7876,18 @@
           "file": "src/components/DelegationTaskStrip.vue",
           "line": 294,
           "column": 73
+        }
+      ]
+    },
+    "6c24266b75d70ce9": {
+      "source": "准备安装 Python 3...",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 328,
+          "column": 87
         }
       ]
     },
@@ -8088,7 +8242,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 640,
+          "line": 676,
           "column": 15
         }
       ]
@@ -8177,7 +8331,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 334,
+          "line": 407,
           "column": 9
         }
       ]
@@ -8213,7 +8367,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 662,
+          "line": 713,
           "column": 19
         }
       ]
@@ -8309,7 +8463,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 289,
+          "line": 312,
           "column": 21
         }
       ]
@@ -8490,7 +8644,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 29,
+          "line": 30,
           "column": 12
         }
       ]
@@ -8828,7 +8982,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 601,
+          "line": 637,
           "column": 24
         }
       ]
@@ -9016,7 +9170,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 556,
+          "line": 592,
           "column": 26
         }
       ]
@@ -9074,7 +9228,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 125,
+          "line": 143,
           "column": 12
         }
       ]
@@ -9156,7 +9310,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 261,
+          "line": 284,
           "column": 57
         }
       ]
@@ -9332,7 +9486,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 45,
+          "line": 46,
           "column": 12
         }
       ]
@@ -9414,7 +9568,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 485,
+          "line": 521,
           "column": 40
         }
       ]
@@ -9597,7 +9751,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 35,
+          "line": 36,
           "column": 12
         }
       ]
@@ -9614,7 +9768,7 @@
         },
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 87,
+          "line": 94,
           "column": 12
         }
       ]
@@ -9638,12 +9792,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 375,
+          "line": 473,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 386,
+          "line": 484,
           "column": 13
         }
       ]
@@ -9679,7 +9833,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 364,
+          "line": 437,
           "column": 52
         }
       ]
@@ -9739,7 +9893,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 524,
+          "line": 560,
           "column": 15
         }
       ]
@@ -9751,7 +9905,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 17,
+          "line": 18,
           "column": 12
         }
       ]
@@ -9921,7 +10075,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 394,
+          "line": 492,
           "column": 9
         },
         {
@@ -10013,7 +10167,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 653,
+          "line": 704,
           "column": 15
         }
       ]
@@ -10073,7 +10227,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 386,
+          "line": 422,
           "column": 23
         }
       ]
@@ -10133,7 +10287,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 404,
+          "line": 502,
           "column": 11
         }
       ]
@@ -10145,7 +10299,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 129,
+          "line": 147,
           "column": 7
         }
       ]
@@ -10256,7 +10410,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 306,
+          "line": 379,
           "column": 22
         }
       ]
@@ -10316,7 +10470,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 75,
+          "line": 80,
           "column": 18
         }
       ]
@@ -10357,7 +10511,7 @@
         },
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 66,
+          "line": 70,
           "column": 12
         }
       ]
@@ -10591,7 +10745,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 96,
+          "line": 104,
           "column": 18
         }
       ]
@@ -10920,7 +11074,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 351,
+          "line": 424,
           "column": 9
         }
       ]
@@ -10932,7 +11086,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 578,
+          "line": 614,
           "column": 13
         }
       ]
@@ -10980,7 +11134,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 395,
+          "line": 493,
           "column": 23
         }
       ]
@@ -11016,7 +11170,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 93,
+          "line": 111,
           "column": 30
         }
       ]
@@ -11298,6 +11452,18 @@
         }
       ]
     },
+    "9e896cf1393da798": {
+      "source": "准备安装 PowerShell 7...",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 328,
+          "column": 62
+        }
+      ]
+    },
     "9ec4b7239920e637": {
       "source": "会话历史",
       "kind": "text",
@@ -11479,7 +11645,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 367,
+          "line": 465,
           "column": 115
         }
       ]
@@ -12127,6 +12293,23 @@
         }
       ]
     },
+    "a866625ca9762bf2": {
+      "source": "提交信息生成来源",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 689,
+          "column": 15
+        },
+        {
+          "file": "src/components/settings/categories/PromptSettings.vue",
+          "line": 696,
+          "column": 19
+        }
+      ]
+    },
     "a898478be1813b95": {
       "source": "连接中",
       "kind": "text",
@@ -12146,7 +12329,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 597,
+          "line": 633,
           "column": 26
         },
         {
@@ -12214,6 +12397,18 @@
           "file": "src/services/browserBindings.js",
           "line": 591,
           "column": 16
+        }
+      ]
+    },
+    "a93320d29014c153": {
+      "source": "通过系统 winget 安装，安装时会弹出 UAC 提权确认，请点击「是」继续。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 461,
+          "column": 58
         }
       ]
     },
@@ -12421,7 +12616,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 80,
+          "line": 86,
           "column": 12
         }
       ]
@@ -12833,7 +13028,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 323,
+          "line": 396,
           "column": 76
         }
       ]
@@ -12881,7 +13076,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 359,
+          "line": 432,
           "column": 45
         }
       ]
@@ -13025,7 +13220,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 628,
+          "line": 664,
           "column": 15
         }
       ]
@@ -13078,7 +13273,7 @@
         },
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 459,
+          "line": 495,
           "column": 15
         },
         {
@@ -13184,7 +13379,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 634,
+          "line": 670,
           "column": 13
         }
       ]
@@ -13403,7 +13598,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 570,
+          "line": 606,
           "column": 22
         }
       ]
@@ -13463,7 +13658,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 525,
+          "line": 561,
           "column": 15
         }
       ]
@@ -13591,7 +13786,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 686,
+          "line": 737,
           "column": 19
         }
       ]
@@ -13789,7 +13984,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 499,
+          "line": 535,
           "column": 15
         }
       ]
@@ -13842,7 +14037,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 385,
+          "line": 483,
           "column": 13
         }
       ]
@@ -13991,7 +14186,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 480,
+          "line": 516,
           "column": 17
         }
       ]
@@ -14092,7 +14287,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 82,
+          "line": 88,
           "column": 18
         }
       ]
@@ -14319,7 +14514,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 416,
+          "line": 452,
           "column": 7
         }
       ]
@@ -14488,7 +14683,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 94,
+          "line": 112,
           "column": 29
         }
       ]
@@ -14500,7 +14695,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 61,
+          "line": 64,
           "column": 18
         }
       ]
@@ -14562,6 +14757,23 @@
           "file": "src/views/Home.vue",
           "line": 212,
           "column": 11
+        }
+      ]
+    },
+    "ce1d67c2703c6d43": {
+      "source": "收起侧边栏",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/SettingsSidebar.vue",
+          "line": 126,
+          "column": 17
+        },
+        {
+          "file": "src/components/settings/SettingsSidebar.vue",
+          "line": 127,
+          "column": 22
         }
       ]
     },
@@ -14661,7 +14873,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 618,
+          "line": 654,
           "column": 34
         }
       ]
@@ -14690,7 +14902,7 @@
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 107,
+          "line": 130,
           "column": 42
         },
         {
@@ -15182,7 +15394,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 94,
+          "line": 102,
           "column": 12
         }
       ]
@@ -15566,7 +15778,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 115,
+          "line": 133,
           "column": 23
         }
       ]
@@ -15836,12 +16048,12 @@
       "refs": [
         {
           "file": "src/components/settings/SettingsSidebar.vue",
-          "line": 78,
+          "line": 114,
           "column": 9
         },
         {
           "file": "src/components/settings/SettingsSidebar.vue",
-          "line": 84,
+          "line": 120,
           "column": 10
         }
       ]
@@ -15853,7 +16065,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 597,
+          "line": 633,
           "column": 26
         },
         {
@@ -16145,7 +16357,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 373,
+          "line": 471,
           "column": 22
         }
       ]
@@ -16251,12 +16463,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 485,
+          "line": 521,
           "column": 26
         },
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 491,
+          "line": 527,
           "column": 19
         }
       ]
@@ -16268,7 +16480,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 422,
+          "line": 458,
           "column": 59
         }
       ]
@@ -16311,6 +16523,18 @@
           "file": "src/services/browserBindings.js",
           "line": 879,
           "column": 35
+        }
+      ]
+    },
+    "e6aede9c8ef7ecef": {
+      "source": "安装 Python 3",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 455,
+          "column": 17
         }
       ]
     },
@@ -16509,7 +16733,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 368,
+          "line": 466,
           "column": 154
         }
       ]
@@ -16627,7 +16851,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 411,
+          "line": 509,
           "column": 9
         }
       ]
@@ -16755,7 +16979,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 380,
+          "line": 416,
           "column": 41
         }
       ]
@@ -16796,7 +17020,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 679,
+          "line": 730,
           "column": 15
         }
       ]
@@ -16822,6 +17046,23 @@
           "file": "src/views/ModelEditor.vue",
           "line": 1309,
           "column": 21
+        }
+      ]
+    },
+    "eea954b92548c541": {
+      "source": "展开侧边栏",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/SettingsSidebar.vue",
+          "line": 126,
+          "column": 17
+        },
+        {
+          "file": "src/components/settings/SettingsSidebar.vue",
+          "line": 127,
+          "column": 22
         }
       ]
     },
@@ -17100,7 +17341,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 47,
+          "line": 48,
           "column": 18
         }
       ]
@@ -17390,7 +17631,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 128,
+          "line": 146,
           "column": 7
         }
       ]
@@ -17641,12 +17882,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 437,
+          "line": 473,
           "column": 17
         },
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 438,
+          "line": 474,
           "column": 17
         }
       ]
@@ -17658,7 +17899,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 120,
+          "line": 138,
           "column": 68
         }
       ]
@@ -17670,7 +17911,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
-          "line": 548,
+          "line": 584,
           "column": 19
         }
       ]

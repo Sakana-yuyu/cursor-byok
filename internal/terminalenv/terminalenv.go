@@ -69,9 +69,11 @@ func Detect() Status {
 }
 
 // detectWindows 探测 Windows 下的 PowerShell。
-// PowerShell 7 通过 PATH 中的 pwsh 定位；Windows PowerShell 5.1 走系统目录回退。
+// PowerShell 7 通过 PATH 中的 pwsh 定位，PATH 找不到时回退到常见安装位置
+// （GUI 进程从 explorer 启动时 PATH 可能滞后于 winget/MSI 安装）；
+// 仍找不到时回退 Windows PowerShell 5.1。
 func detectWindows(status *Status) {
-	if path := lookupExecutable("pwsh.exe", "pwsh"); path != "" {
+	if path := resolvePwshPath(); path != "" {
 		status.ShellName = "PowerShell 7"
 		status.ShellPath = path
 		status.ShellVersion = pwshVersion(path)
@@ -86,9 +88,47 @@ func detectWindows(status *Status) {
 		status.ShellName = "Windows PowerShell 5.1"
 		status.ShellPath = candidate
 		status.ConfigurationNotice = "未检测到 PowerShell 7；已回退到 Windows PowerShell 5.1。建议安装 PowerShell 7 以获得更完整的现代终端支持。"
+		status.UpgradeRecommended = true
+		status.UpgradeMessage = "检测到仅 Windows PowerShell 5.1 可用，建议安装 PowerShell 7（点击下方「安装 PowerShell 7」按钮一键安装）。"
 		return
 	}
 	status.ConfigurationNotice = "未检测到 PowerShell；请安装 PowerShell 7 或启用 Windows PowerShell。"
+	status.UpgradeRecommended = true
+	status.UpgradeMessage = "未检测到 PowerShell，建议安装 PowerShell 7（点击下方「安装 PowerShell 7」按钮一键安装）。"
+}
+
+// resolvePwshPath 定位 PowerShell 7（pwsh.exe）：优先 PATH，再回退到常见安装位置。
+// GUI 进程从 explorer 启动时继承的 PATH 可能不含 winget/MSI 刚装好的 PowerShell\7
+// 目录，纯 LookPath 会导致「明明装了最新版却检测不到」——这里补充硬编码回退。
+func resolvePwshPath() string {
+	if path := lookupExecutable("pwsh.exe", "pwsh"); path != "" {
+		return path
+	}
+	candidates := []string{
+		joinPath(os.Getenv("ProgramFiles"), "PowerShell", "7", "pwsh.exe"),
+		`C:\Program Files\PowerShell\7\pwsh.exe`,
+		joinPath(os.Getenv("ProgramFiles(x86)"), "PowerShell", "7", "pwsh.exe"),
+		joinPath(os.Getenv("LOCALAPPDATA"), "Microsoft", "PowerShell", "7", "pwsh.exe"),
+	}
+	for _, candidate := range candidates {
+		if candidate == "" {
+			continue
+		}
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate
+		}
+	}
+	return ""
+}
+
+// joinPath 把多段拼成路径，任一段为空则返回空串（用于跳过未设置的 env）。
+func joinPath(parts ...string) string {
+	for _, part := range parts {
+		if strings.TrimSpace(part) == "" {
+			return ""
+		}
+	}
+	return strings.Join(parts, string(os.PathSeparator))
 }
 
 // detectUnix 探测非 Windows 平台的 shell：优先 $SHELL，其次常见默认。

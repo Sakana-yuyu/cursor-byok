@@ -20,6 +20,7 @@ import (
 	"cursor/internal/historymetrics"
 	"cursor/internal/logger"
 	"cursor/internal/netproxy"
+	"cursor/internal/promptinject"
 	legacyruntime "cursor/internal/runtime"
 	"cursor/internal/safego"
 )
@@ -568,7 +569,23 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 		tabServerProcedure("/aiserver.v1.AiService/CppAppend", "ai_cpp_append", server.ConnectUnary(), routeDeps),
 		tabServerProcedure("/aiserver.v1.AiService/CppEditHistoryAppend", "ai_cpp_edit_history_append", server.ConnectUnary(), routeDeps),
 		tabServerProcedure("/aiserver.v1.AiService/ReportAiCodeChangeMetrics", "ai_report_ai_code_change_metrics", server.ConnectUnary(), routeDeps),
-		tabServerProcedure("/aiserver.v1.AiService/WriteGitCommitMessage", "ai_write_git_commit_message", server.ConnectUnary(), routeDeps),
+		writeGitCommitMessageDispatchProcedure(
+			"/aiserver.v1.AiService/WriteGitCommitMessage",
+			"ai_write_git_commit_message",
+			server.ConnectUnary(),
+			agentModule.AiHandler,
+			func() string {
+				if agentModule == nil || agentModule.Service == nil {
+					return ""
+				}
+				if injection := agentModule.Service.PromptInjection(); injection != nil {
+					return injection.CommitMessageSource()
+				}
+				return ""
+			},
+			host.controlPlaneAuth,
+			routeDeps,
+		),
 		tabServerProcedure("/aiserver.v1.AiService/WriteGitBranchName", "ai_write_git_branch_name", server.ConnectUnary(), routeDeps),
 		repositoryServiceProcedure(forwarder.RepositoryServiceFastRepoInitHandshakeV2Procedure, "repository_fast_repo_init_handshake_v2", server.ConnectUnary(), agentModule),
 		repositoryServiceProcedure(forwarder.RepositoryServiceFastRepoInitHandshakeProcedure, "repository_fast_repo_init_handshake", server.ConnectUnary(), agentModule),
@@ -887,6 +904,65 @@ func tabServerProcedure(pattern string, name string, protocol server.RouteOption
 		protocol,
 		server.Local(action),
 	)
+}
+
+// writeGitCommitMessageDispatchProcedure 把 WriteGitCommitMessage 按用户配置的
+// CommitMessageSource 分发到三种来源之一。配置每次请求时动态读取（Manager 自带
+// 磁盘 reload），因此改完来源立即生效，无需重建路由表。
+//
+//   - local  → localHandler（forwarder agentModule.AiHandler）：本地 BYOK provider
+//     生成，语言硬约束（commitLanguageHardPrompts）在此生效，跟随界面语言。
+//   - leokun → 转发 https://tab.leokun.cn（原作者自建补全服务）。
+//   - cursor → 走 Cursor 官方 api2.cursor.sh（需登录 Cursor 账号，未登录回退 leokun）。
+func writeGitCommitMessageDispatchProcedure(
+	pattern string,
+	name string,
+	protocol server.RouteOption,
+	localHandler http.Handler,
+	source func() string,
+	authorizationProvider upstream.AuthorizationProvider,
+	deps upstream.Dependencies,
+) server.Option {
+	leokunForward := tabServerForwardAction(name, deps)
+	cursorForward := cursorControlPlaneAction(authorizationProvider, deps, name, leokunForward)
+	local := server.HTTPHandlerAction(localHandler)
+	action := func(ctx *server.Context) error {
+		switch promptinject.NormalizeCommitMessageSource(source()) {
+		case promptinject.CommitSourceCursor:
+			logger.Infof("WriteGitCommitMessage dispatch source=cursor")
+			return cursorForward(ctx)
+		case promptinject.CommitSourceLeokun:
+			logger.Infof("WriteGitCommitMessage dispatch source=leokun")
+			return leokunForward(ctx)
+		default:
+			logger.Infof("WriteGitCommitMessage dispatch source=local")
+			return local(ctx)
+		}
+	}
+	return server.POST(pattern,
+		server.Name(name),
+		protocol,
+		server.Local(action),
+	)
+}
+
+// tabServerForwardAction 转发到 tabServerBaseURL（tab.leokun.cn）。
+// 抽取自 tabServerProcedure 内部闭包，供分发 handler 与 cursor 未登录回退共用。
+func tabServerForwardAction(name string, deps upstream.Dependencies) server.HandlerFunc {
+	forward := upstream.ForwardAction(deps, upstream.CompatRouteConfig{Name: name})
+	return func(ctx *server.Context) error {
+		if ctx != nil && ctx.Request != nil && ctx.Request.URL != nil {
+			baseURL, err := url.Parse(tabServerBaseURL)
+			if err != nil {
+				return fmt.Errorf("解析 tab server 地址失败: %w", err)
+			}
+			targetURL := *ctx.Request.URL
+			targetURL.Scheme = baseURL.Scheme
+			targetURL.Host = baseURL.Host
+			ctx.UpstreamURL = &targetURL
+		}
+		return forward(ctx)
+	}
 }
 
 func cursorControlPlaneProcedure(

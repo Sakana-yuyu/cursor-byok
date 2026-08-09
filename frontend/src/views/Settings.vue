@@ -6,8 +6,10 @@ import {
   SETTINGS_CATEGORIES,
   normalizeSettingsCategory,
   readStoredSettingsCategory,
+  readStoredSidebarCollapsed,
   resolveSettingsCategoryComponent,
   writeStoredSettingsCategory,
+  writeStoredSidebarCollapsed,
 } from "@/components/settings/settingsCategories";
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -25,6 +27,7 @@ function settingsCategoryFromRoute(value) {
 const initialCategory = settingsCategoryFromRoute(route.query.category);
 const selectedCategory = ref(initialCategory || readStoredSettingsCategory());
 const moreExpanded = ref(false);
+const sidebarCollapsed = ref(readStoredSidebarCollapsed());
 
 function syncMoreExpanded(categoryID) {
   const category = SETTINGS_CATEGORIES.find((item) => item.id === normalizeSettingsCategory(categoryID));
@@ -43,6 +46,10 @@ watch(selectedCategory, (value) => {
   }
   writeStoredSettingsCategory(normalized);
   syncMoreExpanded(normalized);
+});
+
+watch(sidebarCollapsed, (value) => {
+  writeStoredSidebarCollapsed(value);
 });
 
 watch(() => route.query.category, (value) => {
@@ -83,6 +90,7 @@ function handleBack() {
       <SettingsSidebar
         v-model="selectedCategory"
         v-model:more-expanded="moreExpanded"
+        v-model:collapsed="sidebarCollapsed"
         :categories="SETTINGS_CATEGORIES"
         class="shrink-0 sm:sticky sm:top-0 sm:self-start"
       />

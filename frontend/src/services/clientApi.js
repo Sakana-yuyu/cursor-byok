@@ -151,6 +151,14 @@ export function applyTerminalEnvironment() {
   return withApiLogging("ApplyTerminalEnvironment", undefined, () => desktopOrMock(BROWSER_TERMINAL_ENVIRONMENT, "@bindings/cursor/internal/bridge/proxyservice.js", "ApplyTerminalEnvironment"));
 }
 
+// 通过 winget 异步安装 PowerShell 7 / Python 3；立即返回，进度走事件。
+export function installTerminalDependency(target) {
+  return withApiLogging("InstallTerminalDependency", undefined, () => desktopOrMock(undefined, "@bindings/cursor/internal/bridge/proxyservice.js", "InstallTerminalDependency", [target]));
+}
+
+// 安装进度事件名（与后端 terminalenv.EventInstallProgress 一致）。
+export const TERMINAL_INSTALL_PROGRESS_EVENT = "terminalenv:install-progress";
+
 export function getHomeMetricsSummary() {
   return withApiLogging("GetHomeMetricsSummary", undefined, () => desktopOrMock(browserPreviewMockMetrics(), "@bindings/cursor/internal/bridge/metricsservice.js", "GetHomeMetricsSummary"));
 }

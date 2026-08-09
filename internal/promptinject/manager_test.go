@@ -78,3 +78,72 @@ func TestSoftwareChineseEnabled(t *testing.T) {
 		t.Fatal("开启 softwareChineseEnabled 后应返回 true")
 	}
 }
+
+// TestCommitMessageSource 验证 Git 提交文本生成来源字段：
+// 默认/空/未知值回退 local；leokun、cursor 原样（小写）返回；来源独立于语言开关。
+func TestCommitMessageSource(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "prompt-injection.json")
+
+	cases := []struct {
+		name  string
+		store string
+		want  string
+	}{
+		{name: "默认空值回退 local", store: "", want: CommitSourceLocal},
+		{name: "未知值回退 local", store: "fr-fr", want: CommitSourceLocal},
+		{name: "auto 回退 local", store: "auto", want: CommitSourceLocal},
+		{name: "leokun 保留", store: "leokun", want: CommitSourceLeokun},
+		{name: "cursor 保留", store: "cursor", want: CommitSourceCursor},
+		{name: "大写 LEOKUN 归一化为 leokun", store: "LEOKUN", want: CommitSourceLeokun},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			manager := New()
+			manager.SetPath(path)
+			if _, err := manager.Save(Config{CommitMessageSource: tc.store}); err != nil {
+				t.Fatalf("保存配置失败: %v", err)
+			}
+			reloaded := New()
+			reloaded.SetPath(path)
+			if got := reloaded.CommitMessageSource(); got != tc.want {
+				t.Fatalf("CommitMessageSource(store=%q) 期望 %q，得到 %q", tc.store, tc.want, got)
+			}
+		})
+	}
+
+	// 损坏配置回退 local。
+	if err := os.WriteFile(path, []byte("{invalid"), 0o644); err != nil {
+		t.Fatalf("写入损坏配置失败: %v", err)
+	}
+	broken := New()
+	broken.SetPath(path)
+	if got := broken.CommitMessageSource(); got != CommitSourceLocal {
+		t.Fatalf("损坏配置下 CommitMessageSource 应回退 local，得到 %q", got)
+	}
+}
+
+// TestNormalizeCommitMessageSource 验证导出的归一化函数纯函数行为。
+func TestNormalizeCommitMessageSource(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{"", CommitSourceLocal},
+		{"local", CommitSourceLocal},
+		{"LOCAL", CommitSourceLocal},
+		{"leokun", CommitSourceLeokun},
+		{"Leokun", CommitSourceLeokun},
+		{"cursor", CommitSourceCursor},
+		{"  cursor  ", CommitSourceCursor},
+		{"unknown", CommitSourceLocal},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.in, func(t *testing.T) {
+			if got := NormalizeCommitMessageSource(tc.in); got != tc.want {
+				t.Fatalf("NormalizeCommitMessageSource(%q) 期望 %q，得到 %q", tc.in, tc.want, got)
+			}
+		})
+	}
+}

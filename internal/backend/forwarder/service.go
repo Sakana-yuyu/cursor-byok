@@ -133,6 +133,16 @@ type contextWindowPersister interface {
 	PersistChannelContextWindow(ctx context.Context, channelID string, contextWindowTokens int) error
 }
 
+// PromptInjection 返回提示词注入管理器，供外部（如路由分发）按需读取
+// 当前 commit 来源、语言等运行时配置。Manager 自身每次读取都从磁盘 reload，
+// 因此返回的引用始终能拿到最新配置。
+func (service *Service) PromptInjection() *promptinject.Manager {
+	if service == nil {
+		return nil
+	}
+	return service.promptInjection
+}
+
 // NewService 使用默认依赖创建 forwarder 服务。
 // transcriptBackfillOnce 保证 Cursor 记录回填每个进程只执行一次：
 // NewService 在启动链路里会被构造两次（NewHost 与 Host.Start 各一次），

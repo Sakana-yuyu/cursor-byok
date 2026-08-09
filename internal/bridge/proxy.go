@@ -269,6 +269,23 @@ func (s *ProxyService) ApplyTerminalEnvironment() (terminalenv.Status, error) {
 	return cursor.EnsureTerminalEnvironmentSettings()
 }
 
+// InstallTerminalDependency 通过 winget 异步安装 PowerShell 7 或 Python 3。
+// 立即返回（不阻塞 RPC），安装进度通过 wails 事件 terminalenv:install-progress 推送，
+// 前端监听该事件刷新进度；收到 stage=done 后应调用 GetTerminalEnvironmentStatus 重新探测。
+func (s *ProxyService) InstallTerminalDependency(target string) error {
+	normalized := strings.ToLower(strings.TrimSpace(target))
+	if normalized != terminalenv.TargetPowerShell && normalized != terminalenv.TargetPython {
+		return fmt.Errorf("不支持的安装目标 %q（仅支持 %s / %s）", target, terminalenv.TargetPowerShell, terminalenv.TargetPython)
+	}
+	go func() {
+		if err := terminalenv.Install(context.Background(), normalized); err != nil {
+			// 进度与错误已通过事件推送，这里仅记日志，避免 goroutine 静默失败。
+			logger.Errorf("InstallTerminalDependency target=%s failed: %v", normalized, err)
+		}
+	}()
+	return nil
+}
+
 // PrepareCursorLaunch ensures local-mode Cursor starts only after the proxy
 // listener, backend, and Cursor proxy configuration are all ready. Upstream
 // mode deliberately bypasses this requirement because it does not use BYOK.
