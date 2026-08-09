@@ -562,7 +562,13 @@ func (s *ProxyServer) forwardToServerStreaming(incoming *http.Request) (*http.Re
 			forwardURL.RawQuery = incoming.URL.RawQuery
 		}
 
-		serverReq, err := http.NewRequestWithContext(context.Background(), incoming.Method, forwardURL.String(), strings.NewReader(string(bodyBytes)))
+		// 上游请求派生自客户端请求上下文：客户端断开时立即停止拉取 backend 流，
+		// 避免 goroutine 与上游连接悬挂到超时才释放。
+		forwardCtx := incoming.Context()
+		if forwardCtx == nil {
+			forwardCtx = context.Background()
+		}
+		serverReq, err := http.NewRequestWithContext(forwardCtx, incoming.Method, forwardURL.String(), strings.NewReader(string(bodyBytes)))
 		if err != nil {
 			pw.CloseWithError(fmt.Errorf("build forward request: %w", err))
 			return
