@@ -1013,7 +1013,7 @@ onMounted(() => {
       </div>
     </SettingsSection>
 
-    <MarkdownEditorModal
+    <MarkdownEditorModal v-if="editorState.visible"
       v-model:visible="editorState.visible"
       v-model="editorState.content"
       :title="editorState.title"
