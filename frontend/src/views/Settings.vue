@@ -86,17 +86,17 @@ function handleBack() {
 
 <template>
   <div class="flex h-full min-h-0 flex-col overflow-hidden bg-[#202020] text-[#e5e5e5]">
-    <div class="mx-auto flex min-h-0 w-full max-w-[1080px] flex-1 flex-col gap-5 px-4 py-5 sm:flex-row sm:gap-8 sm:px-6">
+    <div class="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,1fr)] gap-4 px-3 py-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-6 sm:px-6 sm:py-5 lg:gap-8 lg:px-8">
       <SettingsSidebar
         v-model="selectedCategory"
         v-model:more-expanded="moreExpanded"
         v-model:collapsed="sidebarCollapsed"
         :categories="SETTINGS_CATEGORIES"
-        class="shrink-0 sm:sticky sm:top-0 sm:self-start"
+        class="min-w-0 self-start sm:sticky sm:top-0"
       />
 
-      <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-        <div class="mx-auto flex w-full max-w-[820px] flex-col">
+      <main class="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div class="w-full min-w-0">
           <SettingsPageHeader
             :title="activeCategory.label"
             :description="activeCategory.description"
@@ -105,8 +105,8 @@ function handleBack() {
           />
         </div>
 
-        <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pr-1">
-          <div class="mx-auto flex w-full max-w-[820px] flex-col gap-6 pb-8">
+        <div class="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pr-1 sm:pr-2">
+          <div class="flex w-full min-w-0 flex-col gap-6 pb-8 pt-6 2xl:max-w-[1280px]">
             <Transition name="settings-category" mode="out-in">
               <div :key="selectedCategory" class="settings-category-panel min-w-0">
                 <component
@@ -118,7 +118,7 @@ function handleBack() {
             </Transition>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   </div>
 </template>

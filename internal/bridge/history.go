@@ -41,6 +41,16 @@ var historySessionIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}
 
 const historyTitleMaxRunes = 40
 
+// normalizeHistoryStatus 将没有对应活动流的遗留活跃状态归为已中断。
+// 真实失败状态保持原样，避免把错误伪装成正常结束。
+func normalizeHistoryStatus(status string, active bool) string {
+	normalized := strings.ToLower(strings.TrimSpace(status))
+	if active || (normalized != "running" && normalized != "waiting_tool") {
+		return normalized
+	}
+	return "interrupted"
+}
+
 // historyStateFile 对应会话目录下的 state.json 元数据。
 type historyStateFile struct {
 	CreatedAt         time.Time `json:"created_at"`
@@ -67,7 +77,7 @@ type historyContextItem struct {
 
 // scanHistorySessions 扫描 history 根目录，返回所有会话的展示元数据。
 // 仅收录标准 UUID 命名目录；忽略 usage.json、_debug 等非会话项。
-func scanHistorySessions() ([]HistorySession, error) {
+func scanHistorySessions(isActive func(conversationID, requestID string) bool) ([]HistorySession, error) {
 	root := appdata.HistoryRootPath()
 	entries, err := os.ReadDir(root)
 	if err != nil {
@@ -82,13 +92,13 @@ func scanHistorySessions() ([]HistorySession, error) {
 		if !entry.IsDir() || !historySessionIDPattern.MatchString(name) {
 			continue
 		}
-		sessions = append(sessions, scanHistorySession(filepath.Join(root, name), name))
+		sessions = append(sessions, scanHistorySession(filepath.Join(root, name), name, isActive))
 	}
 	return sessions, nil
 }
 
 // scanHistorySession 汇总单个会话目录的元数据。
-func scanHistorySession(dir, id string) HistorySession {
+func scanHistorySession(dir, id string, isActive func(conversationID, requestID string) bool) HistorySession {
 	session := HistorySession{ID: id}
 	if state := readHistoryState(filepath.Join(dir, "state.json")); state != nil {
 		if !state.CreatedAt.IsZero() {
@@ -99,7 +109,8 @@ func scanHistorySession(dir, id string) HistorySession {
 		}
 		session.SubagentType = strings.TrimSpace(state.SubagentTypeName)
 		session.Mode = strings.TrimSpace(state.Mode)
-		session.Status = strings.TrimSpace(state.CurrentLoopStatus)
+		active := isActive != nil && isActive(session.ID, state.CurrentRequestID)
+		session.Status = normalizeHistoryStatus(state.CurrentLoopStatus, active)
 		session.RequestID = strings.TrimSpace(state.CurrentRequestID)
 	}
 	session.Title = readHistoryTitle(filepath.Join(dir, "context.json"))

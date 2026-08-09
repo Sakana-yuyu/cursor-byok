@@ -49,8 +49,10 @@ const groupedTree = computed(() => {
     days.get(dayKey).push(session);
   }
   const sortedYears = [...years.entries()].sort(([left], [right]) => right.localeCompare(left));
-  const countSessions = (daysMap) =>
-    [...daysMap.values()].reduce((sum, list) => sum + list.length, 0);
+  const countSessions = (itemsMap) =>
+    [...itemsMap.values()].reduce((sum, value) => (
+      sum + (Array.isArray(value) ? value.length : countSessions(value))
+    ), 0);
   return sortedYears.map(([year, monthsMap]) => ({
     key: year,
     label: year,
@@ -76,6 +78,35 @@ const groupedTree = computed(() => {
 });
 
 const selectedCount = computed(() => selectedIDs.size);
+const allSessionIDs = computed(() => sessions.value.map((session) => session.id).filter(Boolean));
+const allSelected = computed(() =>
+  allSessionIDs.value.length > 0 && allSessionIDs.value.every((id) => selectedIDs.has(id)),
+);
+const statusCounts = computed(() => sessions.value.reduce((counts, session) => {
+  const status = String(session.status || "").toLowerCase();
+  if (["running", "waiting_tool"].includes(status)) counts.active += 1;
+  if (["provider_error", "failed"].includes(status)) counts.failed += 1;
+  if (status === "interrupted") counts.interrupted += 1;
+  return counts;
+}, { active: 0, failed: 0, interrupted: 0 }));
+
+function selectAllSessions() {
+  for (const id of allSessionIDs.value) {
+    selectedIDs.add(id);
+  }
+}
+
+function clearSelection() {
+  selectedIDs.clear();
+}
+
+function toggleSelectAll() {
+  if (allSelected.value) {
+    clearSelection();
+    return;
+  }
+  selectAllSessions();
+}
 
 function toggleCollapsed(key) {
   if (collapsed.has(key)) {
@@ -140,6 +171,13 @@ function statusInfo(session) {
       label: "进行中",
       badge: "border-sky-400/15 bg-sky-400/[0.07] text-sky-300/80",
       row: "border-sky-400/10 bg-sky-400/[0.025]",
+    };
+  }
+  if (status === "interrupted") {
+    return {
+      label: "已中断",
+      badge: "border-orange-300/15 bg-orange-300/[0.07] text-orange-200/80",
+      row: "border-orange-300/10 bg-orange-300/[0.025]",
     };
   }
   return {
@@ -255,7 +293,7 @@ onMounted(() => {
 <template>
   <Card>
     <div class="flex h-[min(42rem,calc(100dvh-14rem))] min-h-0 min-w-0 flex-col">
-      <header class="flex flex-wrap items-start justify-between gap-4 border-b border-white/[0.07] pb-4">
+      <header class="grid gap-4 border-b border-white/[0.07] pb-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
         <div class="min-w-0">
           <div class="flex items-center gap-2.5">
             <span class="grid size-8 shrink-0 place-items-center rounded-[8px] bg-[#10AD5D]/10 text-[#65d99b]">
@@ -263,7 +301,7 @@ onMounted(() => {
             </span>
             <div>
               <h2 class="text-sm font-semibold tracking-wide text-[#f2f2f2]">历史与日志</h2>
-              <p class="mt-0.5 text-[11px] text-[#737373]">管理本地会话记录与调试数据</p>
+              <p class="mt-0.5 text-[11px] text-[#737373]">管理本地会话记录、终态与调试数据</p>
             </div>
           </div>
           <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 pl-[42px] text-[11px] text-[#858585]">
@@ -272,7 +310,22 @@ onMounted(() => {
             <span>调试日志 <strong class="font-medium tabular-nums text-[#d4d4d4]">{{ formatSize(totalDebugSizeBytes) }}</strong></span>
           </div>
         </div>
-        <div class="flex shrink-0 items-center gap-2">
+
+        <div class="flex flex-wrap items-center gap-2 lg:justify-end">
+          <div class="grid grid-cols-3 overflow-hidden rounded-[8px] border border-white/[0.07] bg-white/[0.025] text-center text-[10px]">
+            <div class="min-w-[58px] border-r border-white/[0.06] px-2 py-1.5">
+              <div class="tabular-nums text-sky-300/90">{{ statusCounts.active }}</div>
+              <div class="mt-0.5 text-[#6f6f6f]">进行中</div>
+            </div>
+            <div class="min-w-[58px] border-r border-white/[0.06] px-2 py-1.5">
+              <div class="tabular-nums text-red-300/90">{{ statusCounts.failed }}</div>
+              <div class="mt-0.5 text-[#6f6f6f]">错误</div>
+            </div>
+            <div class="min-w-[58px] px-2 py-1.5">
+              <div class="tabular-nums text-orange-200/90">{{ statusCounts.interrupted }}</div>
+              <div class="mt-0.5 text-[#6f6f6f]">已中断</div>
+            </div>
+          </div>
           <button
             type="button"
             class="center-row h-8 gap-1.5 rounded-[7px] border border-white/[0.09] bg-white/[0.035] px-3 text-xs text-[#b5b5b5] transition-colors hover:border-white/15 hover:bg-white/[0.07] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
@@ -299,6 +352,50 @@ onMounted(() => {
         <button type="button" class="font-medium text-red-200 hover:text-white" :disabled="loading" @click="refresh">
           {{ loading ? "重试中" : "重试" }}
         </button>
+      </div>
+
+      <div v-if="sessions.length > 0" class="mt-3 flex flex-wrap items-center gap-2 rounded-[8px] border border-white/[0.07] bg-white/[0.025] px-2.5 py-2">
+        <button
+          type="button"
+          class="center-row h-7 gap-1.5 rounded-[6px] border border-white/[0.09] bg-white/[0.04] px-2.5 text-[11px] text-[#b9b9b9] transition-colors hover:border-[#10AD5D]/30 hover:bg-[#10AD5D]/[0.08] hover:text-white"
+          @click="toggleSelectAll"
+        >
+          <span class="icon-[mdi--checkbox-multiple-marked-outline] text-[14px]" aria-hidden="true" />
+          {{ allSelected ? "取消全选" : "全选会话" }}
+        </button>
+        <button
+          v-if="selectedCount > 0"
+          type="button"
+          class="center-row h-7 gap-1.5 rounded-[6px] px-2.5 text-[11px] text-[#8f8f8f] transition-colors hover:bg-white/[0.06] hover:text-white"
+          @click="clearSelection"
+        >
+          <span class="icon-[mdi--close] text-[13px]" aria-hidden="true" />
+          取消选择
+        </button>
+        <span class="h-4 w-px bg-white/[0.09]" aria-hidden="true" />
+        <span class="text-[11px] text-[#777]">
+          {{ selectedCount > 0 ? `已选择 ${selectedCount} 个会话` : "勾选会话后进行批量清理或删除" }}
+        </span>
+        <div class="ml-auto flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            class="center-row h-7 gap-1.5 rounded-[6px] border border-white/[0.08] bg-white/[0.03] px-2.5 text-[11px] text-[#9d9d9d] transition-colors hover:border-white/15 hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+            :disabled="selectedCount === 0 || cleaningDebug"
+            @click="handleCleanSelectedDebug"
+          >
+            <span class="icon-[mdi--bug-outline] text-[13px]" aria-hidden="true" />
+            {{ cleaningDebug ? "清理中" : "清理调试日志" }}
+          </button>
+          <button
+            type="button"
+            class="center-row h-7 gap-1.5 rounded-[6px] border border-red-400/10 bg-red-400/[0.035] px-2.5 text-[11px] text-red-300/70 transition-colors hover:border-red-400/20 hover:bg-red-400/[0.075] hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-30"
+            :disabled="selectedCount === 0 || deleting"
+            @click="handleDeleteSelected"
+          >
+            <span class="icon-[mdi--trash-can-outline] text-[13px]" aria-hidden="true" />
+            {{ deleting ? "删除中" : "删除所选" }}
+          </button>
+        </div>
       </div>
 
       <div v-if="!loading && !error && sessions.length === 0" class="grid min-h-0 flex-1 place-items-center py-10 text-center">
@@ -408,37 +505,6 @@ onMounted(() => {
         </div>
       </div>
 
-      <footer class="mt-3 flex shrink-0 flex-wrap items-center gap-2 border-t border-white/[0.07] pt-3">
-        <div class="mr-auto flex min-w-0 items-center gap-2 text-[11px]">
-          <span
-            class="grid size-5 place-items-center rounded-full text-[10px] font-semibold tabular-nums transition-colors"
-            :class="selectedCount > 0 ? 'bg-[#10AD5D]/15 text-[#65d99b]' : 'bg-white/[0.045] text-[#666]'"
-          >
-            {{ selectedCount }}
-          </span>
-          <span :class="selectedCount > 0 ? 'text-[#b8b8b8]' : 'text-[#666]'">
-            {{ selectedCount > 0 ? "个会话已选中" : "选择会话后可批量操作" }}
-          </span>
-        </div>
-        <button
-          type="button"
-          class="center-row h-8 gap-1.5 rounded-[7px] border border-white/[0.08] bg-white/[0.03] px-3 text-xs text-[#a3a3a3] transition-colors hover:border-white/15 hover:bg-white/[0.06] hover:text-[#dedede] disabled:cursor-not-allowed disabled:opacity-35"
-          :disabled="selectedCount === 0 || cleaningDebug"
-          @click="handleCleanSelectedDebug"
-        >
-          <span class="icon-[mdi--bug-outline] text-[14px]" aria-hidden="true" />
-          {{ cleaningDebug ? "清理中" : "清理调试日志" }}
-        </button>
-        <button
-          type="button"
-          class="center-row h-8 gap-1.5 rounded-[7px] border border-red-400/10 bg-red-400/[0.035] px-3 text-xs text-red-300/70 transition-colors hover:border-red-400/20 hover:bg-red-400/[0.075] hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-30"
-          :disabled="selectedCount === 0 || deleting"
-          @click="handleDeleteSelected"
-        >
-          <span class="icon-[mdi--trash-can-outline] text-[14px]" aria-hidden="true" />
-          {{ deleting ? "删除中" : "删除所选" }}
-        </button>
-      </footer>
     </div>
   </Card>
 </template>

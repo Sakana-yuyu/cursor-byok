@@ -218,10 +218,61 @@ func (service *Service) publishNativeDelegationProgress(requestID, execID, summa
 	if service == nil || strings.TrimSpace(requestID) == "" || strings.TrimSpace(execID) == "" || strings.TrimSpace(summary) == "" {
 		return
 	}
+	item, ok := service.nativeDelegationTask(execID)
+	if !ok || strings.TrimSpace(item.ToolCallID) == "" {
+		return
+	}
 	if err := service.broker.Publish(requestID, StreamEvent{
-		Message: buildThinkingDeltaMessage(summary, agentv1.ThinkingStyle_THINKING_STYLE_DEFAULT),
+		Message: buildTaskToolCallDeltaMessage(
+			item.ToolCallID,
+			"",
+			buildThinkingDeltaInteraction(summary, agentv1.ThinkingStyle_THINKING_STYLE_DEFAULT),
+		),
 	}); err != nil {
 		return
+	}
+}
+
+// mirrorNativeChildInteraction forwards a direct Cursor child conversation's
+// visible stream event into the owning Task bubble. The child's own request
+// remains the source of truth; this is only the parent-side projection Cursor
+// uses while the subagent window is open.
+func (service *Service) mirrorNativeChildInteraction(child *ActiveStream, modelCallID string, interaction *agentv1.InteractionUpdate) {
+	if service == nil || child == nil || interaction == nil {
+		return
+	}
+	child.mu.Lock()
+	conversation := child.CheckpointConversation
+	childConversationID := strings.TrimSpace(child.ConversationID)
+	child.mu.Unlock()
+	if conversation == nil || strings.TrimSpace(conversation.SubagentTypeName) == "" {
+		return
+	}
+	parentConversationID := strings.TrimSpace(conversation.ParentConversationID)
+	parentToolCallID := strings.TrimSpace(conversation.ParentToolCallID)
+	if childConversationID == "" || parentConversationID == "" || parentToolCallID == "" {
+		return
+	}
+
+	service.delegationRuntimeMu.Lock()
+	var parentRequestID string
+	for _, item := range service.nativeDelegations {
+		if item == nil || delegatedStatusTerminal(item.Status) {
+			continue
+		}
+		if strings.TrimSpace(item.ConversationID) == parentConversationID && strings.TrimSpace(item.ToolCallID) == parentToolCallID {
+			parentRequestID = strings.TrimSpace(item.ParentRequestID)
+			break
+		}
+	}
+	service.delegationRuntimeMu.Unlock()
+	if parentRequestID == "" {
+		return
+	}
+	if err := service.broker.Publish(parentRequestID, StreamEvent{
+		Message: buildTaskToolCallDeltaMessage(parentToolCallID, strings.TrimSpace(modelCallID), interaction),
+	}); err != nil {
+		logger.Infof("forwarder native child delta mirror failed child_conversation_id=%s parent_request_id=%s parent_tool_call_id=%s err=%v", childConversationID, parentRequestID, parentToolCallID, err)
 	}
 }
 

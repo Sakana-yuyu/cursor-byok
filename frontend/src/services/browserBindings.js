@@ -476,6 +476,8 @@ export const StopProxy = () => {
 export const RepairProxySettings = () => Promise.resolve({ settingsApplied: true, settingsPath: "", proxyURL: "http://127.0.0.1:18080", cursorRunning: false, needsCursorRestart: false, details: ["浏览器预览模式：模拟修复成功"] });
 export const GetTerminalEnvironmentStatus = () => Promise.resolve({ platform: "browser-preview", shellPath: "/bin/zsh", shellName: "zsh", shellVersion: "", pythonPath: "/usr/bin/python3", pythonVersion: "Python 3", upgradeRecommended: false, upgradeMessage: "", configurationNotice: "浏览器预览模式：使用模拟环境。" });
 export const ApplyTerminalEnvironment = GetTerminalEnvironmentStatus;
+// 浏览器预览没有 winget；安装为无操作（真实进度走事件，预览模式无事件通道）。
+export const InstallTerminalDependency = () => Promise.resolve();
 export const GetAdRuntime = () => Promise.resolve({ available: false, slots: [], window: {} });
 export const OpenExternalURL = () => Promise.resolve();
 export const GetHomeMetricsSummary = () => Promise.resolve(browserPreviewMockMetrics());

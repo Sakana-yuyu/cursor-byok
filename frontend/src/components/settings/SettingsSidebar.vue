@@ -1,7 +1,7 @@
 <script setup>
 import Select from "@/components/ui/Select.vue";
 import { SETTINGS_GROUPS } from "@/components/settings/settingsCategories";
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 const props = defineProps({
   categories: {
@@ -43,32 +43,44 @@ function groupIcon(key) {
   return GROUP_ICONS[key] || "icon-[mdi--dots-horizontal]";
 }
 
-// 收缩态「更多设置」popover 浮层显隐：hover/focus 弹出，点击选中后关闭。
+// 收缩态的“更多设置”由点击显式打开，避免指针经过窄栏时误触或闪烁。
 const moreFlyoutOpen = ref(false);
-let moreFlyoutTimer = null;
+const sidebarRoot = ref(null);
 
-function openMoreFlyout() {
-  if (moreFlyoutTimer) {
-    clearTimeout(moreFlyoutTimer);
-    moreFlyoutTimer = null;
-  }
-  moreFlyoutOpen.value = true;
+function toggleMoreFlyout() {
+  moreFlyoutOpen.value = !moreFlyoutOpen.value;
 }
 
-function scheduleCloseMoreFlyout() {
-  if (moreFlyoutTimer) {
-    clearTimeout(moreFlyoutTimer);
-  }
-  moreFlyoutTimer = setTimeout(() => {
-    moreFlyoutOpen.value = false;
-    moreFlyoutTimer = null;
-  }, 150);
+function closeMoreFlyout() {
+  moreFlyoutOpen.value = false;
 }
 
 function selectFromFlyout(categoryID) {
   updateValue(categoryID);
-  moreFlyoutOpen.value = false;
+  closeMoreFlyout();
 }
+
+function handleOutsidePointerDown(event) {
+  if (!sidebarRoot.value?.contains(event.target)) {
+    closeMoreFlyout();
+  }
+}
+
+function handleDocumentKeydown(event) {
+  if (event.key === "Escape") {
+    closeMoreFlyout();
+  }
+}
+
+onMounted(() => {
+  document.addEventListener("pointerdown", handleOutsidePointerDown);
+  document.addEventListener("keydown", handleDocumentKeydown);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener("pointerdown", handleOutsidePointerDown);
+  document.removeEventListener("keydown", handleDocumentKeydown);
+});
 
 // 桌面端按 nav 分区：common 常驻，more 收纳到可展开区。
 const commonGroups = computed(() =>
@@ -100,12 +112,22 @@ watch(
     }
   },
 );
+
+watch(
+  () => props.collapsed,
+  (collapsed) => {
+    if (!collapsed) {
+      closeMoreFlyout();
+    }
+  },
+);
 </script>
 
 <template>
   <div
+    ref="sidebarRoot"
     class="w-full min-w-0 transition-[width] duration-200"
-    :class="collapsed ? 'sm:w-[56px]' : 'sm:w-[192px]'"
+    :class="collapsed ? 'sm:w-[64px]' : 'sm:w-[208px]'"
   >
     <div class="sm:hidden">
       <Select
@@ -121,7 +143,7 @@ watch(
       <!-- 收缩切换按钮：仅桌面端，收缩/展开侧边栏 -->
       <button
         type="button"
-        class="mb-2 flex w-full items-center rounded-[6px] py-1.5 text-[#8f8f8f] transition-colors hover:bg-[#252525] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35"
+        class="mb-3 flex h-9 w-full items-center rounded-[8px] text-[#8f8f8f] transition-colors hover:bg-white/[0.045] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35"
         :class="collapsed ? 'justify-center' : 'justify-end px-3'"
         :title="collapsed ? '展开侧边栏' : '收起侧边栏'"
         :aria-label="collapsed ? '展开侧边栏' : '收起侧边栏'"
@@ -137,33 +159,35 @@ watch(
         </span>
       </button>
 
-      <div class="space-y-4">
+      <div :class="collapsed ? 'space-y-1.5' : 'space-y-4'">
         <section v-for="group in commonGroups" :key="group.key">
           <div
-            class="mb-1.5 flex items-center gap-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-[#8f8f8f]"
-            :class="collapsed ? 'justify-center px-0' : ''"
+            v-if="!collapsed"
+            class="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-[#8f8f8f]"
           >
-            <span :class="groupIcon(group.key)" class="text-[13px] text-[#6f6f6f]" aria-hidden="true" />
-            <span v-if="!collapsed">{{ group.label }}</span>
+            {{ group.label }}
           </div>
           <div class="space-y-1">
             <button
               v-for="category in group.items"
               :key="category.id"
               type="button"
-              class="flex w-full items-start justify-between gap-3 rounded-[6px] border-l-2 py-2.5 pl-4 pr-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35"
+              class="relative flex min-h-10 w-full items-center gap-3 overflow-hidden rounded-[8px] border-l-0 px-3 text-left transition-colors before:absolute before:bottom-2 before:left-0 before:top-2 before:w-0.5 before:rounded-full before:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35"
               :class="[
                 category.id === modelValue
-                  ? 'border-[#10AD5D] bg-[#262626] text-white'
-                  : 'border-transparent text-[#9a9a9a] hover:bg-[#252525] hover:text-white',
-                collapsed ? 'justify-center pl-0 pr-0' : '',
+                  ? 'bg-[#2b2b2b] text-white before:bg-[#10AD5D]'
+                  : 'text-[#999] hover:bg-white/[0.045] hover:text-white',
+                collapsed ? 'justify-center px-0' : '',
               ]"
               :aria-current="category.id === modelValue ? 'page' : undefined"
               :title="collapsed ? category.label : undefined"
               @click="updateValue(category.id)"
             >
-              <span v-if="collapsed" :class="category.icon" class="text-[18px]" aria-hidden="true" />
-              <span v-else class="min-w-0">
+              <span
+                :class="[category.icon, collapsed ? 'shrink-0 text-[18px]' : 'shrink-0 text-[17px] text-[#7f7f7f]']"
+                aria-hidden="true"
+              />
+              <span v-if="!collapsed" class="min-w-0">
                 <span class="block text-sm font-medium">{{ category.label }}</span>
                 <span class="mt-0.5 block text-xs leading-5 text-[#777]">{{ category.description }}</span>
               </span>
@@ -214,32 +238,23 @@ watch(
             </Transition>
           </template>
 
-          <!-- 收缩态：more icon + hover/focus 弹出 popover 浮层 -->
-          <div
-            v-else
-            class="relative"
-            @mouseenter="openMoreFlyout"
-            @mouseleave="scheduleCloseMoreFlyout"
-          >
+          <!-- 收缩态：点击“更多”后打开稳定的分类菜单。 -->
+          <div v-else class="relative">
             <button
               type="button"
-              class="flex w-full items-center justify-center rounded-[6px] py-2.5 text-[#9a9a9a] transition-colors hover:bg-[#252525] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35"
-              :class="moreGroup.items.some((category) => category.id === modelValue) ? 'text-white' : ''"
+              class="relative flex h-10 w-full items-center justify-center overflow-hidden rounded-[8px] text-[#999] transition-colors before:absolute before:bottom-2 before:left-0 before:top-2 before:w-0.5 before:rounded-full before:bg-transparent hover:bg-white/[0.045] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35"
+              :class="moreGroup.items.some((category) => category.id === modelValue) ? 'bg-[#2b2b2b] text-white before:bg-[#10AD5D]' : ''"
               :title="moreGroup.label"
               :aria-expanded="moreFlyoutOpen"
               :aria-haspopup="true"
-              @focus="openMoreFlyout"
-              @blur="scheduleCloseMoreFlyout"
-              @click="openMoreFlyout"
+              @click="toggleMoreFlyout"
             >
               <span :class="groupIcon('more')" class="text-[18px]" aria-hidden="true" />
             </button>
             <Transition name="settings-more">
               <div
                 v-if="moreFlyoutOpen"
-                class="absolute left-full top-0 z-30 ml-2 w-[200px] rounded-[8px] border border-[#3f3f3f] bg-[#262626] p-1.5 shadow-lg"
-                @mouseenter="openMoreFlyout"
-                @mouseleave="scheduleCloseMoreFlyout"
+                class="absolute left-full top-0 z-30 ml-3 w-[224px] rounded-[10px] border border-white/10 bg-[#292929] p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.35)]"
               >
                 <div class="mb-1 px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-[#8f8f8f]">
                   {{ moreGroup.label }}
@@ -248,12 +263,12 @@ watch(
                   v-for="category in moreGroup.items"
                   :key="category.id"
                   type="button"
-                  class="flex w-full items-start gap-2 rounded-[6px] px-2 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35"
+                  class="flex w-full items-start gap-2 rounded-[7px] px-2.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35"
                   :class="category.id === modelValue
-                    ? 'bg-[#333] text-white'
-                    : 'text-[#9a9a9a] hover:bg-[#333] hover:text-white'"
+                    ? 'bg-white/[0.08] text-white'
+                    : 'text-[#a8a8a8] hover:bg-white/[0.06] hover:text-white'"
                   :aria-current="category.id === modelValue ? 'page' : undefined"
-                  @mousedown.prevent="selectFromFlyout(category.id)"
+                  @click="selectFromFlyout(category.id)"
                 >
                   <span :class="category.icon" class="mt-0.5 shrink-0 text-[16px]" aria-hidden="true" />
                   <span class="min-w-0">

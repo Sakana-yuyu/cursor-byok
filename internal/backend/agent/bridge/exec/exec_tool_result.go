@@ -1092,6 +1092,11 @@ func recordingModeFromString(mode string) agentv1.RecordingMode {
 	}
 }
 
+// DecodeComputerUseActionsForLocal 导出 ComputerUse 动作解码，供 forwarder 本地执行注入复用。
+func DecodeComputerUseActionsForLocal(raw []byte) ([]*agentv1.ComputerUseAction, error) {
+	return decodeComputerUseActions(raw)
+}
+
 // decodeComputerUseActions 解析 ComputerUse 的模型侧动作参数并映射为协议动作。
 func decodeComputerUseActions(raw []byte) ([]*agentv1.ComputerUseAction, error) {
 	var input struct {

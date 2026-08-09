@@ -91,7 +91,7 @@ func TestChildConversationCannotDispatchSubagents(t *testing.T) {
 		exposed[name] = struct{}{}
 	}
 
-	for _, toolName := range []string{"Task", "ForceBackgroundSubagent", "SubagentAwait"} {
+	for _, toolName := range []string{"Task", "ForceBackgroundSubagent", "SubagentAwait", "send_final_summary"} {
 		if _, ok := exposed[toolName]; ok {
 			t.Errorf("child tool catalog must not expose %q", toolName)
 		}

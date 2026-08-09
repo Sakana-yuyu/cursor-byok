@@ -114,6 +114,21 @@ func TestHistoryDebugDirsInMissingRoot(t *testing.T) {
 	}
 }
 
+func TestNormalizeHistoryStatusMarksInactiveActiveStatesInterrupted(t *testing.T) {
+	if got := normalizeHistoryStatus("running", false); got != "interrupted" {
+		t.Fatalf("normalizeHistoryStatus(running, inactive) = %q, want interrupted", got)
+	}
+	if got := normalizeHistoryStatus("waiting_tool", false); got != "interrupted" {
+		t.Fatalf("normalizeHistoryStatus(waiting_tool, inactive) = %q, want interrupted", got)
+	}
+	if got := normalizeHistoryStatus("provider_error", false); got != "provider_error" {
+		t.Fatalf("normalizeHistoryStatus(provider_error, inactive) = %q, want provider_error", got)
+	}
+	if got := normalizeHistoryStatus("running", true); got != "running" {
+		t.Fatalf("normalizeHistoryStatus(running, active) = %q, want running", got)
+	}
+}
+
 func mustMkdirAll(t *testing.T, path string) {
 	t.Helper()
 	if err := os.MkdirAll(path, 0o755); err != nil {

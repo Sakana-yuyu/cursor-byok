@@ -161,7 +161,11 @@ func (s *ProxyService) ResetUsageMetrics() error {
 
 // GetHistorySessions returns metadata for every retained history session.
 func (s *ProxyService) GetHistorySessions() ([]HistorySession, error) {
-	return scanHistorySessions()
+	var isActive func(conversationID, requestID string) bool
+	if s != nil && s.core != nil {
+		isActive = s.core.HasActiveConversation
+	}
+	return scanHistorySessions(isActive)
 }
 
 // DeleteHistorySessions removes the given history sessions (UUID ids).

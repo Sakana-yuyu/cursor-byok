@@ -176,14 +176,16 @@ func newPromptContextReminder(source string, content string) PromptContextMessag
 func subagentContractText() string {
 	return strings.Join([]string{
 		"The turn that contains this reminder runs inside a subagent child conversation. Work as an investigator for the parent agent, not as the final user-facing assistant.",
-		"Return a short textual result: lead with the conclusion, keep only the key evidence, and do not produce a long response.",
+		"Follow the parent task's requested output format and level of detail. If it requests a structured report, evidence links, file lists, or other detailed deliverables, return them in full rather than replacing them with a status summary.",
+		"This deliverable requirement supersedes any earlier generic instruction to return only a short or concise result.",
+		"Return the complete deliverable to the parent agent. When the parent task does not specify an output format, lead with the conclusion and include the evidence needed for the parent to verify and synthesize the result.",
 		"Use the available agent tools when they materially improve correctness or efficiency. Do not ask the user questions. If required information is missing, report the gap to the parent agent instead of asking the user directly.",
 	}, "\n\n")
 }
 
 func currentModeContractText(mode agentv1.AgentMode, childSubagent bool) string {
 	if childSubagent {
-		return "For the turn that contains this reminder, the active mode is a subagent child conversation. Use the available agent tools, but do not call AskQuestion. Return only a concise investigation result for the parent agent."
+		return "For the turn that contains this reminder, the active mode is a subagent child conversation. Use the available agent tools, but do not call AskQuestion. Return the complete requested deliverable to the parent agent, preserving any explicit structure and evidence requirements from the parent task."
 	}
 	switch normalizeMode(mode) {
 	case agentv1.AgentMode_AGENT_MODE_PLAN:

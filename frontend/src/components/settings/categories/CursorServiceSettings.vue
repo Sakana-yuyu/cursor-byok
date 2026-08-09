@@ -7,11 +7,13 @@ import Select from "@/components/ui/Select.vue";
 import { useMessage } from "@/composables/useMessage";
 import {
   ROUTE_MODE_OPTIONS,
+  COMPUTER_USE_MODE_OPTIONS,
   appState,
   getCursorManualPath,
   openModelConfigWindow,
   persistUserConfig,
   saveRoutingMode,
+  saveComputerUse,
   setCursorManualPath,
   toUserError,
 } from "@/state/appState";
@@ -136,6 +138,73 @@ async function saveRouteMode(value) {
   } finally {
     routeModeState.busy = false;
   }
+}
+
+// ComputerUse 执行模式（桌面/浏览器）配置。
+const computerUseModeDraft = ref(appState.computerUseMode);
+const browserStartURLDraft = ref(appState.computerUseBrowserStartURL || "");
+const computerUseState = reactive({ busy: false, error: "", retry: null });
+const computerUseModeBusy = computed(() => computerUseState.busy || appState.configSaving);
+
+watch(() => appState.computerUseMode, (value) => {
+  if (!computerUseState.busy) {
+    computerUseModeDraft.value = value;
+  }
+});
+
+watch(() => appState.computerUseBrowserStartURL, (value) => {
+  if (!computerUseState.busy) {
+    browserStartURLDraft.value = value || "";
+  }
+});
+
+async function saveComputerUseMode(value) {
+  const nextValue = String(value || "desktop");
+  const previousValue = computerUseModeDraft.value;
+  computerUseModeDraft.value = nextValue;
+  computerUseState.retry = () => saveComputerUseMode(nextValue);
+  computerUseState.error = "";
+  computerUseState.busy = true;
+  try {
+    const result = await saveComputerUse({ mode: nextValue });
+    if (result?.ok === false) {
+      throw new Error(result.error || "保存失败");
+    }
+  } catch (error) {
+    computerUseModeDraft.value = appState.computerUseMode || previousValue;
+    computerUseState.error = toUserError(error);
+  } finally {
+    computerUseState.busy = false;
+  }
+}
+
+// browserStartURL 用 debounce 保存（类似 manualPath 的 schedule 模式）。
+function queueBrowserStartURLSave() {
+  computerUseState.error = "";
+  props.autosave.schedule(
+    "cursor-service.browser-start-url",
+    async () => {
+      computerUseState.retry = null;
+      computerUseState.busy = true;
+      try {
+        const url = String(browserStartURLDraft.value || "").trim() || "about:blank";
+        const result = await saveComputerUse({ browserStartURL: url });
+        if (result?.ok === false) {
+          throw new Error(result.error || "保存失败");
+        }
+      } catch (error) {
+        computerUseState.error = toUserError(error);
+        computerUseState.retry = () => queueBrowserStartURLSave();
+      } finally {
+        computerUseState.busy = false;
+      }
+    },
+    { debounceMs: 500 },
+  );
+}
+
+function flushBrowserStartURLSave() {
+  props.autosave.flush("cursor-service.browser-start-url");
 }
 
 function clearManualPathErrors() {
@@ -485,6 +554,38 @@ onUnmounted(() => {
             :disabled="routeModeBusy"
             @change="saveRouteMode"
           />
+        </div>
+      </SettingsRow>
+
+      <SettingsRow
+        label="ComputerUse 执行模式"
+        description="控制 AI 的屏幕操作工具由谁执行。桌面模式操作真实屏幕；浏览器模式驱动 headless 浏览器，适合前端 UI 验证。"
+        :busy="computerUseModeBusy"
+        :error="computerUseState.error"
+        @retry="retryState(computerUseState)"
+      >
+        <div class="w-full max-w-[460px] space-y-2">
+          <div class="w-[220px] max-w-full">
+            <Select
+              :model-value="computerUseModeDraft"
+              :options="COMPUTER_USE_MODE_OPTIONS"
+              placeholder="选择模式"
+              aria-label="ComputerUse 执行模式"
+              :disabled="computerUseModeBusy"
+              @change="saveComputerUseMode"
+            />
+          </div>
+          <div v-if="computerUseModeDraft === 'browser'" class="w-full max-w-[420px]">
+            <Input
+              :model-value="browserStartURLDraft"
+              :disabled="computerUseModeBusy"
+              placeholder="浏览器初始地址，如 http://localhost:5173"
+              aria-label="浏览器初始地址"
+              @input="(value) => { browserStartURLDraft = value; queueBrowserStartURLSave(); }"
+              @blur="flushBrowserStartURLSave"
+              @keyup.enter="flushBrowserStartURLSave"
+            />
+          </div>
         </div>
       </SettingsRow>
 

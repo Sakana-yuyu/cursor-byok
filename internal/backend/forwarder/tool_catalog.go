@@ -211,6 +211,9 @@ var childConversationDisallowedAgentToolNames = map[string]struct{}{
 	"Task":                    {},
 	"ForceBackgroundSubagent": {},
 	"SubagentAwait":           {},
+	// This tool is a short history-list summary and terminates the provider
+	// pass. A child must return its full final response through SubagentResult.
+	"send_final_summary": {},
 }
 
 func supportedToolNamesForMode(mode agentv1.AgentMode) map[string]struct{} {

@@ -57,6 +57,7 @@ import {
   normalizeHomeMetrics,
   normalizeLocalResponseCache,
   normalizeRouteMode,
+  normalizeComputerUseMode,
   validateConfigPayload,
 } from "@/utils/configNormalize";
 // Cursor 手动路径偏好已归位 utils/cursorLaunch.js；命名生成域已归位
@@ -133,6 +134,11 @@ const GENERIC_SERVICE_ERROR = "服务错误";
 export const ROUTE_MODE_OPTIONS = [
   { label: "本地服务模式", value: "local" },
   { label: "直连 Cursor 模式", value: "upstream" },
+];
+
+export const COMPUTER_USE_MODE_OPTIONS = [
+  { label: "桌面模式", value: "desktop" },
+  { label: "浏览器模式", value: "browser" },
 ];
 const PROXY_STATE_EVENT = "proxy:state";
 const USER_CONFIG_CHANGED_EVENT = "user-config:changed";
@@ -220,6 +226,7 @@ function buildConfigPayload(source = appState) {
     localResponseCache: normalized.localResponseCache,
     delegation,
     goal: normalized.goal,
+    computerUse: normalized.computerUse,
     lastAgentModelHash: normalized.lastAgentModelHash,
   };
 }
@@ -239,6 +246,7 @@ function buildCachedConfigPayload() {
     localResponseCache: payload.localResponseCache,
     delegation: payload.delegation,
     goal: payload.goal,
+    computerUse: payload.computerUse,
     lastAgentModelHash: payload.lastAgentModelHash,
   };
 }
@@ -253,6 +261,8 @@ function applyConfigToState(config, { modelAdaptersOnly = false } = {}) {
   appState.configBackendListenAddr = normalized.backendListenAddr;
   appState.configProxyListenAddr = normalized.proxyListenAddr;
   appState.routingMode = normalized.routing.mode;
+  appState.computerUseMode = normalized.computerUse.mode;
+  appState.computerUseBrowserStartURL = normalized.computerUse.browserStartURL;
   appState.includeCacheWriteInHitRate = normalized.homeMetrics.includeCacheWriteInHitRate;
   appState.localResponseCache = normalized.localResponseCache;
   appState.delegation = normalized.delegation;
@@ -516,6 +526,8 @@ export const appState = reactive({
   configBackendListenAddr: cachedConfig.backendListenAddr,
   configProxyListenAddr: cachedConfig.proxyListenAddr,
   routingMode: cachedConfig.routing.mode,
+  computerUseMode: cachedConfig.computerUse.mode,
+  computerUseBrowserStartURL: cachedConfig.computerUse.browserStartURL,
   includeCacheWriteInHitRate: cachedConfig.homeMetrics.includeCacheWriteInHitRate,
   localResponseCache: cachedConfig.localResponseCache,
   delegation: cachedConfig.delegation,
@@ -1135,6 +1147,18 @@ export async function saveRoutingMode(mode) {
     routing: {
       ...(currentConfig.routing ?? {}),
       mode: normalizeRouteMode(mode),
+    },
+  });
+}
+
+// saveComputerUse 增量保存 ComputerUse 执行模式配置（合并当前配置，失败回滚）。
+export async function saveComputerUse(partial) {
+  const currentConfig = await loadPersistedUserConfig();
+  return persistConfigPayload({
+    ...currentConfig,
+    computerUse: {
+      ...(currentConfig.computerUse ?? {}),
+      ...partial,
     },
   });
 }

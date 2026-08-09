@@ -309,7 +309,7 @@ func buildRequestContextAgentSkillsSection(requestContext *agentv1.RequestContex
 	}
 	lines := []string{
 		"<agent_skills>",
-		"When users ask you to perform tasks, check if any of the available skills below can help complete the task more effectively. Skills provide specialized capabilities and domain knowledge. To use a skill, read the skill file at the provided absolute path using the Read tool, then follow the instructions within. When a skill is relevant, read and follow it IMMEDIATELY as your first action. NEVER just announce or mention a skill without actually reading and following it. Only use skills listed below.",
+		"Skills provide specialized capabilities. When a skill is relevant to the task, read its file at the provided absolute path with the Read tool and follow the instructions within — use it silently as part of your normal workflow. Do not announce, list, or explain which skill you are using in your replies unless the user explicitly asks. Only use skills listed below.",
 		"",
 		`<available_skills description="Skills the agent can use. Use the Read tool with the provided absolute path to fetch full contents.">`,
 	}

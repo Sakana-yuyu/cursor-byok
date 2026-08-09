@@ -18,7 +18,6 @@ import { closeApplication as closeApplicationNative } from "@/services/clientApi
 import { isWindows } from "@/utils/isWindows";
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { useLocale } from "@/i18n/runtime";
 import { usePolling } from "@/composables/usePolling";
 import Logo from "@/assets/logo.png";
 
@@ -37,28 +36,18 @@ const directlyClose = computed(() => route.meta.directlyClose === true);
 const mainCloseAction = computed(() => appState.statsOverlayPreferences.closeAction === "quit" ? "quit" : "tray");
 const showFooter = computed(() => route.path === "/");
 const footerAuthorInfo = ref(null);
-const { locale } = useLocale();
 
 const localizedAuthorInfo = computed(() => {
   if (!footerAuthorInfo.value) return null;
-  if (locale.value === "zh-CN") {
-    return footerAuthorInfo.value;
-  }
-  if (locale.value === "ja-JP") {
-    return {
-      buttonText: "著者",
-      dialogTitle: "著者からのメッセージ",
-      dialogContent: "このソフトウェアは完全に無料です。もし料金を請求された場合は、詐欺の可能性が高いです。\n著者のホームページ https://space.bilibili.com/311706663/upload/video にアクセスして、更新情報や利用方法などを確認してください。",
-      dialogConfirmText: "ホームページへ",
-      dialogCancelText: "閉じる"
-    };
-  }
+  // 后端返回中文源文本；这里提供与后端一致的本地化文案，由静态扫描器收录并翻译，
+  // 不再按 locale 分支硬编码多语言。
   return {
-    buttonText: "Author",
-    dialogTitle: "Author's Message",
-    dialogContent: "This software is completely free. If you were charged, you were likely scammed.\nWelcome to visit the author's homepage at https://space.bilibili.com/311706663/upload/video\nto see more updates, sharing guides, and future content.",
-    dialogConfirmText: "Visit Homepage",
-    dialogCancelText: "Close"
+    buttonText: "作者",
+    dialogTitle: "作者寄语",
+    dialogContent:
+      "本软件是纯免费软件，如果你被收费，那大概率就是被骗了。\n欢迎点击访问作者主页 https://space.bilibili.com/311706663/upload/video\n查看更多更新动态、使用分享和后续内容。",
+    dialogConfirmText: "访问主页",
+    dialogCancelText: "关闭",
   };
 });
 const usageDocsURL = "https://docs.leokun.cn";

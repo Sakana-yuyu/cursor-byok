@@ -16,6 +16,25 @@ import (
 	"cursor/internal/logger"
 )
 
+func extractOpenAIResponsesReasoningSummaryEntries(raw json.RawMessage) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	var entries []struct {
+		Text string `json:"text,omitempty"`
+	}
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		return nil
+	}
+	parts := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if text := strings.TrimSpace(entry.Text); text != "" {
+			parts = append(parts, text)
+		}
+	}
+	return parts
+}
+
 func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamRequest, baseURL string, apiKey string, modelID string, promptCacheKeyMaximumLength int, manualPromptCacheKey bool, sink func(ModelEvent) error) error {
 	startedAt := time.Now().UTC()
 	finishedAt := time.Time{}
@@ -134,6 +153,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		PartialImageB64 string                     `json:"partial_image_b64"`
 		OutputFormat    string                     `json:"output_format"`
 		OutputIndex     int                        `json:"output_index"`
+		SummaryIndex    int                        `json:"summary_index"`
 		ItemID          string                     `json:"item_id"`
 		Item            *openAIResponsesOutputItem `json:"item,omitempty"`
 		Response        *openAIResponsesResponse   `json:"response,omitempty"`
@@ -161,7 +181,9 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 	thinkingStarted := time.Time{}
 	thinkingActive := false
 	emittedReasoningSignature := ""
-	reasoningSummaryForwarded := ""
+	reasoningSummaryEntries := make(map[string]string)
+	reasoningSummaryForwardedBytes := 0
+	reasoningSummaryStarted := false
 	thinkParser := &openAIThinkTagParser{}
 	toolKey := func(itemID string, outputIndex int) string {
 		if strings.TrimSpace(itemID) != "" {
@@ -252,19 +274,22 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			ThinkingStyle: agentv1.ThinkingStyle_THINKING_STYLE_DEFAULT,
 		})
 	}
-	emitReasoningSummary := func(summary string) error {
-		if summary == "" {
+	reasoningSummaryKey := func(itemID string, outputIndex int, summaryIndex int) string {
+		itemKey := strings.TrimSpace(itemID)
+		if itemKey == "" {
+			itemKey = fmt.Sprintf("output:%d", outputIndex)
+		}
+		return fmt.Sprintf("%s:summary:%d", itemKey, summaryIndex)
+	}
+	emitReasoningSummaryEntry := func(key string, summary string, incremental bool) error {
+		if summary == "" || strings.TrimSpace(summary) == "" {
 			return nil
 		}
-		// Responses sends summary deltas during the stream and may repeat the
-		// complete summary on response.output_item.done. Forward only the
-		// unseen suffix so Cursor gets one readable thinking block.
-		if strings.TrimSpace(summary) == "" {
-			return nil
-		}
+		previous, exists := reasoningSummaryEntries[key]
 		forward := summary
-		previous := reasoningSummaryForwarded
-		if previous != "" {
+		if incremental {
+			reasoningSummaryEntries[key] = previous + summary
+		} else if exists {
 			switch {
 			case summary == previous:
 				return nil
@@ -272,18 +297,32 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 				forward = summary[len(previous):]
 			case strings.HasPrefix(previous, summary):
 				return nil
+			default:
+				return nil
 			}
+			reasoningSummaryEntries[key] = summary
+		} else {
+			reasoningSummaryEntries[key] = summary
 		}
 		if strings.TrimSpace(forward) == "" {
 			return nil
 		}
+		if !exists && reasoningSummaryStarted {
+			forward = "\n" + forward
+		}
 		if err := emitThinkingDelta(forward); err != nil {
 			return err
 		}
-		if previous == "" || strings.HasPrefix(summary, previous) {
-			reasoningSummaryForwarded = summary
-		} else {
-			reasoningSummaryForwarded += forward
+		reasoningSummaryStarted = true
+		reasoningSummaryForwardedBytes += len(forward)
+		return nil
+	}
+	emitReasoningSummarySnapshot := func(itemID string, outputIndex int, raw json.RawMessage) error {
+		for summaryIndex, summary := range extractOpenAIResponsesReasoningSummaryEntries(raw) {
+			key := reasoningSummaryKey(itemID, outputIndex, summaryIndex)
+			if err := emitReasoningSummaryEntry(key, summary, false); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
@@ -466,12 +505,12 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		streamIdle.MarkEffectiveContent()
 		return nil
 	}
-	emitReasoningSignature := func(signature string, providerItemID string, providerStatus string, providerSummary json.RawMessage) error {
+	emitReasoningSignature := func(signature string, providerItemID string, outputIndex int, providerStatus string, providerSummary json.RawMessage) error {
 		if summary := extractOpenAIResponsesReasoningSummary(providerSummary); summary != "" {
-			if err := emitReasoningSummary(summary); err != nil {
+			if err := emitReasoningSummarySnapshot(providerItemID, outputIndex, providerSummary); err != nil {
 				return err
 			}
-			logger.Infof("openai responses reasoning summary item request_id=%s model_call_id=%s item_id=%s summary_bytes=%d forwarded_bytes=%d", strings.TrimSpace(req.RequestID), strings.TrimSpace(req.ModelCallID), strings.TrimSpace(providerItemID), len(summary), len(reasoningSummaryForwarded))
+			logger.Infof("openai responses reasoning summary item request_id=%s model_call_id=%s item_id=%s summary_bytes=%d forwarded_bytes=%d", strings.TrimSpace(req.RequestID), strings.TrimSpace(req.ModelCallID), strings.TrimSpace(providerItemID), len(summary), reasoningSummaryForwardedBytes)
 		} else if strings.TrimSpace(signature) != "" {
 			logger.Infof("openai responses reasoning summary unavailable request_id=%s model_call_id=%s item_id=%s encrypted=true", strings.TrimSpace(req.RequestID), strings.TrimSpace(req.ModelCallID), strings.TrimSpace(providerItemID))
 		}
@@ -554,7 +593,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			if !complete {
 				return nil
 			}
-			return emitReasoningSignature(item.EncryptedContent, item.ID, item.Status, item.Summary)
+			return emitReasoningSignature(item.EncryptedContent, item.ID, outputIndex, item.Status, item.Summary)
 		case "function_call":
 			return applyFunctionCallItem(item, outputIndex, complete)
 		case "image_generation_call":
@@ -748,7 +787,8 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			}
 		case "response.reasoning_summary_text.delta", "response.reasoning_text.delta":
 			streamIdle.MarkEffectiveContent()
-			if err := emitReasoningSummary(event.Delta); err != nil {
+			key := reasoningSummaryKey(event.ItemID, event.OutputIndex, event.SummaryIndex)
+			if err := emitReasoningSummaryEntry(key, event.Delta, true); err != nil {
 				return fail(err)
 			}
 		case "response.completed", "response.incomplete":

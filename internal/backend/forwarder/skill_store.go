@@ -352,8 +352,11 @@ func buildAgentSkillsSectionFromList(skills []GlobalSkill) (string, int) {
 	if len(skills) == 0 {
 		return "", 0
 	}
-	lines := make([]string, 0, len(skills)+2)
-	lines = append(lines, `<agent_skills>`)
+	lines := make([]string, 0, len(skills)+3)
+	// 静默约束：明确告诉模型按需读用、无需在回复中声明，避免模型反复念叨技能。
+	lines = append(lines,
+		`<agent_skills>`,
+		`以下技能按需静默使用：相关时用 Read 工具读取其文件并遵循其中的指引，作为正常工作流的一部分执行。除非用户明确询问，否则不要在回复中声明、列举或解释你正在使用哪个技能。`)
 	for _, sk := range skills {
 		desc := strings.TrimSpace(sk.Description)
 		if desc == "" {

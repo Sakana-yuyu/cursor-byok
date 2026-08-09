@@ -75,6 +75,20 @@ func (host *Host) ConfigManager() *serverconfig.Manager {
 	return host.configs
 }
 
+// HasActiveConversation reports whether a conversation still has a live forwarder stream.
+func (host *Host) HasActiveConversation(conversationID, requestID string) bool {
+	if host == nil {
+		return false
+	}
+	host.runMu.RLock()
+	module := host.agentModule
+	host.runMu.RUnlock()
+	if module == nil || module.Service == nil {
+		return false
+	}
+	return module.Service.HasActiveConversation(conversationID, requestID)
+}
+
 // DelegationTaskSnapshots returns the active forwarder's retained worker state.
 func (host *Host) DelegationTaskSnapshots() []forwarder.DelegationTaskSnapshot {
 	if host == nil {

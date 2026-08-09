@@ -46,7 +46,7 @@ func legacyOpenAIResponsesBodyPipeline(req StreamRequest, modelID string, baseUR
 		}
 		if effort := strings.TrimSpace(req.ReasoningEffort); effort != "" {
 			requestBody.Reasoning = &openAIResponsesReasoning{Effort: effort, Summary: "auto"}
-			requestBody.Include = []string{"reasoning.summary", "reasoning.encrypted_content"}
+			requestBody.Include = []string{"reasoning.encrypted_content"}
 		}
 		body = requestBody
 	} else {
@@ -101,6 +101,29 @@ func legacyOpenAIChatBodyPipeline(req StreamRequest, modelID string, baseURL str
 	normalizeOpenAIRequestToolSchemas(bodyMap)
 	applyOpenAIChatCompletionsCompatibility(bodyMap, baseURL, modelID, manualPromptCacheKey)
 	return json.Marshal(bodyMap)
+}
+
+func TestBuildOpenAIResponsesBodyMapUsesSupportedReasoningIncludes(t *testing.T) {
+	body, err := buildOpenAIResponsesBodyMap(StreamRequest{ReasoningEffort: "medium"}, "gpt-5.6-sol", 0)
+	if err != nil {
+		t.Fatalf("build responses body: %v", err)
+	}
+
+	reasoning, ok := body["reasoning"].(map[string]any)
+	if !ok {
+		t.Fatalf("reasoning = %#v, want object", body["reasoning"])
+	}
+	if reasoning["effort"] != "medium" || reasoning["summary"] != "auto" {
+		t.Fatalf("reasoning = %#v, want effort=medium and summary=auto", reasoning)
+	}
+
+	include, ok := body["include"].([]any)
+	if !ok {
+		t.Fatalf("include = %#v, want array", body["include"])
+	}
+	if len(include) != 1 || include[0] != "reasoning.encrypted_content" {
+		t.Fatalf("include = %#v, want only reasoning.encrypted_content", include)
+	}
 }
 
 func TestOpenAIResponsesBodyPipelineEquivalence(t *testing.T) {

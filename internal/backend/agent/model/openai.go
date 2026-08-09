@@ -821,7 +821,7 @@ func buildOpenAIResponsesBodyMap(req StreamRequest, modelID string, promptCacheK
 	}
 	if effort := strings.TrimSpace(req.ReasoningEffort); effort != "" {
 		body["reasoning"] = map[string]any{"effort": effort, "summary": "auto"}
-		body["include"] = []any{"reasoning.summary", "reasoning.encrypted_content"}
+		body["include"] = []any{"reasoning.encrypted_content"}
 	}
 	return body, nil
 }
@@ -1074,4 +1074,3 @@ func emitOpenAIToolProgress(
 		},
 	})
 }
-

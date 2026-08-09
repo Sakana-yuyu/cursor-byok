@@ -59,6 +59,14 @@ func (manager *Manager) Current() Config {
 	return manager.currentConfig()
 }
 
+// ComputerUseMode 返回当前的 ComputerUse 执行模式与浏览器初始 URL。
+// 供 forwarder 注入点按模式选择本地执行后端（desktop/browser）。
+// 返回基础类型避免 config<->forwarder 循环依赖。
+func (manager *Manager) ComputerUseMode() (mode string, browserStartURL string) {
+	cfg := manager.Current().ComputerUse
+	return cfg.Mode, cfg.BrowserStartURL
+}
+
 func (manager *Manager) currentConfig() Config {
 	if manager == nil {
 		return DefaultConfig()

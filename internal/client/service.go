@@ -150,6 +150,14 @@ func (s *ProxyService) ensureBackendHost() error {
 	return nil
 }
 
+// HasActiveConversation reports whether an embedded backend stream is still processing a conversation.
+func (s *ProxyService) HasActiveConversation(conversationID, requestID string) bool {
+	if s == nil || s.backendHost == nil {
+		return false
+	}
+	return s.backendHost.HasActiveConversation(conversationID, requestID)
+}
+
 // ResetUsageMetrics 清空当前 backend writer 管理的用量统计。
 func (s *ProxyService) ResetUsageMetrics() error {
 	if s == nil || s.backendHost == nil {

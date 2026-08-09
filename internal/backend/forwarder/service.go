@@ -81,6 +81,7 @@ type Service struct {
 	localDelegation          *localDelegatedAgentAdapter
 	delegationConfig         delegation.RuntimeConfigProvider
 	goalConfig               goalConfigProvider
+	computerUseCfg           computerUseConfigProvider
 	usageCostEstimator       goalUsageCostEstimator
 	goalsMu                  sync.RWMutex
 	goals                    map[string]*GoalState // conversationID → goal 状态，保留最近 100 条
@@ -118,6 +119,13 @@ type Service struct {
 type agentModelMemory interface {
 	LastAgentModelHash() string
 	SaveLastAgentModelHash(context.Context, string) error
+}
+
+// computerUseConfigProvider 暴露 ComputerUse 执行模式配置（desktop/browser），
+// 由 *serverconfig.Manager 实现（在 NewService 中通过类型断言注入）。
+// 返回基础类型避免 config<->forwarder 循环依赖。
+type computerUseConfigProvider interface {
+	ComputerUseMode() (mode string, browserStartURL string)
 }
 
 // maxTokensConfigPersister 允许转发层把解析到的中转站 max_tokens 限制
@@ -192,6 +200,10 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 	if candidate, ok := resolver.(goalConfigProvider); ok {
 		goalCfg = candidate
 	}
+	var computerUseCfg computerUseConfigProvider
+	if candidate, ok := resolver.(computerUseConfigProvider); ok {
+		computerUseCfg = candidate
+	}
 	debug := newDebugRecorder(historyRoot, broker, debugConfig)
 	service := &Service{
 		store:                  store,
@@ -211,6 +223,7 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 		scanConfig:             scanConfig,
 		delegationConfig:       delegationConfig,
 		goalConfig:             goalCfg,
+		computerUseCfg:         computerUseCfg,
 		usageCostEstimator:     &defaultUsageCostEstimator{lookup: newPricingLookupFromConfig(resolver)},
 		goals:                  make(map[string]*GoalState),
 		mcpRuntime:             SharedMCPRuntimeRegistry(),
@@ -2775,6 +2788,10 @@ func (service *Service) openNativeTaskExec(stream *ActiveStream, invocation runt
 	if strings.TrimSpace(pendingExec.ExecKind) == "subagent" {
 		service.scheduleShellForegroundRecovery(stream.RequestID, pendingExec)
 		service.scheduleExecWatchdog(stream.RequestID, pendingExec)
+		// ComputerUse 在 BYOK 下依赖客户端回传，本地执行器接管（Windows），
+		// 避免调用挂起。仍发送 ExecServerMessage 兼容官方客户端，本地结果通过
+		// dispatchInboundIntent 注入（与客户端回传语义等价、由 stream actor 串行消费）。
+		service.maybeDispatchLocalComputerUse(stream.RequestID, pendingExec, pendingExec.ArgsJSON)
 	}
 	logger.Infof("forwarder native task pre-start registered request_id=%s conversation_id=%s tool_call_id=%s exec_id=%s exec_kind=%s message_id=%d", strings.TrimSpace(stream.RequestID), strings.TrimSpace(stream.ConversationID), strings.TrimSpace(pendingExec.ToolCallID), strings.TrimSpace(pendingExec.ExecID), strings.TrimSpace(pendingExec.ExecKind), pendingExec.MessageID)
 	if service.debug != nil {
@@ -3579,6 +3596,11 @@ func (service *Service) loadConversationForResumeGuard(conversationID string) (*
 		return nil, nil
 	}
 	return service.store.LoadConversation(conversationID)
+}
+
+// HasActiveConversation reports whether an in-memory stream still owns the conversation.
+func (service *Service) HasActiveConversation(conversationID string, requestID string) bool {
+	return service.hasActiveConversationStream(conversationID, requestID)
 }
 
 func (service *Service) hasActiveConversationStream(conversationID string, requestID string) bool {

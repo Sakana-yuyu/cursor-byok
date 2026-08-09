@@ -7,6 +7,22 @@ export function normalizeRouteMode(value) {
   return SUPPORTED_ROUTE_MODES.has(normalized) ? normalized : "local";
 }
 
+const SUPPORTED_COMPUTER_USE_MODES = new Set(["desktop", "browser"]);
+export function normalizeComputerUseMode(value) {
+  const normalized = asString(value).toLowerCase();
+  return SUPPORTED_COMPUTER_USE_MODES.has(normalized) ? normalized : "desktop";
+}
+
+// normalizeComputerUse 归一化 ComputerUse 执行模式配置（与后端 ComputerUseConfig 对齐）。
+export function normalizeComputerUse(source) {
+  const raw = source && typeof source === "object" ? source : {};
+  const browserStartURL = asString(raw.browserStartURL || raw.browserStartUrl).trim();
+  return {
+    mode: normalizeComputerUseMode(raw.mode),
+    browserStartURL: browserStartURL || "about:blank",
+  };
+}
+
 export function validateConfigPayload(payload) {
   const mode = payload?.routing?.mode;
   if (!SUPPORTED_ROUTE_MODES.has(mode)) {
@@ -167,6 +183,7 @@ export function normalizeConfig(source) {
     localResponseCache: normalizeLocalResponseCache(raw.localResponseCache),
     delegation: normalizeDelegation(raw.delegation),
     goal: normalizeGoal(raw.goal),
+    computerUse: normalizeComputerUse(raw.computerUse),
     lastAgentModelHash: asString(raw.lastAgentModelHash),
   };
 }

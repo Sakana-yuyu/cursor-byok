@@ -11,7 +11,7 @@ import {
   GetDelegationConfig, SaveDelegationConfig,
   GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
   RepairCACorruption, GetCARepairStatus,
-  GetTerminalEnvironmentStatus, ApplyTerminalEnvironment,
+  GetTerminalEnvironmentStatus, ApplyTerminalEnvironment, InstallTerminalDependency,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
 import { GetAdRuntime, OpenExternalURL } from "@bindings/cursor/internal/bridge/adservice.js";
 import {
@@ -56,7 +56,7 @@ const desktopMethods = {
   GetDelegationConfig, SaveDelegationConfig,
   GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
   RepairCACorruption, GetCARepairStatus,
-  GetTerminalEnvironmentStatus, ApplyTerminalEnvironment,
+  GetTerminalEnvironmentStatus, ApplyTerminalEnvironment, InstallTerminalDependency,
 };
 
 const API_LOG_PREFIX = "[clientApi]";

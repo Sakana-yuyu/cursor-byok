@@ -97,6 +97,13 @@ type RoutingConfig struct {
 	Mode string `json:"mode" yaml:"mode"`
 }
 
+// ComputerUseConfig 控制 ComputerUse 工具的本地执行后端。
+// desktop=操作真实屏幕（Win32 截图+鼠标键盘）；browser=转发到浏览器 MCP server（如 Playwright MCP，适合前端验证）。
+type ComputerUseConfig struct {
+	Mode            string `json:"mode" yaml:"mode"`                         // "desktop"（默认）/ "browser"
+	BrowserStartURL string `json:"browserStartUrl" yaml:"browserStartUrl"`   // 浏览器模式初始 URL，默认 about:blank
+}
+
 type HomeMetricsConfig struct {
 	IncludeCacheWriteInHitRate bool `json:"includeCacheWriteInHitRate" yaml:"includeCacheWriteInHitRate"`
 }
@@ -153,6 +160,7 @@ type Config struct {
 	SkillMCPScan                    SkillMCPScanConfig       `json:"skillMcpScan" yaml:"skillMcpScan"`
 	Delegation                      DelegationConfig         `json:"delegation" yaml:"delegation"`
 	Goal                            GoalConfig               `json:"goal" yaml:"goal"`
+	ComputerUse                     ComputerUseConfig        `json:"computerUse" yaml:"computerUse"`
 	LastAgentModelHash              string                   `json:"lastAgentModelHash" yaml:"lastAgentModelHash"`
 }
 
@@ -187,6 +195,10 @@ func DefaultConfig() Config {
 			},
 		},
 		Goal: DefaultGoalConfig(),
+		ComputerUse: ComputerUseConfig{
+			Mode:            "desktop",
+			BrowserStartURL: "about:blank",
+		},
 	}
 }
 
@@ -214,6 +226,11 @@ func NormalizeConfig(input Config) (Config, error) {
 	output.Routing.Mode = normalizeRoutingMode(input.Routing.Mode)
 	if output.Routing.Mode == "" {
 		output.Routing.Mode = DefaultRoutingMode
+	}
+	output.ComputerUse.Mode = normalizeComputerUseMode(input.ComputerUse.Mode)
+	output.ComputerUse.BrowserStartURL = strings.TrimSpace(input.ComputerUse.BrowserStartURL)
+	if output.ComputerUse.BrowserStartURL == "" {
+		output.ComputerUse.BrowserStartURL = "about:blank"
 	}
 	adapters, err := NormalizeModelAdapterConfigs(input.ModelAdapters)
 	if err != nil {
@@ -610,6 +627,16 @@ func normalizeRoutingMode(value string) string {
 		return "upstream"
 	default:
 		return ""
+	}
+}
+
+// normalizeComputerUseMode 归一化 ComputerUse 执行模式：非法值回退 desktop。
+func normalizeComputerUseMode(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "browser":
+		return "browser"
+	default:
+		return "desktop"
 	}
 }
 
