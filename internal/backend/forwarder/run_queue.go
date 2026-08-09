@@ -1,6 +1,7 @@
 package forwarder
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -30,6 +31,7 @@ type conversationRunState struct {
 type runQueue struct {
 	mu     sync.Mutex
 	states map[string]*conversationRunState
+	closed bool
 }
 
 func newRunQueue() *runQueue {
@@ -51,6 +53,9 @@ func (q *runQueue) Submit(intent InboundIntent) (result runQueueSubmitResult, ow
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
+	if q.closed {
+		return runQueueDuplicate, "", 0
+	}
 	state := q.states[conversationID]
 	if state == nil {
 		q.states[conversationID] = &conversationRunState{ownerRequestID: requestID}
@@ -85,6 +90,11 @@ func (q *runQueue) Finish(conversationID string, requestID string) (next Inbound
 	if state == nil || state.ownerRequestID != requestID {
 		return InboundIntent{}, false
 	}
+	// 服务关闭后只释放 owner，不再晋升后继：shutdown 不能启动新的 provider 调用。
+	if q.closed {
+		delete(q.states, conversationID)
+		return InboundIntent{}, false
+	}
 	if len(state.pending) == 0 {
 		delete(q.states, conversationID)
 		return InboundIntent{}, false
@@ -114,6 +124,15 @@ func (q *runQueue) CancelQueued(conversationID string, requestID string) (queued
 	if state == nil {
 		return queuedRunCancellation{}, false
 	}
+	return removePendingLocked(state, requestID)
+}
+
+// removePendingLocked 从会话状态中删除第一条匹配的排队 intent（锁由调用方持有），
+// 永不删除 owner；删除后原地压缩切片并清空尾部槽位帮助 GC。
+func removePendingLocked(state *conversationRunState, requestID string) (queuedRunCancellation, bool) {
+	if state == nil {
+		return queuedRunCancellation{}, false
+	}
 	for index := range state.pending {
 		if strings.TrimSpace(state.pending[index].RequestID) != requestID {
 			continue
@@ -127,6 +146,63 @@ func (q *runQueue) CancelQueued(conversationID string, requestID string) (queued
 		return canceled, true
 	}
 	return queuedRunCancellation{}, false
+}
+
+// CancelQueuedByRequestID 在 conversationID 缺省时按 requestID 全局查找排队项。
+// 只在唯一匹配时删除（并发下请求 ID 复用会产生歧义则放弃）；owner 不受影响。
+func (q *runQueue) CancelQueuedByRequestID(requestID string) (conversationID string, canceled queuedRunCancellation, ok bool) {
+	if q == nil {
+		return "", queuedRunCancellation{}, false
+	}
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return "", queuedRunCancellation{}, false
+	}
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	var matchConversation string
+	for conversation, state := range q.states {
+		if state == nil {
+			continue
+		}
+		for index := range state.pending {
+			if strings.TrimSpace(state.pending[index].RequestID) != requestID {
+				continue
+			}
+			if matchConversation != "" {
+				return "", queuedRunCancellation{}, false
+			}
+			matchConversation = conversation
+		}
+	}
+	if matchConversation == "" {
+		return "", queuedRunCancellation{}, false
+	}
+	canceled, removed := removePendingLocked(q.states[matchConversation], requestID)
+	if !removed {
+		return "", queuedRunCancellation{}, false
+	}
+	return matchConversation, canceled, true
+}
+
+// Close 关闭调度器：清空所有排队项并禁止后续晋升。
+// 供服务 Shutdown 使用，避免关闭期间启动新的 provider 调用。
+func (q *runQueue) Close() {
+	if q == nil {
+		return
+	}
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.closed = true
+	for conversationID, state := range q.states {
+		for index := range state.pending {
+			state.pending[index] = InboundIntent{}
+		}
+		state.pending = nil
+		if state.ownerRequestID != "" {
+			delete(q.states, conversationID)
+		}
+	}
 }
 
 func (q *runQueue) IsOwner(conversationID string, requestID string) bool {
@@ -233,4 +309,44 @@ func (service *Service) startPromotedRun(intent InboundIntent) {
 // drainRunQueue preserves terminal call sites while releasing only the request that terminated.
 func (service *Service) drainRunQueue(conversationID string, requestID string) {
 	service.finishConversationTurn(conversationID, requestID)
+}
+
+// cancelQueuedRun 取消仍在会话队列中等待的 run intent：只删除目标排队项，
+// 不创建 history/checkpoint，不启动 provider，也不影响当前 owner 或其他排队项。
+// conversationID 缺省时按 requestID 唯一匹配，避免误判 owner 或删除歧义项。
+func (service *Service) cancelQueuedRun(intent InboundIntent) (handled bool, err error) {
+	if service == nil || service.runQueue == nil {
+		return false, nil
+	}
+	conversationID := strings.TrimSpace(intent.ConversationID)
+	requestID := strings.TrimSpace(intent.RequestID)
+	if requestID == "" {
+		return false, nil
+	}
+	var canceled queuedRunCancellation
+	if conversationID != "" {
+		var ok bool
+		canceled, ok = service.runQueue.CancelQueued(conversationID, requestID)
+		if !ok {
+			return false, nil
+		}
+	} else {
+		var foundConversation string
+		var ok bool
+		foundConversation, canceled, ok = service.runQueue.CancelQueuedByRequestID(requestID)
+		if !ok {
+			return false, nil
+		}
+		conversationID = foundConversation
+	}
+	logger.Infof("forwarder queued run canceled request_id=%s conversation_id=%s owner_request_id=%s queue_position=%d queue_len=%d",
+		requestID, conversationID, service.runQueue.Owner(conversationID), canceled.Position, service.runQueue.Len(conversationID))
+	if service.debug != nil {
+		service.debug.LogRuntime(context.Background(), requestID, conversationID, "queued_run_canceled", map[string]any{
+			"queue_position":   canceled.Position,
+			"queue_len":        service.runQueue.Len(conversationID),
+			"owner_request_id": service.runQueue.Owner(conversationID),
+		})
+	}
+	return true, nil
 }

@@ -953,6 +953,10 @@ func (service *Service) Shutdown(ctx context.Context) error {
 	if service.multitaskDelegation != nil {
 		defer service.multitaskDelegation.Close()
 	}
+	if service.runQueue != nil {
+		// 关闭调度器：清空所有排队项并禁止晋升，避免关闭期间启动新的 provider 调用。
+		service.runQueue.Close()
+	}
 	if service.broker == nil {
 		return nil
 	}
@@ -1087,6 +1091,11 @@ func forceCancelStreamProvider(stream *ActiveStream) {
 func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	stream, ok := service.broker.Get(intent.RequestID)
 	if !ok || stream == nil {
+		// 目标 request 没有活动流：可能是仍在会话队列中等待的 run。
+		// 只删除该排队项，不取消当前 owner，不写历史，不启动 provider。
+		if handled, cancelErr := service.cancelQueuedRun(intent); handled {
+			return cancelErr
+		}
 		return fmt.Errorf("request is not active: %s", intent.RequestID)
 	}
 	stream.mu.Lock()

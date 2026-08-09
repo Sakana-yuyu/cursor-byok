@@ -1,6 +1,7 @@
 package forwarder
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -487,6 +488,133 @@ func TestStartAdmittedRunTerminalizationFailureReleasesOwner(t *testing.T) {
 		t.Fatal("failed request still owns the conversation")
 	}
 	waitForRunQueueOwner(t, service.runQueue, "conversation-a", "request-2")
+}
+
+func TestHandleCancelIntentRemovesQueuedRunWithoutCancelingOwner(t *testing.T) {
+	service := &Service{broker: NewStreamBroker(), runQueue: newRunQueue()}
+	service.debug = newDebugRecorder("", service.broker, nil)
+	if result, _, _ := service.runQueue.Submit(testRunIntent("conversation-a", "request-1")); result != runQueueStart {
+		t.Fatalf("owner submit = %q", result)
+	}
+	for _, requestID := range []string{"request-2", "request-3"} {
+		if result, _, _ := service.runQueue.Submit(testRunIntent("conversation-a", requestID)); result != runQueueQueued {
+			t.Fatalf("queued submit %s = %q", requestID, result)
+		}
+	}
+
+	if err := service.handleCancelIntent(InboundIntent{
+		Kind:           "cancel",
+		RequestID:      "request-2",
+		ConversationID: "conversation-a",
+		CancelReason:   "user aborted queued request",
+	}); err != nil {
+		t.Fatalf("cancel queued run: %v", err)
+	}
+	if !service.runQueue.IsOwner("conversation-a", "request-1") {
+		t.Fatal("queued cancel changed the owner")
+	}
+	if got := service.runQueue.Len("conversation-a"); got != 1 {
+		t.Fatalf("queue length after queued cancel = %d, want 1", got)
+	}
+	next, ok := service.runQueue.Finish("conversation-a", "request-1")
+	if !ok || next.RequestID != "request-3" {
+		t.Fatalf("next after queued cancel = %#v ok=%t, want request-3", next, ok)
+	}
+}
+
+func TestFinishConversationTurnPromotesOneAndStaleFinishIsNoop(t *testing.T) {
+	service := &Service{broker: NewStreamBroker(), runQueue: newRunQueue()}
+	release := make(chan struct{})
+	var guard sync.Mutex
+	started := make([]string, 0, 2)
+	service.startOwnedRunHook = func(intent InboundIntent) error {
+		guard.Lock()
+		started = append(started, intent.RequestID)
+		guard.Unlock()
+		<-release
+		return errors.New("forced startup failure")
+	}
+	for _, requestID := range []string{"request-1", "request-2", "request-3"} {
+		result, _, _ := service.runQueue.Submit(testRunIntent("conversation-a", requestID))
+		if requestID == "request-1" && result != runQueueStart {
+			t.Fatalf("owner submit = %q", result)
+		}
+		if requestID != "request-1" && result != runQueueQueued {
+			t.Fatalf("queued submit %s = %q", requestID, result)
+		}
+	}
+
+	service.finishConversationTurn("conversation-a", "request-1")
+	waitForRunQueueOwner(t, service.runQueue, "conversation-a", "request-2")
+	// 等待异步晋升 goroutine 实际进入 startOwnedRun（hook 被调用且阻塞）。
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		guard.Lock()
+		startedCount := len(started)
+		guard.Unlock()
+		if startedCount >= 1 {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	// 旧 request 的迟到终态不得释放刚晋升的 request-2，也不得提前晋升 request-3。
+	service.finishConversationTurn("conversation-a", "request-1")
+	if owner := service.runQueue.Owner("conversation-a"); owner != "request-2" {
+		t.Fatalf("owner after stale finish = %q", owner)
+	}
+	if got := service.runQueue.Len("conversation-a"); got != 1 {
+		t.Fatalf("queue len after stale finish = %d", got)
+	}
+	guard.Lock()
+	if len(started) != 1 || started[0] != "request-2" {
+		t.Fatalf("started before release = %v", started)
+	}
+	guard.Unlock()
+
+	// 放行：request-2 启动失败后推进 request-3，最终队列清空。
+	close(release)
+	deadline = time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		guard.Lock()
+		complete := len(started) >= 2 && started[1] == "request-3"
+		guard.Unlock()
+		if complete && service.runQueue.Owner("conversation-a") == "" && service.runQueue.Len("conversation-a") == 0 {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	guard.Lock()
+	defer guard.Unlock()
+	if len(started) != 2 || started[0] != "request-2" || started[1] != "request-3" {
+		t.Fatalf("promotion order = %v, want [request-2 request-3]", started)
+	}
+}
+
+func TestShutdownDoesNotStartQueuedRuns(t *testing.T) {
+	service := &Service{broker: NewStreamBroker(), runQueue: newRunQueue()}
+	service.debug = newDebugRecorder("", service.broker, nil)
+	service.startOwnedRunHook = func(InboundIntent) error { return nil }
+	if result, _, _ := service.runQueue.Submit(testRunIntent("conversation-a", "request-1")); result != runQueueStart {
+		t.Fatalf("owner submit = %q", result)
+	}
+	if result, _, _ := service.runQueue.Submit(testRunIntent("conversation-a", "request-2")); result != runQueueQueued {
+		t.Fatalf("queued submit = %q", result)
+	}
+	// 让 owner 有真实 broker 活动流，使 Shutdown 进入取消分支。
+	if _, err := service.streamForIntent(testRunIntent("conversation-a", "request-1")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := service.Shutdown(context.Background()); err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+	if service.runQueue.Len("conversation-a") != 0 {
+		t.Fatalf("queued runs survived shutdown, len=%d", service.runQueue.Len("conversation-a"))
+	}
+	if _, ok := service.broker.Get("request-2"); ok {
+		t.Fatal("shutdown started a queued run")
+	}
 }
 
 func waitForRunQueueOwner(t *testing.T, queue *runQueue, conversationID string, requestID string) {
