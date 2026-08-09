@@ -35,6 +35,11 @@ import {
   SetMainWindowCloseAction, CloseApplication, DetectCursorPath, LaunchCursor, RestartCursor, IsCursorRunning,
 } from "@bindings/cursor/internal/bridge/windowservice.js";
 import { isBrowserPreview, browserPreviewMockMetrics, browserPreviewMockProxyState } from "@/services/runtimeAdapter";
+import {
+  reportRuntimeOperationFailure,
+  reportRuntimeOperationSuccess,
+} from "@/services/runtimeHealth";
+import { normalizeClientError, safeErrorLogAttributes, summarizePayload } from "@/utils/errorContract";
 
 const desktopMethods = {
   LoadUserConfig, SaveUserConfig, GetState, GetHomeMetricsSummary, GetAdRuntime, OpenExternalURL,
@@ -61,6 +66,20 @@ const desktopMethods = {
 
 const API_LOG_PREFIX = "[clientApi]";
 const PROXY_SERVICE_NAME = "cursor/internal/bridge.ProxyService";
+const DEFAULT_API_TIMEOUT_MS = 30_000;
+const RUNTIME_HEALTH_OPERATIONS = new Set([
+  "GetState",
+  "LoadUserConfig",
+  "SaveUserConfig",
+  "StartProxy",
+  "StopProxy",
+]);
+
+function operationError(normalized, cause) {
+  const error = new Error(normalized.userMessage, cause ? { cause } : undefined);
+  Object.assign(error, normalized);
+  return error;
+}
 
 // 浏览器预览测试计划：E2E 通过 localStorage 注入确定性 mock 响应。
 // 仅浏览器预览模式读取；桌面模式始终走真实绑定。
@@ -75,22 +94,60 @@ function readBrowserPreviewTestPlan() {
   }
 }
 
-function logSuccess(name, payload, result) {
-  console.log(`${API_LOG_PREFIX} ${name} response`, { payload, result });
+function logSuccess(name, payload, result, traceId) {
+  console.debug(`${API_LOG_PREFIX} ${name} response`, { payload: summarizePayload(payload), traceId, result: summarizePayload(result) });
 }
 
-function logError(name, payload, error) {
-  console.error(`${API_LOG_PREFIX} ${name} error`, { payload, error });
+function logError(name, payload, _error, normalized) {
+  console.error(`${API_LOG_PREFIX} ${name} error`, {
+    payload: summarizePayload(payload),
+    ...safeErrorLogAttributes(normalized, { operation: name, traceId: normalized.traceId }),
+  });
 }
 
-function withApiLogging(name, payload, runner) {
-  return Promise.resolve().then(runner).then((result) => {
-    logSuccess(name, payload, result);
+function withTimeout(promise, timeoutMs, operation, signal) {
+  if ((!timeoutMs || timeoutMs <= 0) && !signal) return promise;
+  let timer;
+  let removeAbortListener = () => {};
+  const control = new Promise((_, reject) => {
+    if (timeoutMs > 0) {
+      timer = setTimeout(() => reject(new Error(`${operation} timeout`)), timeoutMs);
+    }
+    if (signal) {
+      const abort = () => reject(new Error(`${operation} canceled`));
+      if (signal.aborted) abort();
+      else {
+        signal.addEventListener("abort", abort, { once: true });
+        removeAbortListener = () => signal.removeEventListener("abort", abort);
+      }
+    }
+  });
+  return Promise.race([promise, control]).finally(() => {
+    if (timer) clearTimeout(timer);
+    removeAbortListener();
+  });
+}
+
+export function invokeOperation(name, payload, runner, options = {}) {
+  const traceId = String(options.traceId || globalThis.crypto?.randomUUID?.() || `ui-${Date.now().toString(36)}`).trim();
+  const timeoutMs = options.timeoutMs ?? DEFAULT_API_TIMEOUT_MS;
+  const affectsRuntimeHealth = options.affectsRuntimeHealth ?? RUNTIME_HEALTH_OPERATIONS.has(name);
+  return withTimeout(Promise.resolve().then(runner), timeoutMs, name, options.signal).then((result) => {
+    logSuccess(name, payload, result, traceId);
+    if (affectsRuntimeHealth) reportRuntimeOperationSuccess();
     return result;
   }).catch((error) => {
-    logError(name, payload, error);
-    throw error;
+    const normalized = normalizeClientError(error, { operation: name, traceId });
+    logError(name, payload, error, normalized);
+    if (affectsRuntimeHealth && normalized.disposition !== "canceled") {
+      reportRuntimeOperationFailure(normalized);
+    }
+    throw operationError(normalized, error);
   });
+}
+
+function withApiLogging(name, payload, runner, options) {
+  return invokeOperation(name, payload, runner, options);
 }
 
 function invoke(_modulePath, method, args = []) {
@@ -101,34 +158,38 @@ function invoke(_modulePath, method, args = []) {
   return Promise.resolve(fn(...args));
 }
 
-function desktopOrMock(mock, modulePath, method, args = []) {
+function desktopOrMockRaw(mock, modulePath, method, args = []) {
   return isBrowserPreview ? Promise.resolve(typeof mock === "function" ? mock() : mock) : invoke(modulePath, method, args);
 }
 
+function desktopOrMock(mock, modulePath, method, args = [], options = {}) {
+  return invokeOperation(method, args, () => desktopOrMockRaw(mock, modulePath, method, args), options);
+}
+
 export function loadUserConfig() {
-  return withApiLogging("LoadUserConfig", undefined, () => desktopOrMock(() => LoadUserConfig(), "@bindings/cursor/internal/bridge/proxyservice.js", "LoadUserConfig"));
+  return withApiLogging("LoadUserConfig", undefined, () => desktopOrMockRaw(() => LoadUserConfig(), "@bindings/cursor/internal/bridge/proxyservice.js", "LoadUserConfig"));
 }
 
 export function saveUserConfig(payload) {
-  return withApiLogging("SaveUserConfig", payload, () => desktopOrMock(() => SaveUserConfig(payload), "@bindings/cursor/internal/bridge/proxyservice.js", "SaveUserConfig", [payload]));
+  return withApiLogging("SaveUserConfig", payload, () => desktopOrMockRaw(() => SaveUserConfig(payload), "@bindings/cursor/internal/bridge/proxyservice.js", "SaveUserConfig", [payload]));
 }
 
 const CURSOR_ACCOUNT_SIGNED_OUT_MOCK = { state: "signed_out", authId: "", email: "", error: "" };
 
 export function getCursorAccountStatus() {
-  return withApiLogging("GetCursorAccountStatus", undefined, () => desktopOrMock(CURSOR_ACCOUNT_SIGNED_OUT_MOCK, "@bindings/cursor/internal/bridge/proxyservice.js", "GetCursorAccountStatus"));
+  return withApiLogging("GetCursorAccountStatus", undefined, () => desktopOrMockRaw(CURSOR_ACCOUNT_SIGNED_OUT_MOCK, "@bindings/cursor/internal/bridge/proxyservice.js", "GetCursorAccountStatus"));
 }
 
 export function startCursorAccountLogin() {
-  return withApiLogging("StartCursorAccountLogin", undefined, () => desktopOrMock(CURSOR_ACCOUNT_SIGNED_OUT_MOCK, "@bindings/cursor/internal/bridge/proxyservice.js", "StartCursorAccountLogin"));
+  return withApiLogging("StartCursorAccountLogin", undefined, () => desktopOrMockRaw(CURSOR_ACCOUNT_SIGNED_OUT_MOCK, "@bindings/cursor/internal/bridge/proxyservice.js", "StartCursorAccountLogin"));
 }
 
 export function disconnectCursorAccount() {
-  return withApiLogging("DisconnectCursorAccount", undefined, () => desktopOrMock(CURSOR_ACCOUNT_SIGNED_OUT_MOCK, "@bindings/cursor/internal/bridge/proxyservice.js", "DisconnectCursorAccount"));
+  return withApiLogging("DisconnectCursorAccount", undefined, () => desktopOrMockRaw(CURSOR_ACCOUNT_SIGNED_OUT_MOCK, "@bindings/cursor/internal/bridge/proxyservice.js", "DisconnectCursorAccount"));
 }
 
 export function getProxyState() {
-  return withApiLogging("GetState", undefined, () => desktopOrMock(browserPreviewMockProxyState(), "@bindings/cursor/internal/bridge/proxyservice.js", "GetState"));
+  return withApiLogging("GetState", undefined, () => desktopOrMockRaw(browserPreviewMockProxyState(), "@bindings/cursor/internal/bridge/proxyservice.js", "GetState"));
 }
 
 const BROWSER_TERMINAL_ENVIRONMENT = {
@@ -144,27 +205,27 @@ const BROWSER_TERMINAL_ENVIRONMENT = {
 };
 
 export function getTerminalEnvironmentStatus() {
-  return withApiLogging("GetTerminalEnvironmentStatus", undefined, () => desktopOrMock(BROWSER_TERMINAL_ENVIRONMENT, "@bindings/cursor/internal/bridge/proxyservice.js", "GetTerminalEnvironmentStatus"));
+  return withApiLogging("GetTerminalEnvironmentStatus", undefined, () => desktopOrMockRaw(BROWSER_TERMINAL_ENVIRONMENT, "@bindings/cursor/internal/bridge/proxyservice.js", "GetTerminalEnvironmentStatus"));
 }
 
 export function applyTerminalEnvironment() {
-  return withApiLogging("ApplyTerminalEnvironment", undefined, () => desktopOrMock(BROWSER_TERMINAL_ENVIRONMENT, "@bindings/cursor/internal/bridge/proxyservice.js", "ApplyTerminalEnvironment"));
+  return withApiLogging("ApplyTerminalEnvironment", undefined, () => desktopOrMockRaw(BROWSER_TERMINAL_ENVIRONMENT, "@bindings/cursor/internal/bridge/proxyservice.js", "ApplyTerminalEnvironment"));
 }
 
 // 通过 winget 异步安装 PowerShell 7 / Python 3；立即返回，进度走事件。
 export function installTerminalDependency(target) {
-  return withApiLogging("InstallTerminalDependency", undefined, () => desktopOrMock(undefined, "@bindings/cursor/internal/bridge/proxyservice.js", "InstallTerminalDependency", [target]));
+  return withApiLogging("InstallTerminalDependency", undefined, () => desktopOrMockRaw(undefined, "@bindings/cursor/internal/bridge/proxyservice.js", "InstallTerminalDependency", [target]));
 }
 
 // 安装进度事件名（与后端 terminalenv.EventInstallProgress 一致）。
 export const TERMINAL_INSTALL_PROGRESS_EVENT = "terminalenv:install-progress";
 
 export function getHomeMetricsSummary() {
-  return withApiLogging("GetHomeMetricsSummary", undefined, () => desktopOrMock(browserPreviewMockMetrics(), "@bindings/cursor/internal/bridge/metricsservice.js", "GetHomeMetricsSummary"));
+  return withApiLogging("GetHomeMetricsSummary", undefined, () => desktopOrMockRaw(browserPreviewMockMetrics(), "@bindings/cursor/internal/bridge/metricsservice.js", "GetHomeMetricsSummary"));
 }
 
 export function resetUsageMetrics() {
-  return withApiLogging("ResetUsageMetrics", undefined, () => desktopOrMock(undefined, "@bindings/cursor/internal/bridge/metricsservice.js", "ResetUsageMetrics"));
+  return withApiLogging("ResetUsageMetrics", undefined, () => desktopOrMockRaw(undefined, "@bindings/cursor/internal/bridge/metricsservice.js", "ResetUsageMetrics"));
 }
 
 export function getAdRuntime() {
@@ -176,11 +237,11 @@ export function openAdExternalURL(url) {
 }
 
 export function startProxyService() {
-  return withApiLogging("StartProxy", undefined, () => desktopOrMock(browserPreviewMockProxyState(), "@bindings/cursor/internal/bridge/proxyservice.js", "StartProxy"));
+  return withApiLogging("StartProxy", undefined, () => desktopOrMockRaw(browserPreviewMockProxyState(), "@bindings/cursor/internal/bridge/proxyservice.js", "StartProxy"));
 }
 
 export function stopProxyService() {
-  return withApiLogging("StopProxy", undefined, () => desktopOrMock(browserPreviewMockProxyState(), "@bindings/cursor/internal/bridge/proxyservice.js", "StopProxy"));
+  return withApiLogging("StopProxy", undefined, () => desktopOrMockRaw(browserPreviewMockProxyState(), "@bindings/cursor/internal/bridge/proxyservice.js", "StopProxy"));
 }
 
 export function openLogsDirectory() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "OpenHistoryWindow"); }
@@ -402,7 +463,7 @@ export function getCARepairStatus() {
 }
 
 export function repairProxySettings() {
-  return withApiLogging("RepairProxySettings", undefined, () => desktopOrMock(undefined, "@bindings/cursor/internal/bridge/proxyservice.js", "RepairProxySettings"));
+  return withApiLogging("RepairProxySettings", undefined, () => desktopOrMockRaw(undefined, "@bindings/cursor/internal/bridge/proxyservice.js", "RepairProxySettings"));
 }
 
 export function getDelegationConfig() {

@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"cursor/internal/apperror"
 	"cursor/internal/modelcontext"
 	legacyruntime "cursor/internal/runtime"
 )
@@ -60,15 +61,76 @@ func NewRouter(resolver ChannelResolver) *Router {
 }
 
 const (
-	// routerMaxStreamAttempts 是跨渠道故障切换的尝试上限。
-	// 内层 providerRetryMaxAttempts 已降为 1（不再自行重试 429/5xx），
-	// 因此本值即单次 Stream 调用的总尝试上限；耗尽后直接返回错误。
-	routerMaxStreamAttempts = 10
-	// routerRetryFixedInterval 是渠道切换/重试之间的固定重试间隔。
-	// 每 10 秒重试一次、共重试 routerMaxStreamAttempts(10) 次，全部失败才上报错误；
-	// 给上游瞬时故障（如中转站 Codex OAuth 认证恢复、连接超时恢复）留出恢复窗口。
-	routerRetryFixedInterval = 10 * time.Second
+	// routerMaxStreamAttempts 是单次 Stream 调用的总尝试上限，包含首次请求。
+	// provider adapter 不在此层重复请求；跨渠道 failover 和同渠道恢复统一由 router 负责。
+	routerMaxStreamAttempts = 6
+	// routerRetryTotalBudget 是单次 Stream 调用隐藏恢复的总时间预算。
+	// 预算耗尽后立即把结构化错误交给 forwarder，避免用户长时间无反馈。
+	routerRetryTotalBudget = 45 * time.Second
 )
+
+var routerRetryDelays = [...]time.Duration{
+	time.Second,
+	2 * time.Second,
+	5 * time.Second,
+	10 * time.Second,
+	20 * time.Second,
+}
+
+func routerRetryDelay(nextAttempt int, repeatedChannel bool, err error, elapsed time.Duration) (time.Duration, bool) {
+	if err == nil {
+		return 0, false
+	}
+	if !repeatedChannel {
+		return 0, true
+	}
+	classified := apperror.Classify("model.stream.retry", err)
+	if isPermanentProviderError(err) || classified.Disposition != apperror.DispositionRetryable {
+		return 0, false
+	}
+	if elapsed < 0 {
+		elapsed = 0
+	}
+	remaining := routerRetryTotalBudget - elapsed
+	if remaining <= 0 {
+		return 0, false
+	}
+	var delay time.Duration
+	var retryAfterCoder interface{ RetryAfter() time.Duration }
+	if errors.As(err, &retryAfterCoder) {
+		retryAfter := retryAfterCoder.RetryAfter()
+		if retryAfter > 0 {
+			delay = retryAfter
+		}
+	}
+	if delay == 0 {
+		index := nextAttempt - 1
+		if index < 0 || index >= len(routerRetryDelays) {
+			return 0, false
+		}
+		delay = routerRetryDelays[index]
+	}
+	if delay > remaining {
+		return 0, false
+	}
+	return delay, true
+}
+
+func classifyRouterError(req StreamRequest, err error) error {
+	if err == nil {
+		return nil
+	}
+	options := []apperror.Option{apperror.WithTraceID(req.RequestID)}
+	if errors.Is(err, ErrMidStreamInterrupted) {
+		options = append(options,
+			apperror.WithCode(apperror.CodeStreamInterrupted),
+			apperror.WithKind(apperror.KindStream),
+			apperror.WithDisposition(apperror.DispositionFatal),
+			apperror.WithUserMessage("响应在传输过程中中断，请重试本轮请求"),
+		)
+	}
+	return apperror.Classify("model.stream", err, options...)
+}
 
 // Stream 根据模型标识选择具体 provider，并在 provider 失败时按需切换渠道或退避重试。
 //
@@ -80,10 +142,11 @@ const (
 //   - routerMaxStreamAttempts 仍作为尝试次数上限。
 func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(ModelEvent) error) error {
 	if router == nil || router.resolver == nil {
-		return fmt.Errorf("model adapter resolver is unavailable")
+		return classifyRouterError(req, fmt.Errorf("model adapter resolver is unavailable"))
 	}
 
 	tried := make(map[string]struct{})
+	startedAt := time.Now()
 	var firstErr error
 	var lastErrPermanent bool
 	// streamErr 保存最近一次渠道失败的错误，供提前返回前的 404 判定
@@ -93,45 +156,52 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 	for attempt := 0; attempt < routerMaxStreamAttempts; attempt++ {
 		if err := ctx.Err(); err != nil {
 			if firstErr != nil {
-				return firstErr
+				return classifyRouterError(req, firstErr)
 			}
-			return err
+			return classifyRouterError(req, err)
 		}
 
 		channel, err := router.selectChannel(ctx, req.ModelID)
 		if err != nil {
-			return err
+			return classifyRouterError(req, err)
 		}
 		if channel == nil {
-			return fmt.Errorf("no available channel for model %q", req.ModelID)
+			return classifyRouterError(req, fmt.Errorf("no available channel for model %q", req.ModelID))
 		}
 		channelID := strings.TrimSpace(channel.ID)
 
 		if attempt > 0 {
+			_, repeatedChannel := tried[channelID]
 			// 游标回到已尝试过的渠道，说明没有其它可用端点。
-			if _, seen := tried[channelID]; seen {
+			if repeatedChannel {
 				// OpenAI 兼容端点的 404：已无新渠道可换（单渠道必然如此；多渠道
 				// 路径下等于轮转一圈、全部渠道已 404），继续重试无意义，直接返回。
 				if isOpenAINotFoundError(streamErr) {
 					if isOpenAINotFoundError(firstErr) {
 						return openAINotFoundReadableError(req.ModelID, firstErr)
 					}
-					return firstErr
+					return classifyRouterError(req, firstErr)
 				}
-				// 其它永久错误同样立即返回；若 firstErr 为 OpenAI 404（如后续渠道
-				// 返回非 404 永久错误），提前返回时同样给出可读文案。
 				if lastErrPermanent {
 					if isOpenAINotFoundError(firstErr) {
 						return openAINotFoundReadableError(req.ModelID, firstErr)
 					}
-					return firstErr
+					return classifyRouterError(req, firstErr)
 				}
 			}
-			if err := sleepWithContext(ctx, routerRetryBackoff(attempt)); err != nil {
+
+			delay, shouldRetry := routerRetryDelay(attempt, repeatedChannel, streamErr, time.Since(startedAt))
+			if !shouldRetry {
 				if firstErr != nil {
-					return firstErr
+					return classifyRouterError(req, firstErr)
 				}
-				return err
+				return classifyRouterError(req, streamErr)
+			}
+			if err := sleepWithContext(ctx, delay); err != nil {
+				if firstErr != nil {
+					return classifyRouterError(req, firstErr)
+				}
+				return classifyRouterError(req, err)
 			}
 		}
 
@@ -140,12 +210,12 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 			if streamErr == nil {
 				router.clearChannelFailure(channelID)
 			}
-			return streamErr
+			return classifyRouterError(req, streamErr)
 		}
 		// 流已向客户端转发部分内容后中断：整体重试必然重复输出/重复工具调用，
 		// 直接返回当前错误，不做渠道冷却与 failover。
 		if errors.Is(streamErr, ErrMidStreamInterrupted) {
-			return streamErr
+			return classifyRouterError(req, streamErr)
 		}
 		router.recordChannelFailure(channelID, streamErr)
 		if firstErr == nil {
@@ -157,11 +227,11 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 
 	if firstErr != nil {
 		if isOpenAINotFoundError(firstErr) {
-			return openAINotFoundReadableError(req.ModelID, firstErr)
+			return classifyRouterError(req, openAINotFoundReadableError(req.ModelID, firstErr))
 		}
-		return firstErr
+		return classifyRouterError(req, firstErr)
 	}
-	return fmt.Errorf("all model channels failed")
+	return classifyRouterError(req, fmt.Errorf("all model channels failed"))
 }
 
 func (router *Router) selectChannel(ctx context.Context, modelID string) (*legacyruntime.ResolvedChannel, error) {
@@ -238,14 +308,17 @@ func channelFailureCooldown(err error) time.Duration {
 	case 429:
 		// 尊重上游 Retry-After 限流信号，钳制到 [1min, 10min]：
 		// 下限避免过短冷却在限流期间反复撞墙；上限避免异常大值让渠道长期不可用。
-		if retryAfter := ParseRetryAfterHeader(statusErr.Headers); retryAfter > 0 {
-			if retryAfter < channelFailureCooldownMin {
-				return channelFailureCooldownMin
+		var retryErr interface{ RetryAfter() time.Duration }
+		if errors.As(err, &retryErr) {
+			if retryAfter := retryErr.RetryAfter(); retryAfter > 0 {
+				if retryAfter < channelFailureCooldownMin {
+					return channelFailureCooldownMin
+				}
+				if retryAfter > channelFailureCooldownMax {
+					return channelFailureCooldownMax
+				}
+				return retryAfter
 			}
-			if retryAfter > channelFailureCooldownMax {
-				return channelFailureCooldownMax
-			}
-			return retryAfter
 		}
 		return time.Minute
 	case 500, 502, 503, 504:
@@ -560,14 +633,6 @@ func parseProviderErrorStatus(message string) int {
 		return 0
 	}
 	return status
-}
-
-// routerRetryBackoff 返回渠道切换/重试之间的固定重试间隔（10 秒）。
-// 用户要求：每 10 秒重试一次、共重试 10 次，全部失败才上报错误。
-// 固定间隔给上游瞬时故障（如中转站 Codex OAuth 认证恢复、连接超时恢复）留出恢复窗口，
-// 且避免指数退避在多次失败后间隔过短导致过早耗尽。
-func routerRetryBackoff(_ int) time.Duration {
-	return routerRetryFixedInterval
 }
 
 // sanitizeProviderMessages removes replay-only placeholders and trims trailing

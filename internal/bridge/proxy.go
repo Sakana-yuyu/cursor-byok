@@ -11,6 +11,7 @@ import (
 	"cursor/internal/logger"
 	"cursor/internal/mitm"
 	"cursor/internal/promptinject"
+	"cursor/internal/safego"
 	"cursor/internal/terminalenv"
 	_ "embed"
 	"encoding/json"
@@ -281,12 +282,12 @@ func (s *ProxyService) InstallTerminalDependency(target string) error {
 	if normalized != terminalenv.TargetPowerShell && normalized != terminalenv.TargetPython {
 		return fmt.Errorf("不支持的安装目标 %q（仅支持 %s / %s）", target, terminalenv.TargetPowerShell, terminalenv.TargetPython)
 	}
-	go func() {
+	safego.Go("bridge:install-terminal-dependency", func() {
 		if err := terminalenv.Install(context.Background(), normalized); err != nil {
-			// 进度与错误已通过事件推送，这里仅记日志，避免 goroutine 静默失败。
+			// 进度与错误已通过事件推送，这里仅记日志，避免后台任务静默失败。
 			logger.Errorf("InstallTerminalDependency target=%s failed: %v", normalized, err)
 		}
-	}()
+	})
 	return nil
 }
 

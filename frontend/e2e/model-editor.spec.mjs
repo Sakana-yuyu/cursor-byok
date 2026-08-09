@@ -77,7 +77,7 @@ test("手动添加：保存失败时展示错误信息且不跳转", async ({ pa
   await fieldInput(page, "访问密钥").fill("sk-test-e2e");
 
   await page.getByRole("button", { name: "保存", exact: true }).click();
-  await expect(page.getByText("E2E 注入：配置保存失败")).toBeVisible();
+  await expect(page.getByText("服务发生异常，请重试或导出诊断信息")).toBeVisible();
   await expect(page).toHaveURL(/\/model-editor/);
 });
 

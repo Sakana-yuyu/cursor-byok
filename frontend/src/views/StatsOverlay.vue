@@ -4,6 +4,7 @@ import { getHomeMetricsSummary, fetchLocalCacheStats, setStatsOverlayAlwaysOnTop
 import { getStatsOverlayPreferences, setStatsOverlayPreferences, hideStatsOverlay, closeApplication, appState } from "@/state/appState";
 import { usePolling } from "@/composables/usePolling";
 import { formatCompactInteger } from "@/utils/numberFormat";
+import { safeErrorLogAttributes } from "@/utils/errorContract";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 
 const summary = ref({});
@@ -45,7 +46,7 @@ async function toggleDockLock() {
   try {
     await setStatsOverlayPreferences({ dockLocked: next });
   } catch (error) {
-    console.error("[StatsOverlay] toggle dock lock failed", error);
+    console.error("[StatsOverlay] toggle dock lock failed", safeErrorLogAttributes(error, { operation: "statsOverlay.toggleDockLock" }));
   }
 }
 
@@ -54,7 +55,7 @@ async function toggleSnapCollapse() {
   try {
     await setStatsOverlayPreferences({ snapCollapse: next });
   } catch (error) {
-    console.error("[StatsOverlay] toggle snap collapse failed", error);
+    console.error("[StatsOverlay] toggle snap collapse failed", safeErrorLogAttributes(error, { operation: "statsOverlay.toggleSnapCollapse" }));
   }
 }
 
@@ -63,7 +64,7 @@ async function handleHideOverlay() {
   try {
     await hideStatsOverlay();
   } catch (error) {
-    console.error("[StatsOverlay] hide overlay failed", error);
+    console.error("[StatsOverlay] hide overlay failed", safeErrorLogAttributes(error, { operation: "statsOverlay.hide" }));
   }
 }
 
@@ -72,7 +73,7 @@ async function handleCloseApplication() {
   try {
     await closeApplication();
   } catch (error) {
-    console.error("[StatsOverlay] close application failed", error);
+    console.error("[StatsOverlay] close application failed", safeErrorLogAttributes(error, { operation: "statsOverlay.closeApplication" }));
   }
 }
 

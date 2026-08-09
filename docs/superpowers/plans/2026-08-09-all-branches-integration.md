@@ -30,21 +30,21 @@
 - Consumes: current `main` conversation scheduler implementation
 - Produces: merge history in which the implementation branch tip is an ancestor
 
-- [ ] **Step 1: Run scheduler tests on current main**
+- [x] **Step 1: Run scheduler tests on current main**
 
 Run: `go test ./internal/backend/forwarder -run 'RunQueue|Conversation|Cache' -count=1`
 Expected: PASS, establishing the current scheduler baseline.
 
-- [ ] **Step 2: Merge the implementation branch**
+- [x] **Step 2: Merge the implementation branch**
 
 Run: `git merge --no-ff fix/conversation-concurrency-isolation-impl`
 Expected: clean merge or conflicts limited to equivalent scheduler changes and documentation.
 
-- [ ] **Step 3: Resolve equivalent scheduler conflicts**
+- [x] **Step 3: Resolve equivalent scheduler conflicts**
 
 Keep the current `main` owner/FIFO implementation when both sides implement the same behavior, while retaining non-duplicate tests and design documentation from the source branch.
 
-- [ ] **Step 4: Verify scheduler behavior**
+- [x] **Step 4: Verify scheduler behavior**
 
 Run: `go test ./internal/backend/forwarder -run 'RunQueue|Conversation|Cache' -count=1`
 Expected: PASS.
@@ -66,21 +66,21 @@ Expected: PASS.
 - Consumes: scheduler lifecycle and existing provider/forwarder error paths
 - Produces: `apperror.AppError`, frontend error contract, runtime health state, and retry/diagnostic behavior
 
-- [ ] **Step 1: Merge the feature branch**
+- [x] **Step 1: Merge the feature branch**
 
 Run: `git merge --no-ff feat/error-resilience`
 Expected: conflicts in files independently changed by the scheduler and the error feature.
 
-- [ ] **Step 2: Compose forwarder behavior**
+- [x] **Step 2: Compose forwarder behavior**
 
 For each conflict, preserve scheduler terminalization and exact owner release, then retain error classification, trace recording, and retry metadata around that lifecycle.
 
-- [ ] **Step 3: Regenerate localization catalogs**
+- [x] **Step 3: Regenerate localization catalogs**
 
 Run: `npm run i18n:scan` from `frontend/`
 Expected: generated catalog references match the integrated source tree.
 
-- [ ] **Step 4: Run focused error tests**
+- [x] **Step 4: Run focused error tests**
 
 Run: `go test ./internal/apperror ./internal/backend/agent/model ./internal/backend/forwarder ./internal/safego -count=1`
 Expected: PASS.

@@ -857,7 +857,9 @@ func (coordinator *multitaskDelegationCoordinator) Start(stream *ActiveStream, p
 	}
 	snapshot := aggregate.finishStartup()
 	logger.Errorf("forwarder delegation aggregate startup finished request_id=%s exec_id=%s worker_ids=%d submission_errors=%d canceled=%t", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), len(snapshot.workerIDs), len(snapshot.submissionErrors), snapshot.canceled)
-	go coordinator.awaitAggregate(stream, pending, aggregate, snapshot)
+	safego.Go("forwarder:delegation-await", func() {
+		coordinator.awaitAggregate(stream, pending, aggregate, snapshot)
+	})
 	return true, nil
 }
 
@@ -1021,14 +1023,22 @@ func (coordinator *multitaskDelegationCoordinator) awaitAggregate(stream *Active
 				return
 			}
 			waitErr := fmt.Errorf("delegation aggregate %q wait failed: %w", strings.TrimSpace(aggregate.id), err)
-			logger.Errorf(
-				"forwarder delegation aggregate wait failed request_id=%s aggregate_id=%s exec_id=%s err=%v",
-				strings.TrimSpace(activeStreamRequestID(stream)),
-				strings.TrimSpace(aggregate.id),
-				strings.TrimSpace(pending.ExecID),
-				waitErr,
+			requestID := strings.TrimSpace(activeStreamRequestID(stream))
+			logger.Error(
+				"forwarder delegation aggregate wait failed",
+				"request_id", requestID,
+				"aggregate_id", strings.TrimSpace(aggregate.id),
+				"exec_id", strings.TrimSpace(pending.ExecID),
+				"error", waitErr,
 			)
-			_ = coordinator.service.failStreamIfNonTerminal(stream, "unknown", waitErr)
+			if terminalErr := coordinator.service.failStreamIfNonTerminal(stream, "unknown", waitErr); terminalErr != nil {
+				logger.Error(
+					"forwarder delegation wait terminalization failed",
+					"request_id", requestID,
+					"aggregate_id", strings.TrimSpace(aggregate.id),
+					"error", terminalErr,
+				)
+			}
 			return
 		}
 	}
@@ -1052,14 +1062,22 @@ func (coordinator *multitaskDelegationCoordinator) awaitAggregate(stream *Active
 		},
 	})
 	if postErr != nil {
-		logger.Errorf(
-			"forwarder delegation aggregate post failed request_id=%s aggregate_id=%s exec_id=%s err=%v",
-			strings.TrimSpace(activeStreamRequestID(stream)),
-			strings.TrimSpace(aggregate.id),
-			strings.TrimSpace(pending.ExecID),
-			postErr,
+		requestID := strings.TrimSpace(activeStreamRequestID(stream))
+		logger.Error(
+			"forwarder delegation aggregate post failed",
+			"request_id", requestID,
+			"aggregate_id", strings.TrimSpace(aggregate.id),
+			"exec_id", strings.TrimSpace(pending.ExecID),
+			"error", postErr,
 		)
-		_ = coordinator.service.failStreamIfNonTerminal(stream, "unknown", postErr)
+		if terminalErr := coordinator.service.failStreamIfNonTerminal(stream, "unknown", postErr); terminalErr != nil {
+			logger.Error(
+				"forwarder delegation post terminalization failed",
+				"request_id", requestID,
+				"aggregate_id", strings.TrimSpace(aggregate.id),
+				"error", terminalErr,
+			)
+		}
 	}
 }
 

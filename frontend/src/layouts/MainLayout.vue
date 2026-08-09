@@ -16,6 +16,7 @@ import {
 } from "@/state/appState";
 import { closeApplication as closeApplicationNative } from "@/services/clientApi";
 import { isWindows } from "@/utils/isWindows";
+import { safeErrorLogAttributes } from "@/utils/errorContract";
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { usePolling } from "@/composables/usePolling";
@@ -136,7 +137,7 @@ async function loadFooterAuthorInfo() {
   try {
     footerAuthorInfo.value = await getFooterAuthorInfo();
   } catch (error) {
-    console.error("[MainLayout] 加载作者信息失败", error);
+    console.error("[MainLayout] 加载作者信息失败", safeErrorLogAttributes(error, { operation: "mainLayout.loadFooterAuthorInfo" }));
   }
 }
 

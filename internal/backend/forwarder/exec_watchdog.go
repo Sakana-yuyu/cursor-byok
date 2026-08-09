@@ -95,7 +95,9 @@ func (service *Service) recoverExecWithoutTerminal(stream *ActiveStream, pending
 	// 仍在运行的子代理，避免出现「Cursor 任务还在进行中、byok 已显示超时」的割裂。
 	// 普通工具（read/write/shell 等）不需要 abort，客户端侧没有对应任务在跑。
 	if strings.TrimSpace(pending.ExecKind) == "subagent" {
-		_ = service.broker.Publish(stream.RequestID, StreamEvent{Message: buildExecAbortMessage(pending)})
+		if err := service.broker.Publish(stream.RequestID, StreamEvent{Message: buildExecAbortMessage(pending)}); err != nil {
+			logger.Errorf("forwarder exec watchdog abort publish failed request_id=%s exec_id=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), err)
+		}
 	}
 	markExecCompleted(stream, pending)
 	if strings.TrimSpace(pending.ExecKind) == "subagent" {

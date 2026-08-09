@@ -208,8 +208,8 @@ func (coordinator *SupervisorCoordinator) Start(stream *ActiveStream, pending ru
 	coordinator.aggregates[aggregateID] = aggregate
 	coordinator.mu.Unlock()
 	logger.Infof("forwarder supervisor aggregate registered request_id=%s aggregate_id=%s worker_count=%d provider_pass=%d", strings.TrimSpace(activeStreamRequestID(stream)), aggregateID, len(workers), pending.ProviderPass)
-	go aggregate.run()
-	go aggregate.dispatchInitialWorkers()
+	safego.Go("forwarder:supervisor-run", aggregate.run)
+	safego.Go("forwarder:supervisor-dispatch", aggregate.dispatchInitialWorkers)
 	return aggregateID, nil
 }
 
@@ -564,7 +564,9 @@ func (aggregate *supervisedAggregate) handleWorkerCheckpoint(event supervisorAgg
 	aggregate.mu.Unlock()
 	aggregate.rememberTaskRuntimeState(task)
 	allowed := aggregate.allowedActions(task, event.snapshot)
-	go aggregate.reviewTask(reviewContext, event.identity, contract, event.snapshot, delegation.TaskResult{}, issue, allowed)
+	safego.Go("forwarder:supervisor-review", func() {
+		aggregate.reviewTask(reviewContext, event.identity, contract, event.snapshot, delegation.TaskResult{}, issue, allowed)
+	})
 }
 
 func supervisionCheckpointReadyForReview(checkpoint delegation.WorkerCheckpoint) bool {
@@ -1282,14 +1284,22 @@ func (aggregate *supervisedAggregate) finish() {
 		},
 	})
 	if postErr != nil {
-		logger.Errorf(
-			"forwarder supervised delegation aggregate post failed request_id=%s aggregate_id=%s exec_id=%s err=%v",
-			strings.TrimSpace(activeStreamRequestID(aggregate.stream)),
-			strings.TrimSpace(aggregate.id),
-			strings.TrimSpace(aggregate.pending.ExecID),
-			postErr,
+		requestID := strings.TrimSpace(activeStreamRequestID(aggregate.stream))
+		logger.Error(
+			"forwarder supervised delegation aggregate post failed",
+			"request_id", requestID,
+			"aggregate_id", strings.TrimSpace(aggregate.id),
+			"exec_id", strings.TrimSpace(aggregate.pending.ExecID),
+			"error", postErr,
 		)
-		_ = aggregate.coordinator.service.failStreamIfNonTerminal(aggregate.stream, "unknown", postErr)
+		if terminalErr := aggregate.coordinator.service.failStreamIfNonTerminal(aggregate.stream, "unknown", postErr); terminalErr != nil {
+			logger.Error(
+				"forwarder supervised delegation terminalization failed",
+				"request_id", requestID,
+				"aggregate_id", strings.TrimSpace(aggregate.id),
+				"error", terminalErr,
+			)
+		}
 	}
 }
 

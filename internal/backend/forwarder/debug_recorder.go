@@ -10,10 +10,12 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"cursor/gen/agentv1"
 	"cursor/internal/logger"
+	"cursor/internal/safego"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -46,6 +48,41 @@ type debugRecorder struct {
 	config      debugLogConfig
 	queue       chan debugWriteJob
 	workerOnce  sync.Once
+	health      debugRecorderHealth
+}
+
+type debugRecorderHealth struct {
+	MarshalFailures atomic.Uint64
+	WriteFailures   atomic.Uint64
+	DroppedEvents   atomic.Uint64
+	WorkerPanics    atomic.Uint64
+}
+
+func (recorder *debugRecorder) healthSnapshot() debugRecorderHealthSnapshot {
+	if recorder == nil {
+		return debugRecorderHealthSnapshot{}
+	}
+	return debugRecorderHealthSnapshot{
+		MarshalFailures: recorder.health.MarshalFailures.Load(),
+		WriteFailures:   recorder.health.WriteFailures.Load(),
+		DroppedEvents:   recorder.health.DroppedEvents.Load(),
+		WorkerPanics:    recorder.health.WorkerPanics.Load(),
+	}
+}
+
+type debugRecorderHealthSnapshot struct {
+	MarshalFailures uint64
+	WriteFailures   uint64
+	DroppedEvents   uint64
+	WorkerPanics    uint64
+}
+
+func (recorder *debugRecorder) recordWriteFailure(operation string, filename string) {
+	if recorder == nil {
+		return
+	}
+	recorder.health.WriteFailures.Add(1)
+	logger.Error("debug recorder write failed", "operation", operation, "filename", strings.TrimSpace(filename))
 }
 
 const maxDebugProtoPayloadBytes = 64 * 1024
@@ -193,6 +230,8 @@ func (recorder *debugRecorder) appendJSONL(ctx context.Context, requestID string
 	}
 	payload, err := json.Marshal(event)
 	if err != nil {
+		recorder.health.MarshalFailures.Add(1)
+		logger.Error("debug recorder marshal failed", "filename", strings.TrimSpace(filename))
 		return
 	}
 	// 异步落盘：序列化后的 payload 投递到后台 worker，主链路（BidiAppend / provider
@@ -207,12 +246,16 @@ func (recorder *debugRecorder) enqueue(job debugWriteJob) {
 	}
 	recorder.workerOnce.Do(func() {
 		recorder.queue = make(chan debugWriteJob, debugQueueCapacity)
-		go recorder.writeLoop()
+		safego.GoWithPanicHandler("forwarder:debug-recorder", recorder.writeLoop, func(error) {
+			recorder.health.WorkerPanics.Add(1)
+			logger.Error("debug recorder worker panic recovered")
+		})
 	})
 	select {
 	case recorder.queue <- job:
 	default:
-		logger.Infof("debug recorder queue full, dropping %s event", job.filename)
+		recorder.health.DroppedEvents.Add(1)
+		logger.Warn("debug recorder queue full, dropping event", "filename", strings.TrimSpace(job.filename))
 	}
 }
 
@@ -231,15 +274,26 @@ func (recorder *debugRecorder) writeJob(job debugWriteJob) {
 	}
 	defer debugPurge.endWrite()
 	if err := os.MkdirAll(job.dir, 0o755); err != nil {
+		recorder.recordWriteFailure("mkdir", job.filename)
 		return
 	}
 	path := filepath.Join(job.dir, job.filename)
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
+		recorder.recordWriteFailure("open", job.filename)
 		return
 	}
-	_, _ = file.Write(append(job.payload, '\n'))
-	_ = file.Close()
+	payload := append(job.payload, '\n')
+	written, writeErr := file.Write(payload)
+	if writeErr != nil || written != len(payload) {
+		recorder.recordWriteFailure("write", job.filename)
+	}
+	if closeErr := file.Close(); closeErr != nil {
+		recorder.recordWriteFailure("close", job.filename)
+	}
+	if writeErr != nil || written != len(payload) {
+		return
+	}
 	// 写完检查大小，超上限则裁剪保留尾部（最新 = 最可能含错误的部分）。
 	// 在 worker goroutine 内执行，不阻塞主链路。
 	recorder.rotateIfNeeded(context.Background(), path)
