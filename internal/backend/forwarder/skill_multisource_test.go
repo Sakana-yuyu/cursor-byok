@@ -133,6 +133,36 @@ func TestSkillWorkspaceOverridesUserForSameSource(t *testing.T) {
 	t.Fatal("shared-name skill was not discovered")
 }
 
+func TestSkillWorkspaceOverridesUserAcrossSources(t *testing.T) {
+	home := t.TempDir()
+	setHomeForTest(t, home)
+	workspace := t.TempDir()
+
+	writeScannerTestSkill(t, filepath.Join(home, ".cursor", "skills"), "shared-name", "user Cursor definition")
+	writeScannerTestSkill(t, filepath.Join(workspace, ".gemini", "skills"), "shared-name", "workspace Gemini definition")
+
+	InvalidateSkillScanCache()
+	t.Cleanup(InvalidateSkillScanCache)
+	skilled := ScanAllSkills(workspace)
+	for _, skill := range skilled {
+		if skill.Name != "shared-name" {
+			continue
+		}
+		if skill.Source != SkillSourceGemini {
+			t.Fatalf("shared-name source = %q, want %q", skill.Source, SkillSourceGemini)
+		}
+		if skill.Description != "workspace Gemini definition" {
+			t.Fatalf("shared-name description = %q, want workspace Gemini definition", skill.Description)
+		}
+		wantPrefix := filepath.Join(workspace, ".gemini", "skills")
+		if !strings.HasPrefix(skill.FullPath, wantPrefix) {
+			t.Fatalf("shared-name path = %q, want workspace prefix %q", skill.FullPath, wantPrefix)
+		}
+		return
+	}
+	t.Fatal("shared-name skill was not discovered")
+}
+
 func TestGeminiWorkspaceSkillsAreDiscovered(t *testing.T) {
 	home := t.TempDir()
 	setHomeForTest(t, home)

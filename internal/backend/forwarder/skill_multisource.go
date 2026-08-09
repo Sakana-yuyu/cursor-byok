@@ -109,13 +109,14 @@ type skillScanRoot struct {
 }
 
 // orderedSkillScanRoots 按优先级返回所有待扫描目录（高优先级在前，去重时先到先得）。
-// 顺序：Cursor → Trae → Windsurf → Claude → Codex → Gemini → Copilot → Cline →
-// 共享 .agents → ZCode → ZCode 插件 → 旧 BYOK。
+// 所有工作区根先于用户根；每个作用域内保持 Cursor → Trae → Windsurf → Claude →
+// Codex → Gemini → Copilot → Cline → 共享 .agents → ZCode → ZCode 插件 → 旧 BYOK。
 func orderedSkillScanRoots(workspaceRoot string) []skillScanRoot {
 	home, _ := os.UserHomeDir()
 	home = strings.TrimSpace(home)
 	ws := strings.TrimSpace(workspaceRoot)
 
+	var workspaceRoots []skillScanRoot
 	var roots []skillScanRoot
 	add := func(path string, source SkillSource) {
 		if strings.TrimSpace(path) == "" {
@@ -123,31 +124,37 @@ func orderedSkillScanRoots(workspaceRoot string) []skillScanRoot {
 		}
 		roots = append(roots, skillScanRoot{Path: path, Source: source})
 	}
+	addWorkspace := func(path string, source SkillSource) {
+		if strings.TrimSpace(path) == "" {
+			return
+		}
+		workspaceRoots = append(workspaceRoots, skillScanRoot{Path: path, Source: source})
+	}
 
 	// Cursor（原生优先级最高）
 	if ws != "" {
-		add(filepath.Join(ws, ".cursor", "skills"), SkillSourceCursor)
+		addWorkspace(filepath.Join(ws, ".cursor", "skills"), SkillSourceCursor)
 	}
 	if home != "" {
 		add(filepath.Join(home, ".cursor", "skills"), SkillSourceCursor)
 	}
 	// Trae（IDE，技能放项目 .trae/skills，全局目录兼容）
 	if ws != "" {
-		add(filepath.Join(ws, ".trae", "skills"), SkillSourceTrae)
+		addWorkspace(filepath.Join(ws, ".trae", "skills"), SkillSourceTrae)
 	}
 	if home != "" {
 		add(filepath.Join(home, ".trae", "skills"), SkillSourceTrae)
 	}
 	// Windsurf（IDE，全局在 ~/.codeium/windsurf/skills，项目在 .windsurf/skills）
 	if ws != "" {
-		add(filepath.Join(ws, ".windsurf", "skills"), SkillSourceWindsurf)
+		addWorkspace(filepath.Join(ws, ".windsurf", "skills"), SkillSourceWindsurf)
 	}
 	if home != "" {
 		add(filepath.Join(home, ".codeium", "windsurf", "skills"), SkillSourceWindsurf)
 	}
 	// Claude Code
 	if ws != "" {
-		add(filepath.Join(ws, ".claude", "skills"), SkillSourceClaude)
+		addWorkspace(filepath.Join(ws, ".claude", "skills"), SkillSourceClaude)
 	}
 	if home != "" {
 		add(filepath.Join(home, ".claude", "skills"), SkillSourceClaude)
@@ -159,7 +166,7 @@ func orderedSkillScanRoots(workspaceRoot string) []skillScanRoot {
 	}
 	// Gemini CLI
 	if ws != "" {
-		add(filepath.Join(ws, ".gemini", "skills"), SkillSourceGemini)
+		addWorkspace(filepath.Join(ws, ".gemini", "skills"), SkillSourceGemini)
 	}
 	if home != "" {
 		add(filepath.Join(home, ".gemini", "skills"), SkillSourceGemini)
@@ -170,21 +177,21 @@ func orderedSkillScanRoots(workspaceRoot string) []skillScanRoot {
 	}
 	// Cline
 	if ws != "" {
-		add(filepath.Join(ws, ".cline", "skills"), SkillSourceCline)
+		addWorkspace(filepath.Join(ws, ".cline", "skills"), SkillSourceCline)
 	}
 	if home != "" {
 		add(filepath.Join(home, ".cline", "skills"), SkillSourceCline)
 	}
 	// 共享标准 .agents（跨工具）
 	if ws != "" {
-		add(filepath.Join(ws, ".agents", "skills"), SkillSourceShared)
+		addWorkspace(filepath.Join(ws, ".agents", "skills"), SkillSourceShared)
 	}
 	if home != "" {
 		add(filepath.Join(home, ".agents", "skills"), SkillSourceShared)
 	}
 	// ZCode
 	if ws != "" {
-		add(filepath.Join(ws, ".zcode", "skills"), SkillSourceZCode)
+		addWorkspace(filepath.Join(ws, ".zcode", "skills"), SkillSourceZCode)
 	}
 	if home != "" {
 		add(filepath.Join(home, ".zcode", "skills"), SkillSourceZCode)
@@ -199,7 +206,7 @@ func orderedSkillScanRoots(workspaceRoot string) []skillScanRoot {
 	if home != "" {
 		add(filepath.Join(home, ".cursor-local-assistant-v2", "skills"), SkillSourceBYOK)
 	}
-	return roots
+	return append(workspaceRoots, roots...)
 }
 
 // globZCodePluginSkillDirs 枚举 ~/.zcode/cli/plugins/cache/*/*/skills 目录。
