@@ -36,7 +36,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 219,
+          "line": 232,
           "column": 18
         }
       ]
@@ -135,7 +135,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 280,
+          "line": 293,
           "column": 22
         }
       ]
@@ -335,7 +335,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 977,
+          "line": 969,
           "column": 32
         }
       ]
@@ -383,12 +383,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 889,
+          "line": 881,
           "column": 19
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 979,
+          "line": 971,
           "column": 19
         },
         {
@@ -509,7 +509,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 638,
+          "line": 651,
           "column": 41
         }
       ]
@@ -656,7 +656,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 763,
+          "line": 786,
           "column": 12
         }
       ]
@@ -709,7 +709,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 639,
+          "line": 652,
           "column": 21
         }
       ]
@@ -846,7 +846,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 58,
+          "line": 59,
           "column": 10
         },
         {
@@ -866,7 +866,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 50,
+          "line": 53,
           "column": 28
         },
         {
@@ -912,7 +912,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 281,
+          "line": 282,
           "column": 36
         },
         {
@@ -990,12 +990,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 393,
+          "line": 406,
           "column": 18
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 670,
+          "line": 693,
           "column": 78
         }
       ]
@@ -1072,7 +1072,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 799,
+          "line": 791,
           "column": 1
         }
       ]
@@ -1108,7 +1108,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 811,
+          "line": 803,
           "column": 16
         }
       ]
@@ -1274,7 +1274,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 593,
+          "line": 606,
           "column": 117
         }
       ]
@@ -1452,7 +1452,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 835,
+          "line": 827,
           "column": 21
         }
       ]
@@ -1464,7 +1464,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 412,
+          "line": 420,
           "column": 47
         }
       ]
@@ -1606,7 +1606,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 1004,
+          "line": 996,
           "column": 32
         }
       ]
@@ -1714,7 +1714,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 677,
+          "line": 700,
           "column": 90
         }
       ]
@@ -2101,12 +2101,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 512,
+          "line": 525,
           "column": 61
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 461,
+          "line": 463,
           "column": 66
         }
       ]
@@ -2234,7 +2234,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 606,
+          "line": 619,
           "column": 16
         }
       ]
@@ -2270,7 +2270,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 46,
+          "line": 47,
           "column": 12
         },
         {
@@ -2292,7 +2292,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 750,
+          "line": 773,
           "column": 12
         }
       ]
@@ -2495,7 +2495,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 428,
+          "line": 436,
           "column": 25
         }
       ]
@@ -2862,7 +2862,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 45,
+          "line": 46,
           "column": 11
         },
         {
@@ -2944,7 +2944,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 713,
+          "line": 705,
           "column": 30
         }
       ]
@@ -2992,7 +2992,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 48,
+          "line": 49,
           "column": 11
         },
         {
@@ -3029,7 +3029,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 724,
+          "line": 747,
           "column": 12
         }
       ]
@@ -3101,7 +3101,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 64,
+          "line": 65,
           "column": 14
         }
       ]
@@ -3188,7 +3188,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 871,
+          "line": 894,
           "column": 49
         }
       ]
@@ -3236,7 +3236,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 836,
+          "line": 828,
           "column": 21
         }
       ]
@@ -3490,7 +3490,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 466,
+          "line": 457,
           "column": 43
         }
       ]
@@ -3836,12 +3836,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 518,
+          "line": 531,
           "column": 97
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 305,
+          "line": 307,
           "column": 99
         }
       ]
@@ -3865,7 +3865,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 1004,
+          "line": 996,
           "column": 32
         }
       ]
@@ -3983,7 +3983,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 503,
+          "line": 516,
           "column": 169
         }
       ]
@@ -4007,7 +4007,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 436,
+          "line": 444,
           "column": 25
         }
       ]
@@ -4398,12 +4398,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 896,
+          "line": 888,
           "column": 27
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 897,
+          "line": 889,
           "column": 32
         }
       ]
@@ -4502,7 +4502,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 938,
+          "line": 930,
           "column": 22
         }
       ]
@@ -4558,12 +4558,12 @@
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 54,
+          "line": 55,
           "column": 17
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 445,
+          "line": 436,
           "column": 10
         }
       ]
@@ -4727,7 +4727,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 1022,
+          "line": 1014,
           "column": 7
         }
       ]
@@ -4791,7 +4791,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 997,
+          "line": 989,
           "column": 32
         }
       ]
@@ -4815,7 +4815,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 677,
+          "line": 700,
           "column": 21
         }
       ]
@@ -4856,7 +4856,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 844,
+          "line": 836,
           "column": 22
         }
       ]
@@ -4904,7 +4904,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 66,
+          "line": 67,
           "column": 10
         },
         {
@@ -5078,22 +5078,22 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 62,
+          "line": 63,
           "column": 17
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 91,
+          "line": 92,
           "column": 22
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 93,
+          "line": 94,
           "column": 84
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 427,
+          "line": 435,
           "column": 94
         }
       ]
@@ -5247,7 +5247,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 986,
+          "line": 978,
           "column": 32
         }
       ]
@@ -5312,12 +5312,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 369,
+          "line": 377,
           "column": 141
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 414,
+          "line": 422,
           "column": 146
         },
         {
@@ -5334,7 +5334,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 642,
+          "line": 655,
           "column": 27
         }
       ]
@@ -5404,12 +5404,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 259,
+          "line": 260,
           "column": 23
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 401,
+          "line": 392,
           "column": 23
         }
       ]
@@ -5539,7 +5539,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 344,
+          "line": 357,
           "column": 18
         }
       ]
@@ -5801,12 +5801,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 474,
+          "line": 487,
           "column": 284
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 206,
+          "line": 208,
           "column": 24
         }
       ]
@@ -5878,7 +5878,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 357,
+          "line": 365,
           "column": 58
         },
         {
@@ -5941,12 +5941,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 900,
+          "line": 892,
           "column": 22
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 989,
+          "line": 981,
           "column": 22
         }
       ]
@@ -6064,12 +6064,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 576,
+          "line": 589,
           "column": 126
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 401,
+          "line": 403,
           "column": 128
         }
       ]
@@ -6166,7 +6166,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 394,
+          "line": 402,
           "column": 25
         },
         {
@@ -6344,7 +6344,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 252,
+          "line": 243,
           "column": 23
         }
       ]
@@ -6694,7 +6694,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 1021,
+          "line": 1013,
           "column": 19
         }
       ]
@@ -6802,12 +6802,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 56,
+          "line": 57,
           "column": 14
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 437,
+          "line": 428,
           "column": 12
         }
       ]
@@ -6836,7 +6836,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 47,
+          "line": 50,
           "column": 26
         },
         {
@@ -6870,12 +6870,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 382,
+          "line": 390,
           "column": 55
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 425,
+          "line": 433,
           "column": 53
         },
         {
@@ -6885,7 +6885,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 944,
+          "line": 936,
           "column": 92
         }
       ]
@@ -7015,7 +7015,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 672,
+          "line": 664,
           "column": 7
         }
       ]
@@ -7182,7 +7182,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 677,
+          "line": 700,
           "column": 159
         }
       ]
@@ -7218,7 +7218,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 320,
+          "line": 333,
           "column": 18
         }
       ]
@@ -7449,7 +7449,7 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 273,
+          "line": 264,
           "column": 39
         },
         {
@@ -7873,12 +7873,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 448,
+          "line": 456,
           "column": 20
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 1007,
+          "line": 999,
           "column": 22
         }
       ]
@@ -8042,7 +8042,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 725,
+          "line": 717,
           "column": 19
         }
       ]
@@ -8142,7 +8142,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 582,
+          "line": 595,
           "column": 16
         }
       ]
@@ -8356,7 +8356,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 332,
+          "line": 345,
           "column": 18
         }
       ]
@@ -8604,7 +8604,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 880,
+          "line": 903,
           "column": 58
         }
       ]
@@ -8772,7 +8772,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 573,
+          "line": 564,
           "column": 21
         }
       ]
@@ -8784,7 +8784,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 598,
+          "line": 611,
           "column": 16
         }
       ]
@@ -8820,12 +8820,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 306,
+          "line": 307,
           "column": 23
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 398,
+          "line": 389,
           "column": 23
         }
       ]
@@ -8931,7 +8931,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 57,
+          "line": 58,
           "column": 13
         }
       ]
@@ -9054,12 +9054,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 380,
+          "line": 393,
           "column": 18
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 670,
+          "line": 693,
           "column": 71
         }
       ]
@@ -9219,7 +9219,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 87,
+          "line": 88,
           "column": 10
         }
       ]
@@ -9243,7 +9243,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 698,
+          "line": 721,
           "column": 12
         }
       ]
@@ -9597,7 +9597,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 417,
+          "line": 430,
           "column": 37
         }
       ]
@@ -9621,7 +9621,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 807,
+          "line": 799,
           "column": 70
         }
       ]
@@ -9696,12 +9696,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 861,
+          "line": 853,
           "column": 67
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 951,
+          "line": 943,
           "column": 67
         }
       ]
@@ -9795,7 +9795,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 489,
+          "line": 480,
           "column": 25
         }
       ]
@@ -9831,7 +9831,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 394,
+          "line": 402,
           "column": 25
         }
       ]
@@ -9913,7 +9913,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 338,
+          "line": 351,
           "column": 18
         }
       ]
@@ -10483,7 +10483,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 326,
+          "line": 339,
           "column": 18
         }
       ]
@@ -10587,7 +10587,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 409,
+          "line": 417,
           "column": 56
         }
       ]
@@ -10671,7 +10671,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 443,
+          "line": 434,
           "column": 12
         }
       ]
@@ -10772,7 +10772,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 661,
+          "line": 684,
           "column": 14
         }
       ]
@@ -10943,7 +10943,7 @@
       "refs": [
         {
           "file": "src/services/clientApi.js",
-          "line": 158,
+          "line": 160,
           "column": 37
         }
       ]
@@ -10955,7 +10955,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 671,
+          "line": 663,
           "column": 7
         },
         {
@@ -10984,7 +10984,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 681,
+          "line": 704,
           "column": 35
         }
       ]
@@ -11158,7 +11158,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 776,
+          "line": 799,
           "column": 12
         }
       ]
@@ -11302,7 +11302,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 86,
+          "line": 87,
           "column": 108
         }
       ]
@@ -11350,7 +11350,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 710,
+          "line": 702,
           "column": 54
         }
       ]
@@ -11703,7 +11703,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 764,
+          "line": 756,
           "column": 15
         }
       ]
@@ -11804,7 +11804,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 614,
+          "line": 627,
           "column": 16
         }
       ]
@@ -11932,7 +11932,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 850,
+          "line": 873,
           "column": 25
         }
       ]
@@ -11997,7 +11997,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 65,
+          "line": 66,
           "column": 13
         },
         {
@@ -12183,7 +12183,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 707,
+          "line": 699,
           "column": 25
         }
       ]
@@ -12243,7 +12243,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 1021,
+          "line": 1013,
           "column": 19
         },
         {
@@ -12277,17 +12277,17 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 49,
+          "line": 50,
           "column": 13
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 236,
+          "line": 237,
           "column": 21
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 283,
+          "line": 284,
           "column": 54
         },
         {
@@ -12365,7 +12365,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 789,
+          "line": 812,
           "column": 12
         }
       ]
@@ -12413,12 +12413,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 657,
+          "line": 680,
           "column": 47
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 669,
+          "line": 692,
           "column": 49
         }
       ]
@@ -12430,12 +12430,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 900,
+          "line": 892,
           "column": 22
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 989,
+          "line": 981,
           "column": 22
         }
       ]
@@ -12459,12 +12459,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 456,
+          "line": 464,
           "column": 1
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 1007,
+          "line": 999,
           "column": 22
         },
         {
@@ -12525,7 +12525,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 681,
+          "line": 673,
           "column": 15
         }
       ]
@@ -12773,7 +12773,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 854,
+          "line": 846,
           "column": 69
         }
       ]
@@ -12819,7 +12819,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 756,
+          "line": 748,
           "column": 17
         }
       ]
@@ -12848,7 +12848,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 440,
+          "line": 431,
           "column": 12
         }
       ]
@@ -12865,22 +12865,22 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 49,
+          "line": 52,
           "column": 31
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 721,
+          "line": 713,
           "column": 19
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 855,
+          "line": 847,
           "column": 28
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 945,
+          "line": 937,
           "column": 28
         },
         {
@@ -12926,7 +12926,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 590,
+          "line": 603,
           "column": 16
         }
       ]
@@ -13181,7 +13181,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 754,
+          "line": 746,
           "column": 17
         }
       ]
@@ -13217,7 +13217,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 908,
+          "line": 900,
           "column": 32
         }
       ]
@@ -13311,7 +13311,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 617,
+          "line": 630,
           "column": 114
         }
       ]
@@ -13347,7 +13347,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 879,
+          "line": 902,
           "column": 49
         }
       ]
@@ -13424,7 +13424,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 737,
+          "line": 760,
           "column": 12
         }
       ]
@@ -13525,7 +13525,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 380,
+          "line": 388,
           "column": 28
         },
         {
@@ -13708,7 +13708,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 615,
+          "line": 606,
           "column": 11
         }
       ]
@@ -13816,7 +13816,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 252,
+          "line": 265,
           "column": 18
         }
       ]
@@ -13862,22 +13862,22 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
+          "line": 773,
+          "column": 15
+        },
+        {
+          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
           "line": 781,
           "column": 15
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 789,
-          "column": 15
-        },
-        {
-          "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 875,
+          "line": 867,
           "column": 21
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 966,
+          "line": 958,
           "column": 21
         },
         {
@@ -14011,12 +14011,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 55,
+          "line": 56,
           "column": 15
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 1007,
+          "line": 999,
           "column": 22
         }
       ]
@@ -14153,7 +14153,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 425,
+          "line": 438,
           "column": 37
         }
       ]
@@ -14488,7 +14488,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 235,
+          "line": 236,
           "column": 36
         },
         {
@@ -14580,7 +14580,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 719,
+          "line": 711,
           "column": 19
         }
       ]
@@ -14715,7 +14715,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 410,
+          "line": 418,
           "column": 52
         }
       ]
@@ -14888,7 +14888,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 247,
+          "line": 260,
           "column": 22
         }
       ]
@@ -14912,7 +14912,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 505,
+          "line": 496,
           "column": 21
         }
       ]
@@ -15064,7 +15064,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 375,
+          "line": 383,
           "column": 108
         },
         {
@@ -15267,7 +15267,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 913,
+          "line": 936,
           "column": 69
         }
       ]
@@ -15320,7 +15320,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 622,
+          "line": 635,
           "column": 16
         }
       ]
@@ -15807,7 +15807,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 676,
+          "line": 699,
           "column": 50
         }
       ]
@@ -15882,12 +15882,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 886,
+          "line": 878,
           "column": 27
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 887,
+          "line": 879,
           "column": 32
         }
       ]
@@ -15928,7 +15928,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 896,
+          "line": 888,
           "column": 27
         }
       ]
@@ -16207,7 +16207,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 538,
+          "line": 529,
           "column": 21
         }
       ]
@@ -16280,12 +16280,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 734,
+          "line": 726,
           "column": 17
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 735,
+          "line": 727,
           "column": 17
         },
         {
@@ -16420,7 +16420,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 811,
+          "line": 803,
           "column": 16
         }
       ]
@@ -16606,7 +16606,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 429,
+          "line": 437,
           "column": 133
         }
       ]
@@ -16659,7 +16659,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 941,
+          "line": 933,
           "column": 89
         }
       ]
@@ -16693,22 +16693,22 @@
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 48,
+          "line": 51,
           "column": 30
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 720,
+          "line": 712,
           "column": 19
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 855,
+          "line": 847,
           "column": 28
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 945,
+          "line": 937,
           "column": 28
         },
         {
@@ -16785,7 +16785,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 436,
+          "line": 444,
           "column": 25
         }
       ]
@@ -16797,7 +16797,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 614,
+          "line": 605,
           "column": 11
         }
       ]
@@ -16821,7 +16821,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 886,
+          "line": 878,
           "column": 27
         }
       ]
@@ -16896,7 +16896,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 942,
+          "line": 934,
           "column": 86
         }
       ]
@@ -17040,7 +17040,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 50,
+          "line": 51,
           "column": 14
         },
         {
@@ -17137,7 +17137,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 881,
+          "line": 904,
           "column": 35
         }
       ]
@@ -17260,7 +17260,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 677,
+          "line": 700,
           "column": 170
         }
       ]
@@ -17325,7 +17325,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 850,
+          "line": 842,
           "column": 52
         }
       ]
@@ -17414,7 +17414,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 362,
+          "line": 370,
           "column": 13
         }
       ]
@@ -17737,7 +17737,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 380,
+          "line": 388,
           "column": 28
         },
         {
@@ -17817,7 +17817,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 806,
+          "line": 798,
           "column": 154
         }
       ]
@@ -17841,7 +17841,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 670,
+          "line": 693,
           "column": 21
         }
       ]
@@ -17870,7 +17870,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 473,
+          "line": 486,
           "column": 196
         }
       ]
@@ -17942,7 +17942,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 47,
+          "line": 48,
           "column": 14
         },
         {
@@ -17986,7 +17986,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 711,
+          "line": 734,
           "column": 12
         }
       ]
@@ -18010,12 +18010,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 448,
+          "line": 456,
           "column": 20
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 1007,
+          "line": 999,
           "column": 22
         }
       ]
@@ -18111,7 +18111,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 609,
+          "line": 622,
           "column": 139
         }
       ]
@@ -18329,7 +18329,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 491,
+          "line": 504,
           "column": 58
         }
       ]
@@ -18731,7 +18731,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 427,
+          "line": 435,
           "column": 88
         }
       ]
@@ -18743,7 +18743,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 358,
+          "line": 366,
           "column": 54
         }
       ]
@@ -18755,7 +18755,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 63,
+          "line": 64,
           "column": 15
         }
       ]
@@ -18767,7 +18767,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 873,
+          "line": 896,
           "column": 46
         }
       ]
@@ -18902,7 +18902,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 522,
+          "line": 513,
           "column": 23
         }
       ]

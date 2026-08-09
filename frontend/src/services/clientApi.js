@@ -6,6 +6,7 @@ import {
   AutoMatchContextWindows, DiagnoseModelAdapters, ApplyDiagnosticFixes,
   GetSkillsMCPScanSnapshot, RefreshSkillsMCPScan, SaveSkillsMCPScanConfig,
   ReadSkillFile, SaveSkillFile, GenerateSkillSummary,
+  GetRecentWorkspaceRoot,
   QueryAllProviderBalances,
   RepairProxySettings,
   GetDelegationConfig, SaveDelegationConfig,
@@ -56,6 +57,7 @@ const desktopMethods = {
   RefreshPromptInjectionCatalog, ExportLogs, AutoMatchContextWindows, DiagnoseModelAdapters, ApplyDiagnosticFixes,
   DetectCursorPath, LaunchCursor, RestartCursor, IsCursorRunning, GetSkillsMCPScanSnapshot, RefreshSkillsMCPScan, SaveSkillsMCPScanConfig,
   ReadSkillFile, SaveSkillFile, GenerateSkillSummary,
+  GetRecentWorkspaceRoot,
   QueryAllProviderBalances,
   RepairProxySettings,
   GetDelegationConfig, SaveDelegationConfig,
@@ -470,6 +472,9 @@ export function repairProxySettings() {
 
 export function getDelegationConfig() {
   return desktopOrMock(() => GetDelegationConfig(), "@bindings/cursor/internal/bridge/proxyservice.js", "GetDelegationConfig");
+}
+export function getRecentWorkspaceRoot() {
+  return desktopOrMock(() => GetRecentWorkspaceRoot(), "@bindings/cursor/internal/bridge/proxyservice.js", "GetRecentWorkspaceRoot");
 }
 
 export function saveDelegationConfig(config) {

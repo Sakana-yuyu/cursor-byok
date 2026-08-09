@@ -58,6 +58,7 @@ func (service *Service) enrichRequestContextWithScannedAssets(intent *InboundInt
 	}
 	settings := readSkillMCPScanSettings(service.scanConfig)
 	workspaceRoot := resolveWorkspaceRootFromIntent(intent)
+	service.setRecentWorkspaceRoot(workspaceRoot)
 	preserveRequestContextWorkspaceRoot(intent, workspaceRoot)
 
 	// AGENTS.md/CLAUDE.md/GEMINI.md 兜底注入：客户端 rules 不完整时补充。

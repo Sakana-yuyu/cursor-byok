@@ -113,6 +113,29 @@ type Service struct {
 	conversationLastActivity map[string]time.Time
 	checkpointBlobMu         sync.Mutex
 	checkpointBlobs          map[string]*checkpointBlobCacheEntry
+	recentWorkspaceRootMu    sync.RWMutex
+	recentWorkspaceRoot      string
+}
+
+// RecentWorkspaceRoot returns the latest non-empty workspace root observed
+// during request asset enrichment. It is runtime-only state.
+func (service *Service) RecentWorkspaceRoot() string {
+	if service == nil {
+		return ""
+	}
+	service.recentWorkspaceRootMu.RLock()
+	defer service.recentWorkspaceRootMu.RUnlock()
+	return service.recentWorkspaceRoot
+}
+
+func (service *Service) setRecentWorkspaceRoot(workspaceRoot string) {
+	workspaceRoot = strings.TrimSpace(workspaceRoot)
+	if service == nil || workspaceRoot == "" {
+		return
+	}
+	service.recentWorkspaceRootMu.Lock()
+	service.recentWorkspaceRoot = workspaceRoot
+	service.recentWorkspaceRootMu.Unlock()
 }
 
 type agentModelMemory interface {

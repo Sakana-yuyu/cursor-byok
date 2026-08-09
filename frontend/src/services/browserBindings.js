@@ -101,6 +101,19 @@ function readPreviewTestPlan() {
   }
 }
 const previewTestPlan = readPreviewTestPlan();
+const PREVIEW_CALLS_STORAGE_KEY = "cursor-byok.browser-preview.calls";
+
+function recordPreviewCall(name, args = []) {
+  if (!previewTestPlan?.recordCalls) return;
+  try {
+    const raw = localStorage.getItem(PREVIEW_CALLS_STORAGE_KEY);
+    const calls = raw ? JSON.parse(raw) : [];
+    calls.push({ name, args });
+    localStorage.setItem(PREVIEW_CALLS_STORAGE_KEY, JSON.stringify(calls));
+  } catch {
+    // Call recording is test-only observability and must not affect preview behavior.
+  }
+}
 
 function previewTestBalance(adapter) {
   const override = readPreviewTestPlan()?.balance;
@@ -642,12 +655,22 @@ let previewScanConfig = {
     "preview:filesystem": "基于文件系统的 MCP 服务，提供 12 个文件读写与目录操作工具。",
   },
 };
-export const GetSkillsMCPScanSnapshot = () => Promise.resolve({
-  skills: clone(previewSkills),
-  mcpServers: clone(previewMCPServers),
-  config: clone(previewScanConfig),
-});
-export const RefreshSkillsMCPScan = GetSkillsMCPScanSnapshot;
+export const GetRecentWorkspaceRoot = () => {
+  recordPreviewCall("GetRecentWorkspaceRoot");
+  return Promise.resolve(String(previewTestPlan?.recentWorkspaceRoot || ""));
+};
+export const GetSkillsMCPScanSnapshot = (workspaceRoot = "") => {
+  recordPreviewCall("GetSkillsMCPScanSnapshot", [workspaceRoot]);
+  return Promise.resolve({
+    skills: clone(previewSkills),
+    mcpServers: clone(previewMCPServers),
+    config: clone(previewScanConfig),
+  });
+};
+export const RefreshSkillsMCPScan = (workspaceRoot = "") => {
+  recordPreviewCall("RefreshSkillsMCPScan", [workspaceRoot]);
+  return GetSkillsMCPScanSnapshot(workspaceRoot);
+};
 export const SaveSkillsMCPScanConfig = (config) => {
   previewScanConfig = { ...previewScanConfig, ...(config || {}) };
   return Promise.resolve();

@@ -401,6 +401,14 @@ func (s *ProxyService) LoadUserConfig() (UserConfig, error) {
 	return s.core.LoadUserConfig()
 }
 
+// GetRecentWorkspaceRoot returns the latest workspace observed by request enrichment.
+func (s *ProxyService) GetRecentWorkspaceRoot() string {
+	if s == nil || s.core == nil {
+		return ""
+	}
+	return s.core.GetRecentWorkspaceRoot()
+}
+
 // SaveUserConfig 用于处理与 SaveUserConfig 相关的逻辑。
 func (s *ProxyService) SaveUserConfig(cfg UserConfig) error {
 	return s.core.SaveUserConfig(cfg)

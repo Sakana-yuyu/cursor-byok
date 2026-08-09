@@ -89,6 +89,20 @@ func (host *Host) HasActiveConversation(conversationID, requestID string) bool {
 	return module.Service.HasActiveConversation(conversationID, requestID)
 }
 
+// GetRecentWorkspaceRoot returns the active forwarder's latest request workspace.
+func (host *Host) GetRecentWorkspaceRoot() string {
+	if host == nil {
+		return ""
+	}
+	host.runMu.RLock()
+	module := host.agentModule
+	host.runMu.RUnlock()
+	if module == nil || module.Service == nil {
+		return ""
+	}
+	return module.Service.RecentWorkspaceRoot()
+}
+
 // DelegationTaskSnapshots returns the active forwarder's retained worker state.
 func (host *Host) DelegationTaskSnapshots() []forwarder.DelegationTaskSnapshot {
 	if host == nil {

@@ -4,6 +4,7 @@ import Card from "@/components/ui/Card.vue";
 import DelegationIconButton from "@/components/settings/delegation/DelegationIconButton.vue";
 import { useMessage } from "@/composables/useMessage";
 import { usePolling } from "@/composables/usePolling";
+import { useWorkspaceRoot } from "@/composables/useWorkspaceRoot";
 import {
   cancelDelegationTask,
   cancelMCPRuntimeConnection,
@@ -13,7 +14,7 @@ import {
   getMCPRuntimeServers,
 } from "@/services/runtimeControlApi";
 import { toUserError } from "@/state/appState";
-import { computed, onUnmounted, reactive, ref } from "vue";
+import { computed, onMounted, onUnmounted, reactive } from "vue";
 
 const props = defineProps({
   compact: { type: Boolean, default: false },
@@ -21,6 +22,7 @@ const props = defineProps({
 });
 
 const message = useMessage();
+const { workspaceRoot, initializeWorkspaceRoot, updateWorkspaceRoot } = useWorkspaceRoot();
 const taskState = reactive({ busy: false, error: "", items: [] });
 const mcpState = reactive({ busy: false, error: "", items: [] });
 const cancelingTasks = reactive({});
@@ -28,7 +30,6 @@ const mcpActions = reactive({});
 const mcpAttempts = reactive({});
 const canceledMCPAttempts = reactive({});
 const cancelingMCPAttempts = reactive({});
-const workspaceRoot = ref(window.localStorage.getItem("cursor-byok-mcp-workspace-root") || "");
 const refreshBusy = computed(() => taskState.busy || mcpState.busy);
 let attemptSequence = 0;
 let taskGeneration = 0;
@@ -316,9 +317,7 @@ async function handleDisconnectMCP(server) {
 
 function handleWorkspaceRootChange() {
   if (disposed) return;
-  activeMCPWorkspaceRoot = workspaceRoot.value.trim();
-  workspaceRoot.value = activeMCPWorkspaceRoot;
-  window.localStorage.setItem("cursor-byok-mcp-workspace-root", activeMCPWorkspaceRoot);
+  activeMCPWorkspaceRoot = updateWorkspaceRoot(workspaceRoot.value);
   mcpWorkspaceGeneration += 1;
   mcpRefreshSequence += 1;
   for (const attempt of Object.values(mcpAttempts)) {
@@ -334,8 +333,17 @@ function handleWorkspaceRootChange() {
   void refreshMCPServers();
 }
 
-usePolling(() => refreshTasks(true), { intervalMs: 1500 });
-usePolling(() => refreshMCPServers(true), { intervalMs: 5000 });
+const taskPolling = usePolling(() => refreshTasks(true), { intervalMs: 1500, immediate: false, autostart: false });
+const mcpPolling = usePolling(() => refreshMCPServers(true), { intervalMs: 5000, immediate: false, autostart: false });
+
+onMounted(async () => {
+  activeMCPWorkspaceRoot = await initializeWorkspaceRoot();
+  if (disposed) return;
+  await refreshRuntime();
+  if (disposed) return;
+  taskPolling.start();
+  mcpPolling.start();
+});
 
 onUnmounted(() => {
   disposed = true;

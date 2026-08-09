@@ -5,6 +5,7 @@ import test from "node:test";
 const sourceURL = new URL("./clientApi.js", import.meta.url);
 const browserBindingsURL = new URL("./browserBindings.js", import.meta.url);
 const skillsSettingsURL = new URL("../components/settings/categories/SkillsMcpSettings.vue", import.meta.url);
+const skillsConfigURL = new URL("../utils/skillsMcpScanConfig.js", import.meta.url);
 
 test("long-running model operations use explicit timeout budgets", async () => {
   const source = await readFile(sourceURL, "utf8");
@@ -22,15 +23,16 @@ test("long-running model operations use explicit timeout budgets", async () => {
 });
 
 test("skills scan settings use an explicit enablement whitelist", async () => {
-  const [bindingsSource, settingsSource] = await Promise.all([
+  const [bindingsSource, settingsSource, configSource] = await Promise.all([
     readFile(browserBindingsURL, "utf8"),
     readFile(skillsSettingsURL, "utf8"),
+    readFile(skillsConfigURL, "utf8"),
   ]);
 
   assert.match(bindingsSource, /enabledSkills:\s*\{\}/);
   assert.doesNotMatch(bindingsSource, /disabledSkills:\s*\{\s*"superpowers-test-driven-development"/);
   assert.match(settingsSource, /enabledSkills:\s*\{\}/);
-  assert.match(settingsSource, /config\.enabledSkills/);
+  assert.match(configSource, /config\?\.enabledSkills|config\.enabledSkills/);
   assert.match(settingsSource, /state\.enabledSkills\[normalizeConfigKey\(name\)\]/);
   assert.match(
     settingsSource,

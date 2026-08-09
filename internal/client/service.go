@@ -158,6 +158,14 @@ func (s *ProxyService) HasActiveConversation(conversationID, requestID string) b
 	return s.backendHost.HasActiveConversation(conversationID, requestID)
 }
 
+// GetRecentWorkspaceRoot returns the latest workspace seen by the embedded backend.
+func (s *ProxyService) GetRecentWorkspaceRoot() string {
+	if s == nil || s.backendHost == nil {
+		return ""
+	}
+	return s.backendHost.GetRecentWorkspaceRoot()
+}
+
 // ResetUsageMetrics 清空当前 backend writer 管理的用量统计。
 func (s *ProxyService) ResetUsageMetrics() error {
 	if s == nil || s.backendHost == nil {

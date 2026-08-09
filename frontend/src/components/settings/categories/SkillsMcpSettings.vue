@@ -4,6 +4,7 @@ import Input from "@/components/ui/Input.vue";
 import Select from "@/components/ui/Select.vue";
 import Switch from "@/components/ui/Switch.vue";
 import { useMessage } from "@/composables/useMessage";
+import { useWorkspaceRoot } from "@/composables/useWorkspaceRoot";
 import {
   getSkillsMCPScanSnapshot,
   refreshSkillsMCPScan,
@@ -17,6 +18,7 @@ import {
   disconnectMCPRuntimeServer,
 } from "@/services/runtimeControlApi";
 import { toUserError } from "@/state/appState";
+import { applySkillsMCPScanSnapshot, buildSkillsMCPScanConfig } from "@/utils/skillsMcpScanConfig";
 import { computed, defineAsyncComponent, onMounted, reactive, ref } from "vue";
 
 // md-editor-v3 体积大（含完整编辑器内核与语法高亮），只在真正打开编辑器弹窗时
@@ -37,6 +39,7 @@ const props = defineProps({
 });
 
 const message = useMessage();
+const { workspaceRoot, initializeWorkspaceRoot } = useWorkspaceRoot();
 
 const TAB_OPTIONS = [
   { id: "skills", label: "Skills" },
@@ -50,7 +53,6 @@ const STATUS_FILTER_OPTIONS = [
   { value: "error", label: "错误" },
 ];
 
-const WORKSPACE_ROOT = "";
 const TAB_ID_PREFIX = "skills-mcp-tab";
 const TAB_PANEL_ID_PREFIX = "skills-mcp-panel";
 
@@ -75,6 +77,8 @@ const state = reactive({
   enabled: true,
   skills: [],
   mcpServers: [],
+  skillSources: {},
+  mcpSources: {},
   enabledSkills: {},
   disabledMcpServers: {},
   skillSummaries: {},
@@ -207,24 +211,11 @@ function setEnabledMapEntry(map, key, enabled) {
 }
 
 function buildScanConfig() {
-  return {
-    enabled: state.enabled,
-    enabledSkills: { ...state.enabledSkills },
-    disabledMcpServers: { ...state.disabledMcpServers },
-    skillSummaries: { ...state.skillSummaries },
-    mcpSummaries: { ...state.mcpSummaries },
-  };
+  return buildSkillsMCPScanConfig(state);
 }
 
 function applySnapshot(snapshot) {
-  const config = snapshot?.config || {};
-  state.skills = Array.isArray(snapshot?.skills) ? snapshot.skills : [];
-  state.mcpServers = Array.isArray(snapshot?.mcpServers) ? snapshot.mcpServers : [];
-  state.enabled = config.enabled !== false;
-  state.enabledSkills = { ...(config.enabledSkills || {}) };
-  state.disabledMcpServers = { ...(config.disabledMcpServers || {}) };
-  state.skillSummaries = { ...(config.skillSummaries || {}) };
-  state.mcpSummaries = { ...(config.mcpSummaries || {}) };
+  applySkillsMCPScanSnapshot(state, snapshot);
 }
 
 async function loadSnapshot({ refresh = false } = {}) {
@@ -239,8 +230,8 @@ async function loadSnapshot({ refresh = false } = {}) {
   try {
     const load = async () => {
       const snapshot = refresh
-        ? await refreshSkillsMCPScan(WORKSPACE_ROOT)
-        : await getSkillsMCPScanSnapshot(WORKSPACE_ROOT);
+        ? await refreshSkillsMCPScan(workspaceRoot.value)
+        : await getSkillsMCPScanSnapshot(workspaceRoot.value);
       applySnapshot(snapshot);
     };
     if (refresh) {
@@ -394,10 +385,10 @@ async function handleMcpConnection(server) {
       await persistScanConfig(`skills-mcp.connect-${itemKey}`);
     }
     if (disconnect) {
-      await disconnectMCPRuntimeServer(identifier, WORKSPACE_ROOT);
+      await disconnectMCPRuntimeServer(identifier, workspaceRoot.value);
       message.success("已断开连接");
     } else {
-      await connectMCPRuntimeServer(identifier, attemptID, WORKSPACE_ROOT);
+      await connectMCPRuntimeServer(identifier, attemptID, workspaceRoot.value);
       message.success("连接成功");
     }
   } catch (error) {
@@ -483,7 +474,7 @@ async function openSkillEditor(skill) {
   itemState.retry = () => openSkillEditor(skill);
 
   try {
-    const file = await readSkillFile(skill.name, WORKSPACE_ROOT);
+    const file = await readSkillFile(skill.name, workspaceRoot.value);
     editorState.mode = "skill-file";
     editorState.key = itemKey;
     editorState.title = `编辑 ${skill.name}`;
@@ -500,7 +491,7 @@ async function openSkillEditor(skill) {
 async function saveSkillEditor() {
   editorState.busy = true;
   try {
-    await saveSkillFile(editorState.key, editorState.content, WORKSPACE_ROOT);
+    await saveSkillFile(editorState.key, editorState.content, workspaceRoot.value);
     editorState.visible = false;
     message.success("已保存到 SKILL.md");
     await loadSnapshot({ refresh: true });
@@ -564,7 +555,7 @@ async function generateSummary(kind, key) {
   itemState.retry = () => generateSummary(kind, key);
 
   try {
-    const summary = await generateSkillSummary(kind, key, WORKSPACE_ROOT);
+    const summary = await generateSkillSummary(kind, key, workspaceRoot.value);
     if (kind === "skill") {
       state.skillSummaries = { ...state.skillSummaries, [itemKey]: summary };
     } else {
@@ -600,7 +591,7 @@ async function generateAllSummaries() {
   try {
     for (const item of items) {
       const key = kind === "mcp" ? (item.identifier || item.name) : item.name;
-      const summary = await generateSkillSummary(kind, key, WORKSPACE_ROOT);
+      const summary = await generateSkillSummary(kind, key, workspaceRoot.value);
       const itemKey = normalizeConfigKey(key);
       if (kind === "skill") {
         state.skillSummaries = { ...state.skillSummaries, [itemKey]: summary };
@@ -660,8 +651,9 @@ const activeItems = computed(() => (
 
 const hasResults = computed(() => activeItems.value.length > 0);
 
-onMounted(() => {
-  void loadSnapshot();
+onMounted(async () => {
+  await initializeWorkspaceRoot();
+  await loadSnapshot();
 });
 </script>
 
