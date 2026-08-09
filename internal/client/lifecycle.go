@@ -60,6 +60,10 @@ type ProxyState struct {
 func (s *ProxyService) StartProxy() (ProxyState, error) {
 	s.lifecycleMu.Lock()
 	defer s.lifecycleMu.Unlock()
+	phaseStart := time.Now()
+	logPhase := func(name string) {
+		logger.Infof("startup phase=%s elapsed=%s", name, time.Since(phaseStart).Round(time.Millisecond))
+	}
 
 	logger.Infof("start service requested config_path=%s logs_root=%s", s.configPath, s.logsRoot)
 	fail := func(step string, err error) (ProxyState, error) {
@@ -82,6 +86,7 @@ func (s *ProxyService) StartProxy() (ProxyState, error) {
 	if err := s.ensureBackendHost(); err != nil {
 		return fail("ensure_backend_host", err)
 	}
+	logPhase("backend-host-ready")
 	if !s.backendHost.IsRunning() {
 		logger.Infof("starting embedded backend listen_addr=%s", s.backendHost.ListenAddr())
 		if err := s.backendHost.Start(); err != nil {
@@ -90,15 +95,18 @@ func (s *ProxyService) StartProxy() (ProxyState, error) {
 	} else {
 		logger.Infof("embedded backend already running listen_addr=%s", s.backendHost.ListenAddr())
 	}
+	logPhase("backend-started")
 	healthCtx, healthCancel := context.WithTimeout(context.Background(), backendReadyTimeout)
 	defer healthCancel()
 	if err := s.waitForBackend(healthCtx); err != nil {
 		return fail("wait_backend_ready", err)
 	}
 	logger.Infof("embedded backend ready listen_addr=%s", s.backendHost.ListenAddr())
+	logPhase("backend-ready")
 	if err := s.ensureProxy(cfg); err != nil {
 		return fail("ensure_proxy", err)
 	}
+	logPhase("proxy-ensure")
 
 	// 启动时注入账号信息
 	if err := cursor.InjectCursorUserInfo(localruntime.InjectAccountEmail, localruntime.InjectAuthToken); err != nil {
@@ -123,7 +131,9 @@ func (s *ProxyService) StartProxy() (ProxyState, error) {
 			return fail("start_mitm_proxy", err)
 		}
 	}
+	logPhase("mitm-started")
 
+	logPhase("apply-cursor-settings")
 	if err := s.ApplyCursorSettings(); err != nil {
 		stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer stopCancel()

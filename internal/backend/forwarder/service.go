@@ -134,6 +134,11 @@ type contextWindowPersister interface {
 }
 
 // NewService 使用默认依赖创建 forwarder 服务。
+// transcriptBackfillOnce 保证 Cursor 记录回填每个进程只执行一次：
+// NewService 在启动链路里会被构造两次（NewHost 与 Host.Start 各一次），
+// 配置保存时的 rebuild 也会再次构造，重复同步会白白占用磁盘 I/O。
+var transcriptBackfillOnce sync.Once
+
 func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Service {
 	toolCatalog := NewToolCatalog()
 	projector := NewHistoryProjector()
@@ -222,7 +227,13 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 	service.localDelegation = newLocalDelegatedAgentAdapter(service)
 	service.multitaskDelegation = newMultitaskDelegationCoordinator(service, delegationConfig)
 	service.startHistoryMaintenance()
-	store.SyncAllCursorTranscriptsBestEffort()
+	// Cursor 记录回填是 best-effort 维护任务：历史目录可能包含上千会话、数百 MB 数据，
+	// 同步扫描会拖慢应用窗口与后端启动（实测各约 8s）。改为进程内只执行一次的后台任务。
+	transcriptBackfillOnce.Do(func() {
+		safego.Go("forwarder:transcript-backfill", func() {
+			store.SyncAllCursorTranscriptsBestEffort()
+		})
+	})
 	return service
 }
 

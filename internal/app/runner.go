@@ -77,6 +77,10 @@ func Run(resources EmbeddedResources) error {
 	logger.Init()
 	netproxy.InstallDefaultTransport()
 	appName := i18n.T(i18n.DefaultLocale, appNameKey)
+	startupStart := time.Now()
+	logStartupPhase := func(name string) {
+		logger.Infof("startup phase=%s elapsed=%s", name, time.Since(startupStart).Round(time.Millisecond))
+	}
 
 	certManager, certErr := certs.NewPersistentManager(appdata.CACertFilePath(), appdata.CAKeyFilePath())
 	if certErr != nil {
@@ -91,6 +95,7 @@ func Run(resources EmbeddedResources) error {
 		embeddedCACertPEM = certManager.CACertPEM()
 	}
 	logEmbeddedCAInfo(embeddedCACertPEM)
+	logStartupPhase("certs-ready")
 
 	defaultBackendBaseURL := "http://" + serverconfig.DefaultBackendListenAddr
 	proxyServer, err := mitm.NewProxyServer(serverconfig.DefaultProxyListenAddr, defaultBackendBaseURL, "", "", certManager)
@@ -98,6 +103,7 @@ func Run(resources EmbeddedResources) error {
 		return err
 	}
 	proxyService := bridge.NewProxyService(proxyServer, certManager, embeddedCACertPEM)
+	logStartupPhase("proxy-service")
 	if certErr != nil {
 		proxyService.MarkCAIncomplete(certErr.Error())
 	}
@@ -151,6 +157,7 @@ func Run(resources EmbeddedResources) error {
 		},
 	})
 	adService := bridge.NewAdService(adCore)
+	logStartupPhase("services")
 	var updateManager *updater.Manager
 
 	var mainWindow *application.WebviewWindow
@@ -234,6 +241,7 @@ func Run(resources EmbeddedResources) error {
 		})
 	}
 
+	logStartupPhase("application-new")
 	updateManager = updater.NewManager(app)
 
 	windowService.SetApp(app)
@@ -276,6 +284,7 @@ func Run(resources EmbeddedResources) error {
 		},
 	})
 
+	logStartupPhase("window-created")
 	window := mainWindow
 	windowService.SetMainWindow(window)
 	quitting := false
@@ -451,6 +460,7 @@ func Run(resources EmbeddedResources) error {
 	systray.OnClick(toggleMainWindow).SetMenu(menu)
 	refreshTray()
 
+	logStartupPhase("before-run")
 	return app.Run()
 }
 
