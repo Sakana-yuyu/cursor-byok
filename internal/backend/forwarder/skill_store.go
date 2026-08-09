@@ -55,10 +55,10 @@ type SkillStore struct {
 	// activator 实现调用链稀疏激活；为 nil 时退化为全量注入（保持旧行为）。
 	activator *SkillActivator
 	// convStore 可选，用于读写会话父子激活集；为 nil 时父子传递降级。
-	convStore      *ConversationFileStore
-	scanEnabled    bool
-	skillSources   map[string]bool
-	disabledSkills map[string]bool
+	convStore     *ConversationFileStore
+	scanEnabled   bool
+	skillSources  map[string]bool
+	enabledSkills map[string]bool
 }
 
 // NewSkillStore 创建 SkillStore。root 为空时 Scan 始终返回空。
@@ -69,14 +69,14 @@ func NewSkillStore(root string) *SkillStore {
 }
 
 // SetScanSettings keeps system-prompt skill activation aligned with the settings UI.
-func (s *SkillStore) SetScanSettings(enabled bool, sources map[string]bool, disabled map[string]bool) {
+func (s *SkillStore) SetScanSettings(enabled bool, sources map[string]bool, enabledSkills map[string]bool) {
 	if s == nil {
 		return
 	}
 	s.mu.Lock()
 	s.scanEnabled = enabled
 	s.skillSources = cloneSkillSettingMap(sources)
-	s.disabledSkills = cloneSkillSettingMap(disabled)
+	s.enabledSkills = cloneSkillSettingMap(enabledSkills)
 	s.mu.Unlock()
 }
 
@@ -97,10 +97,10 @@ func (s *SkillStore) Scan() ([]GlobalSkill, error) {
 }
 
 type skillStoreScanSnapshot struct {
-	root           string
-	scanEnabled    bool
-	skillSources   map[string]bool
-	disabledSkills map[string]bool
+	root          string
+	scanEnabled   bool
+	skillSources  map[string]bool
+	enabledSkills map[string]bool
 }
 
 // ScanForWorkspace scans skills for the explicit workspace without mutating shared store scope.
@@ -110,10 +110,10 @@ func (s *SkillStore) ScanForWorkspace(workspaceRoot string) ([]GlobalSkill, erro
 	}
 	s.mu.Lock()
 	snapshot := skillStoreScanSnapshot{
-		root:           s.root,
-		scanEnabled:    s.scanEnabled,
-		skillSources:   cloneSkillSettingMap(s.skillSources),
-		disabledSkills: cloneSkillSettingMap(s.disabledSkills),
+		root:          s.root,
+		scanEnabled:   s.scanEnabled,
+		skillSources:  cloneSkillSettingMap(s.skillSources),
+		enabledSkills: cloneSkillSettingMap(s.enabledSkills),
 	}
 	s.mu.Unlock()
 	if snapshot.root == "" {
@@ -128,13 +128,13 @@ func (s *SkillStore) ScanForWorkspace(workspaceRoot string) ([]GlobalSkill, erro
 // 在其基础上补齐 root（旧 BYOK 目录）里多源扫描未覆盖的技能，保证向后兼容。
 // 结果按 name 去重、排序，交给激活器做 BM25 Top-K 稀疏激活。
 func scanSkillsForWorkspace(workspaceRoot string, snapshot skillStoreScanSnapshot) ([]GlobalSkill, error) {
-	if !snapshot.scanEnabled {
+	if !snapshot.scanEnabled || !hasEnabledSkillSetting(snapshot.enabledSkills) {
 		return nil, nil
 	}
 	settings := SkillMCPScanSettings{
-		Enabled:        true,
-		SkillSources:   snapshot.skillSources,
-		DisabledSkills: snapshot.disabledSkills,
+		Enabled:       true,
+		SkillSources:  snapshot.skillSources,
+		EnabledSkills: snapshot.enabledSkills,
 	}
 	merged := filterScannedSkills(ScanAllSkills(workspaceRoot), settings)
 	seen := make(map[string]struct{}, len(merged))
@@ -158,7 +158,7 @@ func scanSkillsForWorkspace(workspaceRoot string, snapshot skillStoreScanSnapsho
 				if key == "" {
 					continue
 				}
-				if snapshot.disabledSkills != nil && snapshot.disabledSkills[key] {
+				if snapshot.enabledSkills == nil || !snapshot.enabledSkills[key] {
 					continue
 				}
 				if _, exists := seen[key]; exists {
@@ -176,6 +176,15 @@ func scanSkillsForWorkspace(workspaceRoot string, snapshot skillStoreScanSnapsho
 		return skills[i].Name < skills[j].Name
 	})
 	return skills, nil
+}
+
+func hasEnabledSkillSetting(settings map[string]bool) bool {
+	for _, enabled := range settings {
+		if enabled {
+			return true
+		}
+	}
+	return false
 }
 
 func cloneSkillSettingMap(source map[string]bool) map[string]bool {
@@ -434,6 +443,12 @@ func readSkillFile(path string) (GlobalSkill, bool) {
 		FullPath:    absPath,
 	}
 	return skill, len(diagnostics) == 0
+}
+
+// IsSkillManifestValid reports whether path contains a readable, valid SKILL.md manifest.
+func IsSkillManifestValid(path string) bool {
+	_, ok := readSkillFile(path)
+	return ok
 }
 
 type skillManifestMetadata struct {

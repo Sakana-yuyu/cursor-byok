@@ -132,7 +132,9 @@ type SkillMCPScanConfig struct {
 	SkillSources map[string]bool `json:"skillSources,omitempty" yaml:"skillSources,omitempty"`
 	// MCPSources 按工具分类控制 MCP 配置扫描来源；缺省全部启用。
 	MCPSources map[string]bool `json:"mcpSources,omitempty" yaml:"mcpSources,omitempty"`
-	// DisabledSkills 显式禁用的技能名集合（小写匹配），不注入提示。
+	// EnabledSkills 显式启用的技能名集合（小写匹配）；缺省表示全部关闭。
+	EnabledSkills map[string]bool `json:"enabledSkills,omitempty" yaml:"enabledSkills,omitempty"`
+	// DisabledSkills 是旧版黑名单字段，仅保留配置反序列化兼容。
 	DisabledSkills map[string]bool `json:"disabledSkills,omitempty" yaml:"disabledSkills,omitempty"`
 	// DisabledMCPServers 显式禁用的 MCP server identifier 集合（小写匹配）。
 	DisabledMCPServers map[string]bool `json:"disabledMcpServers,omitempty" yaml:"disabledMcpServers,omitempty"`

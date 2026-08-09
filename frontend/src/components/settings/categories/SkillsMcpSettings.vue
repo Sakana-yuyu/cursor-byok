@@ -75,7 +75,7 @@ const state = reactive({
   enabled: true,
   skills: [],
   mcpServers: [],
-  disabledSkills: {},
+  enabledSkills: {},
   disabledMcpServers: {},
   skillSummaries: {},
   mcpSummaries: {},
@@ -196,10 +196,20 @@ function setDisabledMapEntry(map, key, disabled) {
   return next;
 }
 
+function setEnabledMapEntry(map, key, enabled) {
+  const next = { ...(map || {}) };
+  if (enabled) {
+    next[key] = true;
+  } else {
+    delete next[key];
+  }
+  return next;
+}
+
 function buildScanConfig() {
   return {
     enabled: state.enabled,
-    disabledSkills: { ...state.disabledSkills },
+    enabledSkills: { ...state.enabledSkills },
     disabledMcpServers: { ...state.disabledMcpServers },
     skillSummaries: { ...state.skillSummaries },
     mcpSummaries: { ...state.mcpSummaries },
@@ -211,7 +221,7 @@ function applySnapshot(snapshot) {
   state.skills = Array.isArray(snapshot?.skills) ? snapshot.skills : [];
   state.mcpServers = Array.isArray(snapshot?.mcpServers) ? snapshot.mcpServers : [];
   state.enabled = config.enabled !== false;
-  state.disabledSkills = { ...(config.disabledSkills || {}) };
+  state.enabledSkills = { ...(config.enabledSkills || {}) };
   state.disabledMcpServers = { ...(config.disabledMcpServers || {}) };
   state.skillSummaries = { ...(config.skillSummaries || {}) };
   state.mcpSummaries = { ...(config.mcpSummaries || {}) };
@@ -287,7 +297,7 @@ async function handleScanEnabledChange(enabled) {
 }
 
 function isSkillEnabled(name) {
-  return !state.disabledSkills[normalizeConfigKey(name)];
+  return Boolean(state.enabledSkills[normalizeConfigKey(name)]);
 }
 
 function isMcpEnabled(identifier) {
@@ -302,7 +312,7 @@ async function handleSkillToggle(skill, enabled) {
 
   const itemState = ensureSkillState(itemKey);
   const previousValue = isSkillEnabled(skill?.name);
-  state.disabledSkills = setDisabledMapEntry(state.disabledSkills, itemKey, !enabled);
+  state.enabledSkills = setEnabledMapEntry(state.enabledSkills, itemKey, enabled);
   itemState.busy = true;
   itemState.error = "";
   itemState.retry = () => handleSkillToggle(skill, enabled);
@@ -312,7 +322,7 @@ async function handleSkillToggle(skill, enabled) {
       await persistScanConfig(`skills-mcp.skill.${itemKey}`);
       itemState.error = "";
     } catch (error) {
-      state.disabledSkills = setDisabledMapEntry(state.disabledSkills, itemKey, !previousValue);
+      state.enabledSkills = setEnabledMapEntry(state.enabledSkills, itemKey, previousValue);
       itemState.error = toUserError(error);
       throw error;
     } finally {
@@ -781,6 +791,13 @@ onMounted(() => {
             </button>
           </div>
         </div>
+
+        <p
+          v-if="state.activeTab === 'skills'"
+          class="border-l-2 border-[#10AD5D] bg-[#173022]/55 px-3 py-2 text-xs leading-5 text-[#a7d8bd]"
+        >
+          技能默认关闭。启用后，技能只会进入 BYOK 候选池，并不会在每次请求中全部注入；系统会根据当前任务的相关性稀疏激活并注入少量技能，以减少扫描和提示词开销。此开关只控制 BYOK 扫描；Cursor 客户端显式附带的技能仍可能生效。
+        </p>
 
         <div
           class="min-h-[240px] rounded-[8px] border border-[#343434] bg-[#252525]/40"

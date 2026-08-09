@@ -58,3 +58,81 @@ func TestFailWithDetailsPublishesStructuredTerminalMetadata(t *testing.T) {
 		t.Fatalf("terminal diagnostics = trace %q code %q disposition %q attempts %d", got.TerminalTraceID, got.TerminalAppErrorCode, got.TerminalDisposition, got.TerminalRetryAttemptCount)
 	}
 }
+
+func TestFailWithDetailsDoesNotOverrideCompletedStream(t *testing.T) {
+	broker := NewStreamBroker()
+	stream, err := broker.OpenStream("request-completed", "conversation-completed", 1, "model", "model", 1, "")
+	if err != nil {
+		t.Fatalf("OpenStream() error = %v", err)
+	}
+	if err := broker.Complete(stream.RequestID, "", "done"); err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+
+	if err := broker.FailWithDetails(stream.RequestID, TerminalFailure{Code: "late_failure"}); err != nil {
+		t.Fatalf("FailWithDetails() error = %v", err)
+	}
+
+	if stream.Status != StreamStatusCompleted {
+		t.Fatalf("stream status = %q, want %q", stream.Status, StreamStatusCompleted)
+	}
+	events, err := broker.ReadFromCursor(stream.RequestID, 0)
+	if err != nil {
+		t.Fatalf("ReadFromCursor() error = %v", err)
+	}
+	if len(events) != 1 || !events[0].End || events[0].TerminalErrorCode != "" {
+		t.Fatalf("terminal events = %#v, want only the completed event", events)
+	}
+}
+
+func TestFailWithDetailsDoesNotOverrideCanceledStream(t *testing.T) {
+	broker := NewStreamBroker()
+	stream, err := broker.OpenStream("request-canceled", "conversation-canceled", 1, "model", "model", 1, "")
+	if err != nil {
+		t.Fatalf("OpenStream() error = %v", err)
+	}
+	if err := broker.Cancel(stream.RequestID, "user canceled"); err != nil {
+		t.Fatalf("Cancel() error = %v", err)
+	}
+
+	if err := broker.FailWithDetails(stream.RequestID, TerminalFailure{Code: "late_failure"}); err != nil {
+		t.Fatalf("FailWithDetails() error = %v", err)
+	}
+
+	if stream.Status != StreamStatusCanceled {
+		t.Fatalf("stream status = %q, want %q", stream.Status, StreamStatusCanceled)
+	}
+	events, err := broker.ReadFromCursor(stream.RequestID, 0)
+	if err != nil {
+		t.Fatalf("ReadFromCursor() error = %v", err)
+	}
+	if len(events) != 1 || !events[0].End || events[0].TerminalErrorCode != "canceled" {
+		t.Fatalf("terminal events = %#v, want only the canceled event", events)
+	}
+}
+
+func TestCancelDoesNotOverrideCompletedStream(t *testing.T) {
+	broker := NewStreamBroker()
+	stream, err := broker.OpenStream("request-complete-cancel", "conversation-complete-cancel", 1, "model", "model", 1, "")
+	if err != nil {
+		t.Fatalf("OpenStream() error = %v", err)
+	}
+	if err := broker.Complete(stream.RequestID, "", "done"); err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+
+	if err := broker.Cancel(stream.RequestID, "late cancel"); err != nil {
+		t.Fatalf("Cancel() error = %v", err)
+	}
+
+	if stream.Status != StreamStatusCompleted {
+		t.Fatalf("stream status = %q, want %q", stream.Status, StreamStatusCompleted)
+	}
+	events, err := broker.ReadFromCursor(stream.RequestID, 0)
+	if err != nil {
+		t.Fatalf("ReadFromCursor() error = %v", err)
+	}
+	if len(events) != 1 || !events[0].End || events[0].TerminalErrorCode != "" {
+		t.Fatalf("terminal events = %#v, want only the completed event", events)
+	}
+}

@@ -115,14 +115,6 @@ func TestApplyGoalCommandIfEnabled(t *testing.T) {
 	}
 }
 
-func TestGoalSnapshotsEmpty(t *testing.T) {
-	service := &Service{goals: make(map[string]*GoalState)}
-	snaps := service.GoalSnapshots()
-	if len(snaps) != 0 {
-		t.Fatalf("expected empty snapshots, got %d", len(snaps))
-	}
-}
-
 func TestGoalSystemPromptFragment(t *testing.T) {
 	goal := &GoalState{GoalText: "修复全部测试"}
 	cfg := defaultGoalRuntimeConfig()

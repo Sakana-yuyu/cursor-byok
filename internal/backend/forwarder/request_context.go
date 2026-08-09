@@ -174,6 +174,7 @@ func hasRealtimeRequestContextContent(requestContext *agentv1.RequestContext) bo
 		return false
 	}
 	return len(requestContext.GetRules()) > 0 ||
+		len(requestContext.GetNonFileRules()) > 0 ||
 		len(requestContext.GetFileContents()) > 0 ||
 		strings.TrimSpace(requestContext.GetMcpFileSystemOptions().GetWorkspaceProjectDir()) != "" ||
 		strings.TrimSpace(requestContext.GetUserIntentSummary()) != "" ||

@@ -26,7 +26,7 @@ function settingsCategoryFromRoute(value) {
 
 const initialCategory = settingsCategoryFromRoute(route.query.category);
 const selectedCategory = ref(initialCategory || readStoredSettingsCategory());
-const moreExpanded = ref(false);
+const moreExpanded = ref(true);
 const sidebarCollapsed = ref(readStoredSidebarCollapsed());
 
 function syncMoreExpanded(categoryID) {
@@ -46,6 +46,14 @@ watch(selectedCategory, (value) => {
   }
   writeStoredSettingsCategory(normalized);
   syncMoreExpanded(normalized);
+
+  const routeCategory = settingsCategoryFromRoute(route.query.category);
+  if (routeCategory !== normalized) {
+    void router.push({
+      path: "/settings",
+      query: { ...route.query, category: normalized },
+    });
+  }
 });
 
 watch(sidebarCollapsed, (value) => {
@@ -105,10 +113,20 @@ function handleBack() {
           />
         </div>
 
-        <div class="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pr-1 sm:pr-2">
-          <div class="flex w-full min-w-0 flex-col gap-6 pb-8 pt-6 2xl:max-w-[1280px]">
+        <div
+          class="min-h-0 min-w-0 flex-1 overflow-x-hidden overscroll-contain pr-1 sm:pr-2"
+          :class="activeCategory.id === 'history' ? 'overflow-y-hidden' : 'overflow-y-auto'"
+        >
+          <div
+            class="flex w-full min-w-0 flex-col gap-6 pt-6 2xl:max-w-[1280px]"
+            :class="activeCategory.id === 'history' ? 'h-full min-h-0 pb-0' : 'pb-8'"
+          >
             <Transition name="settings-category" mode="out-in">
-              <div :key="selectedCategory" class="settings-category-panel min-w-0">
+              <div
+                :key="selectedCategory"
+                class="settings-category-panel min-w-0"
+                :class="activeCategory.id === 'history' ? 'h-full min-h-0' : ''"
+              >
                 <component
                   :is="activeCategoryComponent"
                   v-if="activeCategoryComponent"

@@ -86,6 +86,9 @@ func (store *Store) Load(_ context.Context) (Config, error) {
 	if hasDelegationEnabled && !yamlHasNestedKey(data, "delegation", "maxConcurrency") {
 		current.Delegation.MaxConcurrency = DefaultDelegationMaxConcurrency
 	}
+	if !yamlHasKey(data, "goal") {
+		current.Goal = DefaultGoalConfig()
+	}
 	normalized, err := NormalizeConfig(current)
 	if err != nil {
 		return DefaultConfig(), err
@@ -160,6 +163,9 @@ func shouldPersistNormalizedConfig(raw []byte, current Config, normalized Config
 		return true
 	}
 	if !reflect.DeepEqual(current.Delegation, normalized.Delegation) {
+		return true
+	}
+	if !yamlHasKey(raw, "goal") {
 		return true
 	}
 	return false

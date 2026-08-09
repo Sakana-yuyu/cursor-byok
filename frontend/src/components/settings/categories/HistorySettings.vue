@@ -4,7 +4,7 @@ import { useMessage } from "@/composables/useMessage";
 import { showModal } from "@/composables/useModal";
 import { clearHistory, deleteHistoryDebugLogs, deleteHistorySessions, getHistorySessions } from "@/services/runtimeControlApi";
 import { toUserError } from "@/state/appState";
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import copyTextToClipboard from "copy-text-to-clipboard";
 
@@ -25,6 +25,18 @@ const deleting = ref(false);
 const clearing = ref(false);
 const cleaningDebug = ref(false);
 const collapsed = reactive(new Set());
+const HISTORY_VIEW_MODE_KEY = "cursor-byok.history.view-mode";
+
+function readHistoryViewMode() {
+  try {
+    return localStorage.getItem(HISTORY_VIEW_MODE_KEY) === "details" ? "details" : "icons";
+  } catch {
+    return "icons";
+  }
+}
+
+const historyViewMode = ref(readHistoryViewMode());
+const historyPath = ref([]);
 
 const totalSizeBytes = computed(() =>
   sessions.value.reduce((total, session) => total + Number(session.sizeBytes || 0), 0),
@@ -74,6 +86,57 @@ const groupedTree = computed(() => {
             ),
           })),
       })),
+  }));
+});
+
+const currentYear = computed(() =>
+  groupedTree.value.find((year) => year.key === historyPath.value[0]),
+);
+const currentMonth = computed(() =>
+  currentYear.value?.months.find((month) => month.key === historyPath.value[1]),
+);
+const currentDay = computed(() =>
+  currentMonth.value?.days.find((day) => day.key === historyPath.value[2]),
+);
+
+const historyBreadcrumbs = computed(() => {
+  const items = [{ key: "root", label: "历史记录", depth: 0 }];
+  if (currentYear.value) items.push({ key: currentYear.value.key, label: currentYear.value.label, depth: 1 });
+  if (currentMonth.value) items.push({ key: currentMonth.value.key, label: formatMonthLabel(currentMonth.value.label), depth: 2 });
+  if (currentDay.value) items.push({ key: currentDay.value.key, label: formatDayLabel(currentDay.value.label), depth: 3 });
+  return items;
+});
+
+const currentIconItems = computed(() => {
+  if (historyPath.value.length === 0) {
+    return groupedTree.value.map((year) => ({
+      kind: "folder",
+      key: year.key,
+      label: year.label,
+      sessionCount: year.sessionCount,
+    }));
+  }
+  if (historyPath.value.length === 1) {
+    return (currentYear.value?.months || []).map((month) => ({
+      kind: "folder",
+      key: month.key,
+      label: formatMonthLabel(month.label),
+      sessionCount: month.sessionCount,
+    }));
+  }
+  if (historyPath.value.length === 2) {
+    return (currentMonth.value?.days || []).map((day) => ({
+      kind: "folder",
+      key: day.key,
+      label: formatDayLabel(day.label),
+      sessionCount: day.sessionCount,
+    }));
+  }
+  return (currentDay.value?.sessions || []).map((session) => ({
+    kind: "session",
+    key: session.id,
+    label: sessionTitle(session),
+    session,
   }));
 });
 
@@ -146,6 +209,38 @@ function formatTime(unixMs) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
+function setHistoryViewMode(mode) {
+  historyViewMode.value = mode === "details" ? "details" : "icons";
+}
+
+function enterHistoryFolder(item) {
+  if (item?.kind !== "folder") return;
+  historyPath.value = [...historyPath.value, item.key];
+}
+
+function navigateHistoryPath(depth) {
+  historyPath.value = historyPath.value.slice(0, Math.max(0, Number(depth) || 0));
+}
+
+function navigateHistoryUp() {
+  navigateHistoryPath(historyPath.value.length - 1);
+}
+
+function handleIconSessionDoubleClick(session) {
+  if (session?.hasDebug) openInDiagnostics(session.id);
+}
+
+function formatModifiedTime(unixMs) {
+  const value = Number(unixMs || 0);
+  if (value <= 0) return "-";
+  const date = new Date(value);
+  return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")} ${formatTime(value)}`;
+}
+
+function sessionType(session) {
+  return String(session.subagentType || session.mode || "agent");
+}
+
 function sessionTitle(session) {
   return session.title || `对话 ${String(session.id).slice(0, 8)}`;
 }
@@ -212,6 +307,14 @@ function toggleSession(id) {
     selectedIDs.add(id);
   }
 }
+
+watch(historyViewMode, (mode) => {
+  try {
+    localStorage.setItem(HISTORY_VIEW_MODE_KEY, mode);
+  } catch {
+    // The view remains usable when browser storage is unavailable.
+  }
+});
 
 async function refresh() {
   if (loading.value) return;
@@ -291,9 +394,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <Card>
-    <div class="flex h-[min(42rem,calc(100dvh-14rem))] min-h-0 min-w-0 flex-col">
-      <header class="grid gap-4 border-b border-white/[0.07] pb-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+  <Card class="h-full min-h-0 overflow-hidden [&>div]:min-h-0 [&>div]:overflow-hidden">
+    <div data-testid="history-panel" class="flex h-full min-h-[34rem] min-w-0 flex-col">
+      <header class="grid gap-3 border-b border-white/[0.07] pb-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
         <div class="min-w-0">
           <div class="flex items-center gap-2.5">
             <span class="grid size-8 shrink-0 place-items-center rounded-[8px] bg-[#10AD5D]/10 text-[#65d99b]">
@@ -304,7 +407,7 @@ onMounted(() => {
               <p class="mt-0.5 text-[11px] text-[#737373]">管理本地会话记录、终态与调试数据</p>
             </div>
           </div>
-          <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 pl-[42px] text-[11px] text-[#858585]">
+          <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 pl-[42px] text-[11px] text-[#858585]">
             <span><strong class="font-medium tabular-nums text-[#d4d4d4]">{{ sessions.length }}</strong> 个会话</span>
             <span>会话历史 <strong class="font-medium tabular-nums text-[#d4d4d4]">{{ formatSize(totalSizeBytes) }}</strong></span>
             <span>调试日志 <strong class="font-medium tabular-nums text-[#d4d4d4]">{{ formatSize(totalDebugSizeBytes) }}</strong></span>
@@ -354,7 +457,7 @@ onMounted(() => {
         </button>
       </div>
 
-      <div v-if="sessions.length > 0" class="mt-3 flex flex-wrap items-center gap-2 rounded-[8px] border border-white/[0.07] bg-white/[0.025] px-2.5 py-2">
+      <div v-if="sessions.length > 0" class="mt-2.5 flex flex-wrap items-center gap-2 rounded-[7px] border border-white/[0.07] bg-white/[0.025] px-2.5 py-1.5">
         <button
           type="button"
           class="center-row h-7 gap-1.5 rounded-[6px] border border-white/[0.09] bg-white/[0.04] px-2.5 text-[11px] text-[#b9b9b9] transition-colors hover:border-[#10AD5D]/30 hover:bg-[#10AD5D]/[0.08] hover:text-white"
@@ -377,6 +480,30 @@ onMounted(() => {
           {{ selectedCount > 0 ? `已选择 ${selectedCount} 个会话` : "勾选会话后进行批量清理或删除" }}
         </span>
         <div class="ml-auto flex flex-wrap items-center gap-2">
+          <div class="flex h-7 items-center overflow-hidden rounded-[6px] border border-white/[0.09] bg-black/[0.12]" role="group" aria-label="历史视图">
+            <button
+              type="button"
+              class="grid size-7 place-items-center transition-colors hover:text-white"
+              :class="historyViewMode === 'icons' ? 'bg-white/[0.09] text-[#e5e5e5]' : 'text-[#777]'"
+              :aria-pressed="historyViewMode === 'icons'"
+              title="图标视图"
+              aria-label="图标视图"
+              @click="setHistoryViewMode('icons')"
+            >
+              <span class="icon-[mdi--view-grid-outline] text-[15px]" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              class="grid size-7 place-items-center border-l border-white/[0.07] transition-colors hover:text-white"
+              :class="historyViewMode === 'details' ? 'bg-white/[0.09] text-[#e5e5e5]' : 'text-[#777]'"
+              :aria-pressed="historyViewMode === 'details'"
+              title="详细信息视图"
+              aria-label="详细信息视图"
+              @click="setHistoryViewMode('details')"
+            >
+              <span class="icon-[mdi--view-list-outline] text-[16px]" aria-hidden="true" />
+            </button>
+          </div>
           <button
             type="button"
             class="center-row h-7 gap-1.5 rounded-[6px] border border-white/[0.08] bg-white/[0.03] px-2.5 text-[11px] text-[#9d9d9d] transition-colors hover:border-white/15 hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
@@ -406,101 +533,181 @@ onMounted(() => {
         </div>
       </div>
 
-      <div v-else class="mt-3 min-h-0 flex-1 overflow-hidden rounded-[9px] border border-white/[0.07] bg-black/[0.12]">
-        <div class="h-full space-y-1 overflow-y-auto overscroll-contain p-1.5 pr-1">
-          <div v-for="year in groupedTree" :key="year.key" class="overflow-hidden rounded-[7px]">
+      <div
+        v-else-if="historyViewMode === 'icons'"
+        data-testid="history-list-viewport"
+        class="mt-2.5 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[8px] border border-white/[0.08] bg-[#202124]"
+      >
+        <div class="flex min-h-10 shrink-0 items-center gap-2 border-b border-white/[0.08] bg-[#292a2d] px-2">
+          <button
+            type="button"
+            class="grid size-7 shrink-0 place-items-center rounded-[5px] text-[#8a8a8a] transition-colors hover:bg-white/[0.06] hover:text-white disabled:opacity-30"
+            :disabled="historyPath.length === 0"
+            title="返回上级"
+            aria-label="返回上级"
+            @click="navigateHistoryUp"
+          >
+            <span class="icon-[mdi--arrow-up] text-[16px]" aria-hidden="true" />
+          </button>
+          <nav aria-label="历史路径" class="flex min-w-0 items-center overflow-hidden rounded-[5px] border border-white/[0.07] bg-black/[0.1] px-1 py-0.5">
+            <template v-for="(crumb, index) in historyBreadcrumbs" :key="crumb.key">
+              <span v-if="index > 0" class="icon-[mdi--chevron-right] shrink-0 text-[14px] text-[#555]" aria-hidden="true" />
+              <button
+                type="button"
+                class="max-w-[180px] truncate rounded-[4px] px-2 py-1 text-[11px] transition-colors hover:bg-white/[0.06] hover:text-white"
+                :class="index === historyBreadcrumbs.length - 1 ? 'text-[#d0d0d0]' : 'text-[#858585]'"
+                @click="navigateHistoryPath(crumb.depth)"
+              >
+                {{ crumb.label }}
+              </button>
+            </template>
+          </nav>
+        </div>
+
+        <ul
+          role="list"
+          aria-label="历史图标视图"
+          class="grid min-h-0 flex-1 auto-rows-[76px] grid-cols-1 content-start gap-x-6 gap-y-2 overflow-y-auto overscroll-contain p-3 sm:grid-cols-2"
+        >
+          <li
+            v-for="item in currentIconItems"
+            :key="item.key"
+            class="min-w-0"
+            :aria-selected="item.kind === 'session' ? (selectedIDs.has(item.session.id) ? 'true' : 'false') : undefined"
+            :tabindex="item.kind === 'session' ? 0 : undefined"
+            @click="item.kind === 'session' ? toggleSession(item.session.id) : undefined"
+            @dblclick="item.kind === 'session' ? handleIconSessionDoubleClick(item.session) : undefined"
+            @keydown.space.prevent="item.kind === 'session' ? toggleSession(item.session.id) : undefined"
+          >
             <button
+              v-if="item.kind === 'folder'"
               type="button"
-              class="group flex w-full items-center gap-2 rounded-[6px] px-2.5 py-2 text-left text-xs font-medium text-[#e5e5e5] transition-colors hover:bg-white/[0.045]"
-              @click="toggleCollapsed(year.key)"
+              class="group flex h-[76px] w-full min-w-0 items-center gap-3 rounded-[5px] px-3 text-left transition-colors hover:bg-white/[0.055] focus-visible:bg-white/[0.055] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#10AD5D]/40"
+              :aria-label="`${item.label}，${item.sessionCount} 个会话`"
+              @dblclick="enterHistoryFolder(item)"
             >
-              <span
-                class="icon-[mdi--chevron-down] text-[16px] text-[#666] transition-transform duration-150"
-                :class="isCollapsed(year.key) ? '-rotate-90' : ''"
-                aria-hidden="true"
-              />
-              <span class="icon-[mdi--calendar-blank-outline] text-[15px] text-[#929292]" aria-hidden="true" />
-              <span class="min-w-0 truncate">{{ year.label }}</span>
-              <span class="ml-auto shrink-0 rounded-full bg-white/[0.045] px-2 py-0.5 text-[10px] font-normal tabular-nums text-[#737373]">{{ year.sessionCount }}</span>
+              <span class="relative grid size-12 shrink-0 place-items-center text-[#e5b93f]">
+                <span class="icon-[mdi--folder] text-[44px] drop-shadow-[0_2px_1px_rgba(0,0,0,0.35)]" aria-hidden="true" />
+              </span>
+              <span class="min-w-0">
+                <span class="block truncate text-xs text-[#e3e3e3]">{{ item.label }}</span>
+                <span class="mt-1 block text-[10px] tabular-nums text-[#6f6f6f]">{{ item.sessionCount }} 个会话</span>
+              </span>
             </button>
-            <div v-if="!isCollapsed(year.key)" class="ml-[17px] border-l border-white/[0.07] pl-2">
-              <div v-for="month in year.months" :key="month.key">
-                <button
-                  type="button"
-                  class="flex w-full items-center gap-2 rounded-[6px] px-2 py-1.5 text-left text-xs text-[#b8b8b8] transition-colors hover:bg-white/[0.04] hover:text-[#e5e5e5]"
-                  @click="toggleCollapsed(month.key)"
-                >
-                  <span
-                    class="icon-[mdi--chevron-down] text-[15px] text-[#5f5f5f] transition-transform duration-150"
-                    :class="isCollapsed(month.key) ? '-rotate-90' : ''"
-                    aria-hidden="true"
-                  />
-                  <span class="min-w-0 truncate">{{ formatMonthLabel(month.label) }}</span>
-                  <span class="ml-auto shrink-0 text-[10px] tabular-nums text-[#5f5f5f]">{{ month.sessionCount }}</span>
+
+            <div
+              v-else
+              class="group relative flex h-[76px] min-w-0 cursor-pointer items-center gap-3 rounded-[5px] border px-3 transition-colors"
+              :class="selectedIDs.has(item.session.id) ? 'border-[#10AD5D]/35 bg-[#10AD5D]/[0.12]' : 'border-transparent hover:border-white/[0.08] hover:bg-white/[0.05]'"
+            >
+              <input
+                type="checkbox"
+                class="absolute left-1.5 top-1.5 size-3.5 accent-[#10AD5D]"
+                :checked="selectedIDs.has(item.session.id)"
+                :aria-label="`选择会话：${item.label}`"
+                @click.stop
+                @change="toggleSession(item.session.id)"
+              />
+              <span class="grid size-12 shrink-0 place-items-center text-[#77aee8]">
+                <span class="icon-[mdi--file-document-outline] text-[40px]" aria-hidden="true" />
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-xs text-[#e3e3e3]" :title="item.label">{{ item.label }}</span>
+                <span class="mt-1 flex min-w-0 items-center gap-2 text-[10px] text-[#707070]">
+                  <span v-if="statusInfo(item.session).label" class="shrink-0">{{ statusInfo(item.session).label }}</span>
+                  <span class="truncate tabular-nums">{{ formatModifiedTime(item.session.updatedAtUnixMs || item.session.createdAtUnixMs) }}</span>
+                  <span v-if="item.session.hasDebug" class="icon-[mdi--bug-outline] shrink-0 text-[12px] text-amber-300/65" title="包含调试日志" aria-label="包含调试日志" />
+                </span>
+              </span>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <div
+        v-else
+        data-testid="history-list-viewport"
+        class="mt-2.5 min-h-0 flex-1 overflow-auto overscroll-contain rounded-[8px] border border-white/[0.08] bg-[#202124]"
+      >
+        <div role="grid" aria-label="历史详细信息列表" class="min-w-[920px] text-[11px] text-[#b8b8b8]">
+          <div role="row" class="sticky top-0 z-10 grid grid-cols-[minmax(320px,1fr)_90px_138px_112px_112px_86px] border-b border-white/[0.09] bg-[#292a2d] text-[#9a9a9a] shadow-[0_1px_0_rgba(0,0,0,0.35)]">
+            <div role="columnheader" class="border-r border-white/[0.06] px-3 py-2">名称</div>
+            <div role="columnheader" class="border-r border-white/[0.06] px-3 py-2">状态</div>
+            <div role="columnheader" class="border-r border-white/[0.06] px-3 py-2">修改日期</div>
+            <div role="columnheader" class="border-r border-white/[0.06] px-3 py-2">类型</div>
+            <div role="columnheader" class="border-r border-white/[0.06] px-3 py-2">调试日志</div>
+            <div role="columnheader" class="px-3 py-2 text-right">大小</div>
+          </div>
+
+          <div v-for="year in groupedTree" :key="year.key" role="rowgroup">
+            <div role="row" class="border-b border-white/[0.055] bg-white/[0.018]">
+              <div role="gridcell" class="col-span-full">
+                <button type="button" class="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-[#e3e3e3] hover:bg-white/[0.04]" @click="toggleCollapsed(year.key)">
+                  <span class="icon-[mdi--chevron-down] text-[15px] text-[#777] transition-transform" :class="isCollapsed(year.key) ? '-rotate-90' : ''" aria-hidden="true" />
+                  <span class="icon-[mdi--folder-outline] text-[15px] text-[#d6b35f]" aria-hidden="true" />
+                  <span>{{ year.label }}</span>
+                  <span class="ml-1 text-[10px] font-normal tabular-nums text-[#686868]">{{ year.sessionCount }} 项</span>
                 </button>
-                <div v-if="!isCollapsed(month.key)" class="ml-[15px] border-l border-white/[0.06] pl-2">
-                  <div v-for="day in month.days" :key="day.key">
-                    <button
-                      type="button"
-                      class="flex w-full items-center gap-2 rounded-[6px] px-2 py-1.5 text-left text-[11px] text-[#858585] transition-colors hover:bg-white/[0.035] hover:text-[#b8b8b8]"
-                      @click="toggleCollapsed(day.key)"
-                    >
-                      <span
-                        class="icon-[mdi--chevron-down] text-[14px] text-[#555] transition-transform duration-150"
-                        :class="isCollapsed(day.key) ? '-rotate-90' : ''"
-                        aria-hidden="true"
-                      />
-                      <span class="min-w-0 truncate">{{ formatDayLabel(day.label) }}</span>
-                      <span class="ml-auto shrink-0 text-[10px] tabular-nums text-[#555]">{{ day.sessionCount }}</span>
-                    </button>
-                    <div v-if="!isCollapsed(day.key)" class="space-y-1 pb-1 pl-1">
-                      <label
-                        v-for="session in day.sessions"
-                        :key="session.id"
-                        class="group flex cursor-pointer items-center gap-2 rounded-[7px] border px-2.5 py-2 transition-colors hover:border-white/[0.12] hover:bg-white/[0.045]"
-                        :class="[
-                          statusInfo(session).row,
-                          selectedIDs.has(session.id) ? '!border-[#10AD5D]/25 !bg-[#10AD5D]/[0.055]' : '',
-                        ]"
-                      >
-                        <input
-                          type="checkbox"
-                          class="size-3.5 shrink-0 accent-[#10AD5D]"
-                          :checked="selectedIDs.has(session.id)"
-                          @change="toggleSession(session.id)"
-                        />
-                        <div class="min-w-0 flex-1">
-                          <div class="flex min-w-0 items-center gap-2">
-                            <span class="icon-[mdi--message-text-outline] shrink-0 text-[14px] text-[#666] transition-colors group-hover:text-[#929292]" aria-hidden="true" />
-                            <span class="min-w-0 flex-1 truncate text-xs font-medium text-[#dedede]" :title="sessionTitle(session)">
-                              {{ sessionTitle(session) }}
-                            </span>
-                            <span
-                              v-if="session.subagentType"
-                              class="shrink-0 rounded-[4px] border border-white/[0.07] bg-white/[0.035] px-1.5 py-0.5 text-[9px] text-[#858585]"
-                            >
-                              {{ session.subagentType }}
-                            </span>
-                            <span class="hidden shrink-0 text-[10px] tabular-nums text-[#737373] xl:inline">{{ formatSize(session.sizeBytes) }}</span>
-                            <span v-if="session.debugSizeBytes" class="hidden shrink-0 text-[10px] tabular-nums text-amber-300/65 xl:inline">日志 {{ formatSize(session.debugSizeBytes) }}</span>
-                          </div>
-                          <div class="mt-1 flex min-w-0 items-center gap-2 pl-[22px] text-[10px] text-[#666]">
-                            <span class="shrink-0 tabular-nums">{{ formatTime(session.updatedAtUnixMs || session.createdAtUnixMs) }}</span>
-                            <span v-if="statusInfo(session).label" class="shrink-0 rounded-full border px-1.5 py-px text-[9px]" :class="statusInfo(session).badge">{{ statusInfo(session).label }}</span>
-                            <span v-if="session.hasDebug" class="shrink-0 rounded-full bg-amber-300/[0.07] px-1.5 py-px text-[9px] text-amber-300/65">
-                              调试日志
-                            </span>
-                            <button type="button" class="center-row min-w-0 gap-1 truncate transition-colors hover:text-[#c7c7c7]" :title="`复制会话 ID：${session.id}`" @click.stop="copyID(session.id, '会话 ID')"><span class="truncate">{{ shortID(session.id) }}</span><span class="icon-[mdi--content-copy] shrink-0 text-[11px]" /></button>
-                            <button v-if="session.hasDebug" type="button" class="center-row shrink-0 gap-1 transition-colors hover:text-[#c7c7c7]" title="在诊断中打开该会话的调试日志" @click.stop="openInDiagnostics(session.id)"><span class="icon-[mdi--bug-outline] text-[11px]" /><span>诊断</span></button>
-                            <button v-if="session.requestId" type="button" class="center-row min-w-0 gap-1 truncate transition-colors hover:text-[#c7c7c7]" :title="`复制请求 ID：${session.requestId}`" @click.stop="copyID(session.requestId, '请求 ID')"><span class="truncate">请求 {{ shortID(session.requestId) }}</span><span class="icon-[mdi--content-copy] shrink-0 text-[11px]" /></button>
-                          </div>
-                        </div>
-                      </label>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
+            <template v-if="!isCollapsed(year.key)">
+              <div v-for="month in year.months" :key="month.key" role="rowgroup">
+                <div role="row" class="border-b border-white/[0.05]">
+                  <div role="gridcell" class="col-span-full">
+                    <button type="button" class="flex w-full items-center gap-2 py-1.5 pl-7 pr-3 text-left text-[#c0c0c0] hover:bg-white/[0.035]" @click="toggleCollapsed(month.key)">
+                      <span class="icon-[mdi--chevron-down] text-[14px] text-[#666] transition-transform" :class="isCollapsed(month.key) ? '-rotate-90' : ''" aria-hidden="true" />
+                      <span class="icon-[mdi--folder-outline] text-[14px] text-[#b99a52]" aria-hidden="true" />
+                      <span>{{ formatMonthLabel(month.label) }}</span>
+                      <span class="ml-1 text-[10px] tabular-nums text-[#626262]">{{ month.sessionCount }} 项</span>
+                    </button>
+                  </div>
+                </div>
+                <template v-if="!isCollapsed(month.key)">
+                  <div v-for="day in month.days" :key="day.key" role="rowgroup">
+                    <div role="row" class="border-b border-white/[0.045]">
+                      <div role="gridcell" class="col-span-full">
+                        <button type="button" class="flex w-full items-center gap-2 py-1.5 pl-11 pr-3 text-left text-[#8e8e8e] hover:bg-white/[0.03]" @click="toggleCollapsed(day.key)">
+                          <span class="icon-[mdi--chevron-down] text-[13px] text-[#5e5e5e] transition-transform" :class="isCollapsed(day.key) ? '-rotate-90' : ''" aria-hidden="true" />
+                          <span>{{ formatDayLabel(day.label) }}</span>
+                          <span class="ml-1 text-[10px] tabular-nums text-[#595959]">{{ day.sessionCount }} 项</span>
+                        </button>
+                      </div>
+                    </div>
+                    <label
+                      v-for="session in !isCollapsed(day.key) ? day.sessions : []"
+                      :key="session.id"
+                      role="row"
+                      :aria-selected="selectedIDs.has(session.id) ? 'true' : 'false'"
+                      class="group grid cursor-pointer grid-cols-[minmax(320px,1fr)_90px_138px_112px_112px_86px] border-b border-white/[0.045] transition-colors hover:bg-white/[0.045]"
+                      :class="selectedIDs.has(session.id) ? 'bg-[#10AD5D]/[0.12] hover:bg-[#10AD5D]/[0.15]' : statusInfo(session).row"
+                    >
+                      <div role="gridcell" class="flex min-w-0 items-center gap-2 border-r border-white/[0.045] py-2 pl-12 pr-3">
+                        <input type="checkbox" class="size-3.5 shrink-0 accent-[#10AD5D]" :checked="selectedIDs.has(session.id)" @change="toggleSession(session.id)" />
+                        <span class="icon-[mdi--message-text-outline] shrink-0 text-[14px] text-[#777]" aria-hidden="true" />
+                        <div class="min-w-0">
+                          <div class="truncate text-xs text-[#e0e0e0]" :title="sessionTitle(session)">{{ sessionTitle(session) }}</div>
+                          <div class="mt-0.5 flex min-w-0 items-center gap-2 text-[9px] text-[#626262]">
+                            <button type="button" class="min-w-0 truncate hover:text-[#bdbdbd]" :title="`复制会话 ID：${session.id}`" @click.stop="copyID(session.id, '会话 ID')">{{ shortID(session.id) }}</button>
+                            <button v-if="session.requestId" type="button" class="min-w-0 truncate hover:text-[#bdbdbd]" :title="`复制请求 ID：${session.requestId}`" @click.stop="copyID(session.requestId, '请求 ID')">请求 {{ shortID(session.requestId) }}</button>
+                          </div>
+                        </div>
+                      </div>
+                      <div role="gridcell" class="flex items-center border-r border-white/[0.045] px-3">
+                        <span v-if="statusInfo(session).label" class="rounded-[4px] border px-1.5 py-0.5 text-[9px]" :class="statusInfo(session).badge">{{ statusInfo(session).label }}</span>
+                        <span v-else class="text-[#6f6f6f]">已完成</span>
+                      </div>
+                      <div role="gridcell" class="flex items-center border-r border-white/[0.045] px-3 tabular-nums text-[#8f8f8f]">{{ formatModifiedTime(session.updatedAtUnixMs || session.createdAtUnixMs) }}</div>
+                      <div role="gridcell" class="flex min-w-0 items-center border-r border-white/[0.045] px-3"><span class="truncate" :title="sessionType(session)">{{ sessionType(session) }}</span></div>
+                      <div role="gridcell" class="flex items-center border-r border-white/[0.045] px-3">
+                        <button v-if="session.hasDebug" type="button" class="flex items-center gap-1 text-amber-300/70 hover:text-amber-200" title="在诊断中打开该会话的调试日志" @click.prevent.stop="openInDiagnostics(session.id)"><span class="icon-[mdi--bug-outline] text-[12px]" /><span>{{ formatSize(session.debugSizeBytes) }}</span></button>
+                        <span v-else class="text-[#5e5e5e]">-</span>
+                      </div>
+                      <div role="gridcell" class="flex items-center justify-end px-3 tabular-nums text-[#8b8b8b]">{{ formatSize(session.sizeBytes) }}</div>
+                    </label>
+                  </div>
+                </template>
+              </div>
+            </template>
           </div>
         </div>
       </div>

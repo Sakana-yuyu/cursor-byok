@@ -29,6 +29,9 @@ import (
 //go:embed vision_mcp_server.py
 var bundledVisionMCPScript []byte
 
+//go:embed image_see_skill.md
+var bundledImageSeeSkillManifest []byte
+
 // Public DTOs remain in package main for Wails service compatibility.
 // ProxyState 定义了当前模块中的 ProxyState 类型。
 type ProxyState = client.ProxyState
@@ -218,21 +221,6 @@ func (s *ProxyService) ReadSessionDebugTail(sessionID, filename string, maxBytes
 // GetDelegationTaskSnapshots returns retained Multitask worker state.
 func (s *ProxyService) GetDelegationTaskSnapshots() []DelegationTaskSnapshot {
 	return s.core.GetDelegationTaskSnapshots()
-}
-
-// GetGoals 返回当前 forwarder 的 goal 状态快照。
-func (s *ProxyService) GetGoals() []forwarder.GoalSnapshot {
-	return s.core.GetGoals()
-}
-
-// StartGoal 以 goal 模式启动新会话，返回 conversationID。
-func (s *ProxyService) StartGoal(goalText, modelID string) (string, error) {
-	return s.core.StartGoal(goalText, modelID)
-}
-
-// StopGoal 停止指定会话的 goal 执行。
-func (s *ProxyService) StopGoal(conversationID string) error {
-	return s.core.StopGoal(conversationID)
 }
 
 // GetDelegationConfig returns the normalized delegation settings subtree.
@@ -712,6 +700,8 @@ const readerMCPIdentifier = "vision-reader"
 // readerMCPBundledScriptName 是内置读图 MCP 脚本的文件名（go:embed vision_mcp_server.py）。
 const readerMCPBundledScriptName = "vision_mcp_server.py"
 
+const readerMCPBundledManifestName = "SKILL.md"
+
 // readerMCPScriptCandidates 返回 vision_mcp_server.py 可能存在的路径
 // （image-see 技能会同步到 .claude/.cursor/.codex 三个 skills 目录）。
 func readerMCPScriptCandidates() []string {
@@ -741,8 +731,19 @@ func detectVisionReaderScript() string {
 // image-see 技能脚本；不存在时把内置脚本落盘到 ~/.cursor/skills/image-see/scripts/
 // （原子写：tmp 文件 + rename），保证「一键启用读图 MCP」不依赖外部技能安装。
 func ensureVisionReaderScript() (string, error) {
-	if existing := detectVisionReaderScript(); existing != "" {
-		return existing, nil
+	var existingScripts []string
+	for _, candidate := range readerMCPScriptCandidates() {
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			existingScripts = append(existingScripts, candidate)
+		}
+	}
+	if len(existingScripts) > 0 {
+		for _, existing := range existingScripts {
+			if err := ensureImageSeeSkillManifest(existing); err != nil {
+				return "", err
+			}
+		}
+		return existingScripts[0], nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil || strings.TrimSpace(home) == "" {
@@ -750,26 +751,92 @@ func ensureVisionReaderScript() (string, error) {
 	}
 	scriptDir := filepath.Join(home, ".cursor", "skills", "image-see", "scripts")
 	scriptPath := filepath.Join(scriptDir, readerMCPBundledScriptName)
-	if err := os.MkdirAll(scriptDir, 0o755); err != nil {
-		return "", fmt.Errorf("创建技能目录失败: %w", err)
+	if err := ensureImageSeeSkillManifest(scriptPath); err != nil {
+		return "", err
 	}
-	tmp, err := os.CreateTemp(scriptDir, ".vision-*.tmp")
-	if err != nil {
-		return "", fmt.Errorf("创建临时脚本失败: %w", err)
-	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
-	if _, err := tmp.Write(bundledVisionMCPScript); err != nil {
-		_ = tmp.Close()
-		return "", fmt.Errorf("写入临时脚本失败: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return "", fmt.Errorf("关闭临时脚本失败: %w", err)
-	}
-	if err := os.Rename(tmpName, scriptPath); err != nil {
+	if _, err := ensureBundledReaderFile(scriptPath, bundledVisionMCPScript, nil); err != nil {
 		return "", fmt.Errorf("写入脚本 %s 失败: %w", scriptPath, err)
 	}
 	return scriptPath, nil
+}
+
+func ensureImageSeeSkillManifest(scriptPath string) error {
+	skillDir := filepath.Dir(filepath.Dir(scriptPath))
+	manifestPath := filepath.Join(skillDir, readerMCPBundledManifestName)
+	validManifest := func(path string) bool {
+		return forwarder.IsSkillManifestValid(path)
+	}
+	if _, err := ensureBundledReaderFile(manifestPath, bundledImageSeeSkillManifest, validManifest); err != nil {
+		return fmt.Errorf("写入技能清单 %s 失败: %w", manifestPath, err)
+	}
+	return nil
+}
+
+func ensureBundledReaderFile(path string, data []byte, existingValid func(string) bool) (bool, error) {
+	if info, err := os.Stat(path); err == nil {
+		if info.IsDir() {
+			return false, fmt.Errorf("目标路径是目录")
+		}
+		if existingValid == nil || existingValid(path) {
+			return false, nil
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return false, err
+	}
+	tmp, err := os.CreateTemp(dir, ".reader-*")
+	if err != nil {
+		return false, err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return false, err
+	}
+	if err := tmp.Chmod(0o644); err != nil {
+		_ = tmp.Close()
+		return false, err
+	}
+	if err := tmp.Close(); err != nil {
+		return false, err
+	}
+	if err := replaceReaderFile(tmpName, path); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func replaceReaderFile(tmpName, path string) error {
+	if err := os.Rename(tmpName, path); err == nil {
+		return nil
+	}
+	if _, err := os.Stat(path); err != nil {
+		return err
+	}
+	backup, err := os.CreateTemp(filepath.Dir(path), ".reader-backup-*")
+	if err != nil {
+		return err
+	}
+	backupName := backup.Name()
+	if err := backup.Close(); err != nil {
+		return err
+	}
+	if err := os.Remove(backupName); err != nil {
+		return err
+	}
+	defer os.Remove(backupName)
+	if err := os.Rename(path, backupName); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		_ = os.Rename(backupName, path)
+		return err
+	}
+	return nil
 }
 
 // resolvePythonCommand 探测可用的 python 解释器绝对路径。
@@ -1142,7 +1209,7 @@ func skillMCPScanSettings(cfg serverconfig.SkillMCPScanConfig) forwarder.SkillMC
 		Enabled:            cfg.Enabled,
 		SkillSources:       cfg.SkillSources,
 		MCPSources:         cfg.MCPSources,
-		DisabledSkills:     cfg.DisabledSkills,
+		EnabledSkills:      cfg.EnabledSkills,
 		DisabledMCPServers: cfg.DisabledMCPServers,
 	}
 }

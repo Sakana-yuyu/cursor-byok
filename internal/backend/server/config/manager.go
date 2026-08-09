@@ -276,8 +276,8 @@ func (manager *Manager) SkillMCPScanMCPSources() map[string]bool {
 	return manager.Current().SkillMCPScan.MCPSources
 }
 
-func (manager *Manager) SkillMCPScanDisabledSkills() map[string]bool {
-	return manager.Current().SkillMCPScan.DisabledSkills
+func (manager *Manager) SkillMCPScanEnabledSkills() map[string]bool {
+	return manager.Current().SkillMCPScan.EnabledSkills
 }
 
 func (manager *Manager) SkillMCPScanDisabledMCPServers() map[string]bool {

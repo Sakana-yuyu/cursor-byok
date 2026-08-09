@@ -578,7 +578,7 @@ type InboundIntent struct {
 	IgnoredReason                string
 	Prewarm                      bool
 	ManualCompaction             manualCompactionDirective
-	// GoalMode 标记该 run 以 goal 模式执行（/goal 前缀或前端面板发起）。
+	// GoalMode 标记该 run 以 goal 模式执行（由 /goal 命令触发）。
 	GoalMode   bool
 	GoalText   string
 	GoalStrict bool // /goal --strict 标记（借鉴 Reasonix Strict 模式）

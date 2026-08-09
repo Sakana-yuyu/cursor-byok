@@ -1,6 +1,58 @@
 package config
 
-import "testing"
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestStoreLoadBackfillsGoalDefaultsForLegacyConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	legacy := []byte("backendListenAddr: 127.0.0.1:18090\nproxyListenAddr: 127.0.0.1:18080\n")
+	if err := os.WriteFile(path, legacy, 0o644); err != nil {
+		t.Fatalf("write legacy config: %v", err)
+	}
+
+	got, err := NewStore(path, "").Load(context.Background())
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	want := DefaultGoalConfig()
+	if got.Goal != want {
+		t.Fatalf("Goal = %+v, want legacy config defaults %+v", got.Goal, want)
+	}
+	persisted, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read migrated config: %v", err)
+	}
+	if !yamlHasKey(persisted, "goal") {
+		t.Fatal("migrated config does not persist goal defaults")
+	}
+}
+
+func TestSkillScanDefaultsToEmptyEnabledSkills(t *testing.T) {
+	cfg := DefaultConfig()
+	if len(cfg.SkillMCPScan.EnabledSkills) != 0 {
+		t.Fatalf("EnabledSkills = %v, want empty opt-in whitelist", cfg.SkillMCPScan.EnabledSkills)
+	}
+}
+
+func TestLegacyDisabledSkillsDoNotBecomeEnabledSkills(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	legacy := []byte("backendListenAddr: 127.0.0.1:18090\nproxyListenAddr: 127.0.0.1:18080\nskillMcpScan:\n  enabled: true\n  disabledSkills:\n    old-skill: true\n")
+	if err := os.WriteFile(path, legacy, 0o644); err != nil {
+		t.Fatalf("write legacy config: %v", err)
+	}
+
+	got, err := NewStore(path, "").Load(context.Background())
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if len(got.SkillMCPScan.EnabledSkills) != 0 {
+		t.Fatalf("legacy disabledSkills must not migrate into enabledSkills: %v", got.SkillMCPScan.EnabledSkills)
+	}
+}
 
 func TestNormalizeModelAdapterConfigsDeduplicatesChannelsAndSetsContext(t *testing.T) {
 	first := ModelAdapterConfig{

@@ -155,6 +155,7 @@ func orderedSkillScanRoots(workspaceRoot string) []skillScanRoot {
 	// Codex / GPT
 	if home != "" {
 		add(filepath.Join(home, ".codex", "skills"), SkillSourceCodex)
+		add(filepath.Join(home, ".codex", "skills", ".system"), SkillSourceCodex)
 	}
 	// Gemini CLI
 	if home != "" {
@@ -249,6 +250,9 @@ func scanOneSkillRootWithDiagnostics(root string, source SkillSource) ([]Sourced
 	skills := make([]SourcedGlobalSkill, 0, len(entries))
 	diagnostics := make([]SourcedGlobalSkill, 0)
 	for _, entry := range entries {
+		if source == SkillSourceCodex && entry.Name() == ".system" {
+			continue
+		}
 		entryPath := filepath.Join(root, entry.Name())
 		// entry.IsDir() 对符号链接返回 false；用 os.Stat 跟踪链接，判断目标是否目录。
 		isDir := entry.IsDir()

@@ -457,6 +457,10 @@ func (broker *StreamBroker) FailWithDetails(requestID string, failure TerminalFa
 		return fmt.Errorf("request is not active: %s", strings.TrimSpace(requestID))
 	}
 	stream.mu.Lock()
+	if isTerminalStreamStatus(stream.Status) {
+		stream.mu.Unlock()
+		return nil
+	}
 	broker.stopTerminalCleanupTimerLocked(stream)
 	stopAllStreamTimersLocked(stream)
 	stream.Status = StreamStatusFailed
@@ -487,6 +491,10 @@ func (broker *StreamBroker) Cancel(requestID string, terminalMessage string) err
 		return fmt.Errorf("%w: %s", errStreamNotActive, strings.TrimSpace(requestID))
 	}
 	stream.mu.Lock()
+	if isTerminalStreamStatus(stream.Status) {
+		stream.mu.Unlock()
+		return nil
+	}
 	broker.stopTerminalCleanupTimerLocked(stream)
 	stopAllStreamTimersLocked(stream)
 	if stream.ProviderCancel != nil {

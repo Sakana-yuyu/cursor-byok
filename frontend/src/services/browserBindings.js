@@ -420,9 +420,6 @@ export const SaveDelegationConfig = (value) => {
   persistPreviewConfig();
   return Promise.resolve(clone(previewConfig.delegation));
 };
-export const GetGoals = () => Promise.resolve([]);
-export const StartGoal = (_goalText, _modelID) => Promise.resolve("mock-goal-" + Date.now());
-export const StopGoal = (_conversationID) => Promise.resolve(null);
 export const SaveUserConfig = (value) => {
   if (previewTestFailSaveConfig()) {
     return Promise.reject(new Error("E2E 注入：配置保存失败"));
@@ -635,7 +632,7 @@ export const RefreshPromptInjection = () => Promise.resolve();
 export const RefreshPromptInjectionCatalog = () => Promise.resolve();
 let previewScanConfig = {
   enabled: true,
-  disabledSkills: { "superpowers-test-driven-development": true },
+  enabledSkills: {},
   disabledMcpServers: { "preview:playwright": true },
   skillSummaries: {
     "superpowers-systematic-debugging": "遇到 bug、测试失败或意外行为时，先建立证据链再提出修复方案，避免盲改代码。",

@@ -28,25 +28,25 @@ const (
 
 // GoalState 挂在 ActiveStream.Goal 上（nil = 非 goal 会话）。
 type GoalState struct {
-	ConversationID string
-	GoalText       string
-	Status         GoalStatus
-	Strict         bool // /goal --strict：校验不通过时不允许模型自检兜底（借鉴 Reasonix Strict）
-	ProviderPasses int
-	ToolCalls      int
-	SelfChecks     int
-	RetryCount     int // 校验子代理未通过的重试次数
-	ErrorRetries   int // provider 错误重试次数
-	StaleCount     int // 校验连续未通过次数，达到阈值后提示结构性换策略（借鉴 Reasonix stale pivot）
+	ConversationID  string
+	GoalText        string
+	Status          GoalStatus
+	Strict          bool // /goal --strict：校验不通过时不允许模型自检兜底（借鉴 Reasonix Strict）
+	ProviderPasses  int
+	ToolCalls       int
+	SelfChecks      int
+	RetryCount      int // 校验子代理未通过的重试次数
+	ErrorRetries    int // provider 错误重试次数
+	StaleCount      int // 校验连续未通过次数，达到阈值后提示结构性换策略（借鉴 Reasonix stale pivot）
 	CostEstimateUSD float64
-	StartedAt      time.Time
-	UpdatedAt      time.Time
-	LastProgress   string
-	CompletionText string
-	StopReason     string
+	StartedAt       time.Time
+	UpdatedAt       time.Time
+	LastProgress    string
+	CompletionText  string
+	StopReason      string
 
-	consecutiveIdle    int  // 连续无工具调用 pass 计数
-	CompletionClaimed  bool // 模型已输出 [goal:complete] 声明
+	consecutiveIdle   int  // 连续无工具调用 pass 计数
+	CompletionClaimed bool // 模型已输出 [goal:complete] 声明
 }
 
 func newGoalState(conversationID, goalText string, strict bool) *GoalState {
@@ -90,81 +90,6 @@ type goalConfigProvider interface {
 	GoalRuntimeConfig() GoalRuntimeConfig
 }
 
-// GoalSnapshot 是暴露给前端（wails binding）的稳定快照。
-type GoalSnapshot struct {
-	ConversationID string  `json:"conversationId"`
-	GoalText       string  `json:"goalText"`
-	Status         string  `json:"status"`
-	ProviderPasses int     `json:"providerPasses"`
-	ToolCalls      int     `json:"toolCalls"`
-	SelfChecks     int     `json:"selfChecks"`
-	RetryCount     int     `json:"retryCount"`
-	CostEstimateUSD float64 `json:"costEstimateUsd"`
-	LastProgress   string  `json:"lastProgress"`
-	CompletionText string  `json:"completionText"`
-	StopReason     string  `json:"stopReason"`
-	StartedAt      string  `json:"startedAt"`
-	UpdatedAt      string  `json:"updatedAt"`
-}
-
-// registerGoal 登记 goal 状态（内存 map，保留最近 100 条）。
-func (service *Service) registerGoal(conversationID string, state *GoalState) {
-	if service == nil || state == nil {
-		return
-	}
-	service.goalsMu.Lock()
-	defer service.goalsMu.Unlock()
-	if service.goals == nil {
-		service.goals = make(map[string]*GoalState)
-	}
-	service.goals[conversationID] = state
-	if len(service.goals) > 100 {
-		// 淘汰最旧一条
-		var oldestKey string
-		var oldest time.Time
-		for k, v := range service.goals {
-			if oldestKey == "" || v.UpdatedAt.Before(oldest) {
-				oldestKey, oldest = k, v.UpdatedAt
-			}
-		}
-		if oldestKey != "" {
-			delete(service.goals, oldestKey)
-		}
-	}
-}
-
-// GoalSnapshots 返回全部已登记 goal 的稳定快照（供前端面板轮询）。
-func (service *Service) GoalSnapshots() []GoalSnapshot {
-	if service == nil {
-		return nil
-	}
-	service.goalsMu.RLock()
-	defer service.goalsMu.RUnlock()
-	snaps := make([]GoalSnapshot, 0, len(service.goals))
-	for _, state := range service.goals {
-		snaps = append(snaps, goalSnapshotOf(state))
-	}
-	return snaps
-}
-
-func goalSnapshotOf(state *GoalState) GoalSnapshot {
-	return GoalSnapshot{
-		ConversationID: state.ConversationID,
-		GoalText:       state.GoalText,
-		Status:         string(state.Status),
-		ProviderPasses: state.ProviderPasses,
-		ToolCalls:      state.ToolCalls,
-		SelfChecks:     state.SelfChecks,
-		RetryCount:     state.RetryCount,
-		CostEstimateUSD: state.CostEstimateUSD,
-		LastProgress:   state.LastProgress,
-		CompletionText: state.CompletionText,
-		StopReason:     state.StopReason,
-		StartedAt:      state.StartedAt.Format(time.RFC3339),
-		UpdatedAt:      state.UpdatedAt.Format(time.RFC3339),
-	}
-}
-
 // currentGoalConfig 返回 goal 运行时配置；provider 未注入时用默认值。
 func (service *Service) currentGoalConfig() GoalRuntimeConfig {
 	if service == nil || service.goalConfig == nil {
@@ -174,7 +99,7 @@ func (service *Service) currentGoalConfig() GoalRuntimeConfig {
 }
 
 // goalCommandPrefixes 是 /goal 文本命令的识别前缀。命中后前缀与可选的 --strict
-// flag 被剥离，剩余文本作为 goal 目标写入 GoalState（前端面板复用同一解析）。
+// flag 被剥离，剩余文本作为 goal 目标写入 GoalState。
 // --strict 借鉴 Reasonix 的 /goal --strict：校验不通过不允许覆盖/兜底。
 var goalCommandPrefixes = []string{"/goal", "#goal", "goal:"}
 
@@ -469,7 +394,9 @@ func (e *defaultUsageCostEstimator) Cost(stream *ActiveStream, usage turnUsageSn
 // newPricingLookupFromConfig 从 resolver 提供的 pricing 配置构建定价表；
 // 拿不到时返回 nil（费用估算与检查自动跳过）。
 func newPricingLookupFromConfig(resolver modeladapter.ChannelResolver) *historymetrics.PriceLookup {
-	provider, ok := resolver.(interface{ PricingRates() []historymetrics.PriceRate })
+	provider, ok := resolver.(interface {
+		PricingRates() []historymetrics.PriceRate
+	})
 	if !ok {
 		return nil
 	}
@@ -657,66 +584,6 @@ func errTextOf(err error) string {
 		return ""
 	}
 	return err.Error()
-}
-
-// StartGoalStream 以 goal 模式启动一个新会话（前端 Goal 面板入口）。
-// 复用 handleRunIntent 路径：构造最小 run intent 并标记 GoalMode。
-// 返回 conversationID；modelID 为空时报错（前端必须选择模型）。
-func (service *Service) StartGoalStream(goalText, modelID string) (string, error) {
-	if service == nil {
-		return "", fmt.Errorf("service unavailable")
-	}
-	if strings.TrimSpace(goalText) == "" {
-		return "", fmt.Errorf("goal text is required")
-	}
-	if strings.TrimSpace(modelID) == "" {
-		return "", fmt.Errorf("model id is required")
-	}
-	conversationID := uuid.NewString()
-	intent := InboundIntent{
-		RequestID:      uuid.NewString(),
-		ConversationID: conversationID,
-		UserMessage:    &agentv1.UserMessage{Text: strings.TrimSpace(goalText)},
-		ModelID:        strings.TrimSpace(modelID),
-		ModelName:      strings.TrimSpace(modelID),
-		Mode:           agentv1.AgentMode_AGENT_MODE_AGENT,
-		GoalMode:       true,
-		GoalText:       strings.TrimSpace(goalText),
-	}
-	if err := service.handleRunIntent(intent); err != nil {
-		return "", err
-	}
-	return conversationID, nil
-}
-
-// StopGoalStream 停止指定会话的 goal 执行（复用取消路径）。
-func (service *Service) StopGoalStream(conversationID string) error {
-	if service == nil || strings.TrimSpace(conversationID) == "" {
-		return fmt.Errorf("conversation id is required")
-	}
-	var stream *ActiveStream
-	for _, requestID := range service.broker.OtherConversationRequestIDs(conversationID, "") {
-		if candidate, ok := service.broker.Get(requestID); ok {
-			stream = candidate
-			break
-		}
-	}
-	if stream == nil {
-		// 无活动流：把内存里的 goal 状态标记为 stopped。
-		service.goalsMu.Lock()
-		if goal, ok := service.goals[conversationID]; ok && goal.Status == GoalStatusRunning {
-			goal.Status = GoalStatusStopped
-			goal.StopReason = "用户手动停止"
-			goal.UpdatedAt = time.Now().UTC()
-		}
-		service.goalsMu.Unlock()
-		return nil
-	}
-	return service.handleCancelIntent(InboundIntent{
-		RequestID:      stream.RequestID,
-		ConversationID: conversationID,
-		CancelReason:   "用户手动停止 goal",
-	})
 }
 
 // handleGoalProviderError 在 goal 模式下把 provider 错误转为"注入错误摘要 + 续跑重试"，

@@ -18,7 +18,7 @@ type skillMCPScanConfigProvider interface {
 	SkillMCPScanEnabled() bool
 	SkillMCPScanSkillSources() map[string]bool
 	SkillMCPScanMCPSources() map[string]bool
-	SkillMCPScanDisabledSkills() map[string]bool
+	SkillMCPScanEnabledSkills() map[string]bool
 	SkillMCPScanDisabledMCPServers() map[string]bool
 }
 
@@ -27,7 +27,7 @@ type SkillMCPScanSettings struct {
 	Enabled            bool
 	SkillSources       map[string]bool
 	MCPSources         map[string]bool
-	DisabledSkills     map[string]bool
+	EnabledSkills      map[string]bool
 	DisabledMCPServers map[string]bool
 }
 
@@ -40,7 +40,7 @@ func readSkillMCPScanSettings(provider skillMCPScanConfigProvider) SkillMCPScanS
 		Enabled:            provider.SkillMCPScanEnabled(),
 		SkillSources:       provider.SkillMCPScanSkillSources(),
 		MCPSources:         provider.SkillMCPScanMCPSources(),
-		DisabledSkills:     provider.SkillMCPScanDisabledSkills(),
+		EnabledSkills:      provider.SkillMCPScanEnabledSkills(),
 		DisabledMCPServers: provider.SkillMCPScanDisabledMCPServers(),
 	}
 }
@@ -65,7 +65,7 @@ func (service *Service) enrichRequestContextWithScannedAssets(intent *InboundInt
 
 	// Keep compiler-side scan settings synchronized even when scanning is disabled.
 	if service.skillsStore() != nil {
-		service.skillsStore().SetScanSettings(settings.Enabled, settings.SkillSources, settings.DisabledSkills)
+		service.skillsStore().SetScanSettings(settings.Enabled, settings.SkillSources, settings.EnabledSkills)
 	}
 	if !settings.Enabled {
 		if service.mcpRuntime != nil {
@@ -127,7 +127,7 @@ func filterScannedSkills(skills []SourcedGlobalSkill, settings SkillMCPScanSetti
 		if !sourceEnabled(settings.SkillSources, string(sk.Source)) {
 			continue
 		}
-		if settings.DisabledSkills != nil && settings.DisabledSkills[strings.ToLower(strings.TrimSpace(sk.Name))] {
+		if settings.EnabledSkills == nil || !settings.EnabledSkills[strings.ToLower(strings.TrimSpace(sk.Name))] {
 			continue
 		}
 		out = append(out, sk)

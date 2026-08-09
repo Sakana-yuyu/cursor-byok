@@ -1,6 +1,7 @@
 package forwarder
 
 import (
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -78,6 +79,41 @@ func TestOrderedSkillScanRootsEmptyWorkspace(t *testing.T) {
 	for _, root := range roots {
 		if !strings.HasPrefix(root.Path, home) {
 			t.Errorf("root %q does not start with home %q (workspace leaked with empty workspaceRoot)", root.Path, home)
+		}
+	}
+}
+
+func TestCodexSystemSkillsAreDiscoveredWithoutContainerDiagnostic(t *testing.T) {
+	home := t.TempDir()
+	setHomeForTest(t, home)
+	manifestPath := filepath.Join(home, ".codex", "skills", ".system", "imagegen", "SKILL.md")
+	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
+		t.Fatalf("create system skill directory: %v", err)
+	}
+	manifest := "---\nname: imagegen\ndescription: Generate raster images for tests.\n---\n\n# Image Generation\n"
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write system skill manifest: %v", err)
+	}
+
+	InvalidateSkillScanCache()
+	t.Cleanup(InvalidateSkillScanCache)
+	skills, diagnostics := scanAllSkillRecords("")
+
+	foundImagegen := false
+	for _, skill := range skills {
+		if skill.Name == "imagegen" {
+			foundImagegen = true
+			if skill.Source != SkillSourceCodex {
+				t.Fatalf("imagegen source = %q, want %q", skill.Source, SkillSourceCodex)
+			}
+		}
+	}
+	if !foundImagegen {
+		t.Fatalf("Codex system skill imagegen was not discovered: %+v", skills)
+	}
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Name == ".system" {
+			t.Fatalf("Codex system container was reported as an invalid skill: %+v", diagnostic)
 		}
 	}
 }

@@ -17,6 +17,13 @@ const props = defineProps({
 
 const emit = defineEmits(["update:modelValue", "update:moreExpanded", "update:collapsed"]);
 
+const CATEGORY_ACTIVE_CLASS = "bg-[#2b2b2b] text-white before:bg-[#10AD5D]";
+const CATEGORY_IDLE_CLASS = "text-[#999] hover:bg-white/[0.045] hover:text-white";
+
+function categoryStateClass(categoryID) {
+  return categoryID === props.modelValue ? CATEGORY_ACTIVE_CLASS : CATEGORY_IDLE_CLASS;
+}
+
 function updateValue(value) {
   emit("update:modelValue", value);
 }
@@ -167,16 +174,14 @@ watch(
           >
             {{ group.label }}
           </div>
-          <div class="space-y-1">
+          <div :class="collapsed ? 'space-y-1' : 'space-y-2'">
             <button
               v-for="category in group.items"
               :key="category.id"
               type="button"
               class="relative flex min-h-10 w-full items-center gap-3 overflow-hidden rounded-[8px] border-l-0 px-3 text-left transition-colors before:absolute before:bottom-2 before:left-0 before:top-2 before:w-0.5 before:rounded-full before:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35"
               :class="[
-                category.id === modelValue
-                  ? 'bg-[#2b2b2b] text-white before:bg-[#10AD5D]'
-                  : 'text-[#999] hover:bg-white/[0.045] hover:text-white',
+                categoryStateClass(category.id),
                 collapsed ? 'justify-center px-0' : '',
               ]"
               :aria-current="category.id === modelValue ? 'page' : undefined"
@@ -222,10 +227,8 @@ watch(
                   v-for="category in moreGroup.items"
                   :key="category.id"
                   type="button"
-                  class="flex w-full items-start justify-between gap-3 rounded-[6px] border-l-2 py-2.5 pl-4 pr-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35"
-                  :class="category.id === modelValue
-                    ? 'border-[#10AD5D] bg-[#262626] text-white'
-                    : 'border-transparent text-[#9a9a9a] hover:bg-[#252525] hover:text-white'"
+                  class="relative flex min-h-10 w-full items-center gap-3 overflow-hidden rounded-[8px] px-3 py-2.5 pl-4 text-left transition-colors before:absolute before:bottom-2 before:left-0 before:top-2 before:w-0.5 before:rounded-full before:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35"
+                  :class="categoryStateClass(category.id)"
                   :aria-current="category.id === modelValue ? 'page' : undefined"
                   @click="updateValue(category.id)"
                 >

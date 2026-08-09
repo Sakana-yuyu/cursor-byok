@@ -84,8 +84,6 @@ type Service struct {
 	goalConfig               goalConfigProvider
 	computerUseCfg           computerUseConfigProvider
 	usageCostEstimator       goalUsageCostEstimator
-	goalsMu                  sync.RWMutex
-	goals                    map[string]*GoalState // conversationID → goal 状态，保留最近 100 条
 	multitaskDelegation      *multitaskDelegationCoordinator
 	delegationRuntimeMu      sync.Mutex
 	nativeDelegations        map[string]*nativeDelegationRuntime
@@ -226,7 +224,6 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 		goalConfig:             goalCfg,
 		computerUseCfg:         computerUseCfg,
 		usageCostEstimator:     &defaultUsageCostEstimator{lookup: newPricingLookupFromConfig(resolver)},
-		goals:                  make(map[string]*GoalState),
 		mcpRuntime:             SharedMCPRuntimeRegistry(),
 		broker:                 broker,
 		recorder:               newArtifactRecorder(store, broker, debug),
@@ -851,7 +848,6 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 	if intent.GoalMode {
 		goalState := newGoalState(intent.ConversationID, intent.GoalText, intent.GoalStrict)
 		stream.Goal = goalState
-		service.registerGoal(intent.ConversationID, goalState)
 		if service.debug != nil {
 			service.debug.LogRuntime(context.Background(), intent.RequestID, intent.ConversationID, "goal_started", map[string]any{
 				"goal_text": intent.GoalText,

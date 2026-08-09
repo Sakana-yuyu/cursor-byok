@@ -67,6 +67,8 @@ const desktopMethods = {
 const API_LOG_PREFIX = "[clientApi]";
 const PROXY_SERVICE_NAME = "cursor/internal/bridge.ProxyService";
 const DEFAULT_API_TIMEOUT_MS = 30_000;
+const MODEL_TEST_TIMEOUT_MS = 60_000;
+const AUTO_MATCH_TIMEOUT_MS = 120_000;
 const RUNTIME_HEALTH_OPERATIONS = new Set([
   "GetState",
   "LoadUserConfig",
@@ -302,7 +304,7 @@ export function testModelAdapter(adapter) {
     }
     return Promise.resolve({ status: "success", adapterID: adapter?.id || "preview", summaryText: "浏览器预览模式：未发起请求" });
   }
-  return withApiLogging("TestModelAdapter", adapter, () => invoke("@bindings/cursor/internal/bridge/proxyservice.js", "TestModelAdapter", [adapter]));
+  return withApiLogging("TestModelAdapter", adapter, () => invoke("@bindings/cursor/internal/bridge/proxyservice.js", "TestModelAdapter", [adapter]), { timeoutMs: MODEL_TEST_TIMEOUT_MS });
 }
 
 export function getModelAdapterTestResults() {
@@ -375,7 +377,7 @@ export function autoMatchContextWindows(force = false) {
   if (isBrowserPreview) {
     return Promise.resolve({ enabled: false, switchEnabled: true, changed: false, total: 0, fromCatalog: 0, fromProbe: 0, unchanged: 0 });
   }
-  return withApiLogging("AutoMatchContextWindows", [force], () => invoke("@bindings/cursor/internal/bridge/proxyservice.js", "AutoMatchContextWindows", [force]));
+  return withApiLogging("AutoMatchContextWindows", [force], () => invoke("@bindings/cursor/internal/bridge/proxyservice.js", "AutoMatchContextWindows", [force]), { timeoutMs: AUTO_MATCH_TIMEOUT_MS });
 }
 
 export function diagnoseModelAdapters() {
