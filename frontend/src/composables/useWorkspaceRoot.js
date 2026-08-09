@@ -1,5 +1,6 @@
 import { getRecentWorkspaceRoot } from "@/services/clientApi";
 import { ref } from "vue";
+import { initializeWorkspaceRootValue } from "./workspaceRootInitialization.js";
 
 const WORKSPACE_ROOT_STORAGE_KEY = "cursor-byok-mcp-workspace-root";
 
@@ -17,6 +18,7 @@ function readStoredWorkspaceRoot() {
 
 const workspaceRoot = ref(readStoredWorkspaceRoot());
 let initializationPromise;
+let mutationRevision = 0;
 
 function persistWorkspaceRoot(value) {
   try {
@@ -26,21 +28,27 @@ function persistWorkspaceRoot(value) {
   }
 }
 
-function updateWorkspaceRoot(value) {
+function commitWorkspaceRoot(value) {
   const normalized = normalizeWorkspaceRoot(value);
   workspaceRoot.value = normalized;
   persistWorkspaceRoot(normalized);
   return normalized;
 }
 
+function updateWorkspaceRoot(value) {
+  mutationRevision += 1;
+  return commitWorkspaceRoot(value);
+}
+
 function initializeWorkspaceRoot() {
   if (!initializationPromise) {
-    initializationPromise = Promise.resolve()
-      .then(() => getRecentWorkspaceRoot())
-      .catch(() => "")
-      .then((recentRoot) => updateWorkspaceRoot(
-        normalizeWorkspaceRoot(recentRoot) || readStoredWorkspaceRoot(),
-      ))
+    initializationPromise = initializeWorkspaceRootValue({
+      workspaceRoot,
+      loadRecentRoot: getRecentWorkspaceRoot,
+      readStoredRoot: readStoredWorkspaceRoot,
+      getMutationRevision: () => mutationRevision,
+      commitRoot: commitWorkspaceRoot,
+    })
       .finally(() => {
         initializationPromise = null;
       });
