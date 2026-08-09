@@ -54,7 +54,7 @@ function handleCancel() {
                   v-model="editorContent"
                   theme="dark"
                   language="zh-CN"
-                  :placeholder="placeholder"
+                  :placeholder="String(placeholder ?? '')"
                   style="height: 440px;"
                 />
               </div>

@@ -7,7 +7,7 @@
     "dev": "vite",
     "dev:browser": "vite --mode browser-preview --host 0.0.0.0",
     "build:dev": "node ./scripts/run-vite-build.mjs --scan --minify false --mode development",
-    "build": "node ./scripts/run-vite-build.mjs --scan --mode production",
+    "build": "node ./scripts/run-vite-build.mjs --scan --mode production && node ./scripts/assert-build-output.mjs",
     "preview": "vite preview",
     "test:unit": "node --test src/utils/*.test.js src/services/*.test.js",
     "test:e2e": "playwright test",
