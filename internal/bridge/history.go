@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -114,13 +115,7 @@ func scanHistorySession(dir, id string, isActive func(conversationID, requestID 
 		session.RequestID = strings.TrimSpace(state.CurrentRequestID)
 	}
 	session.Title = readHistoryTitle(filepath.Join(dir, "context.json"))
-	debugDir := filepath.Join(dir, "debug")
-	session.HasDebug = dirHasFiles(debugDir)
-	session.DebugSizeBytes = dirSize(debugDir)
-	session.SizeBytes = dirSize(dir) - session.DebugSizeBytes
-	if session.SizeBytes < 0 {
-		session.SizeBytes = 0
-	}
+	session.SizeBytes, session.DebugSizeBytes, session.HasDebug = historyDirectoryStats(dir)
 	return session
 }
 
@@ -217,17 +212,33 @@ func truncateHistoryTitle(text string) string {
 	return string(runes)
 }
 
-// dirHasFiles 判断目录下是否存在任何文件（递归）。
-func dirHasFiles(root string) bool {
-	found := false
-	_ = filepath.WalkDir(root, func(_ string, entry os.DirEntry, err error) error {
-		if err == nil && entry.Type().IsRegular() {
-			found = true
-			return filepath.SkipAll
+var historyDirectoryWalkDir = filepath.WalkDir
+
+// historyDirectoryStats 在一次遍历中分别统计会话文件和 debug 文件。
+func historyDirectoryStats(root string) (sessionBytes int64, debugBytes int64, hasDebug bool) {
+	debugPrefix := "debug" + string(filepath.Separator)
+	_ = historyDirectoryWalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || !entry.Type().IsRegular() {
+			return nil
+		}
+		relative, relErr := filepath.Rel(root, path)
+		if relErr != nil {
+			return nil
+		}
+		info, infoErr := entry.Info()
+		if relative == "debug" || strings.HasPrefix(relative, debugPrefix) {
+			hasDebug = true
+			if infoErr == nil {
+				debugBytes += info.Size()
+			}
+			return nil
+		}
+		if infoErr == nil {
+			sessionBytes += info.Size()
 		}
 		return nil
 	})
-	return found
+	return sessionBytes, debugBytes, hasDebug
 }
 
 // dirSize 递归统计目录占用字节数（只统计普通文件）。

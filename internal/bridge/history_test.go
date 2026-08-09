@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -111,6 +112,79 @@ func TestHistoryDebugDirsInMissingRoot(t *testing.T) {
 	}
 	if len(dirs) != 0 {
 		t.Fatalf("want no dirs, got %v", dirs)
+	}
+}
+
+func TestHistoryDirectoryStats(t *testing.T) {
+	tests := []struct {
+		name         string
+		files        map[string]string
+		emptyDirs    []string
+		wantSession  int64
+		wantDebug    int64
+		wantHasDebug bool
+	}{
+		{
+			name: "nested ordinary and debug files",
+			files: map[string]string{
+				"state.json":                                       "abc",
+				filepath.Join("nested", "data"):                    "12345",
+				filepath.Join("debug", "runtime.jsonl"):            "debug",
+				filepath.Join("debug", "nested", "bidi.raw.jsonl"): "events",
+			},
+			wantSession:  8,
+			wantDebug:    11,
+			wantHasDebug: true,
+		},
+		{
+			name:         "empty debug directory",
+			files:        map[string]string{"context.json": "content"},
+			emptyDirs:    []string{"debug"},
+			wantSession:  7,
+			wantDebug:    0,
+			wantHasDebug: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			for _, relative := range tt.emptyDirs {
+				mustMkdirAll(t, filepath.Join(root, relative))
+			}
+			for relative, content := range tt.files {
+				path := filepath.Join(root, relative)
+				mustMkdirAll(t, filepath.Dir(path))
+				if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			sessionBytes, debugBytes, hasDebug := historyDirectoryStats(root)
+			if sessionBytes != tt.wantSession || debugBytes != tt.wantDebug || hasDebug != tt.wantHasDebug {
+				t.Fatalf("historyDirectoryStats() = (%d, %d, %v), want (%d, %d, %v)", sessionBytes, debugBytes, hasDebug, tt.wantSession, tt.wantDebug, tt.wantHasDebug)
+			}
+		})
+	}
+}
+
+func TestHistoryDirectoryStatsWalksOnce(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "state.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	originalWalkDir := historyDirectoryWalkDir
+	t.Cleanup(func() { historyDirectoryWalkDir = originalWalkDir })
+	walks := 0
+	historyDirectoryWalkDir = func(root string, fn fs.WalkDirFunc) error {
+		walks++
+		return filepath.WalkDir(root, fn)
+	}
+
+	historyDirectoryStats(root)
+	if walks != 1 {
+		t.Fatalf("historyDirectoryStats walker calls = %d, want 1", walks)
 	}
 }
 
