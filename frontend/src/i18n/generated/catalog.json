@@ -603,7 +603,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 344,
+          "line": 409,
           "column": 21
         }
       ]
@@ -656,7 +656,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 760,
+          "line": 763,
           "column": 12
         }
       ]
@@ -856,12 +856,12 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 252,
+          "line": 312,
           "column": 43
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 425,
+          "line": 490,
           "column": 50
         },
         {
@@ -1120,12 +1120,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 411,
+          "line": 476,
           "column": 106
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 594,
+          "line": 659,
           "column": 106
         }
       ]
@@ -1375,7 +1375,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 691,
+          "line": 756,
           "column": 175
         }
       ]
@@ -1909,7 +1909,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 448,
+          "line": 513,
           "column": 16
         }
       ]
@@ -2292,7 +2292,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 747,
+          "line": 750,
           "column": 12
         }
       ]
@@ -2519,7 +2519,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 373,
+          "line": 438,
           "column": 14
         }
       ]
@@ -3002,7 +3002,7 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 252,
+          "line": 312,
           "column": 36
         },
         {
@@ -3029,7 +3029,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 721,
+          "line": 724,
           "column": 12
         }
       ]
@@ -3188,7 +3188,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 868,
+          "line": 871,
           "column": 49
         }
       ]
@@ -3284,7 +3284,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 636,
+          "line": 701,
           "column": 85
         }
       ]
@@ -3316,12 +3316,12 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 338,
+          "line": 403,
           "column": 17
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 375,
+          "line": 440,
           "column": 17
         },
         {
@@ -3425,7 +3425,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 335,
+          "line": 400,
           "column": 12
         }
       ]
@@ -3558,7 +3558,7 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 337,
+          "line": 402,
           "column": 18
         },
         {
@@ -3725,7 +3725,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 336,
+          "line": 401,
           "column": 14
         }
       ]
@@ -3930,12 +3930,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 489,
+          "line": 554,
           "column": 15
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 490,
+          "line": 555,
           "column": 15
         }
       ]
@@ -4137,7 +4137,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 467,
+          "line": 532,
           "column": 14
         }
       ]
@@ -4217,7 +4217,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 691,
+          "line": 756,
           "column": 211
         }
       ]
@@ -4294,7 +4294,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 514,
+          "line": 579,
           "column": 16
         },
         {
@@ -4338,7 +4338,7 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 439,
+          "line": 504,
           "column": 16
         }
       ]
@@ -4461,7 +4461,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 289,
+          "line": 349,
           "column": 19
         }
       ]
@@ -4981,7 +4981,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 523,
+          "line": 588,
           "column": 16
         }
       ]
@@ -5346,17 +5346,17 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 649,
+          "line": 714,
           "column": 114
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 661,
+          "line": 726,
           "column": 107
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 672,
+          "line": 737,
           "column": 109
         }
       ]
@@ -5599,17 +5599,17 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 53,
+          "line": 56,
           "column": 57
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 54,
+          "line": 57,
           "column": 92
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 55,
+          "line": 58,
           "column": 86
         },
         {
@@ -5854,7 +5854,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 639,
+          "line": 704,
           "column": 67
         }
       ]
@@ -5958,7 +5958,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 569,
+          "line": 634,
           "column": 11
         }
       ]
@@ -6284,7 +6284,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 103,
+          "line": 106,
           "column": 40
         }
       ]
@@ -7481,7 +7481,7 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 635,
+          "line": 700,
           "column": 85
         },
         {
@@ -7996,7 +7996,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 607,
+          "line": 672,
           "column": 30
         }
       ]
@@ -8219,7 +8219,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 359,
+          "line": 424,
           "column": 33
         }
       ]
@@ -8291,12 +8291,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 546,
+          "line": 611,
           "column": 13
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 547,
+          "line": 612,
           "column": 13
         }
       ]
@@ -8414,7 +8414,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 586,
+          "line": 651,
           "column": 28
         }
       ]
@@ -8546,12 +8546,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 448,
+          "line": 513,
           "column": 16
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 514,
+          "line": 579,
           "column": 16
         }
       ]
@@ -8604,7 +8604,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 877,
+          "line": 880,
           "column": 58
         }
       ]
@@ -8688,7 +8688,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 475,
+          "line": 540,
           "column": 77
         }
       ]
@@ -9243,7 +9243,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 695,
+          "line": 698,
           "column": 12
         }
       ]
@@ -9267,7 +9267,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 197,
+          "line": 257,
           "column": 31
         }
       ]
@@ -9585,7 +9585,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 532,
+          "line": 597,
           "column": 54
         }
       ]
@@ -9783,7 +9783,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 480,
+          "line": 545,
           "column": 14
         }
       ]
@@ -9937,7 +9937,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 552,
+          "line": 617,
           "column": 16
         }
       ]
@@ -10096,7 +10096,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 381,
+          "line": 446,
           "column": 21
         }
       ]
@@ -10132,12 +10132,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 500,
+          "line": 565,
           "column": 15
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 501,
+          "line": 566,
           "column": 15
         }
       ]
@@ -10166,7 +10166,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 406,
+          "line": 471,
           "column": 78
         },
         {
@@ -10224,7 +10224,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 690,
+          "line": 755,
           "column": 105
         }
       ]
@@ -10260,12 +10260,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 273,
+          "line": 333,
           "column": 14
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 429,
+          "line": 494,
           "column": 50
         }
       ]
@@ -10289,7 +10289,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 531,
+          "line": 596,
           "column": 50
         }
       ]
@@ -10313,7 +10313,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 523,
+          "line": 588,
           "column": 16
         }
       ]
@@ -10784,7 +10784,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 359,
+          "line": 424,
           "column": 71
         }
       ]
@@ -11158,7 +11158,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 773,
+          "line": 776,
           "column": 12
         }
       ]
@@ -11501,7 +11501,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 632,
+          "line": 697,
           "column": 26
         }
       ]
@@ -11607,7 +11607,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 372,
+          "line": 437,
           "column": 12
         }
       ]
@@ -11932,7 +11932,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 847,
+          "line": 850,
           "column": 25
         }
       ]
@@ -11968,7 +11968,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 412,
+          "line": 477,
           "column": 19
         }
       ]
@@ -12302,7 +12302,7 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 259,
+          "line": 319,
           "column": 14
         },
         {
@@ -12336,7 +12336,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 456,
+          "line": 521,
           "column": 14
         }
       ]
@@ -12365,7 +12365,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 786,
+          "line": 789,
           "column": 12
         }
       ]
@@ -12732,7 +12732,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 690,
+          "line": 755,
           "column": 143
         }
       ]
@@ -12744,12 +12744,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 619,
+          "line": 684,
           "column": 125
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 619,
+          "line": 684,
           "column": 140
         }
       ]
@@ -13241,7 +13241,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 439,
+          "line": 504,
           "column": 16
         }
       ]
@@ -13255,6 +13255,18 @@
           "file": "src/components/charts/StatsOverlayChart.vue",
           "line": 134,
           "column": 11
+        }
+      ]
+    },
+    "af90a08fec8ee28d": {
+      "source": "加载更多",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 774,
+          "column": 144
         }
       ]
     },
@@ -13335,7 +13347,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 876,
+          "line": 879,
           "column": 49
         }
       ]
@@ -13412,7 +13424,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 734,
+          "line": 737,
           "column": 12
         }
       ]
@@ -13648,7 +13660,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 480,
+          "line": 545,
           "column": 14
         }
       ]
@@ -13732,7 +13744,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 483,
+          "line": 548,
           "column": 132
         }
       ]
@@ -13840,7 +13852,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 456,
+          "line": 521,
           "column": 14
         },
         {
@@ -14040,7 +14052,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 637,
+          "line": 702,
           "column": 85
         }
       ]
@@ -14835,7 +14847,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 245,
+          "line": 305,
           "column": 27
         }
       ]
@@ -14987,7 +14999,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 374,
+          "line": 439,
           "column": 18
         }
       ]
@@ -15255,7 +15267,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 910,
+          "line": 913,
           "column": 69
         }
       ]
@@ -15807,7 +15819,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 634,
+          "line": 699,
           "column": 85
         },
         {
@@ -16183,7 +16195,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 691,
+          "line": 756,
           "column": 130
         }
       ]
@@ -16420,12 +16432,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 266,
+          "line": 326,
           "column": 14
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 421,
+          "line": 486,
           "column": 50
         }
       ]
@@ -16466,12 +16478,12 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 413,
+          "line": 478,
           "column": 19
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 638,
+          "line": 703,
           "column": 85
         }
       ]
@@ -16944,7 +16956,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 202,
+          "line": 262,
           "column": 31
         }
       ]
@@ -17125,7 +17137,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 878,
+          "line": 881,
           "column": 35
         }
       ]
@@ -17426,7 +17438,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 407,
+          "line": 472,
           "column": 60
         }
       ]
@@ -17940,7 +17952,7 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 697,
+          "line": 762,
           "column": 61
         },
         {
@@ -17974,7 +17986,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 708,
+          "line": 711,
           "column": 12
         }
       ]
@@ -18051,7 +18063,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 702,
+          "line": 767,
           "column": 142
         }
       ]
@@ -18147,7 +18159,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 467,
+          "line": 532,
           "column": 14
         },
         {
@@ -18755,7 +18767,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 870,
+          "line": 873,
           "column": 46
         }
       ]

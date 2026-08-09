@@ -689,7 +689,10 @@ export const GetDelegationTaskSnapshots = () => {
 };
 // previewHistorySessions 是可变的预览数据。此前删除/清理都返回成功但数据不变，
 // 占用统计还是写死的常量，界面上「清理成功」之后占用一点没少，等于假成功。
-const previewHistorySessions = [
+const seededPreviewHistorySessions = Array.isArray(previewTestPlan?.historySessions)
+  ? clone(previewTestPlan.historySessions)
+  : null;
+const previewHistorySessions = seededPreviewHistorySessions || [
   {
     id: "preview-session-2026-07-31-001",
     title: "优化站点消耗卡片布局",

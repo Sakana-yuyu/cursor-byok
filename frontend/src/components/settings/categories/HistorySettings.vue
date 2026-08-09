@@ -25,7 +25,10 @@ const deleting = ref(false);
 const clearing = ref(false);
 const cleaningDebug = ref(false);
 const collapsed = reactive(new Set());
+const visibleSessionCounts = reactive(new Map());
+const manuallyToggledGroups = new Set();
 const HISTORY_VIEW_MODE_KEY = "cursor-byok.history.view-mode";
+const DETAILS_PAGE_SIZE = 50;
 
 function readHistoryViewMode() {
   try {
@@ -172,6 +175,7 @@ function toggleSelectAll() {
 }
 
 function toggleCollapsed(key) {
+  manuallyToggledGroups.add(key);
   if (collapsed.has(key)) {
     collapsed.delete(key);
   } else {
@@ -181,6 +185,62 @@ function toggleCollapsed(key) {
 
 function isCollapsed(key) {
   return collapsed.has(key);
+}
+
+function syncCollapsedGroups(tree) {
+  const validKeys = new Set();
+  for (const year of tree) {
+    validKeys.add(year.key);
+    for (const month of year.months) {
+      validKeys.add(month.key);
+      for (const day of month.days) validKeys.add(day.key);
+    }
+  }
+  for (const key of collapsed) {
+    if (!validKeys.has(key)) collapsed.delete(key);
+  }
+  for (const key of manuallyToggledGroups) {
+    if (!validKeys.has(key)) manuallyToggledGroups.delete(key);
+  }
+  for (const key of visibleSessionCounts.keys()) {
+    if (!validKeys.has(key)) visibleSessionCounts.delete(key);
+  }
+  const recentYear = tree[0];
+  const recentMonth = recentYear?.months[0];
+  const recentDay = recentMonth?.days[0];
+  const recentKeys = new Set([recentYear?.key, recentMonth?.key, recentDay?.key].filter(Boolean));
+  for (const year of tree) {
+    if (!manuallyToggledGroups.has(year.key)) {
+      if (recentKeys.has(year.key)) collapsed.delete(year.key);
+      else collapsed.add(year.key);
+    }
+    for (const month of year.months) {
+      if (!manuallyToggledGroups.has(month.key)) {
+        if (recentKeys.has(month.key)) collapsed.delete(month.key);
+        else collapsed.add(month.key);
+      }
+      for (const day of month.days) {
+        if (!manuallyToggledGroups.has(day.key)) {
+          if (recentKeys.has(day.key)) collapsed.delete(day.key);
+          else collapsed.add(day.key);
+        }
+      }
+    }
+  }
+}
+
+function visibleSessions(day) {
+  const count = visibleSessionCounts.get(day.key) || DETAILS_PAGE_SIZE;
+  return day.sessions.slice(0, count);
+}
+
+function hasMoreSessions(day) {
+  return visibleSessions(day).length < day.sessions.length;
+}
+
+function loadMoreSessions(day) {
+  const current = visibleSessionCounts.get(day.key) || DETAILS_PAGE_SIZE;
+  visibleSessionCounts.set(day.key, Math.min(day.sessions.length, current + DETAILS_PAGE_SIZE));
 }
 
 function formatSize(bytes) {
@@ -321,7 +381,12 @@ async function refresh() {
   loading.value = true;
   error.value = "";
   try {
-    sessions.value = await getHistorySessions();
+    const loadedSessions = await getHistorySessions();
+    sessions.value = loadedSessions.map((session) => ({
+      ...session,
+      statusPresentation: statusInfo(session),
+    }));
+    syncCollapsedGroups(groupedTree.value);
   } catch (loadError) {
     error.value = toUserError(loadError);
   } finally {
@@ -614,7 +679,7 @@ onMounted(() => {
               <span class="min-w-0 flex-1">
                 <span class="block truncate text-xs text-[#e3e3e3]" :title="item.label">{{ item.label }}</span>
                 <span class="mt-1 flex min-w-0 items-center gap-2 text-[10px] text-[#707070]">
-                  <span v-if="statusInfo(item.session).label" class="shrink-0">{{ statusInfo(item.session).label }}</span>
+                  <span v-if="item.session.statusPresentation.label" class="shrink-0">{{ item.session.statusPresentation.label }}</span>
                   <span class="truncate tabular-nums">{{ formatModifiedTime(item.session.updatedAtUnixMs || item.session.createdAtUnixMs) }}</span>
                   <span v-if="item.session.hasDebug" class="icon-[mdi--bug-outline] shrink-0 text-[12px] text-amber-300/65" title="包含调试日志" aria-label="包含调试日志" />
                 </span>
@@ -642,7 +707,7 @@ onMounted(() => {
           <div v-for="year in groupedTree" :key="year.key" role="rowgroup">
             <div role="row" class="border-b border-white/[0.055] bg-white/[0.018]">
               <div role="gridcell" class="col-span-full">
-                <button type="button" class="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-[#e3e3e3] hover:bg-white/[0.04]" @click="toggleCollapsed(year.key)">
+                <button type="button" class="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-[#e3e3e3] hover:bg-white/[0.04]" :aria-expanded="!isCollapsed(year.key)" @click="toggleCollapsed(year.key)">
                   <span class="icon-[mdi--chevron-down] text-[15px] text-[#777] transition-transform" :class="isCollapsed(year.key) ? '-rotate-90' : ''" aria-hidden="true" />
                   <span class="icon-[mdi--folder-outline] text-[15px] text-[#d6b35f]" aria-hidden="true" />
                   <span>{{ year.label }}</span>
@@ -654,7 +719,7 @@ onMounted(() => {
               <div v-for="month in year.months" :key="month.key" role="rowgroup">
                 <div role="row" class="border-b border-white/[0.05]">
                   <div role="gridcell" class="col-span-full">
-                    <button type="button" class="flex w-full items-center gap-2 py-1.5 pl-7 pr-3 text-left text-[#c0c0c0] hover:bg-white/[0.035]" @click="toggleCollapsed(month.key)">
+                    <button type="button" class="flex w-full items-center gap-2 py-1.5 pl-7 pr-3 text-left text-[#c0c0c0] hover:bg-white/[0.035]" :aria-expanded="!isCollapsed(month.key)" @click="toggleCollapsed(month.key)">
                       <span class="icon-[mdi--chevron-down] text-[14px] text-[#666] transition-transform" :class="isCollapsed(month.key) ? '-rotate-90' : ''" aria-hidden="true" />
                       <span class="icon-[mdi--folder-outline] text-[14px] text-[#b99a52]" aria-hidden="true" />
                       <span>{{ formatMonthLabel(month.label) }}</span>
@@ -666,7 +731,7 @@ onMounted(() => {
                   <div v-for="day in month.days" :key="day.key" role="rowgroup">
                     <div role="row" class="border-b border-white/[0.045]">
                       <div role="gridcell" class="col-span-full">
-                        <button type="button" class="flex w-full items-center gap-2 py-1.5 pl-11 pr-3 text-left text-[#8e8e8e] hover:bg-white/[0.03]" @click="toggleCollapsed(day.key)">
+                        <button type="button" class="flex w-full items-center gap-2 py-1.5 pl-11 pr-3 text-left text-[#8e8e8e] hover:bg-white/[0.03]" :aria-expanded="!isCollapsed(day.key)" @click="toggleCollapsed(day.key)">
                           <span class="icon-[mdi--chevron-down] text-[13px] text-[#5e5e5e] transition-transform" :class="isCollapsed(day.key) ? '-rotate-90' : ''" aria-hidden="true" />
                           <span>{{ formatDayLabel(day.label) }}</span>
                           <span class="ml-1 text-[10px] tabular-nums text-[#595959]">{{ day.sessionCount }} 项</span>
@@ -674,12 +739,12 @@ onMounted(() => {
                       </div>
                     </div>
                     <label
-                      v-for="session in !isCollapsed(day.key) ? day.sessions : []"
+                      v-for="session in !isCollapsed(day.key) ? visibleSessions(day) : []"
                       :key="session.id"
                       role="row"
                       :aria-selected="selectedIDs.has(session.id) ? 'true' : 'false'"
                       class="group grid cursor-pointer grid-cols-[minmax(320px,1fr)_90px_138px_112px_112px_86px] border-b border-white/[0.045] transition-colors hover:bg-white/[0.045]"
-                      :class="selectedIDs.has(session.id) ? 'bg-[#10AD5D]/[0.12] hover:bg-[#10AD5D]/[0.15]' : statusInfo(session).row"
+                      :class="selectedIDs.has(session.id) ? 'bg-[#10AD5D]/[0.12] hover:bg-[#10AD5D]/[0.15]' : session.statusPresentation.row"
                     >
                       <div role="gridcell" class="flex min-w-0 items-center gap-2 border-r border-white/[0.045] py-2 pl-12 pr-3">
                         <input type="checkbox" class="size-3.5 shrink-0 accent-[#10AD5D]" :checked="selectedIDs.has(session.id)" @change="toggleSession(session.id)" />
@@ -693,7 +758,7 @@ onMounted(() => {
                         </div>
                       </div>
                       <div role="gridcell" class="flex items-center border-r border-white/[0.045] px-3">
-                        <span v-if="statusInfo(session).label" class="rounded-[4px] border px-1.5 py-0.5 text-[9px]" :class="statusInfo(session).badge">{{ statusInfo(session).label }}</span>
+                        <span v-if="session.statusPresentation.label" class="rounded-[4px] border px-1.5 py-0.5 text-[9px]" :class="session.statusPresentation.badge">{{ session.statusPresentation.label }}</span>
                         <span v-else class="text-[#6f6f6f]">已完成</span>
                       </div>
                       <div role="gridcell" class="flex items-center border-r border-white/[0.045] px-3 tabular-nums text-[#8f8f8f]">{{ formatModifiedTime(session.updatedAtUnixMs || session.createdAtUnixMs) }}</div>
@@ -704,6 +769,11 @@ onMounted(() => {
                       </div>
                       <div role="gridcell" class="flex items-center justify-end px-3 tabular-nums text-[#8b8b8b]">{{ formatSize(session.sizeBytes) }}</div>
                     </label>
+                    <div v-if="!isCollapsed(day.key) && hasMoreSessions(day)" role="row" class="border-b border-white/[0.045]">
+                      <div role="gridcell" class="col-span-full flex justify-center py-2">
+                        <button type="button" class="px-3 py-1 text-[11px] text-[#9ecfb5] hover:text-[#c8f2da]" @click="loadMoreSessions(day)">加载更多</button>
+                      </div>
+                    </div>
                   </div>
                 </template>
               </div>
