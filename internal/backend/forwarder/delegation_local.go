@@ -369,6 +369,9 @@ func (adapter *localDelegatedAgentAdapter) runProviderPass(ctx context.Context, 
 		Observer:           adapter.recorder,
 		ArtifactPaths:      &modeladapter.LLMArtifactPaths{},
 	}
+	// 委派 worker 放宽上游看门狗：worker 可能合法长静默（长思考/慢工具），
+	// 由 delegation scheduler 的 30min Timeout 与 5min 无进展看门狗兜底。
+	providerRequest.ProviderStreamIdleTimeout = delegatedProviderStreamIdleTimeout
 	var textBuilder strings.Builder
 	var visibleTextBuilder strings.Builder
 	flushVisibleText := func(force bool) {

@@ -255,6 +255,16 @@ func channelFailureCooldown(err error) time.Duration {
 	}
 }
 
+// resolveProviderStreamIdleTimeout 选择 provider 流空闲看门狗时长：
+// 调用方显式设置时尊重调用方（委派/子代理流用放宽值），否则回退全局配置
+// （父代理交互流默认行为不变）。
+func resolveProviderStreamIdleTimeout(requested time.Duration, configured time.Duration) time.Duration {
+	if requested > 0 {
+		return requested
+	}
+	return configured
+}
+
 // streamChannel 使用已解析的渠道构造请求并驱动对应 provider 适配器。此函数不改变模型可见的请求内容。
 func (router *Router) streamChannel(ctx context.Context, req StreamRequest, channel *legacyruntime.ResolvedChannel, sink func(ModelEvent) error) error {
 	resolved := req
@@ -287,7 +297,7 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 	resolved.AnthropicMaxTokens = channel.AnthropicMaxTokens
 	resolved.AnthropicThinkingEffort = strings.TrimSpace(channel.AnthropicThinkingEffort)
 	resolved.ThinkingBudgetTokens = channel.ThinkingBudgetTokens
-	resolved.ProviderStreamIdleTimeout = router.resolver.ProviderStreamIdleTimeout(ctx)
+	resolved.ProviderStreamIdleTimeout = resolveProviderStreamIdleTimeout(req.ProviderStreamIdleTimeout, router.resolver.ProviderStreamIdleTimeout(ctx))
 	runtimeThinkingEffort := normalizeRuntimeThinkingEffort(req.ThinkingEffort)
 	if runtimeThinkingEffort != "" {
 		resolved.ThinkingEffort = runtimeThinkingEffort

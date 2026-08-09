@@ -1734,6 +1734,12 @@ const parentAgentProviderPassSafetyLimit = 200
 // parentAgentProviderTurnDurationLimit 是父 agent 单次回合的墙钟时长兜底（自 handleRunIntent 起算）。
 const parentAgentProviderTurnDurationLimit = 3 * time.Hour
 
+// delegatedProviderStreamIdleTimeout 是委派/子代理流的 provider 流空闲看门狗时长。
+// 交互式父回合保持全局默认（90s）；委派 worker 与 native 子代理可能合法长静默
+// （长思考、慢工具），由委派层各自的「无有效进展」看门狗（native 5min / worker 30min）
+// 兜底，流级看门狗只负责识别真正断死的连接，取 10 分钟既覆盖长静默又不晚于 worker 兜底。
+const delegatedProviderStreamIdleTimeout = 10 * time.Minute
+
 // driveProvider 由 actor 触发一次 provider pass，并把真实流包装成 provider_event 回投 mailbox。
 func (service *Service) driveProvider(stream *ActiveStream) error {
 	if stream == nil {
@@ -1974,6 +1980,11 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 		CompileSummary:     compiled.CompileSummary,
 		Observer:           service.recorder,
 		ArtifactPaths:      &modeladapter.LLMArtifactPaths{},
+	}
+	// native 子代理流放宽上游看门狗：子代理会话带 SubagentTypeName，可能合法长静默
+	// （长思考/慢工具），由 native 无进展看门狗（5min）兜底；父代理流保持全局默认。
+	if conversation != nil && strings.TrimSpace(conversation.SubagentTypeName) != "" {
+		providerRequest.ProviderStreamIdleTimeout = delegatedProviderStreamIdleTimeout
 	}
 	providerRequest.ThinkingEffort = thinkingEffort
 	service.debug.LogProvider(context.Background(), requestID, conversationID, "provider_request_prepared", map[string]any{

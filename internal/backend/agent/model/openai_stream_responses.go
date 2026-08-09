@@ -613,16 +613,18 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		return fmt.Errorf("openai responses stream failed %s", strings.Join(details, " "))
 	}
 
-	// A2 SSE 逐块读超时：每次 Scan 前设置 30s 读 deadline，块到达后清除（不累积）。
+	// A2 SSE 逐块读超时：每次 Scan 前设置读 deadline，块到达后清除（不累积）。
+	// 超时阈值按请求空闲超时派生（委派/子代理流放宽，父代理保持 30s）。
 	// 底层连接不支持 SetReadDeadline 时静默 fallback，行为与原来一致。
 	// chunkTimedOut 记录本轮是否发生过逐块读超时；是则把扫描错误转为可触发
 	// pre-output 重连的读超时错误（见下方 scanner.Err 处理）。
 	var chunkTimedOut bool
+	chunkReadTimeout := providerStreamChunkTimeout(req.ProviderStreamIdleTimeout)
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), openAIStreamMaxTokenSize)
 	for {
 		disarm := func() bool { return false }
-		if d, ok := resetStreamReadDeadline(resp); ok {
+		if d, ok := resetStreamReadDeadline(resp, chunkReadTimeout); ok {
 			disarm = d
 		}
 		scanOK := scanner.Scan()

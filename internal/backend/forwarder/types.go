@@ -385,6 +385,9 @@ type ProviderRequest struct {
 	Observer            modeladapter.LLMArtifactObserver
 	ArtifactPaths       *modeladapter.LLMArtifactPaths
 	RequestBodyOverride map[string]any
+	// ProviderStreamIdleTimeout 表示本次调用的 provider 流空闲看门狗时长；
+	// 委派/子代理流显式设置放宽值（父代理流留零，走全局配置默认）。
+	ProviderStreamIdleTimeout time.Duration
 }
 
 type ProviderGateway interface {

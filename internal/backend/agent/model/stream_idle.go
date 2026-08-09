@@ -20,6 +20,8 @@ const (
 	minProviderStreamIdleTimeout     = 30 * time.Second
 
 	// chunkTimeout 是 SSE 单块（单次读）之间的最大间隔；超过即视为流卡死。
+	// 这是父代理默认（90s 空闲超时）对应的逐块阈值；委派/子代理流由
+	// providerStreamChunkTimeout 按请求空闲超时放宽，避免长 thinking 静默被误杀。
 	chunkTimeout = 30 * time.Second
 )
 
@@ -48,11 +50,11 @@ func newProviderStreamIdleWatchdog(parent context.Context, timeout time.Duration
 	timeout = normalizeProviderStreamIdleTimeoutDuration(timeout)
 	ctx, cancel := context.WithCancelCause(parent)
 	watchdog := &providerStreamIdleWatchdog{
-		ctx:         ctx,
-		cancel:      cancel,
-		timeout:     timeout,
-		err:         providerStreamIdleTimeoutError(timeout),
-		cancelDone:  make(chan struct{}),
+		ctx:        ctx,
+		cancel:     cancel,
+		timeout:    timeout,
+		err:        providerStreamIdleTimeoutError(timeout),
+		cancelDone: make(chan struct{}),
 	}
 	watchdog.timer = time.AfterFunc(watchdog.timeout, watchdog.expire)
 	// 监听 parent 取消：用户中止请求时立即关闭响应体，让阻塞中的 scanner.Scan() 返回，
@@ -181,20 +183,37 @@ func providerStreamIdleTimeoutError(timeout time.Duration) error {
 	return fmt.Errorf("provider stream idle timeout after %s without effective content", timeout)
 }
 
+// providerStreamChunkTimeout 由请求级空闲超时派生 SSE 逐块读超时：
+// 取空闲超时的 1/4，但不低于默认 30s 阈值。父代理默认 90s 空闲 → 30s 逐块
+// （行为与历史一致）；委派/子代理流放宽空闲超时后，逐块间隙容忍同步放大。
+func providerStreamChunkTimeout(idleTimeout time.Duration) time.Duration {
+	derived := time.Duration(0)
+	if idleTimeout > 0 {
+		derived = idleTimeout / 4
+	}
+	if derived < chunkTimeout {
+		return chunkTimeout
+	}
+	return derived
+}
+
 // resetStreamReadDeadline 在每次 SSE 块读取前设置读超时，块到达后清除。
 // 客户端 *http.Response 没有服务端 ResponseController 的读 deadline 能力，
-// 因此改为定时看护：chunkTimeout 内无块到达即关闭响应体，使阻塞中的读返回
+// 因此改为定时看护：timeout 内无块到达即关闭响应体，使阻塞中的读返回
 // 错误。超时触发会先原子记录标记再关闭 body；返回的 disarm 在每次 Scan 返回后
 // 调用，报告本次是否发生过读超时。调用方据此把扫描错误转换为可被
 // IsStreamConnectionReset 识别的读超时错误（net.Error），从而触发 pre-output
 // 流式重连。
 // 响应体不可用时静默忽略（fallback，不改变原有行为）。
-func resetStreamReadDeadline(resp *http.Response) (disarm func() bool, ok bool) {
+func resetStreamReadDeadline(resp *http.Response, timeout time.Duration) (disarm func() bool, ok bool) {
 	if resp == nil || resp.Body == nil {
 		return func() bool { return false }, false
 	}
+	if timeout <= 0 {
+		timeout = chunkTimeout
+	}
 	var timedOut atomic.Bool
-	timer := time.AfterFunc(chunkTimeout, func() {
+	timer := time.AfterFunc(timeout, func() {
 		timedOut.Store(true)
 		_ = resp.Body.Close()
 	})
