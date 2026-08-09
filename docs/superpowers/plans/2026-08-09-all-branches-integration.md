@@ -97,17 +97,17 @@ Expected: PASS.
 - Consumes: integrated source tree
 - Produces: evidence that the combined branch is buildable and test-clean
 
-- [ ] **Step 1: Check merge integrity**
+- [x] **Step 1: Check merge integrity**
 
 Run: `git diff --check && git grep -n -e '^<<<<<<<' -e '^=======$' -e '^>>>>>>>'`
 Expected: no whitespace errors and no conflict markers.
 
-- [ ] **Step 2: Run complete Go tests**
+- [x] **Step 2: Run complete Go tests**
 
 Run: `go test ./... -count=1`
 Expected: PASS.
 
-- [ ] **Step 3: Run frontend validation**
+- [x] **Step 3: Run frontend validation**
 
 Run: `npm run lint` from `frontend/`
 Expected: PASS.
@@ -115,7 +115,7 @@ Expected: PASS.
 Run: `npm run build` from `frontend/`
 Expected: PASS and stable generated catalogs.
 
-- [ ] **Step 4: Verify locale completeness**
+- [x] **Step 4: Verify locale completeness**
 
 Compare every locale key set and placeholder set against `frontend/src/i18n/generated/catalog.json`; require non-empty translations.
 
