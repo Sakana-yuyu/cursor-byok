@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+
+	"cursor/gen/agentv1"
 )
 
 func testRunIntent(conversationID string, requestID string) InboundIntent {
@@ -11,6 +13,8 @@ func testRunIntent(conversationID string, requestID string) InboundIntent {
 		Kind:           "run",
 		ConversationID: conversationID,
 		RequestID:      requestID,
+		Mode:           agentv1.AgentMode_AGENT_MODE_AGENT,
+		Prewarm:        true,
 	}
 }
 
@@ -251,5 +255,97 @@ func TestRunQueueFinishIsIdempotentAndRejectsWrongOwner(t *testing.T) {
 	}
 	if queue.Owner("conversation-a") != "" || queue.Len("conversation-a") != 0 {
 		t.Fatalf("state after final finish owner=%q queue_len=%d", queue.Owner("conversation-a"), queue.Len("conversation-a"))
+	}
+}
+
+func TestDispatchInboundIntentQueuesBeforeOpeningSecondConversationStream(t *testing.T) {
+	service := &Service{broker: NewStreamBroker(), runQueue: newRunQueue()}
+	first := testRunIntent("conversation-a", "request-1")
+	second := testRunIntent("conversation-a", "request-2")
+
+	if err := service.dispatchInboundIntent(first); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.dispatchInboundIntent(second); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := service.broker.Get("request-1"); !ok {
+		t.Fatal("owner stream was not opened")
+	}
+	if _, ok := service.broker.Get("request-2"); ok {
+		t.Fatal("queued stream was opened before promotion")
+	}
+	if got := service.runQueue.Len("conversation-a"); got != 1 {
+		t.Fatalf("queue len = %d", got)
+	}
+}
+
+func TestDispatchInboundIntentDoesNotPersistQueuedRun(t *testing.T) {
+	store := NewConversationFileStore(t.TempDir())
+	if _, err := store.CreateConversation("conversation-a", agentv1.AgentMode_AGENT_MODE_AGENT, "", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	service := &Service{broker: NewStreamBroker(), runQueue: newRunQueue(), store: store}
+	if result, _, _ := service.runQueue.Submit(testRunIntent("conversation-a", "request-1")); result != runQueueStart {
+		t.Fatalf("owner submit = %q", result)
+	}
+
+	if err := service.dispatchInboundIntent(testRunIntent("conversation-a", "request-2")); err != nil {
+		t.Fatal(err)
+	}
+
+	conversation, err := store.LoadConversation("conversation-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range conversation.Entries {
+		if entry.RequestID == "request-2" {
+			t.Fatalf("queued request persisted context item: %#v", entry)
+		}
+	}
+	if conversation.CurrentRequestID == "request-2" {
+		t.Fatal("queued request mutated conversation state")
+	}
+}
+
+func TestDispatchInboundIntentRunsDifferentConversationsConcurrently(t *testing.T) {
+	service := &Service{broker: NewStreamBroker(), runQueue: newRunQueue()}
+	for _, intent := range []InboundIntent{
+		testRunIntent("conversation-a", "request-a"),
+		testRunIntent("conversation-b", "request-b"),
+	} {
+		if err := service.dispatchInboundIntent(intent); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if _, ok := service.broker.Get("request-a"); !ok {
+		t.Fatal("conversation-a stream was not opened")
+	}
+	if _, ok := service.broker.Get("request-b"); !ok {
+		t.Fatal("conversation-b stream was not opened")
+	}
+	if !service.runQueue.IsOwner("conversation-a", "request-a") || !service.runQueue.IsOwner("conversation-b", "request-b") {
+		t.Fatalf("owners = %q, %q", service.runQueue.Owner("conversation-a"), service.runQueue.Owner("conversation-b"))
+	}
+}
+
+func TestDispatchInboundIntentDuplicateRequestDoesNotQueueAgain(t *testing.T) {
+	service := &Service{broker: NewStreamBroker(), runQueue: newRunQueue()}
+	owner := testRunIntent("conversation-a", "request-1")
+	queued := testRunIntent("conversation-a", "request-2")
+
+	for _, intent := range []InboundIntent{owner, owner, queued, queued} {
+		if err := service.dispatchInboundIntent(intent); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if got := service.runQueue.Len("conversation-a"); got != 1 {
+		t.Fatalf("queue len after duplicates = %d", got)
+	}
+	if _, ok := service.broker.Get("request-2"); ok {
+		t.Fatal("duplicate queued request opened a stream")
 	}
 }

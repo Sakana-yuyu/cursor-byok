@@ -134,13 +134,25 @@ func (service *Service) dispatchInboundIntent(intent InboundIntent) error {
 	if service == nil {
 		return fmt.Errorf("forwarder service is nil")
 	}
-	// 子代理运行期间的新消息不中断旧 stream：若该会话有运行中的子代理，把 run intent 入队等待，
-	// 等当前 turn 终态后再排空。必须在 streamForIntent 之前拦截，避免提前 OpenStream 新 requestID。
-	if strings.TrimSpace(intent.Kind) == "run" && service.activeConversationHasSubagents(intent.ConversationID) {
-		service.runQueue.Enqueue(intent.ConversationID, intent)
-		logger.Infof("forwarder run queued behind subagent request_id=%s conversation_id=%s queue_len=%d",
-			strings.TrimSpace(intent.RequestID), strings.TrimSpace(intent.ConversationID), service.runQueue.Len(intent.ConversationID))
-		return nil
+	if strings.TrimSpace(intent.Kind) == "run" {
+		result, ownerRequestID, queuePosition := service.runQueue.Submit(intent)
+		switch result {
+		case runQueueQueued:
+			logger.Infof("forwarder conversation run queued request_id=%s conversation_id=%s owner_request_id=%s queue_len=%d queue_position=%d",
+				strings.TrimSpace(intent.RequestID), strings.TrimSpace(intent.ConversationID), ownerRequestID,
+				service.runQueue.Len(intent.ConversationID), queuePosition)
+			return nil
+		case runQueueDuplicate:
+			logger.Infof("forwarder duplicate conversation run ignored request_id=%s conversation_id=%s owner_request_id=%s",
+				strings.TrimSpace(intent.RequestID), strings.TrimSpace(intent.ConversationID), ownerRequestID)
+			return nil
+		case runQueueStart:
+			if err := service.startOwnedRun(intent); err != nil {
+				service.finishConversationTurn(intent.ConversationID, intent.RequestID)
+				return err
+			}
+			return nil
+		}
 	}
 	stream, err := service.streamForIntent(intent)
 	if err != nil {
@@ -153,13 +165,9 @@ func (service *Service) dispatchInboundIntent(intent InboundIntent) error {
 	if err != nil {
 		return err
 	}
-	// "run" 类型 intent 使用异步发送，避免 BidiAppend 阻塞等待模型调用完成。
-	// 主进程可以在模型生成期间继续接收新消息，实现 Multitask Mode 的并发对话。
-	// exec_result / interaction_result 同样必须异步：并行工具结果（如一次并行读取
-	// 多个文件）会在 stream actor 中串行处理，若 BidiAppend 同步等待自己的命令完成，
-	// 排在后面的 BidiAppend 等待时间会随队列累积，超过客户端转发超时（约 5s），
-	// 表现为「接口超时 + 工具结果丢失」。mailbox FIFO 保证命令仍按序处理。
-	if commandKind == streamCommandRun || commandKind == streamCommandExecResult || commandKind == streamCommandInteractionResult {
+	// exec_result / interaction_result 必须异步：并行工具结果会在 stream actor 中串行处理，
+	// mailbox FIFO 保证命令仍按序处理，同时避免 BidiAppend 等待前序工具结果。
+	if commandKind == streamCommandExecResult || commandKind == streamCommandInteractionResult {
 		return service.postStreamCommandAsync(stream, streamCommand{
 			Kind:   commandKind,
 			Intent: intent,
@@ -167,6 +175,20 @@ func (service *Service) dispatchInboundIntent(intent InboundIntent) error {
 	}
 	return service.postStreamCommandWait(stream, streamCommand{
 		Kind:   commandKind,
+		Intent: intent,
+	})
+}
+
+func (service *Service) startOwnedRun(intent InboundIntent) error {
+	stream, err := service.streamForIntent(intent)
+	if err != nil {
+		return err
+	}
+	if stream == nil {
+		return nil
+	}
+	return service.postStreamCommandAsync(stream, streamCommand{
+		Kind:   streamCommandRun,
 		Intent: intent,
 	})
 }

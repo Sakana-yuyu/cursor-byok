@@ -1,10 +1,12 @@
 package forwarder
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 
 	"cursor/internal/logger"
+	"cursor/internal/safego"
 )
 
 type runQueueSubmitResult string
@@ -177,101 +179,53 @@ func (q *runQueue) Len(conversationID string) int {
 	return 0
 }
 
-// Enqueue preserves the pre-scheduler queue API for existing integration paths.
-func (q *runQueue) Enqueue(conversationID string, intent InboundIntent) {
-	if q == nil {
+func (service *Service) finishConversationTurn(conversationID string, requestID string) {
+	if service == nil || service.runQueue == nil {
 		return
 	}
-	conversationID = strings.TrimSpace(conversationID)
-	intent.ConversationID = conversationID
-	intent.RequestID = strings.TrimSpace(intent.RequestID)
-	if conversationID == "" || intent.RequestID == "" {
+	next, ok := service.runQueue.Finish(conversationID, requestID)
+	if !ok {
 		return
 	}
-
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	state := q.states[conversationID]
-	if state == nil {
-		state = &conversationRunState{}
-		q.states[conversationID] = state
-	}
-	state.pending = append(state.pending, intent)
+	safego.Go("forwarder:promoted-conversation-run", func() {
+		service.startPromotedRun(next)
+	})
 }
 
-// Dequeue preserves the pre-scheduler queue API for existing integration paths.
-func (q *runQueue) Dequeue(conversationID string) (InboundIntent, bool) {
-	if q == nil {
-		return InboundIntent{}, false
-	}
-	conversationID = strings.TrimSpace(conversationID)
-	if conversationID == "" {
-		return InboundIntent{}, false
-	}
-
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	state := q.states[conversationID]
-	if state == nil || len(state.pending) == 0 {
-		return InboundIntent{}, false
-	}
-	intent := state.pending[0]
-	state.pending[0] = InboundIntent{}
-	state.pending = state.pending[1:]
-	if state.ownerRequestID == "" && len(state.pending) == 0 {
-		delete(q.states, conversationID)
-	}
-	return intent, true
-}
-
-// activeConversationHasSubagents diagnoses the legacy subagent-only queue path.
-func (service *Service) activeConversationHasSubagents(conversationID string) bool {
-	if service == nil || service.broker == nil {
-		return false
-	}
-	conversationID = strings.TrimSpace(conversationID)
-	if conversationID == "" {
-		return false
-	}
-	for _, requestID := range service.broker.OtherConversationRequestIDs(conversationID, "") {
-		stream, ok := service.broker.Get(requestID)
-		if !ok || stream == nil {
-			continue
+func (service *Service) startPromotedRun(intent InboundIntent) {
+	for {
+		err := service.startOwnedRun(intent)
+		if err == nil {
+			return
 		}
-		stream.mu.Lock()
-		hit := false
-		for _, pending := range stream.PendingExecs {
-			if kind := strings.TrimSpace(pending.ExecKind); kind == "subagent" || kind == "delegation_aggregate" {
-				hit = true
-				break
+		logger.Errorf("forwarder promoted conversation run startup failed request_id=%s conversation_id=%s err=%v",
+			strings.TrimSpace(intent.RequestID), strings.TrimSpace(intent.ConversationID), err)
+		if service.broker != nil {
+			if stream, ok := service.broker.Get(intent.RequestID); ok && stream != nil {
+				_ = service.failStreamIfNonTerminal(stream, "unknown", fmt.Errorf("start promoted run: %w", err))
 			}
 		}
-		stream.mu.Unlock()
-		if hit {
-			return true
+		// A failed-terminal path may already release ownership and launch the successor.
+		// Only finish here when this startup failure still owns the conversation.
+		if !service.runQueue.IsOwner(intent.ConversationID, intent.RequestID) {
+			return
 		}
+		next, ok := service.runQueue.Finish(intent.ConversationID, intent.RequestID)
+		if !ok {
+			return
+		}
+		intent = next
 	}
-	return false
 }
 
-// drainRunQueue preserves the legacy subagent queue dispatch path until service integration is updated.
+// drainRunQueue preserves the legacy call sites while conversation ownership is completed in later tasks.
 func (service *Service) drainRunQueue(conversationID string) {
 	if service == nil || service.runQueue == nil {
 		return
 	}
-	conversationID = strings.TrimSpace(conversationID)
-	if conversationID == "" {
+	ownerRequestID := service.runQueue.Owner(conversationID)
+	if ownerRequestID == "" {
 		return
 	}
-	intent, ok := service.runQueue.Dequeue(conversationID)
-	if !ok {
-		return
-	}
-	logger.Infof("forwarder run queue drained request_id=%s conversation_id=%s",
-		strings.TrimSpace(intent.RequestID), conversationID)
-	if err := service.handleRunIntent(intent); err != nil {
-		logger.Errorf("forwarder run queue dispatch failed request_id=%s conversation_id=%s err=%v",
-			strings.TrimSpace(intent.RequestID), conversationID, err)
-		service.drainRunQueue(conversationID)
-	}
+	service.finishConversationTurn(conversationID, ownerRequestID)
 }

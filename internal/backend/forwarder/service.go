@@ -763,13 +763,6 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 	// 仅 turn 1 需要持久化静态上下文（与 normalizeRequestContextForStorageMode 的 turnSeq==1 语义一致），
 	// 复用现有 request_context → projector → engine.go 的原生 user-message 注入链路。
 	service.enrichRequestContextWithScannedAssets(&intent)
-	if !intent.Prewarm {
-		service.cancelOtherConversationActors(
-			intent.ConversationID,
-			intent.RequestID,
-			"[canceled] Superseded by newer request",
-		)
-	}
 	conversation, effectiveMode, turnSeq, initialEntries, err := service.bootstrapRuntimeConversation(intent)
 	if err != nil {
 		return err
