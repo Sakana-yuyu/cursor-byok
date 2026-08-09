@@ -32,6 +32,13 @@ type StreamBroker struct {
 	// failOverride 仅测试使用：非 nil 时 Fail 直接返回它，用于模拟
 	// 「Get 之后、Fail 之前流被清理」导致 Fail 报错的场景。
 	failOverride func(requestID string, terminalCode string, terminalMessage string) error
+	// terminalRetention 覆盖默认 terminalStreamRetentionPeriod；零值 = 使用默认值。
+	// 仅测试使用，用于加速终态流保留/清理定时器。
+	terminalRetention time.Duration
+	// cleanupIntercept 仅测试使用：非 nil 时 runScheduledTerminalCleanup 在校验完成后、
+	// broker.mu 删除前调用它，用于确定性竞态回归测试。测试可通过 channel 阻断清理，
+	// 注入并发的 Subscribe。
+	cleanupIntercept func(requestID string)
 }
 
 // NewStreamBroker 创建活动流注册表。
@@ -142,12 +149,22 @@ func (broker *StreamBroker) Get(requestID string) (*ActiveStream, bool) {
 }
 
 // Subscribe 为指定 request 注册一个新订阅者，并返回用于唤醒 backlog 消费的信号通道。
+//
+// 订阅者注册过程中持有 broker.mu.RLock，保证终态清理（runScheduledTerminalCleanup）
+// 无法在我们拿到流指针之后、注册订阅者之前删除该流，消除 TOCTOU 竞态。
 func (broker *StreamBroker) Subscribe(requestID string) (string, <-chan struct{}, int, error) {
 	normalizedRequestID := strings.TrimSpace(requestID)
 	if normalizedRequestID == "" {
 		return "", nil, 0, fmt.Errorf("request_id is required")
 	}
-	stream, ok := broker.Get(normalizedRequestID)
+
+	// Fast path: look up existing stream under broker.mu.RLock.
+	// If the stream doesn't exist yet, we'll create a placeholder via OpenStream
+	// (which takes broker.mu.Lock internally), then re-acquire RLock.
+	broker.mu.RLock()
+	stream, ok := broker.streams[normalizedRequestID]
+	broker.mu.RUnlock()
+
 	if !ok || stream == nil {
 		// RunSSE 可能先于 BidiAppend 到达。此时先创建一个占位活动流，
 		// 等待后续上行把真实 conversation/model/mode 信息补齐。
@@ -157,8 +174,22 @@ func (broker *StreamBroker) Subscribe(requestID string) (string, <-chan struct{}
 			return "", nil, 0, err
 		}
 	}
+
 	subscriberID := fmt.Sprintf("sub-%d", broker.nextID.Add(1))
 	subscriber := &StreamSubscriber{Signal: make(chan struct{}, subscriberSignalBufferSize)}
+
+	// Hold broker.mu.RLock across subscriber registration.  This prevents
+	// runScheduledTerminalCleanup from acquiring broker.mu.Lock (write) and
+	// deleting the stream between our pointer lookup and registration.
+	broker.mu.RLock()
+	defer broker.mu.RUnlock()
+
+	// Re-verify the stream pointer: between OpenStream returning and our RLock,
+	// the stream could have been completed and cleaned up.  Fall back to the
+	// current map entry if our pointer is stale.
+	if current, ok := broker.streams[normalizedRequestID]; ok && current != nil {
+		stream = current
+	}
 
 	stream.mu.Lock()
 	broker.stopTerminalCleanupTimerLocked(stream)
@@ -196,7 +227,13 @@ func (broker *StreamBroker) Unsubscribe(requestID string, subscriberID string) i
 		delete(stream.Subscribers, strings.TrimSpace(subscriberID))
 	}
 	remaining = len(stream.Subscribers)
+	status := stream.Status
 	stream.mu.Unlock()
+	// 终态流的最后一个订阅者离开时，启动保留定时器而非立即删除。
+	// 定时器是终态流的唯一清理者——RemoveIfIdle 不会删除终态流。
+	if remaining == 0 && (status == StreamStatusCompleted || status == StreamStatusCanceled || status == StreamStatusFailed) {
+		broker.scheduleTerminalCleanup(requestID)
+	}
 	return remaining
 }
 
@@ -295,7 +332,11 @@ func (broker *StreamBroker) scheduleTerminalCleanup(requestID string) bool {
 	if stream.TerminalCleanupTimer != nil {
 		stream.TerminalCleanupTimer.Stop()
 	}
-	stream.TerminalCleanupTimer = time.AfterFunc(terminalStreamRetentionPeriod, func() {
+	retention := terminalStreamRetentionPeriod
+	if broker.terminalRetention > 0 {
+		retention = broker.terminalRetention
+	}
+	stream.TerminalCleanupTimer = time.AfterFunc(retention, func() {
 		broker.runScheduledTerminalCleanup(requestID, sequence)
 	})
 	stream.UpdatedAt = time.Now().UTC()
@@ -303,29 +344,45 @@ func (broker *StreamBroker) scheduleTerminalCleanup(requestID string) bool {
 }
 
 func (broker *StreamBroker) runScheduledTerminalCleanup(requestID string, sequence uint64) {
-	stream, ok := broker.Get(requestID)
+	normalizedRequestID := strings.TrimSpace(requestID)
+	// Hold broker.mu (write) across validation + deletion so a concurrent
+	// Subscribe cannot obtain the stream pointer between our checks and the
+	// map removal.
+	broker.mu.Lock()
+	stream, ok := broker.streams[normalizedRequestID]
 	if !ok || stream == nil {
+		broker.mu.Unlock()
 		return
 	}
 	stream.mu.Lock()
 	if stream.TerminalCleanupSeq.Load() != sequence {
 		stream.mu.Unlock()
+		broker.mu.Unlock()
 		return
 	}
 	stream.TerminalCleanupTimer = nil
 	if len(stream.Subscribers) > 0 {
 		stream.mu.Unlock()
+		broker.mu.Unlock()
 		return
 	}
 	if stream.Status != StreamStatusCompleted && stream.Status != StreamStatusCanceled && stream.Status != StreamStatusFailed {
 		stream.mu.Unlock()
+		broker.mu.Unlock()
 		return
 	}
 	stream.mu.Unlock()
-	broker.RemoveIfIdle(requestID)
+	// 测试拦截点：在校验完成后、broker.mu 删除前阻断，允许测试注入并发的 Subscribe。
+	if broker.cleanupIntercept != nil {
+		broker.cleanupIntercept(requestID)
+	}
+	// 直接删除终态流（不再通过 RemoveIfIdle，后者已不再管理终态流）。
+	delete(broker.streams, normalizedRequestID)
+	broker.mu.Unlock()
 }
 
-// RemoveIfIdle 在没有订阅者时移除终态流，或移除仍为空壳的占位流。
+// RemoveIfIdle 移除无订阅者的空壳占位流。
+// 终态流由 terminalStreamRetentionPeriod 定时器专属管理，RemoveIfIdle 不会删除它们。
 func (broker *StreamBroker) RemoveIfIdle(requestID string) bool {
 	normalizedRequestID := strings.TrimSpace(requestID)
 	if normalizedRequestID == "" {
@@ -343,17 +400,15 @@ func (broker *StreamBroker) RemoveIfIdle(requestID string) bool {
 	hasBacklog := len(stream.Backlog) > 0
 	hasConversation := strings.TrimSpace(stream.ConversationID) != ""
 	status := stream.Status
-	if status == StreamStatusCompleted || status == StreamStatusCanceled || status == StreamStatusFailed {
-		broker.stopTerminalCleanupTimerLocked(stream)
-	}
 	stream.mu.Unlock()
 	if subscriberCount > 0 {
 		return false
 	}
+	// 终态流由定时器独占管理；RemoveIfIdle 不删除它。
 	if status == StreamStatusCompleted || status == StreamStatusCanceled || status == StreamStatusFailed {
-		delete(broker.streams, normalizedRequestID)
-		return true
+		return false
 	}
+	// 非终态占位流：无 provider、无 backlog、无会话信息 → 可安全移除。
 	if isActive || hasBacklog || hasConversation {
 		return false
 	}
