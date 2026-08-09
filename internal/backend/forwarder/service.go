@@ -76,6 +76,7 @@ type Service struct {
 	interactionBridge        interactionbridge.InteractionBridge
 	appendSeq                *appendSequenceTracker
 	runQueue                 *runQueue
+	startOwnedRunHook        func(InboundIntent) error
 	cursorDelegation         *cursorDelegationBridge
 	localDelegation          *localDelegatedAgentAdapter
 	delegationConfig         delegation.RuntimeConfigProvider
@@ -763,13 +764,6 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 	// 仅 turn 1 需要持久化静态上下文（与 normalizeRequestContextForStorageMode 的 turnSeq==1 语义一致），
 	// 复用现有 request_context → projector → engine.go 的原生 user-message 注入链路。
 	service.enrichRequestContextWithScannedAssets(&intent)
-	if !intent.Prewarm {
-		service.cancelOtherConversationActors(
-			intent.ConversationID,
-			intent.RequestID,
-			"[canceled] Superseded by newer request",
-		)
-	}
 	conversation, effectiveMode, turnSeq, initialEntries, err := service.bootstrapRuntimeConversation(intent)
 	if err != nil {
 		return err
@@ -959,6 +953,10 @@ func (service *Service) Shutdown(ctx context.Context) error {
 	if service.multitaskDelegation != nil {
 		defer service.multitaskDelegation.Close()
 	}
+	if service.runQueue != nil {
+		// 关闭调度器：清空所有排队项并禁止晋升，避免关闭期间启动新的 provider 调用。
+		service.runQueue.Close()
+	}
 	if service.broker == nil {
 		return nil
 	}
@@ -1093,6 +1091,11 @@ func forceCancelStreamProvider(stream *ActiveStream) {
 func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	stream, ok := service.broker.Get(intent.RequestID)
 	if !ok || stream == nil {
+		// 目标 request 没有活动流：可能是仍在会话队列中等待的 run。
+		// 只删除该排队项，不取消当前 owner，不写历史，不启动 provider。
+		if handled, cancelErr := service.cancelQueuedRun(intent); handled {
+			return cancelErr
+		}
 		return fmt.Errorf("request is not active: %s", intent.RequestID)
 	}
 	stream.mu.Lock()
@@ -1195,7 +1198,7 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	})
 	cancelErr := service.broker.Cancel(intent.RequestID, firstNonEmpty(intent.CancelReason, "[canceled] User aborted request"))
 	// 当前 turn 终态后，排空该会话因「子代理运行期间」排队的新消息。
-	service.drainRunQueue(stream.ConversationID)
+	service.drainRunQueue(stream.ConversationID, stream.RequestID)
 	return cancelErr
 }
 
@@ -3193,7 +3196,7 @@ func (service *Service) finishSuccessfulTurnAfterCheckpoint(stream *ActiveStream
 	}
 	service.setTurnPhase(stream, TurnPhaseCompleted)
 	// 当前 turn 终态后，排空该会话因「子代理运行期间」排队的新消息。
-	service.drainRunQueue(stream.ConversationID)
+	service.drainRunQueue(stream.ConversationID, stream.RequestID)
 	return nil
 }
 
@@ -3462,7 +3465,7 @@ func (service *Service) failActiveStream(stream *ActiveStream, conversationID st
 		firstErr = err
 	}
 	// 当前 turn 终态后，排空该会话因「子代理运行期间」排队的新消息。
-	service.drainRunQueue(conversationID)
+	service.drainRunQueue(conversationID, requestID)
 	return firstErr
 }
 

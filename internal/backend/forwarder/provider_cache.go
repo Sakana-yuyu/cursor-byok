@@ -431,8 +431,12 @@ func (store *responseCacheStore) flushToDisk() {
 }
 
 // providerCacheKeyShape 是参与哈希的请求归一化视图，只包含决定输出的字段。
-// 刻意排除每次调用都不同的标识（RequestID/RunID/ModelCallID/ConversationID）与
+// 刻意排除每次调用都不同的临时标识（RequestID/RunID/ModelCallID）与
 // 非确定性的观测/工件指针，以保证 byte-identical 的请求得到一致缓存键。
+//
+// ConversationID 属于会话隔离域，必须参与哈希：两个不同 conversation 即使
+// provider-visible 请求完全相同，也不能共享本地响应缓存（否则 A 的完成流、
+// 推理签名等 provider 元数据会被回放进 B 的 history）。它不是临时调用标识。
 //
 // Messages 不直接使用 modeladapter.Message，而走 normalizedCacheMessage 视图：
 // 后者剔除 provider 每次调用都会变化但又不影响请求语义的字段
@@ -442,6 +446,7 @@ func (store *responseCacheStore) flushToDisk() {
 // 若不剔除，只要历史里出现过 thinking 或工具调用，缓存 key 每次都不同，命中率趋近于 0。
 // 归一化只影响 key 计算，缓存的回放内容仍是完整的原始事件序列（含正确 signature）。
 type providerCacheKeyShape struct {
+	ConversationID     string                   `json:"conversation_id"`
 	ModelID            string                   `json:"model_id"`
 	Mode               int32                    `json:"mode"`
 	ThinkingEffort     string                   `json:"thinking_effort"`
@@ -524,6 +529,7 @@ func normalizeCacheMaxTokens(value int) int {
 // providerCacheKey 对归一化请求做 sha256，返回稳定的十六进制缓存键；序列化失败返回空串（不缓存）。
 func providerCacheKey(req ProviderRequest) string {
 	shape := providerCacheKeyShape{
+		ConversationID:     strings.TrimSpace(req.ConversationID),
 		ModelID:            req.ModelID,
 		Mode:               int32(req.Mode),
 		ThinkingEffort:     req.ThinkingEffort,

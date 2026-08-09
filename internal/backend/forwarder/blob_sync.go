@@ -357,7 +357,7 @@ func (service *Service) finishCanceledTurnAfterCheckpoint(stream *ActiveStream, 
 		Message: buildTurnEndedMessage(0, 0, 0, 0),
 	})
 	cancelErr := service.broker.Cancel(stream.RequestID, firstNonEmpty(strings.TrimSpace(message), "[canceled] User aborted request"))
-	service.drainRunQueue(stream.ConversationID)
+	service.drainRunQueue(stream.ConversationID, stream.RequestID)
 	return cancelErr
 }
 
@@ -370,7 +370,13 @@ func (service *Service) failTerminalCheckpointSync(stream *ActiveStream, cause e
 		message = strings.TrimSpace(cause.Error())
 	}
 	service.setTurnPhase(stream, TurnPhaseFailed)
-	return service.broker.Fail(stream.RequestID, "checkpoint_sync_error", message)
+	if err := service.broker.Fail(stream.RequestID, "checkpoint_sync_error", message); err != nil {
+		return err
+	}
+	// 终态 checkpoint 同步失败同样属于该 turn 的终态收口：
+	// 发布 broker failed 终态后释放 conversation owner，推进队列后继。
+	service.finishConversationTurn(stream.ConversationID, stream.RequestID)
+	return nil
 }
 
 func (service *Service) handleCheckpointBlobTimeout(stream *ActiveStream) error {
