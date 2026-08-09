@@ -86,14 +86,21 @@ cursor-byok 是 Cursor 客户端的本地代理（MITM + 后端 agent + 前端�
 - 新增 `internal/safego`：统一 panic 兜底封装，覆盖全部 15 处后台 goroutine（MITM 转发、delegation executor、checkpoint 心跳、历史维护、native 委派看门狗、shutdown 取消、广告刷新、自动启动等），未捕获 panic 不再拖垮整个进程。
 - 前端 `npm run lint` 恢复全绿：清理 `clientApi.js` 残留死导入（`GetGoals/StartGoal/StopGoal/EnableReaderMCP`，对应包装函数已在前轮删除）。
 
-## 七、验证结果
+## 七、健壮性加固（第三轮 2026-08-09）
+
+- MITM 流式转发：上游请求上下文由 `context.Background()` 改为派生自客户端请求上下文，客户端断线立即停止拉取 backend 流，防 goroutine/上游连接悬挂。
+- promptsync 拉取：统一 `fetchHTTPClient`（30s 总超时）替换无超时的 `http.DefaultClient`；`cmd/fetch-native-prompt` 增加 30s 截止时间。
+- native 委派看门狗：恢复失败时记录 error 日志，不再静默吞错（与 turn_stale 路径一致）。
+- 审计结论：`fmt.Errorf` 已普遍使用 `%w` 包裹（无丢失错误链）；HTTP 调用已普遍带超时/派生上下文；v-for 均带 `:key`；图表组件均已 dispose。
+
+## 八、验证结果
 
 - `go build ./...`、`go vet ./...`、`go test ./...`：全绿（2026-08-09）。
 - 前端 `npm run build`：通过；入口主包 4.25MB → 797KB（路由懒加载 + 供应商分包 + md-editor 按需加载）。
 - 死代码清理：前端删除孤儿组件/死导出，后端 34 文件删除 977 行未使用导出，全仓库零引用确认。
 - 每步独立提交（中文 message），历史可回溯；并行子代理只改文件、提交由主代理统一完成。
 
-## 八、遗留说明（非阻塞）
+## 九、遗留说明（非阻塞）
 
 - `@iconify/json` 未在 src 直接引用（tailwind 构建期使用），不进入运行时 bundle。
 - md-editor 异步块仍被 vite 预加载提示引用（本地磁盘读取成本极低），解析/执行已按需延迟。
