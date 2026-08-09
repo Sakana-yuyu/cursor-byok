@@ -11,7 +11,7 @@ import {
 import { toUserError } from "@/state/appState";
 import { usePolling } from "@/composables/usePolling";
 import { Browser } from "@wailsio/runtime";
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 
 const CURSOR_ACCOUNT_CONTRIBUTOR_URL = "https://github.com/aike0210";
 
@@ -87,19 +87,18 @@ async function handleCursorAccountDisconnect() {
 }
 
 // 挂载后立即无条件刷新一次；等待登录完成期间按 1.5s 轮询。
-const { start: startAccountPolling, stop: stopAccountPolling } = usePolling(
+usePolling(
   () => {
     if (cursorAccountWaiting.value) {
-      void refreshCursorAccountStatus().catch(() => {});
+      return refreshCursorAccountStatus().catch(() => {});
     }
+    return undefined;
   },
   { intervalMs: 1500, immediate: false },
 );
 onMounted(() => {
   void refreshCursorAccountStatus().catch(() => {});
-  startAccountPolling();
 });
-onUnmounted(stopAccountPolling);
 </script>
 
 <template>

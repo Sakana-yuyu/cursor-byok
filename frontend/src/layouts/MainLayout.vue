@@ -195,8 +195,9 @@ onMounted(() => {
 usePolling(
   () => {
     if (showFooter.value) {
-      void syncServiceState().catch(() => {});
+      return syncServiceState().catch(() => {});
     }
+    return undefined;
   },
   { intervalMs: proxyStatePollIntervalMs },
 );

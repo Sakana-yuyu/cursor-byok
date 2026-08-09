@@ -332,7 +332,7 @@ const AUTO_REFRESH_INTERVAL_MS = 5000;
 
 function autoRefresh() {
   if (document.hidden || loading.value) return;
-  void refresh({ keepPage: true });
+  return refresh({ keepPage: true });
 }
 
 const { start: startAutoRefresh, stop: stopAutoRefresh } = usePolling(autoRefresh, {

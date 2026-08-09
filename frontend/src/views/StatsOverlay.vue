@@ -452,7 +452,6 @@ onMounted(() => {
   const saved = getStatsOverlayPreferences();
   if (typeof saved.x === "number") lastSavedX = saved.x;
   if (typeof saved.y === "number") lastSavedY = saved.y;
-  void load();
   startOrbCycle();
   startPillCycle();
   // 初始同步一次原生窗口尺寸，确保窗口矩形紧贴实际内容

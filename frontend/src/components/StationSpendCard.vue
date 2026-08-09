@@ -208,10 +208,7 @@ async function loadBalances() {
 // 每分钟刷新一次，与首页其余统计节奏一致
 const REFRESH_INTERVAL_MS = 60_000;
 usePolling(
-  () => {
-    void load();
-    void loadBalances();
-  },
+  () => Promise.allSettled([load(), loadBalances()]),
   { intervalMs: REFRESH_INTERVAL_MS },
 );
 

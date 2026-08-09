@@ -13,7 +13,7 @@ import {
   getMCPRuntimeServers,
 } from "@/services/runtimeControlApi";
 import { toUserError } from "@/state/appState";
-import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
+import { computed, onUnmounted, reactive, ref } from "vue";
 
 const props = defineProps({
   compact: { type: Boolean, default: false },
@@ -334,12 +334,8 @@ function handleWorkspaceRootChange() {
   void refreshMCPServers();
 }
 
-onMounted(() => {
-  disposed = false;
-  void refreshRuntime();
-});
-usePolling(() => void refreshTasks(true), { intervalMs: 1500 });
-usePolling(() => void refreshMCPServers(true), { intervalMs: 5000 });
+usePolling(() => refreshTasks(true), { intervalMs: 1500 });
+usePolling(() => refreshMCPServers(true), { intervalMs: 5000 });
 
 onUnmounted(() => {
   disposed = true;
