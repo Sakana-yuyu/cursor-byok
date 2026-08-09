@@ -287,7 +287,9 @@ func (service *Service) watchNativeDelegationProgress(requestID, execID string) 
 			stream, ok := service.broker.Get(requestID)
 			if ok && stream != nil {
 				if pending, found := selectPendingExec(execID, 0, stream); found {
-					_ = service.recoverExecWithoutTerminal(stream, pending, "无有效进展超时：Cursor 子代理连续没有新的工具调用、工具结果或有效输出")
+					if err := service.recoverExecWithoutTerminal(stream, pending, "无有效进展超时：Cursor 子代理连续没有新的工具调用、工具结果或有效输出"); err != nil {
+						logger.Errorf("forwarder native delegation watchdog recover failed exec_id=%s err=%v", strings.TrimSpace(execID), err)
+					}
 				}
 			}
 			return
