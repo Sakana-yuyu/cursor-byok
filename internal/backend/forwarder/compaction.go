@@ -576,6 +576,9 @@ func (service *Service) handleCompactionEvent(stream *ActiveStream, payload *str
 			return service.failStream(stream, "unknown", err)
 		}
 		service.setTurnPhase(stream, TurnPhaseCompleted)
+		// manual compaction 也是当前 turn 的终态：释放 conversation owner，
+		// 推进队列后继。失败分支已走 failStream（由 failActiveStream 统一释放）。
+		service.finishConversationTurn(stream.ConversationID, stream.RequestID)
 		return nil
 	}
 	return service.requestProviderAction(stream, providerActionResume)
@@ -625,7 +628,13 @@ func (service *Service) finishManualCompactionNoop(stream *ActiveStream) error {
 	}); err != nil {
 		return err
 	}
-	return service.broker.Complete(stream.RequestID, "", "")
+	if err := service.broker.Complete(stream.RequestID, "", ""); err != nil {
+		return err
+	}
+	// manual compaction no-op 也是当前 turn 的终态：释放 conversation owner，
+	// 推进队列后继。
+	service.finishConversationTurn(stream.ConversationID, stream.RequestID)
+	return nil
 }
 
 func (service *Service) completeManualCompactionTurn(stream *ActiveStream) error {

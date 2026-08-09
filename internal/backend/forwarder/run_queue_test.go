@@ -617,6 +617,60 @@ func TestShutdownDoesNotStartQueuedRuns(t *testing.T) {
 	}
 }
 
+func TestCheckpointSyncFailurePromotesQueuedConversationRun(t *testing.T) {
+	broker := NewStreamBroker()
+	service := &Service{broker: broker, runQueue: newRunQueue()}
+	if result, _, _ := service.runQueue.Submit(testRunIntent("conversation-a", "request-1")); result != runQueueStart {
+		t.Fatalf("owner submit = %q", result)
+	}
+	if result, _, _ := service.runQueue.Submit(testRunIntent("conversation-a", "request-2")); result != runQueueQueued {
+		t.Fatalf("queued submit = %q", result)
+	}
+	stream, err := broker.OpenStream("request-1", "conversation-a", 1, "default", "default", agentv1.AgentMode_AGENT_MODE_AGENT, "hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := service.failTerminalCheckpointSync(stream, errors.New("blob write timed out")); err != nil {
+		t.Fatalf("failTerminalCheckpointSync: %v", err)
+	}
+	if stream.Status != StreamStatusFailed {
+		t.Fatalf("stream status = %q, want failed", stream.Status)
+	}
+	waitForRunQueueOwner(t, service.runQueue, "conversation-a", "request-2")
+}
+
+func TestManualCompactionNoopPromotesQueuedConversationRun(t *testing.T) {
+	broker := NewStreamBroker()
+	service := &Service{broker: broker, runQueue: newRunQueue(), projector: NewHistoryProjector()}
+	if result, _, _ := service.runQueue.Submit(testRunIntent("conversation-a", "request-1")); result != runQueueStart {
+		t.Fatalf("owner submit = %q", result)
+	}
+	if result, _, _ := service.runQueue.Submit(testRunIntent("conversation-a", "request-2")); result != runQueueQueued {
+		t.Fatalf("queued submit = %q", result)
+	}
+	stream, err := broker.OpenStream("request-1", "conversation-a", 1, "default", "default", agentv1.AgentMode_AGENT_MODE_AGENT, "hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream.mu.Lock()
+	stream.CheckpointConversation = &ConversationFile{
+		ConversationID: "conversation-a",
+		Mode:           "agent",
+		NextTurnSeq:    2,
+		NextEntrySeq:   1,
+	}
+	stream.mu.Unlock()
+
+	if err := service.finishManualCompactionNoop(stream); err != nil {
+		t.Fatalf("finishManualCompactionNoop: %v", err)
+	}
+	if stream.Status != StreamStatusCompleted {
+		t.Fatalf("stream status = %q, want completed", stream.Status)
+	}
+	waitForRunQueueOwner(t, service.runQueue, "conversation-a", "request-2")
+}
+
 func waitForRunQueueOwner(t *testing.T, queue *runQueue, conversationID string, requestID string) {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)
