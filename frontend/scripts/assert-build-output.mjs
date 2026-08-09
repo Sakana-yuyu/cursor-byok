@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
 const frontendRoot = path.resolve(import.meta.dirname, "..");
@@ -24,6 +24,23 @@ if (eagerEditorAssets.length > 0) {
 }
 
 const assetNames = await readdir(assetsRoot);
+const oversizedFonts = [];
+for (const name of assetNames.filter((assetName) => assetName.endsWith(".ttf"))) {
+  const details = await stat(path.join(assetsRoot, name));
+  if (details.size > 1024 * 1024) oversizedFonts.push(`${name} (${details.size} bytes)`);
+}
+if (oversizedFonts.length > 0) {
+  throw new Error("production assets contain oversized TTF fonts: " + oversizedFonts.join(", "));
+}
+
+const cssAssets = assetNames.filter((name) => name.endsWith(".css"));
+for (const name of cssAssets) {
+  const body = await readFile(path.join(assetsRoot, name), "utf8");
+  if (body.includes("PingFang-Medium")) {
+    throw new Error(`production CSS still references the bundled PingFang font: ${name}`);
+  }
+}
+
 const javascriptAssets = assetNames.filter((name) => name.endsWith(".js"));
 let editorChunkFound = false;
 for (const name of javascriptAssets) {

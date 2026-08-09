@@ -52,11 +52,11 @@ module.exports = {
       fontFamily: {
         num: [
           "HFKos",
-          "PingFang-Medium",
           "system-ui",
           "-apple-system",
           "BlinkMacSystemFont",
           "\"Segoe UI\"",
+          "\"Microsoft YaHei\"",
           "Roboto",
           "sans-serif",
         ],
