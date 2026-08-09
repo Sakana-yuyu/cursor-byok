@@ -200,10 +200,22 @@ func (service *Service) startAdmittedRun(intent InboundIntent) error {
 			service.finishConversationTurn(intent.ConversationID, intent.RequestID)
 			return startupErr
 		}
-
+		stream.mu.Lock()
+		alreadyTerminal := isTerminalStreamStatus(stream.Status)
+		stream.mu.Unlock()
+		// 启动失败发生在 handleRunIntent 写历史之前。若该流已被并发路径收口为
+		// 终态（如 canceled），不能再调用 broker.Fail：它会覆盖终态状态并重复
+		// 发布 endstream。终态流直接释放 owner 即可安全推进后继。
+		if alreadyTerminal {
+			service.finishConversationTurn(intent.ConversationID, intent.RequestID)
+			return startupErr
+		}
 		service.setTurnPhase(stream, TurnPhaseFailed)
 		if terminalErr := service.broker.Fail(intent.RequestID, "startup_error", "[internal] Run startup failed"); terminalErr != nil {
-			return fmt.Errorf("terminalize admitted run startup failure: %w", terminalErr)
+			// 该请求未写任何历史，终态化失败也必须释放 owner，否则会话永久卡死。
+			// 记录可诊断的失败字段，仍推进队列后继（后继只读取已持久化终态历史）。
+			logger.Errorf("forwarder admitted run startup terminalization failed request_id=%s conversation_id=%s err=%v",
+				strings.TrimSpace(intent.RequestID), strings.TrimSpace(intent.ConversationID), terminalErr)
 		}
 		service.finishConversationTurn(intent.ConversationID, intent.RequestID)
 		return startupErr

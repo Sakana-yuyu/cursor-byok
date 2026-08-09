@@ -28,6 +28,9 @@ type StreamBroker struct {
 	mu      sync.RWMutex
 	streams map[string]*ActiveStream
 	nextID  atomic.Uint64
+	// failOverride 仅测试使用：非 nil 时 Fail 直接返回它，用于模拟
+	// 「Get 之后、Fail 之前流被清理」导致 Fail 报错的场景。
+	failOverride func(requestID string, terminalCode string, terminalMessage string) error
 }
 
 // NewStreamBroker 创建活动流注册表。
@@ -437,6 +440,9 @@ func (broker *StreamBroker) Complete(requestID string, terminalCode string, term
 
 // Fail 把活动流标记为失败，并发布一个失败 endstream 事件。
 func (broker *StreamBroker) Fail(requestID string, terminalCode string, terminalMessage string) error {
+	if broker.failOverride != nil {
+		return broker.failOverride(requestID, terminalCode, terminalMessage)
+	}
 	stream, ok := broker.Get(requestID)
 	if !ok || stream == nil {
 		return fmt.Errorf("request is not active: %s", strings.TrimSpace(requestID))
