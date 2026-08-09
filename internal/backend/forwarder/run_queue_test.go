@@ -130,6 +130,35 @@ func TestRunQueueConcurrentSubmitElectsOneOwner(t *testing.T) {
 	if ownerRequestID == "" || queue.Owner("conversation-a") != ownerRequestID || queue.Len("conversation-a") != submissions-1 {
 		t.Fatalf("owner=%q queue_owner=%q queue_len=%d", ownerRequestID, queue.Owner("conversation-a"), queue.Len("conversation-a"))
 	}
+
+	observed := make(map[string]struct{}, submissions)
+	currentRequestID := ownerRequestID
+	for {
+		if _, ok := observed[currentRequestID]; ok {
+			t.Fatalf("request %q observed more than once while finishing", currentRequestID)
+		}
+		observed[currentRequestID] = struct{}{}
+
+		next, ok := queue.Finish("conversation-a", currentRequestID)
+		if !ok {
+			if next.RequestID != "" {
+				t.Fatalf("final finish next = %#v", next)
+			}
+			break
+		}
+		if next.RequestID == "" {
+			t.Fatal("finish promoted an empty request ID")
+		}
+		currentRequestID = next.RequestID
+	}
+	if len(observed) != submissions {
+		t.Fatalf("finished requests = %d, want %d", len(observed), submissions)
+	}
+	for requestID := range seen {
+		if _, ok := observed[requestID]; !ok {
+			t.Fatalf("submitted request %q was not observed while finishing", requestID)
+		}
+	}
 }
 
 func TestRunQueueDuplicateOwnerOrPendingDoesNotEnqueueTwice(t *testing.T) {
@@ -161,6 +190,13 @@ func TestRunQueueCancelQueuedRemovesOnlyTarget(t *testing.T) {
 		if result, _, _ := queue.Submit(testRunIntent("conversation-a", requestID)); result != runQueueQueued {
 			t.Fatalf("submit %s = %q", requestID, result)
 		}
+	}
+
+	if _, ok := queue.CancelQueued("conversation-a", "request-1"); ok {
+		t.Fatal("CancelQueued removed the owner")
+	}
+	if queue.Owner("conversation-a") != "request-1" || queue.Len("conversation-a") != 3 {
+		t.Fatalf("owner cancellation changed state owner=%q queue_len=%d", queue.Owner("conversation-a"), queue.Len("conversation-a"))
 	}
 
 	canceled, ok := queue.CancelQueued(" conversation-a ", " request-3 ")
