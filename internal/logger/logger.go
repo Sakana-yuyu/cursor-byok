@@ -64,7 +64,19 @@ func Info(msg string, args ...any) {
 	slog.Info(msg, args...)
 }
 
-// Infof 输出格式化的 info 级日志。
+// Error 输出带结构化字段的 error 级日志。调用方应优先传入白名单字段，避免把原始请求体写入日志。
+func Error(msg string, args ...any) {
+	Init()
+	slog.Error(msg, args...)
+}
+
+// Warn 输出带结构化字段的 warning 级日志。
+func Warn(msg string, args ...any) {
+	Init()
+	slog.Warn(msg, args...)
+}
+
+// Infof 输出格式化的 info 级日志。新代码优先使用 Info，以便保留可检索字段。
 func Infof(format string, args ...any) {
 	Init()
 	slog.Info(formatMessage(format, args...))

@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"cursor/gen/agentv1"
+	"cursor/internal/apperror"
 	modeladapter "cursor/internal/backend/agent/model"
 	"cursor/internal/logger"
+	"cursor/internal/safego"
 	promptassets "cursor/prompt"
 	"github.com/google/uuid"
 )
@@ -453,7 +455,24 @@ func (service *Service) startPendingCompactionSummary(stream *ActiveStream, plan
 			return err
 		}
 	}
-	go service.runPendingCompaction(stream, token, clonePendingCompaction(plan), summaryModelCallID, ctx)
+	safego.GoWithPanicHandler("forwarder:compaction", func() {
+		service.runPendingCompaction(stream, token, clonePendingCompaction(plan), summaryModelCallID, ctx)
+	}, func(panicErr error) {
+		postErr := service.postStreamCommandWait(stream, streamCommand{
+			Kind: streamCommandCompactionEvent,
+			Compaction: &streamCompactionEvent{
+				Token: token,
+				Plan:  clonePendingCompaction(plan),
+				Err:   panicErr,
+			},
+		})
+		if postErr != nil && !errors.Is(postErr, errProviderLoopInterrupted) {
+			logger.Errorf("forwarder compaction panic completion post failed request_id=%s token=%d err=%v", strings.TrimSpace(stream.RequestID), token, postErr)
+			if terminalErr := service.failStreamIfNonTerminal(stream, "panic", apperror.Join(panicErr, postErr)); terminalErr != nil {
+				logger.Errorf("forwarder compaction panic terminalization failed request_id=%s err=%v", strings.TrimSpace(stream.RequestID), terminalErr)
+			}
+		}
+	})
 	return nil
 }
 
@@ -479,7 +498,9 @@ func (service *Service) runPendingCompaction(stream *ActiveStream, token uint64,
 		},
 	}); postErr != nil && !errors.Is(postErr, errProviderLoopInterrupted) {
 		logger.Errorf("forwarder compaction completion post failed request_id=%s token=%d err=%v", strings.TrimSpace(stream.RequestID), token, postErr)
-		_ = service.failStreamIfNonTerminal(stream, "unknown", postErr)
+		if terminalErr := service.failStreamIfNonTerminal(stream, "unknown", postErr); terminalErr != nil {
+			logger.Errorf("forwarder compaction post failure terminalization failed request_id=%s err=%v", strings.TrimSpace(stream.RequestID), terminalErr)
+		}
 	}
 }
 
@@ -599,7 +620,9 @@ func (service *Service) finishCompactionWithError(stream *ActiveStream, cancel c
 	if errors.As(err, &coded) && strings.TrimSpace(coded.TerminalCode()) != "" {
 		terminalCode = strings.TrimSpace(coded.TerminalCode())
 	}
-	_ = service.failStream(stream, terminalCode, err)
+	if terminalErr := service.failStream(stream, terminalCode, err); terminalErr != nil {
+		logger.Errorf("forwarder compaction failure terminalization failed request_id=%s err=%v", strings.TrimSpace(stream.RequestID), terminalErr)
+	}
 }
 
 func (service *Service) finishManualCompactionNoop(stream *ActiveStream) error {

@@ -22,6 +22,7 @@ import (
 	"cursor/gen/agentv1"
 	"cursor/gen/aiserverv1"
 	"cursor/internal/appdata"
+	"cursor/internal/apperror"
 	execbridge "cursor/internal/backend/agent/bridge/exec"
 	interactionbridge "cursor/internal/backend/agent/bridge/interaction"
 	runtimecore "cursor/internal/backend/agent/core"
@@ -448,6 +449,10 @@ func (service *Service) RunSSE(ctx context.Context, req *connect.Request[aiserve
 						"cursor":                 cursor,
 						"terminal_error_code":    strings.TrimSpace(event.TerminalErrorCode),
 						"terminal_error_message": strings.TrimSpace(event.TerminalErrorMessage),
+						"trace_id":               strings.TrimSpace(event.TerminalTraceID),
+						"error_code":             strings.TrimSpace(event.TerminalAppErrorCode),
+						"disposition":            strings.TrimSpace(event.TerminalDisposition),
+						"retry_attempt":          event.TerminalRetryAttemptCount,
 					})
 					return buildTerminalStreamError(event)
 				}
@@ -469,6 +474,10 @@ func (service *Service) RunSSE(ctx context.Context, req *connect.Request[aiserve
 							"cursor":                 cursor,
 							"terminal_error_code":    strings.TrimSpace(event.TerminalErrorCode),
 							"terminal_error_message": strings.TrimSpace(event.TerminalErrorMessage),
+							"trace_id":               strings.TrimSpace(event.TerminalTraceID),
+							"error_code":             strings.TrimSpace(event.TerminalAppErrorCode),
+							"disposition":            strings.TrimSpace(event.TerminalDisposition),
+							"retry_attempt":          event.TerminalRetryAttemptCount,
 						})
 						return buildTerminalStreamError(event)
 					}
@@ -1016,9 +1025,14 @@ func (service *Service) Shutdown(ctx context.Context) error {
 		// endstream，否则前端会一直停在「运行中」等待永远不会到来的响应。
 		// 先停掉 provider，避免它继续往已取消的 stream 写入造成竞态。
 		forceCancelStreamProvider(stream)
-		_ = service.broker.Publish(requestID, StreamEvent{
+		if err := service.broker.Publish(requestID, StreamEvent{
 			Message: buildTurnEndedMessage(0, 0, 0, 0),
-		})
+		}); err != nil {
+			logger.Errorf("forwarder shutdown turn-ended publish failed request_id=%s err=%v", strings.TrimSpace(requestID), err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
 		if cancelErr := service.broker.Cancel(requestID, "[canceled] Local assistant service shutting down"); cancelErr != nil {
 			// broker.Cancel 仅在 stream 已不在 broker 中时返回 error（已被 actor 移除），
 			// 这种情况下 TurnEnded 已 Publish 到已关闭的订阅也不会被消费——属正常，不记错误。
@@ -1166,9 +1180,11 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 		if strings.TrimSpace(pending.ExecKind) == "delegation_aggregate" {
 			continue
 		}
-		_ = service.broker.Publish(intent.RequestID, StreamEvent{
+		if err := service.broker.Publish(intent.RequestID, StreamEvent{
 			Message: buildExecAbortMessage(pending),
-		})
+		}); err != nil {
+			logger.Errorf("forwarder cancel exec-abort publish failed request_id=%s exec_id=%s err=%v", strings.TrimSpace(intent.RequestID), strings.TrimSpace(pending.ExecID), err)
+		}
 	}
 	// 清除所有 pending exec，防止 stream 永远卡在 running
 	cleanupAllPendingExecs(stream)
@@ -1190,9 +1206,11 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	}
 	service.setTurnPhase(stream, TurnPhaseCanceled)
 	// 发送 TurnEndedUpdate 让前端退出活跃状态（否则一直显示 "planning next moves"）
-	_ = service.broker.Publish(intent.RequestID, StreamEvent{
+	if err := service.broker.Publish(intent.RequestID, StreamEvent{
 		Message: buildTurnEndedMessage(0, 0, 0, 0),
-	})
+	}); err != nil {
+		logger.Errorf("forwarder cancel turn-ended publish failed request_id=%s err=%v", strings.TrimSpace(intent.RequestID), err)
+	}
 	cancelErr := service.broker.Cancel(intent.RequestID, firstNonEmpty(intent.CancelReason, "[canceled] User aborted request"))
 	// 当前 turn 终态后，排空该会话因「子代理运行期间」排队的新消息。
 	service.drainRunQueue(stream.ConversationID)
@@ -2000,7 +2018,24 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 			}
 		}
 	}
-	go service.runProviderStream(stream, currentToken, ctx, providerRequest, markProjectionApplied)
+	safego.GoWithPanicHandler("forwarder:provider-stream", func() {
+		service.runProviderStream(stream, currentToken, ctx, providerRequest, markProjectionApplied)
+	}, func(panicErr error) {
+		postErr := service.postStreamCommandWait(stream, streamCommand{
+			Kind: streamCommandProviderEvent,
+			Provider: &streamProviderEvent{
+				Token: currentToken,
+				Done:  true,
+				Err:   panicErr,
+			},
+		})
+		if postErr != nil && !errors.Is(postErr, errProviderLoopInterrupted) {
+			logger.Errorf("forwarder provider panic completion post failed request_id=%s err=%v", strings.TrimSpace(stream.RequestID), postErr)
+			if terminalErr := service.failStreamIfNonTerminal(stream, "panic", apperror.Join(panicErr, postErr)); terminalErr != nil {
+				logger.Errorf("forwarder provider panic terminalization failed request_id=%s err=%v", strings.TrimSpace(stream.RequestID), terminalErr)
+			}
+		}
+	})
 	return nil
 }
 
@@ -2286,7 +2321,9 @@ func (service *Service) runProviderStream(stream *ActiveStream, token uint64, ct
 			token,
 			postErr,
 		)
-		_ = service.failStreamIfNonTerminal(stream, "unknown", postErr)
+		if terminalErr := service.failStreamIfNonTerminal(stream, "unknown", postErr); terminalErr != nil {
+			logger.Errorf("forwarder provider event post failure terminalization failed request_id=%s err=%v", strings.TrimSpace(stream.RequestID), terminalErr)
+		}
 	}
 	if err != nil {
 		service.debug.LogProvider(context.Background(), request.RequestID, request.ConversationID, "provider_stream_finished", map[string]any{
@@ -3372,34 +3409,65 @@ func (service *Service) flushAssistantText(stream *ActiveStream, conversationID 
 	return err
 }
 
+// normalizeStreamFailure 将 stream 边界的任意错误归一化为安全、可追踪的用户错误。
+// 具体 provider 错误仍保留在 Cause 中，便于 errors.Is/As 和诊断使用。
+func normalizeStreamFailure(stream *ActiveStream, cause error) *apperror.AppError {
+	if cause == nil {
+		return nil
+	}
+	traceID := ""
+	if stream != nil {
+		traceID = strings.TrimSpace(stream.RequestID)
+	}
+	return apperror.Classify("forwarder.stream", cause, apperror.WithTraceID(traceID))
+}
+
 // failStream 在 provider 或投影失败时把错误写入 history 并收口活动流。
 func (service *Service) failStream(stream *ActiveStream, terminalCode string, cause error) error {
 	if stream == nil {
 		return nil
 	}
-	errorText := "unknown error"
-	if cause != nil && strings.TrimSpace(cause.Error()) != "" {
-		errorText = strings.TrimSpace(cause.Error())
+	normalized := normalizeStreamFailure(stream, cause)
+	if normalized == nil {
+		return nil
 	}
+	errorText := normalized.UserMessage
 	resolvedTerminalCode := resolveTerminalCode(terminalCode, cause)
 	metadataType := "failed"
 	var providerErr providerTerminalError
 	if errors.As(cause, &providerErr) || resolvedTerminalCode == "provider_error" {
 		metadataType = "provider_error"
 	}
-	_, _ = service.appendConversationEntries(stream, stream.ConversationID, []HistoryEntry{
+	stream.mu.Lock()
+	retryAttemptCount := stream.ProviderPassCount
+	stream.mu.Unlock()
+	appendErr := error(nil)
+	if _, err := service.appendConversationEntries(stream, stream.ConversationID, []HistoryEntry{
 		newMetadataEntry(stream.TurnSeq, stream.RequestID, metadataType, map[string]any{
-			"error": errorText,
+			"error":         errorText,
+			"error_code":    string(normalized.Code),
+			"disposition":   string(normalized.Disposition),
+			"trace_id":      normalized.TraceID,
+			"retry_attempt": retryAttemptCount,
 		}),
-	})
-	return service.failActiveStream(
+	}); err != nil {
+		appendErr = fmt.Errorf("append failure metadata: %w", err)
+	}
+	terminalErr := service.failActiveStreamWithDetails(
 		stream,
 		stream.ConversationID,
 		stream.RequestID,
 		stream.CurrentModelCallID,
-		resolvedTerminalCode,
-		errorText,
+		TerminalFailure{
+			Code:              resolvedTerminalCode,
+			Message:           errorText,
+			TraceID:           normalized.TraceID,
+			AppErrorCode:      string(normalized.Code),
+			Disposition:       string(normalized.Disposition),
+			RetryAttemptCount: retryAttemptCount,
+		},
 	)
+	return apperror.Join(appendErr, terminalErr)
 }
 
 func resolveTerminalCode(fallback string, cause error) string {
@@ -3415,9 +3483,18 @@ func resolveTerminalCode(fallback string, cause error) string {
 }
 
 func (service *Service) failActiveStream(stream *ActiveStream, conversationID string, requestID string, modelCallID string, terminalCode string, terminalMessage string) error {
+	return service.failActiveStreamWithDetails(stream, conversationID, requestID, modelCallID, TerminalFailure{
+		Code:    terminalCode,
+		Message: terminalMessage,
+	})
+}
+
+func (service *Service) failActiveStreamWithDetails(stream *ActiveStream, conversationID string, requestID string, modelCallID string, failure TerminalFailure) error {
 	if stream == nil {
 		return nil
 	}
+	terminalCode := strings.TrimSpace(failure.Code)
+	terminalMessage := strings.TrimSpace(failure.Message)
 	stream.mu.Lock()
 	activePending := len(stream.PendingExecs)
 	phase := stream.Phase
@@ -3440,19 +3517,19 @@ func (service *Service) failActiveStream(stream *ActiveStream, conversationID st
 		service.multitaskDelegation.CancelStream(stream)
 	}
 	service.setTurnPhase(stream, TurnPhaseFailed)
-	var firstErr error
-	if err := service.syncSummaryCarryForward(conversationID, requestID, modelCallID); err != nil && firstErr == nil {
-		firstErr = err
+	var terminalizationErrors []error
+	if err := service.syncSummaryCarryForward(conversationID, requestID, modelCallID); err != nil {
+		terminalizationErrors = append(terminalizationErrors, fmt.Errorf("sync summary carry forward: %w", err))
 	}
-	if err := service.publishCheckpointForce(requestID, conversationID); err != nil && firstErr == nil {
-		firstErr = err
+	if err := service.publishCheckpointForce(requestID, conversationID); err != nil {
+		terminalizationErrors = append(terminalizationErrors, fmt.Errorf("publish terminal checkpoint: %w", err))
 	}
-	if err := service.broker.Fail(requestID, terminalCode, terminalMessage); err != nil && firstErr == nil {
-		firstErr = err
+	if err := service.broker.FailWithDetails(requestID, failure); err != nil {
+		terminalizationErrors = append(terminalizationErrors, fmt.Errorf("fail stream broker: %w", err))
 	}
 	// 当前 turn 终态后，排空该会话因「子代理运行期间」排队的新消息。
 	service.drainRunQueue(conversationID)
-	return firstErr
+	return errors.Join(terminalizationErrors...)
 }
 
 func provider400RecoveryKey(requestID string, turnSeq int64) string {

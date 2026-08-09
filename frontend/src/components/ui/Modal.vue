@@ -1,5 +1,6 @@
 <script setup>
 import Button from "@/components/ui/Button.vue";
+import { safeErrorLogAttributes } from "@/utils/errorContract";
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from "vue";
 import { marked } from "marked";
 
@@ -33,7 +34,7 @@ const renderedHtml = computed(() => {
     // marked() 直接调用，返回 HTML 字符串
     return marked(props.content);
   } catch (err) {
-    console.error("Markdown parse error:", err);
+    console.error("Markdown parse error:", safeErrorLogAttributes(err, { operation: "modal.renderMarkdown" }));
     return props.content;
   }
 });

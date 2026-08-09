@@ -5,6 +5,7 @@ import Tooltip from "@/components/ui/Tooltip.vue";
 import { fetchLocalCacheStats, fetchMetricsRangeSummary, fetchRecentRequestMetrics, resetUsageMetrics } from "@/services/clientApi";
 import { appState, saveIncludeCacheWriteInHitRate, saveLocalResponseCacheEnabled, openMetricsDetailWindow } from "@/state/appState";
 import { formatCompactInteger, formatInteger } from "@/utils/numberFormat";
+import { safeErrorLogAttributes, toUserError } from "@/utils/errorContract";
 import { isBrowserPreview } from "@/services/runtimeAdapter";
 import { usePolling } from "@/composables/usePolling";
 import { computed, ref, watch } from "vue";
@@ -443,7 +444,8 @@ async function handleClear() {
     await loadEvents();
     emit("refresh");
   } catch (e) {
-    console.error("[HomeMetricsCard] clear usage metrics failed", e);
+    eventsError.value = toUserError(e);
+    console.error("[HomeMetricsCard] clear usage metrics failed", safeErrorLogAttributes(e, { operation: "homeMetrics.clearUsage" }));
   } finally {
     clearing.value = false;
   }

@@ -253,7 +253,7 @@
       "refs": [
         {
           "file": "src/utils/errorHumanizer.js",
-          "line": 13,
+          "line": 15,
           "column": 8
         }
       ]
@@ -311,7 +311,7 @@
       "refs": [
         {
           "file": "src/utils/errorHumanizer.js",
-          "line": 16,
+          "line": 18,
           "column": 8
         }
       ]
@@ -521,7 +521,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 369,
+          "line": 370,
           "column": 41
         }
       ]
@@ -690,6 +690,18 @@
         }
       ]
     },
+    "089bbe62808e635d": {
+      "source": "模型或接口地址不存在，请检查配置",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/utils/errorContract.js",
+          "line": 6,
+          "column": 95
+        }
+      ]
+    },
     "089f621992ac6dbc": {
       "source": "琥珀",
       "kind": "text",
@@ -733,7 +745,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 345,
+          "line": 346,
           "column": 5
         }
       ]
@@ -769,12 +781,12 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 628,
+          "line": 630,
           "column": 19
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 565,
+          "line": 566,
           "column": 35
         }
       ]
@@ -912,12 +924,12 @@
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 157,
+          "line": 158,
           "column": 30
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 157,
+          "line": 158,
           "column": 48
         },
         {
@@ -1019,7 +1031,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 180,
+          "line": 181,
           "column": 27
         }
       ]
@@ -1031,8 +1043,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 288,
-          "column": 1
+          "line": 287,
+          "column": 108
         }
       ]
     },
@@ -1156,7 +1168,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 47,
+          "line": 48,
           "column": 24
         }
       ]
@@ -1216,8 +1228,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 83,
-          "column": 1
+          "line": 82,
+          "column": 179
         }
       ]
     },
@@ -1228,7 +1240,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 337,
+          "line": 338,
           "column": 5
         }
       ]
@@ -1288,8 +1300,8 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 590,
-          "column": 1
+          "line": 591,
+          "column": 123
         }
       ]
     },
@@ -1300,12 +1312,12 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 605,
+          "line": 607,
           "column": 19
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 559,
+          "line": 560,
           "column": 35
         }
       ]
@@ -1329,7 +1341,7 @@
       "refs": [
         {
           "file": "src/utils/errorHumanizer.js",
-          "line": 45,
+          "line": 43,
           "column": 21
         }
       ]
@@ -1413,7 +1425,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 527,
+          "line": 529,
           "column": 19
         },
         {
@@ -1461,6 +1473,18 @@
           "file": "src/services/browserBindings.js",
           "line": 34,
           "column": 18
+        }
+      ]
+    },
+    "140367ee2c7c2ce0": {
+      "source": "暂时无法连接服务",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/runtimeHealthModel.test.js",
+          "line": 16,
+          "column": 16
         }
       ]
     },
@@ -1512,7 +1536,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 554,
+          "line": 555,
           "column": 57
         }
       ]
@@ -1656,7 +1680,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 271,
+          "line": 272,
           "column": 11
         }
       ]
@@ -1762,6 +1786,18 @@
         }
       ]
     },
+    "19e5d8d3c1537a79": {
+      "source": "当前网络离线，恢复联网后会自动重连",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/RuntimeHealthBanner.vue",
+          "line": 6,
+          "column": 12
+        }
+      ]
+    },
     "19f64e91db1fb36c": {
       "source": "复核模型",
       "kind": "text",
@@ -1803,7 +1839,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 286,
+          "line": 287,
           "column": 11
         }
       ]
@@ -1887,7 +1923,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 80,
+          "line": 81,
           "column": 9
         }
       ]
@@ -1935,7 +1971,7 @@
       "refs": [
         {
           "file": "src/utils/errorHumanizer.js",
-          "line": 8,
+          "line": 10,
           "column": 8
         }
       ]
@@ -1983,8 +2019,20 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 484,
-          "column": 1
+          "line": 483,
+          "column": 163
+        }
+      ]
+    },
+    "1cf38e93fdc97e38": {
+      "source": "当前密钥没有访问权限，请检查供应商配置",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/utils/errorContract.js",
+          "line": 5,
+          "column": 91
         }
       ]
     },
@@ -2031,8 +2079,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 481,
-          "column": 1
+          "line": 480,
+          "column": 180
         }
       ]
     },
@@ -2048,7 +2096,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 398,
+          "line": 459,
           "column": 66
         }
       ]
@@ -2188,7 +2236,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 485,
+          "line": 487,
           "column": 40
         }
       ]
@@ -2367,7 +2415,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 582,
+          "line": 583,
           "column": 39
         }
       ]
@@ -2573,6 +2621,18 @@
         }
       ]
     },
+    "24343b764df9b2a5": {
+      "source": "密钥无效或暂无可用额度，请检查供应商配置",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/utils/errorContract.js",
+          "line": 3,
+          "column": 101
+        }
+      ]
+    },
     "2484e2850b0e2048": {
       "source": "天蓝",
       "kind": "text",
@@ -2604,7 +2664,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 389,
+          "line": 390,
           "column": 5
         }
       ]
@@ -2650,7 +2710,7 @@
         },
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 335,
+          "line": 336,
           "column": 5
         }
       ]
@@ -2662,7 +2722,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 317,
+          "line": 318,
           "column": 5
         }
       ]
@@ -2898,7 +2958,7 @@
       "refs": [
         {
           "file": "src/utils/errorHumanizer.js",
-          "line": 52,
+          "line": 50,
           "column": 12
         }
       ]
@@ -3230,7 +3290,7 @@
         },
         {
           "file": "src/components/ui/Modal.vue",
-          "line": 17,
+          "line": 18,
           "column": 40
         },
         {
@@ -3343,7 +3403,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 196,
+          "line": 197,
           "column": 27
         }
       ]
@@ -3547,7 +3607,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 532,
+          "line": 533,
           "column": 17
         }
       ]
@@ -3706,7 +3766,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 188,
+          "line": 189,
           "column": 27
         }
       ]
@@ -3735,7 +3795,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 242,
+          "line": 303,
           "column": 99
         }
       ]
@@ -3771,7 +3831,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 563,
+          "line": 565,
           "column": 23
         }
       ]
@@ -3836,7 +3896,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 50,
+          "line": 51,
           "column": 24
         }
       ]
@@ -3930,6 +3990,23 @@
         }
       ]
     },
+    "3732e727b7bbb8c5": {
+      "source": "服务发生异常，请重试或导出诊断信息",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/utils/errorContract.js",
+          "line": 71,
+          "column": 89
+        },
+        {
+          "file": "src/utils/errorContract.test.js",
+          "line": 61,
+          "column": 35
+        }
+      ]
+    },
     "37aa6ad6a36d46fa": {
       "source": "打开设置",
       "kind": "text",
@@ -3937,7 +4014,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 250,
+          "line": 251,
           "column": 11
         }
       ]
@@ -3997,7 +4074,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 226,
+          "line": 227,
           "column": 68
         },
         {
@@ -4157,8 +4234,8 @@
         },
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 163,
-          "column": 1
+          "line": 162,
+          "column": 11
         }
       ]
     },
@@ -4169,7 +4246,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 492,
+          "line": 494,
           "column": 21
         },
         {
@@ -4365,7 +4442,7 @@
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 372,
+          "line": 373,
           "column": 11
         }
       ]
@@ -4539,8 +4616,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 454,
-          "column": 1
+          "line": 453,
+          "column": 17
         }
       ]
     },
@@ -4590,7 +4667,7 @@
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 287,
+          "line": 288,
           "column": 19
         },
         {
@@ -4793,7 +4870,7 @@
       "refs": [
         {
           "file": "src/utils/errorHumanizer.js",
-          "line": 17,
+          "line": 19,
           "column": 8
         }
       ]
@@ -4941,7 +5018,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 535,
+          "line": 537,
           "column": 21
         }
       ]
@@ -4982,8 +5059,8 @@
       "refs": [
         {
           "file": "src/views/Diagnostics.vue",
-          "line": 211,
-          "column": 1
+          "line": 210,
+          "column": 181
         }
       ]
     },
@@ -5059,7 +5136,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 310,
+          "line": 311,
           "column": 5
         }
       ]
@@ -5107,12 +5184,12 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 344,
+          "line": 345,
           "column": 12
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 368,
+          "line": 369,
           "column": 12
         }
       ]
@@ -5146,7 +5223,7 @@
         },
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 207,
+          "line": 208,
           "column": 38
         }
       ]
@@ -5305,7 +5382,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 309,
+          "line": 310,
           "column": 5
         }
       ]
@@ -5365,7 +5442,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 380,
+          "line": 381,
           "column": 7
         }
       ]
@@ -5448,7 +5525,7 @@
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 287,
+          "line": 288,
           "column": 19
         }
       ]
@@ -5518,7 +5595,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 52,
+          "line": 53,
           "column": 27
         },
         {
@@ -5550,7 +5627,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 85,
+          "line": 86,
           "column": 9
         }
       ]
@@ -5584,7 +5661,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 143,
+          "line": 204,
           "column": 24
         }
       ]
@@ -5596,7 +5673,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 391,
+          "line": 392,
           "column": 5
         }
       ]
@@ -5753,7 +5830,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 349,
+          "line": 350,
           "column": 9
         }
       ]
@@ -5823,7 +5900,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 338,
+          "line": 399,
           "column": 128
         }
       ]
@@ -5920,7 +5997,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 50,
+          "line": 51,
           "column": 20
         }
       ]
@@ -6004,6 +6081,18 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 543,
           "column": 19
+        }
+      ]
+    },
+    "542e2b660ab6a83b": {
+      "source": "供应商网关超时，正在准备恢复",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/utils/errorContract.js",
+          "line": 12,
+          "column": 94
         }
       ]
     },
@@ -6395,7 +6484,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 29,
+          "line": 30,
           "column": 50
         },
         {
@@ -6441,6 +6530,18 @@
         }
       ]
     },
+    "59e71aaf354f6ad5": {
+      "source": "请求过于频繁，稍后会自动重试",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/utils/errorContract.js",
+          "line": 8,
+          "column": 88
+        }
+      ]
+    },
     "5a50d94d9d746ec2": {
       "source": "按所选语言生成提交信息；选择跟随界面语言时，提交信息语言会随界面语言切换自动同步。仅本地模型来源时生效。",
       "kind": "text",
@@ -6472,7 +6573,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 333,
+          "line": 334,
           "column": 5
         }
       ]
@@ -6561,7 +6662,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 51,
+          "line": 52,
           "column": 24
         },
         {
@@ -6639,7 +6740,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 513,
+          "line": 514,
           "column": 17
         }
       ]
@@ -6663,7 +6764,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 84,
+          "line": 85,
           "column": 9
         }
       ]
@@ -6675,7 +6776,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 481,
+          "line": 483,
           "column": 21
         }
       ]
@@ -6984,8 +7085,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 128,
-          "column": 1
+          "line": 127,
+          "column": 71
         }
       ]
     },
@@ -7090,7 +7191,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 465,
+          "line": 467,
           "column": 61
         }
       ]
@@ -7114,22 +7215,22 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 402,
+          "line": 403,
           "column": 55
         },
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 405,
+          "line": 406,
           "column": 54
         },
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 420,
+          "line": 421,
           "column": 54
         },
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 423,
+          "line": 424,
           "column": 53
         },
         {
@@ -7438,7 +7539,7 @@
       "refs": [
         {
           "file": "src/utils/errorHumanizer.js",
-          "line": 58,
+          "line": 56,
           "column": 12
         }
       ]
@@ -7629,7 +7730,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 556,
+          "line": 557,
           "column": 35
         }
       ]
@@ -7805,11 +7906,6 @@
           "column": 31
         },
         {
-          "file": "src/utils/errorHumanizer.js",
-          "line": 74,
-          "column": 31
-        },
-        {
           "file": "src/views/Home.vue",
           "line": 80,
           "column": 98
@@ -7838,7 +7934,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 260,
+          "line": 261,
           "column": 11
         }
       ]
@@ -8093,7 +8189,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 311,
+          "line": 312,
           "column": 5
         }
       ]
@@ -8129,8 +8225,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 69,
-          "column": 1
+          "line": 68,
+          "column": 144
         }
       ]
     },
@@ -8201,8 +8297,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 87,
-          "column": 1
+          "line": 86,
+          "column": 175
         }
       ]
     },
@@ -8295,7 +8391,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 534,
+          "line": 536,
           "column": 21
         }
       ]
@@ -8319,7 +8415,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 332,
+          "line": 333,
           "column": 5
         }
       ]
@@ -8427,7 +8523,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 387,
+          "line": 388,
           "column": 5
         }
       ]
@@ -8475,8 +8571,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 366,
-          "column": 1
+          "line": 365,
+          "column": 115
         }
       ]
     },
@@ -8504,7 +8600,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 256,
+          "line": 257,
           "column": 49
         }
       ]
@@ -8542,6 +8638,18 @@
           "file": "src/views/SupplierDetail.vue",
           "line": 550,
           "column": 52
+        }
+      ]
+    },
+    "77c30e62fbac3631": {
+      "source": "立即重试",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/RuntimeHealthBanner.vue",
+          "line": 10,
+          "column": 10
         }
       ]
     },
@@ -8615,7 +8723,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 471,
+          "line": 473,
           "column": 13
         },
         {
@@ -8668,7 +8776,7 @@
       "refs": [
         {
           "file": "src/utils/errorHumanizer.js",
-          "line": 15,
+          "line": 17,
           "column": 8
         }
       ]
@@ -8680,8 +8788,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 78,
-          "column": 1
+          "line": 77,
+          "column": 139
         }
       ]
     },
@@ -8787,6 +8895,18 @@
         }
       ]
     },
+    "7b0fe85cc2eed27b": {
+      "source": "稍后重试",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/utils/errorContract.test.js",
+          "line": 32,
+          "column": 18
+        }
+      ]
+    },
     "7b2fafc5d7ec952b": {
       "source": "取消全选 {0}",
       "kind": "template",
@@ -8838,8 +8958,8 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 644,
-          "column": 1
+          "line": 645,
+          "column": 61
         }
       ]
     },
@@ -8946,7 +9066,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 532,
+          "line": 533,
           "column": 17
         }
       ]
@@ -9030,7 +9150,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 306,
+          "line": 307,
           "column": 7
         }
       ]
@@ -9182,7 +9302,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 322,
+          "line": 323,
           "column": 15
         },
         {
@@ -9462,7 +9582,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 272,
+          "line": 273,
           "column": 19
         }
       ]
@@ -9539,13 +9659,13 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 247,
-          "column": 1
+          "line": 246,
+          "column": 105
         },
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 359,
-          "column": 1
+          "line": 358,
+          "column": 92
         }
       ]
     },
@@ -9628,12 +9748,12 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 539,
+          "line": 540,
           "column": 9
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 540,
+          "line": 541,
           "column": 9
         }
       ]
@@ -9756,6 +9876,23 @@
         }
       ]
     },
+    "873a9e9b8468312b": {
+      "source": "请求超时，正在准备恢复",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/utils/errorContract.js",
+          "line": 7,
+          "column": 80
+        },
+        {
+          "file": "src/utils/errorContract.js",
+          "line": 66,
+          "column": 85
+        }
+      ]
+    },
     "876056ff40e2e6a1": {
       "source": "历史与日志",
       "kind": "text",
@@ -9799,6 +9936,18 @@
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
           "line": 484,
           "column": 13
+        }
+      ]
+    },
+    "88217b7a03e7c51d": {
+      "source": "请求参数或配置不正确，请检查配置",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/utils/errorContract.js",
+          "line": 2,
+          "column": 98
         }
       ]
     },
@@ -9944,8 +10093,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 533,
-          "column": 1
+          "line": 532,
+          "column": 11
         }
       ]
     },
@@ -9980,8 +10129,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 228,
-          "column": 1
+          "line": 227,
+          "column": 52
         }
       ]
     },
@@ -10143,7 +10292,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 322,
+          "line": 323,
           "column": 5
         }
       ]
@@ -10323,12 +10472,12 @@
       "refs": [
         {
           "file": "src/utils/errorHumanizer.js",
-          "line": 12,
+          "line": 14,
           "column": 8
         },
         {
           "file": "src/utils/errorHumanizer.js",
-          "line": 49,
+          "line": 47,
           "column": 12
         }
       ]
@@ -10379,6 +10528,23 @@
         }
       ]
     },
+    "91bb91d5656cb4df": {
+      "source": "供应商暂时不可用，正在准备恢复",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/utils/errorContract.js",
+          "line": 9,
+          "column": 94
+        },
+        {
+          "file": "src/utils/errorContract.js",
+          "line": 11,
+          "column": 94
+        }
+      ]
+    },
     "91cba5c107a51892": {
       "source": "/ 异常",
       "kind": "text",
@@ -10386,8 +10552,8 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 594,
-          "column": 1
+          "line": 595,
+          "column": 23
         }
       ]
     },
@@ -10494,7 +10660,7 @@
       "refs": [
         {
           "file": "src/services/clientApi.js",
-          "line": 99,
+          "line": 156,
           "column": 37
         }
       ]
@@ -10613,7 +10779,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 136,
+          "line": 137,
           "column": 44
         }
       ]
@@ -10625,7 +10791,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 513,
+          "line": 514,
           "column": 17
         }
       ]
@@ -10774,6 +10940,18 @@
         }
       ]
     },
+    "9596d1ac92cd443d": {
+      "source": "操作已取消",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/utils/errorContract.js",
+          "line": 64,
+          "column": 86
+        }
+      ]
+    },
     "9609515ab8949fa2": {
       "source": "目录未覆盖",
       "kind": "text",
@@ -10841,8 +11019,20 @@
       "refs": [
         {
           "file": "src/utils/errorHumanizer.js",
-          "line": 11,
+          "line": 13,
           "column": 8
+        }
+      ]
+    },
+    "965f377bf370f8d0": {
+      "source": "供应商网关异常，正在准备恢复",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/utils/errorContract.js",
+          "line": 10,
+          "column": 94
         }
       ]
     },
@@ -10877,7 +11067,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 46,
+          "line": 47,
           "column": 26
         },
         {
@@ -10980,7 +11170,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 475,
+          "line": 477,
           "column": 40
         }
       ]
@@ -11194,7 +11384,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 536,
+          "line": 538,
           "column": 21
         }
       ]
@@ -11218,7 +11408,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 379,
+          "line": 380,
           "column": 7
         }
       ]
@@ -11242,7 +11432,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 320,
+          "line": 321,
           "column": 5
         }
       ]
@@ -11372,8 +11562,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 435,
-          "column": 1
+          "line": 434,
+          "column": 67
         }
       ]
     },
@@ -11597,7 +11787,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 48,
+          "line": 49,
           "column": 23
         }
       ]
@@ -11809,8 +11999,13 @@
           "column": 14
         },
         {
+          "file": "src/utils/errorContract.js",
+          "line": 63,
+          "column": 91
+        },
+        {
           "file": "src/utils/errorHumanizer.js",
-          "line": 51,
+          "line": 49,
           "column": 60
         }
       ]
@@ -11887,7 +12082,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 563,
+          "line": 565,
           "column": 23
         }
       ]
@@ -11899,8 +12094,8 @@
       "refs": [
         {
           "file": "src/views/Diagnostics.vue",
-          "line": 206,
-          "column": 1
+          "line": 205,
+          "column": 139
         }
       ]
     },
@@ -11957,8 +12152,8 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 460,
-          "column": 1
+          "line": 459,
+          "column": 17
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
@@ -11989,12 +12184,12 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 547,
+          "line": 548,
           "column": 9
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 548,
+          "line": 549,
           "column": 9
         }
       ]
@@ -12170,7 +12365,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 345,
+          "line": 346,
           "column": 12
         }
       ]
@@ -12196,6 +12391,18 @@
           "file": "src/components/settings/delegation/SubagentProfilesPanel.vue",
           "line": 31,
           "column": 57
+        }
+      ]
+    },
+    "a7188d812d2a4599": {
+      "source": "本地服务暂时不可用，正在自动恢复…",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/RuntimeHealthBanner.vue",
+          "line": 8,
+          "column": 17
         }
       ]
     },
@@ -12419,8 +12626,8 @@
       "refs": [
         {
           "file": "src/components/ui/ModelTreeMultiSelect.vue",
-          "line": 537,
-          "column": 1
+          "line": 536,
+          "column": 13
         }
       ]
     },
@@ -12556,7 +12763,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 261,
+          "line": 262,
           "column": 11
         }
       ]
@@ -12604,7 +12811,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 51,
+          "line": 52,
           "column": 22
         }
       ]
@@ -12640,17 +12847,17 @@
       "refs": [
         {
           "file": "src/utils/errorHumanizer.js",
-          "line": 9,
+          "line": 11,
           "column": 8
         },
         {
           "file": "src/utils/errorHumanizer.js",
-          "line": 10,
+          "line": 12,
           "column": 8
         },
         {
           "file": "src/utils/errorHumanizer.js",
-          "line": 55,
+          "line": 53,
           "column": 12
         }
       ]
@@ -12874,6 +13081,18 @@
         }
       ]
     },
+    "b224e54783afd841": {
+      "source": "正在连接本地服务…",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/RuntimeHealthBanner.vue",
+          "line": 7,
+          "column": 15
+        }
+      ]
+    },
     "b25b8a732c86a74c": {
       "source": "排查 5173 端口连接失败",
       "kind": "text",
@@ -13064,7 +13283,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 328,
+          "line": 329,
           "column": 5
         }
       ]
@@ -13415,7 +13634,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 388,
+          "line": 389,
           "column": 5
         }
       ]
@@ -13456,7 +13675,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 72,
+          "line": 73,
           "column": 12
         }
       ]
@@ -13468,8 +13687,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 93,
-          "column": 1
+          "line": 92,
+          "column": 9
         }
       ]
     },
@@ -13569,12 +13788,12 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 487,
+          "line": 489,
           "column": 17
         },
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 492,
+          "line": 494,
           "column": 21
         }
       ]
@@ -13622,7 +13841,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 319,
+          "line": 320,
           "column": 5
         }
       ]
@@ -13670,7 +13889,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 88,
+          "line": 89,
           "column": 12
         }
       ]
@@ -13682,7 +13901,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 371,
+          "line": 372,
           "column": 10
         }
       ]
@@ -13694,7 +13913,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 49,
+          "line": 50,
           "column": 19
         }
       ]
@@ -13706,7 +13925,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 226,
+          "line": 227,
           "column": 30
         },
         {
@@ -13723,6 +13942,18 @@
           "file": "src/views/RequestMetrics.vue",
           "line": 251,
           "column": 30
+        }
+      ]
+    },
+    "be7a2945399394de": {
+      "source": "当前供应商额度不足，请检查账户或切换供应商",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/utils/errorContract.js",
+          "line": 4,
+          "column": 83
         }
       ]
     },
@@ -13757,12 +13988,12 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 577,
+          "line": 579,
           "column": 19
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 562,
+          "line": 563,
           "column": 35
         }
       ]
@@ -14066,7 +14297,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 348,
+          "line": 349,
           "column": 9
         }
       ]
@@ -14335,7 +14566,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 226,
+          "line": 227,
           "column": 46
         },
         {
@@ -14410,7 +14641,7 @@
       "refs": [
         {
           "file": "src/utils/errorHumanizer.js",
-          "line": 66,
+          "line": 64,
           "column": 29
         }
       ]
@@ -14478,8 +14709,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 509,
-          "column": 1
+          "line": 508,
+          "column": 11
         }
       ]
     },
@@ -14502,7 +14733,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 307,
+          "line": 308,
           "column": 7
         }
       ]
@@ -14543,7 +14774,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 226,
+          "line": 227,
           "column": 85
         },
         {
@@ -14570,7 +14801,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 321,
+          "line": 322,
           "column": 5
         }
       ]
@@ -14731,7 +14962,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 481,
+          "line": 483,
           "column": 21
         }
       ]
@@ -14796,8 +15027,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 329,
-          "column": 1
+          "line": 328,
+          "column": 91
         }
       ]
     },
@@ -14948,7 +15179,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 385,
+          "line": 386,
           "column": 5
         }
       ]
@@ -14960,7 +15191,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 150,
+          "line": 151,
           "column": 19
         }
       ]
@@ -14984,7 +15215,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 130,
+          "line": 131,
           "column": 51
         },
         {
@@ -15030,12 +15261,12 @@
       "refs": [
         {
           "file": "src/utils/errorHumanizer.js",
-          "line": 14,
+          "line": 16,
           "column": 8
         },
         {
           "file": "src/utils/errorHumanizer.js",
-          "line": 65,
+          "line": 63,
           "column": 29
         }
       ]
@@ -15095,7 +15326,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 344,
+          "line": 345,
           "column": 5
         }
       ]
@@ -15281,7 +15512,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 437,
+          "line": 438,
           "column": 23
         }
       ]
@@ -15334,8 +15565,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 72,
-          "column": 1
+          "line": 71,
+          "column": 144
         }
       ]
     },
@@ -15382,8 +15613,8 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 145,
-          "column": 1
+          "line": 144,
+          "column": 53
         }
       ]
     },
@@ -15524,7 +15755,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 49,
+          "line": 50,
           "column": 23
         }
       ]
@@ -15536,12 +15767,12 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 256,
+          "line": 257,
           "column": 38
         },
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 533,
+          "line": 535,
           "column": 21
         }
       ]
@@ -15613,17 +15844,17 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 342,
+          "line": 343,
           "column": 12
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 366,
+          "line": 367,
           "column": 12
         },
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 572,
+          "line": 573,
           "column": 87
         }
       ]
@@ -15766,8 +15997,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 540,
-          "column": 1
+          "line": 539,
+          "column": 43
         }
       ]
     },
@@ -15860,8 +16091,8 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 394,
-          "column": 1
+          "line": 393,
+          "column": 152
         }
       ]
     },
@@ -15901,7 +16132,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 272,
+          "line": 273,
           "column": 19
         }
       ]
@@ -15966,7 +16197,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 251,
+          "line": 252,
           "column": 11
         },
         {
@@ -15995,8 +16226,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 332,
-          "column": 1
+          "line": 331,
+          "column": 85
         },
         {
           "file": "src/views/MetricsDetail.vue",
@@ -16222,7 +16453,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 330,
+          "line": 331,
           "column": 5
         }
       ]
@@ -16321,7 +16552,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 646,
+          "line": 648,
           "column": 28
         }
       ]
@@ -16393,7 +16624,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 569,
+          "line": 570,
           "column": 66
         }
       ]
@@ -16405,7 +16636,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 369,
+          "line": 370,
           "column": 22
         }
       ]
@@ -16438,8 +16669,13 @@
           "column": 14
         },
         {
+          "file": "src/utils/errorContract.js",
+          "line": 65,
+          "column": 100
+        },
+        {
           "file": "src/utils/errorHumanizer.js",
-          "line": 48,
+          "line": 46,
           "column": 81
         }
       ]
@@ -16451,7 +16687,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 384,
+          "line": 385,
           "column": 5
         }
       ]
@@ -16492,8 +16728,8 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 148,
-          "column": 1
+          "line": 147,
+          "column": 81
         }
       ]
     },
@@ -16550,7 +16786,7 @@
         },
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 334,
+          "line": 335,
           "column": 5
         }
       ]
@@ -16562,7 +16798,7 @@
       "refs": [
         {
           "file": "src/views/StatsOverlay.vue",
-          "line": 564,
+          "line": 565,
           "column": 32
         }
       ]
@@ -16620,7 +16856,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 377,
+          "line": 378,
           "column": 7
         }
       ]
@@ -16721,8 +16957,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 468,
-          "column": 1
+          "line": 467,
+          "column": 43
         }
       ]
     },
@@ -16769,7 +17005,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 641,
+          "line": 643,
           "column": 75
         }
       ]
@@ -17032,7 +17268,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 79,
+          "line": 80,
           "column": 9
         }
       ]
@@ -17172,7 +17408,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 644,
+          "line": 646,
           "column": 77
         },
         {
@@ -17290,8 +17526,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 444,
-          "column": 1
+          "line": 443,
+          "column": 17
         }
       ]
     },
@@ -17406,7 +17642,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 390,
+          "line": 391,
           "column": 5
         }
       ]
@@ -17456,6 +17692,18 @@
           "file": "src/utils/configValidators.js",
           "line": 32,
           "column": 14
+        }
+      ]
+    },
+    "f4237988a744f3a9": {
+      "source": "暂时无法连接服务，正在准备恢复",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/utils/errorContract.js",
+          "line": 68,
+          "column": 91
         }
       ]
     },
@@ -17575,7 +17823,7 @@
         },
         {
           "file": "src/components/ui/Modal.vue",
-          "line": 14,
+          "line": 15,
           "column": 35
         },
         {
@@ -17643,7 +17891,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 53,
+          "line": 54,
           "column": 25
         }
       ]
@@ -17679,7 +17927,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 90,
+          "line": 91,
           "column": 10
         }
       ]
@@ -17923,8 +18171,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 475,
-          "column": 1
+          "line": 474,
+          "column": 13
         }
       ]
     },
@@ -17988,7 +18236,7 @@
         },
         {
           "file": "src/components/ui/Modal.vue",
-          "line": 16,
+          "line": 17,
           "column": 41
         },
         {
@@ -18003,7 +18251,7 @@
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 158,
+          "line": 159,
           "column": 18
         },
         {
@@ -18081,7 +18329,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 352,
+          "line": 353,
           "column": 16
         }
       ]
@@ -18312,7 +18560,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 330,
+          "line": 331,
           "column": 15
         }
       ]
@@ -18326,6 +18574,18 @@
           "file": "src/components/settings/delegation/DelegationSupervisionPanel.vue",
           "line": 81,
           "column": 5
+        }
+      ]
+    },
+    "ff65d3213faa8c35": {
+      "source": "本地服务连接失败，请重试或查看诊断信息",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/RuntimeHealthBanner.vue",
+          "line": 9,
+          "column": 12
         }
       ]
     },

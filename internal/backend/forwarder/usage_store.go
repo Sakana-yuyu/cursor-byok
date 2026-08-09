@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"cursor/internal/logger"
 )
 
 const (
@@ -153,7 +155,9 @@ func (store *UsageFileStore) UpsertEvent(event usageFileEvent) error {
 	store.debounceTimer = time.AfterFunc(time.Duration(usageWriteDebounceMs)*time.Millisecond, func() {
 		store.mu.Lock()
 		defer store.mu.Unlock()
-		_ = store.flushPendingEventsLocked()
+		if err := store.flushPendingEventsLocked(); err != nil {
+			logger.Errorf("forwarder usage debounce flush failed path=%s err=%v", store.path, err)
+		}
 	})
 
 	return nil

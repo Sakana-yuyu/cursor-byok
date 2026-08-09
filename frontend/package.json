@@ -9,6 +9,7 @@
     "build:dev": "node ./scripts/run-vite-build.mjs --scan --minify false --mode development",
     "build": "node ./scripts/run-vite-build.mjs --scan --mode production",
     "preview": "vite preview",
+    "test:unit": "node --test src/utils/*.test.js src/services/*.test.js",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "lint": "eslint src scripts plugins",

@@ -8,14 +8,14 @@ test("深链进入更多设置分类时自动展开并渲染内容", async ({ pa
     );
     localStorage.removeItem("cursor-byok.browser-preview.config");
   });
-  await page.goto("/settings?category=goal");
+  await page.goto("/settings?category=advanced");
 
-  await expect(page.getByRole("heading", { name: "Goal", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "高级", exact: true })).toBeVisible();
 
   // 更多设置分组应已展开并高亮当前项
   const moreToggle = page.getByRole("button", { name: /更多设置/ });
   await expect(moreToggle).toHaveAttribute("aria-expanded", "true");
-  await expect(page.getByRole("button", { name: /Goal 目标循环执行的预算与完成判定/ })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: /高级 高风险或低频系统设置/ })).toHaveAttribute(
     "aria-current",
     "page",
   );

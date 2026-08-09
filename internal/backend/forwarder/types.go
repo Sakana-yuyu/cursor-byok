@@ -114,10 +114,23 @@ const (
 )
 
 type StreamEvent struct {
-	Message              *agentv1.AgentServerMessage
-	End                  bool
-	TerminalErrorCode    string
-	TerminalErrorMessage string
+	Message                   *agentv1.AgentServerMessage
+	End                       bool
+	TerminalErrorCode         string
+	TerminalErrorMessage      string
+	TerminalTraceID           string
+	TerminalAppErrorCode      string
+	TerminalDisposition       string
+	TerminalRetryAttemptCount int
+}
+
+type TerminalFailure struct {
+	Code              string
+	Message           string
+	TraceID           string
+	AppErrorCode      string
+	Disposition       string
+	RetryAttemptCount int
 }
 
 type StreamSubscriber struct {

@@ -18,6 +18,7 @@ import (
 
 	"cursor/internal/logger"
 	"cursor/internal/processutil"
+	"cursor/internal/safego"
 )
 
 const (
@@ -62,10 +63,10 @@ var activeInstalls sync.Map
 
 // InstallProgress 是推送给前端的进度 payload。
 type InstallProgress struct {
-	Target  string `json:"target"`            // powershell / python
-	Stage   string `json:"stage"`             // downloading / installing / done / error
-	Message string `json:"message"`           // 人类可读文案
-	Status  Status `json:"status,omitempty"`  // 仅 stage=done 时携带重新探测的结果
+	Target  string `json:"target"`           // powershell / python
+	Stage   string `json:"stage"`            // downloading / installing / done / error
+	Message string `json:"message"`          // 人类可读文案
+	Status  Status `json:"status,omitempty"` // 仅 stage=done 时携带重新探测的结果
 }
 
 // Install 通过 winget 安装指定依赖。异步推送进度事件，成功后返回 nil。
@@ -120,7 +121,9 @@ func Install(ctx context.Context, target string) error {
 	lastLines := newRingBuffer(8)
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 64*1024), 256*1024)
-	go func() {
+	scanDone := make(chan struct{})
+	safego.GoWithPanicHandler("terminalenv:winget-output", func() {
+		defer close(scanDone)
 		for scanner.Scan() {
 			line := strings.TrimSpace(scanner.Text())
 			if line == "" {
@@ -130,9 +133,16 @@ func Install(ctx context.Context, target string) error {
 			classifyAndEmit(line, target, emitProgress)
 			logger.Infof("winget[%s] %s", target, line)
 		}
-	}()
+	}, func(panicErr error) {
+		emitProgress(stageError, "读取 winget 安装进度失败，请稍后重试。")
+		logger.Errorf("winget[%s] output reader panic: %v", target, panicErr)
+	})
 
 	waitErr := cmd.Wait()
+	<-scanDone
+	if scanErr := scanner.Err(); scanErr != nil && waitErr == nil {
+		waitErr = fmt.Errorf("read winget output: %w", scanErr)
+	}
 	if waitErr != nil {
 		tail := strings.Join(lastLines.lines(), "\n")
 		msg := fmt.Sprintf("安装 %s 失败（winget 退出错误: %v）。", installTargetName(target), waitErr)

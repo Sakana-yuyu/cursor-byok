@@ -4,6 +4,8 @@ import App from "@/App.vue";
 import { installI18nRuntime } from "@/i18n/runtime";
 import router from "@/router";
 import { bootstrapAppState } from "@/state/appState";
+import { startRuntimeHealthSupervisor } from "@/services/runtimeHealth";
+import { safeErrorLogAttributes } from "@/utils/errorContract";
 import "@/style/global.css";
 import "@/style/tailwind.css";
 
@@ -33,8 +35,25 @@ updateFlexGapSupportClass();
 const app = createApp(App);
 installI18nRuntime(app);
 app.use(router);
+
+function reportFrontendDefect(error, operation) {
+  const attributes = safeErrorLogAttributes(error, { operation });
+  if (attributes.disposition === "canceled") return;
+  console.error("[frontend] unhandled error", attributes);
+}
+
+app.config.errorHandler = (error, _instance, info) => {
+  reportFrontendDefect(error, `vue.${String(info || "render")}`);
+};
+if (typeof window !== "undefined") {
+  window.addEventListener("unhandledrejection", (event) => {
+    reportFrontendDefect(event.reason, "window.unhandledrejection");
+  });
+}
+
+startRuntimeHealthSupervisor();
 app.mount("#root");
 
-bootstrapAppState().catch(() => {
-  // 启动阶段失败时保持界面可用，错误在业务交互中再提示。
+bootstrapAppState().catch((error) => {
+  reportFrontendDefect(error, "bootstrapAppState");
 });

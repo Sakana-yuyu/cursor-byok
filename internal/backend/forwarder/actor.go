@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"cursor/internal/logger"
+	"cursor/internal/safego"
 	"errors"
 	"fmt"
 	"strings"
@@ -306,9 +307,11 @@ func (service *Service) prepareStreamForForcedTurn(intent InboundIntent) error {
 		if strings.TrimSpace(pending.ExecKind) == "delegation_aggregate" {
 			continue
 		}
-		_ = service.broker.Publish(intent.RequestID, StreamEvent{
+		if err := service.broker.Publish(intent.RequestID, StreamEvent{
 			Message: buildExecAbortMessage(pending),
-		})
+		}); err != nil {
+			logger.Errorf("forwarder forced-turn exec-abort publish failed request_id=%s exec_id=%s err=%v", strings.TrimSpace(intent.RequestID), strings.TrimSpace(pending.ExecID), err)
+		}
 	}
 	stream.mu.Lock()
 	stream.BacklogStartCursor = len(stream.Backlog)
@@ -359,7 +362,13 @@ func (service *Service) ensureStreamActor(stream *ActiveStream) (chan streamComm
 		stream.Phase = TurnPhaseIdle
 	}
 	stream.mu.Unlock()
-	go service.runStreamActor(stream, mailbox, done)
+	safego.GoWithPanicHandler("forwarder:stream-actor", func() {
+		service.runStreamActor(stream, mailbox, done)
+	}, func(panicErr error) {
+		if failErr := service.failStream(stream, "panic", panicErr); failErr != nil {
+			logger.Errorf("forwarder stream actor panic terminalization failed request_id=%s err=%v", strings.TrimSpace(stream.RequestID), failErr)
+		}
+	})
 	return mailbox, done, nil
 }
 
@@ -457,7 +466,9 @@ func (service *Service) runStreamActor(stream *ActiveStream, mailbox <-chan stre
 		if envelope.result != nil {
 			envelope.result <- err
 		} else if err != nil {
-			_ = service.failStream(stream, "unknown", err)
+			if failErr := service.failStream(stream, "unknown", err); failErr != nil {
+				logger.Errorf("forwarder stream command failure terminalization failed request_id=%s err=%v", strings.TrimSpace(stream.RequestID), failErr)
+			}
 		}
 		if shouldStopStreamActor(stream) {
 			return

@@ -57,6 +57,14 @@ func (e *HTTPStatusError) Status() int {
 	return e.StatusCode
 }
 
+// RetryAfter 返回上游建议的重试等待时间，供统一错误分类和 router 冷却复用。
+func (e *HTTPStatusError) RetryAfter() time.Duration {
+	if e == nil {
+		return 0
+	}
+	return ParseRetryAfterHeader(e.Headers)
+}
+
 // buildHTTPStatusError 读取响应体摘要并生成带状态码的错误。
 // 读取错误响应体时使用 errorBodyReadTimeout 超时保护，防止半开连接
 // 导致 io.ReadAll 永久阻塞（移植自 Reasonix errorBodyReadTimeout 模式）。

@@ -66,7 +66,7 @@ test("模型组：保存失败时保留草稿并展示重试入口，重试后�
   await openGroupsSection(page);
 
   await page.getByRole("button", { name: "新增模型组" }).click();
-  await expect(page.getByText("E2E 注入：委派配置保存失败")).toBeVisible();
+  await expect(page.getByText("服务发生异常，请重试或导出诊断信息")).toBeVisible();
   await expect(page.getByText("委派模型组 1", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "重试" })).toBeVisible();
 

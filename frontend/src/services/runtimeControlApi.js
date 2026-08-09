@@ -15,7 +15,7 @@ import {
   ListSessionDebugFiles,
   ReadSessionDebugTail,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
-import { saveDelegationConfig as saveDelegationConfigBinding } from "@/services/clientApi";
+import { saveDelegationConfig as saveDelegationConfigBinding, invokeOperation } from "@/services/clientApi";
 
 const DEFAULT_SUPERVISION = {
   enabled: false,
@@ -116,29 +116,42 @@ function normalizeDelegationTaskSnapshot(snapshot) {
 }
 
 export function getDelegationTaskSnapshots() {
-  return GetDelegationTaskSnapshots().then((items) => (
+  return invokeOperation("GetDelegationTaskSnapshots", null, () => GetDelegationTaskSnapshots()).then((items) => (
     Array.isArray(items) ? items.map((item) => normalizeDelegationTaskSnapshot(item)) : []
   ));
 }
 
 export function cancelDelegationTask(taskID) {
-  return CancelDelegationTask(taskID);
+  return invokeOperation("CancelDelegationTask", [taskID], () => CancelDelegationTask(taskID));
 }
 
 export function getMCPRuntimeServers(workspaceRoot = "") {
-  return GetSkillsMCPScanSnapshot(workspaceRoot).then((snapshot) => snapshot?.mcpServers || []);
+  return invokeOperation("GetSkillsMCPScanSnapshot", [workspaceRoot], () => GetSkillsMCPScanSnapshot(workspaceRoot))
+    .then((snapshot) => snapshot?.mcpServers || []);
 }
 
 export function connectMCPRuntimeServer(identifier, attemptID, workspaceRoot = "") {
-  return ConnectMCPServer(workspaceRoot, identifier, attemptID);
+  return invokeOperation(
+    "ConnectMCPServer",
+    [workspaceRoot, identifier, attemptID],
+    () => ConnectMCPServer(workspaceRoot, identifier, attemptID),
+  );
 }
 
 export function disconnectMCPRuntimeServer(identifier, workspaceRoot = "") {
-  return DisconnectMCPServer(workspaceRoot, identifier);
+  return invokeOperation(
+    "DisconnectMCPServer",
+    [workspaceRoot, identifier],
+    () => DisconnectMCPServer(workspaceRoot, identifier),
+  );
 }
 
 export function cancelMCPRuntimeConnection(identifier, attemptID) {
-  return CancelMCPServerConnection(identifier, attemptID);
+  return invokeOperation(
+    "CancelMCPServerConnection",
+    [identifier, attemptID],
+    () => CancelMCPServerConnection(identifier, attemptID),
+  );
 }
 
 function normalizeHistorySession(session) {
@@ -160,32 +173,37 @@ function normalizeHistorySession(session) {
 }
 
 export function getHistorySessions() {
-  return GetHistorySessions().then((items) => (
+  return invokeOperation("GetHistorySessions", null, () => GetHistorySessions()).then((items) => (
     Array.isArray(items) ? items.map((item) => normalizeHistorySession(item)) : []
   ));
 }
 
 export function deleteHistorySessions(sessionIDs) {
-  return DeleteHistorySessions(Array.isArray(sessionIDs) ? sessionIDs : []);
+  const ids = Array.isArray(sessionIDs) ? sessionIDs : [];
+  return invokeOperation("DeleteHistorySessions", [ids], () => DeleteHistorySessions(ids));
 }
 
 export function clearHistory() {
-  return ClearHistory().then((count) => Number(count || 0));
+  return invokeOperation("ClearHistory", null, () => ClearHistory()).then((count) => Number(count || 0));
 }
 
 // deleteHistoryDebugLogs 清理指定会话的调试日志，返回释放的字节数。
 export function deleteHistoryDebugLogs(sessionIDs) {
-  return DeleteHistoryDebugLogs(Array.isArray(sessionIDs) ? sessionIDs : []).then((bytes) => Number(bytes || 0));
+  const ids = Array.isArray(sessionIDs) ? sessionIDs : [];
+  return invokeOperation("DeleteHistoryDebugLogs", [ids], () => DeleteHistoryDebugLogs(ids))
+    .then((bytes) => Number(bytes || 0));
 }
 
 // purgeAllHistoryDebugLogs 清理全部调试日志（含无会话归属的孤儿日志），返回释放的字节数。
 // 由后端统一遍历目录，前端不需要先列出会话 ID，避免漏掉非 UUID 会话与孤儿日志。
 export function purgeAllHistoryDebugLogs() {
-  return PurgeAllHistoryDebugLogs().then((bytes) => Number(bytes || 0));
+  return invokeOperation("PurgeAllHistoryDebugLogs", null, () => PurgeAllHistoryDebugLogs())
+    .then((bytes) => Number(bytes || 0));
 }
 
 export function getHistoryDebugUsage() {
-  return GetHistoryDebugUsage().then((bytes) => Number(bytes || 0));
+  return invokeOperation("GetHistoryDebugUsage", null, () => GetHistoryDebugUsage())
+    .then((bytes) => Number(bytes || 0));
 }
 
 function normalizeSessionDebugFile(file) {
@@ -200,7 +218,8 @@ function normalizeSessionDebugFile(file) {
 // listSessionDebugFiles 列出指定会话 debug 子目录下的文件元信息。
 // debug 目录不存在时后端返回空切片。
 export function listSessionDebugFiles(sessionID) {
-  return ListSessionDebugFiles(String(sessionID || "")).then((items) => (
+  const id = String(sessionID || "");
+  return invokeOperation("ListSessionDebugFiles", [id], () => ListSessionDebugFiles(id)).then((items) => (
     Array.isArray(items) ? items.map((item) => normalizeSessionDebugFile(item)) : []
   ));
 }
@@ -208,10 +227,16 @@ export function listSessionDebugFiles(sessionID) {
 // readSessionDebugTail 读取指定会话 debug 文件的尾部内容。
 // maxBytes<=0 时后端使用默认 64KiB。
 export function readSessionDebugTail(sessionID, filename, maxBytes = 0) {
-  return ReadSessionDebugTail(String(sessionID || ""), String(filename || ""), Number(maxBytes || 0)).then((text) => String(text || ""));
+  const id = String(sessionID || "");
+  const name = String(filename || "");
+  const size = Number(maxBytes || 0);
+  return invokeOperation("ReadSessionDebugTail", [id, name, size], () => ReadSessionDebugTail(id, name, size))
+    .then((text) => String(text || ""));
 }
 
 // exportSessionDebugBundle 打包指定会话的排查证据为 zip，返回 zip 文件路径。
 export function exportSessionDebugBundle(sessionID) {
-  return ExportSessionDebugBundle(String(sessionID || "")).then((path) => String(path || ""));
+  const id = String(sessionID || "");
+  return invokeOperation("ExportSessionDebugBundle", [id], () => ExportSessionDebugBundle(id))
+    .then((path) => String(path || ""));
 }

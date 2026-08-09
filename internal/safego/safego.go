@@ -7,6 +7,7 @@
 package safego
 
 import (
+	"fmt"
 	"runtime/debug"
 
 	"cursor/internal/logger"
@@ -15,15 +16,35 @@ import (
 // Go 启动一个带 panic 兜底的 goroutine。name 用于日志定位（建议使用
 // “模块:职责”格式）。fn 内的 panic 会被捕获并输出 error 级日志。
 func Go(name string, fn func()) {
+	GoWithPanicHandler(name, fn, nil)
+}
+
+// GoWithPanicHandler 在恢复 worker panic 后调用 onPanic，使有所属状态机的后台任务
+// 可以主动写入失败终态。回调本身的 panic 也会被隔离，避免恢复路径再次拖垮进程。
+func GoWithPanicHandler(name string, fn func(), onPanic func(error)) {
 	if fn == nil {
 		return
 	}
 	go func() {
 		defer func() {
-			if r := recover(); r != nil {
-				logger.Errorf("safego %s panic recovered: %v\n%s", name, r, debug.Stack())
+			if recovered := recover(); recovered != nil {
+				err := fmt.Errorf("safego %s panic recovered: %v\n%s", name, recovered, debug.Stack())
+				logger.Errorf("%v", err)
+				callPanicHandler(name, onPanic, err)
 			}
 		}()
 		fn()
 	}()
+}
+
+func callPanicHandler(name string, handler func(error), err error) {
+	if handler == nil {
+		return
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			logger.Errorf("safego %s panic handler recovered: %v\n%s", name, recovered, debug.Stack())
+		}
+	}()
+	handler(err)
 }

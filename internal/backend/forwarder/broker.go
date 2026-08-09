@@ -14,6 +14,7 @@ import (
 )
 
 const subscriberSignalBufferSize = 1
+
 // orphanSubscriberGracePeriod 是 RunSSE 订阅归零后、判定请求为孤儿前的宽限期。
 // 网络波动（本地代理/线路抖动）时 Cursor 客户端会短暂断开并自动重连，期间
 // subscriber 短暂归零；宽限期给客户端充足的重连窗口，避免波动几秒就误杀长任务。
@@ -437,6 +438,14 @@ func (broker *StreamBroker) Complete(requestID string, terminalCode string, term
 
 // Fail 把活动流标记为失败，并发布一个失败 endstream 事件。
 func (broker *StreamBroker) Fail(requestID string, terminalCode string, terminalMessage string) error {
+	return broker.FailWithDetails(requestID, TerminalFailure{
+		Code:    terminalCode,
+		Message: terminalMessage,
+	})
+}
+
+// FailWithDetails 在可靠终态中附带稳定错误分类和恢复尝试摘要。
+func (broker *StreamBroker) FailWithDetails(requestID string, failure TerminalFailure) error {
 	stream, ok := broker.Get(requestID)
 	if !ok || stream == nil {
 		return fmt.Errorf("request is not active: %s", strings.TrimSpace(requestID))
@@ -449,9 +458,13 @@ func (broker *StreamBroker) Fail(requestID string, terminalCode string, terminal
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
 	if err := broker.Publish(requestID, StreamEvent{
-		End:                  true,
-		TerminalErrorCode:    strings.TrimSpace(terminalCode),
-		TerminalErrorMessage: strings.TrimSpace(terminalMessage),
+		End:                       true,
+		TerminalErrorCode:         strings.TrimSpace(failure.Code),
+		TerminalErrorMessage:      strings.TrimSpace(failure.Message),
+		TerminalTraceID:           strings.TrimSpace(failure.TraceID),
+		TerminalAppErrorCode:      strings.TrimSpace(failure.AppErrorCode),
+		TerminalDisposition:       strings.TrimSpace(failure.Disposition),
+		TerminalRetryAttemptCount: max(0, failure.RetryAttemptCount),
 	}); err != nil {
 		return err
 	}

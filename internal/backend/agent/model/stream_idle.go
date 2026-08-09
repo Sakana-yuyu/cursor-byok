@@ -10,6 +10,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"cursor/internal/safego"
 )
 
 const (
@@ -48,17 +50,19 @@ func newProviderStreamIdleWatchdog(parent context.Context, timeout time.Duration
 	timeout = normalizeProviderStreamIdleTimeoutDuration(timeout)
 	ctx, cancel := context.WithCancelCause(parent)
 	watchdog := &providerStreamIdleWatchdog{
-		ctx:         ctx,
-		cancel:      cancel,
-		timeout:     timeout,
-		err:         providerStreamIdleTimeoutError(timeout),
-		cancelDone:  make(chan struct{}),
+		ctx:        ctx,
+		cancel:     cancel,
+		timeout:    timeout,
+		err:        providerStreamIdleTimeoutError(timeout),
+		cancelDone: make(chan struct{}),
 	}
 	watchdog.timer = time.AfterFunc(watchdog.timeout, watchdog.expire)
 	// 监听 parent 取消：用户中止请求时立即关闭响应体，让阻塞中的 scanner.Scan() 返回，
 	// 而不必等到 30s 的 chunkTimeout 才释放上游连接与连接池槽位。
 	// 监听 parent（而非 watchdog.ctx）是为了避免正常 Stop() 的 cancel(nil) 误触发本路径。
-	go watchdog.watchParentCancel(parent)
+	safego.Go("model:stream-parent-cancel", func() {
+		watchdog.watchParentCancel(parent)
+	})
 	return ctx, watchdog
 }
 
