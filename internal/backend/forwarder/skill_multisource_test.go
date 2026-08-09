@@ -41,10 +41,19 @@ func TestOrderedSkillScanRootsCoversNewSources(t *testing.T) {
 		SkillSourceCline:    filepath.Join(home, ".cline", "skills"),
 	}
 	wantWorkspace := map[SkillSource]string{
+		SkillSourceCursor:   filepath.Join(ws, ".cursor", "skills"),
 		SkillSourceTrae:     filepath.Join(ws, ".trae", "skills"),
 		SkillSourceWindsurf: filepath.Join(ws, ".windsurf", "skills"),
+		SkillSourceClaude:   filepath.Join(ws, ".claude", "skills"),
+		SkillSourceGemini:   filepath.Join(ws, ".gemini", "skills"),
 		SkillSourceCline:    filepath.Join(ws, ".cline", "skills"),
+		SkillSourceShared:   filepath.Join(ws, ".agents", "skills"),
+		SkillSourceZCode:    filepath.Join(ws, ".zcode", "skills"),
 	}
+	wantUser[SkillSourceCursor] = filepath.Join(home, ".cursor", "skills")
+	wantUser[SkillSourceClaude] = filepath.Join(home, ".claude", "skills")
+	wantUser[SkillSourceShared] = filepath.Join(home, ".agents", "skills")
+	wantUser[SkillSourceZCode] = filepath.Join(home, ".zcode", "skills")
 
 	found := map[string]bool{}
 	for _, root := range roots {
@@ -59,7 +68,21 @@ func TestOrderedSkillScanRootsCoversNewSources(t *testing.T) {
 		if !found[want] {
 			t.Errorf("workspace-level root %v missing %q", source, want)
 		}
+		workspaceIndex := skillScanRootIndex(roots, want)
+		userIndex := skillScanRootIndex(roots, wantUser[source])
+		if workspaceIndex < 0 || userIndex < 0 || workspaceIndex >= userIndex {
+			t.Errorf("source %v order workspace=%d user=%d, want workspace first", source, workspaceIndex, userIndex)
+		}
 	}
+}
+
+func skillScanRootIndex(roots []skillScanRoot, path string) int {
+	for index, root := range roots {
+		if root.Path == path {
+			return index
+		}
+	}
+	return -1
 }
 
 func rootPaths(roots []skillScanRoot) []string {
@@ -80,6 +103,72 @@ func TestOrderedSkillScanRootsEmptyWorkspace(t *testing.T) {
 		if !strings.HasPrefix(root.Path, home) {
 			t.Errorf("root %q does not start with home %q (workspace leaked with empty workspaceRoot)", root.Path, home)
 		}
+	}
+}
+
+func TestSkillWorkspaceOverridesUserForSameSource(t *testing.T) {
+	home := t.TempDir()
+	setHomeForTest(t, home)
+	workspace := t.TempDir()
+
+	writeScannerTestSkill(t, filepath.Join(home, ".cursor", "skills"), "shared-name", "user definition")
+	writeScannerTestSkill(t, filepath.Join(workspace, ".cursor", "skills"), "shared-name", "workspace definition")
+
+	InvalidateSkillScanCache()
+	t.Cleanup(InvalidateSkillScanCache)
+	skilled := ScanAllSkills(workspace)
+	for _, skill := range skilled {
+		if skill.Name != "shared-name" {
+			continue
+		}
+		if skill.Description != "workspace definition" {
+			t.Fatalf("shared-name description = %q, want workspace definition", skill.Description)
+		}
+		wantPrefix := filepath.Join(workspace, ".cursor", "skills")
+		if !strings.HasPrefix(skill.FullPath, wantPrefix) {
+			t.Fatalf("shared-name path = %q, want workspace prefix %q", skill.FullPath, wantPrefix)
+		}
+		return
+	}
+	t.Fatal("shared-name skill was not discovered")
+}
+
+func TestGeminiWorkspaceSkillsAreDiscovered(t *testing.T) {
+	home := t.TempDir()
+	setHomeForTest(t, home)
+	workspace := t.TempDir()
+	writeScannerTestSkill(t, filepath.Join(workspace, ".gemini", "skills"), "gemini-project", "Gemini project skill")
+
+	InvalidateSkillScanCache()
+	t.Cleanup(InvalidateSkillScanCache)
+	skilled := ScanAllSkills(workspace)
+	wantSources := map[string]SkillSource{
+		"gemini-project": SkillSourceGemini,
+	}
+	for _, skill := range skilled {
+		wantSource, wanted := wantSources[skill.Name]
+		if !wanted {
+			continue
+		}
+		if skill.Source != wantSource {
+			t.Errorf("skill %q source = %q, want %q", skill.Name, skill.Source, wantSource)
+		}
+		delete(wantSources, skill.Name)
+	}
+	if len(wantSources) != 0 {
+		t.Fatalf("workspace skills not discovered: %v; skills=%+v", wantSources, skilled)
+	}
+}
+
+func writeScannerTestSkill(t *testing.T, root, name, description string) {
+	t.Helper()
+	path := filepath.Join(root, name, "SKILL.md")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("create skill directory: %v", err)
+	}
+	manifest := "---\nname: " + name + "\ndescription: " + description + "\n---\n\n# Test Skill\n"
+	if err := os.WriteFile(path, []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write skill manifest: %v", err)
 	}
 }
 

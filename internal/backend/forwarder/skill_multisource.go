@@ -28,8 +28,8 @@ const (
 	SkillSourceWindsurf    SkillSource = "windsurf"     // ~/.codeium/windsurf/skills 或 <ws>/.windsurf/skills
 	SkillSourceClaude      SkillSource = "claude"       // ~/.claude/skills 或 <ws>/.claude/skills
 	SkillSourceCodex       SkillSource = "codex"        // ~/.codex/skills
-	SkillSourceGemini      SkillSource = "gemini"       // ~/.gemini/skills
-	SkillSourceCopilot     SkillSource = "copilot"      // ~/.copilot/skills（VS Code / GitHub Copilot）
+	SkillSourceGemini      SkillSource = "gemini"       // ~/.gemini/skills 或 <ws>/.gemini/skills
+	SkillSourceCopilot     SkillSource = "copilot"      // ~/.copilot/skills
 	SkillSourceCline       SkillSource = "cline"        // ~/.cline/skills 或 <ws>/.cline/skills
 	SkillSourceShared      SkillSource = "shared"       // ~/.agents/skills 或 <ws>/.agents/skills（跨工具共享标准）
 	SkillSourceZCode       SkillSource = "zcode"        // ~/.zcode/skills 或 <ws>/.zcode/skills
@@ -125,32 +125,32 @@ func orderedSkillScanRoots(workspaceRoot string) []skillScanRoot {
 	}
 
 	// Cursor（原生优先级最高）
-	if home != "" {
-		add(filepath.Join(home, ".cursor", "skills"), SkillSourceCursor)
-	}
 	if ws != "" {
 		add(filepath.Join(ws, ".cursor", "skills"), SkillSourceCursor)
 	}
-	// Trae（IDE，技能放项目 .trae/skills，全局目录兼容）
 	if home != "" {
-		add(filepath.Join(home, ".trae", "skills"), SkillSourceTrae)
+		add(filepath.Join(home, ".cursor", "skills"), SkillSourceCursor)
 	}
+	// Trae（IDE，技能放项目 .trae/skills，全局目录兼容）
 	if ws != "" {
 		add(filepath.Join(ws, ".trae", "skills"), SkillSourceTrae)
 	}
-	// Windsurf（IDE，全局在 ~/.codeium/windsurf/skills，项目在 .windsurf/skills）
 	if home != "" {
-		add(filepath.Join(home, ".codeium", "windsurf", "skills"), SkillSourceWindsurf)
+		add(filepath.Join(home, ".trae", "skills"), SkillSourceTrae)
 	}
+	// Windsurf（IDE，全局在 ~/.codeium/windsurf/skills，项目在 .windsurf/skills）
 	if ws != "" {
 		add(filepath.Join(ws, ".windsurf", "skills"), SkillSourceWindsurf)
 	}
-	// Claude Code
 	if home != "" {
-		add(filepath.Join(home, ".claude", "skills"), SkillSourceClaude)
+		add(filepath.Join(home, ".codeium", "windsurf", "skills"), SkillSourceWindsurf)
 	}
+	// Claude Code
 	if ws != "" {
 		add(filepath.Join(ws, ".claude", "skills"), SkillSourceClaude)
+	}
+	if home != "" {
+		add(filepath.Join(home, ".claude", "skills"), SkillSourceClaude)
 	}
 	// Codex / GPT
 	if home != "" {
@@ -158,6 +158,9 @@ func orderedSkillScanRoots(workspaceRoot string) []skillScanRoot {
 		add(filepath.Join(home, ".codex", "skills", ".system"), SkillSourceCodex)
 	}
 	// Gemini CLI
+	if ws != "" {
+		add(filepath.Join(ws, ".gemini", "skills"), SkillSourceGemini)
+	}
 	if home != "" {
 		add(filepath.Join(home, ".gemini", "skills"), SkillSourceGemini)
 	}
@@ -166,25 +169,25 @@ func orderedSkillScanRoots(workspaceRoot string) []skillScanRoot {
 		add(filepath.Join(home, ".copilot", "skills"), SkillSourceCopilot)
 	}
 	// Cline
-	if home != "" {
-		add(filepath.Join(home, ".cline", "skills"), SkillSourceCline)
-	}
 	if ws != "" {
 		add(filepath.Join(ws, ".cline", "skills"), SkillSourceCline)
 	}
-	// 共享标准 .agents（跨工具）
 	if home != "" {
-		add(filepath.Join(home, ".agents", "skills"), SkillSourceShared)
+		add(filepath.Join(home, ".cline", "skills"), SkillSourceCline)
 	}
+	// 共享标准 .agents（跨工具）
 	if ws != "" {
 		add(filepath.Join(ws, ".agents", "skills"), SkillSourceShared)
 	}
-	// ZCode
 	if home != "" {
-		add(filepath.Join(home, ".zcode", "skills"), SkillSourceZCode)
+		add(filepath.Join(home, ".agents", "skills"), SkillSourceShared)
 	}
+	// ZCode
 	if ws != "" {
 		add(filepath.Join(ws, ".zcode", "skills"), SkillSourceZCode)
+	}
+	if home != "" {
+		add(filepath.Join(home, ".zcode", "skills"), SkillSourceZCode)
 	}
 	// ZCode 插件缓存（glob 一层：~/.zcode/cli/plugins/cache/<marketplace>/<plugin>/skills）
 	if home != "" {

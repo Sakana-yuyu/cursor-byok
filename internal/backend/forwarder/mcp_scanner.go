@@ -36,6 +36,8 @@ const (
 	MCPSourceShared   MCPSource = "shared"   // <ws>/.agents/mcp.json 或 ~/.agents/mcp.json
 	MCPSourceZCode    MCPSource = "zcode"    // ~/.zcode/cli/config.json、<ws>/.zcode/config.json（嵌套 mcp.servers）
 	MCPSourceCodex    MCPSource = "codex"    // ~/.codex/config.toml 的 [mcp_servers.*]
+	MCPSourceGemini   MCPSource = "gemini"   // ~/.gemini/settings.json 或 <ws>/.gemini/settings.json
+	MCPSourceCopilot  MCPSource = "copilot"  // <ws>/.github/mcp.json
 	MCPSourceCline    MCPSource = "cline"    // cline_mcp_settings.json
 	MCPSourceWindsurf MCPSource = "windsurf" // <ws>/.windsurf/mcp_config.json 或 ~/.codeium/windsurf/mcp_config.json
 	MCPSourceVSCode   MCPSource = "vscode"   // <ws>/.vscode/mcp.json 或 ~/.vscode/mcp.json（VS Code 原生 MCP）
@@ -287,11 +289,11 @@ func orderedMCPConfigFiles(workspaceRoot string) []mcpConfigFile {
 	}
 
 	// Cursor
-	if home != "" {
-		addJSON(filepath.Join(home, ".cursor", "mcp.json"), MCPSourceCursor, MCPConfigScopeUser, false)
-	}
 	if ws != "" {
 		addJSON(filepath.Join(ws, ".cursor", "mcp.json"), MCPSourceCursor, MCPConfigScopeWorkspace, false)
+	}
+	if home != "" {
+		addJSON(filepath.Join(home, ".cursor", "mcp.json"), MCPSourceCursor, MCPConfigScopeUser, false)
 	}
 	// Claude Code
 	if ws != "" {
@@ -309,19 +311,30 @@ func orderedMCPConfigFiles(workspaceRoot string) []mcpConfigFile {
 		addJSON(filepath.Join(home, ".agents", "mcp.json"), MCPSourceShared, MCPConfigScopeUser, false)
 	}
 	// ZCode（嵌套 mcp.servers）
-	if home != "" {
-		addJSON(filepath.Join(home, ".zcode", "cli", "config.json"), MCPSourceZCode, MCPConfigScopeUser, true)
-	}
 	if ws != "" {
 		addJSON(filepath.Join(ws, ".zcode", "config.json"), MCPSourceZCode, MCPConfigScopeWorkspace, true)
 		addJSON(filepath.Join(ws, "zcode.json"), MCPSourceZCode, MCPConfigScopeWorkspace, true)
 	}
+	if home != "" {
+		addJSON(filepath.Join(home, ".zcode", "cli", "config.json"), MCPSourceZCode, MCPConfigScopeUser, true)
+	}
 	// Codex（TOML）
+	if ws != "" {
+		addTOML(filepath.Join(ws, ".codex", "config.toml"), MCPSourceCodex, MCPConfigScopeWorkspace)
+	}
 	if home != "" {
 		addTOML(filepath.Join(home, ".codex", "config.toml"), MCPSourceCodex, MCPConfigScopeUser)
 	}
+	// Gemini CLI（用户与项目 .gemini/settings.json 的 mcpServers）
 	if ws != "" {
-		addTOML(filepath.Join(ws, ".codex", "config.toml"), MCPSourceCodex, MCPConfigScopeWorkspace)
+		addJSON(filepath.Join(ws, ".gemini", "settings.json"), MCPSourceGemini, MCPConfigScopeWorkspace, false)
+	}
+	if home != "" {
+		addJSON(filepath.Join(home, ".gemini", "settings.json"), MCPSourceGemini, MCPConfigScopeUser, false)
+	}
+	// GitHub Copilot CLI workspace MCP configuration.
+	if ws != "" {
+		addJSON(filepath.Join(ws, ".github", "mcp.json"), MCPSourceCopilot, MCPConfigScopeWorkspace, false)
 	}
 	// Cline
 	if cline := clineMCPSettingsPath(); cline != "" {
@@ -914,7 +927,7 @@ func mcpURLOrigin(raw string) string {
 
 func mcpSourceKind(source MCPSource) string {
 	switch source {
-	case MCPSourceCursor, MCPSourceClaude, MCPSourceShared, MCPSourceZCode, MCPSourceCodex, MCPSourceCline, MCPSourceWindsurf, MCPSourceVSCode:
+	case MCPSourceCursor, MCPSourceClaude, MCPSourceShared, MCPSourceZCode, MCPSourceCodex, MCPSourceGemini, MCPSourceCopilot, MCPSourceCline, MCPSourceWindsurf, MCPSourceVSCode:
 		return string(source)
 	default:
 		return "other"
