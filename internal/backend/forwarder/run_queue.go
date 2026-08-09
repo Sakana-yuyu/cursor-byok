@@ -192,40 +192,33 @@ func (service *Service) finishConversationTurn(conversationID string, requestID 
 	})
 }
 
-func (service *Service) startPromotedRun(intent InboundIntent) {
-	for {
-		err := service.startOwnedRun(intent)
-		if err == nil {
-			return
+func (service *Service) startAdmittedRun(intent InboundIntent) error {
+	if err := service.startOwnedRun(intent); err != nil {
+		startupErr := fmt.Errorf("start admitted run: %w", err)
+		stream, opened := service.broker.Get(intent.RequestID)
+		if !opened || stream == nil {
+			service.finishConversationTurn(intent.ConversationID, intent.RequestID)
+			return startupErr
 		}
+
+		service.setTurnPhase(stream, TurnPhaseFailed)
+		if terminalErr := service.broker.Fail(intent.RequestID, "startup_error", "[internal] Run startup failed"); terminalErr != nil {
+			return fmt.Errorf("terminalize admitted run startup failure: %w", terminalErr)
+		}
+		service.finishConversationTurn(intent.ConversationID, intent.RequestID)
+		return startupErr
+	}
+	return nil
+}
+
+func (service *Service) startPromotedRun(intent InboundIntent) {
+	if err := service.startAdmittedRun(intent); err != nil {
 		logger.Errorf("forwarder promoted conversation run startup failed request_id=%s conversation_id=%s err=%v",
 			strings.TrimSpace(intent.RequestID), strings.TrimSpace(intent.ConversationID), err)
-		if service.broker != nil {
-			if stream, ok := service.broker.Get(intent.RequestID); ok && stream != nil {
-				_ = service.failStreamIfNonTerminal(stream, "unknown", fmt.Errorf("start promoted run: %w", err))
-			}
-		}
-		// A failed-terminal path may already release ownership and launch the successor.
-		// Only finish here when this startup failure still owns the conversation.
-		if !service.runQueue.IsOwner(intent.ConversationID, intent.RequestID) {
-			return
-		}
-		next, ok := service.runQueue.Finish(intent.ConversationID, intent.RequestID)
-		if !ok {
-			return
-		}
-		intent = next
 	}
 }
 
-// drainRunQueue preserves the legacy call sites while conversation ownership is completed in later tasks.
-func (service *Service) drainRunQueue(conversationID string) {
-	if service == nil || service.runQueue == nil {
-		return
-	}
-	ownerRequestID := service.runQueue.Owner(conversationID)
-	if ownerRequestID == "" {
-		return
-	}
-	service.finishConversationTurn(conversationID, ownerRequestID)
+// drainRunQueue preserves terminal call sites while releasing only the request that terminated.
+func (service *Service) drainRunQueue(conversationID string, requestID string) {
+	service.finishConversationTurn(conversationID, requestID)
 }

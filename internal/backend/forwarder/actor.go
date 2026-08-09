@@ -147,11 +147,7 @@ func (service *Service) dispatchInboundIntent(intent InboundIntent) error {
 				strings.TrimSpace(intent.RequestID), strings.TrimSpace(intent.ConversationID), ownerRequestID)
 			return nil
 		case runQueueStart:
-			if err := service.startOwnedRun(intent); err != nil {
-				service.finishConversationTurn(intent.ConversationID, intent.RequestID)
-				return err
-			}
-			return nil
+			return service.startAdmittedRun(intent)
 		}
 	}
 	stream, err := service.streamForIntent(intent)
@@ -180,6 +176,9 @@ func (service *Service) dispatchInboundIntent(intent InboundIntent) error {
 }
 
 func (service *Service) startOwnedRun(intent InboundIntent) error {
+	if service.startOwnedRunHook != nil {
+		return service.startOwnedRunHook(intent)
+	}
 	stream, err := service.streamForIntent(intent)
 	if err != nil {
 		return err

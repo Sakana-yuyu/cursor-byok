@@ -76,6 +76,7 @@ type Service struct {
 	interactionBridge        interactionbridge.InteractionBridge
 	appendSeq                *appendSequenceTracker
 	runQueue                 *runQueue
+	startOwnedRunHook        func(InboundIntent) error
 	cursorDelegation         *cursorDelegationBridge
 	localDelegation          *localDelegatedAgentAdapter
 	delegationConfig         delegation.RuntimeConfigProvider
@@ -1188,7 +1189,7 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	})
 	cancelErr := service.broker.Cancel(intent.RequestID, firstNonEmpty(intent.CancelReason, "[canceled] User aborted request"))
 	// 当前 turn 终态后，排空该会话因「子代理运行期间」排队的新消息。
-	service.drainRunQueue(stream.ConversationID)
+	service.drainRunQueue(stream.ConversationID, stream.RequestID)
 	return cancelErr
 }
 
@@ -3186,7 +3187,7 @@ func (service *Service) finishSuccessfulTurnAfterCheckpoint(stream *ActiveStream
 	}
 	service.setTurnPhase(stream, TurnPhaseCompleted)
 	// 当前 turn 终态后，排空该会话因「子代理运行期间」排队的新消息。
-	service.drainRunQueue(stream.ConversationID)
+	service.drainRunQueue(stream.ConversationID, stream.RequestID)
 	return nil
 }
 
@@ -3455,7 +3456,7 @@ func (service *Service) failActiveStream(stream *ActiveStream, conversationID st
 		firstErr = err
 	}
 	// 当前 turn 终态后，排空该会话因「子代理运行期间」排队的新消息。
-	service.drainRunQueue(conversationID)
+	service.drainRunQueue(conversationID, requestID)
 	return firstErr
 }
 

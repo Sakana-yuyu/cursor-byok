@@ -357,7 +357,7 @@ func (service *Service) finishCanceledTurnAfterCheckpoint(stream *ActiveStream, 
 		Message: buildTurnEndedMessage(0, 0, 0, 0),
 	})
 	cancelErr := service.broker.Cancel(stream.RequestID, firstNonEmpty(strings.TrimSpace(message), "[canceled] User aborted request"))
-	service.drainRunQueue(stream.ConversationID)
+	service.drainRunQueue(stream.ConversationID, stream.RequestID)
 	return cancelErr
 }
 
