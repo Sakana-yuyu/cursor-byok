@@ -673,7 +673,7 @@ func (s *ProxyService) GetSkillsMCPScanSnapshot(workspaceRoot string) (SkillsMCP
 	}
 	return SkillsMCPScanSnapshot{
 		Skills:     forwarder.SnapshotSourcedSkills(workspaceRoot),
-		MCPServers: forwarder.SnapshotMCPServersWithSettings(workspaceRoot, skillMCPScanSettings(cfg.SkillMCPScan)),
+		MCPServers: forwarder.SnapshotMCPServersWithSettings(workspaceRoot, skillMCPScanSettingsWithTrust(cfg)),
 		Config:     cfg.SkillMCPScan,
 	}, nil
 }
@@ -1095,24 +1095,28 @@ func writeCursorMCPDocument(path string, doc map[string]any) error {
 	return nil
 }
 
-// ConnectMCPServer explicitly trusts and connects one discovered MCP server.
+// ConnectMCPServer connects one discovered MCP server after workspace trust has been granted.
 func (s *ProxyService) ConnectMCPServer(workspaceRoot string, identifier string, attemptID string) (forwarder.MCPServerSnapshotItem, error) {
 	cfg, err := s.core.LoadUserConfig()
 	if err != nil {
 		return forwarder.MCPServerSnapshotItem{}, err
 	}
-	settings := skillMCPScanSettings(cfg.SkillMCPScan)
-	// 显式连接即用户信任该 server：不受扫描总开关影响（总开关只控制是否注入 agent 会话），
+	settings := skillMCPScanSettingsWithTrust(cfg)
+	// 显式连接不受扫描总开关影响（总开关只控制是否注入 agent 会话），
 	// 但仍尊重 mcp.json 配置级 enabled 与 DisabledMCPServers 显式禁用。
 	connectSettings := settings
 	connectSettings.Enabled = true
+	forwarder.InvalidateMCPScanCache()
 	configs := forwarder.ScanMCPServerConfigs(workspaceRoot, connectSettings)
-	registry := forwarder.SharedMCPRuntimeRegistry()
-	forwarder.SyncMCPRuntimeForWorkspace(registry, workspaceRoot, enabledMCPConfigs(configs))
 	target, ok := findEnabledMCPServerConfig(configs, forwarder.MCPRuntimeScope(workspaceRoot), identifier)
 	if !ok {
 		return forwarder.MCPServerSnapshotItem{}, fmt.Errorf("enabled mcp server %q not found in current scan", identifier)
 	}
+	if err := forwarder.RequireMCPTrust(target, settings.MCPTrustRecords); err != nil {
+		return forwarder.MCPServerSnapshotItem{}, err
+	}
+	registry := forwarder.SharedMCPRuntimeRegistry()
+	forwarder.SyncMCPRuntimeForWorkspace(registry, workspaceRoot, enabledMCPConfigs(configs))
 	connectCtx, cancel := context.WithCancel(context.Background())
 	key := strings.ToLower(strings.TrimSpace(identifier))
 	runtimeScope := target.RuntimeScope
@@ -1145,7 +1149,17 @@ func (s *ProxyService) ConnectMCPServer(workspaceRoot string, identifier string,
 		}
 		s.mcpConnectMu.Unlock()
 	}()
-	if err := registry.Connect(connectCtx, runtimeScope, target.Identifier); err != nil {
+	forwarder.InvalidateMCPScanCache()
+	currentConfigs := forwarder.ScanMCPServerConfigs(workspaceRoot, connectSettings)
+	currentTarget, ok := findEnabledMCPServerConfig(currentConfigs, forwarder.MCPRuntimeScope(workspaceRoot), identifier)
+	if !ok {
+		return forwarder.MCPServerSnapshotItem{}, fmt.Errorf("enabled mcp server %q not found in current scan", identifier)
+	}
+	if err := forwarder.RequireMCPTrust(currentTarget, settings.MCPTrustRecords); err != nil {
+		return forwarder.MCPServerSnapshotItem{}, err
+	}
+	forwarder.SyncMCPRuntimeForWorkspace(registry, workspaceRoot, enabledMCPConfigs(currentConfigs))
+	if err := registry.Connect(connectCtx, currentTarget.RuntimeScope, currentTarget.Identifier); err != nil {
 		return forwarder.MCPServerSnapshotItem{}, err
 	}
 	return findMCPServerSnapshot(forwarder.SnapshotMCPServersWithSettings(workspaceRoot, settings), identifier)
@@ -1157,7 +1171,7 @@ func (s *ProxyService) DisconnectMCPServer(workspaceRoot string, identifier stri
 	if err != nil {
 		return forwarder.MCPServerSnapshotItem{}, err
 	}
-	settings := skillMCPScanSettings(cfg.SkillMCPScan)
+	settings := skillMCPScanSettingsWithTrust(cfg)
 	configs := forwarder.ScanMCPServerConfigs(workspaceRoot, settings)
 	registry := forwarder.SharedMCPRuntimeRegistry()
 	forwarder.SyncMCPRuntimeForWorkspace(registry, workspaceRoot, enabledMCPConfigs(configs))
@@ -1173,6 +1187,66 @@ func (s *ProxyService) DisconnectMCPServer(workspaceRoot string, identifier stri
 		return forwarder.MCPServerSnapshotItem{}, err
 	}
 	return findMCPServerSnapshot(forwarder.SnapshotMCPServersWithSettings(workspaceRoot, settings), identifier)
+}
+
+func (s *ProxyService) GrantMCPServerTrust(workspaceRoot string, identifier string) (forwarder.MCPServerSnapshotItem, error) {
+	cfg, err := s.core.LoadUserConfig()
+	if err != nil {
+		return forwarder.MCPServerSnapshotItem{}, err
+	}
+	settings := skillMCPScanSettingsWithTrust(cfg)
+	settings.Enabled = true
+	forwarder.InvalidateMCPScanCache()
+	configs := forwarder.ScanMCPServerConfigs(workspaceRoot, settings)
+	workspaceScope := forwarder.MCPRuntimeScope(workspaceRoot)
+	if workspaceScope == forwarder.MCPRuntimeScope("") {
+		return forwarder.MCPServerSnapshotItem{}, fmt.Errorf("workspace MCP trust can only be granted for a workspace")
+	}
+	target, ok := findEnabledMCPServerConfig(configs, workspaceScope, identifier)
+	if !ok {
+		return forwarder.MCPServerSnapshotItem{}, fmt.Errorf("enabled mcp server %q not found in current scan", identifier)
+	}
+	if target.Scope != forwarder.MCPConfigScopeWorkspace || strings.TrimSpace(target.RuntimeScope) != workspaceScope {
+		return forwarder.MCPServerSnapshotItem{}, fmt.Errorf("mcp server %q is not defined in the current workspace", identifier)
+	}
+	record, err := forwarder.NewMCPTrustRecord(target)
+	if err != nil {
+		return forwarder.MCPServerSnapshotItem{}, err
+	}
+	if err := s.core.GrantMCPServerTrust(record.RuntimeScope, record.Identifier, record.Fingerprint); err != nil {
+		return forwarder.MCPServerSnapshotItem{}, err
+	}
+	items, err := snapshotMCPServers(s, workspaceRoot)
+	if err != nil {
+		return forwarder.MCPServerSnapshotItem{}, err
+	}
+	return findMCPServerSnapshot(items, identifier)
+}
+
+func (s *ProxyService) RevokeMCPServerTrust(workspaceRoot string, identifier string) (forwarder.MCPServerSnapshotItem, error) {
+	runtimeScope := forwarder.MCPRuntimeScope(workspaceRoot)
+	if runtimeScope == forwarder.MCPRuntimeScope("") {
+		return forwarder.MCPServerSnapshotItem{}, fmt.Errorf("workspace MCP trust can only be revoked for a workspace")
+	}
+	if err := s.core.RevokeMCPServerTrust(runtimeScope, identifier); err != nil {
+		return forwarder.MCPServerSnapshotItem{}, err
+	}
+	s.cancelMCPServerConnections(runtimeScope, identifier)
+	registry := forwarder.SharedMCPRuntimeRegistry()
+	for _, item := range registry.Snapshot(runtimeScope) {
+		if strings.EqualFold(item.Identifier, identifier) {
+			if err := registry.Disconnect(runtimeScope, identifier); err != nil {
+				return forwarder.MCPServerSnapshotItem{}, err
+			}
+			break
+		}
+	}
+	forwarder.InvalidateMCPScanCache()
+	items, err := snapshotMCPServers(s, workspaceRoot)
+	if err != nil {
+		return forwarder.MCPServerSnapshotItem{}, err
+	}
+	return findMCPServerSnapshot(items, identifier)
 }
 
 // CancelMCPServerConnection cancels an in-flight explicit connect attempt.
@@ -1220,6 +1294,23 @@ func skillMCPScanSettings(cfg serverconfig.SkillMCPScanConfig) forwarder.SkillMC
 		EnabledSkills:      cfg.EnabledSkills,
 		DisabledMCPServers: cfg.DisabledMCPServers,
 	}
+}
+
+func skillMCPScanSettingsWithTrust(cfg serverconfig.Config) forwarder.SkillMCPScanSettings {
+	settings := skillMCPScanSettings(cfg.SkillMCPScan)
+	settings.MCPTrustRecords = append([]forwarder.MCPTrustRecord(nil), cfg.MCPTrustGrants...)
+	return settings
+}
+
+func snapshotMCPServers(service *ProxyService, workspaceRoot string) ([]forwarder.MCPServerSnapshotItem, error) {
+	if service == nil || service.core == nil {
+		return nil, fmt.Errorf("proxy service is not initialized")
+	}
+	cfg, err := service.core.LoadUserConfig()
+	if err != nil {
+		return nil, err
+	}
+	return forwarder.SnapshotMCPServersWithSettings(workspaceRoot, skillMCPScanSettingsWithTrust(cfg)), nil
 }
 
 func enabledMCPConfigs(configs []forwarder.MCPServerConfig) []forwarder.MCPServerConfig {

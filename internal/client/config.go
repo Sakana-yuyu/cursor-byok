@@ -72,6 +72,70 @@ func (s *ProxyService) SaveUserConfig(cfg UserConfig) error {
 	return nil
 }
 
+func (s *ProxyService) GrantMCPServerTrust(workspaceScope string, identifier string, fingerprint string) error {
+	if s == nil {
+		return fmt.Errorf("proxy service is not initialized")
+	}
+	ctx := context.Background()
+	if app := application.Get(); app != nil {
+		ctx = app.Context()
+	}
+	if s.backendHost != nil && s.backendHost.ConfigManager() != nil {
+		if err := s.backendHost.ConfigManager().GrantMCPServerTrust(ctx, workspaceScope, identifier, fingerprint); err != nil {
+			return err
+		}
+		cfg, _ := s.backendHost.LoadConfig(ctx)
+		s.emitUserConfigChanged(cfg)
+		return nil
+	}
+	if s.store == nil {
+		return fmt.Errorf("config store is not initialized")
+	}
+	s.configMu.Lock()
+	defer s.configMu.Unlock()
+	manager, err := serverconfig.NewManager(ctx, s.store)
+	if err != nil {
+		return err
+	}
+	if err := manager.GrantMCPServerTrust(ctx, workspaceScope, identifier, fingerprint); err != nil {
+		return err
+	}
+	s.emitUserConfigChanged(manager.Current())
+	return nil
+}
+
+func (s *ProxyService) RevokeMCPServerTrust(workspaceScope string, identifier string) error {
+	if s == nil {
+		return fmt.Errorf("proxy service is not initialized")
+	}
+	ctx := context.Background()
+	if app := application.Get(); app != nil {
+		ctx = app.Context()
+	}
+	if s.backendHost != nil && s.backendHost.ConfigManager() != nil {
+		if err := s.backendHost.ConfigManager().RevokeMCPServerTrust(ctx, workspaceScope, identifier); err != nil {
+			return err
+		}
+		cfg, _ := s.backendHost.LoadConfig(ctx)
+		s.emitUserConfigChanged(cfg)
+		return nil
+	}
+	if s.store == nil {
+		return fmt.Errorf("config store is not initialized")
+	}
+	s.configMu.Lock()
+	defer s.configMu.Unlock()
+	manager, err := serverconfig.NewManager(ctx, s.store)
+	if err != nil {
+		return err
+	}
+	if err := manager.RevokeMCPServerTrust(ctx, workspaceScope, identifier); err != nil {
+		return err
+	}
+	s.emitUserConfigChanged(manager.Current())
+	return nil
+}
+
 func (s *ProxyService) emitUserConfigChanged(cfg UserConfig) {
 	app := application.Get()
 	if app == nil {

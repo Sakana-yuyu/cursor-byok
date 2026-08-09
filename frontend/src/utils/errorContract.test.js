@@ -24,6 +24,16 @@ test("classifies authentication failure as blocked", () => {
   assert.equal(error.statusCode, 401);
 });
 
+test("recognizes workspace MCP trust as a stable user action requirement", () => {
+  const error = normalizeClientError(new Error(
+    "mcp_workspace_trust_required: workspace MCP server requires explicit trust",
+  ));
+
+  assert.equal(error.code, "mcp_workspace_trust_required");
+  assert.equal(error.kind, "authorization");
+  assert.equal(error.disposition, "user_action_required");
+});
+
 test("preserves structured backend fields", () => {
   const error = normalizeClientError({
     code: "provider_rate_limited",

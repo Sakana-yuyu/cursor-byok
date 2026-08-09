@@ -1,6 +1,7 @@
 <script setup>
 import SettingsSection from "@/components/settings/SettingsSection.vue";
 import Input from "@/components/ui/Input.vue";
+import Modal from "@/components/ui/Modal.vue";
 import Select from "@/components/ui/Select.vue";
 import Switch from "@/components/ui/Switch.vue";
 import { useMessage } from "@/composables/useMessage";
@@ -16,8 +17,11 @@ import {
 import {
   connectMCPRuntimeServer,
   disconnectMCPRuntimeServer,
+  grantMCPRuntimeServerTrust,
+  revokeMCPRuntimeServerTrust,
 } from "@/services/runtimeControlApi";
 import { toUserError } from "@/state/appState";
+import { MCP_WORKSPACE_TRUST_REQUIRED_CODE, normalizeClientError } from "@/utils/errorContract";
 import { applySkillsMCPScanSnapshot, buildSkillsMCPScanConfig } from "@/utils/skillsMcpScanConfig";
 import { computed, defineAsyncComponent, onMounted, reactive, ref } from "vue";
 
@@ -92,6 +96,10 @@ const editorState = reactive({
   title: "",
   content: "",
   busy: false,
+});
+const trustModalState = reactive({
+  visible: false,
+  server: null,
 });
 
 const summaryBatchState = reactive({
@@ -218,7 +226,7 @@ function applySnapshot(snapshot) {
   applySkillsMCPScanSnapshot(state, snapshot);
 }
 
-async function loadSnapshot({ refresh = false } = {}) {
+async function loadSnapshot({ refresh = false, announceRefresh = true } = {}) {
   snapshotState.retry = () => loadSnapshot({ refresh });
   snapshotState.error = "";
   if (refresh) {
@@ -239,7 +247,7 @@ async function loadSnapshot({ refresh = false } = {}) {
     } else {
       await load();
     }
-    if (refresh) {
+    if (refresh && announceRefresh) {
       message.success("已重新扫描技能与 MCP 配置");
     }
   } catch (error) {
@@ -358,7 +366,30 @@ async function handleMcpToggle(server, enabled) {
   }).catch(() => {});
 }
 
-async function handleMcpConnection(server) {
+function mcpTrustConfirmationContent(server) {
+  const details = [];
+  if (server?.sourcePath) details.push(`配置来源：${server.sourcePath}`);
+  if (server?.commandPreview) {
+    const argumentCount = Number(server.trustArgumentCount) || 0;
+    const argumentSummary = argumentCount > 0 ? ` [${argumentCount} 个参数已隐藏]` : "";
+    details.push(`命令：${server.commandPreview}${argumentSummary}`);
+  }
+  else if (server?.trustUrlOrigin) details.push(`地址：${server.trustUrlOrigin}`);
+  if (server?.cwd) details.push(`工作目录：${server.cwd}`);
+  details.push("", "此工作区配置可以启动本地进程或访问网络。配置发生变化后需要重新批准。");
+  return details.join("\n");
+}
+
+function handleMcpConnection(server) {
+  if (server?.status !== "connected" && server?.isWorkspace && server?.trustRequired) {
+    trustModalState.server = server;
+    trustModalState.visible = true;
+    return;
+  }
+  return runMcpConnection(server);
+}
+
+async function runMcpConnection(server, { grantTrust = false } = {}) {
   const identifier = String(server?.identifier || server?.name || "").trim();
   const itemKey = normalizeConfigKey(identifier);
   if (!itemKey || !isMcpEnabled(identifier)) {
@@ -379,8 +410,12 @@ async function handleMcpConnection(server) {
   itemState.busy = true;
   itemState.error = "";
   itemState.retry = () => handleMcpConnection(server);
+  let trustChangedError = null;
 
   try {
+    if (grantTrust) {
+      await grantMCPRuntimeServerTrust(identifier, workspaceRoot.value);
+    }
     if (scanWasOff && !disconnect) {
       await persistScanConfig(`skills-mcp.connect-${itemKey}`);
     }
@@ -392,9 +427,64 @@ async function handleMcpConnection(server) {
       message.success("连接成功");
     }
   } catch (error) {
+    const normalizedError = normalizeClientError(error, {
+      operation: disconnect ? "DisconnectMCPServer" : "ConnectMCPServer",
+    });
     if (scanWasOff && !disconnect) {
       state.enabled = false;
     }
+    if (!disconnect && normalizedError.code === MCP_WORKSPACE_TRUST_REQUIRED_CODE) {
+      trustChangedError = normalizedError;
+    } else {
+      itemState.error = toUserError(normalizedError);
+    }
+  } finally {
+    itemState.busy = false;
+    await loadSnapshot({ refresh: Boolean(trustChangedError), announceRefresh: false });
+    if (trustChangedError) {
+      const currentServer = state.mcpServers.find((item) =>
+        normalizeConfigKey(item?.identifier || item?.name) === itemKey);
+      if (currentServer?.isWorkspace && currentServer?.trustRequired) {
+        itemState.error = "";
+        trustModalState.server = currentServer;
+        trustModalState.visible = true;
+      } else {
+        itemState.error = toUserError(trustChangedError);
+      }
+    }
+  }
+}
+
+async function confirmMcpTrust() {
+  const server = trustModalState.server;
+  trustModalState.visible = false;
+  trustModalState.server = null;
+  if (server) {
+    await runMcpConnection(server, { grantTrust: true });
+  }
+}
+
+function cancelMcpTrust() {
+  trustModalState.server = null;
+}
+
+async function revokeMcpTrust(server) {
+  const identifier = String(server?.identifier || server?.name || "").trim();
+  const itemKey = normalizeConfigKey(identifier);
+  if (!itemKey) {
+    return;
+  }
+  const itemState = ensureMcpState(itemKey);
+  if (itemState.busy) {
+    return;
+  }
+  itemState.busy = true;
+  itemState.error = "";
+  itemState.retry = () => revokeMcpTrust(server);
+  try {
+    await revokeMCPRuntimeServerTrust(identifier, workspaceRoot.value);
+    message.success("已撤销信任");
+  } catch (error) {
     itemState.error = toUserError(error);
   } finally {
     itemState.busy = false;
@@ -935,6 +1025,9 @@ onMounted(async () => {
                   <span>{{ formatMcpStatus(server.status) }}</span>
                   <span v-if="typeof server.toolCount === 'number'">{{ server.toolCount }} 工具</span>
                   <span>{{ isMcpEnabled(server.identifier || server.name) ? "已启用" : "已停用" }}</span>
+                  <span v-if="server.isWorkspace" :class="server.trusted ? 'text-[#8ddcb3]' : 'text-[#f2a7a7]'">
+                    {{ server.trusted ? "已信任" : "未信任" }}
+                  </span>
                 </div>
                 <div
                   v-if="mcpSummaryOf(server)"
@@ -962,6 +1055,16 @@ onMounted(async () => {
               </div>
 
               <div class="mt-auto flex items-center justify-end gap-2">
+                <button
+                  v-if="server.isWorkspace && server.trusted"
+                  type="button"
+                  class="shrink-0 text-xs text-[#f2a7a7] transition-colors hover:text-[#ffc0c0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ef4444]/35 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="ensureMcpState(normalizeConfigKey(server.identifier || server.name)).busy || snapshotState.refreshing"
+                  :aria-label="`撤销 MCP ${server.identifier || server.name} 信任`"
+                  @click="revokeMcpTrust(server)"
+                >
+                  撤销信任
+                </button>
                 <button
                   type="button"
                   class="shrink-0 rounded-[6px] border border-[#3b3b3b] bg-[#202020] px-2.5 py-1 text-xs text-[#c7c7c7] transition-colors hover:border-[#10AD5D]/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35 disabled:cursor-not-allowed disabled:opacity-50"
@@ -1004,6 +1107,16 @@ onMounted(async () => {
         </div>
       </div>
     </SettingsSection>
+
+    <Modal
+      v-model:visible="trustModalState.visible"
+      title="信任工作区 MCP 配置"
+      :content="mcpTrustConfirmationContent(trustModalState.server)"
+      confirm-text="批准并连接"
+      cancel-text="取消"
+      @confirm="confirmMcpTrust"
+      @cancel="cancelMcpTrust"
+    />
 
     <MarkdownEditorModal v-if="editorState.visible"
       v-model:visible="editorState.visible"

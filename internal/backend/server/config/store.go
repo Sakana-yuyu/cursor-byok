@@ -165,6 +165,9 @@ func shouldPersistNormalizedConfig(raw []byte, current Config, normalized Config
 	if !reflect.DeepEqual(current.Delegation, normalized.Delegation) {
 		return true
 	}
+	if !reflect.DeepEqual(current.MCPTrustGrants, normalized.MCPTrustGrants) {
+		return true
+	}
 	if !yamlHasKey(raw, "goal") {
 		return true
 	}

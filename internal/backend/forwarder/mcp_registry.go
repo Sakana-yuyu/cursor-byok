@@ -73,6 +73,7 @@ type mcpRuntimeEntry struct {
 	lastCheckedAt              time.Time
 	updatedAt                  time.Time
 	lastConnectAttemptAt       time.Time
+	connectCancel              context.CancelFunc
 	generation                 uint64
 	activeCapabilityOperations int
 	capabilityBatchFailed      bool
@@ -94,6 +95,7 @@ type MCPRuntimeRegistry struct {
 	entries        map[string]*mcpRuntimeEntry
 	closed         bool
 	nextGeneration uint64
+	trustResolver  func() []MCPTrustRecord
 }
 
 func NewMCPRuntimeRegistry() *MCPRuntimeRegistry {
@@ -104,6 +106,17 @@ var sharedMCPRuntimeRegistry = NewMCPRuntimeRegistry()
 
 func SharedMCPRuntimeRegistry() *MCPRuntimeRegistry {
 	return sharedMCPRuntimeRegistry
+}
+
+// SetTrustResolver installs the live read-only source of persisted grants.
+// It is evaluated only at a connection boundary, never as part of scanning.
+func (registry *MCPRuntimeRegistry) SetTrustResolver(resolver func() []MCPTrustRecord) {
+	if registry == nil {
+		return
+	}
+	registry.mu.Lock()
+	registry.trustResolver = resolver
+	registry.mu.Unlock()
 }
 
 func (registry *MCPRuntimeRegistry) nextGenerationLocked() uint64 {
@@ -132,6 +145,7 @@ func (registry *MCPRuntimeRegistry) ReplaceScope(scope string, configs []MCPServ
 		next[id] = config
 	}
 	var stale []*mcp.ClientSession
+	var staleCancels []context.CancelFunc
 	registry.mu.Lock()
 	if registry.closed {
 		registry.mu.Unlock()
@@ -151,6 +165,9 @@ func (registry *MCPRuntimeRegistry) ReplaceScope(scope string, configs []MCPServ
 			if entry.session != nil {
 				stale = append(stale, entry.session)
 			}
+			if entry.connectCancel != nil {
+				staleCancels = append(staleCancels, entry.connectCancel)
+			}
 			delete(registry.entries, key)
 		}
 	}
@@ -168,6 +185,9 @@ func (registry *MCPRuntimeRegistry) ReplaceScope(scope string, configs []MCPServ
 		}
 	}
 	registry.mu.Unlock()
+	for _, cancel := range staleCancels {
+		cancel()
+	}
 	for _, session := range stale {
 		_ = session.Close()
 	}
@@ -189,10 +209,22 @@ func (registry *MCPRuntimeRegistry) Connect(ctx context.Context, scope string, i
 		registry.mu.Unlock()
 		return fmt.Errorf("mcp server %q not found in runtime scope %q", identifier, scope)
 	}
+	config := cloneMCPServerConfig(entry.config)
+	var trustRecords []MCPTrustRecord
+	if registry.trustResolver != nil {
+		trustRecords = registry.trustResolver()
+	}
+	if err := RequireMCPTrust(config, trustRecords); err != nil {
+		registry.mu.Unlock()
+		return err
+	}
 	if entry.status == MCPRuntimeConnected && entry.session != nil {
 		registry.mu.Unlock()
 		return nil
 	}
+	connectCtx, cancel := withDefaultTimeout(ctx, mcpConnectTimeout)
+	previousCancel := entry.connectCancel
+	entry.connectCancel = cancel
 	entry.generation = registry.nextGenerationLocked()
 	generation := entry.generation
 	owner := entry
@@ -206,10 +238,10 @@ func (registry *MCPRuntimeRegistry) Connect(ctx context.Context, scope string, i
 	entry.lastCheckedAt = now
 	entry.updatedAt = now
 	entry.lastConnectAttemptAt = now
-	config := cloneMCPServerConfig(entry.config)
 	registry.mu.Unlock()
-
-	connectCtx, cancel := withDefaultTimeout(ctx, mcpConnectTimeout)
+	if previousCancel != nil {
+		previousCancel()
+	}
 	defer cancel()
 	session, tools, err := connectMCPRuntime(connectCtx, config)
 	now = time.Now().UTC()
@@ -227,6 +259,7 @@ func (registry *MCPRuntimeRegistry) Connect(ctx context.Context, scope string, i
 	}
 	entry.lastCheckedAt = now
 	entry.updatedAt = now
+	entry.connectCancel = nil
 	if err != nil {
 		sanitizedError := sanitizeMCPRuntimeError(err, config)
 		entry.status = MCPRuntimeError
@@ -304,6 +337,8 @@ func (registry *MCPRuntimeRegistry) Disconnect(scope string, identifier string) 
 	key := mcpRuntimeEntryKey(scope, id)
 	config := cloneMCPServerConfig(entry.config)
 	session := entry.session
+	connectCancel := entry.connectCancel
+	entry.connectCancel = nil
 	entry.session = nil
 	entry.tools = nil
 	entry.status = MCPRuntimeDisconnected
@@ -317,6 +352,9 @@ func (registry *MCPRuntimeRegistry) Disconnect(scope string, identifier string) 
 	entry.lastCheckedAt = now
 	entry.updatedAt = now
 	registry.mu.Unlock()
+	if connectCancel != nil {
+		connectCancel()
+	}
 	if session != nil {
 		if err := session.Close(); err != nil {
 			sanitizedError := sanitizeMCPRuntimeError(err, config)
@@ -473,11 +511,16 @@ func (registry *MCPRuntimeRegistry) Close() {
 	registry.closed = true
 	now := time.Now().UTC()
 	var sessions []*mcp.ClientSession
+	var cancels []context.CancelFunc
 	for _, entry := range registry.entries {
 		entry.generation = registry.nextGenerationLocked()
 		if entry.session != nil {
 			sessions = append(sessions, entry.session)
 		}
+		if entry.connectCancel != nil {
+			cancels = append(cancels, entry.connectCancel)
+		}
+		entry.connectCancel = nil
 		entry.session = nil
 		entry.tools = nil
 		entry.status = MCPRuntimeDisconnected
@@ -491,6 +534,9 @@ func (registry *MCPRuntimeRegistry) Close() {
 		entry.updatedAt = now
 	}
 	registry.mu.Unlock()
+	for _, cancel := range cancels {
+		cancel()
+	}
 	for _, session := range sessions {
 		_ = session.Close()
 	}
@@ -741,6 +787,17 @@ func normalizeMCPRuntimeScope(scope string) string {
 	scope = strings.TrimSpace(scope)
 	if scope == "" {
 		return MCPRuntimeScope("")
+	}
+	if strings.EqualFold(scope, MCPRuntimeScope("")) {
+		return MCPRuntimeScope("")
+	}
+	const workspacePrefix = "workspace:"
+	if strings.HasPrefix(strings.ToLower(scope), workspacePrefix) {
+		root := strings.TrimSpace(scope[len(workspacePrefix):])
+		if root == "" {
+			return workspacePrefix
+		}
+		return MCPRuntimeScope(root)
 	}
 	return scope
 }

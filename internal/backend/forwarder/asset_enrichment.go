@@ -22,6 +22,10 @@ type skillMCPScanConfigProvider interface {
 	SkillMCPScanDisabledMCPServers() map[string]bool
 }
 
+type mcpTrustConfigProvider interface {
+	SkillMCPScanTrustRecords() []MCPTrustRecord
+}
+
 // SkillMCPScanSettings 是 forwarder 依赖的扫描配置快照。
 type SkillMCPScanSettings struct {
 	Enabled            bool
@@ -29,6 +33,7 @@ type SkillMCPScanSettings struct {
 	MCPSources         map[string]bool
 	EnabledSkills      map[string]bool
 	DisabledMCPServers map[string]bool
+	MCPTrustRecords    []MCPTrustRecord
 }
 
 // readSkillMCPScanSettings 从 provider 读取配置快照。
@@ -36,13 +41,17 @@ func readSkillMCPScanSettings(provider skillMCPScanConfigProvider) SkillMCPScanS
 	if provider == nil {
 		return SkillMCPScanSettings{Enabled: true}
 	}
-	return SkillMCPScanSettings{
+	settings := SkillMCPScanSettings{
 		Enabled:            provider.SkillMCPScanEnabled(),
 		SkillSources:       provider.SkillMCPScanSkillSources(),
 		MCPSources:         provider.SkillMCPScanMCPSources(),
 		EnabledSkills:      provider.SkillMCPScanEnabledSkills(),
 		DisabledMCPServers: provider.SkillMCPScanDisabledMCPServers(),
 	}
+	if trustProvider, ok := provider.(mcpTrustConfigProvider); ok {
+		settings.MCPTrustRecords = append([]MCPTrustRecord(nil), trustProvider.SkillMCPScanTrustRecords()...)
+	}
+	return settings
 }
 
 // enrichRequestContextWithScannedAssets 同步技能扫描设置并合并扫描到的 MCP descriptor。

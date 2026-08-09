@@ -14,6 +14,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path"
@@ -922,7 +923,18 @@ func mcpURLOrigin(raw string) string {
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 		return ""
 	}
-	return strings.ToLower(parsed.Scheme) + "://" + strings.ToLower(parsed.Host)
+	scheme := strings.ToLower(parsed.Scheme)
+	host := strings.ToLower(parsed.Hostname())
+	port := parsed.Port()
+	if (scheme == "http" && port == "80") || (scheme == "https" && port == "443") {
+		port = ""
+	}
+	if port != "" {
+		host = net.JoinHostPort(host, port)
+	} else if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	return scheme + "://" + host
 }
 
 func mcpSourceKind(source MCPSource) string {
@@ -1022,12 +1034,21 @@ type MCPServerSnapshotItem struct {
 	ToolCount         int              `json:"toolCount"`
 	Status            MCPRuntimeStatus `json:"status"`
 	// ConfigFingerprint is a coarse non-secret shape hash, not runtime identity.
-	ConfigFingerprint string           `json:"configFingerprint"`
-	CapabilityStatus  MCPRuntimeStatus `json:"capabilityStatus"`
-	LastError         string           `json:"lastError,omitempty"`
-	LastCheckedAt     time.Time        `json:"lastCheckedAt,omitempty"`
-	SourceLabel       string           `json:"sourceLabel"`
-	RuntimeScope      string           `json:"runtimeScope"`
+	ConfigFingerprint  string           `json:"configFingerprint"`
+	CapabilityStatus   MCPRuntimeStatus `json:"capabilityStatus"`
+	LastError          string           `json:"lastError,omitempty"`
+	LastCheckedAt      time.Time        `json:"lastCheckedAt,omitempty"`
+	SourceLabel        string           `json:"sourceLabel"`
+	RuntimeScope       string           `json:"runtimeScope"`
+	IsWorkspace        bool             `json:"isWorkspace"`
+	Trusted            bool             `json:"trusted"`
+	TrustRequired      bool             `json:"trustRequired"`
+	TrustFingerprint   string           `json:"trustFingerprint,omitempty"`
+	SourcePath         string           `json:"sourcePath,omitempty"`
+	CommandPreview     string           `json:"commandPreview,omitempty"`
+	TrustArgumentCount int              `json:"trustArgumentCount,omitempty"`
+	TrustURLOrigin     string           `json:"trustUrlOrigin,omitempty"`
+	Cwd                string           `json:"cwd,omitempty"`
 }
 
 func SnapshotMCPServersWithSettings(workspaceRoot string, settings SkillMCPScanSettings) []MCPServerSnapshotItem {
@@ -1043,6 +1064,13 @@ func SnapshotMCPServersWithSettings(workspaceRoot string, settings SkillMCPScanS
 	}
 	items := make([]MCPServerSnapshotItem, 0, len(configs))
 	for _, config := range configs {
+		trustPreview := BuildMCPTrustPreview(config)
+		isWorkspace := mcpWorkspaceTrustRequired(config)
+		trusted := !isWorkspace || RequireMCPTrust(config, settings.MCPTrustRecords) == nil
+		trustFingerprint := ""
+		if isWorkspace {
+			trustFingerprint = MCPTrustFingerprint(config)
+		}
 		configFingerprint := mcpConfigShapeFingerprint(config)
 		runtimeItem, connected := runtimeByID[mcpRuntimeEntryKey(config.RuntimeScope, config.Identifier)]
 		// ReplaceScope already uses full config equality. The public shape fingerprint
@@ -1062,25 +1090,34 @@ func SnapshotMCPServersWithSettings(workspaceRoot string, settings SkillMCPScanS
 			lastCheckedAt = runtimeItem.LastCheckedAt
 		}
 		items = append(items, MCPServerSnapshotItem{
-			Name:              config.Name,
-			Identifier:        config.Identifier,
-			Transport:         config.Transport,
-			Command:           mcpCommandBasename(config.Command),
-			URL:               mcpURLOrigin(config.URL),
-			Source:            string(config.Source),
-			Scope:             string(config.Scope),
-			ConfigPath:        config.ConfigPath,
-			ConfiguredEnabled: config.ConfiguredEnabled,
-			Enabled:           config.Enabled,
-			HasTools:          toolCount > 0,
-			ToolCount:         toolCount,
-			Status:            status,
-			ConfigFingerprint: configFingerprint,
-			CapabilityStatus:  capabilityStatus,
-			LastError:         lastError,
-			LastCheckedAt:     lastCheckedAt,
-			SourceLabel:       string(config.Source),
-			RuntimeScope:      config.RuntimeScope,
+			Name:               config.Name,
+			Identifier:         config.Identifier,
+			Transport:          config.Transport,
+			Command:            mcpCommandBasename(config.Command),
+			URL:                mcpURLOrigin(config.URL),
+			Source:             string(config.Source),
+			Scope:              string(config.Scope),
+			ConfigPath:         config.ConfigPath,
+			ConfiguredEnabled:  config.ConfiguredEnabled,
+			Enabled:            config.Enabled,
+			HasTools:           toolCount > 0,
+			ToolCount:          toolCount,
+			Status:             status,
+			ConfigFingerprint:  configFingerprint,
+			CapabilityStatus:   capabilityStatus,
+			LastError:          lastError,
+			LastCheckedAt:      lastCheckedAt,
+			SourceLabel:        string(config.Source),
+			RuntimeScope:       config.RuntimeScope,
+			IsWorkspace:        isWorkspace,
+			Trusted:            trusted,
+			TrustRequired:      isWorkspace && !trusted,
+			TrustFingerprint:   trustFingerprint,
+			SourcePath:         trustPreview.SourcePath,
+			CommandPreview:     trustPreview.CommandPreview,
+			TrustArgumentCount: trustPreview.TrustArgumentCount,
+			TrustURLOrigin:     trustPreview.URLOrigin,
+			Cwd:                trustPreview.Cwd,
 		})
 	}
 	return items

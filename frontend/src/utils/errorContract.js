@@ -12,6 +12,17 @@ const STATUS_CODES = new Map([
   [504, { code: "provider_unavailable", kind: "provider", disposition: "retryable", message: "供应商网关超时，正在准备恢复" }],
 ]);
 
+export const MCP_WORKSPACE_TRUST_REQUIRED_CODE = "mcp_workspace_trust_required";
+
+const DIAGNOSTIC_CODES = new Map([
+  [MCP_WORKSPACE_TRUST_REQUIRED_CODE, {
+    code: MCP_WORKSPACE_TRUST_REQUIRED_CODE,
+    kind: "authorization",
+    disposition: "user_action_required",
+    message: "工作区 MCP 配置需要确认信任后才能连接",
+  }],
+]);
+
 const SAFE_TRACE_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const SENSITIVE_KEYS = /key|token|secret|password|authorization|cookie|credential|prompt|message|body|content|request|response|error|stack|cause/i;
 
@@ -57,7 +68,10 @@ export function normalizeClientError(error, { operation = "ui.operation", traceI
   const text = asText(error);
   const lower = text.toLowerCase();
   const status = extractStatusCode(error);
-  const mapped = STATUS_CODES.get(status);
+  const structuredCode = typeof error?.code === "string" ? error.code.trim() : "";
+  const messageCode = lower.match(/\bmcp_workspace_trust_required\b/)?.[0] || "";
+  const diagnosticCode = DIAGNOSTIC_CODES.has(structuredCode) ? structuredCode : messageCode;
+  const mapped = DIAGNOSTIC_CODES.get(diagnosticCode) || STATUS_CODES.get(status);
   let result = mapped;
 
   if (!result && (lower.includes("cancel") || lower.includes("aborted") || lower.includes("已取消"))) {
@@ -69,7 +83,6 @@ export function normalizeClientError(error, { operation = "ui.operation", traceI
   }
 
   result ||= { code: "internal_error", kind: "internal", disposition: "fatal", message: "服务发生异常，请重试或导出诊断信息" };
-  const structuredCode = typeof error?.code === "string" ? error.code.trim() : "";
   const structuredKind = typeof error?.kind === "string" ? error.kind.trim() : "";
   const structuredDisposition = typeof error?.disposition === "string" ? error.disposition.trim() : "";
   const structuredUserMessage = typeof error?.userMessage === "string" ? error.userMessage.trim() : "";
@@ -79,7 +92,7 @@ export function normalizeClientError(error, { operation = "ui.operation", traceI
   const retryAfter = Number(error?.retryAfterMs || error?.retryAfter || 0);
   return {
     operation,
-    code: structuredCode || result.code,
+    code: diagnosticCode || structuredCode || result.code,
     kind: structuredKind || result.kind,
     disposition: structuredDisposition || result.disposition,
     retryAfterMs: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 0,

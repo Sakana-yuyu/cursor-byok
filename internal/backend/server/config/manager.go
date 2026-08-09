@@ -18,8 +18,8 @@ import (
 const configHotReloadMinInterval = 500 * time.Millisecond
 
 type Manager struct {
-	store            *Store
-	current          atomic.Pointer[Config]
+	store   *Store
+	current atomic.Pointer[Config]
 	// saveMu 串行化「读快照→修改→整包落盘」周期，防止后台持久化任务
 	// （PersistChannelContextWindow / max_tokens cap / LastAgentModelHash / delegation）
 	// 与用户 SaveUserConfig 并发时用旧快照覆盖对方改动（lost-update）。
@@ -72,7 +72,7 @@ func (manager *Manager) currentConfig() Config {
 		return DefaultConfig()
 	}
 	if current := manager.current.Load(); current != nil {
-		return *current
+		return cloneConfig(*current)
 	}
 	return DefaultConfig()
 }
@@ -91,6 +91,9 @@ func (manager *Manager) Save(ctx context.Context, cfg Config) (Config, error) {
 	}
 	manager.saveMu.Lock()
 	defer manager.saveMu.Unlock()
+	// Workspace MCP trust is changed only through the explicit grant/revoke
+	// methods. A stale full settings snapshot must not silently alter it.
+	cfg.MCPTrustGrants = cloneMCPTrustRecords(manager.currentConfig().MCPTrustGrants)
 	return manager.saveLocked(ctx, cfg)
 }
 
@@ -282,6 +285,10 @@ func (manager *Manager) SkillMCPScanEnabledSkills() map[string]bool {
 
 func (manager *Manager) SkillMCPScanDisabledMCPServers() map[string]bool {
 	return manager.Current().SkillMCPScan.DisabledMCPServers
+}
+
+func (manager *Manager) SkillMCPScanTrustRecords() []forwarder.MCPTrustRecord {
+	return append([]forwarder.MCPTrustRecord(nil), manager.Current().MCPTrustGrants...)
 }
 
 // PersistChannelMaxTokensCap 将 provider 反馈的 max_tokens 上限持久化到指定渠道。
@@ -503,8 +510,103 @@ func (manager *Manager) LegacyRuntimeSnapshot(_ context.Context) (legacyruntime.
 }
 
 func (manager *Manager) setCurrent(cfg Config) {
-	next := cfg
+	next := cloneConfig(cfg)
 	manager.current.Store(&next)
+}
+
+func cloneConfig(input Config) Config {
+	output := input
+	output.SkillMCPScan = cloneSkillMCPScanConfig(input.SkillMCPScan)
+	output.MCPTrustGrants = cloneMCPTrustRecords(input.MCPTrustGrants)
+	return output
+}
+
+func cloneSkillMCPScanConfig(input SkillMCPScanConfig) SkillMCPScanConfig {
+	output := input
+	output.SkillSources = cloneBoolMap(input.SkillSources)
+	output.MCPSources = cloneBoolMap(input.MCPSources)
+	output.EnabledSkills = cloneBoolMap(input.EnabledSkills)
+	output.DisabledSkills = cloneBoolMap(input.DisabledSkills)
+	output.DisabledMCPServers = cloneBoolMap(input.DisabledMCPServers)
+	output.SkillSummaries = cloneStringMap(input.SkillSummaries)
+	output.MCPSummaries = cloneStringMap(input.MCPSummaries)
+	return output
+}
+
+func cloneStringMap(input map[string]string) map[string]string {
+	if input == nil {
+		return nil
+	}
+	output := make(map[string]string, len(input))
+	for key, value := range input {
+		output[key] = value
+	}
+	return output
+}
+
+func cloneMCPTrustRecords(input []forwarder.MCPTrustRecord) []forwarder.MCPTrustRecord {
+	return append([]forwarder.MCPTrustRecord(nil), input...)
+}
+
+func (manager *Manager) GrantMCPServerTrust(ctx context.Context, workspaceScope string, identifier string, fingerprint string) error {
+	if manager == nil || manager.store == nil {
+		return fmt.Errorf("config manager is not initialized")
+	}
+	grantList := normalizeMCPTrustGrants([]forwarder.MCPTrustRecord{{
+		RuntimeScope: workspaceScope,
+		Identifier:   identifier,
+		Fingerprint:  fingerprint,
+	}})
+	if len(grantList) != 1 {
+		return fmt.Errorf("valid workspace MCP trust identity is required")
+	}
+	manager.saveMu.Lock()
+	defer manager.saveMu.Unlock()
+	current := manager.currentConfig()
+	current.MCPTrustGrants = normalizeMCPTrustGrants(append(current.MCPTrustGrants, grantList[0]))
+	_, err := manager.saveLocked(ctx, current)
+	return err
+}
+
+func (manager *Manager) RevokeMCPServerTrust(ctx context.Context, workspaceScope string, identifier string) error {
+	if manager == nil || manager.store == nil {
+		return fmt.Errorf("config manager is not initialized")
+	}
+	workspaceScope = normalizeMCPTrustWorkspaceScope(workspaceScope)
+	identifier = strings.ToLower(strings.TrimSpace(identifier))
+	if workspaceScope == "" || identifier == "" {
+		return fmt.Errorf("valid workspace MCP trust identity is required")
+	}
+	manager.saveMu.Lock()
+	defer manager.saveMu.Unlock()
+	current := manager.currentConfig()
+	next := make([]forwarder.MCPTrustRecord, 0, len(current.MCPTrustGrants))
+	for _, grant := range current.MCPTrustGrants {
+		if grant.RuntimeScope == workspaceScope && grant.Identifier == identifier {
+			continue
+		}
+		next = append(next, grant)
+	}
+	current.MCPTrustGrants = next
+	_, err := manager.saveLocked(ctx, current)
+	return err
+}
+
+func (manager *Manager) HasMCPServerTrust(workspaceScope string, identifier string, fingerprint string) bool {
+	wanted := normalizeMCPTrustGrants([]forwarder.MCPTrustRecord{{
+		RuntimeScope: workspaceScope,
+		Identifier:   identifier,
+		Fingerprint:  fingerprint,
+	}})
+	if len(wanted) != 1 {
+		return false
+	}
+	for _, grant := range manager.Current().MCPTrustGrants {
+		if grant == wanted[0] {
+			return true
+		}
+	}
+	return false
 }
 
 func (manager *Manager) reloadIfChanged(ctx context.Context) {

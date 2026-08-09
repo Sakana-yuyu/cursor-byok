@@ -358,7 +358,7 @@ let previewSkills = [
     fullPath: "C:\\Users\\Administrator\\.cursor\\skills\\frontend-design\\SKILL.md",
   },
 ];
-let previewMCPServers = [
+let previewMCPServers = Array.isArray(previewTestPlan?.mcpServers) ? clone(previewTestPlan.mcpServers) : [
   {
     name: "Preview filesystem",
     identifier: "preview:filesystem",
@@ -412,6 +412,7 @@ let previewMCPServers = [
     lastError: "Failed to connect: EADDRINUSE 127.0.0.1:38837",
   },
 ];
+let previewConnectTrustRequiredRemaining = previewTestPlan?.connectMcpTrustRequiredOnce ? 1 : 0;
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -918,12 +919,37 @@ export const CancelDelegationTask = (taskID) => {
   return Promise.resolve(true);
 };
 export const ConnectMCPServer = (_workspaceRoot, identifier) => {
+  recordPreviewCall("ConnectMCPServer", [_workspaceRoot, identifier]);
   const server = previewMCPServers.find((item) => item.identifier === identifier);
   if (!server) return Promise.reject(new Error("MCP server not found"));
+  if (previewConnectTrustRequiredRemaining > 0) {
+    previewConnectTrustRequiredRemaining -= 1;
+    if (previewTestPlan?.connectMcpTrustRequiredServer) {
+      Object.assign(server, clone(previewTestPlan.connectMcpTrustRequiredServer));
+    }
+    return Promise.reject(new Error(
+      "mcp_workspace_trust_required: workspace MCP server requires explicit trust",
+    ));
+  }
   Object.assign(server, { status: "connected", hasTools: true, toolCount: 3, lastError: "" });
   return Promise.resolve(clone(server));
 };
+export const GrantMCPServerTrust = (workspaceRoot, identifier) => {
+  recordPreviewCall("GrantMCPServerTrust", [workspaceRoot, identifier]);
+  const server = previewMCPServers.find((item) => item.identifier === identifier);
+  if (!server) return Promise.reject(new Error("MCP server not found"));
+  Object.assign(server, { trusted: true, trustRequired: false });
+  return Promise.resolve(clone(server));
+};
+export const RevokeMCPServerTrust = (workspaceRoot, identifier) => {
+  recordPreviewCall("RevokeMCPServerTrust", [workspaceRoot, identifier]);
+  const server = previewMCPServers.find((item) => item.identifier === identifier);
+  if (!server) return Promise.reject(new Error("MCP server not found"));
+  Object.assign(server, { trusted: false, trustRequired: Boolean(server.isWorkspace), status: "disconnected", hasTools: false, toolCount: 0 });
+  return Promise.resolve(clone(server));
+};
 export const DisconnectMCPServer = (_workspaceRoot, identifier) => {
+  recordPreviewCall("DisconnectMCPServer", [_workspaceRoot, identifier]);
   const server = previewMCPServers.find((item) => item.identifier === identifier);
   if (!server) return Promise.reject(new Error("MCP server not found"));
   Object.assign(server, { status: "disconnected", hasTools: false, toolCount: 0, lastError: "" });

@@ -54,6 +54,9 @@ func NewHost(store *serverconfig.Store, controlPlaneAuth upstream.AuthorizationP
 	if err != nil {
 		return nil, err
 	}
+	forwarder.SharedMCPRuntimeRegistry().SetTrustResolver(func() []forwarder.MCPTrustRecord {
+		return configs.SkillMCPScanTrustRecords()
+	})
 	cfg := configs.Current()
 	host := &Host{
 		store:            store,

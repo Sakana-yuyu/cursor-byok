@@ -4,9 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"path/filepath"
+	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 
+	"cursor/internal/backend/forwarder"
 	"cursor/internal/i18n"
 	"cursor/internal/modelchannel"
 	"cursor/internal/modelcontext"
@@ -100,8 +104,8 @@ type RoutingConfig struct {
 // ComputerUseConfig 控制 ComputerUse 工具的本地执行后端。
 // desktop=操作真实屏幕（Win32 截图+鼠标键盘）；browser=转发到浏览器 MCP server（如 Playwright MCP，适合前端验证）。
 type ComputerUseConfig struct {
-	Mode            string `json:"mode" yaml:"mode"`                         // "desktop"（默认）/ "browser"
-	BrowserStartURL string `json:"browserStartUrl" yaml:"browserStartUrl"`   // 浏览器模式初始 URL，默认 about:blank
+	Mode            string `json:"mode" yaml:"mode"`                       // "desktop"（默认）/ "browser"
+	BrowserStartURL string `json:"browserStartUrl" yaml:"browserStartUrl"` // 浏览器模式初始 URL，默认 about:blank
 }
 
 type HomeMetricsConfig struct {
@@ -148,22 +152,23 @@ type Config struct {
 	Log bool `json:"log" yaml:"log"`
 	// DebugLogMaxBytes 限制每个 debug jsonl 文件的最大字节数；超过后保留尾部（错误附近）。
 	// 0 表示用默认值（50MB），负数表示不限制。热加载即时生效。
-	DebugLogMaxBytes                int                      `json:"debugLogMaxBytes" yaml:"debugLogMaxBytes"`
-	ProviderStreamIdleTimeout       int                      `json:"providerStreamIdleTimeout" yaml:"providerStreamIdleTimeout"`
-	TurnStaleTimeout                int                      `json:"turnStaleTimeout" yaml:"turnStaleTimeout"`
-	NativeDelegationProgressTimeout int                      `json:"nativeDelegationProgressTimeout" yaml:"nativeDelegationProgressTimeout"`
-	AutoMatchContextWindow          bool                     `json:"autoMatchContextWindow" yaml:"autoMatchContextWindow"`
-	BackendListenAddr               string                   `json:"backendListenAddr" yaml:"backendListenAddr"`
-	ProxyListenAddr                 string                   `json:"proxyListenAddr" yaml:"proxyListenAddr"`
-	ModelAdapters                   []ModelAdapterConfig     `json:"modelAdapters" yaml:"modelAdapters"`
-	Routing                         RoutingConfig            `json:"routing" yaml:"routing"`
-	HomeMetrics                     HomeMetricsConfig        `json:"homeMetrics" yaml:"homeMetrics"`
-	LocalResponseCache              LocalResponseCacheConfig `json:"localResponseCache" yaml:"localResponseCache"`
-	SkillMCPScan                    SkillMCPScanConfig       `json:"skillMcpScan" yaml:"skillMcpScan"`
-	Delegation                      DelegationConfig         `json:"delegation" yaml:"delegation"`
-	Goal                            GoalConfig               `json:"goal" yaml:"goal"`
-	ComputerUse                     ComputerUseConfig        `json:"computerUse" yaml:"computerUse"`
-	LastAgentModelHash              string                   `json:"lastAgentModelHash" yaml:"lastAgentModelHash"`
+	DebugLogMaxBytes                int                        `json:"debugLogMaxBytes" yaml:"debugLogMaxBytes"`
+	ProviderStreamIdleTimeout       int                        `json:"providerStreamIdleTimeout" yaml:"providerStreamIdleTimeout"`
+	TurnStaleTimeout                int                        `json:"turnStaleTimeout" yaml:"turnStaleTimeout"`
+	NativeDelegationProgressTimeout int                        `json:"nativeDelegationProgressTimeout" yaml:"nativeDelegationProgressTimeout"`
+	AutoMatchContextWindow          bool                       `json:"autoMatchContextWindow" yaml:"autoMatchContextWindow"`
+	BackendListenAddr               string                     `json:"backendListenAddr" yaml:"backendListenAddr"`
+	ProxyListenAddr                 string                     `json:"proxyListenAddr" yaml:"proxyListenAddr"`
+	ModelAdapters                   []ModelAdapterConfig       `json:"modelAdapters" yaml:"modelAdapters"`
+	Routing                         RoutingConfig              `json:"routing" yaml:"routing"`
+	HomeMetrics                     HomeMetricsConfig          `json:"homeMetrics" yaml:"homeMetrics"`
+	LocalResponseCache              LocalResponseCacheConfig   `json:"localResponseCache" yaml:"localResponseCache"`
+	SkillMCPScan                    SkillMCPScanConfig         `json:"skillMcpScan" yaml:"skillMcpScan"`
+	MCPTrustGrants                  []forwarder.MCPTrustRecord `json:"mcpTrustGrants,omitempty" yaml:"mcpTrustGrants,omitempty"`
+	Delegation                      DelegationConfig           `json:"delegation" yaml:"delegation"`
+	Goal                            GoalConfig                 `json:"goal" yaml:"goal"`
+	ComputerUse                     ComputerUseConfig          `json:"computerUse" yaml:"computerUse"`
+	LastAgentModelHash              string                     `json:"lastAgentModelHash" yaml:"lastAgentModelHash"`
 }
 
 func DefaultConfig() Config {
@@ -224,6 +229,7 @@ func NormalizeConfig(input Config) (Config, error) {
 	output.HomeMetrics.IncludeCacheWriteInHitRate = input.HomeMetrics.IncludeCacheWriteInHitRate
 	output.LocalResponseCache = normalizeLocalResponseCache(input.LocalResponseCache)
 	output.SkillMCPScan = input.SkillMCPScan
+	output.MCPTrustGrants = normalizeMCPTrustGrants(input.MCPTrustGrants)
 	output.LastAgentModelHash = strings.TrimSpace(input.LastAgentModelHash)
 	output.Routing.Mode = normalizeRoutingMode(input.Routing.Mode)
 	if output.Routing.Mode == "" {
@@ -242,6 +248,69 @@ func NormalizeConfig(input Config) (Config, error) {
 	output.Delegation = normalizeDelegationConfig(input.Delegation, adapters)
 	output.Goal = normalizeGoalConfig(input.Goal)
 	return output, nil
+}
+
+func normalizeMCPTrustGrants(input []forwarder.MCPTrustRecord) []forwarder.MCPTrustRecord {
+	if len(input) == 0 {
+		return nil
+	}
+	unique := make(map[string]forwarder.MCPTrustRecord, len(input))
+	for _, grant := range input {
+		grant.RuntimeScope = normalizeMCPTrustWorkspaceScope(grant.RuntimeScope)
+		grant.Identifier = strings.ToLower(strings.TrimSpace(grant.Identifier))
+		grant.Fingerprint = strings.ToLower(strings.TrimSpace(grant.Fingerprint))
+		if grant.RuntimeScope == "" || grant.Identifier == "" || !validMCPTrustFingerprint(grant.Fingerprint) {
+			continue
+		}
+		key := grant.RuntimeScope + "\x00" + grant.Identifier + "\x00" + grant.Fingerprint
+		unique[key] = grant
+	}
+	result := make([]forwarder.MCPTrustRecord, 0, len(unique))
+	for _, grant := range unique {
+		result = append(result, grant)
+	}
+	sort.Slice(result, func(left, right int) bool {
+		if result[left].RuntimeScope != result[right].RuntimeScope {
+			return result[left].RuntimeScope < result[right].RuntimeScope
+		}
+		if result[left].Identifier != result[right].Identifier {
+			return result[left].Identifier < result[right].Identifier
+		}
+		return result[left].Fingerprint < result[right].Fingerprint
+	})
+	return result
+}
+
+func normalizeMCPTrustWorkspaceScope(value string) string {
+	value = strings.TrimSpace(value)
+	if !strings.HasPrefix(strings.ToLower(value), "workspace:") {
+		return ""
+	}
+	workspacePath := strings.TrimSpace(value[len("workspace:"):])
+	if workspacePath == "" {
+		return ""
+	}
+	if absolute, err := filepath.Abs(workspacePath); err == nil {
+		workspacePath = absolute
+	}
+	workspacePath = filepath.ToSlash(filepath.Clean(workspacePath))
+	if runtime.GOOS == "windows" {
+		workspacePath = strings.ToLower(workspacePath)
+	}
+	return "workspace:" + workspacePath
+}
+
+func validMCPTrustFingerprint(value string) bool {
+	const prefix = "mcp-trust-v1:sha256:"
+	if !strings.HasPrefix(value, prefix) || len(value) != len(prefix)+64 {
+		return false
+	}
+	for _, character := range value[len(prefix):] {
+		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // GoalConfig 是 goal 循环执行（codex-style goal）的持久化配置。

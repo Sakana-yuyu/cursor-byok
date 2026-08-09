@@ -3,6 +3,7 @@ import {
   CancelMCPServerConnection,
   ConnectMCPServer,
   DisconnectMCPServer,
+  GrantMCPServerTrust,
   GetDelegationTaskSnapshots,
   GetSkillsMCPScanSnapshot,
   GetHistorySessions,
@@ -14,6 +15,7 @@ import {
   ExportSessionDebugBundle,
   ListSessionDebugFiles,
   ReadSessionDebugTail,
+  RevokeMCPServerTrust,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
 import { saveDelegationConfig as saveDelegationConfigBinding, invokeOperation } from "@/services/clientApi";
 
@@ -143,6 +145,22 @@ export function disconnectMCPRuntimeServer(identifier, workspaceRoot = "") {
     "DisconnectMCPServer",
     [workspaceRoot, identifier],
     () => DisconnectMCPServer(workspaceRoot, identifier),
+  );
+}
+
+export function grantMCPRuntimeServerTrust(identifier, workspaceRoot = "") {
+  return invokeOperation(
+    "GrantMCPServerTrust",
+    [workspaceRoot, identifier],
+    () => GrantMCPServerTrust(workspaceRoot, identifier),
+  );
+}
+
+export function revokeMCPRuntimeServerTrust(identifier, workspaceRoot = "") {
+  return invokeOperation(
+    "RevokeMCPServerTrust",
+    [workspaceRoot, identifier],
+    () => RevokeMCPServerTrust(workspaceRoot, identifier),
   );
 }
 
