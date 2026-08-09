@@ -19,8 +19,8 @@ import (
 // Content 为空，文本 prompt + 图片 ContentPart。
 func visionDescribeReq(data []byte, path string) ProviderRequest {
 	return ProviderRequest{
-		ModelID:  "4f97a29883b70e79",
-		Mode:     5, // agent mode
+		ModelID: "4f97a29883b70e79",
+		Mode:    5, // agent mode
 		Messages: []modeladapter.Message{{
 			Role:    "user",
 			Content: "", // 文本与图片都在 ContentParts，Content 为空 —— 旧指纹的盲区
@@ -138,6 +138,42 @@ func TestProviderCacheKeyTextOnlyStable(t *testing.T) {
 	}
 	if kc.fingerprint(req) != kc.fingerprint(req) {
 		t.Fatal("相同纯文本请求指纹必须稳定")
+	}
+}
+
+// TestCacheKeyFingerprintIsolatesConversations 完全相同 provider-visible 请求但属于
+// 不同 conversation 时，本地响应缓存必须给出不同键：不能把 A 会话的完成流回放给 B。
+func TestCacheKeyFingerprintIsolatesConversations(t *testing.T) {
+	kc := newCacheKeyCache(64)
+	base := ProviderRequest{
+		ModelID:   "deepseek-v4-flash",
+		ModelName: "deepseek-v4-flash",
+		Messages: []modeladapter.Message{
+			{Role: "user", Content: "帮我修复这个 bug"},
+		},
+		MaxTokens: 4000,
+	}
+	reqA := base
+	reqA.ConversationID = "conversation-a"
+	reqB := base
+	reqB.ConversationID = "conversation-b"
+
+	fpA := kc.fingerprint(reqA)
+	fpB := kc.fingerprint(reqB)
+	if fpA == "" || fpB == "" {
+		t.Fatalf("conversation-scoped fingerprints must be non-empty: %q %q", fpA, fpB)
+	}
+	if fpA == fpB {
+		t.Fatalf("不同 conversation 必须产生不同缓存指纹，实际碰撞: %q == %q", fpA, fpB)
+	}
+	reqA2 := base
+	reqA2.ConversationID = "conversation-a"
+	if kc.fingerprint(reqA) != kc.fingerprint(reqA2) {
+		t.Fatal("同一 conversation 相同请求必须稳定命中")
+	}
+	empty := base
+	if kc.fingerprint(empty) != kc.fingerprint(empty) {
+		t.Fatal("空 conversation 请求指纹必须稳定")
 	}
 }
 
