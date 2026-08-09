@@ -642,7 +642,17 @@ func contextProjectionTurns(conversation *ConversationFile) ([]contextProjection
 }
 
 func isHistoricalInterruptedToolChain(reason string, turnSeq int64, currentTurnSeq int64) bool {
-	return turnSeq > 0 && turnSeq < currentTurnSeq && strings.HasPrefix(strings.TrimSpace(reason), "incomplete tool chain for call ")
+	reason = strings.TrimSpace(reason)
+	if turnSeq <= 0 || turnSeq >= currentTurnSeq {
+		return false
+	}
+	// 历史 turn 的中断工具链（无终态结果 / 孤儿工具结果）是失败收口（上游中断、
+	// 上下文溢出）的常见产物：摘要化继续，而不是让整个会话的所有后续请求
+	// 在投影阶段永久失败（线上故障：cannot summarize turn）。
+	if strings.HasPrefix(reason, "incomplete tool chain for call ") {
+		return true
+	}
+	return strings.HasPrefix(reason, "orphan tool result for call ")
 }
 
 func summarizeInterruptedContextProjectionTurn(turnSeq int64, entries []HistoryEntry, reason string) contextProjectionTurn {
@@ -663,7 +673,7 @@ func summarizeInterruptedContextProjectionTurn(turnSeq int64, entries []HistoryE
 		}
 		break
 	}
-	turn.Summary.Steps = []string{"[interrupted tool chain] " + strings.TrimSpace(reason) + "; no terminal tool result was recorded."}
+	turn.Summary.Steps = []string{"[interrupted tool chain] " + strings.TrimSpace(reason) + "; damaged history entries were folded into this summary."}
 	turn.ReplayCount = 1
 	turn.EstimatedTokens = estimateModelMessagesTokens([]modeladapter.Message{{Role: "assistant", Content: turn.Summary.Steps[0]}})
 	return turn
