@@ -12,6 +12,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"cursor/internal/backend/promptsync"
 )
@@ -21,7 +22,8 @@ func main() {
 	showAll := flag.Bool("all", false, "打印完整提示词而不是前 2000 字符")
 	flag.Parse()
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	result, err := promptsync.Fetch(ctx, "agent")
 	if err != nil {
 		fmt.Printf("拉取失败: %v\n", err)

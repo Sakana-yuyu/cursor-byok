@@ -8,7 +8,12 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
+
+// fetchHTTPClient 是带总超时的 HTTP 客户端：connect-go 调用与手写 RPC 都走这里，
+// 即使调用方传入无截止时间的 context，单次请求也不会无限悬挂。
+var fetchHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
 // httpClient 是带固定认证头的 http.Client 包装，供 connect-go 客户端使用。
 type httpClient struct {
@@ -19,7 +24,7 @@ func (c *httpClient) Do(req *http.Request) (*http.Response, error) {
 	for key, value := range c.headers {
 		req.Header.Set(key, value)
 	}
-	return http.DefaultClient.Do(req)
+	return fetchHTTPClient.Do(req)
 }
 
 // fetchChatPrompt 手写调用 GetChatPrompt（RPC 未在提取的 proto service 中，
@@ -52,7 +57,7 @@ func fetchChatPrompt(ctx context.Context, mode string, header map[string]string)
 			req.Header.Set(key, value)
 		}
 		req.Header.Set("Content-Type", "application/json")
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := fetchHTTPClient.Do(req)
 		if err != nil {
 			details = append(details, fmt.Sprintf("GetChatPrompt@%s: %v", path, err))
 			continue
