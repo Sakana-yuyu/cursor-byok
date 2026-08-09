@@ -130,22 +130,22 @@ Compare every locale key set and placeholder set against `frontend/src/i18n/gene
 - Consumes: verified integration branch
 - Produces: one local `main` branch containing every feature branch tip
 
-- [ ] **Step 1: Verify branch reachability**
+- [x] **Step 1: Verify branch reachability**
 
 Run `git merge-base --is-ancestor <branch> codex/integrate-all-branches` for every local source branch.
 Expected: exit code 0 for all branches.
 
-- [ ] **Step 2: Fast-forward main**
+- [x] **Step 2: Fast-forward main**
 
 Run: `git merge --ff-only codex/integrate-all-branches` from the primary worktree.
 Expected: `main` advances without rewriting or stashing user changes.
 
-- [ ] **Step 3: Verify dirty worktree payloads**
+- [x] **Step 3: Verify dirty worktree payloads**
 
 Hash each untracked file in old worktrees and its counterpart on final `main`; preserve any mismatch before removal.
 Expected: every file is identical or explicitly preserved.
 
-- [ ] **Step 4: Remove obsolete worktrees and branches**
+- [x] **Step 4: Remove obsolete worktrees and branches**
 
 Remove the source-branch worktrees, then delete every local branch except `main`.
 Expected: `git branch` lists only `main`, and `git status --short --branch` is clean.

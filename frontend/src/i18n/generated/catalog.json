@@ -1036,8 +1036,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 287,
-          "column": 108
+          "line": 288,
+          "column": 1
         }
       ]
     },
@@ -1221,8 +1221,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 82,
-          "column": 179
+          "line": 83,
+          "column": 1
         }
       ]
     },
@@ -2012,8 +2012,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 483,
-          "column": 163
+          "line": 484,
+          "column": 1
         }
       ]
     },
@@ -2072,8 +2072,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 480,
-          "column": 180
+          "line": 481,
+          "column": 1
         }
       ]
     },
@@ -4275,8 +4275,8 @@
         },
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 162,
-          "column": 11
+          "line": 163,
+          "column": 1
         }
       ]
     },
@@ -4657,8 +4657,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 453,
-          "column": 17
+          "line": 454,
+          "column": 1
         }
       ]
     },
@@ -5105,8 +5105,8 @@
       "refs": [
         {
           "file": "src/views/Diagnostics.vue",
-          "line": 210,
-          "column": 181
+          "line": 211,
+          "column": 1
         }
       ]
     },
@@ -7155,8 +7155,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 127,
-          "column": 71
+          "line": 128,
+          "column": 1
         }
       ]
     },
@@ -8305,8 +8305,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 68,
-          "column": 144
+          "line": 69,
+          "column": 1
         }
       ]
     },
@@ -8377,8 +8377,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 86,
-          "column": 175
+          "line": 87,
+          "column": 1
         }
       ]
     },
@@ -8663,8 +8663,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 365,
-          "column": 115
+          "line": 366,
+          "column": 1
         }
       ]
     },
@@ -8880,8 +8880,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 77,
-          "column": 139
+          "line": 78,
+          "column": 1
         }
       ]
     },
@@ -9763,13 +9763,13 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 246,
-          "column": 105
+          "line": 247,
+          "column": 1
         },
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 358,
-          "column": 92
+          "line": 359,
+          "column": 1
         }
       ]
     },
@@ -10214,8 +10214,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 532,
-          "column": 11
+          "line": 533,
+          "column": 1
         }
       ]
     },
@@ -10250,8 +10250,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 227,
-          "column": 52
+          "line": 228,
+          "column": 1
         }
       ]
     },
@@ -11695,8 +11695,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 434,
-          "column": 67
+          "line": 435,
+          "column": 1
         }
       ]
     },
@@ -12227,8 +12227,8 @@
       "refs": [
         {
           "file": "src/views/Diagnostics.vue",
-          "line": 205,
-          "column": 139
+          "line": 206,
+          "column": 1
         }
       ]
     },
@@ -12285,8 +12285,8 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 459,
-          "column": 17
+          "line": 460,
+          "column": 1
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
@@ -12759,8 +12759,8 @@
       "refs": [
         {
           "file": "src/components/ui/ModelTreeMultiSelect.vue",
-          "line": 536,
-          "column": 13
+          "line": 537,
+          "column": 1
         }
       ]
     },
@@ -13837,8 +13837,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 92,
-          "column": 9
+          "line": 93,
+          "column": 1
         }
       ]
     },
@@ -14864,8 +14864,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 508,
-          "column": 11
+          "line": 509,
+          "column": 1
         }
       ]
     },
@@ -15182,8 +15182,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 328,
-          "column": 91
+          "line": 329,
+          "column": 1
         }
       ]
     },
@@ -15720,8 +15720,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 71,
-          "column": 144
+          "line": 72,
+          "column": 1
         }
       ]
     },
@@ -15768,8 +15768,8 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 144,
-          "column": 53
+          "line": 145,
+          "column": 1
         }
       ]
     },
@@ -16152,8 +16152,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 539,
-          "column": 43
+          "line": 540,
+          "column": 1
         }
       ]
     },
@@ -16386,8 +16386,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 331,
-          "column": 85
+          "line": 332,
+          "column": 1
         },
         {
           "file": "src/views/MetricsDetail.vue",
@@ -16876,8 +16876,8 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 147,
-          "column": 81
+          "line": 148,
+          "column": 1
         }
       ]
     },
@@ -17105,8 +17105,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 467,
-          "column": 43
+          "line": 468,
+          "column": 1
         }
       ]
     },
@@ -17686,8 +17686,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 443,
-          "column": 17
+          "line": 444,
+          "column": 1
         }
       ]
     },
@@ -18324,8 +18324,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 474,
-          "column": 13
+          "line": 475,
+          "column": 1
         }
       ]
     },
