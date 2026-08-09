@@ -593,6 +593,21 @@ func buildDelegatedFallbackSummary(messages []modeladapter.Message) string {
 	return result
 }
 
+// delegatedSummaryInputBudget 计算摘要 LLM 请求的安全输入预算。
+// 摘要请求与主请求共享同一 provider 通道，输入不能超过窗口推导预算
+// （delegatedContextBudgetForWindow）；同时不高于当前 pass 的压缩预算，
+// 避免摘要输入比主请求本身还大。窗口信息缺失（<=0）时退回 pass 预算。
+func delegatedSummaryInputBudget(adapter *localDelegatedAgentAdapter, request delegation.TaskRequest, passBudget int64) int64 {
+	budget := int64(0)
+	if adapter != nil && adapter.resolveContextWindow != nil {
+		budget = delegatedContextBudgetForWindow(int64(adapter.resolveContextWindow(strings.TrimSpace(request.ModelID))))
+	}
+	if budget <= 0 || (passBudget > 0 && passBudget < budget) {
+		budget = passBudget
+	}
+	return budget
+}
+
 // compactDelegatedMessagesWithSummary 递归分治压缩子代理消息（借鉴 aider summarize_real）。
 // 流程：snip 超长 tool result -> findCutIndex 安全切割 -> LLM 摘要头部 -> 重建 -> 递归。
 // depth 控制递归深度（最多 3 层），LLM 失败时降级为确定性摘要。
@@ -617,10 +632,32 @@ func compactDelegatedMessagesWithSummary(ctx context.Context, adapter *localDele
 	}
 
 	// 第 3 步：对切割点之前的消息生成摘要
-	messagesToSummarize := working[:cutIndex]
+	messagesToSummarize := cloneDelegatedMessages(working[:cutIndex])
 	tail := working[cutIndex:]
+	// 摘要 LLM 与主请求共享同一 provider 通道，输入必须落在窗口内；
+	// 配置窗口偏大时 working 可能未被压缩到真实窗口内，摘要请求会必失败。
+	// 先把摘要输入压到摘要安全预算内（snip 超长 tool result，仍超则裁掉尾部）。
+	summaryBudget := delegatedSummaryInputBudget(adapter, request, budget)
+	if summaryBudget > 0 && estimateModelMessagesTokens(messagesToSummarize) > summaryBudget {
+		snipDelegatedAggressiveToolResults(messagesToSummarize, summaryBudget)
+		if estimateModelMessagesTokens(messagesToSummarize) > summaryBudget {
+			cut := findDelegatedCompactionCutIndex(messagesToSummarize, int64(float64(summaryBudget)*delegatedCompactionPreserveRatio))
+			if cut > 1 {
+				messagesToSummarize = messagesToSummarize[:cut]
+			}
+		}
+	}
 	modelCallID := fmt.Sprintf("%s-compaction-%d", strings.TrimSpace(request.ID), depth+1)
 	summary, err := generateDelegatedCompactionSummary(ctx, adapter, request, messagesToSummarize, modelCallID)
+	if err != nil && len(messagesToSummarize) > 4 {
+		// 摘要请求本身超窗（窗口/估算偏差兜底）：输入再减半重试一次，仍失败才走确定性回退。
+		half := messagesToSummarize[:len(messagesToSummarize)/2]
+		if retried, retryErr := generateDelegatedCompactionSummary(ctx, adapter, request, half, modelCallID+"-retry"); retryErr == nil {
+			err = nil
+			summary = retried
+			logger.Infof("forwarder delegated compaction summary retried with halved input task_id=%s depth=%d", strings.TrimSpace(request.ID), depth)
+		}
+	}
 	if err != nil {
 		logger.Infof("forwarder delegated compaction summary LLM failed task_id=%s depth=%d err=%v, using fallback", strings.TrimSpace(request.ID), depth, err)
 		summary = buildDelegatedFallbackSummary(messagesToSummarize)

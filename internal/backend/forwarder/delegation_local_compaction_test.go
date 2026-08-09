@@ -413,3 +413,131 @@ func TestBuildChildConversationUsesTheDelegatedModelContextWindow(t *testing.T) 
 		t.Fatalf("child context window = %d, want delegated model window 8192", child.TokenDetailsMaxTokens)
 	}
 }
+
+// summaryControlledProvider 主请求总是成功；摘要请求按 failSummaryCalls 控制前 N 次失败。
+// 记录每次摘要请求的输入估算，用于验证预压缩与减半重试。
+type summaryControlledProvider struct {
+	failSummaryCalls int
+	summaryCalls     int
+	summaryInputs    []int64
+}
+
+func (p *summaryControlledProvider) StartStream(_ context.Context, req ProviderRequest, sink func(modeladapter.ModelEvent) error) error {
+	if strings.Contains(req.CompileSummary, "compaction summary") {
+		p.summaryCalls++
+		p.summaryInputs = append(p.summaryInputs, estimateCompiledPromptTokens(CompiledConversation{Messages: req.Messages, Tools: req.Tools}))
+		if p.summaryCalls <= p.failSummaryCalls {
+			return errors.New("openai responses stream error code=context_too_large: Your input exceeds the context window of this model")
+		}
+		if err := sink(modeladapter.ModelEvent{Kind: modeladapter.ModelEventKindTextDelta, Text: "summary-ok"}); err != nil {
+			return err
+		}
+		return sink(modeladapter.ModelEvent{Kind: modeladapter.ModelEventKindTurnFinished})
+	}
+	if err := sink(modeladapter.ModelEvent{Kind: modeladapter.ModelEventKindTurnFinished}); err != nil {
+		return err
+	}
+	return nil
+}
+
+// buildOversizedDelegatedHistory 构造估算 token 数超过 minTokens 的消息历史。
+// 消息条数足够多，使序列化截断（每条 8K 字符上限）后仍可能超出预算，
+// 以验证摘要输入预压缩真正生效。
+func buildOversizedDelegatedHistory(minTokens int64) []modeladapter.Message {
+	messages := []modeladapter.Message{{Role: "system", Content: "sys"}}
+	for estimateModelMessagesTokens(messages) <= minTokens {
+		messages = append(messages,
+			modeladapter.Message{Role: "user", Content: strings.Repeat("u", 8_000)},
+			modeladapter.Message{Role: "assistant", Content: strings.Repeat("a", 8_000)},
+		)
+	}
+	return messages
+}
+
+func TestExecuteLearnContextWindowOncePerTask(t *testing.T) {
+	provider := &fakeDelegatedProvider{errorsBeforeSuccess: 2}
+	adapter := newCompactionTestAdapter(provider)
+	adapter.compiler = delegatedOverflowCompiler{}
+	var learnCalls int
+	var learnedModel string
+	var learnedSent int64
+	adapter.learnContextWindow = func(_ context.Context, modelID string, sentTokens int64) (int, int, bool) {
+		learnCalls++
+		learnedModel = modelID
+		learnedSent = sentTokens
+		return 1_000_000, 75_000, true
+	}
+	req := delegation.TaskRequest{ID: "learn-1", Prompt: "do the thing", ModelID: "m1", ModelName: "gpt-5.6-luna"}
+	result := adapter.Execute(context.Background(), req)
+	if result.Error != nil {
+		t.Fatalf("expected recovery, got error: %v", result.Error)
+	}
+	if learnCalls != 1 {
+		t.Fatalf("learnContextWindow called %d times, want exactly once per task (idempotent)", learnCalls)
+	}
+	if learnedModel != "m1" {
+		t.Fatalf("learnContextWindow model = %q, want m1", learnedModel)
+	}
+	if learnedSent <= 0 {
+		t.Fatalf("learnContextWindow sentTokens = %d, want the failed sent input tokens > 0", learnedSent)
+	}
+}
+
+func TestDelegatedSummaryInputPrecompressedToBudget(t *testing.T) {
+	provider := &summaryControlledProvider{}
+	adapter := newCompactionTestAdapter(provider)
+	req := delegation.TaskRequest{ID: "precompact", ModelID: "m1", ModelName: "gpt-5.6-luna"}
+	budget := delegatedContextBudgetForWindow(272_000)
+	messages := buildOversizedDelegatedHistory(budget)
+
+	out, changed, err := compactDelegatedMessagesWithSummary(context.Background(), adapter, req, messages, budget, 0)
+	if err != nil {
+		t.Fatalf("compactDelegatedMessagesWithSummary() error = %v", err)
+	}
+	if !changed {
+		t.Fatal("expected summary compaction to change messages")
+	}
+	if len(provider.summaryInputs) == 0 {
+		t.Fatal("summary LLM was never called")
+	}
+	if got := provider.summaryInputs[0]; got > budget {
+		t.Fatalf("summary input tokens = %d, want <= summary budget %d (precompression)", got, budget)
+	}
+	if !containsDelegatedText(out, "summary-ok") {
+		t.Fatalf("rebuilt messages do not contain the LLM summary: %#v", out)
+	}
+}
+
+func TestDelegatedSummaryHalvedRetryOnOverflow(t *testing.T) {
+	provider := &summaryControlledProvider{failSummaryCalls: 1}
+	adapter := newCompactionTestAdapter(provider)
+	req := delegation.TaskRequest{ID: "summary-halve", ModelID: "m1", ModelName: "gpt-5.6-luna"}
+	budget := delegatedContextBudgetForWindow(272_000)
+	messages := buildOversizedDelegatedHistory(budget)
+
+	out, changed, err := compactDelegatedMessagesWithSummary(context.Background(), adapter, req, messages, budget, 0)
+	if err != nil {
+		t.Fatalf("compactDelegatedMessagesWithSummary() error = %v", err)
+	}
+	if !changed {
+		t.Fatal("expected summary compaction to change messages")
+	}
+	if provider.summaryCalls != 2 {
+		t.Fatalf("summary calls = %d, want 2 (failed full input + halved retry)", provider.summaryCalls)
+	}
+	if provider.summaryInputs[1] >= provider.summaryInputs[0] {
+		t.Fatalf("retry input %d is not smaller than the failed input %d", provider.summaryInputs[1], provider.summaryInputs[0])
+	}
+	if !containsDelegatedText(out, "summary-ok") {
+		t.Fatalf("rebuilt messages do not contain the halved-retry summary: %#v", out)
+	}
+}
+
+func containsDelegatedText(messages []modeladapter.Message, needle string) bool {
+	for _, msg := range messages {
+		if strings.Contains(msg.Content, needle) {
+			return true
+		}
+	}
+	return false
+}

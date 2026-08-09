@@ -42,6 +42,9 @@ type localDelegatedAgentAdapter struct {
 	maxPasses            int
 	sequence             atomic.Uint64
 	resolveContextWindow func(string) uint32
+	// learnContextWindow 在溢出重试时按失败发送量收敛渠道窗口并持久化，
+	// 让后续任务的首次预算落在真实窗口附近（每任务幂等一次，nil 时跳过）。
+	learnContextWindow func(ctx context.Context, modelID string, sentTokens int64) (before int, after int, ok bool)
 }
 
 func newLocalDelegatedAgentAdapter(service *Service) *localDelegatedAgentAdapter {
@@ -60,6 +63,7 @@ func newLocalDelegatedAgentAdapter(service *Service) *localDelegatedAgentAdapter
 		toolExecutor:         service.executeLocalDelegatedTool,
 		maxPasses:            defaultLocalDelegationMaxProviderPasses,
 		resolveContextWindow: service.resolveContextWindowTokens,
+		learnContextWindow:   service.learnContextWindowForDelegatedOverflow,
 	}
 }
 
@@ -145,6 +149,11 @@ func (adapter *localDelegatedAgentAdapter) Execute(ctx context.Context, request 
 			if delegatedContextOverflowError(err) && overflowRetries < delegatedCompactionRetryLimit {
 				previousSentInputTokens = passView.InputTokens
 				overflowRetries++
+				// 本任务首次溢出：按失败发送量收敛渠道窗口并持久化（每任务幂等一次），
+				// 让后续任务的首次预算就落在真实窗口附近，避免每个任务都靠溢出重试兜底。
+				if overflowRetries == 1 && adapter.learnContextWindow != nil {
+					adapter.learnContextWindow(ctx, strings.TrimSpace(request.ModelID), previousSentInputTokens)
+				}
 				logger.Infof("forwarder delegated context overflow retry task_id=%s provider_pass=%d retry=%d/%d window_ratio=%.3f", strings.TrimSpace(request.ID), providerPass, overflowRetries, delegatedCompactionRetryLimit, delegatedOverflowWindowRatio(overflowRetries))
 				// providerPass-- 抵消 for post 语句的 providerPass++，使重试复用同一 provider_pass。
 				// 重试轮会照常执行循环顶部的主动压缩与 checkpoint；不要在此循环内添加

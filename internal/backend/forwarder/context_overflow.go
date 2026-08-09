@@ -19,6 +19,12 @@ const contextOverflowMaxCompactionRetries = 2
 // 中转站限制自适应（遇 context_too_large 时减半）到此值后不再减半，避免上下文过小导致模型不可用。
 const contextWindowHalveFloor = 32_000
 
+// delegatedWindowLearnFactor 是 delegated worker 溢出时窗口收敛系数：
+// 新窗口 = 失败发送量 × 该系数（下限 contextWindowHalveFloor）。
+// 失败发送量本身已超窗（估算口径），按 0.75 收敛给 tokenizer 估算偏差留余量，
+// 使下一次任务的首次预算即可落在真实窗口内。
+const delegatedWindowLearnFactor = 0.75
+
 // recoverFromContextOverflow 在 provider 返回 context_length_exceeded 时尝试强制压缩并重试。
 // 返回 (recovered=true, nil) 表示已成功挂起压缩流程（压缩完成后会自动 resume provider）；
 // 返回 (false, nil) 表示已达重试上限或无可压缩内容，交给调用方走正常失败路径。
@@ -149,4 +155,58 @@ func (service *Service) maybeHalveContextWindowForOverflow(stream *ActiveStream,
 	})
 	logger.Infof("forwarder context window halved request_id=%s channel_id=%s model_id=%s %d -> %d",
 		strings.TrimSpace(requestID), channelID, strings.TrimSpace(modelID), currentWindow, halved)
+}
+
+// learnContextWindowForDelegatedOverflow 在 delegated worker 因 context_length_exceeded
+// 触发溢出重试时，把命中渠道的 contextWindowTokens 收敛为「失败发送量 ×
+// delegatedWindowLearnFactor」（下限 contextWindowHalveFloor）并持久化到该用户的
+// config.yaml 对应 adapter 条目。与 maybeHalveContextWindowForOverflow 同为「仅下调」
+// 语义，但按实际失败发送量收敛，比逐次减半更快贴近真实窗口：下一次任务的首次预算
+// 即可落在窗口内，避免每个任务都靠溢出重试兜底。
+// 返回 (before, after, ok)；无可持久化后端、已至下限或目标未下调时为 (0,0,false)。
+func (service *Service) learnContextWindowForDelegatedOverflow(ctx context.Context, modelID string, sentTokens int64) (int, int, bool) {
+	if service == nil || service.resolver == nil || service.contextWindowPersister == nil {
+		return 0, 0, false
+	}
+	if sentTokens <= 0 {
+		return 0, 0, false
+	}
+	channel, err := service.resolver.SelectChannelForModel(ctx, strings.TrimSpace(modelID))
+	if err != nil || channel == nil {
+		return 0, 0, false
+	}
+	current := channel.ContextWindowTokens
+	if current <= contextWindowHalveFloor {
+		return 0, 0, false
+	}
+	target := int64(float64(sentTokens) * delegatedWindowLearnFactor)
+	if target < contextWindowHalveFloor {
+		target = contextWindowHalveFloor
+	}
+	if target >= int64(current) {
+		target = int64(current) - 1
+	}
+	if target <= 0 {
+		return 0, 0, false
+	}
+	channelID := strings.TrimSpace(channel.ID)
+	if channelID == "" {
+		return 0, 0, false
+	}
+	if err := service.contextWindowPersister.PersistChannelContextWindow(ctx, channelID, int(target)); err != nil {
+		logger.Errorf("forwarder delegated context window learn persist failed channel_id=%s model_id=%s: %v",
+			channelID, strings.TrimSpace(modelID), err)
+		return 0, 0, false
+	}
+	service.debug.LogRuntime(ctx, "", "", "delegated_context_window_learned", map[string]any{
+		"channel_id":  channelID,
+		"model_id":    strings.TrimSpace(modelID),
+		"sent_tokens": sentTokens,
+		"before":      current,
+		"after":       target,
+		"floor":       contextWindowHalveFloor,
+	})
+	logger.Infof("forwarder delegated context window learned channel_id=%s model_id=%s sent_tokens=%d %d -> %d",
+		channelID, strings.TrimSpace(modelID), sentTokens, current, target)
+	return int(current), int(target), true
 }
