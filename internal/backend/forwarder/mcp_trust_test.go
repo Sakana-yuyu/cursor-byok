@@ -38,10 +38,11 @@ func TestMCPTrustFingerprintTracksExecutableIdentityWithoutSecretValues(t *testi
 	}
 
 	cases := map[string]func(*MCPServerConfig){
-		"command":            func(config *MCPServerConfig) { config.Command = "C:\\Tools\\other.exe" },
-		"command whitespace": func(config *MCPServerConfig) { config.Command = " " + config.Command },
-		"argument":           func(config *MCPServerConfig) { config.Args[1] = "unsafe" },
-		"argument order":     func(config *MCPServerConfig) { config.Args[0], config.Args[1] = config.Args[1], config.Args[0] },
+		"command":  func(config *MCPServerConfig) { config.Command = "C:\\Tools\\other.exe" },
+		"argument": func(config *MCPServerConfig) { config.Args[1] = "unsafe" },
+		"argument order": func(config *MCPServerConfig) {
+			config.Args[0], config.Args[1] = config.Args[1], config.Args[0]
+		},
 		"cwd":                func(config *MCPServerConfig) { config.Cwd = "C:\\Repo\\Other" },
 		"transport":          func(config *MCPServerConfig) { config.Transport = "sse" },
 		"config source path": func(config *MCPServerConfig) { config.ConfigPath = "C:\\Repo\\Example\\.agents\\mcp.json" },
@@ -64,7 +65,7 @@ func TestMCPTrustFingerprintTracksExecutableIdentityWithoutSecretValues(t *testi
 	}
 }
 
-func TestMCPTrustFingerprintTreatsCommandTextAsExactIdentity(t *testing.T) {
+func TestMCPTrustFingerprintCanonicalizesEquivalentCommandPaths(t *testing.T) {
 	workspace := t.TempDir()
 	base := MCPServerConfig{
 		Identifier:   "workspace-stdio",
@@ -76,8 +77,8 @@ func TestMCPTrustFingerprintTreatsCommandTextAsExactIdentity(t *testing.T) {
 
 	equivalent := cloneMCPServerConfig(base)
 	equivalent.Command = filepath.Join(workspace, "runner.exe")
-	if got, want := MCPTrustFingerprint(equivalent), MCPTrustFingerprint(base); got == want {
-		t.Fatalf("command representation change retained trust: got %q want different from %q", got, want)
+	if got, want := MCPTrustFingerprint(equivalent), MCPTrustFingerprint(base); got != want {
+		t.Fatalf("equivalent command paths differed after canonicalization: got %q want %q", got, want)
 	}
 
 	changed := cloneMCPServerConfig(base)

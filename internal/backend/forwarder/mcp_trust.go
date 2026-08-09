@@ -94,7 +94,7 @@ func MCPTrustFingerprint(config MCPServerConfig) string {
 		Scope:         mcpConfigScopeKind(config.Scope),
 		RuntimeScope:  normalizeMCPRuntimeScope(config.RuntimeScope),
 		Transport:     mcpTransportKind(config.Transport),
-		Command:       config.Command,
+		Command:       normalizeMCPTrustCommand(config.Command),
 		Args:          append([]string(nil), config.Args...),
 		Cwd:           normalizeMCPTrustPath(config.Cwd),
 		URLOrigin:     mcpURLOrigin(config.URL),
@@ -180,6 +180,21 @@ func mcpWorkspaceTrustRequired(config MCPServerConfig) bool {
 
 func normalizeMCPTrustIdentifier(identifier string) string {
 	return strings.ToLower(strings.TrimSpace(identifier))
+}
+
+func normalizeMCPTrustCommand(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if absolute, err := filepath.Abs(value); err == nil {
+		value = absolute
+	}
+	value = filepath.ToSlash(filepath.Clean(value))
+	if runtime.GOOS == "windows" {
+		value = strings.ToLower(value)
+	}
+	return value
 }
 
 func normalizeMCPTrustPath(value string) string {
