@@ -54,6 +54,10 @@ type nativeDelegationRuntime struct {
 	// ExecWatchdogDeferrals 记录 exec 看门狗因「子代理仍在客户端运行」而延期的次数，
 	// 达到 nativeSubagentExecWatchdogMaxDeferrals 后不再延期，按超时收口。
 	ExecWatchdogDeferrals int
+	// ProviderRetryCount 记录该次子代理派发是第几次尝试（0=首次）。瞬时上游故障
+	// （request_timeout/503/连接拒绝等）自动重试时继承并递增，达到
+	// nativeSubagentTransientRetryMax 后不再重试。
+	ProviderRetryCount int
 	// holdsSlot 表示该任务已占用原生子代理并发信号量；terminal 时释放，防重复释放。
 	holdsSlot bool
 }
