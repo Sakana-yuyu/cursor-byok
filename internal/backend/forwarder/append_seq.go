@@ -120,28 +120,6 @@ func (state *appendSequenceState) acquire(ctx context.Context, requestID string,
 		}
 		state.updatedAt = now
 
-		// Cursor may reuse the same request_id for a later turn and restart
-		// append_seqno from 1. Accept that as a sequence restart when idle so
-		// tool results are not discarded as stale forever.
-		if appendSeq == 1 && state.next > 1 {
-			if state.processing {
-				ready := state.ready
-				state.mu.Unlock()
-				select {
-				case <-ctx.Done():
-					return false, ctx.Err()
-				case <-ready:
-				}
-				continue
-			}
-			prevNext := state.next
-			state.next = 1
-			state.processing = true
-			state.mu.Unlock()
-			logger.Infof("forwarder reset append sequence request_id=%s previous_next=%d append_seqno=1", requestID, prevNext)
-			return false, nil
-		}
-
 		switch {
 		case appendSeq < state.next:
 			state.mu.Unlock()
