@@ -186,7 +186,7 @@ func (s *ProxyService) runModelAdapterTest(adapter serverconfig.ModelAdapterConf
 	metrics, requestErr := s.executeModelAdapterNonStreamingTest(ctx, adapter)
 	if requestErr != nil {
 		// endpoint 不支持时自动探测备选 endpoint，成功后静默保存
-		if fallbackResult, ok := s.tryOpenAIEndpointFallback(ctx, adapter, requestHash, startedAt, requestErr); ok {
+		if fallbackResult, ok := s.tryOpenAIEndpointFallback(ctx, adapter, requestHash, requestErr); ok {
 			return fallbackResult, nil
 		}
 		result := buildErroredModelAdapterTestResult(adapter.ID, requestHash, requestErr)
@@ -218,11 +218,11 @@ func (s *ProxyService) runModelAdapterTest(adapter serverconfig.ModelAdapterConf
 		totalDurationMS = 0
 	}
 
-	tokensPerSecond := 0.0
-	totalDuration := metrics.finishedAt.Sub(startedAt)
-	if outputTokens > 0 && totalDuration > 0 {
-		tokensPerSecond = float64(outputTokens) / totalDuration.Seconds()
-	}
+	tokensPerSecond := calculateGenerationTokensPerSecond(
+		outputTokens,
+		metrics.firstTextTokenAt,
+		metrics.finishedAt,
+	)
 
 	result := ModelAdapterTestResult{
 		AdapterID:        adapter.ID,
@@ -967,11 +967,11 @@ func buildSuccessfulModelAdapterTestResult(adapterID string, requestHash string,
 	if totalDurationMS < 0 {
 		totalDurationMS = 0
 	}
-	tokensPerSecond := 0.0
-	totalDuration := metrics.finishedAt.Sub(startedAt)
-	if outputTokens > 0 && totalDuration > 0 {
-		tokensPerSecond = float64(outputTokens) / totalDuration.Seconds()
-	}
+	tokensPerSecond := calculateGenerationTokensPerSecond(
+		outputTokens,
+		metrics.firstTextTokenAt,
+		metrics.finishedAt,
+	)
 	result := ModelAdapterTestResult{
 		AdapterID:        adapterID,
 		RequestHash:      requestHash,
@@ -994,7 +994,6 @@ func (s *ProxyService) tryOpenAIEndpointFallback(
 	ctx context.Context,
 	adapter serverconfig.ModelAdapterConfig,
 	requestHash string,
-	startedAt time.Time,
 	originalErr error,
 ) (ModelAdapterTestResult, bool) {
 	if strings.TrimSpace(adapter.Type) != "openai" {
@@ -1016,12 +1015,18 @@ func (s *ProxyService) tryOpenAIEndpointFallback(
 		fallbackAdapter.OpenAIEndpoint = candidate.Endpoint
 		fallbackAdapter.OpenAIRequestGroup = candidate.RequestGroup
 		fallbackAdapter.ProtocolGroup = candidate.RequestGroup
+		candidateStartedAt := time.Now().UTC()
 		metrics, retryErr := s.executeModelAdapterNonStreamingTest(fallbackCtx, fallbackAdapter)
 		cancel()
 		if retryErr != nil {
 			continue
 		}
-		result, ok := buildSuccessfulModelAdapterTestResult(adapter.ID, requestHash, startedAt, metrics)
+		result, ok := buildSuccessfulModelAdapterTestResult(
+			adapter.ID,
+			requestHash,
+			candidateStartedAt,
+			metrics,
+		)
 		if !ok {
 			continue
 		}
@@ -1029,6 +1034,22 @@ func (s *ProxyService) tryOpenAIEndpointFallback(
 		return result, true
 	}
 	return ModelAdapterTestResult{}, false
+}
+
+func calculateGenerationTokensPerSecond(
+	outputTokens int64,
+	firstTextTokenAt time.Time,
+	finishedAt time.Time,
+) float64 {
+	if outputTokens <= 0 || firstTextTokenAt.IsZero() || finishedAt.IsZero() {
+		return 0
+	}
+
+	generationDuration := finishedAt.Sub(firstTextTokenAt)
+	if generationDuration <= 0 {
+		return 0
+	}
+	return float64(outputTokens) / generationDuration.Seconds()
 }
 
 // persistOpenAITransportOverride 把单个 adapter 的 endpoint / request group 静默写回配置文件。
