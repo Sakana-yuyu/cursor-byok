@@ -1889,29 +1889,19 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 		}
 	}
 	if compacted, compactErr := service.maybeCompactBeforeProvider(stream, canonicalConversation, compiled); compactErr != nil {
+		// 自动/投影压缩链穷尽（或 preflight 前估算超限）时，先尝试一次强制 legacy 兜底压缩
+		//（自动 /summarize），而不是直接以 context_overflow_after_compaction 终态失败。
+		if escalated, escErr := service.escalateForcedPreflightCompaction(stream, canonicalConversation, canonicalCompiled, compactErr); escErr != nil {
+			service.setTurnPhase(stream, TurnPhaseFailed)
+			return service.failStream(stream, "unknown", escErr)
+		} else if escalated {
+			service.finalizeCompactionAdmission(stream)
+			return nil
+		}
 		service.setTurnPhase(stream, TurnPhaseFailed)
 		return service.failStream(stream, "unknown", compactErr)
 	} else if compacted {
-		stream.mu.Lock()
-		stream.UpdatedAt = time.Now().UTC()
-		hasPendingCompaction := stream.PendingCompaction != nil
-		status := stream.Status
-		stream.mu.Unlock()
-		switch {
-		case isTerminalStreamStatus(status):
-			switch status {
-			case StreamStatusCompleted:
-				service.setTurnPhase(stream, TurnPhaseCompleted)
-			case StreamStatusCanceled:
-				service.setTurnPhase(stream, TurnPhaseCanceled)
-			default:
-				service.setTurnPhase(stream, TurnPhaseFailed)
-			}
-		case hasPendingCompaction:
-			service.setTurnPhase(stream, TurnPhaseCompacting)
-		default:
-			service.setTurnPhase(stream, TurnPhaseIdle)
-		}
+		service.finalizeCompactionAdmission(stream)
 		return nil
 	}
 	if err := service.syncSummarySnapshot(stream, canonicalConversation, requestID, modelCallID); err != nil {
@@ -1960,6 +1950,15 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 		requestKnobs["max_tokens_recovery_cap"] = recoveryCap
 	}
 	if err := validateProviderRequestContextBudget(conversation, compiled, maxTokens); err != nil {
+		// preflight 最终校验超限：尝试一次强制 legacy 兜底压缩（自动 /summarize），
+		// 压缩完成后 resume 重算预算；attempts 耗尽或无可压缩内容才按原样终态失败。
+		if escalated, escErr := service.escalateForcedPreflightCompaction(stream, canonicalConversation, canonicalCompiled, err); escErr != nil {
+			service.setTurnPhase(stream, TurnPhaseFailed)
+			return service.failStream(stream, "unknown", escErr)
+		} else if escalated {
+			service.finalizeCompactionAdmission(stream)
+			return nil
+		}
 		service.setTurnPhase(stream, TurnPhaseFailed)
 		return service.failStream(stream, "unknown", err)
 	}

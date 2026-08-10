@@ -119,38 +119,9 @@ func (service *Service) buildCompactionPlan(stream *ActiveStream, conversation *
 }
 
 func (service *Service) buildManualCompactionPlan(stream *ActiveStream, conversation *ConversationFile, compiled CompiledConversation, manualInstruction string) (*compactionPlan, error) {
-	if stream == nil || conversation == nil {
-		return nil, nil
-	}
-	contextWindowSize := compactionContextWindowSize(conversation)
-	if contextWindowSize <= 0 {
-		return nil, nil
-	}
-	contextTokens, err := service.resolveCompactionBaselineTokens(stream.ConversationID, compiled, conversation)
-	if err != nil {
-		return nil, err
-	}
-	if contextTokens <= 0 {
-		return nil, nil
-	}
-	usagePercent := 0.0
-	if contextWindowSize > 0 {
-		usagePercent = float64(contextTokens) / float64(contextWindowSize)
-	}
-	base := &compactionPlan{
-		Trigger:                   "manual",
-		ContextTokens:             contextTokens,
-		ContextWindowSize:         contextWindowSize,
-		ContextUsagePercent:       usagePercent,
-		ReserveTokens:             compactionAutoReserveTokens,
-		MessageCount:              clampInt64ToInt32(int64(len(compiled.Messages))),
-		IsFirstCompaction:         len(compactionSummaryTexts(conversation)) == 0,
-		ExistingSummary:           existingConversationSummaryText(conversation),
-		ManualInstruction:         strings.TrimSpace(manualInstruction),
-		CurrentTurnSeq:            stream.TurnSeq,
-		CurrentRequestID:          strings.TrimSpace(stream.RequestID),
-		CurrentUserText:           strings.TrimSpace(stream.LatestUserText),
-		PreserveCurrentTurnInputs: false,
+	base, err := service.buildLegacyCompactionPlanBase(stream, conversation, compiled, "manual", false, manualInstruction)
+	if err != nil || base == nil {
+		return base, err
 	}
 	return service.buildLegacyCompactionPlan(base, conversation, true, 0)
 }
