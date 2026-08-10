@@ -2,6 +2,7 @@ package modeladapter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -179,12 +180,48 @@ func normalizeProviderStreamIdleTimeoutDuration(timeout time.Duration) time.Dura
 	return timeout
 }
 
+// providerStreamIdleTimeoutError 构造空闲看门狗错误。
+// 错误被实现为携带哨兵的可识别类型：router 层用 IsProviderStreamIdleTimeout
+// 把「上游静默卡死」识别为 pre-output 失败并做有界重试（见 Router.Stream）。
 func providerStreamIdleTimeoutError(timeout time.Duration) error {
-	seconds := int(timeout / time.Second)
-	if seconds > 0 && timeout == time.Duration(seconds)*time.Second {
-		return fmt.Errorf("provider stream idle timeout after %ds without effective content", seconds)
+	return &providerStreamIdleTimeoutErr{timeout: timeout}
+}
+
+// errProviderStreamIdleTimeout 标记「provider 流空闲看门狗超时」这一失败类别，
+// 便于 errors.Is 穿透各层包装（ChannelError/providerTerminalError）识别。
+var errProviderStreamIdleTimeout = errors.New("provider stream idle timeout")
+
+// providerStreamIdleTimeoutErr 是空闲看门狗超时的错误类型，保留与历史一致的
+// 错误文本（"provider stream idle timeout after <N>s without effective content"）。
+type providerStreamIdleTimeoutErr struct {
+	timeout time.Duration
+}
+
+func (e *providerStreamIdleTimeoutErr) Error() string {
+	if e == nil {
+		return ""
 	}
-	return fmt.Errorf("provider stream idle timeout after %s without effective content", timeout)
+	seconds := int(e.timeout / time.Second)
+	if seconds > 0 && e.timeout == time.Duration(seconds)*time.Second {
+		return fmt.Sprintf("provider stream idle timeout after %ds without effective content", seconds)
+	}
+	return fmt.Sprintf("provider stream idle timeout after %s without effective content", e.timeout)
+}
+
+func (e *providerStreamIdleTimeoutErr) Unwrap() error {
+	return errProviderStreamIdleTimeout
+}
+
+// IsProviderStreamIdleTimeout 判断错误是否由 provider 流空闲看门狗触发：
+// 连接已建立（或已发出请求）但到阈值时长仍无任何有效内容。此类失败发生在任何
+// 内容转发给客户端之前（内容到达会重置看门狗），重发同一请求不会产生重复输出，
+// 因此可安全重试。
+func IsProviderStreamIdleTimeout(err error) bool {
+	if err == nil {
+		return false
+	}
+	var target *providerStreamIdleTimeoutErr
+	return errors.As(err, &target) || errors.Is(err, errProviderStreamIdleTimeout)
 }
 
 // providerStreamChunkTimeout 由请求级空闲超时派生 SSE 逐块读超时：

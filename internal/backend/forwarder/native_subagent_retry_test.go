@@ -21,6 +21,7 @@ func TestIsTransientNativeSubagentFailure(t *testing.T) {
 		{name: "502 bad gateway", error: "openai adapter status=502 body=bad gateway", wantRetry: true},
 		{name: "connection refused", error: "transport failure reason: delayed connect error: Connection refused", wantRetry: true},
 		{name: "stream disconnected before completion", error: "stream closed before response.completed", wantRetry: true},
+		{name: "provider stream idle timeout", error: "Server Error provider stream idle timeout after 600s without effective content", wantRetry: true},
 		{name: "context too large", error: "openai responses stream error code=context_length_exceeded", wantRetry: false},
 		{name: "tool logic error", error: "file not found: /etc/missing", wantRetry: false},
 		{name: "empty error", error: "", wantRetry: false},

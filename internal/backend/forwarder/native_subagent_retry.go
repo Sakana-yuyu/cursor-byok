@@ -32,6 +32,7 @@ func isTransientNativeSubagentFailure(errorText string) bool {
 		"stream closed before response.completed",
 		"connection refused",
 		"upstream connect",
+		"stream idle timeout",
 		"status=500",
 		"status=502",
 		"status=503",
