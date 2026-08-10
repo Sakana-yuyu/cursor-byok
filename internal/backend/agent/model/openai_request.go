@@ -394,8 +394,9 @@ func openAIModelSupportsParallelToolCalls(modelID string) bool {
 	return strings.Contains(strings.ToLower(strings.TrimSpace(modelID)), "gpt-5.6")
 }
 
-// applyOpenAIParallelToolCalls 在 Responses 请求（含 input 且 tools 非空）上开启并行工具调用。
-// 不覆盖用户通过 extra params 显式设置的值。
+// applyOpenAIParallelToolCalls 为 gpt-5.6 Responses 请求选择安全的串行默认值。
+// v0.0.85 自动开启并行后，模型会在同一响应中偶发返回截断或错误转义的工具参数；
+// 用户通过 extra params 显式选择并行时仍尊重其配置。
 func applyOpenAIParallelToolCalls(body map[string]any, modelID string) {
 	if !openAIModelSupportsParallelToolCalls(modelID) {
 		return
@@ -418,7 +419,7 @@ func applyOpenAIParallelToolCalls(body map[string]any, modelID string) {
 	default:
 		return
 	}
-	body["parallel_tool_calls"] = true
+	body["parallel_tool_calls"] = false
 }
 
 func openAIModelSupportsReasoningNone(model string) bool {

@@ -249,6 +249,30 @@ func RepairIncompleteCA(certPath, keyPath string) (backupPath string, err error)
 	return backup, nil
 }
 
+// RepairAndReloadManager 修复 CA 材料不完整并重新加载为可用 Manager：
+//  1. 调用 RepairIncompleteCA（备份残留 + 重新生成落盘）；
+//  2. 重新调用 NewPersistentManager 取得有效 Manager；
+//  3. 若本次确实重建（backup 非空）且 Manager.RepairedAt 仍为零（NewPersistentManager
+//     的 mismatch 分支会设值，但 incomplete 分支不会走到那里），显式设 RepairedAt，
+//     使 bridge/前端横幅提示「重启 Cursor 使新 CA 生效」。
+//
+// 返回 (manager, backupPath, err)：manager 非 nil 时可直接使用；backupPath 空表示
+// 材料原本就完整（未重建）。供启动时自动修复与「一键修复」热重载共用。
+func RepairAndReloadManager(certPath, keyPath string) (*Manager, string, error) {
+	backup, err := RepairIncompleteCA(certPath, keyPath)
+	if err != nil {
+		return nil, "", err
+	}
+	manager, err := NewPersistentManager(certPath, keyPath)
+	if err != nil {
+		return nil, backup, err
+	}
+	if backup != "" && manager != nil && manager.RepairedAt.IsZero() {
+		manager.RepairedAt = time.Now().UTC()
+	}
+	return manager, backup, nil
+}
+
 // CACertPEM returns a copy of the public CA certificate used by this manager.
 func (m *Manager) CACertPEM() []byte {
 	if m == nil || m.caCert == nil {

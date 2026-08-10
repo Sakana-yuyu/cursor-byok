@@ -18,6 +18,11 @@ const (
 	longRunningExecTimeout = 30 * time.Minute
 	// execWatchdogTick 是 watchdog 扫描间隔。
 	execWatchdogTick = 30 * time.Second
+	// nativeSubagentExecWatchdogMaxDeferrals 是 native 子代理 exec 看门狗的最大延期次数。
+	// 每次延期把 30 分钟超时重置一次；默认 1 次（总上限 60 分钟），足以吸收
+	// 「子代理恰在 30 分钟整完成、终态信号与看门狗赛跑」的场景，同时防止客户端
+	// 异常但父流活跃时无限挂起。
+	nativeSubagentExecWatchdogMaxDeferrals = 1
 )
 
 const streamTimerExecWatchdog = "exec_watchdog"
@@ -82,6 +87,16 @@ func (service *Service) recoverStaleExecWithoutTerminal(stream *ActiveStream, ex
 	}
 	if strings.TrimSpace(current.ExecKind) == "shell" {
 		return nil // shell 有自己的 recovery
+	}
+	// native Cursor 子代理在客户端运行，byok 只在派发与终态之间做中继，客户端不会持续
+	// 回传 exec 心跳；长任务可能在 30 分钟 exec 看门狗处被误杀，即使客户端仍在执行且
+	// 终态即将到达。若子代理运行态仍在（客户端尚未回报终态）且延期次数未达上限，先延期
+	// 一次而非强杀；达到上限后才按超时收口（见 deferNativeSubagentExecWatchdog）。
+	if strings.TrimSpace(current.ExecKind) == "subagent" && service.deferNativeSubagentExecWatchdog(execID) {
+		service.rescheduleExecWatchdog(stream.RequestID, current)
+		logger.Infof("forwarder exec watchdog deferred request_id=%s exec_id=%s kind=subagent max_deferrals=%d",
+			strings.TrimSpace(stream.RequestID), strings.TrimSpace(execID), nativeSubagentExecWatchdogMaxDeferrals)
+		return nil
 	}
 	return service.recoverExecWithoutTerminal(stream, current, reason)
 }

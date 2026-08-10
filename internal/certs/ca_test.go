@@ -97,6 +97,77 @@ func TestRepairIncompleteCADoesNothingWhenComplete(t *testing.T) {
 	}
 }
 
+// TestRepairAndReloadManagerRegeneratesIncompleteCA 验证 cert 残留/key 缺失时，
+// RepairAndReloadManager 备份残留 + 重新生成 + 返回有效 Manager 且标记 RepairedAt。
+func TestRepairAndReloadManagerRegeneratesIncompleteCA(t *testing.T) {
+	root := t.TempDir()
+	certPath := filepath.Join(root, "data", "ca.crt")
+	keyPath := filepath.Join(root, "data", "ca.key")
+
+	// 先生成完整 CA，再删除 key 模拟「仅存 cert」。
+	seed, err := NewPersistentManager(certPath, keyPath)
+	if err != nil {
+		t.Fatalf("seed manager: %v", err)
+	}
+	seedPEM := seed.CACertPEM()
+	if err := os.Remove(keyPath); err != nil {
+		t.Fatalf("remove key: %v", err)
+	}
+
+	manager, backup, err := RepairAndReloadManager(certPath, keyPath)
+	if err != nil {
+		t.Fatalf("RepairAndReloadManager: %v", err)
+	}
+	if manager == nil {
+		t.Fatal("RepairAndReloadManager returned nil manager")
+	}
+	if backup == "" {
+		t.Fatal("expected a backup path after repair")
+	}
+	if _, statErr := os.Stat(backup); statErr != nil {
+		t.Fatalf("backup file missing: %v", statErr)
+	}
+	if manager.RepairedAt.IsZero() {
+		t.Fatal("expected RepairedAt to be set after incomplete-CA repair")
+	}
+	// 新 CA 必须与旧 CA 不同（重新生成）。
+	if string(manager.CACertPEM()) == string(seedPEM) {
+		t.Fatal("repaired CA certificate matches the old one; expected regeneration")
+	}
+	// 重新加载应能复用新 CA（材料已齐全）。
+	reused, err := NewPersistentManager(certPath, keyPath)
+	if err != nil {
+		t.Fatalf("reuse after repair: %v", err)
+	}
+	if string(reused.CACertPEM()) != string(manager.CACertPEM()) {
+		t.Fatal("reused CA does not match the repaired CA")
+	}
+}
+
+// TestRepairAndReloadManagerNoopWhenComplete 验证材料齐全时不重建、不标记 RepairedAt。
+func TestRepairAndReloadManagerNoopWhenComplete(t *testing.T) {
+	root := t.TempDir()
+	certPath := filepath.Join(root, "data", "ca.crt")
+	keyPath := filepath.Join(root, "data", "ca.key")
+
+	if _, err := NewPersistentManager(certPath, keyPath); err != nil {
+		t.Fatalf("seed manager: %v", err)
+	}
+	manager, backup, err := RepairAndReloadManager(certPath, keyPath)
+	if err != nil {
+		t.Fatalf("RepairAndReloadManager: %v", err)
+	}
+	if manager == nil {
+		t.Fatal("manager should not be nil when material is complete")
+	}
+	if backup != "" {
+		t.Fatalf("expected no backup when complete, got %q", backup)
+	}
+	if !manager.RepairedAt.IsZero() {
+		t.Fatal("RepairedAt should be zero when no repair occurred")
+	}
+}
+
 // TestIncompleteCAErrorMessage 验证错误文案的方向：cert 残留 → 缺失描述为私钥；
 // key 残留 → 缺失描述为证书。文案反了会误导用户删错文件。
 func TestIncompleteCAErrorMessage(t *testing.T) {

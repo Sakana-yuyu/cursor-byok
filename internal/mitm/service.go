@@ -917,6 +917,14 @@ func (l *goproxyLogAdapter) Printf(format string, args ...interface{}) {
 	if strings.Contains(lower, "cannot read tls request from mitm'd client") || strings.Contains(lower, "cannot write tls response") {
 		return
 	}
+	// MITM 客户端 TLS 握手被拒：Cursor 的后台/遥测子组件（如 metrics.cursor.sh、
+	// api2/api3 的非 agent 请求）走 MITM 路径，但其 HTTP 客户端未配置信任本应用 CA，
+	// 握手阶段即以 'tls: unknown certificate' 拒绝。这是 Cursor 自身边路流量的预期行为，
+	// 不影响 relay（agent 流量经独立端点、已正确信任 CA）。历史上这类警告在每个
+	// 去重窗口都会刷屏（实测 15 分钟内 420+ 条、抑制 309 批），属于纯噪音，直接静默。
+	if strings.Contains(lower, "cannot handshake client") && strings.Contains(lower, "unknown certificate") {
+		return
+	}
 	if suppressed, ok := proxyLogLimiter.ShouldLog("goproxy|" + goproxyMessageRateLimitKey(msg)); ok {
 		logSuppressedProxyMessages("goproxy", suppressed)
 		logger.Infof("goproxy: %s", msg)

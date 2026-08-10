@@ -69,7 +69,7 @@ func projectConversationStructuredState(conversation *ConversationFile) (structu
 			continue
 		}
 		toolCall := &agentv1.ToolCall{}
-		if err := protojson.Unmarshal(payload.ToolCall, toolCall); err != nil {
+		if err := protojson.Unmarshal(normalizeLegacyShellToolCallPayload(payload.ToolCall), toolCall); err != nil {
 			return structuredConversationState{}, fmt.Errorf("decode structured state tool_call: %w", err)
 		}
 		entryTime := entry.CreatedAt

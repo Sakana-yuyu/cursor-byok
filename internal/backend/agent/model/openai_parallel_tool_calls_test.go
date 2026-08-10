@@ -27,9 +27,9 @@ func TestOpenAIModelSupportsParallelToolCalls(t *testing.T) {
 	}
 }
 
-// TestApplyOpenAIParallelToolCalls 验证 body 写入规则：
-//   - 仅 gpt-5.6 + Responses 请求（含 input）+ 非空 tools 才写入 parallel_tool_calls:true
-//   - 显式 extra params 已存在的值不被覆盖
+// TestApplyOpenAIParallelToolCalls 验证安全默认值：
+//   - gpt-5.6 + Responses 请求（含 input）+ 非空 tools 默认写入 parallel_tool_calls:false
+//   - 用户通过 extra params 显式设置的值不被覆盖
 //   - 非 Responses 请求 / 空 tools / 非 gpt-5.6 模型均不写入
 func TestApplyOpenAIParallelToolCalls(t *testing.T) {
 	responsesBody := func() map[string]any {
@@ -40,19 +40,35 @@ func TestApplyOpenAIParallelToolCalls(t *testing.T) {
 		}
 	}
 
-	// gpt-5.6 Responses + 非空 tools → 写入
+	// gpt-5.6 Responses + 非空 tools → 默认串行，避免并行参数流产生残缺 JSON。
 	body := responsesBody()
 	applyOpenAIParallelToolCalls(body, "gpt-5.6")
-	if body["parallel_tool_calls"] != true {
-		t.Fatalf("parallel_tool_calls = %v, want true", body["parallel_tool_calls"])
+	if body["parallel_tool_calls"] != false {
+		t.Fatalf("parallel_tool_calls = %v, want false", body["parallel_tool_calls"])
 	}
 
-	// 显式 extra params 已设置 → 不覆盖
+	// RequestBodyOverride 已显式设置 → 不覆盖。
 	body = responsesBody()
-	body["parallel_tool_calls"] = false
+	body["parallel_tool_calls"] = true
 	applyOpenAIParallelToolCalls(body, "gpt-5.6")
-	if body["parallel_tool_calls"] != false {
-		t.Fatalf("parallel_tool_calls = %v, want explicit false preserved", body["parallel_tool_calls"])
+	if body["parallel_tool_calls"] != true {
+		t.Fatalf("parallel_tool_calls = %v, want request override true preserved", body["parallel_tool_calls"])
+	}
+
+	// Extra params 在默认值之后合并，显式 true/false 都必须成为最终值。
+	for _, explicit := range []bool{true, false} {
+		body = responsesBody()
+		applyOpenAIParallelToolCalls(body, "gpt-5.6")
+		params := `{"parallel_tool_calls":false}`
+		if explicit {
+			params = `{"parallel_tool_calls":true}`
+		}
+		if err := ApplyOpenAIExtraParams(body, true, params); err != nil {
+			t.Fatalf("apply extra params: %v", err)
+		}
+		if body["parallel_tool_calls"] != explicit {
+			t.Fatalf("parallel_tool_calls = %v, want extra params %v", body["parallel_tool_calls"], explicit)
+		}
 	}
 
 	// 非 Responses 请求（无 input）→ 不写入

@@ -12,6 +12,7 @@ import {
   GetDelegationConfig, SaveDelegationConfig, GetDelegationExecutorSnapshots, RefreshDelegationExecutorProbes,
   GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
   RepairCACorruption, GetCARepairStatus,
+  OfferDefenderExclusion, GetDefenderExclusionState, DismissDefenderExclusion,
   GetTerminalEnvironmentStatus, ApplyTerminalEnvironment, InstallTerminalDependency,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
 import { GetAdRuntime, OpenExternalURL } from "@bindings/cursor/internal/bridge/adservice.js";
@@ -63,6 +64,7 @@ const desktopMethods = {
   GetDelegationConfig, SaveDelegationConfig, GetDelegationExecutorSnapshots, RefreshDelegationExecutorProbes,
   GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
   RepairCACorruption, GetCARepairStatus,
+  OfferDefenderExclusion, GetDefenderExclusionState, DismissDefenderExclusion,
   GetTerminalEnvironmentStatus, ApplyTerminalEnvironment, InstallTerminalDependency,
 };
 
@@ -464,6 +466,18 @@ export function repairCACorruption() {
 }
 export function getCARepairStatus() {
   return desktopOrMock({ repaired: false, repairedAt: "", detail: "" }, "@bindings/cursor/internal/bridge/proxyservice.js", "GetCARepairStatus");
+}
+
+export function offerDefenderExclusion() {
+  return desktopOrMock({ added: false, alreadyExcluded: false, cancelled: false, error: "" }, "@bindings/cursor/internal/bridge/proxyservice.js", "OfferDefenderExclusion");
+}
+
+export function getDefenderExclusionState() {
+  return desktopOrMock({ supported: false, defenderActive: false, alreadyExcluded: false, offered: false, path: "" }, "@bindings/cursor/internal/bridge/proxyservice.js", "GetDefenderExclusionState");
+}
+
+export function dismissDefenderExclusion() {
+  return desktopOrMock(true, "@bindings/cursor/internal/bridge/proxyservice.js", "DismissDefenderExclusion");
 }
 
 export function repairProxySettings() {

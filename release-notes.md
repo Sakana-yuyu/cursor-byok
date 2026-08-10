@@ -1,51 +1,124 @@
-## v0.0.85
+## v0.0.91
 
-本版本汇总 v0.0.84 之后的全部更新，重点完善 Cursor 内的持续目标执行、技能稀疏激活、会话隔离、委派可靠性、历史管理与设置体验。
+本版本修复本地 CA 私钥缺失导致代理降级停用、用户卡死需重启整个应用的问题。
 
-### 新功能
-- **Cursor `/goal` 持续目标模式**：支持 `/goal <目标>` 与 `/goal --strict <目标>`，加入开关、执行预算、重试、校验子代理、进度与终态报告；`goal-loop` 技能随包安装。目标执行仅服务于 Cursor，已移除助手首页中的 Goal 面板和相关客户端 API。
-- **技能默认关闭与稀疏激活**：扫描到的技能默认不参与 BYOK；用户启用的技能组成候选池，再按当前请求相关性稀疏注入，降低扫描、提示词和模型开销。Cursor 客户端显式附带的技能仍可能生效，并新增 `.codex/skills/.system` 扫描支持。
-- **Windows 文件管理器式历史视图**：历史与日志支持图标视图和详细信息表格双视图、年/月/日逐级浏览、面包屑与返回上级，选择状态跨视图共享并记住上次模式。
-- **全局上下文投影**：持久化会话上下文并按预算使用滑动窗口，保留重要规则与近期交互，在长会话中更稳定地控制上下文体积。
-- **会话级调度与隔离**：同一会话按所有者顺序执行，不同会话可并行；provider、缓存、上下文投影和终态写入均按会话隔离，支持排队取消和关闭时安全收口。
-- **委派与子代理增强**：加入工具白名单、最大步数、`SubagentAwait`、fork 协议、thinking 转发、LLM 摘要压缩、超长工具结果裁剪、早期消息对回收以及上下文溢出自救。
-- **协议与工具扩展**：接入 allowlist 预检、脱敏读取、异步 AskQuestion、Bidi `data_binary`，OpenAI Responses 支持 `parallel_tool_calls`。
-- **Shell Profile**：可选择 auto、PowerShell、pwsh、cmd、Git Bash 或 WSL。
-- **技能清单自修复**：Reader/Image Reader 的技能清单缺失或损坏时可自动修复，改善视觉能力与 Kimi 等模型的能力识别。
+### 修复
 
-### 修复与可靠性
-- **证书与启动修复**：自动修复 CA 证书/私钥不匹配并提示重启 Cursor；启动 Cursor 前等待本地代理和配置真正就绪。
-- **流式响应收口**：统一 EOF 与中途断流语义；已有部分输出时不再整体重试，并在失败前保存已推送内容。
-- **循环与超时保护**：修复 `send_final_summary` 无限 resume；普通回合加入 provider pass/总时长预算；用户交互加入 15 分钟超时。
-- **委派可靠性**：放宽长静默 worker 看门狗，视觉委派支持取消与超时，溢出后回到正确 provider pass，并记录看门狗恢复错误。
-- **后台任务保护**：后台 goroutine 增加 panic 兜底；MITM 上游请求继承客户端取消上下文；prompt 同步和 CLI 拉取增加 30 秒截止时间。
-- **缓存与历史正确性**：包含工具调用的回合不再写入响应缓存；容忍历史中的孤立工具结果；终态写入保持幂等，避免启动失败覆盖既有终态。
-- **请求上下文完整性**：实时上下文继续保留非文件规则；长耗时前端 API 使用明确超时预算。
-- **终端与错误诊断**：修复子代理闪窗、委派错误空白、流命令高频分配和请求体重复序列化，改进结构化错误与安全日志。
-- **跨平台构建兼容**：隔离 Windows 专属的桌面输入与隐藏窗口实现，恢复 Linux 和 macOS 的完整编译与打包。
+- **本地 CA 私钥缺失时自动修复，消除降级死锁**：CA 私钥文件 `ca.key` 被外部因素删除（常见于杀毒软件清理私钥、同步软件漏同步、或手动误删）而 `ca.crt` 仍在时，应用此前会降级启动（本地代理停用），用户只能点「一键修复」重新生成 CA 后重启整个应用。现在启动时检测到该状态会自动备份残留文件并重新生成 CA，代理正常启动，首页提示重启 Cursor（非整个应用）使新 CA 生效——与 cert/key 失配的自动修复行为一致。其它 CA 初始化错误（权限/解析）仍保持降级，首页提供修复入口。
+- **修复按钮热重载，无需重启应用**：「一键修复」重新生成 CA 后，此前必须重启整个应用才能让内存中的 CA 状态更新。现在修复会热重载内存中的 CA Manager 与代理配置并清除降级标志，随后自动启动本地代理；用户只需重启 Cursor 使新 CA 生效。
 
-### 界面与性能
-- **设置导航统一**：分类选择与 URL、浏览器历史、本地存储保持同步；“更多设置”默认展开，所有分类选中状态一致，普通分组增加清晰的上下级间距。
-- **历史页面布局**：优化可用高度、窄屏单列与横向溢出，工具栏、统计区和文件列表更接近 Windows 文件管理器。
-- **技能说明**：界面明确说明默认关闭、启用候选池、相关性稀疏注入，以及 Cursor 显式技能不受 BYOK 开关完全控制。
-- **请求与日志面板**：收敛设置导航、请求明细列序和日志面板布局，改善计量单位、余额告警与诊断信息。
-- **前端加载性能**：路由懒加载、供应商分包、Markdown 编辑器按需加载并清理未使用代码；同时异步化历史回填，缩短应用启动等待。
-- **代码结构清理**：拆分大型前后端模块，移除不可达分支、孤儿组件、死导出与已被新投影方案替代的旧压缩逻辑。
+### 说明
 
-### 测试与质量
-- 新增模型编辑、模型组、监督委派、供应商、设置导航、历史双视图、Goal 边界、并发调度、跨会话隔离、技能启用、请求上下文和清单修复回归测试。
-- 更新四种语言目录并校验键集合一致，强化错误恢复、并发、终态、流式中断和上下文压缩覆盖。
+- 本版本同时包含 v0.0.90 的全部修复（上游静默卡死不再一次性判死、MITM 证书警告日志刷屏消除）、v0.0.88（native 子代理瞬时上游故障重试、legacy Shell 工具调用解析崩溃）、v0.0.87（gpt-5.6 并行工具调用回退串行、上下文 preflight 超限自动压缩、长时子代理不再被看门狗误杀）与 v0.0.85 的全部更新。
 
 ### 下载哪个文件？（按系统选择）
 
 > 名字里的 x64 / x32 / arm64 表示 CPU 架构，认准自己系统的类型下载即可。
 
-- **Windows 64 位（绝大多数 Windows 电脑）**：下载 `cursor-byok-0.0.85-windows-x64-installer.exe`（安装版，推荐）或 `cursor-byok-0.0.85-windows-x64.zip`（绿色版）
-- **Windows ARM64（骁龙/麒麟等 ARM 处理器的 Windows 电脑）**：下载 `cursor-byok-0.0.85-windows-arm64-installer.exe` 或 `cursor-byok-0.0.85-windows-arm64.zip`
-- **Windows 32 位（很老的低配电脑才需要）**：下载 `cursor-byok-0.0.85-windows-x32-installer.exe` 或 `cursor-byok-0.0.85-windows-x32.zip`
-- **macOS Apple Silicon（M1/M2/M3/M4 芯片）**：下载 `cursor-byok-0.0.85-macos-arm64.dmg`
-- **macOS Intel**：下载 `cursor-byok-0.0.85-macos-x64.dmg`
-- **Linux 64 位**：下载 `cursor-byok-0.0.85-linux-x64.tar.gz`
+- **Windows 64 位（绝大多数 Windows 电脑）**：下载 `cursor-byok-0.0.91-windows-x64-installer.exe`（安装版，推荐）或 `cursor-byok-0.0.91-windows-x64.zip`（绿色版）
+- **Windows ARM64（骁龙/麒麟等 ARM 处理器的 Windows 电脑）**：下载 `cursor-byok-0.0.91-windows-arm64-installer.exe` 或 `cursor-byok-0.0.91-windows-arm64.zip`
+- **Windows 32 位（很老的低配电脑才需要）**：下载 `cursor-byok-0.0.91-windows-x32-installer.exe` 或 `cursor-byok-0.0.91-windows-x32.zip`
+- **macOS Apple Silicon（M1/M2/M3/M4 芯片）**：下载 `cursor-byok-0.0.91-macos-arm64.dmg`
+- **macOS Intel**：下载 `cursor-byok-0.0.91-macos-x64.dmg`
+- **Linux 64 位**：下载 `cursor-byok-0.0.91-linux-x64.tar.gz`
+
+**如何判断自己的 Windows 是多少位**：右键“此电脑” -> “属性”，查看“系统类型”。显示“64 位操作系统”下载 x64，只有显示“32 位”才下载 x32。macOS 可在“关于本机”查看芯片是 Apple 还是 Intel。
+
+### macOS DMG 授权与首次打开
+当前版本构建流程只给 `.app` 使用 ad-hoc 临时签名，未执行 Apple Developer ID Application 正式签名、未公证，也没有装订 Apple 公证票据。因此，首次打开时如果 macOS 阻止启动，请在 Finder 中右键应用选择“打开”并确认；仍被拦截时，到“系统设置 -> 隐私与安全性”中点击“仍要打开”。仅对确认来源可信的文件执行此操作。
+
+> **Windows 用户注意**：安装时若被 SmartScreen 拦截，点击“更多信息”后选择“仍要运行”。
+
+---
+
+## v0.0.90
+
+本版本修复上游中转站「静默卡死」导致整轮请求终态失败的问题，并消除 Cursor 后台流量产生的 MITM 证书警告日志噪音。
+
+### 修复
+
+- **上游静默卡死不再一次性判死**：上游中转站偶发「连接已建立但长时间不返回任何内容」时，provider 流空闲看门狗会在阈值（父代理默认 90s，长任务/子代理放宽至 240s/600s）后判定失败。此前该失败被归类为不可恢复的终态错误，整个请求直接失败、用户需手动重试。实测（会话 4958d320）一天内因此出现多次 `provider stream idle timeout after 240s without effective content` 终态失败。现在该失败被识别为 pre-output 瞬时故障：尚未向客户端转发任何内容前断开，重发不会产生重复输出，因此 router 会自动重试（最多 2 次），重试使用更短的空闲阈值（45s）让仍卡死的上游快速失败、已恢复的上游立即继续；同时跳过常规重试的 45s 预算门槛（静默后的耗时必然已超预算）。仅重试耗尽仍卡死才报错，且错误文本保持不变。native 子代理的瞬时故障重试同步覆盖该错误。
+- **消除 MITM 客户端证书拒绝的日志刷屏**：所有 `*.cursor.sh` 都在 MITM 白名单内。Cursor 的 agent 流量经独立 relay 端点、已正确信任本应用 CA（relay 正常工作），但其后台/遥测子组件（`metrics.cursor.sh` 上报、`api2/api3` 的非 agent 请求）的 HTTP 客户端未配置信任 CA，在 TLS 握手阶段即以 `tls: unknown certificate` 拒绝。这是 Cursor 自身边路流量的预期行为，不影响 relay，但历史上每个去重窗口都会刷屏（实测约 15 分钟内 420+ 条警告、抑制 309 批、实际近千次）。现在这类警告被静默，日志恢复干净；真正的握手错误（连接重置/EOF 等）仍照常记录。
+
+### 说明
+
+- 本版本同时包含 v0.0.88 的全部修复（native 子代理瞬时上游故障重试、legacy Shell 工具调用解析崩溃）、v0.0.87（gpt-5.6 并行工具调用回退串行、上下文 preflight 超限自动压缩、长时子代理不再被看门狗误杀）与 v0.0.85 的全部更新。
+
+### 下载哪个文件？（按系统选择）
+
+> 名字里的 x64 / x32 / arm64 表示 CPU 架构，认准自己系统的类型下载即可。
+
+- **Windows 64 位（绝大多数 Windows 电脑）**：下载 `cursor-byok-0.0.90-windows-x64-installer.exe`（安装版，推荐）或 `cursor-byok-0.0.90-windows-x64.zip`（绿色版）
+- **Windows ARM64（骁龙/麒麟等 ARM 处理器的 Windows 电脑）**：下载 `cursor-byok-0.0.90-windows-arm64-installer.exe` 或 `cursor-byok-0.0.90-windows-arm64.zip`
+- **Windows 32 位（很老的低配电脑才需要）**：下载 `cursor-byok-0.0.90-windows-x32-installer.exe` 或 `cursor-byok-0.0.90-windows-x32.zip`
+- **macOS Apple Silicon（M1/M2/M3/M4 芯片）**：下载 `cursor-byok-0.0.90-macos-arm64.dmg`
+- **macOS Intel**：下载 `cursor-byok-0.0.90-macos-x64.dmg`
+- **Linux 64 位**：下载 `cursor-byok-0.0.90-linux-x64.tar.gz`
+
+**如何判断自己的 Windows 是多少位**：右键“此电脑” -> “属性”，查看“系统类型”。显示“64 位操作系统”下载 x64，只有显示“32 位”才下载 x32。macOS 可在“关于本机”查看芯片是 Apple 还是 Intel。
+
+### macOS DMG 授权与首次打开
+当前版本构建流程只给 `.app` 使用 ad-hoc 临时签名，未执行 Apple Developer ID Application 正式签名、未公证，也没有装订 Apple 公证票据。因此，首次打开时如果 macOS 阻止启动，请在 Finder 中右键应用选择“打开”并确认；仍被拦截时，到“系统设置 -> 隐私与安全性”中点击“仍要打开”。仅对确认来源可信的文件执行此操作。
+
+> **Windows 用户注意**：安装时若被 SmartScreen 拦截，点击“更多信息”后选择“仍要运行”。
+
+---
+
+## v0.0.89
+
+本版本修复上游中转站「静默卡死」导致整轮请求以 `provider stream idle timeout` 终态失败的问题。
+
+### 修复
+
+- **上游静默卡死不再一次性判死**：上游中转站偶发「连接已建立但长时间不返回任何内容」时，provider 流空闲看门狗会在阈值（父代理默认 90s，长任务/子代理放宽至 240s/600s）后判定失败。此前该失败被归类为不可恢复的终态错误，整个请求直接失败、用户需手动重试。实测（会话 4958d320）一天内因此出现多次 `provider stream idle timeout after 240s without effective content` 终态失败。现在该失败被识别为 pre-output 瞬时故障：尚未向客户端转发任何内容前断开，重发不会产生重复输出，因此 router 会自动重试（最多 2 次），重试使用更短的空闲阈值（45s）让仍卡死的上游快速失败、已恢复的上游立即继续；同时跳过常规重试的 45s 预算门槛（静默后的耗时必然已超预算）。仅重试耗尽仍卡死才报错，且错误文本保持不变。native 子代理的瞬时故障重试同步覆盖该错误。
+
+### 说明
+
+- 本版本同时包含 v0.0.88 的全部修复（native 子代理瞬时上游故障重试、legacy Shell 工具调用解析崩溃）、v0.0.87（gpt-5.6 并行工具调用回退串行、上下文 preflight 超限自动压缩、长时子代理不再被看门狗误杀）与 v0.0.85 的全部更新。
+
+### 下载哪个文件？（按系统选择）
+
+> 名字里的 x64 / x32 / arm64 表示 CPU 架构，认准自己系统的类型下载即可。
+
+- **Windows 64 位（绝大多数 Windows 电脑）**：下载 `cursor-byok-0.0.89-windows-x64-installer.exe`（安装版，推荐）或 `cursor-byok-0.0.89-windows-x64.zip`（绿色版）
+- **Windows ARM64（骁龙/麒麟等 ARM 处理器的 Windows 电脑）**：下载 `cursor-byok-0.0.89-windows-arm64-installer.exe` 或 `cursor-byok-0.0.89-windows-arm64.zip`
+- **Windows 32 位（很老的低配电脑才需要）**：下载 `cursor-byok-0.0.89-windows-x32-installer.exe` 或 `cursor-byok-0.0.89-windows-x32.zip`
+- **macOS Apple Silicon（M1/M2/M3/M4 芯片）**：下载 `cursor-byok-0.0.89-macos-arm64.dmg`
+- **macOS Intel**：下载 `cursor-byok-0.0.89-macos-x64.dmg`
+- **Linux 64 位**：下载 `cursor-byok-0.0.89-linux-x64.tar.gz`
+
+**如何判断自己的 Windows 是多少位**：右键“此电脑” -> “属性”，查看“系统类型”。显示“64 位操作系统”下载 x64，只有显示“32 位”才下载 x32。macOS 可在“关于本机”查看芯片是 Apple 还是 Intel。
+
+### macOS DMG 授权与首次打开
+当前版本构建流程只给 `.app` 使用 ad-hoc 临时签名，未执行 Apple Developer ID Application 正式签名、未公证，也没有装订 Apple 公证票据。因此，首次打开时如果 macOS 阻止启动，请在 Finder 中右键应用选择“打开”并确认；仍被拦截时，到“系统设置 -> 隐私与安全性”中点击“仍要打开”。仅对确认来源可信的文件执行此操作。
+
+> **Windows 用户注意**：安装时若被 SmartScreen 拦截，点击“更多信息”后选择“仍要运行”。
+
+---
+
+## v0.0.88
+
+本版本聚焦两个稳定性修复：native 子代理瞬时上游故障自动重试，以及历史会话 legacy Shell 工具调用解析崩溃。
+
+### 修复
+
+- **native 子代理瞬时上游故障自动重试**：上游中转站出现瞬时 `request_timeout` / `503 Connection refused` 时，父 agent 靠模型重试能扛住，而 Cursor 原生子代理一次 provider 调用失败即被判死。现在子代理因可判定的瞬时上游错误失败时，会自动重新派发同一次 Task（最多 2 次重试、共 3 次尝试），上游恢复后即可成功；仅重试耗尽或非瞬时错误（如 `context_too_large`、工具逻辑失败）才按原样失败。
+- **历史会话 legacy Shell 工具调用解析崩溃修复**：旧版本写入的 Shell 工具调用把 `outputNotification` 存成 message 对象，而当前格式是 base64 bytes，导致带旧历史的会话在启动或失败收尾发布 checkpoint 时解析崩溃（报 `invalid value for bytes field outputNotification`），表现为「An unexpected error occurred」且反复重试。现在所有历史解析路径都会把 legacy 对象格式自动升级，旧会话恢复正常。
+
+### 说明
+
+- 本版本同时包含 v0.0.87 的全部修复（gpt-5.6 并行工具调用回退串行、上下文 preflight 超限自动压缩、长时子代理不再被看门狗误杀）与 v0.0.85 的全部更新（会话级调度与隔离、全局上下文投影、委派与子代理增强、设置与历史界面优化等）。
+
+### 下载哪个文件？（按系统选择）
+
+> 名字里的 x64 / x32 / arm64 表示 CPU 架构，认准自己系统的类型下载即可。
+
+- **Windows 64 位（绝大多数 Windows 电脑）**：下载 `cursor-byok-0.0.88-windows-x64-installer.exe`（安装版，推荐）或 `cursor-byok-0.0.88-windows-x64.zip`（绿色版）
+- **Windows ARM64（骁龙/麒麟等 ARM 处理器的 Windows 电脑）**：下载 `cursor-byok-0.0.88-windows-arm64-installer.exe` 或 `cursor-byok-0.0.88-windows-arm64.zip`
+- **Windows 32 位（很老的低配电脑才需要）**：下载 `cursor-byok-0.0.88-windows-x32-installer.exe` 或 `cursor-byok-0.0.88-windows-x32.zip`
+- **macOS Apple Silicon（M1/M2/M3/M4 芯片）**：下载 `cursor-byok-0.0.88-macos-arm64.dmg`
+- **macOS Intel**：下载 `cursor-byok-0.0.88-macos-x64.dmg`
+- **Linux 64 位**：下载 `cursor-byok-0.0.88-linux-x64.tar.gz`
 
 **如何判断自己的 Windows 是多少位**：右键“此电脑” -> “属性”，查看“系统类型”。显示“64 位操作系统”下载 x64，只有显示“32 位”才下载 x32。macOS 可在“关于本机”查看芯片是 Apple 还是 Intel。
 

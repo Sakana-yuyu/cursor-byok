@@ -345,16 +345,22 @@ type CARepairStatus struct {
 	Detail string `json:"detail"`
 }
 
-// RepairCACorruption 一键修复 CA 材料不完整：把残留文件备份改名后重新生成 CA 落盘。
-// 修复后需重启应用使新 CA 生效（本地代理与 MITM 在启动时构建）。
+// RepairCACorruption 一键修复 CA 材料不完整并热重载（无需重启应用）。
+// 调用 client.ReloadCAFromDisk：备份残留文件 -> 重新生成 CA -> 用新 Manager 更新内存状态
+// （certManager/caCertPEM/caFilePath）-> 清 caIncomplete 标志，使代理可立即启动。
+// 修复成功后刷新 caRepairedAt，使 GetCARepairStatus 反映本次修复。
+// 注意：热重载不自动 StartProxy（ApplyCursorSettings 可能触发系统信任 UAC/钥匙串授权，
+// 应由前端在修复成功后引导用户启动代理，避免静默交互）。
 func (s *ProxyService) RepairCACorruption() (CARepairResult, error) {
 	if s == nil {
 		return CARepairResult{}, errors.New("proxy service is not initialized")
 	}
-	backup, err := certs.RepairIncompleteCA(appdata.CACertFilePath(), appdata.CAKeyFilePath())
+	backup, err := s.core.ReloadCAFromDisk()
 	if err != nil {
 		return CARepairResult{}, fmt.Errorf("repair CA: %w", err)
 	}
+	// 刷新 caRepairedAt：ReloadCAFromDisk 已为新 Manager 设 RepairedAt（若发生重建）。
+	s.caRepairedAt = s.core.CertManagerRepairedAt()
 	if backup == "" {
 		return CARepairResult{
 			Repaired: false,
@@ -364,7 +370,7 @@ func (s *ProxyService) RepairCACorruption() (CARepairResult, error) {
 	return CARepairResult{
 		Repaired:   true,
 		BackupPath: backup,
-		Detail:     "已备份残留文件并重新生成 CA，重启应用后生效",
+		Detail:     "已备份残留文件并重新生成 CA。代理已就绪，请点击「启动服务」；并重启 Cursor 使新 CA 生效。",
 	}, nil
 }
 
@@ -394,6 +400,120 @@ func (s *ProxyService) MarkCAIncomplete(message string) {
 		err = errors.New(message)
 	}
 	s.core.MarkCAIncomplete(err)
+}
+
+// AVExclusionState 是杀软排除项引导状态的持久化结构（av-exclusion-state.json）。
+// 用途：实现「仅提示一次」--用户已看过引导或已完成排除后不再弹窗。
+type AVExclusionState struct {
+	// Offered 表示是否已向用户提示过排除引导。
+	Offered bool `json:"offered"`
+	// Done 表示用户已完成排除（Defender 一键添加成功，或非 Defender 平台手动添加后确认）。
+	Done bool `json:"done"`
+	// Dismissed 表示用户主动关闭/跳过引导（不再弹窗，但不代表已完成排除）。
+	Dismissed bool `json:"dismissed"`
+	// Path 记录提示排除的路径（供排查/对比）。
+	Path string `json:"path"`
+}
+
+// DefenderExclusionResult 描述一次「一键添加 Defender 排除项」的结果。
+type DefenderExclusionResult struct {
+	// Added 表示排除项是否已成功添加（true）或本来就已存在（false + AlreadyExcluded）。
+	Added bool `json:"added"`
+	// AlreadyExcluded 表示目标路径本来就在 Defender 排除列表中。
+	AlreadyExcluded bool `json:"alreadyExcluded"`
+	// Cancelled 表示用户在 UAC 弹窗中取消了提权。
+	Cancelled bool `json:"cancelled"`
+	// Error 为非空时表示失败原因（非取消）。
+	Error string `json:"error"`
+}
+
+// avExclusionStatePath 解析杀软排除项引导状态文件路径。
+// 提取为变量以便测试覆盖（避免写入真实用户 home 目录）。
+var avExclusionStatePath = appdata.AVExclusionStateFilePath
+
+// readAVExclusionState 读取持久化的杀软排除项引导状态。
+// 文件不存在或解析失败时返回零值（视为未提示过），不报错。
+func readAVExclusionState() AVExclusionState {
+	var state AVExclusionState
+	data, err := os.ReadFile(avExclusionStatePath())
+	if err != nil {
+		return state
+	}
+	_ = json.Unmarshal(data, &state)
+	return state
+}
+
+// writeAVExclusionState 持久化杀软排除项引导状态。
+func writeAVExclusionState(state AVExclusionState) error {
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(avExclusionStatePath(), data, 0o600)
+}
+
+// GetDefenderExclusionState 查询当前 Defender 排除项引导状态（非提权，供前端展示/判断是否弹窗）。
+// 返回的 Offered/Dismissed/Done 来自持久化状态文件，DefenderActive/AlreadyExcluded 实时查询。
+func (s *ProxyService) GetDefenderExclusionState() (cursor.WindowsDefenderExclusionState, error) {
+	if s == nil {
+		return cursor.WindowsDefenderExclusionState{}, errors.New("proxy service is not initialized")
+	}
+	persisted := readAVExclusionState()
+	path := appdata.RootDir()
+	state := cursor.QueryDefenderExclusionState(path, persisted.Offered)
+	state.Offered = persisted.Offered || persisted.Dismissed || persisted.Done
+	return state, nil
+}
+
+// OfferDefenderExclusion 触发 UAC 把应用 home 目录加入 Windows Defender 排除列表。
+// 成功后在状态文件标记 Done=true、Offered=true（实现「仅一次」）。
+// 用户取消 UAC 时返回 Cancelled=true（前端据此保持引导入口、不标记为已提示）。
+// 非 Windows 平台或 Defender 非活动时返回 Supported=false，前端走引导说明。
+func (s *ProxyService) OfferDefenderExclusion() (DefenderExclusionResult, error) {
+	if s == nil {
+		return DefenderExclusionResult{}, errors.New("proxy service is not initialized")
+	}
+	path := appdata.RootDir()
+
+	// 非 Windows 平台或 Defender 非活动：不提权，返回让前端走引导。
+	if !cursor.IsWindowsDefenderActive() {
+		return DefenderExclusionResult{
+			Added:    false,
+			Error:    "",
+			Cancelled: false,
+		}, nil
+	}
+
+	// 已在排除列表：直接标记完成，无需提权。
+	if cursor.IsPathExcludedByDefender(path) {
+		_ = writeAVExclusionState(AVExclusionState{Offered: true, Done: true, Path: path})
+		return DefenderExclusionResult{AlreadyExcluded: true}, nil
+	}
+
+	if err := cursor.AddDefenderExclusion(path); err != nil {
+		// 用户取消 UAC：不标记为已提示，保留下次启动再次弹窗的能力。
+		if strings.Contains(err.Error(), "用户取消") {
+			return DefenderExclusionResult{Cancelled: true}, nil
+		}
+		return DefenderExclusionResult{Error: err.Error()}, nil
+	}
+
+	// 添加成功：标记 Done + Offered，实现「仅一次」。
+	_ = writeAVExclusionState(AVExclusionState{Offered: true, Done: true, Path: path})
+	logger.Infof("defender: exclusion added for %s", path)
+	return DefenderExclusionResult{Added: true}, nil
+}
+
+// DismissDefenderExclusion 用户主动跳过/关闭杀软排除项引导。
+// 标记 Dismissed=true（不再弹窗，但不代表已完成排除）。
+func (s *ProxyService) DismissDefenderExclusion() error {
+	if s == nil {
+		return errors.New("proxy service is not initialized")
+	}
+	state := readAVExclusionState()
+	state.Offered = true
+	state.Dismissed = true
+	return writeAVExclusionState(state)
 }
 
 // ClearLastError 用于处理与 ClearLastError 相关的逻辑。

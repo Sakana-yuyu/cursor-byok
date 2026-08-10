@@ -237,6 +237,10 @@ type ActiveStream struct {
 	// ContextOverflowCompactionAttempts 记录本回合因 context_length_exceeded 触发「强制压缩+重试」的次数，
 	// 用于限制每轮最多重试若干次，避免压不动时无限循环。
 	ContextOverflowCompactionAttempts int
+	// PreflightForcedCompactionAttempts 记录本回合在 provider 请求前预算校验（preflight）超限、
+	// 自动投影压缩穷尽时触发「强制 legacy 兜底压缩」的次数，用于限制每轮最多一次，
+	// 避免重写 canonical 仍压不动时无限循环。
+	PreflightForcedCompactionAttempts int
 	// MaxTokensRecoveryCap 记录因 max_tokens 超限被中转站拒绝后，重试时强制施加的 max_tokens 上限。
 	// 由 recoverFromMaxTokensExceeded 从错误文本解析的中转站真实限制值设置；driveProvider 读取它覆盖预算。
 	// 零值表示未触发恢复，沿用 catalog/配置预算。

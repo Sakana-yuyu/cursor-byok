@@ -160,7 +160,7 @@ func (projector *HistoryProjector) ProjectPromptReplay(conversation *Conversatio
 				return nil, fmt.Errorf("decode tool_call entry: %w", err)
 			}
 			toolCall := &agentv1.ToolCall{}
-			if err := protojson.Unmarshal(payload.ToolCall, toolCall); err != nil {
+			if err := protojson.Unmarshal(normalizeLegacyShellToolCallPayload(payload.ToolCall), toolCall); err != nil {
 				return nil, fmt.Errorf("decode tool_call payload: %w", err)
 			}
 			replayMessage, ok := promptengine.BuildAssistantToolCallReplayMessage(payload.ToolCallID, toolCall)
@@ -196,7 +196,7 @@ func (projector *HistoryProjector) ProjectPromptReplay(conversation *Conversatio
 				var toolCall *agentv1.ToolCall
 				if len(payload.ToolCall) > 0 {
 					decoded := &agentv1.ToolCall{}
-					if err := protojson.Unmarshal(payload.ToolCall, decoded); err == nil {
+					if err := protojson.Unmarshal(normalizeLegacyShellToolCallPayload(payload.ToolCall), decoded); err == nil {
 						toolCall = decoded
 					}
 				}
@@ -229,7 +229,7 @@ func (projector *HistoryProjector) ProjectPromptReplay(conversation *Conversatio
 			}
 			if len(payload.ToolCall) > 0 {
 				toolCall := &agentv1.ToolCall{}
-				if err := protojson.Unmarshal(payload.ToolCall, toolCall); err != nil {
+				if err := protojson.Unmarshal(normalizeLegacyShellToolCallPayload(payload.ToolCall), toolCall); err != nil {
 					return nil, fmt.Errorf("decode tool_result tool_call entry: %w", err)
 				}
 				replayMessages, ok := promptengine.BuildToolCallReplayMessages(payload.ToolCallID, toolCall)
@@ -684,7 +684,7 @@ func projectCheckpointTurnBlobs(conversation *ConversationFile, blobs *checkpoin
 					stepIDs = append(stepIDs, stepID)
 				}
 				toolCall := &agentv1.ToolCall{}
-				if err := protojson.Unmarshal(payload.ToolCall, toolCall); err != nil {
+				if err := protojson.Unmarshal(normalizeLegacyShellToolCallPayload(payload.ToolCall), toolCall); err != nil {
 					return nil, err
 				}
 				if !shouldPersistToolResultName(firstNonEmpty(strings.TrimSpace(payload.ToolName), inferToolName(toolCall))) {
@@ -727,7 +727,7 @@ func projectCheckpointTurnBlobs(conversation *ConversationFile, blobs *checkpoin
 					continue
 				}
 				toolCall := &agentv1.ToolCall{}
-				if err := protojson.Unmarshal(payload.ToolCall, toolCall); err != nil {
+				if err := protojson.Unmarshal(normalizeLegacyShellToolCallPayload(payload.ToolCall), toolCall); err != nil {
 					return nil, err
 				}
 				if !shouldPersistToolResultName(firstNonEmpty(strings.TrimSpace(payload.ToolName), inferToolName(toolCall))) {

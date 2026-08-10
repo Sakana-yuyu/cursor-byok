@@ -84,11 +84,29 @@ func Run(resources EmbeddedResources) error {
 
 	certManager, certErr := certs.NewPersistentManager(appdata.CACertFilePath(), appdata.CAKeyFilePath())
 	if certErr != nil {
-		// 降级启动：CA 任何初始化失败都不中止应用——GUI 必须能打开，
-		// 本地代理停用（MITM disabled）；材料不完整时首页提供「一键修复」入口，
-		// 其余错误同样展示在首页，避免「应用打不开、无法自救」的死锁。
-		logger.Errorf("CA init failed, degraded startup (MITM disabled): %v", certErr)
-		certManager = nil
+		// CA 材料不完整（cert/key 仅存其一，常见于 ca.key 被杀软/同步/误删）：
+		// 自动修复（备份残留 + 重新生成 + 标记 RepairedAt），避免降级死锁。
+		// 与 cert/key 失配的自动修复行为对齐：重建后启动流程自动重装信任，
+		// 首页横幅提示重启 Cursor（非整个应用）。
+		if certs.IsIncompleteCA(certErr) {
+			logger.Infof("CA material incomplete, auto-repairing at startup: %v", certErr)
+			repaired, _, repairErr := certs.RepairAndReloadManager(appdata.CACertFilePath(), appdata.CAKeyFilePath())
+			if repairErr != nil {
+				// 修复失败仍降级（权限等），保留原 certErr 上报。
+				logger.Errorf("CA auto-repair failed, degraded startup (MITM disabled): %v", repairErr)
+				certManager = nil
+			} else {
+				certManager = repaired
+				certErr = nil
+				logger.Infof("CA auto-repaired at startup, proxy will start with new CA (restart Cursor to take effect)")
+			}
+		} else {
+			// 降级启动：CA 任何初始化失败都不中止应用--GUI 必须能打开，
+			// 本地代理停用（MITM disabled）；材料不完整时首页提供「一键修复」入口，
+			// 其余错误同样展示在首页，避免「应用打不开、无法自救」的死锁。
+			logger.Errorf("CA init failed, degraded startup (MITM disabled): %v", certErr)
+			certManager = nil
+		}
 	}
 	var embeddedCACertPEM []byte
 	if certManager != nil {

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"cursor/internal/apperror"
+	"cursor/internal/logger"
 	"cursor/internal/modelcontext"
 	legacyruntime "cursor/internal/runtime"
 )
@@ -67,6 +68,18 @@ const (
 	// routerRetryTotalBudget 是单次 Stream 调用隐藏恢复的总时间预算。
 	// 预算耗尽后立即把结构化错误交给 forwarder，避免用户长时间无反馈。
 	routerRetryTotalBudget = 45 * time.Second
+
+	// maxProviderStreamIdleRetries 是「上游静默卡死」（连接已建立但到空闲看门狗
+	// 时长仍无任何有效内容）的透明重试上限。此类失败发生在任何内容转发给客户端
+	// 之前，重发同一请求不会产生重复输出；但每次重试都要再等一个空闲阈值，必须
+	// 限制次数，避免长时间无反馈。重试尝试使用更短的空闲阈值（下方常量）快速收敛。
+	maxProviderStreamIdleRetries = 2
+	// providerStreamIdleRetryTimeout 是静默卡死重试尝试的空闲阈值。健康上游的
+	// ttfb 通常 <10s，45s 已足够区分「正在响应」与「仍卡死」，同时把最坏等待从
+	// 「首阈值 × 重试次数」压缩为「首阈值 + 45s × 重试次数」。
+	providerStreamIdleRetryTimeout = 45 * time.Second
+	// providerStreamIdleRetryDelay 是静默卡死重试前的固定等待，给上游队列排空机会。
+	providerStreamIdleRetryDelay = 2 * time.Second
 )
 
 var routerRetryDelays = [...]time.Duration{
@@ -152,6 +165,11 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 	// streamErr 保存最近一次渠道失败的错误，供提前返回前的 404 判定
 	//（提前返回检查发生在 streamChannel 调用之前，因此需在循环外声明）。
 	var streamErr error
+	// idleTimeoutRetries 累计本次调用中「上游静默卡死」的透明重试次数。
+	var idleTimeoutRetries int
+	// pendingIdleTimeoutRetry 标记上一轮失败为静默卡死：下一轮尝试跳过
+	// routerRetryDelay 的 45s 预算门槛（该预算在长时间静默后必然已耗尽）。
+	var pendingIdleTimeoutRetry bool
 
 	for attempt := 0; attempt < routerMaxStreamAttempts; attempt++ {
 		if err := ctx.Err(); err != nil {
@@ -190,19 +208,24 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 				}
 			}
 
-			delay, shouldRetry := routerRetryDelay(attempt, repeatedChannel, streamErr, time.Since(startedAt))
-			if !shouldRetry {
-				if firstErr != nil {
-					return classifyRouterError(req, firstErr)
+			// 上一轮是静默卡死时，重试已在本轮失败分支内自行安排等待，不再经过
+			// 面向快速瞬时错误的预算门槛（45s 预算在 240s/600s 静默后必然已耗尽）。
+			if !pendingIdleTimeoutRetry {
+				delay, shouldRetry := routerRetryDelay(attempt, repeatedChannel, streamErr, time.Since(startedAt))
+				if !shouldRetry {
+					if firstErr != nil {
+						return classifyRouterError(req, firstErr)
+					}
+					return classifyRouterError(req, streamErr)
 				}
-				return classifyRouterError(req, streamErr)
-			}
-			if err := sleepWithContext(ctx, delay); err != nil {
-				if firstErr != nil {
-					return classifyRouterError(req, firstErr)
+				if err := sleepWithContext(ctx, delay); err != nil {
+					if firstErr != nil {
+						return classifyRouterError(req, firstErr)
+					}
+					return classifyRouterError(req, err)
 				}
-				return classifyRouterError(req, err)
 			}
+			pendingIdleTimeoutRetry = false
 		}
 
 		streamErr = router.streamChannel(ctx, req, channel, sink)
@@ -223,6 +246,30 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 		}
 		tried[channelID] = struct{}{}
 		lastErrPermanent = isPermanentProviderError(streamErr)
+
+		// 上游静默卡死：连接已建立但到空闲看门狗时长仍无任何有效内容，尚未向
+		// 客户端转发任何事件，属于 pre-output 失败，重发同一请求不会重复输出。
+		// 常规 routerRetryDelay 会因预算耗尽而拒绝重试，这里单独做有界重试：
+		// 把重试的空闲阈值调短，让仍卡死的上游快速失败、已恢复的上游立即继续。
+		if IsProviderStreamIdleTimeout(streamErr) {
+			idleTimeoutRetries++
+			if idleTimeoutRetries > maxProviderStreamIdleRetries {
+				break
+			}
+			if req.ProviderStreamIdleTimeout <= 0 || req.ProviderStreamIdleTimeout > providerStreamIdleRetryTimeout {
+				req.ProviderStreamIdleTimeout = providerStreamIdleRetryTimeout
+			}
+			pendingIdleTimeoutRetry = true
+			logger.Infof("model stream idle timeout, retrying request_id=%s model_call_id=%s attempt=%d next_timeout=%s",
+				strings.TrimSpace(req.RequestID), strings.TrimSpace(req.ModelCallID), attempt+1, req.ProviderStreamIdleTimeout)
+			if err := sleepWithContext(ctx, providerStreamIdleRetryDelay); err != nil {
+				if firstErr != nil {
+					return classifyRouterError(req, firstErr)
+				}
+				return classifyRouterError(req, err)
+			}
+			continue
+		}
 	}
 
 	if firstErr != nil {

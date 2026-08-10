@@ -126,6 +126,9 @@ import {
   restartCursor,
   isCursorRunning,
   repairCACorruption,
+  offerDefenderExclusion,
+  getDefenderExclusionState,
+  dismissDefenderExclusion,
 } from "@/services/clientApi";
 import { getHistoryDebugUsage } from "@/services/runtimeControlApi";
 
@@ -1601,6 +1604,37 @@ export async function repairCACorruptionAction() {
     return { ok: true, result: result || {}, error: "" };
   } catch (error) {
     return { ok: false, result: null, error: toUserError(error) };
+  }
+}
+
+// offerDefenderExclusionAction 一键把应用目录加入 Windows Defender 排除列表（触发 UAC）。
+// 返回 { ok, result: { added, alreadyExcluded, cancelled, error }, error }。
+export async function offerDefenderExclusionAction() {
+  try {
+    const result = await offerDefenderExclusion();
+    return { ok: true, result: result || {}, error: "" };
+  } catch (error) {
+    return { ok: false, result: null, error: toUserError(error) };
+  }
+}
+
+// getDefenderExclusionStateAction 查询 Defender 排除项引导状态（供前端判断是否弹窗）。
+export async function getDefenderExclusionStateAction() {
+  try {
+    const result = await getDefenderExclusionState();
+    return { ok: true, result: result || {}, error: "" };
+  } catch (error) {
+    return { ok: false, result: null, error: toUserError(error) };
+  }
+}
+
+// dismissDefenderExclusionAction 用户主动跳过杀软排除项引导（标记不再弹窗）。
+export async function dismissDefenderExclusionAction() {
+  try {
+    await dismissDefenderExclusion();
+    return { ok: true, error: "" };
+  } catch (error) {
+    return { ok: false, error: toUserError(error) };
   }
 }
 
