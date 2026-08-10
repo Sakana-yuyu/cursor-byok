@@ -39,3 +39,13 @@ test("skills scan settings use an explicit enablement whitelist", async () => {
     /技能默认关闭。启用后，技能只会进入 BYOK 候选池，并不会在每次请求中全部注入；系统会根据当前任务的相关性稀疏激活并注入少量技能，以减少扫描和提示词开销。此开关只控制 BYOK 扫描；Cursor 客户端显式附带的技能仍可能生效。/,
   );
 });
+
+test("browser preview exposes Defender exclusion bindings", async () => {
+  const bindingsSource = await readFile(browserBindingsURL, "utf8");
+
+  assert.match(bindingsSource, /export const GetDefenderExclusionState =/);
+  assert.match(bindingsSource, /export const OfferDefenderExclusion =/);
+  assert.match(bindingsSource, /export const DismissDefenderExclusion =/);
+  assert.ok(bindingsSource.includes("alreadyExcluded: true"));
+  assert.ok(bindingsSource.includes("offered: true"));
+});

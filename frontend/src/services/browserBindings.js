@@ -88,6 +88,13 @@ const previewConfig = {
 
 const PREVIEW_CONFIG_STORAGE_KEY = "cursor-byok.browser-preview.config";
 let previewDelegationExecutors = [];
+let previewDefenderExclusionState = {
+  supported: false,
+  defenderActive: false,
+  alreadyExcluded: false,
+  offered: false,
+  path: "",
+};
 // E2E 测试控制：测试通过 addInitScript 预置该 localStorage 键，mock 据此注入
 // 确定性的余额/测试结果/保存失败响应，避免测试依赖默认随机状态。
 const PREVIEW_TEST_PLAN_KEY = "cursor-byok.browser-preview.test-plan";
@@ -496,6 +503,21 @@ export const StopProxy = () => {
   return Promise.resolve(previewProxyState());
 };
 export const RepairProxySettings = () => Promise.resolve({ settingsApplied: true, settingsPath: "", proxyURL: "http://127.0.0.1:18080", cursorRunning: false, needsCursorRestart: false, details: ["浏览器预览模式：模拟修复成功"] });
+export const GetDefenderExclusionState = () => Promise.resolve(clone(previewDefenderExclusionState));
+export const OfferDefenderExclusion = () => {
+  recordPreviewCall("OfferDefenderExclusion");
+  previewDefenderExclusionState = {
+    ...previewDefenderExclusionState,
+    alreadyExcluded: true,
+    offered: true,
+  };
+  return Promise.resolve({ added: true, alreadyExcluded: false, cancelled: false, error: "" });
+};
+export const DismissDefenderExclusion = () => {
+  recordPreviewCall("DismissDefenderExclusion");
+  previewDefenderExclusionState = { ...previewDefenderExclusionState, offered: true };
+  return Promise.resolve();
+};
 export const GetTerminalEnvironmentStatus = () => Promise.resolve({ platform: "browser-preview", shellPath: "/bin/zsh", shellName: "zsh", shellVersion: "", pythonPath: "/usr/bin/python3", pythonVersion: "Python 3", upgradeRecommended: false, upgradeMessage: "", configurationNotice: "浏览器预览模式：使用模拟环境。" });
 export const ApplyTerminalEnvironment = GetTerminalEnvironmentStatus;
 // 浏览器预览没有 winget；安装为无操作（真实进度走事件，预览模式无事件通道）。
