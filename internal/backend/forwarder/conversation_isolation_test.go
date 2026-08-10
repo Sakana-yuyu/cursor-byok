@@ -33,6 +33,7 @@ func TestDifferentConversationsSharingModelEnterProviderConcurrently(t *testing.
 	provider := &conversationIsolationTestProvider{entered: entered, release: release}
 
 	service := newServiceWithDependencies(NewConversationFileStore(t.TempDir()), NewHistoryProjector(), contextProjectionLifecycleCompiler{}, provider, NewStreamBroker())
+	service.scanConfig = disabledAssetScanConfig{}
 
 	runA := testRunIntent("conversation-a", "request-a")
 	runA.Prewarm = false
@@ -93,6 +94,7 @@ func TestQueuedRunDoesNotWriteHistoryBeforePromotion(t *testing.T) {
 	defer close(release)
 	provider := &conversationIsolationTestProvider{entered: entered, release: release}
 	service := newServiceWithDependencies(store, NewHistoryProjector(), contextProjectionLifecycleCompiler{}, provider, NewStreamBroker())
+	service.scanConfig = disabledAssetScanConfig{}
 
 	first := testRunIntent("conversation-a", "request-1")
 	first.Prewarm = false
