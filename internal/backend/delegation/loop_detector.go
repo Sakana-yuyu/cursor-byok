@@ -699,6 +699,7 @@ func SanitizeTaskResult(result TaskResult, workspaceHint string) TaskResult {
 	result.Output = sanitizeNarrativeText(result.Output, workspaceHint)
 	result.Error = sanitizeTaskError(result.Error, workspaceHint)
 	result.Metadata = sanitizeResultMetadata(result.Metadata, workspaceHint)
+	result.Attempts = sanitizeExecutorAttempts(result.Attempts, workspaceHint)
 	if result.SubagentResult != nil {
 		if cloned := cloneSubagentResult(result.SubagentResult); cloned != nil {
 			result.SubagentResult = cloned

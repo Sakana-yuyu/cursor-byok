@@ -96,6 +96,8 @@ type TaskResult struct {
 	ToolCallCount  int
 	SubagentResult *agentv1.SubagentResult
 	Metadata       map[string]string
+	ExecutorID     ExecutorID
+	Attempts       []ExecutorAttemptSnapshot
 }
 
 // TaskSnapshot 是 UI 和主代理读取的稳定状态快照，只保留安全元数据。
@@ -124,6 +126,8 @@ type TaskSnapshot struct {
 	Output            string
 	Error             string
 	ToolCallCount     int
+	ExecutorID        ExecutorID
+	Attempts          []ExecutorAttemptSnapshot
 	EventID           string
 	Sequence          uint64
 	EventType         string
@@ -350,6 +354,8 @@ func (s *Scheduler) run(state *taskState) {
 	}
 	state.snapshot.Output = result.Output
 	state.snapshot.ToolCallCount = result.ToolCallCount
+	state.snapshot.ExecutorID = result.ExecutorID
+	state.snapshot.Attempts = sanitizeExecutorAttempts(result.Attempts, request.WorkspaceHint)
 	state.snapshot.FinishedAt = finished
 	state.result = cloneTaskResult(result)
 	if executionCtx.Err() != nil {
@@ -926,6 +932,8 @@ func cloneTaskSnapshot(snapshot TaskSnapshot) TaskSnapshot {
 		Output:            snapshot.Output,
 		Error:             snapshot.Error,
 		ToolCallCount:     snapshot.ToolCallCount,
+		ExecutorID:        snapshot.ExecutorID,
+		Attempts:          cloneExecutorAttempts(snapshot.Attempts),
 		EventID:           snapshot.EventID,
 		Sequence:          snapshot.Sequence,
 		EventType:         snapshot.EventType,
@@ -998,12 +1006,22 @@ func cloneToolPermissions(source map[string]bool) map[string]bool {
 
 func cloneTaskResult(result TaskResult) TaskResult {
 	result.Metadata = cloneStringMap(result.Metadata)
+	result.Attempts = cloneExecutorAttempts(result.Attempts)
 	if result.SubagentResult != nil {
 		if cloned, ok := proto.Clone(result.SubagentResult).(*agentv1.SubagentResult); ok {
 			result.SubagentResult = cloned
 		}
 	}
 	return result
+}
+
+func sanitizeExecutorAttempts(source []ExecutorAttemptSnapshot, workspaceHint string) []ExecutorAttemptSnapshot {
+	cloned := cloneExecutorAttempts(source)
+	for index := range cloned {
+		cloned[index].Error = SanitizeSupervisorText(cloned[index].Error, workspaceHint)
+		cloned[index].Metadata = sanitizeResultMetadata(cloned[index].Metadata, workspaceHint)
+	}
+	return cloned
 }
 
 func cloneModelParams(source []*agentv1.RequestedModel_ModelParameterValue) []*agentv1.RequestedModel_ModelParameterValue {
