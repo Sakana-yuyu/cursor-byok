@@ -9,7 +9,7 @@ import DelegationTaskStrip from "@/components/DelegationTaskStrip.vue";
 import CursorAccountCard from "@/components/CursorAccountCard.vue";
 import { useMessage } from "@/composables/useMessage";
 import { showModal } from "@/composables/useModal";
-import { appState, appViewState, DEBUG_LOG_WARNING_BYTES, getCursorManualPath, openModelConfigWindow, openMetricsDetailWindow, openRequestMetricsWindow, openLocalLogsDirectory, exportLogsAction, repairProxyAction, restartCursorAction, isCursorRunningAction, repairCACorruptionAction, saveRoutingMode, syncServiceState, refreshDebugLogUsage, toUserError, toggleService } from "@/state/appState";
+import { appState, appViewState, DEBUG_LOG_WARNING_BYTES, getCursorManualPath, openModelConfigWindow, openMetricsDetailWindow, openRequestMetricsWindow, openLocalLogsDirectory, exportLogsAction, repairProxyAction, restartCursorAction, isCursorRunningAction, repairCACorruptionAction, offerDefenderExclusionAction, getDefenderExclusionStateAction, dismissDefenderExclusionAction, saveRoutingMode, syncServiceState, refreshDebugLogUsage, toUserError, toggleService } from "@/state/appState";
 import { purgeAllHistoryDebugLogs } from "@/services/runtimeControlApi";
 import { getCARepairStatus, launchCursor } from "@/services/clientApi";
 import { isBrowserPreview } from "@/services/runtimeAdapter";
@@ -29,6 +29,7 @@ const debugLogsClearing = ref(false);
 const debugUsageRetrying = ref(false);
 const caAutoRepaired = ref(false); // 本次启动 CA 被自动修复（cert/key 失配重建）
 const caRepairDismissed = ref(false);
+const defenderPromptBusy = ref(false); // 一键添加 Defender 排除项进行中
 const debugLogsWarningVisible = computed(() => appState.debugLogBytes >= DEBUG_LOG_WARNING_BYTES);
 
 function formatSize(bytes) {
@@ -198,6 +199,73 @@ async function handleRepairCA() {
   }
 }
 
+// maybePromptDefenderExclusion 启动时「仅一次」引导用户把应用目录加入杀软排除项，
+// 防止杀软误删 CA 私钥（ca.key）导致本地代理降级。
+// 策略（A + B 结合）：
+//   - Windows Defender 活动时：弹窗提供「一键添加排除项」按钮，点击后触发 UAC 提权。
+//   - 非 Defender（第三方杀软 / 非 Windows）：弹窗展示应用数据目录路径，引导用户手动添加。
+// 用户点「跳过」或操作完成后标记已提示（持久化），不再重复弹窗。
+async function maybePromptDefenderExclusion() {
+  if (isBrowserPreview) return; // 浏览器预览模式无后端，跳过。
+  const stateResult = await getDefenderExclusionStateAction();
+  if (!stateResult.ok) return; // 查询失败不阻塞首页，静默跳过。
+  const st = stateResult.result || {};
+  // 仅一次：已提示过 / 已排除 / 平台不支持 -> 不弹。
+  if (st.offered || st.alreadyExcluded || !st.supported) return;
+
+  const appPath = st.path || "应用数据目录";
+
+  if (st.defenderActive) {
+    // A：Defender 一键添加。
+    const confirmed = await showModal({
+      title: "防止杀软误删",
+      content: `检测到 Windows Defender 正在运行。为确保本地 CA 私钥（ca.key）不被误杀导致本地代理停用，建议把应用数据目录加入 Defender 排除项：\n\n${appPath}\n\n点击「一键添加」将弹出管理员授权（UAC），授权后自动完成。`,
+      confirmText: "一键添加",
+      cancelText: "跳过",
+    });
+    if (!confirmed) {
+      // 用户跳过：标记已提示，不再弹窗。
+      await dismissDefenderExclusionAction().catch(() => {});
+      return;
+    }
+    // 触发 UAC 提权添加排除项。
+    defenderPromptBusy.value = true;
+    try {
+      const addResult = await offerDefenderExclusionAction();
+      const r = addResult.result || {};
+      let content;
+      if (!addResult.ok) {
+        content = `添加 Defender 排除项失败：${addResult.error}\n\n可手动在 Windows 安全中心 → 病毒和威胁防护 → 排除项中添加：\n${appPath}`;
+      } else if (r.cancelled) {
+        // 用户在 UAC 中取消：不标记为已提示，下次启动再引导。
+        await showModal({ title: "已取消", content: "未授予管理员权限，排除项未添加。下次启动会再次提醒。", confirmText: "知道了", showCancel: false });
+        return;
+      } else if (r.added) {
+        content = `已成功把以下目录加入 Windows Defender 排除项：\n\n${appPath}\n\n本地 CA 私钥不会再被误删。`;
+      } else if (r.alreadyExcluded) {
+        content = `该目录已在 Defender 排除项中，无需重复添加：\n\n${appPath}`;
+      } else if (r.error) {
+        content = `添加 Defender 排除项失败：${r.error}\n\n可手动在 Windows 安全中心 → 病毒和威胁防护 → 排除项中添加：\n${appPath}`;
+      } else {
+        content = `操作已完成。如未添加成功，可手动在 Windows 安全中心排除项中添加：\n\n${appPath}`;
+      }
+      await showModal({ title: "排除项引导", content, confirmText: "知道了", showCancel: false });
+    } finally {
+      defenderPromptBusy.value = false;
+    }
+  } else {
+    // B：非 Defender（第三方杀软 / 非 Windows）引导说明。
+    await showModal({
+      title: "防止杀软误删",
+      content: `为确保本地 CA 私钥（ca.key）不被杀毒软件误删导致本地代理停用，建议在您的杀毒软件中把应用数据目录加入排除/白名单：\n\n${appPath}\n\n（未检测到 Windows Defender；若使用第三方杀软，请在其设置中手动添加排除项。）`,
+      confirmText: "知道了",
+      showCancel: false,
+    });
+    // 标记已提示，实现「仅一次」（用户已知悉，下次启动不再弹窗）。
+    await dismissDefenderExclusionAction().catch(() => {});
+  }
+}
+
 async function handleRepairProxy() {
   if (repairingProxy.value) return;
   repairingProxy.value = true;
@@ -245,6 +313,9 @@ async function handleRepairProxy() {
 onMounted(() => { void syncServiceState().catch(() => {}); });
 // 查询本次启动是否发生过 CA 自动修复（cert/key 失配重建），是则提示重启 Cursor。
 void getCARepairStatus().then((status) => { if (status?.repaired) caAutoRepaired.value = true; }).catch(() => {});
+// 启动时「仅一次」引导用户把应用目录加入杀软排除项（防止 ca.key 被误删）。
+// 延迟一拍，避免与 CA 修复横幅/服务状态查询同时弹出，让用户先看到首页主体。
+void maybePromptDefenderExclusion().catch(() => {});
 </script>
 
 <template>

@@ -33,6 +33,12 @@ func ConfigFilePath() string {
 	return filepath.Join(RootDir(), "config.yaml")
 }
 
+// AVExclusionStateFilePath 返回「杀软排除项引导状态」持久化路径（记录是否已提示/已完成，
+// 实现「仅提示一次」）。不进 config.yaml，避免污染用户可编辑配置。
+func AVExclusionStateFilePath() string {
+	return filepath.Join(RootDir(), "av-exclusion-state.json")
+}
+
 func DataRootPath() string {
 	return filepath.Join(RootDir(), "data")
 }
