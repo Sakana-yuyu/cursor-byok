@@ -69,3 +69,41 @@ func TestHostRegistersClaudeExecutorAndAppliesSavedPolicy(t *testing.T) {
 		t.Fatalf("updated Claude snapshot = %#v, ok=%t", snapshot, ok)
 	}
 }
+
+func TestHostRegistersCodexExecutorAndAppliesSavedPolicy(t *testing.T) {
+	store := serverconfig.NewStore(filepath.Join(t.TempDir(), "config.yaml"), "")
+	host, err := NewHost(store, nil)
+	if err != nil {
+		t.Fatalf("NewHost() error = %v", err)
+	}
+	t.Cleanup(func() { _ = host.Stop(context.Background()) })
+
+	snapshot, ok := host.ExecutorRegistry().Snapshot("codex-cli")
+	if !ok || snapshot.Enabled {
+		t.Fatalf("default Codex snapshot = %#v, ok=%t", snapshot, ok)
+	}
+	cfg, err := host.ConfigManager().GetDelegationConfig(t.Context())
+	if err != nil {
+		t.Fatalf("GetDelegationConfig() error = %v", err)
+	}
+	cfg.Executors = []serverconfig.DelegationExecutorConfig{{
+		ID:                      "codex-cli",
+		Kind:                    serverconfig.DelegationExecutorKindBuiltin,
+		Enabled:                 true,
+		Priority:                3,
+		Executable:              "C:/tools/codex.exe",
+		ProbeTimeoutSeconds:     4,
+		ExecutionTimeoutSeconds: 40,
+	}}
+	if _, err := host.ConfigManager().SaveDelegationConfig(t.Context(), cfg); err != nil {
+		t.Fatalf("SaveDelegationConfig() error = %v", err)
+	}
+	snapshot, ok = host.ExecutorRegistry().Snapshot("codex-cli")
+	if !ok || !snapshot.Enabled || snapshot.Priority != 3 || snapshot.Probe.State != delegation.ExecutorProbeUnknown {
+		t.Fatalf("updated Codex snapshot = %#v, ok=%t", snapshot, ok)
+	}
+	claude, ok := host.ExecutorRegistry().Snapshot("claude-code")
+	if !ok || claude.Enabled {
+		t.Fatalf("Claude snapshot after Codex save = %#v, ok=%t", claude, ok)
+	}
+}

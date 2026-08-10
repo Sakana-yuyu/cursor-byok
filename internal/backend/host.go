@@ -87,36 +87,47 @@ func (host *Host) syncDelegationExecutors(cfg serverconfig.Config) error {
 	if host == nil || host.executorRegistry == nil {
 		return nil
 	}
-	runtimeConfig := delegation.RuntimeExecutorConfig{ID: delegationexecutors.ClaudeCodeExecutorID}
+	runner := delegation.NewProcessRunner(delegation.ProcessRunnerConfig{})
+	factories := []struct {
+		id     delegation.ExecutorID
+		create func(delegation.RuntimeExecutorConfig) (delegation.ExecutorRegistration, error)
+	}{
+		{id: delegationexecutors.ClaudeCodeExecutorID, create: func(runtimeConfig delegation.RuntimeExecutorConfig) (delegation.ExecutorRegistration, error) {
+			return delegationexecutors.NewClaudeCodeRegistration(runner, runtimeConfig)
+		}},
+		{id: delegationexecutors.CodexCLIExecutorID, create: func(runtimeConfig delegation.RuntimeExecutorConfig) (delegation.ExecutorRegistration, error) {
+			return delegationexecutors.NewCodexCLIRegistration(runner, runtimeConfig)
+		}},
+	}
+	for _, factory := range factories {
+		registration, err := factory.create(hostRuntimeExecutorConfig(cfg, factory.id))
+		if err != nil {
+			return err
+		}
+		if _, exists := host.executorRegistry.Snapshot(registration.ID); exists {
+			err = host.executorRegistry.Replace(registration)
+		} else {
+			err = host.executorRegistry.Register(registration)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func hostRuntimeExecutorConfig(cfg serverconfig.Config, id delegation.ExecutorID) delegation.RuntimeExecutorConfig {
 	for _, item := range cfg.Delegation.Executors {
-		if delegation.ExecutorID(item.ID) != delegationexecutors.ClaudeCodeExecutorID {
+		if delegation.ExecutorID(item.ID) != id {
 			continue
 		}
-		runtimeConfig = delegation.RuntimeExecutorConfig{
-			ID:                      delegation.ExecutorID(item.ID),
-			Kind:                    item.Kind,
-			DisplayName:             item.DisplayName,
-			Enabled:                 item.Enabled,
-			Priority:                item.Priority,
-			Executable:              item.Executable,
-			ProbeTimeoutSeconds:     item.ProbeTimeoutSeconds,
-			ExecutionTimeoutSeconds: item.ExecutionTimeoutSeconds,
-			EnvironmentVariables:    append([]string{}, item.EnvironmentVariables...),
-			Options:                 cloneHostStringMap(item.Options),
+		return delegation.RuntimeExecutorConfig{
+			ID: id, Kind: item.Kind, DisplayName: item.DisplayName, Enabled: item.Enabled, Priority: item.Priority,
+			Executable: item.Executable, ProbeTimeoutSeconds: item.ProbeTimeoutSeconds, ExecutionTimeoutSeconds: item.ExecutionTimeoutSeconds,
+			EnvironmentVariables: append([]string{}, item.EnvironmentVariables...), Options: cloneHostStringMap(item.Options),
 		}
-		break
 	}
-	registration, err := delegationexecutors.NewClaudeCodeRegistration(
-		delegation.NewProcessRunner(delegation.ProcessRunnerConfig{}),
-		runtimeConfig,
-	)
-	if err != nil {
-		return err
-	}
-	if _, exists := host.executorRegistry.Snapshot(registration.ID); exists {
-		return host.executorRegistry.Replace(registration)
-	}
-	return host.executorRegistry.Register(registration)
+	return delegation.RuntimeExecutorConfig{ID: id}
 }
 
 func cloneHostStringMap(source map[string]string) map[string]string {
