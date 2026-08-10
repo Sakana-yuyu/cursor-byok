@@ -67,6 +67,16 @@ const mcpCapabilityLabels = {
   error: "异常",
 };
 
+const executorNames = {
+  "claude-code": "Claude Code",
+  "codex-cli": "Codex CLI",
+  "gemini-cli": "Gemini CLI",
+  "cursor-agent": "Cursor Agent",
+  "local-byok": "本地 BYOK",
+};
+
+const attemptStatusLabels = { running: "运行中", completed: "已完成", failed: "失败", canceled: "已取消", timed_out: "超时" };
+
 function statusClass(status) {
   if (status === "completed" || status === "connected") return "text-[#6ee7a5]";
   if (status === "failed" || status === "error" || status === "timed_out") return "text-[#fca5a5]";
@@ -156,6 +166,25 @@ function taskStateLabel(task) {
 
 function taskStateClass(task) {
   return task?.supervisionPhase ? supervisionClass(task.supervisionPhase) : statusClass(task?.status);
+}
+
+function executionModeLabel(mode) {
+  return { auto: "自动选择", cursor: "Cursor 子会话", local: "本地子代理", vision: "视觉委派" }[mode] || mode || "自动选择";
+}
+
+function executorLabel(id) {
+  const value = String(id || "").trim();
+  return executorNames[value] || value;
+}
+
+function attemptPath(task) {
+  return (Array.isArray(task?.attempts) ? task.attempts : []).map((attempt) => executorLabel(attempt?.executorId)).filter(Boolean).join(" → ");
+}
+
+function attemptDuration(attempt) {
+  const start = Number(attempt?.startedAtUnixMs || 0);
+  const finish = Number(attempt?.finishedAtUnixMs || Date.now());
+  return start > 0 ? formatDuration(Math.max(0, finish - start)) : "";
 }
 
 function replaceMCPServer(next, expectedKey = "") {
@@ -385,7 +414,8 @@ onUnmounted(() => {
                 </div>
                 <div class="mt-1 truncate text-[11px] text-[#858585]" :title="task.description || task.id">{{ task.description || task.id }}</div>
                 <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-[#a3a3a3]">
-                  <span>{{ task.executionMode === "cursor" ? "Cursor 子会话" : "本地子代理" }}</span>
+                  <span>{{ executionModeLabel(task.executionMode) }}</span>
+                  <span v-if="task.executorId">{{ executorLabel(task.executorId) }}</span>
                   <span>{{ formatDuration(task.durationMs) }}</span>
                   <span>{{ task.toolCallCount || 0 }} 工具</span>
                 </div>
@@ -395,6 +425,15 @@ onUnmounted(() => {
                 <div v-if="task.issueCategory" class="mt-2 line-clamp-2 break-words text-[11px] text-[#facc15]" :title="task.issueCategory">{{ task.issueCategory }}</div>
                 <div v-if="task.progressSummary" class="mt-2 line-clamp-3 break-words text-[11px] text-[#a3a3a3]" :title="task.progressSummary">{{ task.progressSummary }}</div>
                 <div v-if="task.error" class="mt-2 line-clamp-2 break-words text-[11px] text-[#fca5a5]" :title="task.error">{{ task.error }}</div>
+                <div v-if="task.attempts?.length" class="mt-2 border-t border-white/10 pt-2">
+                  <div class="truncate text-[11px] text-[#d4d4d4]" :title="attemptPath(task)">{{ attemptPath(task) }}</div>
+                  <div class="mt-1 space-y-1">
+                    <div v-for="attempt in task.attempts" :key="`${attempt.attempt}-${attempt.executorId}`" class="flex min-w-0 items-start gap-2 text-[11px]">
+                      <span class="w-4 shrink-0 text-right text-[#666]">{{ attempt.attempt }}</span>
+                      <span class="min-w-0 flex-1 truncate text-[#a3a3a3]" :title="attempt.error || attempt.diagnosticCode">{{ executorLabel(attempt.executorId) }} · {{ attemptStatusLabels[attempt.status] || attempt.status }}<template v-if="attemptDuration(attempt)"> · {{ attemptDuration(attempt) }}</template><template v-if="attempt.error"> · <span class="text-[#fca5a5]">{{ attempt.error }}</span></template></span>
+                    </div>
+                  </div>
+                </div>
               </div>
               <DelegationIconButton
                 v-if="task.cancelable"

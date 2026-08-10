@@ -2,12 +2,14 @@
 import DelegationRuntimePanel from "@/components/DelegationRuntimePanel.vue";
 import SettingsSection from "@/components/settings/SettingsSection.vue";
 import DelegationGlobalControlsPanel from "@/components/settings/delegation/DelegationGlobalControlsPanel.vue";
+import DelegationExecutorsPanel from "@/components/settings/delegation/DelegationExecutorsPanel.vue";
 import DelegationGroupEditor from "@/components/settings/delegation/DelegationGroupEditor.vue";
 import DelegationSupervisionPanel from "@/components/settings/delegation/DelegationSupervisionPanel.vue";
 import DelegationVisionPanel from "@/components/settings/delegation/DelegationVisionPanel.vue";
 import SubagentProfilesPanel from "@/components/settings/delegation/SubagentProfilesPanel.vue";
 import Button from "@/components/ui/Button.vue";
 import { showModal } from "@/composables/useModal";
+import { getDelegationExecutorSnapshots, refreshDelegationExecutorProbes } from "@/services/clientApi";
 import { saveDelegationConfig } from "@/services/runtimeControlApi";
 import { appState, toUserError } from "@/state/appState";
 // 委派配置的纯函数与默认常量已归位 utils/delegationSettings.js，此处 import 保持调用零改动。
@@ -29,7 +31,7 @@ import {
   toggleModel,
   togglePermission,
 } from "@/utils/delegationSettings";
-import { computed, reactive, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 
 const props = defineProps({
   autosave: {
@@ -105,6 +107,7 @@ const groupNameDrafts = reactive({});
 const expandedGroupStates = reactive({});
 const maxConcurrencyDraft = ref("");
 const groupCreating = ref(false);
+const executorState = reactive({ busy: false, error: "", items: [] });
 // 创建组 ID 的递增序号，避免同毫秒内多次点击产生 Date.now() 碰撞。
 let groupCreateSeq = 0;
 
@@ -358,6 +361,51 @@ async function persistDelegationConfig() {
     };
     throw error;
   }
+}
+
+async function loadExecutorSnapshots(force = false) {
+  if (executorState.busy) return;
+  executorState.busy = true;
+  executorState.error = "";
+  try {
+    const items = force ? await refreshDelegationExecutorProbes() : await getDelegationExecutorSnapshots();
+    executorState.items = Array.isArray(items) ? items : [];
+  } catch (error) {
+    executorState.error = toUserError(error);
+  } finally {
+    executorState.busy = false;
+  }
+}
+
+function executorConfigIndex(id) {
+  return (appState.delegation.executors || []).findIndex((item) => item.id === id);
+}
+
+async function saveExecutorPatch(id, patch) {
+  const index = executorConfigIndex(id);
+  if (index < 0) return;
+  const previous = cloneConfigValue(appState.delegation.executors[index]);
+  appState.delegation.executors.splice(index, 1, { ...previous, ...patch });
+  try {
+    await serializeDelegationSave();
+    await loadExecutorSnapshots(false);
+  } catch (error) {
+    const currentIndex = executorConfigIndex(id);
+    if (currentIndex >= 0) appState.delegation.executors.splice(currentIndex, 1, previous);
+    executorState.error = toUserError(error);
+  }
+}
+
+function handleExecutorToggle({ id, enabled }) {
+  void saveExecutorPatch(id, { enabled: Boolean(enabled) });
+}
+
+function handleExecutorPriority({ id, priority }) {
+  void saveExecutorPatch(id, { priority });
+}
+
+function handleCustomExecutorSave(value) {
+  void saveExecutorPatch(value.id, value);
 }
 
 async function saveSupervisionField(field, value) {
@@ -972,6 +1020,10 @@ watch(
   },
   { immediate: true },
 );
+
+onMounted(() => {
+  void loadExecutorSnapshots(false);
+});
 </script>
 
 <template>
@@ -987,6 +1039,17 @@ watch(
       @update:max-concurrency="handleMaxConcurrencyInput"
       @flush:max-concurrency="flushMaxConcurrency"
       @retry:max-concurrency="retryMaxConcurrency"
+    />
+
+    <DelegationExecutorsPanel
+      :executors="appState.delegation.executors || []"
+      :snapshots="executorState.items"
+      :busy="executorState.busy"
+      :error="executorState.error"
+      @refresh="loadExecutorSnapshots(true)"
+      @toggle="handleExecutorToggle"
+      @priority="handleExecutorPriority"
+      @save-custom="handleCustomExecutorSave"
     />
 
     <SettingsSection

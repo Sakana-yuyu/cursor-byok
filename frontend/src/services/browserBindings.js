@@ -87,7 +87,7 @@ const previewConfig = {
 };
 
 const PREVIEW_CONFIG_STORAGE_KEY = "cursor-byok.browser-preview.config";
-const previewDelegationExecutors = [];
+let previewDelegationExecutors = [];
 // E2E 测试控制：测试通过 addInitScript 预置该 localStorage 键，mock 据此注入
 // 确定性的余额/测试结果/保存失败响应，避免测试依赖默认随机状态。
 const PREVIEW_TEST_PLAN_KEY = "cursor-byok.browser-preview.test-plan";
@@ -102,6 +102,9 @@ function readPreviewTestPlan() {
   }
 }
 const previewTestPlan = readPreviewTestPlan();
+previewDelegationExecutors = Array.isArray(previewTestPlan?.delegationExecutors)
+  ? clone(previewTestPlan.delegationExecutors)
+  : [];
 const PREVIEW_CALLS_STORAGE_KEY = "cursor-byok.browser-preview.calls";
 
 function recordPreviewCall(name, args = []) {
@@ -193,7 +196,7 @@ if (previewTestPlan?.editorContext && typeof previewTestPlan.editorContext === "
     adapterJSON: typeof seeded.adapterJSON === "string" ? seeded.adapterJSON : "{}",
   };
 }
-let previewDelegationTasks = [
+let previewDelegationTasks = Array.isArray(previewTestPlan?.delegationTasks) ? clone(previewTestPlan.delegationTasks) : [
   {
     id: "preview-task-running",
     aggregateId: "preview-aggregate",
@@ -436,7 +439,12 @@ export const SaveDelegationConfig = (value) => {
   return Promise.resolve(clone(previewConfig.delegation));
 };
 export const GetDelegationExecutorSnapshots = () => Promise.resolve(clone(previewDelegationExecutors));
-export const RefreshDelegationExecutorProbes = () => Promise.resolve(clone(previewDelegationExecutors));
+export const RefreshDelegationExecutorProbes = () => {
+  recordPreviewCall("RefreshDelegationExecutorProbes");
+  const refreshed = readPreviewTestPlan()?.refreshedDelegationExecutors;
+  if (Array.isArray(refreshed)) previewDelegationExecutors = clone(refreshed);
+  return Promise.resolve(clone(previewDelegationExecutors));
+};
 export const SaveUserConfig = (value) => {
   if (previewTestFailSaveConfig()) {
     return Promise.reject(new Error("E2E 注入：配置保存失败"));
@@ -908,6 +916,7 @@ export const ExportSessionDebugBundle = (sessionID) => {
   return Promise.reject(new Error("浏览器预览模式不支持导出证据包 ZIP，请在桌面客户端中使用"));
 };
 export const CancelDelegationTask = (taskID) => {
+  recordPreviewCall("CancelDelegationTask", [taskID]);
   const task = previewDelegationTasks.find((item) => item.id === taskID && item.cancelable);
   if (!task) return Promise.resolve(false);
   const sequence = previewDelegationTasks.reduce((highest, item) => Math.max(highest, Number(item.sequence) || 0), 0) + 1;

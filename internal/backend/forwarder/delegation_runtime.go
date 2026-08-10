@@ -10,42 +10,77 @@ import (
 
 // DelegationTaskSnapshot is the sanitized runtime view exposed to the desktop UI.
 type DelegationTaskSnapshot struct {
-	ID                   string                `json:"id"`
-	AggregateID          string                `json:"aggregateId"`
-	Description          string                `json:"description"`
-	ModelID              string                `json:"modelId"`
-	ModelName            string                `json:"modelName"`
-	ModelGroupID         string                `json:"modelGroupId"`
-	WorkerRole           string                `json:"workerRole,omitempty"`
-	ExecutionMode        string                `json:"executionMode"`
-	Status               delegation.TaskStatus `json:"status"`
-	SupervisionStatus    string                `json:"supervisionStatus,omitempty"`
-	SupervisionPhase     string                `json:"supervisionPhase,omitempty"`
-	SupervisorModelName  string                `json:"supervisorModelName,omitempty"`
-	ReviewerModelName    string                `json:"reviewerModelName,omitempty"`
-	SupervisionRound     int                   `json:"supervisionRound,omitempty"`
-	CorrectionCount      int                   `json:"correctionCount,omitempty"`
-	RetryCount           int                   `json:"retryCount,omitempty"`
-	ReassignCount        int                   `json:"reassignCount,omitempty"`
-	EscalateCount        int                   `json:"escalateCount,omitempty"`
-	IssueCategory        string                `json:"issueCategory,omitempty"`
-	LastIssueCode        string                `json:"lastIssueCode,omitempty"`
-	LastProgressAtUnixMS int64                 `json:"lastProgressAtUnixMs,omitempty"`
-	ProgressSummary      string                `json:"progressSummary,omitempty"`
-	ToolCallCount        int                   `json:"toolCallCount"`
-	Error                string                `json:"error,omitempty"`
-	EventID              string                `json:"eventId"`
-	Sequence             uint64                `json:"sequence"`
-	EventType            string                `json:"eventType"`
-	ParentRequestID      string                `json:"parentRequestId"`
-	ParentExecID         string                `json:"parentExecId"`
-	GroupID              string                `json:"groupId"`
-	QueuedAtUnixMS       int64                 `json:"queuedAtUnixMs"`
-	StartedAtUnixMS      int64                 `json:"startedAtUnixMs"`
-	FinishedAtUnixMS     int64                 `json:"finishedAtUnixMs"`
-	UpdatedAtUnixMS      int64                 `json:"updatedAtUnixMs"`
-	DurationMS           int64                 `json:"durationMs"`
-	Cancelable           bool                  `json:"cancelable"`
+	ID                   string                              `json:"id"`
+	AggregateID          string                              `json:"aggregateId"`
+	Description          string                              `json:"description"`
+	ModelID              string                              `json:"modelId"`
+	ModelName            string                              `json:"modelName"`
+	ModelGroupID         string                              `json:"modelGroupId"`
+	WorkerRole           string                              `json:"workerRole,omitempty"`
+	ExecutionMode        string                              `json:"executionMode"`
+	Status               delegation.TaskStatus               `json:"status"`
+	SupervisionStatus    string                              `json:"supervisionStatus,omitempty"`
+	SupervisionPhase     string                              `json:"supervisionPhase,omitempty"`
+	SupervisorModelName  string                              `json:"supervisorModelName,omitempty"`
+	ReviewerModelName    string                              `json:"reviewerModelName,omitempty"`
+	SupervisionRound     int                                 `json:"supervisionRound,omitempty"`
+	CorrectionCount      int                                 `json:"correctionCount,omitempty"`
+	RetryCount           int                                 `json:"retryCount,omitempty"`
+	ReassignCount        int                                 `json:"reassignCount,omitempty"`
+	EscalateCount        int                                 `json:"escalateCount,omitempty"`
+	IssueCategory        string                              `json:"issueCategory,omitempty"`
+	LastIssueCode        string                              `json:"lastIssueCode,omitempty"`
+	LastProgressAtUnixMS int64                               `json:"lastProgressAtUnixMs,omitempty"`
+	ProgressSummary      string                              `json:"progressSummary,omitempty"`
+	ToolCallCount        int                                 `json:"toolCallCount"`
+	ExecutorID           string                              `json:"executorId,omitempty"`
+	Attempts             []DelegationExecutorAttemptSnapshot `json:"attempts,omitempty"`
+	Error                string                              `json:"error,omitempty"`
+	EventID              string                              `json:"eventId"`
+	Sequence             uint64                              `json:"sequence"`
+	EventType            string                              `json:"eventType"`
+	ParentRequestID      string                              `json:"parentRequestId"`
+	ParentExecID         string                              `json:"parentExecId"`
+	GroupID              string                              `json:"groupId"`
+	QueuedAtUnixMS       int64                               `json:"queuedAtUnixMs"`
+	StartedAtUnixMS      int64                               `json:"startedAtUnixMs"`
+	FinishedAtUnixMS     int64                               `json:"finishedAtUnixMs"`
+	UpdatedAtUnixMS      int64                               `json:"updatedAtUnixMs"`
+	DurationMS           int64                               `json:"durationMs"`
+	Cancelable           bool                                `json:"cancelable"`
+}
+
+type DelegationExecutorAttemptSnapshot struct {
+	ExecutorID       string `json:"executorId"`
+	Attempt          int    `json:"attempt"`
+	Status           string `json:"status"`
+	FailureClass     string `json:"failureClass,omitempty"`
+	RetrySafe        bool   `json:"retrySafe"`
+	DiagnosticCode   string `json:"diagnosticCode,omitempty"`
+	Error            string `json:"error,omitempty"`
+	StartedAtUnixMS  int64  `json:"startedAtUnixMs,omitempty"`
+	FinishedAtUnixMS int64  `json:"finishedAtUnixMs,omitempty"`
+}
+
+func publicDelegationExecutorAttempts(source []delegation.ExecutorAttemptSnapshot) []DelegationExecutorAttemptSnapshot {
+	if len(source) == 0 {
+		return nil
+	}
+	result := make([]DelegationExecutorAttemptSnapshot, 0, len(source))
+	for _, attempt := range source {
+		result = append(result, DelegationExecutorAttemptSnapshot{
+			ExecutorID:       strings.TrimSpace(string(attempt.ExecutorID)),
+			Attempt:          attempt.Attempt,
+			Status:           strings.TrimSpace(string(attempt.Status)),
+			FailureClass:     strings.TrimSpace(string(attempt.FailureClass)),
+			RetrySafe:        attempt.RetrySafe,
+			DiagnosticCode:   strings.TrimSpace(attempt.DiagnosticCode),
+			Error:            normalizeDelegationRuntimeSummary(attempt.Error),
+			StartedAtUnixMS:  unixMilliseconds(attempt.StartedAt),
+			FinishedAtUnixMS: unixMilliseconds(attempt.FinishedAt),
+		})
+	}
+	return result
 }
 
 // DelegationTaskSnapshots returns retained worker state without prompts, tool
@@ -139,6 +174,8 @@ func (service *Service) DelegationTaskSnapshots() []DelegationTaskSnapshot {
 			LastProgressAtUnixMS: unixMilliseconds(lastProgressAt),
 			ProgressSummary:      progressSummary,
 			ToolCallCount:        snapshot.ToolCallCount,
+			ExecutorID:           strings.TrimSpace(string(snapshot.ExecutorID)),
+			Attempts:             publicDelegationExecutorAttempts(snapshot.Attempts),
 			Error:                safeDelegationRuntimeError(snapshot.Status),
 			EventID:              strings.TrimSpace(snapshot.EventID),
 			Sequence:             snapshot.Sequence,
