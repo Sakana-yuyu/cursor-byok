@@ -157,13 +157,13 @@ async function handleRestartCursor({ skipConfirm = false } = {}) {
   }
 }
 
-// handleRepairCA 一键修复 CA 异常：备份残留文件并重新生成 CA。
-// 修复后需重启应用使新 CA 生效（本地代理与 MITM 在启动时构建）。
+// handleRepairCA 一键修复 CA 异常：备份残留文件并重新生成 CA，热重载内存状态后自动启动代理。
+// 修复后无需重启应用（热重载），但需重启 Cursor 使新 CA 生效。
 async function handleRepairCA() {
   if (repairingCA.value) return;
   const confirmed = await showModal({
     title: "修复 CA 证书",
-    content: "本地 CA 异常（证书/密钥缺失其一或无法读取），本地代理已停用。修复将备份残留文件并重新生成 CA，完成后需重启应用生效。继续吗？",
+    content: "本地 CA 异常（证书/密钥缺失其一或无法读取），本地代理已停用。修复将备份残留文件并重新生成 CA，完成后自动启动本地代理。继续吗？",
     confirmText: "一键修复",
     cancelText: "取消",
   });
@@ -181,7 +181,14 @@ async function handleRepairCA() {
     if (r.repaired) {
       content = "已备份残留文件并重新生成 CA。";
       if (r.backupPath) content += `\n\n备份文件：${r.backupPath}`;
-      content += "\n\n请重启应用，本地代理将恢复正常。";
+      // 热重载已清 caIncomplete，尝试自动启动代理（修复前处于停用态）。
+      const startResult = await toggleService();
+      await syncServiceState().catch(() => {});
+      if (!startResult.ok) {
+        content += `\n\n本地代理自动启动失败：${startResult.error}。请稍后手动点击「启动服务」。`;
+      } else {
+        content += "\n\n本地代理已自动启动。请重启 Cursor 使新 CA 生效。";
+      }
     } else {
       content = r.detail || "CA 材料完整，无需修复。";
     }

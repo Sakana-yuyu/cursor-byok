@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -98,6 +99,77 @@ func (s *ProxyService) MarkCAIncomplete(err error) {
 		s.caError = err.Error()
 	}
 	s.mu.Unlock()
+}
+
+// ClearCAIncomplete 清除 CA 材料不完整状态（修复成功后调用），使 StartProxy 的
+// caIncomplete 硬门放行。调用方应先确保 certManager/caCertPEM 已更新为有效 CA。
+func (s *ProxyService) ClearCAIncomplete() {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.caIncomplete = false
+	s.caError = ""
+	s.mu.Unlock()
+}
+
+// reloadCAFromDiskLocked 修复并重新加载本地 CA：当 CA 材料不完整（key 缺失等）时，
+// 调用 certs.RepairAndReloadManager 备份残留 + 重新生成，并用新 Manager 更新内存状态
+// （certManager / caCertPEM / caFilePath），随后清掉 caIncomplete 标志，使代理可立即启动。
+// 调用方需持有 s.mu（或在外部串行化，避免与 StartProxy/ApplyCursorSettings 竞争）。
+// 返回的 backupPath 为残留文件备份路径（空表示材料原本就完整、未重建）。
+func (s *ProxyService) reloadCAFromDiskLocked() (backupPath string, err error) {
+	if s == nil {
+		return "", errors.New("proxy service is not initialized")
+	}
+	certPath := appdata.CACertFilePath()
+	keyPath := appdata.CAKeyFilePath()
+	manager, backup, err := certs.RepairAndReloadManager(certPath, keyPath)
+	if err != nil {
+		return backup, err
+	}
+	if manager == nil {
+		return backup, errors.New("CA reload returned nil manager")
+	}
+	s.certManager = manager
+	newPEM := manager.CACertPEM()
+	copiedCert := make([]byte, len(newPEM))
+	copy(copiedCert, newPEM)
+	s.caCertPEM = copiedCert
+	s.caFilePath = certPath
+	s.caIncomplete = false
+	s.caError = ""
+	return backup, nil
+}
+
+// ReloadCAFromDisk 是 reloadCAFromDiskLocked 的公开入口（供 bridge 调用）。
+// 在 s.mu 保护下执行修复+重载，并 emitState 让前端同步。
+// 返回 backupPath（空表示材料已完整、未重建）。
+func (s *ProxyService) ReloadCAFromDisk() (backupPath string, err error) {
+	if s == nil {
+		return "", errors.New("proxy service is not initialized")
+	}
+	s.mu.Lock()
+	backup, err := s.reloadCAFromDiskLocked()
+	s.mu.Unlock()
+	if err != nil {
+		s.setLastError(err)
+		s.emitState()
+		return backup, err
+	}
+	s.setLastError(nil)
+	s.emitState()
+	return backup, nil
+}
+
+// CertManagerRepairedAt 暴露当前 certManager 的 RepairedAt（供 bridge 在热重载后刷新）。
+func (s *ProxyService) CertManagerRepairedAt() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.certManager == nil {
+		return time.Time{}
+	}
+	return s.certManager.RepairedAt
 }
 
 // NewProxyService 用于处理与 NewProxyService 相关的逻辑。

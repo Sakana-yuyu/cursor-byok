@@ -2,7 +2,6 @@ package bridge
 
 import (
 	"context"
-	"cursor/internal/appdata"
 	"cursor/internal/backend/forwarder"
 	serverconfig "cursor/internal/backend/server/config"
 	"cursor/internal/certs"
@@ -335,16 +334,22 @@ type CARepairStatus struct {
 	Detail string `json:"detail"`
 }
 
-// RepairCACorruption 一键修复 CA 材料不完整：把残留文件备份改名后重新生成 CA 落盘。
-// 修复后需重启应用使新 CA 生效（本地代理与 MITM 在启动时构建）。
+// RepairCACorruption 一键修复 CA 材料不完整并热重载（无需重启应用）。
+// 调用 client.ReloadCAFromDisk：备份残留文件 -> 重新生成 CA -> 用新 Manager 更新内存状态
+// （certManager/caCertPEM/caFilePath）-> 清 caIncomplete 标志，使代理可立即启动。
+// 修复成功后刷新 caRepairedAt，使 GetCARepairStatus 反映本次修复。
+// 注意：热重载不自动 StartProxy（ApplyCursorSettings 可能触发系统信任 UAC/钥匙串授权，
+// 应由前端在修复成功后引导用户启动代理，避免静默交互）。
 func (s *ProxyService) RepairCACorruption() (CARepairResult, error) {
 	if s == nil {
 		return CARepairResult{}, errors.New("proxy service is not initialized")
 	}
-	backup, err := certs.RepairIncompleteCA(appdata.CACertFilePath(), appdata.CAKeyFilePath())
+	backup, err := s.core.ReloadCAFromDisk()
 	if err != nil {
 		return CARepairResult{}, fmt.Errorf("repair CA: %w", err)
 	}
+	// 刷新 caRepairedAt：ReloadCAFromDisk 已为新 Manager 设 RepairedAt（若发生重建）。
+	s.caRepairedAt = s.core.CertManagerRepairedAt()
 	if backup == "" {
 		return CARepairResult{
 			Repaired: false,
@@ -354,7 +359,7 @@ func (s *ProxyService) RepairCACorruption() (CARepairResult, error) {
 	return CARepairResult{
 		Repaired:   true,
 		BackupPath: backup,
-		Detail:     "已备份残留文件并重新生成 CA，重启应用后生效",
+		Detail:     "已备份残留文件并重新生成 CA。代理已就绪，请点击「启动服务」；并重启 Cursor 使新 CA 生效。",
 	}, nil
 }
 
