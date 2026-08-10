@@ -2,6 +2,7 @@ package forwarder
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 
@@ -15,12 +16,48 @@ type cursorDelegationBridge struct {
 	cursor *delegation.CursorAdapter
 }
 
+// CursorAgentExecutionAvailable 只在 Cursor 客户端仍订阅活动父请求时返回 true。
+// parentRequestID 为空时检查任一活动请求，供 executor probe 使用。
+func (service *Service) CursorAgentExecutionAvailable(parentRequestID string) bool {
+	if service == nil || service.cursorDelegation == nil || service.cursorDelegation.cursor == nil || service.broker == nil {
+		return false
+	}
+	parentRequestID = strings.TrimSpace(parentRequestID)
+	if parentRequestID != "" {
+		return service.cursorAgentStreamAvailable(parentRequestID)
+	}
+	for _, requestID := range service.broker.ActiveRequestIDs() {
+		if service.cursorAgentStreamAvailable(requestID) {
+			return true
+		}
+	}
+	return false
+}
+
+func (service *Service) cursorAgentStreamAvailable(requestID string) bool {
+	stream, ok := service.broker.Get(requestID)
+	if !ok || stream == nil {
+		return false
+	}
+	stream.mu.Lock()
+	defer stream.mu.Unlock()
+	if strings.TrimSpace(stream.ConversationID) == "" || len(stream.Subscribers) == 0 || isTerminalStreamStatus(stream.Status) {
+		return false
+	}
+	switch stream.Phase {
+	case TurnPhaseCanceled, TurnPhaseCompleted, TurnPhaseFailed:
+		return false
+	default:
+		return true
+	}
+}
+
 func newCursorDelegationBridge(service *Service) *cursorDelegationBridge {
 	if service == nil || service.execBridge == nil || service.broker == nil {
 		return nil
 	}
 	cursor := delegation.NewCursorAdapterWithProgress(service.execBridge, func(requestID string, message *agentv1.AgentServerMessage) error {
-		return service.broker.Publish(strings.TrimSpace(requestID), StreamEvent{Message: message})
+		return service.broker.PublishToActiveSubscriber(strings.TrimSpace(requestID), StreamEvent{Message: message})
 	}, func(parentRequestID string, pending runtimecore.PendingExec, message *agentv1.ExecClientMessage, result execbridge.ExecApplyResult) {
 		if strings.TrimSpace(pending.ExecKind) != "subagent" {
 			return
@@ -35,6 +72,18 @@ func newCursorDelegationBridge(service *Service) *cursorDelegationBridge {
 }
 
 func (bridge *cursorDelegationBridge) Close() {
+}
+
+func (service *Service) ExecuteCursorAgent(ctx context.Context, request delegation.TaskRequest) delegation.TaskResult {
+	if service == nil || service.cursorDelegation == nil || service.cursorDelegation.cursor == nil {
+		return delegation.TaskResult{Error: delegation.NewClassifiedExecutorError(
+			delegation.ExecutorFailureSwitchable,
+			true,
+			"cursor_agent_unavailable",
+			errors.New("Cursor agent bridge is unavailable"),
+		)}
+	}
+	return service.cursorDelegation.cursor.Execute(ctx, request)
 }
 
 func (bridge *cursorDelegationBridge) ConsumeExecMessage(requestID string, message *agentv1.ExecClientMessage) bool {

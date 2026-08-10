@@ -105,6 +105,7 @@ func TestCustomCLIRegistrationRejectsRuntimeSecretUnknownOptionAndBuiltinCollisi
 		{name: "secret literal", id: "custom-cli", options: map[string]string{CustomOptionArguments: `["--key","sk-runtime-secret-12345678","{{prompt}}"]`}, want: "secret literal"},
 		{name: "unknown option", id: "custom-cli", options: map[string]string{CustomOptionArguments: `["{{prompt}}"]`, "shellCommand": "echo unsafe"}, want: "not supported"},
 		{name: "builtin collision", id: "claude-code", options: map[string]string{CustomOptionArguments: `["{{prompt}}"]`}, want: "reserved"},
+		{name: "cursor collision", id: "cursor-agent", options: map[string]string{CustomOptionArguments: `["{{prompt}}"]`}, want: "reserved"},
 		{name: "version task token", id: "custom-cli", options: map[string]string{CustomOptionArguments: `["{{prompt}}"]`, CustomOptionVersionArguments: `["{{workspace}}"]`}, want: "versionArguments cannot contain template variables"},
 	}
 	for _, tc := range tests {

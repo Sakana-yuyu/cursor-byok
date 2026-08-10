@@ -50,3 +50,17 @@ func TestPublicDelegationExecutorSnapshotsOmitSecrets(t *testing.T) {
 		t.Fatalf("diagnostic was not sanitized: %q", got.DiagnosticText)
 	}
 }
+
+func TestPublicCursorCapabilityMapsEditorAndAgentStates(t *testing.T) {
+	items := publicDelegationExecutorSnapshots([]delegation.ExecutorSnapshot{{
+		ID: "cursor-agent",
+		Probe: delegation.ExecutorProbeResult{
+			State:                   delegation.ExecutorProbeActionRequired,
+			EditorAvailable:         true,
+			AgentExecutionAvailable: false,
+		},
+	}})
+	if len(items) != 1 || !items[0].EditorAvailable || items[0].AgentExecutionAvailable {
+		t.Fatalf("public Cursor snapshot = %#v", items)
+	}
+}

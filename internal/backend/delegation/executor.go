@@ -41,15 +41,17 @@ const (
 )
 
 type ExecutorProbeResult struct {
-	State          ExecutorProbeState
-	ExecutablePath string
-	Version        string
-	Installed      bool
-	AuthState      ExecutorAuthState
-	Capabilities   []ExecutorCapability
-	DiagnosticCode string
-	DiagnosticText string
-	ProbedAt       time.Time
+	State                   ExecutorProbeState
+	ExecutablePath          string
+	Version                 string
+	Installed               bool
+	EditorAvailable         bool
+	AgentExecutionAvailable bool
+	AuthState               ExecutorAuthState
+	Capabilities            []ExecutorCapability
+	DiagnosticCode          string
+	DiagnosticText          string
+	ProbedAt                time.Time
 }
 
 type ExecutorFailureClass string

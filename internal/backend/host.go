@@ -91,7 +91,7 @@ func (host *Host) syncDelegationExecutors(cfg serverconfig.Config) error {
 		return nil
 	}
 	runner := delegation.NewProcessRunner(delegation.ProcessRunnerConfig{})
-	registrations := make([]delegation.ExecutorRegistration, 0, 3+len(cfg.Delegation.Executors))
+	registrations := make([]delegation.ExecutorRegistration, 0, 4+len(cfg.Delegation.Executors))
 	factories := []struct {
 		id     delegation.ExecutorID
 		create func(delegation.RuntimeExecutorConfig) (delegation.ExecutorRegistration, error)
@@ -104,6 +104,14 @@ func (host *Host) syncDelegationExecutors(cfg serverconfig.Config) error {
 		}},
 		{id: delegationexecutors.GeminiCLIExecutorID, create: func(runtimeConfig delegation.RuntimeExecutorConfig) (delegation.ExecutorRegistration, error) {
 			return delegationexecutors.NewGeminiCLIRegistration(runner, runtimeConfig)
+		}},
+		{id: delegationexecutors.CursorExecutorID, create: func(runtimeConfig delegation.RuntimeExecutorConfig) (delegation.ExecutorRegistration, error) {
+			return delegationexecutors.NewCursorRegistration(
+				runtimeConfig,
+				delegationexecutors.NewCursorEditorDetector(runtimeConfig.Executable),
+				host.cursorAgentExecutionAvailable,
+				host.executeCursorAgent,
+			)
 		}},
 	}
 	for _, factory := range factories {
@@ -147,6 +155,29 @@ func (host *Host) syncDelegationExecutors(cfg serverconfig.Config) error {
 	}
 	host.customExecutorIDs = nextCustomIDs
 	return nil
+}
+
+func (host *Host) cursorAgentExecutionAvailable(parentRequestID string) bool {
+	if host == nil {
+		return false
+	}
+	host.runMu.RLock()
+	module := host.agentModule
+	host.runMu.RUnlock()
+	return module != nil && module.Service != nil && module.Service.CursorAgentExecutionAvailable(parentRequestID)
+}
+
+func (host *Host) executeCursorAgent(ctx context.Context, request delegation.TaskRequest) delegation.TaskResult {
+	if host == nil {
+		return delegation.TaskResult{Error: fmt.Errorf("backend host is nil")}
+	}
+	host.runMu.RLock()
+	module := host.agentModule
+	host.runMu.RUnlock()
+	if module == nil || module.Service == nil {
+		return delegation.TaskResult{Error: fmt.Errorf("Cursor agent service is unavailable")}
+	}
+	return module.Service.ExecuteCursorAgent(ctx, request)
 }
 
 func hostRuntimeExecutorConfig(cfg serverconfig.Config, id delegation.ExecutorID) delegation.RuntimeExecutorConfig {

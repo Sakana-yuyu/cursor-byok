@@ -12,22 +12,24 @@ import (
 )
 
 type DelegationExecutorSnapshot struct {
-	ID             string     `json:"id"`
-	DisplayName    string     `json:"displayName"`
-	Enabled        bool       `json:"enabled"`
-	Priority       int        `json:"priority"`
-	Capabilities   []string   `json:"capabilities,omitempty"`
-	State          string     `json:"state"`
-	ExecutablePath string     `json:"executablePath,omitempty"`
-	Version        string     `json:"version,omitempty"`
-	Installed      bool       `json:"installed"`
-	AuthState      string     `json:"authState"`
-	DiagnosticCode string     `json:"diagnosticCode,omitempty"`
-	DiagnosticText string     `json:"diagnosticText,omitempty"`
-	ProbedAt       *time.Time `json:"probedAt,omitempty"`
-	CooldownUntil  *time.Time `json:"cooldownUntil,omitempty"`
-	FailureClass   string     `json:"failureClass,omitempty"`
-	FailureCode    string     `json:"failureCode,omitempty"`
+	ID                      string     `json:"id"`
+	DisplayName             string     `json:"displayName"`
+	Enabled                 bool       `json:"enabled"`
+	Priority                int        `json:"priority"`
+	Capabilities            []string   `json:"capabilities,omitempty"`
+	State                   string     `json:"state"`
+	ExecutablePath          string     `json:"executablePath,omitempty"`
+	Version                 string     `json:"version,omitempty"`
+	Installed               bool       `json:"installed"`
+	EditorAvailable         bool       `json:"editorAvailable"`
+	AgentExecutionAvailable bool       `json:"agentExecutionAvailable"`
+	AuthState               string     `json:"authState"`
+	DiagnosticCode          string     `json:"diagnosticCode,omitempty"`
+	DiagnosticText          string     `json:"diagnosticText,omitempty"`
+	ProbedAt                *time.Time `json:"probedAt,omitempty"`
+	CooldownUntil           *time.Time `json:"cooldownUntil,omitempty"`
+	FailureClass            string     `json:"failureClass,omitempty"`
+	FailureCode             string     `json:"failureCode,omitempty"`
 }
 
 func publicDelegationExecutorSnapshots(source []delegation.ExecutorSnapshot) []DelegationExecutorSnapshot {
@@ -41,22 +43,24 @@ func publicDelegationExecutorSnapshots(source []delegation.ExecutorSnapshot) []D
 			capabilities = append(capabilities, string(capability))
 		}
 		result = append(result, DelegationExecutorSnapshot{
-			ID:             string(item.ID),
-			DisplayName:    item.DisplayName,
-			Enabled:        item.Enabled,
-			Priority:       item.Priority,
-			Capabilities:   capabilities,
-			State:          string(item.Probe.State),
-			ExecutablePath: item.Probe.ExecutablePath,
-			Version:        item.Probe.Version,
-			Installed:      item.Probe.Installed,
-			AuthState:      string(item.Probe.AuthState),
-			DiagnosticCode: item.Probe.DiagnosticCode,
-			DiagnosticText: delegation.SanitizeSupervisorText(item.Probe.DiagnosticText, ""),
-			ProbedAt:       optionalDelegationExecutorTime(item.Probe.ProbedAt),
-			CooldownUntil:  optionalDelegationExecutorTime(item.CooldownUntil),
-			FailureClass:   string(item.FailureClass),
-			FailureCode:    item.FailureCode,
+			ID:                      string(item.ID),
+			DisplayName:             item.DisplayName,
+			Enabled:                 item.Enabled,
+			Priority:                item.Priority,
+			Capabilities:            capabilities,
+			State:                   string(item.Probe.State),
+			ExecutablePath:          item.Probe.ExecutablePath,
+			Version:                 item.Probe.Version,
+			Installed:               item.Probe.Installed,
+			EditorAvailable:         item.Probe.EditorAvailable,
+			AgentExecutionAvailable: item.Probe.AgentExecutionAvailable,
+			AuthState:               string(item.Probe.AuthState),
+			DiagnosticCode:          item.Probe.DiagnosticCode,
+			DiagnosticText:          delegation.SanitizeSupervisorText(item.Probe.DiagnosticText, ""),
+			ProbedAt:                optionalDelegationExecutorTime(item.Probe.ProbedAt),
+			CooldownUntil:           optionalDelegationExecutorTime(item.CooldownUntil),
+			FailureClass:            string(item.FailureClass),
+			FailureCode:             item.FailureCode,
 		})
 	}
 	return result

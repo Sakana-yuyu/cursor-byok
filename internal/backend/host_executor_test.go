@@ -148,6 +148,20 @@ func TestHostRegistersGeminiExecutorAndAppliesSavedPolicy(t *testing.T) {
 	}
 }
 
+func TestHostRegistersCursorExecutorSeparatelyFromEditorLaunch(t *testing.T) {
+	store := serverconfig.NewStore(filepath.Join(t.TempDir(), "config.yaml"), "")
+	host, err := NewHost(store, nil)
+	if err != nil {
+		t.Fatalf("NewHost() error = %v", err)
+	}
+	t.Cleanup(func() { _ = host.Stop(context.Background()) })
+
+	snapshot, ok := host.ExecutorRegistry().Snapshot("cursor-agent")
+	if !ok || snapshot.Enabled {
+		t.Fatalf("default Cursor snapshot = %#v, ok=%t", snapshot, ok)
+	}
+}
+
 func TestHostRegistersAndRemovesConfiguredCustomExecutor(t *testing.T) {
 	store := serverconfig.NewStore(filepath.Join(t.TempDir(), "config.yaml"), "")
 	host, err := NewHost(store, nil)

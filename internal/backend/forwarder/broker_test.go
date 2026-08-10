@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"cursor/gen/agentv1"
 )
 
 // waitFor subscribes to a channel with a generous timeout, failing the test on timeout.
@@ -428,6 +430,23 @@ func TestMultipleSubscribersAndTerminalRetention(t *testing.T) {
 	}
 	if _, ok := broker.Get("request-multi"); !ok {
 		t.Fatal("stream should be retained after last unsubscribe")
+	}
+}
+
+func TestPublishToActiveSubscriberRejectsDisconnectedStreamWithoutBacklog(t *testing.T) {
+	broker := NewStreamBroker()
+	stream, err := broker.OpenStream("request-1", "conversation-1", 1, "model-1", "model-1", agentv1.AgentMode_AGENT_MODE_AGENT, "test")
+	if err != nil {
+		t.Fatalf("OpenStream() error = %v", err)
+	}
+	if err := broker.PublishToActiveSubscriber("request-1", StreamEvent{}); err == nil {
+		t.Fatal("PublishToActiveSubscriber() must reject a stream without subscribers")
+	}
+	stream.mu.Lock()
+	backlogCount := len(stream.Backlog)
+	stream.mu.Unlock()
+	if backlogCount != 0 {
+		t.Fatalf("backlog count = %d, want 0", backlogCount)
 	}
 }
 

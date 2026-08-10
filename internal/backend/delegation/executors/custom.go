@@ -157,7 +157,7 @@ func parseCustomCLIContract(options map[string]string) (customCLIContract, error
 
 func reservedCustomExecutorID(id delegation.ExecutorID) bool {
 	switch id {
-	case ClaudeCodeExecutorID, CodexCLIExecutorID, GeminiCLIExecutorID:
+	case ClaudeCodeExecutorID, CodexCLIExecutorID, GeminiCLIExecutorID, CursorExecutorID:
 		return true
 	default:
 		return false

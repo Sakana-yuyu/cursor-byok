@@ -451,6 +451,42 @@ func (broker *StreamBroker) Publish(requestID string, event StreamEvent) error {
 	return nil
 }
 
+// PublishToActiveSubscriber 仅在活动流仍有客户端订阅时原子写入事件。
+// Cursor exec 依赖客户端立即消费，不允许把请求写入零订阅者 backlog 后假装已派发。
+func (broker *StreamBroker) PublishToActiveSubscriber(requestID string, event StreamEvent) error {
+	stream, ok := broker.Get(requestID)
+	if !ok || stream == nil {
+		return fmt.Errorf("request is not active: %s", strings.TrimSpace(requestID))
+	}
+	stream.mu.Lock()
+	if isTerminalStreamStatus(stream.Status) || len(stream.Subscribers) == 0 {
+		stream.mu.Unlock()
+		return fmt.Errorf("request has no active subscriber: %s", strings.TrimSpace(requestID))
+	}
+	switch stream.Phase {
+	case TurnPhaseCanceled, TurnPhaseCompleted, TurnPhaseFailed:
+		stream.mu.Unlock()
+		return fmt.Errorf("request is terminal: %s", strings.TrimSpace(requestID))
+	}
+	stream.Backlog = append(stream.Backlog, event)
+	stream.UpdatedAt = time.Now().UTC()
+	subscribers := make([]*StreamSubscriber, 0, len(stream.Subscribers))
+	for _, subscriber := range stream.Subscribers {
+		subscribers = append(subscribers, subscriber)
+	}
+	stream.mu.Unlock()
+	for _, subscriber := range subscribers {
+		if subscriber == nil {
+			continue
+		}
+		select {
+		case subscriber.Signal <- struct{}{}:
+		default:
+		}
+	}
+	return nil
+}
+
 // ReadFromCursor 返回从 cursor 开始尚未消费的 backlog 事件副本。
 func (broker *StreamBroker) ReadFromCursor(requestID string, cursor int) ([]StreamEvent, error) {
 	stream, ok := broker.Get(requestID)
