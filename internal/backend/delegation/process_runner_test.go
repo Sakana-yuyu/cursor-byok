@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -44,6 +45,42 @@ func TestProcessRunnerUsesArgumentArrayAndWorkingDirectory(t *testing.T) {
 	}
 	if _, statErr := os.Stat(marker); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("argument was interpreted by a shell: stat error = %v", statErr)
+	}
+}
+
+func TestProcessRunnerDeliversBoundedStdinWithoutShellInterpretation(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "stdin-shell-marker")
+	stdin := "prompt; & echo literal $(touch " + marker + ")"
+	runner := NewProcessRunner(ProcessRunnerConfig{})
+	result, err := runner.Run(t.Context(), ProcessRequest{
+		Executable: processRunnerTestExecutable(t),
+		Args:       processRunnerHelperArgs("stdin"),
+		Stdin:      stdin,
+		Env: map[string]string{
+			processRunnerHelperEnvironment: "process-runner-helper-enabled",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if result.Stdout != stdin {
+		t.Fatalf("Run() stdin stdout = %q, want %q", result.Stdout, stdin)
+	}
+	if _, statErr := os.Stat(marker); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("stdin was interpreted by a shell: stat error = %v", statErr)
+	}
+}
+
+func TestProcessRunnerRejectsOversizedStdin(t *testing.T) {
+	runner := NewProcessRunner(ProcessRunnerConfig{})
+	_, err := runner.Run(t.Context(), ProcessRequest{
+		Executable: processRunnerTestExecutable(t),
+		Args:       processRunnerHelperArgs("stdin"),
+		Stdin:      strings.Repeat("x", MaximumProcessStdinBytes+1),
+	})
+	class, retrySafe := ExecutorErrorClassification(err)
+	if err == nil || class != ExecutorFailureTerminal || retrySafe || executorErrorCode(err) != ProcessErrorCodeInvalidRequest {
+		t.Fatalf("oversized stdin error=%v class=%s retrySafe=%t", err, class, retrySafe)
 	}
 }
 
@@ -274,6 +311,12 @@ func TestProcessRunnerHelperProcess(t *testing.T) {
 		}
 		_, _ = fmt.Fprint(os.Stdout, strings.Repeat("O", size))
 		_, _ = fmt.Fprint(os.Stderr, strings.Repeat("E", size))
+	case "stdin":
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			os.Exit(11)
+		}
+		_, _ = os.Stdout.Write(data)
 	case "environment":
 		for _, name := range arguments[1:] {
 			fmt.Printf("%s=%s\n", name, os.Getenv(name))

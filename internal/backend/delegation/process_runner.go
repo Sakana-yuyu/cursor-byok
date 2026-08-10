@@ -20,6 +20,7 @@ const (
 	DefaultProcessTimeout               = 2 * time.Minute
 	DefaultProcessOutputLimit           = 256 * 1024
 	MaximumProcessOutputLimit           = 4 * 1024 * 1024
+	MaximumProcessStdinBytes            = 4 * 1024 * 1024
 	MaximumProcessEnvironmentEntries    = 128
 	MaximumProcessEnvironmentValueBytes = 32 * 1024
 	MaximumProcessEnvironmentBytes      = 256 * 1024
@@ -65,6 +66,7 @@ type ProcessRunnerConfig struct {
 type ProcessRequest struct {
 	Executable         string
 	Args               []string
+	Stdin              string
 	Dir                string
 	Env                map[string]string
 	InheritEnvironment []string
@@ -165,6 +167,9 @@ func (runner *ProcessRunner) Run(ctx context.Context, request ProcessRequest) (P
 	if err := validateProcessArguments(request.Args); err != nil {
 		return ProcessResult{}, processInvalidRequestError(err.Error())
 	}
+	if len(request.Stdin) > MaximumProcessStdinBytes {
+		return ProcessResult{}, processInvalidRequestError(fmt.Sprintf("stdin exceeds %d bytes", MaximumProcessStdinBytes))
+	}
 
 	timeout := request.Timeout
 	if timeout <= 0 {
@@ -179,6 +184,9 @@ func (runner *ProcessRunner) Run(ctx context.Context, request ProcessRequest) (P
 	command := exec.CommandContext(runCtx, resolved, request.Args...)
 	command.Dir = directory
 	command.Env = environment
+	if request.Stdin != "" {
+		command.Stdin = strings.NewReader(request.Stdin)
+	}
 	command.Stdout = stdout
 	command.Stderr = stderr
 	command.WaitDelay = runner.config.WaitDelay

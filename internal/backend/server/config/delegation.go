@@ -1,8 +1,11 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -21,6 +24,7 @@ const (
 	MaximumDelegationExecutorExecutionTimeoutSeconds = 7200
 	DelegationExecutorKindBuiltin                    = "builtin"
 	DelegationExecutorKindCustom                     = "custom"
+	maximumCustomExecutorOutputLimitBytes            = 4 * 1024 * 1024
 	// 视觉委派识图模式。
 	VisionModeAuto     = "auto"     // 描述 + OCR，按内容自适应
 	VisionModeDescribe = "describe" // 仅结构化描述画面
@@ -225,7 +229,7 @@ func normalizeDelegationExecutors(input []DelegationExecutorConfig) ([]Delegatio
 			return nil, fmt.Errorf("executor %q id is invalid", executor.ID)
 		}
 		if _, exists := seen[executor.ID]; exists {
-			continue
+			return nil, fmt.Errorf("executor %q is duplicate", executor.ID)
 		}
 		seen[executor.ID] = struct{}{}
 		executor.Kind = strings.ToLower(strings.TrimSpace(executor.Kind))
@@ -239,6 +243,9 @@ func normalizeDelegationExecutors(input []DelegationExecutorConfig) ([]Delegatio
 		executor.Executable = strings.TrimSpace(executor.Executable)
 		if executor.Kind == DelegationExecutorKindCustom && executor.Executable == "" {
 			return nil, fmt.Errorf("executor %q executable is required", executor.ID)
+		}
+		if executor.Kind == DelegationExecutorKindCustom && reservedBuiltinExecutorID(executor.ID) {
+			return nil, fmt.Errorf("executor %q id is reserved for a builtin executor", executor.ID)
 		}
 		if executor.Priority < 0 {
 			executor.Priority = 0
@@ -254,6 +261,12 @@ func normalizeDelegationExecutors(input []DelegationExecutorConfig) ([]Delegatio
 		if err != nil {
 			return nil, fmt.Errorf("executor %q: %w", executor.ID, err)
 		}
+		if executor.Kind == DelegationExecutorKindCustom {
+			executor.Options, err = normalizeCustomExecutorOptions(executor.Options)
+			if err != nil {
+				return nil, fmt.Errorf("executor %q: %w", executor.ID, err)
+			}
+		}
 		result = append(result, executor)
 	}
 	return result, nil
@@ -267,6 +280,15 @@ func validDelegationExecutorID(value string) bool {
 		}
 	}
 	return value != ""
+}
+
+func reservedBuiltinExecutorID(value string) bool {
+	switch value {
+	case "claude-code", "codex-cli", "gemini-cli":
+		return true
+	default:
+		return false
+	}
 }
 
 func normalizeDelegationExecutorTimeout(value, fallback, maximum int) int {
@@ -331,6 +353,160 @@ func normalizeDelegationExecutorOptions(input map[string]string) (map[string]str
 		return nil, nil
 	}
 	return output, nil
+}
+
+var customExecutorSecretLiteralPattern = regexp.MustCompile(`(?i)(?:\b(?:sk|rk|pk|ghp|github_pat|xox[baprs]-|AIza|AKIA)[a-z0-9_-]{8,}\b|\bBearer\s+[^\s]+|(?:api[_ -]?key|access[_ -]?token|secret|password)\s*[:=]\s*[^\s,;]+)`)
+
+func normalizeCustomExecutorOptions(input map[string]string) (map[string]string, error) {
+	allowed := map[string]struct{}{
+		"arguments": {}, "versionArguments": {}, "stdinMode": {}, "outputMode": {},
+		"finalField": {}, "progressField": {}, "errorField": {}, "outputLimitBytes": {},
+	}
+	for key, value := range input {
+		if _, ok := allowed[key]; !ok {
+			return nil, fmt.Errorf("custom option %q is not supported", key)
+		}
+		if customExecutorSecretLiteralPattern.MatchString(value) {
+			return nil, fmt.Errorf("custom option %q contains a secret literal; use an environment variable name allowlist instead", key)
+		}
+	}
+
+	arguments, err := normalizeCustomExecutorArguments(input["arguments"], "arguments", true)
+	if err != nil {
+		return nil, err
+	}
+	versionArguments, err := normalizeCustomExecutorArguments(input["versionArguments"], "versionArguments", false)
+	if err != nil {
+		return nil, err
+	}
+	if customExecutorArgumentsContainAnyToken(versionArguments) {
+		return nil, fmt.Errorf("versionArguments cannot contain template variables")
+	}
+	stdinMode := firstNonEmptyConfigValue(input["stdinMode"], "none")
+	if stdinMode != "none" && stdinMode != "prompt" {
+		return nil, fmt.Errorf("stdinMode must be none or prompt")
+	}
+	outputMode := firstNonEmptyConfigValue(input["outputMode"], "text")
+	if outputMode != "text" && outputMode != "jsonl" {
+		return nil, fmt.Errorf("outputMode must be text or jsonl")
+	}
+	for _, key := range []string{"finalField", "progressField", "errorField"} {
+		if value := input[key]; value != "" && !validCustomExecutorFieldPath(value) {
+			return nil, fmt.Errorf("%s is invalid", key)
+		}
+	}
+	if outputMode == "jsonl" && input["finalField"] == "" {
+		return nil, fmt.Errorf("finalField is required for jsonl output")
+	}
+	outputLimit := 1024 * 1024
+	if value := input["outputLimitBytes"]; value != "" {
+		outputLimit, err = strconv.Atoi(value)
+		if err != nil || outputLimit <= 0 || outputLimit > maximumCustomExecutorOutputLimitBytes {
+			return nil, fmt.Errorf("outputLimitBytes must be between 1 and %d", maximumCustomExecutorOutputLimitBytes)
+		}
+	}
+	if stdinMode != "prompt" && !customExecutorArgumentsContainToken(arguments, "{{prompt}}") {
+		return nil, fmt.Errorf("arguments must contain {{prompt}} when stdinMode is none")
+	}
+
+	output := map[string]string{
+		"arguments": arguments, "stdinMode": stdinMode, "outputMode": outputMode,
+		"outputLimitBytes": strconv.Itoa(outputLimit),
+	}
+	if versionArguments != "" {
+		output["versionArguments"] = versionArguments
+	}
+	for _, key := range []string{"finalField", "progressField", "errorField"} {
+		if input[key] != "" {
+			output[key] = input[key]
+		}
+	}
+	return output, nil
+}
+
+func normalizeCustomExecutorArguments(value, option string, required bool) (string, error) {
+	if value == "" {
+		if required {
+			return "", fmt.Errorf("%s is required and must be a JSON string array", option)
+		}
+		return "", nil
+	}
+	var arguments []string
+	if err := json.Unmarshal([]byte(value), &arguments); err != nil {
+		return "", fmt.Errorf("%s must be a JSON string array: %w", option, err)
+	}
+	for _, argument := range arguments {
+		if strings.ContainsRune(argument, '\x00') {
+			return "", fmt.Errorf("%s contains a NUL byte", option)
+		}
+		if err := validateCustomExecutorTemplateVariables(argument); err != nil {
+			return "", fmt.Errorf("%s: %w", option, err)
+		}
+	}
+	normalized, err := json.Marshal(arguments)
+	if err != nil {
+		return "", fmt.Errorf("normalize %s: %w", option, err)
+	}
+	return string(normalized), nil
+}
+
+func validateCustomExecutorTemplateVariables(value string) error {
+	for {
+		start := strings.Index(value, "{{")
+		if start < 0 {
+			if strings.Contains(value, "}}") {
+				return fmt.Errorf("template variable is malformed")
+			}
+			return nil
+		}
+		end := strings.Index(value[start+2:], "}}")
+		if end < 0 {
+			return fmt.Errorf("template variable is malformed")
+		}
+		token := value[start : start+2+end+2]
+		switch token {
+		case "{{prompt}}", "{{workspace}}", "{{readonly}}":
+		default:
+			return fmt.Errorf("unknown template variable %q", token)
+		}
+		value = value[start+2+end+2:]
+	}
+}
+
+func customExecutorArgumentsContainToken(argumentsJSON, token string) bool {
+	var arguments []string
+	if json.Unmarshal([]byte(argumentsJSON), &arguments) != nil {
+		return false
+	}
+	for _, argument := range arguments {
+		if strings.Contains(argument, token) {
+			return true
+		}
+	}
+	return false
+}
+
+func customExecutorArgumentsContainAnyToken(argumentsJSON string) bool {
+	for _, token := range []string{"{{prompt}}", "{{workspace}}", "{{readonly}}"} {
+		if customExecutorArgumentsContainToken(argumentsJSON, token) {
+			return true
+		}
+	}
+	return false
+}
+
+func validCustomExecutorFieldPath(value string) bool {
+	for _, segment := range strings.Split(value, ".") {
+		if segment == "" {
+			return false
+		}
+		for _, char := range segment {
+			if !delegationExecutorASCIIAlphaNumeric(char) && char != '_' && char != '-' {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func sensitiveDelegationExecutorOptionKey(key string) bool {

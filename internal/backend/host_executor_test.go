@@ -147,3 +147,42 @@ func TestHostRegistersGeminiExecutorAndAppliesSavedPolicy(t *testing.T) {
 		}
 	}
 }
+
+func TestHostRegistersAndRemovesConfiguredCustomExecutor(t *testing.T) {
+	store := serverconfig.NewStore(filepath.Join(t.TempDir(), "config.yaml"), "")
+	host, err := NewHost(store, nil)
+	if err != nil {
+		t.Fatalf("NewHost() error = %v", err)
+	}
+	t.Cleanup(func() { _ = host.Stop(context.Background()) })
+	if _, ok := host.ExecutorRegistry().Snapshot("grok-cli"); ok {
+		t.Fatal("unconfigured grok-cli must not be registered")
+	}
+	cfg, err := host.ConfigManager().GetDelegationConfig(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Executors = []serverconfig.DelegationExecutorConfig{{
+		ID: "grok-cli", Kind: serverconfig.DelegationExecutorKindCustom, DisplayName: "Grok Compatible", Enabled: true, Executable: "grok", Priority: 7,
+		Options: map[string]string{"arguments": `["{{prompt}}"]`, "versionArguments": `["--version"]`, "stdinMode": "none", "outputMode": "text", "outputLimitBytes": "1024"},
+	}}
+	if _, err := host.ConfigManager().SaveDelegationConfig(t.Context(), cfg); err != nil {
+		t.Fatalf("SaveDelegationConfig() error=%v", err)
+	}
+	snapshot, ok := host.ExecutorRegistry().Snapshot("grok-cli")
+	if !ok || !snapshot.Enabled || snapshot.Priority != 7 || snapshot.DisplayName != "Grok Compatible" {
+		t.Fatalf("custom snapshot=%#v ok=%t", snapshot, ok)
+	}
+	cfg.Executors = nil
+	if _, err := host.ConfigManager().SaveDelegationConfig(t.Context(), cfg); err != nil {
+		t.Fatalf("clear custom executor error=%v", err)
+	}
+	if _, ok := host.ExecutorRegistry().Snapshot("grok-cli"); ok {
+		t.Fatal("removed custom executor remains registered")
+	}
+	for _, id := range []delegation.ExecutorID{"claude-code", "codex-cli", "gemini-cli"} {
+		if _, ok := host.ExecutorRegistry().Snapshot(id); !ok {
+			t.Fatalf("builtin executor %s disappeared", id)
+		}
+	}
+}

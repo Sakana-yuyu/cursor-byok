@@ -32,12 +32,14 @@ const healthPath = "/healthz"
 const tabServerBaseURL = "https://tab.leokun.cn"
 
 type Host struct {
-	store            *serverconfig.Store
-	listenAddr       string
-	configs          *serverconfig.Manager
-	executorRegistry *delegation.ExecutorRegistry
-	healthHTTP       *http.Client
-	controlPlaneAuth upstream.AuthorizationProvider
+	store             *serverconfig.Store
+	listenAddr        string
+	configs           *serverconfig.Manager
+	executorRegistry  *delegation.ExecutorRegistry
+	executorMu        sync.Mutex
+	customExecutorIDs map[delegation.ExecutorID]struct{}
+	healthHTTP        *http.Client
+	controlPlaneAuth  upstream.AuthorizationProvider
 
 	runMu      sync.RWMutex
 	httpServer *http.Server
@@ -62,12 +64,13 @@ func NewHost(store *serverconfig.Store, controlPlaneAuth upstream.AuthorizationP
 	})
 	cfg := configs.Current()
 	host := &Host{
-		store:            store,
-		listenAddr:       cfg.BackendListenAddr,
-		configs:          configs,
-		executorRegistry: delegation.NewExecutorRegistry(delegation.ExecutorRegistryConfig{}),
-		healthHTTP:       newLoopbackHTTPClient(),
-		controlPlaneAuth: controlPlaneAuth,
+		store:             store,
+		listenAddr:        cfg.BackendListenAddr,
+		configs:           configs,
+		executorRegistry:  delegation.NewExecutorRegistry(delegation.ExecutorRegistryConfig{}),
+		customExecutorIDs: make(map[delegation.ExecutorID]struct{}),
+		healthHTTP:        newLoopbackHTTPClient(),
+		controlPlaneAuth:  controlPlaneAuth,
 	}
 	if err := host.syncDelegationExecutors(cfg); err != nil {
 		return nil, err
@@ -88,6 +91,7 @@ func (host *Host) syncDelegationExecutors(cfg serverconfig.Config) error {
 		return nil
 	}
 	runner := delegation.NewProcessRunner(delegation.ProcessRunnerConfig{})
+	registrations := make([]delegation.ExecutorRegistration, 0, 3+len(cfg.Delegation.Executors))
 	factories := []struct {
 		id     delegation.ExecutorID
 		create func(delegation.RuntimeExecutorConfig) (delegation.ExecutorRegistration, error)
@@ -107,6 +111,26 @@ func (host *Host) syncDelegationExecutors(cfg serverconfig.Config) error {
 		if err != nil {
 			return err
 		}
+		registrations = append(registrations, registration)
+	}
+	nextCustomIDs := make(map[delegation.ExecutorID]struct{})
+	for _, item := range cfg.Delegation.Executors {
+		if item.Kind != serverconfig.DelegationExecutorKindCustom {
+			continue
+		}
+		runtimeConfig := hostRuntimeExecutorConfig(cfg, delegation.ExecutorID(item.ID))
+		registration, err := delegationexecutors.NewCustomCLIRegistration(runner, runtimeConfig)
+		if err != nil {
+			return err
+		}
+		registrations = append(registrations, registration)
+		nextCustomIDs[registration.ID] = struct{}{}
+	}
+
+	host.executorMu.Lock()
+	defer host.executorMu.Unlock()
+	for _, registration := range registrations {
+		var err error
 		if _, exists := host.executorRegistry.Snapshot(registration.ID); exists {
 			err = host.executorRegistry.Replace(registration)
 		} else {
@@ -116,6 +140,12 @@ func (host *Host) syncDelegationExecutors(cfg serverconfig.Config) error {
 			return err
 		}
 	}
+	for id := range host.customExecutorIDs {
+		if _, keep := nextCustomIDs[id]; !keep {
+			host.executorRegistry.Unregister(id)
+		}
+	}
+	host.customExecutorIDs = nextCustomIDs
 	return nil
 }
 

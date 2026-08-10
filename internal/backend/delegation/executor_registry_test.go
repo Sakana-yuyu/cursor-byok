@@ -95,6 +95,35 @@ func TestExecutorRegistryReplaceDiscardsInFlightProbeResult(t *testing.T) {
 	}
 }
 
+func TestExecutorRegistryUnregisterDiscardsInFlightProbeResult(t *testing.T) {
+	registry := NewExecutorRegistry(ExecutorRegistryConfig{})
+	started := make(chan struct{})
+	release := make(chan struct{})
+	registration := readyExecutorRegistration("custom-cli", 10, ExecutorCapabilityReadWorkspace)
+	registration.Probe = func(context.Context) (ExecutorProbeResult, error) {
+		close(started)
+		<-release
+		return ExecutorProbeResult{State: ExecutorProbeReady, Version: "stale"}, nil
+	}
+	if err := registry.Register(registration); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	done := make(chan struct{})
+	go func() {
+		_, _ = registry.Probe(t.Context(), registration.ID, true)
+		close(done)
+	}()
+	<-started
+	if !registry.Unregister(registration.ID) {
+		t.Fatal("Unregister() = false")
+	}
+	close(release)
+	<-done
+	if _, ok := registry.Snapshot(registration.ID); ok {
+		t.Fatal("unregistered executor was restored by stale probe")
+	}
+}
+
 func TestExecutorRegistryEligibleUsesStablePriorityAndFilters(t *testing.T) {
 	now := time.Date(2026, 8, 10, 15, 0, 0, 0, time.UTC)
 	registry := NewExecutorRegistry(ExecutorRegistryConfig{Now: func() time.Time { return now }})

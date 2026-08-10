@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -33,45 +34,101 @@ func TestNormalizeDelegationExecutorConfigRejectsInvalidID(t *testing.T) {
 	}
 }
 
-func TestNormalizeDelegationExecutorConfigDeduplicatesAndAppliesBounds(t *testing.T) {
+func TestNormalizeDelegationExecutorConfigRejectsDuplicateIDs(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.Delegation.ExecutorFailoverLimit = -1
 	cfg.Delegation.Executors = []DelegationExecutorConfig{
-		{
-			ID:                      " claude-code ",
-			Kind:                    " builtin ",
-			Enabled:                 true,
-			Priority:                -5,
-			ProbeTimeoutSeconds:     -1,
-			ExecutionTimeoutSeconds: -1,
-			EnvironmentVariables:    []string{" ANTHROPIC_API_KEY ", "ANTHROPIC_API_KEY"},
-			Options:                 map[string]string{" outputFormat ": " stream-json "},
-		},
+		{ID: " claude-code ", Kind: DelegationExecutorKindBuiltin},
 		{ID: "claude-code", Kind: DelegationExecutorKindBuiltin, Enabled: false},
 	}
-
-	got, err := NormalizeConfig(cfg)
-	if err != nil {
+	_, err := NormalizeConfig(cfg)
+	if err == nil || !strings.Contains(err.Error(), "duplicate") {
 		t.Fatalf("NormalizeConfig() error = %v", err)
 	}
-	if got.Delegation.ExecutorFailoverLimit != DefaultDelegationExecutorFailoverLimit {
-		t.Fatalf("ExecutorFailoverLimit = %d", got.Delegation.ExecutorFailoverLimit)
+}
+
+func TestNormalizeDelegationExecutorConfigAppliesBoundsAndDeduplicatesEnvironment(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Delegation.ExecutorFailoverLimit = -1
+	cfg.Delegation.Executors = []DelegationExecutorConfig{{
+		ID: " claude-code ", Kind: " builtin ", Enabled: true, Priority: -5,
+		ProbeTimeoutSeconds: -1, ExecutionTimeoutSeconds: -1,
+		EnvironmentVariables: []string{" ANTHROPIC_API_KEY ", "ANTHROPIC_API_KEY"},
+		Options:              map[string]string{" outputFormat ": " stream-json "},
+	}}
+	got, err := NormalizeConfig(cfg)
+	if err != nil {
+		t.Fatalf("NormalizeConfig() error=%v", err)
 	}
-	if len(got.Delegation.Executors) != 1 {
-		t.Fatalf("Executors = %#v", got.Delegation.Executors)
+	if got.Delegation.ExecutorFailoverLimit != DefaultDelegationExecutorFailoverLimit || len(got.Delegation.Executors) != 1 {
+		t.Fatalf("delegation=%#v", got.Delegation)
 	}
 	executor := got.Delegation.Executors[0]
-	if executor.ID != "claude-code" || executor.Kind != DelegationExecutorKindBuiltin || !executor.Enabled {
-		t.Fatalf("normalized executor = %#v", executor)
+	if executor.ID != "claude-code" || executor.Kind != DelegationExecutorKindBuiltin || !executor.Enabled || executor.Priority != 0 {
+		t.Fatalf("executor=%#v", executor)
 	}
-	if executor.Priority != 0 || executor.ProbeTimeoutSeconds != DefaultDelegationExecutorProbeTimeoutSeconds || executor.ExecutionTimeoutSeconds != DefaultDelegationExecutorExecutionTimeoutSeconds {
-		t.Fatalf("normalized limits = %#v", executor)
+	if executor.ProbeTimeoutSeconds != DefaultDelegationExecutorProbeTimeoutSeconds || executor.ExecutionTimeoutSeconds != DefaultDelegationExecutorExecutionTimeoutSeconds {
+		t.Fatalf("timeouts=%#v", executor)
 	}
-	if len(executor.EnvironmentVariables) != 1 || executor.EnvironmentVariables[0] != "ANTHROPIC_API_KEY" {
-		t.Fatalf("EnvironmentVariables = %v", executor.EnvironmentVariables)
+	if !reflect.DeepEqual(executor.EnvironmentVariables, []string{"ANTHROPIC_API_KEY"}) || executor.Options["outputFormat"] != "stream-json" {
+		t.Fatalf("policy=%#v", executor)
 	}
-	if executor.Options["outputFormat"] != "stream-json" {
-		t.Fatalf("Options = %v", executor.Options)
+}
+
+func TestNormalizeCustomExecutorContract(t *testing.T) {
+	tests := []struct {
+		name    string
+		options map[string]string
+		want    string
+	}{
+		{name: "arguments must be JSON tokens", options: map[string]string{"arguments": `--prompt {{prompt}} | tee out`}, want: "arguments"},
+		{name: "unknown template token", options: map[string]string{"arguments": `["{{unknown}}"]`}, want: "unknown template variable"},
+		{name: "secret literal", options: map[string]string{"arguments": `["--key","sk-custom-secret-12345678"]`}, want: "secret literal"},
+		{name: "unbounded output", options: map[string]string{"arguments": `[]`, "outputLimitBytes": "4194305"}, want: "outputLimitBytes"},
+		{name: "missing final mapping", options: map[string]string{"arguments": `[]`, "outputMode": "jsonl"}, want: "finalField"},
+		{name: "version arguments cannot use task tokens", options: map[string]string{"arguments": `["{{prompt}}"]`, "versionArguments": `["--workspace","{{workspace}}"]`}, want: "versionArguments cannot contain template variables"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			cfg.Delegation.Executors = []DelegationExecutorConfig{{ID: "grok-cli", Kind: DelegationExecutorKindCustom, Executable: "grok", Options: tc.options}}
+			_, err := NormalizeConfig(cfg)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("NormalizeConfig() error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeCustomExecutorContractAcceptsStructuredOptions(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Delegation.Executors = []DelegationExecutorConfig{{
+		ID: "grok-cli", Kind: DelegationExecutorKindCustom, Executable: "grok",
+		EnvironmentVariables: []string{"XAI_API_KEY"},
+		Options: map[string]string{
+			"arguments":        `["--workspace","{{workspace}}","--readonly","{{readonly}}"]`,
+			"versionArguments": `["--version"]`, "stdinMode": "prompt", "outputMode": "jsonl",
+			"finalField": "result.text", "progressField": "delta", "errorField": "error.message", "outputLimitBytes": "1048576",
+		},
+	}}
+	got, err := NormalizeConfig(cfg)
+	if err != nil || len(got.Delegation.Executors) != 1 {
+		t.Fatalf("NormalizeConfig() got=%#v error=%v", got.Delegation.Executors, err)
+	}
+}
+
+func TestNormalizeCustomExecutorRejectsBuiltinIDCollision(t *testing.T) {
+	for _, id := range []string{"claude-code", "codex-cli", "gemini-cli"} {
+		t.Run(id, func(t *testing.T) {
+			cfg := DefaultConfig()
+			cfg.Delegation.Executors = []DelegationExecutorConfig{{
+				ID: id, Kind: DelegationExecutorKindCustom, Executable: "custom",
+				Options: map[string]string{"arguments": `["{{prompt}}"]`},
+			}}
+			_, err := NormalizeConfig(cfg)
+			if err == nil || !strings.Contains(err.Error(), "reserved") {
+				t.Fatalf("NormalizeConfig() error=%v", err)
+			}
+		})
 	}
 }
 
@@ -110,9 +167,8 @@ func TestNormalizeDelegationExecutorConfigRejectsSensitiveOptions(t *testing.T) 
 func TestNormalizeDelegationExecutorConfigAllowsNonSensitiveOptionNamesContainingKey(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Delegation.Executors = []DelegationExecutorConfig{{
-		ID:         "custom-cli",
-		Kind:       DelegationExecutorKindCustom,
-		Executable: "custom-agent",
+		ID:   "custom-cli",
+		Kind: DelegationExecutorKindBuiltin,
 		Options: map[string]string{
 			"keyboardLayout": "us",
 			"monkeyMode":     "enabled",

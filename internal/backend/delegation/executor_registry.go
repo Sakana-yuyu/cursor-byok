@@ -119,6 +119,20 @@ func (registry *ExecutorRegistry) Replace(registration ExecutorRegistration) err
 	return nil
 }
 
+func (registry *ExecutorRegistry) Unregister(id ExecutorID) bool {
+	if registry == nil {
+		return false
+	}
+	id = ExecutorID(strings.TrimSpace(string(id)))
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+	if _, exists := registry.entries[id]; !exists {
+		return false
+	}
+	delete(registry.entries, id)
+	return true
+}
+
 func normalizeExecutorRegistration(registration ExecutorRegistration) (ExecutorRegistration, error) {
 	registration.ID = ExecutorID(strings.TrimSpace(string(registration.ID)))
 	if !validExecutorID(registration.ID) {
