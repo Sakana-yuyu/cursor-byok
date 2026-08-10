@@ -38,7 +38,17 @@ var scalarTypes = map[int]string{
 	18: "sint64",
 }
 
-var strictExtractionValidation = true
+// ExtractionOptions controls extraction behavior.
+type ExtractionOptions struct {
+	// Strict enables validation that fails on unresolved/placeholder types,
+	// skipped fields, and method type resolution errors. Default is true.
+	Strict bool
+}
+
+// DefaultExtractionOptions returns options with strict mode enabled.
+func DefaultExtractionOptions() ExtractionOptions {
+	return ExtractionOptions{Strict: true}
+}
 
 type extractionDiagnostics struct {
 	totalFieldObjects   int
@@ -94,11 +104,19 @@ func (d *extractionDiagnostics) addUnresolvedType(ref string) {
 	d.unresolvedTypeRefs[key]++
 }
 
-func SetStrictMode(enabled bool) {
-	strictExtractionValidation = enabled
+type extractionRun struct {
+	options     ExtractionOptions
+	diagnostics *extractionDiagnostics
+	copiedTypes map[string]map[string]string
 }
 
-var activeDiagnostics *extractionDiagnostics
+func newExtractionRun(options ExtractionOptions) *extractionRun {
+	return &extractionRun{
+		options:     options,
+		diagnostics: newExtractionDiagnostics(),
+		copiedTypes: make(map[string]map[string]string),
+	}
+}
 
 var (
 	noRe          = regexp.MustCompile(`(?:^|[,{]\s*)no:\s*(\d+)`)
@@ -182,27 +200,270 @@ type symbolDef struct {
 	Pos         int
 	Kind        string
 	ModuleStart int
+	Alias       bool
 }
 
 type TypeResolver struct {
-	bySymbol map[string][]symbolDef
-	byShort  map[string][]symbolDef
+	bySymbol       map[string][]symbolDef
+	byDirectSymbol map[string][]symbolDef
+	byShort        map[string][]symbolDef
 }
 
-func newTypeResolver(messages []Message, enums []Enum, aliases map[string][]string) *TypeResolver {
-	resolver := &TypeResolver{
-		bySymbol: make(map[string][]symbolDef),
-		byShort:  make(map[string][]symbolDef),
+type aliasIndex struct {
+	byModule map[int]map[string][]string
+	legacy   map[string][]string
+}
+
+// ===== Webpack Module Graph =====
+
+// moduleInfo records a webpack module's start position and numeric ID.
+type moduleInfo struct {
+	Start int
+	ID    string
+}
+
+// webpackModuleGraph captures webpack module import/export relationships.
+type webpackModuleGraph struct {
+	namespaceImports map[string][]string // "contextModuleID:namespaceVar" -> target module IDs
+	exportMaps       map[string][]string // "targetModuleID:exportName" -> internal symbols
+	reexportModules  map[string][]string // module ID -> modules reached through __exportStar
+	moduleIDByStart  map[int]string
+	moduleStartByID  map[string]int
+	moduleStarts     []int
+}
+
+type webpackExportTarget struct {
+	moduleID string
+	symbol   string
+}
+
+func (g *webpackModuleGraph) moduleStartForModuleID(id string) (int, bool) {
+	start, found := g.moduleStartByID[id]
+	return start, found
+}
+
+func (g *webpackModuleGraph) moduleStartsFromInfos() []int {
+	return g.moduleStarts
+}
+
+func (g *webpackModuleGraph) resolveExportTargets(moduleID string, exportName string, visiting map[string]bool) []webpackExportTarget {
+	visitKey := moduleID + ":" + exportName
+	if visiting[visitKey] {
+		return nil
+	}
+	visiting[visitKey] = true
+	defer delete(visiting, visitKey)
+
+	directSymbols := uniqueSortedStrings(g.exportMaps[moduleID+":"+exportName])
+	if len(directSymbols) > 0 {
+		targets := make([]webpackExportTarget, 0, len(directSymbols))
+		for _, symbol := range directSymbols {
+			targets = append(targets, webpackExportTarget{moduleID: moduleID, symbol: symbol})
+		}
+		return targets
 	}
 
-	add := func(symbol, typeName string, pos int, moduleStart int, kind string) {
+	var targets []webpackExportTarget
+	for _, reexportModuleID := range uniqueSortedStrings(g.reexportModules[moduleID]) {
+		targets = append(targets, g.resolveExportTargets(reexportModuleID, exportName, visiting)...)
+	}
+	return uniqueSortedExportTargets(targets)
+}
+
+func uniqueSortedExportTargets(targets []webpackExportTarget) []webpackExportTarget {
+	byKey := make(map[string]webpackExportTarget, len(targets))
+	keys := make([]string, 0, len(targets))
+	for _, target := range targets {
+		key := target.moduleID + ":" + target.symbol
+		if _, exists := byKey[key]; exists {
+			continue
+		}
+		byKey[key] = target
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	result := make([]webpackExportTarget, 0, len(keys))
+	for _, key := range keys {
+		result = append(result, byKey[key])
+	}
+	return result
+}
+
+// resolveQualifiedRef resolves a qualified ref (e.g., r.KS) through the webpack module graph.
+func (g *webpackModuleGraph) resolveQualifiedRef(
+	namespaceVar, exportName string,
+	contextModuleStart int,
+	resolver *TypeResolver,
+	preferredPkg string,
+	expectedKind string,
+) (string, error) {
+	if g == nil {
+		return "", errors.New("webpack module graph is unavailable")
+	}
+
+	contextModuleID := g.moduleIDByStart[contextModuleStart]
+	if contextModuleID == "" {
+		return "", fmt.Errorf("webpack module for source position %d was not found", contextModuleStart)
+	}
+
+	nsKey := contextModuleID + ":" + namespaceVar
+	targetModuleIDs := uniqueSortedStrings(g.namespaceImports[nsKey])
+	if len(targetModuleIDs) == 0 {
+		return "", fmt.Errorf("webpack module %s has no namespace import %q", contextModuleID, namespaceVar)
+	}
+	if len(targetModuleIDs) > 1 {
+		return "", fmt.Errorf(
+			"webpack module %s namespace import %q has multiple targets: %s",
+			contextModuleID,
+			namespaceVar,
+			strings.Join(targetModuleIDs, ", "),
+		)
+	}
+	targetModuleID := targetModuleIDs[0]
+
+	exportTargets := g.resolveExportTargets(targetModuleID, exportName, make(map[string]bool))
+	if len(exportTargets) == 0 {
+		return "", fmt.Errorf("webpack module %s has no export %q", targetModuleID, exportName)
+	}
+	if len(exportTargets) > 1 {
+		targetNames := make([]string, 0, len(exportTargets))
+		for _, target := range exportTargets {
+			if target.moduleID == targetModuleID {
+				targetNames = append(targetNames, target.symbol)
+			} else {
+				targetNames = append(targetNames, target.moduleID+":"+target.symbol)
+			}
+		}
+		return "", fmt.Errorf(
+			"webpack module %s export %q has multiple targets: %s",
+			targetModuleID,
+			exportName,
+			strings.Join(targetNames, ", "),
+		)
+	}
+	exportTarget := exportTargets[0]
+	internalSymbol := exportTarget.symbol
+
+	targetModuleStart, found := g.moduleStartForModuleID(exportTarget.moduleID)
+	if !found {
+		return "", fmt.Errorf("webpack export %q targets unknown module %s", exportName, exportTarget.moduleID)
+	}
+
+	candidates := resolver.directDefinitions(internalSymbol, targetModuleStart)
+	if len(candidates) == 0 {
+		return "", fmt.Errorf(
+			"webpack module %s export %q targets %q with no internal definition",
+			exportTarget.moduleID,
+			exportName,
+			internalSymbol,
+		)
+	}
+
+	if expectedKind != "" {
+		kindCandidates := filterDefinitionsByKind(candidates, expectedKind)
+		if len(kindCandidates) == 0 {
+			kinds := definitionKinds(candidates)
+			return "", fmt.Errorf(
+				"export %q from webpack module %s resolves to %s, expected %s",
+				exportName,
+				exportTarget.moduleID,
+				strings.Join(kinds, " or "),
+				expectedKind,
+			)
+		}
+		candidates = kindCandidates
+	}
+
+	if preferredPkg != "" {
+		packageCandidates := filterDefinitionsByPackage(candidates, preferredPkg)
+		if len(packageCandidates) > 0 {
+			candidates = packageCandidates
+		}
+	}
+
+	typeNames := definitionTypeNames(candidates)
+	if len(typeNames) != 1 {
+		return "", fmt.Errorf(
+			"webpack module %s export %q target %q resolves ambiguously to: %s",
+			exportTarget.moduleID,
+			exportName,
+			internalSymbol,
+			strings.Join(typeNames, ", "),
+		)
+	}
+	return typeNames[0], nil
+}
+
+func uniqueSortedStrings(values []string) []string {
+	seen := make(map[string]bool, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		result = append(result, value)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func filterDefinitionsByKind(candidates []symbolDef, kind string) []symbolDef {
+	result := make([]symbolDef, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.Kind == kind {
+			result = append(result, candidate)
+		}
+	}
+	return result
+}
+
+func filterDefinitionsByPackage(candidates []symbolDef, pkg string) []symbolDef {
+	result := make([]symbolDef, 0, len(candidates))
+	for _, candidate := range candidates {
+		candidatePkg, _ := parseTypeName(candidate.TypeName)
+		if candidatePkg == pkg {
+			result = append(result, candidate)
+		}
+	}
+	return result
+}
+
+func definitionKinds(candidates []symbolDef) []string {
+	kinds := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		kinds = append(kinds, candidate.Kind)
+	}
+	return uniqueSortedStrings(kinds)
+}
+
+func definitionTypeNames(candidates []symbolDef) []string {
+	typeNames := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		typeNames = append(typeNames, candidate.TypeName)
+	}
+	return uniqueSortedStrings(typeNames)
+}
+
+func newTypeResolver(messages []Message, enums []Enum, aliases *aliasIndex) *TypeResolver {
+	resolver := &TypeResolver{
+		bySymbol:       make(map[string][]symbolDef),
+		byDirectSymbol: make(map[string][]symbolDef),
+		byShort:        make(map[string][]symbolDef),
+	}
+
+	add := func(symbol, typeName string, pos int, moduleStart int, kind string, direct bool) {
 		symbol = strings.TrimSpace(symbol)
 		typeName = strings.TrimSpace(typeName)
 		if symbol == "" || typeName == "" {
 			return
 		}
-		def := symbolDef{TypeName: typeName, Pos: pos, ModuleStart: moduleStart, Kind: kind}
+		def := symbolDef{TypeName: typeName, Pos: pos, ModuleStart: moduleStart, Kind: kind, Alias: !direct}
 		resolver.bySymbol[symbol] = append(resolver.bySymbol[symbol], def)
+		if direct {
+			resolver.byDirectSymbol[symbol] = append(resolver.byDirectSymbol[symbol], def)
+		}
 		_, shortName := parseTypeName(typeName)
 		if shortName != "" {
 			resolver.byShort[shortName] = append(resolver.byShort[shortName], def)
@@ -220,26 +481,39 @@ func newTypeResolver(messages []Message, enums []Enum, aliases map[string][]stri
 	}
 
 	for _, msg := range messages {
-		add(msg.VarName, msg.TypeName, msg.Pos, msg.ModuleStart, "message")
+		add(msg.VarName, msg.TypeName, msg.Pos, msg.ModuleStart, "message", true)
 		if msg.InternalName != "" && msg.InternalName != msg.VarName {
-			add(msg.InternalName, msg.TypeName, msg.Pos, msg.ModuleStart, "message")
+			add(msg.InternalName, msg.TypeName, msg.Pos, msg.ModuleStart, "message", true)
 		}
-		for _, alias := range aliasesForSymbols(aliases, msg.VarName, msg.InternalName) {
-			add(alias, msg.TypeName, msg.Pos, msg.ModuleStart, "message")
+		for _, alias := range aliasesForSymbols(aliases, msg.ModuleStart, msg.VarName, msg.InternalName) {
+			add(alias, msg.TypeName, msg.Pos, msg.ModuleStart, "message", false)
 		}
 	}
 	for _, enum := range enums {
-		add(enum.VarName, enum.TypeName, enum.Pos, enum.ModuleStart, "enum")
-		for _, alias := range aliasesForSymbols(aliases, enum.VarName) {
-			add(alias, enum.TypeName, enum.Pos, enum.ModuleStart, "enum")
+		add(enum.VarName, enum.TypeName, enum.Pos, enum.ModuleStart, "enum", true)
+		for _, alias := range aliasesForSymbols(aliases, enum.ModuleStart, enum.VarName) {
+			add(alias, enum.TypeName, enum.Pos, enum.ModuleStart, "enum", false)
 		}
 	}
 
 	return resolver
 }
 
-func buildAliasIndex(text string) map[string][]string {
-	matches := varAliasRe.FindAllStringSubmatch(text, -1)
+func (resolver *TypeResolver) directDefinitions(symbol string, moduleStart int) []symbolDef {
+	if resolver == nil {
+		return nil
+	}
+	candidates := resolver.byDirectSymbol[strings.TrimSpace(symbol)]
+	result := make([]symbolDef, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.ModuleStart == moduleStart {
+			result = append(result, candidate)
+		}
+	}
+	return result
+}
+
+func buildAliasBucket(matches [][]string) map[string][]string {
 	if len(matches) == 0 {
 		return nil
 	}
@@ -284,14 +558,65 @@ func buildAliasIndex(text string) map[string][]string {
 	return aliases
 }
 
-func aliasesForSymbols(aliases map[string][]string, symbols ...string) []string {
-	if len(aliases) == 0 {
+func buildAliasIndex(text string, moduleInfos []moduleInfo) *aliasIndex {
+	matches := varAliasRe.FindAllStringSubmatchIndex(text, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+
+	toSubmatches := func(items [][]int) [][]string {
+		result := make([][]string, 0, len(items))
+		for _, match := range items {
+			result = append(result, []string{
+				text[match[0]:match[1]],
+				text[match[2]:match[3]],
+				text[match[4]:match[5]],
+			})
+		}
+		return result
+	}
+
+	if len(moduleInfos) == 0 {
+		return &aliasIndex{legacy: buildAliasBucket(toSubmatches(matches))}
+	}
+
+	moduleStarts := make([]int, len(moduleInfos))
+	validStarts := make(map[int]bool, len(moduleInfos))
+	for index, info := range moduleInfos {
+		moduleStarts[index] = info.Start
+		validStarts[info.Start] = true
+	}
+	matchesByModule := make(map[int][][]int)
+	for _, match := range matches {
+		moduleStart := moduleStartForPos(moduleStarts, match[0])
+		if !validStarts[moduleStart] {
+			continue
+		}
+		matchesByModule[moduleStart] = append(matchesByModule[moduleStart], match)
+	}
+
+	index := &aliasIndex{byModule: make(map[int]map[string][]string)}
+	for moduleStart, moduleMatches := range matchesByModule {
+		index.byModule[moduleStart] = buildAliasBucket(toSubmatches(moduleMatches))
+	}
+	return index
+}
+
+func aliasesForSymbols(aliases *aliasIndex, moduleStart int, symbols ...string) []string {
+	if aliases == nil {
+		return nil
+	}
+	bucket := aliases.legacy
+	if aliases.byModule != nil {
+		bucket = aliases.byModule[moduleStart]
+	}
+	if len(bucket) == 0 {
 		return nil
 	}
 	seen := make(map[string]bool)
 	var result []string
 	for _, symbol := range symbols {
-		for _, alias := range aliases[strings.TrimSpace(symbol)] {
+		for _, alias := range bucket[strings.TrimSpace(symbol)] {
 			if alias == "" || seen[alias] {
 				continue
 			}
@@ -338,21 +663,21 @@ func pickBestDefinition(candidates []symbolDef, contextPos int, contextModuleSta
 				tmp = append(tmp, item)
 			}
 		}
-		if len(tmp) > 0 {
-			filtered = tmp
+		if len(tmp) == 0 {
+			// Strict: when expectedKind is specified, never fall back to a different kind.
+			return symbolDef{}, false
 		}
+		filtered = tmp
 	}
 
-	if contextModuleStart > 0 {
-		tmp := make([]symbolDef, 0, len(filtered))
-		for _, item := range filtered {
-			if item.ModuleStart == contextModuleStart {
-				tmp = append(tmp, item)
-			}
+	tmp := make([]symbolDef, 0, len(filtered))
+	for _, item := range filtered {
+		if item.ModuleStart == contextModuleStart {
+			tmp = append(tmp, item)
 		}
-		if len(tmp) > 0 {
-			filtered = tmp
-		}
+	}
+	if len(tmp) > 0 {
+		filtered = tmp
 	}
 
 	// Pick absolute nearest definition, prefer previous if distance ties.
@@ -406,6 +731,18 @@ func (resolver *TypeResolver) ResolveTypeName(ref string, contextPos int, contex
 		if len(candidates) == 0 {
 			return "", false
 		}
+		if preferSameModule {
+			filtered := make([]symbolDef, 0, len(candidates))
+			for _, candidate := range candidates {
+				if !candidate.Alias || candidate.ModuleStart == contextModuleStart {
+					filtered = append(filtered, candidate)
+				}
+			}
+			candidates = filtered
+			if len(candidates) == 0 {
+				return "", false
+			}
+		}
 		moduleStart := 0
 		if preferSameModule {
 			moduleStart = contextModuleStart
@@ -454,6 +791,43 @@ func (resolver *TypeResolver) ResolveTypeName(ref string, contextPos int, contex
 	return "", false
 }
 
+// isQualifiedRef checks if a type reference contains a dot (qualified ref like r.KS).
+func isQualifiedRef(ref string) bool {
+	return strings.Contains(strings.TrimSpace(ref), ".")
+}
+
+// resolveTypeNameWithGraph resolves a type reference, dispatching qualified refs
+// through the webpack module graph and unqualified refs through the standard resolver.
+func resolveTypeNameWithGraph(ref string, contextPos int, contextModuleStart int, resolver *TypeResolver, preferredPkg string, expectedKind string, wpg *webpackModuleGraph) (string, error) {
+	trimmed := strings.TrimSpace(ref)
+	if trimmed == "" {
+		return "", errors.New("empty type reference")
+	}
+	if looksLikeFullTypeName(trimmed) {
+		return trimmed, nil
+	}
+
+	// Qualified ref: dispatch to webpack graph.
+	if isQualifiedRef(trimmed) {
+		parts := strings.SplitN(trimmed, ".", 2)
+		return wpg.resolveQualifiedRef(
+			parts[0],
+			parts[1],
+			contextModuleStart,
+			resolver,
+			preferredPkg,
+			expectedKind,
+		)
+	}
+
+	// Unqualified ref: use standard resolver.
+	typeName, ok := resolver.ResolveTypeName(trimmed, contextPos, contextModuleStart, preferredPkg, expectedKind)
+	if !ok {
+		return "", fmt.Errorf("cannot resolve %q to %s descriptor", trimmed, expectedKind)
+	}
+	return typeName, nil
+}
+
 func fallbackTypeToken(ref string) string {
 	token := strings.TrimSpace(ref)
 	if token == "" {
@@ -473,7 +847,8 @@ func absInt(value int) int {
 	return value
 }
 
-var moduleStartRe = regexp.MustCompile(`(?:^|,)(\d+):(?:function\([\w$,]*\)|\([\w$,]*\)=>)\{`)
+var moduleStartRe = regexp.MustCompile(`(?:[{},;]|^|
+)\s*(\d+):(?:function\([\w$,]*\)\s*\{|\([\w$,]*\)\s*=>\s*\{|[\w$]+\s*=>\s*\{)`)
 
 func buildModuleStarts(text string) []int {
 	matches := moduleStartRe.FindAllStringSubmatchIndex(text, -1)
@@ -497,47 +872,173 @@ func moduleStartForPos(moduleStarts []int, pos int) int {
 	return moduleStarts[index]
 }
 
-// ExtractProtos extracts proto definitions from formatted JS file
-func ExtractProtos(inputFile, outputDir string) {
-	activeDiagnostics = newExtractionDiagnostics()
-	defer func() {
-		activeDiagnostics = nil
-	}()
+// buildModuleInfos captures both module start positions and module IDs.
+func buildModuleInfos(text string) []moduleInfo {
+	matches := moduleStartRe.FindAllStringSubmatchIndex(text, -1)
+	infos := make([]moduleInfo, 0, len(matches))
+	for _, match := range matches {
+		moduleID := text[match[2]:match[3]]
+		infos = append(infos, moduleInfo{Start: match[0], ID: moduleID})
+	}
+	sort.Slice(infos, func(i, j int) bool { return infos[i].Start < infos[j].Start })
+	return infos
+}
 
+var webpackNsImportRe = regexp.MustCompile(`(?:\b(?:var|let|const)\s+|,\s*)([\w$]+)\s*=\s*n\((\d+)\)`)
+var webpackExportEntryRe = regexp.MustCompile(`([\w$]+)\s*:\s*\(\)\s*=>\s*([\w$]+)`)
+var webpackExportMapRe = regexp.MustCompile(`n\.d\s*\(\s*t\s*,\s*\{([^}]+)\}\s*\)`)
+var webpackCommonJSExportRe = regexp.MustCompile(`(?:\bt|exports)\.([\w$]+)\s*=\s*([\w$]+)\s*[,;]`)
+var webpackExportStarHelperRe = regexp.MustCompile(`(?:\bvar\s+|,\s*)([\w$]+)\s*=\s*this&&this\.__exportStar\|\|function`)
+var webpackExportStarCallRe = regexp.MustCompile(`([\w$]+)\s*\(\s*n\((\d+)\)\s*,\s*t\s*\)`)
+
+// buildWebpackGraph extracts namespace imports and export maps from webpack bundles.
+func buildWebpackGraph(text string, moduleInfos []moduleInfo) *webpackModuleGraph {
+	g := &webpackModuleGraph{
+		namespaceImports: make(map[string][]string),
+		exportMaps:       make(map[string][]string),
+		reexportModules:  make(map[string][]string),
+		moduleIDByStart:  make(map[int]string),
+		moduleStartByID:  make(map[string]int),
+		moduleStarts:     make([]int, len(moduleInfos)),
+	}
+
+	for i, mi := range moduleInfos {
+		g.moduleIDByStart[mi.Start] = mi.ID
+		g.moduleStartByID[mi.ID] = mi.Start
+		g.moduleStarts[i] = mi.Start
+	}
+
+	for i := 0; i < len(moduleInfos); i++ {
+		mi := moduleInfos[i]
+		bodyEnd := len(text)
+		if i+1 < len(moduleInfos) {
+			bodyEnd = moduleInfos[i+1].Start
+		}
+
+		// Skip past the module header to find the function body opening brace.
+		// Start from mi.Start + 1 to skip the prefix "{" when the match starts with one
+		// (e.g., fixture: {5801:(e,t,n)=>{...}}).
+		bodyStart := mi.Start
+		for j := mi.Start + 1; j < bodyEnd && j < mi.Start+200; j++ {
+			if text[j] == '{' {
+				bodyStart = j + 1
+				break
+			}
+		}
+		moduleBody := text[bodyStart:bodyEnd]
+
+		// Extract namespace imports within this module
+		nsMatches := webpackNsImportRe.FindAllStringSubmatch(moduleBody, -1)
+		for _, ns := range nsMatches {
+			nsVar := strings.TrimSpace(ns[1])
+			nsModuleID := strings.TrimSpace(ns[2])
+			key := mi.ID + ":" + nsVar
+			g.namespaceImports[key] = append(g.namespaceImports[key], nsModuleID)
+		}
+
+		// Extract export maps: n.d(t, { ... })
+		expMatches := webpackExportMapRe.FindAllStringSubmatch(moduleBody, -1)
+		for _, em := range expMatches {
+			exportsBody := em[1]
+			entryMatches := webpackExportEntryRe.FindAllStringSubmatch(exportsBody, -1)
+			for _, entry := range entryMatches {
+				exportName := strings.TrimSpace(entry[1])
+				internalSymbol := strings.TrimSpace(entry[2])
+				key := mi.ID + ":" + exportName
+				g.exportMaps[key] = append(g.exportMaps[key], internalSymbol)
+			}
+		}
+
+		// CommonJS output modules assign exports directly (for example t.Empty=o).
+		commonJSMatches := webpackCommonJSExportRe.FindAllStringSubmatch(moduleBody, -1)
+		for _, match := range commonJSMatches {
+			exportName := strings.TrimSpace(match[1])
+			internalSymbol := strings.TrimSpace(match[2])
+			if internalSymbol == "" || internalSymbol == "void" || internalSymbol == "undefined" {
+				continue
+			}
+			key := mi.ID + ":" + exportName
+			g.exportMaps[key] = append(g.exportMaps[key], internalSymbol)
+		}
+
+		// CommonJS barrel modules re-export complete downstream modules through
+		// the webpack-transpiled __exportStar helper.
+		exportStarHelpers := make(map[string]bool)
+		for _, match := range webpackExportStarHelperRe.FindAllStringSubmatch(moduleBody, -1) {
+			exportStarHelpers[strings.TrimSpace(match[1])] = true
+		}
+		for _, match := range webpackExportStarCallRe.FindAllStringSubmatch(moduleBody, -1) {
+			if !exportStarHelpers[strings.TrimSpace(match[1])] {
+				continue
+			}
+			g.reexportModules[mi.ID] = append(g.reexportModules[mi.ID], strings.TrimSpace(match[2]))
+		}
+	}
+
+	return g
+}
+
+// ExtractProtosToDir extracts proto definitions from formatted JS file
+// and writes generated .proto files to outputDir. Returns an error instead
+// of exiting on fatal conditions so callers can handle failures gracefully.
+func ExtractProtosToDir(inputFile, outputDir string) error {
+	return ExtractProtosToDirWithOptions(inputFile, outputDir, DefaultExtractionOptions())
+}
+
+// ExtractProtosToDirWithOptions is the options-bearing variant of ExtractProtosToDir.
+func ExtractProtosToDirWithOptions(inputFile, outputDir string, opts ExtractionOptions) error {
+	return newExtractionRun(opts).extractProtosToDir(inputFile, outputDir)
+}
+
+func (run *extractionRun) extractProtosToDir(inputFile, outputDir string) error {
 	content, err := os.ReadFile(inputFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("read input file: %w", err)
 	}
 
 	text := string(content)
-	moduleStarts := buildModuleStarts(text)
-	aliases := buildAliasIndex(text)
+	moduleInfos := buildModuleInfos(text)
+	wpg := buildWebpackGraph(text, moduleInfos)
+	moduleStarts := wpg.moduleStartsFromInfos()
+	aliases := buildAliasIndex(text, moduleInfos)
 
 	// Extract messages, enums, and services
-	messages := extractMessages(text, moduleStarts)
+	messages := extractMessages(text, moduleStarts, run.diagnostics)
 	enums := extractEnums(text, moduleStarts)
 	services := extractServices(text, moduleStarts)
 	for _, msg := range messages {
 		if len(msg.Fields) == 0 {
-			activeDiagnostics.emptyMessages = append(activeDiagnostics.emptyMessages, msg.TypeName)
+			run.diagnostics.emptyMessages = append(run.diagnostics.emptyMessages, msg.TypeName)
 		}
 	}
 
 	resolver := newTypeResolver(messages, enums, aliases)
 
-	// Generate proto files
-	generateProtos(messages, enums, services, resolver, outputDir)
-
-	validateErr := validateGeneratedProtos(outputDir, activeDiagnostics)
-
-	printDiagnosticsSummary(activeDiagnostics)
-
-	if strictExtractionValidation && hasValidationFailure(activeDiagnostics, validateErr) {
-		if validateErr != nil {
-			fmt.Fprintf(os.Stderr, "Validation failed: %v\n", validateErr)
+	// Validate method types before generating protos
+	methodErrs := validateMethodTypes(services, resolver, wpg)
+	if len(methodErrs) > 0 {
+		for _, me := range methodErrs {
+			fmt.Fprintf(os.Stderr, "Method type error: %v\n", me)
 		}
-		os.Exit(1)
+		if run.options.Strict {
+			return fmt.Errorf("method type validation failed: %d error(s): %s", len(methodErrs), errors.Join(methodErrs...).Error())
+		}
+	}
+
+	// Generate proto files
+	if err := generateProtos(messages, enums, services, resolver, wpg, run, outputDir); err != nil {
+		return fmt.Errorf("generate protos: %w", err)
+	}
+
+	validateErr := validateGeneratedProtos(outputDir, run.diagnostics)
+
+	printDiagnosticsSummary(run.diagnostics)
+
+	if run.options.Strict && hasValidationFailure(run.diagnostics, validateErr) {
+		if validateErr != nil {
+			return fmt.Errorf("validation failed: %w", validateErr)
+		}
+		return fmt.Errorf("validation failed: unresolved/placeholder output detected")
 	}
 
 	if validateErr != nil {
@@ -545,6 +1046,45 @@ func ExtractProtos(inputFile, outputDir string) {
 	}
 
 	fmt.Printf("提取完成: %d 个消息, %d 个枚举, %d 个服务\n", len(messages), len(enums), len(services))
+	return nil
+}
+
+// validateMethodType checks a single method input or output type reference resolves
+// strictly to a message descriptor. It is the shared helper used for both directions.
+func validateMethodType(svcName, methodName, dir, ref string, svcPos, svcModuleStart int, preferredPkg string, resolver *TypeResolver, wpg *webpackModuleGraph) error {
+	typeName, err := resolveTypeNameWithGraph(ref, svcPos, svcModuleStart, resolver, preferredPkg, "message", wpg)
+	if err != nil {
+		return fmt.Errorf("service %s method %s %s type %q: %w", svcName, methodName, dir, ref, err)
+	}
+	// Defense in depth: verify the resolved type is not an enum.
+	// (Strict kind in pickBestDefinition already prevents this, but check bySymbol
+	// in case a future code path bypasses the kind filter.)
+	defs, exists := resolver.bySymbol[ref]
+	if exists {
+		for _, def := range defs {
+			if def.TypeName == typeName && def.Kind == "enum" {
+				return fmt.Errorf("service %s method %s %s type %q: resolved to enum %q, expected message", svcName, methodName, dir, ref, typeName)
+			}
+		}
+	}
+	return nil
+}
+
+// validateMethodTypes checks that all service method input/output types resolve
+// strictly to message descriptors. Enums and ambiguous resolutions are errors.
+func validateMethodTypes(services []Service, resolver *TypeResolver, wpg *webpackModuleGraph) []error {
+	var errs []error
+	for _, svc := range services {
+		for _, m := range svc.Methods {
+			if err := validateMethodType(svc.TypeName, m.Name, "input", m.InputType, svc.Pos, svc.ModuleStart, svc.Package, resolver, wpg); err != nil {
+				errs = append(errs, err)
+			}
+			if err := validateMethodType(svc.TypeName, m.Name, "output", m.OutputType, svc.Pos, svc.ModuleStart, svc.Package, resolver, wpg); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+	return errs
 }
 
 func hasValidationFailure(diag *extractionDiagnostics, validateErr error) bool {
@@ -671,7 +1211,7 @@ func validateRequiredAgentShapes(file string, body string) error {
 	return nil
 }
 
-func extractMessages(text string, moduleStarts []int) []Message {
+func extractMessages(text string, moduleStarts []int, diagnostics *extractionDiagnostics) []Message {
 	var messages []Message
 
 	// Pattern 1: VarName = class InternalName extends l { ... this.typeName = "..." ... this.fields = ... }
@@ -715,7 +1255,7 @@ func extractMessages(text string, moduleStarts []int) []Message {
 
 		// 找到 fields 数组的开始位置
 		bracketPos := classStart + fieldsMatch[1] - 1
-		fields := extractFieldArray(text, bracketPos)
+		fields := extractFieldArray(text, bracketPos, diagnostics)
 
 		pkg, shortName := parseTypeName(typeName)
 		msg := Message{
@@ -734,8 +1274,42 @@ func extractMessages(text string, moduleStarts []int) []Message {
 	// Pattern 2: transpiled/minified bundle style
 	// Example:
 	// i.runtime=n.proto3,i.typeName="agent.v1.McpArgs",i.fields=n.proto3.util.newFieldList(()=>[{...}]);
-	assignmentRe := regexp.MustCompile(`([\w$]+)\.typeName\s*=\s*"([\w.]+)"\s*,\s*[\w$]+\.fields\s*=\s*\w+(?:\.\w+)*\.util\.newFieldList\s*\(\s*\(\s*\)\s*=>\s*\[`)
+	assignmentRe := regexp.MustCompile(`([\w$]+)\.typeName\s*=\s*"([\w.]+)"\s*[,;]\s*[\w$]+\.fields\s*=\s*\w+(?:\.\w+)*\.util\.newFieldList\s*\(\s*\(\s*\)\s*=>\s*\[`)
 	assignmentMatches := assignmentRe.FindAllStringSubmatchIndex(text, -1)
+
+	// Build class declaration index for resolving InternalName.
+	// Minified bundles use class declarations (not class expressions):
+	//   class T extends s.Message{constructor(){this.typeName="agent.v1.AgentClientMessage";...}}
+	// The export map references the class name (T), not "this".
+	classDeclRe := regexp.MustCompile(`class\s+([\w$]+)\s+extends\s+[\w$.]+\s*{`)
+	classDeclIdxs := classDeclRe.FindAllStringSubmatchIndex(text, -1)
+	type classDeclInfo struct {
+		name string
+		pos  int
+	}
+	classDecls := make([]classDeclInfo, 0, len(classDeclIdxs))
+	for _, cd := range classDeclIdxs {
+		classDecls = append(classDecls, classDeclInfo{name: text[cd[2]:cd[3]], pos: cd[0]})
+	}
+
+	findEnclosingClassName := func(pos int) string {
+		var best classDeclInfo
+		bestDist := -1
+		for _, cd := range classDecls {
+			if cd.pos < pos {
+				dist := pos - cd.pos
+				if bestDist < 0 || dist < bestDist {
+					bestDist = dist
+					best = cd
+				}
+			}
+		}
+		if bestDist > 0 {
+			return best.name
+		}
+		return ""
+	}
+
 	for _, m := range assignmentMatches {
 		varName := text[m[2]:m[3]]
 		typeName := text[m[4]:m[5]]
@@ -757,13 +1331,16 @@ func extractMessages(text string, moduleStarts []int) []Message {
 		if start < 0 || start >= len(text) || text[start] != '[' {
 			continue
 		}
-		fields := extractFieldArray(text, start)
+		fields := extractFieldArray(text, start, diagnostics)
+
+		// Find enclosing class name for webpack export map resolution.
+		internalName := findEnclosingClassName(m[0])
 
 		pkg, shortName := parseTypeName(typeName)
 		messages = append(messages, Message{
 			TypeName:     typeName,
 			VarName:      varName,
-			InternalName: "",
+			InternalName: internalName,
 			Fields:       fields,
 			Package:      pkg,
 			ShortName:    shortName,
@@ -791,7 +1368,7 @@ func findClassEnd(text string, openBrace int) int {
 	return -1
 }
 
-func extractFieldArray(text string, start int) []Field {
+func extractFieldArray(text string, start int, diagnostics *extractionDiagnostics) []Field {
 	// Find matching bracket
 	depth := 0
 	end := start
@@ -818,10 +1395,10 @@ func extractFieldArray(text string, start int) []Field {
 	for _, fieldObj := range fieldObjects {
 		field, parseErr := parseFieldObject(fieldObj)
 		if parseErr != nil {
-			activeDiagnostics.addSkippedField(fieldObj, parseErr)
+			diagnostics.addSkippedField(fieldObj, parseErr)
 			continue
 		}
-		activeDiagnostics.addParsedField()
+		diagnostics.addParsedField()
 		fields = append(fields, *field)
 	}
 
@@ -1083,8 +1660,35 @@ func extractEnumValues(text string, start int) []EnumValue {
 	return values
 }
 
-func generateProtos(messages []Message, enums []Enum, services []Service, resolver *TypeResolver, outputDir string) {
-	os.MkdirAll(outputDir, 0755)
+func generateProtos(
+	messages []Message,
+	enums []Enum,
+	services []Service,
+	resolver *TypeResolver,
+	wpg *webpackModuleGraph,
+	run *extractionRun,
+	outputDir string,
+) error {
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return fmt.Errorf("create output dir: %w", err)
+	}
+
+	// Sort messages and enums for deterministic output
+	sort.Slice(messages, func(i, j int) bool {
+		if messages[i].Package != messages[j].Package {
+			return messages[i].Package < messages[j].Package
+		}
+		return messages[i].ShortName < messages[j].ShortName
+	})
+	sort.Slice(enums, func(i, j int) bool {
+		if enums[i].Package != enums[j].Package {
+			return enums[i].Package < enums[j].Package
+		}
+		return enums[i].ShortName < enums[j].ShortName
+	})
+	sort.Slice(services, func(i, j int) bool {
+		return services[i].TypeName < services[j].TypeName
+	})
 
 	// Group by package
 	packages := make(map[string]struct {
@@ -1129,20 +1733,50 @@ func generateProtos(messages []Message, enums []Enum, services []Service, resolv
 		}
 	}
 
-	// Reset copiedTypes tracking
-	copiedTypes = make(map[string]map[string]string)
+	// Sort package names for deterministic generation order
+	pkgNames := make([]string, 0, len(packages))
+	for name := range packages {
+		pkgNames = append(pkgNames, name)
+	}
+	sort.Strings(pkgNames)
 
-	for pkgName, pkg := range packages {
+	for _, pkgName := range pkgNames {
+		pkg := packages[pkgName]
 		// Skip Google standard packages - use official proto files instead
-		if isGooglePkg(pkgName) {
-			fmt.Printf("跳过: %s (使用官方 proto 文件)\n", pkgName)
+		// Also skip empty package names
+		if isGooglePkg(pkgName) || pkgName == "" {
+			if pkgName == "" {
+				fmt.Printf("跳过: (空包名) 有 %d messages, %d enums, %d services\n", len(pkg.messages), len(pkg.enums), len(pkg.services))
+			} else {
+				fmt.Printf("跳过: %s (使用官方 proto 文件)\n", pkgName)
+			}
 			continue
 		}
 
 		// Copy all external types referenced by this package
-		augmentedPkg := copyAllExternalTypes(pkgName, pkg, resolver, allMessages, allEnums)
-		generateProtoFile(pkgName, augmentedPkg.messages, augmentedPkg.enums, pkg.services, resolver, outputDir)
+		augmentedPkg := copyAllExternalTypes(
+			pkgName,
+			pkg,
+			resolver,
+			allMessages,
+			allEnums,
+			wpg,
+			run,
+		)
+		if err := generateProtoFile(
+			pkgName,
+			augmentedPkg.messages,
+			augmentedPkg.enums,
+			pkg.services,
+			resolver,
+			wpg,
+			run,
+			outputDir,
+		); err != nil {
+			return fmt.Errorf("generate %s proto file: %w", pkgName, err)
+		}
 	}
+	return nil
 }
 
 // copyAllExternalTypes copies all externally referenced types into the current package
@@ -1150,13 +1784,13 @@ func copyAllExternalTypes(pkgName string, pkg struct {
 	messages []Message
 	enums    []Enum
 	services []Service
-}, resolver *TypeResolver, allMessages map[string]*Message, allEnums map[string]*Enum) struct {
+}, resolver *TypeResolver, allMessages map[string]*Message, allEnums map[string]*Enum, wpg *webpackModuleGraph, run *extractionRun) struct {
 	messages []Message
 	enums    []Enum
 	services []Service
 } {
-	if copiedTypes[pkgName] == nil {
-		copiedTypes[pkgName] = make(map[string]string)
+	if run.copiedTypes[pkgName] == nil {
+		run.copiedTypes[pkgName] = make(map[string]string)
 	}
 
 	// Build set of types already in this package
@@ -1165,14 +1799,14 @@ func copyAllExternalTypes(pkgName string, pkg struct {
 	for _, msg := range pkg.messages {
 		localTypes[msg.ShortName] = true
 		// Mark as "local" - empty string means original type in this package
-		if copiedTypes[pkgName][msg.ShortName] == "" {
-			copiedTypes[pkgName][msg.ShortName] = "local:" + msg.TypeName
+		if run.copiedTypes[pkgName][msg.ShortName] == "" {
+			run.copiedTypes[pkgName][msg.ShortName] = "local:" + msg.TypeName
 		}
 	}
 	for _, enum := range pkg.enums {
 		localTypes[enum.ShortName] = true
-		if copiedTypes[pkgName][enum.ShortName] == "" {
-			copiedTypes[pkgName][enum.ShortName] = "local:" + enum.TypeName
+		if run.copiedTypes[pkgName][enum.ShortName] == "" {
+			run.copiedTypes[pkgName][enum.ShortName] = "local:" + enum.TypeName
 		}
 	}
 
@@ -1195,20 +1829,26 @@ func copyAllExternalTypes(pkgName string, pkg struct {
 		neededTypes := make(map[string]bool)
 
 		for _, msg := range result.messages {
+			sourcePkg := packageForTypeName(msg.TypeName, msg.Package)
 			for _, f := range msg.Fields {
-				collectFieldRefsSimple(f, pkgName, msg.Pos, msg.ModuleStart, resolver, neededTypes, localTypes)
+				collectFieldRefsSimple(f, pkgName, sourcePkg, msg.Pos, msg.ModuleStart, resolver, neededTypes, localTypes, wpg)
 			}
 		}
 		for _, svc := range result.services {
 			for _, m := range svc.Methods {
-				collectMethodRefsSimple(m.InputType, pkgName, svc.Pos, svc.ModuleStart, resolver, neededTypes, localTypes)
-				collectMethodRefsSimple(m.OutputType, pkgName, svc.Pos, svc.ModuleStart, resolver, neededTypes, localTypes)
+				collectMethodRefsSimple(m.InputType, pkgName, svc.Pos, svc.ModuleStart, resolver, neededTypes, localTypes, wpg)
+				collectMethodRefsSimple(m.OutputType, pkgName, svc.Pos, svc.ModuleStart, resolver, neededTypes, localTypes, wpg)
 			}
 		}
 
-		// Copy needed types
+		// Copy needed types (sorted for deterministic output)
 		copiedThisRound := 0
-		for typeName := range neededTypes {
+		sortedNeeded := make([]string, 0, len(neededTypes))
+		for tn := range neededTypes {
+			sortedNeeded = append(sortedNeeded, tn)
+		}
+		sort.Strings(sortedNeeded)
+		for _, typeName := range sortedNeeded {
 			refPkg, shortName := parseTypeName(typeName)
 			if refPkg == pkgName || isGooglePkg(refPkg) {
 				continue
@@ -1226,7 +1866,7 @@ func copyAllExternalTypes(pkgName string, pkg struct {
 				// Keep original TypeName for source reference in comments
 				// msgCopy.TypeName will be used for reference, store original separately
 				result.messages = append(result.messages, msgCopy)
-				copiedTypes[pkgName][shortName] = typeName // original full type name
+				run.copiedTypes[pkgName][shortName] = typeName // original full type name
 				localTypes[shortName] = true
 				copiedThisRound++
 				fmt.Printf("  [%s] 轮%d 复制: %s\n", pkgName, round, typeName)
@@ -1235,14 +1875,14 @@ func copyAllExternalTypes(pkgName string, pkg struct {
 				enumCopy := *enum
 				enumCopy.Package = pkgName
 				result.enums = append(result.enums, enumCopy)
-				copiedTypes[pkgName][shortName] = typeName
+				run.copiedTypes[pkgName][shortName] = typeName
 				localTypes[shortName] = true
 				copiedThisRound++
 				fmt.Printf("  [%s] 轮%d 复制枚举: %s\n", pkgName, round, typeName)
 			} else {
 				// Type not found - add to copiedTypes anyway to use local reference
 				// This handles cases where the type exists locally but wasn't in our extraction
-				copiedTypes[pkgName][shortName] = typeName
+				run.copiedTypes[pkgName][shortName] = typeName
 				localTypes[shortName] = true
 				fmt.Printf("  [%s] 轮%d 警告: 类型未找到 %s，标记为本地引用\n", pkgName, round, typeName)
 			}
@@ -1264,12 +1904,20 @@ func copyAllExternalTypes(pkgName string, pkg struct {
 		fmt.Printf("  [%s] 共复制 %d 个外部类型\n", pkgName, totalCopied)
 	}
 
+	// Sort result collections for deterministic output
+	sort.Slice(result.messages, func(i, j int) bool {
+		return result.messages[i].ShortName < result.messages[j].ShortName
+	})
+	sort.Slice(result.enums, func(i, j int) bool {
+		return result.enums[i].ShortName < result.enums[j].ShortName
+	})
+
 	return result
 }
 
 // collectFieldRefsSimple collects external type references from a field (non-recursive, just this field)
-func collectFieldRefsSimple(f Field, currentPkg string, contextPos int, contextModuleStart int, resolver *TypeResolver,
-	neededTypes map[string]bool, localTypes map[string]bool) {
+func collectFieldRefsSimple(f Field, outputPkg string, sourcePkg string, contextPos int, contextModuleStart int, resolver *TypeResolver,
+	neededTypes map[string]bool, localTypes map[string]bool, wpg *webpackModuleGraph) {
 
 	type refWithKind struct {
 		ref  string
@@ -1289,13 +1937,13 @@ func collectFieldRefsSimple(f Field, currentPkg string, contextPos int, contextM
 	}
 
 	for _, item := range refs {
-		typeName, ok := resolver.ResolveTypeName(item.ref, contextPos, contextModuleStart, currentPkg, item.kind)
-		if !ok {
+		typeName, err := resolveTypeNameWithGraph(item.ref, contextPos, contextModuleStart, resolver, sourcePkg, item.kind, wpg)
+		if err != nil {
 			continue
 		}
 
 		refPkg, shortName := parseTypeName(typeName)
-		if refPkg == "" || refPkg == currentPkg || isGooglePkg(refPkg) {
+		if refPkg == "" || refPkg == outputPkg || isGooglePkg(refPkg) {
 			continue
 		}
 
@@ -1310,10 +1958,10 @@ func collectFieldRefsSimple(f Field, currentPkg string, contextPos int, contextM
 
 // collectMethodRefsSimple collects external type references from a method type
 func collectMethodRefsSimple(ref string, currentPkg string, contextPos int, contextModuleStart int, resolver *TypeResolver,
-	neededTypes map[string]bool, localTypes map[string]bool) {
+	neededTypes map[string]bool, localTypes map[string]bool, wpg *webpackModuleGraph) {
 
-	typeName, ok := resolver.ResolveTypeName(ref, contextPos, contextModuleStart, currentPkg, "message")
-	if !ok {
+	typeName, err := resolveTypeNameWithGraph(ref, contextPos, contextModuleStart, resolver, currentPkg, "message", wpg)
+	if err != nil {
 		return
 	}
 
@@ -1329,9 +1977,6 @@ func collectMethodRefsSimple(ref string, currentPkg string, contextPos int, cont
 	neededTypes[typeName] = true
 }
 
-// Global map to track copied types: targetPkg -> shortName -> original typeName
-var copiedTypes = make(map[string]map[string]string)
-
 // TypeNode represents a node in the nested type tree
 type TypeNode struct {
 	Name     string
@@ -1341,12 +1986,12 @@ type TypeNode struct {
 }
 
 // collectImports collects only Google standard imports (all other types are copied locally)
-func collectImports(currentPkg string, messages []Message, services []Service, resolver *TypeResolver) map[string]bool {
+func collectImports(currentPkg string, messages []Message, services []Service, resolver *TypeResolver, wpg *webpackModuleGraph) map[string]bool {
 	imports := make(map[string]bool)
 
-	addImport := func(ref string, contextPos int, contextModuleStart int, expectedKind string) {
-		typeName, ok := resolver.ResolveTypeName(ref, contextPos, contextModuleStart, currentPkg, expectedKind)
-		if !ok {
+	addImport := func(ref string, contextPos int, contextModuleStart int, preferredPkg string, expectedKind string) {
+		typeName, err := resolveTypeNameWithGraph(ref, contextPos, contextModuleStart, resolver, preferredPkg, expectedKind, wpg)
+		if err != nil {
 			return
 		}
 
@@ -1389,34 +2034,45 @@ func collectImports(currentPkg string, messages []Message, services []Service, r
 	}
 
 	for _, msg := range messages {
+		sourcePkg := packageForTypeName(msg.TypeName, msg.Package)
 		for _, f := range msg.Fields {
 			if f.Kind == "message" || f.Kind == "enum" {
 				if ref, ok := f.T.(string); ok {
-					addImport(ref, msg.Pos, msg.ModuleStart, f.Kind)
+					addImport(ref, msg.Pos, msg.ModuleStart, sourcePkg, f.Kind)
 				}
 			}
 			// Also check map value types
 			if f.Kind == "map" && (f.MapValueKind == "message" || f.MapValueKind == "enum") {
 				if ref, ok := f.MapValueT.(string); ok {
-					addImport(ref, msg.Pos, msg.ModuleStart, f.MapValueKind)
+					addImport(ref, msg.Pos, msg.ModuleStart, sourcePkg, f.MapValueKind)
 				}
 			}
 		}
 	}
 
 	for _, svc := range services {
+		sourcePkg := packageForTypeName(svc.TypeName, svc.Package)
 		for _, m := range svc.Methods {
-			addImport(m.InputType, svc.Pos, svc.ModuleStart, "message")
-			addImport(m.OutputType, svc.Pos, svc.ModuleStart, "message")
+			addImport(m.InputType, svc.Pos, svc.ModuleStart, sourcePkg, "message")
+			addImport(m.OutputType, svc.Pos, svc.ModuleStart, sourcePkg, "message")
 		}
 	}
 
 	return imports
 }
 
-func generateProtoFile(pkgName string, messages []Message, enums []Enum, services []Service, resolver *TypeResolver, outputDir string) {
+func generateProtoFile(
+	pkgName string,
+	messages []Message,
+	enums []Enum,
+	services []Service,
+	resolver *TypeResolver,
+	wpg *webpackModuleGraph,
+	run *extractionRun,
+	outputDir string,
+) error {
 	// First, collect all cross-package imports
-	imports := collectImports(pkgName, messages, services, resolver)
+	imports := collectImports(pkgName, messages, services, resolver, wpg)
 
 	var sb strings.Builder
 
@@ -1456,7 +2112,7 @@ func generateProtoFile(pkgName string, messages []Message, enums []Enum, service
 	}
 
 	// Write all top-level types
-	writeTypeTree(root, &sb, resolver, 0, pkgName)
+	writeTypeTree(root, &sb, resolver, 0, pkgName, wpg, run)
 
 	// Write services
 	sort.Slice(services, func(i, j int) bool {
@@ -1468,8 +2124,8 @@ func generateProtoFile(pkgName string, messages []Message, enums []Enum, service
 		sb.WriteString(fmt.Sprintf("// Source: %s (var: %s)\n", svc.TypeName, svc.VarName))
 		sb.WriteString(fmt.Sprintf("service %s {\n", svc.ShortName))
 		for _, m := range svc.Methods {
-			inputType := resolveMethodType(m.InputType, resolver, pkgName, svc.Pos, svc.ModuleStart)
-			outputType := resolveMethodType(m.OutputType, resolver, pkgName, svc.Pos, svc.ModuleStart)
+			inputType := resolveMethodType(m.InputType, resolver, pkgName, svc.Pos, svc.ModuleStart, wpg, run)
+			outputType := resolveMethodType(m.OutputType, resolver, pkgName, svc.Pos, svc.ModuleStart, wpg, run)
 
 			switch m.Kind {
 			case "ServerStreaming":
@@ -1489,14 +2145,17 @@ func generateProtoFile(pkgName string, messages []Message, enums []Enum, service
 	fileName := strings.ReplaceAll(pkgName, ".", "_") + ".proto"
 	filePath := filepath.Join(outputDir, fileName)
 
-	os.WriteFile(filePath, []byte(sb.String()), 0644)
+	if err := os.WriteFile(filePath, []byte(sb.String()), 0644); err != nil {
+		return fmt.Errorf("write proto file %s: %w", filePath, err)
+	}
 	fmt.Printf("Generated: %s (%d messages, %d enums, %d services)\n", filePath, len(messages), len(enums), len(services))
+	return nil
 }
 
-func resolveMethodType(ref string, resolver *TypeResolver, currentPkg string, contextPos int, contextModuleStart int) string {
-	typeName, ok := resolver.ResolveTypeName(ref, contextPos, contextModuleStart, currentPkg, "message")
-	if !ok {
-		activeDiagnostics.addUnresolvedType("method:" + ref)
+func resolveMethodType(ref string, resolver *TypeResolver, currentPkg string, contextPos int, contextModuleStart int, wpg *webpackModuleGraph, run *extractionRun) string {
+	typeName, err := resolveTypeNameWithGraph(ref, contextPos, contextModuleStart, resolver, currentPkg, "message", wpg)
+	if err != nil {
+		run.diagnostics.addUnresolvedType("method:" + ref)
 		return fallbackTypeToken(ref)
 	}
 
@@ -1505,7 +2164,7 @@ func resolveMethodType(ref string, resolver *TypeResolver, currentPkg string, co
 		return shortName
 	}
 	// Check if this type was copied to current package
-	if copied := copiedTypes[currentPkg]; copied != nil {
+	if copied := run.copiedTypes[currentPkg]; copied != nil {
 		if _, isCopied := copied[shortName]; isCopied {
 			return shortName
 		}
@@ -1559,7 +2218,7 @@ func insertEnum(node *TypeNode, path []string, enum *Enum) {
 	}
 }
 
-func writeTypeTree(node *TypeNode, sb *strings.Builder, resolver *TypeResolver, indent int, currentPkg string) {
+func writeTypeTree(node *TypeNode, sb *strings.Builder, resolver *TypeResolver, indent int, currentPkg string, wpg *webpackModuleGraph, run *extractionRun) {
 	// Get sorted child names
 	var names []string
 	for name := range node.Children {
@@ -1575,7 +2234,7 @@ func writeTypeTree(node *TypeNode, sb *strings.Builder, resolver *TypeResolver, 
 		if child.Enum != nil {
 			// Check if this is a copied type
 			originalType := ""
-			if copied := copiedTypes[currentPkg]; copied != nil {
+			if copied := run.copiedTypes[currentPkg]; copied != nil {
 				if orig, ok := copied[child.Enum.ShortName]; ok {
 					originalType = orig
 				}
@@ -1603,7 +2262,7 @@ func writeTypeTree(node *TypeNode, sb *strings.Builder, resolver *TypeResolver, 
 
 				// Check if this is a copied type
 				originalType := ""
-				if copied := copiedTypes[currentPkg]; copied != nil {
+				if copied := run.copiedTypes[currentPkg]; copied != nil {
 					if orig, ok := copied[child.Message.ShortName]; ok {
 						originalType = orig
 					}
@@ -1619,11 +2278,11 @@ func writeTypeTree(node *TypeNode, sb *strings.Builder, resolver *TypeResolver, 
 			sb.WriteString(fmt.Sprintf("%smessage %s {\n", indentStr, name))
 
 			// Write nested types first
-			writeTypeTree(child, sb, resolver, indent+1, currentPkg)
+			writeTypeTree(child, sb, resolver, indent+1, currentPkg, wpg, run)
 
 			// Write fields if this node has a message
 			if child.Message != nil {
-				writeMessageFields(child.Message, sb, resolver, indent+1)
+				writeMessageFields(child.Message, sb, resolver, indent+1, wpg, run)
 			}
 
 			sb.WriteString(fmt.Sprintf("%s}\n\n", indentStr))
@@ -1631,12 +2290,13 @@ func writeTypeTree(node *TypeNode, sb *strings.Builder, resolver *TypeResolver, 
 	}
 }
 
-func writeMessageFields(msg *Message, sb *strings.Builder, resolver *TypeResolver, indent int) {
+func writeMessageFields(msg *Message, sb *strings.Builder, resolver *TypeResolver, indent int, wpg *webpackModuleGraph, run *extractionRun) {
 	indentStr := strings.Repeat("  ", indent)
 
 	// Get the current message's path prefix for relative type resolution
 	msgPath := msg.ShortName
 	currentPkg := msg.Package
+	sourcePkg := packageForTypeName(msg.TypeName, currentPkg)
 
 	// Group fields by oneof
 	oneofGroups := make(map[string][]Field)
@@ -1652,7 +2312,7 @@ func writeMessageFields(msg *Message, sb *strings.Builder, resolver *TypeResolve
 
 	// Write regular fields
 	for _, f := range regularFields {
-		fieldType := resolveFieldTypeWithPkg(f, resolver, msgPath, currentPkg, msg.Pos, msg.ModuleStart)
+		fieldType := resolveFieldTypeWithPkg(f, resolver, msgPath, currentPkg, sourcePkg, msg.Pos, msg.ModuleStart, wpg, run)
 		prefix := ""
 		if f.Repeated {
 			prefix = "repeated "
@@ -1673,7 +2333,7 @@ func writeMessageFields(msg *Message, sb *strings.Builder, resolver *TypeResolve
 		fields := oneofGroups[oneofName]
 		sb.WriteString(fmt.Sprintf("%soneof %s {\n", indentStr, oneofName))
 		for _, f := range fields {
-			fieldType := resolveFieldTypeWithPkg(f, resolver, msgPath, currentPkg, msg.Pos, msg.ModuleStart)
+			fieldType := resolveFieldTypeWithPkg(f, resolver, msgPath, currentPkg, sourcePkg, msg.Pos, msg.ModuleStart, wpg, run)
 			sb.WriteString(fmt.Sprintf("%s  %s %s = %d;\n", indentStr, fieldType, f.Name, f.No))
 		}
 		sb.WriteString(fmt.Sprintf("%s}\n", indentStr))
@@ -1712,6 +2372,14 @@ func parseTypeName(typeName string) (pkg, shortName string) {
 	return "", typeName
 }
 
+func packageForTypeName(typeName string, fallback string) string {
+	pkg, _ := parseTypeName(typeName)
+	if pkg == "" {
+		return fallback
+	}
+	return pkg
+}
+
 // getNestedPath returns the path components for a nested type
 // "Foo" -> ["Foo"]
 // "Foo.Bar" -> ["Foo", "Bar"]
@@ -1720,18 +2388,18 @@ func getNestedPath(shortName string) []string {
 	return strings.Split(shortName, ".")
 }
 
-func resolveFieldType(f Field, resolver *TypeResolver, contextPos int, contextModuleStart int) string {
-	return resolveFieldTypeWithPkg(f, resolver, "", "", contextPos, contextModuleStart)
+func resolveFieldType(f Field, resolver *TypeResolver, contextPos int, contextModuleStart int, wpg *webpackModuleGraph, run *extractionRun) string {
+	return resolveFieldTypeWithPkg(f, resolver, "", "", "", contextPos, contextModuleStart, wpg, run)
 }
 
 // resolveFieldTypeWithPkg resolves field type with package awareness
 // parentPath is like "ConversationMessage" or "ConversationMessage.ToolResult"
 // currentPkg is the package of the current message being written (e.g., "agent.v1")
-func resolveFieldTypeWithPkg(f Field, resolver *TypeResolver, parentPath string, currentPkg string, contextPos int, contextModuleStart int) string {
+func resolveFieldTypeWithPkg(f Field, resolver *TypeResolver, parentPath string, currentPkg string, sourcePkg string, contextPos int, contextModuleStart int, wpg *webpackModuleGraph, run *extractionRun) string {
 	resolveNamedType := func(ref string, expectedKind string) string {
-		typeName, ok := resolver.ResolveTypeName(ref, contextPos, contextModuleStart, currentPkg, expectedKind)
-		if !ok {
-			activeDiagnostics.addUnresolvedType(expectedKind + ":" + ref)
+		typeName, err := resolveTypeNameWithGraph(ref, contextPos, contextModuleStart, resolver, sourcePkg, expectedKind, wpg)
+		if err != nil {
+			run.diagnostics.addUnresolvedType(expectedKind + ":" + ref)
 			return fallbackTypeToken(ref)
 		}
 
@@ -1749,7 +2417,7 @@ func resolveFieldTypeWithPkg(f Field, resolver *TypeResolver, parentPath string,
 		}
 
 		// Check if this type was copied to current package (circular import resolution)
-		if copied := copiedTypes[currentPkg]; copied != nil {
+		if copied := run.copiedTypes[currentPkg]; copied != nil {
 			if _, isCopied := copied[shortName]; isCopied {
 				// This type exists locally as a copy, use short name
 				return shortName

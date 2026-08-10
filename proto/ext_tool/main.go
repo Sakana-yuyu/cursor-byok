@@ -27,6 +27,21 @@ func findPrettier() (string, error) {
 	return "", fmt.Errorf("prettier not found in PATH, please install: npm install -g prettier")
 }
 
+// ExtractProtos extracts proto definitions from formatted JS file (legacy wrapper).
+// Calls os.Exit on failure. Prefer ExtractProtosToDir for library usage.
+func ExtractProtos(inputFile, outputDir string) {
+	ExtractProtosWithOptions(inputFile, outputDir, DefaultExtractionOptions())
+}
+
+// ExtractProtosWithOptions extracts proto definitions with custom options.
+// Calls os.Exit on failure. Prefer ExtractProtosToDirWithOptions for library usage.
+func ExtractProtosWithOptions(inputFile, outputDir string, opts ExtractionOptions) {
+	if err := ExtractProtosToDirWithOptions(inputFile, outputDir, opts); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
 func main() {
 	// 命令行参数
 	inputPath := flag.String("input", "", "Path to JS file (e.g., extensionHostProcess.js)")
@@ -109,8 +124,7 @@ func main() {
 
 	// 运行提取器
 	fmt.Println("Extracting Proto definitions...")
-	SetStrictMode(*strict)
-	ExtractProtos(tempFileName, *outputDir)
+	ExtractProtosWithOptions(tempFileName, *outputDir, ExtractionOptions{Strict: *strict})
 
 	// 清理临时文件
 	os.Remove(tempFileName)
