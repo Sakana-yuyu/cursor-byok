@@ -98,6 +98,9 @@ func (host *Host) syncDelegationExecutors(cfg serverconfig.Config) error {
 		{id: delegationexecutors.CodexCLIExecutorID, create: func(runtimeConfig delegation.RuntimeExecutorConfig) (delegation.ExecutorRegistration, error) {
 			return delegationexecutors.NewCodexCLIRegistration(runner, runtimeConfig)
 		}},
+		{id: delegationexecutors.GeminiCLIExecutorID, create: func(runtimeConfig delegation.RuntimeExecutorConfig) (delegation.ExecutorRegistration, error) {
+			return delegationexecutors.NewGeminiCLIRegistration(runner, runtimeConfig)
+		}},
 	}
 	for _, factory := range factories {
 		registration, err := factory.create(hostRuntimeExecutorConfig(cfg, factory.id))
