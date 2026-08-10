@@ -51,6 +51,9 @@ type nativeDelegationRuntime struct {
 	FinishedAt              time.Time
 	UpdatedAt               time.Time
 	LastEffectiveProgressAt time.Time
+	// ExecWatchdogDeferrals 记录 exec 看门狗因「子代理仍在客户端运行」而延期的次数，
+	// 达到 nativeSubagentExecWatchdogMaxDeferrals 后不再延期，按超时收口。
+	ExecWatchdogDeferrals int
 	// holdsSlot 表示该任务已占用原生子代理并发信号量；terminal 时释放，防重复释放。
 	holdsSlot bool
 }
@@ -310,6 +313,27 @@ func (service *Service) markNativeDelegationEffectiveProgress(execID, summary st
 	return true
 }
 
+// deferNativeSubagentExecWatchdog 在 exec 看门狗到期时尝试延期一次 native 子代理的强杀：
+// 仅当子代理运行态仍在（客户端尚未回报终态，说明子代理可能仍在客户端执行）且延期次数
+// 未达上限时返回 true，并原子递增计数；返回 false 表示应走正常超时收口。
+func (service *Service) deferNativeSubagentExecWatchdog(execID string) bool {
+	if service == nil || strings.TrimSpace(execID) == "" {
+		return false
+	}
+	service.delegationRuntimeMu.Lock()
+	defer service.delegationRuntimeMu.Unlock()
+	item := service.nativeDelegations[strings.TrimSpace(execID)]
+	if item == nil || delegatedStatusTerminal(item.Status) {
+		return false
+	}
+	if item.ExecWatchdogDeferrals >= nativeSubagentExecWatchdogMaxDeferrals {
+		return false
+	}
+	item.ExecWatchdogDeferrals++
+	item.UpdatedAt = time.Now().UTC()
+	return true
+}
+
 func (service *Service) watchNativeDelegationProgress(requestID, execID string) {
 	if service == nil || strings.TrimSpace(requestID) == "" || strings.TrimSpace(execID) == "" {
 		return
@@ -446,16 +470,25 @@ func (service *Service) updateNativeDelegationStatus(execID string, status deleg
 	requestID := item.ParentRequestID
 	snapshot := *item
 	service.delegationRuntimeMu.Unlock()
-	logger.Errorf("forwarder native delegation status request_id=%s conversation_id=%s exec_id=%s tool_call_id=%s model_id=%s model_name=%s status=%s error=%s",
-		strings.TrimSpace(requestID), strings.TrimSpace(snapshot.ConversationID), strings.TrimSpace(execID), strings.TrimSpace(snapshot.ToolCallID), strings.TrimSpace(snapshot.ModelID), strings.TrimSpace(snapshot.ModelName), strings.TrimSpace(string(status)), strings.TrimSpace(errorText))
+	// 成功/普通状态转换用 INFO 记录；只有带错误文本或失败态（failed/canceled/timed_out）
+	// 才用 ERR，避免子代理正常完成被误记为错误日志（曾出现 status=completed error= 的假报警）。
+	statusText := strings.TrimSpace(string(status))
+	errorText = strings.TrimSpace(errorText)
+	if errorText != "" || status == delegation.TaskFailed || status == delegation.TaskCanceled || status == delegation.TaskTimedOut {
+		logger.Errorf("forwarder native delegation status request_id=%s conversation_id=%s exec_id=%s tool_call_id=%s model_id=%s model_name=%s status=%s error=%s",
+			strings.TrimSpace(requestID), strings.TrimSpace(snapshot.ConversationID), strings.TrimSpace(execID), strings.TrimSpace(snapshot.ToolCallID), strings.TrimSpace(snapshot.ModelID), strings.TrimSpace(snapshot.ModelName), statusText, errorText)
+	} else {
+		logger.Infof("forwarder native delegation status request_id=%s conversation_id=%s exec_id=%s tool_call_id=%s model_id=%s model_name=%s status=%s error=%s",
+			strings.TrimSpace(requestID), strings.TrimSpace(snapshot.ConversationID), strings.TrimSpace(execID), strings.TrimSpace(snapshot.ToolCallID), strings.TrimSpace(snapshot.ModelID), strings.TrimSpace(snapshot.ModelName), statusText, errorText)
+	}
 	if service.debug != nil {
 		service.debug.LogRuntime(context.Background(), requestID, snapshot.ConversationID, "native_delegation_status", map[string]any{
 			"exec_id":      strings.TrimSpace(execID),
 			"tool_call_id": strings.TrimSpace(snapshot.ToolCallID),
 			"model_id":     strings.TrimSpace(snapshot.ModelID),
 			"model_name":   strings.TrimSpace(snapshot.ModelName),
-			"status":       strings.TrimSpace(string(status)),
-			"error":        strings.TrimSpace(errorText),
+			"status":       statusText,
+			"error":        errorText,
 		})
 	}
 	if delegatedStatusTerminal(status) {
