@@ -329,6 +329,9 @@ func (s *Scheduler) run(state *taskState) {
 	executionCtx = withWorkerProgressPublisher(executionCtx, func() bool {
 		return s.MarkEffectiveProgress(taskID)
 	})
+	executionCtx = withExecutorAttemptPublisher(executionCtx, func(attempt ExecutorAttemptSnapshot) bool {
+		return s.PublishExecutorAttempt(taskID, attempt)
+	})
 	resultChannel := make(chan TaskResult, 1)
 	executorStarted = true
 	go s.watchEffectiveProgress(state)
@@ -376,6 +379,40 @@ func (s *Scheduler) run(state *taskState) {
 	}
 	s.publishLocked(&state.snapshot)
 	s.mu.Unlock()
+}
+
+func (s *Scheduler) PublishExecutorAttempt(taskID string, attempt ExecutorAttemptSnapshot) bool {
+	if s == nil {
+		return false
+	}
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" || attempt.ExecutorID == "" {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state, ok := s.tasks[taskID]
+	if !ok || isTerminalStatus(state.snapshot.Status) {
+		return false
+	}
+	attempt = sanitizeExecutorAttempts([]ExecutorAttemptSnapshot{attempt}, state.request.WorkspaceHint)[0]
+	index := -1
+	for current := len(state.snapshot.Attempts) - 1; current >= 0; current-- {
+		if state.snapshot.Attempts[current].ExecutorID == attempt.ExecutorID && state.snapshot.Attempts[current].Status == ExecutorAttemptRunning {
+			index = current
+			break
+		}
+	}
+	if index >= 0 {
+		attempt.Attempt = state.snapshot.Attempts[index].Attempt
+		state.snapshot.Attempts[index] = attempt
+	} else {
+		attempt.Attempt = len(state.snapshot.Attempts) + 1
+		state.snapshot.Attempts = append(state.snapshot.Attempts, attempt)
+	}
+	state.snapshot.ExecutorID = attempt.ExecutorID
+	s.publishLocked(&state.snapshot)
+	return true
 }
 
 // Cancel 只取消目标任务，不影响其他委派任务。

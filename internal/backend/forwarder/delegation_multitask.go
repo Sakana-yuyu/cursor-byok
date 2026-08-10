@@ -905,11 +905,30 @@ func (coordinator *multitaskDelegationCoordinator) executeWorker(ctx context.Con
 			return coordinator.service.localDelegation.Execute(ctx, request)
 		}
 		return result
-	case delegation.ExecutionModeLocal, delegation.ExecutionModeAuto:
+	case delegation.ExecutionModeLocal:
 		return coordinator.service.localDelegation.Execute(ctx, request)
+	case delegation.ExecutionModeAuto:
+		executor := delegation.NewFailoverExecutor(delegation.FailoverExecutorConfig{
+			Registry: coordinator.service.executorRegistry,
+			MaxAttempts: func() int {
+				return coordinator.runtimeConfig().ExecutorFailoverLimit
+			},
+			RequiredCapabilities: delegationExecutorCapabilities,
+			FallbackID:           delegation.ExecutorID("local-byok"),
+			Fallback:             coordinator.service.localDelegation.Execute,
+		})
+		return executor(ctx, request)
 	default:
 		return delegation.TaskResult{Error: fmt.Errorf("unsupported delegation execution mode %q", request.ExecutionMode)}
 	}
+}
+
+func delegationExecutorCapabilities(request delegation.TaskRequest) []delegation.ExecutorCapability {
+	capabilities := []delegation.ExecutorCapability{delegation.ExecutorCapabilityReadWorkspace}
+	if !request.Readonly {
+		capabilities = append(capabilities, delegation.ExecutorCapabilityWriteWorkspace)
+	}
+	return capabilities
 }
 
 // delegationBubbleCreationTimeout 判断 worker 是否因为 Cursor 客户端无法为

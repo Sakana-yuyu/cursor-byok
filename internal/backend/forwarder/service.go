@@ -81,6 +81,7 @@ type Service struct {
 	cursorDelegation         *cursorDelegationBridge
 	localDelegation          *localDelegatedAgentAdapter
 	delegationConfig         delegation.RuntimeConfigProvider
+	executorRegistry         *delegation.ExecutorRegistry
 	goalConfig               goalConfigProvider
 	computerUseCfg           computerUseConfigProvider
 	usageCostEstimator       goalUsageCostEstimator
@@ -189,6 +190,14 @@ func (service *Service) PromptInjection() *promptinject.Manager {
 var transcriptBackfillOnce sync.Once
 
 func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Service {
+	return newService(historyRoot, resolver, nil)
+}
+
+func NewServiceWithExecutorRegistry(historyRoot string, resolver modeladapter.ChannelResolver, registry *delegation.ExecutorRegistry) *Service {
+	return newService(historyRoot, resolver, registry)
+}
+
+func newService(historyRoot string, resolver modeladapter.ChannelResolver, registry *delegation.ExecutorRegistry) *Service {
 	toolCatalog := NewToolCatalog()
 	projector := NewHistoryProjector()
 	store := NewConversationFileStore(historyRoot)
@@ -252,6 +261,7 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 		contextWindowPersister: ctxWindowPersister,
 		scanConfig:             scanConfig,
 		delegationConfig:       delegationConfig,
+		executorRegistry:       registry,
 		goalConfig:             goalCfg,
 		computerUseCfg:         computerUseCfg,
 		usageCostEstimator:     &defaultUsageCostEstimator{lookup: newPricingLookupFromConfig(resolver)},

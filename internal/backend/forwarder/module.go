@@ -7,6 +7,7 @@ import (
 	"connectrpc.com/connect"
 
 	modeladapter "cursor/internal/backend/agent/model"
+	"cursor/internal/backend/delegation"
 )
 
 type Module struct {
@@ -20,7 +21,11 @@ type Module struct {
 
 // NewModule 创建 forwarder 模块，并导出本地 Bidi / RunSSE 处理器。
 func NewModule(historyRoot string, channelService modeladapter.ChannelResolver) *Module {
-	service := NewService(historyRoot, channelService)
+	return NewModuleWithExecutorRegistry(historyRoot, channelService, nil)
+}
+
+func NewModuleWithExecutorRegistry(historyRoot string, channelService modeladapter.ChannelResolver, registry *delegation.ExecutorRegistry) *Module {
+	service := NewServiceWithExecutorRegistry(historyRoot, channelService, registry)
 	legacyBidiAppendProcedure := "/aiserver.v1.BidiService/BidiAppend"
 	legacyRunSSEProcedure := "/agent.v1.AgentService/RunSSE"
 	return &Module{

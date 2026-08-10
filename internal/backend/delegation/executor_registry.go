@@ -328,6 +328,9 @@ func (registry *ExecutorRegistry) Executor(id ExecutorID) (Executor, error) {
 	registry.mu.RUnlock()
 	return func(ctx context.Context, request TaskRequest) TaskResult {
 		startedAt := registry.now().UTC()
+		publishExecutorAttempt(ctx, ExecutorAttemptSnapshot{
+			ExecutorID: id, Status: ExecutorAttemptRunning, StartedAt: startedAt,
+		})
 		result := execute(ctx, request)
 		finishedAt := registry.now().UTC()
 		attempt := ExecutorAttemptSnapshot{
@@ -348,6 +351,7 @@ func (registry *ExecutorRegistry) Executor(id ExecutorID) (Executor, error) {
 		}
 		result.ExecutorID = id
 		result.Attempts = append(cloneExecutorAttempts(result.Attempts), attempt)
+		publishExecutorAttempt(ctx, attempt)
 		result.Metadata = cloneStringMap(result.Metadata)
 		if result.Metadata == nil {
 			result.Metadata = make(map[string]string, 1)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -16,11 +17,164 @@ import (
 
 type visibleProgressProvider struct{}
 
+type executorFailoverConfigProvider struct {
+	limit int
+}
+
+func (provider executorFailoverConfigProvider) DelegationRuntimeConfig() delegation.RuntimeConfig {
+	return delegation.NormalizeRuntimeConfig(delegation.RuntimeConfig{
+		Enabled:               true,
+		MaxConcurrency:        1,
+		ExecutorFailoverLimit: provider.limit,
+	})
+}
+
 func (visibleProgressProvider) StartStream(_ context.Context, _ ProviderRequest, sink func(modeladapter.ModelEvent) error) error {
 	if err := sink(modeladapter.ModelEvent{Kind: modeladapter.ModelEventKindTextDelta, Text: "found the relevant code path"}); err != nil {
 		return err
 	}
 	return sink(modeladapter.ModelEvent{Kind: modeladapter.ModelEventKindTurnFinished})
+}
+
+func TestDelegationAutoUsesRegistryExecutorAndSchedulerSnapshotsAttempts(t *testing.T) {
+	registry := delegation.NewExecutorRegistry(delegation.ExecutorRegistryConfig{})
+	var calls atomic.Int32
+	registration := delegation.ExecutorRegistration{
+		ID: "codex-cli", DisplayName: "Codex CLI", Enabled: true, Priority: 10,
+		Capabilities: []delegation.ExecutorCapability{delegation.ExecutorCapabilityReadWorkspace},
+		Probe: func(context.Context) (delegation.ExecutorProbeResult, error) {
+			return delegation.ExecutorProbeResult{State: delegation.ExecutorProbeReady}, nil
+		},
+		Execute: func(_ context.Context, request delegation.TaskRequest) delegation.TaskResult {
+			calls.Add(1)
+			return delegation.TaskResult{Output: request.ID + ":external"}
+		},
+	}
+	if err := registry.Register(registration); err != nil {
+		t.Fatalf("Register(): %v", err)
+	}
+	if _, err := registry.Probe(context.Background(), registration.ID, true); err != nil {
+		t.Fatalf("Probe(): %v", err)
+	}
+	service := NewServiceWithExecutorRegistry(t.TempDir(), nilResolver{}, registry)
+	defer service.multitaskDelegation.Close()
+	service.multitaskDelegation.configProvider = executorFailoverConfigProvider{limit: 2}
+
+	taskID, err := service.multitaskDelegation.scheduler.Submit(delegation.TaskRequest{
+		ID: "worker-external", ExecutionMode: delegation.ExecutionModeAuto, Readonly: true,
+	})
+	if err != nil {
+		t.Fatalf("Submit(): %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := service.multitaskDelegation.scheduler.WaitForTerminal(ctx, []string{taskID}); err != nil {
+		t.Fatalf("WaitForTerminal(): %v", err)
+	}
+	snapshot, ok := service.multitaskDelegation.scheduler.Snapshot(taskID)
+	if !ok || snapshot.Status != delegation.TaskCompleted || snapshot.Output != "worker-external:external" {
+		t.Fatalf("snapshot = %#v, ok=%t", snapshot, ok)
+	}
+	if calls.Load() != 1 || snapshot.ExecutorID != "codex-cli" || len(snapshot.Attempts) != 1 || snapshot.Attempts[0].ExecutorID != "codex-cli" {
+		t.Fatalf("calls=%d snapshot=%#v", calls.Load(), snapshot)
+	}
+}
+
+func TestDelegationAutoFailoverUsesConfiguredLimitAndWriteCapability(t *testing.T) {
+	registry := delegation.NewExecutorRegistry(delegation.ExecutorRegistryConfig{})
+	var readOnlyCalls atomic.Int32
+	var firstCalls atomic.Int32
+	var secondCalls atomic.Int32
+	registrations := []delegation.ExecutorRegistration{
+		{
+			ID: "read-only", DisplayName: "Read only", Enabled: true, Priority: 1,
+			Capabilities: []delegation.ExecutorCapability{delegation.ExecutorCapabilityReadWorkspace},
+			Probe: func(context.Context) (delegation.ExecutorProbeResult, error) {
+				return delegation.ExecutorProbeResult{State: delegation.ExecutorProbeReady}, nil
+			},
+			Execute: func(context.Context, delegation.TaskRequest) delegation.TaskResult {
+				readOnlyCalls.Add(1)
+				return delegation.TaskResult{Output: "wrong"}
+			},
+		},
+		{
+			ID: "first-writer", DisplayName: "First writer", Enabled: true, Priority: 2,
+			Capabilities: []delegation.ExecutorCapability{delegation.ExecutorCapabilityReadWorkspace, delegation.ExecutorCapabilityWriteWorkspace},
+			Probe: func(context.Context) (delegation.ExecutorProbeResult, error) {
+				return delegation.ExecutorProbeResult{State: delegation.ExecutorProbeReady}, nil
+			},
+			Execute: func(context.Context, delegation.TaskRequest) delegation.TaskResult {
+				firstCalls.Add(1)
+				return delegation.TaskResult{Error: delegation.NewClassifiedExecutorError(delegation.ExecutorFailureSwitchable, true, "temporary", errors.New("temporary"))}
+			},
+		},
+		{
+			ID: "second-writer", DisplayName: "Second writer", Enabled: true, Priority: 3,
+			Capabilities: []delegation.ExecutorCapability{delegation.ExecutorCapabilityReadWorkspace, delegation.ExecutorCapabilityWriteWorkspace},
+			Probe: func(context.Context) (delegation.ExecutorProbeResult, error) {
+				return delegation.ExecutorProbeResult{State: delegation.ExecutorProbeReady}, nil
+			},
+			Execute: func(context.Context, delegation.TaskRequest) delegation.TaskResult {
+				secondCalls.Add(1)
+				return delegation.TaskResult{Output: "recovered"}
+			},
+		},
+	}
+	for _, registration := range registrations {
+		if err := registry.Register(registration); err != nil {
+			t.Fatalf("Register(%s): %v", registration.ID, err)
+		}
+		if _, err := registry.Probe(context.Background(), registration.ID, true); err != nil {
+			t.Fatalf("Probe(%s): %v", registration.ID, err)
+		}
+	}
+	service := NewServiceWithExecutorRegistry(t.TempDir(), nilResolver{}, registry)
+	defer service.multitaskDelegation.Close()
+	service.multitaskDelegation.configProvider = executorFailoverConfigProvider{limit: 2}
+
+	result := service.multitaskDelegation.executeWorker(context.Background(), delegation.TaskRequest{
+		ID: "write-worker", ExecutionMode: delegation.ExecutionModeAuto, Readonly: false,
+	})
+	if result.Error != nil || result.Output != "recovered" || result.ExecutorID != "second-writer" {
+		t.Fatalf("result = %#v", result)
+	}
+	if readOnlyCalls.Load() != 0 || firstCalls.Load() != 1 || secondCalls.Load() != 1 {
+		t.Fatalf("calls read=%d first=%d second=%d", readOnlyCalls.Load(), firstCalls.Load(), secondCalls.Load())
+	}
+	if len(result.Attempts) != 2 || result.Attempts[0].ExecutorID != "first-writer" || result.Attempts[1].ExecutorID != "second-writer" {
+		t.Fatalf("attempts = %#v", result.Attempts)
+	}
+}
+
+func TestDelegationLocalModeDoesNotUseExternalExecutor(t *testing.T) {
+	registry := delegation.NewExecutorRegistry(delegation.ExecutorRegistryConfig{})
+	var calls atomic.Int32
+	registration := delegation.ExecutorRegistration{
+		ID: "external", DisplayName: "External", Enabled: true, Priority: 1,
+		Capabilities: []delegation.ExecutorCapability{delegation.ExecutorCapabilityReadWorkspace},
+		Probe: func(context.Context) (delegation.ExecutorProbeResult, error) {
+			return delegation.ExecutorProbeResult{State: delegation.ExecutorProbeReady}, nil
+		},
+		Execute: func(context.Context, delegation.TaskRequest) delegation.TaskResult {
+			calls.Add(1)
+			return delegation.TaskResult{Output: "external"}
+		},
+	}
+	if err := registry.Register(registration); err != nil {
+		t.Fatalf("Register(): %v", err)
+	}
+	if _, err := registry.Probe(context.Background(), registration.ID, true); err != nil {
+		t.Fatalf("Probe(): %v", err)
+	}
+	service := NewServiceWithExecutorRegistry(t.TempDir(), nilResolver{}, registry)
+	defer service.multitaskDelegation.Close()
+	result := service.multitaskDelegation.executeWorker(context.Background(), delegation.TaskRequest{ExecutionMode: delegation.ExecutionModeLocal})
+	if calls.Load() != 0 {
+		t.Fatalf("local mode external calls = %d", calls.Load())
+	}
+	if result.Error == nil {
+		t.Fatalf("local mode result = %#v", result)
+	}
 }
 
 func TestHasDelegationAggregateForToolCallOnlyMatchesSameCall(t *testing.T) {

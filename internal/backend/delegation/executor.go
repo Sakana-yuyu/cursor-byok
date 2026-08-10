@@ -1,10 +1,28 @@
 package delegation
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"time"
 )
+
+type executorAttemptPublisherContextKey struct{}
+
+func withExecutorAttemptPublisher(ctx context.Context, publish func(ExecutorAttemptSnapshot) bool) context.Context {
+	if ctx == nil || publish == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, executorAttemptPublisherContextKey{}, publish)
+}
+
+func publishExecutorAttempt(ctx context.Context, attempt ExecutorAttemptSnapshot) bool {
+	if ctx == nil {
+		return false
+	}
+	publish, ok := ctx.Value(executorAttemptPublisherContextKey{}).(func(ExecutorAttemptSnapshot) bool)
+	return ok && publish(attempt)
+}
 
 const ExecutorMetadataIDKey = "executor_id"
 
