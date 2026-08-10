@@ -14,6 +14,7 @@ import (
 	"cursor/internal/ads"
 	"cursor/internal/appdata"
 	"cursor/internal/backend/delegation"
+	delegationexecutors "cursor/internal/backend/delegation/executors"
 	"cursor/internal/backend/forwarder"
 	"cursor/internal/backend/server"
 	serverconfig "cursor/internal/backend/server/config"
@@ -68,10 +69,65 @@ func NewHost(store *serverconfig.Store, controlPlaneAuth upstream.AuthorizationP
 		healthHTTP:       newLoopbackHTTPClient(),
 		controlPlaneAuth: controlPlaneAuth,
 	}
+	if err := host.syncDelegationExecutors(cfg); err != nil {
+		return nil, err
+	}
+	configs.Subscribe(func(next serverconfig.Config) {
+		if err := host.syncDelegationExecutors(next); err != nil {
+			logger.Errorf("同步 delegation executor 配置失败 err=%v", err)
+		}
+	})
 	if err := host.rebuild(cfg); err != nil {
 		return nil, err
 	}
 	return host, nil
+}
+
+func (host *Host) syncDelegationExecutors(cfg serverconfig.Config) error {
+	if host == nil || host.executorRegistry == nil {
+		return nil
+	}
+	runtimeConfig := delegation.RuntimeExecutorConfig{ID: delegationexecutors.ClaudeCodeExecutorID}
+	for _, item := range cfg.Delegation.Executors {
+		if delegation.ExecutorID(item.ID) != delegationexecutors.ClaudeCodeExecutorID {
+			continue
+		}
+		runtimeConfig = delegation.RuntimeExecutorConfig{
+			ID:                      delegation.ExecutorID(item.ID),
+			Kind:                    item.Kind,
+			DisplayName:             item.DisplayName,
+			Enabled:                 item.Enabled,
+			Priority:                item.Priority,
+			Executable:              item.Executable,
+			ProbeTimeoutSeconds:     item.ProbeTimeoutSeconds,
+			ExecutionTimeoutSeconds: item.ExecutionTimeoutSeconds,
+			EnvironmentVariables:    append([]string{}, item.EnvironmentVariables...),
+			Options:                 cloneHostStringMap(item.Options),
+		}
+		break
+	}
+	registration, err := delegationexecutors.NewClaudeCodeRegistration(
+		delegation.NewProcessRunner(delegation.ProcessRunnerConfig{}),
+		runtimeConfig,
+	)
+	if err != nil {
+		return err
+	}
+	if _, exists := host.executorRegistry.Snapshot(registration.ID); exists {
+		return host.executorRegistry.Replace(registration)
+	}
+	return host.executorRegistry.Register(registration)
+}
+
+func cloneHostStringMap(source map[string]string) map[string]string {
+	if len(source) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(source))
+	for key, value := range source {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func (host *Host) ExecutorRegistry() *delegation.ExecutorRegistry {

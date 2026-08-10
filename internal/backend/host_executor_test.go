@@ -2,10 +2,12 @@ package backend
 
 import (
 	"context"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 
 	"cursor/internal/backend/delegation"
+	serverconfig "cursor/internal/backend/server/config"
 )
 
 func TestRefreshDelegationExecutorProbesForcesRegistryProbe(t *testing.T) {
@@ -31,5 +33,39 @@ func TestRefreshDelegationExecutorProbesForcesRegistryProbe(t *testing.T) {
 	}
 	if calls.Load() != 2 {
 		t.Fatalf("probe calls = %d, want 2 forced probes", calls.Load())
+	}
+}
+
+func TestHostRegistersClaudeExecutorAndAppliesSavedPolicy(t *testing.T) {
+	store := serverconfig.NewStore(filepath.Join(t.TempDir(), "config.yaml"), "")
+	host, err := NewHost(store, nil)
+	if err != nil {
+		t.Fatalf("NewHost() error = %v", err)
+	}
+	t.Cleanup(func() { _ = host.Stop(context.Background()) })
+
+	snapshot, ok := host.ExecutorRegistry().Snapshot("claude-code")
+	if !ok || snapshot.Enabled {
+		t.Fatalf("default Claude snapshot = %#v, ok=%t", snapshot, ok)
+	}
+	cfg, err := host.ConfigManager().GetDelegationConfig(t.Context())
+	if err != nil {
+		t.Fatalf("GetDelegationConfig() error = %v", err)
+	}
+	cfg.Executors = []serverconfig.DelegationExecutorConfig{{
+		ID:                      "claude-code",
+		Kind:                    serverconfig.DelegationExecutorKindBuiltin,
+		Enabled:                 true,
+		Priority:                4,
+		Executable:              "C:/tools/claude.exe",
+		ProbeTimeoutSeconds:     3,
+		ExecutionTimeoutSeconds: 25,
+	}}
+	if _, err := host.ConfigManager().SaveDelegationConfig(t.Context(), cfg); err != nil {
+		t.Fatalf("SaveDelegationConfig() error = %v", err)
+	}
+	snapshot, ok = host.ExecutorRegistry().Snapshot("claude-code")
+	if !ok || !snapshot.Enabled || snapshot.Priority != 4 || snapshot.Probe.State != delegation.ExecutorProbeUnknown {
+		t.Fatalf("updated Claude snapshot = %#v, ok=%t", snapshot, ok)
 	}
 }

@@ -87,21 +87,11 @@ func (registry *ExecutorRegistry) Register(registration ExecutorRegistration) er
 	if registry == nil {
 		return fmt.Errorf("executor registry is nil")
 	}
-	registration.ID = ExecutorID(strings.TrimSpace(string(registration.ID)))
-	if !validExecutorID(registration.ID) {
-		return fmt.Errorf("executor id %q is invalid", registration.ID)
+	var err error
+	registration, err = normalizeExecutorRegistration(registration)
+	if err != nil {
+		return err
 	}
-	registration.DisplayName = strings.TrimSpace(registration.DisplayName)
-	if registration.DisplayName == "" {
-		registration.DisplayName = string(registration.ID)
-	}
-	if registration.Probe == nil {
-		return fmt.Errorf("executor %q probe is required", registration.ID)
-	}
-	if registration.Execute == nil {
-		return fmt.Errorf("executor %q execute function is required", registration.ID)
-	}
-	registration.Capabilities = normalizeExecutorCapabilities(registration.Capabilities)
 
 	registry.mu.Lock()
 	defer registry.mu.Unlock()
@@ -110,6 +100,42 @@ func (registry *ExecutorRegistry) Register(registration ExecutorRegistration) er
 	}
 	registry.entries[registration.ID] = &executorRegistryEntry{registration: registration}
 	return nil
+}
+
+func (registry *ExecutorRegistry) Replace(registration ExecutorRegistration) error {
+	if registry == nil {
+		return fmt.Errorf("executor registry is nil")
+	}
+	normalized, err := normalizeExecutorRegistration(registration)
+	if err != nil {
+		return err
+	}
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+	if _, exists := registry.entries[normalized.ID]; !exists {
+		return fmt.Errorf("executor %q is not registered", normalized.ID)
+	}
+	registry.entries[normalized.ID] = &executorRegistryEntry{registration: normalized}
+	return nil
+}
+
+func normalizeExecutorRegistration(registration ExecutorRegistration) (ExecutorRegistration, error) {
+	registration.ID = ExecutorID(strings.TrimSpace(string(registration.ID)))
+	if !validExecutorID(registration.ID) {
+		return ExecutorRegistration{}, fmt.Errorf("executor id %q is invalid", registration.ID)
+	}
+	registration.DisplayName = strings.TrimSpace(registration.DisplayName)
+	if registration.DisplayName == "" {
+		registration.DisplayName = string(registration.ID)
+	}
+	if registration.Probe == nil {
+		return ExecutorRegistration{}, fmt.Errorf("executor %q probe is required", registration.ID)
+	}
+	if registration.Execute == nil {
+		return ExecutorRegistration{}, fmt.Errorf("executor %q execute function is required", registration.ID)
+	}
+	registration.Capabilities = normalizeExecutorCapabilities(registration.Capabilities)
+	return registration, nil
 }
 
 func (registry *ExecutorRegistry) Probe(ctx context.Context, id ExecutorID, force bool) (ExecutorProbeResult, error) {
@@ -162,11 +188,17 @@ func (registry *ExecutorRegistry) Probe(ctx context.Context, id ExecutorID, forc
 	result = normalizeExecutorProbeResult(result, registrationCapabilities, registry.now().UTC(), err)
 
 	registry.mu.Lock()
-	if current, exists := registry.entries[id]; exists {
+	if current, exists := registry.entries[id]; exists && current == entry {
 		current.probe = cloneExecutorProbeResult(result)
 		current.probeErr = err
 		current.hasProbe = true
 		current.probeInFlight = nil
+	} else if exists {
+		result = cloneExecutorProbeResult(current.probe)
+		if !current.hasProbe {
+			result.State = ExecutorProbeUnknown
+		}
+		err = current.probeErr
 	}
 	close(done)
 	registry.mu.Unlock()

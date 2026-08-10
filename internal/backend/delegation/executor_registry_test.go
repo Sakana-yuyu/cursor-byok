@@ -38,6 +38,63 @@ func TestExecutorRegistryRejectsDuplicateRegistration(t *testing.T) {
 	}
 }
 
+func TestExecutorRegistryReplaceUpdatesPolicyAndClearsProbe(t *testing.T) {
+	registry := NewExecutorRegistry(ExecutorRegistryConfig{})
+	registration := readyExecutorRegistration("claude-code", 10, ExecutorCapabilityReadWorkspace)
+	if err := registry.Register(registration); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	if _, err := registry.Probe(t.Context(), registration.ID, false); err != nil {
+		t.Fatalf("Probe() error = %v", err)
+	}
+	replacement := readyExecutorRegistration("claude-code", 2, ExecutorCapabilityReadWorkspace, ExecutorCapabilityWriteWorkspace)
+	replacement.Enabled = false
+	if err := registry.Replace(replacement); err != nil {
+		t.Fatalf("Replace() error = %v", err)
+	}
+	snapshot, ok := registry.Snapshot("claude-code")
+	if !ok {
+		t.Fatal("Snapshot() missing replacement")
+	}
+	if snapshot.Enabled || snapshot.Priority != 2 || snapshot.Probe.State != ExecutorProbeUnknown || len(snapshot.Capabilities) != 2 {
+		t.Fatalf("Snapshot() = %#v", snapshot)
+	}
+}
+
+func TestExecutorRegistryReplaceDiscardsInFlightProbeResult(t *testing.T) {
+	registry := NewExecutorRegistry(ExecutorRegistryConfig{})
+	started := make(chan struct{})
+	release := make(chan struct{})
+	registration := readyExecutorRegistration("claude-code", 10, ExecutorCapabilityReadWorkspace)
+	registration.Probe = func(context.Context) (ExecutorProbeResult, error) {
+		close(started)
+		<-release
+		return ExecutorProbeResult{State: ExecutorProbeReady, Version: "stale"}, nil
+	}
+	if err := registry.Register(registration); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	probeResult := make(chan ExecutorProbeResult, 1)
+	go func() {
+		result, _ := registry.Probe(t.Context(), registration.ID, true)
+		probeResult <- result
+	}()
+	<-started
+	replacement := readyExecutorRegistration("claude-code", 1, ExecutorCapabilityReadWorkspace)
+	if err := registry.Replace(replacement); err != nil {
+		t.Fatalf("Replace() error = %v", err)
+	}
+	close(release)
+	returned := <-probeResult
+	if returned.State != ExecutorProbeUnknown || returned.Version != "" {
+		t.Fatalf("Probe() returned stale result = %#v", returned)
+	}
+	snapshot, ok := registry.Snapshot("claude-code")
+	if !ok || snapshot.Probe.State != ExecutorProbeUnknown || snapshot.Probe.Version != "" || snapshot.Priority != 1 {
+		t.Fatalf("Snapshot() = %#v, ok=%t", snapshot, ok)
+	}
+}
+
 func TestExecutorRegistryEligibleUsesStablePriorityAndFilters(t *testing.T) {
 	now := time.Date(2026, 8, 10, 15, 0, 0, 0, time.UTC)
 	registry := NewExecutorRegistry(ExecutorRegistryConfig{Now: func() time.Time { return now }})
