@@ -4,12 +4,16 @@ package forwarder
 
 import (
 	"encoding/json"
-	"os"
-	"regexp"
+	"fmt"
+	"strings"
 	"testing"
 
 	"cursor/gen/agentv1"
+	execbridge "cursor/internal/backend/agent/bridge/exec"
+	interactionbridge "cursor/internal/backend/agent/bridge/interaction"
+	runtimecore "cursor/internal/backend/agent/core"
 	"cursor/prompt"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // modeWhitelistTests 列出每个静态工具资产对应的白名单。
@@ -109,61 +113,323 @@ func TestChildConversationCannotDispatchSubagents(t *testing.T) {
 	}
 }
 
-// protoToolArgsPattern 匹配 proto 源中的工具参数消息：message <Name>Args { ... }。
-// Cursor 的工具在 agent_v1.proto 中约定为 <Name>Args / <Name>Result / <Name>ToolCall 三件套。
-var protoToolArgsPattern = regexp.MustCompile(`(?m)^message ([A-Z][A-Za-z0-9]*)Args\s*\{`)
-
-// TestProtoToolArgsSyncReport 对比 Cursor 官方 agent_v1.proto 与本地工具资产/白名单，
-// 输出「proto 新增工具待接入」清单。Cursor 升级后更新 proto/from_extensions 再跑本测试，
-// 即可发现新工具。报告为提示性质（新工具是否接入是产品决策），不失败。
-func TestProtoToolArgsSyncReport(t *testing.T) {
-	const protoPath = "../../../proto/from_extensions/agent_v1.proto"
-	data, err := os.ReadFile(protoPath)
-	if err != nil {
-		t.Skipf("跳过 proto 同步检查：%v", err)
+func TestCursorCapabilityMapClassifiesReachableProtocolEntries(t *testing.T) {
+	entries := CursorCapabilityMap()
+	byProtocol := make(map[string]CursorCapabilityEntry, len(entries))
+	for _, entry := range entries {
+		byProtocol[entry.ProtocolName] = entry
 	}
-	protoTools := map[string]struct{}{}
-	for _, match := range protoToolArgsPattern.FindAllStringSubmatch(string(data), -1) {
-		protoTools[match[1]] = struct{}{}
-	}
-	known := knownBuiltInToolNameSet()
 
-	var pending []string
-	for name := range protoTools {
-		if _, ok := known[name]; !ok {
-			pending = append(pending, name)
+	for _, protocolName := range []string{
+		"ExecServerMessage.shell_stream_args (ShellArgs)",
+		"ExecServerMessage.mcp_args (McpArgs)",
+		"ExecServerMessage.subagent_args (SubagentArgs)",
+		"PromptTool.TodoWrite",
+	} {
+		entry, ok := byProtocol[protocolName]
+		if !ok || entry.Class != CursorCapabilityExecutableTool {
+			t.Errorf("%s must be an executable protocol capability: %#v", protocolName, entry)
 		}
 	}
-	if len(pending) > 0 {
-		t.Logf("[sync-tool-catalog] proto 新增 %d 个工具未接入：%v（运行 go run ./cmd/sync-tool-catalog --write 生成骨架，再补白名单与 schema）", len(pending), pending)
-	} else {
-		t.Log("[sync-tool-catalog] proto 中所有 <Name>Args 工具均已接入白名单")
-	}
-
-	stale := 0
-	for name := range known {
-		if _, ok := protoTools[name]; !ok {
-			stale++
+	for protocolName, want := range map[string]CursorCapabilityClass{
+		"ExecServerMessage.agent_store_conflict_args (AgentStoreConflictArgs)": CursorCapabilityControlMessage,
+		"AbortArgs": CursorCapabilitySharedArgument,
+		"ToolCall.sem_search_tool_call (SemSearchToolCall)": CursorCapabilityProtocolSupport,
+	} {
+		if got := byProtocol[protocolName]; got.Class != want {
+			t.Errorf("%s class = %q, want %q", protocolName, got.Class, want)
 		}
-	}
-	if stale > 0 {
-		t.Logf("[sync-tool-catalog] %d/%d 已知工具未在 proto 中发现独立 <Name>Args 消息（可能为共享参数或已废弃）", stale, len(known))
 	}
 }
 
-// knownBuiltInToolNameSet 返回全部内置工具白名单的并集（包内 isKnownBuiltInToolName 的测试副本）。
-func knownBuiltInToolNameSet() map[string]struct{} {
-	known := map[string]struct{}{}
-	for _, names := range []map[string]struct{}{
-		agentModeToolNames,
-		multitaskModeToolNames,
-		debugModeToolNames,
-		askModeToolNames,
-		planModeToolNames,
-	} {
-		for name := range names {
-			known[name] = struct{}{}
+func TestCursorCapabilityMapExecutableEntriesAreAuditable(t *testing.T) {
+	if gaps := CursorCapabilityHandlerGaps(CursorCapabilityMap()); len(gaps) > 0 {
+		t.Fatalf("only executable entries are handler gaps: %#v", gaps)
+	}
+}
+
+func TestCursorCapabilityMapCoversProtocolArmsAndPromptTools(t *testing.T) {
+	entries := CursorCapabilityMap()
+	byProtocol := make(map[string]CursorCapabilityEntry, len(entries))
+	for _, entry := range entries {
+		if _, exists := byProtocol[entry.ProtocolName]; exists {
+			t.Errorf("duplicate capability identity %q", entry.ProtocolName)
+		}
+		byProtocol[entry.ProtocolName] = entry
+	}
+
+	assertOneofCoverage := func(messageName string, message interface{ ProtoReflect() protoreflect.Message }) {
+		t.Helper()
+		descriptor := message.ProtoReflect().Descriptor()
+		oneof := descriptor.Oneofs().Get(0)
+		fields := oneof.Fields()
+		for index := 0; index < fields.Len(); index++ {
+			field := fields.Get(index)
+			identity := fmt.Sprintf("%s.%s (%s)", messageName, field.Name(), field.Message().Name())
+			if _, ok := byProtocol[identity]; !ok {
+				t.Errorf("%s is absent from the capability map", identity)
+			}
 		}
 	}
-	return known
+	assertOneofCoverage("ExecServerMessage", &agentv1.ExecServerMessage{})
+	assertOneofCoverage("ToolCall", &agentv1.ToolCall{})
+
+	promptTools := map[string]struct{}{}
+	for _, tc := range modeWhitelistTests {
+		for _, name := range loadAssetToolNames(t, tc.mode) {
+			promptTools[name] = struct{}{}
+		}
+	}
+	for _, name := range loadAssetToolNames(t, prompt.ModeSubagent) {
+		promptTools[name] = struct{}{}
+	}
+	for name := range promptTools {
+		identity := "PromptTool." + name
+		if _, ok := byProtocol[identity]; !ok {
+			t.Errorf("%s is absent from the capability map", identity)
+		}
+	}
+}
+
+func capabilityOneofIdentity(messageName string, message interface{ ProtoReflect() protoreflect.Message }) string {
+	descriptor := message.ProtoReflect().Descriptor()
+	oneof := descriptor.Oneofs().Get(0)
+	field := message.ProtoReflect().WhichOneof(oneof)
+	if field == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s.%s (%s)", messageName, field.Name(), field.Message().Name())
+}
+
+func TestCursorCapabilityImplementedRoutesReachMappedProtocol(t *testing.T) {
+	reached := map[string]bool{}
+	reachToolCall := func(toolCall *agentv1.ToolCall) {
+		t.Helper()
+		identity := capabilityOneofIdentity("ToolCall", toolCall)
+		if identity == "" {
+			t.Fatalf("ToolCall has no selected oneof: %#v", toolCall)
+		}
+		reached[identity] = true
+	}
+
+	execCases := []struct {
+		toolName string
+		argsJSON string
+		wantArm  string
+	}{
+		{"Read", `{"path":"x"}`, "ExecServerMessage.read_args (ReadArgs)"},
+		{"Write", `{"path":"x","contents":"x"}`, "ExecServerMessage.write_args (WriteArgs)"},
+		{"Delete", `{"path":"x"}`, "ExecServerMessage.delete_args (DeleteArgs)"},
+		{"Glob", `{"glob_pattern":"*.go","target_directory":"."}`, "ExecServerMessage.grep_args (GrepArgs)"},
+		{"Grep", `{"pattern":"x"}`, "ExecServerMessage.grep_args (GrepArgs)"},
+		{"ReadLints", "{}", "ExecServerMessage.diagnostics_args (DiagnosticsArgs)"},
+		{"Ls", `{"path":"."}`, "ExecServerMessage.ls_args (LsArgs)"},
+		{"Shell", `{"command":"echo ok"}`, "ExecServerMessage.shell_stream_args (ShellArgs)"},
+		{"WriteShellStdin", `{"shell_id":1,"chars":"x"}`, "ExecServerMessage.write_shell_stdin_args (WriteShellStdinArgs)"},
+		{"ForceBackgroundShell", `{"tool_call_id":"target"}`, "ExecServerMessage.force_background_shell_args (ForceBackgroundShellArgs)"},
+		{"Task", `{"subagent_type":"explore","access_mode":"inspect","prompt":"x"}`, "ExecServerMessage.subagent_args (SubagentArgs)"},
+		{"CallMcpTool", `{"server":"s","toolName":"t","arguments":{}}`, "ExecServerMessage.mcp_args (McpArgs)"},
+		{"ListMcpResources", `{"server":"s"}`, "ExecServerMessage.list_mcp_resources_exec_args (ListMcpResourcesExecArgs)"},
+		{"FetchMcpResource", `{"server":"s","uri":"x"}`, "ExecServerMessage.read_mcp_resource_exec_args (ReadMcpResourceExecArgs)"},
+		{"Fetch", `{"url":"https://example.com"}`, "ExecServerMessage.fetch_args (FetchArgs)"},
+		{"RecordScreen", "{}", "ExecServerMessage.record_screen_args (RecordScreenArgs)"},
+		{"ComputerUse", `{"actions":[{"type":"screenshot"}]}`, "ExecServerMessage.computer_use_args (ComputerUseArgs)"},
+		{"ForceBackgroundSubagent", `{"tool_call_id":"target"}`, "ExecServerMessage.force_background_subagent_args (ForceBackgroundSubagentArgs)"},
+		{"SubagentAwait", `{"agent_id":"agent-1"}`, "ExecServerMessage.subagent_await_args (SubagentAwaitArgs)"},
+	}
+	execBridge := execbridge.NewBridge()
+	for _, tc := range execCases {
+		t.Run("exec_"+tc.toolName, func(t *testing.T) {
+			if tc.toolName != "ListMcpResources" && !isExecTool(tc.toolName) {
+				t.Fatalf("%s is not admitted by the service exec route", tc.toolName)
+			}
+			serverMessage, pending, err := execBridge.OpenExec(execbridge.OpenExecContext{
+				ConversationID: "conversation", ModelID: "model", WorkspaceHint: ".",
+			}, runtimecore.ToolInvocation{CallID: "call-" + tc.toolName, ToolName: tc.toolName, ArgsJSON: []byte(tc.argsJSON)})
+			if err != nil {
+				t.Fatalf("OpenExec(%s): %v", tc.toolName, err)
+			}
+			execMessage := serverMessage.GetExecServerMessage()
+			if identity := capabilityOneofIdentity("ExecServerMessage", execMessage); identity != tc.wantArm {
+				t.Fatalf("OpenExec(%s) arm = %q, want %q", tc.toolName, identity, tc.wantArm)
+			}
+			reached[tc.wantArm] = true
+			if tc.toolName == "ReadLints" {
+				applied, err := execBridge.ApplyExecClientMessage(&agentv1.ExecClientMessage{
+					Id: pending.MessageID, ExecId: pending.ExecID,
+					Message: &agentv1.ExecClientMessage_DiagnosticsResult{DiagnosticsResult: &agentv1.DiagnosticsResult{}},
+				}, pending)
+				if err != nil {
+					t.Fatalf("ApplyExecClientMessage(ReadLints): %v", err)
+				}
+				reachToolCall(applied.ToolCall)
+			}
+		})
+	}
+
+	hookMessage, _, err := execBridge.OpenExecuteHook(&agentv1.ExecuteHookRequest{
+		Request: &agentv1.ExecuteHookRequest_PreCompact{PreCompact: &agentv1.PreCompactRequestQuery{}},
+	}, "execute_hook_pre_compact")
+	if err != nil {
+		t.Fatalf("OpenExecuteHook: %v", err)
+	}
+	hookIdentity := capabilityOneofIdentity("ExecServerMessage", hookMessage.GetExecServerMessage())
+	if hookIdentity != "ExecServerMessage.execute_hook_args (ExecuteHookArgs)" {
+		t.Fatalf("OpenExecuteHook arm = %q", hookIdentity)
+	}
+	reached[hookIdentity] = true
+
+	interactionCases := []struct {
+		toolName string
+		argsJSON string
+	}{
+		{"AskQuestion", "{}"},
+		{"CreatePlan", "{}"},
+		{"WebSearch", `{"search_term":"x"}`},
+		{"WebFetch", `{"url":"https://example.com"}`},
+		{"SwitchMode", `{"target_mode_id":"agent"}`},
+		{"CreatePr", `{"title":"x"}`},
+		{"UpdatePr", "{}"},
+	}
+	interactionBridge := interactionbridge.NewBridge()
+	for _, tc := range interactionCases {
+		t.Run("interaction_"+tc.toolName, func(t *testing.T) {
+			if !isInteractionTool(tc.toolName) {
+				t.Fatalf("%s is not admitted by the service interaction route", tc.toolName)
+			}
+			if _, _, err := interactionBridge.OpenQuery(runtimecore.ToolInvocation{
+				CallID: "call-" + tc.toolName, ToolName: tc.toolName, ArgsJSON: []byte(tc.argsJSON),
+			}); err != nil {
+				t.Fatalf("OpenQuery(%s): %v", tc.toolName, err)
+			}
+		})
+	}
+
+	startedCases := []struct {
+		toolName string
+		argsJSON string
+		wantArm  string
+	}{
+		{"Shell", `{"command":"echo ok"}`, "ToolCall.shell_tool_call (ShellToolCall)"},
+		{"Delete", `{"path":"x"}`, "ToolCall.delete_tool_call (DeleteToolCall)"},
+		{"Glob", `{"glob_pattern":"*.go"}`, "ToolCall.glob_tool_call (GlobToolCall)"},
+		{"Grep", `{"pattern":"x"}`, "ToolCall.grep_tool_call (GrepToolCall)"},
+		{"Read", `{"path":"x"}`, "ToolCall.read_tool_call (ReadToolCall)"},
+		{"TodoWrite", `{"todos":[]}`, "ToolCall.update_todos_tool_call (UpdateTodosToolCall)"},
+		{"Write", `{"path":"x","contents":"x"}`, "ToolCall.edit_tool_call (EditToolCall)"},
+		{"Ls", `{"path":"."}`, "ToolCall.ls_tool_call (LsToolCall)"},
+		{"CallMcpTool", `{"server":"s","toolName":"t","arguments":{}}`, "ToolCall.mcp_tool_call (McpToolCall)"},
+		{"CreatePlan", "{}", "ToolCall.create_plan_tool_call (CreatePlanToolCall)"},
+		{"WebSearch", `{"search_term":"x"}`, "ToolCall.web_search_tool_call (WebSearchToolCall)"},
+		{"Task", `{"subagent_type":"explore","access_mode":"inspect","prompt":"x"}`, "ToolCall.task_tool_call (TaskToolCall)"},
+		{"ListMcpResources", `{"server":"s"}`, "ToolCall.list_mcp_resources_tool_call (ListMcpResourcesToolCall)"},
+		{"FetchMcpResource", `{"server":"s","uri":"x"}`, "ToolCall.read_mcp_resource_tool_call (ReadMcpResourceToolCall)"},
+		{"AskQuestion", "{}", "ToolCall.ask_question_tool_call (AskQuestionToolCall)"},
+		{"Fetch", `{"url":"https://example.com"}`, "ToolCall.fetch_tool_call (FetchToolCall)"},
+		{"SwitchMode", `{"target_mode_id":"agent"}`, "ToolCall.switch_mode_tool_call (SwitchModeToolCall)"},
+		{"GenerateImage", "{}", "ToolCall.generate_image_tool_call (GenerateImageToolCall)"},
+		{"RecordScreen", "{}", "ToolCall.record_screen_tool_call (RecordScreenToolCall)"},
+		{"ComputerUse", `{"actions":[{"type":"screenshot"}]}`, "ToolCall.computer_use_tool_call (ComputerUseToolCall)"},
+		{"WriteShellStdin", `{"shell_id":1,"chars":"x"}`, "ToolCall.write_shell_stdin_tool_call (WriteShellStdinToolCall)"},
+		{"WebFetch", `{"url":"https://example.com"}`, "ToolCall.web_fetch_tool_call (WebFetchToolCall)"},
+		{"CreatePr", `{"title":"x"}`, "ToolCall.pr_management_tool_call (PrManagementToolCall)"},
+		{"AwaitShell", `{"shell_id":1}`, "ToolCall.await_tool_call (AwaitToolCall)"},
+		{"send_final_summary", `{"final_summary":"done"}`, "ToolCall.send_final_summary_tool_call (SendFinalSummaryToolCall)"},
+	}
+	for _, tc := range startedCases {
+		toolCall := buildStartedToolCall(runtimecore.ToolInvocation{CallID: "call-" + tc.toolName, ToolName: tc.toolName, ArgsJSON: []byte(tc.argsJSON)})
+		identity := capabilityOneofIdentity("ToolCall", toolCall)
+		if identity != tc.wantArm {
+			t.Fatalf("buildStartedToolCall(%s) arm = %q, want %q", tc.toolName, identity, tc.wantArm)
+		}
+		reached[identity] = true
+	}
+
+	for _, toolName := range []string{"GenerateImage", "AwaitShell", "SeeImage", "send_final_summary"} {
+		if !isImmediateNativeTool(toolName) {
+			t.Errorf("%s is not admitted by the immediate-native route", toolName)
+		}
+	}
+	if buildStartedToolCall(runtimecore.ToolInvocation{CallID: "see-image", ToolName: "SeeImage", ArgsJSON: []byte(`{"image_path":"x.png"}`)}) != nil {
+		t.Error("SeeImage intentionally has no dedicated ToolCall arm")
+	}
+	if !isLocalStateTool("TodoWrite") {
+		t.Error("TodoWrite is not admitted by the local-state route")
+	}
+	if !isPatchEditToolName("PatchEdit") {
+		t.Error("PatchEdit is not admitted by the patch-edit route")
+	}
+
+	for _, tc := range execCases {
+		if tc.toolName != "ListMcpResources" {
+			reached["PromptTool."+tc.toolName] = true
+		}
+	}
+	for _, tc := range interactionCases {
+		reached["PromptTool."+tc.toolName] = true
+	}
+	for _, toolName := range []string{"GenerateImage", "AwaitShell", "SeeImage", "send_final_summary", "TodoWrite", "PatchEdit"} {
+		reached["PromptTool."+toolName] = true
+	}
+
+	for _, entry := range CursorCapabilityMap() {
+		if entry.Status == "implemented" && !reached[entry.ProtocolName] {
+			t.Errorf("implemented capability %s was not reached through its real route", entry.ProtocolName)
+		}
+	}
+}
+
+func TestCursorCapabilityMapDistinguishesReusedExecArms(t *testing.T) {
+	want := []string{
+		"ExecServerMessage.read_args (ReadArgs)",
+		"ExecServerMessage.redacted_read_args (ReadArgs)",
+		"ExecServerMessage.shell_args (ShellArgs)",
+		"ExecServerMessage.shell_stream_args (ShellArgs)",
+		"ExecServerMessage.mini_swe_agent_bash_args (ShellArgs)",
+	}
+	byProtocol := map[string]CursorCapabilityEntry{}
+	for _, entry := range CursorCapabilityMap() {
+		byProtocol[entry.ProtocolName] = entry
+	}
+	for _, identity := range want {
+		if _, ok := byProtocol[identity]; !ok {
+			t.Errorf("missing distinct exec arm %s", identity)
+		}
+	}
+}
+
+func TestCursorCapabilityMapKnownMappingsAreFactuallyReachable(t *testing.T) {
+	byProtocol := map[string]CursorCapabilityEntry{}
+	for _, entry := range CursorCapabilityMap() {
+		byProtocol[entry.ProtocolName] = entry
+		if entry.Status == "implemented" {
+			if entry.ReachabilityTest != "internal/backend/forwarder/tool_catalog_test.go: TestCursorCapabilityImplementedRoutesReachMappedProtocol" {
+				t.Errorf("implemented capability %s cites non-semantic reachability evidence %q", entry.ProtocolName, entry.ReachabilityTest)
+			}
+		}
+	}
+
+	listResources := byProtocol["ExecServerMessage.list_mcp_resources_exec_args (ListMcpResourcesExecArgs)"]
+	if listResources.Status != "implemented" || !strings.Contains(listResources.Handler, "openListMcpResources") {
+		t.Errorf("ListMcpResources mapping is not the real exec bridge route: %#v", listResources)
+	}
+	backgroundSpawn := byProtocol["ExecServerMessage.background_shell_spawn_args (BackgroundShellSpawnArgs)"]
+	if backgroundSpawn.Status != "unsupported" || strings.TrimSpace(backgroundSpawn.UnsupportedReason) == "" {
+		t.Errorf("BackgroundShellSpawn must not be marked implemented without an emitting route: %#v", backgroundSpawn)
+	}
+	todo := byProtocol["PromptTool.TodoWrite"]
+	if !strings.Contains(todo.Handler, "interaction_tools.go: Service.handleLocalStateToolInvocation") {
+		t.Errorf("TodoWrite mapping points at the wrong handler: %#v", todo)
+	}
+}
+
+func TestRenderCursorCapabilityMapIsDeterministic(t *testing.T) {
+	first := RenderCursorCapabilityMap()
+	second := RenderCursorCapabilityMap()
+	if first != second {
+		t.Fatal("capability map rendering is not deterministic")
+	}
+	if !strings.Contains(first, "| ExecServerMessage.shell_stream_args (ShellArgs) | executable tool |") {
+		t.Fatalf("rendered map is missing the Shell exec arm: %s", first)
+	}
 }
