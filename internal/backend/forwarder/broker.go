@@ -101,6 +101,9 @@ func (broker *StreamBroker) OpenStream(requestID string, conversationID string, 
 		if existing.StreamTimers == nil {
 			existing.StreamTimers = make(map[string]*time.Timer)
 		}
+		if existing.ExecCompletionSignals == nil {
+			existing.ExecCompletionSignals = make(map[string]chan struct{})
+		}
 		existing.UpdatedAt = time.Now().UTC()
 		existing.mu.Unlock()
 		return existing, nil
@@ -128,6 +131,7 @@ func (broker *StreamBroker) OpenStream(requestID string, conversationID string, 
 		BackgroundShellsByMessageID: make(map[uint32]string),
 		BackgroundShellsByExecID:    make(map[string]string),
 		BackgroundShellActions:      make(map[string]time.Time),
+		ExecCompletionSignals:       make(map[string]chan struct{}),
 		TimerTokens:                 make(map[string]uint64),
 		StreamTimers:                make(map[string]*time.Timer),
 		CreatedAt:                   now,

@@ -36,7 +36,7 @@ import (
 const (
 	providerResumeDebounce         = 200 * time.Millisecond
 	completedExecRetention         = 15 * time.Second
-	nonStreamingExecCloseGrace     = 1500 * time.Millisecond
+	defaultNonStreamingCloseGrace  = 30 * time.Second
 	defaultSummaryCompletedThought = "Chat context summarized"
 	providerDefaultMaxOutputTokens = 65536
 	providerOutputSafetyTokens     = 1024
@@ -115,6 +115,14 @@ type Service struct {
 	checkpointBlobs          map[string]*checkpointBlobCacheEntry
 	recentWorkspaceRootMu    sync.RWMutex
 	recentWorkspaceRoot      string
+	// nonStreamingCloseGrace returns the bounded wait period for non-streaming
+	// exec recovery after stream_close. Production uses a conservative default;
+	// tests may override via direct field assignment.
+	nonStreamingCloseGrace func() time.Duration
+	// nonStreamingRecoveryTimer, if non-nil, provides the timer channel used
+	// by the non-streaming recovery goroutine instead of time.After. Tests
+	// inject a test-controlled channel to trigger timeouts deterministically.
+	nonStreamingRecoveryTimer func(execID string, grace time.Duration) <-chan time.Time
 }
 
 // RecentWorkspaceRoot returns the latest non-empty workspace root observed
@@ -267,6 +275,7 @@ func NewService(historyRoot string, resolver modeladapter.ChannelResolver) *Serv
 		visionArchiveLimit:       visionArchiveMaxEntries,
 		checkpointBlobs:          make(map[string]*checkpointBlobCacheEntry),
 		conversationLastActivity: make(map[string]time.Time),
+			nonStreamingCloseGrace:   func() time.Duration { return defaultNonStreamingCloseGrace },
 	}
 	service.cursorDelegation = newCursorDelegationBridge(service)
 	service.localDelegation = newLocalDelegatedAgentAdapter(service)
@@ -322,6 +331,7 @@ func newServiceWithDependencies(store *ConversationFileStore, projector *History
 		visionArchiveLimit:       visionArchiveMaxEntries,
 		checkpointBlobs:          make(map[string]*checkpointBlobCacheEntry),
 		conversationLastActivity: make(map[string]time.Time),
+			nonStreamingCloseGrace:   func() time.Duration { return defaultNonStreamingCloseGrace },
 	}
 	service.cursorDelegation = newCursorDelegationBridge(service)
 	service.localDelegation = newLocalDelegatedAgentAdapter(service)
@@ -895,6 +905,16 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 	stream.PendingCompaction = nil
 	stream.PendingExecs = make(map[string]runtimecore.PendingExec)
 	stream.PendingInteractions = make(map[string]runtimecore.PendingInteraction)
+		// Close any leftover completion signals from previous turn, then allocate a fresh map.
+		for execID, ch := range stream.ExecCompletionSignals {
+			if ch != nil {
+				close(ch)
+			}
+			delete(stream.ExecCompletionSignals, execID)
+		}
+		if stream.ExecCompletionSignals == nil {
+			stream.ExecCompletionSignals = make(map[string]chan struct{})
+		}
 	stream.RecentCompletedExecs = make(map[uint32]time.Time)
 	stream.RecentCompletedInteractions = make(map[string]time.Time)
 	stream.BackgroundShells = make(map[string]*BackgroundShellState)
@@ -1227,6 +1247,16 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	stream.mu.Lock()
 	stream.PendingExecs = make(map[string]runtimecore.PendingExec)
 	stream.PendingInteractions = make(map[string]runtimecore.PendingInteraction)
+		// Close any leftover completion signals from previous turn, then allocate a fresh map.
+		for execID, ch := range stream.ExecCompletionSignals {
+			if ch != nil {
+				close(ch)
+			}
+			delete(stream.ExecCompletionSignals, execID)
+		}
+		if stream.ExecCompletionSignals == nil {
+			stream.ExecCompletionSignals = make(map[string]chan struct{})
+		}
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
 	if hasCheckpoint {
@@ -1586,15 +1616,91 @@ func (service *Service) scheduleNonStreamingExecRecovery(requestID string, pendi
 	if !ok || stream == nil {
 		return
 	}
-	service.scheduleStreamTimer(
-		stream,
-		providerTimerKey(streamTimerNonStreamingRecovery, pending.ExecID),
-		nonStreamingExecCloseGrace,
-		streamTimerNonStreamingRecovery,
-		pending.ExecID,
-		pending.MessageID,
-		"",
-	)
+	execID := strings.TrimSpace(pending.ExecID)
+	messageID := pending.MessageID
+	timerKey := providerTimerKey(streamTimerNonStreamingRecovery, execID)
+
+	// Register a completion signal so the terminal-result path can wake us,
+	// and a TimerTokens entry for invalidation — same semantics as
+	// scheduleStreamTimer.
+	signal := make(chan struct{})
+	stream.mu.Lock()
+	if stream.ExecCompletionSignals == nil {
+		stream.ExecCompletionSignals = make(map[string]chan struct{})
+	}
+	// Idempotent: if a signal already exists for this exec (duplicate
+	// stream_close), don't double-register.
+	if _, exists := stream.ExecCompletionSignals[execID]; exists {
+		stream.mu.Unlock()
+		return
+	}
+	stream.ExecCompletionSignals[execID] = signal
+	if stream.TimerTokens == nil {
+		stream.TimerTokens = make(map[string]uint64)
+	}
+	stream.TimerTokens[timerKey]++
+	token := stream.TimerTokens[timerKey]
+	stream.mu.Unlock()
+
+	// Choose a grace duration. Production uses the injected conservative
+	// default; tests override the field for short deterministic timeouts.
+	grace := defaultNonStreamingCloseGrace
+	if fn := service.nonStreamingCloseGrace; fn != nil {
+		grace = fn()
+	}
+
+	// Start a background goroutine that waits for one of:
+	//   - signal closed → terminal result arrived; recovery not needed.
+	//   - timer fires  → post the timer event to the actor.
+	// The actor's handleTimerEvent rechecks pending identity / state under
+	// stream.mu before synthesizing failure, so late arrival between timeout
+	// and actor dispatch is handled correctly.
+	go func() {
+		defer func() {
+			// Clean up the map entry on exit (already closed by the
+			// terminal/recovery path, or never needed).
+			stream.mu.Lock()
+			if ch, ok := stream.ExecCompletionSignals[execID]; ok && ch == signal {
+				delete(stream.ExecCompletionSignals, execID)
+			}
+			stream.mu.Unlock()
+		}()
+
+		// Use the injectable timer when a test hook is present;
+		// otherwise fall back to the production time.After.
+		var timerCh <-chan time.Time
+		if fn := service.nonStreamingRecoveryTimer; fn != nil {
+			timerCh = fn(execID, grace)
+		} else {
+			timerCh = time.After(max(grace, 0))
+		}
+
+		select {
+		case <-signal:
+			// Terminal result arrived; no recovery needed.
+			return
+		case <-timerCh:
+			// Grace expired; ask the actor to recheck and possibly
+			// synthesize failure.
+		}
+
+		// Post the timer event to the stream actor. The event carries
+		// the token registered above so timerEventMatches can reject
+		// stale events after cancel / new-turn invalidation.
+		if err := service.postStreamCommandAsync(stream, streamCommand{
+			Kind: streamCommandTimerFired,
+			Timer: &streamTimerEvent{
+				Key:       timerKey,
+				Kind:      streamTimerNonStreamingRecovery,
+				Token:     token,
+				ExecID:    execID,
+				MessageID: messageID,
+			},
+		}); err != nil && !errors.Is(err, errProviderLoopInterrupted) {
+			logger.Errorf("forwarder non-streaming recovery post failed request_id=%s exec_id=%s err=%v",
+				strings.TrimSpace(requestID), execID, err)
+		}
+	}()
 }
 
 func (service *Service) recoverNonStreamingExecAfterStreamClose(stream *ActiveStream, pending runtimecore.PendingExec) error {
@@ -4373,6 +4479,14 @@ func markExecCompleted(stream *ActiveStream, pending runtimecore.PendingExec) {
 
 	stream.mu.Lock()
 	delete(stream.PendingExecs, pending.ExecID)
+	// Close the completion signal to wake any waiting non-streaming
+	// recovery goroutine; idempotent under stream.mu.
+	if stream.ExecCompletionSignals != nil {
+		if ch, ok := stream.ExecCompletionSignals[pending.ExecID]; ok {
+			delete(stream.ExecCompletionSignals, pending.ExecID)
+			close(ch)
+		}
+	}
 	if pending.MessageID != 0 {
 		if stream.RecentCompletedExecs == nil {
 			stream.RecentCompletedExecs = make(map[uint32]time.Time)

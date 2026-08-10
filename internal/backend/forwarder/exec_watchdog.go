@@ -170,6 +170,14 @@ func cleanupAllPendingExecs(stream *ActiveStream) []runtimecore.PendingExec {
 	for execID, item := range stream.PendingExecs {
 		pending = append(pending, item)
 		delete(stream.PendingExecs, execID)
+		// Close completion signal to wake any waiting non-streaming
+		// recovery goroutine.
+		if stream.ExecCompletionSignals != nil {
+			if ch, ok := stream.ExecCompletionSignals[execID]; ok {
+				delete(stream.ExecCompletionSignals, execID)
+				close(ch)
+			}
+		}
 	}
 	stream.UpdatedAt = time.Now().UTC()
 	return pending
