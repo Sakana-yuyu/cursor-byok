@@ -1,27 +1,26 @@
-## v0.0.87
+## v0.0.88
 
-本版本聚焦三个稳定性修复：gpt-5.6 并行工具调用参数流回退安全默认、上下文 preflight 超限时的自动强制压缩兜底，以及长时 native 子代理不再被 exec 看门狗误杀。
+本版本聚焦两个稳定性修复：native 子代理瞬时上游故障自动重试，以及历史会话 legacy Shell 工具调用解析崩溃。
 
 ### 修复
 
-- **gpt-5.6 并行工具调用回退串行默认**：v0.0.85 自动开启 `parallel_tool_calls` 后，模型偶发返回截断或错误转义的工具参数，导致工具调用残缺。本版本改为安全默认：gpt-5.6 Responses 请求默认串行（`parallel_tool_calls:false`），用户通过 extra params 显式选择并行时仍尊重其配置。
-- **上下文超限自动兜底压缩（自动 `/summarize`）**：长会话中被冻结的头部历史让自动投影压缩结构性压不动，请求体积持续增长，最终以「Context Too Large After Compaction」终态失败。现在当自动压缩链穷尽、provider 请求前预算校验仍超限时，会先自动执行一次 `/summarize` 式强制压缩（覆盖所有历史轮次并真正重写会话），压缩完成后自动继续原请求；仅当压缩后仍超限才报错（每回合最多触发一次，避免死循环）。
-- **长时 native 子代理不再被误杀**：Cursor 原生子代理在客户端运行，长任务（约 30 分钟）因客户端不回传 exec 心跳，会被 30 分钟 exec 看门狗在与完成信号赛跑时强杀成超时。现在看门狗到期时若子代理仍在运行会先延期一次（总上限 60 分钟），只有真正失去信号才按超时收口；同时成功完成的子代理不再被误记为错误日志。
+- **native 子代理瞬时上游故障自动重试**：上游中转站出现瞬时 `request_timeout` / `503 Connection refused` 时，父 agent 靠模型重试能扛住，而 Cursor 原生子代理一次 provider 调用失败即被判死。现在子代理因可判定的瞬时上游错误失败时，会自动重新派发同一次 Task（最多 2 次重试、共 3 次尝试），上游恢复后即可成功；仅重试耗尽或非瞬时错误（如 `context_too_large`、工具逻辑失败）才按原样失败。
+- **历史会话 legacy Shell 工具调用解析崩溃修复**：旧版本写入的 Shell 工具调用把 `outputNotification` 存成 message 对象，而当前格式是 base64 bytes，导致带旧历史的会话在启动或失败收尾发布 checkpoint 时解析崩溃（报 `invalid value for bytes field outputNotification`），表现为「An unexpected error occurred」且反复重试。现在所有历史解析路径都会把 legacy 对象格式自动升级，旧会话恢复正常。
 
 ### 说明
 
-- 本版本同时包含 v0.0.85 的全部更新（会话级调度与隔离、全局上下文投影、委派与子代理增强、设置与历史界面优化等）。
+- 本版本同时包含 v0.0.87 的全部修复（gpt-5.6 并行工具调用回退串行、上下文 preflight 超限自动压缩、长时子代理不再被看门狗误杀）与 v0.0.85 的全部更新（会话级调度与隔离、全局上下文投影、委派与子代理增强、设置与历史界面优化等）。
 
 ### 下载哪个文件？（按系统选择）
 
 > 名字里的 x64 / x32 / arm64 表示 CPU 架构，认准自己系统的类型下载即可。
 
-- **Windows 64 位（绝大多数 Windows 电脑）**：下载 `cursor-byok-0.0.87-windows-x64-installer.exe`（安装版，推荐）或 `cursor-byok-0.0.87-windows-x64.zip`（绿色版）
-- **Windows ARM64（骁龙/麒麟等 ARM 处理器的 Windows 电脑）**：下载 `cursor-byok-0.0.87-windows-arm64-installer.exe` 或 `cursor-byok-0.0.87-windows-arm64.zip`
-- **Windows 32 位（很老的低配电脑才需要）**：下载 `cursor-byok-0.0.87-windows-x32-installer.exe` 或 `cursor-byok-0.0.87-windows-x32.zip`
-- **macOS Apple Silicon（M1/M2/M3/M4 芯片）**：下载 `cursor-byok-0.0.87-macos-arm64.dmg`
-- **macOS Intel**：下载 `cursor-byok-0.0.87-macos-x64.dmg`
-- **Linux 64 位**：下载 `cursor-byok-0.0.87-linux-x64.tar.gz`
+- **Windows 64 位（绝大多数 Windows 电脑）**：下载 `cursor-byok-0.0.88-windows-x64-installer.exe`（安装版，推荐）或 `cursor-byok-0.0.88-windows-x64.zip`（绿色版）
+- **Windows ARM64（骁龙/麒麟等 ARM 处理器的 Windows 电脑）**：下载 `cursor-byok-0.0.88-windows-arm64-installer.exe` 或 `cursor-byok-0.0.88-windows-arm64.zip`
+- **Windows 32 位（很老的低配电脑才需要）**：下载 `cursor-byok-0.0.88-windows-x32-installer.exe` 或 `cursor-byok-0.0.88-windows-x32.zip`
+- **macOS Apple Silicon（M1/M2/M3/M4 芯片）**：下载 `cursor-byok-0.0.88-macos-arm64.dmg`
+- **macOS Intel**：下载 `cursor-byok-0.0.88-macos-x64.dmg`
+- **Linux 64 位**：下载 `cursor-byok-0.0.88-linux-x64.tar.gz`
 
 **如何判断自己的 Windows 是多少位**：右键“此电脑” -> “属性”，查看“系统类型”。显示“64 位操作系统”下载 x64，只有显示“32 位”才下载 x32。macOS 可在“关于本机”查看芯片是 Apple 还是 Intel。
 
