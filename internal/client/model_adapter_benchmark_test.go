@@ -2,6 +2,7 @@ package client
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -9,15 +10,42 @@ import (
 	"cursor/internal/modelchannel"
 )
 
-func TestCalculateGenerationTokensPerSecondExcludesFirstTokenLatency(t *testing.T) {
+func TestCalculateGenerationTokensPerSecondExcludesFirstResponseLatency(t *testing.T) {
 	startedAt := time.Unix(0, 0)
-	firstTextTokenAt := startedAt.Add(20 * time.Second)
+	firstResponseAt := startedAt.Add(20 * time.Second)
 	finishedAt := startedAt.Add(24 * time.Second)
 
-	got := calculateGenerationTokensPerSecond(240, firstTextTokenAt, finishedAt)
+	got := calculateGenerationTokensPerSecond(240, firstResponseAt, finishedAt)
 
 	if math.Abs(got-60) > 0.0001 {
 		t.Fatalf("tokens per second mismatch: got=%f want=60", got)
+	}
+}
+
+func TestBuildSuccessfulModelAdapterTestResultSeparatesTotalAndVisibleThroughput(t *testing.T) {
+	startedAt := time.Unix(0, 0)
+	metrics := &modelAdapterTestMetrics{
+		firstResponseAt:  startedAt.Add(20 * time.Second),
+		firstTextTokenAt: startedAt.Add(23 * time.Second),
+		finishedAt:       startedAt.Add(24 * time.Second),
+		outputTokens:     240,
+		outputProvided:   true,
+		reasoningTokens:  180,
+	}
+	_, _ = metrics.text.WriteString(strings.Repeat("a", 240))
+
+	result, ok := buildSuccessfulModelAdapterTestResult("adapter", "hash", startedAt, metrics)
+	if !ok {
+		t.Fatal("expected successful result")
+	}
+	if math.Abs(result.TokensPerSecond-60) > 0.0001 {
+		t.Fatalf("total TPS = %f, want 60", result.TokensPerSecond)
+	}
+	if result.FirstResponseMS != 20_000 || result.FirstTextTokenMS != 23_000 {
+		t.Fatalf("latencies = response:%d text:%d", result.FirstResponseMS, result.FirstTextTokenMS)
+	}
+	if result.ReasoningTokens != 180 || result.VisibleTokensPerSecond <= 0 {
+		t.Fatalf("usage = reasoning:%d visible_tps:%f", result.ReasoningTokens, result.VisibleTokensPerSecond)
 	}
 }
 
@@ -45,6 +73,30 @@ func TestCalculateGenerationTokensPerSecondRejectsInvalidGenerationWindow(t *tes
 
 			if got != 0 {
 				t.Fatalf("tokens per second mismatch: got=%f want=0", got)
+			}
+		})
+	}
+}
+
+func TestCalculateVisibleTokensPerSecondRejectsInvalidVisibleWindow(t *testing.T) {
+	base := time.Unix(0, 0)
+	tests := []struct {
+		name                string
+		visibleOutputTokens int64
+		firstTextTokenAt    time.Time
+		finishedAt          time.Time
+	}{
+		{name: "zero visible tokens", visibleOutputTokens: 0, firstTextTokenAt: base, finishedAt: base.Add(time.Second)},
+		{name: "zero duration", visibleOutputTokens: 10, firstTextTokenAt: base, finishedAt: base},
+		{name: "negative duration", visibleOutputTokens: 10, firstTextTokenAt: base.Add(time.Second), finishedAt: base},
+		{name: "missing first text time", visibleOutputTokens: 10, finishedAt: base.Add(time.Second)},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := calculateVisibleTokensPerSecond(test.visibleOutputTokens, test.firstTextTokenAt, test.finishedAt)
+			if got != 0 {
+				t.Fatalf("visible tokens per second mismatch: got=%f want=0", got)
 			}
 		})
 	}

@@ -103,8 +103,11 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 	}
 
 	type openAIResponsesUsage struct {
-		InputTokens        int64 `json:"input_tokens"`
-		OutputTokens       int64 `json:"output_tokens"`
+		InputTokens         int64 `json:"input_tokens"`
+		OutputTokens        int64 `json:"output_tokens"`
+		OutputTokensDetails *struct {
+			ReasoningTokens int64 `json:"reasoning_tokens"`
+		} `json:"output_tokens_details,omitempty"`
 		InputTokensDetails *struct {
 			CachedTokens int64 `json:"cached_tokens"`
 		} `json:"input_tokens_details,omitempty"`
@@ -167,6 +170,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 	currentModel := modelID
 	inputTokens := int64(0)
 	outputTokens := int64(0)
+	reasoningTokens := int64(0)
 	cacheReadTokens := int64(0)
 	cacheWriteTokens := int64(0)
 	usagePresent := false
@@ -231,6 +235,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			Model:             currentModel,
 			InputTokens:       inputTokens,
 			OutputTokens:      outputTokens,
+			ReasoningTokens:   reasoningTokens,
 			CacheReadTokens:   cacheReadTokens,
 			CacheWriteTokens:  cacheWriteTokens,
 			UsagePresent:      usagePresent,
@@ -370,6 +375,9 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		}
 		inputTokens = promptTokens - cachedTokens
 		outputTokens = maxInt64(usage.OutputTokens, 0)
+		if usage.OutputTokensDetails != nil {
+			reasoningTokens = maxInt64(usage.OutputTokensDetails.ReasoningTokens, 0)
+		}
 		cacheReadTokens = cachedTokens
 		cacheWriteTokens = 0
 		cacheWritePresent = true

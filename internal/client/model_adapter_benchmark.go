@@ -48,18 +48,23 @@ const (
 
 // ModelAdapterTestResult 表示一次模型测速结果。
 type ModelAdapterTestResult struct {
-	AdapterID        string  `json:"adapterID"`
-	RequestHash      string  `json:"requestHash"`
-	Status           string  `json:"status"`
-	TokensPerSecond  float64 `json:"tokensPerSecond"`
-	FirstTextTokenMS int64   `json:"firstTextTokenMS"`
-	TotalDurationMS  int64   `json:"totalDurationMS"`
-	OutputTokens     int64   `json:"outputTokens"`
-	TokensEstimated  bool    `json:"tokensEstimated"`
-	SummaryText      string  `json:"summaryText"`
-	Error            string  `json:"error"`
-	RawResponse      string  `json:"rawResponse"`
-	TestedAt         string  `json:"testedAt"`
+	AdapterID               string  `json:"adapterID"`
+	RequestHash             string  `json:"requestHash"`
+	Status                  string  `json:"status"`
+	TokensPerSecond         float64 `json:"tokensPerSecond"`
+	VisibleTokensPerSecond  float64 `json:"visibleTokensPerSecond"`
+	FirstResponseMS         int64   `json:"firstResponseMS"`
+	FirstTextTokenMS        int64   `json:"firstTextTokenMS"`
+	TotalDurationMS         int64   `json:"totalDurationMS"`
+	OutputTokens            int64   `json:"outputTokens"`
+	VisibleOutputTokens     int64   `json:"visibleOutputTokens"`
+	ReasoningTokens         int64   `json:"reasoningTokens"`
+	EffectiveThinkingEffort string  `json:"effectiveThinkingEffort"`
+	TokensEstimated         bool    `json:"tokensEstimated"`
+	SummaryText             string  `json:"summaryText"`
+	Error                   string  `json:"error"`
+	RawResponse             string  `json:"rawResponse"`
+	TestedAt                string  `json:"testedAt"`
 }
 
 // ModelAdapterTestResultsPayload 用于向前端广播当前测速结果快照。
@@ -68,12 +73,15 @@ type ModelAdapterTestResultsPayload struct {
 }
 
 type modelAdapterTestMetrics struct {
-	firstTextTokenAt time.Time
-	finishedAt       time.Time
-	outputTokens     int64
-	outputProvided   bool
-	text             strings.Builder
-	rawResponse      string
+	firstResponseAt         time.Time
+	firstTextTokenAt        time.Time
+	finishedAt              time.Time
+	outputTokens            int64
+	reasoningTokens         int64
+	outputProvided          bool
+	effectiveThinkingEffort string
+	text                    strings.Builder
+	rawResponse             string
 }
 
 type modelAdapterTestArtifactObserver struct {
@@ -193,50 +201,11 @@ func (s *ProxyService) runModelAdapterTest(adapter serverconfig.ModelAdapterConf
 		return result, requestErr
 	}
 
-	if metrics.finishedAt.IsZero() {
-		metrics.finishedAt = time.Now().UTC()
-	}
-	if metrics.firstTextTokenAt.IsZero() {
+	result, ok := buildSuccessfulModelAdapterTestResult(adapter.ID, requestHash, startedAt, metrics)
+	if !ok {
 		emptyTextErr := errors.New(modelAdapterTestEmptyTextError)
-		result := buildErroredModelAdapterTestResult(adapter.ID, requestHash, emptyTextErr)
-		return result, emptyTextErr
+		return buildErroredModelAdapterTestResult(adapter.ID, requestHash, emptyTextErr), emptyTextErr
 	}
-
-	outputTokens := metrics.outputTokens
-	tokensEstimated := false
-	if !metrics.outputProvided || outputTokens <= 0 {
-		outputTokens = estimateBenchmarkTextTokens(metrics.text.String())
-		tokensEstimated = true
-	}
-
-	firstTextTokenMS := metrics.firstTextTokenAt.Sub(startedAt).Milliseconds()
-	if firstTextTokenMS < 0 {
-		firstTextTokenMS = 0
-	}
-	totalDurationMS := metrics.finishedAt.Sub(startedAt).Milliseconds()
-	if totalDurationMS < 0 {
-		totalDurationMS = 0
-	}
-
-	tokensPerSecond := calculateGenerationTokensPerSecond(
-		outputTokens,
-		metrics.firstTextTokenAt,
-		metrics.finishedAt,
-	)
-
-	result := ModelAdapterTestResult{
-		AdapterID:        adapter.ID,
-		RequestHash:      requestHash,
-		Status:           string(ModelAdapterTestStatusSuccess),
-		TokensPerSecond:  tokensPerSecond,
-		FirstTextTokenMS: firstTextTokenMS,
-		TotalDurationMS:  totalDurationMS,
-		OutputTokens:     outputTokens,
-		TokensEstimated:  tokensEstimated,
-		TestedAt:         time.Now().UTC().Format(time.RFC3339Nano),
-		RawResponse:      strings.TrimSpace(metrics.rawResponse),
-	}
-	result.SummaryText = buildModelAdapterTestSummaryText(result)
 	return result, nil
 }
 
@@ -285,8 +254,12 @@ func (s *ProxyService) executeOpenAIStreamingTest(ctx context.Context, adapter s
 		Observer:                    observer,
 		ProviderStreamIdleTimeout:   modelAdapterTestTimeout,
 	}
+	metrics.effectiveThinkingEffort = strings.TrimSpace(adapter.ReasoningEffort)
 	err := modeladapter.NewOpenAIAdapter().Stream(ctx, req, func(event modeladapter.ModelEvent) error {
 		now := time.Now().UTC()
+		if metrics.firstResponseAt.IsZero() && isBenchmarkEffectiveResponseEvent(event) {
+			metrics.firstResponseAt = now
+		}
 		switch event.Kind {
 		case modeladapter.ModelEventKindTextDelta:
 			if strings.TrimSpace(event.Text) != "" && metrics.firstTextTokenAt.IsZero() {
@@ -295,6 +268,7 @@ func (s *ProxyService) executeOpenAIStreamingTest(ctx context.Context, adapter s
 			_, _ = metrics.text.WriteString(event.Text)
 		case modeladapter.ModelEventKindTurnFinished:
 			metrics.finishedAt = now
+			metrics.reasoningTokens = event.ReasoningTokens
 			if event.OutputTokens > 0 {
 				metrics.outputTokens = event.OutputTokens
 				metrics.outputProvided = true
@@ -356,8 +330,12 @@ func (s *ProxyService) executeAnthropicStreamingTest(ctx context.Context, adapte
 		Observer:                    observer,
 		ProviderStreamIdleTimeout:   modelAdapterTestTimeout,
 	}
+	metrics.effectiveThinkingEffort = thinkingEffort
 	err := modeladapter.NewAnthropicAdapter().Stream(ctx, req, func(event modeladapter.ModelEvent) error {
 		now := time.Now().UTC()
+		if metrics.firstResponseAt.IsZero() && isBenchmarkEffectiveResponseEvent(event) {
+			metrics.firstResponseAt = now
+		}
 		switch event.Kind {
 		case modeladapter.ModelEventKindTextDelta:
 			if strings.TrimSpace(event.Text) != "" && metrics.firstTextTokenAt.IsZero() {
@@ -366,6 +344,7 @@ func (s *ProxyService) executeAnthropicStreamingTest(ctx context.Context, adapte
 			_, _ = metrics.text.WriteString(event.Text)
 		case modeladapter.ModelEventKindTurnFinished:
 			metrics.finishedAt = now
+			metrics.reasoningTokens = event.ReasoningTokens
 			if event.OutputTokens > 0 {
 				metrics.outputTokens = event.OutputTokens
 				metrics.outputProvided = true
@@ -953,6 +932,9 @@ func buildSuccessfulModelAdapterTestResult(adapterID string, requestHash string,
 	if metrics.firstTextTokenAt.IsZero() {
 		return ModelAdapterTestResult{}, false
 	}
+	if metrics.firstResponseAt.IsZero() {
+		metrics.firstResponseAt = metrics.firstTextTokenAt
+	}
 	outputTokens := metrics.outputTokens
 	tokensEstimated := false
 	if !metrics.outputProvided || outputTokens <= 0 {
@@ -963,26 +945,41 @@ func buildSuccessfulModelAdapterTestResult(adapterID string, requestHash string,
 	if firstTextTokenMS < 0 {
 		firstTextTokenMS = 0
 	}
+	firstResponseMS := metrics.firstResponseAt.Sub(startedAt).Milliseconds()
+	if firstResponseMS < 0 {
+		firstResponseMS = 0
+	}
 	totalDurationMS := metrics.finishedAt.Sub(startedAt).Milliseconds()
 	if totalDurationMS < 0 {
 		totalDurationMS = 0
 	}
 	tokensPerSecond := calculateGenerationTokensPerSecond(
 		outputTokens,
+		metrics.firstResponseAt,
+		metrics.finishedAt,
+	)
+	visibleOutputTokens := estimateBenchmarkTextTokens(metrics.text.String())
+	visibleTokensPerSecond := calculateVisibleTokensPerSecond(
+		visibleOutputTokens,
 		metrics.firstTextTokenAt,
 		metrics.finishedAt,
 	)
 	result := ModelAdapterTestResult{
-		AdapterID:        adapterID,
-		RequestHash:      requestHash,
-		Status:           string(ModelAdapterTestStatusSuccess),
-		TokensPerSecond:  tokensPerSecond,
-		FirstTextTokenMS: firstTextTokenMS,
-		TotalDurationMS:  totalDurationMS,
-		OutputTokens:     outputTokens,
-		TokensEstimated:  tokensEstimated,
-		TestedAt:         time.Now().UTC().Format(time.RFC3339Nano),
-		RawResponse:      strings.TrimSpace(metrics.rawResponse),
+		AdapterID:               adapterID,
+		RequestHash:             requestHash,
+		Status:                  string(ModelAdapterTestStatusSuccess),
+		TokensPerSecond:         tokensPerSecond,
+		VisibleTokensPerSecond:  visibleTokensPerSecond,
+		FirstResponseMS:         firstResponseMS,
+		FirstTextTokenMS:        firstTextTokenMS,
+		TotalDurationMS:         totalDurationMS,
+		OutputTokens:            outputTokens,
+		VisibleOutputTokens:     visibleOutputTokens,
+		ReasoningTokens:         metrics.reasoningTokens,
+		EffectiveThinkingEffort: strings.TrimSpace(metrics.effectiveThinkingEffort),
+		TokensEstimated:         tokensEstimated,
+		TestedAt:                time.Now().UTC().Format(time.RFC3339Nano),
+		RawResponse:             strings.TrimSpace(metrics.rawResponse),
 	}
 	result.SummaryText = buildModelAdapterTestSummaryText(result)
 	return result, true
@@ -1038,18 +1035,42 @@ func (s *ProxyService) tryOpenAIEndpointFallback(
 
 func calculateGenerationTokensPerSecond(
 	outputTokens int64,
-	firstTextTokenAt time.Time,
+	firstResponseAt time.Time,
 	finishedAt time.Time,
 ) float64 {
-	if outputTokens <= 0 || firstTextTokenAt.IsZero() || finishedAt.IsZero() {
+	if outputTokens <= 0 || firstResponseAt.IsZero() || finishedAt.IsZero() {
 		return 0
 	}
 
-	generationDuration := finishedAt.Sub(firstTextTokenAt)
+	generationDuration := finishedAt.Sub(firstResponseAt)
 	if generationDuration <= 0 {
 		return 0
 	}
 	return float64(outputTokens) / generationDuration.Seconds()
+}
+
+func calculateVisibleTokensPerSecond(visibleOutputTokens int64, firstTextTokenAt time.Time, finishedAt time.Time) float64 {
+	if visibleOutputTokens <= 0 || firstTextTokenAt.IsZero() || finishedAt.IsZero() {
+		return 0
+	}
+	visibleDuration := finishedAt.Sub(firstTextTokenAt)
+	if visibleDuration <= 0 {
+		return 0
+	}
+	return float64(visibleOutputTokens) / visibleDuration.Seconds()
+}
+
+func isBenchmarkEffectiveResponseEvent(event modeladapter.ModelEvent) bool {
+	switch event.Kind {
+	case modeladapter.ModelEventKindTextDelta,
+		modeladapter.ModelEventKindThinkingDelta,
+		modeladapter.ModelEventKindPartialToolCall,
+		modeladapter.ModelEventKindToolCallDelta,
+		modeladapter.ModelEventKindToolLikeCompleted:
+		return true
+	default:
+		return false
+	}
 }
 
 // persistOpenAITransportOverride 把单个 adapter 的 endpoint / request group 静默写回配置文件。
