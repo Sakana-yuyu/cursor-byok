@@ -13,6 +13,7 @@ import (
 
 	"cursor/internal/ads"
 	"cursor/internal/appdata"
+	"cursor/internal/backend/delegation"
 	"cursor/internal/backend/forwarder"
 	"cursor/internal/backend/server"
 	serverconfig "cursor/internal/backend/server/config"
@@ -33,6 +34,7 @@ type Host struct {
 	store            *serverconfig.Store
 	listenAddr       string
 	configs          *serverconfig.Manager
+	executorRegistry *delegation.ExecutorRegistry
 	healthHTTP       *http.Client
 	controlPlaneAuth upstream.AuthorizationProvider
 
@@ -62,6 +64,7 @@ func NewHost(store *serverconfig.Store, controlPlaneAuth upstream.AuthorizationP
 		store:            store,
 		listenAddr:       cfg.BackendListenAddr,
 		configs:          configs,
+		executorRegistry: delegation.NewExecutorRegistry(delegation.ExecutorRegistryConfig{}),
 		healthHTTP:       newLoopbackHTTPClient(),
 		controlPlaneAuth: controlPlaneAuth,
 	}
@@ -69,6 +72,36 @@ func NewHost(store *serverconfig.Store, controlPlaneAuth upstream.AuthorizationP
 		return nil, err
 	}
 	return host, nil
+}
+
+func (host *Host) ExecutorRegistry() *delegation.ExecutorRegistry {
+	if host == nil {
+		return nil
+	}
+	return host.executorRegistry
+}
+
+func (host *Host) DelegationExecutorSnapshots() []delegation.ExecutorSnapshot {
+	if host == nil || host.executorRegistry == nil {
+		return nil
+	}
+	return host.executorRegistry.Snapshots()
+}
+
+func (host *Host) RefreshDelegationExecutorProbes(ctx context.Context) ([]delegation.ExecutorSnapshot, error) {
+	if host == nil || host.executorRegistry == nil {
+		return nil, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	for _, snapshot := range host.executorRegistry.Snapshots() {
+		if err := ctx.Err(); err != nil {
+			return host.executorRegistry.Snapshots(), err
+		}
+		_, _ = host.executorRegistry.Probe(ctx, snapshot.ID, true)
+	}
+	return host.executorRegistry.Snapshots(), ctx.Err()
 }
 
 func (host *Host) ConfigManager() *serverconfig.Manager {

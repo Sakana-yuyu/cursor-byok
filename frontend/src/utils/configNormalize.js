@@ -1,5 +1,6 @@
 import { asArray, asBoolean, asPositiveInteger, asString } from "@/utils/valueCast";
 import { dedupeModelAdapters } from "@/utils/modelAdapter";
+import { normalizeDelegationExecutorPolicy } from "./delegationExecutorConfig.js";
 
 const SUPPORTED_ROUTE_MODES = new Set(["local", "upstream"]);
 export function normalizeRouteMode(value) {
@@ -58,6 +59,7 @@ export function normalizeGoal(source) {
 
 export function normalizeDelegation(source) {
   const raw = source && typeof source === "object" ? source : {};
+  const executorPolicy = normalizeDelegationExecutorPolicy(raw);
   const groups = asArray(raw.groups).map((item, index) => {
     const group = item && typeof item === "object" ? item : {};
     const modelIDs = [...new Set(asArray(group.modelIDs || group.modelIds).map((value) => asString(value)).filter(Boolean))];
@@ -106,6 +108,7 @@ export function normalizeDelegation(source) {
       mode: ["auto", "describe", "ocr"].includes(visionMode) ? visionMode : "auto",
     },
     subagentProfiles: subagentProfileRows,
+    ...executorPolicy,
   };
 }
 

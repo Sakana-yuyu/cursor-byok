@@ -2,12 +2,73 @@ package client
 
 import (
 	"context"
+	"time"
 
+	"cursor/internal/backend/delegation"
 	"cursor/internal/backend/forwarder"
 	serverconfig "cursor/internal/backend/server/config"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
+
+type DelegationExecutorSnapshot struct {
+	ID             string     `json:"id"`
+	DisplayName    string     `json:"displayName"`
+	Enabled        bool       `json:"enabled"`
+	Priority       int        `json:"priority"`
+	Capabilities   []string   `json:"capabilities,omitempty"`
+	State          string     `json:"state"`
+	ExecutablePath string     `json:"executablePath,omitempty"`
+	Version        string     `json:"version,omitempty"`
+	Installed      bool       `json:"installed"`
+	AuthState      string     `json:"authState"`
+	DiagnosticCode string     `json:"diagnosticCode,omitempty"`
+	DiagnosticText string     `json:"diagnosticText,omitempty"`
+	ProbedAt       *time.Time `json:"probedAt,omitempty"`
+	CooldownUntil  *time.Time `json:"cooldownUntil,omitempty"`
+	FailureClass   string     `json:"failureClass,omitempty"`
+	FailureCode    string     `json:"failureCode,omitempty"`
+}
+
+func publicDelegationExecutorSnapshots(source []delegation.ExecutorSnapshot) []DelegationExecutorSnapshot {
+	if len(source) == 0 {
+		return nil
+	}
+	result := make([]DelegationExecutorSnapshot, 0, len(source))
+	for _, item := range source {
+		capabilities := make([]string, 0, len(item.Capabilities))
+		for _, capability := range item.Capabilities {
+			capabilities = append(capabilities, string(capability))
+		}
+		result = append(result, DelegationExecutorSnapshot{
+			ID:             string(item.ID),
+			DisplayName:    item.DisplayName,
+			Enabled:        item.Enabled,
+			Priority:       item.Priority,
+			Capabilities:   capabilities,
+			State:          string(item.Probe.State),
+			ExecutablePath: item.Probe.ExecutablePath,
+			Version:        item.Probe.Version,
+			Installed:      item.Probe.Installed,
+			AuthState:      string(item.Probe.AuthState),
+			DiagnosticCode: item.Probe.DiagnosticCode,
+			DiagnosticText: delegation.SanitizeSupervisorText(item.Probe.DiagnosticText, ""),
+			ProbedAt:       optionalDelegationExecutorTime(item.Probe.ProbedAt),
+			CooldownUntil:  optionalDelegationExecutorTime(item.CooldownUntil),
+			FailureClass:   string(item.FailureClass),
+			FailureCode:    item.FailureCode,
+		})
+	}
+	return result
+}
+
+func optionalDelegationExecutorTime(value time.Time) *time.Time {
+	if value.IsZero() {
+		return nil
+	}
+	value = value.UTC()
+	return &value
+}
 
 // GetDelegationTaskSnapshots returns retained Multitask worker state.
 func (s *ProxyService) GetDelegationTaskSnapshots() []forwarder.DelegationTaskSnapshot {
@@ -15,6 +76,25 @@ func (s *ProxyService) GetDelegationTaskSnapshots() []forwarder.DelegationTaskSn
 		return nil
 	}
 	return s.backendHost.DelegationTaskSnapshots()
+}
+
+func (s *ProxyService) GetDelegationExecutorSnapshots() []DelegationExecutorSnapshot {
+	if s == nil || s.backendHost == nil {
+		return nil
+	}
+	return publicDelegationExecutorSnapshots(s.backendHost.DelegationExecutorSnapshots())
+}
+
+func (s *ProxyService) RefreshDelegationExecutorProbes() ([]DelegationExecutorSnapshot, error) {
+	if s == nil || s.backendHost == nil {
+		return nil, nil
+	}
+	ctx := context.Background()
+	if app := application.Get(); app != nil {
+		ctx = app.Context()
+	}
+	items, err := s.backendHost.RefreshDelegationExecutorProbes(ctx)
+	return publicDelegationExecutorSnapshots(items), err
 }
 
 // GetDelegationConfig returns the normalized delegation and supervision config.

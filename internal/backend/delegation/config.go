@@ -18,6 +18,19 @@ type RuntimeModelGroup struct {
 	ToolPermissions map[string]bool
 }
 
+type RuntimeExecutorConfig struct {
+	ID                      ExecutorID
+	Kind                    string
+	DisplayName             string
+	Enabled                 bool
+	Priority                int
+	Executable              string
+	ProbeTimeoutSeconds     int
+	ExecutionTimeoutSeconds int
+	EnvironmentVariables    []string
+	Options                 map[string]string
+}
+
 type RuntimeConfig struct {
 	Enabled                 bool
 	MaxConcurrency          int
@@ -38,7 +51,9 @@ type RuntimeConfig struct {
 	VisionMode              string
 	// SubagentProfiles 子代理角色覆盖：subagentType → 自定义角色片段（空串 = 不注入）。
 	// 只影响本地委派（BYOK worker）路径的角色注入，Cursor 原生子代理由客户端管理。
-	SubagentProfiles map[string]string
+	SubagentProfiles      map[string]string
+	ExecutorFailoverLimit int
+	Executors             []RuntimeExecutorConfig
 }
 
 type RuntimeConfigProvider interface {
@@ -90,6 +105,15 @@ func NormalizeRuntimeConfig(config RuntimeConfig) RuntimeConfig {
 	}
 	config.ModelNames = cloneRuntimeStringMap(config.ModelNames)
 	config.SubagentProfiles = cloneRuntimeStringMap(config.SubagentProfiles)
+	if len(config.Executors) > 0 {
+		executors := make([]RuntimeExecutorConfig, len(config.Executors))
+		for index, executor := range config.Executors {
+			executors[index] = executor
+			executors[index].EnvironmentVariables = append([]string(nil), executor.EnvironmentVariables...)
+			executors[index].Options = cloneRuntimeStringMap(executor.Options)
+		}
+		config.Executors = executors
+	}
 	return config
 }
 

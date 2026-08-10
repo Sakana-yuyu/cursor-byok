@@ -87,6 +87,7 @@ const previewConfig = {
 };
 
 const PREVIEW_CONFIG_STORAGE_KEY = "cursor-byok.browser-preview.config";
+const previewDelegationExecutors = [];
 // E2E 测试控制：测试通过 addInitScript 预置该 localStorage 键，mock 据此注入
 // 确定性的余额/测试结果/保存失败响应，避免测试依赖默认随机状态。
 const PREVIEW_TEST_PLAN_KEY = "cursor-byok.browser-preview.test-plan";
@@ -434,6 +435,8 @@ export const SaveDelegationConfig = (value) => {
   persistPreviewConfig();
   return Promise.resolve(clone(previewConfig.delegation));
 };
+export const GetDelegationExecutorSnapshots = () => Promise.resolve(clone(previewDelegationExecutors));
+export const RefreshDelegationExecutorProbes = () => Promise.resolve(clone(previewDelegationExecutors));
 export const SaveUserConfig = (value) => {
   if (previewTestFailSaveConfig()) {
     return Promise.reject(new Error("E2E 注入：配置保存失败"));

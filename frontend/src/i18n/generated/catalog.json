@@ -36,7 +36,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 232,
+          "line": 233,
           "column": 18
         }
       ]
@@ -135,7 +135,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 293,
+          "line": 294,
           "column": 22
         }
       ]
@@ -509,7 +509,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 652,
+          "line": 655,
           "column": 41
         }
       ]
@@ -656,7 +656,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 787,
+          "line": 790,
           "column": 12
         }
       ]
@@ -709,7 +709,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 653,
+          "line": 656,
           "column": 21
         }
       ]
@@ -1002,12 +1002,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 406,
+          "line": 407,
           "column": 18
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 694,
+          "line": 697,
           "column": 78
         }
       ]
@@ -1048,8 +1048,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 285,
-          "column": 1
+          "line": 284,
+          "column": 108
         }
       ]
     },
@@ -1084,8 +1084,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 881,
-          "column": 1
+          "line": 880,
+          "column": 11
         }
       ]
     },
@@ -1262,8 +1262,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 83,
-          "column": 1
+          "line": 82,
+          "column": 179
         }
       ]
     },
@@ -1298,7 +1298,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 607,
+          "line": 610,
           "column": 117
         }
       ]
@@ -1738,7 +1738,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 701,
+          "line": 704,
           "column": 90
         }
       ]
@@ -1885,7 +1885,7 @@
       "refs": [
         {
           "file": "src/utils/configNormalize.js",
-          "line": 29,
+          "line": 30,
           "column": 12
         }
       ]
@@ -2053,8 +2053,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 484,
-          "column": 1
+          "line": 483,
+          "column": 163
         }
       ]
     },
@@ -2113,8 +2113,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 481,
-          "column": 1
+          "line": 480,
+          "column": 180
         }
       ]
     },
@@ -2125,7 +2125,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 526,
+          "line": 529,
           "column": 61
         },
         {
@@ -2258,7 +2258,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 620,
+          "line": 623,
           "column": 16
         }
       ]
@@ -2316,7 +2316,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 774,
+          "line": 777,
           "column": 12
         }
       ]
@@ -3053,7 +3053,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 748,
+          "line": 751,
           "column": 12
         }
       ]
@@ -3212,7 +3212,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 895,
+          "line": 898,
           "column": 49
         }
       ]
@@ -3877,7 +3877,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 532,
+          "line": 535,
           "column": 97
         },
         {
@@ -4024,7 +4024,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 517,
+          "line": 520,
           "column": 169
         }
       ]
@@ -4362,8 +4362,8 @@
         },
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 162,
-          "column": 1
+          "line": 161,
+          "column": 11
         }
       ]
     },
@@ -4744,8 +4744,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 454,
-          "column": 1
+          "line": 453,
+          "column": 17
         }
       ]
     },
@@ -4856,7 +4856,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 701,
+          "line": 704,
           "column": 21
         }
       ]
@@ -5199,8 +5199,8 @@
       "refs": [
         {
           "file": "src/views/Diagnostics.vue",
-          "line": 211,
-          "column": 1
+          "line": 210,
+          "column": 181
         }
       ]
     },
@@ -5399,7 +5399,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 656,
+          "line": 659,
           "column": 27
         }
       ]
@@ -5604,7 +5604,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 357,
+          "line": 358,
           "column": 18
         }
       ]
@@ -5866,7 +5866,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 488,
+          "line": 491,
           "column": 284
         },
         {
@@ -6129,7 +6129,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 590,
+          "line": 593,
           "column": 126
         },
         {
@@ -7247,7 +7247,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 701,
+          "line": 704,
           "column": 159
         }
       ]
@@ -7283,7 +7283,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 333,
+          "line": 334,
           "column": 18
         }
       ]
@@ -7319,8 +7319,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 128,
-          "column": 1
+          "line": 127,
+          "column": 71
         }
       ]
     },
@@ -7704,7 +7704,7 @@
         },
         {
           "file": "src/utils/configNormalize.js",
-          "line": 67,
+          "line": 69,
           "column": 44
         }
       ]
@@ -8207,7 +8207,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 596,
+          "line": 599,
           "column": 16
         }
       ]
@@ -8433,7 +8433,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 345,
+          "line": 346,
           "column": 18
         }
       ]
@@ -8527,8 +8527,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 69,
-          "column": 1
+          "line": 68,
+          "column": 144
         }
       ]
     },
@@ -8599,8 +8599,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 87,
-          "column": 1
+          "line": 86,
+          "column": 175
         }
       ]
     },
@@ -8681,7 +8681,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 904,
+          "line": 907,
           "column": 58
         }
       ]
@@ -8873,7 +8873,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 612,
+          "line": 615,
           "column": 16
         }
       ]
@@ -8897,8 +8897,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 366,
-          "column": 1
+          "line": 365,
+          "column": 115
         }
       ]
     },
@@ -9114,8 +9114,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 78,
-          "column": 1
+          "line": 77,
+          "column": 139
         }
       ]
     },
@@ -9143,12 +9143,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 393,
+          "line": 394,
           "column": 18
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 694,
+          "line": 697,
           "column": 71
         }
       ]
@@ -9332,7 +9332,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 722,
+          "line": 725,
           "column": 12
         }
       ]
@@ -9686,7 +9686,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 431,
+          "line": 432,
           "column": 37
         }
       ]
@@ -9985,13 +9985,13 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 247,
-          "column": 1
+          "line": 246,
+          "column": 105
         },
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 356,
-          "column": 1
+          "line": 355,
+          "column": 92
         }
       ]
     },
@@ -10002,7 +10002,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 351,
+          "line": 352,
           "column": 18
         }
       ]
@@ -10465,8 +10465,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 533,
-          "column": 1
+          "line": 532,
+          "column": 11
         }
       ]
     },
@@ -10501,8 +10501,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 225,
-          "column": 1
+          "line": 224,
+          "column": 52
         }
       ]
     },
@@ -10572,7 +10572,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 339,
+          "line": 340,
           "column": 18
         }
       ]
@@ -10861,7 +10861,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 685,
+          "line": 688,
           "column": 14
         }
       ]
@@ -11073,7 +11073,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 705,
+          "line": 708,
           "column": 35
         }
       ]
@@ -11247,7 +11247,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 800,
+          "line": 803,
           "column": 12
         }
       ]
@@ -11602,8 +11602,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 1066,
-          "column": 1
+          "line": 1065,
+          "column": 19
         }
       ]
     },
@@ -11905,7 +11905,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 628,
+          "line": 631,
           "column": 16
         }
       ]
@@ -11970,8 +11970,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 435,
-          "column": 1
+          "line": 434,
+          "column": 67
         }
       ]
     },
@@ -12033,7 +12033,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 874,
+          "line": 877,
           "column": 25
         }
       ]
@@ -12466,7 +12466,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 813,
+          "line": 816,
           "column": 12
         }
       ]
@@ -12502,8 +12502,8 @@
       "refs": [
         {
           "file": "src/views/Diagnostics.vue",
-          "line": 206,
-          "column": 1
+          "line": 205,
+          "column": 139
         }
       ]
     },
@@ -12514,12 +12514,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 681,
+          "line": 684,
           "column": 47
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 693,
+          "line": 696,
           "column": 49
         }
       ]
@@ -12560,8 +12560,8 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 464,
-          "column": 1
+          "line": 463,
+          "column": 17
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
@@ -13027,7 +13027,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 604,
+          "line": 607,
           "column": 16
         }
       ]
@@ -13051,8 +13051,8 @@
       "refs": [
         {
           "file": "src/components/ui/ModelTreeMultiSelect.vue",
-          "line": 537,
-          "column": 1
+          "line": 536,
+          "column": 13
         }
       ]
     },
@@ -13412,7 +13412,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 631,
+          "line": 634,
           "column": 114
         }
       ]
@@ -13448,7 +13448,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 903,
+          "line": 906,
           "column": 49
         }
       ]
@@ -13525,7 +13525,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 761,
+          "line": 764,
           "column": 12
         }
       ]
@@ -13929,7 +13929,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 265,
+          "line": 266,
           "column": 18
         }
       ]
@@ -14177,8 +14177,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 93,
-          "column": 1
+          "line": 92,
+          "column": 9
         }
       ]
     },
@@ -14266,7 +14266,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 439,
+          "line": 442,
           "column": 37
         }
       ]
@@ -15025,7 +15025,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 260,
+          "line": 261,
           "column": 22
         }
       ]
@@ -15228,8 +15228,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 509,
-          "column": 1
+          "line": 508,
+          "column": 11
         }
       ]
     },
@@ -15416,7 +15416,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 962,
+          "line": 965,
           "column": 69
         }
       ]
@@ -15469,7 +15469,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 636,
+          "line": 639,
           "column": 16
         }
       ]
@@ -15558,8 +15558,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 326,
-          "column": 1
+          "line": 325,
+          "column": 91
         }
       ]
     },
@@ -15956,7 +15956,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 700,
+          "line": 703,
           "column": 50
         }
       ]
@@ -16101,8 +16101,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 72,
-          "column": 1
+          "line": 71,
+          "column": 144
         }
       ]
     },
@@ -16149,8 +16149,8 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 144,
-          "column": 1
+          "line": 143,
+          "column": 53
         }
       ]
     },
@@ -16533,8 +16533,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 540,
-          "column": 1
+          "line": 539,
+          "column": 43
         }
       ]
     },
@@ -16767,8 +16767,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 329,
-          "column": 1
+          "line": 328,
+          "column": 85
         },
         {
           "file": "src/views/MetricsDetail.vue",
@@ -17269,8 +17269,8 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 147,
-          "column": 1
+          "line": 146,
+          "column": 81
         }
       ]
     },
@@ -17298,7 +17298,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 905,
+          "line": 908,
           "column": 35
         }
       ]
@@ -17433,7 +17433,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 701,
+          "line": 704,
           "column": 170
         }
       ]
@@ -17510,8 +17510,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 468,
-          "column": 1
+          "line": 467,
+          "column": 43
         }
       ]
     },
@@ -18014,7 +18014,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 694,
+          "line": 697,
           "column": 21
         }
       ]
@@ -18043,7 +18043,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 487,
+          "line": 490,
           "column": 196
         }
       ]
@@ -18091,8 +18091,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 444,
-          "column": 1
+          "line": 443,
+          "column": 17
         }
       ]
     },
@@ -18159,7 +18159,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 735,
+          "line": 738,
           "column": 12
         }
       ]
@@ -18284,7 +18284,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 623,
+          "line": 626,
           "column": 139
         }
       ]
@@ -18502,7 +18502,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 505,
+          "line": 508,
           "column": 58
         }
       ]
@@ -18734,8 +18734,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 475,
-          "column": 1
+          "line": 474,
+          "column": 13
         }
       ]
     },
@@ -18940,7 +18940,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 897,
+          "line": 900,
           "column": 46
         }
       ]

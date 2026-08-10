@@ -9,7 +9,7 @@ import {
   GetRecentWorkspaceRoot,
   QueryAllProviderBalances,
   RepairProxySettings,
-  GetDelegationConfig, SaveDelegationConfig,
+  GetDelegationConfig, SaveDelegationConfig, GetDelegationExecutorSnapshots, RefreshDelegationExecutorProbes,
   GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
   RepairCACorruption, GetCARepairStatus,
   GetTerminalEnvironmentStatus, ApplyTerminalEnvironment, InstallTerminalDependency,
@@ -60,7 +60,7 @@ const desktopMethods = {
   GetRecentWorkspaceRoot,
   QueryAllProviderBalances,
   RepairProxySettings,
-  GetDelegationConfig, SaveDelegationConfig,
+  GetDelegationConfig, SaveDelegationConfig, GetDelegationExecutorSnapshots, RefreshDelegationExecutorProbes,
   GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
   RepairCACorruption, GetCARepairStatus,
   GetTerminalEnvironmentStatus, ApplyTerminalEnvironment, InstallTerminalDependency,
@@ -479,4 +479,12 @@ export function getRecentWorkspaceRoot() {
 
 export function saveDelegationConfig(config) {
   return desktopOrMock(() => SaveDelegationConfig(config), "@bindings/cursor/internal/bridge/proxyservice.js", "SaveDelegationConfig", [config]);
+}
+
+export function getDelegationExecutorSnapshots() {
+  return desktopOrMock(() => GetDelegationExecutorSnapshots(), "@bindings/cursor/internal/bridge/proxyservice.js", "GetDelegationExecutorSnapshots");
+}
+
+export function refreshDelegationExecutorProbes() {
+  return desktopOrMock(() => RefreshDelegationExecutorProbes(), "@bindings/cursor/internal/bridge/proxyservice.js", "RefreshDelegationExecutorProbes");
 }

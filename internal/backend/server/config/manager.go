@@ -216,6 +216,8 @@ func (manager *Manager) DelegationRuntimeConfig() delegation.RuntimeConfig {
 		VisionModelID:           strings.TrimSpace(current.VisionDelegation.VisionModelID),
 		VisionMode:              strings.TrimSpace(current.VisionDelegation.Mode),
 		SubagentProfiles:        delegationSubagentProfileMap(current.SubagentProfiles),
+		ExecutorFailoverLimit:   current.ExecutorFailoverLimit,
+		Executors:               make([]delegation.RuntimeExecutorConfig, 0, len(current.Executors)),
 	}
 	for _, adapter := range config.ModelAdapters {
 		adapterID := strings.TrimSpace(adapter.ID)
@@ -233,6 +235,20 @@ func (manager *Manager) DelegationRuntimeConfig() delegation.RuntimeConfig {
 			DefaultModelID:  strings.TrimSpace(group.DefaultModelID),
 			ExecutionMode:   delegation.NormalizeExecutionMode(group.ExecutionMode),
 			ToolPermissions: cloneBoolMap(group.ToolPermissions),
+		})
+	}
+	for _, executor := range current.Executors {
+		result.Executors = append(result.Executors, delegation.RuntimeExecutorConfig{
+			ID:                      delegation.ExecutorID(executor.ID),
+			Kind:                    executor.Kind,
+			DisplayName:             executor.DisplayName,
+			Enabled:                 executor.Enabled,
+			Priority:                executor.Priority,
+			Executable:              executor.Executable,
+			ProbeTimeoutSeconds:     executor.ProbeTimeoutSeconds,
+			ExecutionTimeoutSeconds: executor.ExecutionTimeoutSeconds,
+			EnvironmentVariables:    append([]string(nil), executor.EnvironmentVariables...),
+			Options:                 cloneStringMap(executor.Options),
 		})
 	}
 	return delegation.NormalizeRuntimeConfig(result)

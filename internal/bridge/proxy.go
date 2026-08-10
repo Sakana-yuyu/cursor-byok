@@ -84,6 +84,8 @@ type PromptInjectionStatus = promptinject.Status
 // DelegationTaskSnapshot is the desktop-safe Multitask worker state.
 type DelegationTaskSnapshot = forwarder.DelegationTaskSnapshot
 
+type DelegationExecutorSnapshot = client.DelegationExecutorSnapshot
+
 // LicenseActionRequest 定义了当前模块中的 LicenseActionRequest 类型。
 type LicenseActionRequest = client.LicenseActionRequest
 
@@ -221,6 +223,14 @@ func (s *ProxyService) ReadSessionDebugTail(sessionID, filename string, maxBytes
 // GetDelegationTaskSnapshots returns retained Multitask worker state.
 func (s *ProxyService) GetDelegationTaskSnapshots() []DelegationTaskSnapshot {
 	return s.core.GetDelegationTaskSnapshots()
+}
+
+func (s *ProxyService) GetDelegationExecutorSnapshots() []DelegationExecutorSnapshot {
+	return s.core.GetDelegationExecutorSnapshots()
+}
+
+func (s *ProxyService) RefreshDelegationExecutorProbes() ([]DelegationExecutorSnapshot, error) {
+	return s.core.RefreshDelegationExecutorProbes()
 }
 
 // GetDelegationConfig returns the normalized delegation settings subtree.

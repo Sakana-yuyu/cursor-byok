@@ -2,17 +2,25 @@ package config
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
 const (
-	DefaultDelegationMaxConcurrency = 4
-	DelegationModeCursor            = "cursor"
-	DelegationModeLocal             = "local"
-	DelegationModeAuto              = "auto"
-	DefaultDelegationMaxCorrections = 2
-	DefaultDelegationMaxRetries     = 1
-	DefaultDelegationMaxRounds      = 8
+	DefaultDelegationMaxConcurrency                  = 4
+	DelegationModeCursor                             = "cursor"
+	DelegationModeLocal                              = "local"
+	DelegationModeAuto                               = "auto"
+	DefaultDelegationMaxCorrections                  = 2
+	DefaultDelegationMaxRetries                      = 1
+	DefaultDelegationMaxRounds                       = 8
+	DefaultDelegationExecutorFailoverLimit           = 3
+	DefaultDelegationExecutorProbeTimeoutSeconds     = 5
+	DefaultDelegationExecutorExecutionTimeoutSeconds = 120
+	MaximumDelegationExecutorProbeTimeoutSeconds     = 30
+	MaximumDelegationExecutorExecutionTimeoutSeconds = 7200
+	DelegationExecutorKindBuiltin                    = "builtin"
+	DelegationExecutorKindCustom                     = "custom"
 	// 视觉委派识图模式。
 	VisionModeAuto     = "auto"     // 描述 + OCR，按内容自适应
 	VisionModeDescribe = "describe" // 仅结构化描述画面
@@ -60,6 +68,20 @@ type SubagentProfileOverride struct {
 	PromptFragment string `json:"promptFragment,omitempty" yaml:"promptFragment,omitempty"`
 }
 
+// DelegationExecutorConfig 保存外部 executor 的非敏感策略。凭据只按环境变量名引用。
+type DelegationExecutorConfig struct {
+	ID                      string            `json:"id" yaml:"id"`
+	Kind                    string            `json:"kind" yaml:"kind"`
+	DisplayName             string            `json:"displayName,omitempty" yaml:"displayName,omitempty"`
+	Enabled                 bool              `json:"enabled" yaml:"enabled"`
+	Priority                int               `json:"priority" yaml:"priority"`
+	Executable              string            `json:"executable,omitempty" yaml:"executable,omitempty"`
+	ProbeTimeoutSeconds     int               `json:"probeTimeoutSeconds,omitempty" yaml:"probeTimeoutSeconds,omitempty"`
+	ExecutionTimeoutSeconds int               `json:"executionTimeoutSeconds,omitempty" yaml:"executionTimeoutSeconds,omitempty"`
+	EnvironmentVariables    []string          `json:"environmentVariables,omitempty" yaml:"environmentVariables,omitempty"`
+	Options                 map[string]string `json:"options,omitempty" yaml:"options,omitempty"`
+}
+
 // DelegationConfig 控制 Multitask 委派总开关、并发度和模型组。
 type DelegationConfig struct {
 	Enabled          bool                        `json:"enabled" yaml:"enabled"`
@@ -68,7 +90,9 @@ type DelegationConfig struct {
 	Supervision      DelegationSupervisionConfig `json:"supervision,omitempty" yaml:"supervision,omitempty"`
 	VisionDelegation VisionDelegationConfig      `json:"visionDelegation,omitempty" yaml:"visionDelegation,omitempty"`
 	// SubagentProfiles 子代理角色覆盖（subagentType → 自定义角色片段），读时合并进注册表。
-	SubagentProfiles []SubagentProfileOverride `json:"subagentProfiles,omitempty" yaml:"subagentProfiles,omitempty"`
+	SubagentProfiles      []SubagentProfileOverride  `json:"subagentProfiles,omitempty" yaml:"subagentProfiles,omitempty"`
+	ExecutorFailoverLimit int                        `json:"executorFailoverLimit,omitempty" yaml:"executorFailoverLimit,omitempty"`
+	Executors             []DelegationExecutorConfig `json:"executors,omitempty" yaml:"executors,omitempty"`
 }
 
 func cloneDelegationConfig(input DelegationConfig) DelegationConfig {
@@ -82,6 +106,20 @@ func cloneDelegationConfig(input DelegationConfig) DelegationConfig {
 		}
 	}
 	output.SubagentProfiles = normalizeSubagentProfileOverrides(input.SubagentProfiles)
+	output.Executors = cloneDelegationExecutors(input.Executors)
+	return output
+}
+
+func cloneDelegationExecutors(input []DelegationExecutorConfig) []DelegationExecutorConfig {
+	if len(input) == 0 {
+		return nil
+	}
+	output := make([]DelegationExecutorConfig, len(input))
+	for index, executor := range input {
+		output[index] = executor
+		output[index].EnvironmentVariables = append([]string(nil), executor.EnvironmentVariables...)
+		output[index].Options = cloneStringMap(executor.Options)
+	}
 	return output
 }
 
@@ -113,7 +151,7 @@ func cloneDelegationGroup(input DelegationModelGroup) DelegationModelGroup {
 	return output
 }
 
-func normalizeDelegationConfig(input DelegationConfig, adapters []ModelAdapterConfig) DelegationConfig {
+func normalizeDelegationConfig(input DelegationConfig, adapters []ModelAdapterConfig) (DelegationConfig, error) {
 	availableModels := make(map[string]struct{}, len(adapters))
 	for _, adapter := range adapters {
 		if adapterID := strings.TrimSpace(adapter.ID); adapterID != "" {
@@ -121,16 +159,25 @@ func normalizeDelegationConfig(input DelegationConfig, adapters []ModelAdapterCo
 		}
 	}
 	output := DelegationConfig{
-		Enabled:          input.Enabled,
-		MaxConcurrency:   input.MaxConcurrency,
-		Groups:           make([]DelegationModelGroup, 0, len(input.Groups)),
-		Supervision:      normalizeDelegationSupervision(input.Supervision, availableModels, nil),
-		VisionDelegation: normalizeDelegationVision(input.VisionDelegation, availableModels),
-		SubagentProfiles: normalizeSubagentProfileOverrides(input.SubagentProfiles),
+		Enabled:               input.Enabled,
+		MaxConcurrency:        input.MaxConcurrency,
+		Groups:                make([]DelegationModelGroup, 0, len(input.Groups)),
+		Supervision:           normalizeDelegationSupervision(input.Supervision, availableModels, nil),
+		VisionDelegation:      normalizeDelegationVision(input.VisionDelegation, availableModels),
+		SubagentProfiles:      normalizeSubagentProfileOverrides(input.SubagentProfiles),
+		ExecutorFailoverLimit: input.ExecutorFailoverLimit,
 	}
 	if output.MaxConcurrency <= 0 {
 		output.MaxConcurrency = DefaultDelegationMaxConcurrency
 	}
+	if output.ExecutorFailoverLimit <= 0 {
+		output.ExecutorFailoverLimit = DefaultDelegationExecutorFailoverLimit
+	}
+	executors, err := normalizeDelegationExecutors(input.Executors)
+	if err != nil {
+		return DelegationConfig{}, err
+	}
+	output.Executors = executors
 	seenGroups := make(map[string]struct{}, len(input.Groups))
 	groupIDs := make(map[string]struct{}, len(input.Groups))
 	for index, group := range input.Groups {
@@ -163,7 +210,202 @@ func normalizeDelegationConfig(input DelegationConfig, adapters []ModelAdapterCo
 		output.Groups = append(output.Groups, group)
 	}
 	output.Supervision = normalizeDelegationSupervision(input.Supervision, availableModels, groupIDs)
-	return output
+	return output, nil
+}
+
+func normalizeDelegationExecutors(input []DelegationExecutorConfig) ([]DelegationExecutorConfig, error) {
+	seen := make(map[string]struct{}, len(input))
+	result := make([]DelegationExecutorConfig, 0, len(input))
+	for _, executor := range input {
+		executor.ID = strings.ToLower(strings.TrimSpace(executor.ID))
+		if executor.ID == "" {
+			continue
+		}
+		if !validDelegationExecutorID(executor.ID) {
+			return nil, fmt.Errorf("executor %q id is invalid", executor.ID)
+		}
+		if _, exists := seen[executor.ID]; exists {
+			continue
+		}
+		seen[executor.ID] = struct{}{}
+		executor.Kind = strings.ToLower(strings.TrimSpace(executor.Kind))
+		if executor.Kind == "" {
+			executor.Kind = DelegationExecutorKindBuiltin
+		}
+		if executor.Kind != DelegationExecutorKindBuiltin && executor.Kind != DelegationExecutorKindCustom {
+			return nil, fmt.Errorf("executor %q kind is invalid", executor.ID)
+		}
+		executor.DisplayName = strings.TrimSpace(executor.DisplayName)
+		executor.Executable = strings.TrimSpace(executor.Executable)
+		if executor.Kind == DelegationExecutorKindCustom && executor.Executable == "" {
+			return nil, fmt.Errorf("executor %q executable is required", executor.ID)
+		}
+		if executor.Priority < 0 {
+			executor.Priority = 0
+		}
+		executor.ProbeTimeoutSeconds = normalizeDelegationExecutorTimeout(executor.ProbeTimeoutSeconds, DefaultDelegationExecutorProbeTimeoutSeconds, MaximumDelegationExecutorProbeTimeoutSeconds)
+		executor.ExecutionTimeoutSeconds = normalizeDelegationExecutorTimeout(executor.ExecutionTimeoutSeconds, DefaultDelegationExecutorExecutionTimeoutSeconds, MaximumDelegationExecutorExecutionTimeoutSeconds)
+		var err error
+		executor.EnvironmentVariables, err = normalizeDelegationExecutorEnvironmentVariables(executor.EnvironmentVariables)
+		if err != nil {
+			return nil, fmt.Errorf("executor %q: %w", executor.ID, err)
+		}
+		executor.Options, err = normalizeDelegationExecutorOptions(executor.Options)
+		if err != nil {
+			return nil, fmt.Errorf("executor %q: %w", executor.ID, err)
+		}
+		result = append(result, executor)
+	}
+	return result, nil
+}
+
+func validDelegationExecutorID(value string) bool {
+	for index, char := range value {
+		valid := char >= 'a' && char <= 'z' || char >= '0' && char <= '9' || char == '-' || char == '_' || char == '.'
+		if !valid || index == 0 && (char == '-' || char == '_' || char == '.') {
+			return false
+		}
+	}
+	return value != ""
+}
+
+func normalizeDelegationExecutorTimeout(value, fallback, maximum int) int {
+	if value <= 0 {
+		return fallback
+	}
+	if value > maximum {
+		return maximum
+	}
+	return value
+}
+
+func normalizeDelegationExecutorEnvironmentVariables(input []string) ([]string, error) {
+	seen := make(map[string]struct{}, len(input))
+	result := make([]string, 0, len(input))
+	for _, name := range input {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if !validDelegationExecutorEnvironmentName(name) {
+			return nil, fmt.Errorf("environment variable name %q is invalid", name)
+		}
+		if _, exists := seen[name]; exists {
+			continue
+		}
+		seen[name] = struct{}{}
+		result = append(result, name)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
+func validDelegationExecutorEnvironmentName(name string) bool {
+	for index, char := range name {
+		if index == 0 && !((char >= 'A' && char <= 'Z') || char == '_') {
+			return false
+		}
+		if index > 0 && !((char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '_') {
+			return false
+		}
+	}
+	return name != ""
+}
+
+func normalizeDelegationExecutorOptions(input map[string]string) (map[string]string, error) {
+	if len(input) == 0 {
+		return nil, nil
+	}
+	output := make(map[string]string, len(input))
+	for key, value := range input {
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if sensitiveDelegationExecutorOptionKey(key) {
+			return nil, fmt.Errorf("sensitive option %q is not allowed; reference an environment variable name instead", key)
+		}
+		if key != "" {
+			output[key] = value
+		}
+	}
+	if len(output) == 0 {
+		return nil, nil
+	}
+	return output, nil
+}
+
+func sensitiveDelegationExecutorOptionKey(key string) bool {
+	compact := strings.ToLower(strings.Map(func(char rune) rune {
+		if delegationExecutorASCIIAlphaNumeric(char) {
+			return char
+		}
+		return -1
+	}, strings.TrimSpace(key)))
+	for _, sensitive := range []string{
+		"accesskey", "accesstoken", "apikey", "apitoken", "authkey", "authtoken",
+		"privatekey", "refreshtoken", "secretkey", "sessionkey", "sessiontoken",
+	} {
+		if compact == sensitive {
+			return true
+		}
+	}
+	tokens := delegationExecutorOptionKeyTokens(strings.TrimSpace(key))
+	for _, token := range []string{"AUTH", "COOKIE", "CREDENTIAL", "KEY", "PASSWORD", "PRIVATE", "SECRET", "SESSION", "TOKEN"} {
+		for _, candidate := range tokens {
+			if candidate == token {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func delegationExecutorOptionKeyTokens(key string) []string {
+	runes := []rune(key)
+	tokens := make([]string, 0, 4)
+	start := -1
+	flush := func(end int) {
+		if start >= 0 && start < end {
+			tokens = append(tokens, strings.ToUpper(string(runes[start:end])))
+		}
+		start = -1
+	}
+	for index, char := range runes {
+		if !delegationExecutorASCIIAlphaNumeric(char) {
+			flush(index)
+			continue
+		}
+		if start < 0 {
+			start = index
+			continue
+		}
+		previous := runes[index-1]
+		nextLower := index+1 < len(runes) && delegationExecutorASCIILower(runes[index+1])
+		previousLowerOrDigit := delegationExecutorASCIILower(previous) || delegationExecutorASCIIDigit(previous)
+		camelBoundary := delegationExecutorASCIIUpper(char) && previousLowerOrDigit
+		acronymBoundary := delegationExecutorASCIIUpper(char) && delegationExecutorASCIIUpper(previous) && nextLower
+		if camelBoundary || acronymBoundary {
+			flush(index)
+			start = index
+		}
+	}
+	flush(len(runes))
+	return tokens
+}
+
+func delegationExecutorASCIIAlphaNumeric(char rune) bool {
+	return delegationExecutorASCIILower(char) || delegationExecutorASCIIUpper(char) || delegationExecutorASCIIDigit(char)
+}
+
+func delegationExecutorASCIILower(char rune) bool {
+	return char >= 'a' && char <= 'z'
+}
+
+func delegationExecutorASCIIUpper(char rune) bool {
+	return char >= 'A' && char <= 'Z'
+}
+
+func delegationExecutorASCIIDigit(char rune) bool {
+	return char >= '0' && char <= '9'
 }
 
 func normalizeDelegationSupervision(input DelegationSupervisionConfig, availableModels map[string]struct{}, groupIDs map[string]struct{}) DelegationSupervisionConfig {

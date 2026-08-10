@@ -188,8 +188,9 @@ func DefaultConfig() Config {
 			Enabled: DefaultSkillMCPScanEnabled,
 		},
 		Delegation: DelegationConfig{
-			Enabled:        true,
-			MaxConcurrency: DefaultDelegationMaxConcurrency,
+			Enabled:               true,
+			MaxConcurrency:        DefaultDelegationMaxConcurrency,
+			ExecutorFailoverLimit: DefaultDelegationExecutorFailoverLimit,
 			Supervision: DelegationSupervisionConfig{
 				Enabled:        false,
 				MaxCorrections: DefaultDelegationMaxCorrections,
@@ -245,7 +246,10 @@ func NormalizeConfig(input Config) (Config, error) {
 		return Config{}, err
 	}
 	output.ModelAdapters = adapters
-	output.Delegation = normalizeDelegationConfig(input.Delegation, adapters)
+	output.Delegation, err = normalizeDelegationConfig(input.Delegation, adapters)
+	if err != nil {
+		return Config{}, err
+	}
 	output.Goal = normalizeGoalConfig(input.Goal)
 	return output, nil
 }
