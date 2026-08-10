@@ -94,7 +94,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 762,
+          "line": 765,
           "column": 14
         }
       ]
@@ -113,6 +113,23 @@
           "file": "src/views/ModelEditor.vue",
           "line": 169,
           "column": 12
+        }
+      ]
+    },
+    "028c04829e31a546": {
+      "source": "添加 Defender 排除项失败：{0}\n\n可手动在 Windows 安全中心 → 病毒和威胁防护 → 排除项中添加：\n{1}",
+      "kind": "template",
+      "placeholders": 2,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 238,
+          "column": 19
+        },
+        {
+          "file": "src/views/Home.vue",
+          "line": 248,
+          "column": 19
         }
       ]
     },
@@ -219,6 +236,18 @@
           "file": "src/views/SupplierDetail.vue",
           "line": 982,
           "column": 54
+        }
+      ]
+    },
+    "03b70ee5bcffcfa1": {
+      "source": "操作已完成。如未添加成功，可手动在 Windows 安全中心排除项中添加：\n\n{0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 250,
+          "column": 19
         }
       ]
     },
@@ -359,7 +388,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 186,
+          "line": 194,
           "column": 29
         }
       ]
@@ -461,7 +490,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 136,
+          "line": 139,
           "column": 12
         }
       ]
@@ -574,7 +603,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 122,
+          "line": 123,
           "column": 21
         }
       ]
@@ -591,7 +620,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 106,
+          "line": 107,
           "column": 111
         }
       ]
@@ -745,7 +774,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 2415
         }
       ]
@@ -757,7 +786,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 50,
+          "line": 51,
           "column": 27
         }
       ]
@@ -978,7 +1007,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 124,
+          "line": 125,
           "column": 27
         }
       ]
@@ -1036,8 +1065,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 288,
-          "column": 1
+          "line": 287,
+          "column": 108
         }
       ]
     },
@@ -1072,8 +1101,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
-          "line": 799,
-          "column": 1
+          "line": 798,
+          "column": 11
         }
       ]
     },
@@ -1252,6 +1281,18 @@
           "file": "src/components/HomeMetricsCard.vue",
           "line": 338,
           "column": 5
+        }
+      ]
+    },
+    "11180a39a187e1d4": {
+      "source": "该目录已在 Defender 排除项中，无需重复添加：\n\n{0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 246,
+          "column": 19
         }
       ]
     },
@@ -1505,7 +1546,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 7182
         }
       ]
@@ -1517,7 +1558,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 1087
         }
       ]
@@ -1726,7 +1767,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 816,
+          "line": 819,
           "column": 38
         }
       ]
@@ -1750,7 +1791,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 97,
+          "line": 98,
           "column": 38
         }
       ]
@@ -1774,7 +1815,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 715,
+          "line": 718,
           "column": 34
         }
       ]
@@ -1822,6 +1863,18 @@
           "file": "src/components/settings/delegation/DelegationSupervisionPanel.vue",
           "line": 134,
           "column": 11
+        }
+      ]
+    },
+    "1a1bc837b4d34278": {
+      "source": "检测到 Windows Defender 正在运行。为确保本地 CA 私钥（ca.key）不被误杀导致本地代理停用，建议把应用数据目录加入 Defender 排除项：\n\n{0}\n\n点击「一键添加」将弹出管理员授权（UAC），授权后自动完成。",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 222,
+          "column": 16
         }
       ]
     },
@@ -1945,7 +1998,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1287,
+          "line": 1290,
           "column": 32
         }
       ]
@@ -2106,7 +2159,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 461,
+          "line": 463,
           "column": 66
         }
       ]
@@ -2372,7 +2425,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 779,
+          "line": 782,
           "column": 40
         }
       ]
@@ -2483,7 +2536,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 106,
+          "line": 107,
           "column": 92
         }
       ]
@@ -2555,7 +2608,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 112,
+          "line": 113,
           "column": 36
         }
       ]
@@ -2608,22 +2661,22 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 82,
+          "line": 83,
           "column": 184
         },
         {
           "file": "src/views/Home.vue",
-          "line": 83,
+          "line": 84,
           "column": 187
         },
         {
           "file": "src/views/Home.vue",
-          "line": 84,
+          "line": 85,
           "column": 178
         },
         {
           "file": "src/views/Home.vue",
-          "line": 105,
+          "line": 106,
           "column": 122
         },
         {
@@ -2768,7 +2821,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 147,
+          "line": 148,
           "column": 29
         }
       ]
@@ -2850,7 +2903,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 703,
+          "line": 706,
           "column": 12
         }
       ]
@@ -2932,7 +2985,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 106,
+          "line": 107,
           "column": 176
         }
       ]
@@ -3019,6 +3072,18 @@
           "file": "src/views/SupplierDetail.vue",
           "line": 893,
           "column": 115
+        }
+      ]
+    },
+    "2843e6537264d798": {
+      "source": "已成功把以下目录加入 Windows Defender 排除项：\n\n{0}\n\n本地 CA 私钥不会再被误删。",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 244,
+          "column": 19
         }
       ]
     },
@@ -3265,18 +3330,6 @@
         }
       ]
     },
-    "2c7a3fb23a6aab72": {
-      "source": "\n\n请重启应用，本地代理将恢复正常。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Home.vue",
-          "line": 184,
-          "column": 18
-        }
-      ]
-    },
     "2cbced881b2df35a": {
       "source": "修改日期",
       "kind": "text",
@@ -3351,22 +3404,22 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 821,
+          "line": 824,
           "column": 12
         },
         {
           "file": "src/views/Home.vue",
-          "line": 106,
+          "line": 107,
           "column": 196
         },
         {
           "file": "src/views/Home.vue",
-          "line": 139,
+          "line": 140,
           "column": 19
         },
         {
           "file": "src/views/Home.vue",
-          "line": 168,
+          "line": 169,
           "column": 17
         },
         {
@@ -3437,7 +3490,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 188,
+          "line": 196,
           "column": 30
         }
       ]
@@ -3463,6 +3516,23 @@
           "file": "src/components/settings/categories/OverlaySettings.vue",
           "line": 326,
           "column": 9
+        }
+      ]
+    },
+    "2d99f376df0fdff2": {
+      "source": "防止杀软误删",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 221,
+          "column": 14
+        },
+        {
+          "file": "src/views/Home.vue",
+          "line": 259,
+          "column": 14
         }
       ]
     },
@@ -3519,7 +3589,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 7617
         }
       ]
@@ -3600,7 +3670,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 502
         }
       ]
@@ -3677,7 +3747,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 7135
         }
       ]
@@ -3841,7 +3911,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 305,
+          "line": 307,
           "column": 99
         }
       ]
@@ -3855,6 +3925,18 @@
           "file": "src/components/settings/delegation/DelegationSupervisionPanel.vue",
           "line": 279,
           "column": 13
+        }
+      ]
+    },
+    "343a7655ae6074d5": {
+      "source": "一键添加",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 223,
+          "column": 20
         }
       ]
     },
@@ -3889,12 +3971,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 231,
+          "line": 306,
           "column": 64
         },
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 2312
         }
       ]
@@ -3920,6 +4002,18 @@
           "file": "src/components/settings/delegation/DelegationSupervisionPanel.vue",
           "line": 142,
           "column": 7
+        }
+      ]
+    },
+    "3532f73a8a9798e9": {
+      "source": "\n\n本地代理自动启动失败：{0}。请稍后手动点击「启动服务」。",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 189,
+          "column": 20
         }
       ]
     },
@@ -3995,7 +4089,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 152,
+          "line": 153,
           "column": 52
         }
       ]
@@ -4101,7 +4195,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 806,
+          "line": 809,
           "column": 14
         }
       ]
@@ -4149,7 +4243,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 3604
         }
       ]
@@ -4299,7 +4393,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 7286
         }
       ]
@@ -4321,8 +4415,8 @@
         },
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 163,
-          "column": 1
+          "line": 162,
+          "column": 11
         }
       ]
     },
@@ -4490,7 +4584,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 135,
+          "line": 138,
           "column": 12
         }
       ]
@@ -4679,7 +4773,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 760,
+          "line": 763,
           "column": 5
         }
       ]
@@ -4764,17 +4858,17 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 100,
+          "line": 101,
           "column": 109
         },
         {
           "file": "src/views/Home.vue",
-          "line": 231,
+          "line": 306,
           "column": 89
         },
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 6840
         },
         {
@@ -4926,18 +5020,6 @@
         }
       ]
     },
-    "42d66c5651dcd1f5": {
-      "source": "本地 CA 异常（证书/密钥缺失其一或无法读取），本地代理已停用。修复将备份残留文件并重新生成 CA，完成后需重启应用生效。继续吗？",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Home.vue",
-          "line": 166,
-          "column": 14
-        }
-      ]
-    },
     "42dccacbf9386981": {
       "source": "{0}剩余 {1}%",
       "kind": "template",
@@ -5068,6 +5150,18 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 64,
           "column": 28
+        }
+      ]
+    },
+    "4516acf53b78cbe2": {
+      "source": "\n\n本地代理已自动启动。请重启 Cursor 使新 CA 生效。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 191,
+          "column": 20
         }
       ]
     },
@@ -5474,7 +5568,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 140,
+          "line": 143,
           "column": 12
         }
       ]
@@ -5653,7 +5747,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 141,
+          "line": 144,
           "column": 12
         }
       ]
@@ -5723,12 +5817,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 167,
+          "line": 168,
           "column": 18
         },
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 6145
         }
       ]
@@ -5806,7 +5900,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 206,
+          "line": 208,
           "column": 24
         }
       ]
@@ -6069,7 +6163,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 401,
+          "line": 403,
           "column": 128
         }
       ]
@@ -6122,12 +6216,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 154,
+          "line": 155,
           "column": 60
         },
         {
           "file": "src/views/Home.vue",
-          "line": 216,
+          "line": 291,
           "column": 63
         }
       ]
@@ -6356,7 +6450,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 154,
+          "line": 155,
           "column": 30
         }
       ]
@@ -6380,7 +6474,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 100,
+          "line": 101,
           "column": 34
         }
       ]
@@ -6404,7 +6498,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 138,
+          "line": 139,
           "column": 20
         }
       ]
@@ -6450,7 +6544,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 230,
+          "line": 305,
           "column": 16
         }
       ]
@@ -6778,7 +6872,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 112,
+          "line": 113,
           "column": 164
         }
       ]
@@ -6897,7 +6991,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 225,
+          "line": 300,
           "column": 66
         }
       ]
@@ -6969,7 +7063,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 165,
+          "line": 166,
           "column": 12
         }
       ]
@@ -7039,7 +7133,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 753,
+          "line": 756,
           "column": 7
         }
       ]
@@ -7051,7 +7145,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 5150
         }
       ]
@@ -7372,7 +7466,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 48,
+          "line": 49,
           "column": 69
         }
       ]
@@ -7656,6 +7750,18 @@
         }
       ]
     },
+    "657cbbb0d1edafd5": {
+      "source": "未授予管理员权限，排除项未添加。下次启动会再次提醒。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 241,
+          "column": 50
+        }
+      ]
+    },
     "65840c5b7d298cbb": {
       "source": "默认跟随主模型；也可以指定一个更强的已配置模型作为顾问。",
       "kind": "text",
@@ -7687,7 +7793,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 729,
+          "line": 732,
           "column": 14
         }
       ]
@@ -7699,7 +7805,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1364,
+          "line": 1367,
           "column": 32
         }
       ]
@@ -7711,7 +7817,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 698,
+          "line": 701,
           "column": 14
         }
       ]
@@ -7798,6 +7904,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 281,
           "column": 54
+        }
+      ]
+    },
+    "67ae2bf7dacfde5d": {
+      "source": "应用数据目录",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 216,
+          "column": 30
         }
       ]
     },
@@ -7936,7 +8054,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 1054
         }
       ]
@@ -7984,7 +8102,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 152,
+          "line": 153,
           "column": 34
         }
       ]
@@ -8054,12 +8172,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 63,
+          "line": 64,
           "column": 29
         },
         {
           "file": "src/views/Home.vue",
-          "line": 70,
+          "line": 71,
           "column": 27
         }
       ]
@@ -8098,17 +8216,17 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 133,
+          "line": 136,
           "column": 31
         },
         {
           "file": "src/views/Home.vue",
-          "line": 80,
+          "line": 81,
           "column": 98
         },
         {
           "file": "src/views/Home.vue",
-          "line": 80,
+          "line": 81,
           "column": 116
         },
         {
@@ -8279,7 +8397,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 5506
         }
       ]
@@ -8320,7 +8438,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 93,
+          "line": 94,
           "column": 29
         }
       ]
@@ -8344,7 +8462,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 721,
+          "line": 724,
           "column": 20
         }
       ]
@@ -8462,7 +8580,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 112,
+          "line": 113,
           "column": 144
         }
       ]
@@ -8808,8 +8926,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 366,
-          "column": 1
+          "line": 365,
+          "column": 115
         }
       ]
     },
@@ -8861,7 +8979,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 219,
+          "line": 294,
           "column": 69
         }
       ]
@@ -9315,7 +9433,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 100,
+          "line": 101,
           "column": 89
         }
       ]
@@ -9435,7 +9553,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 805,
+          "line": 808,
           "column": 38
         }
       ]
@@ -9447,7 +9565,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 81,
+          "line": 82,
           "column": 116
         }
       ]
@@ -9532,6 +9650,18 @@
         }
       ]
     },
+    "7f6046084d2a0f0d": {
+      "source": "排除项引导",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 252,
+          "column": 32
+        }
+      ]
+    },
     "7f68ebad19ba6bcd": {
       "source": "检查更新",
       "kind": "text",
@@ -9544,7 +9674,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 788,
+          "line": 791,
           "column": 16
         }
       ]
@@ -9742,7 +9872,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 224,
+          "line": 299,
           "column": 18
         }
       ]
@@ -9766,12 +9896,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 4716
         },
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 6145
         }
       ]
@@ -9901,8 +10031,8 @@
         },
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 359,
-          "column": 1
+          "line": 358,
+          "column": 92
         }
       ]
     },
@@ -10108,7 +10238,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 695,
+          "line": 698,
           "column": 14
         }
       ]
@@ -10376,8 +10506,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 533,
-          "column": 1
+          "line": 532,
+          "column": 11
         }
       ]
     },
@@ -10412,8 +10542,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 228,
-          "column": 1
+          "line": 227,
+          "column": 52
         }
       ]
     },
@@ -10522,7 +10652,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 4325
         },
         {
@@ -10539,7 +10669,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 211,
+          "line": 286,
           "column": 11
         }
       ]
@@ -10907,7 +11037,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 97,
+          "line": 98,
           "column": 29
         }
       ]
@@ -10931,7 +11061,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1327,
+          "line": 1330,
           "column": 32
         }
       ]
@@ -10943,7 +11073,7 @@
       "refs": [
         {
           "file": "src/services/clientApi.js",
-          "line": 158,
+          "line": 160,
           "column": 37
         }
       ]
@@ -11016,7 +11146,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 7759
         },
         {
@@ -11194,7 +11324,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 216,
+          "line": 291,
           "column": 32
         }
       ]
@@ -11525,13 +11655,25 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1540,
+          "line": 1543,
           "column": 32
         },
         {
           "file": "src/state/appState.js",
-          "line": 1561,
+          "line": 1564,
           "column": 32
+        }
+      ]
+    },
+    "98787db7f026a506": {
+      "source": "本地 CA 异常（证书/密钥缺失其一或无法读取），本地代理已停用。修复将备份残留文件并重新生成 CA，完成后自动启动本地代理。继续吗？",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 167,
+          "column": 14
         }
       ]
     },
@@ -11655,7 +11797,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 137,
+          "line": 138,
           "column": 16
         }
       ]
@@ -11727,7 +11869,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 6479
         }
       ]
@@ -11833,7 +11975,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 116,
+          "line": 117,
           "column": 29
         }
       ]
@@ -11869,8 +12011,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 435,
-          "column": 1
+          "line": 434,
+          "column": 67
         }
       ]
     },
@@ -11893,7 +12035,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 817,
+          "line": 820,
           "column": 14
         }
       ]
@@ -12154,12 +12296,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 731,
+          "line": 734,
           "column": 12
         },
         {
           "file": "src/state/appState.js",
-          "line": 798,
+          "line": 801,
           "column": 87
         }
       ]
@@ -12314,6 +12456,11 @@
           "file": "src/utils/errorHumanizer.js",
           "line": 49,
           "column": 60
+        },
+        {
+          "file": "src/views/Home.vue",
+          "line": 241,
+          "column": 34
         }
       ]
     },
@@ -12459,8 +12606,8 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 460,
-          "column": 1
+          "line": 459,
+          "column": 17
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
@@ -13034,7 +13181,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 48,
+          "line": 49,
           "column": 33
         }
       ]
@@ -13075,7 +13222,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 780,
+          "line": 783,
           "column": 16
         }
       ]
@@ -13123,7 +13270,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 182,
+          "line": 183,
           "column": 17
         }
       ]
@@ -13323,7 +13470,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 1107
         }
       ]
@@ -13501,7 +13648,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 116,
+          "line": 117,
           "column": 50
         }
       ]
@@ -13547,7 +13694,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 4716
         }
       ]
@@ -13571,7 +13718,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 787,
+          "line": 790,
           "column": 40
         }
       ]
@@ -13708,7 +13855,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 112,
+          "line": 113,
           "column": 57
         }
       ]
@@ -13900,7 +14047,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 7759
         },
         {
@@ -14100,7 +14247,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 100,
+          "line": 101,
           "column": 51
         }
       ]
@@ -14411,7 +14558,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 701,
+          "line": 704,
           "column": 14
         }
       ]
@@ -14691,7 +14838,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1383,
+          "line": 1386,
           "column": 32
         }
       ]
@@ -15079,8 +15226,8 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 509,
-          "column": 1
+          "line": 508,
+          "column": 11
         }
       ]
     },
@@ -15091,7 +15238,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 215,
+          "line": 290,
           "column": 18
         }
       ]
@@ -15127,12 +15274,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 713,
+          "line": 716,
           "column": 38
         },
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 2312
         }
       ]
@@ -15356,7 +15503,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 287,
           "column": 11
         }
       ]
@@ -15397,8 +15544,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 329,
-          "column": 1
+          "line": 328,
+          "column": 91
         }
       ]
     },
@@ -15508,7 +15655,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 106,
+          "line": 107,
           "column": 324
         }
       ]
@@ -15573,7 +15720,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 5992
         }
       ]
@@ -15730,7 +15877,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1408,
+          "line": 1411,
           "column": 14
         }
       ]
@@ -15754,7 +15901,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 502
         }
       ]
@@ -15988,8 +16135,8 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 145,
-          "column": 1
+          "line": 144,
+          "column": 53
         }
       ]
     },
@@ -16077,12 +16224,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 225,
+          "line": 300,
           "column": 36
         },
         {
           "file": "src/views/Home.vue",
-          "line": 231,
+          "line": 306,
           "column": 34
         }
       ]
@@ -16094,7 +16241,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 219,
+          "line": 294,
           "column": 31
         }
       ]
@@ -16106,7 +16253,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 183,
+          "line": 184,
           "column": 36
         }
       ]
@@ -16312,6 +16459,18 @@
         }
       ]
     },
+    "db9cc7741aab1699": {
+      "source": "为确保本地 CA 私钥（ca.key）不被杀毒软件误删导致本地代理停用，建议在您的杀毒软件中把应用数据目录加入排除/白名单：\n\n{0}\n\n（未检测到 Windows Defender；若使用第三方杀软，请在其设置中手动添加排除项。）",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 260,
+          "column": 16
+        }
+      ]
+    },
     "dbb4b5be9b5723dc": {
       "source": "{0} 的推理强度仅支持 low、medium、high、xhigh、max",
       "kind": "template",
@@ -16343,7 +16502,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 214,
+          "line": 289,
           "column": 38
         }
       ]
@@ -16360,7 +16519,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 5150
         }
       ]
@@ -16396,7 +16555,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 759,
+          "line": 762,
           "column": 5
         }
       ]
@@ -16536,8 +16695,23 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 188,
+          "line": 196,
           "column": 60
+        },
+        {
+          "file": "src/views/Home.vue",
+          "line": 241,
+          "column": 93
+        },
+        {
+          "file": "src/views/Home.vue",
+          "line": 252,
+          "column": 63
+        },
+        {
+          "file": "src/views/Home.vue",
+          "line": 261,
+          "column": 20
         }
       ]
     },
@@ -16606,8 +16780,8 @@
       "refs": [
         {
           "file": "src/components/StationSpendCard.vue",
-          "line": 332,
-          "column": 1
+          "line": 331,
+          "column": 85
         },
         {
           "file": "src/views/MetricsDetail.vue",
@@ -16838,7 +17012,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 4014
         },
         {
@@ -16980,7 +17154,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 783,
+          "line": 786,
           "column": 40
         }
       ]
@@ -17096,8 +17270,8 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 148,
-          "column": 1
+          "line": 147,
+          "column": 81
         }
       ]
     },
@@ -17542,7 +17716,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 784,
+          "line": 787,
           "column": 16
         }
       ]
@@ -17817,7 +17991,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 225,
+          "line": 300,
           "column": 93
         }
       ]
@@ -17841,12 +18015,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 3187
         },
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 6668
         }
       ]
@@ -17882,7 +18056,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 66,
+          "line": 67,
           "column": 21
         }
       ]
@@ -18111,7 +18285,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 715,
+          "line": 718,
           "column": 25
         }
       ]
@@ -18281,7 +18455,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 7286
         }
       ]
@@ -18634,7 +18808,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 810,
+          "line": 813,
           "column": 12
         },
         {
@@ -18695,7 +18869,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 713,
+          "line": 716,
           "column": 27
         }
       ]
@@ -18745,6 +18919,18 @@
           "file": "src/components/DelegationRuntimePanel.vue",
           "line": 63,
           "column": 15
+        }
+      ]
+    },
+    "fc50a99caae0cddc": {
+      "source": "跳过",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 224,
+          "column": 19
         }
       ]
     },
@@ -18803,17 +18989,17 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 136,
+          "line": 137,
           "column": 14
         },
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 3187
         },
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 324,
           "column": 6668
         }
       ]
@@ -18837,12 +19023,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 175,
+          "line": 176,
           "column": 29
         },
         {
           "file": "src/views/Home.vue",
-          "line": 200,
+          "line": 275,
           "column": 29
         }
       ]
