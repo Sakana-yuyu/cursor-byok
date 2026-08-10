@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"cursor/gen/agentv1"
+
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 const (
@@ -46,6 +50,12 @@ func limitProjectedToolResultReplay(toolName string, content string, resultText 
 	if compacted, ok := compactProjectedShellToolResultReplay(toolName, content); ok {
 		content = compacted
 		fromStoredToolCall = false
+	}
+	if historical && len(content) > staleToolResultAggressiveThreshold {
+		if compacted, ok := compactHistoricalLsResultReplay(toolName, content, resultText); ok {
+			content = compacted
+			fromStoredToolCall = false
+		}
 	}
 	limit, ok := projectedToolReplayLimit(toolName)
 	if !ok {
@@ -98,6 +108,8 @@ func projectedToolReplayLimit(toolName string) (int, bool) {
 		return projectedShellReplayLimit, true
 	case "Grep":
 		return projectedGrepReplayLimit, true
+	case "Ls":
+		return projectedGrepReplayLimit, true
 	case "PatchEdit", "PatchEditLines", "PatchEditSpan":
 		return projectedPatchEditReplayLimit, true
 	case "Edit", "Write":
@@ -113,6 +125,77 @@ func projectedToolReplayLimit(toolName string) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func compactHistoricalLsResultReplay(toolName string, content string, resultText string) (string, bool) {
+	if strings.TrimSpace(toolName) != "Ls" {
+		return "", false
+	}
+	const notice = "[历史 Ls 目录树已从 provider 回放中省略；如需精确内容请重新调用 Ls]"
+	if fallback := strings.TrimSpace(resultText); fallback != "" {
+		return fallback + "\n\n" + notice, true
+	}
+
+	path, files, ok := projectedLsReplaySummary(content)
+	if !ok {
+		return "", false
+	}
+	return fmt.Sprintf("ls success path=%s files=%d\n\n%s", path, files, notice), true
+}
+
+func projectedLsReplaySummary(content string) (string, int, bool) {
+	trimmed := strings.TrimSpace(content)
+	if trimmed == "" {
+		return "", 0, false
+	}
+
+	toolCall := &agentv1.ToolCall{}
+	if err := protojson.Unmarshal([]byte(trimmed), toolCall); err == nil {
+		if ls := toolCall.GetLsToolCall(); ls != nil {
+			path := strings.TrimSpace(ls.GetArgs().GetPath())
+			if root := lsResultDirectoryRoot(ls.GetResult()); root != nil {
+				path = firstNonEmpty(path, strings.TrimSpace(root.GetAbsPath()))
+				return path, projectedLsFileCount(root), path != ""
+			}
+		}
+	}
+
+	result := &agentv1.LsResult{}
+	if err := protojson.Unmarshal([]byte(trimmed), result); err != nil {
+		return "", 0, false
+	}
+	root := lsResultDirectoryRoot(result)
+	if root == nil || strings.TrimSpace(root.GetAbsPath()) == "" {
+		return "", 0, false
+	}
+	return strings.TrimSpace(root.GetAbsPath()), projectedLsFileCount(root), true
+}
+
+func lsResultDirectoryRoot(result *agentv1.LsResult) *agentv1.LsDirectoryTreeNode {
+	if result == nil {
+		return nil
+	}
+	if success := result.GetSuccess(); success != nil {
+		return success.GetDirectoryTreeRoot()
+	}
+	if timeout := result.GetTimeout(); timeout != nil {
+		return timeout.GetDirectoryTreeRoot()
+	}
+	return nil
+}
+
+func projectedLsFileCount(root *agentv1.LsDirectoryTreeNode) int {
+	if root == nil {
+		return 0
+	}
+	if count := int(root.GetNumFiles()); count > 0 {
+		return count
+	}
+	count := len(root.GetChildrenFiles())
+	for _, child := range root.GetChildrenDirs() {
+		count += projectedLsFileCount(child)
+	}
+	return count
 }
 
 func compactProjectedGenerateImageResultReplay(toolName string, content string, resultText string) (string, bool) {

@@ -105,6 +105,112 @@ func TestProjectLegacyCheckpointLargeModelHistoryUsesRootReplay(t *testing.T) {
 	}
 }
 
+func TestProjectPromptReplayCompactsHistoricalLsWithoutChangingToolSequence(t *testing.T) {
+	const toolCallID = "call-ls-1"
+	files := make([]*agentv1.LsDirectoryTreeNode_File, 0, 500)
+	for index := 0; index < cap(files); index++ {
+		files = append(files, &agentv1.LsDirectoryTreeNode_File{
+			Name: fmt.Sprintf("large-directory-entry-%03d.txt", index),
+		})
+	}
+	toolCallPayload, err := protojson.Marshal(&agentv1.ToolCall{
+		Tool: &agentv1.ToolCall_LsToolCall{
+			LsToolCall: &agentv1.LsToolCall{
+				Args: &agentv1.LsArgs{
+					Path:       "E:\\MyProject\\cursor-byok",
+					ToolCallId: toolCallID,
+				},
+				Result: &agentv1.LsResult{
+					Result: &agentv1.LsResult_Success{
+						Success: &agentv1.LsSuccess{
+							DirectoryTreeRoot: &agentv1.LsDirectoryTreeNode{
+								AbsPath:       "E:\\MyProject\\cursor-byok",
+								ChildrenFiles: files,
+								NumFiles:      int32(len(files)),
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal Ls tool call: %v", err)
+	}
+	if len(toolCallPayload) <= staleToolResultAggressiveThreshold {
+		t.Fatalf("Ls fixture bytes = %d, want > %d", len(toolCallPayload), staleToolResultAggressiveThreshold)
+	}
+
+	conversation := testConversation([]HistoryEntry{
+		testUserMessageEntry(t, 1, "request-1", "列出项目目录"),
+		newToolCallEntry(1, "request-1", toolCallID, "Ls", "", "", toolCallPayload),
+		newToolResultEntry(1, "request-1", toolCallID, "Ls", "{\"path\":\"E:\\\\MyProject\\\\cursor-byok\"}", "ls success path=E:\\MyProject\\cursor-byok files=500", "", toolCallPayload),
+		newAssistantTextEntry(1, "request-1", "目录读取完成", "", ""),
+		testUserMessageEntry(t, 2, "request-2", "继续检查"),
+	})
+
+	projector := NewHistoryProjector()
+	first, err := projector.ProjectPromptReplay(conversation)
+	if err != nil {
+		t.Fatalf("first ProjectPromptReplay() error = %v", err)
+	}
+	second, err := projector.ProjectPromptReplay(conversation)
+	if err != nil {
+		t.Fatalf("second ProjectPromptReplay() error = %v", err)
+	}
+	firstJSON, err := json.Marshal(first)
+	if err != nil {
+		t.Fatalf("marshal first replay: %v", err)
+	}
+	secondJSON, err := json.Marshal(second)
+	if err != nil {
+		t.Fatalf("marshal second replay: %v", err)
+	}
+	if string(firstJSON) != string(secondJSON) {
+		t.Fatal("ProjectPromptReplay() output is not deterministic")
+	}
+
+	assistantIndex := -1
+	toolResultIndex := -1
+	nextUserIndex := -1
+	projectedTools := make(map[string]struct{})
+	for index, message := range first {
+		for _, toolCall := range message.ToolCalls {
+			projectedTools[toolCall.Function.Name] = struct{}{}
+			if toolCall.ID == toolCallID {
+				assistantIndex = index
+				if toolCall.Function.Name != "Ls" {
+					t.Fatalf("projected tool name = %q, want Ls", toolCall.Function.Name)
+				}
+			}
+		}
+		if message.Role == "tool" && message.ToolCallID == toolCallID {
+			toolResultIndex = index
+			if message.Name != "Ls" {
+				t.Fatalf("tool result name = %q, want Ls", message.Name)
+			}
+			if strings.Contains(message.Content, "large-directory-entry-") {
+				t.Fatal("historical Ls directory tree leaked into provider replay")
+			}
+			if !strings.Contains(message.Content, "历史 Ls 目录树已从 provider 回放中省略") {
+				t.Fatalf("historical Ls omission notice missing: %s", message.Content)
+			}
+		}
+		if message.Role == "user" && strings.Contains(message.Content, "继续检查") {
+			nextUserIndex = index
+		}
+	}
+	if assistantIndex < 0 || toolResultIndex < 0 || nextUserIndex < 0 {
+		t.Fatalf("replay indexes assistant=%d tool=%d next_user=%d", assistantIndex, toolResultIndex, nextUserIndex)
+	}
+	if !(assistantIndex < toolResultIndex && toolResultIndex < nextUserIndex) {
+		t.Fatalf("tool replay order assistant=%d tool=%d next_user=%d", assistantIndex, toolResultIndex, nextUserIndex)
+	}
+	if len(projectedTools) != 1 {
+		t.Fatalf("projected tool set = %#v, want only Ls", projectedTools)
+	}
+}
+
 func TestProjectLegacyCheckpointSnapshotIsIsolatedFromLaterHistory(t *testing.T) {
 	conversation := testConversation([]HistoryEntry{
 		testUserMessageEntry(t, 1, "request-1", "first question"),
