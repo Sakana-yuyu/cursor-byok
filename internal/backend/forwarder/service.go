@@ -493,12 +493,7 @@ func (service *Service) RunSSE(ctx context.Context, req *connect.Request[aiserve
 						})
 						return err
 					}
-					service.debug.LogRunSSE(ctx, requestID, "", "send_message", map[string]any{
-						"cursor":       cursor,
-						"message_case": agentServerMessageCase(event.Message),
-						"message_size": proto.Size(event.Message),
-						"message":      protoJSONDebugPayload(event.Message),
-					})
+					service.debug.LogRunSSE(ctx, requestID, "", "send_message", runSSEMessageDebugFields(cursor, event.Message))
 				}
 				cursor++
 				if event.End {

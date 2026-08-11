@@ -25,7 +25,7 @@ go run ./scripts/debugreport `
 - `usage.ttftMs`：provider 首个有效事件到达前的首响应延迟口径。
 - `usage.durationMs`：provider 流总耗时。
 - `forwarderReceived`：adapter 模型事件进入 forwarder 时生成的正文摘要；它是 forwarder 接收点的独立证据，不等同于 provider 原始 SSE 抓取。
-- `runSSE`：forwarder 实际发送给 RunSSE 订阅者的正文摘要。
+- `runSSE`：forwarder 实际发送给 RunSSE 订阅者的正文摘要。新日志只含增量字节数与 SHA-256，不在用户可见输出热路径构造完整 protobuf JSON；旧日志中的完整消息格式仍可读取。
 - `textComparison`：
   - `match`：`forwarderReceived` 与 `runSSE` 的正文增量数量及摘要一致。
   - `mismatch`：两层都有证据但摘要不一致，需要继续追查 forwarder 接收与下发之间的链路。
@@ -39,4 +39,10 @@ go run ./scripts/debugreport `
 
 ## 性能边界
 
-正文摘要只在配置 `log: true` 时计算并异步落盘；关闭 debug 日志时不会计算 SHA-256，也不会为该诊断分配字段 map。debug 日志是尽力而为的证据层，队列满时可以丢弃事件，不能把日志缺失解释为业务流丢失。
+正文摘要只在配置 `log: true` 时计算并异步落盘；关闭 debug 日志时不会计算 SHA-256，也不会为该诊断分配字段 map。正常 RunSSE 下行不再为日志执行完整 protobuf JSON 编码和反解码，发送失败时仍会保留完整错误诊断。debug 日志是尽力而为的证据层，队列满时可以丢弃事件，不能把日志缺失解释为业务流丢失。
+
+## NewAPI TPS 口径对照
+
+2026-08-11 以关键词 `NewAPI TPS generation_ms output_tokens` 检索并读取 [Calcium-Ion/new-api](https://github.com/Calcium-Ion/new-api) 最新 `9c97e78aced572d540f227007a675d7d007666ac` 的 `pkg/perf_metrics/metrics.go`。该实现把 `generation_ms` 记为首响应到完成的时长，并计算 `output_tokens / generation_ms`。选用其官方 GitHub 仓库而非第三方说明，原因是统计公式以源码为准。
+
+因此对照时必须区分渠道返回的总 `output_tokens` 和用户可见正文 token：推理模型的总 TPS 可以高于正文 TPS。`debugreport` 的链路摘要只用于证明 forwarder 接收与 RunSSE 下发一致，不能替代同一 prompt、模型、推理强度下的端到端测速。

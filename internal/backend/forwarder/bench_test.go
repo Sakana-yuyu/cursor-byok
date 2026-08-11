@@ -11,6 +11,8 @@ import (
 	"testing"
 )
 
+var benchmarkRunSSEDebugFields any
+
 // benchStreamCommandEnvelopeActor 模拟 runStreamActor：从 mailbox 取命令，
 // 处理（此处为空操作），若有 result channel 则回写结果。
 func benchStreamCommandEnvelopeActor(mailbox <-chan streamCommandEnvelope, done chan struct{}) {
@@ -155,5 +157,26 @@ func BenchmarkTextAccumulationBuilder(b *testing.B) {
 		if builder.Len() == 0 {
 			b.Fatal("empty accumulation")
 		}
+	}
+}
+
+// BenchmarkRunSSEFullMessageDebugPayload 量化旧的正常下行日志路径：每个 delta
+// 同步 protobuf JSON 编码再反解码，保留全文到调试对象。
+func BenchmarkRunSSEFullMessageDebugPayload(b *testing.B) {
+	message := buildTextDeltaMessage("a realistic streamed text delta for a coding response")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		benchmarkRunSSEDebugFields = protoJSONDebugPayload(message)
+	}
+}
+
+// BenchmarkRunSSECompactMessageDebugFields 量化新路径：只保留协议元信息与正文摘要。
+func BenchmarkRunSSECompactMessageDebugFields(b *testing.B) {
+	message := buildTextDeltaMessage("a realistic streamed text delta for a coding response")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		benchmarkRunSSEDebugFields = runSSEMessageDebugFields(1, message)
 	}
 }

@@ -100,6 +100,26 @@ func TestLoadRequestReportMarksDifferentTextAsMismatch(t *testing.T) {
 	}
 }
 
+func TestLoadRequestReportMatchesCompactRunSSETextDeltaDigest(t *testing.T) {
+	root := t.TempDir()
+	debugDir := filepath.Join(root, "conversation-1", "debug")
+	if err := os.MkdirAll(debugDir, 0o755); err != nil {
+		t.Fatalf("create debug directory: %v", err)
+	}
+	const digest = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+	writeFixture(t, filepath.Join(debugDir, "provider.jsonl"), "{\"request_id\":\"request-1\",\"event\":\"llm_request\"}\n")
+	writeFixture(t, filepath.Join(debugDir, "runtime.jsonl"), "{\"request_id\":\"request-1\",\"event\":\"text_delta_forwarded\",\"delta_bytes\":5,\"delta_sha256\":\""+digest+"\"}\n")
+	writeFixture(t, filepath.Join(debugDir, "runsse.jsonl"), "{\"request_id\":\"request-1\",\"event\":\"send_message\",\"text_delta_bytes\":5,\"text_delta_sha256\":\""+digest+"\"}\n")
+
+	report, err := LoadRequestReport(root, "conversation-1", "request-1")
+	if err != nil {
+		t.Fatalf("load report: %v", err)
+	}
+	if !report.TextMatches || report.TextComparison != "match" {
+		t.Fatalf("compact runsse comparison = %q, matches=%t", report.TextComparison, report.TextMatches)
+	}
+}
+
 func writeFixture(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {

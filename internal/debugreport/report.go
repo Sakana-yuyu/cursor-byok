@@ -91,8 +91,9 @@ func LoadRequestReport(historyRoot, conversationID, requestID string) (RequestRe
 	}
 	if err := scanJSONL(filepath.Join(debugDir, "runsse.jsonl"), requestID, func(event debugEvent) error {
 		if event.Event == "send_message" {
-			text := event.runSSETextDelta()
-			if text != "" {
+			if event.TextDeltaBytes > 0 && validSHA256(event.TextDeltaSHA256) {
+				runSSEText.addDigest(event.TextDeltaBytes, event.TextDeltaSHA256)
+			} else if text := event.runSSETextDelta(); text != "" {
 				sum := sha256.Sum256([]byte(text))
 				runSSEText.addDigest(int64(len([]byte(text))), hex.EncodeToString(sum[:]))
 			}
@@ -120,14 +121,16 @@ func LoadRequestReport(historyRoot, conversationID, requestID string) (RequestRe
 }
 
 type debugEvent struct {
-	RequestID   string         `json:"request_id"`
-	Event       string         `json:"event"`
-	ModelCallID string         `json:"model_call_id"`
-	Payload     map[string]any `json:"payload"`
-	Text        string         `json:"text"`
-	DeltaBytes  int64          `json:"delta_bytes"`
-	DeltaSHA256 string         `json:"delta_sha256"`
-	Message     map[string]any `json:"message"`
+	RequestID       string         `json:"request_id"`
+	Event           string         `json:"event"`
+	ModelCallID     string         `json:"model_call_id"`
+	Payload         map[string]any `json:"payload"`
+	Text            string         `json:"text"`
+	DeltaBytes      int64          `json:"delta_bytes"`
+	DeltaSHA256     string         `json:"delta_sha256"`
+	TextDeltaBytes  int64          `json:"text_delta_bytes"`
+	TextDeltaSHA256 string         `json:"text_delta_sha256"`
+	Message         map[string]any `json:"message"`
 }
 
 func (event debugEvent) runSSETextDelta() string {

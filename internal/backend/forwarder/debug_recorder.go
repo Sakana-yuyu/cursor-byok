@@ -3,6 +3,8 @@ package forwarder
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -205,6 +207,25 @@ func (recorder *debugRecorder) LogRunSSE(ctx context.Context, requestID string, 
 		event[key] = value
 	}
 	recorder.appendJSONL(ctx, requestID, conversationID, "runsse.jsonl", event)
+}
+
+// runSSEMessageDebugFields 仅记录 RunSSE 消息的协议类别、大小与正文增量摘要。
+// RunSSE 位于用户可见输出热路径，不能为调试日志同步执行 protobuf JSON 编码和反解码。
+func runSSEMessageDebugFields(cursor int, message *agentv1.AgentServerMessage) map[string]any {
+	fields := map[string]any{
+		"cursor":       cursor,
+		"message_case": agentServerMessageCase(message),
+		"message_size": proto.Size(message),
+	}
+	if textDelta := message.GetInteractionUpdate().GetTextDelta(); textDelta != nil {
+		text := textDelta.GetText()
+		if text != "" {
+			sum := sha256.Sum256([]byte(text))
+			fields["text_delta_bytes"] = len([]byte(text))
+			fields["text_delta_sha256"] = hex.EncodeToString(sum[:])
+		}
+	}
+	return fields
 }
 
 func (recorder *debugRecorder) LogProvider(ctx context.Context, requestID string, conversationID string, eventName string, fields map[string]any) {
