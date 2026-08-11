@@ -44,3 +44,11 @@
 - `go build ./...`：退出码 0。
 - `git diff --check`：退出码 0；代码提交前仅暂存 `internal/mitm/mirror.go` 与 `internal/mitm/service.go`。
 - 关联 ID 基于 goproxy 的单调 `ProxyCtx.Session`，未进入 HTTP header、URL 或正文；镜像开关在响应过滤器仍保留原有检查，关闭后新到达的响应不再包装记录。
+
+## Round 3 - routing semantics investigation
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- | --- |
+| V-10 | correctness | major | open | `upstream` 的前端说明承诺绕过本地代理，但运行中服务仍会让 Cursor 经过本地 MITM；`routing.mode` 未参与 MITM 请求分流。 | `internal/client/lifecycle.go` 的 `StartProxy` 无条件启动 MITM 并调用 `ApplyCursorSettings`；`internal/client/cursor.go` 会写入 Cursor `http.proxy`；`internal/mitm/service.go` 对 `*.cursor.sh` 无条件转 backend，且仅镜像 host 旁路直通；`internal/bridge/proxy.go` 的 `PrepareCursorLaunch` 仅在 upstream 时跳过启动前就绪检查。 | 已将语义差异和目标行为写入研究、提案与设计；下一实现提交需先以现有 Go 测试描述 routing mode 对 MITM 分流的期望，再最小化接入配置读取和前端运行态文案。 |
+
+本轮为静态请求链路追踪，未启动桌面代理、未修改真实 Cursor 设置、未调用官方 API。它确认了配置消费点与代理行为之间的不一致，但不能代替真实 Cursor 的端到端抓包验证。

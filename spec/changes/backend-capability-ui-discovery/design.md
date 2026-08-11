@@ -18,6 +18,8 @@ flowchart LR
 
 状态查询只暴露运行条件和记录文件元数据。用户主动点击后，系统文件管理器打开镜像目录；记录正文始终停留在本地文件，不经过前端。
 
+路由模式与传输路径必须分开表达：`upstream` 选择业务请求的官方上游，并在未启动本地服务时允许 Cursor 直接访问官方服务；但只要用户启动本地服务且 Cursor 代理设置仍生效，请求仍会先经过本地 MITM。此时镜像域名只旁路记录并直通官方模型 API，Cursor relay 域名则须由显式的路由策略决定是否交给 backend。
+
 ## Interfaces
 
 - `ProxyService.GetMirrorCaptureStatus()`
@@ -42,6 +44,11 @@ flowchart LR
   - Output: 仅用于 JSONL 的 URL 字符串；保留路径和非敏感查询参数。
   - Invariants: `key`、`api_key`、`apikey`、`token`、`access_token`、`refresh_token`、`secret`、`signature`、`sig`、`password` 与 `pass` 等参数值写为 `[REDACTED]`；实际 `http.Request.URL` 不被修改，Gemini 模型路径提取继续使用原始 URL。
 
+- 路由模式与 MITM 传输状态
+  - Input: 已归一化的 `routing.mode`、本地服务运行态和 Cursor 代理设置状态。
+  - Output: 页面使用“官方上游”与“本地服务”描述业务去向，并单独显示是否仍经本地 MITM；镜像状态只在本地代理实际运行且已写入 Cursor 设置时宣称可捕获。
+  - Invariants: 不以 `routing.mode === upstream` 推断 Cursor 已绕过本地代理；不得因更正界面文案而改变用户已启动服务时的镜像记录能力；未启动服务时不能显示“等待官方模型请求”。
+
 ## Data Model
 
 - 镜像状态为派生 DTO，不持久化。
@@ -65,3 +72,4 @@ flowchart LR
 
 - 不迁移配置或历史文件；缺少记录文件按“等待官方模型请求”展示。
 - 既有开关、代理修复和日志目录入口保持原语义。
+- 现有 `upstream` 配置不迁移；只更正其运行态解释，并让代理分流按同一配置源作出明确决策。

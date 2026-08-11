@@ -21,6 +21,7 @@
 - `EnableReaderMCP` 虽仍保留 Wails binding 和浏览器预览 mock，但保存已启用的视觉委派配置时会自动同步同一识图模型的网关、密钥、模型和协议端点至 `~/.cursor/mcp.json`；视觉委派面板已向用户说明该自动同步和 MCP 兜底 | 另设手动入口会以默认 `/v1/chat/completions` 重写全局 Cursor MCP 配置，既与当前委派端点保持一致的自动路径重复，也会扩大误操作和密钥写入风险。
 - `ClearLastError` 仅清空进程内 `ProxyState.lastError` 并发送状态事件；成功启动、停止或 CA 重载已自行清除此状态，首页错误横幅同时提供启动、修复代理和修复 CA 等实际恢复动作 | 单独提供“清除错误”只能隐藏仍未解决的故障，不增加诊断或恢复能力，且服务重启后也不应将该错误作为持久状态保留。
 - 镜像记录对 `Authorization` 等 HTTP 头已脱敏，但请求记录的 `url` 直接来自 `req.URL.String()`；Gemini 等官方接口可在查询参数中传递 `key`，因此现有头部脱敏不能覆盖 URL 凭据 | 本地调试 JSONL 不能保存 API key、token、签名或其他凭据型查询参数的明文；保留路径与非敏感查询项即可支持端点和协议形态对比。
+- `routing.mode` 目前只在保存配置、启动前检查和前端状态中被消费，未进入 MITM 的请求分流；已运行的服务会无条件写入 Cursor `http.proxy`，并把 `*.cursor.sh` 请求转发给嵌入式 backend | 因此 `upstream` 恢复官方登录态后，不能保证 Cursor 绕过本地 MITM；页面的“绕过本地代理服务”表述与实际运行链路不一致，也使镜像抓包的就绪状态缺少运行模式语义。
 
 ## Open [TBD]
 - (无开放决策。)
@@ -38,3 +39,4 @@
 - [DEC-10] 不为 `EnableReaderMCP` 增加独立的手动 UI 入口 | decided from status quo: `SaveDelegationConfig` 会在视觉委派启用且识图模型有效时自动调用 `syncVisionReaderFromDelegation`，以该模型实际的网关、密钥和请求端点更新 `vision-reader`；设置页已将这项同步与回退能力告知用户。独立入口会重复写入 `~/.cursor/mcp.json`，并可能用默认端点覆盖与视觉委派不一致的配置。
 - [DEC-11] 不为 `ClearLastError` 增加 UI 入口 | decided from status quo: 它只清空瞬态错误文本；成功的启动、停止和 CA 重载已自动清除该状态，首页现有启动、代理修复与 CA 修复路径才会处理根因。
 - [DEC-12] 镜像 JSONL 的请求 URL 必须脱敏凭据型查询参数 | decided from status quo: `mirrorRecord.URL` 当前直接使用请求 URL，而仅 headers 经过脱敏。记录器将保持 URL 路径与非敏感参数，以支持对比；`key`、API key、token、secret、签名与密码等参数的值统一替换为 `[REDACTED]`，不修改实际直通请求。
+- [DEC-13] 将 `upstream` 的实现与界面语义统一为“业务请求回官方上游，但在服务运行且抓包开启时仍可经本地 MITM 镜像”，而不再承诺无条件绕过本地代理 | decided from status quo: `PrepareCursorLaunch` 在 upstream 模式不强制启动服务，但 `StartProxy` 不读取 routing mode，仍启动 MITM 并调用 `ApplyCursorSettings`；MITM 对 `*.cursor.sh` 无条件转 backend、对镜像域名无条件旁路直通。后续实现需让请求分流显式读取运行配置，并让状态/文案区分“未启动本地服务的官方直连”与“经本地 MITM 的官方上游镜像”。
