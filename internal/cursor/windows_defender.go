@@ -3,10 +3,13 @@
 package cursor
 
 import (
+	"encoding/base64"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
+	"unicode/utf16"
 
 	"cursor/internal/logger"
 )
@@ -76,12 +79,9 @@ func AddDefenderExclusion(path string) error {
 	if err != nil {
 		return fmt.Errorf("定位 Windows PowerShell 失败: %w", err)
 	}
-	// 直接在提权会话内执行 Add-MpPreference（而非 Start-Process 套 certutil）。
-	script := fmt.Sprintf(
-		"$process = Start-Process -FilePath %s -ArgumentList @('-NoProfile','-NonInteractive','-Command','Add-MpPreference -ExclusionPath %s') -Verb RunAs -WindowStyle Hidden -Wait -PassThru; exit $process.ExitCode",
-		quotePowerShellLiteral(powerShellPath),
-		quotePowerShellLiteral(path),
-	)
+	// 内层命令使用 EncodedCommand，避免路径中的引号、空格或中文经过两层
+	// PowerShell 字符串解析后损坏。
+	script := buildElevatedDefenderExclusionScript(powerShellPath, path)
 	// 外层用一个新的 powershell 进程发起 Start-Process -Verb RunAs。
 	outer := exec.Command(powerShellPath,
 		"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script,
@@ -100,6 +100,25 @@ func AddDefenderExclusion(path string) error {
 		return fmt.Errorf("添加 Defender 排除项失败: %w", err)
 	}
 	return fmt.Errorf("添加 Defender 排除项失败: %w, output: %s", err, trimmed)
+}
+
+func buildElevatedDefenderExclusionScript(powerShellPath string, path string) string {
+	innerCommand := "$ErrorActionPreference = 'Stop'; try { Add-MpPreference -ExclusionPath " + quotePowerShellLiteral(path) + " -ErrorAction Stop; exit 0 } catch { exit 1 }"
+	return fmt.Sprintf(
+		"$process = Start-Process -FilePath %s -ArgumentList @('-NoProfile','-NonInteractive','-EncodedCommand','%s') -Verb RunAs -WindowStyle Hidden -Wait -PassThru; exit $process.ExitCode",
+		quotePowerShellLiteral(powerShellPath),
+		encodePowerShellCommand(innerCommand),
+	)
+}
+
+// encodePowerShellCommand 生成 Windows PowerShell -EncodedCommand 所需的 UTF-16LE Base64。
+func encodePowerShellCommand(command string) string {
+	units := utf16.Encode([]rune(command))
+	data := make([]byte, len(units)*2)
+	for index, unit := range units {
+		binary.LittleEndian.PutUint16(data[index*2:], unit)
+	}
+	return base64.StdEncoding.EncodeToString(data)
 }
 
 // QueryDefenderExclusionState 汇总当前 Defender 排除项状态（非提权，供前端展示）。
