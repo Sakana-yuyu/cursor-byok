@@ -23,6 +23,10 @@
 - 镜像记录对 `Authorization` 等 HTTP 头已脱敏，但请求记录的 `url` 直接来自 `req.URL.String()`；Gemini 等官方接口可在查询参数中传递 `key`，因此现有头部脱敏不能覆盖 URL 凭据 | 本地调试 JSONL 不能保存 API key、token、签名或其他凭据型查询参数的明文；保留路径与非敏感查询项即可支持端点和协议形态对比。
 - `routing.mode` 目前只在保存配置、启动前检查和前端状态中被消费，未进入 MITM 的请求分流；已运行的服务会无条件写入 Cursor `http.proxy`，并把 `*.cursor.sh` 请求转发给嵌入式 backend | 因此 `upstream` 恢复官方登录态后，不能保证 Cursor 绕过本地 MITM；页面的“绕过本地代理服务”表述与实际运行链路不一致，也使镜像抓包的就绪状态缺少运行模式语义。
 - 现有 `cmd/isolated-cursor-e2e` 会为进程及其 Cursor 子进程创建临时 HOME、APPDATA、LOCALAPPDATA、CA 和 loopback 端口，隔离代理设置与登录状态写入；但它以空 `historyRoot` 和 `nil` mirror 配置创建 MITM，并在源码中明确声明“不写入真实请求镜像” | 该入口可证明隔离代理启动边界，不能证明 `official.raw.jsonl` 的真实传输链路。直接启动隔离 Cursor 仍可能由用户操作触发官方网络请求，因此在“不调用官方 API”的本阶段不运行它。
+- 对 Wails binding 与 `frontend/src` 的可复现静态对照显示，4 个已注册服务共有 117 个公开方法，其中 99 个已有前端源码调用；余下 18 个由 12 个 ProxyService 管理/兼容接口和 6 个 WindowService 内部装配接口组成 | 不能只以“binding 未调用”认定缺少界面，必须继续核对其实际副作用、调用者和已有工作流。
+- 12 个未引用的 ProxyService 方法中，授权激活/设备绑定/设备切换固定返回“已移除”，用量记录固定返回 `UNSUPPORTED`；`SetBaseURL` 固定报不支持；`MarkCAIncomplete`、`PrepareCursorLaunch`、`ShutdownForQuit` 分别由应用启动、Cursor 启动预检和退出钩子调用；`ApplyCursorSettings`、`ClearCursorSettings` 会直接写入或清理 CA、系统 `NODE_EXTRA_CA_CERTS`、Cursor 代理及登录态；`ClearLastError` 只隐藏瞬态错误；`GetDeviceID` 仅供广告服务内部标识 | 这些方法不构成面向用户的安全 UI 缺口；已有启动、修复代理、修复 CA、停止服务和账户工作流承接可见操作。
+- 6 个未引用的 WindowService 方法中，`GetMainWindowCloseAction` 由 `runner.go` 主窗口关闭 hook 消费；`SetApp`、`SetMainWindow`、`SetUpdater`、`SetCursorLaunchPreflight` 与 `SetLocale` 分别由应用装配和 `locale:changed` 事件设置 | 它们是原生窗口运行时依赖注入，不应暴露为浏览器可触发的用户动作。
+- 从 `clientApi.js` 与 `runtimeControlApi.js` 再向视图、组件、布局及状态层对照，100 个服务层导出中 97 个有消费者；剩余 `invokeOperation` 是 runtimeControlApi 复用的通用执行器，`getDelegationConfig` 被总配置加载路径覆盖，`updateStatsOverlayWindow` 由 `updateStatsOverlayLayout` 间接调用 | 两层对照均未发现“后端可用、低风险、面向用户且没有前端入口”的能力；本阶段不应为了数字覆盖率新增平行入口。
 
 ## Open [TBD]
 - (无开放决策。)
@@ -43,3 +47,4 @@
 - [DEC-13] 将 `upstream` 的实现与界面语义统一为“业务请求回官方上游，但在服务运行且抓包开启时仍可经本地 MITM 镜像”，而不再承诺无条件绕过本地代理 | decided from status quo: `PrepareCursorLaunch` 在 upstream 模式不强制启动服务，但 `StartProxy` 不读取 routing mode，仍启动 MITM 并调用 `ApplyCursorSettings`；MITM 对 `*.cursor.sh` 无条件转 backend、对镜像域名无条件旁路直通。后续实现需让请求分流显式读取运行配置，并让状态/文案区分“未启动本地服务的官方直连”与“经本地 MITM 的官方上游镜像”。
 - [DEC-14] 本阶段不运行 `cmd/isolated-cursor-e2e` 作为镜像抓包验收，也不为此新建临时测试工具 | decided from status quo: 该启动器隔离用户目录是安全的，但代码显式以空 `historyRoot` 和 `nil` mirror 配置禁用镜像记录，运行 Cursor 后仍需人工触发请求，无法在“不调用官方 API”的边界内证明 `official.raw.jsonl`。继续沿用已有单元/构建/浏览器预览证据，并将真实 Cursor 抓包保留为用户可控的最终人工验收。
 - [DEC-15] 为隔离 E2E 启动器增加默认关闭、仅由 `CURSOR_E2E_MIRROR_CAPTURE=1` 显式启用的官方上游镜像模式 | source: 用户确认“进入下一步”并要求后续抓包完成 Cursor 对接；默认模式继续传入空 `historyRoot` 与 `nil` 镜像配置，维持仅验证代理链路的旧行为。启用后将记录写入临时根目录的 `history/_debug/mirror/official.raw.jsonl`，强制隔离配置为 `routing.mode=upstream` 与 `mirrorCapture.enabled=true`，并跳过本地伪账号注入，让用户自行在隔离 Cursor 中登录和发起官方请求 | reversibility: 取消环境变量或回退该启动器提交即可恢复原隔离代理模式；记录文件与 Cursor 配置均留在临时根目录，不修改真实用户目录。
+- [DEC-16] 不为本轮差异审计中未引用的 18 个 binding 新增前端入口 | decided from status quo: 12 个 ProxyService 方法为已移除/不支持接口、生命周期协调、内部标识，或会裸改 Cursor/系统配置；6 个 WindowService 方法用于原生运行时装配。服务包装层 100 个导出已有 97 个被 UI/状态层消费，余下 3 个分别为内部执行器、被总配置读取覆盖的委派子树读取和由布局包装函数间接复用的浮窗更新；不存在低风险且面向用户的真实缺口。

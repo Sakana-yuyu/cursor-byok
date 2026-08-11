@@ -100,3 +100,17 @@
 - `go build ./cmd/isolated-cursor-e2e`：退出码 0。
 - `git diff --check`：退出码 0；功能提交 `72a45e8` 仅包含启动器和本轮 Spec 批准标记。
 - 未新增测试文件，遵循 `IMPROVEMENT_TASKS.md`；当前会话没有可调用的独立 `spec-verifier` 调度工具，因此以上是实施自检，不代替独立审查。
+
+## Round 7 - backend capability and UI coverage audit
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- |
+| V-18 | necessity | minor | fixed(r7) | 不能把未被 `frontend/src` 调用的 Wails binding 机械补成新界面。 | 对 `ProxyService`、`MetricsService`、`WindowService`、`AdService` 公开方法及 generated binding 做静态对照：117 个公开方法中 99 个已有 `frontend/src` 调用，未引用的 18 个只包括 12 个已移除/不支持/生命周期/高副作用 ProxyService 接口和 6 个 WindowService 运行时装配接口。 | 排除这些 binding；不增加必然失败、重复或会裸改本地 Cursor 配置的 UI。 |
+| V-19 | usability | minor | fixed(r7) | 仅检查 Wails binding 的引用不足以证明最终用户路径存在，需再检查服务包装层是否由页面、组件、布局或状态层消费。 | 对 `clientApi.js` 和 `runtimeControlApi.js` 的 100 个导出向 `frontend/src` 非 services 消费者对照，97 个有实际消费者；`invokeOperation` 是 runtimeControlApi 内部通用执行器，`getDelegationConfig` 被总配置读取覆盖，`updateStatsOverlayWindow` 由 `updateStatsOverlayLayout` 间接调用。 | 未发现后端已可用、低风险、面向用户却没有界面的能力；维持现有入口，不为覆盖率新增平行操作台。 |
+
+本轮证据：
+
+- 使用 PowerShell 从 `frontend/bindings/cursor/internal/bridge/{proxyservice,metricsservice,windowservice,adservice}.js` 提取公开 binding，并扫描 `frontend/src`：117 个方法，99 个有调用、18 个无调用。
+- 逐项回溯 `internal/bridge/proxy.go`、`internal/client/license.go`、`internal/client/cursor.go`、`internal/client/lifecycle.go`、`internal/bridge/window.go` 与 `internal/app/runner.go`，确认未引用项的固定失败、配置副作用和内部调用者。
+- 使用 PowerShell 从 `frontend/src/services/{clientApi,runtimeControlApi}.js` 提取导出并扫描非 services 消费者：100 个导出，97 个有消费者；余下 3 个均有明确的内部/间接复用理由。
+- 本轮仅更新 Spec 研究与验证台账，不新增测试文件、不修改业务代码、不启动 Cursor、不改真实用户配置或发起官方 API 请求。
