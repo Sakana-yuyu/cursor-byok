@@ -22,7 +22,9 @@ Cursor 客户端在配置官方 OpenAI/Anthropic key（直连模式）时，会�
 
 ### ② 记录层
 
-复用 `debug_recorder` 体系，新增 `history/<conversationId>/debug/official.raw.jsonl`，每行一个事件：
+复用 `debug_recorder` 体系，新增 `history/_debug/mirror/official.raw.jsonl`，每行一个事件：
+
+> 官方直连请求（OpenAI/Anthropic JSON）不含 conversationId，故镜像记录独立组织（不按会话分目录）；每条记录携带 ts/host/model，供人工按时间与 `provider.jsonl` 关联。
 
 - request：method、url、脱敏后的 headers、request body
 - response：status、脱敏后的 headers、逐 chunk 响应片段
