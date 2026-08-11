@@ -443,6 +443,24 @@ function nextID() {
 
 export const IsWindows = () => Promise.resolve(false);
 export const GetState = () => Promise.resolve(previewProxyState());
+export const GetMirrorCaptureStatus = () => {
+  recordPreviewCall("GetMirrorCaptureStatus");
+  const state = previewProxyState();
+  const enabled = Boolean(previewConfig.mirrorCapture?.enabled);
+  const status = {
+    enabled,
+    backendRunning: Boolean(state.backendRunning),
+    proxyRunning: Boolean(state.proxyRunning),
+    cursorSettingsApplied: Boolean(state.cursorSettingsApplied),
+    ready: enabled && Boolean(state.backendRunning) && Boolean(state.proxyRunning) && Boolean(state.cursorSettingsApplied),
+    recordPath: "history/_debug/mirror/official.raw.jsonl",
+    fileExists: false,
+    sizeBytes: 0,
+    modifiedAtUnixMs: 0,
+  };
+  const override = readPreviewTestPlan()?.mirrorCaptureStatus;
+  return Promise.resolve(override && typeof override === "object" ? { ...status, ...clone(override) } : status);
+};
 export const LoadUserConfig = () => Promise.resolve(clone(previewConfig));
 export const GetDelegationConfig = () => Promise.resolve(clone(previewConfig.delegation));
 export const SaveDelegationConfig = (value) => {
@@ -498,6 +516,7 @@ export const ApplyDiagnosticFixes = () => Promise.resolve({ total: previewConfig
 // previewProxyRunning 让预览模式的启停真的改变状态。此前 StartProxy/StopProxy
 // 都返回同一份「未运行」快照，界面点了启动却始终显示未运行，看起来像启动失败。
 let previewProxyRunning = false;
+let previewCursorSettingsApplied = false;
 
 function previewProxyState() {
   const state = browserPreviewMockProxyState();
@@ -506,18 +525,23 @@ function previewProxyState() {
     serviceRunning: previewProxyRunning,
     backendRunning: previewProxyRunning,
     proxyRunning: previewProxyRunning,
+    cursorSettingsApplied: previewCursorSettingsApplied,
   };
 }
 
 export const StartProxy = () => {
   previewProxyRunning = true;
+  previewCursorSettingsApplied = true;
   return Promise.resolve(previewProxyState());
 };
 export const StopProxy = () => {
   previewProxyRunning = false;
   return Promise.resolve(previewProxyState());
 };
-export const RepairProxySettings = () => Promise.resolve({ settingsApplied: true, settingsPath: "", proxyURL: "http://127.0.0.1:18080", cursorRunning: false, needsCursorRestart: false, details: ["浏览器预览模式：模拟修复成功"] });
+export const RepairProxySettings = () => {
+  previewCursorSettingsApplied = true;
+  return Promise.resolve({ settingsApplied: true, settingsPath: "", proxyURL: "http://127.0.0.1:18080", cursorRunning: false, needsCursorRestart: false, details: ["浏览器预览模式：模拟修复成功"] });
+};
 export const GetDefenderExclusionState = () => Promise.resolve(clone(previewDefenderExclusionState));
 export const OfferDefenderExclusion = () => {
   recordPreviewCall("OfferDefenderExclusion");
@@ -548,6 +572,10 @@ export const GetModelEditorContext = () => Promise.resolve(clone(editorContext))
 export const OpenConfigWindow = () => Promise.resolve();
 export const OpenFooterAuthorHome = () => Promise.resolve();
 export const OpenHistoryWindow = () => Promise.resolve();
+export const OpenMirrorCaptureDirectory = () => {
+  recordPreviewCall("OpenMirrorCaptureDirectory");
+  return Promise.resolve();
+};
 // 浏览器预览没有本地文件系统，无法真的打包日志。返回空路径会被上层当成
 // 「导出成功但路径为空」，这里显式失败，界面才会给出可理解的提示。
 export const ExportLogs = () => Promise.reject(new Error("浏览器预览模式不支持导出日志 ZIP，请在桌面客户端中使用"));

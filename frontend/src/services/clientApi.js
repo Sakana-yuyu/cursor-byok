@@ -1,5 +1,5 @@
 import {
-  GetState, LoadUserConfig, SaveUserConfig, StartProxy, StopProxy, TestModelAdapter,
+  GetState, GetMirrorCaptureStatus, LoadUserConfig, SaveUserConfig, StartProxy, StopProxy, TestModelAdapter,
   GetModelAdapterTestResults, FetchModelCatalog, ProbeModelAdapter, QueryProviderBalance,
   GetPromptInjectionSettings,
   SavePromptInjectionSettings, RefreshPromptInjection, RefreshPromptInjectionCatalog,
@@ -34,7 +34,7 @@ import {
   GetModelEditorContext, OpenConfigWindow, OpenFooterAuthorHome, OpenHistoryWindow,
   OpenMetricsDetailWindow, OpenRequestMetricsWindow, OpenStatsOverlayWindow, UpdateStatsOverlayWindow, SetStatsOverlayAlwaysOnTop,
   CloseStatsOverlayWindow, OpenModelConfigWindow, OpenModelEditorWindow, ExportLogs,
-  SetMainWindowCloseAction, CloseApplication, DetectCursorPath, LaunchCursor, RestartCursor, IsCursorRunning,
+  SetMainWindowCloseAction, CloseApplication, DetectCursorPath, LaunchCursor, RestartCursor, IsCursorRunning, OpenMirrorCaptureDirectory,
 } from "@bindings/cursor/internal/bridge/windowservice.js";
 import { isBrowserPreview, browserPreviewMockMetrics, browserPreviewMockProxyState } from "@/services/runtimeAdapter";
 import {
@@ -44,8 +44,8 @@ import {
 import { normalizeClientError, safeErrorLogAttributes, summarizePayload } from "@/utils/errorContract";
 
 const desktopMethods = {
-  LoadUserConfig, SaveUserConfig, GetState, GetHomeMetricsSummary, GetAdRuntime, OpenExternalURL,
-  StartProxy, StopProxy, OpenHistoryWindow, OpenConfigWindow, GetAppVersion, GetFooterAuthorInfo,
+  LoadUserConfig, SaveUserConfig, GetState, GetMirrorCaptureStatus, GetHomeMetricsSummary, GetAdRuntime, OpenExternalURL,
+  StartProxy, StopProxy, OpenHistoryWindow, OpenMirrorCaptureDirectory, OpenConfigWindow, GetAppVersion, GetFooterAuthorInfo,
   CheckForUpdates, InstallReadyUpdate, OpenFooterAuthorHome, OpenModelConfigWindow, OpenModelEditorWindow,
   OpenMetricsDetailWindow, OpenRequestMetricsWindow, OpenStatsOverlayWindow, UpdateStatsOverlayWindow, SetStatsOverlayAlwaysOnTop,
   CloseStatsOverlayWindow, SetMainWindowCloseAction, CloseApplication, GetModelEditorContext, TestModelAdapter, GetModelAdapterTestResults, GetRecentRequestMetrics,
@@ -198,6 +198,10 @@ export function getProxyState() {
   return withApiLogging("GetState", undefined, () => desktopOrMockRaw(browserPreviewMockProxyState(), "@bindings/cursor/internal/bridge/proxyservice.js", "GetState"));
 }
 
+export function getMirrorCaptureStatus() {
+  return withApiLogging("GetMirrorCaptureStatus", undefined, () => desktopOrMockRaw(() => GetMirrorCaptureStatus(), "@bindings/cursor/internal/bridge/proxyservice.js", "GetMirrorCaptureStatus"));
+}
+
 const BROWSER_TERMINAL_ENVIRONMENT = {
   platform: "browser-preview",
   shellPath: "/bin/zsh",
@@ -251,6 +255,7 @@ export function stopProxyService() {
 }
 
 export function openLogsDirectory() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "OpenHistoryWindow"); }
+export function openMirrorCaptureDirectory() { return desktopOrMock(() => OpenMirrorCaptureDirectory(), "@bindings/cursor/internal/bridge/windowservice.js", "OpenMirrorCaptureDirectory"); }
 export function exportLogs() { return desktopOrMock("", "@bindings/cursor/internal/bridge/windowservice.js", "ExportLogs"); }
 export function openConfigWindow() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "OpenConfigWindow"); }
 export function getAppVersion() { return desktopOrMock("Browser Preview", "@bindings/cursor/internal/bridge/windowservice.js", "GetAppVersion"); }

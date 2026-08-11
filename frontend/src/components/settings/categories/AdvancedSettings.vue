@@ -1,21 +1,25 @@
 <script setup>
 import SettingsRow from "@/components/settings/SettingsRow.vue";
 import SettingsSection from "@/components/settings/SettingsSection.vue";
+import Button from "@/components/ui/Button.vue";
 import Input from "@/components/ui/Input.vue";
 import Switch from "@/components/ui/Switch.vue";
 import { useMessage } from "@/composables/useMessage";
 import { showModal } from "@/composables/useModal";
+import { getMirrorCaptureStatus, openMirrorCaptureDirectory } from "@/services/clientApi";
 import {
   appState,
+  repairProxyAction,
   saveDebugLogEnabled,
   saveGoalSettings,
   saveLocalResponseCacheEnabled,
   saveLocalResponseCacheSettings,
   saveMirrorCaptureEnabled,
   saveRoutingMode,
+  startService,
   toUserError,
 } from "@/state/appState";
-import { computed, reactive, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 
 const props = defineProps({
   autosave: {
@@ -49,6 +53,26 @@ const mirrorCaptureState = reactive({
   busy: false,
   error: "",
   retry: null,
+});
+
+const mirrorCaptureStatusState = reactive({
+  loading: false,
+  error: "",
+  enabled: false,
+  backendRunning: false,
+  proxyRunning: false,
+  cursorSettingsApplied: false,
+  ready: false,
+  recordPath: "",
+  fileExists: false,
+  sizeBytes: 0,
+  modifiedAtUnixMs: 0,
+});
+
+const mirrorCaptureActionState = reactive({
+  starting: false,
+  repairing: false,
+  openingDirectory: false,
 });
 
 const goalEnabledState = reactive({
@@ -93,6 +117,24 @@ const cacheEnabledBusy = computed(() => cacheEnabledState.busy || appState.confi
 const cachePersistBusy = computed(() => cachePersistState.busy || appState.configSaving);
 const goalEnabledBusy = computed(() => goalEnabledState.busy || appState.configSaving);
 const mirrorCaptureBusy = computed(() => mirrorCaptureState.busy || appState.configSaving);
+const mirrorCaptureStatusBusy = computed(() => mirrorCaptureStatusState.loading || mirrorCaptureActionState.starting || mirrorCaptureActionState.repairing);
+const mirrorCaptureStatusLabel = computed(() => {
+  if (mirrorCaptureStatusState.loading) return "正在检查";
+  if (!mirrorCaptureStatusState.enabled) return "未启用";
+  if (!mirrorCaptureStatusState.backendRunning || !mirrorCaptureStatusState.proxyRunning) return "等待本地服务";
+  if (!mirrorCaptureStatusState.cursorSettingsApplied) return "Cursor 未接入";
+  if (mirrorCaptureStatusState.fileExists) return "已记录";
+  return "等待官方模型请求";
+});
+const mirrorCaptureStatusDescription = computed(() => {
+  if (!mirrorCaptureStatusState.enabled) return "开启镜像记录后，系统会检查本地服务、Cursor 代理接入和实际记录情况。";
+  if (!mirrorCaptureStatusState.backendRunning || !mirrorCaptureStatusState.proxyRunning) return "本地服务未完整运行，暂时无法接收 Cursor 的官方模型请求。";
+  if (!mirrorCaptureStatusState.cursorSettingsApplied) return "Cursor 尚未配置为通过本地代理访问，修复后请按提示重启 Cursor。";
+  if (!mirrorCaptureStatusState.fileExists) return "已具备抓包条件，等待 Cursor 发起一次官方模型请求。";
+  return `已写入 ${formatMirrorCaptureSize(mirrorCaptureStatusState.sizeBytes)}，最后更新于 ${formatMirrorCaptureTime(mirrorCaptureStatusState.modifiedAtUnixMs)}。`;
+});
+const mirrorCaptureNeedsService = computed(() => mirrorCaptureStatusState.enabled && (!mirrorCaptureStatusState.backendRunning || !mirrorCaptureStatusState.proxyRunning));
+const mirrorCaptureNeedsProxyRepair = computed(() => mirrorCaptureStatusState.enabled && mirrorCaptureStatusState.backendRunning && mirrorCaptureStatusState.proxyRunning && !mirrorCaptureStatusState.cursorSettingsApplied);
 const ttlBusy = computed(() => ttlSecondsState.busy || ttlSecondsState.queued || appState.configSaving);
 const maxEntriesBusy = computed(() => maxEntriesState.busy || maxEntriesState.queued || appState.configSaving);
 
@@ -115,6 +157,10 @@ watch(
   },
   { immediate: true },
 );
+
+onMounted(() => {
+  void refreshMirrorCaptureStatus();
+});
 
 watch(
   () => appState.mirrorCaptureEnabled,
@@ -236,6 +282,7 @@ async function handleMirrorCaptureChange(enabled) {
         throw new Error(result?.error || "保存失败");
       }
       message.success(nextValue ? "已开启镜像记录（即时生效）" : "已关闭镜像记录（即时生效）");
+      await refreshMirrorCaptureStatus();
     });
   } catch (error) {
     mirrorCaptureDraft.value = previousValue;
@@ -243,6 +290,93 @@ async function handleMirrorCaptureChange(enabled) {
   } finally {
     mirrorCaptureState.busy = false;
   }
+}
+
+function applyMirrorCaptureStatus(status) {
+  const source = status && typeof status === "object" ? status : {};
+  mirrorCaptureStatusState.enabled = Boolean(source.enabled);
+  mirrorCaptureStatusState.backendRunning = Boolean(source.backendRunning);
+  mirrorCaptureStatusState.proxyRunning = Boolean(source.proxyRunning);
+  mirrorCaptureStatusState.cursorSettingsApplied = Boolean(source.cursorSettingsApplied);
+  mirrorCaptureStatusState.ready = Boolean(source.ready);
+  mirrorCaptureStatusState.recordPath = String(source.recordPath || "");
+  mirrorCaptureStatusState.fileExists = Boolean(source.fileExists);
+  mirrorCaptureStatusState.sizeBytes = Number(source.sizeBytes) || 0;
+  mirrorCaptureStatusState.modifiedAtUnixMs = Number(source.modifiedAtUnixMs) || 0;
+}
+
+async function refreshMirrorCaptureStatus() {
+  if (mirrorCaptureStatusState.loading) return;
+  mirrorCaptureStatusState.loading = true;
+  mirrorCaptureStatusState.error = "";
+  try {
+    applyMirrorCaptureStatus(await getMirrorCaptureStatus());
+  } catch (error) {
+    mirrorCaptureStatusState.error = toUserError(error);
+  } finally {
+    mirrorCaptureStatusState.loading = false;
+  }
+}
+
+async function handleStartMirrorCaptureService() {
+  mirrorCaptureActionState.starting = true;
+  mirrorCaptureStatusState.error = "";
+  try {
+    const result = await startService();
+    if (!result?.ok) throw new Error(result?.error || "启动本地服务失败");
+    message.success("本地服务已启动，正在重新检查抓包状态");
+  } catch (error) {
+    mirrorCaptureStatusState.error = toUserError(error);
+  } finally {
+    mirrorCaptureActionState.starting = false;
+    await refreshMirrorCaptureStatus();
+  }
+}
+
+async function handleRepairMirrorCaptureProxy() {
+  const confirmed = await showModal({
+    title: "修复 Cursor 代理",
+    content: "将重新写入并校验 Cursor 的本地代理配置。修复完成后需要重启 Cursor，是否继续？",
+    confirmText: "修复代理",
+    cancelText: "取消",
+  });
+  if (!confirmed) return;
+
+  mirrorCaptureActionState.repairing = true;
+  mirrorCaptureStatusState.error = "";
+  try {
+    const result = await repairProxyAction();
+    if (!result?.ok) throw new Error(result?.error || "修复代理失败");
+    message.success("已修复 Cursor 代理配置，请重启 Cursor 后再发起模型请求");
+  } catch (error) {
+    mirrorCaptureStatusState.error = toUserError(error);
+  } finally {
+    mirrorCaptureActionState.repairing = false;
+    await refreshMirrorCaptureStatus();
+  }
+}
+
+async function handleOpenMirrorCaptureDirectory() {
+  mirrorCaptureActionState.openingDirectory = true;
+  mirrorCaptureStatusState.error = "";
+  try {
+    await openMirrorCaptureDirectory();
+  } catch (error) {
+    mirrorCaptureStatusState.error = toUserError(error);
+  } finally {
+    mirrorCaptureActionState.openingDirectory = false;
+  }
+}
+
+function formatMirrorCaptureSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatMirrorCaptureTime(timestamp) {
+  if (!timestamp) return "未知时间";
+  return new Date(timestamp).toLocaleString();
 }
 
 async function handleGoalEnabledChange(enabled) {
@@ -422,6 +556,35 @@ function handleCacheFieldInput(field, state, valueRef, value) {
           aria-label="镜像记录官方请求"
           @change="handleMirrorCaptureChange"
         />
+      </SettingsRow>
+
+      <SettingsRow
+        label="抓包状态"
+        :description="mirrorCaptureStatusDescription"
+        :busy="mirrorCaptureStatusBusy"
+        :error="mirrorCaptureStatusState.error"
+        @retry="refreshMirrorCaptureStatus"
+      >
+        <div class="flex min-w-0 flex-wrap items-center gap-2">
+          <span
+            class="inline-flex min-h-[24px] items-center rounded-[5px] border px-2 text-xs"
+            :class="mirrorCaptureStatusState.fileExists ? 'border-[#1b6b45] bg-[#123524] text-[#8ce0af]' : (mirrorCaptureStatusState.enabled ? 'border-[#6b4f1a] bg-[#302512] text-[#f2c66d]' : 'border-[#3f3f3f] bg-[#292929] text-[#a3a3a3]')"
+          >
+            {{ mirrorCaptureStatusLabel }}
+          </span>
+          <Button variant="default" :disabled="mirrorCaptureStatusBusy" @click="refreshMirrorCaptureStatus">
+            <span class="icon-[mdi--refresh] text-[15px]" aria-hidden="true" />刷新
+          </Button>
+          <Button v-if="mirrorCaptureNeedsService" variant="default" :disabled="mirrorCaptureStatusBusy" @click="handleStartMirrorCaptureService">
+            <span class="icon-[mdi--play] text-[15px]" aria-hidden="true" />启动本地服务
+          </Button>
+          <Button v-if="mirrorCaptureNeedsProxyRepair" variant="default" :disabled="mirrorCaptureStatusBusy" @click="handleRepairMirrorCaptureProxy">
+            <span class="icon-[mdi--wrench-outline] text-[15px]" aria-hidden="true" />修复代理
+          </Button>
+          <Button variant="default" :disabled="mirrorCaptureActionState.openingDirectory" @click="handleOpenMirrorCaptureDirectory">
+            <span class="icon-[mdi--folder-open-outline] text-[15px]" aria-hidden="true" />打开记录目录
+          </Button>
+        </div>
       </SettingsRow>
     </SettingsSection>
 
