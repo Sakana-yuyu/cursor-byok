@@ -9,7 +9,7 @@ const executors = [
   { id: "gemini-cli", displayName: "Gemini CLI", installURL: "https://github.com/google-gemini/gemini-cli", enabled: false, priority: 30, state: "not_installed", installed: false, authState: "unknown", diagnosticCode: "not_installed", diagnosticText: "未检测到 Gemini CLI" },
   { id: "kiro-cli", displayName: "Kiro CLI", installURL: "https://cli.kiro.dev/install", enabled: false, priority: 35, state: "incompatible", installed: true, authState: "unknown", diagnosticCode: "kiro_incompatible", diagnosticText: "当前 Kiro CLI 未提供 Headless 参数" },
   { id: "grok-cli", displayName: "Grok CLI", enabled: false, priority: 40, state: "action_required", installed: false, authState: "required", diagnosticCode: "custom_not_configured", diagnosticText: "请配置可执行文件" },
-  { id: "cursor-agent", displayName: "Cursor Agent", enabled: true, priority: 50, state: "action_required", installed: true, editorAvailable: true, agentExecutionAvailable: false, authState: "unknown", diagnosticCode: "cursor_editor_only", diagnosticText: "Cursor 编辑器可用，但当前没有活动 Agent 连接" },
+  { id: "cursor-agent", displayName: "Cursor Agent", installURL: "https://www.cursor.com/downloads", enabled: true, priority: 50, state: "not_installed", installed: false, editorAvailable: false, agentExecutionAvailable: false, authState: "unknown", diagnosticCode: "cursor_editor_not_found", diagnosticText: "未检测到 Cursor 编辑器" },
 ];
 
 const config = basePreviewConfig({
@@ -49,13 +49,14 @@ test("紧凑展示执行器健康、版本与 Cursor 编辑器限定状态", asy
     await expect(section.getByText(name, { exact: true })).toBeVisible();
   }
   await expect(section.getByText("2.1.226", { exact: true })).toBeVisible();
-  await expect(section.getByText("未安装", { exact: true })).toHaveCount(1);
+  await expect(section.getByText("未安装", { exact: true })).toHaveCount(2);
   await expect(section.getByText("不兼容", { exact: true })).toBeVisible();
   await expect(section.getByText("未配置", { exact: true })).toBeVisible();
-  await expect(section.getByText("仅编辑器", { exact: true })).toBeVisible();
+  await expect(section.getByText("仅编辑器", { exact: true })).toHaveCount(0);
   const installLinks = section.getByRole("link", { name: "官方下载" });
-  await expect(installLinks).toHaveCount(1);
+  await expect(installLinks).toHaveCount(2);
   await expect(installLinks.nth(0)).toHaveAttribute("href", "https://github.com/google-gemini/gemini-cli");
+  await expect(installLinks.nth(1)).toHaveAttribute("href", "https://www.cursor.com/downloads");
   await expect(section.getByText("备用 CLI", { exact: true })).toBeVisible();
   await expect(section.getByText("未检查", { exact: true })).toBeVisible();
   await expect(section.getByRole("button", { name: "配置 备用 CLI" })).toBeVisible();

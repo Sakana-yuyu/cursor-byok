@@ -45,6 +45,9 @@ func TestCursorCapabilitySeparatesEditorFromAgentExecution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewCursorRegistration() error = %v", err)
 	}
+	if registration.InstallURL != CursorInstallURL {
+		t.Fatalf("registration install URL = %q, want %q", registration.InstallURL, CursorInstallURL)
+	}
 	probe, err := registration.Probe(t.Context())
 	if err != nil {
 		t.Fatalf("Probe() error = %v", err)
