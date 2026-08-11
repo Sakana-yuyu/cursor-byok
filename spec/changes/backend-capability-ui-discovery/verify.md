@@ -84,3 +84,19 @@
 - 静态读取 `cmd/isolated-cursor-e2e/main.go`、`internal/mitm/service.go`、`internal/mitm/mirror.go`、`internal/cursor/settings.go` 与 `internal/cursor/state_db.go`，确认隔离目录、代理设置、状态注入、MITM recorder 的创建参数和记录条件。
 - `rg` 命中 `cmd/isolated-cursor-e2e/main.go:101-102`：该命令明确传入空 `historyRoot` 和 `nil` mirror 配置；`internal/mitm/service.go:888` 要求 mirror 配置和 recorder 同时存在才启用记录。
 - 未新增测试文件，符合 `IMPROVEMENT_TASKS.md`；未启动 Cursor、未启动代理、未调用任何官方 API。
+
+## Round 6 - opt-in isolated mirror capture
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- | --- |
+| V-14 | runtime-evidence | minor | fixed(r6) | 隔离 E2E 启动器此前固定禁用镜像 recorder，不能留下官方请求镜像。 | `72a45e8` 在 `cmd/isolated-cursor-e2e/main.go` 增加严格等于 `CURSOR_E2E_MIRROR_CAPTURE=1` 的显式开关。启用后配置强制为 `mirrorCapture.enabled=true` 和 `routing.mode=upstream`，MITM 接收临时 `history` 及隔离配置管理器；未启用时仍传入空 `historyRoot` 与 `nil` 配置。 | 启动器输出的 `mirror_record` 固定为 `<isolated_root>/history/_debug/mirror/official.raw.jsonl`；默认行为不变。
+| V-16 | runtime-evidence | minor | open | 尚未由隔离 Cursor 真实登录并发起一次官方模型请求，因此没有运行时证据证明 `official.raw.jsonl` 已实际写入。 | 本轮未启动 Cursor、未写入真实用户目录、未调用官方 API。`go test ./cmd/isolated-cursor-e2e ./internal/mitm -count=1`、`go vet ./cmd/isolated-cursor-e2e ./internal/mitm` 与 `go build ./cmd/isolated-cursor-e2e` 均退出码 0，只证明本地代码路径可构建和既有覆盖通过。 | 用户可在明确授权的隔离会话中设置 `CURSOR_E2E_MIRROR_CAPTURE=1`，在临时 Cursor 内自行登录并发起官方模型请求，然后核对输出的 `mirror_record` 存在，且同一交换记录使用一致的 `exchangeId` 与 `phase`。
+| V-17 | safety-boundary | minor | fixed(r6) | 启用镜像模式不应把本地伪账号写入隔离 Cursor，避免误将本地模式身份用于官方上游调用。 | `72a45e8` 仅在镜像模式关闭时调用 `cursor.InjectCursorUserInfo`；所有配置、代理设置、CA、history 和 Cursor 子进程环境继续锚定在 `isolated_root`。 | 镜像模式由用户在临时 Cursor 中自行登录；回退该提交或取消环境变量即可恢复原隔离代理验证路径。
+
+本轮证据：
+
+- `go test ./cmd/isolated-cursor-e2e ./internal/mitm -count=1`：退出码 0。
+- `go vet ./cmd/isolated-cursor-e2e ./internal/mitm`：退出码 0。
+- `go build ./cmd/isolated-cursor-e2e`：退出码 0。
+- `git diff --check`：退出码 0；功能提交 `72a45e8` 仅包含启动器和本轮 Spec 批准标记。
+- 未新增测试文件，遵循 `IMPROVEMENT_TASKS.md`；当前会话没有可调用的独立 `spec-verifier` 调度工具，因此以上是实施自检，不代替独立审查。
