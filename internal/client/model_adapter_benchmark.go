@@ -187,15 +187,34 @@ func normalizeSingleModelAdapterConfig(adapter serverconfig.ModelAdapterConfig) 
 }
 
 func (s *ProxyService) runModelAdapterTest(adapter serverconfig.ModelAdapterConfig, requestHash string) (ModelAdapterTestResult, error) {
+	return s.runModelAdapterTestWithFallback(adapter, requestHash, true)
+}
+
+// RunModelAdapterThroughputProbe 只测试当前渠道已配置的协议组合。
+// 它不触发协议回退、不保存测速结果，也不会改写用户配置，适合隔离性能取证。
+func (s *ProxyService) RunModelAdapterThroughputProbe(adapter serverconfig.ModelAdapterConfig) (ModelAdapterTestResult, error) {
+	normalized, err := normalizeSingleModelAdapterConfig(adapter)
+	if err != nil {
+		return buildErroredModelAdapterTestResult(strings.TrimSpace(adapter.ID), buildModelAdapterTestRequestHash(adapter), err), err
+	}
+	requestHash := buildModelAdapterTestRequestHash(adapter)
+	return s.runModelAdapterTestWithFallback(normalized, requestHash, false)
+}
+
+func (s *ProxyService) runModelAdapterTestWithFallback(adapter serverconfig.ModelAdapterConfig, requestHash string, allowEndpointFallback bool) (ModelAdapterTestResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), modelAdapterTestTimeout)
 	defer cancel()
 
 	startedAt := time.Now().UTC()
 	metrics, requestErr := s.executeModelAdapterNonStreamingTest(ctx, adapter)
 	if requestErr != nil {
-		// endpoint 不支持时自动探测备选 endpoint，成功后静默保存
-		if fallbackResult, ok := s.tryOpenAIEndpointFallback(ctx, adapter, requestHash, requestErr); ok {
-			return fallbackResult, nil
+		// 界面中的渠道测试可在端点不兼容时自动探测备选协议并保存；
+		// 隔离测速明确关闭此分支，确保结果对应当前配置。
+		if allowEndpointFallback {
+			fallbackResult, ok := s.tryOpenAIEndpointFallback(ctx, adapter, requestHash, requestErr)
+			if ok {
+				return fallbackResult, nil
+			}
 		}
 		result := buildErroredModelAdapterTestResult(adapter.ID, requestHash, requestErr)
 		return result, requestErr

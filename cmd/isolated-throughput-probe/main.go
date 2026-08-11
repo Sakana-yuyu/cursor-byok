@@ -52,7 +52,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "no configured model adapter")
 		os.Exit(2)
 	}
-	result, testErr := client.NewProxyService(nil, nil, nil).TestModelAdapter(adapter)
+	result, testErr := client.NewProxyService(nil, nil, nil).RunModelAdapterThroughputProbe(adapter)
 	output := probeOutput{
 		Status:                  result.Status,
 		TokensPerSecond:         result.TokensPerSecond,
