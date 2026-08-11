@@ -449,10 +449,11 @@ export const GetMirrorCaptureStatus = () => {
   const enabled = Boolean(previewConfig.mirrorCapture?.enabled);
   const status = {
     enabled,
+    routingMode: String(previewConfig.routing?.mode || "local"),
     backendRunning: Boolean(state.backendRunning),
     proxyRunning: Boolean(state.proxyRunning),
     cursorSettingsApplied: Boolean(state.cursorSettingsApplied),
-    ready: enabled && Boolean(state.backendRunning) && Boolean(state.proxyRunning) && Boolean(state.cursorSettingsApplied),
+    ready: enabled && previewConfig.routing?.mode === "upstream" && Boolean(state.backendRunning) && Boolean(state.proxyRunning) && Boolean(state.cursorSettingsApplied),
     recordPath: "history/_debug/mirror/official.raw.jsonl",
     fileExists: false,
     sizeBytes: 0,

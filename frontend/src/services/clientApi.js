@@ -36,7 +36,7 @@ import {
   CloseStatsOverlayWindow, OpenModelConfigWindow, OpenModelEditorWindow, ExportLogs,
   SetMainWindowCloseAction, CloseApplication, DetectCursorPath, LaunchCursor, RestartCursor, IsCursorRunning, OpenMirrorCaptureDirectory,
 } from "@bindings/cursor/internal/bridge/windowservice.js";
-import { isBrowserPreview, browserPreviewMockMetrics, browserPreviewMockProxyState } from "@/services/runtimeAdapter";
+import { isBrowserPreview, browserPreviewMockMetrics } from "@/services/runtimeAdapter";
 import {
   reportRuntimeOperationFailure,
   reportRuntimeOperationSuccess,
@@ -195,7 +195,7 @@ export function disconnectCursorAccount() {
 }
 
 export function getProxyState() {
-  return withApiLogging("GetState", undefined, () => desktopOrMockRaw(browserPreviewMockProxyState(), "@bindings/cursor/internal/bridge/proxyservice.js", "GetState"));
+  return withApiLogging("GetState", undefined, () => desktopOrMockRaw(() => GetState(), "@bindings/cursor/internal/bridge/proxyservice.js", "GetState"));
 }
 
 export function getMirrorCaptureStatus() {
@@ -247,11 +247,11 @@ export function openAdExternalURL(url) {
 }
 
 export function startProxyService() {
-  return withApiLogging("StartProxy", undefined, () => desktopOrMockRaw(browserPreviewMockProxyState(), "@bindings/cursor/internal/bridge/proxyservice.js", "StartProxy"));
+  return withApiLogging("StartProxy", undefined, () => desktopOrMockRaw(() => StartProxy(), "@bindings/cursor/internal/bridge/proxyservice.js", "StartProxy"));
 }
 
 export function stopProxyService() {
-  return withApiLogging("StopProxy", undefined, () => desktopOrMockRaw(browserPreviewMockProxyState(), "@bindings/cursor/internal/bridge/proxyservice.js", "StopProxy"));
+  return withApiLogging("StopProxy", undefined, () => desktopOrMockRaw(() => StopProxy(), "@bindings/cursor/internal/bridge/proxyservice.js", "StopProxy"));
 }
 
 export function openLogsDirectory() { return desktopOrMock(undefined, "@bindings/cursor/internal/bridge/windowservice.js", "OpenHistoryWindow"); }

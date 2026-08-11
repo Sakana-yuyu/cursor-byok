@@ -40,6 +40,7 @@ type ProxyState = client.ProxyState
 // 它只返回运行条件和记录文件元数据，绝不包含请求或响应正文。
 type MirrorCaptureStatus struct {
 	Enabled               bool   `json:"enabled"`
+	RoutingMode           string `json:"routingMode"`
 	BackendRunning        bool   `json:"backendRunning"`
 	ProxyRunning          bool   `json:"proxyRunning"`
 	CursorSettingsApplied bool   `json:"cursorSettingsApplied"`
@@ -294,12 +295,13 @@ func (s *ProxyService) GetMirrorCaptureStatus() (MirrorCaptureStatus, error) {
 	state := s.core.GetState()
 	status := MirrorCaptureStatus{
 		Enabled:               cfg.MirrorCapture.Enabled,
+		RoutingMode:           cfg.Routing.Mode,
 		BackendRunning:        state.BackendRunning,
 		ProxyRunning:          state.ProxyRunning,
 		CursorSettingsApplied: state.CursorSettingsApplied,
 		RecordPath:            mirrorCaptureRecordPath(),
 	}
-	status.Ready = status.Enabled && status.BackendRunning && status.ProxyRunning && status.CursorSettingsApplied
+	status.Ready = status.Enabled && status.RoutingMode == "upstream" && status.BackendRunning && status.ProxyRunning && status.CursorSettingsApplied
 
 	info, err := os.Stat(status.RecordPath)
 	if err == nil {

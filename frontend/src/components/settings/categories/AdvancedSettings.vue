@@ -59,6 +59,7 @@ const mirrorCaptureStatusState = reactive({
   loading: false,
   error: "",
   enabled: false,
+  routingMode: "local",
   backendRunning: false,
   proxyRunning: false,
   cursorSettingsApplied: false,
@@ -121,6 +122,7 @@ const mirrorCaptureStatusBusy = computed(() => mirrorCaptureStatusState.loading 
 const mirrorCaptureStatusLabel = computed(() => {
   if (mirrorCaptureStatusState.loading) return "正在检查";
   if (!mirrorCaptureStatusState.enabled) return "未启用";
+  if (mirrorCaptureStatusState.routingMode !== "upstream") return "需要官方上游模式";
   if (!mirrorCaptureStatusState.backendRunning || !mirrorCaptureStatusState.proxyRunning) return "等待本地服务";
   if (!mirrorCaptureStatusState.cursorSettingsApplied) return "Cursor 未接入";
   if (mirrorCaptureStatusState.fileExists) return "已记录";
@@ -128,13 +130,14 @@ const mirrorCaptureStatusLabel = computed(() => {
 });
 const mirrorCaptureStatusDescription = computed(() => {
   if (!mirrorCaptureStatusState.enabled) return "开启镜像记录后，系统会检查本地服务、Cursor 代理接入和实际记录情况。";
+  if (mirrorCaptureStatusState.routingMode !== "upstream") return "请先切换到官方上游模式。该模式让 Cursor relay 请求直通官方；本地服务运行时，模型 API 仍会经本地 MITM 镜像记录。";
   if (!mirrorCaptureStatusState.backendRunning || !mirrorCaptureStatusState.proxyRunning) return "本地服务未完整运行，暂时无法接收 Cursor 的官方模型请求。";
   if (!mirrorCaptureStatusState.cursorSettingsApplied) return "Cursor 尚未配置为通过本地代理访问，修复后请按提示重启 Cursor。";
   if (!mirrorCaptureStatusState.fileExists) return "已具备抓包条件，等待 Cursor 发起一次官方模型请求。";
   return `已写入 ${formatMirrorCaptureSize(mirrorCaptureStatusState.sizeBytes)}，最后更新于 ${formatMirrorCaptureTime(mirrorCaptureStatusState.modifiedAtUnixMs)}。`;
 });
-const mirrorCaptureNeedsService = computed(() => mirrorCaptureStatusState.enabled && (!mirrorCaptureStatusState.backendRunning || !mirrorCaptureStatusState.proxyRunning));
-const mirrorCaptureNeedsProxyRepair = computed(() => mirrorCaptureStatusState.enabled && mirrorCaptureStatusState.backendRunning && mirrorCaptureStatusState.proxyRunning && !mirrorCaptureStatusState.cursorSettingsApplied);
+const mirrorCaptureNeedsService = computed(() => mirrorCaptureStatusState.enabled && mirrorCaptureStatusState.routingMode === "upstream" && (!mirrorCaptureStatusState.backendRunning || !mirrorCaptureStatusState.proxyRunning));
+const mirrorCaptureNeedsProxyRepair = computed(() => mirrorCaptureStatusState.enabled && mirrorCaptureStatusState.routingMode === "upstream" && mirrorCaptureStatusState.backendRunning && mirrorCaptureStatusState.proxyRunning && !mirrorCaptureStatusState.cursorSettingsApplied);
 const ttlBusy = computed(() => ttlSecondsState.busy || ttlSecondsState.queued || appState.configSaving);
 const maxEntriesBusy = computed(() => maxEntriesState.busy || maxEntriesState.queued || appState.configSaving);
 
@@ -217,9 +220,9 @@ async function handleDirectModeChange(enabled) {
   directModeState.error = "";
   if (nextValue) {
     const confirmed = await showModal({
-      title: "开启直连模式",
-      content: "直连模式会绕过本地代理服务，Cursor 将直接连接官方服务，可能产生官方账号计费。确定开启吗？",
-      confirmText: "开启直连",
+      title: "开启官方上游模式",
+      content: "Cursor relay 请求将直通官方服务，可能产生官方账号计费。若本地服务正在运行，官方模型 API 仍会经过本地 MITM，以便镜像记录。确定开启吗？",
+      confirmText: "开启官方上游",
       cancelText: "取消",
     });
     if (!confirmed) {
@@ -236,7 +239,7 @@ async function handleDirectModeChange(enabled) {
         throw new Error(result?.error || "切换失败");
       }
     });
-    message.success(nextValue ? "已切换到直连 Cursor 模式" : "已切换到本地服务模式");
+    message.success(nextValue ? "已切换到官方上游模式" : "已切换到本地服务模式");
   } catch (error) {
     directModeDraft.value = appState.routingMode === "upstream";
     directModeState.error = toUserError(error);
@@ -295,6 +298,7 @@ async function handleMirrorCaptureChange(enabled) {
 function applyMirrorCaptureStatus(status) {
   const source = status && typeof status === "object" ? status : {};
   mirrorCaptureStatusState.enabled = Boolean(source.enabled);
+  mirrorCaptureStatusState.routingMode = source.routingMode === "upstream" ? "upstream" : "local";
   mirrorCaptureStatusState.backendRunning = Boolean(source.backendRunning);
   mirrorCaptureStatusState.proxyRunning = Boolean(source.proxyRunning);
   mirrorCaptureStatusState.cursorSettingsApplied = Boolean(source.cursorSettingsApplied);
@@ -501,8 +505,8 @@ function handleCacheFieldInput(field, state, valueRef, value) {
   <div class="space-y-8">
     <SettingsSection title="高级连接">
       <SettingsRow
-        label="直连模式"
-        description="绕过本地服务并直接连接官方，可能产生官方账号计费。"
+        label="官方上游模式"
+        description="Cursor relay 请求直通官方服务，可能产生官方账号计费。本地服务运行时，官方模型 API 仍可经本地 MITM 镜像记录。"
         :busy="directModeBusy"
         :error="directModeState.error"
         @retry="retryState(directModeState)"
@@ -513,7 +517,7 @@ function handleCacheFieldInput(field, state, valueRef, value) {
           :enabled="directModeDraft"
           :busy="directModeBusy"
           :disabled="directModeBusy"
-          aria-label="直连模式"
+          aria-label="官方上游模式"
           @change="handleDirectModeChange"
         />
       </SettingsRow>
@@ -542,7 +546,7 @@ function handleCacheFieldInput(field, state, valueRef, value) {
     <SettingsSection title="官方请求镜像记录（调试）">
       <SettingsRow
         label="镜像记录官方请求"
-        description="抓取 Cursor 直连官方模型 API 的请求和响应明文，用于测试和排障。默认关闭；开启后立即生效，记录在 history/_debug/mirror/official.raw.jsonl，可能包含提示词、模型回复和工作区上下文等敏感内容。"
+        description="在官方上游模式下抓取 Cursor 官方模型 API 的请求和响应明文，用于测试和排障。默认关闭；本地服务运行时会经 MITM 旁路记录，记录在 history/_debug/mirror/official.raw.jsonl，可能包含提示词、模型回复和工作区上下文等敏感内容。"
         :busy="mirrorCaptureBusy"
         :error="mirrorCaptureState.error"
         @retry="mirrorCaptureState.retry?.()"

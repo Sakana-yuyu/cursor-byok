@@ -136,7 +136,7 @@ const APP_STATE_STORAGE_KEY = "cursor-client:runtime-state:v2";
 const GENERIC_SERVICE_ERROR = "服务错误";
 export const ROUTE_MODE_OPTIONS = [
   { label: "本地服务模式", value: "local" },
-  { label: "直连 Cursor 模式", value: "upstream" },
+  { label: "官方上游模式", value: "upstream" },
 ];
 
 export const COMPUTER_USE_MODE_OPTIONS = [

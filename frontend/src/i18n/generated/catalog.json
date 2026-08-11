@@ -263,6 +263,18 @@
         }
       ]
     },
+    "0441e2404d2c9938": {
+      "source": "官方上游模式：Cursor relay 请求直通官方；本地服务运行时，模型 API 仍会经过本地 MITM 以便镜像记录。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 324,
+          "column": 1106
+        }
+      ]
+    },
     "04437ce6914b2080": {
       "source": "按渠道归类时，本页所选模型会写入同一渠道名。",
       "kind": "text",
@@ -323,12 +335,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 612,
+          "line": 616,
           "column": 11
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 624,
+          "line": 628,
           "column": 13
         }
       ]
@@ -483,18 +495,6 @@
         }
       ]
     },
-    "05c8a9238c702efa": {
-      "source": "直连 Cursor 模式",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/state/appState.js",
-          "line": 139,
-          "column": 12
-        }
-      ]
-    },
     "05e54c05656fe790": {
       "source": "例如：114514",
       "kind": "text",
@@ -538,7 +538,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 349,
+          "line": 353,
           "column": 55
         }
       ]
@@ -550,7 +550,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 728,
+          "line": 729,
           "column": 41
         }
       ]
@@ -620,23 +620,6 @@
         }
       ]
     },
-    "07198781743ea0aa": {
-      "source": "直连模式会绕过本地代理服务，Cursor 将直接连接官方服务，可能产生官方账号计费。确定开启吗？",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 221,
-          "column": 16
-        },
-        {
-          "file": "src/views/Home.vue",
-          "line": 107,
-          "column": 111
-        }
-      ]
-    },
     "077a6d37719a0e21": {
       "source": "已删除",
       "kind": "text",
@@ -656,7 +639,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 338,
+          "line": 342,
           "column": 12
         }
       ]
@@ -721,7 +704,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 864,
+          "line": 865,
           "column": 12
         }
       ]
@@ -774,7 +757,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 729,
+          "line": 730,
           "column": 21
         }
       ]
@@ -811,7 +794,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 2415
+          "column": 2445
         }
       ]
     },
@@ -1084,8 +1067,20 @@
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 770,
+          "line": 771,
           "column": 78
+        }
+      ]
+    },
+    "0d46f0334bce1342": {
+      "source": "Cursor relay 请求直通官方服务，可能产生官方账号计费。本地服务运行时，官方模型 API 仍可经本地 MITM 镜像记录。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 509,
+          "column": 9
         }
       ]
     },
@@ -1185,7 +1180,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 630,
+          "line": 634,
           "column": 11
         }
       ]
@@ -1387,7 +1382,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 683,
+          "line": 684,
           "column": 117
         }
       ]
@@ -1607,19 +1602,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 7182
-        }
-      ]
-    },
-    "147b403d341aae6d": {
-      "source": "直连模式说明",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Home.vue",
-          "line": 324,
-          "column": 1087
+          "column": 7212
         }
       ]
     },
@@ -1707,7 +1690,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 502,
+          "line": 506,
           "column": 22
         }
       ]
@@ -1851,7 +1834,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 777,
+          "line": 778,
           "column": 90
         }
       ]
@@ -1923,7 +1906,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 542,
+          "line": 546,
           "column": 22
         }
       ]
@@ -2142,7 +2125,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 261,
+          "line": 264,
           "column": 35
         }
       ]
@@ -2286,7 +2269,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 602,
+          "line": 603,
           "column": 61
         },
         {
@@ -2419,7 +2402,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 696,
+          "line": 697,
           "column": 16
         }
       ]
@@ -2482,7 +2465,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 851,
+          "line": 852,
           "column": 12
         }
       ]
@@ -2518,7 +2501,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 327,
+          "line": 331,
           "column": 21
         }
       ]
@@ -2670,23 +2653,6 @@
           "file": "src/components/supplier/SupplierModelToolbar.vue",
           "line": 51,
           "column": 9
-        }
-      ]
-    },
-    "21728e7dc755b320": {
-      "source": "开启直连模式",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 220,
-          "column": 14
-        },
-        {
-          "file": "src/views/Home.vue",
-          "line": 107,
-          "column": 92
         }
       ]
     },
@@ -3134,23 +3100,6 @@
         }
       ]
     },
-    "277e9133aa2024d7": {
-      "source": "开启直连",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 222,
-          "column": 20
-        },
-        {
-          "file": "src/views/Home.vue",
-          "line": 107,
-          "column": 176
-        }
-      ]
-    },
     "278de1a205d6403d": {
       "source": "一键生成简介",
       "kind": "text",
@@ -3260,7 +3209,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 825,
+          "line": 826,
           "column": 12
         }
       ]
@@ -3344,7 +3293,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 133,
+          "line": 136,
           "column": 52
         }
       ]
@@ -3431,7 +3380,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 972,
+          "line": 973,
           "column": 49
         }
       ]
@@ -3537,12 +3486,12 @@
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 223,
+          "line": 226,
           "column": 19
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 341,
+          "line": 345,
           "column": 17
         },
         {
@@ -3603,7 +3552,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 107,
-          "column": 196
+          "column": 230
         },
         {
           "file": "src/views/Home.vue",
@@ -3807,7 +3756,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 7617
+          "column": 7647
         }
       ]
     },
@@ -3965,7 +3914,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 7135
+          "column": 7165
         }
       ]
     },
@@ -4080,6 +4029,18 @@
         }
       ]
     },
+    "337249c42c537afe": {
+      "source": "请先切换到官方上游模式。该模式让 Cursor relay 请求直通官方；本地服务运行时，模型 API 仍会经本地 MITM 镜像记录。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 133,
+          "column": 67
+        }
+      ]
+    },
     "33af7a30868ab146": {
       "source": "监督信息",
       "kind": "text",
@@ -4123,7 +4084,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 608,
+          "line": 609,
           "column": 97
         },
         {
@@ -4194,7 +4155,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 2312
+          "column": 2342
         }
       ]
     },
@@ -4306,7 +4267,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 593,
+          "line": 594,
           "column": 169
         }
       ]
@@ -4468,7 +4429,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 3604
+          "column": 3634
         }
       ]
     },
@@ -4618,7 +4579,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 7286
+          "column": 7316
         }
       ]
     },
@@ -4767,7 +4728,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 650,
+          "line": 654,
           "column": 11
         }
       ]
@@ -4975,7 +4936,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 562,
+          "line": 566,
           "column": 9
         }
       ]
@@ -5105,7 +5066,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 6840
+          "column": 6870
         },
         {
           "file": "src/views/SupplierDetail.vue",
@@ -5121,12 +5082,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 544,
+          "line": 548,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 556,
+          "line": 560,
           "column": 11
         }
       ]
@@ -5162,7 +5123,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 777,
+          "line": 778,
           "column": 21
         }
       ]
@@ -5686,7 +5647,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 284,
+          "line": 287,
           "column": 53
         }
       ]
@@ -5744,7 +5705,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 732,
+          "line": 733,
           "column": 27
         }
       ]
@@ -5843,7 +5804,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 525,
+          "line": 529,
           "column": 9
         }
       ]
@@ -5896,7 +5857,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 326,
+          "line": 330,
           "column": 55
         }
       ]
@@ -5997,7 +5958,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 660,
+          "line": 664,
           "column": 15
         }
       ]
@@ -6168,7 +6129,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 6145
+          "column": 6175
         }
       ]
     },
@@ -6240,7 +6201,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 560,
+          "line": 561,
           "column": 284
         },
         {
@@ -6358,18 +6319,6 @@
           "file": "src/utils/supplierCatalog.js",
           "line": 144,
           "column": 18
-        }
-      ]
-    },
-    "51a9b083047da8d7": {
-      "source": "绕过本地服务并直接连接官方，可能产生官方账号计费。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 505,
-          "column": 9
         }
       ]
     },
@@ -6503,7 +6452,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 666,
+          "line": 667,
           "column": 126
         },
         {
@@ -7230,7 +7179,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 113,
-          "column": 164
+          "column": 166
         }
       ]
     },
@@ -7314,6 +7263,23 @@
         }
       ]
     },
+    "5c88bf3b04ae4332": {
+      "source": "开启官方上游",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 225,
+          "column": 20
+        },
+        {
+          "file": "src/views/Home.vue",
+          "line": 107,
+          "column": 208
+        }
+      ]
+    },
     "5ca6730d44152201": {
       "source": "工具",
       "kind": "text",
@@ -7372,7 +7338,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 261,
+          "line": 264,
           "column": 47
         }
       ]
@@ -7389,18 +7355,6 @@
         }
       ]
     },
-    "5ea0241a25eb82cc": {
-      "source": "抓取 Cursor 直连官方模型 API 的请求和响应明文，用于测试和排障。默认关闭；开启后立即生效，记录在 history/_debug/mirror/official.raw.jsonl，可能包含提示词、模型回复和工作区上下文等敏感内容。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 545,
-          "column": 9
-        }
-      ]
-    },
     "5ebeeb543bc60d3c": {
       "source": "已记录",
       "kind": "text",
@@ -7408,7 +7362,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 126,
+          "line": 128,
           "column": 51
         }
       ]
@@ -7527,7 +7481,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 5150
+          "column": 5180
         }
       ]
     },
@@ -7567,6 +7521,18 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 646,
           "column": 21
+        }
+      ]
+    },
+    "60410a98a95cceb8": {
+      "source": "官方上游模式说明",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 324,
+          "column": 1084
         }
       ]
     },
@@ -7657,7 +7623,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 777,
+          "line": 778,
           "column": 159
         }
       ]
@@ -7879,32 +7845,32 @@
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 259,
+          "line": 262,
           "column": 42
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 282,
+          "line": 285,
           "column": 42
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 393,
+          "line": 397,
           "column": 42
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 416,
+          "line": 420,
           "column": 42
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 438,
+          "line": 442,
           "column": 42
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 460,
+          "line": 464,
           "column": 44
         },
         {
@@ -8203,7 +8169,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 378,
+          "line": 382,
           "column": 26
         }
       ]
@@ -8435,28 +8401,6 @@
         }
       ]
     },
-    "699fe7ade5407687": {
-      "source": "直连模式",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 504,
-          "column": 9
-        },
-        {
-          "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 516,
-          "column": 11
-        },
-        {
-          "file": "src/views/Home.vue",
-          "line": 324,
-          "column": 1054
-        }
-      ]
-    },
     "69a93cb2108c94e0": {
       "source": "按用户命名或服务 URL 汇总现有模型配置，不改变原有渠道。",
       "kind": "text",
@@ -8658,7 +8602,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 672,
+          "line": 673,
           "column": 16
         }
       ]
@@ -8771,7 +8715,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 670,
+          "line": 674,
           "column": 22
         }
       ]
@@ -8796,7 +8740,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 5506
+          "column": 5536
         }
       ]
     },
@@ -8978,7 +8922,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 673,
+          "line": 677,
           "column": 9
         }
       ]
@@ -9003,7 +8947,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 113,
-          "column": 144
+          "column": 146
         }
       ]
     },
@@ -9115,7 +9059,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 395,
+          "line": 399,
           "column": 51
         }
       ]
@@ -9144,7 +9088,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 981,
+          "line": 982,
           "column": 58
         }
       ]
@@ -9324,7 +9268,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 350,
+          "line": 354,
           "column": 21
         }
       ]
@@ -9360,7 +9304,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 688,
+          "line": 689,
           "column": 16
         }
       ]
@@ -9647,7 +9591,7 @@
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 770,
+          "line": 771,
           "column": 71
         }
       ]
@@ -9819,7 +9763,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 799,
+          "line": 800,
           "column": 12
         }
       ]
@@ -10144,12 +10088,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 593,
+          "line": 597,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 605,
+          "line": 609,
           "column": 11
         }
       ]
@@ -10185,7 +10129,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 131,
+          "line": 134,
           "column": 98
         }
       ]
@@ -10197,7 +10141,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 468,
+          "line": 469,
           "column": 37
         }
       ]
@@ -10372,12 +10316,12 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 4716
+          "column": 4746
         },
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 6145
+          "column": 6175
         }
       ]
     },
@@ -10877,7 +10821,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 284,
+          "line": 287,
           "column": 35
         }
       ]
@@ -10990,7 +10934,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 132,
+          "line": 135,
           "column": 63
         }
       ]
@@ -11053,7 +10997,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 339,
+          "line": 343,
           "column": 14
         }
       ]
@@ -11188,7 +11132,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 4325
+          "column": 4355
         },
         {
           "file": "src/views/ModelGroups.vue",
@@ -11276,7 +11220,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 395,
+          "line": 399,
           "column": 35
         }
       ]
@@ -11288,7 +11232,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 641,
+          "line": 645,
           "column": 15
         }
       ]
@@ -11425,7 +11369,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 579,
+          "line": 583,
           "column": 77
         }
       ]
@@ -11507,7 +11451,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 761,
+          "line": 762,
           "column": 14
         }
       ]
@@ -11719,7 +11663,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 781,
+          "line": 782,
           "column": 35
         }
       ]
@@ -11752,7 +11696,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 7759
+          "column": 7789
         },
         {
           "file": "src/views/RequestMetrics.vue",
@@ -11905,7 +11849,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 877,
+          "line": 878,
           "column": 12
         }
       ]
@@ -12289,6 +12233,23 @@
         }
       ]
     },
+    "982d766ad9a45cf7": {
+      "source": "开启官方上游模式",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 223,
+          "column": 14
+        },
+        {
+          "file": "src/views/Home.vue",
+          "line": 107,
+          "column": 92
+        }
+      ]
+    },
     "986678eccf56dc28": {
       "source": "服务状态更新中，请稍后再试",
       "kind": "text",
@@ -12535,7 +12496,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 6479
+          "column": 6509
         }
       ]
     },
@@ -12623,7 +12584,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 704,
+          "line": 705,
           "column": 16
         }
       ]
@@ -12649,23 +12610,6 @@
           "file": "src/components/ModelAdapterTestCard.vue",
           "line": 144,
           "column": 74
-        }
-      ]
-    },
-    "9c38b6e9bf94abec": {
-      "source": "已切换到直连 Cursor 模式",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 239,
-          "column": 33
-        },
-        {
-          "file": "src/views/Home.vue",
-          "line": 117,
-          "column": 29
         }
       ]
     },
@@ -12751,7 +12695,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 951,
+          "line": 952,
           "column": 25
         }
       ]
@@ -12765,6 +12709,18 @@
           "file": "src/utils/supplierCatalog.js",
           "line": 140,
           "column": 12
+        }
+      ]
+    },
+    "9e7a8110ff319b84": {
+      "source": "在官方上游模式下抓取 Cursor 官方模型 API 的请求和响应明文，用于测试和排障。默认关闭；本地服务运行时会经 MITM 旁路记录，记录在 history/_debug/mirror/official.raw.jsonl，可能包含提示词、模型回复和工作区上下文等敏感内容。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 549,
+          "column": 9
         }
       ]
     },
@@ -13194,7 +13150,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 890,
+          "line": 891,
           "column": 12
         }
       ]
@@ -13242,12 +13198,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 757,
+          "line": 758,
           "column": 47
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 769,
+          "line": 770,
           "column": 49
         }
       ]
@@ -13484,12 +13440,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 672,
+          "line": 676,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 684,
+          "line": 688,
           "column": 11
         }
       ]
@@ -13755,7 +13711,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 680,
+          "line": 681,
           "column": 16
         }
       ]
@@ -14070,7 +14026,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 576,
+          "line": 580,
           "column": 80
         },
         {
@@ -14157,7 +14113,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 707,
+          "line": 708,
           "column": 114
         }
       ]
@@ -14174,18 +14130,6 @@
         }
       ]
     },
-    "b12f3225a0729d5f": {
-      "source": "直连模式：绕过本地服务并直接连接官方，可能产生官方账号计费。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Home.vue",
-          "line": 324,
-          "column": 1107
-        }
-      ]
-    },
     "b1a977cdc77cdb28": {
       "source": "未找到会话 {0}",
       "kind": "template",
@@ -14193,7 +14137,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 980,
+          "line": 981,
           "column": 49
         }
       ]
@@ -14270,8 +14214,25 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 838,
+          "line": 839,
           "column": 12
+        }
+      ]
+    },
+    "b2a50507f27688a6": {
+      "source": "Cursor relay 请求将直通官方服务，可能产生官方账号计费。若本地服务正在运行，官方模型 API 仍会经过本地 MITM，以便镜像记录。确定开启吗？",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 224,
+          "column": 16
+        },
+        {
+          "file": "src/views/Home.vue",
+          "line": 107,
+          "column": 113
         }
       ]
     },
@@ -14366,13 +14327,13 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 239,
-          "column": 54
+          "line": 242,
+          "column": 48
         },
         {
           "file": "src/views/Home.vue",
           "line": 117,
-          "column": 50
+          "column": 44
         }
       ]
     },
@@ -14417,18 +14378,18 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 340,
+          "line": 344,
           "column": 18
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 582,
+          "line": 586,
           "column": 87
         },
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 4716
+          "column": 4746
         }
       ]
     },
@@ -14578,18 +14539,6 @@
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
           "line": 696,
           "column": 11
-        }
-      ]
-    },
-    "b6872f5f2206b207": {
-      "source": "已切换到直连模式并恢复 Cursor 官方登录态。检测到 Cursor 正在运行，重启后官方登录态才会完全生效。立即重启 Cursor 吗？",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Home.vue",
-          "line": 113,
-          "column": 57
         }
       ]
     },
@@ -14781,7 +14730,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 7759
+          "column": 7789
         },
         {
           "file": "src/views/ModelConfig.vue",
@@ -15021,7 +14970,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 490,
+          "line": 491,
           "column": 37
         }
       ]
@@ -15110,7 +15059,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 125,
+          "line": 127,
           "column": 63
         }
       ]
@@ -15484,7 +15433,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 130,
+          "line": 132,
           "column": 49
         }
       ]
@@ -15508,7 +15457,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 124,
+          "line": 126,
           "column": 98
         }
       ]
@@ -15756,6 +15705,18 @@
         }
       ]
     },
+    "c71f1cb8af84dd24": {
+      "source": "需要官方上游模式",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 125,
+          "column": 67
+        }
+      ]
+    },
     "c75bb65232483ae4": {
       "source": "对话 {0}",
       "kind": "template",
@@ -15961,6 +15922,18 @@
         }
       ]
     },
+    "c97ce837713e6d0a": {
+      "source": "官方上游",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 324,
+          "column": 502
+        }
+      ]
+    },
     "c98e118e0a43f078": {
       "source": "模型",
       "kind": "text",
@@ -16061,7 +16034,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 2312
+          "column": 2342
         }
       ]
     },
@@ -16183,7 +16156,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1040,
+          "line": 1041,
           "column": 69
         }
       ]
@@ -16195,12 +16168,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 524,
+          "line": 528,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 536,
+          "line": 540,
           "column": 11
         }
       ]
@@ -16236,7 +16209,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 712,
+          "line": 713,
           "column": 16
         }
       ]
@@ -16450,7 +16423,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 236,
+          "line": 239,
           "column": 42
         },
         {
@@ -16461,7 +16434,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 107,
-          "column": 324
+          "column": 358
         }
       ]
     },
@@ -16526,7 +16499,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 5992
+          "column": 6022
         }
       ]
     },
@@ -16699,18 +16672,6 @@
         }
       ]
     },
-    "d37095690d515624": {
-      "source": "直连 Cursor",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/Home.vue",
-          "line": 324,
-          "column": 502
-        }
-      ]
-    },
     "d373809ab86ba93b": {
       "source": "拷贝",
       "kind": "text",
@@ -16747,7 +16708,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 776,
+          "line": 777,
           "column": 50
         }
       ]
@@ -16781,7 +16742,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 631,
+          "line": 635,
           "column": 11
         }
       ]
@@ -17070,7 +17031,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 122,
+          "line": 123,
           "column": 48
         }
       ]
@@ -17106,7 +17067,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 585,
+          "line": 589,
           "column": 92
         }
       ]
@@ -17383,7 +17344,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 5150
+          "column": 5180
         }
       ]
     },
@@ -17483,7 +17444,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 127,
+          "line": 129,
           "column": 10
         }
       ]
@@ -17495,7 +17456,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 522,
+          "line": 526,
           "column": 22
         },
         {
@@ -17905,7 +17866,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 4014
+          "column": 4044
         },
         {
           "file": "src/views/RequestMetrics.vue",
@@ -18143,6 +18104,33 @@
         }
       ]
     },
+    "e519d4c2cae28eda": {
+      "source": "官方上游模式",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 508,
+          "column": 9
+        },
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 520,
+          "column": 11
+        },
+        {
+          "file": "src/state/appState.js",
+          "line": 139,
+          "column": 12
+        },
+        {
+          "file": "src/views/Home.vue",
+          "line": 324,
+          "column": 1049
+        }
+      ]
+    },
     "e51da3f7bf33afbe": {
       "source": "提示词模式",
       "kind": "text",
@@ -18208,7 +18196,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 982,
+          "line": 983,
           "column": 35
         }
       ]
@@ -18343,7 +18331,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 777,
+          "line": 778,
           "column": 170
         }
       ]
@@ -18912,7 +18900,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 770,
+          "line": 771,
           "column": 21
         }
       ]
@@ -18925,12 +18913,12 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 3187
+          "column": 3217
         },
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 6668
+          "column": 6698
         }
       ]
     },
@@ -18941,7 +18929,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 543,
+          "line": 544,
           "column": 164
         }
       ]
@@ -19074,7 +19062,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 812,
+          "line": 813,
           "column": 12
         }
       ]
@@ -19088,6 +19076,23 @@
           "file": "src/components/DelegationTaskStrip.vue",
           "line": 200,
           "column": 19
+        }
+      ]
+    },
+    "f331ece122e2f053": {
+      "source": "已切换到官方上游模式",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 242,
+          "column": 33
+        },
+        {
+          "file": "src/views/Home.vue",
+          "line": 117,
+          "column": 29
         }
       ]
     },
@@ -19139,7 +19144,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 134,
+          "line": 137,
           "column": 10
         }
       ]
@@ -19199,7 +19204,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 699,
+          "line": 700,
           "column": 139
         }
       ]
@@ -19382,7 +19387,7 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 7286
+          "column": 7316
         }
       ]
     },
@@ -19417,7 +19422,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 581,
+          "line": 582,
           "column": 58
         }
       ]
@@ -19584,7 +19589,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 613,
+          "line": 617,
           "column": 11
         }
       ]
@@ -19625,7 +19630,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 123,
+          "line": 124,
           "column": 49
         },
         {
@@ -19702,7 +19707,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 594,
+          "line": 598,
           "column": 9
         }
       ]
@@ -19865,6 +19870,18 @@
         }
       ]
     },
+    "fc579710aa7b538c": {
+      "source": "已切换到官方上游模式并恢复 Cursor 官方登录态。检测到 Cursor 正在运行，重启后官方登录态才会完全生效。立即重启 Cursor 吗？",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/Home.vue",
+          "line": 113,
+          "column": 57
+        }
+      ]
+    },
     "fc5e897787ed8b48": {
       "source": "debug 文件 {0} 不在白名单内",
       "kind": "template",
@@ -19872,7 +19889,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 974,
+          "line": 975,
           "column": 46
         }
       ]
@@ -19938,12 +19955,12 @@
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 3187
+          "column": 3217
         },
         {
           "file": "src/views/Home.vue",
           "line": 324,
-          "column": 6668
+          "column": 6698
         }
       ]
     },
