@@ -96,10 +96,6 @@ func run(sourceConfigPath string, cursorPath string) error {
 	}
 
 	store := serverconfig.NewStore(configPath, filepath.Join(dirs.home, ".cursor-local-assistant-v2", "logs"))
-	mirrorConfig, err := serverconfig.NewManager(context.Background(), store)
-	if err != nil {
-		return fmt.Errorf("创建隔离镜像配置失败: %w", err)
-	}
 	host, err := backend.NewHost(store, nil)
 	if err != nil {
 		return fmt.Errorf("创建隔离 backend 失败: %w", err)
@@ -115,6 +111,10 @@ func run(sourceConfigPath string, cursorPath string) error {
 	historyRoot := ""
 	var proxyMirrorConfig mitm.MirrorCaptureConfig
 	if mirrorCaptureEnabled {
+		mirrorConfig, err := serverconfig.NewManager(context.Background(), store)
+		if err != nil {
+			return fmt.Errorf("创建隔离镜像配置失败: %w", err)
+		}
 		historyRoot = filepath.Join(dirs.root, "history")
 		proxyMirrorConfig = mirrorConfig
 	}
