@@ -33,7 +33,7 @@ func NewFailoverExecutor(config FailoverExecutorConfig) Executor {
 		if config.RequiredCapabilities != nil {
 			required = config.RequiredCapabilities(request)
 		}
-		candidates := config.Registry.Eligible(required)
+		candidates := config.Registry.Candidates(required)
 		attempts := make([]ExecutorAttemptSnapshot, 0, limit)
 		previousOutput := ""
 		var last TaskResult
@@ -44,6 +44,15 @@ func NewFailoverExecutor(config FailoverExecutorConfig) Executor {
 			}
 			if err := ctx.Err(); err != nil {
 				return failoverResult(last, attempts, previousOutput, err)
+			}
+			if candidate.Probe.State == ExecutorProbeUnknown {
+				probe, probeErr := config.Registry.Probe(ctx, candidate.ID, false)
+				if err := ctx.Err(); err != nil {
+					return failoverResult(last, attempts, previousOutput, err)
+				}
+				if probeErr != nil || probe.State != ExecutorProbeReady || !executorCapabilitiesContain(probe.Capabilities, required) {
+					continue
+				}
 			}
 			executor, err := config.Registry.Executor(candidate.ID)
 			if err != nil {
@@ -70,7 +79,7 @@ func NewFailoverExecutor(config FailoverExecutorConfig) Executor {
 			}
 		}
 
-		if len(candidates) == 0 && config.Fallback != nil && len(attempts) < limit {
+		if config.Fallback != nil && len(attempts) < limit {
 			return executeFallback(ctx, request, config, attempts, previousOutput)
 		}
 		if last.Error != nil {

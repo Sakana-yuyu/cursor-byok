@@ -279,6 +279,40 @@ func (registry *ExecutorRegistry) Eligible(required []ExecutorCapability) []Exec
 	return items
 }
 
+// Candidates 返回可被自动故障转移考虑的执行器。除已就绪项外，也保留尚未探测、
+// 但静态配置满足能力要求的项；调用方必须在实际执行前完成探测，不能把 unknown
+// 当作可运行状态。这样刚保存的执行器配置无需等待设置页手工刷新才会参与首个任务。
+func (registry *ExecutorRegistry) Candidates(required []ExecutorCapability) []ExecutorSnapshot {
+	if registry == nil {
+		return nil
+	}
+	required = normalizeExecutorCapabilities(required)
+	now := registry.now().UTC()
+	registry.mu.RLock()
+	items := make([]ExecutorSnapshot, 0, len(registry.entries))
+	for _, entry := range registry.entries {
+		if entry == nil || !entry.registration.Enabled || entry.cooldownUntil.After(now) {
+			continue
+		}
+		capabilities := entry.registration.Capabilities
+		if entry.hasProbe {
+			if entry.probe.State != ExecutorProbeReady {
+				continue
+			}
+			if len(entry.probe.Capabilities) > 0 {
+				capabilities = entry.probe.Capabilities
+			}
+		}
+		if !executorCapabilitiesContain(capabilities, required) {
+			continue
+		}
+		items = append(items, snapshotExecutorEntry(entry))
+	}
+	registry.mu.RUnlock()
+	sortExecutorSnapshots(items)
+	return items
+}
+
 func (registry *ExecutorRegistry) RecordFailure(id ExecutorID, err error) {
 	if registry == nil || err == nil {
 		return
