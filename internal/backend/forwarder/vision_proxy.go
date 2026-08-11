@@ -452,26 +452,6 @@ func (service *Service) synthesizeMessageImagesWithSemaphore(ctx context.Context
 					vdbg("[goro] PANIC idx=%d panic=%v", p.index, r)
 				}
 			}()
-			select {
-			case sem <- struct{}{}:
-			case <-ctx.Done():
-				service.visionRunImageDone(requestID, ctx.Err())
-				mu.Lock()
-				replaced[p.index] = visionProxyFallbackPart(ctx, p.image, fmt.Sprintf("识图首字预算耗尽：%v", ctx.Err()))
-				mu.Unlock()
-				vdbg("[goro] CTX_WAIT_ERR idx=%d err=%v", p.index, ctx.Err())
-				return
-			}
-			defer func() { <-sem }()
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				// pass 预算耗尽：主模型需立即启动，保留本地路径让读图工具继续兜底。
-				service.visionRunImageDone(requestID, ctxErr)
-				mu.Lock()
-				replaced[p.index] = visionProxyFallbackPart(ctx, p.image, fmt.Sprintf("识图首字预算耗尽：%v", ctxErr))
-				mu.Unlock()
-				vdbg("[goro] CTX_ERR idx=%d err=%v", p.index, ctxErr)
-				return
-			}
 			// 会话级图片归档：同一会话内同一张图（按内容哈希）已识图过时，
 			// 直接复用归档文本替换图片 part，不再调识图模型，也不再让图片字节
 			// 反复进入 provider 上下文（历史恢复/被打断后继续场景的关键兜底）。
@@ -486,7 +466,16 @@ func (service *Service) synthesizeMessageImagesWithSemaphore(ctx context.Context
 			}
 			key := visionCacheKey(requestID, p.image)
 			vdbg("[goro] describe idx=%d key=%q", p.index, key)
-			description, err := service.cachedVisionDescribe(ctx, key, p.image, config, userContext)
+			description, err := service.cachedVisionDescribe(ctx, key, func(callCtx context.Context) (string, error) {
+				// 缓存未命中时只有 leader 获取并发令牌；同键等待者不占用识图并发。
+				select {
+				case sem <- struct{}{}:
+					defer func() { <-sem }()
+				case <-callCtx.Done():
+					return "", callCtx.Err()
+				}
+				return service.describeImageOnce(callCtx, p.image, config, userContext)
+			})
 			service.visionRunImageDone(requestID, err)
 			if err != nil {
 				vdbg("[goro] FAILED idx=%d err=%v", p.index, err)
@@ -773,6 +762,14 @@ type visionCacheEntry struct {
 	err  error
 }
 
+// visionInflightCall 表示同一 request 内尚未完成的识图调用。它只用于合并短生命周期
+// 的重复请求，不跨请求保存，也不会改变会话归档的持久化语义。
+type visionInflightCall struct {
+	done chan struct{}
+	text string
+	err  error
+}
+
 // visionCacheKey 生成识图缓存键：同一 request（同一 turn 内多个 provider pass）对同一
 // 张图（按字节内容 hash）复用识图结果，避免 browser 等多截图场景在每个 pass 重复调用
 // 识图模型（每次调用同步阻塞数秒，累积后会把对话拖到客户端超时）。仅缓存带字节内容的
@@ -1044,29 +1041,49 @@ func (service *Service) visionReplaceFromArchive(conversationID string, messages
 	return result
 }
 
-// cachedVisionDescribe 带缓存执行识图调用。
-func (service *Service) cachedVisionDescribe(ctx context.Context, key string, image *modeladapter.ImageContent, config visionProxyConfig, userContext string) (string, error) {
-	if key != "" && service != nil {
-		service.visionCacheMu.Lock()
-		if entry, ok := service.visionCache[key]; ok {
-			service.visionCacheMu.Unlock()
-			vdbg("[cache] HIT key=%q text_len=%d err=%v", key, len(entry.text), entry.err)
-			return entry.text, entry.err
-		}
-		service.visionCacheMu.Unlock()
-	} else {
-		vdbg("[cache] SKIP (empty key)")
+// cachedVisionDescribe 复用完成缓存，并合并同一键正在进行的识图请求。调用方可在
+// 等待期间取消；leader 的 describe 函数负责实际占用视觉模型并发额度。
+func (service *Service) cachedVisionDescribe(ctx context.Context, key string, describe func(context.Context) (string, error)) (text string, err error) {
+	if key == "" || service == nil {
+		return describe(ctx)
 	}
-	text, err := service.describeImageOnce(ctx, image, config, userContext)
-	if key != "" && service != nil {
+
+	service.visionCacheMu.Lock()
+	if entry, ok := service.visionCache[key]; ok {
+		service.visionCacheMu.Unlock()
+		vdbg("[cache] HIT key=%q text_len=%d err=%v", key, len(entry.text), entry.err)
+		return entry.text, entry.err
+	}
+	if pending := service.visionInflight[key]; pending != nil {
+		service.visionCacheMu.Unlock()
+		select {
+		case <-pending.done:
+			return pending.text, pending.err
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
+	pending := &visionInflightCall{done: make(chan struct{})}
+	service.visionInflight[key] = pending
+	service.visionCacheMu.Unlock()
+
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			text = ""
+			err = fmt.Errorf("vision describe panic: %v", recovered)
+		}
 		service.visionCacheMu.Lock()
+		delete(service.visionInflight, key)
 		if len(service.visionCache) >= visionProxyCacheLimit {
 			service.visionCache = make(map[string]visionCacheEntry)
 		}
 		service.visionCache[key] = visionCacheEntry{text: text, err: err}
+		pending.text = text
+		pending.err = err
+		close(pending.done)
 		service.visionCacheMu.Unlock()
-	}
-	return text, err
+	}()
+	return describe(ctx)
 }
 
 // ---- see_image 工具入口 ----

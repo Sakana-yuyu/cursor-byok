@@ -92,6 +92,7 @@ type Service struct {
 	visionRuns               map[string]*visionDelegationRun
 	visionCacheMu            sync.Mutex
 	visionCache              map[string]visionCacheEntry
+	visionInflight           map[string]*visionInflightCall
 	visionImageMu            sync.Mutex
 	visionImageFiles         map[string][]string
 	// visionArchiveMu 保护 visionArchive：会话级图片识图结果归档。
@@ -282,6 +283,7 @@ func newService(historyRoot string, resolver modeladapter.ChannelResolver, regis
 		// （视觉委派一触发就闪退的根因）。
 		visionRuns:               make(map[string]*visionDelegationRun),
 		visionCache:              make(map[string]visionCacheEntry),
+		visionInflight:           make(map[string]*visionInflightCall),
 		visionImageFiles:         make(map[string][]string),
 		visionArchive:            make(map[string]visionArchiveEntry),
 		visionArchiveLimit:       visionArchiveMaxEntries,
@@ -338,6 +340,7 @@ func newServiceWithDependencies(store *ConversationFileStore, projector *History
 		nativeDelegations:        make(map[string]*nativeDelegationRuntime),
 		visionRuns:               make(map[string]*visionDelegationRun),
 		visionCache:              make(map[string]visionCacheEntry),
+		visionInflight:           make(map[string]*visionInflightCall),
 		visionImageFiles:         make(map[string][]string),
 		visionArchive:            make(map[string]visionArchiveEntry),
 		visionArchiveLimit:       visionArchiveMaxEntries,

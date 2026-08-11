@@ -235,6 +235,38 @@ func TestVisionSynthesizeSharesParallelismAcrossMessages(t *testing.T) {
 	}
 }
 
+// TestVisionSynthesizeCoalescesDuplicateImagesInOnePass 锁定同轮内重复截图的
+// 合并语义：结果写入缓存前，并发协程也必须共享在途请求，避免重复占用识图模型。
+func TestVisionSynthesizeCoalescesDuplicateImagesInOnePass(t *testing.T) {
+	service, provider := newEmpiricalService(t)
+	service.multitaskDelegation.configProvider = visionEnabledConfigProvider{}
+	service.visionProxyPassBudget = func() time.Duration { return 500 * time.Millisecond }
+	provider.blockMs = 80 * time.Millisecond
+
+	duplicate := []byte("same-screenshot-bytes")
+	messages := []modeladapter.Message{{
+		Role: "user",
+		ContentParts: []modeladapter.ContentPart{
+			imagePartByData(duplicate),
+			imagePartByData(duplicate),
+		},
+	}}
+
+	out := service.synthesizeImageDescriptions(context.Background(), "req-duplicate-image", "conv-duplicate-image", messages, "deepseek-v4-flash")
+
+	if got := provider.calls.Load(); got != 1 {
+		t.Fatalf("重复图片必须共享一个在途识图调用，实际 %d 次", got)
+	}
+	if len(out) != 1 || len(out[0].ContentParts) != 2 {
+		t.Fatalf("输出结构不符合预期：%#v", out)
+	}
+	for index, part := range out[0].ContentParts {
+		if part.Type != "text" || !strings.Contains(part.Text, "浏览器截图") {
+			t.Fatalf("parts[%d] = %#v，应为共享的识图描述", index, part)
+		}
+	}
+}
+
 // TestPrepareVisionImagePathsKeepsConversationOrder 锁定 data-only 图片在并行识图
 // 前按会话顺序落地和登记，避免历史恢复时用错另一张图的临时文件。
 func TestPrepareVisionImagePathsKeepsConversationOrder(t *testing.T) {
