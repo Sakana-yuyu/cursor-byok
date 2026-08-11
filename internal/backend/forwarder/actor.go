@@ -458,9 +458,21 @@ func (service *Service) postStreamCommandAsync(stream *ActiveStream, command str
 	envelope := streamCommandEnvelope{command: command}
 	select {
 	case <-done:
+		return errProviderLoopInterrupted
+	default:
+	}
+	select {
+	case <-done:
 		logger.Errorf("forwarder stream command enqueue rejected request_id=%s kind=%s reason=actor_done", strings.TrimSpace(stream.RequestID), command.Kind)
 		return errProviderLoopInterrupted
 	case mailbox <- envelope:
+	}
+	// actor 可能刚好在入队后退出。此时让 provider 尽快停止读取，避免把
+	// 后续上游增量写入不会再消费的邮箱。
+	select {
+	case <-done:
+		return errProviderLoopInterrupted
+	default:
 		return nil
 	}
 }

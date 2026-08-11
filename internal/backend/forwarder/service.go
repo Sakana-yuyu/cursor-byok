@@ -2447,13 +2447,17 @@ func (service *Service) runProviderStream(stream *ActiveStream, token uint64, ct
 	}
 	err := service.provider.StartStream(ctx, request, func(event modeladapter.ModelEvent) error {
 		markProviderAccepted()
-		return service.postStreamCommandWait(stream, streamCommand{
+		command := streamCommand{
 			Kind: streamCommandProviderEvent,
 			Provider: &streamProviderEvent{
 				Token: token,
 				Event: event,
 			},
-		})
+		}
+		if providerEventCanQueueAsync(event) {
+			return service.postStreamCommandAsync(stream, command)
+		}
+		return service.postStreamCommandWait(stream, command)
 	})
 	if err == nil {
 		markProviderAccepted()
@@ -2494,6 +2498,18 @@ func (service *Service) runProviderStream(stream *ActiveStream, token uint64, ct
 		"model_call_id":  strings.TrimSpace(request.ModelCallID),
 		"provider_token": token,
 	})
+}
+
+// providerEventCanQueueAsync 仅放宽高频且无状态收口职责的可见增量。邮箱仍为
+// 固定容量，满时 postStreamCommandAsync 会阻塞上游读取以形成背压；回合完成、
+// 工具调用和错误则继续同步等待，作为前序增量已被 actor 消费的顺序栅栏。
+func providerEventCanQueueAsync(event modeladapter.ModelEvent) bool {
+	switch event.Kind {
+	case modeladapter.ModelEventKindTextDelta, modeladapter.ModelEventKindThinkingDelta:
+		return true
+	default:
+		return false
+	}
 }
 
 // handleToolInvocation 把模型产生的工具意图转成 exec/interaction 请求并下发给客户端。
