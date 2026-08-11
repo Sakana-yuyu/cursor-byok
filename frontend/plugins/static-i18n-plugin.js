@@ -74,6 +74,10 @@ function isExcludedFile(rootDir, id) {
     return true;
   }
 
+  if (/\.(?:test|spec)\.(?:js|jsx|ts|tsx|vue)$/.test(relativePath)) {
+    return true;
+  }
+
   return relativePath.startsWith("src/i18n/");
 }
 

@@ -157,7 +157,7 @@ func parseCustomCLIContract(options map[string]string) (customCLIContract, error
 
 func reservedCustomExecutorID(id delegation.ExecutorID) bool {
 	switch id {
-	case ClaudeCodeExecutorID, CodexCLIExecutorID, GeminiCLIExecutorID, CursorExecutorID:
+	case ClaudeCodeExecutorID, CodexCLIExecutorID, GeminiCLIExecutorID, KiroCLIExecutorID, CursorExecutorID:
 		return true
 	default:
 		return false
@@ -285,8 +285,8 @@ func (adapter *customCLIAdapter) execute(ctx context.Context, request delegation
 	if request.Timeout > 0 && request.Timeout < timeout {
 		timeout = request.Timeout
 	}
-	processResult, processErr := adapter.runner.Run(ctx, delegation.ProcessRequest{Executable: adapter.config.Executable, Args: args, Stdin: stdin, Dir: workspace, InheritEnvironment: append([]string{}, adapter.config.EnvironmentVariables...), Timeout: timeout, StdoutLimit: adapter.contract.outputLimit, StderrLimit: adapter.contract.outputLimit})
-	parsed, parseErr := adapter.parseOutput(processResult.Stdout, ctx)
+	processResult, processErr := adapter.runner.Run(ctx, delegation.ProcessRequest{Executable: adapter.config.Executable, Args: args, Stdin: stdin, Dir: workspace, InheritEnvironment: append([]string{}, adapter.config.EnvironmentVariables...), Timeout: timeout, StdoutLimit: adapter.contract.outputLimit, StderrLimit: adapter.contract.outputLimit, OnStdoutLine: func(line string) { publishCustomJSONLLine(ctx, adapter.contract, line) }})
+	parsed, parseErr := adapter.parseOutput(processResult.Stdout, ctx, !processResult.StdoutStreamed)
 	if processErr != nil {
 		if errors.Is(processErr, context.Canceled) || errors.Is(processErr, context.DeadlineExceeded) {
 			return delegation.TaskResult{Output: parsed.output, Error: processErr}
@@ -328,10 +328,10 @@ func substituteCustomArguments(arguments []string, prompt, workspace string, rea
 
 type customOutputResult struct{ output, failure string }
 
-func (adapter *customCLIAdapter) parseOutput(output string, ctx context.Context) (customOutputResult, error) {
+func (adapter *customCLIAdapter) parseOutput(output string, ctx context.Context, publishVisible bool) (customOutputResult, error) {
 	if adapter.contract.outputMode == "text" {
 		value := strings.TrimSpace(output)
-		if value != "" {
+		if publishVisible && value != "" {
 			delegation.PublishWorkerVisibleUpdate(ctx, boundCustomVisibleUpdate(value))
 		}
 		return customOutputResult{output: value}, nil
@@ -350,8 +350,10 @@ func (adapter *customCLIAdapter) parseOutput(output string, ctx context.Context)
 		if err := json.Unmarshal([]byte(value), &event); err != nil {
 			return result, fmt.Errorf("parse custom JSONL line %d: %w", line, err)
 		}
-		if text, ok := customJSONPathString(event, adapter.contract.progressField); ok && text != "" {
-			delegation.PublishWorkerVisibleUpdate(ctx, boundCustomVisibleUpdate(text))
+		if publishVisible {
+			if text, ok := customJSONPathString(event, adapter.contract.progressField); ok && text != "" {
+				delegation.PublishWorkerVisibleUpdate(ctx, boundCustomVisibleUpdate(text))
+			}
 		}
 		if text, ok := customJSONPathString(event, adapter.contract.errorField); ok && text != "" {
 			result.failure = text
@@ -364,6 +366,21 @@ func (adapter *customCLIAdapter) parseOutput(output string, ctx context.Context)
 		return result, fmt.Errorf("scan custom JSONL: %w", err)
 	}
 	return result, nil
+}
+
+func publishCustomJSONLLine(ctx context.Context, contract customCLIContract, line string) {
+	if contract.outputMode != "jsonl" {
+		return
+	}
+	var event any
+	if json.Unmarshal([]byte(strings.TrimSpace(line)), &event) != nil {
+		return
+	}
+	for _, field := range []string{contract.progressField, contract.finalField} {
+		if text, ok := customJSONPathString(event, field); ok && text != "" {
+			delegation.PublishWorkerVisibleUpdate(ctx, boundCustomVisibleUpdate(text))
+		}
+	}
 }
 
 func customJSONPathString(root any, path string) (string, bool) {

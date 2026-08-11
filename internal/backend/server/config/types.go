@@ -213,6 +213,7 @@ func DefaultConfig() Config {
 func NormalizeConfig(input Config) (Config, error) {
 	output := DefaultConfig()
 	output.Log = input.Log
+	output.DebugLogMaxBytes = input.DebugLogMaxBytes
 	output.ProviderStreamIdleTimeout = normalizeProviderStreamIdleTimeout(input.ProviderStreamIdleTimeout)
 	output.TurnStaleTimeout = normalizeTurnStaleTimeout(input.TurnStaleTimeout)
 	output.NativeDelegationProgressTimeout = normalizeNativeDelegationProgressTimeout(input.NativeDelegationProgressTimeout)

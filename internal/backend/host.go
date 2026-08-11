@@ -31,6 +31,10 @@ const healthPath = "/healthz"
 
 const tabServerBaseURL = "https://tab.leokun.cn"
 
+// delegationExecutorProbeConcurrency 限制手工刷新时同时启动的外部 CLI，
+// 避免多个执行器的超时按注册顺序线性叠加。
+const delegationExecutorProbeConcurrency = 3
+
 type Host struct {
 	store             *serverconfig.Store
 	listenAddr        string
@@ -91,7 +95,7 @@ func (host *Host) syncDelegationExecutors(cfg serverconfig.Config) error {
 		return nil
 	}
 	runner := delegation.NewProcessRunner(delegation.ProcessRunnerConfig{})
-	registrations := make([]delegation.ExecutorRegistration, 0, 4+len(cfg.Delegation.Executors))
+	registrations := make([]delegation.ExecutorRegistration, 0, 5+len(cfg.Delegation.Executors))
 	factories := []struct {
 		id     delegation.ExecutorID
 		create func(delegation.RuntimeExecutorConfig) (delegation.ExecutorRegistration, error)
@@ -104,6 +108,9 @@ func (host *Host) syncDelegationExecutors(cfg serverconfig.Config) error {
 		}},
 		{id: delegationexecutors.GeminiCLIExecutorID, create: func(runtimeConfig delegation.RuntimeExecutorConfig) (delegation.ExecutorRegistration, error) {
 			return delegationexecutors.NewGeminiCLIRegistration(runner, runtimeConfig)
+		}},
+		{id: delegationexecutors.KiroCLIExecutorID, create: func(runtimeConfig delegation.RuntimeExecutorConfig) (delegation.ExecutorRegistration, error) {
+			return delegationexecutors.NewKiroCLIRegistration(runner, runtimeConfig)
 		}},
 		{id: delegationexecutors.CursorExecutorID, create: func(runtimeConfig delegation.RuntimeExecutorConfig) (delegation.ExecutorRegistration, error) {
 			return delegationexecutors.NewCursorRegistration(
@@ -226,12 +233,40 @@ func (host *Host) RefreshDelegationExecutorProbes(ctx context.Context) ([]delega
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	for _, snapshot := range host.executorRegistry.Snapshots() {
-		if err := ctx.Err(); err != nil {
-			return host.executorRegistry.Snapshots(), err
-		}
-		_, _ = host.executorRegistry.Probe(ctx, snapshot.ID, true)
+	items := host.executorRegistry.Snapshots()
+	workers := delegationExecutorProbeConcurrency
+	if workers > len(items) {
+		workers = len(items)
 	}
+	if workers == 0 {
+		return items, ctx.Err()
+	}
+
+	jobs := make(chan delegation.ExecutorID)
+	var wg sync.WaitGroup
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for id := range jobs {
+				if ctx.Err() != nil {
+					return
+				}
+				_, _ = host.executorRegistry.Probe(ctx, id, true)
+			}
+		}()
+	}
+	for _, item := range items {
+		select {
+		case <-ctx.Done():
+			close(jobs)
+			wg.Wait()
+			return host.executorRegistry.Snapshots(), ctx.Err()
+		case jobs <- item.ID:
+		}
+	}
+	close(jobs)
+	wg.Wait()
 	return host.executorRegistry.Snapshots(), ctx.Err()
 }
 

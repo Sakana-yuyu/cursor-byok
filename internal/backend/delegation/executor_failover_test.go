@@ -29,6 +29,77 @@ func TestExecutorFailoverUsesPriorityAndRequiredCapabilities(t *testing.T) {
 	assertAttemptIDs(t, result.Attempts, "writer")
 }
 
+// TestExecutorFailoverProbesUnknownEligibleCandidatesOnFirstUse 锁定首次启用
+// 执行器后的兜底路径：配置同步会清除旧探测结果，自动委派不能因此跳过刚启用的
+// CLI 并直接退回本地 BYOK。
+func TestExecutorFailoverProbesUnknownEligibleCandidatesOnFirstUse(t *testing.T) {
+	registry := NewExecutorRegistry(ExecutorRegistryConfig{})
+	var probeCalls atomic.Int32
+	var executeCalls atomic.Int32
+	registration := ExecutorRegistration{
+		ID: "newly-enabled", DisplayName: "Newly enabled", Enabled: true, Priority: 1,
+		Capabilities: []ExecutorCapability{ExecutorCapabilityReadWorkspace},
+		Probe: func(context.Context) (ExecutorProbeResult, error) {
+			probeCalls.Add(1)
+			return ExecutorProbeResult{State: ExecutorProbeReady}, nil
+		},
+		Execute: func(context.Context, TaskRequest) TaskResult {
+			executeCalls.Add(1)
+			return TaskResult{Output: "external"}
+		},
+	}
+	if err := registry.Register(registration); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	result := NewFailoverExecutor(FailoverExecutorConfig{
+		Registry:    registry,
+		MaxAttempts: func() int { return 1 },
+		RequiredCapabilities: func(TaskRequest) []ExecutorCapability {
+			return []ExecutorCapability{ExecutorCapabilityReadWorkspace}
+		},
+	})(context.Background(), TaskRequest{ID: "first-use"})
+
+	if result.Error != nil || result.Output != "external" || result.ExecutorID != registration.ID {
+		t.Fatalf("result = %#v", result)
+	}
+	if probeCalls.Load() != 1 || executeCalls.Load() != 1 {
+		t.Fatalf("probe_calls=%d execute_calls=%d", probeCalls.Load(), executeCalls.Load())
+	}
+	assertAttemptIDs(t, result.Attempts, registration.ID)
+}
+
+func TestExecutorFailoverFallsBackWhenFirstUseProbeDoesNotBecomeReady(t *testing.T) {
+	registry := NewExecutorRegistry(ExecutorRegistryConfig{})
+	if err := registry.Register(ExecutorRegistration{
+		ID: "unavailable", DisplayName: "Unavailable", Enabled: true, Priority: 1,
+		Capabilities: []ExecutorCapability{ExecutorCapabilityReadWorkspace},
+		Probe: func(context.Context) (ExecutorProbeResult, error) {
+			return ExecutorProbeResult{State: ExecutorProbeNotInstalled}, nil
+		},
+		Execute: func(context.Context, TaskRequest) TaskResult {
+			t.Fatal("an executor that failed its first probe must not run")
+			return TaskResult{}
+		},
+	}); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	result := NewFailoverExecutor(FailoverExecutorConfig{
+		Registry:    registry,
+		MaxAttempts: func() int { return 1 },
+		FallbackID:  "local-byok",
+		Fallback: func(context.Context, TaskRequest) TaskResult {
+			return TaskResult{Output: "local"}
+		},
+	})(context.Background(), TaskRequest{ID: "first-use-unavailable"})
+
+	if result.Error != nil || result.Output != "local" || result.ExecutorID != "local-byok" {
+		t.Fatalf("result = %#v", result)
+	}
+	assertAttemptIDs(t, result.Attempts, "local-byok")
+}
+
 func TestExecutorFailoverAdvancesOnlyForRetrySafeSwitchableFailure(t *testing.T) {
 	firstErr := NewClassifiedExecutorError(ExecutorFailureSwitchable, true, "rate_limited", errors.New("rate limited"))
 	registry := newReadyFailoverRegistry(t,

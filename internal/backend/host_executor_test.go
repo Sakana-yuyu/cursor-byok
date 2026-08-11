@@ -2,9 +2,13 @@ package backend
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"cursor/internal/backend/delegation"
 	serverconfig "cursor/internal/backend/server/config"
@@ -33,6 +37,87 @@ func TestRefreshDelegationExecutorProbesForcesRegistryProbe(t *testing.T) {
 	}
 	if calls.Load() != 2 {
 		t.Fatalf("probe calls = %d, want 2 forced probes", calls.Load())
+	}
+}
+
+func TestRefreshDelegationExecutorProbesStartsIndependentProbesConcurrently(t *testing.T) {
+	registry := delegation.NewExecutorRegistry(delegation.ExecutorRegistryConfig{})
+	started := make(chan struct{}, 2)
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	t.Cleanup(func() { releaseOnce.Do(func() { close(release) }) })
+	for _, id := range []delegation.ExecutorID{"first-cli", "second-cli"} {
+		id := id
+		if err := registry.Register(delegation.ExecutorRegistration{
+			ID:      id,
+			Enabled: true,
+			Probe: func(context.Context) (delegation.ExecutorProbeResult, error) {
+				started <- struct{}{}
+				<-release
+				return delegation.ExecutorProbeResult{State: delegation.ExecutorProbeReady}, nil
+			},
+			Execute: func(context.Context, delegation.TaskRequest) delegation.TaskResult { return delegation.TaskResult{} },
+		}); err != nil {
+			t.Fatalf("register %s: %v", id, err)
+		}
+	}
+
+	host := &Host{executorRegistry: registry}
+	completed := make(chan error, 1)
+	go func() {
+		_, err := host.RefreshDelegationExecutorProbes(context.Background())
+		completed <- err
+	}()
+	<-started
+	select {
+	case <-started:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("second independent executor probe did not start concurrently")
+	}
+	releaseOnce.Do(func() { close(release) })
+	if err := <-completed; err != nil {
+		t.Fatalf("RefreshDelegationExecutorProbes() error = %v", err)
+	}
+}
+
+func TestRefreshDelegationExecutorProbesReturnsWhenContextCancelsDuringDispatch(t *testing.T) {
+	registry := delegation.NewExecutorRegistry(delegation.ExecutorRegistryConfig{})
+	started := make(chan struct{}, delegationExecutorProbeConcurrency)
+	for index := 0; index <= delegationExecutorProbeConcurrency; index++ {
+		id := delegation.ExecutorID(fmt.Sprintf("cancel-cli-%d", index))
+		if err := registry.Register(delegation.ExecutorRegistration{
+			ID:      id,
+			Enabled: true,
+			Probe: func(ctx context.Context) (delegation.ExecutorProbeResult, error) {
+				started <- struct{}{}
+				<-ctx.Done()
+				return delegation.ExecutorProbeResult{}, ctx.Err()
+			},
+			Execute: func(context.Context, delegation.TaskRequest) delegation.TaskResult { return delegation.TaskResult{} },
+		}); err != nil {
+			t.Fatalf("register %s: %v", id, err)
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	host := &Host{executorRegistry: registry}
+	completed := make(chan error, 1)
+	go func() {
+		_, err := host.RefreshDelegationExecutorProbes(ctx)
+		completed <- err
+	}()
+	for range delegationExecutorProbeConcurrency {
+		<-started
+	}
+	cancel()
+	select {
+	case err := <-completed:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("RefreshDelegationExecutorProbes() error = %v, want context canceled", err)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("RefreshDelegationExecutorProbes() did not return after context cancellation")
 	}
 }
 
@@ -145,6 +230,32 @@ func TestHostRegistersGeminiExecutorAndAppliesSavedPolicy(t *testing.T) {
 		if !exists || other.Enabled {
 			t.Fatalf("%s snapshot after Gemini save = %#v, ok=%t", id, other, exists)
 		}
+	}
+}
+
+func TestHostRegistersKiroExecutorAndAppliesSavedPolicy(t *testing.T) {
+	store := serverconfig.NewStore(filepath.Join(t.TempDir(), "config.yaml"), "")
+	host, err := NewHost(store, nil)
+	if err != nil {
+		t.Fatalf("NewHost() error = %v", err)
+	}
+	t.Cleanup(func() { _ = host.Stop(context.Background()) })
+
+	snapshot, ok := host.ExecutorRegistry().Snapshot("kiro-cli")
+	if !ok || snapshot.Enabled {
+		t.Fatalf("default Kiro snapshot = %#v, ok=%t", snapshot, ok)
+	}
+	cfg, err := host.ConfigManager().GetDelegationConfig(t.Context())
+	if err != nil {
+		t.Fatalf("GetDelegationConfig() error = %v", err)
+	}
+	cfg.Executors = []serverconfig.DelegationExecutorConfig{{ID: "kiro-cli", Kind: serverconfig.DelegationExecutorKindBuiltin, Enabled: true, Priority: 2, Executable: "C:/tools/kiro-cli.exe"}}
+	if _, err := host.ConfigManager().SaveDelegationConfig(t.Context(), cfg); err != nil {
+		t.Fatalf("SaveDelegationConfig() error = %v", err)
+	}
+	snapshot, ok = host.ExecutorRegistry().Snapshot("kiro-cli")
+	if !ok || !snapshot.Enabled || snapshot.Priority != 2 || snapshot.Probe.State != delegation.ExecutorProbeUnknown {
+		t.Fatalf("updated Kiro snapshot = %#v, ok=%t", snapshot, ok)
 	}
 }
 

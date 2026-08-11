@@ -400,7 +400,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 460,
+          "line": 411,
           "column": 14
         }
       ]
@@ -666,6 +666,18 @@
         }
       ]
     },
+    "07e4106ac5138090": {
+      "source": "Anthropic adaptive thinking 的思考强度上限。客户端选择高于上限时会自动限制，请求固定使用新版 thinking.type=adaptive。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/utils/modelEditorMeta.js",
+          "line": 55,
+          "column": 28
+        }
+      ]
+    },
     "07f01be2b5c034ef": {
       "source": "Google 官方模型目录；公开用量接口未接入",
       "kind": "text",
@@ -685,7 +697,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 820,
+          "line": 821,
           "column": 12
         }
       ]
@@ -856,6 +868,18 @@
         }
       ]
     },
+    "0b4707ac97e3fabd": {
+      "source": "渠道允许的推理强度上限。客户端选择低于上限时保留客户端值，选择高于上限时自动限制到这里；越高通常越稳，但也可能更慢。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/utils/modelEditorMeta.js",
+          "line": 46,
+          "column": 20
+        }
+      ]
+    },
     "0bb62e8b45b6c339": {
       "source": "{0} · {1} 次 · {2} tokens",
       "kind": "template",
@@ -875,12 +899,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 59,
+          "line": 61,
           "column": 10
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 302,
+          "line": 308,
           "column": 73
         },
         {
@@ -953,7 +977,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 311,
+          "line": 317,
           "column": 36
         },
         {
@@ -1351,7 +1375,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 184,
+          "line": 190,
           "column": 83
         }
       ]
@@ -1529,7 +1553,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 459,
+          "line": 469,
           "column": 47
         }
       ]
@@ -1548,18 +1572,6 @@
           "file": "src/services/browserBindings.js",
           "line": 34,
           "column": 18
-        }
-      ]
-    },
-    "140367ee2c7c2ce0": {
-      "source": "暂时无法连接服务",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/services/runtimeHealthModel.test.js",
-          "line": 16,
-          "column": 16
         }
       ]
     },
@@ -1594,7 +1606,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 139,
+          "line": 141,
           "column": 112
         }
       ]
@@ -1613,6 +1625,18 @@
           "file": "src/components/StationSpendCard.vue",
           "line": 340,
           "column": 20
+        }
+      ]
+    },
+    "153283b322db7345": {
+      "source": "推理强度上限",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/model-editor/ModelBehaviorFields.vue",
+          "line": 60,
+          "column": 13
         }
       ]
     },
@@ -1767,7 +1791,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 282,
+          "line": 288,
           "column": 80
         }
       ]
@@ -1923,6 +1947,18 @@
           "file": "src/views/Home.vue",
           "line": 222,
           "column": 16
+        }
+      ]
+    },
+    "1a872957ee5631fc": {
+      "source": "正文 Token",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/ModelAdapterTestCard.vue",
+          "line": 164,
+          "column": 74
         }
       ]
     },
@@ -2094,7 +2130,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 110,
+          "line": 111,
           "column": 85
         }
       ]
@@ -2383,22 +2419,22 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 47,
+          "line": 49,
           "column": 12
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 78,
+          "line": 81,
           "column": 40
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 44,
+          "line": 46,
           "column": 12
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 184,
+          "line": 190,
           "column": 30
         }
       ]
@@ -2410,7 +2446,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 807,
+          "line": 808,
           "column": 12
         }
       ]
@@ -2613,7 +2649,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 475,
+          "line": 485,
           "column": 25
         }
       ]
@@ -2828,7 +2864,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 143,
+          "line": 145,
           "column": 57
         }
       ]
@@ -2992,12 +3028,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 46,
+          "line": 48,
           "column": 11
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 43,
+          "line": 45,
           "column": 11
         }
       ]
@@ -3098,7 +3134,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 469,
+          "line": 420,
           "column": 14
         }
       ]
@@ -3122,17 +3158,17 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 49,
+          "line": 51,
           "column": 11
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 78,
+          "line": 81,
           "column": 73
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 46,
+          "line": 48,
           "column": 11
         },
         {
@@ -3176,7 +3212,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 781,
+          "line": 782,
           "column": 12
         }
       ]
@@ -3248,7 +3284,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 65,
+          "line": 67,
           "column": 14
         }
       ]
@@ -3335,7 +3371,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 928,
+          "line": 929,
           "column": 49
         }
       ]
@@ -3436,7 +3472,7 @@
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 223,
+          "line": 229,
           "column": 18
         },
         {
@@ -3466,7 +3502,7 @@
         },
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 148,
+          "line": 150,
           "column": 97
         },
         {
@@ -3481,7 +3517,7 @@
         },
         {
           "file": "src/components/ui/Modal.vue",
-          "line": 18,
+          "line": 11,
           "column": 40
         },
         {
@@ -3596,6 +3632,18 @@
           "file": "src/layouts/MainLayout.vue",
           "line": 186,
           "column": 27
+        }
+      ]
+    },
+    "2d5be7bcc0956fdc": {
+      "source": "首响应",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/ModelAdapterTestCard.vue",
+          "line": 148,
+          "column": 74
         }
       ]
     },
@@ -3911,22 +3959,22 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 435,
+          "line": 386,
           "column": 16
         },
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 441,
+          "line": 392,
           "column": 16
         },
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 447,
+          "line": 398,
           "column": 16
         },
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 453,
+          "line": 404,
           "column": 16
         }
       ]
@@ -3938,7 +3986,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 152,
+          "line": 180,
           "column": 7
         }
       ]
@@ -3974,7 +4022,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 290,
+          "line": 296,
           "column": 70
         }
       ]
@@ -4169,7 +4217,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 101,
+          "line": 102,
           "column": 5
         }
       ]
@@ -4217,7 +4265,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 483,
+          "line": 493,
           "column": 25
         }
       ]
@@ -4284,11 +4332,6 @@
           "file": "src/utils/errorContract.js",
           "line": 85,
           "column": 89
-        },
-        {
-          "file": "src/utils/errorContract.test.js",
-          "line": 71,
-          "column": 35
         }
       ]
     },
@@ -4768,7 +4811,7 @@
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 55,
+          "line": 57,
           "column": 17
         },
         {
@@ -4850,12 +4893,12 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 223,
+          "line": 229,
           "column": 18
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 307,
+          "line": 313,
           "column": 14
         }
       ]
@@ -4949,7 +4992,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 309,
+          "line": 315,
           "column": 56
         },
         {
@@ -5013,7 +5056,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 254,
+          "line": 260,
           "column": 5
         }
       ]
@@ -5114,12 +5157,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 67,
+          "line": 69,
           "column": 10
         },
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 36,
+          "line": 37,
           "column": 42
         },
         {
@@ -5136,7 +5179,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 140,
+          "line": 156,
           "column": 74
         }
       ]
@@ -5196,7 +5239,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 144,
+          "line": 146,
           "column": 57
         }
       ]
@@ -5305,27 +5348,27 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 63,
+          "line": 65,
           "column": 17
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 102,
+          "line": 105,
           "column": 22
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 104,
+          "line": 107,
           "column": 84
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 474,
+          "line": 484,
           "column": 94
         },
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 37,
+          "line": 38,
           "column": 10
         }
       ]
@@ -5479,12 +5522,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 172,
+          "line": 175,
           "column": 72
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 114,
+          "line": 116,
           "column": 48
         }
       ]
@@ -5549,7 +5592,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 415,
+          "line": 366,
           "column": 14
         }
       ]
@@ -5573,12 +5616,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 406,
+          "line": 416,
           "column": 141
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 461,
+          "line": 471,
           "column": 146
         },
         {
@@ -5665,7 +5708,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 289,
+          "line": 295,
           "column": 23
         },
         {
@@ -5708,6 +5751,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 1066,
           "column": 15
+        }
+      ]
+    },
+    "4ae9eb28741faa5f": {
+      "source": "不兼容",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
+          "line": 36,
+          "column": 45
         }
       ]
     },
@@ -6144,17 +6199,17 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 394,
+          "line": 404,
           "column": 58
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 105,
+          "line": 107,
           "column": 79
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 177,
+          "line": 183,
           "column": 54
         }
       ]
@@ -6432,12 +6487,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 441,
+          "line": 451,
           "column": 25
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 307,
+          "line": 313,
           "column": 14
         }
       ]
@@ -6699,7 +6754,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 124,
+          "line": 126,
           "column": 68
         }
       ]
@@ -7080,7 +7135,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 57,
+          "line": 59,
           "column": 14
         },
         {
@@ -7136,7 +7191,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 260,
+          "line": 266,
           "column": 73
         }
       ]
@@ -7148,12 +7203,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 420,
+          "line": 430,
           "column": 55
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 472,
+          "line": 482,
           "column": 53
         },
         {
@@ -7754,7 +7809,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 265,
+          "line": 271,
           "column": 72
         },
         {
@@ -7798,7 +7853,7 @@
         },
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 400,
+          "line": 351,
           "column": 20
         }
       ]
@@ -8042,7 +8097,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 411,
+          "line": 362,
           "column": 14
         }
       ]
@@ -8163,7 +8218,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 285,
+          "line": 291,
           "column": 72
         }
       ]
@@ -8175,7 +8230,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 495,
+          "line": 505,
           "column": 20
         },
         {
@@ -8468,7 +8523,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 294,
+          "line": 300,
           "column": 73
         }
       ]
@@ -8646,7 +8701,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 148,
+          "line": 150,
           "column": 154
         }
       ]
@@ -8930,7 +8985,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 937,
+          "line": 938,
           "column": 58
         }
       ]
@@ -8942,7 +8997,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 127,
+          "line": 129,
           "column": 91
         }
       ]
@@ -9170,7 +9225,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 336,
+          "line": 342,
           "column": 23
         },
         {
@@ -9281,7 +9336,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 58,
+          "line": 60,
           "column": 13
         }
       ]
@@ -9310,7 +9365,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 85,
+          "line": 86,
           "column": 25
         }
       ]
@@ -9494,18 +9549,6 @@
         }
       ]
     },
-    "7b0fe85cc2eed27b": {
-      "source": "稍后重试",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/utils/errorContract.test.js",
-          "line": 42,
-          "column": 18
-        }
-      ]
-    },
     "7b2fafc5d7ec952b": {
       "source": "取消全选 {0}",
       "kind": "template",
@@ -9534,8 +9577,8 @@
           "column": 14
         },
         {
-          "file": "src/utils/modelAdapter.js",
-          "line": 120,
+          "file": "src/utils/modelAdapterTestResult.js",
+          "line": 33,
           "column": 12
         },
         {
@@ -9581,7 +9624,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 98,
+          "line": 101,
           "column": 10
         }
       ]
@@ -9605,7 +9648,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 755,
+          "line": 756,
           "column": 12
         }
       ]
@@ -10210,7 +10253,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 441,
+          "line": 451,
           "column": 25
         }
       ]
@@ -10275,7 +10318,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 246,
+          "line": 252,
           "column": 105
         },
         {
@@ -10294,6 +10337,18 @@
           "file": "src/services/browserBindings.js",
           "line": 362,
           "column": 18
+        }
+      ]
+    },
+    "844b8cc8dff7c1d8": {
+      "source": "默认",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/ModelAdapterTestCard.vue",
+          "line": 173,
+          "column": 53
         }
       ]
     },
@@ -10966,7 +11021,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 456,
+          "line": 466,
           "column": 56
         }
       ]
@@ -11014,12 +11069,12 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 141,
+          "line": 143,
           "column": 55
         },
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 141,
+          "line": 143,
           "column": 135
         }
       ]
@@ -11067,7 +11122,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 139,
+          "line": 141,
           "column": 196
         }
       ]
@@ -11151,7 +11206,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 427,
+          "line": 378,
           "column": 14
         }
       ]
@@ -11163,7 +11218,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 75,
+          "line": 78,
           "column": 17
         }
       ]
@@ -11192,12 +11247,12 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 128,
+          "line": 130,
           "column": 103
         },
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 138,
+          "line": 140,
           "column": 61
         }
       ]
@@ -11516,6 +11571,18 @@
         }
       ]
     },
+    "9444359272ba94f7": {
+      "source": "总生成 {0} t/s | 正文 {1} t/s | 首响应 {2} | 首字 {3}",
+      "kind": "template",
+      "placeholders": 4,
+      "refs": [
+        {
+          "file": "src/utils/modelAdapterTestResult.js",
+          "line": 43,
+          "column": 10
+        }
+      ]
+    },
     "94447bd6763ecb0c": {
       "source": "锁定为胶囊（悬停不再展开）",
       "kind": "text",
@@ -11535,7 +11602,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 273,
+          "line": 279,
           "column": 72
         }
       ]
@@ -11595,7 +11662,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 833,
+          "line": 834,
           "column": 12
         }
       ]
@@ -11655,7 +11722,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 181,
+          "line": 187,
           "column": 19
         }
       ]
@@ -11739,7 +11806,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 97,
+          "line": 100,
           "column": 108
         }
       ]
@@ -11816,7 +11883,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 181,
+          "line": 187,
           "column": 19
         }
       ]
@@ -12037,6 +12104,18 @@
         }
       ]
     },
+    "98ee7e7457d808cd": {
+      "source": "推理 Token",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/ModelAdapterTestCard.vue",
+          "line": 168,
+          "column": 74
+        }
+      ]
+    },
     "98fd987d7d08f9eb": {
       "source": "单独控制每个模板是否参与注入，并按需预览内容。",
       "kind": "text",
@@ -12181,6 +12260,18 @@
         }
       ]
     },
+    "9af7c25429dc6424": {
+      "source": "思考强度上限",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/model-editor/ModelBehaviorFields.vue",
+          "line": 72,
+          "column": 13
+        }
+      ]
+    },
     "9b03c479af465c36": {
       "source": "检测到本地 CA 异常，已自动修复，请重启 Cursor 使连接生效。",
       "kind": "text",
@@ -12212,7 +12303,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 125,
+          "line": 127,
           "column": 85
         }
       ]
@@ -12294,6 +12385,18 @@
         }
       ]
     },
+    "9be66f38b00a6b3f": {
+      "source": "总生成 TPS",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/ModelAdapterTestCard.vue",
+          "line": 140,
+          "column": 74
+        }
+      ]
+    },
     "9c38b6e9bf94abec": {
       "source": "已切换到直连 Cursor 模式",
       "kind": "text",
@@ -12308,18 +12411,6 @@
           "file": "src/views/Home.vue",
           "line": 117,
           "column": 29
-        }
-      ]
-    },
-    "9c41b3a9e12ac994": {
-      "source": "思考强度",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/model-editor/ModelBehaviorFields.vue",
-          "line": 72,
-          "column": 13
         }
       ]
     },
@@ -12405,7 +12496,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 907,
+          "line": 908,
           "column": 25
         }
       ]
@@ -12470,7 +12561,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 66,
+          "line": 68,
           "column": 13
         },
         {
@@ -12555,7 +12646,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 144,
+          "line": 160,
           "column": 74
         }
       ]
@@ -12603,7 +12694,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 457,
+          "line": 408,
           "column": 14
         }
       ]
@@ -12750,32 +12841,32 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 50,
+          "line": 52,
           "column": 13
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 78,
+          "line": 81,
           "column": 89
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 266,
+          "line": 272,
           "column": 21
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 313,
+          "line": 319,
           "column": 54
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 47,
+          "line": 49,
           "column": 13
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 158,
+          "line": 162,
           "column": 21
         },
         {
@@ -12848,7 +12939,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 846,
+          "line": 847,
           "column": 12
         }
       ]
@@ -12942,7 +13033,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 502,
+          "line": 512,
           "column": 17
         },
         {
@@ -13385,7 +13476,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 281,
+          "line": 287,
           "column": 72
         }
       ]
@@ -13469,7 +13560,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 430,
+          "line": 381,
           "column": 14
         }
       ]
@@ -13736,7 +13827,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 107,
+          "line": 108,
           "column": 58
         }
       ]
@@ -13842,7 +13933,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 936,
+          "line": 937,
           "column": 49
         }
       ]
@@ -13919,7 +14010,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 794,
+          "line": 795,
           "column": 12
         }
       ]
@@ -14032,12 +14123,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 172,
+          "line": 175,
           "column": 34
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 113,
+          "line": 115,
           "column": 48
         },
         {
@@ -14518,7 +14609,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 56,
+          "line": 58,
           "column": 15
         },
         {
@@ -15019,12 +15110,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 265,
+          "line": 271,
           "column": 36
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 157,
+          "line": 161,
           "column": 36
         }
       ]
@@ -15246,7 +15337,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 457,
+          "line": 467,
           "column": 52
         }
       ]
@@ -15260,18 +15351,6 @@
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 57,
           "column": 26
-        }
-      ]
-    },
-    "c5af02060847d167": {
-      "source": "Anthropic adaptive thinking 的思考强度。请求会固定使用新版 thinking.type=adaptive。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/utils/modelEditorMeta.js",
-          "line": 55,
-          "column": 28
         }
       ]
     },
@@ -15535,18 +15614,6 @@
         }
       ]
     },
-    "c8c14507b2d37395": {
-      "source": "推理强度",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/model-editor/ModelBehaviorFields.vue",
-          "line": 60,
-          "column": 13
-        }
-      ]
-    },
     "c8e76c3b04ef2ecf": {
       "source": "请求被拒绝，请检查模型与参数配置",
       "kind": "text",
@@ -15595,12 +15662,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 412,
+          "line": 422,
           "column": 108
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 109,
+          "line": 111,
           "column": 46
         },
         {
@@ -15810,7 +15877,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 996,
+          "line": 997,
           "column": 69
         }
       ]
@@ -15940,7 +16007,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 269,
+          "line": 275,
           "column": 72
         }
       ]
@@ -16029,7 +16096,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 102,
+          "line": 103,
           "column": 5
         }
       ]
@@ -16227,7 +16294,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 402,
+          "line": 353,
           "column": 14
         }
       ]
@@ -16356,13 +16423,13 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/utils/modelAdapter.js",
-          "line": 123,
+          "file": "src/utils/modelAdapterTestResult.js",
+          "line": 36,
           "column": 38
         },
         {
-          "file": "src/utils/modelAdapter.js",
-          "line": 153,
+          "file": "src/utils/modelAdapterTestResult.js",
+          "line": 72,
           "column": 50
         }
       ]
@@ -16509,6 +16576,18 @@
           "file": "src/components/settings/delegation/DelegationSupervisionPanel.vue",
           "line": 159,
           "column": 7
+        }
+      ]
+    },
+    "d6083d596f3d4785": {
+      "source": "实际推理强度",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/ModelAdapterTestCard.vue",
+          "line": 172,
+          "column": 74
         }
       ]
     },
@@ -16832,7 +16911,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 178,
+          "line": 129,
           "column": 18
         },
         {
@@ -16893,12 +16972,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 172,
+          "line": 175,
           "column": 18
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 172,
+          "line": 175,
           "column": 98
         },
         {
@@ -16932,7 +17011,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 424,
+          "line": 375,
           "column": 14
         }
       ]
@@ -16944,7 +17023,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 408,
+          "line": 359,
           "column": 14
         }
       ]
@@ -17089,6 +17168,18 @@
         }
       ]
     },
+    "dd720e192ffa910c": {
+      "source": "官方下载",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
+          "line": 122,
+          "column": 178
+        }
+      ]
+    },
     "dd9fd5ce6780b09a": {
       "source": "最大并发数",
       "kind": "text",
@@ -17111,6 +17202,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/ModelAdapterTestCard.vue",
+          "line": 152,
+          "column": 74
+        },
         {
           "file": "src/views/RequestMetrics.vue",
           "line": 480,
@@ -17222,7 +17318,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 476,
+          "line": 486,
           "column": 133
         }
       ]
@@ -17401,7 +17497,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 483,
+          "line": 493,
           "column": 25
         }
       ]
@@ -17524,7 +17620,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 418,
+          "line": 369,
           "column": 14
         }
       ]
@@ -17536,7 +17632,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 421,
+          "line": 372,
           "column": 14
         }
       ]
@@ -17668,17 +17764,17 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 51,
+          "line": 53,
           "column": 14
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 78,
+          "line": 81,
           "column": 107
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 48,
+          "line": 50,
           "column": 14
         },
         {
@@ -17770,7 +17866,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 938,
+          "line": 939,
           "column": 35
         }
       ]
@@ -17869,7 +17965,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 277,
+          "line": 283,
           "column": 72
         }
       ]
@@ -18059,7 +18155,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 399,
+          "line": 409,
           "column": 13
         }
       ]
@@ -18165,18 +18261,6 @@
           "file": "src/views/MetricsDetail.vue",
           "line": 384,
           "column": 75
-        }
-      ]
-    },
-    "ec3b17a75db49e24": {
-      "source": "{0} t/s | 首字 {1}",
-      "kind": "template",
-      "placeholders": 2,
-      "refs": [
-        {
-          "file": "src/utils/modelAdapter.js",
-          "line": 129,
-          "column": 10
         }
       ]
     },
@@ -18382,12 +18466,12 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 172,
+          "line": 175,
           "column": 55
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 115,
+          "line": 117,
           "column": 10
         },
         {
@@ -18551,7 +18635,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 106,
+          "line": 107,
           "column": 63
         }
       ]
@@ -18587,7 +18671,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 247,
+          "line": 253,
           "column": 59
         }
       ]
@@ -18599,17 +18683,17 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 48,
+          "line": 50,
           "column": 14
         },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 78,
+          "line": 81,
           "column": 58
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 45,
+          "line": 47,
           "column": 14
         },
         {
@@ -18648,7 +18732,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 768,
+          "line": 769,
           "column": 12
         }
       ]
@@ -18660,7 +18744,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 194,
+          "line": 200,
           "column": 19
         }
       ]
@@ -18672,25 +18756,13 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 495,
+          "line": 505,
           "column": 20
         },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
           "line": 1102,
           "column": 22
-        }
-      ]
-    },
-    "f363622480699c52": {
-      "source": "推理强度仅对部分支持 reasoning_effort 的模型生效，并不是所有模型都支持。越高通常越稳，但也可能更慢。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/utils/modelEditorMeta.js",
-          "line": 46,
-          "column": 20
         }
       ]
     },
@@ -18887,7 +18959,7 @@
         },
         {
           "file": "src/components/ui/Modal.vue",
-          "line": 15,
+          "line": 8,
           "column": 35
         },
         {
@@ -18926,12 +18998,12 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 463,
+          "line": 414,
           "column": 14
         },
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 466,
+          "line": 417,
           "column": 14
         }
       ]
@@ -19146,7 +19218,7 @@
       "refs": [
         {
           "file": "src/components/DelegationTaskStrip.vue",
-          "line": 298,
+          "line": 304,
           "column": 70
         }
       ]
@@ -19288,7 +19360,7 @@
         },
         {
           "file": "src/components/ui/Modal.vue",
-          "line": 17,
+          "line": 10,
           "column": 41
         },
         {
@@ -19393,7 +19465,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 474,
+          "line": 484,
           "column": 88
         }
       ]
@@ -19405,7 +19477,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 395,
+          "line": 405,
           "column": 54
         }
       ]
@@ -19417,7 +19489,7 @@
       "refs": [
         {
           "file": "src/components/DelegationRuntimePanel.vue",
-          "line": 64,
+          "line": 66,
           "column": 15
         }
       ]
@@ -19441,8 +19513,20 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 930,
+          "line": 931,
           "column": 46
+        }
+      ]
+    },
+    "fc5ee6b6d2686702": {
+      "source": "正文 TPS",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/ModelAdapterTestCard.vue",
+          "line": 144,
+          "column": 74
         }
       ]
     },
@@ -19552,7 +19636,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 405,
+          "line": 356,
           "column": 14
         }
       ]

@@ -22,6 +22,7 @@ const (
 	CursorDiagnosticEditorNotFound = "cursor_editor_not_found"
 
 	CursorErrorCodeAgentUnavailable = "cursor_agent_unavailable"
+	CursorInstallURL                = "https://www.cursor.com/downloads"
 )
 
 var cursorCapabilities = []delegation.ExecutorCapability{
@@ -111,6 +112,7 @@ func NewCursorRegistration(
 	return delegation.ExecutorRegistration{
 		ID:           CursorExecutorID,
 		DisplayName:  firstNonEmpty(config.DisplayName, "Cursor Agent"),
+		InstallURL:   CursorInstallURL,
 		Enabled:      config.Enabled,
 		Priority:     config.Priority,
 		Capabilities: append([]delegation.ExecutorCapability{}, cursorCapabilities...),

@@ -268,6 +268,9 @@ func (s *ProxyServer) Start() error {
 		return err
 	}
 
+	// 端口为 0 时由系统分配空闲端口；对外暴露实际地址，供隔离验证等调用方
+	// 写入正确的客户端代理设置，避免误写不可连接的 :0。
+	s.addr = ln.Addr().String()
 	s.httpServer = httpServer
 	s.serveErrCh = make(chan error, 1)
 

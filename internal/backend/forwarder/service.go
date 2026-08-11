@@ -34,7 +34,6 @@ import (
 )
 
 const (
-	providerResumeDebounce         = 200 * time.Millisecond
 	completedExecRetention         = 15 * time.Second
 	defaultNonStreamingCloseGrace  = 30 * time.Second
 	defaultSummaryCompletedThought = "Chat context summarized"
@@ -93,6 +92,7 @@ type Service struct {
 	visionRuns               map[string]*visionDelegationRun
 	visionCacheMu            sync.Mutex
 	visionCache              map[string]visionCacheEntry
+	visionInflight           map[string]*visionInflightCall
 	visionImageMu            sync.Mutex
 	visionImageFiles         map[string][]string
 	// visionArchiveMu 保护 visionArchive：会话级图片识图结果归档。
@@ -124,6 +124,9 @@ type Service struct {
 	// by the non-streaming recovery goroutine instead of time.After. Tests
 	// inject a test-controlled channel to trigger timeouts deterministically.
 	nonStreamingRecoveryTimer func(execID string, grace time.Duration) <-chan time.Time
+	// visionProxyPassBudget 控制自动识图在主模型首字前可占用的总时间。
+	// 仅测试可覆盖；生产使用 visionProxyPassTimeout，避免把该运行时策略持久化进历史。
+	visionProxyPassBudget func() time.Duration
 }
 
 // RecentWorkspaceRoot returns the latest non-empty workspace root observed
@@ -280,12 +283,13 @@ func newService(historyRoot string, resolver modeladapter.ChannelResolver, regis
 		// （视觉委派一触发就闪退的根因）。
 		visionRuns:               make(map[string]*visionDelegationRun),
 		visionCache:              make(map[string]visionCacheEntry),
+		visionInflight:           make(map[string]*visionInflightCall),
 		visionImageFiles:         make(map[string][]string),
 		visionArchive:            make(map[string]visionArchiveEntry),
 		visionArchiveLimit:       visionArchiveMaxEntries,
 		checkpointBlobs:          make(map[string]*checkpointBlobCacheEntry),
 		conversationLastActivity: make(map[string]time.Time),
-			nonStreamingCloseGrace:   func() time.Duration { return defaultNonStreamingCloseGrace },
+		nonStreamingCloseGrace:   func() time.Duration { return defaultNonStreamingCloseGrace },
 	}
 	service.cursorDelegation = newCursorDelegationBridge(service)
 	service.localDelegation = newLocalDelegatedAgentAdapter(service)
@@ -336,12 +340,13 @@ func newServiceWithDependencies(store *ConversationFileStore, projector *History
 		nativeDelegations:        make(map[string]*nativeDelegationRuntime),
 		visionRuns:               make(map[string]*visionDelegationRun),
 		visionCache:              make(map[string]visionCacheEntry),
+		visionInflight:           make(map[string]*visionInflightCall),
 		visionImageFiles:         make(map[string][]string),
 		visionArchive:            make(map[string]visionArchiveEntry),
 		visionArchiveLimit:       visionArchiveMaxEntries,
 		checkpointBlobs:          make(map[string]*checkpointBlobCacheEntry),
 		conversationLastActivity: make(map[string]time.Time),
-			nonStreamingCloseGrace:   func() time.Duration { return defaultNonStreamingCloseGrace },
+		nonStreamingCloseGrace:   func() time.Duration { return defaultNonStreamingCloseGrace },
 	}
 	service.cursorDelegation = newCursorDelegationBridge(service)
 	service.localDelegation = newLocalDelegatedAgentAdapter(service)
@@ -490,11 +495,8 @@ func (service *Service) RunSSE(ctx context.Context, req *connect.Request[aiserve
 						})
 						return err
 					}
-					service.debug.LogRunSSE(ctx, requestID, "", "send_message", map[string]any{
-						"cursor":       cursor,
-						"message_case": agentServerMessageCase(event.Message),
-						"message_size": proto.Size(event.Message),
-						"message":      protoJSONDebugPayload(event.Message),
+					service.debug.LogRunSSELazy(ctx, requestID, "", "send_message", func() map[string]any {
+						return runSSEMessageDebugFields(cursor, event.Message)
 					})
 				}
 				cursor++
@@ -945,6 +947,7 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 		stream.CurrentCompactionToken = 0
 	}
 	stream.ProviderAccumulatedText = nil
+	stream.ProviderTextDeltaCount = 0
 	stream.ProviderAccumulatedReasoning = nil
 	stream.ProviderAccumulatedReasoningSignature = ""
 	stream.ProviderAccumulatedReasoningSignatureSource = ""
@@ -1893,13 +1896,6 @@ func shouldResumeAfterToolResults(finishReason string) bool {
 	}
 }
 
-func (service *Service) cancelScheduledProviderResume(stream *ActiveStream) {
-	if stream == nil {
-		return
-	}
-	clearStreamTimer(stream, providerTimerKey(streamTimerProviderResume, ""))
-}
-
 // parentAgentProviderPassSafetyLimit 是父 agent（非 goal）单次回合 provider pass 的硬上限。
 // goal 模式拥有独立的预算体系（goalBudgetExceeded），不受此限制。
 // 正常 agent 回合的工具调用循环远低于该值；达到上限说明模型陷入死循环，兜底收口防止无限空转。
@@ -2456,13 +2452,17 @@ func (service *Service) runProviderStream(stream *ActiveStream, token uint64, ct
 	}
 	err := service.provider.StartStream(ctx, request, func(event modeladapter.ModelEvent) error {
 		markProviderAccepted()
-		return service.postStreamCommandWait(stream, streamCommand{
+		command := streamCommand{
 			Kind: streamCommandProviderEvent,
 			Provider: &streamProviderEvent{
 				Token: token,
 				Event: event,
 			},
-		})
+		}
+		if providerEventCanQueueAsync(event) {
+			return service.postStreamCommandAsync(stream, command)
+		}
+		return service.postStreamCommandWait(stream, command)
 	})
 	if err == nil {
 		markProviderAccepted()
@@ -2503,6 +2503,18 @@ func (service *Service) runProviderStream(stream *ActiveStream, token uint64, ct
 		"model_call_id":  strings.TrimSpace(request.ModelCallID),
 		"provider_token": token,
 	})
+}
+
+// providerEventCanQueueAsync 仅放宽高频且无状态收口职责的可见增量。邮箱仍为
+// 固定容量，满时 postStreamCommandAsync 会阻塞上游读取以形成背压；回合完成、
+// 工具调用和错误则继续同步等待，作为前序增量已被 actor 消费的顺序栅栏。
+func providerEventCanQueueAsync(event modeladapter.ModelEvent) bool {
+	switch event.Kind {
+	case modeladapter.ModelEventKindTextDelta, modeladapter.ModelEventKindThinkingDelta:
+		return true
+	default:
+		return false
+	}
 }
 
 // handleToolInvocation 把模型产生的工具意图转成 exec/interaction 请求并下发给客户端。
@@ -3252,6 +3264,54 @@ func (service *Service) closeStreamWithProviderError(
 		return err
 	}
 	return service.failActiveStream(stream, conversationID, requestID, modelCallID, "provider_error", errorText)
+}
+
+const (
+	outputTruncatedTerminalCode = "output_truncated"
+	outputTruncatedErrorText    = "模型输出达到 token 上限，已保留部分回复；请继续或缩短请求后重试。"
+)
+
+// closeStreamWithOutputTruncation 保留已发送的部分正文，并把输出预算截断作为失败终态落库。
+// 已有可见正文时不能自动续写，否则模型可能重复、改写或矛盾此前已经展示的内容。
+func (service *Service) closeStreamWithOutputTruncation(
+	stream *ActiveStream,
+	conversationID string,
+	turnSeq int64,
+	requestID string,
+	usage turnUsageSnapshot,
+	finishReason string,
+) error {
+	if stream == nil {
+		return nil
+	}
+	modelCallID := strings.TrimSpace(stream.CurrentModelCallID)
+	if strings.TrimSpace(usage.ErrorCode) == "" {
+		usage.ErrorCode = outputTruncatedTerminalCode
+	}
+	if err := service.recordTurnUsageSnapshot(stream, conversationID, turnSeq, requestID, modelCallID, "provider_error", usage, outputTruncatedErrorText, false); err != nil {
+		return fmt.Errorf("record truncated output usage: %w", err)
+	}
+	if _, err := service.appendConversationEntries(stream, conversationID, []HistoryEntry{
+		newMetadataEntry(turnSeq, requestID, outputTruncatedTerminalCode, map[string]any{
+			"model_call_id": modelCallID,
+			"finish_reason": strings.TrimSpace(finishReason),
+		}),
+	}); err != nil {
+		return err
+	}
+	if err := service.recordTurnFinalizedSnapshot(stream, conversationID, turnSeq, requestID, outputTruncatedTerminalCode, outputTruncatedErrorText); err != nil {
+		return fmt.Errorf("record truncated output turn finalized: %w", err)
+	}
+	if err := service.updateConversationTokenState(stream, conversationID, usage, modelCallID, false); err != nil {
+		return err
+	}
+	return service.failActiveStreamWithDetails(stream, conversationID, requestID, modelCallID, TerminalFailure{
+		Code:         outputTruncatedTerminalCode,
+		Message:      outputTruncatedErrorText,
+		TraceID:      strings.TrimSpace(requestID),
+		AppErrorCode: outputTruncatedTerminalCode,
+		Disposition:  "retryable",
+	})
 }
 
 // closeStreamWithTurnBudgetExceeded 在非 goal 回合触发 provider pass / 时长硬上限时安全收口。

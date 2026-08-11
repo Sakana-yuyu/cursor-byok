@@ -89,8 +89,6 @@ type cachingProviderGateway struct {
 	settings func() (enabled bool, ttl time.Duration, maxEntries int, persist bool)
 	store    *responseCacheStore
 	keyCache *cacheKeyCache // 缓存 key 哈希计算结果
-	// inflight 记录进行中的请求（key → 通知 channel），相同 key 的并发请求合并为一次上游调用。
-	inflight sync.Map
 }
 
 // newCachingProviderGateway 构造响应缓存网关。persistPath 为空时不做磁盘持久化。
@@ -106,13 +104,9 @@ func newCachingProviderGateway(inner ProviderGateway, settings func() (bool, tim
 	}
 }
 
-// inflightCall 是一次进行中的上游请求的完成信号。
-type inflightCall struct {
-	done chan struct{}
-}
-
 // StartStream 在缓存关闭时直接透传；开启时按精确匹配尝试命中或录制后有条件写入，
-// 相同 key 的并发请求共享一次上游调用（singleflight）。
+// 只复用已完整收口的响应。进行中的流不做合并，避免用户重试或重复发送时等待旧流
+// 取消收尾，把旧流剩余时长直接叠加到新请求 TTFT。
 func (gateway *cachingProviderGateway) StartStream(ctx context.Context, req ProviderRequest, sink func(modeladapter.ModelEvent) error) error {
 	enabled, ttl, maxEntries, _ := gateway.settings()
 	if !enabled {
@@ -131,36 +125,6 @@ func (gateway *cachingProviderGateway) StartStream(ctx context.Context, req Prov
 		// 无法归一化 key（序列化失败）：直接透传，不参与缓存与合并。
 		return gateway.inner.StartStream(ctx, req, sink)
 	}
-
-	// 单飞：相同 key 的并发请求等待首个请求结束后复用其结果。
-	call := &inflightCall{done: make(chan struct{})}
-	actual, loaded := gateway.inflight.LoadOrStore(key, call)
-	if loaded {
-		waiter := actual.(*inflightCall)
-		select {
-		case <-waiter.done:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-		if entry, ok := gateway.store.get(key, time.Now()); ok {
-			// 首个请求成功收口并写入缓存：直接回放。
-			for _, event := range entry.events {
-				if err := sink(event); err != nil {
-					return err
-				}
-			}
-			localcache.RecordHit(entry.savedInputTokens, entry.savedOutputTokens)
-			return nil
-		}
-		// 首个请求失败未产生缓存：本请求自行发起（此时首请求已离开 inflight）。
-		return gateway.inner.StartStream(ctx, req, sink)
-	}
-
-	// 本请求成为上游发起者；结束后通知所有等待者。
-	defer func() {
-		close(call.done)
-		gateway.inflight.Delete(key)
-	}()
 
 	if entry, ok := gateway.store.get(key, time.Now()); ok {
 		// 命中：直接把缓存事件序列回放给 sink，等价于底层 provider 成功流。

@@ -40,6 +40,7 @@ const (
 	GeminiMetadataOutputTokensKey = "gemini_output_tokens"
 	GeminiMetadataCachedTokensKey = "gemini_cached_tokens"
 	GeminiMetadataContractKey     = "gemini_command_contract"
+	GeminiCLIInstallURL           = "https://github.com/google-gemini/gemini-cli"
 
 	geminiCommandContract    = "prompt-stream-json-approval-mode"
 	geminiOutputLimit        = 4 * 1024 * 1024
@@ -91,6 +92,7 @@ func NewGeminiCLIRegistration(runner processRunner, config delegation.RuntimeExe
 	return delegation.ExecutorRegistration{
 		ID:           GeminiCLIExecutorID,
 		DisplayName:  firstNonEmpty(config.DisplayName, "Gemini CLI"),
+		InstallURL:   GeminiCLIInstallURL,
 		Enabled:      config.Enabled,
 		Priority:     config.Priority,
 		Capabilities: append([]delegation.ExecutorCapability{}, geminiCapabilities...),
@@ -189,8 +191,9 @@ func (adapter *geminiCLIAdapter) execute(ctx context.Context, request delegation
 		Executable: adapter.executable, Args: args, Dir: workspace,
 		InheritEnvironment: append([]string{}, adapter.config.EnvironmentVariables...),
 		Timeout:            timeout, StdoutLimit: geminiOutputLimit, StderrLimit: geminiOutputLimit,
+		OnStdoutLine: func(line string) { publishGeminiStreamLine(ctx, line) },
 	})
-	parsed, parseErr := parseGeminiStream(processResult.Stdout, ctx)
+	parsed, parseErr := parseGeminiStream(processResult.Stdout, ctx, !processResult.StdoutStreamed)
 	metadata := parsed.metadata(adapter.getVersion())
 	if processErr != nil {
 		if errors.Is(processErr, context.Canceled) || errors.Is(processErr, context.DeadlineExceeded) {
@@ -235,7 +238,7 @@ type geminiStreamResult struct {
 	completed, failed                       bool
 }
 
-func parseGeminiStream(output string, ctx context.Context) (geminiStreamResult, error) {
+func parseGeminiStream(output string, ctx context.Context, publishVisible bool) (geminiStreamResult, error) {
 	var result geminiStreamResult
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	scanner.Buffer(make([]byte, 64*1024), geminiOutputLimit)
@@ -278,7 +281,9 @@ func parseGeminiStream(output string, ctx context.Context) (geminiStreamResult, 
 				} else {
 					result.output = event.Content
 				}
-				delegation.PublishWorkerVisibleUpdate(ctx, boundGeminiVisibleUpdate(event.Content))
+				if publishVisible {
+					delegation.PublishWorkerVisibleUpdate(ctx, boundGeminiVisibleUpdate(event.Content))
+				}
 			}
 		case "tool_use":
 			result.toolCalls++
@@ -307,6 +312,20 @@ func parseGeminiStream(output string, ctx context.Context) (geminiStreamResult, 
 	}
 	result.output = strings.TrimSpace(result.output)
 	return result, nil
+}
+
+func publishGeminiStreamLine(ctx context.Context, line string) {
+	var event struct {
+		Type    string `json:"type"`
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+	if json.Unmarshal([]byte(strings.TrimSpace(line)), &event) != nil || event.Type != "message" || event.Role != "assistant" {
+		return
+	}
+	if text := strings.TrimSpace(event.Content); text != "" {
+		delegation.PublishWorkerVisibleUpdate(ctx, boundGeminiVisibleUpdate(text))
+	}
 }
 
 func (result geminiStreamResult) metadata(version string) map[string]string {

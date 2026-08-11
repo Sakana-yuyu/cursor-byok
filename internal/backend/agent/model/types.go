@@ -77,15 +77,17 @@ type StreamRequest struct {
 	// ModelName 是本地逻辑模型名称，用于请求链路追踪。
 	ModelName string
 	// Role 表示本次调用在请求链路中的角色。
-	Role string
-	ParentModel string
-	ModelGroupID string
-	TaskID string
-	ExecutionMode string
+	Role            string
+	ParentModel     string
+	ModelGroupID    string
+	TaskID          string
+	ExecutionMode   string
 	SupervisorModel string
-	ReviewerModel string
+	ReviewerModel   string
 	// ThinkingEffort 表示客户端在本轮运行时选择的思考强度覆盖。
 	ThinkingEffort string
+	// ConfiguredThinkingEffortMaximum 表示渠道允许的最高思考强度。
+	ConfiguredThinkingEffortMaximum string
 	// MaxMode 表示是否使用模型最大上下文窗口（true=目录最大值, false=配置值）。
 	MaxMode bool
 	// Provider 表示目标 provider 类型，例如 openai 或 anthropic。
@@ -238,6 +240,8 @@ type ModelEvent struct {
 	InputTokens int64
 	// OutputTokens 表示当前已知的输出 token 数。
 	OutputTokens int64
+	// ReasoningTokens 表示 provider 明确返回的 reasoning token 数。
+	ReasoningTokens int64
 	// CacheReadTokens 表示当前已知的 cache read token 数。
 	CacheReadTokens int64
 	// CacheWriteTokens 表示当前已知的 cache write token 数。

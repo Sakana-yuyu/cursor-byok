@@ -5,11 +5,14 @@
 package forwarder
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
 	"testing"
 )
+
+var benchmarkRunSSEDebugFields any
 
 // benchStreamCommandEnvelopeActor 模拟 runStreamActor：从 mailbox 取命令，
 // 处理（此处为空操作），若有 result channel 则回写结果。
@@ -155,5 +158,51 @@ func BenchmarkTextAccumulationBuilder(b *testing.B) {
 		if builder.Len() == 0 {
 			b.Fatal("empty accumulation")
 		}
+	}
+}
+
+// BenchmarkRunSSEFullMessageDebugPayload 量化旧的正常下行日志路径：每个 delta
+// 同步 protobuf JSON 编码再反解码，保留全文到调试对象。
+func BenchmarkRunSSEFullMessageDebugPayload(b *testing.B) {
+	message := buildTextDeltaMessage("a realistic streamed text delta for a coding response")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		benchmarkRunSSEDebugFields = protoJSONDebugPayload(message)
+	}
+}
+
+// BenchmarkRunSSECompactMessageDebugFields 量化新路径：只保留协议元信息与正文摘要。
+func BenchmarkRunSSECompactMessageDebugFields(b *testing.B) {
+	message := buildTextDeltaMessage("a realistic streamed text delta for a coding response")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		benchmarkRunSSEDebugFields = runSSEMessageDebugFields(1, message)
+	}
+}
+
+// BenchmarkRunSSEDisabledDebugEagerFields 对比旧行为：观测关闭后仍构造每条增量的
+// debug 字段，包含 protobuf 大小和文本摘要计算。
+func BenchmarkRunSSEDisabledDebugEagerFields(b *testing.B) {
+	recorder := newDebugRecorder("", nil, stubDebugLogConfig{enabled: false})
+	message := buildTextDeltaMessage("a realistic streamed text delta for a coding response")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		recorder.LogRunSSE(context.Background(), "request", "conversation", "send_message", runSSEMessageDebugFields(i, message))
+	}
+}
+
+// BenchmarkRunSSEDisabledDebugLazyFields 锁定优化后行为：观测关闭时不构造字段。
+func BenchmarkRunSSEDisabledDebugLazyFields(b *testing.B) {
+	recorder := newDebugRecorder("", nil, stubDebugLogConfig{enabled: false})
+	message := buildTextDeltaMessage("a realistic streamed text delta for a coding response")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		recorder.LogRunSSELazy(context.Background(), "request", "conversation", "send_message", func() map[string]any {
+			return runSSEMessageDebugFields(i, message)
+		})
 	}
 }

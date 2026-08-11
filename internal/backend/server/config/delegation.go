@@ -284,7 +284,7 @@ func validDelegationExecutorID(value string) bool {
 
 func reservedBuiltinExecutorID(value string) bool {
 	switch value {
-	case "claude-code", "codex-cli", "gemini-cli", "cursor-agent":
+	case "claude-code", "codex-cli", "gemini-cli", "kiro-cli", "cursor-agent":
 		return true
 	default:
 		return false

@@ -52,7 +52,7 @@ test("卡片测试按钮驱动测试流程并展示测试结果", async ({ page 
   const openaiCard = cardByModelName(page, "Demo GPT");
   await openaiCard.getByRole("button", { name: "测试", exact: true }).click();
 
-  await expect(page.getByText("E2E 注入：测试通过")).toBeVisible();
+  await expect(page.getByText("总生成 61 t/s | 正文 22 t/s | 首响应 24.6 s | 首字 27.2 s")).toBeVisible();
   await expect(openaiCard.getByText("可用")).toBeVisible();
 });
 
@@ -111,7 +111,7 @@ test("一键测试并发驱动全部模型测试", async ({ page }) => {
   });
 
   await page.getByRole("button", { name: "一键测试 (2)" }).click();
-  await expect(page.getByText("E2E 注入：测试通过")).toHaveCount(2);
+  await expect(page.getByText("总生成 61 t/s | 正文 22 t/s | 首响应 24.6 s | 首字 27.2 s")).toHaveCount(2);
   await expect(page.getByRole("button", { name: /一键测试 \(2\)/ })).toBeVisible();
 });
 

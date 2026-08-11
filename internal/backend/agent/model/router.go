@@ -403,6 +403,11 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 			resolved.ResolvedContextWindowTokens = catalogMax
 		}
 	}
+	configuredThinkingEffortMaximum := normalizeRuntimeThinkingEffort(channel.ReasoningEffort)
+	if resolved.Provider == "anthropic" {
+		configuredThinkingEffortMaximum = normalizeRuntimeThinkingEffort(channel.AnthropicThinkingEffort)
+	}
+	resolved.ConfiguredThinkingEffortMaximum = configuredThinkingEffortMaximum
 	resolved.ReasoningEffort = openAIReasoningEffortFromRuntime(channel.ReasoningEffort)
 	resolved.OpenAIEndpoint = strings.TrimSpace(channel.OpenAIEndpoint)
 	resolved.OpenAIRequestGroup = strings.TrimSpace(channel.OpenAIRequestGroup)
@@ -419,14 +424,15 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 	resolved.ThinkingBudgetTokens = channel.ThinkingBudgetTokens
 	resolved.ProviderStreamIdleTimeout = resolveProviderStreamIdleTimeout(req.ProviderStreamIdleTimeout, router.resolver.ProviderStreamIdleTimeout(ctx))
 	runtimeThinkingEffort := normalizeRuntimeThinkingEffort(req.ThinkingEffort)
-	if runtimeThinkingEffort != "" {
-		resolved.ThinkingEffort = runtimeThinkingEffort
-		if runtimeThinkingEffort == "disabled" {
+	effectiveThinkingEffort := resolveEffectiveThinkingEffort(runtimeThinkingEffort, configuredThinkingEffortMaximum)
+	if effectiveThinkingEffort != "" {
+		resolved.ThinkingEffort = effectiveThinkingEffort
+		if effectiveThinkingEffort == "disabled" {
 			resolved.ReasoningEffort = ""
 			resolved.AnthropicThinkingEffort = ""
 		} else {
-			resolved.ReasoningEffort = openAIReasoningEffortFromRuntime(runtimeThinkingEffort)
-			resolved.AnthropicThinkingEffort = runtimeThinkingEffort
+			resolved.ReasoningEffort = openAIReasoningEffortFromRuntime(effectiveThinkingEffort)
+			resolved.AnthropicThinkingEffort = effectiveThinkingEffort
 		}
 	} else {
 		resolved.ThinkingEffort = ""
@@ -523,6 +529,16 @@ func applyStreamKnobs(resolved *StreamRequest, runtimeThinkingEffort string) {
 		resolved.RequestKnobs["runtime_thinking_effort"] = runtimeThinkingEffort
 	} else {
 		delete(resolved.RequestKnobs, "runtime_thinking_effort")
+	}
+	if maximum := strings.TrimSpace(resolved.ConfiguredThinkingEffortMaximum); maximum != "" {
+		resolved.RequestKnobs["configured_thinking_effort_maximum"] = maximum
+	} else {
+		delete(resolved.RequestKnobs, "configured_thinking_effort_maximum")
+	}
+	if effective := strings.TrimSpace(resolved.ThinkingEffort); effective != "" {
+		resolved.RequestKnobs["effective_thinking_effort"] = effective
+	} else {
+		delete(resolved.RequestKnobs, "effective_thinking_effort")
 	}
 	if resolved.Provider == "openai" || resolved.Provider == "gemini" {
 		if strings.TrimSpace(resolved.ReasoningEffort) != "" {

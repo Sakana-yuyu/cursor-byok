@@ -26,6 +26,13 @@ import {
   validateOpenAIExtraParamsJSON,
 } from "./configValidators";
 import { contextWindowTokensForModel } from "./modelContext";
+import { normalizeModelAdapterTestResult } from "./modelAdapterTestResult.js";
+
+export {
+  formatDuration,
+  formatModelAdapterTestSummary,
+  normalizeModelAdapterTestResult,
+} from "./modelAdapterTestResult.js";
 
 const SUPPORTED_MODEL_ADAPTER_TYPES = new Set(["openai", "anthropic", "gemini"]);
 const SUPPORTED_REASONING_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
@@ -36,7 +43,6 @@ export const EXTRA_PARAMS_DEFAULT_JSON = `{
 }`;
 export const CUSTOM_HEADERS_DEFAULT_JSON = `{
 }`;
-const SUPPORTED_MODEL_ADAPTER_TEST_STATUSES = new Set(["idle", "running", "success", "error"]);
 export function normalizeBaseURL(value) {
   const text = asString(value);
   if (!text) {
@@ -98,61 +104,6 @@ export function buildModelAdapterTestRequestHash(source) {
     String(asPositiveInteger(adapter.anthropicMaxTokens)),
     adapter.type === "anthropic" ? asString(adapter.anthropicThinkingEffort || ANTHROPIC_THINKING_EFFORT_DEFAULT) : "",
   ].join("\n"));
-}
-
-export function formatDuration(value) {
-  const durationMS = Math.max(0, Math.round(asNumber(value)));
-  if (durationMS < 1000) {
-    return `${durationMS} ms`;
-  }
-  return `${(durationMS / 1000).toFixed(1)} s`;
-}
-
-function normalizeModelAdapterTestStatus(value) {
-  const text = asString(value).toLowerCase();
-  return SUPPORTED_MODEL_ADAPTER_TEST_STATUSES.has(text) ? text : "idle";
-}
-
-export function formatModelAdapterTestSummary(source) {
-  const result = source && typeof source === "object" ? source : {};
-  const status = normalizeModelAdapterTestStatus(result.status);
-  if (status === "running") {
-    return "测试中...";
-  }
-  if (status === "error") {
-    return asString(result.error) || "模型测试失败";
-  }
-  if (status !== "success") {
-    return "";
-  }
-  const roundedTPS = Math.max(0, Math.round(asNumber(result.tokensPerSecond)));
-  return `${roundedTPS} t/s | 首字 ${formatDuration(result.firstTextTokenMS)}`;
-}
-
-export function normalizeModelAdapterTestResult(source) {
-  const raw = source && typeof source === "object" ? source : {};
-  const status = normalizeModelAdapterTestStatus(raw.status);
-  const normalized = {
-    adapterID: asString(raw.adapterID),
-    requestHash: asString(raw.requestHash),
-    status,
-    tokensPerSecond: Math.max(0, asNumber(raw.tokensPerSecond)),
-    firstTextTokenMS: Math.max(0, Math.round(asNumber(raw.firstTextTokenMS))),
-    totalDurationMS: Math.max(0, Math.round(asNumber(raw.totalDurationMS))),
-    outputTokens: Math.max(0, Math.round(asNumber(raw.outputTokens))),
-    tokensEstimated: asBoolean(raw.tokensEstimated),
-    summaryText: asString(raw.summaryText),
-    error: asString(raw.error),
-    rawResponse: asString(raw.rawResponse),
-    testedAt: asString(raw.testedAt),
-  };
-  if (!normalized.summaryText) {
-    normalized.summaryText = formatModelAdapterTestSummary(normalized);
-  }
-  if (status === "error" && !normalized.summaryText) {
-    normalized.summaryText = normalized.error || "模型测试失败";
-  }
-  return normalized;
 }
 
 export function normalizeModelAdapterTestResults(source) {

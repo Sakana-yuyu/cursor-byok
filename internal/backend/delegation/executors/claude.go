@@ -40,6 +40,7 @@ const (
 	ClaudeMetadataOutputTokensKey = "claude_output_tokens"
 	ClaudeMetadataCostUSDKey      = "claude_cost_usd"
 	ClaudeMetadataContractKey     = "claude_command_contract"
+	ClaudeCodeInstallURL          = "https://code.claude.com/docs/en/quickstart"
 
 	claudeCommandContract    = "print-stream-json-v2.1.226"
 	claudeOutputLimit        = 4 * 1024 * 1024
@@ -92,6 +93,7 @@ func NewClaudeCodeRegistration(runner processRunner, config delegation.RuntimeEx
 	return delegation.ExecutorRegistration{
 		ID:           ClaudeCodeExecutorID,
 		DisplayName:  firstNonEmpty(strings.TrimSpace(config.DisplayName), "Claude Code"),
+		InstallURL:   ClaudeCodeInstallURL,
 		Enabled:      config.Enabled,
 		Priority:     config.Priority,
 		Capabilities: append([]delegation.ExecutorCapability{}, claudeCapabilities...),
@@ -220,8 +222,9 @@ func (adapter *claudeCodeAdapter) execute(ctx context.Context, request delegatio
 		Timeout:            timeout,
 		StdoutLimit:        claudeOutputLimit,
 		StderrLimit:        claudeOutputLimit,
+		OnStdoutLine:       func(line string) { publishClaudeStreamLine(ctx, line) },
 	})
-	parsed, parseErr := parseClaudeStream(processResult.Stdout, ctx)
+	parsed, parseErr := parseClaudeStream(processResult.Stdout, ctx, !processResult.StdoutStreamed)
 	if processErr != nil {
 		if errors.Is(processErr, context.Canceled) || errors.Is(processErr, context.DeadlineExceeded) {
 			delegation.PublishTaskCheckpoint(ctx, request, delegation.SupervisionStatusCanceled, 2, nil, nil, "Claude Code task canceled", processErr.Error())
@@ -306,7 +309,7 @@ type claudeStreamResult struct {
 	toolCalls    int
 }
 
-func parseClaudeStream(output string, ctx context.Context) (claudeStreamResult, error) {
+func parseClaudeStream(output string, ctx context.Context, publishVisible bool) (claudeStreamResult, error) {
 	var result claudeStreamResult
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	scanner.Buffer(make([]byte, 64*1024), claudeOutputLimit)
@@ -347,7 +350,7 @@ func parseClaudeStream(output string, ctx context.Context) (claudeStreamResult, 
 				switch content.Type {
 				case "text":
 					text := strings.TrimSpace(content.Text)
-					if text != "" {
+					if publishVisible && text != "" {
 						delegation.PublishWorkerVisibleUpdate(ctx, boundClaudeVisibleUpdate(text))
 					}
 				case "tool_use":
@@ -370,6 +373,28 @@ func parseClaudeStream(output string, ctx context.Context) (claudeStreamResult, 
 		return result, fmt.Errorf("scan Claude stream: %w", err)
 	}
 	return result, nil
+}
+
+func publishClaudeStreamLine(ctx context.Context, line string) {
+	var event struct {
+		Type    string `json:"type"`
+		Message struct {
+			Content []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"message"`
+	}
+	if json.Unmarshal([]byte(strings.TrimSpace(line)), &event) != nil || event.Type != "assistant" {
+		return
+	}
+	for _, content := range event.Message.Content {
+		if content.Type == "text" {
+			if text := strings.TrimSpace(content.Text); text != "" {
+				delegation.PublishWorkerVisibleUpdate(ctx, boundClaudeVisibleUpdate(text))
+			}
+		}
+	}
 }
 
 func boundClaudeVisibleUpdate(value string) string {

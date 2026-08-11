@@ -7,27 +7,45 @@ package forwarder
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"cursor/internal/backend/delegation"
 	modeladapter "cursor/internal/backend/agent/model"
+	"cursor/internal/backend/delegation"
 )
 
 // countingProvider 记录 StartStream 调用次数与收到的文本增量，模拟真实 provider。
 type countingProvider struct {
-	calls   atomic.Int32
-	mu      sync.Mutex
-	deltas  []string
-	blockMs time.Duration
+	calls                 atomic.Int32
+	active                atomic.Int32
+	peak                  atomic.Int32
+	mu                    sync.Mutex
+	deltas                []string
+	blockMs               time.Duration
+	blockUntilContextDone bool
+	canceled              atomic.Bool
 }
 
-func (p *countingProvider) StartStream(_ context.Context, req ProviderRequest, sink func(modeladapter.ModelEvent) error) error {
+func (p *countingProvider) StartStream(ctx context.Context, req ProviderRequest, sink func(modeladapter.ModelEvent) error) error {
 	p.calls.Add(1)
+	active := p.active.Add(1)
+	defer p.active.Add(-1)
+	for {
+		peak := p.peak.Load()
+		if active <= peak || p.peak.CompareAndSwap(peak, active) {
+			break
+		}
+	}
 	// 模拟一次真实的识图子调用：一小段网络延迟 + 文本增量。
+	if p.blockUntilContextDone {
+		<-ctx.Done()
+		p.canceled.Store(true)
+		return ctx.Err()
+	}
 	if p.blockMs > 0 {
 		time.Sleep(p.blockMs)
 	}
@@ -113,7 +131,169 @@ func TestVisionProxyEmpiricalDataImages(t *testing.T) {
 	t.Logf("识别结果已替换为文本（示例）：%s", shortLog(out.ContentParts[0].Text))
 }
 
+// TestVisionSynthesizeUsesShortBudgetBeforeProviderStart 防止慢识图在主模型请求前
+// 长时间占用首字时间。预算耗尽后必须保留本地图片路径，让主模型可以调用读图工具兜底。
+func TestVisionSynthesizeUsesShortBudgetBeforeProviderStart(t *testing.T) {
+	service, provider := newEmpiricalService(t)
+	service.multitaskDelegation.configProvider = visionEnabledConfigProvider{}
+	service.visionProxyPassBudget = func() time.Duration { return 20 * time.Millisecond }
+	provider.blockUntilContextDone = true
 
+	imagePath := t.TempDir() + "/slow-vision.png"
+	if err := os.WriteFile(imagePath, []byte("slow-vision-image"), 0o600); err != nil {
+		t.Fatalf("write image: %v", err)
+	}
+	messages := []modeladapter.Message{{
+		Role: "user",
+		ContentParts: []modeladapter.ContentPart{
+			modeladapter.NewTextContentPart("检查这张图"),
+			imagePartByPath(imagePath),
+		},
+	}}
+
+	started := time.Now()
+	out := service.synthesizeImageDescriptions(context.Background(), "req-short-budget", "conv-short-budget", messages, "deepseek-v4-flash")
+	elapsed := time.Since(started)
+
+	if elapsed > 250*time.Millisecond {
+		t.Fatalf("慢识图不应阻塞主请求首字预算，elapsed=%s", elapsed)
+	}
+	if !provider.canceled.Load() {
+		t.Fatal("识图预算耗尽后必须取消子调用")
+	}
+	if got := provider.calls.Load(); got != 1 {
+		t.Fatalf("应仅发起一次被取消的识图调用，实际 %d", got)
+	}
+	if modeladapter.MessageHasImage(out[0]) {
+		t.Fatal("预算耗尽后不得将原始图片发送给纯文本主模型")
+	}
+	text := modeladapter.CollapseTextContentParts(out[0].ContentParts)
+	if !strings.Contains(text, imagePath) || !strings.Contains(text, "读图工具") {
+		t.Fatalf("预算耗尽后应保留图片路径和读图兜底说明，got %q", text)
+	}
+}
+
+// TestVisionSynthesizeKeepsCompletedDescription 验证首字预算只中断慢调用，
+// 正常完成的识图结果仍按原契约注入到当前请求。
+func TestVisionSynthesizeKeepsCompletedDescription(t *testing.T) {
+	service, provider := newEmpiricalService(t)
+	service.multitaskDelegation.configProvider = visionEnabledConfigProvider{}
+	service.visionProxyPassBudget = func() time.Duration { return 100 * time.Millisecond }
+
+	messages := []modeladapter.Message{{
+		Role: "user",
+		ContentParts: []modeladapter.ContentPart{
+			modeladapter.NewTextContentPart("描述这张图"),
+			imagePartByData([]byte("fast-vision-image")),
+		},
+	}}
+	out := service.synthesizeImageDescriptions(context.Background(), "req-fast-budget", "conv-fast-budget", messages, "deepseek-v4-flash")
+
+	if got := provider.calls.Load(); got != 1 {
+		t.Fatalf("正常识图应调用一次视觉模型，实际 %d", got)
+	}
+	if provider.canceled.Load() {
+		t.Fatal("正常识图不应被首字预算取消")
+	}
+	text := modeladapter.CollapseTextContentParts(out[0].ContentParts)
+	if !strings.Contains(text, "浏览器截图") || strings.Contains(text, "图片识图未完成") {
+		t.Fatalf("正常识图结果未按原契约注入，got %q", text)
+	}
+}
+
+// TestVisionSynthesizeSharesParallelismAcrossMessages 锁定自动识图的并发上限必须
+// 覆盖整个 provider pass。多条消息各含一张图时，旧实现会逐条等待，直接把首字
+// 延迟叠加；新实现应在同一轮预算内并行启动，同时仍由全局令牌限制总并发。
+func TestVisionSynthesizeSharesParallelismAcrossMessages(t *testing.T) {
+	service, provider := newEmpiricalService(t)
+	service.multitaskDelegation.configProvider = visionEnabledConfigProvider{}
+	service.visionProxyPassBudget = func() time.Duration { return 500 * time.Millisecond }
+	provider.blockMs = 80 * time.Millisecond
+
+	messages := []modeladapter.Message{
+		{Role: "user", ContentParts: []modeladapter.ContentPart{imagePartByData([]byte("first-image"))}},
+		{Role: "user", ContentParts: []modeladapter.ContentPart{imagePartByData([]byte("second-image"))}},
+	}
+
+	started := time.Now()
+	out := service.synthesizeImageDescriptions(context.Background(), "req-cross-message", "conv-cross-message", messages, "deepseek-v4-flash")
+	elapsed := time.Since(started)
+
+	if got := provider.calls.Load(); got != 2 {
+		t.Fatalf("StartStream calls=%d, want 2", got)
+	}
+	if got := provider.peak.Load(); got < 2 {
+		t.Fatalf("跨消息识图应并行执行，峰值并发=%d", got)
+	}
+	if elapsed >= 140*time.Millisecond {
+		t.Fatalf("跨消息识图不应串行叠加首字等待，elapsed=%s", elapsed)
+	}
+	for index, message := range out {
+		if modeladapter.MessageHasImage(message) {
+			t.Fatalf("messages[%d] should have its image replaced", index)
+		}
+	}
+}
+
+// TestVisionSynthesizeCoalescesDuplicateImagesInOnePass 锁定同轮内重复截图的
+// 合并语义：结果写入缓存前，并发协程也必须共享在途请求，避免重复占用识图模型。
+func TestVisionSynthesizeCoalescesDuplicateImagesInOnePass(t *testing.T) {
+	service, provider := newEmpiricalService(t)
+	service.multitaskDelegation.configProvider = visionEnabledConfigProvider{}
+	service.visionProxyPassBudget = func() time.Duration { return 500 * time.Millisecond }
+	provider.blockMs = 80 * time.Millisecond
+
+	duplicate := []byte("same-screenshot-bytes")
+	messages := []modeladapter.Message{{
+		Role: "user",
+		ContentParts: []modeladapter.ContentPart{
+			imagePartByData(duplicate),
+			imagePartByData(duplicate),
+		},
+	}}
+
+	out := service.synthesizeImageDescriptions(context.Background(), "req-duplicate-image", "conv-duplicate-image", messages, "deepseek-v4-flash")
+
+	if got := provider.calls.Load(); got != 1 {
+		t.Fatalf("重复图片必须共享一个在途识图调用，实际 %d 次", got)
+	}
+	if len(out) != 1 || len(out[0].ContentParts) != 2 {
+		t.Fatalf("输出结构不符合预期：%#v", out)
+	}
+	for index, part := range out[0].ContentParts {
+		if part.Type != "text" || !strings.Contains(part.Text, "浏览器截图") {
+			t.Fatalf("parts[%d] = %#v，应为共享的识图描述", index, part)
+		}
+	}
+}
+
+// TestPrepareVisionImagePathsKeepsConversationOrder 锁定 data-only 图片在并行识图
+// 前按会话顺序落地和登记，避免历史恢复时用错另一张图的临时文件。
+func TestPrepareVisionImagePathsKeepsConversationOrder(t *testing.T) {
+	service, _ := newEmpiricalService(t)
+	messages := []modeladapter.Message{
+		{Role: "user", ContentParts: []modeladapter.ContentPart{imagePartByData([]byte("first-image-bytes"))}},
+		{Role: "user", ContentParts: []modeladapter.ContentPart{imagePartByData([]byte("second-image-bytes"))}},
+	}
+
+	service.prepareVisionImagePaths(context.Background(), "conv-image-order", messages)
+
+	service.visionImageMu.Lock()
+	paths := append([]string{}, service.visionImageFiles["conv-image-order"]...)
+	service.visionImageMu.Unlock()
+	if len(paths) != 2 {
+		t.Fatalf("registered paths=%d, want 2", len(paths))
+	}
+	for index, want := range [][]byte{[]byte("first-image-bytes"), []byte("second-image-bytes")} {
+		got, err := os.ReadFile(paths[index])
+		if err != nil {
+			t.Fatalf("read paths[%d]: %v", index, err)
+		}
+		if string(got) != string(want) {
+			t.Fatalf("paths[%d] content=%q, want %q", index, got, want)
+		}
+	}
+}
 
 // visionEnabledConfigProvider 返回启用了视觉委派的运行时配置，供端到端测试注入。
 type visionEnabledConfigProvider struct{}

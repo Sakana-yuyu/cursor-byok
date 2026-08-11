@@ -64,6 +64,18 @@ func TestCustomCLIRegistrationDeliversStdinAndParsesJSONLines(t *testing.T) {
 	}
 }
 
+func TestCustomJSONLLinePublisherEmitsProgressAndFinalText(t *testing.T) {
+	updates := []string{}
+	ctx := delegation.WithWorkerVisibleUpdatePublisher(t.Context(), func(value string) bool { updates = append(updates, value); return true })
+	contract := customCLIContract{outputMode: "jsonl", progressField: "event.delta", finalField: "event.result.text"}
+	publishCustomJSONLLine(ctx, contract, `{"event":{"delta":"working"}}`)
+	publishCustomJSONLLine(ctx, contract, `{"event":{"result":{"text":"finished"}}}`)
+	publishCustomJSONLLine(ctx, contract, "not-json")
+	if !reflect.DeepEqual(updates, []string{"working", "finished"}) {
+		t.Fatalf("updates=%#v", updates)
+	}
+}
+
 func TestCustomCLIRegistrationDiagnosesNotInstalledAndPreservesCancellation(t *testing.T) {
 	notFound := &claudeScriptedRunner{steps: []claudeRunnerStep{{err: delegation.NewClassifiedExecutorError(delegation.ExecutorFailureSwitchable, true, delegation.ProcessErrorCodeNotFound, errors.New("missing"))}}}
 	registration, _ := NewCustomCLIRegistration(notFound, customRuntimeConfigForTest("grok-cli"))

@@ -31,6 +31,8 @@ const mcpAttempts = reactive({});
 const canceledMCPAttempts = reactive({});
 const cancelingMCPAttempts = reactive({});
 const refreshBusy = computed(() => taskState.busy || mcpState.busy);
+const activeTaskPollIntervalMs = 1500;
+const idleTaskPollIntervalMs = 15000;
 let attemptSequence = 0;
 let taskGeneration = 0;
 let mcpWorkspaceGeneration = 0;
@@ -71,6 +73,7 @@ const executorNames = {
   "claude-code": "Claude Code",
   "codex-cli": "Codex CLI",
   "gemini-cli": "Gemini CLI",
+  "kiro-cli": "Kiro CLI",
   "cursor-agent": "Cursor Agent",
   "local-byok": "本地 BYOK",
 };
@@ -206,9 +209,11 @@ async function refreshTasks(silent = false) {
     if (disposed || generation !== taskGeneration) return;
     taskState.items = Array.isArray(items) ? items : [];
     taskState.error = "";
+    return taskState.items.some((item) => item?.cancelable);
   } catch (error) {
     if (disposed) return;
     taskState.error = toUserError(error);
+    return false;
   } finally {
     if (disposed) return;
     taskState.busy = false;
@@ -251,7 +256,8 @@ async function refreshMCPServers(silent = false) {
 }
 
 async function refreshRuntime(silent = false) {
-  await Promise.all([refreshTasks(silent), refreshMCPServers(silent)]);
+  const [hasActiveTasks] = await Promise.all([refreshTasks(silent), refreshMCPServers(silent)]);
+  return hasActiveTasks;
 }
 
 async function handleCancelTask(task) {
@@ -362,15 +368,19 @@ function handleWorkspaceRootChange() {
   void refreshMCPServers();
 }
 
-const taskPolling = usePolling(() => refreshTasks(true), { intervalMs: 1500, immediate: false, autostart: false });
+const taskPolling = usePolling(() => refreshTasks(true), {
+  intervalMs: (hasActiveTasks) => hasActiveTasks ? activeTaskPollIntervalMs : idleTaskPollIntervalMs,
+  immediate: false,
+  autostart: false,
+});
 const mcpPolling = usePolling(() => refreshMCPServers(true), { intervalMs: 5000, immediate: false, autostart: false });
 
 onMounted(async () => {
   activeMCPWorkspaceRoot = await initializeWorkspaceRoot();
   if (disposed) return;
-  await refreshRuntime();
+  const hasActiveTasks = await refreshRuntime();
   if (disposed) return;
-  taskPolling.start();
+  taskPolling.start({ initialResult: hasActiveTasks });
   mcpPolling.start();
 });
 

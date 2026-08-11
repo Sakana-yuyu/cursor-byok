@@ -97,10 +97,12 @@ test("编辑既有模型：加载草稿并支持保存并测试", async ({ page 
 
   // 行为字段按类型显示
   await expect(page.getByText("最大输出 Token", { exact: true })).toBeVisible();
-  await expect(page.getByText("推理强度", { exact: true })).toBeVisible();
+  await expect(page.getByText("推理强度上限", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "保存并测试", exact: true }).click();
-  await expect(page.getByText("E2E 注入：测试通过")).toBeVisible();
+  await expect(page.getByText("总生成 61 t/s | 正文 22 t/s | 首响应 24.6 s | 首字 27.2 s")).toBeVisible();
+  await expect(page.getByText("实际推理强度", { exact: true })).toBeVisible();
+  await expect(page.getByText("medium", { exact: true })).toBeVisible();
 });
 
 test("编辑模式：保存后跳转模型配置页并持久化修改", async ({ page }) => {

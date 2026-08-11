@@ -42,6 +42,7 @@ const (
 	CodexMetadataOutputTokensKey    = "codex_output_tokens"
 	CodexMetadataReasoningTokensKey = "codex_reasoning_output_tokens"
 	CodexMetadataContractKey        = "codex_command_contract"
+	CodexCLIInstallURL              = "https://developers.openai.com/codex/cli/"
 
 	codexCommandContract    = "exec-jsonl-v0.147.0"
 	codexOutputLimit        = 4 * 1024 * 1024
@@ -86,7 +87,7 @@ func NewCodexCLIRegistration(runner processRunner, config delegation.RuntimeExec
 		runTimeout:   executorTimeout(config.ExecutionTimeoutSeconds, 2*time.Minute),
 	}
 	return delegation.ExecutorRegistration{
-		ID: CodexCLIExecutorID, DisplayName: firstNonEmpty(config.DisplayName, "Codex CLI"),
+		ID: CodexCLIExecutorID, DisplayName: firstNonEmpty(config.DisplayName, "Codex CLI"), InstallURL: CodexCLIInstallURL,
 		Enabled: config.Enabled, Priority: config.Priority,
 		Capabilities: append([]delegation.ExecutorCapability{}, codexCapabilities...),
 		Probe:        adapter.probe, Execute: adapter.execute,
@@ -126,7 +127,9 @@ func (adapter *codexCLIAdapter) probe(ctx context.Context) (delegation.ExecutorP
 		return delegation.ExecutorProbeResult{State: delegation.ExecutorProbeActionRequired, ExecutablePath: firstNonEmpty(versionResult.ExecutablePath, authResult.ExecutablePath), Version: version, Installed: true, AuthState: delegation.ExecutorAuthRequired, Capabilities: append([]delegation.ExecutorCapability{}, codexCapabilities...), DiagnosticCode: CodexDiagnosticAuthRequired, DiagnosticText: "Codex CLI login is required", ProbedAt: time.Now().UTC()}, nil
 	}
 	if !codexAuthenticationReady(authText) {
-		err := fmt.Errorf("Codex CLI login status output is not recognized: %q", authText)
+		// 登录状态来自外部 CLI，不把未识别的原始文本写进诊断，避免其包含
+		// 账户或凭据相关信息时经由设置页暴露。
+		err := errors.New("Codex CLI login status output is not recognized")
 		return adapter.unhealthyProbe(authResult, time.Now().UTC(), err), err
 	}
 	return delegation.ExecutorProbeResult{State: delegation.ExecutorProbeReady, ExecutablePath: firstNonEmpty(versionResult.ExecutablePath, authResult.ExecutablePath), Version: version, Installed: true, AuthState: delegation.ExecutorAuthReady, Capabilities: append([]delegation.ExecutorCapability{}, codexCapabilities...), DiagnosticCode: CodexDiagnosticReady, ProbedAt: time.Now().UTC()}, nil
@@ -152,8 +155,8 @@ func (adapter *codexCLIAdapter) execute(ctx context.Context, request delegation.
 		sandbox = "read-only"
 	}
 	args := []string{"--sandbox", sandbox, "--ask-for-approval", "never", "-C", workspace, "exec", "--json", "--ephemeral", "--color", "never", prompt}
-	processResult, processErr := adapter.runner.Run(ctx, delegation.ProcessRequest{Executable: adapter.executable, Args: args, Dir: workspace, InheritEnvironment: append([]string{}, adapter.config.EnvironmentVariables...), Timeout: timeout, StdoutLimit: codexOutputLimit, StderrLimit: codexOutputLimit})
-	parsed, parseErr := parseCodexStream(processResult.Stdout, ctx)
+	processResult, processErr := adapter.runner.Run(ctx, delegation.ProcessRequest{Executable: adapter.executable, Args: args, Dir: workspace, InheritEnvironment: append([]string{}, adapter.config.EnvironmentVariables...), Timeout: timeout, StdoutLimit: codexOutputLimit, StderrLimit: codexOutputLimit, OnStdoutLine: func(line string) { publishCodexStreamLine(ctx, line) }})
+	parsed, parseErr := parseCodexStream(processResult.Stdout, ctx, !processResult.StdoutStreamed)
 	metadata := parsed.metadata(adapter.getVersion())
 	if processErr != nil {
 		if errors.Is(processErr, context.Canceled) || errors.Is(processErr, context.DeadlineExceeded) {
@@ -198,7 +201,7 @@ type codexStreamResult struct {
 	completed, failed                                        bool
 }
 
-func parseCodexStream(output string, ctx context.Context) (codexStreamResult, error) {
+func parseCodexStream(output string, ctx context.Context, publishVisible bool) (codexStreamResult, error) {
 	var result codexStreamResult
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	scanner.Buffer(make([]byte, 64*1024), codexOutputLimit)
@@ -237,7 +240,7 @@ func parseCodexStream(output string, ctx context.Context) (codexStreamResult, er
 		case "item.completed":
 			if event.Item.Type == "agent_message" {
 				result.output = strings.TrimSpace(event.Item.Text)
-				if result.output != "" {
+				if publishVisible && result.output != "" {
 					delegation.PublishWorkerVisibleUpdate(ctx, boundCodexVisibleUpdate(result.output))
 				}
 			} else if codexToolItem(event.Item.Type) {
@@ -261,6 +264,22 @@ func parseCodexStream(output string, ctx context.Context) (codexStreamResult, er
 		return result, fmt.Errorf("scan Codex JSONL: %w", err)
 	}
 	return result, nil
+}
+
+func publishCodexStreamLine(ctx context.Context, line string) {
+	var event struct {
+		Type string `json:"type"`
+		Item struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"item"`
+	}
+	if json.Unmarshal([]byte(strings.TrimSpace(line)), &event) != nil || event.Type != "item.completed" || event.Item.Type != "agent_message" {
+		return
+	}
+	if text := strings.TrimSpace(event.Item.Text); text != "" {
+		delegation.PublishWorkerVisibleUpdate(ctx, boundCodexVisibleUpdate(text))
+	}
 }
 
 func codexToolItem(itemType string) bool {

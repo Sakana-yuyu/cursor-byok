@@ -12,6 +12,8 @@ const state = reactive({ items: [], error: "", canceling: {} });
 const message = useMessage();
 let refreshBusy = false;
 let generation = 0;
+const activeTaskPollIntervalMs = 1500;
+const idleTaskPollIntervalMs = 15000;
 
 // 平铺展示：最多保留 4 条，按可取消优先、新任务在前排序。
 const visibleItems = computed(() =>
@@ -141,8 +143,10 @@ async function refresh() {
     if (currentGeneration !== generation) return;
     state.items = Array.isArray(items) ? items : [];
     state.error = "";
+    return state.items.some((item) => item?.cancelable);
   } catch (error) {
     state.error = toUserError(error);
+    return false;
   } finally {
     refreshBusy = false;
   }
@@ -165,7 +169,9 @@ async function handleCancel(item) {
   }
 }
 
-usePolling(refresh, { intervalMs: 1500 });
+usePolling(refresh, {
+  intervalMs: (hasActiveTasks) => hasActiveTasks ? activeTaskPollIntervalMs : idleTaskPollIntervalMs,
+});
 </script>
 
 <template>

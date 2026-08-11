@@ -73,6 +73,7 @@ type ProcessRequest struct {
 	Timeout            time.Duration
 	StdoutLimit        int
 	StderrLimit        int
+	OnStdoutLine       func(string)
 }
 
 type ProcessResult struct {
@@ -85,6 +86,7 @@ type ProcessResult struct {
 	ExitCode        int
 	StartedAt       time.Time
 	FinishedAt      time.Time
+	StdoutStreamed  bool
 }
 
 type processTreeController interface {
@@ -181,6 +183,9 @@ func (runner *ProcessRunner) Run(ctx context.Context, request ProcessRequest) (P
 	redactionLookahead := processRedactionLookahead(redactions)
 	stdout := newLimitedProcessBuffer(stdoutLimit, redactionLookahead)
 	stderr := newLimitedProcessBuffer(stderrLimit, redactionLookahead)
+	if request.OnStdoutLine != nil {
+		stdout.onLine = newSanitizedProcessLinePublisher(request.OnStdoutLine, redactions)
+	}
 	command := exec.CommandContext(runCtx, resolved, request.Args...)
 	command.Dir = directory
 	command.Env = environment
@@ -249,6 +254,7 @@ func (runner *ProcessRunner) Run(ctx context.Context, request ProcessRequest) (P
 		result.ExitCode = command.ProcessState.ExitCode()
 	}
 	populateProcessOutput(&result, stdout, stderr, redactions)
+	result.StdoutStreamed = stdout.PublishedLineCount() > 0
 	if ctxErr := runCtx.Err(); ctxErr != nil {
 		return result, classifiedProcessContextError(errors.Join(
 			ctxErr,
@@ -466,6 +472,7 @@ func populateProcessOutput(
 	result.Stderr = boundProcessOutput(sanitizeProcessOutput(string(stderrBytes), redactions), stderr.limit)
 	result.StdoutTruncated = stdoutTruncated
 	result.StderrTruncated = stderrTruncated
+	result.StdoutStreamed = stdout.PublishedLineCount() > 0
 }
 
 func sanitizeProcessOutput(value string, redactions []string) string {
@@ -504,6 +511,7 @@ type limitedProcessBuffer struct {
 	captureLimit int
 	seen         int64
 	truncated    bool
+	onLine       *sanitizedProcessLinePublisher
 }
 
 func newLimitedProcessBuffer(limit, lookahead int) *limitedProcessBuffer {
@@ -516,18 +524,23 @@ func newLimitedProcessBuffer(limit, lookahead int) *limitedProcessBuffer {
 
 func (buffer *limitedProcessBuffer) Write(data []byte) (int, error) {
 	buffer.mu.Lock()
-	defer buffer.mu.Unlock()
 	originalLength := len(data)
 	buffer.seen += int64(originalLength)
 	remaining := buffer.captureLimit - buffer.buffer.Len()
 	if remaining > 0 {
-		if len(data) > remaining {
-			data = data[:remaining]
+		captured := data
+		if len(captured) > remaining {
+			captured = captured[:remaining]
 		}
-		_, _ = buffer.buffer.Write(data)
+		_, _ = buffer.buffer.Write(captured)
 	}
 	if buffer.seen > int64(buffer.limit) {
 		buffer.truncated = true
+	}
+	publisher := buffer.onLine
+	buffer.mu.Unlock()
+	if publisher != nil {
+		publisher.Write(data)
 	}
 	return originalLength, nil
 }
@@ -539,6 +552,79 @@ func (buffer *limitedProcessBuffer) Snapshot() ([]byte, bool) {
 	buffer.mu.Lock()
 	defer buffer.mu.Unlock()
 	return append([]byte{}, buffer.buffer.Bytes()...), buffer.truncated
+}
+
+func (buffer *limitedProcessBuffer) PublishedLineCount() int64 {
+	if buffer == nil || buffer.onLine == nil {
+		return 0
+	}
+	return buffer.onLine.Count()
+}
+
+type sanitizedProcessLinePublisher struct {
+	mu                  sync.Mutex
+	pending             []byte
+	discardUntilNewline bool
+	redactions          []string
+	publish             func(string)
+	count               int64
+}
+
+func newSanitizedProcessLinePublisher(publish func(string), redactions []string) *sanitizedProcessLinePublisher {
+	return &sanitizedProcessLinePublisher{redactions: append([]string{}, redactions...), publish: publish}
+}
+
+func (publisher *sanitizedProcessLinePublisher) Write(data []byte) {
+	if publisher == nil || len(data) == 0 || publisher.publish == nil {
+		return
+	}
+	publisher.mu.Lock()
+	lines := make([]string, 0)
+	for len(data) > 0 {
+		index := bytes.IndexByte(data, '\n')
+		if index < 0 {
+			if publisher.discardUntilNewline {
+				break
+			}
+			if len(publisher.pending)+len(data) > MaximumProcessOutputLimit {
+				publisher.pending = nil
+				publisher.discardUntilNewline = true
+				break
+			}
+			publisher.pending = append(publisher.pending, data...)
+			break
+		}
+		if publisher.discardUntilNewline {
+			publisher.discardUntilNewline = false
+			data = data[index+1:]
+			continue
+		}
+		if len(publisher.pending)+index <= MaximumProcessOutputLimit {
+			publisher.pending = append(publisher.pending, data[:index]...)
+			line := strings.TrimSuffix(string(publisher.pending), "\r")
+			publisher.pending = nil
+			lines = append(lines, sanitizeProcessOutput(line, publisher.redactions))
+		} else {
+			publisher.pending = nil
+		}
+		data = data[index+1:]
+	}
+	publisher.mu.Unlock()
+	for _, line := range lines {
+		publisher.publish(line)
+		publisher.mu.Lock()
+		publisher.count++
+		publisher.mu.Unlock()
+	}
+}
+
+func (publisher *sanitizedProcessLinePublisher) Count() int64 {
+	if publisher == nil {
+		return 0
+	}
+	publisher.mu.Lock()
+	defer publisher.mu.Unlock()
+	return publisher.count
 }
 
 var _ io.Writer = (*limitedProcessBuffer)(nil)

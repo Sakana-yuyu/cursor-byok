@@ -127,6 +127,80 @@ func TestProviderCacheDistinguishesImageContent(t *testing.T) {
 	}
 }
 
+type concurrentStreamingProvider struct {
+	calls   atomic.Int32
+	started chan int32
+	release chan struct{}
+}
+
+func (p *concurrentStreamingProvider) StartStream(ctx context.Context, _ ProviderRequest, sink func(modeladapter.ModelEvent) error) error {
+	call := p.calls.Add(1)
+	p.started <- call
+	select {
+	case <-p.release:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	if err := sink(modeladapter.ModelEvent{Kind: modeladapter.ModelEventKindTextDelta, Text: fmt.Sprintf("call-%d", call)}); err != nil {
+		return err
+	}
+	return sink(modeladapter.ModelEvent{Kind: modeladapter.ModelEventKindTurnFinished, FinishReason: "stop"})
+}
+
+// TestProviderCacheDoesNotWaitForInflightStream 验证流式请求不会等待相同 key 的在途请求。
+// 用户重试或重新发送相同消息时，旧流可能仍在取消收尾；若在途合并，新的 TTFT 会被
+// 旧流剩余时长直接拖慢。已完成响应仍应正常缓存，但进行中的流必须各自发往上游。
+func TestProviderCacheDoesNotWaitForInflightStream(t *testing.T) {
+	inner := &concurrentStreamingProvider{
+		started: make(chan int32, 2),
+		release: make(chan struct{}),
+	}
+	gateway := newCachingProviderGateway(inner, func() (bool, time.Duration, int, bool) {
+		return true, time.Minute, 64, false
+	}, "")
+	req := ProviderRequest{
+		ConversationID: "conversation-retry",
+		ModelID:        "deepseek-v4-flash",
+		Messages:       []modeladapter.Message{{Role: "user", Content: "相同请求"}},
+	}
+
+	firstDone := make(chan error, 1)
+	go func() {
+		firstDone <- gateway.StartStream(context.Background(), req, func(modeladapter.ModelEvent) error { return nil })
+	}()
+	select {
+	case <-inner.started:
+	case <-time.After(time.Second):
+		t.Fatal("首个请求未进入上游")
+	}
+
+	secondDone := make(chan error, 1)
+	go func() {
+		secondDone <- gateway.StartStream(context.Background(), req, func(modeladapter.ModelEvent) error { return nil })
+	}()
+	select {
+	case <-inner.started:
+		// 第二个请求已独立进入上游，符合低 TTFT 预期。
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("第二个流式请求等待了在途请求，TTFT 会被旧流阻塞")
+	}
+
+	close(inner.release)
+	for i, done := range []<-chan error{firstDone, secondDone} {
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatalf("请求 %d 返回错误: %v", i+1, err)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("请求 %d 未结束", i+1)
+		}
+	}
+	if got := inner.calls.Load(); got != 2 {
+		t.Fatalf("并发相同流应各自调用上游，实际调用 %d 次", got)
+	}
+}
+
 // TestProviderCacheKeyTextOnlyStable 相同纯文本请求指纹稳定（回归旧行为不破坏）。
 func TestProviderCacheKeyTextOnlyStable(t *testing.T) {
 	kc := newCacheKeyCache(64)

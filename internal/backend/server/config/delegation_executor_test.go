@@ -117,7 +117,7 @@ func TestNormalizeCustomExecutorContractAcceptsStructuredOptions(t *testing.T) {
 }
 
 func TestNormalizeCustomExecutorRejectsBuiltinIDCollision(t *testing.T) {
-	for _, id := range []string{"claude-code", "codex-cli", "gemini-cli", "cursor-agent"} {
+	for _, id := range []string{"claude-code", "codex-cli", "gemini-cli", "kiro-cli", "cursor-agent"} {
 		t.Run(id, func(t *testing.T) {
 			cfg := DefaultConfig()
 			cfg.Delegation.Executors = []DelegationExecutorConfig{{

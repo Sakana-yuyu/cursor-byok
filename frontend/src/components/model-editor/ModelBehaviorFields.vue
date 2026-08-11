@@ -57,7 +57,7 @@ const usesOpenAIStyleBehavior = (type) => type === "openai" || type === "gemini"
   <label v-if="usesOpenAIStyleBehavior(type)" class="flex flex-col gap-1">
     <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
       <Tooltip :content="fieldTips.reasoningEffort" />
-      <span>推理强度</span>
+      <span>推理强度上限</span>
     </span>
     <Select
       :model-value="reasoningEffort"
@@ -69,7 +69,7 @@ const usesOpenAIStyleBehavior = (type) => type === "openai" || type === "gemini"
   <label v-if="type === 'anthropic'" class="flex flex-col gap-1">
     <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
       <Tooltip :content="fieldTips.anthropicThinkingEffort" />
-      <span>思考强度</span>
+      <span>思考强度上限</span>
     </span>
     <Select
       :model-value="anthropicThinkingEffort"

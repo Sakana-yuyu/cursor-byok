@@ -116,8 +116,11 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		} `json:"choices"`
 		Model string `json:"model"`
 		Usage *struct {
-			PromptTokens     int64 `json:"prompt_tokens"`
-			CompletionTokens int64 `json:"completion_tokens"`
+			PromptTokens            int64 `json:"prompt_tokens"`
+			CompletionTokens        int64 `json:"completion_tokens"`
+			CompletionTokensDetails *struct {
+				ReasoningTokens int64 `json:"reasoning_tokens"`
+			} `json:"completion_tokens_details,omitempty"`
 			// DeepSeek 在顶层返回 prompt_cache_hit_tokens / prompt_cache_miss_tokens。
 			PromptCacheHitTokens  int64 `json:"prompt_cache_hit_tokens"`
 			PromptCacheMissTokens int64 `json:"prompt_cache_miss_tokens"`
@@ -135,6 +138,7 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 	currentModel := modelID
 	inputTokens := int64(0)
 	outputTokens := int64(0)
+	reasoningTokens := int64(0)
 	cacheReadTokens := int64(0)
 	cacheWriteTokens := int64(0)
 	usagePresent := false
@@ -180,6 +184,7 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 			Model:             currentModel,
 			InputTokens:       inputTokens,
 			OutputTokens:      outputTokens,
+			ReasoningTokens:   reasoningTokens,
 			CacheReadTokens:   cacheReadTokens,
 			CacheWriteTokens:  cacheWriteTokens,
 			UsagePresent:      usagePresent,
@@ -274,8 +279,11 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		return fmt.Errorf("openai chat stream error")
 	}
 	applyUsage := func(usage *struct {
-		PromptTokens          int64 `json:"prompt_tokens"`
-		CompletionTokens      int64 `json:"completion_tokens"`
+		PromptTokens            int64 `json:"prompt_tokens"`
+		CompletionTokens        int64 `json:"completion_tokens"`
+		CompletionTokensDetails *struct {
+			ReasoningTokens int64 `json:"reasoning_tokens"`
+		} `json:"completion_tokens_details,omitempty"`
 		PromptCacheHitTokens  int64 `json:"prompt_cache_hit_tokens"`
 		PromptCacheMissTokens int64 `json:"prompt_cache_miss_tokens"`
 		PromptTokensDetails   *struct {
@@ -324,6 +332,9 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 			inputTokens = promptTokens - cachedTokens
 		}
 		outputTokens = maxInt64(usage.CompletionTokens, 0)
+		if usage.CompletionTokensDetails != nil {
+			reasoningTokens = maxInt64(usage.CompletionTokensDetails.ReasoningTokens, 0)
+		}
 		cacheReadTokens = cachedTokens
 		// cache write：原生 OpenAI 协议无此概念（保持 0）；但包装 claude 的 OpenAI 兼容中转
 		// 会在 prompt_tokens_details.cache_creation_tokens 返回缓存写入量，对齐 anthropic.go

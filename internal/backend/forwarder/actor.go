@@ -3,6 +3,7 @@ package forwarder
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"cursor/internal/logger"
 	"cursor/internal/safego"
 	"errors"
@@ -16,6 +17,9 @@ import (
 )
 
 type TurnPhase string
+
+// thinkingDeltaLogInterval 保留首条和周期性进度，避免每个推理增量同步写 app.log。
+const thinkingDeltaLogInterval = 64
 
 const (
 	TurnPhaseIdle            TurnPhase = "idle"
@@ -64,7 +68,6 @@ const (
 type streamTimerKind string
 
 const (
-	streamTimerProviderResume       streamTimerKind = "provider_resume"
 	streamTimerNonStreamingRecovery streamTimerKind = "non_streaming_recovery"
 	streamTimerInteractionTimeout   streamTimerKind = "interaction_timeout"
 	streamTimerShellForeground      streamTimerKind = "shell_foreground"
@@ -455,9 +458,21 @@ func (service *Service) postStreamCommandAsync(stream *ActiveStream, command str
 	envelope := streamCommandEnvelope{command: command}
 	select {
 	case <-done:
+		return errProviderLoopInterrupted
+	default:
+	}
+	select {
+	case <-done:
 		logger.Errorf("forwarder stream command enqueue rejected request_id=%s kind=%s reason=actor_done", strings.TrimSpace(stream.RequestID), command.Kind)
 		return errProviderLoopInterrupted
 	case mailbox <- envelope:
+	}
+	// actor 可能刚好在入队后退出。此时让 provider 尽快停止读取，避免把
+	// 后续上游增量写入不会再消费的邮箱。
+	select {
+	case <-done:
+		return errProviderLoopInterrupted
+	default:
 		return nil
 	}
 }
@@ -636,9 +651,9 @@ func (service *Service) reconcileStream(stream *ActiveStream) error {
 	case providerActionStart:
 		return service.driveProvider(stream)
 	case providerActionResume:
-		service.setTurnPhase(stream, TurnPhaseWaitingExternal)
-		service.scheduleStreamTimer(stream, providerTimerKey(streamTimerProviderResume, ""), providerResumeDebounce, streamTimerProviderResume, "", 0, "")
-		return nil
+		// 并发工具结果在 pendingBridgeCount 清零前不会到达这里；一旦状态完整，
+		// 立即续写下一轮 provider，避免每个工具链额外停顿固定 200ms。
+		return service.driveProvider(stream)
 	default:
 		service.setTurnPhase(stream, TurnPhaseIdle)
 		return nil
@@ -676,6 +691,7 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 	conversationID := stream.ConversationID
 	turnSeq := stream.TurnSeq
 	modelCallID := stream.CurrentModelCallID
+	providerPass := stream.ProviderPassCount
 	accumulatedReasoningSignature := stream.ProviderAccumulatedReasoningSignature
 	accumulatedReasoningSignatureSource := stream.ProviderAccumulatedReasoningSignatureSource
 	accumulatedReasoningItemID := stream.ProviderAccumulatedReasoningItemID
@@ -687,9 +703,16 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 	case modeladapter.ModelEventKindTextDelta:
 		stream.mu.Lock()
 		stream.ProviderAccumulatedText = append(stream.ProviderAccumulatedText, event.Text...)
+		stream.ProviderTextDeltaCount = nextTextDeltaCount(stream.ProviderTextDeltaCount, event.Text)
+		deltaCount := stream.ProviderTextDeltaCount
 		stream.UpdatedAt = time.Now().UTC()
 		stream.mu.Unlock()
 		service.markConversationActivity(conversationID)
+		if service.debug != nil {
+			service.debug.LogRuntimeLazy(context.Background(), requestID, conversationID, "text_delta_forwarded", func() map[string]any {
+				return textDeltaDebugFields(modelCallID, providerPass, deltaCount, event.Text)
+			})
+		}
 		service.mirrorNativeChildInteraction(stream, modelCallID, buildTextDeltaInteraction(event.Text))
 		return service.broker.Publish(requestID, StreamEvent{Message: buildTextDeltaMessage(event.Text)})
 	case modeladapter.ModelEventKindThinkingDelta:
@@ -701,13 +724,12 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 		stream.UpdatedAt = time.Now().UTC()
 		stream.mu.Unlock()
 		service.markConversationActivity(conversationID)
-		logger.Infof("forwarder thinking delta request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d delta_count=%d accumulated_bytes=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), currentProviderPass(stream), deltaCount, accumulatedLength)
+		if shouldLogThinkingDelta(deltaCount) {
+			logger.Infof("forwarder thinking delta request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d delta_count=%d accumulated_bytes=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), providerPass, deltaCount, accumulatedLength)
+		}
 		if service.debug != nil {
-			service.debug.LogRuntime(context.Background(), requestID, conversationID, "thinking_delta_forwarded", map[string]any{
-				"model_call_id":     strings.TrimSpace(modelCallID),
-				"provider_pass":     currentProviderPass(stream),
-				"delta_count":       deltaCount,
-				"accumulated_bytes": accumulatedLength,
+			service.debug.LogRuntimeLazy(context.Background(), requestID, conversationID, "thinking_delta_forwarded", func() map[string]any {
+				return thinkingDeltaDebugFields(modelCallID, providerPass, deltaCount, accumulatedLength)
 			})
 		}
 		service.mirrorNativeChildInteraction(stream, modelCallID, buildThinkingDeltaInteraction(event.Text, event.ThinkingStyle))
@@ -768,7 +790,7 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 			stream.ProviderThinkingSuppressedCount++
 			suppressedCount := stream.ProviderThinkingSuppressedCount
 			stream.mu.Unlock()
-			logger.Infof("forwarder thinking completion suppressed request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d completed_count=%d suppressed_count=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), currentProviderPass(stream), completedCount, suppressedCount)
+			logger.Infof("forwarder thinking completion suppressed request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d completed_count=%d suppressed_count=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), providerPass, completedCount, suppressedCount)
 			if service.debug != nil {
 				eventName := "thinking_completed_suppressed"
 				if encryptedOnlyThinking {
@@ -776,7 +798,7 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 				}
 				service.debug.LogRuntime(context.Background(), requestID, conversationID, eventName, map[string]any{
 					"model_call_id":      strings.TrimSpace(modelCallID),
-					"provider_pass":      currentProviderPass(stream),
+					"provider_pass":      providerPass,
 					"completed_count":    completedCount,
 					"suppressed_count":   suppressedCount,
 					"has_reasoning_text": len(bytes.TrimSpace(stream.ProviderAccumulatedReasoning)) != 0,
@@ -785,11 +807,11 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 			}
 			return nil
 		}
-		logger.Infof("forwarder thinking completion forwarded request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d completed_count=%d synthetic=%t duration_ms=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), currentProviderPass(stream), completedCount, shouldEmitSyntheticThinking, completedDuration)
+		logger.Infof("forwarder thinking completion forwarded request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d completed_count=%d synthetic=%t duration_ms=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), providerPass, completedCount, shouldEmitSyntheticThinking, completedDuration)
 		if service.debug != nil {
 			service.debug.LogRuntime(context.Background(), requestID, conversationID, "thinking_completed_forwarded", map[string]any{
 				"model_call_id":   strings.TrimSpace(modelCallID),
-				"provider_pass":   currentProviderPass(stream),
+				"provider_pass":   providerPass,
 				"completed_count": completedCount,
 				"synthetic":       shouldEmitSyntheticThinking,
 				"duration_ms":     completedDuration,
@@ -888,6 +910,44 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 	default:
 		return nil
 	}
+}
+
+func shouldLogThinkingDelta(deltaCount int) bool {
+	return deltaCount == 1 || (deltaCount > 1 && deltaCount%thinkingDeltaLogInterval == 0)
+}
+
+func thinkingDeltaDebugFields(modelCallID string, providerPass int, deltaCount int, accumulatedLength int) map[string]any {
+	if !shouldLogThinkingDelta(deltaCount) {
+		return nil
+	}
+	return map[string]any{
+		"model_call_id":     strings.TrimSpace(modelCallID),
+		"provider_pass":     providerPass,
+		"delta_count":       deltaCount,
+		"accumulated_bytes": accumulatedLength,
+	}
+}
+
+// textDeltaDebugFields 只记录计数、字节数和摘要，避免新增 debug 事件复制用户正文。
+func textDeltaDebugFields(modelCallID string, providerPass int, deltaCount int, text string) map[string]any {
+	if text == "" {
+		return nil
+	}
+	sum := sha256.Sum256([]byte(text))
+	return map[string]any{
+		"model_call_id": strings.TrimSpace(modelCallID),
+		"provider_pass": providerPass,
+		"delta_count":   deltaCount,
+		"delta_bytes":   len([]byte(text)),
+		"delta_sha256":  fmt.Sprintf("%x", sum),
+	}
+}
+
+func nextTextDeltaCount(current int, text string) int {
+	if text == "" {
+		return current
+	}
+	return current + 1
 }
 
 func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *streamProviderEvent) error {
@@ -1138,6 +1198,19 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 			return nil
 		}
 	}
+	// 已向用户发送过正文时，通用续写会重复或篡改已展示的上下文。保留部分正文，
+	// 以明确失败终态收口，让客户端和后续回合都知道回复并未完整结束。
+	if isMaxOutputTokensTruncation(finishReason) && !hadToolInvocation && strings.TrimSpace(accumulatedText) != "" {
+		service.setTurnPhase(stream, TurnPhaseFailed)
+		return service.closeStreamWithOutputTruncation(
+			stream,
+			conversationID,
+			turnSeq,
+			requestID,
+			usage,
+			finishReason,
+		)
+	}
 
 	clearPendingProviderCompletion(stream)
 	if err := service.completeSuccessfulTurn(stream, pendingTurnCompletion{
@@ -1244,16 +1317,6 @@ func (service *Service) handleTimerEvent(stream *ActiveStream, payload *streamTi
 	clearStreamTimer(stream, payload.Key)
 
 	switch payload.Kind {
-	case streamTimerProviderResume:
-		stream.mu.Lock()
-		providerActive := stream.ProviderActive
-		action := stream.PendingProviderAction
-		status := stream.Status
-		stream.mu.Unlock()
-		if providerActive || isTerminalStreamStatus(status) || action != providerActionResume || pendingBridgeCount(stream) > 0 {
-			return nil
-		}
-		return service.driveProvider(stream)
 	case streamTimerNonStreamingRecovery:
 		current, ok := snapshotPendingExec(stream, payload.ExecID)
 		if !ok || current.MessageID != payload.MessageID || current.StreamState != "transport_closed" {

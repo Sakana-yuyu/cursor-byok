@@ -77,3 +77,47 @@ test("高级委派面板：启用监督委派并持久化", async ({ page }) => 
     })
     .toBe(true);
 });
+
+test("视觉委派：选择识图模型后可启用并保存模式", async ({ page }) => {
+  await openDelegationSettingsPage(page);
+  await page.getByRole("button", { name: "高级委派" }).click();
+
+  const modelSelect = page.getByRole("button", { name: "识图模型" });
+  await modelSelect.click();
+  await page.getByRole("option", { name: "Demo GPT" }).click();
+
+  const modeSelect = page.getByRole("button", { name: "识图模式" });
+  await modeSelect.click();
+  await page.getByRole("option", { name: "仅文字抄录" }).click();
+
+  const visionSwitch = page.getByRole("switch", { name: "启用视觉委派" });
+  await expect(visionSwitch).toBeEnabled();
+  await visionSwitch.click();
+
+  await expect
+    .poll(async () => (await readStoredPreviewConfig(page))?.delegation?.visionDelegation)
+    .toMatchObject({
+      enabled: true,
+      visionModelID: "preview-demo-openai",
+      mode: "ocr",
+    });
+});
+
+test("子代理角色：编辑角色片段后自动持久化", async ({ page }) => {
+  await openDelegationSettingsPage(page);
+  await page.getByRole("button", { name: "子代理角色" }).click();
+  await page.getByRole("button", { name: "新增角色" }).click();
+
+  const typeInput = page.getByRole("textbox", { name: "子代理类型" });
+  const fragmentInput = page.getByRole("textbox", { name: "角色片段（留空 = 禁用注入）" });
+  await typeInput.fill("explore");
+  await fragmentInput.fill("先检索代码库，再以证据报告结论。");
+  await fragmentInput.blur();
+
+  await expect
+    .poll(async () => (await readStoredPreviewConfig(page))?.delegation?.subagentProfiles)
+    .toEqual([{
+      subagentType: "explore",
+      promptFragment: "先检索代码库，再以证据报告结论。",
+    }]);
+});

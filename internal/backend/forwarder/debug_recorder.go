@@ -3,6 +3,8 @@ package forwarder
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -40,7 +42,10 @@ type debugWriteJob struct {
 // debugQueueCapacity 是 debug 写盘队列容量。写盘是尽力而为的证据层，队列满时丢弃
 // 新事件（限频日志提示），绝不让日志拖垮主链路（此前同步写盘 + 全局互斥导致
 // BidiAppend 接口超时与 provider 事件流吞吐下降，见 13:36 的 timeout 日志）。
-const debugQueueCapacity = 8192
+const (
+	debugQueueCapacity            = 8192
+	debugQueueDropWarningInterval = 64
+)
 
 type debugRecorder struct {
 	historyRoot string
@@ -129,7 +134,7 @@ func (recorder *debugRecorder) LogBidiRaw(ctx context.Context, requestID string,
 	for key, value := range extra {
 		event[key] = value
 	}
-	recorder.appendJSONL(ctx, requestID, conversationID, "bidi.raw.jsonl", event)
+	recorder.appendJSONLEnabled(ctx, requestID, conversationID, "bidi.raw.jsonl", event)
 }
 
 // truncateDebugPayload 把超长 hex/文本截断到 maxDebugProtoPayloadBytes。
@@ -160,7 +165,7 @@ func (recorder *debugRecorder) LogBidiDecoded(ctx context.Context, requestID str
 	for key, value := range extra {
 		event[key] = value
 	}
-	recorder.appendJSONL(ctx, requestID, firstNonEmpty(conversationID, intent.ConversationID), "bidi.decoded.jsonl", event)
+	recorder.appendJSONLEnabled(ctx, requestID, firstNonEmpty(conversationID, intent.ConversationID), "bidi.decoded.jsonl", event)
 }
 
 func (recorder *debugRecorder) LogRuntime(ctx context.Context, requestID string, conversationID string, eventName string, fields map[string]any) {
@@ -172,7 +177,27 @@ func (recorder *debugRecorder) LogRuntime(ctx context.Context, requestID string,
 	for key, value := range fields {
 		event[key] = value
 	}
-	recorder.appendJSONL(ctx, requestID, conversationID, "runtime.jsonl", event)
+	recorder.appendJSONLEnabled(ctx, requestID, conversationID, "runtime.jsonl", event)
+}
+
+// LogRuntimeLazy 只在观测日志启用时构造字段，避免关闭日志时影响流式热路径。
+func (recorder *debugRecorder) LogRuntimeLazy(ctx context.Context, requestID string, conversationID string, eventName string, buildFields func() map[string]any) {
+	if !recorder.enabled(ctx) {
+		return
+	}
+	var fields map[string]any
+	if buildFields != nil {
+		fields = buildFields()
+	}
+	if len(fields) == 0 {
+		return
+	}
+	event := recorder.baseEvent("runtime", requestID, conversationID)
+	event["event"] = strings.TrimSpace(eventName)
+	for key, value := range fields {
+		event[key] = value
+	}
+	recorder.appendJSONLEnabled(ctx, requestID, conversationID, "runtime.jsonl", event)
 }
 
 func (recorder *debugRecorder) LogRunSSE(ctx context.Context, requestID string, conversationID string, eventName string, fields map[string]any) {
@@ -184,7 +209,47 @@ func (recorder *debugRecorder) LogRunSSE(ctx context.Context, requestID string, 
 	for key, value := range fields {
 		event[key] = value
 	}
-	recorder.appendJSONL(ctx, requestID, conversationID, "runsse.jsonl", event)
+	recorder.appendJSONLEnabled(ctx, requestID, conversationID, "runsse.jsonl", event)
+}
+
+// LogRunSSELazy 仅在观测日志启用时构造 RunSSE 字段，避免正文增量热路径在
+// 正常关闭观测时仍计算 protobuf 大小和文本摘要。
+func (recorder *debugRecorder) LogRunSSELazy(ctx context.Context, requestID string, conversationID string, eventName string, buildFields func() map[string]any) {
+	if !recorder.enabled(ctx) {
+		return
+	}
+	var fields map[string]any
+	if buildFields != nil {
+		fields = buildFields()
+	}
+	if len(fields) == 0 {
+		return
+	}
+	event := recorder.baseEvent("runsse", requestID, conversationID)
+	event["event"] = strings.TrimSpace(eventName)
+	for key, value := range fields {
+		event[key] = value
+	}
+	recorder.appendJSONLEnabled(ctx, requestID, conversationID, "runsse.jsonl", event)
+}
+
+// runSSEMessageDebugFields 仅记录 RunSSE 消息的协议类别、大小与正文增量摘要。
+// RunSSE 位于用户可见输出热路径，不能为调试日志同步执行 protobuf JSON 编码和反解码。
+func runSSEMessageDebugFields(cursor int, message *agentv1.AgentServerMessage) map[string]any {
+	fields := map[string]any{
+		"cursor":       cursor,
+		"message_case": agentServerMessageCase(message),
+		"message_size": proto.Size(message),
+	}
+	if textDelta := message.GetInteractionUpdate().GetTextDelta(); textDelta != nil {
+		text := textDelta.GetText()
+		if text != "" {
+			sum := sha256.Sum256([]byte(text))
+			fields["text_delta_bytes"] = len([]byte(text))
+			fields["text_delta_sha256"] = hex.EncodeToString(sum[:])
+		}
+	}
+	return fields
 }
 
 func (recorder *debugRecorder) LogProvider(ctx context.Context, requestID string, conversationID string, eventName string, fields map[string]any) {
@@ -196,17 +261,18 @@ func (recorder *debugRecorder) LogProvider(ctx context.Context, requestID string
 	for key, value := range fields {
 		event[key] = value
 	}
-	recorder.appendJSONL(ctx, requestID, conversationID, "provider.jsonl", event)
+	recorder.appendJSONLEnabled(ctx, requestID, conversationID, "provider.jsonl", event)
 }
 
 func (recorder *debugRecorder) LogProviderArtifact(ctx context.Context, requestID string, conversationID string, modelCallID string, eventName string, payload map[string]any) {
 	if !recorder.enabled(ctx) {
 		return
 	}
-	recorder.LogProvider(ctx, requestID, conversationID, eventName, map[string]any{
-		"model_call_id": strings.TrimSpace(modelCallID),
-		"payload":       payload,
-	})
+	event := recorder.baseEvent("provider", requestID, conversationID)
+	event["event"] = strings.TrimSpace(eventName)
+	event["model_call_id"] = strings.TrimSpace(modelCallID)
+	event["payload"] = payload
+	recorder.appendJSONLEnabled(ctx, requestID, conversationID, "provider.jsonl", event)
 }
 
 func (recorder *debugRecorder) baseEvent(layer string, requestID string, conversationID string) map[string]any {
@@ -222,6 +288,13 @@ func (recorder *debugRecorder) baseEvent(layer string, requestID string, convers
 
 func (recorder *debugRecorder) appendJSONL(ctx context.Context, requestID string, conversationID string, filename string, event map[string]any) {
 	if !recorder.enabled(ctx) || len(event) == 0 {
+		return
+	}
+	recorder.appendJSONLEnabled(ctx, requestID, conversationID, filename, event)
+}
+
+func (recorder *debugRecorder) appendJSONLEnabled(ctx context.Context, requestID string, conversationID string, filename string, event map[string]any) {
+	if recorder == nil || len(event) == 0 {
 		return
 	}
 	dir := recorder.debugDir(requestID, conversationID)
@@ -254,9 +327,15 @@ func (recorder *debugRecorder) enqueue(job debugWriteJob) {
 	select {
 	case recorder.queue <- job:
 	default:
-		recorder.health.DroppedEvents.Add(1)
-		logger.Warn("debug recorder queue full, dropping event", "filename", strings.TrimSpace(job.filename))
+		droppedTotal := recorder.health.DroppedEvents.Add(1)
+		if shouldWarnDebugQueueDrop(droppedTotal) {
+			logger.Warn("debug recorder queue full, dropping event", "filename", strings.TrimSpace(job.filename), "dropped_total", droppedTotal)
+		}
 	}
+}
+
+func shouldWarnDebugQueueDrop(droppedTotal uint64) bool {
+	return droppedTotal == 1 || (droppedTotal > 1 && droppedTotal%debugQueueDropWarningInterval == 0)
 }
 
 // writeLoop 是 debug 落盘 worker：单 goroutine 串行写文件，天然保序。
