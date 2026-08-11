@@ -11,6 +11,7 @@
 - 同步新增中文源文案的 i18n 目录与三种非源语言翻译，并运行既有浏览器预览路径核对抓包状态交互 | refs: R-1, R-2 | verify: i18n 扫描、lint、构建与既有设置页预览冒烟检查通过。
 - 为每个镜像 HTTP 交换生成仅本地使用的 `exchangeId`，使 `request`、`response_start`、`response_chunk` 与 `response_truncated` 记录可稳定关联 | refs: R-3 | verify: 同一代理上下文生成的每条记录携带同一 ID；不向上游 HTTP 请求添加该 ID。
 - 为每条记录增加枚举 `phase`，并从官方请求已有正文或 Gemini URL 尽力提取 `model` | refs: R-3 | verify: 已知 OpenAI/Anthropic JSON `model` 和 Gemini `models/<name>` URL 可写入模型字段；缺失或畸形输入保留空字段且不阻断直通。
+- 镜像请求 URL 对凭据型查询参数做本地脱敏，保留端点路径和非敏感查询项 | refs: R-4 | verify: `key`、`api_key`、`token`、`secret`、`signature` 与密码等值不出现在 JSONL，原始 HTTP 请求 URL 不被改写。
 
 **Not in this change**: 不提供 `official.raw.jsonl` 的应用内浏览、导出、对比或 hosts 编辑；不为已移除的授权/设备接口或不支持的用量查询建立 UI；不改变脱敏、正文截断、镜像域名或代理直通语义；不自动修改 Cursor 代理或主动向官方 API 发起测试请求。
 
@@ -19,7 +20,7 @@
 - 状态合同遵循 `design.md`：代理桥接层从既有运行态和固定记录文件派生状态，正文绝不越过本地文件边界。
 - 开关只变更 `mirrorCapture.enabled`，保留后端已有 hosts；默认关闭，记录继续仅存于本地调试目录。
 - 先将配置数据流作为一个提交，再将高级设置和多语言文案作为第二个提交；后续将状态 binding、状态面板和规格台账分别提交；每个提交都可独立回退，不新增测试文件。
-- 在镜像请求过滤器创建关联上下文写入 `goproxy.ProxyCtx.UserData`，并在响应过滤器读取它；记录器只消费该内部值，绝不修改请求头、URL 或正文。
+- 在镜像请求过滤器创建关联上下文写入 `goproxy.ProxyCtx.UserData`，并在响应过滤器读取它；记录器只消费该内部值，绝不修改官方请求头、URL 或正文。镜像 JSONL 写入前只脱敏记录副本的凭据型查询参数。
 - `model` 提取是旁路元数据：OpenAI/Anthropic 从请求 JSON 的顶层 `model` 读取，Gemini 从 URL 路径的 `models/<name>` 段读取；JSON 解析失败或字段缺失时留空。
 
 ## Risk
@@ -29,6 +30,7 @@
 - 文件存在只证明至少有一次写入，不证明当前每一条 Cursor 请求都会经过代理；状态文案明确为“已记录/等待请求”，不夸大为持续抓包成功。
 - 打开目录受操作系统文件管理器可用性影响；失败不会影响代理或记录，回退对应目录入口提交即可恢复。
 - JSONL 是调试文件而非稳定公共 API；新增字段保持向后兼容，既有消费者可忽略未知字段。若后续对比工具依赖这些字段，需将其版本化约束单独设计。
+- 请求 URL 的 query string 可能携带 API key 或签名；记录器必须在落盘前脱敏常见凭据型参数。该脱敏只影响 JSONL 副本；回退本次提交会恢复此前记录格式，但不建议在共享或备份含旧记录的目录中保留明文 URL 凭据。
 - `ProxyCtx.UserData` 可能被同一代理其他功能使用；镜像记录应使用具名上下文结构，并在只处理镜像域名的分支写入，避免覆盖 relay 流程的上下文数据。
 
 <!-- APPROVED: 2026-08-12 02:02 (用户确认：全部使用推荐) -->

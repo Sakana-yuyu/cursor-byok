@@ -37,6 +37,11 @@ flowchart LR
   - Output: JSONL 记录新增 `{ exchangeId, phase, model? }`。`phase` 仅允许 `request`、`response_start`、`response_chunk`、`response_truncated`。
   - Invariants: `exchangeId` 只在本进程内生成并写入本地 JSONL，不进入任何官方 HTTP 头、URL 或请求体；同一 `ProxyCtx` 的所有记录使用同一 ID；`model` 从已有请求 JSON 或 Gemini URL 尽力解析，解析失败留空且不影响转发。
 
+- 本地镜像请求 URL 脱敏
+  - Input: 原始 `http.Request.URL`。
+  - Output: 仅用于 JSONL 的 URL 字符串；保留路径和非敏感查询参数。
+  - Invariants: `key`、`api_key`、`apikey`、`token`、`access_token`、`refresh_token`、`secret`、`signature`、`sig`、`password` 与 `pass` 等参数值写为 `[REDACTED]`；实际 `http.Request.URL` 不被修改，Gemini 模型路径提取继续使用原始 URL。
+
 ## Data Model
 
 - 镜像状态为派生 DTO，不持久化。
