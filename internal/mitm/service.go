@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -436,7 +437,7 @@ func (s *ProxyServer) newGoproxyHandler() *goproxy.ProxyHttpServer {
 	}))
 
 	// MITM 解密后：Cursor 白名单域名转发到 backend server，其余请求由 goproxy 直连回源。
-	proxy.OnRequest().DoFunc(func(req *http.Request, _ *goproxy.ProxyCtx) (*http.Request, *http.Response) {
+	proxy.OnRequest().DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 		req.Header.Del(HeaderServerUpstreamURL)
 
 		host := hostFromHTTPRequest(req)
@@ -460,7 +461,9 @@ func (s *ProxyServer) newGoproxyHandler() *goproxy.ProxyHttpServer {
 
 		if s.mirrorEnabledForHost(host) {
 			// 镜像记录：解密后记录明文，直通官方（不转发 backend）。
-			s.recordMirrorRequest(req)
+			exchange := newMirrorExchange(ctx)
+			ctx.UserData = exchange
+			s.recordMirrorRequest(exchange, req)
 		}
 		return req, nil
 	})
@@ -470,13 +473,18 @@ func (s *ProxyServer) newGoproxyHandler() *goproxy.ProxyHttpServer {
 		if resp == nil || resp.Body == nil {
 			return resp
 		}
+		exchange, ok := mirrorExchangeFromProxyCtx(ctx)
+		if !ok {
+			return resp
+		}
 		host := ""
 		if resp.Request != nil {
 			host = hostFromHTTPRequest(resp.Request)
 		}
-		if s.mirrorEnabledForHost(host) {
-			resp.Body = s.wrapMirrorResponse(host, resp)
+		if !s.mirrorEnabledForHost(host) {
+			return resp
 		}
+		resp.Body = s.wrapMirrorExchangeResponse(host, exchange, resp)
 		return resp
 	})
 	return proxy
@@ -870,18 +878,22 @@ func (s *ProxyServer) mirrorEnabledForHost(host string) bool {
 }
 
 // recordMirrorRequest 记录一次镜像请求（内部重建 req.Body 供直通）。
-func (s *ProxyServer) recordMirrorRequest(req *http.Request) {
+func (s *ProxyServer) recordMirrorRequest(exchange *mirrorExchange, req *http.Request) {
 	s.mirrorMu.RLock()
 	defer s.mirrorMu.RUnlock()
 	if s.mirrorRec == nil {
 		return
 	}
-	s.mirrorRec.recordRequest(hostFromHTTPRequest(req), req)
+	s.mirrorRec.recordExchangeRequest(hostFromHTTPRequest(req), exchange, req)
 }
 
-// wrapMirrorResponse 记录响应起始信息（status/脱敏 headers）并包装响应体，
-// 使每个读出的 chunk 同时写入记录器。
+// wrapMirrorResponse 保留无关联调用入口，供已有调用方和测试使用。
 func (s *ProxyServer) wrapMirrorResponse(host string, resp *http.Response) io.ReadCloser {
+	return s.wrapMirrorExchangeResponse(host, nil, resp)
+}
+
+// wrapMirrorExchangeResponse 记录带本地交换关联信息的响应起始与流式片段。
+func (s *ProxyServer) wrapMirrorExchangeResponse(host string, exchange *mirrorExchange, resp *http.Response) io.ReadCloser {
 	s.mirrorMu.RLock()
 	defer s.mirrorMu.RUnlock()
 	if s.mirrorRec == nil || resp == nil {
@@ -890,8 +902,11 @@ func (s *ProxyServer) wrapMirrorResponse(host string, resp *http.Response) io.Re
 		}
 		return resp.Body
 	}
-	s.mirrorRec.recordResponseStart(host, resp)
-	return &mirrorTeeReadCloser{r: resp.Body, rec: s.mirrorRec, host: host}
+	s.mirrorRec.recordExchangeResponseStart(host, exchange, resp)
+	if resp.Body == nil {
+		return nil
+	}
+	return &mirrorTeeReadCloser{r: resp.Body, rec: s.mirrorRec, host: host, exchange: exchange}
 }
 
 // mirrorTeeReadCloser 读取时逐 chunk 记录；累计记录字节数超过 mirrorResponseMaxBytes
@@ -900,6 +915,7 @@ type mirrorTeeReadCloser struct {
 	r         io.ReadCloser
 	rec       *mirrorRecorder
 	host      string
+	exchange  *mirrorExchange
 	recorded  int
 	truncated bool
 }
@@ -919,15 +935,30 @@ func (m *mirrorTeeReadCloser) recordChunk(chunk []byte) {
 		return
 	}
 	if m.recorded+len(chunk) > mirrorResponseMaxBytes {
-		m.rec.recordResponseTruncated(m.host)
+		m.rec.recordExchangeResponseTruncated(m.host, m.exchange)
 		m.truncated = true
 		return
 	}
-	m.rec.recordResponseChunk(m.host, chunk)
+	m.rec.recordExchangeResponseChunk(m.host, m.exchange, chunk)
 	m.recorded += len(chunk)
 }
 
 func (m *mirrorTeeReadCloser) Close() error { return m.r.Close() }
+
+func newMirrorExchange(ctx *goproxy.ProxyCtx) *mirrorExchange {
+	if ctx == nil {
+		return nil
+	}
+	return &mirrorExchange{id: "mirror-" + strconv.FormatInt(ctx.Session, 10)}
+}
+
+func mirrorExchangeFromProxyCtx(ctx *goproxy.ProxyCtx) (*mirrorExchange, bool) {
+	if ctx == nil {
+		return nil, false
+	}
+	exchange, ok := ctx.UserData.(*mirrorExchange)
+	return exchange, ok && exchange != nil && exchange.id != ""
+}
 
 // closeMirrorRecorder 关闭镜像记录器文件句柄并释放文件描述符；幂等，可多次调用。
 // 在服务停止路径（Stop）调用：Shutdown 排空活跃请求后，记录器不再有新写入。
