@@ -29,10 +29,9 @@ const (
 	visionProxyMaxOutputTokens = 4000
 	// 视觉委派单次识图调用超时。
 	visionProxyCallTimeout = 120 * time.Second
-	// 自动触发时单个 provider pass 的识图总预算：browser 等工具会一次产生多张截图，
-	// 同步识图不能无限阻塞主模型请求（期间客户端收不到任何事件，容易判定掉线）。
-	// 预算耗尽后剩余图片降级为占位文本，不中断主流程。
-	visionProxyPassTimeout = 90 * time.Second
+	// 自动触发时单个 provider pass 的识图总预算。视觉调用处于主模型请求之前，
+	// 预算必须优先保证首字：超时后交给已注册的读图工具按本地路径兜底。
+	visionProxyPassTimeout = 8 * time.Second
 	// 自动触发时单轮内最多并行识图数量，避免大量图片同时打爆识图模型。
 	visionProxyMaxParallel = 3
 	// 同一 request 内识图结果缓存上限；超过后整体清空（均为短生命周期条目）。
@@ -239,9 +238,9 @@ func (service *Service) synthesizeImageDescriptions(ctx context.Context, request
 	service.beginVisionRun(requestID, config, imageCount, service.visionPassIntent(messages))
 
 	// 整个 pass 的识图总预算：synthesizeImageDescriptions 同步阻塞在 provider pass
-	// 编译阶段（期间主模型请求尚未开始、客户端收不到任何事件），必须限制最长等待，
-	// 否则 browser 多截图场景会把对话拖到客户端超时判定掉线。
-	visionCtx, visionCancel := context.WithTimeout(ctx, visionProxyPassTimeout)
+	// 编译阶段（期间主模型请求尚未开始、客户端收不到任何事件）。预算耗尽后使用
+	// 本地路径提示主模型调用读图工具，不能为等待识图牺牲本轮首字时间。
+	visionCtx, visionCancel := context.WithTimeout(ctx, service.visionProxyPassTimeout())
 
 	result := make([]modeladapter.Message, len(messages))
 	for i, message := range messages {
@@ -425,12 +424,10 @@ func (service *Service) synthesizeMessageImages(ctx context.Context, requestID s
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			if ctxErr := ctx.Err(); ctxErr != nil {
-				// pass 预算耗尽：降级为占位文本，不再等待识图模型。
+				// pass 预算耗尽：主模型需立即启动，保留本地路径让读图工具继续兜底。
 				service.visionRunImageDone(requestID, ctxErr)
 				mu.Lock()
-				replaced[p.index] = modeladapter.NewTextContentPart(
-					fmt.Sprintf("%s预算耗尽，未识别）]", visionProxyResultPrefix),
-				)
+				replaced[p.index] = visionProxyFallbackPart(ctx, p.image, fmt.Sprintf("识图首字预算耗尽：%v", ctxErr))
 				mu.Unlock()
 				vdbg("[goro] CTX_ERR idx=%d err=%v", p.index, ctxErr)
 				return
@@ -459,17 +456,8 @@ func (service *Service) synthesizeMessageImages(ctx context.Context, requestID s
 			mu.Lock()
 			if err != nil {
 				logger.Errorf("forwarder vision proxy image failed vision_model=%s error=%v", config.visionName, err)
-				// 委派失败时保留图片本地路径占位（MCP 兜底衔接）：让纯文本主模型仍能
-				// 通过读图 MCP 工具读取该路径。路径无法落地时退化为纯失败说明。
-				if path, pathErr := modeladapter.ImageLocalPath(ctx, p.image); pathErr == nil && strings.TrimSpace(path) != "" {
-					replaced[p.index] = modeladapter.NewTextContentPart(fmt.Sprintf(
-						"[图片识图失败（视觉委派：%s）]\n[图片文件: %s] 请使用你可用的读图工具读取该文件路径来查看图片内容，不要在工作区中搜索或猜测其他图片文件。",
-						truncateErr(err.Error()), path))
-				} else {
-					replaced[p.index] = modeladapter.NewTextContentPart(
-						fmt.Sprintf("%s失败：%s）]", visionProxyResultPrefix, truncateErr(err.Error())),
-					)
-				}
+				// 委派失败时保留图片本地路径占位（MCP 兜底衔接）。
+				replaced[p.index] = visionProxyFallbackPart(ctx, p.image, err.Error())
 			} else {
 				replaced[p.index] = modeladapter.NewTextContentPart(
 					fmt.Sprintf("%s · 由 %s 提供）]\n%s", visionProxyResultPrefix, config.visionName, description),
@@ -493,6 +481,26 @@ func (service *Service) synthesizeMessageImages(ctx context.Context, requestID s
 
 func visionProxyImagePlaceholder() string {
 	return "[图片已省略：当前模型不支持图片输入]"
+}
+
+// visionProxyPassTimeout 返回当前自动识图的首字预算；测试可注入短预算验证取消链路。
+func (service *Service) visionProxyPassTimeout() time.Duration {
+	if service != nil && service.visionProxyPassBudget != nil {
+		if budget := service.visionProxyPassBudget(); budget > 0 {
+			return budget
+		}
+	}
+	return visionProxyPassTimeout
+}
+
+// visionProxyFallbackPart 在自动识图未及时完成时保留图片路径，交由读图工具按需读取。
+func visionProxyFallbackPart(ctx context.Context, image *modeladapter.ImageContent, reason string) modeladapter.ContentPart {
+	if path, pathErr := modeladapter.ImageLocalPath(ctx, image); pathErr == nil && strings.TrimSpace(path) != "" {
+		return modeladapter.NewTextContentPart(fmt.Sprintf(
+			"[图片识图未完成（视觉委派：%s）]\n[图片文件: %s] 请使用你可用的读图工具读取该文件路径来查看图片内容，不要在工作区中搜索或猜测其他图片文件。",
+			truncateErr(reason), path))
+	}
+	return modeladapter.NewTextContentPart(fmt.Sprintf("%s未完成：%s）]", visionProxyResultPrefix, truncateErr(reason)))
 }
 
 func truncateErr(message string) string {

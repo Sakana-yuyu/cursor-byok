@@ -124,6 +124,9 @@ type Service struct {
 	// by the non-streaming recovery goroutine instead of time.After. Tests
 	// inject a test-controlled channel to trigger timeouts deterministically.
 	nonStreamingRecoveryTimer func(execID string, grace time.Duration) <-chan time.Time
+	// visionProxyPassBudget 控制自动识图在主模型首字前可占用的总时间。
+	// 仅测试可覆盖；生产使用 visionProxyPassTimeout，避免把该运行时策略持久化进历史。
+	visionProxyPassBudget func() time.Duration
 }
 
 // RecentWorkspaceRoot returns the latest non-empty workspace root observed
@@ -285,7 +288,7 @@ func newService(historyRoot string, resolver modeladapter.ChannelResolver, regis
 		visionArchiveLimit:       visionArchiveMaxEntries,
 		checkpointBlobs:          make(map[string]*checkpointBlobCacheEntry),
 		conversationLastActivity: make(map[string]time.Time),
-			nonStreamingCloseGrace:   func() time.Duration { return defaultNonStreamingCloseGrace },
+		nonStreamingCloseGrace:   func() time.Duration { return defaultNonStreamingCloseGrace },
 	}
 	service.cursorDelegation = newCursorDelegationBridge(service)
 	service.localDelegation = newLocalDelegatedAgentAdapter(service)
@@ -341,7 +344,7 @@ func newServiceWithDependencies(store *ConversationFileStore, projector *History
 		visionArchiveLimit:       visionArchiveMaxEntries,
 		checkpointBlobs:          make(map[string]*checkpointBlobCacheEntry),
 		conversationLastActivity: make(map[string]time.Time),
-			nonStreamingCloseGrace:   func() time.Duration { return defaultNonStreamingCloseGrace },
+		nonStreamingCloseGrace:   func() time.Duration { return defaultNonStreamingCloseGrace },
 	}
 	service.cursorDelegation = newCursorDelegationBridge(service)
 	service.localDelegation = newLocalDelegatedAgentAdapter(service)
