@@ -11,6 +11,7 @@ import {
   saveGoalSettings,
   saveLocalResponseCacheEnabled,
   saveLocalResponseCacheSettings,
+  saveMirrorCaptureEnabled,
   saveRoutingMode,
   toUserError,
 } from "@/state/appState";
@@ -34,10 +35,17 @@ const ttlSecondsDraft = ref("");
 const maxEntriesDraft = ref("");
 
 const debugLogDraft = ref(Boolean(appState.debugLogEnabled));
+const mirrorCaptureDraft = ref(Boolean(appState.mirrorCaptureEnabled));
 
 const goalEnabledDraft = ref(Boolean(appState.goal?.enabled));
 
 const debugLogState = reactive({
+  busy: false,
+  error: "",
+  retry: null,
+});
+
+const mirrorCaptureState = reactive({
   busy: false,
   error: "",
   retry: null,
@@ -84,6 +92,7 @@ const directModeBusy = computed(() => directModeState.busy || appState.configSav
 const cacheEnabledBusy = computed(() => cacheEnabledState.busy || appState.configSaving);
 const cachePersistBusy = computed(() => cachePersistState.busy || appState.configSaving);
 const goalEnabledBusy = computed(() => goalEnabledState.busy || appState.configSaving);
+const mirrorCaptureBusy = computed(() => mirrorCaptureState.busy || appState.configSaving);
 const ttlBusy = computed(() => ttlSecondsState.busy || ttlSecondsState.queued || appState.configSaving);
 const maxEntriesBusy = computed(() => maxEntriesState.busy || maxEntriesState.queued || appState.configSaving);
 
@@ -102,6 +111,16 @@ watch(
   (value) => {
     if (!debugLogState.busy) {
       debugLogDraft.value = Boolean(value);
+    }
+  },
+  { immediate: true },
+);
+
+watch(
+  () => appState.mirrorCaptureEnabled,
+  (value) => {
+    if (!mirrorCaptureState.busy) {
+      mirrorCaptureDraft.value = Boolean(value);
     }
   },
   { immediate: true },
@@ -200,6 +219,29 @@ async function handleDebugLogChange(enabled) {
     debugLogState.error = toUserError(error);
   } finally {
     debugLogState.busy = false;
+  }
+}
+
+async function handleMirrorCaptureChange(enabled) {
+  const nextValue = Boolean(enabled);
+  const previousValue = mirrorCaptureDraft.value;
+  mirrorCaptureDraft.value = nextValue;
+  mirrorCaptureState.retry = () => handleMirrorCaptureChange(nextValue);
+  mirrorCaptureState.error = "";
+  mirrorCaptureState.busy = true;
+  try {
+    await props.autosave.run("advanced.mirror-capture", async () => {
+      const result = await saveMirrorCaptureEnabled(nextValue);
+      if (!result?.ok) {
+        throw new Error(result?.error || "保存失败");
+      }
+      message.success(nextValue ? "已开启镜像记录（即时生效）" : "已关闭镜像记录（即时生效）");
+    });
+  } catch (error) {
+    mirrorCaptureDraft.value = previousValue;
+    mirrorCaptureState.error = toUserError(error);
+  } finally {
+    mirrorCaptureState.busy = false;
   }
 }
 
@@ -359,6 +401,26 @@ function handleCacheFieldInput(field, state, valueRef, value) {
           :disabled="debugLogState.busy"
           aria-label="记录调试日志"
           @change="handleDebugLogChange"
+        />
+      </SettingsRow>
+    </SettingsSection>
+
+    <SettingsSection title="官方请求镜像记录（调试）">
+      <SettingsRow
+        label="镜像记录官方请求"
+        description="抓取 Cursor 直连官方模型 API 的请求和响应明文，用于测试和排障。默认关闭；开启后立即生效，记录在 history/_debug/mirror/official.raw.jsonl，可能包含提示词、模型回复和工作区上下文等敏感内容。"
+        :busy="mirrorCaptureBusy"
+        :error="mirrorCaptureState.error"
+        @retry="mirrorCaptureState.retry?.()"
+      >
+        <Switch
+          compact
+          label=""
+          :enabled="mirrorCaptureDraft"
+          :busy="mirrorCaptureBusy"
+          :disabled="mirrorCaptureBusy"
+          aria-label="镜像记录官方请求"
+          @change="handleMirrorCaptureChange"
         />
       </SettingsRow>
     </SettingsSection>

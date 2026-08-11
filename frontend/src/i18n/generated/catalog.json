@@ -36,7 +36,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 243,
+          "line": 251,
           "column": 18
         }
       ]
@@ -94,7 +94,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 765,
+          "line": 769,
           "column": 14
         }
       ]
@@ -152,7 +152,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 304,
+          "line": 312,
           "column": 22
         }
       ]
@@ -323,12 +323,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 387,
+          "line": 449,
           "column": 11
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 399,
+          "line": 461,
           "column": 13
         }
       ]
@@ -538,7 +538,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 692,
+          "line": 700,
           "column": 41
         }
       ]
@@ -615,7 +615,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 156,
+          "line": 175,
           "column": 16
         },
         {
@@ -697,7 +697,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 828,
+          "line": 836,
           "column": 12
         }
       ]
@@ -750,7 +750,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 693,
+          "line": 701,
           "column": 21
         }
       ]
@@ -1055,12 +1055,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 417,
+          "line": 425,
           "column": 18
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 734,
+          "line": 742,
           "column": 78
         }
       ]
@@ -1161,7 +1161,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 405,
+          "line": 467,
           "column": 11
         }
       ]
@@ -1315,8 +1315,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 82,
-          "column": 179
+          "line": 83,
+          "column": 1
         }
       ]
     },
@@ -1363,7 +1363,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 647,
+          "line": 655,
           "column": 117
         }
       ]
@@ -1683,7 +1683,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 326,
+          "line": 368,
           "column": 22
         }
       ]
@@ -1827,7 +1827,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 741,
+          "line": 749,
           "column": 90
         }
       ]
@@ -1839,7 +1839,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 819,
+          "line": 823,
           "column": 38
         }
       ]
@@ -1887,8 +1887,20 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 718,
+          "line": 722,
           "column": 34
+        }
+      ]
+    },
+    "195a6689428e6120": {
+      "source": "官方请求镜像记录（调试）",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 408,
+          "column": 22
         }
       ]
     },
@@ -1998,7 +2010,7 @@
       "refs": [
         {
           "file": "src/utils/configNormalize.js",
-          "line": 30,
+          "line": 35,
           "column": 12
         }
       ]
@@ -2082,7 +2094,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1290,
+          "line": 1305,
           "column": 32
         }
       ]
@@ -2106,7 +2118,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 196,
+          "line": 215,
           "column": 35
         }
       ]
@@ -2178,8 +2190,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 483,
-          "column": 163
+          "line": 484,
+          "column": 1
         }
       ]
     },
@@ -2238,8 +2250,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 480,
-          "column": 180
+          "line": 481,
+          "column": 1
         }
       ]
     },
@@ -2250,7 +2262,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 566,
+          "line": 574,
           "column": 61
         },
         {
@@ -2383,7 +2395,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 660,
+          "line": 668,
           "column": 16
         }
       ]
@@ -2446,7 +2458,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 815,
+          "line": 823,
           "column": 12
         }
       ]
@@ -2526,7 +2538,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 782,
+          "line": 786,
           "column": 40
         }
       ]
@@ -2632,7 +2644,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 155,
+          "line": 174,
           "column": 14
         },
         {
@@ -3016,7 +3028,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 706,
+          "line": 710,
           "column": 12
         }
       ]
@@ -3093,7 +3105,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 157,
+          "line": 176,
           "column": 20
         },
         {
@@ -3212,7 +3224,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 789,
+          "line": 797,
           "column": 12
         }
       ]
@@ -3371,7 +3383,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 936,
+          "line": 944,
           "column": 49
         }
       ]
@@ -3477,7 +3489,7 @@
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 158,
+          "line": 177,
           "column": 19
         },
         {
@@ -3532,7 +3544,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 824,
+          "line": 828,
           "column": 12
         },
         {
@@ -4058,7 +4070,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 572,
+          "line": 580,
           "column": 97
         },
         {
@@ -4241,7 +4253,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 557,
+          "line": 565,
           "column": 169
         }
       ]
@@ -4354,7 +4366,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 809,
+          "line": 813,
           "column": 14
         }
       ]
@@ -4702,7 +4714,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 425,
+          "line": 487,
           "column": 11
         }
       ]
@@ -4932,7 +4944,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 763,
+          "line": 767,
           "column": 5
         }
       ]
@@ -4956,8 +4968,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 453,
-          "column": 17
+          "line": 454,
+          "column": 1
         }
       ]
     },
@@ -5037,6 +5049,23 @@
         }
       ]
     },
+    "3fe61d24b844836c": {
+      "source": "镜像记录官方请求",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 410,
+          "column": 9
+        },
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 422,
+          "column": 11
+        }
+      ]
+    },
     "3fe7045d8332f460": {
       "source": "切换 MCP {0}",
       "kind": "template",
@@ -5068,7 +5097,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 741,
+          "line": 749,
           "column": 21
         }
       ]
@@ -5433,8 +5462,8 @@
       "refs": [
         {
           "file": "src/views/Diagnostics.vue",
-          "line": 210,
-          "column": 181
+          "line": 211,
+          "column": 1
         }
       ]
     },
@@ -5585,6 +5614,18 @@
         }
       ]
     },
+    "48c2104fae3631ac": {
+      "source": "已关闭镜像记录（即时生效）",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 238,
+          "column": 53
+        }
+      ]
+    },
     "4923eeb7bd75cccd": {
       "source": "{0} 的模型标识不能为空",
       "kind": "template",
@@ -5638,7 +5679,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 696,
+          "line": 704,
           "column": 27
         }
       ]
@@ -5737,7 +5778,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 349,
+          "line": 391,
           "column": 9
         }
       ]
@@ -5855,7 +5896,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 368,
+          "line": 376,
           "column": 18
         }
       ]
@@ -5879,7 +5920,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 435,
+          "line": 497,
           "column": 15
         }
       ]
@@ -6122,7 +6163,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 528,
+          "line": 536,
           "column": 284
         },
         {
@@ -6250,7 +6291,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 329,
+          "line": 371,
           "column": 9
         }
       ]
@@ -6385,7 +6426,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 630,
+          "line": 638,
           "column": 126
         },
         {
@@ -7254,7 +7295,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 196,
+          "line": 215,
           "column": 47
         }
       ]
@@ -7267,6 +7308,18 @@
         {
           "file": "src/layouts/MainLayout.vue",
           "line": 74,
+          "column": 9
+        }
+      ]
+    },
+    "5ea0241a25eb82cc": {
+      "source": "抓取 Cursor 直连官方模型 API 的请求和响应明文，用于测试和排障。默认关闭；开启后立即生效，记录在 history/_debug/mirror/official.raw.jsonl，可能包含提示词、模型回复和工作区上下文等敏感内容。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 411,
           "column": 9
         }
       ]
@@ -7372,7 +7425,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 756,
+          "line": 760,
           "column": 7
         }
       ]
@@ -7515,7 +7568,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 741,
+          "line": 749,
           "column": 159
         }
       ]
@@ -7551,7 +7604,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 344,
+          "line": 352,
           "column": 18
         }
       ]
@@ -7587,8 +7640,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 127,
-          "column": 71
+          "line": 128,
+          "column": 1
         }
       ]
     },
@@ -7737,27 +7790,32 @@
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 194,
+          "line": 213,
           "column": 42
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 217,
+          "line": 236,
           "column": 42
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 240,
+          "line": 259,
           "column": 42
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 262,
+          "line": 282,
           "column": 42
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 284,
+          "line": 304,
+          "column": 42
+        },
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 326,
           "column": 44
         },
         {
@@ -7972,7 +8030,7 @@
         },
         {
           "file": "src/utils/configNormalize.js",
-          "line": 69,
+          "line": 83,
           "column": 44
         }
       ]
@@ -8032,7 +8090,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 732,
+          "line": 736,
           "column": 14
         }
       ]
@@ -8044,7 +8102,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1367,
+          "line": 1382,
           "column": 32
         }
       ]
@@ -8056,7 +8114,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 701,
+          "line": 705,
           "column": 14
         }
       ]
@@ -8283,12 +8341,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 328,
+          "line": 370,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 340,
+          "line": 382,
           "column": 11
         },
         {
@@ -8499,7 +8557,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 636,
+          "line": 644,
           "column": 16
         }
       ]
@@ -8612,7 +8670,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 445,
+          "line": 507,
           "column": 22
         }
       ]
@@ -8725,7 +8783,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 724,
+          "line": 728,
           "column": 20
         }
       ]
@@ -8737,7 +8795,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 356,
+          "line": 364,
           "column": 18
         }
       ]
@@ -8819,7 +8877,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 448,
+          "line": 510,
           "column": 9
         }
       ]
@@ -8831,8 +8889,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 68,
-          "column": 144
+          "line": 69,
+          "column": 1
         }
       ]
     },
@@ -8903,8 +8961,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 86,
-          "column": 175
+          "line": 87,
+          "column": 1
         }
       ]
     },
@@ -8956,7 +9014,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 219,
+          "line": 261,
           "column": 51
         }
       ]
@@ -8985,7 +9043,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 945,
+          "line": 953,
           "column": 58
         }
       ]
@@ -9189,7 +9247,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 652,
+          "line": 660,
           "column": 16
         }
       ]
@@ -9442,8 +9500,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 77,
-          "column": 139
+          "line": 78,
+          "column": 1
         }
       ]
     },
@@ -9471,12 +9529,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 404,
+          "line": 412,
           "column": 18
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 734,
+          "line": 742,
           "column": 71
         }
       ]
@@ -9648,7 +9706,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 763,
+          "line": 771,
           "column": 12
         }
       ]
@@ -9840,7 +9898,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 808,
+          "line": 812,
           "column": 38
         }
       ]
@@ -9961,7 +10019,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 791,
+          "line": 795,
           "column": 16
         }
       ]
@@ -9973,12 +10031,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 368,
+          "line": 430,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 380,
+          "line": 442,
           "column": 11
         }
       ]
@@ -10014,7 +10072,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 442,
+          "line": 450,
           "column": 37
         }
       ]
@@ -10335,7 +10393,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 362,
+          "line": 370,
           "column": 18
         }
       ]
@@ -10554,7 +10612,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 698,
+          "line": 702,
           "column": 14
         }
       ]
@@ -10684,6 +10742,18 @@
           "file": "src/views/SupplierDetail.vue",
           "line": 1040,
           "column": 57
+        }
+      ]
+    },
+    "88aa7ff29cb81526": {
+      "source": "已开启镜像记录（即时生效）",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/AdvancedSettings.vue",
+          "line": 238,
+          "column": 35
         }
       ]
     },
@@ -10929,7 +10999,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 350,
+          "line": 358,
           "column": 18
         }
       ]
@@ -11057,7 +11127,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 219,
+          "line": 261,
           "column": 35
         }
       ]
@@ -11069,7 +11139,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 416,
+          "line": 478,
           "column": 15
         }
       ]
@@ -11276,7 +11346,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 725,
+          "line": 733,
           "column": 14
         }
       ]
@@ -11435,7 +11505,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1330,
+          "line": 1345,
           "column": 32
         }
       ]
@@ -11488,7 +11558,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 745,
+          "line": 753,
           "column": 35
         }
       ]
@@ -11674,7 +11744,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 841,
+          "line": 849,
           "column": 12
         }
       ]
@@ -12065,12 +12135,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1543,
+          "line": 1558,
           "column": 32
         },
         {
           "file": "src/state/appState.js",
-          "line": 1564,
+          "line": 1579,
           "column": 32
         }
       ]
@@ -12392,7 +12462,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 668,
+          "line": 676,
           "column": 16
         }
       ]
@@ -12428,7 +12498,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 174,
+          "line": 193,
           "column": 33
         },
         {
@@ -12481,7 +12551,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 820,
+          "line": 824,
           "column": 14
         }
       ]
@@ -12520,7 +12590,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 915,
+          "line": 923,
           "column": 25
         }
       ]
@@ -12742,12 +12812,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 734,
+          "line": 738,
           "column": 12
         },
         {
           "file": "src/state/appState.js",
-          "line": 801,
+          "line": 805,
           "column": 87
         }
       ]
@@ -12963,7 +13033,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 854,
+          "line": 862,
           "column": 12
         }
       ]
@@ -12999,8 +13069,8 @@
       "refs": [
         {
           "file": "src/views/Diagnostics.vue",
-          "line": 205,
-          "column": 139
+          "line": 206,
+          "column": 1
         }
       ]
     },
@@ -13011,12 +13081,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 721,
+          "line": 729,
           "column": 47
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 733,
+          "line": 741,
           "column": 49
         }
       ]
@@ -13253,12 +13323,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 447,
+          "line": 509,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 459,
+          "line": 521,
           "column": 11
         }
       ]
@@ -13524,7 +13594,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 644,
+          "line": 652,
           "column": 16
         }
       ]
@@ -13548,8 +13618,8 @@
       "refs": [
         {
           "file": "src/components/ui/ModelTreeMultiSelect.vue",
-          "line": 536,
-          "column": 13
+          "line": 537,
+          "column": 1
         }
       ]
     },
@@ -13673,7 +13743,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 783,
+          "line": 787,
           "column": 16
         }
       ]
@@ -13921,7 +13991,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 671,
+          "line": 679,
           "column": 114
         }
       ]
@@ -13957,7 +14027,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 944,
+          "line": 952,
           "column": 49
         }
       ]
@@ -14034,7 +14104,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 802,
+          "line": 810,
           "column": 12
         }
       ]
@@ -14130,7 +14200,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 174,
+          "line": 193,
           "column": 54
         },
         {
@@ -14205,7 +14275,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 790,
+          "line": 794,
           "column": 40
         }
       ]
@@ -14438,7 +14508,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 276,
+          "line": 284,
           "column": 18
         }
       ]
@@ -14686,8 +14756,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 92,
-          "column": 9
+          "line": 93,
+          "column": 1
         }
       ]
     },
@@ -14775,7 +14845,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 464,
+          "line": 472,
           "column": 37
         }
       ]
@@ -15069,7 +15139,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 704,
+          "line": 708,
           "column": 14
         }
       ]
@@ -15349,7 +15419,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1386,
+          "line": 1401,
           "column": 32
         }
       ]
@@ -15522,7 +15592,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 271,
+          "line": 279,
           "column": 22
         }
       ]
@@ -15773,7 +15843,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 716,
+          "line": 720,
           "column": 38
         },
         {
@@ -15901,7 +15971,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1004,
+          "line": 1012,
           "column": 69
         }
       ]
@@ -15913,12 +15983,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 348,
+          "line": 390,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 360,
+          "line": 402,
           "column": 11
         }
       ]
@@ -15954,7 +16024,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 676,
+          "line": 684,
           "column": 16
         }
       ]
@@ -16168,7 +16238,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 171,
+          "line": 190,
           "column": 42
         },
         {
@@ -16400,7 +16470,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1411,
+          "line": 1426,
           "column": 14
         }
       ]
@@ -16465,7 +16535,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 740,
+          "line": 748,
           "column": 50
         }
       ]
@@ -16499,7 +16569,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 406,
+          "line": 468,
           "column": 11
         }
       ]
@@ -16622,8 +16692,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 71,
-          "column": 144
+          "line": 72,
+          "column": 1
         }
       ]
     },
@@ -17088,8 +17158,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 539,
-          "column": 43
+          "line": 540,
+          "column": 1
         }
       ]
     },
@@ -17112,7 +17182,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 762,
+          "line": 766,
           "column": 5
         }
       ]
@@ -17177,7 +17247,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 346,
+          "line": 388,
           "column": 22
         },
         {
@@ -17740,7 +17810,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 786,
+          "line": 790,
           "column": 40
         }
       ]
@@ -17890,7 +17960,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 946,
+          "line": 954,
           "column": 35
         }
       ]
@@ -18025,7 +18095,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 741,
+          "line": 749,
           "column": 170
         }
       ]
@@ -18102,8 +18172,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 467,
-          "column": 43
+          "line": 468,
+          "column": 1
         }
       ]
     },
@@ -18307,7 +18377,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 787,
+          "line": 791,
           "column": 16
         }
       ]
@@ -18594,7 +18664,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 734,
+          "line": 742,
           "column": 21
         }
       ]
@@ -18623,7 +18693,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 512,
+          "line": 520,
           "column": 196
         }
       ]
@@ -18683,8 +18753,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 443,
-          "column": 17
+          "line": 444,
+          "column": 1
         }
       ]
     },
@@ -18756,7 +18826,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 776,
+          "line": 784,
           "column": 12
         }
       ]
@@ -18869,7 +18939,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 663,
+          "line": 671,
           "column": 139
         }
       ]
@@ -18881,7 +18951,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 718,
+          "line": 722,
           "column": 25
         }
       ]
@@ -19087,7 +19157,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 545,
+          "line": 553,
           "column": 58
         }
       ]
@@ -19254,7 +19324,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 388,
+          "line": 450,
           "column": 11
         }
       ]
@@ -19319,8 +19389,8 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 474,
-          "column": 13
+          "line": 475,
+          "column": 1
         }
       ]
     },
@@ -19367,7 +19437,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 369,
+          "line": 431,
           "column": 9
         }
       ]
@@ -19404,7 +19474,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 813,
+          "line": 817,
           "column": 12
         },
         {
@@ -19465,7 +19535,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 716,
+          "line": 720,
           "column": 27
         }
       ]
@@ -19537,7 +19607,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 938,
+          "line": 946,
           "column": 46
         }
       ]
