@@ -3,6 +3,11 @@ import { dedupeModelAdapters } from "@/utils/modelAdapter";
 import { normalizeDelegationExecutorPolicy } from "./delegationExecutorConfig.js";
 
 const SUPPORTED_ROUTE_MODES = new Set(["local", "upstream"]);
+const DEFAULT_MIRROR_CAPTURE_HOSTS = [
+  "api.openai.com",
+  "api.anthropic.com",
+  "generativelanguage.googleapis.com",
+];
 export function normalizeRouteMode(value) {
   const normalized = asString(value).toLowerCase();
   return SUPPORTED_ROUTE_MODES.has(normalized) ? normalized : "local";
@@ -39,6 +44,15 @@ export function normalizeLocalResponseCache(source) {
     ttlSeconds: asPositiveInteger(raw.ttlSeconds),
     maxEntries: asPositiveInteger(raw.maxEntries),
     persist: asBoolean(raw.persist, true),
+  };
+}
+
+export function normalizeMirrorCapture(source) {
+  const raw = source && typeof source === "object" ? source : {};
+  const hosts = [...new Set(asArray(raw.hosts).map((value) => asString(value).trim()).filter(Boolean))];
+  return {
+    enabled: asBoolean(raw.enabled),
+    hosts: hosts.length > 0 ? hosts : [...DEFAULT_MIRROR_CAPTURE_HOSTS],
   };
 }
 
@@ -184,6 +198,7 @@ export function normalizeConfig(source) {
     },
     // 本地响应缓存配置：保留在归一化白名单中，避免任何一次配置保存把它清空回默认值
     localResponseCache: normalizeLocalResponseCache(raw.localResponseCache),
+    mirrorCapture: normalizeMirrorCapture(raw.mirrorCapture),
     delegation: normalizeDelegation(raw.delegation),
     goal: normalizeGoal(raw.goal),
     computerUse: normalizeComputerUse(raw.computerUse),

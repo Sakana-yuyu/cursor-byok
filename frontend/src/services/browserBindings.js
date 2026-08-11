@@ -62,6 +62,14 @@ const previewConfig = {
   proxyListenAddr: "127.0.0.1:8788",
   routing: { mode: "local" },
   homeMetrics: { includeCacheWriteInHitRate: false },
+  mirrorCapture: {
+    enabled: false,
+    hosts: [
+      "api.openai.com",
+      "api.anthropic.com",
+      "generativelanguage.googleapis.com",
+    ],
+  },
   delegation: {
     enabled: true,
     maxConcurrency: 4,

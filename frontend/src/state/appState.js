@@ -227,6 +227,7 @@ function buildConfigPayload(source = appState) {
     routing: normalized.routing,
     homeMetrics: normalized.homeMetrics,
     localResponseCache: normalized.localResponseCache,
+    mirrorCapture: normalized.mirrorCapture,
     delegation,
     goal: normalized.goal,
     computerUse: normalized.computerUse,
@@ -247,6 +248,7 @@ function buildCachedConfigPayload() {
     routing: payload.routing,
     homeMetrics: payload.homeMetrics,
     localResponseCache: payload.localResponseCache,
+    mirrorCapture: payload.mirrorCapture,
     delegation: payload.delegation,
     goal: payload.goal,
     computerUse: payload.computerUse,
@@ -268,6 +270,7 @@ function applyConfigToState(config, { modelAdaptersOnly = false } = {}) {
   appState.computerUseBrowserStartURL = normalized.computerUse.browserStartURL;
   appState.includeCacheWriteInHitRate = normalized.homeMetrics.includeCacheWriteInHitRate;
   appState.localResponseCache = normalized.localResponseCache;
+  appState.mirrorCaptureEnabled = normalized.mirrorCapture.enabled;
   appState.delegation = normalized.delegation;
   appState.goal = normalized.goal;
   appState.turnStaleTimeout = normalized.turnStaleTimeout;
@@ -544,6 +547,7 @@ export const appState = reactive({
   autoMatchContextWindow: cachedConfig.autoMatchContextWindow,
   // 调试日志开关（log 配置）：控制 forwarder 是否把对话级 debug jsonl 写入磁盘。
   debugLogEnabled: asBoolean(cachedConfig.log),
+  mirrorCaptureEnabled: asBoolean(cachedConfig.mirrorCapture?.enabled),
 
   serviceRunning: asBoolean(cachedState.serviceRunning),
   backendRunning: asBoolean(cachedState.backendRunning),
@@ -1171,6 +1175,17 @@ export async function saveDebugLogEnabled(enabled) {
   return persistConfigPayload({
     ...currentConfig,
     log: !!enabled,
+  });
+}
+
+export async function saveMirrorCaptureEnabled(enabled) {
+  const currentConfig = await loadPersistedUserConfig();
+  return persistConfigPayload({
+    ...currentConfig,
+    mirrorCapture: {
+      ...(currentConfig.mirrorCapture ?? {}),
+      enabled: !!enabled,
+    },
   });
 }
 
