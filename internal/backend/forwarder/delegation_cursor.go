@@ -98,6 +98,15 @@ func buildExecOpenContextForStream(stream *ActiveStream, overrides map[string]ru
 	}
 }
 
+// buildNativeTaskOpenContextForStream selects Cursor's direct parent-child
+// protocol only for a Task started from the parent conversation. Other exec
+// tools must retain the generic context.
+func buildNativeTaskOpenContextForStream(stream *ActiveStream, overrides map[string]runtimecore.SubagentModelOverrideSelection) execbridge.OpenExecContext {
+	openContext := buildExecOpenContextForStream(stream, overrides)
+	openContext.DirectMetaParentChild = true
+	return openContext
+}
+
 func firstSubagentOverrides(values ...map[string]runtimecore.SubagentModelOverrideSelection) map[string]runtimecore.SubagentModelOverrideSelection {
 	for _, value := range values {
 		if value != nil {

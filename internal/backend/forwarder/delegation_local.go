@@ -23,6 +23,8 @@ const (
 	defaultLocalDelegationMaxProviderPasses = 32
 	localDelegationFirstEventTimeout        = 90 * time.Second
 	delegatedOverflowRetryBudgetFactor      = 0.8
+	localDelegationVisibleUpdateMinBytes    = 320
+	localDelegationVisibleUpdateMaxBytes    = 1200
 )
 
 type LocalDelegatedToolExecutor func(context.Context, delegation.TaskRequest, runtimecore.ToolInvocation) (string, error)
@@ -337,6 +339,17 @@ func (adapter *localDelegatedAgentAdapter) runProviderPass(ctx context.Context, 
 		ArtifactPaths:      &modeladapter.LLMArtifactPaths{},
 	}
 	var textBuilder strings.Builder
+	var visibleTextBuilder strings.Builder
+	flushVisibleText := func(force bool) {
+		if visibleTextBuilder.Len() == 0 || (!force && visibleTextBuilder.Len() < localDelegationVisibleUpdateMinBytes) {
+			return
+		}
+		text := localDelegationVisibleProgress(visibleTextBuilder.String(), request.WorkspaceHint)
+		visibleTextBuilder.Reset()
+		if text != "" {
+			delegation.PublishWorkerVisibleUpdate(ctx, text)
+		}
+	}
 	invocations := make([]runtimecore.ToolInvocation, 0, 4)
 	usage := turnUsageSnapshot{
 		Role:          "worker",
@@ -367,6 +380,8 @@ func (adapter *localDelegatedAgentAdapter) runProviderPass(ctx context.Context, 
 		case modeladapter.ModelEventKindTextDelta:
 			delegation.MarkWorkerProgress(ctx)
 			textBuilder.WriteString(event.Text)
+			visibleTextBuilder.WriteString(event.Text)
+			flushVisibleText(false)
 		case modeladapter.ModelEventKindToolLikeCompleted:
 			delegation.MarkWorkerProgress(ctx)
 			if event.ToolInvocation != nil {
@@ -380,6 +395,7 @@ func (adapter *localDelegatedAgentAdapter) runProviderPass(ctx context.Context, 
 			}
 			return fmt.Errorf("delegated provider error")
 		case modeladapter.ModelEventKindTurnFinished:
+			flushVisibleText(true)
 			usage.Provider = event.Provider
 			usage.Model = event.Model
 			usage.ProviderModel = event.Model
@@ -432,6 +448,17 @@ func (adapter *localDelegatedAgentAdapter) runProviderPass(ctx context.Context, 
 		len(invocations),
 	)
 	return pass, nil
+}
+
+func localDelegationVisibleProgress(text, workspaceHint string) string {
+	text = delegation.SanitizeSupervisorText(strings.TrimSpace(text), workspaceHint)
+	if text == "" {
+		return ""
+	}
+	if len(text) > localDelegationVisibleUpdateMaxBytes {
+		text = strings.TrimSpace(text[:localDelegationVisibleUpdateMaxBytes]) + "..."
+	}
+	return text
 }
 
 func (adapter *localDelegatedAgentAdapter) executeTool(ctx context.Context, request delegation.TaskRequest, conversation *ConversationFile, invocation runtimecore.ToolInvocation) string {

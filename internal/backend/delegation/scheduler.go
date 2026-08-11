@@ -23,6 +23,13 @@ const (
 	DefaultMaxConcurrency = 4
 	DefaultRetentionLimit = 256
 	DefaultRetentionAge   = 10 * time.Minute
+	// DefaultPendingMultiplier 排队上限 = maxConcurrency × 该系数。模型批量
+	// 派发时超出的任务在 Submit 即被拒绝（返回错误给模型），而不是无限排队，
+	// 避免一次 provider pass 提交数百个任务拖垮客户端与整机。
+	DefaultPendingMultiplier = 4
+	// DefaultQueueTimeout 是未显式设置 QueueTimeout 时的排队等待上限。排队
+	// 任务超过该时长仍拿不到执行槽位即按超时结束，防止队列无限堆积。
+	DefaultQueueTimeout = 15 * time.Minute
 )
 
 type TaskStatus string
@@ -216,6 +223,11 @@ func (s *Scheduler) Submit(request TaskRequest) (string, error) {
 		request.ID = fmt.Sprintf("delegated-%d", s.taskSequence.Add(1))
 	}
 	request = cloneTaskRequest(request)
+	// QueueTimeout 兑底：调用方未显式设置时按默认排队上限计，排队超时即
+	// 终止，防止任务在槽位不足时无限堆积（曾造成数百个排队任务拖垮整机）。
+	if request.QueueTimeout <= 0 {
+		request.QueueTimeout = DefaultQueueTimeout
+	}
 	now := time.Now().UTC()
 	contract, err := canonicalizeSupervisionTaskContract(request)
 	if err != nil {
@@ -235,6 +247,13 @@ func (s *Scheduler) Submit(request TaskRequest) (string, error) {
 	if _, exists := s.activeExecutions[request.ID]; exists {
 		s.mu.Unlock()
 		return "", fmt.Errorf("delegated task %q is still executing", request.ID)
+	}
+	// 排队上限：非终态任务（排队 + 执行中）超过 maxConcurrency × 系数即
+	// 拒绝提交并把错误交还模型，阻止模型单轮批量派发数百个子代理。上限
+	// 随 maxConcurrency 放大，用户调高并发时排队容量同步放宽。
+	if pending := s.pendingTaskCountLocked(); pending >= s.maxConcurrency*DefaultPendingMultiplier {
+		s.mu.Unlock()
+		return "", fmt.Errorf("delegation scheduler queue is full: %d pending tasks (limit %d); reduce batch size or wait for running tasks to finish", pending, s.maxConcurrency*DefaultPendingMultiplier)
 	}
 	taskCtx, taskCancel := context.WithCancel(s.ctx)
 	snapshot := buildTaskSnapshot(request, now)
@@ -852,6 +871,12 @@ func (s *Scheduler) liveTaskCountLocked() int {
 		}
 	}
 	return live
+}
+
+// pendingTaskCountLocked 统计非终态任务数（排队 + 执行中 + 被取消但尚未
+// 收尾的 runner），用于 Submit 的排队上限判断。调用方必须已持有 s.mu。
+func (s *Scheduler) pendingTaskCountLocked() int {
+	return s.liveTaskCountLocked()
 }
 
 func (s *Scheduler) purgeBufferedEventsLocked() {

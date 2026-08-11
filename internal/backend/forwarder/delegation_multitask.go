@@ -133,9 +133,9 @@ func (service *Service) tryStartDelegatedTask(stream *ActiveStream, invocation r
 		logger.Infof("forwarder delegation start skipped request_id=%s reason=mode_not_multitask mode=%s provider_pass=%d", strings.TrimSpace(stream.RequestID), mode.String(), providerPass)
 		return false, nil
 	}
-	if hasActiveDelegationAggregate(stream) {
-		logger.Errorf("forwarder delegation start rejected request_id=%s reason=active_aggregate provider_pass=%d", strings.TrimSpace(stream.RequestID), providerPass)
-		return false, fmt.Errorf("a delegated task batch is already running for this turn")
+	if hasDelegationAggregateForToolCall(stream, invocation.CallID) {
+		logger.Errorf("forwarder delegation start rejected request_id=%s reason=duplicate_tool_call provider_pass=%d tool_call_id=%s", strings.TrimSpace(stream.RequestID), providerPass, strings.TrimSpace(invocation.CallID))
+		return false, fmt.Errorf("a delegated task batch is already running for tool call %q", strings.TrimSpace(invocation.CallID))
 	}
 	now := time.Now().UTC()
 	pending := runtimecore.PendingExec{
@@ -415,6 +415,27 @@ func hasActiveDelegationAggregate(stream *ActiveStream) bool {
 	return false
 }
 
+// hasDelegationAggregateForToolCall rejects only a duplicate dispatch of the
+// same Task call. Multitask may legitimately run the synthetic exploration
+// Task alongside later model-authored Task calls.
+func hasDelegationAggregateForToolCall(stream *ActiveStream, toolCallID string) bool {
+	if stream == nil {
+		return false
+	}
+	toolCallID = strings.TrimSpace(toolCallID)
+	if toolCallID == "" {
+		return false
+	}
+	stream.mu.Lock()
+	defer stream.mu.Unlock()
+	for _, pending := range stream.PendingExecs {
+		if strings.TrimSpace(pending.ExecKind) == "delegation_aggregate" && strings.TrimSpace(pending.ToolCallID) == toolCallID {
+			return true
+		}
+	}
+	return false
+}
+
 func (service *Service) handleDelegationResult(stream *ActiveStream, payload *streamDelegationResult) error {
 	if service == nil || stream == nil || payload == nil {
 		return nil
@@ -460,13 +481,12 @@ func (service *Service) handleDelegationResult(stream *ActiveStream, payload *st
 	// 构造完整的 Task tool call（含 TaskResult）随 tool_call_completed 发送给 Cursor 客户端。
 	// Cursor 客户端在 subagentTaskState 判定中依赖 tool_call_completed 的 tool_call.result：
 	// 带成功/失败 Result 时 Task 显示为 succeeded/failed，缺 Result 时退化为 cancelled。
-	agentID := delegationSubagentID(pending.ToolCallID)
 	durationMS := time.Since(firstNonZeroTime(pending.OpenedAt, time.Now().UTC())).Milliseconds()
 	if durationMS < 1 {
 		durationMS = 1
 	}
-	completedToolCall := buildDelegationCompletedTaskToolCall(pending.ArgsJSON, resultPayload, agentID, uint64(durationMS))
-	logger.Infof("forwarder delegation terminal task result ready request_id=%s exec_id=%s tool_call_id=%s agent_id=%s status=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID), agentID, strings.TrimSpace(resultSummary.Status))
+	completedToolCall := buildDelegationCompletedTaskToolCall(pending.ArgsJSON, resultPayload, "", uint64(durationMS))
+	logger.Infof("forwarder delegation terminal task result ready request_id=%s exec_id=%s tool_call_id=%s status=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID), strings.TrimSpace(resultSummary.Status))
 	if err := service.publishToolCallCompleted(stream.RequestID, pending.ToolCallID, pending.ModelCallID, completedToolCall); err != nil {
 		return err
 	}
@@ -507,6 +527,15 @@ func setTaskToolCallIdentity(toolCall *agentv1.ToolCall, agentID string) {
 	args.AgentId = &agentID
 }
 
+// clearTaskToolCallIdentity keeps locally aggregated Task cards from claiming
+// a Cursor-native child conversation that was never opened.
+func clearTaskToolCallIdentity(toolCall *agentv1.ToolCall) {
+	if toolCall == nil || toolCall.GetTaskToolCall() == nil || toolCall.GetTaskToolCall().GetArgs() == nil {
+		return
+	}
+	toolCall.GetTaskToolCall().GetArgs().AgentId = nil
+}
+
 func buildDelegationCompletedTaskToolCall(argsJSON []byte, resultPayload string, agentID string, durationMS uint64) *agentv1.ToolCall {
 	var summary struct {
 		Status    string                  `json:"status"`
@@ -523,13 +552,16 @@ func buildDelegationCompletedTaskToolCall(argsJSON []byte, resultPayload string,
 	// 在部分 worker 成功时产出，若映射为失败会让用户看到 worker 成功但 Task 报错。
 	if status == "completed" || status == "partial_success" {
 		steps := delegationResultConversationSteps(summary.Tasks)
+		success := &agentv1.TaskSuccess{
+			ConversationSteps: steps,
+			DurationMs:        &durationMS,
+		}
+		if agentID = strings.TrimSpace(agentID); agentID != "" {
+			success.AgentId = stringPtr(agentID)
+		}
 		taskResult = &agentv1.TaskResult{
 			Result: &agentv1.TaskResult_Success{
-				Success: &agentv1.TaskSuccess{
-					AgentId:           stringPtr(agentID),
-					ConversationSteps: steps,
-					DurationMs:        &durationMS,
-				},
+				Success: success,
 			},
 		}
 		logger.Infof("forwarder delegation completed TaskResult request_result_status=%s worker_count=%d step_count=%d output_chars=%d",
@@ -824,6 +856,9 @@ func (coordinator *multitaskDelegationCoordinator) ensureScheduler(maxConcurrenc
 }
 
 func (coordinator *multitaskDelegationCoordinator) executeWorker(ctx context.Context, request delegation.TaskRequest) delegation.TaskResult {
+	ctx = delegation.WithWorkerVisibleUpdatePublisher(ctx, func(text string) bool {
+		return coordinator.publishLocalWorkerProgress(request, text)
+	})
 	mode := delegation.NormalizeExecutionMode(request.ExecutionMode)
 	switch mode {
 	case delegation.ExecutionModeCursor:
@@ -833,6 +868,25 @@ func (coordinator *multitaskDelegationCoordinator) executeWorker(ctx context.Con
 	default:
 		return delegation.TaskResult{Error: fmt.Errorf("unsupported delegation execution mode %q", request.ExecutionMode)}
 	}
+}
+
+func (coordinator *multitaskDelegationCoordinator) publishLocalWorkerProgress(request delegation.TaskRequest, text string) bool {
+	if coordinator == nil || coordinator.service == nil {
+		return false
+	}
+	requestID := strings.TrimSpace(request.ParentRequest)
+	text = localDelegationVisibleProgress(text, request.WorkspaceHint)
+	if requestID == "" || text == "" {
+		return false
+	}
+	label := firstNonEmpty(strings.TrimSpace(request.Description), strings.TrimSpace(request.ModelName), strings.TrimSpace(request.ID), "worker")
+	message := fmt.Sprintf("【委派任务：%s】%s\n", label, text)
+	if err := coordinator.service.broker.Publish(requestID, StreamEvent{
+		Message: buildThinkingDeltaMessage(message, agentv1.ThinkingStyle_THINKING_STYLE_DEFAULT),
+	}); err != nil {
+		return false
+	}
+	return true
 }
 
 func (coordinator *multitaskDelegationCoordinator) awaitAggregate(stream *ActiveStream, pending runtimecore.PendingExec, aggregate *delegatedAggregate, snapshot delegatedAggregateSnapshot) {

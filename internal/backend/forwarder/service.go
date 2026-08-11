@@ -72,25 +72,25 @@ type Service struct {
 	// 避免每个请求重复刷日志（进程内一次即可，覆盖后由用户配置/目录补录解决）。
 	catalogUncoveredReported sync.Map
 	execBridge               execbridge.ExecBridge
-	interactionBridge      interactionbridge.InteractionBridge
-	appendSeq              *appendSequenceTracker
-	runQueue               *runQueue
-	cursorDelegation       *cursorDelegationBridge
-	localDelegation        *localDelegatedAgentAdapter
-	delegationConfig       delegation.RuntimeConfigProvider
-	goalConfig             goalConfigProvider
-	usageCostEstimator     goalUsageCostEstimator
-	goalsMu                sync.RWMutex
-	goals                  map[string]*GoalState // conversationID → goal 状态，保留最近 100 条
-	multitaskDelegation    *multitaskDelegationCoordinator
-	delegationRuntimeMu    sync.Mutex
-	nativeDelegations      map[string]*nativeDelegationRuntime
-	visionRunsMu           sync.Mutex
-	visionRuns             map[string]*visionDelegationRun
-	visionCacheMu          sync.Mutex
-	visionCache            map[string]visionCacheEntry
-	visionImageMu          sync.Mutex
-	visionImageFiles       map[string][]string
+	interactionBridge        interactionbridge.InteractionBridge
+	appendSeq                *appendSequenceTracker
+	runQueue                 *runQueue
+	cursorDelegation         *cursorDelegationBridge
+	localDelegation          *localDelegatedAgentAdapter
+	delegationConfig         delegation.RuntimeConfigProvider
+	goalConfig               goalConfigProvider
+	usageCostEstimator       goalUsageCostEstimator
+	goalsMu                  sync.RWMutex
+	goals                    map[string]*GoalState // conversationID → goal 状态，保留最近 100 条
+	multitaskDelegation      *multitaskDelegationCoordinator
+	delegationRuntimeMu      sync.Mutex
+	nativeDelegations        map[string]*nativeDelegationRuntime
+	visionRunsMu             sync.Mutex
+	visionRuns               map[string]*visionDelegationRun
+	visionCacheMu            sync.Mutex
+	visionCache              map[string]visionCacheEntry
+	visionImageMu            sync.Mutex
+	visionImageFiles         map[string][]string
 	// visionArchiveMu 保护 visionArchive：会话级图片识图结果归档。
 	// key = conversationID#imageHash，命中后直接用归档文本替换图片 part，
 	// 不再重复调识图模型，也避免历史图片反复进入 provider 上下文。
@@ -2500,6 +2500,7 @@ func (service *Service) handleToolInvocation(stream *ActiveStream, invocation ru
 			return service.completePreDispatchToolError(stream, invocation, startedToolCall, startedToolCall != nil, startedEmitted, err)
 		}
 		if delegatedTaskStarted {
+			clearTaskToolCallIdentity(startedToolCall)
 			logger.Infof("forwarder task dispatch order request_id=%s tool_call_id=%s order=aggregate_started_then_checkpoint_then_started", strings.TrimSpace(stream.RequestID), strings.TrimSpace(invocation.CallID))
 			if service.debug != nil {
 				service.debug.LogRuntime(context.Background(), stream.RequestID, stream.ConversationID, "task_dispatch_order", map[string]any{
