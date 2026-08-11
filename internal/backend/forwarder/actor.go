@@ -18,6 +18,9 @@ import (
 
 type TurnPhase string
 
+// thinkingDeltaLogInterval 保留首条和周期性进度，避免每个推理增量同步写 app.log。
+const thinkingDeltaLogInterval = 64
+
 const (
 	TurnPhaseIdle            TurnPhase = "idle"
 	TurnPhaseProviderRunning TurnPhase = "provider_running"
@@ -709,7 +712,9 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 		stream.UpdatedAt = time.Now().UTC()
 		stream.mu.Unlock()
 		service.markConversationActivity(conversationID)
-		logger.Infof("forwarder thinking delta request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d delta_count=%d accumulated_bytes=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), currentProviderPass(stream), deltaCount, accumulatedLength)
+		if shouldLogThinkingDelta(deltaCount) {
+			logger.Infof("forwarder thinking delta request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d delta_count=%d accumulated_bytes=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), currentProviderPass(stream), deltaCount, accumulatedLength)
+		}
 		if service.debug != nil {
 			service.debug.LogRuntime(context.Background(), requestID, conversationID, "thinking_delta_forwarded", map[string]any{
 				"model_call_id":     strings.TrimSpace(modelCallID),
@@ -896,6 +901,10 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 	default:
 		return nil
 	}
+}
+
+func shouldLogThinkingDelta(deltaCount int) bool {
+	return deltaCount == 1 || (deltaCount > 1 && deltaCount%thinkingDeltaLogInterval == 0)
 }
 
 // textDeltaDebugFields 只记录计数、字节数和摘要，避免新增 debug 事件复制用户正文。
