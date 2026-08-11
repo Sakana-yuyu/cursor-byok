@@ -42,6 +42,7 @@ const (
 	CodexMetadataOutputTokensKey    = "codex_output_tokens"
 	CodexMetadataReasoningTokensKey = "codex_reasoning_output_tokens"
 	CodexMetadataContractKey        = "codex_command_contract"
+	CodexCLIInstallURL              = "https://developers.openai.com/codex/cli/"
 
 	codexCommandContract    = "exec-jsonl-v0.147.0"
 	codexOutputLimit        = 4 * 1024 * 1024
@@ -86,7 +87,7 @@ func NewCodexCLIRegistration(runner processRunner, config delegation.RuntimeExec
 		runTimeout:   executorTimeout(config.ExecutionTimeoutSeconds, 2*time.Minute),
 	}
 	return delegation.ExecutorRegistration{
-		ID: CodexCLIExecutorID, DisplayName: firstNonEmpty(config.DisplayName, "Codex CLI"),
+		ID: CodexCLIExecutorID, DisplayName: firstNonEmpty(config.DisplayName, "Codex CLI"), InstallURL: CodexCLIInstallURL,
 		Enabled: config.Enabled, Priority: config.Priority,
 		Capabilities: append([]delegation.ExecutorCapability{}, codexCapabilities...),
 		Probe:        adapter.probe, Execute: adapter.execute,

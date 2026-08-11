@@ -18,6 +18,7 @@ const (
 type ExecutorRegistration struct {
 	ID           ExecutorID
 	DisplayName  string
+	InstallURL   string
 	Enabled      bool
 	Priority     int
 	Capabilities []ExecutorCapability
@@ -34,6 +35,7 @@ type ExecutorRegistryConfig struct {
 type ExecutorSnapshot struct {
 	ID            ExecutorID
 	DisplayName   string
+	InstallURL    string
 	Enabled       bool
 	Priority      int
 	Capabilities  []ExecutorCapability
@@ -142,6 +144,7 @@ func normalizeExecutorRegistration(registration ExecutorRegistration) (ExecutorR
 	if registration.DisplayName == "" {
 		registration.DisplayName = string(registration.ID)
 	}
+	registration.InstallURL = strings.TrimSpace(registration.InstallURL)
 	if registration.Probe == nil {
 		return ExecutorRegistration{}, fmt.Errorf("executor %q probe is required", registration.ID)
 	}
@@ -376,6 +379,7 @@ func snapshotExecutorEntry(entry *executorRegistryEntry) ExecutorSnapshot {
 	return ExecutorSnapshot{
 		ID:            entry.registration.ID,
 		DisplayName:   entry.registration.DisplayName,
+		InstallURL:    entry.registration.InstallURL,
 		Enabled:       entry.registration.Enabled,
 		Priority:      entry.registration.Priority,
 		Capabilities:  cloneExecutorCapabilities(capabilities),

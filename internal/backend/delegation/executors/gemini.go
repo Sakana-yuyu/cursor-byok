@@ -40,6 +40,7 @@ const (
 	GeminiMetadataOutputTokensKey = "gemini_output_tokens"
 	GeminiMetadataCachedTokensKey = "gemini_cached_tokens"
 	GeminiMetadataContractKey     = "gemini_command_contract"
+	GeminiCLIInstallURL           = "https://github.com/google-gemini/gemini-cli"
 
 	geminiCommandContract    = "prompt-stream-json-approval-mode"
 	geminiOutputLimit        = 4 * 1024 * 1024
@@ -91,6 +92,7 @@ func NewGeminiCLIRegistration(runner processRunner, config delegation.RuntimeExe
 	return delegation.ExecutorRegistration{
 		ID:           GeminiCLIExecutorID,
 		DisplayName:  firstNonEmpty(config.DisplayName, "Gemini CLI"),
+		InstallURL:   GeminiCLIInstallURL,
 		Enabled:      config.Enabled,
 		Priority:     config.Priority,
 		Capabilities: append([]delegation.ExecutorCapability{}, geminiCapabilities...),

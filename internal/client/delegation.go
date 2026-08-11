@@ -14,6 +14,7 @@ import (
 type DelegationExecutorSnapshot struct {
 	ID                      string     `json:"id"`
 	DisplayName             string     `json:"displayName"`
+	InstallURL              string     `json:"installURL,omitempty"`
 	Enabled                 bool       `json:"enabled"`
 	Priority                int        `json:"priority"`
 	Capabilities            []string   `json:"capabilities,omitempty"`
@@ -45,6 +46,7 @@ func publicDelegationExecutorSnapshots(source []delegation.ExecutorSnapshot) []D
 		result = append(result, DelegationExecutorSnapshot{
 			ID:                      string(item.ID),
 			DisplayName:             item.DisplayName,
+			InstallURL:              item.InstallURL,
 			Enabled:                 item.Enabled,
 			Priority:                item.Priority,
 			Capabilities:            capabilities,

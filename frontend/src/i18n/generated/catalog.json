@@ -1606,7 +1606,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 145,
+          "line": 140,
           "column": 112
         }
       ]
@@ -2130,7 +2130,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 115,
+          "line": 110,
           "column": 85
         }
       ]
@@ -2864,7 +2864,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 149,
+          "line": 144,
           "column": 57
         }
       ]
@@ -3502,7 +3502,7 @@
         },
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 154,
+          "line": 149,
           "column": 97
         },
         {
@@ -4217,7 +4217,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 106,
+          "line": 101,
           "column": 5
         }
       ]
@@ -5239,7 +5239,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 150,
+          "line": 145,
           "column": 57
         }
       ]
@@ -6742,7 +6742,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 130,
+          "line": 125,
           "column": 68
         }
       ]
@@ -8689,7 +8689,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 154,
+          "line": 149,
           "column": 154
         }
       ]
@@ -8985,7 +8985,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 133,
+          "line": 128,
           "column": 91
         }
       ]
@@ -9353,7 +9353,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 90,
+          "line": 85,
           "column": 25
         }
       ]
@@ -11057,12 +11057,12 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 147,
+          "line": 142,
           "column": 55
         },
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 147,
+          "line": 142,
           "column": 135
         }
       ]
@@ -11110,7 +11110,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 145,
+          "line": 140,
           "column": 196
         }
       ]
@@ -11235,12 +11235,12 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 134,
+          "line": 129,
           "column": 103
         },
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 144,
+          "line": 139,
           "column": 61
         }
       ]
@@ -12291,7 +12291,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 131,
+          "line": 126,
           "column": 85
         }
       ]
@@ -13815,7 +13815,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 112,
+          "line": 107,
           "column": 58
         }
       ]
@@ -16084,7 +16084,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 107,
+          "line": 102,
           "column": 5
         }
       ]
@@ -17163,8 +17163,8 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 126,
-          "column": 180
+          "line": 121,
+          "column": 178
         }
       ]
     },
@@ -18623,7 +18623,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 111,
+          "line": 106,
           "column": 63
         }
       ]

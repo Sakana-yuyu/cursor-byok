@@ -38,6 +38,21 @@ func TestExecutorRegistryRejectsDuplicateRegistration(t *testing.T) {
 	}
 }
 
+// TestExecutorRegistrySnapshotCarriesOfficialInstallURL 防止安装入口退化为前端按 ID 硬编码。
+func TestExecutorRegistrySnapshotCarriesOfficialInstallURL(t *testing.T) {
+	registry := NewExecutorRegistry(ExecutorRegistryConfig{})
+	registration := readyExecutorRegistration("gemini-cli", 10, ExecutorCapabilityReadWorkspace)
+	registration.InstallURL = "https://github.com/google-gemini/gemini-cli"
+	if err := registry.Register(registration); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+
+	snapshot, ok := registry.Snapshot("gemini-cli")
+	if !ok || snapshot.InstallURL != registration.InstallURL {
+		t.Fatalf("Snapshot() install URL = %q, ok=%t", snapshot.InstallURL, ok)
+	}
+}
+
 func TestExecutorRegistryReplaceUpdatesPolicyAndClearsProbe(t *testing.T) {
 	registry := NewExecutorRegistry(ExecutorRegistryConfig{})
 	registration := readyExecutorRegistration("claude-code", 10, ExecutorCapabilityReadWorkspace)

@@ -64,3 +64,15 @@ func TestPublicCursorCapabilityMapsEditorAndAgentStates(t *testing.T) {
 		t.Fatalf("public Cursor snapshot = %#v", items)
 	}
 }
+
+// TestPublicDelegationExecutorSnapshotExposesInstallURL 验证官方安装入口经过桌面绑定传递，
+// 并且不依赖诊断文本解析。
+func TestPublicDelegationExecutorSnapshotExposesInstallURL(t *testing.T) {
+	items := publicDelegationExecutorSnapshots([]delegation.ExecutorSnapshot{{
+		ID:         "gemini-cli",
+		InstallURL: "https://github.com/google-gemini/gemini-cli",
+	}})
+	if len(items) != 1 || items[0].InstallURL != "https://github.com/google-gemini/gemini-cli" {
+		t.Fatalf("public install URL = %#v", items)
+	}
+}

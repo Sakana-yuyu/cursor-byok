@@ -40,6 +40,7 @@ const (
 	ClaudeMetadataOutputTokensKey = "claude_output_tokens"
 	ClaudeMetadataCostUSDKey      = "claude_cost_usd"
 	ClaudeMetadataContractKey     = "claude_command_contract"
+	ClaudeCodeInstallURL          = "https://code.claude.com/docs/en/quickstart"
 
 	claudeCommandContract    = "print-stream-json-v2.1.226"
 	claudeOutputLimit        = 4 * 1024 * 1024
@@ -92,6 +93,7 @@ func NewClaudeCodeRegistration(runner processRunner, config delegation.RuntimeEx
 	return delegation.ExecutorRegistration{
 		ID:           ClaudeCodeExecutorID,
 		DisplayName:  firstNonEmpty(strings.TrimSpace(config.DisplayName), "Claude Code"),
+		InstallURL:   ClaudeCodeInstallURL,
 		Enabled:      config.Enabled,
 		Priority:     config.Priority,
 		Capabilities: append([]delegation.ExecutorCapability{}, claudeCapabilities...),

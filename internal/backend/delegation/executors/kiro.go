@@ -29,6 +29,7 @@ const (
 
 	KiroMetadataVersionKey  = "kiro_version"
 	KiroMetadataContractKey = "kiro_command_contract"
+	KiroCLIInstallURL       = "https://cli.kiro.dev/install"
 
 	kiroCommandContract = "chat-no-interactive-v1"
 	kiroOutputLimit     = 4 * 1024 * 1024
@@ -72,7 +73,7 @@ func NewKiroCLIRegistration(runner processRunner, config delegation.RuntimeExecu
 		runTimeout:   executorTimeout(config.ExecutionTimeoutSeconds, 2*time.Minute),
 	}
 	return delegation.ExecutorRegistration{
-		ID: KiroCLIExecutorID, DisplayName: firstNonEmpty(config.DisplayName, "Kiro CLI"),
+		ID: KiroCLIExecutorID, DisplayName: firstNonEmpty(config.DisplayName, "Kiro CLI"), InstallURL: KiroCLIInstallURL,
 		Enabled: config.Enabled, Priority: config.Priority,
 		Capabilities: append([]delegation.ExecutorCapability{}, kiroCapabilities...),
 		Probe:        adapter.probe, Execute: adapter.execute,
