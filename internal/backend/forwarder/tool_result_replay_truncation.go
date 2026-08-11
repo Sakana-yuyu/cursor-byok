@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	modeladapter "cursor/internal/backend/agent/model"
 )
 
 const (
@@ -21,6 +23,7 @@ const (
 	projectedWebSearchReplayLimit  = 16 * projectedReplayKiB
 	projectedMcpReplayLimit        = 32 * projectedReplayKiB
 	projectedTaskReplayLimit       = 64 * projectedReplayKiB
+	activeTurnEmergencyReplayLimit = 4 * projectedReplayKiB
 
 	// 陈旧工具结果激进截断阈值（移植自 Reasonix 的「cache-first context maintenance」）。
 	// 投影层不改动历史，只让「陈旧且巨大」的工具结果在模型视图里比当前更短，从而减缓上下文增长、
@@ -28,6 +31,120 @@ const (
 	staleToolResultAggressiveThreshold = 8 * projectedReplayKiB // 仅当陈旧结果 > 8 KiB 才启动激进截断，避免无谓截断已经很小的结果
 	staleToolResultReplayLimit         = 4 * projectedReplayKiB // 陈旧大结果的目标上限，远小于各工具的常规 32-128 KiB 限制
 )
+
+type activeTurnToolResultCompactionStats struct {
+	BeforeTokens     int64
+	AfterTokens      int64
+	ShortenedResults int
+	OmittedResults   int
+	LatestToolCallID string
+}
+
+// compactActiveTurnToolResultsForBudget is an emergency provider-view projection.
+// It preserves the canonical conversation and the newest completed tool result,
+// while shrinking older results from the active turn until the prompt fits.
+func compactActiveTurnToolResultsForBudget(conversation *ConversationFile, compiled CompiledConversation, budgetTokens int64) (CompiledConversation, activeTurnToolResultCompactionStats, bool) {
+	stats := activeTurnToolResultCompactionStats{BeforeTokens: estimateCompiledPromptTokens(compiled)}
+	stats.AfterTokens = stats.BeforeTokens
+	if conversation == nil || budgetTokens <= 0 || stats.BeforeTokens <= budgetTokens {
+		return compiled, stats, stats.BeforeTokens <= budgetTokens
+	}
+	turnSeq := conversation.CurrentTurnSeq
+	if turnSeq <= 0 {
+		turnSeq = conversation.NextTurnSeq - 1
+	}
+	requestID := strings.TrimSpace(conversation.CurrentRequestID)
+	latestToolCallID := latestCompletedToolCallIDForTurn(conversation.Entries, turnSeq, requestID)
+	stats.LatestToolCallID = latestToolCallID
+	if turnSeq <= 0 || requestID == "" || latestToolCallID == "" {
+		return compiled, stats, false
+	}
+	currentToolCallIDs := make(map[string]struct{})
+	for _, entry := range conversation.Entries {
+		if entry.TurnSeq != turnSeq || strings.TrimSpace(entry.RequestID) != requestID || strings.TrimSpace(entry.Kind) != "tool_result" {
+			continue
+		}
+		if toolCallID := historyEntryToolCallID(entry); toolCallID != "" {
+			currentToolCallIDs[toolCallID] = struct{}{}
+		}
+	}
+	if len(currentToolCallIDs) < 2 {
+		return compiled, stats, false
+	}
+
+	projected := compiled
+	projected.Messages = append([]modeladapter.Message(nil), compiled.Messages...)
+	currentToolMessageIndexes := make(map[string]int, len(currentToolCallIDs))
+	for index, message := range projected.Messages {
+		toolCallID := strings.TrimSpace(message.ToolCallID)
+		if strings.TrimSpace(message.Role) != "tool" || toolCallID == "" {
+			continue
+		}
+		if _, ok := currentToolCallIDs[toolCallID]; ok {
+			// The active turn is the newest replay suffix. Selecting the last provider
+			// message for each ID prevents an older turn that reused an ID from being
+			// rewritten by this emergency projection.
+			currentToolMessageIndexes[toolCallID] = index
+		}
+	}
+	type activeTurnToolResultCandidate struct {
+		Index         int
+		OriginalBytes int
+		ToolName      string
+		ToolCallID    string
+	}
+	candidateIndexes := make([]activeTurnToolResultCandidate, 0, len(currentToolCallIDs)-1)
+	for index, message := range projected.Messages {
+		toolCallID := strings.TrimSpace(message.ToolCallID)
+		if toolCallID == "" || toolCallID == latestToolCallID || currentToolMessageIndexes[toolCallID] != index {
+			continue
+		}
+		candidateIndexes = append(candidateIndexes, activeTurnToolResultCandidate{
+			Index:         index,
+			OriginalBytes: len(message.Content),
+			ToolName:      firstNonEmpty(strings.TrimSpace(message.Name), "tool"),
+			ToolCallID:    toolCallID,
+		})
+	}
+	for _, candidate := range candidateIndexes {
+		message := &projected.Messages[candidate.Index]
+		if len(message.Content) <= activeTurnEmergencyReplayLimit {
+			continue
+		}
+		message.Content = truncateProjectedReplayTextMiddle(candidate.ToolName, message.Content, activeTurnEmergencyReplayLimit)
+		if candidate.Index < projected.StableMessageCount {
+			projected.StableMessageCount = candidate.Index
+		}
+		stats.ShortenedResults++
+		stats.AfterTokens = estimateCompiledPromptTokens(projected)
+		if stats.AfterTokens <= budgetTokens {
+			return projected, stats, true
+		}
+	}
+	for _, candidate := range candidateIndexes {
+		message := &projected.Messages[candidate.Index]
+		minimal := fmt.Sprintf(
+			"[%s result omitted from the active-turn provider view after exceeding the context budget; tool_call_id=%s original_bytes=%d original result remains in canonical history]",
+			candidate.ToolName,
+			candidate.ToolCallID,
+			candidate.OriginalBytes,
+		)
+		if message.Content == minimal {
+			continue
+		}
+		message.Content = minimal
+		if candidate.Index < projected.StableMessageCount {
+			projected.StableMessageCount = candidate.Index
+		}
+		stats.OmittedResults++
+		stats.AfterTokens = estimateCompiledPromptTokens(projected)
+		if stats.AfterTokens <= budgetTokens {
+			return projected, stats, true
+		}
+	}
+	stats.AfterTokens = estimateCompiledPromptTokens(projected)
+	return projected, stats, stats.AfterTokens <= budgetTokens
+}
 
 func limitProjectedToolResultReplay(toolName string, content string, resultText string, fromStoredToolCall bool, historical bool) string {
 	if compacted, ok := compactProjectedGenerateImageResultReplay(toolName, content, resultText); ok {
