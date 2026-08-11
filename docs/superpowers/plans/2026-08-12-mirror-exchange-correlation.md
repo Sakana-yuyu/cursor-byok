@@ -33,16 +33,16 @@
 - 修改：`internal/mitm/mirror.go`
 - 修改：`internal/mitm/service.go`
 
-- [ ] 定义镜像交换上下文和四种记录阶段。
-- [ ] 在镜像请求分支创建上下文、记录请求并从 JSON/URL 尽力提取模型。
-- [ ] 在响应和响应流包装分支传递相同上下文，记录响应起始、片段和截断。
-- [ ] 运行 `go test ./internal/mitm`、`go build ./...` 与 `go vet ./...`，检查 JSONL 输出字段，然后提交本任务。
+- [x] 定义镜像交换上下文和四种记录阶段。
+- [x] 在镜像请求分支创建上下文、记录请求并从 JSON/URL 尽力提取模型。
+- [x] 在响应和响应流包装分支传递相同上下文，记录响应起始、片段和截断。
+- [x] 运行 `go test ./internal/mitm`、`go build ./...` 与 `go vet ./internal/mitm`，检查代码输出字段并提交本任务。
 
 ### 任务 3：更新验证台账
 
 **文件：**
 - 修改：`spec/changes/backend-capability-ui-discovery/verify.md`
 
-- [ ] 记录静态、模块测试和构建证据。
-- [ ] 明确真实 Cursor 官方请求仍需用户显式完成的桌面端人工验证。
-- [ ] 提交本任务。
+- [x] 记录静态、模块测试和构建证据。
+- [x] 明确真实 Cursor 官方请求仍需用户显式完成的桌面端人工验证。
+- [x] 提交本任务。

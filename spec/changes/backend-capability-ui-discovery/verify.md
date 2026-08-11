@@ -27,3 +27,20 @@
 - 浏览器 preview：未启用态显示“未启用/刷新/打开记录目录”；注入只读元数据后显示“已记录”、`1.5 KB` 和更新时间；375px 宽度 `scrollWidth=375`、`innerWidth=375`；页面中未出现样例正文、HTTP URL 或 `authorization`；点击目录按钮记录到 `OpenMirrorCaptureDirectory` mock，控制台错误数为 0。
 - `ast-grep` 未安装，未执行 AST 规则包；已对 `AdvancedSettings.vue`、`clientApi.js`、`browserBindings.js` 进行 charter 手工模式扫描。新增的状态/操作错误均写入界面错误状态，未发现“新逻辑失败后静默回退旧逻辑”或数据写入路径吞错返回默认值。
 - 独立 `spec-verifier` agent 调度工具在当前会话不可用，因此本轮没有独立验证结论；上述检查为实现会话的自检证据，不能替代独立审查。
+
+## Round 2 - mirror exchange correlation evidence
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- | --- |
+| V-6 | correctness | major | fixed(r2) | 镜像记录的请求、响应起始、流式片段与截断标记没有共同事务标识；并发请求只能按时间猜测关联。 | `51a1b80` 在 `internal/mitm/service.go` 的镜像请求分支以 `goproxy.ProxyCtx.Session` 创建仅进程内的 `mirror-<session>` ID 并存入 `UserData`；响应过滤器只读取同一具名 `*mirrorExchange`。`internal/mitm/mirror.go` 为四类记录写入 `exchangeId` 和 `phase`，并将请求体或 Gemini URL 的模型名传递给响应记录。 | JSONL 可按 `exchangeId` 关联；阶段限定为 `request`、`response_start`、`response_chunk`、`response_truncated`。 |
+| V-7 | security-boundary | major | fixed(r2) | 关联元数据不得改变官方请求，且不能扩大前端对抓包原文的读取边界。 | 静态检索显示 `internal/mitm/service.go` 仅有一处 `ctx.UserData = exchange`，位于镜像请求分支；新增代码没有 `Header.Set` 或 `Header.Add`。`frontend/src` 对 `exchangeId` 与四种阶段均无消费者。 | `exchangeId` 只落本地 JSONL；现有前端继续仅显示记录文件元数据与本地目录入口。 |
+| V-8 | runtime-evidence | minor | open | 未在真实 Cursor 桌面端产生一条带关联字段的官方请求记录。 | 本轮没有启动桌面代理、修改真实 Cursor 配置或主动调用官方 API；`go test ./internal/mitm` 覆盖既有 recorder/响应包装路径，但项目 `IMPROVEMENT_TASKS.md` 要求不新增测试，未添加新测试文件或测试用例。 | 用户需在桌面端显式开启镜像记录、确认本地服务/MITM/代理均就绪、重启 Cursor 后用官方 key 发起一次模型请求；应检查 `history/_debug/mirror/official.raw.jsonl` 的同一交换记录具备相同 `exchangeId`，依次出现 `request`、`response_start` 及零到多个 `response_chunk` 或 `response_truncated`。 |
+| V-9 | concurrency-evidence | minor | open | 当前环境无法运行 Go race detector，为并发关联提供额外运行时证据。 | `go test -race ./internal/mitm` 未启动，报错 `-race requires cgo`；`go env` 显示 `CGO_ENABLED=0`、`GOOS=windows`、`GOARCH=amd64`。 | 在具备 CGO 的 Windows Go 环境运行 `go test -race ./internal/mitm`；正常模块测试、`go vet ./internal/mitm` 与 `go build ./...` 已通过。 |
+
+本轮证据：
+
+- `go test ./internal/mitm`：退出码 0。
+- `go vet ./internal/mitm`：退出码 0。
+- `go build ./...`：退出码 0。
+- `git diff --check`：退出码 0；代码提交前仅暂存 `internal/mitm/mirror.go` 与 `internal/mitm/service.go`。
+- 关联 ID 基于 goproxy 的单调 `ProxyCtx.Session`，未进入 HTTP header、URL 或正文；镜像开关在响应过滤器仍保留原有检查，关闭后新到达的响应不再包装记录。
