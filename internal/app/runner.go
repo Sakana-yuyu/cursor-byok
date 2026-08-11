@@ -116,7 +116,16 @@ func Run(resources EmbeddedResources) error {
 	logStartupPhase("certs-ready")
 
 	defaultBackendBaseURL := "http://" + serverconfig.DefaultBackendListenAddr
-	proxyServer, err := mitm.NewProxyServer(serverconfig.DefaultProxyListenAddr, defaultBackendBaseURL, "", "", certManager)
+	// 镜像记录配置使用应用生命周期上下文：Manager 在启动时加载一次，
+	// 之后每次读取都会热加载（reloadIfChanged），无需持有可取消的 ctx。
+	runCtx := context.Background()
+	mirrorStore := serverconfig.NewStore(appdata.ConfigFilePath(), appdata.LogsRootPath())
+	mirrorCfg, mirrorCfgErr := serverconfig.NewManager(runCtx, mirrorStore)
+	if mirrorCfgErr != nil {
+		// 配置管理器初始化失败不影响启动：镜像开关关闭（镜像记录不启用），回落语义不变。
+		logger.Warnf("init mirror capture config manager failed: %v", mirrorCfgErr)
+	}
+	proxyServer, err := mitm.NewProxyServer(serverconfig.DefaultProxyListenAddr, defaultBackendBaseURL, appdata.HistoryRootPath(), mirrorCfg, certManager)
 	if err != nil {
 		return err
 	}

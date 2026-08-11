@@ -470,6 +470,27 @@ func (manager *Manager) DebugLogMaxBytes(ctx context.Context) int {
 	return 0
 }
 
+// MirrorCaptureEnabled 返回镜像记录开关（热加载生效）。
+func (manager *Manager) MirrorCaptureEnabled(ctx context.Context) bool {
+	if manager == nil {
+		return false
+	}
+	manager.reloadIfChanged(ctx)
+	return manager.currentConfig().MirrorCapture.Enabled
+}
+
+// MirrorCaptureHosts 返回镜像记录域名列表；空配置回落默认列表。
+func (manager *Manager) MirrorCaptureHosts() []string {
+	if manager == nil {
+		return nil
+	}
+	hosts := manager.currentConfig().MirrorCapture.Hosts
+	if len(hosts) == 0 {
+		return DefaultMirrorHosts
+	}
+	return hosts
+}
+
 func (manager *Manager) Subscribe(listener func(Config)) func() {
 	if manager == nil || listener == nil {
 		return func() {}

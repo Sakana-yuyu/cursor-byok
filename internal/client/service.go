@@ -63,6 +63,8 @@ type ProxyService struct {
 	configPath string
 	// store 表示统一的配置存储。
 	store *serverconfig.Store
+	// configs 提供热加载配置（含镜像记录开关）。
+	configs *serverconfig.Manager
 	// caCertPEM 表示当前声明中的 caCertPEM。
 	caCertPEM []byte
 
@@ -198,6 +200,12 @@ func NewProxyService(proxy *mitm.ProxyServer, certManager *certs.Manager, caCert
 	)
 	service.loadPersistedModelAdapterTestResults()
 	service.store = serverconfig.NewStore(service.configPath, service.logsRoot)
+	if m, err := serverconfig.NewManager(context.Background(), service.store); err == nil {
+		service.configs = m
+	} else {
+		// 配置管理器初始化失败不影响启动：镜像开关关闭（镜像记录不启用），回落语义不变。
+		logger.Warnf("init mirror capture config manager failed: %v", err)
+	}
 	host, err := backend.NewHost(service.store, service.cursorAccount)
 	if err != nil {
 		logger.Errorf("init backend host failed: %v", err)
@@ -269,7 +277,7 @@ func (s *ProxyService) ensureProxy(cfg serverconfig.Config) error {
 		}
 	}
 
-	proxyServer, err := mitm.NewProxyServer(listenAddr, baseURL, "", "", s.certManager)
+	proxyServer, err := mitm.NewProxyServer(listenAddr, baseURL, appdata.HistoryRootPath(), s.configs, s.certManager)
 	if err != nil {
 		return err
 	}

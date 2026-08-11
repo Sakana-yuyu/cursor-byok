@@ -55,6 +55,13 @@ type ProxyServer struct {
 	httpServer *http.Server
 	// serveErrCh 表示当前声明中的 serveErrCh。
 	serveErrCh chan error
+
+	// mirrorConfig 提供镜像记录配置；nil 表示不启用。
+	mirrorConfig MirrorCaptureConfig
+	// mirrorRec 负责把镜像请求/响应写入 official.raw.jsonl；nil 表示不可用。
+	mirrorRec *mirrorRecorder
+	// mirrorMu 保护 mirrorConfig/mirrorRec 的并发替换。
+	mirrorMu sync.RWMutex
 }
 
 // Snapshot 定义了当前模块中的 Snapshot 类型。
@@ -179,7 +186,7 @@ func logSuppressedProxyMessages(prefix string, suppressed int) {
 }
 
 // NewProxyServer 用于处理与 NewProxyServer 相关的逻辑。
-func NewProxyServer(addr, baseURL, _ string, _ string, certManager *certs.Manager) (*ProxyServer, error) {
+func NewProxyServer(addr, baseURL, historyRoot string, mirror MirrorCaptureConfig, certManager *certs.Manager) (*ProxyServer, error) {
 	u, normalizedBaseURL, err := parseBaseURL(baseURL)
 	if err != nil {
 		return nil, err
@@ -201,6 +208,10 @@ func NewProxyServer(addr, baseURL, _ string, _ string, certManager *certs.Manage
 				ResponseHeaderTimeout: 5 * time.Minute,
 			},
 		},
+		mirrorConfig: mirror,
+	}
+	if historyRoot != "" {
+		s.mirrorRec = newMirrorRecorder(historyRoot)
 	}
 	s.proxy = s.newGoproxyHandler()
 	return s, nil
@@ -291,6 +302,11 @@ func (s *ProxyServer) Start() error {
 			s.httpServer = nil
 		}
 		s.runMu.Unlock()
+		// 异常退出（非正常 Shutdown）：服务已不可用，及时关闭镜像记录器释放文件句柄。
+		// 正常 Stop 路径由 Stop 在 Shutdown 后调用 closeMirrorRecorder（幂等，重复调用安全）。
+		if serveErr != nil {
+			s.closeMirrorRecorder()
+		}
 	})
 
 	return nil
@@ -306,7 +322,10 @@ func (s *ProxyServer) Stop(ctx context.Context) error {
 	}
 	s.httpServer = nil
 	s.runMu.Unlock()
-	return httpServer.Shutdown(ctx)
+	err := httpServer.Shutdown(ctx)
+	// 排空活跃请求后关闭镜像记录器，释放文件句柄。
+	s.closeMirrorRecorder()
+	return err
 }
 
 // IsRunning 用于处理与 IsRunning 相关的逻辑。
@@ -407,10 +426,13 @@ func (s *ProxyServer) newGoproxyHandler() *goproxy.ProxyHttpServer {
 		}
 	}
 	proxy.OnRequest().HandleConnect(goproxy.FuncHttpsHandler(func(host string, ctx *goproxy.ProxyCtx) (*goproxy.ConnectAction, string) {
-		if mitmAction == nil || !isWhitelistedRelayHost(host) {
+		if mitmAction == nil {
 			return goproxy.OkConnect, host
 		}
-		return mitmAction, host
+		if isWhitelistedRelayHost(host) || s.isMirrorHost(host) {
+			return mitmAction, host
+		}
+		return goproxy.OkConnect, host
 	}))
 
 	// MITM 解密后：Cursor 白名单域名转发到 backend server，其余请求由 goproxy 直连回源。
@@ -436,7 +458,26 @@ func (s *ProxyServer) newGoproxyHandler() *goproxy.ProxyHttpServer {
 			return req, resp
 		}
 
+		if s.mirrorEnabledForHost(host) {
+			// 镜像记录：解密后记录明文，直通官方（不转发 backend）。
+			s.recordMirrorRequest(req)
+		}
 		return req, nil
+	})
+
+	// 镜像记录响应流：SSE 逐 chunk tee 一份到记录器，客户端流不受影响。
+	proxy.OnResponse().DoFunc(func(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
+		if resp == nil || resp.Body == nil {
+			return resp
+		}
+		host := ""
+		if resp.Request != nil {
+			host = hostFromHTTPRequest(resp.Request)
+		}
+		if s.mirrorEnabledForHost(host) {
+			resp.Body = s.wrapMirrorResponse(host, resp)
+		}
+		return resp
 	})
 	return proxy
 }
@@ -791,6 +832,114 @@ func isWhitelistedRelayHost(host string) bool {
 		return true
 	}
 	return false
+}
+
+// isMirrorHost 判断 host（可含端口）是否命中镜像记录域名列表。
+func (s *ProxyServer) isMirrorHost(host string) bool {
+	host = strings.ToLower(strings.TrimSpace(host))
+	if i := strings.IndexByte(host, ':'); i >= 0 {
+		host = host[:i]
+	}
+	for _, h := range s.mirrorHosts() {
+		if h == host {
+			return true
+		}
+	}
+	return false
+}
+
+// mirrorHosts 返回当前镜像记录域名列表。
+func (s *ProxyServer) mirrorHosts() []string {
+	s.mirrorMu.RLock()
+	defer s.mirrorMu.RUnlock()
+	if s.mirrorConfig == nil {
+		return nil
+	}
+	return s.mirrorConfig.MirrorCaptureHosts()
+}
+
+// mirrorEnabledForHost 判定镜像记录是否对该 host 生效（开关+列表+记录器三者齐备）。
+func (s *ProxyServer) mirrorEnabledForHost(host string) bool {
+	if s.mirrorConfig == nil || s.mirrorRec == nil {
+		return false
+	}
+	if !s.mirrorConfig.MirrorCaptureEnabled(context.Background()) {
+		return false
+	}
+	return s.isMirrorHost(host)
+}
+
+// recordMirrorRequest 记录一次镜像请求（内部重建 req.Body 供直通）。
+func (s *ProxyServer) recordMirrorRequest(req *http.Request) {
+	s.mirrorMu.RLock()
+	defer s.mirrorMu.RUnlock()
+	if s.mirrorRec == nil {
+		return
+	}
+	s.mirrorRec.recordRequest(hostFromHTTPRequest(req), req)
+}
+
+// wrapMirrorResponse 记录响应起始信息（status/脱敏 headers）并包装响应体，
+// 使每个读出的 chunk 同时写入记录器。
+func (s *ProxyServer) wrapMirrorResponse(host string, resp *http.Response) io.ReadCloser {
+	s.mirrorMu.RLock()
+	defer s.mirrorMu.RUnlock()
+	if s.mirrorRec == nil || resp == nil {
+		if resp == nil {
+			return nil
+		}
+		return resp.Body
+	}
+	s.mirrorRec.recordResponseStart(host, resp)
+	return &mirrorTeeReadCloser{r: resp.Body, rec: s.mirrorRec, host: host}
+}
+
+// mirrorTeeReadCloser 读取时逐 chunk 记录；累计记录字节数超过 mirrorResponseMaxBytes
+// 后停止记录（数据仍正常透传给客户端），并写一条 truncated 收尾标记。
+type mirrorTeeReadCloser struct {
+	r         io.ReadCloser
+	rec       *mirrorRecorder
+	host      string
+	recorded  int
+	truncated bool
+}
+
+func (m *mirrorTeeReadCloser) Read(p []byte) (int, error) {
+	n, err := m.r.Read(p)
+	if n > 0 {
+		m.recordChunk(p[:n])
+	}
+	return n, err
+}
+
+// recordChunk 在记录端限流：累计未超上限时记录当前 chunk，超限后写 truncated 收尾标记并停止。
+// 数据透传不受影响（限流只作用于记录写入）。
+func (m *mirrorTeeReadCloser) recordChunk(chunk []byte) {
+	if m.truncated || m.rec == nil {
+		return
+	}
+	if m.recorded+len(chunk) > mirrorResponseMaxBytes {
+		m.rec.recordResponseTruncated(m.host)
+		m.truncated = true
+		return
+	}
+	m.rec.recordResponseChunk(m.host, chunk)
+	m.recorded += len(chunk)
+}
+
+func (m *mirrorTeeReadCloser) Close() error { return m.r.Close() }
+
+// closeMirrorRecorder 关闭镜像记录器文件句柄并释放文件描述符；幂等，可多次调用。
+// 在服务停止路径（Stop）调用：Shutdown 排空活跃请求后，记录器不再有新写入。
+func (s *ProxyServer) closeMirrorRecorder() {
+	s.mirrorMu.Lock()
+	defer s.mirrorMu.Unlock()
+	if s.mirrorRec == nil {
+		return
+	}
+	if err := s.mirrorRec.Close(); err != nil {
+		logger.Errorf("mirror recorder close failed: %v", err)
+	}
 }
 
 // mitmCertStore 缓存 goproxy 为站点动态签发的证书，避免同一 host 重复执行 RSA/x509 签发。

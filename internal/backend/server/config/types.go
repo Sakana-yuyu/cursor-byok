@@ -148,8 +148,24 @@ type SkillMCPScanConfig struct {
 	MCPSummaries map[string]string `json:"mcpSummaries,omitempty" yaml:"mcpSummaries,omitempty"`
 }
 
+// MirrorCaptureConfig 是镜像记录配置。
+type MirrorCaptureConfig struct {
+	Enabled bool     `json:"enabled" yaml:"enabled"`
+	Hosts   []string `json:"hosts,omitempty" yaml:"hosts,omitempty"`
+}
+
+// DefaultMirrorHosts 是 Cursor 官方 key 直连模式使用的模型 API 入口；Hosts 为空时回落。
+var DefaultMirrorHosts = []string{
+	"api.openai.com",
+	"api.anthropic.com",
+	"generativelanguage.googleapis.com",
+}
+
 type Config struct {
 	Log bool `json:"log" yaml:"log"`
+	// MirrorCapture 控制 MITM 镜像记录：对模型 API 域名解密后记录请求/响应明文并直通官方。
+	// 默认关闭；开启后仅记录不阻断，官方链路不受影响。
+	MirrorCapture MirrorCaptureConfig `json:"mirrorCapture" yaml:"mirrorCapture"`
 	// DebugLogMaxBytes 限制每个 debug jsonl 文件的最大字节数；超过后保留尾部（错误附近）。
 	// 0 表示用默认值（50MB），负数表示不限制。热加载即时生效。
 	DebugLogMaxBytes                int                        `json:"debugLogMaxBytes" yaml:"debugLogMaxBytes"`
@@ -174,6 +190,7 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		Log:                             false,
+		MirrorCapture:                   MirrorCaptureConfig{Enabled: false, Hosts: DefaultMirrorHosts},
 		ProviderStreamIdleTimeout:       DefaultProviderStreamIdleTimeoutSeconds,
 		TurnStaleTimeout:                DefaultTurnStaleTimeoutSeconds,
 		NativeDelegationProgressTimeout: DefaultNativeDelegationProgressTimeoutSeconds,
@@ -230,6 +247,7 @@ func NormalizeConfig(input Config) (Config, error) {
 	output.ProxyListenAddr = proxyListenAddr
 	output.HomeMetrics.IncludeCacheWriteInHitRate = input.HomeMetrics.IncludeCacheWriteInHitRate
 	output.LocalResponseCache = normalizeLocalResponseCache(input.LocalResponseCache)
+	output.MirrorCapture = input.MirrorCapture
 	output.SkillMCPScan = input.SkillMCPScan
 	output.MCPTrustGrants = normalizeMCPTrustGrants(input.MCPTrustGrants)
 	output.LastAgentModelHash = strings.TrimSpace(input.LastAgentModelHash)
