@@ -436,12 +436,13 @@ func (s *ProxyServer) newGoproxyHandler() *goproxy.ProxyHttpServer {
 		return goproxy.OkConnect, host
 	}))
 
-	// MITM 解密后：Cursor 白名单域名转发到 backend server，其余请求由 goproxy 直连回源。
+	// MITM 解密后：本地服务模式把 Cursor relay 域名转发到 backend；
+	// 官方上游模式让 goproxy 保持原始目标直通，镜像域名仍可旁路记录。
 	proxy.OnRequest().DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 		req.Header.Del(HeaderServerUpstreamURL)
 
 		host := hostFromHTTPRequest(req)
-		if isWhitelistedRelayHost(host) {
+		if isWhitelistedRelayHost(host) && s.routesCursorRelayLocally() {
 			if shouldHandleLocalCORSPreflight(req) {
 				return req, buildLocalCORSPreflightResponse(req)
 			}
@@ -864,6 +865,23 @@ func (s *ProxyServer) mirrorHosts() []string {
 		return nil
 	}
 	return s.mirrorConfig.MirrorCaptureHosts()
+}
+
+type routingModeProvider interface {
+	RoutingMode(ctx context.Context) string
+}
+
+// routesCursorRelayLocally 只在配置明确为 upstream 时跳过本地 backend。
+// 不支持路由查询的旧配置实现维持本地服务模式，避免升级时意外改为官方直通。
+func (s *ProxyServer) routesCursorRelayLocally() bool {
+	s.mirrorMu.RLock()
+	config := s.mirrorConfig
+	s.mirrorMu.RUnlock()
+	provider, ok := config.(routingModeProvider)
+	if !ok || provider == nil {
+		return true
+	}
+	return strings.TrimSpace(strings.ToLower(provider.RoutingMode(context.Background()))) != "upstream"
 }
 
 // mirrorEnabledForHost 判定镜像记录是否对该 host 生效（开关+列表+记录器三者齐备）。

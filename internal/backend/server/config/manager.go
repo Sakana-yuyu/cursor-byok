@@ -491,6 +491,15 @@ func (manager *Manager) MirrorCaptureHosts() []string {
 	return hosts
 }
 
+// RoutingMode 返回代理请求分流模式，并在读取前检查配置热加载。
+func (manager *Manager) RoutingMode(ctx context.Context) string {
+	if manager == nil {
+		return DefaultRoutingMode
+	}
+	manager.reloadIfChanged(ctx)
+	return manager.currentConfig().Routing.Mode
+}
+
 func (manager *Manager) Subscribe(listener func(Config)) func() {
 	if manager == nil || listener == nil {
 		return func() {}
