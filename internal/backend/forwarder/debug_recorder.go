@@ -131,7 +131,7 @@ func (recorder *debugRecorder) LogBidiRaw(ctx context.Context, requestID string,
 	for key, value := range extra {
 		event[key] = value
 	}
-	recorder.appendJSONL(ctx, requestID, conversationID, "bidi.raw.jsonl", event)
+	recorder.appendJSONLEnabled(ctx, requestID, conversationID, "bidi.raw.jsonl", event)
 }
 
 // truncateDebugPayload 把超长 hex/文本截断到 maxDebugProtoPayloadBytes。
@@ -162,7 +162,7 @@ func (recorder *debugRecorder) LogBidiDecoded(ctx context.Context, requestID str
 	for key, value := range extra {
 		event[key] = value
 	}
-	recorder.appendJSONL(ctx, requestID, firstNonEmpty(conversationID, intent.ConversationID), "bidi.decoded.jsonl", event)
+	recorder.appendJSONLEnabled(ctx, requestID, firstNonEmpty(conversationID, intent.ConversationID), "bidi.decoded.jsonl", event)
 }
 
 func (recorder *debugRecorder) LogRuntime(ctx context.Context, requestID string, conversationID string, eventName string, fields map[string]any) {
@@ -206,7 +206,7 @@ func (recorder *debugRecorder) LogRunSSE(ctx context.Context, requestID string, 
 	for key, value := range fields {
 		event[key] = value
 	}
-	recorder.appendJSONL(ctx, requestID, conversationID, "runsse.jsonl", event)
+	recorder.appendJSONLEnabled(ctx, requestID, conversationID, "runsse.jsonl", event)
 }
 
 // runSSEMessageDebugFields 仅记录 RunSSE 消息的协议类别、大小与正文增量摘要。
@@ -237,17 +237,18 @@ func (recorder *debugRecorder) LogProvider(ctx context.Context, requestID string
 	for key, value := range fields {
 		event[key] = value
 	}
-	recorder.appendJSONL(ctx, requestID, conversationID, "provider.jsonl", event)
+	recorder.appendJSONLEnabled(ctx, requestID, conversationID, "provider.jsonl", event)
 }
 
 func (recorder *debugRecorder) LogProviderArtifact(ctx context.Context, requestID string, conversationID string, modelCallID string, eventName string, payload map[string]any) {
 	if !recorder.enabled(ctx) {
 		return
 	}
-	recorder.LogProvider(ctx, requestID, conversationID, eventName, map[string]any{
-		"model_call_id": strings.TrimSpace(modelCallID),
-		"payload":       payload,
-	})
+	event := recorder.baseEvent("provider", requestID, conversationID)
+	event["event"] = strings.TrimSpace(eventName)
+	event["model_call_id"] = strings.TrimSpace(modelCallID)
+	event["payload"] = payload
+	recorder.appendJSONLEnabled(ctx, requestID, conversationID, "provider.jsonl", event)
 }
 
 func (recorder *debugRecorder) baseEvent(layer string, requestID string, conversationID string) map[string]any {
