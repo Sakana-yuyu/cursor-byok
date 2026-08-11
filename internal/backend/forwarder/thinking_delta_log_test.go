@@ -1,7 +1,12 @@
 package forwarder
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"cursor/gen/agentv1"
 	modeladapter "cursor/internal/backend/agent/model"
@@ -70,6 +75,65 @@ func TestThinkingDeltaSamplingKeepsEveryBrokerEvent(t *testing.T) {
 	for index, event := range events {
 		if got := event.Message.GetInteractionUpdate().GetThinkingDelta().GetText(); got != "reasoning" {
 			t.Fatalf("thinking event %d text = %q, want reasoning", index, got)
+		}
+	}
+}
+
+func TestDeltaRuntimeLogsUseProviderPassCapturedWithStreamState(t *testing.T) {
+	root := t.TempDir()
+	service := NewService(root, nilResolver{})
+	service.debug = newDebugRecorder(root, service.broker, stubDebugLogConfig{enabled: true, maxBytes: -1})
+	stream, err := service.broker.OpenStream("request-provider-pass", "conversation-provider-pass", 1, "model", "model", agentv1.AgentMode_AGENT_MODE_AGENT, "")
+	if err != nil {
+		t.Fatalf("OpenStream() error = %v", err)
+	}
+	stream.ProviderPassCount = 7
+
+	if err := service.applyProviderModelEvent(stream, modeladapter.ModelEvent{Kind: modeladapter.ModelEventKindTextDelta, Text: "text"}); err != nil {
+		t.Fatalf("text delta error = %v", err)
+	}
+	if err := service.applyProviderModelEvent(stream, modeladapter.ModelEvent{
+		Kind:          modeladapter.ModelEventKindThinkingDelta,
+		Text:          "thinking",
+		ThinkingStyle: agentv1.ThinkingStyle_THINKING_STYLE_DEFAULT,
+	}); err != nil {
+		t.Fatalf("thinking delta error = %v", err)
+	}
+
+	path := filepath.Join(root, stream.ConversationID, "debug", "runtime.jsonl")
+	var payload []byte
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		data, readErr := os.ReadFile(path)
+		if readErr == nil && len(data) > 0 {
+			payload = data
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(payload) == 0 {
+		t.Fatalf("runtime log was not written: %s", path)
+	}
+
+	seen := map[string]int{}
+	for _, line := range strings.Split(strings.TrimSpace(string(payload)), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var entry struct {
+			Event        string `json:"event"`
+			ProviderPass int    `json:"provider_pass"`
+		}
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			t.Fatalf("unmarshal runtime entry: %v", err)
+		}
+		if entry.Event == "text_delta_forwarded" || entry.Event == "thinking_delta_forwarded" {
+			seen[entry.Event] = entry.ProviderPass
+		}
+	}
+	for _, eventName := range []string{"text_delta_forwarded", "thinking_delta_forwarded"} {
+		if got := seen[eventName]; got != 7 {
+			t.Fatalf("%s provider_pass = %d, want 7", eventName, got)
 		}
 	}
 }

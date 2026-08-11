@@ -680,6 +680,7 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 	conversationID := stream.ConversationID
 	turnSeq := stream.TurnSeq
 	modelCallID := stream.CurrentModelCallID
+	providerPass := stream.ProviderPassCount
 	accumulatedReasoningSignature := stream.ProviderAccumulatedReasoningSignature
 	accumulatedReasoningSignatureSource := stream.ProviderAccumulatedReasoningSignatureSource
 	accumulatedReasoningItemID := stream.ProviderAccumulatedReasoningItemID
@@ -698,7 +699,7 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 		service.markConversationActivity(conversationID)
 		if service.debug != nil {
 			service.debug.LogRuntimeLazy(context.Background(), requestID, conversationID, "text_delta_forwarded", func() map[string]any {
-				return textDeltaDebugFields(modelCallID, currentProviderPass(stream), deltaCount, event.Text)
+				return textDeltaDebugFields(modelCallID, providerPass, deltaCount, event.Text)
 			})
 		}
 		service.mirrorNativeChildInteraction(stream, modelCallID, buildTextDeltaInteraction(event.Text))
@@ -713,11 +714,11 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 		stream.mu.Unlock()
 		service.markConversationActivity(conversationID)
 		if shouldLogThinkingDelta(deltaCount) {
-			logger.Infof("forwarder thinking delta request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d delta_count=%d accumulated_bytes=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), currentProviderPass(stream), deltaCount, accumulatedLength)
+			logger.Infof("forwarder thinking delta request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d delta_count=%d accumulated_bytes=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), providerPass, deltaCount, accumulatedLength)
 		}
 		if service.debug != nil {
 			service.debug.LogRuntimeLazy(context.Background(), requestID, conversationID, "thinking_delta_forwarded", func() map[string]any {
-				return thinkingDeltaDebugFields(modelCallID, currentProviderPass(stream), deltaCount, accumulatedLength)
+				return thinkingDeltaDebugFields(modelCallID, providerPass, deltaCount, accumulatedLength)
 			})
 		}
 		service.mirrorNativeChildInteraction(stream, modelCallID, buildThinkingDeltaInteraction(event.Text, event.ThinkingStyle))
@@ -778,7 +779,7 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 			stream.ProviderThinkingSuppressedCount++
 			suppressedCount := stream.ProviderThinkingSuppressedCount
 			stream.mu.Unlock()
-			logger.Infof("forwarder thinking completion suppressed request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d completed_count=%d suppressed_count=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), currentProviderPass(stream), completedCount, suppressedCount)
+			logger.Infof("forwarder thinking completion suppressed request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d completed_count=%d suppressed_count=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), providerPass, completedCount, suppressedCount)
 			if service.debug != nil {
 				eventName := "thinking_completed_suppressed"
 				if encryptedOnlyThinking {
@@ -786,7 +787,7 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 				}
 				service.debug.LogRuntime(context.Background(), requestID, conversationID, eventName, map[string]any{
 					"model_call_id":      strings.TrimSpace(modelCallID),
-					"provider_pass":      currentProviderPass(stream),
+					"provider_pass":      providerPass,
 					"completed_count":    completedCount,
 					"suppressed_count":   suppressedCount,
 					"has_reasoning_text": len(bytes.TrimSpace(stream.ProviderAccumulatedReasoning)) != 0,
@@ -795,11 +796,11 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 			}
 			return nil
 		}
-		logger.Infof("forwarder thinking completion forwarded request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d completed_count=%d synthetic=%t duration_ms=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), currentProviderPass(stream), completedCount, shouldEmitSyntheticThinking, completedDuration)
+		logger.Infof("forwarder thinking completion forwarded request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d completed_count=%d synthetic=%t duration_ms=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), providerPass, completedCount, shouldEmitSyntheticThinking, completedDuration)
 		if service.debug != nil {
 			service.debug.LogRuntime(context.Background(), requestID, conversationID, "thinking_completed_forwarded", map[string]any{
 				"model_call_id":   strings.TrimSpace(modelCallID),
-				"provider_pass":   currentProviderPass(stream),
+				"provider_pass":   providerPass,
 				"completed_count": completedCount,
 				"synthetic":       shouldEmitSyntheticThinking,
 				"duration_ms":     completedDuration,
