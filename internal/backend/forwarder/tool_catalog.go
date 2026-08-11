@@ -204,7 +204,11 @@ var planModeToolNames = map[string]struct{}{
 }
 
 var childConversationDisallowedAgentToolNames = map[string]struct{}{
-	"AskQuestion": {},
+	// Child conversations cannot recursively fan out into more subagents.
+	"AskQuestion":             {},
+	"Task":                    {},
+	"ForceBackgroundSubagent": {},
+	"SubagentAwait":           {},
 }
 
 func supportedToolNamesForMode(mode agentv1.AgentMode) map[string]struct{} {

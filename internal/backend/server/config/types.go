@@ -147,7 +147,7 @@ type SkillMCPScanConfig struct {
 }
 
 type Config struct {
-	Log                             bool                     `json:"log" yaml:"log"`
+	Log bool `json:"log" yaml:"log"`
 	// DebugLogMaxBytes 限制每个 debug jsonl 文件的最大字节数；超过后保留尾部（错误附近）。
 	// 0 表示用默认值（50MB），负数表示不限制。热加载即时生效。
 	DebugLogMaxBytes                int                      `json:"debugLogMaxBytes" yaml:"debugLogMaxBytes"`
@@ -379,7 +379,7 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 		case next.Type == "anthropic" && next.AnthropicThinkingEffort == "":
 			return nil, i18n.NewError("error.model_adapter.thinking_effort_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 anthropicThinkingEffort 仅支持 low、medium、high、xhigh、max")
 		}
-		identity := modelchannel.BuildChannelID(next.BaseURL, next.ModelID, next.APIKey, next.DisplayName, next.OpenAIEndpoint)
+		identity := modelAdapterConfigIdentity(next)
 		explicitID := strings.TrimSpace(item.ID)
 		next.ID = explicitID
 		if next.ID == "" {
@@ -451,6 +451,17 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 		normalized = append(normalized, next)
 	}
 	return normalized, nil
+}
+
+func modelAdapterConfigIdentity(adapter ModelAdapterConfig) string {
+	channelID := modelchannel.BuildChannelID(
+		adapter.BaseURL,
+		adapter.ModelID,
+		adapter.APIKey,
+		adapter.DisplayName,
+		adapter.OpenAIEndpoint,
+	)
+	return channelID + "\n" + strings.TrimSpace(adapter.GroupName)
 }
 
 func firstNonEmptyProtocolGroup(values ...string) string {

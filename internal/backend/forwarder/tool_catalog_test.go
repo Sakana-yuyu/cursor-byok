@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"testing"
 
+	"cursor/gen/agentv1"
 	"cursor/prompt"
 )
 
@@ -73,6 +74,36 @@ func TestToolAssetsConsistentWithModeWhitelists(t *testing.T) {
 	for _, name := range loadAssetToolNames(t, prompt.ModeSubagent) {
 		if _, ok := agentModeToolNames[name]; !ok {
 			t.Errorf("subagent 资产工具 %q 不在 agent 白名单中，子代理会话将无法使用该工具", name)
+		}
+	}
+}
+
+func TestChildConversationCannotDispatchSubagents(t *testing.T) {
+	tools, names, err := NewToolCatalog().Load(agentv1.AgentMode_AGENT_MODE_PLAN, "explore")
+	if err != nil {
+		t.Fatalf("load child conversation tools: %v", err)
+	}
+	if len(tools) != len(names) {
+		t.Fatalf("loaded tool descriptors = %d, names = %d", len(tools), len(names))
+	}
+	exposed := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		exposed[name] = struct{}{}
+	}
+	for _, toolName := range []string{"Task", "ForceBackgroundSubagent", "SubagentAwait"} {
+		if _, ok := exposed[toolName]; ok {
+			t.Errorf("child tool catalog must not expose %q", toolName)
+		}
+		if isToolAllowedInMode(agentv1.AgentMode_AGENT_MODE_PLAN, "explore", toolName) {
+			t.Errorf("child invocation guard must reject %q", toolName)
+		}
+	}
+	for _, toolName := range []string{"Read", "Grep", "Shell"} {
+		if _, ok := exposed[toolName]; !ok {
+			t.Errorf("child tool catalog should retain %q", toolName)
+		}
+		if !isToolAllowedInMode(agentv1.AgentMode_AGENT_MODE_PLAN, "explore", toolName) {
+			t.Errorf("child invocation guard should allow %q", toolName)
 		}
 	}
 }

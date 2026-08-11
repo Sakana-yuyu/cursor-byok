@@ -79,7 +79,7 @@ function handleBack() {
 
 <template>
   <div class="flex h-full min-h-0 flex-col overflow-hidden bg-[#202020] text-[#e5e5e5]">
-    <div class="mx-auto flex min-h-0 w-full max-w-[1080px] flex-1 flex-col gap-5 px-4 py-5 sm:flex-row sm:gap-8 sm:px-6">
+    <div class="flex min-h-0 w-full flex-1 flex-col gap-5 px-4 py-5 sm:flex-row sm:gap-8 sm:px-6 lg:px-8">
       <SettingsSidebar
         v-model="selectedCategory"
         v-model:more-expanded="moreExpanded"
@@ -88,7 +88,7 @@ function handleBack() {
       />
 
       <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-        <div class="mx-auto flex w-full max-w-[820px] flex-col">
+        <div class="flex w-full flex-col">
           <SettingsPageHeader
             :title="activeCategory.label"
             :description="activeCategory.description"
@@ -98,7 +98,7 @@ function handleBack() {
         </div>
 
         <div class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pr-1">
-          <div class="mx-auto flex w-full max-w-[820px] flex-col gap-6 pb-8">
+          <div class="flex w-full flex-col gap-6 pb-8">
             <Transition name="settings-category" mode="out-in">
               <div :key="selectedCategory" class="settings-category-panel min-w-0">
                 <component
