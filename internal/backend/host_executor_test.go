@@ -2,9 +2,13 @@ package backend
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"cursor/internal/backend/delegation"
 	serverconfig "cursor/internal/backend/server/config"
@@ -33,6 +37,87 @@ func TestRefreshDelegationExecutorProbesForcesRegistryProbe(t *testing.T) {
 	}
 	if calls.Load() != 2 {
 		t.Fatalf("probe calls = %d, want 2 forced probes", calls.Load())
+	}
+}
+
+func TestRefreshDelegationExecutorProbesStartsIndependentProbesConcurrently(t *testing.T) {
+	registry := delegation.NewExecutorRegistry(delegation.ExecutorRegistryConfig{})
+	started := make(chan struct{}, 2)
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	t.Cleanup(func() { releaseOnce.Do(func() { close(release) }) })
+	for _, id := range []delegation.ExecutorID{"first-cli", "second-cli"} {
+		id := id
+		if err := registry.Register(delegation.ExecutorRegistration{
+			ID:      id,
+			Enabled: true,
+			Probe: func(context.Context) (delegation.ExecutorProbeResult, error) {
+				started <- struct{}{}
+				<-release
+				return delegation.ExecutorProbeResult{State: delegation.ExecutorProbeReady}, nil
+			},
+			Execute: func(context.Context, delegation.TaskRequest) delegation.TaskResult { return delegation.TaskResult{} },
+		}); err != nil {
+			t.Fatalf("register %s: %v", id, err)
+		}
+	}
+
+	host := &Host{executorRegistry: registry}
+	completed := make(chan error, 1)
+	go func() {
+		_, err := host.RefreshDelegationExecutorProbes(context.Background())
+		completed <- err
+	}()
+	<-started
+	select {
+	case <-started:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("second independent executor probe did not start concurrently")
+	}
+	releaseOnce.Do(func() { close(release) })
+	if err := <-completed; err != nil {
+		t.Fatalf("RefreshDelegationExecutorProbes() error = %v", err)
+	}
+}
+
+func TestRefreshDelegationExecutorProbesReturnsWhenContextCancelsDuringDispatch(t *testing.T) {
+	registry := delegation.NewExecutorRegistry(delegation.ExecutorRegistryConfig{})
+	started := make(chan struct{}, delegationExecutorProbeConcurrency)
+	for index := 0; index <= delegationExecutorProbeConcurrency; index++ {
+		id := delegation.ExecutorID(fmt.Sprintf("cancel-cli-%d", index))
+		if err := registry.Register(delegation.ExecutorRegistration{
+			ID:      id,
+			Enabled: true,
+			Probe: func(ctx context.Context) (delegation.ExecutorProbeResult, error) {
+				started <- struct{}{}
+				<-ctx.Done()
+				return delegation.ExecutorProbeResult{}, ctx.Err()
+			},
+			Execute: func(context.Context, delegation.TaskRequest) delegation.TaskResult { return delegation.TaskResult{} },
+		}); err != nil {
+			t.Fatalf("register %s: %v", id, err)
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	host := &Host{executorRegistry: registry}
+	completed := make(chan error, 1)
+	go func() {
+		_, err := host.RefreshDelegationExecutorProbes(ctx)
+		completed <- err
+	}()
+	for range delegationExecutorProbeConcurrency {
+		<-started
+	}
+	cancel()
+	select {
+	case err := <-completed:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("RefreshDelegationExecutorProbes() error = %v, want context canceled", err)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("RefreshDelegationExecutorProbes() did not return after context cancellation")
 	}
 }
 
