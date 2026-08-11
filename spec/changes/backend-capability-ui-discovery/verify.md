@@ -52,3 +52,22 @@
 | V-10 | correctness | major | open | `upstream` 的前端说明承诺绕过本地代理，但运行中服务仍会让 Cursor 经过本地 MITM；`routing.mode` 未参与 MITM 请求分流。 | `internal/client/lifecycle.go` 的 `StartProxy` 无条件启动 MITM 并调用 `ApplyCursorSettings`；`internal/client/cursor.go` 会写入 Cursor `http.proxy`；`internal/mitm/service.go` 对 `*.cursor.sh` 无条件转 backend，且仅镜像 host 旁路直通；`internal/bridge/proxy.go` 的 `PrepareCursorLaunch` 仅在 upstream 时跳过启动前就绪检查。 | 已将语义差异和目标行为写入研究、提案与设计；下一实现提交需先以现有 Go 测试描述 routing mode 对 MITM 分流的期望，再最小化接入配置读取和前端运行态文案。 |
 
 本轮为静态请求链路追踪，未启动桌面代理、未修改真实 Cursor 设置、未调用官方 API。它确认了配置消费点与代理行为之间的不一致，但不能代替真实 Cursor 的端到端抓包验证。
+
+## Round 4 - official upstream UI and status contract
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- | --- |
+| V-11 | correctness | major | fixed(r4) | 镜像抓包就绪条件未包含 `routing.mode`，界面仍把 `upstream` 表述为无条件绕过本地代理。 | `6119826` 已让 MITM 在官方上游模式将 Cursor relay 直通官方；`ff223b4` 的 `GetMirrorCaptureStatus` 返回 `routingMode`，并仅在 `enabled && routingMode == upstream && backendRunning && proxyRunning && cursorSettingsApplied` 时标记 `ready`。首页、状态面板、确认弹窗与四个语言包统一为“官方上游模式”。 | local 模式显示“需要官方上游模式”，且不显示启动本地服务或修复代理这类无效动作；官方上游模式才按服务、代理接入和记录文件继续细分状态。 |
+| V-12 | regression-compat | minor | fixed(r4) | browser-preview 的 `getProxyState`、`startProxyService` 和 `stopProxyService` 返回固定快照，绕过已有可变 mock；点击“启动本地服务”后状态无法前进。 | 浏览器复现后，`frontend/src/services/clientApi.js` 改为调用 `GetState`、`StartProxy`、`StopProxy` binding。清空因凭据保护而无法启动的预览配置后，Playwright 实际点击“启动本地服务”，控制台出现 `StartProxy response`，状态由“等待本地服务”变为“等待官方模型请求”。 | 预览 mock 与桌面调用合同保持一致，不影响真实 Wails binding。 |
+| V-13 | runtime-evidence | minor | open | 本轮浏览器验证不等同于真实 Cursor 桌面端抓包。 | browser-preview 未修改真实 Cursor 配置，未启动真实桌面代理，也未向官方 API 发送请求；仅验证 local、official upstream、服务未启动与服务已启动的状态分支。 | 用户需在桌面端明确开启镜像记录、启动服务、重启 Cursor，并自行发起官方模型请求后确认 `history/_debug/mirror/official.raw.jsonl` 写入且页面显示“已记录”。 |
+
+本轮证据：
+
+- `frontend/yarn lint`：退出码 0。
+- `frontend/yarn build`：退出码 0；保留既有 router 静态/动态导入与 chunk 大小警告。
+- `go test ./internal/bridge ./internal/mitm ./internal/backend/server/config -count=1`：退出码 0。
+- `go vet ./internal/bridge ./internal/mitm ./internal/backend/server/config`：退出码 0。
+- `go build .`、`go build ./cmd/...`、`go build ./internal/bridge ./internal/mitm ./internal/backend/server/config`：均退出码 0。`go build ./...` 曾在前端构建期间扫描 `//go:embed all:frontend/dist` 的资源目录时报告 `frontend/dist/supplier-icons` 路径不可访问，复跑根程序和相关包构建均成功，不将此环境性竞态表述为全量构建通过。
+- 语言目录结构化核对：`en-US`、`ja-JP`、`ru-RU` 各 1,436 键，`missing=0`、`extra=0`、`empty=0`、`placeholderMismatch=0`。
+- Playwright browser-preview：local 模式开启镜像记录后显示“需要官方上游模式”，无启动/修复代理动作；官方上游模式开启记录后先显示“等待本地服务”，启动 mock 服务后显示“等待官方模型请求”。375px 视口两次检查均为 `scrollWidth=375`、`clientWidth=375`，未出现横向溢出。
+- `git diff --check` 与暂存后 `git diff --cached --check` 均退出码 0；代码提交 `ff223b4` 仅包含本轮 11 个 UI、状态、桥接与 i18n 文件。
