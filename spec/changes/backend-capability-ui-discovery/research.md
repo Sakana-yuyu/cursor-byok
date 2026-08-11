@@ -22,6 +22,7 @@
 - `ClearLastError` 仅清空进程内 `ProxyState.lastError` 并发送状态事件；成功启动、停止或 CA 重载已自行清除此状态，首页错误横幅同时提供启动、修复代理和修复 CA 等实际恢复动作 | 单独提供“清除错误”只能隐藏仍未解决的故障，不增加诊断或恢复能力，且服务重启后也不应将该错误作为持久状态保留。
 - 镜像记录对 `Authorization` 等 HTTP 头已脱敏，但请求记录的 `url` 直接来自 `req.URL.String()`；Gemini 等官方接口可在查询参数中传递 `key`，因此现有头部脱敏不能覆盖 URL 凭据 | 本地调试 JSONL 不能保存 API key、token、签名或其他凭据型查询参数的明文；保留路径与非敏感查询项即可支持端点和协议形态对比。
 - `routing.mode` 目前只在保存配置、启动前检查和前端状态中被消费，未进入 MITM 的请求分流；已运行的服务会无条件写入 Cursor `http.proxy`，并把 `*.cursor.sh` 请求转发给嵌入式 backend | 因此 `upstream` 恢复官方登录态后，不能保证 Cursor 绕过本地 MITM；页面的“绕过本地代理服务”表述与实际运行链路不一致，也使镜像抓包的就绪状态缺少运行模式语义。
+- 现有 `cmd/isolated-cursor-e2e` 会为进程及其 Cursor 子进程创建临时 HOME、APPDATA、LOCALAPPDATA、CA 和 loopback 端口，隔离代理设置与登录状态写入；但它以空 `historyRoot` 和 `nil` mirror 配置创建 MITM，并在源码中明确声明“不写入真实请求镜像” | 该入口可证明隔离代理启动边界，不能证明 `official.raw.jsonl` 的真实传输链路。直接启动隔离 Cursor 仍可能由用户操作触发官方网络请求，因此在“不调用官方 API”的本阶段不运行它。
 
 ## Open [TBD]
 - (无开放决策。)
@@ -40,3 +41,4 @@
 - [DEC-11] 不为 `ClearLastError` 增加 UI 入口 | decided from status quo: 它只清空瞬态错误文本；成功的启动、停止和 CA 重载已自动清除该状态，首页现有启动、代理修复与 CA 修复路径才会处理根因。
 - [DEC-12] 镜像 JSONL 的请求 URL 必须脱敏凭据型查询参数 | decided from status quo: `mirrorRecord.URL` 当前直接使用请求 URL，而仅 headers 经过脱敏。记录器将保持 URL 路径与非敏感参数，以支持对比；`key`、API key、token、secret、签名与密码等参数的值统一替换为 `[REDACTED]`，不修改实际直通请求。
 - [DEC-13] 将 `upstream` 的实现与界面语义统一为“业务请求回官方上游，但在服务运行且抓包开启时仍可经本地 MITM 镜像”，而不再承诺无条件绕过本地代理 | decided from status quo: `PrepareCursorLaunch` 在 upstream 模式不强制启动服务，但 `StartProxy` 不读取 routing mode，仍启动 MITM 并调用 `ApplyCursorSettings`；MITM 对 `*.cursor.sh` 无条件转 backend、对镜像域名无条件旁路直通。后续实现需让请求分流显式读取运行配置，并让状态/文案区分“未启动本地服务的官方直连”与“经本地 MITM 的官方上游镜像”。
+- [DEC-14] 本阶段不运行 `cmd/isolated-cursor-e2e` 作为镜像抓包验收，也不为此新建临时测试工具 | decided from status quo: 该启动器隔离用户目录是安全的，但代码显式以空 `historyRoot` 和 `nil` mirror 配置禁用镜像记录，运行 Cursor 后仍需人工触发请求，无法在“不调用官方 API”的边界内证明 `official.raw.jsonl`。继续沿用已有单元/构建/浏览器预览证据，并将真实 Cursor 抓包保留为用户可控的最终人工验收。

@@ -71,3 +71,16 @@
 - 语言目录结构化核对：`en-US`、`ja-JP`、`ru-RU` 各 1,436 键，`missing=0`、`extra=0`、`empty=0`、`placeholderMismatch=0`。
 - Playwright browser-preview：local 模式开启镜像记录后显示“需要官方上游模式”，无启动/修复代理动作；官方上游模式开启记录后先显示“等待本地服务”，启动 mock 服务后显示“等待官方模型请求”。375px 视口两次检查均为 `scrollWidth=375`、`clientWidth=375`，未出现横向溢出。
 - `git diff --check` 与暂存后 `git diff --cached --check` 均退出码 0；代码提交 `ff223b4` 仅包含本轮 11 个 UI、状态、桥接与 i18n 文件。
+
+## Round 5 - isolated E2E boundary audit
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- | --- |
+| V-14 | runtime-evidence | minor | open | 项目已有 `cmd/isolated-cursor-e2e`，但它不是镜像 recorder 的隔离 E2E。 | 该入口在临时目录设置 `USERPROFILE`、`HOME`、`APPDATA`、`LOCALAPPDATA`，并为 Cursor 子进程设置隔离 CA；但 `cmd/isolated-cursor-e2e/main.go` 以空 `historyRoot` 和 `nil` mirror 配置调用 `mitm.NewProxyServer`，且源码注释明确“不写入真实请求镜像”。因此它不会产生 `official.raw.jsonl`。 | 不将该启动器的代理启动结果冒充为抓包成功；本阶段不运行它，因为启动 Cursor 后由人工操作产生的官方请求不满足“不调用官方 API”的验证边界。 |
+| V-15 | safety-boundary | minor | fixed(r5) | 隔离入口不会直接写入真实用户的 Cursor 配置或状态。 | `applyIsolatedEnvironment` 和 `buildCursorChildEnvironment` 同时覆盖临时 HOME、APPDATA、LOCALAPPDATA；代理设置与状态注入发生在这些变量已替换之后，监听地址严格分配为 `127.0.0.1` 临时端口。 | 当前审计没有运行该入口，也没有修改真实 Cursor 配置、已安装客户端或官方 API；真实抓包继续由用户明确授权并操作。 |
+
+本轮证据：
+
+- 静态读取 `cmd/isolated-cursor-e2e/main.go`、`internal/mitm/service.go`、`internal/mitm/mirror.go`、`internal/cursor/settings.go` 与 `internal/cursor/state_db.go`，确认隔离目录、代理设置、状态注入、MITM recorder 的创建参数和记录条件。
+- `rg` 命中 `cmd/isolated-cursor-e2e/main.go:101-102`：该命令明确传入空 `historyRoot` 和 `nil` mirror 配置；`internal/mitm/service.go:888` 要求 mirror 配置和 recorder 同时存在才启用记录。
+- 未新增测试文件，符合 `IMPROVEMENT_TASKS.md`；未启动 Cursor、未启动代理、未调用任何官方 API。
