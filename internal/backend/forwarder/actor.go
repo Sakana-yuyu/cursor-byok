@@ -716,11 +716,8 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 			logger.Infof("forwarder thinking delta request_id=%s conversation_id=%s model_call_id=%s provider_pass=%d delta_count=%d accumulated_bytes=%d", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), currentProviderPass(stream), deltaCount, accumulatedLength)
 		}
 		if service.debug != nil {
-			service.debug.LogRuntime(context.Background(), requestID, conversationID, "thinking_delta_forwarded", map[string]any{
-				"model_call_id":     strings.TrimSpace(modelCallID),
-				"provider_pass":     currentProviderPass(stream),
-				"delta_count":       deltaCount,
-				"accumulated_bytes": accumulatedLength,
+			service.debug.LogRuntimeLazy(context.Background(), requestID, conversationID, "thinking_delta_forwarded", func() map[string]any {
+				return thinkingDeltaDebugFields(modelCallID, currentProviderPass(stream), deltaCount, accumulatedLength)
 			})
 		}
 		service.mirrorNativeChildInteraction(stream, modelCallID, buildThinkingDeltaInteraction(event.Text, event.ThinkingStyle))
@@ -905,6 +902,18 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 
 func shouldLogThinkingDelta(deltaCount int) bool {
 	return deltaCount == 1 || (deltaCount > 1 && deltaCount%thinkingDeltaLogInterval == 0)
+}
+
+func thinkingDeltaDebugFields(modelCallID string, providerPass int, deltaCount int, accumulatedLength int) map[string]any {
+	if !shouldLogThinkingDelta(deltaCount) {
+		return nil
+	}
+	return map[string]any{
+		"model_call_id":     strings.TrimSpace(modelCallID),
+		"provider_pass":     providerPass,
+		"delta_count":       deltaCount,
+		"accumulated_bytes": accumulatedLength,
+	}
 }
 
 // textDeltaDebugFields 只记录计数、字节数和摘要，避免新增 debug 事件复制用户正文。

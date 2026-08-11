@@ -30,6 +30,17 @@ func TestShouldLogThinkingDeltaSamplesFirstAndInterval(t *testing.T) {
 	}
 }
 
+func TestThinkingDeltaDebugFieldsSampleFirstAndInterval(t *testing.T) {
+	if fields := thinkingDeltaDebugFields("call-1", 2, 2, 128); fields != nil {
+		t.Fatalf("non-sampled fields = %#v, want nil", fields)
+	}
+
+	fields := thinkingDeltaDebugFields("call-1", 2, thinkingDeltaLogInterval, 128)
+	if fields["model_call_id"] != "call-1" || fields["provider_pass"] != 2 || fields["delta_count"] != thinkingDeltaLogInterval || fields["accumulated_bytes"] != 128 {
+		t.Fatalf("sampled fields = %#v", fields)
+	}
+}
+
 func TestThinkingDeltaSamplingKeepsEveryBrokerEvent(t *testing.T) {
 	service := NewService(t.TempDir(), nilResolver{})
 	stream, err := service.broker.OpenStream("request-thinking", "conversation-thinking", 1, "model", "model", agentv1.AgentMode_AGENT_MODE_AGENT, "")
