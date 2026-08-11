@@ -736,6 +736,7 @@
   "851e708d09bfcb1f": "Aggregated into the same connection.",
   "85435da2715656ab": "Maximum retry count",
   "855754c132f37863": "Requests",
+  "8579b0ffdc43ac30": "Output {0} t/s · First response {1}",
   "85a2a50db30d8fc7": "Hide overlay",
   "85a591e86a4eab14": "User ID (New API)",
   "860e100ca3951404": "Hide to the tray when closing the main window, or quit the app directly.",

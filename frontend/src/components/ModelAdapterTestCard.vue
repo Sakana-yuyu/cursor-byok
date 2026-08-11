@@ -3,6 +3,7 @@ import { computed } from "vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
 import { formatDuration } from "@/state/appState";
 import { humanizeProviderError } from "@/utils/errorHumanizer";
+import { formatCompactModelAdapterTestSummary } from "@/utils/modelAdapterTestResult";
 
 const props = defineProps({
   result: {
@@ -40,6 +41,9 @@ const summaryText = computed(() => {
   if (normalizedStatus.value === "error") {
     const source = props.result?.error || props.result?.summaryText || props.result?.rawResponse;
     return humanizeProviderError(source) || "测试失败";
+  }
+  if (props.compact && normalizedStatus.value === "success") {
+    return formatCompactModelAdapterTestSummary(props.result);
   }
   const text = String(props.result?.summaryText || "").trim();
   if (text) {

@@ -2,9 +2,20 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  formatCompactModelAdapterTestSummary,
   formatModelAdapterTestSummary,
   normalizeModelAdapterTestResult,
 } from "./modelAdapterTestResult.js";
+
+test("紧凑卡片摘要只展示正文输出速度与首响", () => {
+  const summary = formatCompactModelAdapterTestSummary({
+    status: "success",
+    visibleTokensPerSecond: 116.4,
+    firstResponseMS: 7_842,
+  });
+
+  assert.equal(summary, "输出 116 t/s · 首响 7.8 s");
+});
 
 test("测速摘要同时展示总生成、正文、首响应和首字口径", () => {
   const summary = formatModelAdapterTestSummary({

@@ -1957,7 +1957,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 164,
+          "line": 168,
           "column": 74
         }
       ]
@@ -3642,7 +3642,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 148,
+          "line": 152,
           "column": 74
         }
       ]
@@ -3986,7 +3986,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 180,
+          "line": 184,
           "column": 7
         }
       ]
@@ -4140,7 +4140,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 131,
+          "line": 135,
           "column": 60
         }
       ]
@@ -5179,7 +5179,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 156,
+          "line": 160,
           "column": 74
         }
       ]
@@ -6187,7 +6187,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 126,
+          "line": 130,
           "column": 9
         }
       ]
@@ -7945,7 +7945,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 115,
+          "line": 119,
           "column": 19
         }
       ]
@@ -8136,7 +8136,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 30,
+          "line": 31,
           "column": 14
         },
         {
@@ -9302,7 +9302,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 42,
+          "line": 43,
           "column": 45
         },
         {
@@ -9568,7 +9568,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 49,
+          "line": 53,
           "column": 12
         },
         {
@@ -10347,7 +10347,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 173,
+          "line": 177,
           "column": 53
         }
       ]
@@ -10421,6 +10421,18 @@
           "file": "src/views/MetricsDetail.vue",
           "line": 423,
           "column": 62
+        }
+      ]
+    },
+    "8579b0ffdc43ac30": {
+      "source": "输出 {0} t/s · 首响 {1}",
+      "kind": "template",
+      "placeholders": 2,
+      "refs": [
+        {
+          "file": "src/utils/modelAdapterTestResult.js",
+          "line": 54,
+          "column": 10
         }
       ]
     },
@@ -10858,7 +10870,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 26,
+          "line": 27,
           "column": 14
         }
       ]
@@ -12123,7 +12135,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 168,
+          "line": 172,
           "column": 74
         }
       ]
@@ -12404,7 +12416,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 140,
+          "line": 144,
           "column": 74
         }
       ]
@@ -12658,7 +12670,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 160,
+          "line": 164,
           "column": 74
         }
       ]
@@ -16441,7 +16453,7 @@
         },
         {
           "file": "src/utils/modelAdapterTestResult.js",
-          "line": 72,
+          "line": 83,
           "column": 50
         }
       ]
@@ -16598,7 +16610,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 172,
+          "line": 176,
           "column": 74
         }
       ]
@@ -17216,7 +17228,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 152,
+          "line": 156,
           "column": 74
         },
         {
@@ -19537,7 +19549,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 144,
+          "line": 148,
           "column": 74
         }
       ]

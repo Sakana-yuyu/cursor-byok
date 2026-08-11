@@ -43,6 +43,17 @@ export function formatModelAdapterTestSummary(source) {
   return `总生成 ${totalTPS} t/s | 正文 ${visibleTPS} t/s | 首响应 ${formatDuration(result.firstResponseMS)} | 首字 ${formatDuration(result.firstTextTokenMS)}`;
 }
 
+// formatCompactModelAdapterTestSummary 为供应商卡片保留用户可感知的两项测速结果。
+// 详细结果仍由 formatModelAdapterTestSummary 和编辑器指标区完整展示。
+export function formatCompactModelAdapterTestSummary(source) {
+  const result = source && typeof source === "object" ? source : {};
+  if (normalizeModelAdapterTestStatus(result.status) !== "success") {
+    return "";
+  }
+  const visibleTPS = Math.max(0, Math.round(asNumber(result.visibleTokensPerSecond)));
+  return `输出 ${visibleTPS} t/s · 首响 ${formatDuration(result.firstResponseMS)}`;
+}
+
 export function normalizeModelAdapterTestResult(source) {
   const raw = source && typeof source === "object" ? source : {};
   const status = normalizeModelAdapterTestStatus(raw.status);
