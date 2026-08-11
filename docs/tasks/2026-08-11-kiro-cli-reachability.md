@@ -7,6 +7,7 @@
 - 检索关键词：Kiro CLI headless mode、Kiro CLI commands、KIRO_API_KEY、no-interactive。
 - 采用来源：Kiro 官方文档 [Headless mode](https://kiro.dev/docs/cli/headless/) 和 [CLI commands](https://kiro.dev/docs/reference/cli-commands/)。采用原因是其定义了命令、认证、权限与退出语义；未采用第三方教程。
 - 降级说明：官方文档只承诺 `--no-interactive` 将首个回答打印到 STDOUT，未承诺 JSONL 增量事件。适配器因此只返回结束后的最终文本，绝不把批量 stdout 误报为实时流。
+- 反代调查：本次额外检索了 Kiro 官方文档中的 Base URL、endpoint override、proxy、HTTP proxy 与 `KIRO_API_BASE_URL`。`https://kiro.dev/docs/cli/headless` 可访问，但官方文档未声明上述自定义上游地址或 HTTP 代理的 CLI 契约；推测性加入环境变量会制造“已支持反代”的错误预期，因此暂不实现。
 
 ## 已实现的命令契约
 
@@ -26,6 +27,7 @@
 
 - 写入任务的 `--trust-all-tools` 与官方 headless 用法一致，但具有完整工具权限。仅在委派任务原本允许写入时使用；只读任务限制为 `read,grep`。
 - Kiro 不提供本适配器可验证的增量输出协议，长任务的过程可见性仍受限于 CLI 最终文本；后续若官方发布稳定事件协议，再独立实现增量 stdout 消费。
+- Kiro 反代能力尚未获得官方 CLI 文档证实。当前适配器只继承用户显式允许的环境变量与 `KIRO_API_KEY`，不解释或注入未验证的 Base URL、endpoint override 或 HTTP proxy 配置；后续如官方发布正式契约，应以官方变量名、作用范围和认证边界为准另行实现并增加真实连通性测试。
 - 回滚：移除 `kiro.go`、Host 注册项、保留 ID 列表和前端 Kiro 行即可恢复到通用 custom CLI 路径；不影响既有 Claude、Codex、Gemini 或 Cursor 执行器。
 
 ## CLI 输出延迟修复
