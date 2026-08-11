@@ -21,8 +21,9 @@ import (
 )
 
 const (
-	isolationConfigEnv  = "CURSOR_E2E_CONFIG"
-	cursorExecutableEnv = "CURSOR_E2E_CURSOR_EXE"
+	isolationConfigEnv      = "CURSOR_E2E_CONFIG"
+	cursorExecutableEnv     = "CURSOR_E2E_CURSOR_EXE"
+	mirrorCaptureEnabledEnv = "CURSOR_E2E_MIRROR_CAPTURE"
 )
 
 type isolatedDirectories struct {
@@ -50,6 +51,7 @@ func run(sourceConfigPath string, cursorPath string) error {
 	if err != nil {
 		return err
 	}
+	mirrorCaptureEnabled := isolatedMirrorCaptureEnabled()
 	dirs, err := newIsolatedDirectories()
 	if err != nil {
 		return err
@@ -73,6 +75,14 @@ func run(sourceConfigPath string, cursorPath string) error {
 	if err != nil {
 		return err
 	}
+	if mirrorCaptureEnabled {
+		isolatedConfig.MirrorCapture.Enabled = true
+		isolatedConfig.Routing.Mode = "upstream"
+		isolatedConfig, err = serverconfig.NormalizeConfig(isolatedConfig)
+		if err != nil {
+			return fmt.Errorf("归一化隔离镜像配置失败: %w", err)
+		}
+	}
 	configPath := filepath.Join(dirs.home, ".cursor-local-assistant-v2", "config.yaml")
 	if err := writeConfig(configPath, isolatedConfig); err != nil {
 		return err
@@ -86,6 +96,10 @@ func run(sourceConfigPath string, cursorPath string) error {
 	}
 
 	store := serverconfig.NewStore(configPath, filepath.Join(dirs.home, ".cursor-local-assistant-v2", "logs"))
+	mirrorConfig, err := serverconfig.NewManager(context.Background(), store)
+	if err != nil {
+		return fmt.Errorf("创建隔离镜像配置失败: %w", err)
+	}
 	host, err := backend.NewHost(store, nil)
 	if err != nil {
 		return fmt.Errorf("创建隔离 backend 失败: %w", err)
@@ -98,8 +112,13 @@ func run(sourceConfigPath string, cursorPath string) error {
 		return err
 	}
 
-	// 隔离 E2E 只验证代理链路，不写入真实请求镜像；显式关闭镜像记录配置。
-	proxy, err := mitm.NewProxyServer(isolatedConfig.ProxyListenAddr, host.BaseURL(), "", nil, certManager)
+	historyRoot := ""
+	var proxyMirrorConfig mitm.MirrorCaptureConfig
+	if mirrorCaptureEnabled {
+		historyRoot = filepath.Join(dirs.root, "history")
+		proxyMirrorConfig = mirrorConfig
+	}
+	proxy, err := mitm.NewProxyServer(isolatedConfig.ProxyListenAddr, host.BaseURL(), historyRoot, proxyMirrorConfig, certManager)
 	if err != nil {
 		return fmt.Errorf("创建隔离 MITM 失败: %w", err)
 	}
@@ -112,8 +131,10 @@ func run(sourceConfigPath string, cursorPath string) error {
 	if err := cursor.WriteUserProxySettings(proxyURL); err != nil {
 		return fmt.Errorf("写入隔离 Cursor 代理设置失败: %w", err)
 	}
-	if err := cursor.InjectCursorUserInfo(localruntime.InjectAccountEmail, localruntime.InjectAuthToken); err != nil {
-		return fmt.Errorf("注入隔离 Cursor 状态失败: %w", err)
+	if !mirrorCaptureEnabled {
+		if err := cursor.InjectCursorUserInfo(localruntime.InjectAccountEmail, localruntime.InjectAuthToken); err != nil {
+			return fmt.Errorf("注入隔离 Cursor 状态失败: %w", err)
+		}
 	}
 
 	command := exec.Command(cursorPath)
@@ -121,11 +142,23 @@ func run(sourceConfigPath string, cursorPath string) error {
 	if err := command.Start(); err != nil {
 		return fmt.Errorf("启动隔离 Cursor 失败: %w", err)
 	}
-	fmt.Printf("isolated_root=%s backend=%s proxy=%s cursor_pid=%d\n", dirs.root, host.ListenAddr(), proxy.Snapshot().ListenAddr, command.Process.Pid)
+	if mirrorCaptureEnabled {
+		fmt.Printf("isolated_root=%s backend=%s proxy=%s mirror_record=%s cursor_pid=%d\n", dirs.root, host.ListenAddr(), proxy.Snapshot().ListenAddr, mirrorRecordPath(dirs), command.Process.Pid)
+	} else {
+		fmt.Printf("isolated_root=%s backend=%s proxy=%s cursor_pid=%d\n", dirs.root, host.ListenAddr(), proxy.Snapshot().ListenAddr, command.Process.Pid)
+	}
 	if err := command.Wait(); err != nil {
 		return fmt.Errorf("隔离 Cursor 已退出: %w", err)
 	}
 	return nil
+}
+
+func isolatedMirrorCaptureEnabled() bool {
+	return strings.TrimSpace(os.Getenv(mirrorCaptureEnabledEnv)) == "1"
+}
+
+func mirrorRecordPath(dirs isolatedDirectories) string {
+	return filepath.Join(dirs.root, "history", "_debug", "mirror", "official.raw.jsonl")
 }
 
 func buildIsolatedConfig(input serverconfig.Config, backendAddr string, proxyAddr string) (serverconfig.Config, error) {
