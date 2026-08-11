@@ -23,6 +23,15 @@
 - 只发现 `%APPDATA%/Kiro/User` 用户数据目录，未发现可调用的 Kiro CLI 可执行文件。
 - 因此本机实际状态应为“未安装”，不能声称已经完成 Kiro 真实调用或认证验证。
 
+## Claude Code 与 Codex CLI 契约复核
+
+- 复核日期：2026-08-11。仅使用本机 CLI 的帮助、登录状态和最小只读请求；不读取或输出账户、认证信息、密钥或模型完整正文。
+- Claude Code `2.1.226`：`--help` 已确认 `-p`、`--output-format`、`--no-session-persistence`、`--permission-mode` 和 `--disallowedTools` 参数存在；`auth status --json` 成功返回已认证形态。因此当前适配器的探测与只读执行参数契约可用。
+- Codex CLI `0.147.0`：`--help` 与 `exec --help` 已确认 `--sandbox`、`exec --json`、`--ephemeral`、`--color` 参数存在，`login status` 为已认证形态。最小只读请求在约 7.95 秒内成功结束，实测 JSONL 类型为 `thread.started`、`turn.started`、`item.completed`、`turn.completed`；其中含最终 `agent_message` 和完成事件，和适配器解析器一致。
+- 输出边界：本机 Codex CLI 的这次实测只在 `item.completed` 提供最终 `agent_message`，没有正文 token 级事件。因此适配器可以实时传递 CLI 的行级事件，但不能把 Codex CLI 不提供的 token 增量伪造成实时输出。
+- Claude Code 的真实生成 JSONL 本轮未能闭环：最初短请求在 124 秒内未结束；随后三种受控采集方式分别受包装命令路径、PowerShell 异步回调无 Runspace、环境命令策略限制，未产生可用的 CLI 输出证据。它们均为观测脚本限制，不能据此归因于 Claude Code 协议或本项目适配器。后续应在允许独立子进程输出重定向的终端中，用同一只读参数复测 `assistant` 与 `result` 事件。
+- 吞吐链路审计：`ProcessRunner` 的 stdout 行回调发生在子进程存活期间；委派可见进度写入 broker 仅追加 backlog 并以非阻塞信号唤醒订阅者；RunSSE 网络发送和调试落盘不在该回调的同步等待路径上。结合前述异步 actor mailbox 优化，当前没有证据表明这段本地链路会将上游 60--70 t/s 稳定压低到约 20 t/s。
+
 ## 风险与回滚
 
 - 写入任务的 `--trust-all-tools` 与官方 headless 用法一致，但具有完整工具权限。仅在委派任务原本允许写入时使用；只读任务限制为 `read,grep`。
