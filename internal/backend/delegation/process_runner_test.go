@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -68,6 +69,75 @@ func TestProcessRunnerDeliversBoundedStdinWithoutShellInterpretation(t *testing.
 	}
 	if _, statErr := os.Stat(marker); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("stdin was interpreted by a shell: stat error = %v", statErr)
+	}
+}
+
+func TestProcessRunnerPublishesSanitizedStdoutLinesBeforeProcessExit(t *testing.T) {
+	secret := "sk-process-runner-stream-secret"
+	lines := make(chan string, 2)
+	runner := NewProcessRunner(ProcessRunnerConfig{})
+	finished := make(chan struct{})
+	var result ProcessResult
+	var runErr error
+	go func() {
+		result, runErr = runner.Run(context.Background(), ProcessRequest{
+			Executable: processRunnerTestExecutable(t),
+			Args:       processRunnerHelperArgs("stream-lines"),
+			Env: map[string]string{
+				processRunnerHelperEnvironment: "process-runner-helper-enabled",
+				"PROCESS_RUNNER_STREAM_SECRET": secret,
+			},
+			OnStdoutLine: func(line string) { lines <- line },
+		})
+		close(finished)
+	}()
+
+	select {
+	case line := <-lines:
+		if strings.Contains(line, secret) || line != "first <redacted>" {
+			t.Fatalf("first stdout line=%q", line)
+		}
+	case <-finished:
+		t.Fatalf("process exited before first stdout line: result=%#v err=%v", result, runErr)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for first stdout line")
+	}
+
+	select {
+	case <-finished:
+		if runErr != nil || !result.StdoutStreamed || !strings.Contains(result.Stdout, "second") {
+			t.Fatalf("result=%#v err=%v", result, runErr)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for streamed process completion")
+	}
+}
+
+func TestProcessRunnerStreamsLinesAfterFinalOutputBufferIsFull(t *testing.T) {
+	lines := make(chan string, 2)
+	runner := NewProcessRunner(ProcessRunnerConfig{})
+	result, err := runner.Run(t.Context(), ProcessRequest{
+		Executable:  processRunnerTestExecutable(t),
+		Args:        processRunnerHelperArgs("stream-after-limit"),
+		StdoutLimit: 16,
+		Env: map[string]string{
+			processRunnerHelperEnvironment: "process-runner-helper-enabled",
+		},
+		OnStdoutLine: func(line string) { lines <- line },
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if !result.StdoutTruncated {
+		t.Fatalf("Run() stdout truncation = false, want true")
+	}
+	var streamed []string
+	close(lines)
+	for line := range lines {
+		streamed = append(streamed, line)
+	}
+	if !slices.Contains(streamed, "after-limit") {
+		t.Fatalf("streamed lines = %#v, want after-limit", streamed)
 	}
 }
 
@@ -323,6 +393,13 @@ func TestProcessRunnerHelperProcess(t *testing.T) {
 		}
 	case "secret-boundary":
 		fmt.Printf("%s%s", strings.Repeat("X", 60), os.Getenv("PROCESS_RUNNER_SECRET"))
+	case "stream-lines":
+		fmt.Printf("first %s\n", os.Getenv("PROCESS_RUNNER_STREAM_SECRET"))
+		time.Sleep(300 * time.Millisecond)
+		fmt.Fprintln(os.Stdout, "second")
+	case "stream-after-limit":
+		fmt.Fprintln(os.Stdout, strings.Repeat("x", processOutputRedactionLookahead+512))
+		fmt.Fprintln(os.Stdout, "after-limit")
 	case "sleep":
 		duration, err := time.ParseDuration(arguments[1])
 		if err != nil {

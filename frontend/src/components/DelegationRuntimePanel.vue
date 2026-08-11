@@ -71,6 +71,7 @@ const executorNames = {
   "claude-code": "Claude Code",
   "codex-cli": "Codex CLI",
   "gemini-cli": "Gemini CLI",
+  "kiro-cli": "Kiro CLI",
   "cursor-agent": "Cursor Agent",
   "local-byok": "本地 BYOK",
 };

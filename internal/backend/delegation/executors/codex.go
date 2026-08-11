@@ -152,8 +152,8 @@ func (adapter *codexCLIAdapter) execute(ctx context.Context, request delegation.
 		sandbox = "read-only"
 	}
 	args := []string{"--sandbox", sandbox, "--ask-for-approval", "never", "-C", workspace, "exec", "--json", "--ephemeral", "--color", "never", prompt}
-	processResult, processErr := adapter.runner.Run(ctx, delegation.ProcessRequest{Executable: adapter.executable, Args: args, Dir: workspace, InheritEnvironment: append([]string{}, adapter.config.EnvironmentVariables...), Timeout: timeout, StdoutLimit: codexOutputLimit, StderrLimit: codexOutputLimit})
-	parsed, parseErr := parseCodexStream(processResult.Stdout, ctx)
+	processResult, processErr := adapter.runner.Run(ctx, delegation.ProcessRequest{Executable: adapter.executable, Args: args, Dir: workspace, InheritEnvironment: append([]string{}, adapter.config.EnvironmentVariables...), Timeout: timeout, StdoutLimit: codexOutputLimit, StderrLimit: codexOutputLimit, OnStdoutLine: func(line string) { publishCodexStreamLine(ctx, line) }})
+	parsed, parseErr := parseCodexStream(processResult.Stdout, ctx, !processResult.StdoutStreamed)
 	metadata := parsed.metadata(adapter.getVersion())
 	if processErr != nil {
 		if errors.Is(processErr, context.Canceled) || errors.Is(processErr, context.DeadlineExceeded) {
@@ -198,7 +198,7 @@ type codexStreamResult struct {
 	completed, failed                                        bool
 }
 
-func parseCodexStream(output string, ctx context.Context) (codexStreamResult, error) {
+func parseCodexStream(output string, ctx context.Context, publishVisible bool) (codexStreamResult, error) {
 	var result codexStreamResult
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	scanner.Buffer(make([]byte, 64*1024), codexOutputLimit)
@@ -237,7 +237,7 @@ func parseCodexStream(output string, ctx context.Context) (codexStreamResult, er
 		case "item.completed":
 			if event.Item.Type == "agent_message" {
 				result.output = strings.TrimSpace(event.Item.Text)
-				if result.output != "" {
+				if publishVisible && result.output != "" {
 					delegation.PublishWorkerVisibleUpdate(ctx, boundCodexVisibleUpdate(result.output))
 				}
 			} else if codexToolItem(event.Item.Type) {
@@ -261,6 +261,22 @@ func parseCodexStream(output string, ctx context.Context) (codexStreamResult, er
 		return result, fmt.Errorf("scan Codex JSONL: %w", err)
 	}
 	return result, nil
+}
+
+func publishCodexStreamLine(ctx context.Context, line string) {
+	var event struct {
+		Type string `json:"type"`
+		Item struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"item"`
+	}
+	if json.Unmarshal([]byte(strings.TrimSpace(line)), &event) != nil || event.Type != "item.completed" || event.Item.Type != "agent_message" {
+		return
+	}
+	if text := strings.TrimSpace(event.Item.Text); text != "" {
+		delegation.PublishWorkerVisibleUpdate(ctx, boundCodexVisibleUpdate(text))
+	}
 }
 
 func codexToolItem(itemType string) bool {

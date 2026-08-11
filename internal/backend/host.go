@@ -91,7 +91,7 @@ func (host *Host) syncDelegationExecutors(cfg serverconfig.Config) error {
 		return nil
 	}
 	runner := delegation.NewProcessRunner(delegation.ProcessRunnerConfig{})
-	registrations := make([]delegation.ExecutorRegistration, 0, 4+len(cfg.Delegation.Executors))
+	registrations := make([]delegation.ExecutorRegistration, 0, 5+len(cfg.Delegation.Executors))
 	factories := []struct {
 		id     delegation.ExecutorID
 		create func(delegation.RuntimeExecutorConfig) (delegation.ExecutorRegistration, error)
@@ -104,6 +104,9 @@ func (host *Host) syncDelegationExecutors(cfg serverconfig.Config) error {
 		}},
 		{id: delegationexecutors.GeminiCLIExecutorID, create: func(runtimeConfig delegation.RuntimeExecutorConfig) (delegation.ExecutorRegistration, error) {
 			return delegationexecutors.NewGeminiCLIRegistration(runner, runtimeConfig)
+		}},
+		{id: delegationexecutors.KiroCLIExecutorID, create: func(runtimeConfig delegation.RuntimeExecutorConfig) (delegation.ExecutorRegistration, error) {
+			return delegationexecutors.NewKiroCLIRegistration(runner, runtimeConfig)
 		}},
 		{id: delegationexecutors.CursorExecutorID, create: func(runtimeConfig delegation.RuntimeExecutorConfig) (delegation.ExecutorRegistration, error) {
 			return delegationexecutors.NewCursorRegistration(

@@ -7,6 +7,7 @@ const executors = [
   { id: "claude-code", displayName: "Claude Code", enabled: true, priority: 10, state: "ready", installed: true, authState: "ready", version: "2.1.226", capabilities: ["read_workspace", "write_workspace"] },
   { id: "codex-cli", displayName: "Codex CLI", enabled: true, priority: 20, state: "ready", installed: true, authState: "ready", version: "0.147.0", capabilities: ["read_workspace", "write_workspace"] },
   { id: "gemini-cli", displayName: "Gemini CLI", enabled: false, priority: 30, state: "not_installed", installed: false, authState: "unknown", diagnosticCode: "not_installed", diagnosticText: "未检测到 Gemini CLI" },
+  { id: "kiro-cli", displayName: "Kiro CLI", enabled: false, priority: 35, state: "not_installed", installed: false, authState: "unknown", diagnosticCode: "kiro_not_installed", diagnosticText: "未检测到 Kiro CLI；安装地址：https://cli.kiro.dev/install" },
   { id: "grok-cli", displayName: "Grok CLI", enabled: false, priority: 40, state: "action_required", installed: false, authState: "required", diagnosticCode: "custom_not_configured", diagnosticText: "请配置可执行文件" },
   { id: "cursor-agent", displayName: "Cursor Agent", enabled: true, priority: 50, state: "action_required", installed: true, editorAvailable: true, agentExecutionAvailable: false, authState: "unknown", diagnosticCode: "cursor_editor_only", diagnosticText: "Cursor 编辑器可用，但当前没有活动 Agent 连接" },
 ];
@@ -44,13 +45,14 @@ test.beforeEach(async ({ page }) => {
 test("紧凑展示执行器健康、版本与 Cursor 编辑器限定状态", async ({ page }) => {
   const section = page.getByRole("heading", { name: "Agent 执行器" }).locator("xpath=ancestor::section");
   await expect(section).toBeVisible();
-  for (const name of ["Claude Code", "Codex CLI", "Gemini CLI", "Grok CLI", "Cursor Agent"]) {
+  for (const name of ["Claude Code", "Codex CLI", "Gemini CLI", "Kiro CLI", "Grok CLI", "Cursor Agent"]) {
     await expect(section.getByText(name, { exact: true })).toBeVisible();
   }
   await expect(section.getByText("2.1.226", { exact: true })).toBeVisible();
-  await expect(section.getByText("未安装", { exact: true })).toBeVisible();
+  await expect(section.getByText("未安装", { exact: true })).toHaveCount(2);
   await expect(section.getByText("未配置", { exact: true })).toBeVisible();
   await expect(section.getByText("仅编辑器", { exact: true })).toBeVisible();
+  await expect(section.getByRole("link", { name: "官方下载" })).toHaveAttribute("href", "https://cli.kiro.dev/install");
   await expect(section.getByText("备用 CLI", { exact: true })).toBeVisible();
   await expect(section.getByText("未检查", { exact: true })).toBeVisible();
   await expect(section.getByRole("button", { name: "配置 备用 CLI" })).toBeVisible();

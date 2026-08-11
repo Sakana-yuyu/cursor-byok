@@ -148,6 +148,32 @@ func TestHostRegistersGeminiExecutorAndAppliesSavedPolicy(t *testing.T) {
 	}
 }
 
+func TestHostRegistersKiroExecutorAndAppliesSavedPolicy(t *testing.T) {
+	store := serverconfig.NewStore(filepath.Join(t.TempDir(), "config.yaml"), "")
+	host, err := NewHost(store, nil)
+	if err != nil {
+		t.Fatalf("NewHost() error = %v", err)
+	}
+	t.Cleanup(func() { _ = host.Stop(context.Background()) })
+
+	snapshot, ok := host.ExecutorRegistry().Snapshot("kiro-cli")
+	if !ok || snapshot.Enabled {
+		t.Fatalf("default Kiro snapshot = %#v, ok=%t", snapshot, ok)
+	}
+	cfg, err := host.ConfigManager().GetDelegationConfig(t.Context())
+	if err != nil {
+		t.Fatalf("GetDelegationConfig() error = %v", err)
+	}
+	cfg.Executors = []serverconfig.DelegationExecutorConfig{{ID: "kiro-cli", Kind: serverconfig.DelegationExecutorKindBuiltin, Enabled: true, Priority: 2, Executable: "C:/tools/kiro-cli.exe"}}
+	if _, err := host.ConfigManager().SaveDelegationConfig(t.Context(), cfg); err != nil {
+		t.Fatalf("SaveDelegationConfig() error = %v", err)
+	}
+	snapshot, ok = host.ExecutorRegistry().Snapshot("kiro-cli")
+	if !ok || !snapshot.Enabled || snapshot.Priority != 2 || snapshot.Probe.State != delegation.ExecutorProbeUnknown {
+		t.Fatalf("updated Kiro snapshot = %#v, ok=%t", snapshot, ok)
+	}
+}
+
 func TestHostRegistersCursorExecutorSeparatelyFromEditorLaunch(t *testing.T) {
 	store := serverconfig.NewStore(filepath.Join(t.TempDir(), "config.yaml"), "")
 	host, err := NewHost(store, nil)
