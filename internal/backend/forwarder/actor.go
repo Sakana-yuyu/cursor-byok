@@ -1198,6 +1198,19 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 			return nil
 		}
 	}
+	// 已向用户发送过正文时，通用续写会重复或篡改已展示的上下文。保留部分正文，
+	// 以明确失败终态收口，让客户端和后续回合都知道回复并未完整结束。
+	if isMaxOutputTokensTruncation(finishReason) && !hadToolInvocation && strings.TrimSpace(accumulatedText) != "" {
+		service.setTurnPhase(stream, TurnPhaseFailed)
+		return service.closeStreamWithOutputTruncation(
+			stream,
+			conversationID,
+			turnSeq,
+			requestID,
+			usage,
+			finishReason,
+		)
+	}
 
 	clearPendingProviderCompletion(stream)
 	if err := service.completeSuccessfulTurn(stream, pendingTurnCompletion{

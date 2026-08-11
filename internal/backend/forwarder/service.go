@@ -3261,6 +3261,54 @@ func (service *Service) closeStreamWithProviderError(
 	return service.failActiveStream(stream, conversationID, requestID, modelCallID, "provider_error", errorText)
 }
 
+const (
+	outputTruncatedTerminalCode = "output_truncated"
+	outputTruncatedErrorText    = "模型输出达到 token 上限，已保留部分回复；请继续或缩短请求后重试。"
+)
+
+// closeStreamWithOutputTruncation 保留已发送的部分正文，并把输出预算截断作为失败终态落库。
+// 已有可见正文时不能自动续写，否则模型可能重复、改写或矛盾此前已经展示的内容。
+func (service *Service) closeStreamWithOutputTruncation(
+	stream *ActiveStream,
+	conversationID string,
+	turnSeq int64,
+	requestID string,
+	usage turnUsageSnapshot,
+	finishReason string,
+) error {
+	if stream == nil {
+		return nil
+	}
+	modelCallID := strings.TrimSpace(stream.CurrentModelCallID)
+	if strings.TrimSpace(usage.ErrorCode) == "" {
+		usage.ErrorCode = outputTruncatedTerminalCode
+	}
+	if err := service.recordTurnUsageSnapshot(stream, conversationID, turnSeq, requestID, modelCallID, "provider_error", usage, outputTruncatedErrorText, false); err != nil {
+		return fmt.Errorf("record truncated output usage: %w", err)
+	}
+	if _, err := service.appendConversationEntries(stream, conversationID, []HistoryEntry{
+		newMetadataEntry(turnSeq, requestID, outputTruncatedTerminalCode, map[string]any{
+			"model_call_id": modelCallID,
+			"finish_reason": strings.TrimSpace(finishReason),
+		}),
+	}); err != nil {
+		return err
+	}
+	if err := service.recordTurnFinalizedSnapshot(stream, conversationID, turnSeq, requestID, outputTruncatedTerminalCode, outputTruncatedErrorText); err != nil {
+		return fmt.Errorf("record truncated output turn finalized: %w", err)
+	}
+	if err := service.updateConversationTokenState(stream, conversationID, usage, modelCallID, false); err != nil {
+		return err
+	}
+	return service.failActiveStreamWithDetails(stream, conversationID, requestID, modelCallID, TerminalFailure{
+		Code:         outputTruncatedTerminalCode,
+		Message:      outputTruncatedErrorText,
+		TraceID:      strings.TrimSpace(requestID),
+		AppErrorCode: outputTruncatedTerminalCode,
+		Disposition:  "retryable",
+	})
+}
+
 // closeStreamWithTurnBudgetExceeded 在非 goal 回合触发 provider pass / 时长硬上限时安全收口。
 // 防死循环兜底：正常 agent 回合的工具循环远低于上限；超过说明模型陷入死循环，结束回合并告知用户。
 func (service *Service) closeStreamWithTurnBudgetExceeded(stream *ActiveStream, reason string) error {

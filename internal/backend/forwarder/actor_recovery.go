@@ -13,10 +13,10 @@ import (
 
 // isMaxOutputTokensTruncation 判断 provider 流式收口原因是否表示被输出预算截断（而非模型主动结束）。
 // 与 provider_cache.go 的 isTruncationFinishReason 语义一致，但范围收窄到恢复能获益的截断原因：
-// max_output_tokens / length / incomplete。content_filter 是策略拦截而非预算截断，恢复无益，故排除。
+// max_output_tokens / max_tokens / length / incomplete。content_filter 是策略拦截而非预算截断，恢复无益，故排除。
 func isMaxOutputTokensTruncation(reason string) bool {
 	switch strings.TrimSpace(reason) {
-	case "max_output_tokens", "length", "incomplete":
+	case "max_output_tokens", "max_tokens", "length", "incomplete":
 		return true
 	default:
 		return false
