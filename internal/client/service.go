@@ -261,7 +261,7 @@ func (s *ProxyService) ensureProxy(cfg serverconfig.Config) error {
 		}
 	}
 
-	proxyServer, err := mitm.NewProxyServer(listenAddr, baseURL, "", "", s.certManager)
+	proxyServer, err := mitm.NewProxyServer(listenAddr, baseURL, "", nil, s.certManager)
 	if err != nil {
 		return err
 	}

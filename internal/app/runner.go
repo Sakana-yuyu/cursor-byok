@@ -116,7 +116,7 @@ func Run(resources EmbeddedResources) error {
 	logStartupPhase("certs-ready")
 
 	defaultBackendBaseURL := "http://" + serverconfig.DefaultBackendListenAddr
-	proxyServer, err := mitm.NewProxyServer(serverconfig.DefaultProxyListenAddr, defaultBackendBaseURL, "", "", certManager)
+	proxyServer, err := mitm.NewProxyServer(serverconfig.DefaultProxyListenAddr, defaultBackendBaseURL, "", nil, certManager)
 	if err != nil {
 		return err
 	}

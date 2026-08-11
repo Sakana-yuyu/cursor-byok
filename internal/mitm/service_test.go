@@ -1,13 +1,14 @@
 package mitm
 
 import (
+	"context"
 	"testing"
 )
 
 // TestNewProxyServerAllowsNilCertManager 验证 CA 材料不完整时（certManager=nil）
 // 代理服务仍可创建（MITM 自动禁用），支撑应用降级启动。
 func TestNewProxyServerAllowsNilCertManager(t *testing.T) {
-	proxy, err := NewProxyServer("127.0.0.1:0", "http://127.0.0.1:1", "", "", nil)
+	proxy, err := NewProxyServer("127.0.0.1:0", "http://127.0.0.1:1", t.TempDir(), nil, nil)
 	if err != nil {
 		t.Fatalf("NewProxyServer with nil certManager: %v", err)
 	}
@@ -53,4 +54,36 @@ func (limiter *logLimiter) snapshotKeyCount() int {
 	limiter.mu.Lock()
 	defer limiter.mu.Unlock()
 	return len(limiter.entries)
+}
+
+type fakeMirrorConfig struct {
+	enabled bool
+	hosts   []string
+}
+
+func (f *fakeMirrorConfig) MirrorCaptureEnabled(ctx context.Context) bool { return f.enabled }
+func (f *fakeMirrorConfig) MirrorCaptureHosts() []string                  { return f.hosts }
+
+func TestMirrorHostMatching(t *testing.T) {
+	s := &ProxyServer{mirrorConfig: &fakeMirrorConfig{enabled: true, hosts: []string{"api.openai.com"}}}
+	if !s.isMirrorHost("api.openai.com") {
+		t.Fatal("exact host should match")
+	}
+	if !s.isMirrorHost("api.openai.com:443") {
+		t.Fatal("host with port should match")
+	}
+	if s.isMirrorHost("api.anthropic.com") {
+		t.Fatal("non-listed host should not match")
+	}
+	if s.mirrorEnabledForHost("api.openai.com") {
+		t.Fatal("mirrorRec is nil, must be disabled")
+	}
+	s.mirrorRec = newMirrorRecorder(t.TempDir())
+	if !s.mirrorEnabledForHost("api.openai.com") {
+		t.Fatal("enabled+listed+recorder should be active")
+	}
+	s.mirrorConfig = &fakeMirrorConfig{enabled: false, hosts: []string{"api.openai.com"}}
+	if s.mirrorEnabledForHost("api.openai.com") {
+		t.Fatal("disabled config must disable mirroring")
+	}
 }
