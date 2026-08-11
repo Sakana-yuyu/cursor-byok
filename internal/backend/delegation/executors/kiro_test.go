@@ -12,9 +12,10 @@ import (
 )
 
 func TestKiroCLIRegistrationUsesOfficialHeadlessContract(t *testing.T) {
+	t.Setenv("KIRO_API_KEY", "test-key")
 	runner := &claudeScriptedRunner{steps: []claudeRunnerStep{
 		{result: delegation.ProcessResult{Stdout: "Kiro CLI 1.26.0", ExecutablePath: "C:/tools/kiro-cli.exe"}},
-		{result: delegation.ProcessResult{Stdout: `{"models":[{"id":"kiro-default"}]}`, ExecutablePath: "C:/tools/kiro-cli.exe"}},
+		{result: delegation.ProcessResult{Stdout: "Usage: kiro-cli chat --no-interactive --trust-tools=<categories>", ExecutablePath: "C:/tools/kiro-cli.exe"}},
 		{result: delegation.ProcessResult{Stdout: "完成检查\n"}},
 	}}
 	registration, err := NewKiroCLIRegistration(runner, delegation.RuntimeExecutorConfig{ID: KiroCLIExecutorID, Enabled: true, Priority: 6, Executable: "C:/tools/kiro-cli.exe", ProbeTimeoutSeconds: 4, ExecutionTimeoutSeconds: 30})
@@ -25,8 +26,8 @@ func TestKiroCLIRegistrationUsesOfficialHeadlessContract(t *testing.T) {
 	if err != nil || probe.State != delegation.ExecutorProbeReady || probe.AuthState != delegation.ExecutorAuthReady || probe.Version != "Kiro CLI 1.26.0" {
 		t.Fatalf("probe=%#v err=%v", probe, err)
 	}
-	if want := []string{"chat", "--list-model", "--format", "json"}; !reflect.DeepEqual(runner.requests[1].Args, want) {
-		t.Fatalf("model probe args=%#v want=%#v", runner.requests[1].Args, want)
+	if want := []string{"chat", "--help"}; !reflect.DeepEqual(runner.requests[1].Args, want) {
+		t.Fatalf("headless contract probe args=%#v want=%#v", runner.requests[1].Args, want)
 	}
 	result := registration.Execute(t.Context(), delegation.TaskRequest{Prompt: "检查工作区", WorkspaceHint: "E:/workspace", Readonly: true, Timeout: 20 * time.Second})
 	if result.Error != nil || result.Output != "完成检查" {
@@ -41,7 +42,7 @@ func TestKiroCLIRegistrationUsesOfficialHeadlessContract(t *testing.T) {
 	}
 }
 
-func TestKiroCLIProbeClassifiesNotInstalledAndAuthenticationRequired(t *testing.T) {
+func TestKiroCLIProbeClassifiesNotInstalledAndMissingAuthentication(t *testing.T) {
 	notFound := &claudeScriptedRunner{steps: []claudeRunnerStep{{err: delegation.NewClassifiedExecutorError(delegation.ExecutorFailureSwitchable, true, delegation.ProcessErrorCodeNotFound, errors.New("missing"))}}}
 	registration, _ := NewKiroCLIRegistration(notFound, delegation.RuntimeExecutorConfig{ID: KiroCLIExecutorID, Executable: "missing-kiro"})
 	probe, err := registration.Probe(t.Context())
@@ -50,7 +51,7 @@ func TestKiroCLIProbeClassifiesNotInstalledAndAuthenticationRequired(t *testing.
 	}
 	auth := &claudeScriptedRunner{steps: []claudeRunnerStep{
 		{result: delegation.ProcessResult{Stdout: "Kiro CLI 1.26.0", ExecutablePath: "kiro-cli"}},
-		{result: delegation.ProcessResult{Stderr: "KIRO_API_KEY is required", ExecutablePath: "kiro-cli"}, err: delegation.NewClassifiedExecutorError(delegation.ExecutorFailureSwitchable, true, delegation.ProcessErrorCodeExitFailed, errors.New("exit 1"))},
+		{result: delegation.ProcessResult{Stdout: "Usage: kiro-cli chat --no-interactive --trust-tools=<categories>", ExecutablePath: "kiro-cli"}},
 	}}
 	registration, _ = NewKiroCLIRegistration(auth, delegation.RuntimeExecutorConfig{ID: KiroCLIExecutorID, Executable: "kiro-cli"})
 	probe, err = registration.Probe(t.Context())

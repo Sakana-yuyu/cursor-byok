@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -95,18 +96,21 @@ func (adapter *kiroCLIAdapter) probe(ctx context.Context) (delegation.ExecutorPr
 		return adapter.unhealthyProbe(versionResult, probedAt, err), err
 	}
 	adapter.setVersion(version)
-	modelsResult, err := adapter.runProbe(ctx, "chat", "--list-model", "--format", "json")
+	helpResult, err := adapter.runProbe(ctx, "chat", "--help")
 	if err != nil {
-		diagnostic := firstNonEmpty(modelsResult.Stderr, err.Error())
+		diagnostic := firstNonEmpty(helpResult.Stderr, err.Error())
 		if kiroAuthenticationRequired(diagnostic) {
-			return delegation.ExecutorProbeResult{State: delegation.ExecutorProbeActionRequired, ExecutablePath: firstNonEmpty(versionResult.ExecutablePath, modelsResult.ExecutablePath), Version: version, Installed: true, AuthState: delegation.ExecutorAuthRequired, Capabilities: append([]delegation.ExecutorCapability{}, kiroCapabilities...), DiagnosticCode: KiroDiagnosticAuthRequired, DiagnosticText: "Kiro CLI authentication is required; set KIRO_API_KEY for headless execution or run kiro-cli login", ProbedAt: time.Now().UTC()}, nil
+			return adapter.authenticationRequiredProbe(versionResult, helpResult, version)
 		}
-		return adapter.unhealthyProbe(modelsResult, time.Now().UTC(), err), err
+		return adapter.unhealthyProbe(helpResult, time.Now().UTC(), err), err
 	}
-	if modelsResult.StdoutTruncated || modelsResult.StderrTruncated || !kiroModelListRecognized(modelsResult.Stdout) {
-		return delegation.ExecutorProbeResult{State: delegation.ExecutorProbeIncompatible, ExecutablePath: firstNonEmpty(versionResult.ExecutablePath, modelsResult.ExecutablePath), Version: version, Installed: true, AuthState: delegation.ExecutorAuthUnknown, Capabilities: append([]delegation.ExecutorCapability{}, kiroCapabilities...), DiagnosticCode: KiroDiagnosticIncompatible, DiagnosticText: "Kiro CLI does not support the required chat --list-model --format json probe contract", ProbedAt: time.Now().UTC()}, nil
+	if helpResult.StdoutTruncated || helpResult.StderrTruncated || !kiroHeadlessContractRecognized(firstNonEmpty(helpResult.Stdout, helpResult.Stderr)) {
+		return delegation.ExecutorProbeResult{State: delegation.ExecutorProbeIncompatible, ExecutablePath: firstNonEmpty(versionResult.ExecutablePath, helpResult.ExecutablePath), Version: version, Installed: true, AuthState: delegation.ExecutorAuthUnknown, Capabilities: append([]delegation.ExecutorCapability{}, kiroCapabilities...), DiagnosticCode: KiroDiagnosticIncompatible, DiagnosticText: "Kiro CLI does not support the required chat --no-interactive headless contract", ProbedAt: time.Now().UTC()}, nil
 	}
-	return delegation.ExecutorProbeResult{State: delegation.ExecutorProbeReady, ExecutablePath: firstNonEmpty(versionResult.ExecutablePath, modelsResult.ExecutablePath), Version: version, Installed: true, AuthState: delegation.ExecutorAuthReady, Capabilities: append([]delegation.ExecutorCapability{}, kiroCapabilities...), DiagnosticCode: KiroDiagnosticReady, ProbedAt: time.Now().UTC()}, nil
+	if !adapter.hasHeadlessAPIKey() {
+		return adapter.authenticationRequiredProbe(versionResult, helpResult, version)
+	}
+	return delegation.ExecutorProbeResult{State: delegation.ExecutorProbeReady, ExecutablePath: firstNonEmpty(versionResult.ExecutablePath, helpResult.ExecutablePath), Version: version, Installed: true, AuthState: delegation.ExecutorAuthReady, Capabilities: append([]delegation.ExecutorCapability{}, kiroCapabilities...), DiagnosticCode: KiroDiagnosticReady, ProbedAt: time.Now().UTC()}, nil
 }
 
 func (adapter *kiroCLIAdapter) runProbe(ctx context.Context, args ...string) (delegation.ProcessResult, error) {
@@ -170,6 +174,19 @@ func (adapter *kiroCLIAdapter) environmentNames() []string {
 	return append(values, "KIRO_API_KEY")
 }
 
+func (adapter *kiroCLIAdapter) hasHeadlessAPIKey() bool {
+	for _, name := range adapter.environmentNames() {
+		if name == "KIRO_API_KEY" {
+			return strings.TrimSpace(os.Getenv(name)) != ""
+		}
+	}
+	return false
+}
+
+func (adapter *kiroCLIAdapter) authenticationRequiredProbe(versionResult, helpResult delegation.ProcessResult, version string) (delegation.ExecutorProbeResult, error) {
+	return delegation.ExecutorProbeResult{State: delegation.ExecutorProbeActionRequired, ExecutablePath: firstNonEmpty(versionResult.ExecutablePath, helpResult.ExecutablePath), Version: version, Installed: true, AuthState: delegation.ExecutorAuthRequired, Capabilities: append([]delegation.ExecutorCapability{}, kiroCapabilities...), DiagnosticCode: KiroDiagnosticAuthRequired, DiagnosticText: "Kiro CLI headless execution requires KIRO_API_KEY", ProbedAt: time.Now().UTC()}, nil
+}
+
 func (adapter *kiroCLIAdapter) unhealthyProbe(result delegation.ProcessResult, probedAt time.Time, err error) delegation.ExecutorProbeResult {
 	return delegation.ExecutorProbeResult{State: delegation.ExecutorProbeUnhealthy, ExecutablePath: result.ExecutablePath, Version: adapter.getVersion(), Installed: result.ExecutablePath != "", AuthState: delegation.ExecutorAuthUnknown, Capabilities: append([]delegation.ExecutorCapability{}, kiroCapabilities...), DiagnosticCode: KiroDiagnosticProbeFailed, DiagnosticText: firstNonEmpty(result.Stderr, err.Error()), ProbedAt: probedAt}
 }
@@ -186,9 +203,9 @@ func (adapter *kiroCLIAdapter) getVersion() string {
 	return adapter.version
 }
 
-func kiroModelListRecognized(output string) bool {
-	value := strings.TrimSpace(output)
-	return strings.HasPrefix(value, "{") && strings.Contains(value, "models")
+func kiroHeadlessContractRecognized(output string) bool {
+	value := strings.ToLower(strings.TrimSpace(output))
+	return strings.Contains(value, "--no-interactive") && (strings.Contains(value, "--trust-tools") || strings.Contains(value, "--trust-all-tools"))
 }
 
 func kiroAuthenticationRequired(message string) bool {

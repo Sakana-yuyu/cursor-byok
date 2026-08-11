@@ -33,6 +33,7 @@ function stateLabel(row) {
   if (row?.state === "ready") return "可用";
   if (row?.state === "not_installed") return "未安装";
   if (row?.state === "action_required") return "需要操作";
+  if (row?.state === "incompatible") return "不兼容";
   if (row?.state === "unhealthy") return "异常";
   return "未检查";
 }
@@ -40,7 +41,7 @@ function stateLabel(row) {
 function stateClass(row) {
   if (row?.state === "ready") return "text-[#6ee7a5]";
   if (row?.state === "unhealthy") return "text-[#fca5a5]";
-  if (row?.state === "action_required") return "text-[#facc15]";
+  if (row?.state === "action_required" || row?.state === "incompatible") return "text-[#facc15]";
   return "text-[#a3a3a3]";
 }
 

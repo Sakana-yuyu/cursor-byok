@@ -406,6 +406,7 @@
   "4a6f0a0b410fb664": "Export evidence bundle",
   "4a84af992a929425": "Write conversation-level debug logs to disk (in the history directory, with a 50 MB limit per jsonl file). Turning this off stops writes immediately and prevents additional large log files from being created.",
   "4ae1bfcb6bbe1c2e": "Overridden",
+  "4ae9eb28741faa5f": "Incompatible",
   "4b47dbae97ba938a": "Prompts",
   "4b6fe794215680c3": "Desktop mode",
   "4b99b5f56ceaf34e": "✓ Available",
