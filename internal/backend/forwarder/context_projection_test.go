@@ -65,6 +65,29 @@ func (provider *contextProjectionRequestProvider) StartStream(_ context.Context,
 	return errProviderLoopInterrupted
 }
 
+// contextProjectionTimeoutProvider 模拟自动投影摘要长时间没有返回，而主模型请求
+// 在最近尾部回退后应立即被重新调度。
+type contextProjectionTimeoutProvider struct {
+	summaryStarted chan struct{}
+	parentRequests chan ProviderRequest
+}
+
+func (provider *contextProjectionTimeoutProvider) StartStream(ctx context.Context, request ProviderRequest, _ func(modeladapter.ModelEvent) error) error {
+	if strings.Contains(request.CompileSummary, "compaction trigger=auto_projection") {
+		select {
+		case provider.summaryStarted <- struct{}{}:
+		default:
+		}
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	select {
+	case provider.parentRequests <- request:
+	default:
+	}
+	return errProviderLoopInterrupted
+}
+
 type contextProjectionLifecycleCompiler struct{}
 
 func (contextProjectionLifecycleCompiler) Compile(conversation *ConversationFile, mode agentv1.AgentMode, _ string, _ string, _ string, _ bool) (CompiledConversation, error) {
@@ -234,6 +257,85 @@ func TestHandleContextProjectionSummaryFailureFallsBackToRecentTailSidecar(t *te
 		t.Fatal("recent-tail fallback did not resume the provider pass")
 	}
 	waitForContextProjectionProviderIdle(t, stream)
+}
+
+// TestAutomaticContextProjectionSummaryTimesOutIntoRecentTail 验证自动维护的
+// 性能边界：摘要卡住时不能无限阻塞下一次主模型请求，最近尾部回退仍需保留可用上下文。
+func TestAutomaticContextProjectionSummaryTimesOutIntoRecentTail(t *testing.T) {
+	store := NewConversationFileStore(t.TempDir())
+	provider := &contextProjectionTimeoutProvider{
+		summaryStarted: make(chan struct{}, 1),
+		parentRequests: make(chan ProviderRequest, 1),
+	}
+	service := newServiceWithDependencies(store, NewHistoryProjector(), contextProjectionLifecycleCompiler{}, provider, NewStreamBroker())
+	conversation := contextProjectionTestConversation(t, 8)
+	conversation.CurrentTurnSeq = 8
+	conversation.CurrentRequestID = "request-timeout"
+	persisted, err := service.store.SaveConversationWithEntries(conversation.ConversationID, conversation, conversation.Entries)
+	if err != nil {
+		t.Fatalf("SaveConversationWithEntries() error = %v", err)
+	}
+	plan, err := buildContextProjectionSummaryPlan(persisted, "model-a", nil, 120_000, 160_000, 10_000)
+	if err != nil || plan == nil {
+		t.Fatalf("buildContextProjectionSummaryPlan() = (%#v, %v)", plan, err)
+	}
+	stream, err := service.broker.OpenStream(
+		"request-timeout",
+		persisted.ConversationID,
+		8,
+		"model-a",
+		"model-a",
+		agentv1.AgentMode_AGENT_MODE_AGENT,
+		"question 8",
+	)
+	if err != nil {
+		t.Fatalf("OpenStream() error = %v", err)
+	}
+	defer func() { _ = service.broker.Cancel(stream.RequestID, "test cleanup") }()
+	stream.CheckpointConversation = cloneConversationFile(persisted)
+	stream.Status = StreamStatusStreaming
+	stream.PendingCompaction = newPendingCompaction(plan)
+
+	if err := service.startPendingCompactionSummary(stream, stream.PendingCompaction); err != nil {
+		t.Fatalf("startPendingCompactionSummary() error = %v", err)
+	}
+	select {
+	case <-provider.summaryStarted:
+	case <-time.After(time.Second):
+		t.Fatal("自动投影摘要没有启动")
+	}
+
+	select {
+	case request := <-provider.parentRequests:
+		if strings.Contains(request.CompileSummary, "compaction trigger=auto_projection") {
+			t.Fatalf("等待到的仍是摘要请求：%#v", request)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("自动投影摘要超时后没有及时恢复主模型请求，TTFT 会被摘要阻塞")
+	}
+
+	fallback, err := service.store.LoadContextProjection(persisted.ConversationID)
+	if err != nil {
+		t.Fatalf("LoadContextProjection() error = %v", err)
+	}
+	if fallback == nil || fallback.Mode != contextProjectionModeRecentTail {
+		t.Fatalf("fallback projection = %#v，want recent-tail", fallback)
+	}
+}
+
+func TestCompactionSummaryTimeoutOnlyAppliesToAutomaticProjection(t *testing.T) {
+	service := NewService(t.TempDir(), nilResolver{})
+	autoCtx, autoCancel := service.newCompactionSummaryContext(newPendingCompaction(&compactionPlan{Trigger: contextProjectionTrigger}))
+	defer autoCancel()
+	if _, ok := autoCtx.Deadline(); !ok {
+		t.Fatal("自动上下文投影摘要必须有首字预算截止时间")
+	}
+
+	manualCtx, manualCancel := service.newCompactionSummaryContext(newPendingCompaction(&compactionPlan{Trigger: "manual"}))
+	defer manualCancel()
+	if _, ok := manualCtx.Deadline(); ok {
+		t.Fatal("用户手动压缩不应继承自动投影的短时限")
+	}
 }
 
 func TestGenerateContextProjectionSummaryDoesNotModifyCanonicalFiles(t *testing.T) {

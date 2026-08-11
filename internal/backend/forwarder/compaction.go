@@ -22,7 +22,10 @@ const (
 	compactionReserveFloorTokens     = 8192
 	compactionSummaryMaxChars        = 12000
 	compactionSummaryOutputMaxTokens = 4096
-	compactionTurnSnippetMaxChars    = 900
+	// 自动上下文投影位于主模型请求之前，摘要慢于此预算时应直接使用
+	// recent-tail 侧车回退，避免维护任务放大用户可见的首字延迟。
+	contextProjectionSummaryTimeout = 1500 * time.Millisecond
+	compactionTurnSnippetMaxChars   = 900
 
 	autoCompactionPreservedToolResultLimitBytes = 16 * 1024
 	autoCompactionFallbackToolResultLimitBytes  = 4 * 1024
@@ -399,7 +402,7 @@ func (service *Service) startPendingCompactionSummary(stream *ActiveStream, plan
 		return nil
 	}
 	summaryModelCallID := uuid.NewString()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := service.newCompactionSummaryContext(plan)
 	stream.mu.Lock()
 	if stream.Status == StreamStatusCanceled || stream.Status == StreamStatusCompleted || stream.Status == StreamStatusFailed {
 		stream.PendingCompaction = nil
@@ -445,6 +448,15 @@ func (service *Service) startPendingCompactionSummary(stream *ActiveStream, plan
 		}
 	})
 	return nil
+}
+
+// newCompactionSummaryContext 仅限制自动上下文投影的维护预算。用户显式发起的
+// 压缩需要完整总结，因此仍只跟随 stream 的取消信号。
+func (service *Service) newCompactionSummaryContext(plan *PendingCompaction) (context.Context, context.CancelFunc) {
+	if plan != nil && plan.Trigger == contextProjectionTrigger {
+		return context.WithTimeout(context.Background(), contextProjectionSummaryTimeout)
+	}
+	return context.WithCancel(context.Background())
 }
 
 func (service *Service) runPendingCompaction(stream *ActiveStream, token uint64, plan *PendingCompaction, modelCallID string, ctx context.Context) {
