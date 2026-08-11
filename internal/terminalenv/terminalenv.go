@@ -16,23 +16,23 @@ import (
 // 前端按这些字段展示「终端 / Python」状态并决定「应用到 Cursor」按钮可用性。
 type Status struct {
 	// Platform 取值：windows / darwin / linux（runtime.GOOS）。
-	Platform string
+	Platform string `json:"platform"`
 	// ShellName 是探测到的首选 shell 显示名（如 "PowerShell 7"、"zsh"）。
-	ShellName string
+	ShellName string `json:"shellName"`
 	// ShellVersion 是 shell 版本号字符串，可能为空。
-	ShellVersion string
+	ShellVersion string `json:"shellVersion"`
 	// ShellPath 是可执行文件的绝对路径；空表示未检测到可用 shell。
-	ShellPath string
+	ShellPath string `json:"shellPath"`
 	// PythonPath 是探测到的 Python 3 解释器路径；空表示未检测到。
-	PythonPath string
+	PythonPath string `json:"pythonPath"`
 	// PythonVersion 是 python 的版本行（如 "Python 3.12.4"），可能为空。
-	PythonVersion string
+	PythonVersion string `json:"pythonVersion"`
 	// UpgradeRecommended 为 true 时前端提示用户升级到更现代的 shell。
-	UpgradeRecommended bool
+	UpgradeRecommended bool `json:"upgradeRecommended"`
 	// UpgradeMessage 是升级提示文案（仅在 UpgradeRecommended 时展示）。
-	UpgradeMessage string
+	UpgradeMessage string `json:"upgradeMessage"`
 	// ConfigurationNotice 是展示在状态区的说明性文案（如 PowerShell 7 未安装提示）。
-	ConfigurationNotice string
+	ConfigurationNotice string `json:"configurationNotice"`
 }
 
 // Validate 校验探测结果是否可用：Shell 路径缺失时返回错误。
