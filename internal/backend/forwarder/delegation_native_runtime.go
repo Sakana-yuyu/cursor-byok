@@ -143,7 +143,10 @@ func (service *Service) registerNativeDelegation(stream *ActiveStream, pending r
 		holdsSlot:               true,
 	}
 	service.delegationRuntimeMu.Unlock()
-	service.publishNativeDelegationProgress(parentRequestID, pending.ExecID, nativeDelegationStartSummary(description, modelName, workerRole))
+	// Do not emit a TaskToolCallDelta here. Cursor has not created and linked the
+	// real child composer yet; an early delta makes the Task handler allocate a
+	// nested fallback composer that masks the native child window. Child stream
+	// events and the delayed keepalive publish only after native binding can win.
 	service.keepNativeDelegationAlive(parentRequestID, pending.ExecID)
 	service.watchNativeDelegationProgress(parentRequestID, pending.ExecID)
 	return true

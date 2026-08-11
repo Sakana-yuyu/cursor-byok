@@ -4,9 +4,46 @@ import (
 	"testing"
 
 	"cursor/gen/agentv1"
+	runtimecore "cursor/internal/backend/agent/core"
 	modeladapter "cursor/internal/backend/agent/model"
 	"cursor/internal/backend/delegation"
 )
+
+func TestRegisterNativeDelegationWaitsForClientSubagentBeforeParentDelta(t *testing.T) {
+	service := NewService(t.TempDir(), nilResolver{})
+	requestID := "req-native-register"
+	conversationID := "conv-native-register"
+	execID := "exec-native-register"
+	toolCallID := "call-native-register"
+
+	stream, err := service.broker.OpenStream(
+		requestID,
+		conversationID,
+		1,
+		"model-id",
+		"Model Name",
+		agentv1.AgentMode_AGENT_MODE_AGENT,
+		"delegate work",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pending := runtimecore.PendingExec{
+		ExecID:     execID,
+		ExecKind:   "subagent",
+		ToolCallID: toolCallID,
+		ArgsJSON:   []byte(`{"description":"inspect routes","subagent_type":"explore"}`),
+	}
+
+	if !service.registerNativeDelegation(stream, pending, nil) {
+		t.Fatal("native delegation was not registered")
+	}
+	defer service.updateNativeDelegationStatus(execID, delegation.TaskCompleted, "completed", "")
+
+	if got := len(stream.Backlog); got != 0 {
+		t.Fatalf("parent backlog length = %d, want 0 before Cursor links the real child composer", got)
+	}
+}
 
 func TestPublishNativeDelegationProgressScopesDeltaToTaskToolCall(t *testing.T) {
 	service := NewService(t.TempDir(), nilResolver{})
