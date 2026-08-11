@@ -212,6 +212,27 @@ func (recorder *debugRecorder) LogRunSSE(ctx context.Context, requestID string, 
 	recorder.appendJSONLEnabled(ctx, requestID, conversationID, "runsse.jsonl", event)
 }
 
+// LogRunSSELazy 仅在观测日志启用时构造 RunSSE 字段，避免正文增量热路径在
+// 正常关闭观测时仍计算 protobuf 大小和文本摘要。
+func (recorder *debugRecorder) LogRunSSELazy(ctx context.Context, requestID string, conversationID string, eventName string, buildFields func() map[string]any) {
+	if !recorder.enabled(ctx) {
+		return
+	}
+	var fields map[string]any
+	if buildFields != nil {
+		fields = buildFields()
+	}
+	if len(fields) == 0 {
+		return
+	}
+	event := recorder.baseEvent("runsse", requestID, conversationID)
+	event["event"] = strings.TrimSpace(eventName)
+	for key, value := range fields {
+		event[key] = value
+	}
+	recorder.appendJSONLEnabled(ctx, requestID, conversationID, "runsse.jsonl", event)
+}
+
 // runSSEMessageDebugFields 仅记录 RunSSE 消息的协议类别、大小与正文增量摘要。
 // RunSSE 位于用户可见输出热路径，不能为调试日志同步执行 protobuf JSON 编码和反解码。
 func runSSEMessageDebugFields(cursor int, message *agentv1.AgentServerMessage) map[string]any {

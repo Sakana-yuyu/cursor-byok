@@ -5,6 +5,7 @@
 package forwarder
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -178,5 +179,30 @@ func BenchmarkRunSSECompactMessageDebugFields(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		benchmarkRunSSEDebugFields = runSSEMessageDebugFields(1, message)
+	}
+}
+
+// BenchmarkRunSSEDisabledDebugEagerFields 对比旧行为：观测关闭后仍构造每条增量的
+// debug 字段，包含 protobuf 大小和文本摘要计算。
+func BenchmarkRunSSEDisabledDebugEagerFields(b *testing.B) {
+	recorder := newDebugRecorder("", nil, stubDebugLogConfig{enabled: false})
+	message := buildTextDeltaMessage("a realistic streamed text delta for a coding response")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		recorder.LogRunSSE(context.Background(), "request", "conversation", "send_message", runSSEMessageDebugFields(i, message))
+	}
+}
+
+// BenchmarkRunSSEDisabledDebugLazyFields 锁定优化后行为：观测关闭时不构造字段。
+func BenchmarkRunSSEDisabledDebugLazyFields(b *testing.B) {
+	recorder := newDebugRecorder("", nil, stubDebugLogConfig{enabled: false})
+	message := buildTextDeltaMessage("a realistic streamed text delta for a coding response")
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		recorder.LogRunSSELazy(context.Background(), "request", "conversation", "send_message", func() map[string]any {
+			return runSSEMessageDebugFields(i, message)
+		})
 	}
 }

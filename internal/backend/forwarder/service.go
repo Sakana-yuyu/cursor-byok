@@ -495,7 +495,9 @@ func (service *Service) RunSSE(ctx context.Context, req *connect.Request[aiserve
 						})
 						return err
 					}
-					service.debug.LogRunSSE(ctx, requestID, "", "send_message", runSSEMessageDebugFields(cursor, event.Message))
+					service.debug.LogRunSSELazy(ctx, requestID, "", "send_message", func() map[string]any {
+						return runSSEMessageDebugFields(cursor, event.Message)
+					})
 				}
 				cursor++
 				if event.End {

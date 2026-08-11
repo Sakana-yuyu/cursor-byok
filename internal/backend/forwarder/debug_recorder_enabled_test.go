@@ -32,6 +32,24 @@ func TestLogRunSSEChecksObservabilitySettingOnce(t *testing.T) {
 	}
 }
 
+func TestLogRunSSELazyBuildsFieldsWhenEnabled(t *testing.T) {
+	config := &countingDebugLogConfig{}
+	recorder := newDebugRecorder("", nil, config)
+	builderCalls := 0
+
+	recorder.LogRunSSELazy(context.Background(), "request", "conversation", "send_message", func() map[string]any {
+		builderCalls++
+		return map[string]any{"cursor": 1}
+	})
+
+	if builderCalls != 1 {
+		t.Fatalf("field builder calls = %d, want 1", builderCalls)
+	}
+	if got := config.enabledCalls.Load(); got != 1 {
+		t.Fatalf("IsObservabilityLogEnabled() calls = %d, want 1", got)
+	}
+}
+
 func TestLogProviderChecksObservabilitySettingOnce(t *testing.T) {
 	config := &countingDebugLogConfig{}
 	recorder := newDebugRecorder("", nil, config)
