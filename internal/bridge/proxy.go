@@ -36,6 +36,20 @@ var bundledImageSeeSkillManifest []byte
 // ProxyState 定义了当前模块中的 ProxyState 类型。
 type ProxyState = client.ProxyState
 
+// MirrorCaptureStatus 是镜像抓包的只读就绪与命中状态。
+// 它只返回运行条件和记录文件元数据，绝不包含请求或响应正文。
+type MirrorCaptureStatus struct {
+	Enabled               bool   `json:"enabled"`
+	BackendRunning        bool   `json:"backendRunning"`
+	ProxyRunning          bool   `json:"proxyRunning"`
+	CursorSettingsApplied bool   `json:"cursorSettingsApplied"`
+	Ready                 bool   `json:"ready"`
+	RecordPath            string `json:"recordPath"`
+	FileExists            bool   `json:"fileExists"`
+	SizeBytes             int64  `json:"sizeBytes"`
+	ModifiedAtUnixMs      int64  `json:"modifiedAtUnixMs"`
+}
+
 // UserConfig 定义了当前模块中的 UserConfig 类型。
 type UserConfig = client.UserConfig
 
@@ -265,6 +279,49 @@ func (s *ProxyService) CancelDelegationTask(taskID string) bool {
 // GetState 用于处理与 GetState 相关的逻辑。
 func (s *ProxyService) GetState() ProxyState {
 	return s.core.GetState()
+}
+
+// GetMirrorCaptureStatus 返回镜像抓包是否就绪及记录文件的元数据。
+// 文件不存在表示尚未命中官方模型请求，不会为查询创建空文件。
+func (s *ProxyService) GetMirrorCaptureStatus() (MirrorCaptureStatus, error) {
+	if s == nil || s.core == nil {
+		return MirrorCaptureStatus{}, errors.New("本地代理服务未初始化")
+	}
+	cfg, err := s.core.LoadUserConfig()
+	if err != nil {
+		return MirrorCaptureStatus{}, fmt.Errorf("读取镜像记录配置失败: %w", err)
+	}
+	state := s.core.GetState()
+	status := MirrorCaptureStatus{
+		Enabled:               cfg.MirrorCapture.Enabled,
+		BackendRunning:        state.BackendRunning,
+		ProxyRunning:          state.ProxyRunning,
+		CursorSettingsApplied: state.CursorSettingsApplied,
+		RecordPath:            mirrorCaptureRecordPath(),
+	}
+	status.Ready = status.Enabled && status.BackendRunning && status.ProxyRunning && status.CursorSettingsApplied
+
+	info, err := os.Stat(status.RecordPath)
+	if err == nil {
+		if !info.IsDir() {
+			status.FileExists = true
+			status.SizeBytes = info.Size()
+			status.ModifiedAtUnixMs = info.ModTime().UnixMilli()
+		}
+		return status, nil
+	}
+	if os.IsNotExist(err) {
+		return status, nil
+	}
+	return MirrorCaptureStatus{}, fmt.Errorf("读取镜像记录状态失败: %w", err)
+}
+
+func mirrorCaptureDirectoryPath() string {
+	return filepath.Join(appdata.HistoryRootPath(), "_debug", "mirror")
+}
+
+func mirrorCaptureRecordPath() string {
+	return filepath.Join(mirrorCaptureDirectoryPath(), "official.raw.jsonl")
 }
 
 // GetTerminalEnvironmentStatus returns the shell and Python 3 that Cursor will use.

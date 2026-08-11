@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"archive/zip"
+	"cursor/internal/appdata"
 	"cursor/internal/buildinfo"
 	"cursor/internal/client"
 	"cursor/internal/i18n"
@@ -714,6 +715,17 @@ func (s *WindowService) GetModelEditorContext() map[string]any {
 func (s *WindowService) OpenHistoryWindow() {
 	_ = os.MkdirAll(client.ResolveLogsRootPath(), 0o755)
 	openDirectory(client.ResolveLogsRootPath())
+}
+
+// OpenMirrorCaptureDirectory 打开镜像抓包记录目录。
+// 该操作不读取、复制或导出 official.raw.jsonl 的内容。
+func (s *WindowService) OpenMirrorCaptureDirectory() {
+	dir := filepath.Join(appdata.HistoryRootPath(), "_debug", "mirror")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		logger.Errorf("create mirror capture directory failed: %v", err)
+		return
+	}
+	openDirectory(dir)
 }
 
 // ExportLogs 将日志目录打包为 zip 文件，返回 zip 文件路径。
