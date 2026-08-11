@@ -76,6 +76,12 @@ func Warn(msg string, args ...any) {
 	slog.Warn(msg, args...)
 }
 
+// Warnf 输出格式化的 warning 级日志。
+func Warnf(format string, args ...any) {
+	Init()
+	slog.Warn(formatMessage(format, args...))
+}
+
 // Infof 输出格式化的 info 级日志。新代码优先使用 Info，以便保留可检索字段。
 func Infof(format string, args ...any) {
 	Init()

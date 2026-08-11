@@ -22,9 +22,10 @@ type MirrorCaptureConfig interface {
 }
 
 const (
-	mirrorLogSubdir    = "_debug/mirror"
-	mirrorLogFilename  = "official.raw.jsonl"
-	mirrorBodyMaxBytes = 128 * 1024
+	mirrorLogSubdir        = "_debug/mirror"
+	mirrorLogFilename      = "official.raw.jsonl"
+	mirrorBodyMaxBytes     = 128 * 1024
+	mirrorResponseMaxBytes = 1024 * 1024
 )
 
 // mirrorSensitiveHeaders 记录时一律抹掉的敏感头。
@@ -42,6 +43,7 @@ type mirrorRecord struct {
 	Host      string            `json:"host"`
 	Method    string            `json:"method,omitempty"`
 	URL       string            `json:"url,omitempty"`
+	Status    int               `json:"status,omitempty"`
 	Headers   map[string]string `json:"headers,omitempty"`
 	Body      string            `json:"body,omitempty"`
 	Truncated bool              `json:"truncated,omitempty"`
@@ -100,10 +102,19 @@ func (r *mirrorRecorder) recordRequest(host string, req *http.Request) {
 	}
 	rec := mirrorRecord{TS: time.Now(), Host: host, Method: req.Method, URL: requestURL(req), Headers: sanitizeHeaders(req.Header)}
 	if req.Body != nil {
-		body, _ := io.ReadAll(io.LimitReader(req.Body, mirrorBodyMaxBytes+1))
+		body, err := io.ReadAll(io.LimitReader(req.Body, mirrorBodyMaxBytes+1))
+		if err != nil {
+			// 直通语义优先于记录：读失败时保持 req.Body 原样（不重建），
+			// 避免把截断的部分 body 重建后直通给上游；不写记录也不动 body。
+			logger.Errorf("mirror record read request body failed: %v", err)
+			return
+		}
 		if len(body) > mirrorBodyMaxBytes {
 			// 记录端截断不影响直通：继续读完剩余部分，重建完整 body 给上游。
-			rest, _ := io.ReadAll(req.Body)
+			rest, restErr := io.ReadAll(req.Body)
+			if restErr != nil {
+				logger.Errorf("mirror record drain request body failed: %v", restErr)
+			}
 			body = append(body, rest...)
 			rec.Truncated = true
 			rec.Body = string(body[:mirrorBodyMaxBytes])
@@ -113,6 +124,23 @@ func (r *mirrorRecorder) recordRequest(host string, req *http.Request) {
 		req.Body = io.NopCloser(bytes.NewReader(body))
 	}
 	r.write(rec)
+}
+
+// recordResponseStart 记录一次镜像响应的起始信息（ts/host/status/脱敏 headers），body 为空。
+// 响应体内容由 recordResponseChunk 逐 chunk 追加。
+func (r *mirrorRecorder) recordResponseStart(host string, resp *http.Response) {
+	if r == nil || resp == nil {
+		return
+	}
+	r.write(mirrorRecord{TS: time.Now(), Host: host, Status: resp.StatusCode, Headers: sanitizeHeaders(resp.Header)})
+}
+
+// recordResponseTruncated 写一条 truncated 收尾记录，标记该响应后续 body 因超限未记录。
+func (r *mirrorRecorder) recordResponseTruncated(host string) {
+	if r == nil {
+		return
+	}
+	r.write(mirrorRecord{TS: time.Now(), Host: host, Truncated: true})
 }
 
 // recordResponseChunk 记录一次镜像响应的一个流式 chunk。

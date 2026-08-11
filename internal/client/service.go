@@ -202,6 +202,9 @@ func NewProxyService(proxy *mitm.ProxyServer, certManager *certs.Manager, caCert
 	service.store = serverconfig.NewStore(service.configPath, service.logsRoot)
 	if m, err := serverconfig.NewManager(context.Background(), service.store); err == nil {
 		service.configs = m
+	} else {
+		// 配置管理器初始化失败不影响启动：镜像开关关闭（镜像记录不启用），回落语义不变。
+		logger.Warnf("init mirror capture config manager failed: %v", err)
 	}
 	host, err := backend.NewHost(service.store, service.cursorAccount)
 	if err != nil {

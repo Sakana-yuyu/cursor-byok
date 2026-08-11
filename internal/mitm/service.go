@@ -472,7 +472,7 @@ func (s *ProxyServer) newGoproxyHandler() *goproxy.ProxyHttpServer {
 			host = hostFromHTTPRequest(resp.Request)
 		}
 		if s.mirrorEnabledForHost(host) {
-			resp.Body = s.wrapMirrorResponse(host, resp.Body)
+			resp.Body = s.wrapMirrorResponse(host, resp)
 		}
 		return resp
 	})
@@ -876,29 +876,52 @@ func (s *ProxyServer) recordMirrorRequest(req *http.Request) {
 	s.mirrorRec.recordRequest(hostFromHTTPRequest(req), req)
 }
 
-// wrapMirrorResponse 包装响应体，使每个读出的 chunk 同时写入记录器。
-func (s *ProxyServer) wrapMirrorResponse(host string, body io.ReadCloser) io.ReadCloser {
+// wrapMirrorResponse 记录响应起始信息（status/脱敏 headers）并包装响应体，
+// 使每个读出的 chunk 同时写入记录器。
+func (s *ProxyServer) wrapMirrorResponse(host string, resp *http.Response) io.ReadCloser {
 	s.mirrorMu.RLock()
 	defer s.mirrorMu.RUnlock()
-	if s.mirrorRec == nil {
-		return body
+	if s.mirrorRec == nil || resp == nil {
+		if resp == nil {
+			return nil
+		}
+		return resp.Body
 	}
-	return &mirrorTeeReadCloser{r: body, rec: s.mirrorRec, host: host}
+	s.mirrorRec.recordResponseStart(host, resp)
+	return &mirrorTeeReadCloser{r: resp.Body, rec: s.mirrorRec, host: host}
 }
 
-// mirrorTeeReadCloser 读取时逐 chunk 记录。
+// mirrorTeeReadCloser 读取时逐 chunk 记录；累计记录字节数超过 mirrorResponseMaxBytes
+// 后停止记录（数据仍正常透传给客户端），并写一条 truncated 收尾标记。
 type mirrorTeeReadCloser struct {
-	r    io.ReadCloser
-	rec  *mirrorRecorder
-	host string
+	r         io.ReadCloser
+	rec       *mirrorRecorder
+	host      string
+	recorded  int
+	truncated bool
 }
 
 func (m *mirrorTeeReadCloser) Read(p []byte) (int, error) {
 	n, err := m.r.Read(p)
 	if n > 0 {
-		m.rec.recordResponseChunk(m.host, p[:n])
+		m.recordChunk(p[:n])
 	}
 	return n, err
+}
+
+// recordChunk 在记录端限流：累计未超上限时记录当前 chunk，超限后写 truncated 收尾标记并停止。
+// 数据透传不受影响（限流只作用于记录写入）。
+func (m *mirrorTeeReadCloser) recordChunk(chunk []byte) {
+	if m.truncated || m.rec == nil {
+		return
+	}
+	if m.recorded+len(chunk) > mirrorResponseMaxBytes {
+		m.rec.recordResponseTruncated(m.host)
+		m.truncated = true
+		return
+	}
+	m.rec.recordResponseChunk(m.host, chunk)
+	m.recorded += len(chunk)
 }
 
 func (m *mirrorTeeReadCloser) Close() error { return m.r.Close() }
