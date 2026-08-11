@@ -2,12 +2,9 @@ package forwarder
 
 import (
 	"testing"
-	"time"
 
 	"cursor/gen/agentv1"
 )
-
-const providerResumeImmediateTestTimeout = 150 * time.Millisecond
 
 // TestProviderResumeStartsNextPassWithoutFixedDelay 锁定工具结果、压缩或恢复逻辑
 // 已经完成后，下一轮 provider pass 不再额外等待固定防抖窗口。并发工具结果仍由
@@ -34,17 +31,17 @@ func TestProviderResumeStartsNextPassWithoutFixedDelay(t *testing.T) {
 	}
 	stream.CheckpointConversation = cloneConversationFile(conversation)
 
-	started := time.Now()
 	if err := service.requestProviderAction(stream, providerActionResume); err != nil {
 		t.Fatalf("requestProviderAction(resume) error = %v", err)
 	}
-	select {
-	case <-provider.requests:
-		if elapsed := time.Since(started); elapsed >= providerResumeImmediateTestTimeout {
-			t.Fatalf("resume waited %s before starting next provider pass", elapsed)
-		}
-	case <-time.After(providerResumeImmediateTestTimeout):
-		t.Fatalf("resume did not start next provider pass within %s", providerResumeImmediateTestTimeout)
+	stream.mu.Lock()
+	providerPassCount := stream.ProviderPassCount
+	providerActive := stream.ProviderActive
+	pendingAction := stream.PendingProviderAction
+	stream.mu.Unlock()
+	if providerPassCount != 1 || !providerActive || pendingAction != providerActionNone {
+		t.Fatalf("resume state = pass=%d active=%t pending=%q, want pass=1 active=true pending=none", providerPassCount, providerActive, pendingAction)
 	}
+	<-provider.requests
 	waitForContextProjectionProviderIdle(t, stream)
 }
