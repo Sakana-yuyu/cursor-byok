@@ -917,16 +917,16 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 	stream.PendingCompaction = nil
 	stream.PendingExecs = make(map[string]runtimecore.PendingExec)
 	stream.PendingInteractions = make(map[string]runtimecore.PendingInteraction)
-		// Close any leftover completion signals from previous turn, then allocate a fresh map.
-		for execID, ch := range stream.ExecCompletionSignals {
-			if ch != nil {
-				close(ch)
-			}
-			delete(stream.ExecCompletionSignals, execID)
+	// Close any leftover completion signals from previous turn, then allocate a fresh map.
+	for execID, ch := range stream.ExecCompletionSignals {
+		if ch != nil {
+			close(ch)
 		}
-		if stream.ExecCompletionSignals == nil {
-			stream.ExecCompletionSignals = make(map[string]chan struct{})
-		}
+		delete(stream.ExecCompletionSignals, execID)
+	}
+	if stream.ExecCompletionSignals == nil {
+		stream.ExecCompletionSignals = make(map[string]chan struct{})
+	}
 	stream.RecentCompletedExecs = make(map[uint32]time.Time)
 	stream.RecentCompletedInteractions = make(map[string]time.Time)
 	stream.BackgroundShells = make(map[string]*BackgroundShellState)
@@ -1260,16 +1260,16 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	stream.mu.Lock()
 	stream.PendingExecs = make(map[string]runtimecore.PendingExec)
 	stream.PendingInteractions = make(map[string]runtimecore.PendingInteraction)
-		// Close any leftover completion signals from previous turn, then allocate a fresh map.
-		for execID, ch := range stream.ExecCompletionSignals {
-			if ch != nil {
-				close(ch)
-			}
-			delete(stream.ExecCompletionSignals, execID)
+	// Close any leftover completion signals from previous turn, then allocate a fresh map.
+	for execID, ch := range stream.ExecCompletionSignals {
+		if ch != nil {
+			close(ch)
 		}
-		if stream.ExecCompletionSignals == nil {
-			stream.ExecCompletionSignals = make(map[string]chan struct{})
-		}
+		delete(stream.ExecCompletionSignals, execID)
+	}
+	if stream.ExecCompletionSignals == nil {
+		stream.ExecCompletionSignals = make(map[string]chan struct{})
+	}
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
 	if hasCheckpoint {
@@ -2009,6 +2009,7 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	canonicalCompiled := compiled
 	_, manualCompactionRequested := streamManualCompactionDirective(stream)
 	var activeContextProjection *contextProjectionState
+	var activeTurnProjectionStats *activeTurnToolResultCompactionStats
 	projectionSidecarHit := false
 	projectionInvalidationReason := ""
 	if !manualCompactionRequested && service.contextProjectionPressureExceeded(stream, canonicalConversation, canonicalCompiled) {
@@ -2026,6 +2027,22 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 			projectionSidecarHit = true
 		} else {
 			projectionInvalidationReason = invalidationReason
+		}
+	}
+	if activeContextProjection != nil && service.contextProjectionPressureExceeded(stream, conversation, compiled) {
+		contextWindowTokens := compactionContextWindowSize(conversation)
+		reserveTokens := service.resolveCompactionReserveTokens(modelID)
+		if reserveTokens <= 0 {
+			reserveTokens = compactionAutoReserveTokens
+		}
+		budgetTokens := int64(float64(contextWindowTokens)*contextProjectionHardRatio) - reserveTokens
+		projectedCompiled, stats, changedEnough := compactActiveTurnToolResultsForBudget(conversation, compiled, budgetTokens)
+		if stats.ShortenedResults > 0 || stats.OmittedResults > 0 {
+			compiled = projectedCompiled
+			activeTurnProjectionStats = &stats
+			if !changedEnough {
+				projectionInvalidationReason = "active_turn_projection_insufficient"
+			}
 		}
 	}
 	if compacted, compactErr := service.maybeCompactBeforeProvider(stream, canonicalConversation, compiled); compactErr != nil {
@@ -2116,6 +2133,14 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 		0,
 		1,
 	)
+	if activeTurnProjectionStats != nil {
+		projectionDiagnostics["active_turn_projection"] = true
+		projectionDiagnostics["active_turn_input_tokens_before"] = activeTurnProjectionStats.BeforeTokens
+		projectionDiagnostics["active_turn_input_tokens_after"] = activeTurnProjectionStats.AfterTokens
+		projectionDiagnostics["active_turn_shortened_results"] = activeTurnProjectionStats.ShortenedResults
+		projectionDiagnostics["active_turn_omitted_results"] = activeTurnProjectionStats.OmittedResults
+		projectionDiagnostics["active_turn_latest_tool_call_id"] = activeTurnProjectionStats.LatestToolCallID
+	}
 	if requestKnobs == nil {
 		requestKnobs = map[string]any{}
 	}
