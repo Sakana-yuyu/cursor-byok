@@ -54,3 +54,26 @@ func TestDebugRecorderLogRuntimeLazySkipsFieldBuilderWhenDisabled(t *testing.T) 
 		t.Fatalf("field builder calls = %d, want 0", builderCalls)
 	}
 }
+
+func TestShouldWarnDebugQueueDropSamplesFirstAndInterval(t *testing.T) {
+	tests := []struct {
+		name         string
+		droppedTotal uint64
+		want         bool
+	}{
+		{name: "zero", droppedTotal: 0, want: false},
+		{name: "first", droppedTotal: 1, want: true},
+		{name: "before interval", droppedTotal: debugQueueDropWarningInterval - 1, want: false},
+		{name: "interval", droppedTotal: debugQueueDropWarningInterval, want: true},
+		{name: "after interval", droppedTotal: debugQueueDropWarningInterval + 1, want: false},
+		{name: "second interval", droppedTotal: debugQueueDropWarningInterval * 2, want: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := shouldWarnDebugQueueDrop(test.droppedTotal); got != test.want {
+				t.Fatalf("shouldWarnDebugQueueDrop(%d) = %t, want %t", test.droppedTotal, got, test.want)
+			}
+		})
+	}
+}

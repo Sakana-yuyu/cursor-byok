@@ -42,7 +42,10 @@ type debugWriteJob struct {
 // debugQueueCapacity 是 debug 写盘队列容量。写盘是尽力而为的证据层，队列满时丢弃
 // 新事件（限频日志提示），绝不让日志拖垮主链路（此前同步写盘 + 全局互斥导致
 // BidiAppend 接口超时与 provider 事件流吞吐下降，见 13:36 的 timeout 日志）。
-const debugQueueCapacity = 8192
+const (
+	debugQueueCapacity            = 8192
+	debugQueueDropWarningInterval = 64
+)
 
 type debugRecorder struct {
 	historyRoot string
@@ -303,9 +306,15 @@ func (recorder *debugRecorder) enqueue(job debugWriteJob) {
 	select {
 	case recorder.queue <- job:
 	default:
-		recorder.health.DroppedEvents.Add(1)
-		logger.Warn("debug recorder queue full, dropping event", "filename", strings.TrimSpace(job.filename))
+		droppedTotal := recorder.health.DroppedEvents.Add(1)
+		if shouldWarnDebugQueueDrop(droppedTotal) {
+			logger.Warn("debug recorder queue full, dropping event", "filename", strings.TrimSpace(job.filename), "dropped_total", droppedTotal)
+		}
 	}
+}
+
+func shouldWarnDebugQueueDrop(droppedTotal uint64) bool {
+	return droppedTotal == 1 || (droppedTotal > 1 && droppedTotal%debugQueueDropWarningInterval == 0)
 }
 
 // writeLoop 是 debug 落盘 worker：单 goroutine 串行写文件，天然保序。
