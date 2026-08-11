@@ -11,18 +11,28 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 )
 
 type RequestReport struct {
-	ConversationID    string         `json:"conversationId"`
-	RequestID         string         `json:"requestId"`
-	ModelCallIDs      []string       `json:"modelCallIds"`
-	Effort            ThinkingEffort `json:"effort"`
-	Usage             Usage          `json:"usage"`
-	ForwarderReceived StreamLayer    `json:"forwarderReceived"`
-	RunSSE            StreamLayer    `json:"runSSE"`
-	TextComparison    string         `json:"textComparison"`
-	TextMatches       bool           `json:"textMatches"`
+	ConversationID    string          `json:"conversationId"`
+	RequestID         string          `json:"requestId"`
+	ModelCallIDs      []string        `json:"modelCallIds"`
+	Effort            ThinkingEffort  `json:"effort"`
+	Usage             Usage           `json:"usage"`
+	ForwarderReceived StreamLayer     `json:"forwarderReceived"`
+	RunSSE            StreamLayer     `json:"runSSE"`
+	DeliveryLatency   DeliveryLatency `json:"deliveryLatency"`
+	TextComparison    string          `json:"textComparison"`
+	TextMatches       bool            `json:"textMatches"`
+}
+
+// DeliveryLatency 是 forwarder 接收正文增量到 RunSSE 下发同一条增量的时间差。
+// 它只描述本地转发链路，不包含 provider 生成时间和 Cursor 客户端渲染时间。
+type DeliveryLatency struct {
+	Available bool  `json:"available"`
+	FirstMS   int64 `json:"firstMs"`
+	LastMS    int64 `json:"lastMs"`
 }
 
 type ThinkingEffort struct {
@@ -62,6 +72,8 @@ func LoadRequestReport(historyRoot, conversationID, requestID string) (RequestRe
 	debugDir := filepath.Join(strings.TrimSpace(historyRoot), conversationID, "debug")
 	forwarderReceivedText := newTextDigest()
 	runSSEText := newTextDigest()
+	forwarderReceivedTimes := make([]time.Time, 0)
+	runSSETimes := make([]time.Time, 0)
 	modelCallIDs := make(map[string]struct{})
 
 	if err := scanJSONL(filepath.Join(debugDir, "provider.jsonl"), requestID, func(event debugEvent) error {
@@ -84,6 +96,9 @@ func LoadRequestReport(historyRoot, conversationID, requestID string) (RequestRe
 		}
 		if event.Event == "text_delta_forwarded" {
 			forwarderReceivedText.addDigest(event.DeltaBytes, event.DeltaSHA256)
+			if at, ok := event.timestamp(); ok && event.DeltaBytes > 0 && validSHA256(event.DeltaSHA256) {
+				forwarderReceivedTimes = append(forwarderReceivedTimes, at)
+			}
 		}
 		return nil
 	}); err != nil {
@@ -93,6 +108,9 @@ func LoadRequestReport(historyRoot, conversationID, requestID string) (RequestRe
 		if event.Event == "send_message" {
 			if event.TextDeltaBytes > 0 && validSHA256(event.TextDeltaSHA256) {
 				runSSEText.addDigest(event.TextDeltaBytes, event.TextDeltaSHA256)
+				if at, ok := event.timestamp(); ok {
+					runSSETimes = append(runSSETimes, at)
+				}
 			} else if text := event.runSSETextDelta(); text != "" {
 				sum := sha256.Sum256([]byte(text))
 				runSSEText.addDigest(int64(len([]byte(text))), hex.EncodeToString(sum[:]))
@@ -114,6 +132,7 @@ func LoadRequestReport(historyRoot, conversationID, requestID string) (RequestRe
 		report.ForwarderReceived.TextSHA256 == report.RunSSE.TextSHA256
 	if report.TextMatches {
 		report.TextComparison = "match"
+		report.DeliveryLatency = deliveryLatency(forwarderReceivedTimes, runSSETimes)
 	} else {
 		report.TextComparison = "mismatch"
 	}
@@ -121,6 +140,7 @@ func LoadRequestReport(historyRoot, conversationID, requestID string) (RequestRe
 }
 
 type debugEvent struct {
+	At              string         `json:"at"`
 	RequestID       string         `json:"request_id"`
 	Event           string         `json:"event"`
 	ModelCallID     string         `json:"model_call_id"`
@@ -131,6 +151,26 @@ type debugEvent struct {
 	TextDeltaBytes  int64          `json:"text_delta_bytes"`
 	TextDeltaSHA256 string         `json:"text_delta_sha256"`
 	Message         map[string]any `json:"message"`
+}
+
+func (event debugEvent) timestamp() (time.Time, bool) {
+	at, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(event.At))
+	if err != nil {
+		return time.Time{}, false
+	}
+	return at, true
+}
+
+func deliveryLatency(forwarderTimes, runSSETimes []time.Time) DeliveryLatency {
+	if len(forwarderTimes) == 0 || len(forwarderTimes) != len(runSSETimes) {
+		return DeliveryLatency{}
+	}
+	first := runSSETimes[0].Sub(forwarderTimes[0]).Milliseconds()
+	last := runSSETimes[len(runSSETimes)-1].Sub(forwarderTimes[len(forwarderTimes)-1]).Milliseconds()
+	if first < 0 || last < 0 {
+		return DeliveryLatency{}
+	}
+	return DeliveryLatency{Available: true, FirstMS: first, LastMS: last}
 }
 
 func (event debugEvent) runSSETextDelta() string {

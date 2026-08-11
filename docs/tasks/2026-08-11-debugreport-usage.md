@@ -26,6 +26,7 @@ go run ./scripts/debugreport `
 - `usage.durationMs`：provider 流总耗时。
 - `forwarderReceived`：adapter 模型事件进入 forwarder 时生成的正文摘要；它是 forwarder 接收点的独立证据，不等同于 provider 原始 SSE 抓取。
 - `runSSE`：forwarder 实际发送给 RunSSE 订阅者的正文摘要。新日志只含增量字节数与 SHA-256，不在用户可见输出热路径构造完整 protobuf JSON；旧日志中的完整消息格式仍可读取。
+- `deliveryLatency`：仅在两层正文摘要、增量数量与 RFC3339 时间戳均完整匹配时提供。`firstMs` 和 `lastMs` 分别表示首条、末条正文从 forwarder 接收到 RunSSE 下发的本地耗时；不包含 provider 生成时间和 Cursor 客户端渲染时间。
 - `textComparison`：
   - `match`：`forwarderReceived` 与 `runSSE` 的正文增量数量及摘要一致。
   - `mismatch`：两层都有证据但摘要不一致，需要继续追查 forwarder 接收与下发之间的链路。
@@ -36,6 +37,8 @@ go run ./scripts/debugreport `
 同一渠道、模型和短请求分别执行 `disabled`、`medium`、`max`，每次取得新的 `conversationId`/`requestId` 后运行报告。渠道上限为 `medium` 时，预期 `max` 的四个推理字段均能解释为：运行时 `max`、上限 `medium`、实际 `medium`、provider `medium`。
 
 正文链路必须以新请求的 `textComparison=match` 为准，它证明 forwarder 接收与 RunSSE 下发一致，不能替代 provider 原始 SSE 的独立比对。旧请求若显示 `unavailable`，只能说明日志版本较旧或链路缺少摘要，不能推断发生了丢字或重复输出。
+
+同一请求若 `textComparison=match` 且 `deliveryLatency` 为个位数毫秒，而正文仍然肉眼缓慢，优先检查 provider 的正文输出速度、推理 token 占比和 Cursor 客户端渲染；若该延迟持续增长，则继续检查本地 RunSSE/客户端连接。
 
 ## 性能边界
 

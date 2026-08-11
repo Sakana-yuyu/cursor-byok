@@ -120,6 +120,26 @@ func TestLoadRequestReportMatchesCompactRunSSETextDeltaDigest(t *testing.T) {
 	}
 }
 
+func TestLoadRequestReportCalculatesForwarderToRunSSEDeliveryLatency(t *testing.T) {
+	root := t.TempDir()
+	debugDir := filepath.Join(root, "conversation-1", "debug")
+	if err := os.MkdirAll(debugDir, 0o755); err != nil {
+		t.Fatalf("create debug directory: %v", err)
+	}
+	const digest = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+	writeFixture(t, filepath.Join(debugDir, "provider.jsonl"), "{\"request_id\":\"request-1\",\"event\":\"llm_request\"}\n")
+	writeFixture(t, filepath.Join(debugDir, "runtime.jsonl"), "{\"at\":\"2026-08-11T00:00:01.000Z\",\"request_id\":\"request-1\",\"event\":\"text_delta_forwarded\",\"delta_bytes\":5,\"delta_sha256\":\""+digest+"\"}\n{\"at\":\"2026-08-11T00:00:03.000Z\",\"request_id\":\"request-1\",\"event\":\"text_delta_forwarded\",\"delta_bytes\":5,\"delta_sha256\":\""+digest+"\"}\n")
+	writeFixture(t, filepath.Join(debugDir, "runsse.jsonl"), "{\"at\":\"2026-08-11T00:00:01.012Z\",\"request_id\":\"request-1\",\"event\":\"send_message\",\"text_delta_bytes\":5,\"text_delta_sha256\":\""+digest+"\"}\n{\"at\":\"2026-08-11T00:00:03.018Z\",\"request_id\":\"request-1\",\"event\":\"send_message\",\"text_delta_bytes\":5,\"text_delta_sha256\":\""+digest+"\"}\n")
+
+	report, err := LoadRequestReport(root, "conversation-1", "request-1")
+	if err != nil {
+		t.Fatalf("load report: %v", err)
+	}
+	if !report.DeliveryLatency.Available || report.DeliveryLatency.FirstMS != 12 || report.DeliveryLatency.LastMS != 18 {
+		t.Fatalf("delivery latency = %+v, want available first=12 last=18", report.DeliveryLatency)
+	}
+}
+
 func writeFixture(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
