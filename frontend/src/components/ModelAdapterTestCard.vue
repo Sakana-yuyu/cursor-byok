@@ -134,8 +134,24 @@ const summaryClass = computed(() => {
 
     <div
       v-if="showMetrics && normalizedStatus === 'success'"
-      class="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2"
+      class="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4"
     >
+      <div class="rounded-[8px] bg-[#1c1c1c] px-3 py-2">
+        <div class="text-[11px] uppercase tracking-[0.08em] text-[#666]">总生成 TPS</div>
+        <div class="mt-1 text-sm text-[#d4d4d4]">{{ Math.round(result?.tokensPerSecond ?? 0) }} t/s</div>
+      </div>
+      <div class="rounded-[8px] bg-[#1c1c1c] px-3 py-2">
+        <div class="text-[11px] uppercase tracking-[0.08em] text-[#666]">正文 TPS</div>
+        <div class="mt-1 text-sm text-[#d4d4d4]">{{ Math.round(result?.visibleTokensPerSecond ?? 0) }} t/s</div>
+      </div>
+      <div class="rounded-[8px] bg-[#1c1c1c] px-3 py-2">
+        <div class="text-[11px] uppercase tracking-[0.08em] text-[#666]">首响应</div>
+        <div class="mt-1 text-sm text-[#d4d4d4]">{{ formatDuration(result?.firstResponseMS) }}</div>
+      </div>
+      <div class="rounded-[8px] bg-[#1c1c1c] px-3 py-2">
+        <div class="text-[11px] uppercase tracking-[0.08em] text-[#666]">首字</div>
+        <div class="mt-1 text-sm text-[#d4d4d4]">{{ formatDuration(result?.firstTextTokenMS) }}</div>
+      </div>
       <div class="rounded-[8px] bg-[#1c1c1c] px-3 py-2">
         <div class="text-[11px] uppercase tracking-[0.08em] text-[#666]">总耗时</div>
         <div class="mt-1 text-sm text-[#d4d4d4]">{{ formatDuration(result?.totalDurationMS) }}</div>
@@ -143,6 +159,18 @@ const summaryClass = computed(() => {
       <div class="rounded-[8px] bg-[#1c1c1c] px-3 py-2">
         <div class="text-[11px] uppercase tracking-[0.08em] text-[#666]">输出 Token</div>
         <div class="mt-1 text-sm text-[#d4d4d4]">{{ result?.outputTokens ?? 0 }}</div>
+      </div>
+      <div class="rounded-[8px] bg-[#1c1c1c] px-3 py-2">
+        <div class="text-[11px] uppercase tracking-[0.08em] text-[#666]">正文 Token</div>
+        <div class="mt-1 text-sm text-[#d4d4d4]">{{ result?.visibleOutputTokens ?? 0 }}</div>
+      </div>
+      <div class="rounded-[8px] bg-[#1c1c1c] px-3 py-2">
+        <div class="text-[11px] uppercase tracking-[0.08em] text-[#666]">推理 Token</div>
+        <div class="mt-1 text-sm text-[#d4d4d4]">{{ result?.reasoningTokens ?? 0 }}</div>
+      </div>
+      <div class="rounded-[8px] bg-[#1c1c1c] px-3 py-2">
+        <div class="text-[11px] uppercase tracking-[0.08em] text-[#666]">实际推理强度</div>
+        <div class="mt-1 text-sm text-[#d4d4d4]">{{ result?.effectiveThinkingEffort || '默认' }}</div>
       </div>
     </div>
 

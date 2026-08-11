@@ -400,7 +400,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 460,
+          "line": 411,
           "column": 14
         }
       ]
@@ -666,6 +666,18 @@
         }
       ]
     },
+    "07e4106ac5138090": {
+      "source": "Anthropic adaptive thinking 的思考强度上限。客户端选择高于上限时会自动限制，请求固定使用新版 thinking.type=adaptive。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/utils/modelEditorMeta.js",
+          "line": 55,
+          "column": 28
+        }
+      ]
+    },
     "07f01be2b5c034ef": {
       "source": "Google 官方模型目录；公开用量接口未接入",
       "kind": "text",
@@ -853,6 +865,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 599,
           "column": 48
+        }
+      ]
+    },
+    "0b4707ac97e3fabd": {
+      "source": "渠道允许的推理强度上限。客户端选择低于上限时保留客户端值，选择高于上限时自动限制到这里；越高通常越稳，但也可能更慢。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/utils/modelEditorMeta.js",
+          "line": 46,
+          "column": 20
         }
       ]
     },
@@ -1551,18 +1575,6 @@
         }
       ]
     },
-    "140367ee2c7c2ce0": {
-      "source": "暂时无法连接服务",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/services/runtimeHealthModel.test.js",
-          "line": 16,
-          "column": 16
-        }
-      ]
-    },
     "145d1d2e4d6636e4": {
       "source": "，建议及时清理。",
       "kind": "text",
@@ -1613,6 +1625,18 @@
           "file": "src/components/StationSpendCard.vue",
           "line": 340,
           "column": 20
+        }
+      ]
+    },
+    "153283b322db7345": {
+      "source": "推理强度上限",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/model-editor/ModelBehaviorFields.vue",
+          "line": 60,
+          "column": 13
         }
       ]
     },
@@ -1923,6 +1947,18 @@
           "file": "src/views/Home.vue",
           "line": 222,
           "column": 16
+        }
+      ]
+    },
+    "1a872957ee5631fc": {
+      "source": "正文 Token",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/ModelAdapterTestCard.vue",
+          "line": 164,
+          "column": 74
         }
       ]
     },
@@ -3098,7 +3134,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 469,
+          "line": 420,
           "column": 14
         }
       ]
@@ -3599,6 +3635,18 @@
         }
       ]
     },
+    "2d5be7bcc0956fdc": {
+      "source": "首响应",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/ModelAdapterTestCard.vue",
+          "line": 148,
+          "column": 74
+        }
+      ]
+    },
     "2d7183a86cb1e7bd": {
       "source": "切换浮窗内数值、进度环与装饰的主题色",
       "kind": "text",
@@ -3911,22 +3959,22 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 435,
+          "line": 386,
           "column": 16
         },
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 441,
+          "line": 392,
           "column": 16
         },
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 447,
+          "line": 398,
           "column": 16
         },
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 453,
+          "line": 404,
           "column": 16
         }
       ]
@@ -3938,7 +3986,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 152,
+          "line": 180,
           "column": 7
         }
       ]
@@ -4284,11 +4332,6 @@
           "file": "src/utils/errorContract.js",
           "line": 85,
           "column": 89
-        },
-        {
-          "file": "src/utils/errorContract.test.js",
-          "line": 71,
-          "column": 35
         }
       ]
     },
@@ -5136,7 +5179,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 140,
+          "line": 156,
           "column": 74
         }
       ]
@@ -5549,7 +5592,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 415,
+          "line": 366,
           "column": 14
         }
       ]
@@ -7798,7 +7841,7 @@
         },
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 400,
+          "line": 351,
           "column": 20
         }
       ]
@@ -8042,7 +8085,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 411,
+          "line": 362,
           "column": 14
         }
       ]
@@ -9494,18 +9537,6 @@
         }
       ]
     },
-    "7b0fe85cc2eed27b": {
-      "source": "稍后重试",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/utils/errorContract.test.js",
-          "line": 42,
-          "column": 18
-        }
-      ]
-    },
     "7b2fafc5d7ec952b": {
       "source": "取消全选 {0}",
       "kind": "template",
@@ -9534,8 +9565,8 @@
           "column": 14
         },
         {
-          "file": "src/utils/modelAdapter.js",
-          "line": 120,
+          "file": "src/utils/modelAdapterTestResult.js",
+          "line": 33,
           "column": 12
         },
         {
@@ -10294,6 +10325,18 @@
           "file": "src/services/browserBindings.js",
           "line": 362,
           "column": 18
+        }
+      ]
+    },
+    "844b8cc8dff7c1d8": {
+      "source": "默认",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/ModelAdapterTestCard.vue",
+          "line": 173,
+          "column": 53
         }
       ]
     },
@@ -11151,7 +11194,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 427,
+          "line": 378,
           "column": 14
         }
       ]
@@ -11513,6 +11556,18 @@
           "file": "src/layouts/MainLayout.vue",
           "line": 126,
           "column": 44
+        }
+      ]
+    },
+    "9444359272ba94f7": {
+      "source": "总生成 {0} t/s | 正文 {1} t/s | 首响应 {2} | 首字 {3}",
+      "kind": "template",
+      "placeholders": 4,
+      "refs": [
+        {
+          "file": "src/utils/modelAdapterTestResult.js",
+          "line": 43,
+          "column": 10
         }
       ]
     },
@@ -12037,6 +12092,18 @@
         }
       ]
     },
+    "98ee7e7457d808cd": {
+      "source": "推理 Token",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/ModelAdapterTestCard.vue",
+          "line": 168,
+          "column": 74
+        }
+      ]
+    },
     "98fd987d7d08f9eb": {
       "source": "单独控制每个模板是否参与注入，并按需预览内容。",
       "kind": "text",
@@ -12181,6 +12248,18 @@
         }
       ]
     },
+    "9af7c25429dc6424": {
+      "source": "思考强度上限",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/model-editor/ModelBehaviorFields.vue",
+          "line": 72,
+          "column": 13
+        }
+      ]
+    },
     "9b03c479af465c36": {
       "source": "检测到本地 CA 异常，已自动修复，请重启 Cursor 使连接生效。",
       "kind": "text",
@@ -12294,6 +12373,18 @@
         }
       ]
     },
+    "9be66f38b00a6b3f": {
+      "source": "总生成 TPS",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/ModelAdapterTestCard.vue",
+          "line": 140,
+          "column": 74
+        }
+      ]
+    },
     "9c38b6e9bf94abec": {
       "source": "已切换到直连 Cursor 模式",
       "kind": "text",
@@ -12308,18 +12399,6 @@
           "file": "src/views/Home.vue",
           "line": 117,
           "column": 29
-        }
-      ]
-    },
-    "9c41b3a9e12ac994": {
-      "source": "思考强度",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/model-editor/ModelBehaviorFields.vue",
-          "line": 72,
-          "column": 13
         }
       ]
     },
@@ -12555,7 +12634,7 @@
       "refs": [
         {
           "file": "src/components/ModelAdapterTestCard.vue",
-          "line": 144,
+          "line": 160,
           "column": 74
         }
       ]
@@ -12603,7 +12682,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 457,
+          "line": 408,
           "column": 14
         }
       ]
@@ -13469,7 +13548,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 430,
+          "line": 381,
           "column": 14
         }
       ]
@@ -15263,18 +15342,6 @@
         }
       ]
     },
-    "c5af02060847d167": {
-      "source": "Anthropic adaptive thinking 的思考强度。请求会固定使用新版 thinking.type=adaptive。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/utils/modelEditorMeta.js",
-          "line": 55,
-          "column": 28
-        }
-      ]
-    },
     "c5c4db6ad0278ce7": {
       "source": "委派 worker",
       "kind": "text",
@@ -15532,18 +15599,6 @@
           "file": "src/components/settings/categories/HistorySettings.vue",
           "line": 439,
           "column": 18
-        }
-      ]
-    },
-    "c8c14507b2d37395": {
-      "source": "推理强度",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/model-editor/ModelBehaviorFields.vue",
-          "line": 60,
-          "column": 13
         }
       ]
     },
@@ -16227,7 +16282,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 402,
+          "line": 353,
           "column": 14
         }
       ]
@@ -16356,13 +16411,13 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/utils/modelAdapter.js",
-          "line": 123,
+          "file": "src/utils/modelAdapterTestResult.js",
+          "line": 36,
           "column": 38
         },
         {
-          "file": "src/utils/modelAdapter.js",
-          "line": 153,
+          "file": "src/utils/modelAdapterTestResult.js",
+          "line": 72,
           "column": 50
         }
       ]
@@ -16509,6 +16564,18 @@
           "file": "src/components/settings/delegation/DelegationSupervisionPanel.vue",
           "line": 159,
           "column": 7
+        }
+      ]
+    },
+    "d6083d596f3d4785": {
+      "source": "实际推理强度",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/ModelAdapterTestCard.vue",
+          "line": 172,
+          "column": 74
         }
       ]
     },
@@ -16832,7 +16899,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 178,
+          "line": 129,
           "column": 18
         },
         {
@@ -16932,7 +16999,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 424,
+          "line": 375,
           "column": 14
         }
       ]
@@ -16944,7 +17011,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 408,
+          "line": 359,
           "column": 14
         }
       ]
@@ -17111,6 +17178,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/ModelAdapterTestCard.vue",
+          "line": 152,
+          "column": 74
+        },
         {
           "file": "src/views/RequestMetrics.vue",
           "line": 480,
@@ -17524,7 +17596,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 418,
+          "line": 369,
           "column": 14
         }
       ]
@@ -17536,7 +17608,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 421,
+          "line": 372,
           "column": 14
         }
       ]
@@ -18168,18 +18240,6 @@
         }
       ]
     },
-    "ec3b17a75db49e24": {
-      "source": "{0} t/s | 首字 {1}",
-      "kind": "template",
-      "placeholders": 2,
-      "refs": [
-        {
-          "file": "src/utils/modelAdapter.js",
-          "line": 129,
-          "column": 10
-        }
-      ]
-    },
     "ec83bb04d648120f": {
       "source": "协议模式",
       "kind": "text",
@@ -18682,18 +18742,6 @@
         }
       ]
     },
-    "f363622480699c52": {
-      "source": "推理强度仅对部分支持 reasoning_effort 的模型生效，并不是所有模型都支持。越高通常越稳，但也可能更慢。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/utils/modelEditorMeta.js",
-          "line": 46,
-          "column": 20
-        }
-      ]
-    },
     "f38d4a34aba38f9f": {
       "source": "已省输入：{0}",
       "kind": "template",
@@ -18926,12 +18974,12 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 463,
+          "line": 414,
           "column": 14
         },
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 466,
+          "line": 417,
           "column": 14
         }
       ]
@@ -19446,6 +19494,18 @@
         }
       ]
     },
+    "fc5ee6b6d2686702": {
+      "source": "正文 TPS",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/ModelAdapterTestCard.vue",
+          "line": 144,
+          "column": 74
+        }
+      ]
+    },
     "fc63da52d77e8c79": {
       "source": "自动检测：Kimi For Coding、智谱、MiniMax、ZenMux、火山方舟 Coding 入口。智谱团队版须手动选择。",
       "kind": "text",
@@ -19552,7 +19612,7 @@
       "refs": [
         {
           "file": "src/utils/modelAdapter.js",
-          "line": 405,
+          "line": 356,
           "column": 14
         }
       ]

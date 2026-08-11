@@ -534,7 +534,13 @@ func buildModelAdapterTestSummaryText(result ModelAdapterTestResult) string {
 	if strings.TrimSpace(result.Status) != string(ModelAdapterTestStatusSuccess) {
 		return firstNonEmptyTrimmed(result.SummaryText, "测试失败")
 	}
-	return fmt.Sprintf("%d t/s | 首字 %s", int(math.Round(maxFloat64(result.TokensPerSecond, 0))), formatModelAdapterTestDuration(result.FirstTextTokenMS))
+	return fmt.Sprintf(
+		"总生成 %d t/s | 正文 %d t/s | 首响应 %s | 首字 %s",
+		int(math.Round(maxFloat64(result.TokensPerSecond, 0))),
+		int(math.Round(maxFloat64(result.VisibleTokensPerSecond, 0))),
+		formatModelAdapterTestDuration(result.FirstResponseMS),
+		formatModelAdapterTestDuration(result.FirstTextTokenMS),
+	)
 }
 
 func buildModelAdapterHTTPStatusError(prefix string, resp *http.Response) error {

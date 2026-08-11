@@ -93,7 +93,21 @@ export function transientBalanceFailure(overrides = {}) {
 }
 
 export function testResultSuccess(overrides = {}) {
-  return { status: "success", summaryText: "E2E 注入：测试通过", testedAt: "2026-01-01T00:00:00.000Z", tokensPerSecond: 42, ...overrides };
+  return {
+    status: "success",
+    summaryText: "E2E 注入：测试通过",
+    testedAt: "2026-01-01T00:00:00.000Z",
+    tokensPerSecond: 60.5,
+    visibleTokensPerSecond: 22.4,
+    firstResponseMS: 24_616,
+    firstTextTokenMS: 27_214,
+    totalDurationMS: 30_000,
+    outputTokens: 197,
+    visibleOutputTokens: 70,
+    reasoningTokens: 127,
+    effectiveThinkingEffort: "medium",
+    ...overrides,
+  };
 }
 
 export async function seedPreviewTestPlan(page, plan, config = null) {

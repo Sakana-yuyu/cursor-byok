@@ -47,6 +47,10 @@ func TestBuildSuccessfulModelAdapterTestResultSeparatesTotalAndVisibleThroughput
 	if result.ReasoningTokens != 180 || result.VisibleTokensPerSecond <= 0 {
 		t.Fatalf("usage = reasoning:%d visible_tps:%f", result.ReasoningTokens, result.VisibleTokensPerSecond)
 	}
+	wantSummary := "总生成 60 t/s | 正文 60 t/s | 首响应 20.0 s | 首字 23.0 s"
+	if result.SummaryText != wantSummary {
+		t.Fatalf("summary = %q, want %q", result.SummaryText, wantSummary)
+	}
 }
 
 func TestCalculateGenerationTokensPerSecondRejectsInvalidGenerationWindow(t *testing.T) {
