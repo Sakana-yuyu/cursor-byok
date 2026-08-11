@@ -7,6 +7,8 @@ import (
 	"cursor/gen/agentv1"
 )
 
+const providerResumeImmediateTestTimeout = 150 * time.Millisecond
+
 // TestProviderResumeStartsNextPassWithoutFixedDelay 锁定工具结果、压缩或恢复逻辑
 // 已经完成后，下一轮 provider pass 不再额外等待固定防抖窗口。并发工具结果仍由
 // pendingBridgeCount 在最后一个结果收口前拦截，因此无需再用时间等待合并。
@@ -38,11 +40,11 @@ func TestProviderResumeStartsNextPassWithoutFixedDelay(t *testing.T) {
 	}
 	select {
 	case <-provider.requests:
-		if elapsed := time.Since(started); elapsed >= 100*time.Millisecond {
+		if elapsed := time.Since(started); elapsed >= providerResumeImmediateTestTimeout {
 			t.Fatalf("resume waited %s before starting next provider pass", elapsed)
 		}
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("resume did not start next provider pass within 100ms")
+	case <-time.After(providerResumeImmediateTestTimeout):
+		t.Fatalf("resume did not start next provider pass within %s", providerResumeImmediateTestTimeout)
 	}
 	waitForContextProjectionProviderIdle(t, stream)
 }

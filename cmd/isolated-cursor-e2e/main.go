@@ -98,7 +98,8 @@ func run(sourceConfigPath string, cursorPath string) error {
 		return err
 	}
 
-	proxy, err := mitm.NewProxyServer(isolatedConfig.ProxyListenAddr, host.BaseURL(), "", "", certManager)
+	// 隔离 E2E 只验证代理链路，不写入真实请求镜像；显式关闭镜像记录配置。
+	proxy, err := mitm.NewProxyServer(isolatedConfig.ProxyListenAddr, host.BaseURL(), "", nil, certManager)
 	if err != nil {
 		return fmt.Errorf("创建隔离 MITM 失败: %w", err)
 	}
