@@ -116,7 +116,11 @@ func Run(resources EmbeddedResources) error {
 	logStartupPhase("certs-ready")
 
 	defaultBackendBaseURL := "http://" + serverconfig.DefaultBackendListenAddr
-	proxyServer, err := mitm.NewProxyServer(serverconfig.DefaultProxyListenAddr, defaultBackendBaseURL, "", nil, certManager)
+	// 镜像记录配置使用应用生命周期上下文：Manager 在启动时加载一次，
+	// 之后每次读取都会热加载（reloadIfChanged），无需持有可取消的 ctx。
+	runCtx := context.Background()
+	mirrorCfg, _ := serverconfig.NewManager(runCtx, serverconfig.NewStore(appdata.ConfigFilePath(), appdata.LogsRootPath()))
+	proxyServer, err := mitm.NewProxyServer(serverconfig.DefaultProxyListenAddr, defaultBackendBaseURL, appdata.HistoryRootPath(), mirrorCfg, certManager)
 	if err != nil {
 		return err
 	}

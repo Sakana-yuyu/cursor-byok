@@ -299,6 +299,11 @@ func (s *ProxyServer) Start() error {
 			s.httpServer = nil
 		}
 		s.runMu.Unlock()
+		// 异常退出（非正常 Shutdown）：服务已不可用，及时关闭镜像记录器释放文件句柄。
+		// 正常 Stop 路径由 Stop 在 Shutdown 后调用 closeMirrorRecorder（幂等，重复调用安全）。
+		if serveErr != nil {
+			s.closeMirrorRecorder()
+		}
 	})
 
 	return nil
