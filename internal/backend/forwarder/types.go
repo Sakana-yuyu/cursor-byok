@@ -203,6 +203,7 @@ type ActiveStream struct {
 	TimerTokens                                 map[string]uint64
 	StreamTimers                                map[string]*time.Timer
 	ProviderAccumulatedText                     []byte
+	ProviderTextDeltaCount                      int
 	ProviderAccumulatedReasoning                []byte
 	ProviderAccumulatedReasoningSignature       string
 	ProviderAccumulatedReasoningSignatureSource string

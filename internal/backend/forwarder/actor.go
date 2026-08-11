@@ -3,6 +3,7 @@ package forwarder
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"cursor/internal/logger"
 	"cursor/internal/safego"
 	"errors"
@@ -687,9 +688,16 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 	case modeladapter.ModelEventKindTextDelta:
 		stream.mu.Lock()
 		stream.ProviderAccumulatedText = append(stream.ProviderAccumulatedText, event.Text...)
+		stream.ProviderTextDeltaCount = nextTextDeltaCount(stream.ProviderTextDeltaCount, event.Text)
+		deltaCount := stream.ProviderTextDeltaCount
 		stream.UpdatedAt = time.Now().UTC()
 		stream.mu.Unlock()
 		service.markConversationActivity(conversationID)
+		if service.debug != nil {
+			service.debug.LogRuntimeLazy(context.Background(), requestID, conversationID, "text_delta_forwarded", func() map[string]any {
+				return textDeltaDebugFields(modelCallID, currentProviderPass(stream), deltaCount, event.Text)
+			})
+		}
 		service.mirrorNativeChildInteraction(stream, modelCallID, buildTextDeltaInteraction(event.Text))
 		return service.broker.Publish(requestID, StreamEvent{Message: buildTextDeltaMessage(event.Text)})
 	case modeladapter.ModelEventKindThinkingDelta:
@@ -888,6 +896,28 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 	default:
 		return nil
 	}
+}
+
+// textDeltaDebugFields 只记录计数、字节数和摘要，避免新增 debug 事件复制用户正文。
+func textDeltaDebugFields(modelCallID string, providerPass int, deltaCount int, text string) map[string]any {
+	if text == "" {
+		return nil
+	}
+	sum := sha256.Sum256([]byte(text))
+	return map[string]any{
+		"model_call_id": strings.TrimSpace(modelCallID),
+		"provider_pass": providerPass,
+		"delta_count":   deltaCount,
+		"delta_bytes":   len([]byte(text)),
+		"delta_sha256":  fmt.Sprintf("%x", sum),
+	}
+}
+
+func nextTextDeltaCount(current int, text string) int {
+	if text == "" {
+		return current
+	}
+	return current + 1
 }
 
 func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *streamProviderEvent) error {

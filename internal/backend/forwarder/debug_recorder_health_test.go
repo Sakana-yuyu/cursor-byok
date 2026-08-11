@@ -40,3 +40,17 @@ func TestDebugRecorderCountsWriteFailure(t *testing.T) {
 		t.Fatalf("write failures = %d, want 1", health.WriteFailures)
 	}
 }
+
+func TestDebugRecorderLogRuntimeLazySkipsFieldBuilderWhenDisabled(t *testing.T) {
+	recorder := newDebugRecorder(t.TempDir(), nil, stubDebugLogConfig{enabled: false})
+	builderCalls := 0
+
+	recorder.LogRuntimeLazy(context.Background(), "request-1", "conversation-1", "text_delta_forwarded", func() map[string]any {
+		builderCalls++
+		return map[string]any{"delta_sha256": "should-not-be-computed"}
+	})
+
+	if builderCalls != 0 {
+		t.Fatalf("field builder calls = %d, want 0", builderCalls)
+	}
+}

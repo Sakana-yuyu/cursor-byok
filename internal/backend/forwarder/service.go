@@ -945,6 +945,7 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 		stream.CurrentCompactionToken = 0
 	}
 	stream.ProviderAccumulatedText = nil
+	stream.ProviderTextDeltaCount = 0
 	stream.ProviderAccumulatedReasoning = nil
 	stream.ProviderAccumulatedReasoningSignature = ""
 	stream.ProviderAccumulatedReasoningSignatureSource = ""

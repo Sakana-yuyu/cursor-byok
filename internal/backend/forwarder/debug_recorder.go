@@ -172,7 +172,27 @@ func (recorder *debugRecorder) LogRuntime(ctx context.Context, requestID string,
 	for key, value := range fields {
 		event[key] = value
 	}
-	recorder.appendJSONL(ctx, requestID, conversationID, "runtime.jsonl", event)
+	recorder.appendJSONLEnabled(ctx, requestID, conversationID, "runtime.jsonl", event)
+}
+
+// LogRuntimeLazy 只在观测日志启用时构造字段，避免关闭日志时影响流式热路径。
+func (recorder *debugRecorder) LogRuntimeLazy(ctx context.Context, requestID string, conversationID string, eventName string, buildFields func() map[string]any) {
+	if !recorder.enabled(ctx) {
+		return
+	}
+	var fields map[string]any
+	if buildFields != nil {
+		fields = buildFields()
+	}
+	if len(fields) == 0 {
+		return
+	}
+	event := recorder.baseEvent("runtime", requestID, conversationID)
+	event["event"] = strings.TrimSpace(eventName)
+	for key, value := range fields {
+		event[key] = value
+	}
+	recorder.appendJSONLEnabled(ctx, requestID, conversationID, "runtime.jsonl", event)
 }
 
 func (recorder *debugRecorder) LogRunSSE(ctx context.Context, requestID string, conversationID string, eventName string, fields map[string]any) {
@@ -222,6 +242,13 @@ func (recorder *debugRecorder) baseEvent(layer string, requestID string, convers
 
 func (recorder *debugRecorder) appendJSONL(ctx context.Context, requestID string, conversationID string, filename string, event map[string]any) {
 	if !recorder.enabled(ctx) || len(event) == 0 {
+		return
+	}
+	recorder.appendJSONLEnabled(ctx, requestID, conversationID, filename, event)
+}
+
+func (recorder *debugRecorder) appendJSONLEnabled(ctx context.Context, requestID string, conversationID string, filename string, event map[string]any) {
+	if recorder == nil || len(event) == 0 {
 		return
 	}
 	dir := recorder.debugDir(requestID, conversationID)
