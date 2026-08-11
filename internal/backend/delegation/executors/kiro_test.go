@@ -25,6 +25,9 @@ func TestKiroCLIRegistrationUsesOfficialHeadlessContract(t *testing.T) {
 	if err != nil || probe.State != delegation.ExecutorProbeReady || probe.AuthState != delegation.ExecutorAuthReady || probe.Version != "Kiro CLI 1.26.0" {
 		t.Fatalf("probe=%#v err=%v", probe, err)
 	}
+	if want := []string{"chat", "--list-model", "--format", "json"}; !reflect.DeepEqual(runner.requests[1].Args, want) {
+		t.Fatalf("model probe args=%#v want=%#v", runner.requests[1].Args, want)
+	}
 	result := registration.Execute(t.Context(), delegation.TaskRequest{Prompt: "检查工作区", WorkspaceHint: "E:/workspace", Readonly: true, Timeout: 20 * time.Second})
 	if result.Error != nil || result.Output != "完成检查" {
 		t.Fatalf("result=%#v", result)

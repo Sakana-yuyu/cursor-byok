@@ -13,7 +13,7 @@
 
 - 执行：`kiro-cli chat --no-interactive --trust-tools=read,grep <prompt>` 用于只读任务，写入任务使用 `--trust-all-tools`。
 - 认证：执行进程继承 `KIRO_API_KEY` 与用户配置中允许继承的环境变量名；不保存或输出密钥值。无 API key 或未登录会明确显示为需操作。
-- 探测：先执行 `--version`，再执行 `chat --list-models --format json`。缺失可执行文件、认证缺失、协议不兼容和探测异常分别返回不同状态。
+- 探测：先执行 `--version`，再执行 `chat --list-model --format json`。缺失可执行文件、认证缺失、协议不兼容和探测异常分别返回不同状态。`--list-model` 的单数拼写以 2026-08-11 核对的 Kiro 官方 CLI commands 页面为准。
 - 安装：设置页在 Kiro 未安装时提供官方安装页链接，不自动下载、安装或提升权限。
 - 取消：进程上下文取消或超时原样保留，不触发故障转移重试。限流和可恢复的进程失败才标记为可切换。
 

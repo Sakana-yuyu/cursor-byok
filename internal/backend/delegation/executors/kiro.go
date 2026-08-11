@@ -95,7 +95,7 @@ func (adapter *kiroCLIAdapter) probe(ctx context.Context) (delegation.ExecutorPr
 		return adapter.unhealthyProbe(versionResult, probedAt, err), err
 	}
 	adapter.setVersion(version)
-	modelsResult, err := adapter.runProbe(ctx, "chat", "--list-models", "--format", "json")
+	modelsResult, err := adapter.runProbe(ctx, "chat", "--list-model", "--format", "json")
 	if err != nil {
 		diagnostic := firstNonEmpty(modelsResult.Stderr, err.Error())
 		if kiroAuthenticationRequired(diagnostic) {
@@ -104,7 +104,7 @@ func (adapter *kiroCLIAdapter) probe(ctx context.Context) (delegation.ExecutorPr
 		return adapter.unhealthyProbe(modelsResult, time.Now().UTC(), err), err
 	}
 	if modelsResult.StdoutTruncated || modelsResult.StderrTruncated || !kiroModelListRecognized(modelsResult.Stdout) {
-		return delegation.ExecutorProbeResult{State: delegation.ExecutorProbeIncompatible, ExecutablePath: firstNonEmpty(versionResult.ExecutablePath, modelsResult.ExecutablePath), Version: version, Installed: true, AuthState: delegation.ExecutorAuthUnknown, Capabilities: append([]delegation.ExecutorCapability{}, kiroCapabilities...), DiagnosticCode: KiroDiagnosticIncompatible, DiagnosticText: "Kiro CLI does not support the required chat --list-models --format json probe contract", ProbedAt: time.Now().UTC()}, nil
+		return delegation.ExecutorProbeResult{State: delegation.ExecutorProbeIncompatible, ExecutablePath: firstNonEmpty(versionResult.ExecutablePath, modelsResult.ExecutablePath), Version: version, Installed: true, AuthState: delegation.ExecutorAuthUnknown, Capabilities: append([]delegation.ExecutorCapability{}, kiroCapabilities...), DiagnosticCode: KiroDiagnosticIncompatible, DiagnosticText: "Kiro CLI does not support the required chat --list-model --format json probe contract", ProbedAt: time.Now().UTC()}, nil
 	}
 	return delegation.ExecutorProbeResult{State: delegation.ExecutorProbeReady, ExecutablePath: firstNonEmpty(versionResult.ExecutablePath, modelsResult.ExecutablePath), Version: version, Installed: true, AuthState: delegation.ExecutorAuthReady, Capabilities: append([]delegation.ExecutorCapability{}, kiroCapabilities...), DiagnosticCode: KiroDiagnosticReady, ProbedAt: time.Now().UTC()}, nil
 }
