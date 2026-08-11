@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -130,7 +131,7 @@ func (r *mirrorRecorder) recordExchangeRequest(host string, exchange *mirrorExch
 		Host:       host,
 		Model:      mirrorExchangeModel(exchange),
 		Method:     req.Method,
-		URL:        requestURL(req),
+		URL:        sanitizeMirrorRequestURL(req),
 		Headers:    sanitizeHeaders(req.Header),
 	}
 	var body []byte
@@ -279,6 +280,45 @@ func (r *mirrorRecorder) write(rec mirrorRecord) {
 	if _, err := r.file.Write(append(line, '\n')); err != nil {
 		logger.Errorf("mirror record write failed: %v", err)
 	}
+}
+
+// sanitizeMirrorRequestURL 只生成用于本地镜像记录的 URL 副本。
+// 直通请求继续使用 req.URL，避免记录脱敏意外改变官方 API 语义。
+func sanitizeMirrorRequestURL(req *http.Request) string {
+	if req == nil || req.URL == nil {
+		return ""
+	}
+	copyURL := *req.URL
+	values := copyURL.Query()
+	for key := range values {
+		if isMirrorSensitiveQueryKey(key) {
+			values[key] = []string{"[REDACTED]"}
+		}
+	}
+	copyURL.RawQuery = values.Encode()
+	copyURL.Fragment = ""
+	copyURL.RawFragment = ""
+	return mirrorURLString(&copyURL)
+}
+
+func isMirrorSensitiveQueryKey(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(key)) {
+	case "key", "api_key", "apikey", "token", "access_token", "refresh_token", "secret", "signature", "sig", "password", "pass":
+		return true
+	default:
+		return false
+	}
+}
+
+func mirrorURLString(value *url.URL) string {
+	if value == nil {
+		return ""
+	}
+	text := value.String()
+	if strings.TrimSpace(text) == "" {
+		return "/"
+	}
+	return text
 }
 
 func sanitizeHeaders(h http.Header) map[string]string {
