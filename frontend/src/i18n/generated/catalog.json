@@ -376,7 +376,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1096,
+          "line": 1113,
           "column": 7
         }
       ]
@@ -514,7 +514,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 952,
+          "line": 967,
           "column": 14
         }
       ]
@@ -538,7 +538,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 685,
+          "line": 692,
           "column": 41
         }
       ]
@@ -697,7 +697,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 821,
+          "line": 828,
           "column": 12
         }
       ]
@@ -750,7 +750,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 686,
+          "line": 693,
           "column": 21
         }
       ]
@@ -1060,7 +1060,7 @@
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 727,
+          "line": 734,
           "column": 78
         }
       ]
@@ -1363,7 +1363,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 640,
+          "line": 647,
           "column": 117
         }
       ]
@@ -1606,7 +1606,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 141,
+          "line": 151,
           "column": 112
         }
       ]
@@ -1671,7 +1671,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 34,
+          "line": 35,
           "column": 46
         }
       ]
@@ -1827,7 +1827,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 734,
+          "line": 741,
           "column": 90
         }
       ]
@@ -2130,7 +2130,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 111,
+          "line": 120,
           "column": 85
         }
       ]
@@ -2202,7 +2202,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1095,
+          "line": 1112,
           "column": 7
         }
       ]
@@ -2250,7 +2250,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 559,
+          "line": 566,
           "column": 61
         },
         {
@@ -2383,7 +2383,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 653,
+          "line": 660,
           "column": 16
         }
       ]
@@ -2446,7 +2446,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 808,
+          "line": 815,
           "column": 12
         }
       ]
@@ -2864,7 +2864,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 145,
+          "line": 155,
           "column": 57
         }
       ]
@@ -3212,7 +3212,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 782,
+          "line": 789,
           "column": 12
         }
       ]
@@ -3371,7 +3371,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 929,
+          "line": 936,
           "column": 49
         }
       ]
@@ -3482,7 +3482,7 @@
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 954,
+          "line": 969,
           "column": 17
         },
         {
@@ -3502,7 +3502,7 @@
         },
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 150,
+          "line": 160,
           "column": 97
         },
         {
@@ -3775,7 +3775,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 953,
+          "line": 968,
           "column": 18
         },
         {
@@ -4058,7 +4058,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 565,
+          "line": 572,
           "column": 97
         },
         {
@@ -4217,7 +4217,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 102,
+          "line": 111,
           "column": 5
         }
       ]
@@ -4241,7 +4241,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 550,
+          "line": 557,
           "column": 169
         }
       ]
@@ -4378,7 +4378,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1112,
+          "line": 1129,
           "column": 9
         }
       ]
@@ -5068,7 +5068,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 734,
+          "line": 741,
           "column": 21
         }
       ]
@@ -5162,7 +5162,7 @@
         },
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 37,
+          "line": 38,
           "column": 42
         },
         {
@@ -5239,7 +5239,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 146,
+          "line": 156,
           "column": 57
         }
       ]
@@ -5368,7 +5368,7 @@
         },
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 38,
+          "line": 39,
           "column": 10
         }
       ]
@@ -5638,7 +5638,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 689,
+          "line": 696,
           "column": 27
         }
       ]
@@ -5761,7 +5761,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 36,
+          "line": 37,
           "column": 45
         }
       ]
@@ -5942,7 +5942,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 33,
+          "line": 34,
           "column": 38
         },
         {
@@ -6122,7 +6122,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 521,
+          "line": 528,
           "column": 284
         },
         {
@@ -6385,7 +6385,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 623,
+          "line": 630,
           "column": 126
         },
         {
@@ -6641,7 +6641,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1104,
+          "line": 1121,
           "column": 111
         }
       ]
@@ -6754,7 +6754,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 126,
+          "line": 135,
           "column": 68
         }
       ]
@@ -7515,7 +7515,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 734,
+          "line": 741,
           "column": 159
         }
       ]
@@ -7563,7 +7563,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1102,
+          "line": 1119,
           "column": 55
         }
       ]
@@ -7962,12 +7962,12 @@
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 793,
+          "line": 808,
           "column": 18
         },
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 952,
+          "line": 967,
           "column": 43
         },
         {
@@ -8499,7 +8499,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 629,
+          "line": 636,
           "column": 16
         }
       ]
@@ -8701,7 +8701,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 150,
+          "line": 160,
           "column": 154
         }
       ]
@@ -8985,7 +8985,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 938,
+          "line": 945,
           "column": 58
         }
       ]
@@ -8997,7 +8997,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 129,
+          "line": 138,
           "column": 91
         }
       ]
@@ -9081,7 +9081,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1156,
+          "line": 1173,
           "column": 7
         }
       ]
@@ -9189,7 +9189,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 645,
+          "line": 652,
           "column": 16
         }
       ]
@@ -9365,7 +9365,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 86,
+          "line": 95,
           "column": 25
         }
       ]
@@ -9476,7 +9476,7 @@
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 727,
+          "line": 734,
           "column": 71
         }
       ]
@@ -9648,7 +9648,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 756,
+          "line": 763,
           "column": 12
         }
       ]
@@ -9804,7 +9804,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1157,
+          "line": 1174,
           "column": 7
         }
       ]
@@ -10050,7 +10050,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 32,
+          "line": 33,
           "column": 63
         },
         {
@@ -11069,12 +11069,12 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 143,
+          "line": 153,
           "column": 55
         },
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 143,
+          "line": 153,
           "column": 135
         }
       ]
@@ -11122,7 +11122,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 141,
+          "line": 151,
           "column": 196
         }
       ]
@@ -11158,7 +11158,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 951,
+          "line": 966,
           "column": 12
         }
       ]
@@ -11247,12 +11247,12 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 130,
-          "column": 103
+          "line": 140,
+          "column": 108
         },
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 140,
+          "line": 150,
           "column": 61
         }
       ]
@@ -11264,7 +11264,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 718,
+          "line": 725,
           "column": 14
         }
       ]
@@ -11476,7 +11476,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 738,
+          "line": 745,
           "column": 35
         }
       ]
@@ -11662,7 +11662,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 834,
+          "line": 841,
           "column": 12
         }
       ]
@@ -11986,6 +11986,18 @@
         }
       ]
     },
+    "98004dd0f372d9e3": {
+      "source": "安装 {0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
+          "line": 54,
+          "column": 83
+        }
+      ]
+    },
     "98057319c712ab54": {
       "source": "(空)",
       "kind": "text",
@@ -12303,7 +12315,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 127,
+          "line": 136,
           "column": 85
         }
       ]
@@ -12368,7 +12380,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 661,
+          "line": 668,
           "column": 16
         }
       ]
@@ -12496,7 +12508,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 908,
+          "line": 915,
           "column": 25
         }
       ]
@@ -12939,7 +12951,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 847,
+          "line": 854,
           "column": 12
         }
       ]
@@ -12987,12 +12999,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 714,
+          "line": 721,
           "column": 47
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 726,
+          "line": 733,
           "column": 49
         }
       ]
@@ -13500,7 +13512,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 637,
+          "line": 644,
           "column": 16
         }
       ]
@@ -13827,7 +13839,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 108,
+          "line": 117,
           "column": 58
         }
       ]
@@ -13897,7 +13909,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 664,
+          "line": 671,
           "column": 114
         }
       ]
@@ -13909,7 +13921,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1057,
+          "line": 1074,
           "column": 7
         }
       ]
@@ -13933,7 +13945,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 937,
+          "line": 944,
           "column": 49
         }
       ]
@@ -14010,7 +14022,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 795,
+          "line": 802,
           "column": 12
         }
       ]
@@ -14426,7 +14438,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1101,
+          "line": 1118,
           "column": 46
         }
       ]
@@ -14751,7 +14763,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 457,
+          "line": 464,
           "column": 37
         }
       ]
@@ -15877,7 +15889,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 997,
+          "line": 1004,
           "column": 69
         }
       ]
@@ -15930,7 +15942,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 669,
+          "line": 676,
           "column": 16
         }
       ]
@@ -16043,7 +16055,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 35,
+          "line": 36,
           "column": 48
         }
       ]
@@ -16096,7 +16108,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 103,
+          "line": 112,
           "column": 5
         }
       ]
@@ -16441,7 +16453,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 733,
+          "line": 740,
           "column": 50
         }
       ]
@@ -16853,7 +16865,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 31,
+          "line": 32,
           "column": 99
         }
       ]
@@ -17175,7 +17187,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 122,
+          "line": 131,
           "column": 178
         }
       ]
@@ -17437,7 +17449,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/DelegationSettings.vue",
-          "line": 1056,
+          "line": 1073,
           "column": 7
         }
       ]
@@ -17866,7 +17878,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 939,
+          "line": 946,
           "column": 35
         }
       ]
@@ -18001,7 +18013,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 734,
+          "line": 741,
           "column": 170
         }
       ]
@@ -18570,7 +18582,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 727,
+          "line": 734,
           "column": 21
         }
       ]
@@ -18599,7 +18611,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 505,
+          "line": 512,
           "column": 196
         }
       ]
@@ -18635,7 +18647,7 @@
       "refs": [
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
-          "line": 107,
+          "line": 116,
           "column": 63
         }
       ]
@@ -18732,7 +18744,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 769,
+          "line": 776,
           "column": 12
         }
       ]
@@ -18845,7 +18857,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 656,
+          "line": 663,
           "column": 139
         }
       ]
@@ -19063,7 +19075,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 538,
+          "line": 545,
           "column": 58
         }
       ]
@@ -19513,7 +19525,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 931,
+          "line": 938,
           "column": 46
         }
       ]
@@ -19597,6 +19609,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 446,
           "column": 19
+        }
+      ]
+    },
+    "fd55a93df04a8dd0": {
+      "source": "正在安装 {0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
+          "line": 54,
+          "column": 43
         }
       ]
     },

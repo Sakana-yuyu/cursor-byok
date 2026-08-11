@@ -452,6 +452,13 @@ export const RefreshDelegationExecutorProbes = () => {
   if (Array.isArray(refreshed)) previewDelegationExecutors = clone(refreshed);
   return Promise.resolve(clone(previewDelegationExecutors));
 };
+export const InstallDelegationExecutor = (id) => {
+  recordPreviewCall("InstallDelegationExecutor", [id]);
+  const installed = readPreviewTestPlan()?.installedDelegationExecutors;
+  if (Array.isArray(installed)) previewDelegationExecutors = clone(installed);
+  const snapshot = previewDelegationExecutors.find((item) => item?.id === id);
+  return Promise.resolve(clone(snapshot || {}));
+};
 export const SaveUserConfig = (value) => {
   if (previewTestFailSaveConfig()) {
     return Promise.reject(new Error("E2E 注入：配置保存失败"));

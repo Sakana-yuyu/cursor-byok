@@ -103,6 +103,26 @@ func (s *ProxyService) RefreshDelegationExecutorProbes() ([]DelegationExecutorSn
 	return publicDelegationExecutorSnapshots(items), err
 }
 
+// InstallDelegationExecutor 仅安装后端白名单中的 CLI，并在安装完成后返回强制复检结果。
+func (s *ProxyService) InstallDelegationExecutor(id string) (DelegationExecutorSnapshot, error) {
+	if s == nil || s.backendHost == nil {
+		return DelegationExecutorSnapshot{}, nil
+	}
+	ctx := context.Background()
+	if app := application.Get(); app != nil {
+		ctx = app.Context()
+	}
+	snapshot, err := s.backendHost.InstallDelegationExecutor(ctx, id)
+	if err != nil {
+		return DelegationExecutorSnapshot{}, err
+	}
+	items := publicDelegationExecutorSnapshots([]delegation.ExecutorSnapshot{snapshot})
+	if len(items) == 0 {
+		return DelegationExecutorSnapshot{}, nil
+	}
+	return items[0], nil
+}
+
 // GetDelegationConfig returns the normalized delegation and supervision config.
 func (s *ProxyService) GetDelegationConfig() (serverconfig.DelegationConfig, error) {
 	if s == nil {

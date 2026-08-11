@@ -42,6 +42,8 @@ type Host struct {
 	executorRegistry  *delegation.ExecutorRegistry
 	executorMu        sync.Mutex
 	customExecutorIDs map[delegation.ExecutorID]struct{}
+	executorInstaller delegationExecutorInstaller
+	executorInstalls  map[delegation.ExecutorID]struct{}
 	healthHTTP        *http.Client
 	controlPlaneAuth  upstream.AuthorizationProvider
 
@@ -73,6 +75,8 @@ func NewHost(store *serverconfig.Store, controlPlaneAuth upstream.AuthorizationP
 		configs:           configs,
 		executorRegistry:  delegation.NewExecutorRegistry(delegation.ExecutorRegistryConfig{}),
 		customExecutorIDs: make(map[delegation.ExecutorID]struct{}),
+		executorInstaller: newNPMExecutorInstaller(),
+		executorInstalls:  make(map[delegation.ExecutorID]struct{}),
 		healthHTTP:        newLoopbackHTTPClient(),
 		controlPlaneAuth:  controlPlaneAuth,
 	}

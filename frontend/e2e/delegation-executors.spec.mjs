@@ -62,6 +62,55 @@ test("紧凑展示执行器健康、版本与 Cursor 编辑器限定状态", asy
   await expect(section.getByRole("button", { name: "配置 备用 CLI" })).toBeVisible();
 });
 
+test("进入委派设置时自动探测执行器并展示刷新结果", async ({ page }) => {
+  const unknownExecutors = executors.map((item) => ({
+    ...item,
+    state: "unknown",
+    installed: false,
+    version: "",
+    diagnosticText: "",
+  }));
+  const refreshedExecutors = unknownExecutors.map((item) => (
+    item.id === "codex-cli"
+      ? { ...item, state: "ready", installed: true, version: "0.147.0" }
+      : item
+  ));
+
+  await openDelegationSettingsPage(page, {
+    config,
+    plan: {
+      recordCalls: true,
+      delegationExecutors: unknownExecutors,
+      refreshedDelegationExecutors: refreshedExecutors,
+    },
+  });
+
+  const section = page.getByRole("heading", { name: "Agent 执行器" }).locator("xpath=ancestor::section");
+  await expect(section.getByText("0.147.0", { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "[]").map((item) => item.name), CALLS_KEY)).toContain("RefreshDelegationExecutorProbes");
+});
+
+test("未安装的受支持 CLI 可由用户显式安装并自动复检", async ({ page }) => {
+  const installedExecutors = executors.map((item) => (
+    item.id === "gemini-cli"
+      ? { ...item, state: "action_required", installed: true, authState: "required", diagnosticText: "Gemini CLI login is required" }
+      : item
+  ));
+  await openDelegationSettingsPage(page, {
+    config,
+    plan: {
+      recordCalls: true,
+      delegationExecutors: executors,
+      installedDelegationExecutors: installedExecutors,
+    },
+  });
+
+  const section = page.getByRole("heading", { name: "Agent 执行器" }).locator("xpath=ancestor::section");
+  await page.getByRole("button", { name: "安装 Gemini CLI" }).click();
+  await expect(section.getByText("需要操作", { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "[]").map((item) => item.name), CALLS_KEY)).toContain("InstallDelegationExecutor");
+});
+
 test("刷新探测、启用开关和优先级都走真实保存入口", async ({ page }) => {
   await page.getByRole("button", { name: "刷新执行器状态" }).click();
   await page.getByRole("switch", { name: "启用 Gemini CLI" }).click();

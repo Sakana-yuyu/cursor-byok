@@ -9,7 +9,7 @@ import DelegationVisionPanel from "@/components/settings/delegation/DelegationVi
 import SubagentProfilesPanel from "@/components/settings/delegation/SubagentProfilesPanel.vue";
 import Button from "@/components/ui/Button.vue";
 import { showModal } from "@/composables/useModal";
-import { getDelegationExecutorSnapshots, refreshDelegationExecutorProbes } from "@/services/clientApi";
+import { getDelegationExecutorSnapshots, installDelegationExecutor, refreshDelegationExecutorProbes } from "@/services/clientApi";
 import { saveDelegationConfig } from "@/services/runtimeControlApi";
 import { appState, toUserError } from "@/state/appState";
 // 委派配置的纯函数与默认常量已归位 utils/delegationSettings.js，此处 import 保持调用零改动。
@@ -107,7 +107,7 @@ const groupNameDrafts = reactive({});
 const expandedGroupStates = reactive({});
 const maxConcurrencyDraft = ref("");
 const groupCreating = ref(false);
-const executorState = reactive({ busy: false, error: "", items: [] });
+const executorState = reactive({ busy: false, installingID: "", error: "", items: [] });
 // 创建组 ID 的递增序号，避免同毫秒内多次点击产生 Date.now() 碰撞。
 let groupCreateSeq = 0;
 
@@ -374,6 +374,21 @@ async function loadExecutorSnapshots(force = false) {
     executorState.error = toUserError(error);
   } finally {
     executorState.busy = false;
+  }
+}
+
+async function installExecutor(id) {
+  const executorID = String(id || "").trim();
+  if (!executorID || executorState.busy || executorState.installingID) return;
+  executorState.installingID = executorID;
+  executorState.error = "";
+  try {
+    await installDelegationExecutor(executorID);
+    await loadExecutorSnapshots(true);
+  } catch (error) {
+    executorState.error = toUserError(error);
+  } finally {
+    executorState.installingID = "";
   }
 }
 
@@ -1022,7 +1037,7 @@ watch(
 );
 
 onMounted(() => {
-  void loadExecutorSnapshots(false);
+  void loadExecutorSnapshots(true);
 });
 </script>
 
@@ -1045,8 +1060,10 @@ onMounted(() => {
       :executors="appState.delegation.executors || []"
       :snapshots="executorState.items"
       :busy="executorState.busy"
+      :installing-id="executorState.installingID"
       :error="executorState.error"
       @refresh="loadExecutorSnapshots(true)"
+      @install="installExecutor"
       @toggle="handleExecutorToggle"
       @priority="handleExecutorPriority"
       @save-custom="handleCustomExecutorSave"

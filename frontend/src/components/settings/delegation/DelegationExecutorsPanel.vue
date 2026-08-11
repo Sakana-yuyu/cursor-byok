@@ -10,10 +10,11 @@ const props = defineProps({
   executors: { type: Array, default: () => [] },
   snapshots: { type: Array, default: () => [] },
   busy: { type: Boolean, default: false },
+  installingId: { type: String, default: "" },
   error: { type: String, default: "" },
 });
 
-const emit = defineEmits(["refresh", "toggle", "priority", "save-custom"]);
+const emit = defineEmits(["refresh", "install", "toggle", "priority", "save-custom"]);
 const priorityDrafts = reactive({});
 const customVisible = ref(false);
 const customError = ref("");
@@ -43,6 +44,14 @@ function stateClass(row) {
   if (row?.state === "unhealthy") return "text-[#fca5a5]";
   if (row?.state === "action_required" || row?.state === "incompatible") return "text-[#facc15]";
   return "text-[#a3a3a3]";
+}
+
+function canInstall(row) {
+  return row?.state === "not_installed" && ["claude-code", "codex-cli", "gemini-cli"].includes(row?.id);
+}
+
+function installLabel(row) {
+  return props.installingId === row?.id ? `正在安装 ${row?.displayName || row?.id}` : `安装 ${row?.displayName || row?.id}`;
 }
 
 function priorityValue(row) {
@@ -127,7 +136,8 @@ function saveCustom() {
               <input :value="priorityValue(row)" type="number" min="0" :aria-label="`${row.displayName || row.id} 优先级`" class="mt-0.5 h-7 w-full rounded-[5px] border border-white/10 bg-black/20 px-2 text-xs text-white outline-none focus:border-[#10AD5D]" @input="updatePriority(row, $event.target.value)" @blur="flushPriority(row)" />
             </label>
             <Switch compact :enabled="Boolean(row.enabled)" :disabled="busy" :aria-label="`启用 ${row.displayName || row.id}`" @change="emit('toggle', { id: row.id, enabled: $event })" />
-            <DelegationIconButton v-if="row.kind === 'custom'" icon="icon-[mdi--cog-outline]" :label="`配置 ${row.displayName || row.id}`" @click="openCustom(row)" />
+            <DelegationIconButton v-if="canInstall(row)" icon="icon-[mdi--download-outline]" :label="installLabel(row)" :disabled="busy || Boolean(installingId)" :spinning="installingId === row.id" @click="emit('install', row.id)" />
+            <DelegationIconButton v-else-if="row.kind === 'custom'" icon="icon-[mdi--cog-outline]" :label="`配置 ${row.displayName || row.id}`" @click="openCustom(row)" />
             <span v-else class="h-8 w-8"></span>
           </div>
         </div>

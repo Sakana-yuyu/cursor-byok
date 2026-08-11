@@ -233,6 +233,11 @@ func (s *ProxyService) RefreshDelegationExecutorProbes() ([]DelegationExecutorSn
 	return s.core.RefreshDelegationExecutorProbes()
 }
 
+// InstallDelegationExecutor 安装经后端白名单审核的 CLI，并返回安装后的探测状态。
+func (s *ProxyService) InstallDelegationExecutor(id string) (DelegationExecutorSnapshot, error) {
+	return s.core.InstallDelegationExecutor(id)
+}
+
 // GetDelegationConfig returns the normalized delegation settings subtree.
 func (s *ProxyService) GetDelegationConfig() (DelegationConfig, error) {
 	return s.core.GetDelegationConfig()
@@ -478,8 +483,8 @@ func (s *ProxyService) OfferDefenderExclusion() (DefenderExclusionResult, error)
 	// 非 Windows 平台或 Defender 非活动：不提权，返回让前端走引导。
 	if !cursor.IsWindowsDefenderActive() {
 		return DefenderExclusionResult{
-			Added:    false,
-			Error:    "",
+			Added:     false,
+			Error:     "",
 			Cancelled: false,
 		}, nil
 	}
