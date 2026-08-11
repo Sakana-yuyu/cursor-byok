@@ -1,14 +1,7 @@
 <script setup>
 import Button from "@/components/ui/Button.vue";
 import { safeErrorLogAttributes } from "@/utils/errorContract";
-import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from "vue";
-import { marked } from "marked";
-
-// 配置 marked
-marked.setOptions({
-  breaks: true,
-  gfm: true,
-});
+import { nextTick, onBeforeUnmount, ref, useId, watch } from "vue";
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -28,16 +21,32 @@ const confirmBtnRef = ref(null);
 // 打开对话框前的焦点元素，关闭后还原。用普通变量即可，不需响应式。
 let lastFocused = null;
 
-const renderedHtml = computed(() => {
-  if (!props.markdown || !props.content) return "";
-  try {
-    // marked() 直接调用，返回 HTML 字符串
-    return marked(props.content);
-  } catch (err) {
-    console.error("Markdown parse error:", safeErrorLogAttributes(err, { operation: "modal.renderMarkdown" }));
-    return props.content;
-  }
-});
+const renderedHtml = ref("");
+const markdownReady = ref(false);
+let markdownRenderVersion = 0;
+
+watch(
+  () => [props.visible, props.markdown, props.content],
+  async ([visible, markdown, content]) => {
+    const renderVersion = ++markdownRenderVersion;
+    renderedHtml.value = "";
+    markdownReady.value = false;
+    if (!visible || !markdown || !content) return;
+
+    try {
+      const { marked } = await import("marked");
+      marked.setOptions({ breaks: true, gfm: true });
+      const html = marked(content);
+      if (renderVersion !== markdownRenderVersion) return;
+      renderedHtml.value = html;
+      markdownReady.value = true;
+    } catch (err) {
+      if (renderVersion !== markdownRenderVersion) return;
+      console.error("Markdown parse error:", safeErrorLogAttributes(err, { operation: "modal.renderMarkdown" }));
+    }
+  },
+  { immediate: true },
+);
 
 const emit = defineEmits(["update:visible", "confirm", "cancel"]);
 
@@ -159,9 +168,9 @@ onBeforeUnmount(() => {
               <h3 :id="titleId" class="mb-3 text-base font-medium text-white">
                 {{ title }}
               </h3>
-              <!-- markdown 模式用 v-html 渲染，普通模式保持 whitespace-pre-wrap -->
+              <!-- Markdown 解析器按需加载；加载或失败时保留原始文本，避免用户看到空白内容。 -->
               <div
-                v-if="markdown"
+                v-if="markdown && markdownReady"
                 class="modal-md mb-5 max-h-[55vh] overflow-y-auto text-sm leading-relaxed text-[#a3a3a3]"
                 v-html="renderedHtml"
               />

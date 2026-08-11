@@ -23,6 +23,14 @@ if (eagerEditorAssets.length > 0) {
   throw new Error("entry HTML eagerly references Markdown editor assets: " + eagerEditorAssets.join(", "));
 }
 
+const eagerMarkdownParserAssets = assetReferences(html).filter((reference) => (
+  path.basename(reference).toLowerCase().includes("marked")
+));
+
+if (eagerMarkdownParserAssets.length > 0) {
+  throw new Error("entry HTML eagerly references Markdown parser assets: " + eagerMarkdownParserAssets.join(", "));
+}
+
 const assetNames = await readdir(assetsRoot);
 const oversizedFonts = [];
 for (const name of assetNames.filter((assetName) => assetName.endsWith(".ttf"))) {
@@ -55,4 +63,4 @@ if (!editorChunkFound) {
   throw new Error("Markdown editor chunk was not generated; the editor feature may be unreachable");
 }
 
-console.log("build output assertion passed: Markdown editor remains lazy and reachable");
+console.log("build output assertion passed: Markdown editor and parser remain lazy and reachable");
