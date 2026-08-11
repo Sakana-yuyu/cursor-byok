@@ -738,6 +738,7 @@ export const GenerateSkillSummary = (_workspaceRoot, kind, key) => {
   return Promise.reject(new Error(`未知的生成目标类型 ${kind}`));
 };
 export const GetDelegationTaskSnapshots = () => {
+  recordPreviewCall("GetDelegationTaskSnapshots");
   const now = Date.now();
   return Promise.resolve(clone(previewDelegationTasks.map((item) => ({
     ...item,

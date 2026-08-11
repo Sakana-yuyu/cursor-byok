@@ -99,3 +99,35 @@ test("polling continues after a synchronous task failure", () => {
   assert.equal(harness.scheduled.length, 1);
   assert.equal(harness.scheduled[0].delay, 25);
 });
+
+test("polling resolves the next interval from the settled task result", async () => {
+  const harness = schedulerHarness();
+  const controller = createPollingController(
+    () => Promise.resolve({ active: false }),
+    harness.schedule,
+    harness.cancel,
+    (result) => result.active ? 1500 : 15000,
+  );
+
+  controller.start({ immediate: true });
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(harness.scheduled.length, 1);
+  assert.equal(harness.scheduled[0].delay, 15000);
+});
+
+test("polling resolves a dynamic initial interval before a deferred start", () => {
+  const harness = schedulerHarness();
+  const controller = createPollingController(
+    () => Promise.resolve({ active: true }),
+    harness.schedule,
+    harness.cancel,
+    (result) => result?.active ? 1500 : 15000,
+  );
+
+  controller.start({ immediate: false, initialResult: { active: false } });
+
+  assert.equal(harness.scheduled.length, 1);
+  assert.equal(harness.scheduled[0].delay, 15000);
+});

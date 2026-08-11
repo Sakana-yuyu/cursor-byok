@@ -4,6 +4,7 @@ export function createPollingController(task, schedule, cancel, intervalMs) {
   let active = false;
   let running = false;
   let timer = null;
+  let nextIntervalMs = intervalMs;
 
   function clearTimer() {
     if (timer !== null) {
@@ -17,7 +18,13 @@ export function createPollingController(task, schedule, cancel, intervalMs) {
     timer = schedule(() => {
       timer = null;
       run();
-    }, intervalMs);
+    }, nextIntervalMs);
+  }
+
+  function resolveNextInterval(result, error) {
+    const resolved = typeof intervalMs === "function" ? intervalMs(result, error) : intervalMs;
+    const parsed = Number(resolved);
+    nextIntervalMs = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
   }
 
   function run() {
@@ -26,24 +33,31 @@ export function createPollingController(task, schedule, cancel, intervalMs) {
     let result;
     try {
       result = task();
-    } catch (_) {
+    } catch (error) {
       running = false;
+      resolveNextInterval(undefined, error);
       scheduleNext();
       return;
     }
     void Promise.resolve(result)
-      .catch(() => {})
+      .then(
+        (value) => resolveNextInterval(value, undefined),
+        (error) => resolveNextInterval(undefined, error),
+      )
       .finally(() => {
         running = false;
         scheduleNext();
       });
   }
 
-  function start({ immediate = false } = {}) {
+  function start({ immediate = false, initialResult, initialError } = {}) {
     if (active) return;
     active = true;
     if (immediate) run();
-    else scheduleNext();
+    else {
+      resolveNextInterval(initialResult, initialError);
+      scheduleNext();
+    }
   }
 
   function stop() {
@@ -59,10 +73,10 @@ export function createPollingController(task, schedule, cancel, intervalMs) {
  * task 应自行处理内部守卫（如 visibility、loading、条件状态）与错误兜底。
  *
  * @param {() => any} task 轮询任务；返回 Promise 时会等待其 settle 后再安排下一次
- * @param {{intervalMs: number, immediate?: boolean, autostart?: boolean}} options
- *   intervalMs 轮询间隔（毫秒）；immediate 挂载后立即执行一次（默认 true）；
+ * @param {{intervalMs: number | ((result: any, error: any) => number), immediate?: boolean, autostart?: boolean}} options
+ *   intervalMs 固定间隔，或根据任务结算结果决定下一次轮询间隔的函数；immediate 挂载后立即执行一次（默认 true）；
  *   autostart 挂载后自动开始轮询（默认 true，false 时需手动调用 start）。
- * @returns {{start: () => void, stop: () => void}}
+ * @returns {{start: (options?: {immediate?: boolean, initialResult?: any, initialError?: any}) => void, stop: () => void}}
  */
 export function usePolling(task, { intervalMs, immediate = true, autostart = true } = {}) {
   const controller = createPollingController(task, setTimeout, clearTimeout, intervalMs);
