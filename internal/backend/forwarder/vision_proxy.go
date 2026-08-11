@@ -172,7 +172,7 @@ func supportsVision(modelName string) bool {
 
 // synthesizeImageDescriptions 是自动触发的核心：扫描消息中的所有图片块，
 // 对每张图调用识图模型取得"描述 + OCR"文本，把图片块替换为文本块。
-// 同一条消息内多张图按顺序识图；不同消息间串行处理（保持消息顺序稳定）。
+// 图片识图在整轮共享限流下并行执行，结果仍按原消息和图片位置写回。
 // 单张识图失败时该图降级为错误说明文字，不中断整轮。
 // 整个 pass 注册为一次「视觉委派」运行，经首页委派任务条可见。
 //
@@ -232,6 +232,9 @@ func (service *Service) synthesizeImageDescriptions(ctx context.Context, request
 		vdbg("[pass] all images archived -> reuse context request_id=%s conv=%s images=%d", requestID, conversationID, imageCount)
 		return service.visionReplaceFromArchive(conversationID, messages)
 	}
+	// 图片落地及会话顺序登记必须先于并行识图完成。后续历史恢复依赖
+	// visionImageFiles 的出现顺序，不能让 goroutine 调度决定它。
+	service.prepareVisionImagePaths(ctx, conversationID, messages)
 	startedAt := time.Now()
 	logger.Infof("forwarder vision proxy pass started request_model=%s vision_model=%s mode=%s images=%d",
 		strings.TrimSpace(modelName), config.visionName, config.mode, imageCount)
@@ -243,13 +246,22 @@ func (service *Service) synthesizeImageDescriptions(ctx context.Context, request
 	visionCtx, visionCancel := context.WithTimeout(ctx, service.visionProxyPassTimeout())
 
 	result := make([]modeladapter.Message, len(messages))
+	// 同一 provider pass 内的图片共用并发令牌。消息顺序只影响结果排列，
+	// 不应让不同历史消息中的图片逐条等待而叠加首字延迟。
+	sem := make(chan struct{}, visionProxyMaxParallel)
+	var wg sync.WaitGroup
 	for i, message := range messages {
 		if !modeladapter.MessageHasImage(message) {
 			result[i] = message
 			continue
 		}
-		result[i] = service.synthesizeMessageImages(visionCtx, requestID, conversationID, message, config)
+		wg.Add(1)
+		go func(index int, current modeladapter.Message) {
+			defer wg.Done()
+			result[index] = service.synthesizeMessageImagesWithSemaphore(visionCtx, requestID, conversationID, current, config, sem)
+		}(i, message)
 	}
+	wg.Wait()
 	visionCancel()
 
 	status := delegation.TaskCompleted
@@ -348,9 +360,40 @@ func (service *Service) registerVisionImageFile(conversationID string, path stri
 	service.visionImageFiles[key] = append(service.visionImageFiles[key], path)
 }
 
+// prepareVisionImagePaths 按消息与图片出现顺序落地 data-only 图片并登记恢复路径。
+// 该步骤只做本地文件准备，识图调用仍在后续阶段受共享 semaphore 并行执行。
+func (service *Service) prepareVisionImagePaths(ctx context.Context, conversationID string, messages []modeladapter.Message) {
+	if service == nil {
+		return
+	}
+	for messageIndex := range messages {
+		for partIndex := range messages[messageIndex].ContentParts {
+			part := &messages[messageIndex].ContentParts[partIndex]
+			if !modeladapter.IsImageContentPart(*part) || part.Image == nil || len(part.Image.Data) == 0 || strings.TrimSpace(part.Image.Path) != "" {
+				continue
+			}
+			path, err := modeladapter.ImageLocalPath(ctx, part.Image)
+			if err != nil || strings.TrimSpace(path) == "" {
+				vdbg("[img] data-only land FAILED err=%v", err)
+				continue
+			}
+			part.Image.Path = path
+			service.registerVisionImageFile(conversationID, path)
+			vdbg("[img] data-only landed path=%s", path)
+		}
+	}
+}
+
 // synthesizeMessageImages 处理单条消息内的所有图片块，返回替换后的消息。
 // 提取消息中的文本作为用户意图（userContext）注入识图任务，让识图结果贴合用户需求。
 func (service *Service) synthesizeMessageImages(ctx context.Context, requestID string, conversationID string, message modeladapter.Message, config visionProxyConfig) modeladapter.Message {
+	// 保留单消息调用方的路径恢复契约；完整 pass 已在并发前统一预处理，
+	// 因此这里通常不会重复落地。
+	service.prepareVisionImagePaths(ctx, conversationID, []modeladapter.Message{message})
+	return service.synthesizeMessageImagesWithSemaphore(ctx, requestID, conversationID, message, config, make(chan struct{}, visionProxyMaxParallel))
+}
+
+func (service *Service) synthesizeMessageImagesWithSemaphore(ctx context.Context, requestID string, conversationID string, message modeladapter.Message, config visionProxyConfig, sem chan struct{}) modeladapter.Message {
 	type pendingImage struct {
 		index    int
 		image    *modeladapter.ImageContent
@@ -361,17 +404,6 @@ func (service *Service) synthesizeMessageImages(ctx context.Context, requestID s
 	for idx, part := range message.ContentParts {
 		if modeladapter.IsImageContentPart(part) {
 			if part.Image != nil && (len(part.Image.Data) > 0 || strings.TrimSpace(part.Image.Path) != "") {
-				// 纯字节图片落地为临时文件并注册会话缓存：checkpoint 不持久化图片
-				// 字节，后续 turn 靠这个缓存补回路径才能继续识图。
-				if len(part.Image.Data) > 0 && strings.TrimSpace(part.Image.Path) == "" {
-					if path, pathErr := modeladapter.ImageLocalPath(ctx, part.Image); pathErr == nil && strings.TrimSpace(path) != "" {
-						part.Image.Path = path
-						service.registerVisionImageFile(conversationID, path)
-						vdbg("[img] data-only landed path=%s", path)
-					} else {
-						vdbg("[img] data-only land FAILED err=%v", pathErr)
-					}
-				}
 				pendings = append(pendings, pendingImage{
 					index:    idx,
 					image:    part.Image,
@@ -400,8 +432,7 @@ func (service *Service) synthesizeMessageImages(ctx context.Context, requestID s
 		userContext = truncateVisionUserContext(modeladapter.CollapseTextContentParts(replaced))
 	}
 
-	// 并行识图，受 visionProxyMaxParallel 限制。
-	sem := make(chan struct{}, visionProxyMaxParallel)
+	// 并行识图，令牌由整个 provider pass 共享，受 visionProxyMaxParallel 限制。
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	for _, item := range pendings {
@@ -421,7 +452,16 @@ func (service *Service) synthesizeMessageImages(ctx context.Context, requestID s
 					vdbg("[goro] PANIC idx=%d panic=%v", p.index, r)
 				}
 			}()
-			sem <- struct{}{}
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				service.visionRunImageDone(requestID, ctx.Err())
+				mu.Lock()
+				replaced[p.index] = visionProxyFallbackPart(ctx, p.image, fmt.Sprintf("识图首字预算耗尽：%v", ctx.Err()))
+				mu.Unlock()
+				vdbg("[goro] CTX_WAIT_ERR idx=%d err=%v", p.index, ctx.Err())
+				return
+			}
 			defer func() { <-sem }()
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				// pass 预算耗尽：主模型需立即启动，保留本地路径让读图工具继续兜底。
