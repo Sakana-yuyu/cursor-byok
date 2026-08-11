@@ -180,7 +180,9 @@ func TestCompleteContextProjectionSummaryWritesOnlySidecar(t *testing.T) {
 }
 
 func TestHandleContextProjectionSummaryFailureFallsBackToRecentTailSidecar(t *testing.T) {
-	service := NewService(t.TempDir(), nilResolver{})
+	store := NewConversationFileStore(t.TempDir())
+	provider := &contextProjectionRequestProvider{requests: make(chan ProviderRequest, 1)}
+	service := newServiceWithDependencies(store, NewHistoryProjector(), contextProjectionLifecycleCompiler{}, provider, NewStreamBroker())
 	conversation := contextProjectionTestConversation(t, 8)
 	conversation.CurrentTurnSeq = 8
 	conversation.CurrentRequestID = "request-8"
@@ -188,10 +190,6 @@ func TestHandleContextProjectionSummaryFailureFallsBackToRecentTailSidecar(t *te
 	if err != nil {
 		t.Fatalf("SaveConversationWithEntries() error = %v", err)
 	}
-	statePath := filepath.Join(service.store.conversationDir(persisted.ConversationID), conversationStateFileName)
-	contextPath := filepath.Join(service.store.conversationDir(persisted.ConversationID), conversationContextFileName)
-	stateBefore, _ := os.ReadFile(statePath)
-	contextBefore, _ := os.ReadFile(contextPath)
 	plan, err := buildContextProjectionSummaryPlan(persisted, "model-a", nil, 120_000, 160_000, 10_000)
 	if err != nil || plan == nil {
 		t.Fatalf("buildContextProjectionSummaryPlan() = (%#v, %v)", plan, err)
@@ -212,7 +210,6 @@ func TestHandleContextProjectionSummaryFailureFallsBackToRecentTailSidecar(t *te
 	}); err != nil {
 		t.Fatalf("handleCompactionEvent() error = %v", err)
 	}
-	clearStreamTimer(stream, providerTimerKey(streamTimerProviderResume, ""))
 	fallback, err := service.store.LoadContextProjection(persisted.ConversationID)
 	if err != nil {
 		t.Fatalf("LoadContextProjection() error = %v", err)
@@ -231,18 +228,12 @@ func TestHandleContextProjectionSummaryFailureFallsBackToRecentTailSidecar(t *te
 	if text := contextProjectionMessageText(messages); strings.Contains(text, "<conversation_summary>") {
 		t.Fatalf("recent-tail fallback inserted a summary: %s", text)
 	}
-	stream.mu.Lock()
-	action := stream.PendingProviderAction
-	status := stream.Status
-	stream.mu.Unlock()
-	if action != providerActionResume || status == StreamStatusFailed {
-		t.Fatalf("fallback stream state = action %q status %q, want resume without failure", action, status)
+	select {
+	case <-provider.requests:
+	case <-time.After(2 * time.Second):
+		t.Fatal("recent-tail fallback did not resume the provider pass")
 	}
-	stateAfter, _ := os.ReadFile(statePath)
-	contextAfter, _ := os.ReadFile(contextPath)
-	if !reflect.DeepEqual(stateAfter, stateBefore) || !reflect.DeepEqual(contextAfter, contextBefore) {
-		t.Fatal("recent-tail fallback modified canonical conversation files")
-	}
+	waitForContextProjectionProviderIdle(t, stream)
 }
 
 func TestGenerateContextProjectionSummaryDoesNotModifyCanonicalFiles(t *testing.T) {

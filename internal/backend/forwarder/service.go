@@ -34,7 +34,6 @@ import (
 )
 
 const (
-	providerResumeDebounce         = 200 * time.Millisecond
 	completedExecRetention         = 15 * time.Second
 	defaultNonStreamingCloseGrace  = 30 * time.Second
 	defaultSummaryCompletedThought = "Chat context summarized"
@@ -1890,13 +1889,6 @@ func shouldResumeAfterToolResults(finishReason string) bool {
 	default:
 		return false
 	}
-}
-
-func (service *Service) cancelScheduledProviderResume(stream *ActiveStream) {
-	if stream == nil {
-		return
-	}
-	clearStreamTimer(stream, providerTimerKey(streamTimerProviderResume, ""))
 }
 
 // parentAgentProviderPassSafetyLimit 是父 agent（非 goal）单次回合 provider pass 的硬上限。

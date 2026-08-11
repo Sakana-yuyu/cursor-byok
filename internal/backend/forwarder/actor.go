@@ -68,7 +68,6 @@ const (
 type streamTimerKind string
 
 const (
-	streamTimerProviderResume       streamTimerKind = "provider_resume"
 	streamTimerNonStreamingRecovery streamTimerKind = "non_streaming_recovery"
 	streamTimerInteractionTimeout   streamTimerKind = "interaction_timeout"
 	streamTimerShellForeground      streamTimerKind = "shell_foreground"
@@ -640,9 +639,9 @@ func (service *Service) reconcileStream(stream *ActiveStream) error {
 	case providerActionStart:
 		return service.driveProvider(stream)
 	case providerActionResume:
-		service.setTurnPhase(stream, TurnPhaseWaitingExternal)
-		service.scheduleStreamTimer(stream, providerTimerKey(streamTimerProviderResume, ""), providerResumeDebounce, streamTimerProviderResume, "", 0, "")
-		return nil
+		// 并发工具结果在 pendingBridgeCount 清零前不会到达这里；一旦状态完整，
+		// 立即续写下一轮 provider，避免每个工具链额外停顿固定 200ms。
+		return service.driveProvider(stream)
 	default:
 		service.setTurnPhase(stream, TurnPhaseIdle)
 		return nil
@@ -1293,16 +1292,6 @@ func (service *Service) handleTimerEvent(stream *ActiveStream, payload *streamTi
 	clearStreamTimer(stream, payload.Key)
 
 	switch payload.Kind {
-	case streamTimerProviderResume:
-		stream.mu.Lock()
-		providerActive := stream.ProviderActive
-		action := stream.PendingProviderAction
-		status := stream.Status
-		stream.mu.Unlock()
-		if providerActive || isTerminalStreamStatus(status) || action != providerActionResume || pendingBridgeCount(stream) > 0 {
-			return nil
-		}
-		return service.driveProvider(stream)
 	case streamTimerNonStreamingRecovery:
 		current, ok := snapshotPendingExec(stream, payload.ExecID)
 		if !ok || current.MessageID != payload.MessageID || current.StreamState != "transport_closed" {
