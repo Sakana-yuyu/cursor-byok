@@ -80,14 +80,18 @@ func TestCodexCLIProbeReportsNotInstalledWithoutApplicationError(t *testing.T) {
 }
 
 func TestCodexCLIProbeRejectsUnknownAuthenticationOutput(t *testing.T) {
+	secret := "sk-codex-probe-secret"
 	runner := &claudeScriptedRunner{steps: []claudeRunnerStep{
 		{result: delegation.ProcessResult{Stdout: "codex-cli 0.147.0", ExecutablePath: "codex.exe"}},
-		{result: delegation.ProcessResult{Stdout: "authentication state unavailable", ExecutablePath: "codex.exe"}},
+		{result: delegation.ProcessResult{Stdout: "authentication state unavailable " + secret, ExecutablePath: "codex.exe"}},
 	}}
 	registration, _ := NewCodexCLIRegistration(runner, delegation.RuntimeExecutorConfig{ID: CodexCLIExecutorID, Executable: "codex.exe"})
 	probe, err := registration.Probe(t.Context())
 	if err == nil || probe.State != delegation.ExecutorProbeUnhealthy || probe.AuthState != delegation.ExecutorAuthUnknown {
 		t.Fatalf("probe=%#v err=%v", probe, err)
+	}
+	if strings.Contains(probe.DiagnosticText, secret) || strings.Contains(err.Error(), secret) {
+		t.Fatalf("unknown auth status leaked into diagnostics: probe=%#v err=%v", probe, err)
 	}
 }
 

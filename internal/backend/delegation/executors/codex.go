@@ -127,7 +127,9 @@ func (adapter *codexCLIAdapter) probe(ctx context.Context) (delegation.ExecutorP
 		return delegation.ExecutorProbeResult{State: delegation.ExecutorProbeActionRequired, ExecutablePath: firstNonEmpty(versionResult.ExecutablePath, authResult.ExecutablePath), Version: version, Installed: true, AuthState: delegation.ExecutorAuthRequired, Capabilities: append([]delegation.ExecutorCapability{}, codexCapabilities...), DiagnosticCode: CodexDiagnosticAuthRequired, DiagnosticText: "Codex CLI login is required", ProbedAt: time.Now().UTC()}, nil
 	}
 	if !codexAuthenticationReady(authText) {
-		err := fmt.Errorf("Codex CLI login status output is not recognized: %q", authText)
+		// 登录状态来自外部 CLI，不把未识别的原始文本写进诊断，避免其包含
+		// 账户或凭据相关信息时经由设置页暴露。
+		err := errors.New("Codex CLI login status output is not recognized")
 		return adapter.unhealthyProbe(authResult, time.Now().UTC(), err), err
 	}
 	return delegation.ExecutorProbeResult{State: delegation.ExecutorProbeReady, ExecutablePath: firstNonEmpty(versionResult.ExecutablePath, authResult.ExecutablePath), Version: version, Installed: true, AuthState: delegation.ExecutorAuthReady, Capabilities: append([]delegation.ExecutorCapability{}, codexCapabilities...), DiagnosticCode: CodexDiagnosticReady, ProbedAt: time.Now().UTC()}, nil
