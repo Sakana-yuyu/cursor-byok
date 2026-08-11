@@ -1,6 +1,7 @@
 package mitm
 
 import (
+	"context"
 	"testing"
 )
 
@@ -13,6 +14,25 @@ func TestNewProxyServerAllowsNilCertManager(t *testing.T) {
 	}
 	if proxy == nil {
 		t.Fatal("NewProxyServer returned nil server")
+	}
+}
+
+func TestProxyServerStartPublishesAllocatedEphemeralPort(t *testing.T) {
+	proxy, err := NewProxyServer("127.0.0.1:0", "http://127.0.0.1:18090", "", "", nil)
+	if err != nil {
+		t.Fatalf("NewProxyServer() error = %v", err)
+	}
+	if err := proxy.Start(); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := proxy.Stop(context.Background()); err != nil {
+			t.Errorf("Stop() error = %v", err)
+		}
+	})
+
+	if got := proxy.Snapshot().ListenAddr; got == "127.0.0.1:0" {
+		t.Fatalf("Snapshot().ListenAddr = %q, want allocated listener address", got)
 	}
 }
 
