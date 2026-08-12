@@ -56,16 +56,13 @@ func NewProviderGateway(resolver modeladapter.ChannelResolver) ProviderGateway {
 		router: modeladapter.NewRouter(resolver),
 	}
 	if settingsProvider, ok := resolver.(localResponseCacheSettingsProvider); ok {
-		// 缓存条目持久化到磁盘（L2 层），跨进程/重启保留；持久化开关关闭时退回纯内存。
-		persistPath := localResponseCachePersistPath()
-		if _, _, _, persist := settingsProvider.LocalResponseCacheSettings(); !persist {
-			persistPath = ""
-		}
+		// 磁盘路径固定，是否读写由缓存网关在每次调用时按热加载配置判断。
+		// 不能在启动时固定 persist，否则设置页改动必须重启才能生效。
 		var modelSource func(context.Context, string) string
 		if sourceResolver, ok := resolver.(modelSourceCacheResolver); ok {
 			modelSource = sourceResolver.ModelSourceForModel
 		}
-		return newCachingProviderGateway(base, settingsProvider.LocalResponseCacheSettings, persistPath, modelSource)
+		return newCachingProviderGateway(base, settingsProvider.LocalResponseCacheSettings, localResponseCachePersistPath(), modelSource)
 	}
 	return base
 }
