@@ -64,6 +64,18 @@ flowchart LR
   - Output: 每个协议帧一条记录 `{ exchangeId, direction, sequence, frameEncoding, frameBytes, frameSHA256, serverMessageKind?, decodeError? }`，并在独立索引中以 `requestIdHash` 聚合。
   - Invariants: 协议帧不是底层读取块；同一 `requestIdHash` 的事件按局部序号递增；不同并发请求不共享序号或索引桶；响应上限命中必须以 `response_truncated` 明示。
 
+- `ProxyService.GetCursorProtocolSessions()`
+  - Input: 无。
+  - Output: `CursorProtocolSession[]`，每项为 `{ requestIdHash, firstSeenAtUnixMs, lastSeenAtUnixMs, eventCount, upstreamCount, downstreamCount, agentMode?, multitask, subagentActions: string[], terminal, decodeErrors: string[], events: CursorProtocolEvent[] }`；事件仅为 `{ timestampUnixMs, direction, sequence, eventKind, clientMessageKind?, clientDetailKind?, clientResultKind?, agentMode?, multitask, subagentAction?, serverMessageKind?, serverDetailKind?, execMessageKind?, streamContentKind?, streamDeltaBytes?, terminal, decodeError? }`。
+  - Error codes: 时间线文件不存在时返回空数组；文件存在但无法读取或解析时返回 Wails 调用错误，不能把损坏或权限错误伪装成空记录。单条畸形 JSONL 行跳过，其余合法记录继续可读。
+  - Invariants: 只读取固定路径 `<historyRoot>/_debug/mirror/protocol.timeline.jsonl`；不读取 `official.raw.jsonl`。DTO 不含正文、原始帧、URL、路径、请求参数、Cookie、Token、认证头、完整 request ID 或 exchange ID。只聚合具有非空 `requestIdHash` 的记录，并按时间、序号稳定排序。
+
+- 历史页协议来源切换
+  - Input: 既有本地会话历史 API 与 `GetCursorProtocolSessions()`。
+  - Output: 历史页提供“本地会话”和“Cursor 协议”两个来源。本地会话保留现有文件夹、选择、删除、清理调试日志和诊断跳转；协议来源只读，提供刷新、会话摘要和安全事件序列展开。
+  - Error codes: 协议时间线缺失时显示未采集状态；读取错误沿用页面错误提示与重试，不回退到原始抓包文件。
+  - Invariants: 协议来源不提供正文查看、导出、回放、删除原始抓包或复制完整稳定标识；既有 `icons/details` 仅表示本地会话布局，不与协议来源状态混用。
+
 ## Data Model
 
 - 镜像状态为派生 DTO，不持久化。
@@ -72,6 +84,7 @@ flowchart LR
 - 每条 JSONL 记录保留现有字段，并新增内部关联字段：`exchangeId`、`phase`、`model`。已有记录没有这些字段时仍可按旧格式读取。
 - 隔离保真字段为向后兼容的可选字段；没有 `bodyEncoding` 的旧记录保持原解释，禁止把旧 `body` 重新解释为完整原始二进制。
 - 协议时间线与原镜像记录分文件保存，均位于隔离临时根目录下的 `_debug/mirror`，不进入普通 history。
+- `CursorProtocolSession` 是读取时派生的安全聚合，不持久化；时间线缺失表示当前运行模式尚未采集，不代表 Cursor 没有发送请求。
 
 ## Key Decisions
 
@@ -84,6 +97,11 @@ flowchart LR
   Solution: 请求过滤器生成一枚内部交换 ID 并保存在 `ProxyCtx.UserData`，响应过滤器读取同一 ID；记录器为每行写入阶段枚举与可选模型元数据。
   Cost: JSONL 每行增加少量元数据，并需要维护四类事件阶段的一致性。
   Why not the alternatives: 仅按时间戳无法可靠区分并发流；将关联 ID 插入上游请求会改变官方 API 交互，风险不可接受。
+
+- Problem: 安全时间线已具备上下行、流式和终态结构，但普通历史界面只能读取本项目会话文件；把原始镜像 JSONL 接入界面会暴露提示词、模型输出和凭据风险。
+  Solution: 增加固定路径、只读的协议会话查询，按不可逆 `requestIdHash` 聚合安全字段；在历史页作为独立来源展示，不改变本地会话管理语义。
+  Cost: 增加一份前后端 DTO、JSONL 读取和紧凑协议事件视图。
+  Why not the alternatives: 复用普通会话详情会混淆两套存储语义；直接读取 `official.raw.jsonl` 会突破已批准的数据保护边界；普通模式同步写时间线会改变抓包运行行为，需另行设计与验证。
 
 ## Migration / Compatibility
 

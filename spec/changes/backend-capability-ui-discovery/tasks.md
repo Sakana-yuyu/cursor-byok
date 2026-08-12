@@ -78,3 +78,23 @@
   - [x] 12.1 仅对非空 stdout/stderr 将既有 Shell 输出投影为 `ToolCallDelta.ShellToolCallDelta`，保留原 `ShellOutputDelta` 发布与全部终态逻辑。
   - [x] 12.2 以 stdout、stderr、启动、退出与空输出的定向单元测试验证结构和忽略边界。
   - [x] 12.3 已运行 `go test ./internal/backend/forwarder -run 'TestBuildShellToolCallDeltaMessage' -count=1`、`go test ./internal/backend/agent/bridge/exec ./internal/backend/forwarder -count=1`、`go vet ./internal/backend/forwarder` 与 `git diff --check`。
+
+## Cursor 协议历史对齐实施
+
+> 目标：将隔离镜像已经生成的无正文 `protocol.timeline.jsonl` 以只读、安全、可用的方式接入历史页，供后续 Cursor 功能对接核对上下行、流式、子代理和终态结构。
+> 约束：不读取或展示 `official.raw.jsonl`，不改变普通镜像模式、不新增自动抓包、不修改已安装 Cursor、真实登录态或原始协议转发；本地会话历史的删除和清理语义保持不变。
+
+- [x] 13. 安全协议会话读取合同
+  - [x] 13.1 以 `TestScanCursorProtocolSessionsIn` 与缺文件用例锁定固定时间线路径、按 `requestIdHash` 聚合、稳定排序、畸形行跳过和缺文件空结果。
+  - [x] 13.2 增加 `ProxyService.GetCursorProtocolSessions()`，仅返回设计列出的安全字段；读取或扫描错误显式返回，绝不读取 `official.raw.jsonl`。
+  - [x] 13.3 已生成 Wails bindings 并补齐浏览器预览 mock；已运行 bridge/MITM 测试、vet 与全仓 Go 构建。
+
+- [x] 14. 历史页协议视图
+  - [x] 14.1 以浏览器 E2E 锁定来源切换、协议摘要、事件展开与原始抓包字段不可见；缺文件由后端空数组和页面未采集状态表示。
+  - [x] 14.2 在现有历史页增加只读“Cursor 协议”来源；“本地会话”保留现有图标/详细信息、选择、删除和清理行为，协议页仅允许刷新与展开安全事件。
+  - [x] 14.3 已运行 i18n 扫描构建并补齐英日俄翻译；四个 locale 的键集、空值和占位符校验均通过，前端 lint、单元测试、构建和历史页 E2E 均通过。
+
+- [ ] 15. 交付与发布准备
+  - [x] 15.1 已对协议读取、MITM 与前端记录验证证据；真实 Cursor 已覆盖的上下行、流式、MCP、Shell、子代理与终态范围沿用 `verify.md`，后台化、等待与 ComputerUse 等未触发分支继续明确标记为未验证。
+  - [ ] 15.2 单独提交协议历史功能，随后核对 detached 工作树、`main`、`fork/main` 与 `upstream/main` 的共同祖先，只并入可验证且兼容的改动。
+  - [ ] 15.3 将版本升级为下一个 patch，按既有工作流构建并验证 Windows 安装包，推送 tag 并核验 GitHub Actions/Release 资产。

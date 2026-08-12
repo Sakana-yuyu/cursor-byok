@@ -7,6 +7,7 @@ import {
   GetDelegationTaskSnapshots,
   GetSkillsMCPScanSnapshot,
   GetHistorySessions,
+  GetCursorProtocolSessions,
   DeleteHistorySessions,
   ClearHistory,
   DeleteHistoryDebugLogs,
@@ -193,6 +194,54 @@ function normalizeHistorySession(session) {
 export function getHistorySessions() {
   return invokeOperation("GetHistorySessions", null, () => GetHistorySessions()).then((items) => (
     Array.isArray(items) ? items.map((item) => normalizeHistorySession(item)) : []
+  ));
+}
+
+function normalizeCursorProtocolEvent(event) {
+  const raw = event && typeof event === "object" ? event : {};
+  const deltaBytes = Number(raw.streamDeltaBytes);
+  return {
+    timestampUnixMs: Number(raw.timestampUnixMs || 0),
+    direction: String(raw.direction || "").trim(),
+    sequence: Number(raw.sequence || 0),
+    eventKind: String(raw.eventKind || "").trim(),
+    clientMessageKind: String(raw.clientMessageKind || "").trim(),
+    clientDetailKind: String(raw.clientDetailKind || "").trim(),
+    clientResultKind: String(raw.clientResultKind || "").trim(),
+    agentMode: String(raw.agentMode || "").trim(),
+    multitask: Boolean(raw.multitask),
+    subagentAction: String(raw.subagentAction || "").trim(),
+    serverMessageKind: String(raw.serverMessageKind || "").trim(),
+    serverDetailKind: String(raw.serverDetailKind || "").trim(),
+    execMessageKind: String(raw.execMessageKind || "").trim(),
+    streamContentKind: String(raw.streamContentKind || "").trim(),
+    streamDeltaBytes: Number.isFinite(deltaBytes) ? deltaBytes : null,
+    terminal: Boolean(raw.terminal),
+    decodeError: String(raw.decodeError || "").trim(),
+  };
+}
+
+function normalizeCursorProtocolSession(session) {
+  const raw = session && typeof session === "object" ? session : {};
+  return {
+    requestIdHash: String(raw.requestIdHash || "").trim(),
+    firstSeenAtUnixMs: Number(raw.firstSeenAtUnixMs || 0),
+    lastSeenAtUnixMs: Number(raw.lastSeenAtUnixMs || 0),
+    eventCount: Number(raw.eventCount || 0),
+    upstreamCount: Number(raw.upstreamCount || 0),
+    downstreamCount: Number(raw.downstreamCount || 0),
+    agentMode: String(raw.agentMode || "").trim(),
+    multitask: Boolean(raw.multitask),
+    subagentActions: Array.isArray(raw.subagentActions) ? raw.subagentActions.map((item) => String(item || "").trim()).filter(Boolean) : [],
+    terminal: Boolean(raw.terminal),
+    decodeErrors: Array.isArray(raw.decodeErrors) ? raw.decodeErrors.map((item) => String(item || "").trim()).filter(Boolean) : [],
+    events: Array.isArray(raw.events) ? raw.events.map((item) => normalizeCursorProtocolEvent(item)) : [],
+  };
+}
+
+export function getCursorProtocolSessions() {
+  return invokeOperation("GetCursorProtocolSessions", null, () => GetCursorProtocolSessions()).then((items) => (
+    Array.isArray(items) ? items.map((item) => normalizeCursorProtocolSession(item)) : []
   ));
 }
 

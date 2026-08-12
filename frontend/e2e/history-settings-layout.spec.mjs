@@ -84,3 +84,41 @@ test("窄屏图标视图使用单列且页面不产生横向溢出", async ({ pa
   expect(metrics.documentWidth).toBe(metrics.viewportWidth);
   expect(metrics.columns).toBe(1);
 });
+
+test("Cursor 协议来源只展示安全时间线，不暴露原始抓包内容", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("cursor-byok.browser-preview.test-plan", JSON.stringify({
+      cursorProtocolSessions: [
+        {
+          requestIdHash: "hash-preview-7f4a",
+          firstSeenAtUnixMs: Date.UTC(2026, 7, 12, 9, 0, 0),
+          lastSeenAtUnixMs: Date.UTC(2026, 7, 12, 9, 2, 0),
+          eventCount: 2,
+          upstreamCount: 1,
+          downstreamCount: 1,
+          agentMode: "AGENT_MODE_MULTITASK",
+          multitask: true,
+          subagentActions: ["create"],
+          terminal: true,
+          decodeErrors: [],
+          events: [
+            { timestampUnixMs: Date.UTC(2026, 7, 12, 9, 0, 0), direction: "request", sequence: 1, eventKind: "bidi_append", clientMessageKind: "exec_client_message", subagentAction: "create", multitask: true },
+            { timestampUnixMs: Date.UTC(2026, 7, 12, 9, 2, 0), direction: "response", sequence: 2, eventKind: "runsse_connect", serverMessageKind: "exec_server_message", terminal: true },
+          ],
+        },
+      ],
+    }));
+  });
+  await page.goto("/settings?category=history");
+
+  await page.getByRole("tab", { name: "Cursor 协议" }).click();
+  await expect(page.getByTestId("cursor-protocol-history")).toBeVisible();
+  await expect(page.getByText("hash-preview-7f4a", { exact: true })).toBeVisible();
+  await expect(page.getByText("上行 1")).toBeVisible();
+  await expect(page.getByText("下行 1")).toBeVisible();
+  await page.getByRole("button", { name: "展开协议事件" }).click();
+  await expect(page.getByText("bidi_append", { exact: true })).toBeVisible();
+  await expect(page.getByText("runsse_connect", { exact: true })).toBeVisible();
+  await expect(page.getByText("official.raw.jsonl", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("bodyBase64", { exact: true })).toHaveCount(0);
+});

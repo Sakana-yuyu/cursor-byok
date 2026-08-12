@@ -75,6 +75,18 @@
         }
       ]
     },
+    "00bd7c75d70cc9ae": {
+      "source": "匿名请求哈希",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 667,
+          "column": 36
+        }
+      ]
+    },
     "0164f80178a2f12a": {
       "source": "全部模型",
       "kind": "text",
@@ -381,6 +393,18 @@
         }
       ]
     },
+    "04a32291e7363170": {
+      "source": "收起协议事件",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 673,
+          "column": 474
+        }
+      ]
+    },
     "04a3b0f4eb7eec28": {
       "source": "模型组用于划分委派模型、默认模型、执行模式和工具权限。新增、排序、开关和删除会立即保存；需要调整时展开本区。",
       "kind": "text",
@@ -627,7 +651,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 409,
+          "line": 449,
           "column": 21
         }
       ]
@@ -916,12 +940,12 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 312,
+          "line": 348,
           "column": 43
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 490,
+          "line": 536,
           "column": 50
         },
         {
@@ -974,6 +998,18 @@
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
           "line": 1029,
           "column": 24
+        }
+      ]
+    },
+    "0c29311d55d84b8a": {
+      "source": "展开协议事件",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 673,
+          "column": 474
         }
       ]
     },
@@ -1204,12 +1240,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 476,
-          "column": 106
+          "line": 517,
+          "column": 108
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 659,
+          "line": 738,
           "column": 106
         }
       ]
@@ -1363,6 +1399,18 @@
         }
       ]
     },
+    "1121471a0ff440f8": {
+      "source": "方向",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 667,
+          "column": 160
+        }
+      ]
+    },
     "114e146719a6d0e6": {
       "source": "检测到 {0} 个模型不在内置能力目录中（能力未知，图片不会直传；可在模型编辑页手动补充能力）：\n\n{1}{2}\n\n",
       "kind": "template",
@@ -1483,7 +1531,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 756,
+          "line": 835,
           "column": 175
         }
       ]
@@ -2065,7 +2113,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 513,
+          "line": 560,
           "column": 16
         }
       ]
@@ -2175,6 +2223,23 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 508,
           "column": 15
+        }
+      ]
+    },
+    "1cc22077b8646a9b": {
+      "source": "下行",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 672,
+          "column": 260
+        },
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 675,
+          "column": 557
         }
       ]
     },
@@ -2687,7 +2752,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 438,
+          "line": 478,
           "column": 14
         }
       ]
@@ -3170,7 +3235,7 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 312,
+          "line": 348,
           "column": 36
         },
         {
@@ -3380,7 +3445,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 973,
+          "line": 977,
           "column": 49
         }
       ]
@@ -3464,7 +3529,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 701,
+          "line": 780,
           "column": 85
         }
       ]
@@ -3501,12 +3566,12 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 403,
+          "line": 443,
           "column": 17
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 440,
+          "line": 480,
           "column": 17
         },
         {
@@ -3620,7 +3685,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 400,
+          "line": 440,
           "column": 12
         }
       ]
@@ -3794,7 +3859,7 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 402,
+          "line": 442,
           "column": 18
         },
         {
@@ -3961,7 +4026,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 401,
+          "line": 441,
           "column": 14
         }
       ]
@@ -4202,12 +4267,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 554,
+          "line": 606,
           "column": 15
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 555,
+          "line": 607,
           "column": 15
         }
       ]
@@ -4416,7 +4481,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 532,
+          "line": 584,
           "column": 14
         }
       ]
@@ -4496,7 +4561,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 756,
+          "line": 835,
           "column": 211
         }
       ]
@@ -4573,7 +4638,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 579,
+          "line": 631,
           "column": 16
         },
         {
@@ -4605,6 +4670,18 @@
         }
       ]
     },
+    "3ade93662de4ea27": {
+      "source": "历史来源",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 565,
+          "column": 108
+        }
+      ]
+    },
     "3af7e5489e61ea51": {
       "source": "刷新中",
       "kind": "text",
@@ -4617,7 +4694,7 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 504,
+          "line": 550,
           "column": 16
         }
       ]
@@ -4740,7 +4817,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 349,
+          "line": 385,
           "column": 19
         }
       ]
@@ -5282,7 +5359,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 588,
+          "line": 640,
           "column": 16
         }
       ]
@@ -5587,6 +5664,18 @@
         }
       ]
     },
+    "47a270081ab2892f": {
+      "source": "模式",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 667,
+          "column": 220
+        }
+      ]
+    },
     "47c8425fc8942c69": {
       "source": "为 MCP {0} 生成简介",
       "kind": "template",
@@ -5717,17 +5806,17 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 714,
+          "line": 793,
           "column": 114
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 726,
+          "line": 805,
           "column": 107
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 737,
+          "line": 816,
           "column": 109
         }
       ]
@@ -5994,17 +6083,17 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 56,
+          "line": 59,
           "column": 57
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 57,
+          "line": 60,
           "column": 92
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 58,
+          "line": 61,
           "column": 86
         },
         {
@@ -6254,7 +6343,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 704,
+          "line": 783,
           "column": 67
         }
       ]
@@ -6346,7 +6435,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 634,
+          "line": 713,
           "column": 11
         }
       ]
@@ -6672,7 +6761,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 106,
+          "line": 109,
           "column": 40
         }
       ]
@@ -7927,7 +8016,7 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 700,
+          "line": 779,
           "column": 85
         },
         {
@@ -8456,7 +8545,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 672,
+          "line": 751,
           "column": 30
         }
       ]
@@ -8679,7 +8768,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 424,
+          "line": 464,
           "column": 33
         }
       ]
@@ -8751,12 +8840,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 611,
+          "line": 690,
           "column": 13
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 612,
+          "line": 691,
           "column": 13
         }
       ]
@@ -8898,7 +8987,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 651,
+          "line": 730,
           "column": 28
         }
       ]
@@ -8975,6 +9064,23 @@
         }
       ]
     },
+    "70fd1f2defbf4a37": {
+      "source": "终态",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 667,
+          "column": 353
+        },
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 675,
+          "column": 819
+        }
+      ]
+    },
     "71075b1a484c7753": {
       "source": "搜索供应商 / 模型 / host",
       "kind": "text",
@@ -9030,12 +9136,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 513,
+          "line": 560,
           "column": 16
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 579,
+          "line": 631,
           "column": 16
         }
       ]
@@ -9064,6 +9170,18 @@
         }
       ]
     },
+    "71c21f50fa444c7f": {
+      "source": "暂无 Cursor 协议记录",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 661,
+          "column": 52
+        }
+      ]
+    },
     "71fcb173824e5544": {
       "source": "同步到同 URL 分组",
       "kind": "text",
@@ -9088,7 +9206,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 982,
+          "line": 986,
           "column": 58
         }
       ]
@@ -9196,7 +9314,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 540,
+          "line": 592,
           "column": 77
         }
       ]
@@ -9787,7 +9905,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 257,
+          "line": 260,
           "column": 31
         }
       ]
@@ -10117,7 +10235,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 597,
+          "line": 649,
           "column": 54
         }
       ]
@@ -10332,7 +10450,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 545,
+          "line": 597,
           "column": 14
         }
       ]
@@ -10498,7 +10616,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 617,
+          "line": 696,
           "column": 16
         }
       ]
@@ -10669,7 +10787,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 446,
+          "line": 486,
           "column": 21
         }
       ]
@@ -10705,12 +10823,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 565,
+          "line": 617,
           "column": 15
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 566,
+          "line": 618,
           "column": 15
         }
       ]
@@ -10739,7 +10857,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 471,
+          "line": 511,
           "column": 78
         },
         {
@@ -10797,7 +10915,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 755,
+          "line": 834,
           "column": 105
         }
       ]
@@ -10845,12 +10963,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 333,
+          "line": 369,
           "column": 14
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 494,
+          "line": 540,
           "column": 50
         }
       ]
@@ -10874,7 +10992,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 596,
+          "line": 648,
           "column": 50
         }
       ]
@@ -10898,7 +11016,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 588,
+          "line": 640,
           "column": 16
         }
       ]
@@ -11386,6 +11504,23 @@
         }
       ]
     },
+    "9043e17f4fbe67f4": {
+      "source": "上行",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 672,
+          "column": 194
+        },
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 675,
+          "column": 557
+        }
+      ]
+    },
     "907395551d0f3a93": {
       "source": "{0} 的 OpenAI 端点仅支持 /v1/responses、/v1/chat/completions 或以 / 开头的自定义路径",
       "kind": "template",
@@ -11463,7 +11598,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 424,
+          "line": 464,
           "column": 71
         }
       ]
@@ -12204,7 +12339,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 697,
+          "line": 776,
           "column": 26
         }
       ]
@@ -12363,7 +12498,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 437,
+          "line": 477,
           "column": 12
         }
       ]
@@ -12695,7 +12830,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 952,
+          "line": 956,
           "column": 25
         }
       ]
@@ -12743,8 +12878,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 477,
-          "column": 19
+          "line": 518,
+          "column": 21
         }
       ]
     },
@@ -13082,7 +13217,7 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 319,
+          "line": 355,
           "column": 14
         },
         {
@@ -13121,7 +13256,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 521,
+          "line": 573,
           "column": 14
         }
       ]
@@ -13517,7 +13652,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 755,
+          "line": 834,
           "column": 143
         }
       ]
@@ -13529,12 +13664,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 684,
+          "line": 763,
           "column": 125
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 684,
+          "line": 763,
           "column": 140
         }
       ]
@@ -13901,6 +14036,18 @@
         }
       ]
     },
+    "acd37b4c796c10b9": {
+      "source": "子代理",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 671,
+          "column": 591
+        }
+      ]
+    },
     "ad1cafee0ef40257": {
       "source": "已备份残留文件并重新生成 CA。",
       "kind": "text",
@@ -14031,7 +14178,7 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 504,
+          "line": 550,
           "column": 16
         }
       ]
@@ -14067,7 +14214,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 774,
+          "line": 853,
           "column": 144
         }
       ]
@@ -14137,7 +14284,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 981,
+          "line": 985,
           "column": 49
         }
       ]
@@ -14489,7 +14636,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 545,
+          "line": 597,
           "column": 14
         }
       ]
@@ -14561,7 +14708,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 548,
+          "line": 600,
           "column": 132
         }
       ]
@@ -14669,7 +14816,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 521,
+          "line": 573,
           "column": 14
         },
         {
@@ -14869,7 +15016,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 702,
+          "line": 781,
           "column": 85
         }
       ]
@@ -15585,6 +15732,30 @@
         }
       ]
     },
+    "c5036d8bd2937bae": {
+      "source": "未知协议会话",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 304,
+          "column": 57
+        }
+      ]
+    },
+    "c560201b331c5443": {
+      "source": "事件",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 667,
+          "column": 100
+        }
+      ]
+    },
     "c584bdca21996c00": {
       "source": "状态、能力检查与连接控制。",
       "kind": "text",
@@ -15724,7 +15895,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 305,
+          "line": 341,
           "column": 27
         }
       ]
@@ -15876,7 +16047,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 439,
+          "line": 479,
           "column": 18
         }
       ]
@@ -16156,7 +16327,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1041,
+          "line": 1045,
           "column": 69
         }
       ]
@@ -16720,7 +16891,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 699,
+          "line": 778,
           "column": 85
         },
         {
@@ -16819,6 +16990,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 1184,
           "column": 21
+        }
+      ]
+    },
+    "d5886b656868769b": {
+      "source": "个协议会话",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 522,
+          "column": 122
         }
       ]
     },
@@ -16939,6 +17122,18 @@
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 68,
           "column": 26
+        }
+      ]
+    },
+    "d73e80799634dd7f": {
+      "source": "最后活动",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 667,
+          "column": 280
         }
       ]
     },
@@ -17072,6 +17267,18 @@
         }
       ]
     },
+    "d8e6657ef5866d09": {
+      "source": "已收口",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 673,
+          "column": 187
+        }
+      ]
+    },
     "d94daba316055842": {
       "source": "一周",
       "kind": "text",
@@ -17132,7 +17339,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 756,
+          "line": 835,
           "column": 130
         }
       ]
@@ -17403,13 +17610,18 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 326,
+          "line": 362,
           "column": 14
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 486,
+          "line": 532,
           "column": 50
+        },
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 673,
+          "column": 187
         }
       ]
     },
@@ -17461,12 +17673,12 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 478,
-          "column": 19
+          "line": 519,
+          "column": 21
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 703,
+          "line": 782,
           "column": 85
         }
       ]
@@ -17745,6 +17957,18 @@
         }
       ]
     },
+    "e05233d2e8e0346f": {
+      "source": "本地会话",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 566,
+          "column": 307
+        }
+      ]
+    },
     "e05ddf992cc50896": {
       "source": "保存成功",
       "kind": "text",
@@ -17959,7 +18183,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 262,
+          "line": 265,
           "column": 31
         }
       ]
@@ -18184,7 +18408,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 983,
+          "line": 987,
           "column": 35
         }
       ]
@@ -18497,7 +18721,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 472,
+          "line": 512,
           "column": 60
         }
       ]
@@ -18765,6 +18989,18 @@
         }
       ]
     },
+    "ef386a1d595dbde2": {
+      "source": "使用隔离镜像采集后，脱敏的上下行结构会显示在这里",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 662,
+          "column": 56
+        }
+      ]
+    },
     "ef4344c31174a825": {
       "source": "父请求",
       "kind": "text",
@@ -18982,6 +19218,18 @@
         }
       ]
     },
+    "f22e99cac6ace0f6": {
+      "source": "Cursor 协议",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 567,
+          "column": 316
+        }
+      ]
+    },
     "f26ced314c3315c0": {
       "source": "个任务未显示",
       "kind": "text",
@@ -19016,7 +19264,7 @@
         },
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 762,
+          "line": 841,
           "column": 61
         },
         {
@@ -19052,6 +19300,18 @@
           "file": "src/services/browserBindings.js",
           "line": 813,
           "column": 12
+        }
+      ]
+    },
+    "f30130c4bdc8fe7b": {
+      "source": "仅显示脱敏结构时间线",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 523,
+          "column": 21
         }
       ]
     },
@@ -19144,7 +19404,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 767,
+          "line": 846,
           "column": 142
         }
       ]
@@ -19240,7 +19500,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/HistorySettings.vue",
-          "line": 532,
+          "line": 584,
           "column": 14
         },
         {
@@ -19834,6 +20094,18 @@
         }
       ]
     },
+    "fbff7b5046d951dc": {
+      "source": "解析",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/HistorySettings.vue",
+          "line": 671,
+          "column": 725
+        }
+      ]
+    },
     "fc2db52daaa9955b": {
       "source": "检查中",
       "kind": "text",
@@ -19877,7 +20149,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 975,
+          "line": 979,
           "column": 46
         }
       ]

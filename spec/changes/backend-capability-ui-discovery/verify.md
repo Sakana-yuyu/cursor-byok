@@ -279,3 +279,14 @@
 - 红灯：`go test ./internal/backend/forwarder -run 'TestBuildShellToolCallDeltaMessage' -count=1` 因缺少 `buildShellToolCallDeltaMessage` 失败。
 - 绿灯：实现后同一命令、`go test ./internal/backend/agent/bridge/exec ./internal/backend/forwarder -count=1`、`go vet ./internal/backend/forwarder` 与 `git diff --check` 均退出码 0。
 - 仅暂存 forwarder 的实现/测试和本 Spec 设计、任务、验证台账；`.playwright-cli/`、`frontend/.playwright-cli/` 与 `output/` 保持未跟踪且不纳入提交。
+
+## Round 20 - 安全协议历史视图
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- |
+| V-55 | data-protection | major | fixed(r20) | 历史页若直接读取原始镜像记录，会将正文、原始帧与凭据暴露给常规用户界面。 | 新增 `GetCursorProtocolSessions()` 只读取固定 `protocol.timeline.jsonl`，JSON 解码类型和返回 DTO 均为安全字段白名单。单元测试向时间线注入 `exchangeId`、`body` 与 `token` 字段后，序列化 DTO 不含这些值或字段。 | 协议页只显示匿名请求哈希、方向、事件类型、模式、子代理动作、终态和解析错误；不读取或展示 `official.raw.jsonl`。 |
+| V-56 | correctness | minor | fixed(r20) | 协议时间线缺失、单条畸形 JSONL 与多事件关联必须分别处理，避免把未采集误判为读取失败，或让单条损坏丢失全部历史。 | `TestScanCursorProtocolSessionsIn` 覆盖按 `requestIdHash` 聚合、时间/序号排序、畸形行跳过与上下行统计；缺文件用例返回空数组。`go test ./internal/bridge ./internal/mitm -count=1`、`go vet ./internal/bridge ./internal/mitm`、`go build ./...` 均退出码 0。 | 缺文件由协议页显示“暂无 Cursor 协议记录”；文件打开/扫描错误仍显式返回，页面可重试。 |
+| V-57 | ux-regression | minor | fixed(r20) | 历史页需要同时保留本地会话管理与协议核对，但删除或清理控件不能作用于隔离抓包。 | 新增“本地会话 / Cursor 协议”来源 tab；协议来源仅有刷新和安全事件展开。本地会话原有文件夹、图标/详细信息、选择、删除和调试日志清理仍由同一 E2E 覆盖。`npx playwright test e2e/history-settings-layout.spec.mjs --workers=1`：4/4 通过。 | 通过来源隔离保留既有历史语义，协议页不提供删除、导出或回放入口。 |
+| V-58 | i18n | minor | fixed(r20) | 新增中文可见文案必须同步所有现有 locale，不能依赖中文回退。 | `npm run build` 完成静态扫描；随后校验 `zh-CN`、`en-US`、`ja-JP`、`ru-RU` 的键集、空值和占位符差异均为 0。`npm run lint -- --quiet` 与 `npm run test:unit`（29/29）退出码 0。 | 新增协议视图文案已提供英日俄翻译，构建产物断言通过。 |
+
+本轮仅实现历史 UI 对安全时间线的读取与展示；没有启动、修改或登录已安装 Cursor，没有对官方请求做回放，也没有把临时抓包或生成 bindings 产物加入 Git。真实协议覆盖范围仍以 V-29 至 V-45 为准：后台化、等待、ComputerUse 与部分专属审批 oneof 继续保持未触发验证。

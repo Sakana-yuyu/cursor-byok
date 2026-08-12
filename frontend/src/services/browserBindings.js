@@ -913,6 +913,10 @@ function clearPreviewSessionDebug(session) {
 }
 
 export const GetHistorySessions = () => Promise.resolve(clone(previewHistorySessions));
+const seededPreviewCursorProtocolSessions = Array.isArray(previewTestPlan?.cursorProtocolSessions)
+  ? clone(previewTestPlan.cursorProtocolSessions)
+  : [];
+export const GetCursorProtocolSessions = () => Promise.resolve(clone(seededPreviewCursorProtocolSessions));
 export const DeleteHistorySessions = (sessionIDs) => {
   const ids = new Set(Array.isArray(sessionIDs) ? sessionIDs : []);
   for (let index = previewHistorySessions.length - 1; index >= 0; index -= 1) {

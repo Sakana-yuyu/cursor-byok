@@ -2,7 +2,7 @@
 import Card from "@/components/ui/Card.vue";
 import { useMessage } from "@/composables/useMessage";
 import { showModal } from "@/composables/useModal";
-import { clearHistory, deleteHistoryDebugLogs, deleteHistorySessions, getHistorySessions } from "@/services/runtimeControlApi";
+import { clearHistory, deleteHistoryDebugLogs, deleteHistorySessions, getCursorProtocolSessions, getHistorySessions } from "@/services/runtimeControlApi";
 import { toUserError } from "@/state/appState";
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
@@ -18,6 +18,9 @@ const props = defineProps({
 const message = useMessage();
 const router = useRouter();
 const sessions = ref([]);
+const cursorProtocolSessions = ref([]);
+const historySource = ref("local");
+const expandedProtocolSessions = reactive(new Set());
 const loading = ref(false);
 const error = ref("");
 const selectedIDs = reactive(new Set());
@@ -297,6 +300,39 @@ function formatModifiedTime(unixMs) {
   return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")} ${formatTime(value)}`;
 }
 
+function protocolSessionLabel(session) {
+  return String(session?.requestIdHash || "").trim() || "未知协议会话";
+}
+
+function protocolEventDetails(event) {
+  return [
+    event.clientMessageKind,
+    event.clientDetailKind,
+    event.clientResultKind,
+    event.serverMessageKind,
+    event.serverDetailKind,
+    event.execMessageKind,
+    event.streamContentKind,
+    event.subagentAction,
+    event.decodeError,
+  ].filter(Boolean);
+}
+
+function toggleProtocolSession(requestIDHash) {
+  if (expandedProtocolSessions.has(requestIDHash)) {
+    expandedProtocolSessions.delete(requestIDHash);
+  } else {
+    expandedProtocolSessions.add(requestIDHash);
+  }
+}
+
+function selectHistorySource(source) {
+  const next = source === "protocol" ? "protocol" : "local";
+  if (historySource.value === next) return;
+  historySource.value = next;
+  void refresh();
+}
+
 function sessionType(session) {
   return String(session.subagentType || session.mode || "agent");
 }
@@ -381,12 +417,16 @@ async function refresh() {
   loading.value = true;
   error.value = "";
   try {
-    const loadedSessions = await getHistorySessions();
-    sessions.value = loadedSessions.map((session) => ({
-      ...session,
-      statusPresentation: statusInfo(session),
-    }));
-    syncCollapsedGroups(groupedTree.value);
+    if (historySource.value === "protocol") {
+      cursorProtocolSessions.value = await getCursorProtocolSessions();
+    } else {
+      const loadedSessions = await getHistorySessions();
+      sessions.value = loadedSessions.map((session) => ({
+        ...session,
+        statusPresentation: statusInfo(session),
+      }));
+      syncCollapsedGroups(groupedTree.value);
+    }
   } catch (loadError) {
     error.value = toUserError(loadError);
   } finally {
@@ -473,9 +513,15 @@ onMounted(() => {
             </div>
           </div>
           <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 pl-[42px] text-[11px] text-[#858585]">
-            <span><strong class="font-medium tabular-nums text-[#d4d4d4]">{{ sessions.length }}</strong> 个会话</span>
-            <span>会话历史 <strong class="font-medium tabular-nums text-[#d4d4d4]">{{ formatSize(totalSizeBytes) }}</strong></span>
-            <span>调试日志 <strong class="font-medium tabular-nums text-[#d4d4d4]">{{ formatSize(totalDebugSizeBytes) }}</strong></span>
+            <template v-if="historySource === 'local'">
+              <span><strong class="font-medium tabular-nums text-[#d4d4d4]">{{ sessions.length }}</strong> 个会话</span>
+              <span>会话历史 <strong class="font-medium tabular-nums text-[#d4d4d4]">{{ formatSize(totalSizeBytes) }}</strong></span>
+              <span>调试日志 <strong class="font-medium tabular-nums text-[#d4d4d4]">{{ formatSize(totalDebugSizeBytes) }}</strong></span>
+            </template>
+            <template v-else>
+              <span><strong class="font-medium tabular-nums text-[#d4d4d4]">{{ cursorProtocolSessions.length }}</strong> 个协议会话</span>
+              <span>仅显示脱敏结构时间线</span>
+            </template>
           </div>
         </div>
 
@@ -504,6 +550,7 @@ onMounted(() => {
             {{ loading ? "刷新中" : "刷新" }}
           </button>
           <button
+            v-if="historySource === 'local'"
             type="button"
             class="center-row h-8 gap-1.5 rounded-[7px] border border-red-400/10 bg-transparent px-3 text-xs text-red-300/65 transition-colors hover:border-red-400/20 hover:bg-red-400/[0.06] hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-35"
             :disabled="clearing || sessions.length === 0"
@@ -515,6 +562,11 @@ onMounted(() => {
         </div>
       </header>
 
+      <div class="mt-2.5 flex h-8 shrink-0 items-center gap-1 border-b border-white/[0.07]" role="tablist" aria-label="历史来源">
+        <button type="button" role="tab" :aria-selected="historySource === 'local'" class="h-full border-b-2 px-3 text-xs transition-colors" :class="historySource === 'local' ? 'border-[#10AD5D] text-[#dcefe4]' : 'border-transparent text-[#777] hover:text-[#bdbdbd]'" @click="selectHistorySource('local')">本地会话</button>
+        <button type="button" role="tab" :aria-selected="historySource === 'protocol'" class="h-full border-b-2 px-3 text-xs transition-colors" :class="historySource === 'protocol' ? 'border-[#10AD5D] text-[#dcefe4]' : 'border-transparent text-[#777] hover:text-[#bdbdbd]'" @click="selectHistorySource('protocol')">Cursor 协议</button>
+      </div>
+
       <div v-if="error" class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[8px] border border-red-400/15 bg-red-400/[0.05] px-3 py-2 text-xs text-red-300/90">
         <span class="min-w-0">{{ error }}</span>
         <button type="button" class="font-medium text-red-200 hover:text-white" :disabled="loading" @click="refresh">
@@ -522,7 +574,7 @@ onMounted(() => {
         </button>
       </div>
 
-      <div v-if="sessions.length > 0" class="mt-2.5 flex flex-wrap items-center gap-2 rounded-[7px] border border-white/[0.07] bg-white/[0.025] px-2.5 py-1.5">
+      <div v-if="historySource === 'local' && sessions.length > 0" class="mt-2.5 flex flex-wrap items-center gap-2 rounded-[7px] border border-white/[0.07] bg-white/[0.025] px-2.5 py-1.5">
         <button
           type="button"
           class="center-row h-7 gap-1.5 rounded-[6px] border border-white/[0.09] bg-white/[0.04] px-2.5 text-[11px] text-[#b9b9b9] transition-colors hover:border-[#10AD5D]/30 hover:bg-[#10AD5D]/[0.08] hover:text-white"
@@ -590,11 +642,38 @@ onMounted(() => {
         </div>
       </div>
 
-      <div v-if="!loading && !error && sessions.length === 0" class="grid min-h-0 flex-1 place-items-center py-10 text-center">
+      <div v-if="historySource === 'local' && !loading && !error && sessions.length === 0" class="grid min-h-0 flex-1 place-items-center py-10 text-center">
         <div>
           <span class="icon-[mdi--history] text-[32px] text-[#4a4a4a]" aria-hidden="true" />
           <p class="mt-2 text-sm text-[#858585]">暂无历史记录</p>
           <p class="mt-1 text-[11px] text-[#5f5f5f]">完成对话后，记录会显示在这里</p>
+        </div>
+      </div>
+
+      <div
+        v-else-if="historySource === 'protocol'"
+        data-testid="cursor-protocol-history"
+        class="mt-2.5 min-h-0 flex-1 overflow-auto overscroll-contain rounded-[8px] border border-white/[0.08] bg-[#202124]"
+      >
+        <div v-if="!loading && !error && cursorProtocolSessions.length === 0" class="grid min-h-full place-items-center py-10 text-center">
+          <div>
+            <span class="icon-[mdi--source-branch] text-[32px] text-[#4a4a4a]" aria-hidden="true" />
+            <p class="mt-2 text-sm text-[#858585]">暂无 Cursor 协议记录</p>
+            <p class="mt-1 text-[11px] text-[#5f5f5f]">使用隔离镜像采集后，脱敏的上下行结构会显示在这里</p>
+          </div>
+        </div>
+        <div v-else class="min-w-[720px] text-[11px] text-[#b8b8b8]">
+          <div class="sticky top-0 z-10 grid grid-cols-[minmax(220px,1fr)_80px_80px_100px_108px_72px] border-b border-white/[0.09] bg-[#292a2d] text-[#9a9a9a] shadow-[0_1px_0_rgba(0,0,0,0.35)]">
+            <div class="px-3 py-2">匿名请求哈希</div><div class="border-l border-white/[0.06] px-3 py-2">事件</div><div class="border-l border-white/[0.06] px-3 py-2">方向</div><div class="border-l border-white/[0.06] px-3 py-2">模式</div><div class="border-l border-white/[0.06] px-3 py-2">最后活动</div><div class="border-l border-white/[0.06] px-3 py-2 text-right">终态</div>
+          </div>
+          <div v-for="protocolSession in cursorProtocolSessions" :key="protocolSession.requestIdHash" class="border-b border-white/[0.05]">
+            <div class="grid grid-cols-[minmax(220px,1fr)_80px_80px_100px_108px_72px] items-center hover:bg-white/[0.035]">
+              <div class="min-w-0 px-3 py-2.5"><div class="flex min-w-0 items-center gap-2"><span class="icon-[mdi--source-branch] shrink-0 text-[15px] text-[#75b7e8]" aria-hidden="true" /><span class="truncate font-mono text-xs text-[#e0e0e0]">{{ protocolSessionLabel(protocolSession) }}</span><span v-if="protocolSession.multitask" class="shrink-0 rounded-[4px] border border-sky-300/15 bg-sky-300/[0.07] px-1.5 py-0.5 text-[9px] text-sky-200/80">Multitask</span></div><div class="mt-1 flex flex-wrap gap-x-2 text-[9px] text-[#696969]"><span v-if="protocolSession.subagentActions.length">子代理 {{ protocolSession.subagentActions.join('、') }}</span><span v-if="protocolSession.decodeErrors.length" class="text-orange-200/75">解析 {{ protocolSession.decodeErrors.join('、') }}</span></div></div>
+              <div class="border-l border-white/[0.045] px-3 py-2.5 tabular-nums">{{ protocolSession.eventCount }}</div><div class="border-l border-white/[0.045] px-3 py-2.5 text-[10px]"><span>上行 {{ protocolSession.upstreamCount }}</span><span class="ml-1.5">下行 {{ protocolSession.downstreamCount }}</span></div><div class="border-l border-white/[0.045] px-3 py-2.5 truncate text-[10px] text-[#8d8d8d]">{{ protocolSession.agentMode || '-' }}</div><div class="border-l border-white/[0.045] px-3 py-2.5 tabular-nums text-[10px] text-[#8d8d8d]">{{ formatModifiedTime(protocolSession.lastSeenAtUnixMs) }}</div>
+              <div class="flex items-center justify-end gap-2 border-l border-white/[0.045] px-3 py-2.5"><span :class="protocolSession.terminal ? 'text-[#74d5a1]' : 'text-[#8d8d8d]'">{{ protocolSession.terminal ? '已收口' : '进行中' }}</span><button type="button" class="grid size-6 place-items-center rounded-[4px] text-[#8a8a8a] transition-colors hover:bg-white/[0.08] hover:text-white" :aria-expanded="expandedProtocolSessions.has(protocolSession.requestIdHash)" :aria-label="expandedProtocolSessions.has(protocolSession.requestIdHash) ? '收起协议事件' : '展开协议事件'" @click="toggleProtocolSession(protocolSession.requestIdHash)"><span class="icon-[mdi--chevron-down] text-[15px] transition-transform" :class="expandedProtocolSessions.has(protocolSession.requestIdHash) ? '' : '-rotate-90'" aria-hidden="true" /></button></div>
+            </div>
+            <div v-if="expandedProtocolSessions.has(protocolSession.requestIdHash)" class="border-t border-white/[0.045] bg-black/[0.1] px-3 py-2"><div v-for="event in protocolSession.events" :key="[event.timestampUnixMs, event.sequence, event.eventKind].join('-')" class="grid grid-cols-[78px_64px_160px_minmax(0,1fr)_64px] gap-2 border-b border-white/[0.04] py-1.5 last:border-b-0"><span class="tabular-nums text-[#777]">{{ formatTime(event.timestampUnixMs) }}</span><span :class="event.direction === 'request' ? 'text-sky-200/80' : 'text-[#74d5a1]'">{{ event.direction === 'request' ? '上行' : '下行' }}</span><span class="font-mono text-[#d3d3d3]">{{ event.eventKind }}</span><span class="min-w-0 truncate text-[#777]">{{ protocolEventDetails(event).join(' · ') || '-' }}</span><span class="text-right text-[#777]">{{ event.terminal ? '终态' : '' }}</span></div></div>
+          </div>
         </div>
       </div>
 

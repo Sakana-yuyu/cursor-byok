@@ -189,6 +189,12 @@ func (s *ProxyService) GetHistorySessions() ([]HistorySession, error) {
 	return scanHistorySessions(isActive)
 }
 
+// GetCursorProtocolSessions 返回仅含结构元数据的隔离 Cursor 协议时间线聚合。
+// 它从不读取或返回 official.raw.jsonl 的原始帧、正文或凭据。
+func (s *ProxyService) GetCursorProtocolSessions() ([]CursorProtocolSession, error) {
+	return scanCursorProtocolSessions()
+}
+
 // DeleteHistorySessions removes the given history sessions (UUID ids).
 func (s *ProxyService) DeleteHistorySessions(sessionIDs []string) error {
 	return deleteHistorySessions(sessionIDs)

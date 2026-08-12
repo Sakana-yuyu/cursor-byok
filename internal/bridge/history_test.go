@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"encoding/json"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -200,6 +201,64 @@ func TestNormalizeHistoryStatusMarksInactiveActiveStatesInterrupted(t *testing.T
 	}
 	if got := normalizeHistoryStatus("running", true); got != "running" {
 		t.Fatalf("normalizeHistoryStatus(running, active) = %q, want running", got)
+	}
+}
+
+// TestScanCursorProtocolSessionsIn 只从安全时间线聚合协议结构，忽略畸形行，
+// 且不得让原始抓包可能携带的正文或凭据字段进入对外 DTO。
+func TestScanCursorProtocolSessionsIn(t *testing.T) {
+	root := t.TempDir()
+	timelineDir := filepath.Join(root, "_debug", "mirror")
+	mustMkdirAll(t, timelineDir)
+	timeline := strings.Join([]string{
+		`{"ts":"2026-08-12T09:00:02Z","requestIdHash":"hash-alpha","exchangeId":"private-exchange","direction":"response","sequence":2,"eventKind":"runsse_connect","serverMessageKind":"exec_server_message","streamDeltaBytes":42,"terminal":true,"body":"must-not-leak","token":"must-not-leak"}`,
+		`not-json`,
+		`{"ts":"2026-08-12T09:00:01Z","requestIdHash":"hash-alpha","exchangeId":"private-exchange","direction":"request","sequence":1,"eventKind":"bidi_append","clientMessageKind":"exec_client_message","multitask":true,"subagentAction":"create"}`,
+		`{"ts":"2026-08-12T10:00:00Z","requestIdHash":"hash-bravo","direction":"request","sequence":1,"eventKind":"bidi_append","decodeError":"connect_frame_incomplete"}`,
+		`{"ts":"2026-08-12T10:01:00Z","direction":"response","sequence":2,"eventKind":"runsse_connect"}`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(filepath.Join(timelineDir, cursorProtocolTimelineFileName), []byte(timeline), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	sessions, err := scanCursorProtocolSessionsIn(root)
+	if err != nil {
+		t.Fatalf("scanCursorProtocolSessionsIn: %v", err)
+	}
+	if len(sessions) != 2 {
+		t.Fatalf("session count = %d, want 2", len(sessions))
+	}
+	if sessions[0].RequestIDHash != "hash-bravo" || sessions[0].EventCount != 1 || sessions[0].UpstreamCount != 1 {
+		t.Fatalf("first session = %#v, want newest hash-bravo aggregate", sessions[0])
+	}
+	alpha := sessions[1]
+	if alpha.RequestIDHash != "hash-alpha" || alpha.EventCount != 2 || alpha.UpstreamCount != 1 || alpha.DownstreamCount != 1 {
+		t.Fatalf("alpha aggregate = %#v", alpha)
+	}
+	if !alpha.Multitask || !alpha.Terminal || len(alpha.SubagentActions) != 1 || alpha.SubagentActions[0] != "create" {
+		t.Fatalf("alpha state = %#v", alpha)
+	}
+	if len(alpha.Events) != 2 || alpha.Events[0].Sequence != 1 || alpha.Events[1].Sequence != 2 {
+		t.Fatalf("alpha events = %#v, want timestamp/sequence order", alpha.Events)
+	}
+	encoded, err := json.Marshal(alpha)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{"must-not-leak", "private-exchange", "body", "token"} {
+		if strings.Contains(string(encoded), forbidden) {
+			t.Fatalf("safe DTO leaked %q: %s", forbidden, encoded)
+		}
+	}
+}
+
+func TestScanCursorProtocolSessionsInMissingTimeline(t *testing.T) {
+	sessions, err := scanCursorProtocolSessionsIn(t.TempDir())
+	if err != nil {
+		t.Fatalf("scan missing timeline: %v", err)
+	}
+	if len(sessions) != 0 {
+		t.Fatalf("missing timeline sessions = %#v, want empty", sessions)
 	}
 }
 
