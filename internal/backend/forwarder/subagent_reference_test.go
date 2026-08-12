@@ -57,3 +57,47 @@ func TestSubagentReferenceIdentityStaysBoundToToolCall(t *testing.T) {
 		})
 	}
 }
+
+func TestParallelSubagentReferenceRoutingUsesExactParentToolCall(t *testing.T) {
+	stream := &ActiveStream{
+		PendingExecs: map[string]runtimecore.PendingExec{
+			"exec-first":  {ExecID: "exec-first", ExecKind: "subagent", ToolCallID: "tool-first"},
+			"exec-second": {ExecID: "exec-second", ExecKind: "subagent", ToolCallID: "tool-second"},
+		},
+		DelegationRunProgress: map[string]string{},
+		DelegationRunTerminals: map[string]*agentv1.SubagentRunState{
+			// 第二个任务先完成，标题相同也不能改变 map key 的归属。
+			"tool-second": {
+				ParentToolCallId: "tool-second",
+				SubagentId:       stringPtr(delegationSubagentID("tool-second")),
+				Status:           agentv1.SubagentRunStatus_SUBAGENT_RUN_STATUS_SUCCESS,
+				Title:            stringPtr("相同标题"),
+			},
+			"tool-first": {
+				ParentToolCallId: "tool-first",
+				SubagentId:       stringPtr(delegationSubagentID("tool-first")),
+				Status:           agentv1.SubagentRunStatus_SUBAGENT_RUN_STATUS_ERROR,
+				Title:            stringPtr("相同标题"),
+			},
+		},
+	}
+
+	state := &agentv1.ConversationStateStructure{}
+	attachDelegationRunStates(stream, state)
+	runs := state.GetSubagentRunsByParentToolCallId()
+	if got := runs["tool-first"].GetStatus(); got != agentv1.SubagentRunStatus_SUBAGENT_RUN_STATUS_ERROR {
+		t.Fatalf("tool-first status = %v, want ERROR", got)
+	}
+	if got := runs["tool-second"].GetStatus(); got != agentv1.SubagentRunStatus_SUBAGENT_RUN_STATUS_SUCCESS {
+		t.Fatalf("tool-second status = %v, want SUCCESS", got)
+	}
+	if got := runs["tool-first"].GetSubagentId(); got != delegationSubagentID("tool-first") {
+		t.Fatalf("tool-first subagent_id = %q", got)
+	}
+	if got := runs["tool-second"].GetSubagentId(); got != delegationSubagentID("tool-second") {
+		t.Fatalf("tool-second subagent_id = %q", got)
+	}
+	if _, ok := runs["missing-tool"]; ok {
+		t.Fatal("missing parent tool call unexpectedly routed to another subagent")
+	}
+}
