@@ -523,12 +523,14 @@ func (manager *Manager) LegacyRuntimeSnapshot(_ context.Context) (legacyruntime.
 	adapters := make([]legacyruntime.ModelAdapterConfig, 0, len(cfg.ModelAdapters))
 	for _, item := range cfg.ModelAdapters {
 		adapters = append(adapters, legacyruntime.ModelAdapterConfig{
-			ID:           item.ID,
-			DisplayName:  item.DisplayName,
-			GroupName:    item.GroupName,
-			Type:         item.Type,
-			SupplierID:   item.SupplierID,
-			ProtocolMode: item.ProtocolMode,
+			ID:              item.ID,
+			Source:          item.Source,
+			CredentialScope: item.CredentialScope,
+			DisplayName:     item.DisplayName,
+			GroupName:       item.GroupName,
+			Type:            item.Type,
+			SupplierID:      item.SupplierID,
+			ProtocolMode:    item.ProtocolMode,
 
 			ProtocolGroup:               item.ProtocolGroup,
 			BaseURL:                     item.BaseURL,

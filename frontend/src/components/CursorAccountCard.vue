@@ -141,7 +141,10 @@ onMounted(() => {
             {{ cursorAccountStatus.email || cursorAccountStatus.authId }}
           </div>
           <div class="mt-1 text-sm text-[#a3a3a3]">
-            独立用于插件、Skills 和 MCP；不会改变 Cursor 客户端当前账号
+            独立用于插件、Skills 和 MCP 控制面；不会改变 Cursor 客户端当前账号
+          </div>
+          <div class="mt-1 text-xs leading-5 text-[#8f8f8f]">
+            Agent 内置模型执行通道仍需与真实 Cursor 请求协议完成比对验证，当前不会将账户授权用于第三方 API。
           </div>
           <div v-if="cursorAccountWaiting" class="mt-1 text-sm text-[#d6a84b]">
             请在浏览器完成登录，完成后返回 Cursor 重新打开插件市场

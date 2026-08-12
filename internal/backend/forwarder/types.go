@@ -285,7 +285,7 @@ type ActiveStream struct {
 	// 信号/超时/取消来避免盲等固定时间窗口。
 	ExecCompletionSignals map[string]chan struct{}
 	TerminalCleanupTimer  *time.Timer
-	TerminalCleanupSeq          atomic.Uint64
+	TerminalCleanupSeq    atomic.Uint64
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -382,11 +382,13 @@ type PendingCompaction struct {
 }
 
 type ProviderRequest struct {
-	RequestID           string
-	ConversationID      string
-	RunID               string
-	ModelCallID         string
-	ModelID             string
+	RequestID      string
+	ConversationID string
+	RunID          string
+	ModelCallID    string
+	ModelID        string
+	// ModelSource 是来源隔离域；本地响应缓存必须把它纳入键空间。
+	ModelSource         string
 	ModelName           string
 	Role                string
 	ParentModel         string

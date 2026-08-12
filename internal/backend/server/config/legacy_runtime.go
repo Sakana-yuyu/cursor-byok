@@ -15,11 +15,13 @@ func (store *Store) LegacyRuntimeSnapshot(ctx context.Context) (legacyruntime.Ru
 	adapters := make([]legacyruntime.ModelAdapterConfig, 0, len(cfg.ModelAdapters))
 	for _, item := range cfg.ModelAdapters {
 		adapters = append(adapters, legacyruntime.ModelAdapterConfig{
-			ID:          item.ID,
-			DisplayName: item.DisplayName,
-			Type:        item.Type,
-			SupplierID:  item.SupplierID,
-			BaseURL:     item.BaseURL,
+			ID:              item.ID,
+			Source:          item.Source,
+			CredentialScope: item.CredentialScope,
+			DisplayName:     item.DisplayName,
+			Type:            item.Type,
+			SupplierID:      item.SupplierID,
+			BaseURL:         item.BaseURL,
 
 			APIKey:                      item.APIKey,
 			TooltipData:                 item.TooltipData,

@@ -49,10 +49,14 @@ const (
 type ModelPricing = legacyruntime.ModelPricing
 
 type ModelAdapterConfig struct {
-	ID          string `json:"id,omitempty" yaml:"id,omitempty"`
-	DisplayName string `json:"displayName" yaml:"displayName"`
-	GroupName   string `json:"groupName,omitempty" yaml:"groupName,omitempty"`
-	Type        string `json:"type" yaml:"type"`
+	ID string `json:"id,omitempty" yaml:"id,omitempty"`
+	// Source 区分第三方 API 与 Cursor 账户模型；缺失值兼容为 third_party。
+	Source string `json:"source,omitempty" yaml:"source,omitempty"`
+	// CredentialScope 限制真实凭据的注入边界，避免账户凭据落入第三方 adapter。
+	CredentialScope string `json:"credentialScope,omitempty" yaml:"credentialScope,omitempty"`
+	DisplayName     string `json:"displayName" yaml:"displayName"`
+	GroupName       string `json:"groupName,omitempty" yaml:"groupName,omitempty"`
+	Type            string `json:"type" yaml:"type"`
 	// SupplierID 是品牌供应商标识，仅用于模板、展示和供应商专用能力；协议仍由 Type 决定。
 	SupplierID                  string        `json:"supplierID,omitempty" yaml:"supplierID,omitempty"`
 	ProtocolMode                string        `json:"protocolMode,omitempty" yaml:"protocolMode,omitempty"`
@@ -389,6 +393,69 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 	identityByAdapterID := make(map[string]string, len(input))
 	explicitIDByIdentity := make(map[string]string, len(input))
 	for _, item := range input {
+		source := legacyruntime.NormalizeModelSource(item.Source)
+		if source == "" {
+			return nil, i18n.NewError("error.model_adapter.source_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 source 仅支持 third_party 或 cursor_account")
+		}
+		credentialScope := legacyruntime.NormalizeCredentialScope(source, item.CredentialScope)
+		if credentialScope == "" {
+			return nil, i18n.NewError("error.model_adapter.credential_scope_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 credentialScope 与 source 不匹配")
+		}
+		if source == legacyruntime.ModelSourceCursorAccount {
+			if strings.TrimSpace(item.BaseURL) != "" || strings.TrimSpace(item.APIKey) != "" || item.CustomHeadersEnabled || strings.TrimSpace(item.CustomHeadersJSON) != "" {
+				return nil, i18n.NewError("error.model_adapter.cursor_account_credentials", i18n.CodeInvalidModelAdapter, "Cursor 账户模型不能配置第三方接口地址、API Key 或自定义请求头")
+			}
+			next := ModelAdapterConfig{
+				Source:              source,
+				CredentialScope:     credentialScope,
+				DisplayName:         strings.TrimSpace(item.DisplayName),
+				GroupName:           strings.TrimSpace(item.GroupName),
+				Type:                legacyruntime.ModelSourceCursorAccount,
+				TooltipData:         strings.TrimSpace(item.TooltipData),
+				ModelID:             strings.TrimSpace(item.ModelID),
+				ContextWindowTokens: modelcontext.Resolve(item.ModelID, normalizeMaxCompletionTokens(item.ContextWindowTokens)),
+				MaxCompletionTokens: normalizeMaxCompletionTokens(item.MaxCompletionTokens),
+				Pricing:             item.Pricing,
+			}
+			if next.TooltipData == "" {
+				next.TooltipData = "Cursor 账户模型"
+			}
+			if next.DisplayName == "" || next.ModelID == "" {
+				return nil, i18n.NewError("error.model_adapter.cursor_account_identity", i18n.CodeInvalidModelAdapter, "Cursor 账户模型 displayName 和 modelID 不能为空")
+			}
+			identity := modelAdapterConfigIdentity(next)
+			explicitID := strings.TrimSpace(item.ID)
+			next.ID = explicitID
+			if next.ID == "" {
+				next.ID = identity
+			}
+			if ownerIdentity, exists := identityByAdapterID[next.ID]; exists && ownerIdentity != identity {
+				return nil, i18n.NewError("error.model_adapter.id_duplicate", i18n.CodeInvalidModelAdapter, "模型适配器 id 不能被不同模型配置重复使用")
+			}
+			if existingIndex, exists := channelIndexByIdentity[identity]; exists {
+				if explicitID != "" {
+					existing := normalized[existingIndex]
+					if previousExplicitID := explicitIDByIdentity[identity]; previousExplicitID != "" && previousExplicitID != explicitID {
+						return nil, i18n.NewError("error.model_adapter.id_conflict", i18n.CodeInvalidModelAdapter, "相同模型连接不能配置不同的持久化 id")
+					}
+					if existing.ID != explicitID {
+						delete(identityByAdapterID, existing.ID)
+						existing.ID = explicitID
+						identityByAdapterID[explicitID] = identity
+						explicitIDByIdentity[identity] = explicitID
+						normalized[existingIndex] = existing
+					}
+				}
+				continue
+			}
+			channelIndexByIdentity[identity] = len(normalized)
+			identityByAdapterID[next.ID] = identity
+			if explicitID != "" {
+				explicitIDByIdentity[identity] = explicitID
+			}
+			normalized = append(normalized, next)
+			continue
+		}
 		baseURL, err := modelchannel.NormalizeBaseURL(item.BaseURL)
 		if err != nil {
 			return nil, err
@@ -401,12 +468,14 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			openAIEndpoint = modelchannel.OpenAIEndpointForProtocolGroup(protocolGroup, openAIEndpoint)
 		}
 		next := ModelAdapterConfig{
-			DisplayName:   strings.TrimSpace(item.DisplayName),
-			GroupName:     strings.TrimSpace(item.GroupName),
-			Type:          nextType,
-			SupplierID:    strings.TrimSpace(item.SupplierID),
-			ProtocolMode:  protocolMode,
-			ProtocolGroup: protocolGroup,
+			Source:          source,
+			CredentialScope: credentialScope,
+			DisplayName:     strings.TrimSpace(item.DisplayName),
+			GroupName:       strings.TrimSpace(item.GroupName),
+			Type:            nextType,
+			SupplierID:      strings.TrimSpace(item.SupplierID),
+			ProtocolMode:    protocolMode,
+			ProtocolGroup:   protocolGroup,
 
 			BaseURL:                   baseURL,
 			APIKey:                    strings.TrimSpace(item.APIKey),
@@ -554,7 +623,8 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 }
 
 func modelAdapterConfigIdentity(adapter ModelAdapterConfig) string {
-	channelID := modelchannel.BuildChannelID(
+	channelID := modelchannel.BuildSourcedChannelID(
+		adapter.Source,
 		adapter.BaseURL,
 		adapter.ModelID,
 		adapter.APIKey,

@@ -133,6 +133,18 @@ func BuildChannelID(baseURL string, modelID string, apiKey string, name string, 
 	})
 }
 
+// BuildSourcedChannelID 把模型来源纳入稳定渠道身份，避免同名模型在不同凭据域共享
+// 健康状态、轮询游标或响应缓存身份。
+func BuildSourcedChannelID(source string, baseURL string, modelID string, apiKey string, name string, openAIEndpoint string) string {
+	return buildChannelID([]string{
+		strings.TrimSpace(source),
+		strings.TrimSpace(baseURL),
+		strings.TrimSpace(modelID),
+		strings.TrimSpace(apiKey),
+		strings.TrimSpace(openAIEndpoint),
+	})
+}
+
 func buildChannelID(parts []string) string {
 	payload := strings.Join(parts, "\n")
 	hashBytes := sha256.Sum256([]byte(payload))

@@ -83,19 +83,29 @@ type localResponseCacheSettingsProvider interface {
 	LocalResponseCacheSettings() (enabled bool, ttl time.Duration, maxEntries int, persist bool)
 }
 
+type modelSourceCacheResolver interface {
+	ModelSourceForModel(context.Context, string) string
+}
+
 // cachingProviderGateway 是包装底层 ProviderGateway 的响应缓存网关。
 type cachingProviderGateway struct {
-	inner    ProviderGateway
-	settings func() (enabled bool, ttl time.Duration, maxEntries int, persist bool)
-	store    *responseCacheStore
-	keyCache *cacheKeyCache // 缓存 key 哈希计算结果
+	inner       ProviderGateway
+	settings    func() (enabled bool, ttl time.Duration, maxEntries int, persist bool)
+	modelSource func(context.Context, string) string
+	store       *responseCacheStore
+	keyCache    *cacheKeyCache // 缓存 key 哈希计算结果
 }
 
 // newCachingProviderGateway 构造响应缓存网关。persistPath 为空时不做磁盘持久化。
-func newCachingProviderGateway(inner ProviderGateway, settings func() (bool, time.Duration, int, bool), persistPath string) *cachingProviderGateway {
+func newCachingProviderGateway(inner ProviderGateway, settings func() (bool, time.Duration, int, bool), persistPath string, modelSources ...func(context.Context, string) string) *cachingProviderGateway {
+	var modelSource func(context.Context, string) string
+	if len(modelSources) > 0 {
+		modelSource = modelSources[0]
+	}
 	return &cachingProviderGateway{
-		inner:    inner,
-		settings: settings,
+		inner:       inner,
+		settings:    settings,
+		modelSource: modelSource,
 		store: newResponseCacheStore(persistPath, func() time.Duration {
 			_, ttl, _, _ := settings()
 			return ttl
@@ -112,6 +122,14 @@ func (gateway *cachingProviderGateway) StartStream(ctx context.Context, req Prov
 	if !enabled {
 		// 禁用路径：与今日完全一致，不做哈希、不录制、不产生额外延迟。
 		return gateway.inner.StartStream(ctx, req, sink)
+	}
+	if strings.TrimSpace(req.ModelSource) == "" {
+		req.ModelSource = "third_party"
+		if gateway.modelSource != nil {
+			if resolved := strings.TrimSpace(gateway.modelSource(ctx, req.ModelID)); resolved != "" {
+				req.ModelSource = resolved
+			}
+		}
 	}
 
 	key := gateway.keyCache.get(req)
@@ -412,6 +430,7 @@ func (store *responseCacheStore) flushToDisk() {
 type providerCacheKeyShape struct {
 	ConversationID     string                   `json:"conversation_id"`
 	ModelID            string                   `json:"model_id"`
+	ModelSource        string                   `json:"model_source"`
 	Mode               int32                    `json:"mode"`
 	ThinkingEffort     string                   `json:"thinking_effort"`
 	Messages           []normalizedCacheMessage `json:"messages"`
@@ -495,6 +514,7 @@ func providerCacheKey(req ProviderRequest) string {
 	shape := providerCacheKeyShape{
 		ConversationID:     strings.TrimSpace(req.ConversationID),
 		ModelID:            req.ModelID,
+		ModelSource:        strings.TrimSpace(req.ModelSource),
 		Mode:               int32(req.Mode),
 		ThinkingEffort:     req.ThinkingEffort,
 		Messages:           normalizeMessagesForCacheKey(req.Messages),

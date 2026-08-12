@@ -61,7 +61,11 @@ func NewProviderGateway(resolver modeladapter.ChannelResolver) ProviderGateway {
 		if _, _, _, persist := settingsProvider.LocalResponseCacheSettings(); !persist {
 			persistPath = ""
 		}
-		return newCachingProviderGateway(base, settingsProvider.LocalResponseCacheSettings, persistPath)
+		var modelSource func(context.Context, string) string
+		if sourceResolver, ok := resolver.(modelSourceCacheResolver); ok {
+			modelSource = sourceResolver.ModelSourceForModel
+		}
+		return newCachingProviderGateway(base, settingsProvider.LocalResponseCacheSettings, persistPath, modelSource)
 	}
 	return base
 }
@@ -95,6 +99,7 @@ func (gateway *DefaultProviderGateway) StartStream(ctx context.Context, req Prov
 		ConversationID:            req.ConversationID,
 		Mode:                      req.Mode,
 		ModelID:                   req.ModelID,
+		ModelSource:               req.ModelSource,
 		ModelName:                 req.ModelName,
 		Role:                      req.Role,
 		ParentModel:               req.ParentModel,
