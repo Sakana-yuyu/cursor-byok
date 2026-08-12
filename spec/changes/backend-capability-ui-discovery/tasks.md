@@ -59,7 +59,7 @@
   - [x] 9.4 已运行 `go test ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e`、`go build ./cmd/isolated-cursor-e2e`、`go vet ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e` 与 `git diff --check`；未新增测试文件。
 
 - [~] 10. 当前隔离实例的真实矩阵验收
-  - [~] 10.1 保持当前隔离实例运行；已真实验证单子代理取消、错误结果、父级 `Stop All`、Shell 审批和 MCP 审批/结果。后台化与等待专属分支仍未触发：`force_background_subagent_*`、`subagent_await_*` 保持未验证。
+  - [~] 10.1 保持当前隔离实例运行；已真实验证单子代理取消、错误结果、父级 `Stop All`、Shell 审批和 MCP 审批/结果。后续真实操作继续捕获 3 次子代理创建、2 次成功回传、1 次错误回传、MCP/Shell 调用、流式状态与终态；后台化、等待、ComputerUse 和新的审批预检专属分支仍未触发：`force_background_subagent_*`、`subagent_await_*`、`computer_use_*`、`*_allowlist_precheck_*` 保持未验证。
   - [x] 10.2 只读检查 `protocol.timeline.jsonl`：已确认 `subagent_args/result`、`clientResultKind=success`、`interaction_query/response`、`step_completed`、`turn_ended` 和 `stream_close`；交互闭环按相同 `requestIdHash` 关联。
   - [x] 10.3 对已触发事件核对 `runsse_connect`、`bidi_append` 方向、requestIdHash 关联、终态与 `decodeError`；最近约 11,498 条时间线记录的正文、原始帧、凭据、路径、token 和完整 request ID 字段扫描均为 0。
   - [x] 10.4 已将汇总计数、实际 oneof 类型、取消/停止、审批和 IDE 内 Playwright MCP 证据、未触发分支和隐私检查写入 `verify.md` 与本任务清单；临时 JSONL 未提交，文档改动单独提交。

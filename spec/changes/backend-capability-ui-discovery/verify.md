@@ -226,3 +226,18 @@
 | V-39 | runtime-evidence | minor | fixed(r15) | Cursor 对 `cursor-ide-browser` 的工具流程自述与已捕获的非内容工具矩阵一致。 | 已捕获 provider=`cursor-ide-browser`，以及 `browser_tabs`、`browser_lock`、`browser_navigate`、`browser_snapshot`、`browser_click`、`browser_cdp`；无 `computer_use_args/result`。 | 后续对接以直接 MCP 浏览器调用建模，不误标为 OS 鼠标操作或 ComputerUse 协议。 |
 | V-40 | evidence-boundary | minor | open | 具体前台 `viewId`、snapshot ref、点击目标、CDP 脚本、截图和解锁调用仅来自客户端自述，未由当前安全索引独立证实。 | 时间线不保存 MCP args、URL、DOM、页面文本、脚本、tool call ID 或结果正文；保真帧未向文档输出这些内容。 | 保留为客户端自述；若未来确需验证，新增仅保存不可逆标签页关联与工具种类的索引，不保存页面或认证数据。 |
 | V-41 | data-protection | major | fixed(r15) | 客户端自述提及登录态写入，不能成为自动复制或落盘凭据的实现依据。 | 当前研究与时间线均未保存 token 值、认证请求体、存储键或 URL；原始数据仍局限于临时隔离目录。 | 对接界面仅呈现需确认的认证状态变更，不实现或记录自动凭据注入。 |
+
+## Round 16 - 后续调度、流式与终态覆盖
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- |
+| V-42 | runtime-evidence | minor | fixed(r16) | 用户执行三组后续操作后，当前索引继续覆盖子代理创建/结果、MCP、Shell、流式状态和终态收口。 | 以 `2026-08-12 15:45:22 +08:00` 为起点的只读窗口有 `subagent_args=3`、`subagent_result.success=2`、`subagent_result.error=1`、`mcp_args=23`、`mcp_result=10`、`mcp_state_exec_args=4`、`shell_stream_args=4`、`shell_stream=11`；下行有 `thinking_delta=1122`、`text_delta=3064`、`tool_call_started/completed=305/290`、`step_completed/turn_ended=9/9` 和 `terminal=8`。 | 对接层可继续以已捕获的状态机驱动子代理、工具、Shell 与流式 UI；这只是协议采集/解析证据，不等同于产品对接完成。 |
+| V-43 | coverage | minor | open | 本轮仍未触发后台化、等待、ComputerUse 或新的审批预检专属协议。 | `force_background_subagent_args/result`、`subagent_await_args/result`、`computer_use_args/result`、`mcp_allowlist_precheck_args/result` 和 `shell_allowlist_precheck_args/result` 均为 `0`；`subagentAction` 仅为 `create=3`。 | 判定为 Cursor 调度器未选择这些 oneof，而非当前统计遗漏。待真实 UI/工具环境自然发出对应操作后，再标记为运行时已验证。 |
+| V-44 | parser-resilience | minor | open | 本轮下行出现至少一条不完整 Connect 帧，但解析器将其显式标记而未静默丢弃。 | 时间线记录 `connect_frame_incomplete`，同时后续仍有流式、步骤完成、回合结束和 terminal 结构事件。 | 保留稳定错误标签并继续透传；在出现可重复的完整业务终态缺失证据前，不将单条截断记录判为协议解析失败。 |
+| V-45 | data-protection | major | fixed(r16) | 后续统计未扩大安全时间线的数据范围。 | 时间线字段名扫描中 `body`、`bodyBase64`、`frameBase64`、`prompt`、`output`、`cookie`、`authorization`、`path`、`url`、`token`、`accessToken`、`refreshToken`、`requestId` 和 `args` 均为 `0`。 | 本轮只写入事件类型、计数、终态和错误标签；原始抓包继续留在临时隔离目录，未暂存或提交。 |
+
+本轮证据：
+
+- 隔离时间线在核验时已持续写入至 `2026-08-12 16:10:54`；统计使用实际 `ts` 字段，而非不存在的 `timestamp` 字段。
+- 本会话未读取或输出请求/响应正文、MCP 或 Shell 参数、页面内容、完整 ID、Cookie、认证头或凭据。
+- 这轮没有代码改动；本提交仅记录经只读抓包核验的覆盖范围和未触发分支。
