@@ -84,6 +84,13 @@
 - 当前时间线安全索引不保存 agent ID、tool call ID、任务标题、prompt、工具参数、结果正文、Cookie、Authorization、URL、完整 request ID 或原始帧 Base64；原始保真 JSONL 只留在临时隔离目录。因此目前可以对接协议状态和流式阶段，但不能仅凭索引将 5 个子代理事件逐一映射到截图中的 4 个 UI 标题。后续实现需增加进程内父任务/子任务关联表，落盘时只使用不可逆短哈希或稳定匿名序号。
 - `force_background_subagent_*`、`subagent_await_*`、取消/错误收口和父级 `Stop All` 的真实协议格式本次仍未确认；不能据此宣称已完整还原 Multitask 的后台化、等待、取消或全量停止能力。
 
+### 本轮后续实测补充：取消、审批与 IDE 内 Playwright（2026-08-12）
+- 单子代理取消已真实出现为客户端上行 `conversation_action.cancel_subagent_action`，并由索引标记 `subagentAction=cancel`；父级 `Stop All` 在同一秒出现 4 条独立的 `conversation_action.cancel_action`，随后可观察到执行流 `stream_close` 与父级 `step_completed`、`turn_ended`、terminal 收口。`cancel_action` 表示取消当前会话/任务流，不能仅按单一 requestIdHash 推断其对应的具体 UI 标题。
+- 截图中的 `Allow / Stop` 是子任务工具级审批，不等同于父级 `Stop All`。Shell 审批闭环为服务端 `shell_allowlist_precheck_args` 到客户端 `shell_allowlist_precheck_result`；索引只保存 oneof、方向和关联哈希，不保存命令、审批选择或结果正文，因此需在用户实际点击后通过后续工具结果判断执行是否继续。
+- 用户在 IDE 内使用 Playwright 进行浏览器操作时，真实流走的是 MCP 工具链，而非 `computer_use`：服务端 `mcp_allowlist_precheck_args -> mcp_args`，客户端 `mcp_allowlist_precheck_result -> mcp_result`，并出现一次 `mcp_state_exec_args`。同一会话也会出现 Shell allowlist 和 `shell_stream`，用于 Playwright 配套的本地执行环境；两种审批必须在界面上分别呈现。
+- 本次窗口确认 `mcp_allowlist_precheck_args/result` 10 组、`mcp_args` 10 条、`mcp_result` 9 条、`mcp_state_exec_args` 1 条，以及 `shell_allowlist_precheck_args/result` 10 组、`shell_stream_args` 9 条。安全索引不保存 MCP 服务名、浏览器页面、URL、页面内容、操作参数或结果正文，所以可确认“IDE 内 Playwright 经 MCP 调用”，不能从索引单独断言某一次具体点击/导航。
+- 真实浏览器对接界面应将 MCP 审批、Shell 审批、MCP 执行中、Shell 流输出、MCP 结果、流关闭和任务收口拆分显示；避免把批准 MCP 调用错误显示为批准终端命令。`force_background_subagent_*` 与 `subagent_await_*` 仍未触发，保持未验证。
+
 ## Open [TBD]
 
 ## Decided

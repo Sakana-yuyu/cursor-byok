@@ -190,3 +190,18 @@
 | V-32 | data-protection | major | fixed(r12) | 本次结构化索引未暴露敏感数据或正文。 | 对最近约 `11,498` 条时间线记录扫描，`body`、`bodyBase64`、`frameBase64`、`prompt`、`output`、`cookie`、`authorization`、`path`、`url`、`token`、`accessToken`、`refreshToken`、`requestId` 均为 0；`decodeError=0`。 | 原始 JSONL 继续只留在临时隔离目录，不进入 Git、研究文档或前端状态。 |
 
 本轮对接结论：已可作为 Cursor Multitask 的协议状态采集基础，覆盖并行任务创建、流式思考/文本/工具调用、交互询问/响应、子代理成功回传、步骤完成和流关闭；尚不足以宣称完成逐子任务归属、后台化/等待、取消/错误及 `Stop All` 的完整还原。
+
+## Round 13 - 取消、工具审批与 IDE 内 Playwright
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- | --- |
+| V-31 | coverage | minor | fixed(r13) | 单子代理取消和父级 `Stop All` 的真实上行格式及基本收口已确认。 | 单子代理操作产生 `conversation_action.cancel_subagent_action` 和 `subagentAction=cancel`；父级停止时同一秒出现 4 条独立 `conversation_action.cancel_action`，随后有 `stream_close`、`step_completed`、`turn_ended` 和 terminal。 | 前端区分单任务取消与父级全量停止；逐任务 UI 归属仍需匿名关联模型，不能按 requestIdHash 代替。 |
+| V-33 | runtime-evidence | minor | fixed(r13) | IDE 内 Playwright 浏览器操作通过 MCP 工具链执行，不是 `computer_use`。 | 真实窗口有 `mcp_allowlist_precheck_args/result=10/10`、`mcp_args=10`、`mcp_result=9`、`mcp_state_exec_args=1`；同时有 Shell 审批 `shell_allowlist_precheck_args/result=10/10` 与 `shell_stream_args=9`。 | 以 MCP 审批、MCP 调用/结果和 Shell 审批/流输出作为独立 UI 状态；不把 MCP 批准误标为终端批准。 |
+| V-34 | data-protection | major | fixed(r13) | Playwright 会话的结构索引继续不暴露浏览器或 MCP 敏感内容。 | 仅记录 oneof、方向、长度/哈希和匿名 requestIdHash；不保存 MCP 服务名、浏览器页面、URL、页面内容、操作参数、结果正文或凭据。 | 原始保真数据继续局限于临时隔离目录；后续如需任务卡片归属，只增加不可逆匿名关联键。 |
+| V-35 | coverage | minor | open | 子代理后台化和等待结果的专属工具分支尚未由真实 Cursor 调度器触发。 | 多轮真实长任务、父级等待和并行审查均未出现 `force_background_subagent_*` 或 `subagent_await_*`；出现的 `background_shell_spawn_*` 属于后台终端而非后台子代理。 | 保持当前解析支持但不得标为运行时已验证；待客户端实际下发相应 Exec 工具后复核。 |
+
+本轮证据：
+
+- IDE 内 Playwright 操作的 MCP 证据来自 `2026-08-12 14:55:41` 后的隔离时间线；相关请求可在安全索引中按匿名哈希关联，未读取或写入网页/命令正文。
+- 截图中 `Allow / Stop` 的 Shell 审批已确认一组 `shell_allowlist_precheck_args -> shell_allowlist_precheck_result` 闭环；该闭环本身不携带用户最终选择的业务内容。
+- 本轮文档前的最新 Playwright 窗口未出现解码错误；临时 JSONL 未暂存、未提交，也未暴露到前端。
