@@ -32,6 +32,33 @@
 - 本机实际安装 Cursor 的 bundle 同时包含 `https://api2.cursor.sh`、`https://api3.cursor.sh` 和 `https://api4.cursor.sh`；`isWhitelistedRelayHost` 已将所有 `*.cursor.sh` 纳入 MITM 解密，但隔离镜像配置仅记录显式 hosts | 若不把 `api4.cursor.sh` 加入临时镜像 hosts，经过 MITM 的该 relay 流量不会写入隔离 JSONL，导致后续对接所需协议采集不完整。
 - 用户启用 Multitask 后，隔离 JSONL 出现多条互相重叠的 `RunSSE` 长连接及大量 `BidiAppend` 上行，均使用 `application/connect+proto` 或 `application/proto`；现有记录器却把原始 bytes 直接转换为字符串写入 JSON | 非 UTF-8 protobuf 字节会在 JSON 编码时替换，底层 `Read()` 的 chunk 也不等于 Connect/SSE 消息边界。现有 `BidiAppendRequest`、`AgentClientMessage` 和 `AGENT_MODE_MULTITASK` 的 protobuf 定义及解码器均已存在，但无法可靠消费已损坏的镜像载荷。
 - `BidiAppendRequest` 同时承载外层 `request_id`、`append_seqno` 与内层 `data_binary` Agent 消息；Multitask 的模式、子代理创建/后台化/完成/取消等状态分布在该内层消息和 `RunSSE` 的服务端消息中 | 仅记录 URL、状态和底层分块数量无法还原父子任务关系、事件顺序或可回放格式。
+- 当前真实隔离镜像已捕获 `BidiAppend` 上行与 `RunSSE` 下行原始字节：上行可提取 `exec_client_message`、`exec_client_control_message`、`kv_client_message`、心跳等客户端 oneof；下行响应头为 `text/event-stream`，但帧载荷满足 Connect 的 5 字节帧头格式 | `newMirrorRunSSEFrameDecoder` 仅依据响应头选择 SSE 解码，因而把可重组的 Connect 二进制帧记为 `runsse_sse` 与 `sse_server_message_unavailable`，原始 Base64 帧仍保真且未丢失。
+- `AgentServerMessage` 的顶层 oneof 已定义 `interaction_update`、`exec_server_message`、`exec_server_control_message`、`conversation_checkpoint_update`、`kv_server_message` 与 `interaction_query`；`ExecServerMessage` 又定义工具和子代理 oneof，包括 `subagent_args`、`force_background_subagent_args`、`subagent_await_args` | 仅记录顶层服务端 oneof 无法判定 Multitask 的创建、后台化与等待关系，需在不展开正文的前提下建立二层结构索引。
+
+## Bidirectional Protocol Indexing Design
+
+### Goal and boundary
+- 仅在 `CURSOR_E2E_MIRROR_CAPTURE=1` 的隔离镜像模式中，将真实 Cursor 上下行协议记录为“原始字节保真层 + 安全结构索引层”；普通镜像模式、前端正文边界、已安装 Cursor、真实用户配置和官方请求转发均保持不变。
+- `official.raw.jsonl` 保留现有的 Base64、长度和 SHA-256 原始载荷/帧记录，确保离线按字节复核请求格式和响应帧；`protocol.timeline.jsonl` 只保存关联、方向、顺序、协议类型、结构类型、长度、哈希、终态和可解释的解码错误。
+- 索引层不得写入 prompt、代码、工具参数、工作区路径、模型输出、思考文本、token、Cookie、认证头、完整 request ID 或完整 protobuf JSON；流式内容最多记录类别、增量字节数、增量 SHA-256 和完成状态。
+
+### Upstream indexing
+- 对 `BidiAppendRequest` 保留 `requestIdHash` 与 `appendSeqno`，并记录 `data` 或 `dataBinary` 的来源、字节长度和 SHA-256；继续用仓库既有 protobuf 解码器读取内嵌 `AgentClientMessage`。
+- 将客户端顶层 oneof 写入 `clientMessageKind`；对 `run_request`、`exec_client_message`、`exec_client_control_message`、`kv_client_message`、conversation action 与 interaction 类消息，增加只包含 oneof 名称的细分字段。
+- `agentMode`、`multitask` 和已有子代理动作摘要继续保留；对创建、后台化、完成、取消与等待等客户端可判定动作使用固定安全枚举，不展开子代理名称、提示词或参数。
+- 解码失败、压缩不支持或原始载荷截断时仍写入原始保真记录，并在索引层写入稳定错误码；绝不阻塞官方直通。
+
+### Downstream detection and indexing
+- 对 `application/connect+proto` 响应直接按 Connect 重组；对 `text/event-stream` 响应先缓冲至少 5 个字节，再以合法 flags、受上限约束的 Big Endian 长度和完整帧可用性判断是否为 Connect。判定成功后回放缓冲区并持续按 Connect 重组；判定失败才按文本 SSE 的空行边界解析。
+- Connect 解析记录帧序号、flags、压缩标识、原始帧长度、SHA-256、终态和解码错误；`flags & 0x02 != 0` 统一表示 `connect_end_stream`。普通 SSE 继续只提供边界与终态摘要，不假装为 protobuf。
+- 对可解码的 `AgentServerMessage`，记录顶层 `serverMessageKind`；当其为 `exec_server_message` 时，再通过 protobuf reflection 记录 `ExecServerMessage` 的实际 oneof 作为 `execMessageKind`。
+- `subagent_args`、`force_background_subagent_args` 和 `subagent_await_args` 作为显式子代理事件摘要，便于重建 Multitask 的创建、后台化和等待时序；`interaction_update` 的流式文本或思考仅记录其类型、字节摘要和完成状态。
+
+### Compatibility, verification and rollback
+- 记录结构只新增可选字段，旧 JSONL 仍保持可读；真实响应 tee 仅观察字节副本，解码器的任何失败都不能修改 Cursor 接收到的响应。
+- 实现后先运行现有定向 Go 测试、构建、vet 与 `git diff --check`；项目约束为“不写任何测试”，因此不新增测试文件。
+- 用户明确授权后才启动新的隔离 Cursor 实例进行真实 E2E：验收 `runsse_connect`、服务端顶层/Exec 内层类型、Multitask 子代理摘要、原始帧 Base64 可回放，以及时间线不含受限正文或凭据。
+- 回退对应实现提交即可恢复当前按响应头选择的行为；临时隔离记录目录可整体删除，不影响真实 Cursor 登录库、配置、证书库或已安装客户端。
 
 ## Open [TBD]
 
@@ -55,3 +82,4 @@
 - [DEC-17] 隔离镜像验收模式额外记录 `api2.cursor.sh`、`api3.cursor.sh` 与 `api4.cursor.sh`，并仅以本次临时 CA 的 SPKI 指纹启动临时 Cursor | decided from runtime evidence: 当前隔离 Cursor 在正确写入临时 `http.proxy` 后仍因 Chromium 不信任临时 CA 报 `ERR_CERT_AUTHORITY_INVALID`；仅捕获三类直连模型域名也无法采集 Cursor 官方 relay 协议。实际安装的客户端 bundle 还引用 `api4.cursor.sh`，而未列入镜像 hosts 的 relay 流量不会落盘。SPKI 白名单比全局 `--ignore-certificate-errors` 更窄，且环境变量未启用时不改变现有隔离或普通运行模式。
 - [DEC-18] 为隔离 E2E 的显式镜像模式增加协议保真记录与 Multitask 摘要 | source: 用户选择 A，目标是采集所有调用格式以还原 Cursor 功能；仅在 `CURSOR_E2E_MIRROR_CAPTURE=1` 时保存带编码声明、长度和摘要的原始协议字节，复用仓库 protobuf 定义解析 `BidiAppend` 与 Agent 流。凭据型 URL 参数、认证头和 Cookie 继续脱敏，普通镜像模式和前端正文边界不变 | reversibility: 回退本阶段提交即可移除隔离记录中的保真字段和摘要；临时记录目录可整体删除，不影响真实 Cursor 配置、系统证书库或已安装客户端。
 - [DEC-19] 隔离 E2E 的显式镜像模式启动时，只读导入真实 Cursor 的最小登录态 | source: 用户选择 A 并确认设计，目标是每次新建临时隔离实例时免除重复登录。启动器必须在替换进程 `APPDATA` 前定位真实 `%APPDATA%\Cursor\User\globalStorage\state.vscdb`，仅以 SQLite 只读方式读取 `cursorAuth/accessToken`、`cursorAuth/refreshToken` 和 `cursorAuth/cachedEmail`，然后在本次临时根目录创建只含这三项的最小状态库。不得复制约 1.15 GB 的真实状态库、Cookie、缓存、扩展、工作区、历史或其他 `globalStorage` 项；不得复用会修改 Statsig 开关的模拟账号注入函数；不得写回真实库或向日志、JSONL、Git、终端输出 token、邮箱或完整凭据。真实库忙锁、缺项或读取失败时继续启动并降级为手动登录，只输出不含敏感数据的状态摘要 | verification: 运行既有相关 Go 测试、构建、`go vet` 与 `git diff --check`；在用户授权启动新隔离 Cursor 后，确认无需重新登录，同时核对真实状态库未被修改 | reversibility: 回退该导入实现提交即可恢复每次手动登录；临时凭据仅留在该次隔离根目录，可随目录整体删除。
+- [DEC-20] 隔离镜像的上下行采用“原始字节保真 + 全部已知协议结构化索引” | source: 用户确认 A 并批准设计；`official.raw.jsonl` 保存上下行 Base64、长度和 SHA-256，`protocol.timeline.jsonl` 保存 Bidi/RunSSE 的方向、顺序、顶层与 Exec 内层 oneof、Multitask 子代理事件、终态和解码错误。对 `text/event-stream` 先探测合法 Connect 帧再降级 SSE，以修复真实 Cursor 下行协议被错误分类的问题；不重复存储 prompt、模型输出、token、Cookie、完整 ID 或 protobuf JSON | verification: 定向 Go 检查后，经用户授权启动新的隔离实例，确认出现 `runsse_connect`、服务端结构类型与子代理摘要，且原始帧仍可按 Base64 复核 | reversibility: 回退后续解析实现提交即可恢复当前行为；已产生的隔离临时记录可整体删除，不影响真实 Cursor 或官方直通。
