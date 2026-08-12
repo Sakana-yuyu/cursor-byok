@@ -81,6 +81,7 @@ type mirrorProtocol struct {
 	ClientPayloadSHA256 string `json:"clientPayloadSHA256,omitempty"`
 	ClientMessageKind   string `json:"clientMessageKind,omitempty"`
 	ClientDetailKind    string `json:"clientDetailKind,omitempty"`
+	ClientResultKind    string `json:"clientResultKind,omitempty"`
 	AgentMode           string `json:"agentMode,omitempty"`
 	Multitask           bool   `json:"multitask,omitempty"`
 	SubagentAction      string `json:"subagentAction,omitempty"`
@@ -122,6 +123,7 @@ type mirrorTimelineRecord struct {
 	ClientPayloadSHA256 string    `json:"clientPayloadSHA256,omitempty"`
 	ClientMessageKind   string    `json:"clientMessageKind,omitempty"`
 	ClientDetailKind    string    `json:"clientDetailKind,omitempty"`
+	ClientResultKind    string    `json:"clientResultKind,omitempty"`
 	AgentMode           string    `json:"agentMode,omitempty"`
 	Multitask           bool      `json:"multitask,omitempty"`
 	SubagentAction      string    `json:"subagentAction,omitempty"`
@@ -421,6 +423,7 @@ func (r *mirrorRecorder) setBidiProtocolSummary(rec *mirrorRecord, req *http.Req
 	mirrorSetClientPayloadSummary(summary, appendRequest.GetData(), appendRequest.GetDataBinary())
 	summary.ClientMessageKind = clientMessageKind
 	summary.ClientDetailKind = mirrorClientMessageDetailKind(clientMessage)
+	summary.ClientResultKind = mirrorClientMessageResultKind(clientMessage)
 	summary.AgentMode = mirrorAgentMode(clientMessage)
 	summary.Multitask = summary.AgentMode == agentv1.AgentMode_AGENT_MODE_MULTITASK.String()
 	summary.SubagentAction = mirrorSubagentAction(clientMessage)
@@ -565,6 +568,37 @@ func mirrorClientMessageDetailKind(message *agentv1.AgentClientMessage) string {
 		return mirrorActiveOneofName(message.GetInteractionResponse())
 	default:
 		return ""
+	}
+}
+
+func mirrorClientMessageResultKind(message *agentv1.AgentClientMessage) string {
+	if message == nil || message.GetExecClientMessage() == nil {
+		return ""
+	}
+	execMessage := message.GetExecClientMessage()
+	switch {
+	case execMessage.GetSubagentResult() != nil:
+		return mirrorActiveOneofName(execMessage.GetSubagentResult())
+	case execMessage.GetSubagentAwaitResult() != nil:
+		return mirrorActiveOneofName(execMessage.GetSubagentAwaitResult())
+	case execMessage.GetForceBackgroundSubagentResult() != nil:
+		return mirrorForceBackgroundSubagentResultKind(execMessage.GetForceBackgroundSubagentResult())
+	default:
+		return ""
+	}
+}
+
+func mirrorForceBackgroundSubagentResultKind(result *agentv1.ForceBackgroundSubagentResult) string {
+	if result == nil {
+		return ""
+	}
+	switch result.GetStatus() {
+	case agentv1.ForceBackgroundSubagentStatus_FORCE_BACKGROUND_SUBAGENT_STATUS_ACCEPTED:
+		return "accepted"
+	case agentv1.ForceBackgroundSubagentStatus_FORCE_BACKGROUND_SUBAGENT_STATUS_NOT_FOUND:
+		return "not_found"
+	default:
+		return "unspecified"
 	}
 }
 
@@ -897,6 +931,7 @@ func (r *mirrorRecorder) recordExchangeRequestTimeline(exchange *mirrorExchange,
 		ClientPayloadSHA256: summary.ClientPayloadSHA256,
 		ClientMessageKind:   summary.ClientMessageKind,
 		ClientDetailKind:    summary.ClientDetailKind,
+		ClientResultKind:    summary.ClientResultKind,
 		AgentMode:           summary.AgentMode,
 		Multitask:           summary.Multitask,
 		SubagentAction:      summary.SubagentAction,

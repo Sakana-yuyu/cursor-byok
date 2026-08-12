@@ -52,11 +52,11 @@
 > 目标：补齐子代理结果状态的安全二层索引，并以现有隔离实例真实验证 Multitask 生命周期与用户交互协议。
 > 约束：不新增测试文件、不读取或落盘正文/参数/路径/完整 ID/凭据；不关闭或重启任何既有 Cursor 实例；仅暂存本计划明确列出的文件。
 
-- [ ] 9. 子代理结果的安全二层索引
-  - [ ] 9.1 在 `internal/mitm/mirror.go` 的 `mirrorProtocol` 和 `mirrorTimelineRecord` 增加可选 `clientResultKind`，仅由 `exec_client_message` 的 `subagent_result`、`force_background_subagent_result`、`subagent_await_result` 填写。
-  - [ ] 9.2 新增只读 helper：`SubagentResult.result` 映射 `success/error`；`SubagentAwaitResult.result` 映射 `complete/still_running/not_found/error`；`ForceBackgroundSubagentResult.status` 映射 `accepted/not_found/unspecified`。helper 不读取 agent ID、tool call ID、错误文本、转录路径、最终消息或状态数字。
-  - [ ] 9.3 保持 `interaction_query.query` 到 `serverDetailKind` 与 `interaction_response.result` 到 `clientDetailKind` 的现有通用 reflection 路径；不增加重复字段。nil、未知分支或 protobuf 解码失败保持空结果字段或既有错误码，且不影响代理直通。
-  - [ ] 9.4 运行 `go test ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e`、`go build ./cmd/isolated-cursor-e2e`、`go vet ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e` 与 `git diff --check`；确认未新增测试文件后提交 `feat(mitm): index multitask result states`。
+- [x] 9. 子代理结果的安全二层索引
+  - [x] 9.1 在 `internal/mitm/mirror.go` 的 `mirrorProtocol` 和 `mirrorTimelineRecord` 增加可选 `clientResultKind`，仅由 `exec_client_message` 的 `subagent_result`、`force_background_subagent_result`、`subagent_await_result` 填写。
+  - [x] 9.2 新增只读 helper：`SubagentResult.result` 映射 `success/error`；`SubagentAwaitResult.result` 映射 `complete/still_running/not_found/error`；`ForceBackgroundSubagentResult.status` 映射 `accepted/not_found/unspecified`。helper 不读取 agent ID、tool call ID、错误文本、转录路径、最终消息或状态数字。
+  - [x] 9.3 保持 `interaction_query.query` 到 `serverDetailKind` 与 `interaction_response.result` 到 `clientDetailKind` 的现有通用 reflection 路径；不增加重复字段。nil、未知分支或 protobuf 解码失败保持空结果字段或既有错误码，且不影响代理直通。
+  - [x] 9.4 已运行 `go test ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e`、`go build ./cmd/isolated-cursor-e2e`、`go vet ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e` 与 `git diff --check`；未新增测试文件。
 
 - [ ] 10. 当前隔离实例的真实矩阵验收
   - [ ] 10.1 保持当前隔离实例运行；用户依次尝试一个可后台化的长子任务、等待该任务结果的后续操作、取消或错误收口，以及一次会要求选择/确认的操作。用户界面未出现某项动作时跳过并记录未触发。
