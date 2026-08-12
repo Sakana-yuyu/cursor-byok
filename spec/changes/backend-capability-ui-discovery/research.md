@@ -60,6 +60,22 @@
 - 用户明确授权后才启动新的隔离 Cursor 实例进行真实 E2E：验收 `runsse_connect`、服务端顶层/Exec 内层类型、Multitask 子代理摘要、原始帧 Base64 可回放，以及时间线不含受限正文或凭据。
 - 回退对应实现提交即可恢复当前按响应头选择的行为；临时隔离记录目录可整体删除，不影响真实 Cursor 登录库、配置、证书库或已安装客户端。
 
+## Multitask Result and Interaction Coverage Design
+
+### Confirmed status and scope
+- 当前索引已通过通用 protobuf reflection 记录 `interaction_query` 的 `query` oneof 到服务端 `serverDetailKind`，并记录 `interaction_response` 的 `result` oneof 到客户端 `clientDetailKind`；本轮不重复新增同义字段，而是以真实交互确认这些字段可被触发和按 requestIdHash 关联。
+- 当前客户端 `exec_client_message` 只能记录外层 oneof，例如 `subagent_result`、`force_background_subagent_result`、`subagent_await_result`；无法区分子代理成功/错误、后台化接受/未找到，或等待完成/仍在运行/未找到/错误。该二层结果是本轮唯一代码索引缺口。
+
+### Safe result indexing
+- 为 `mirrorProtocol` 与 `mirrorTimelineRecord` 新增可选 `clientResultKind`；仅当客户端顶层为 `exec_client_message`，且其实际 result 为 `subagent_result`、`force_background_subagent_result` 或 `subagent_await_result` 时填写。其他工具 result 继续只写当前 `clientDetailKind`，避免把范围扩大为所有工具结果的递归展开。
+- `subagent_result` 使用其 `result` oneof，写入 `success` 或 `error`；`subagent_await_result` 使用其 `result` oneof，写入 `complete`、`still_running`、`not_found` 或 `error`；`force_background_subagent_result` 不读取业务字段，仅把枚举映射为 `accepted`、`not_found` 或 `unspecified`。
+- 不记录 agent ID、tool call ID、transcript path、final message、error text、status 原始数字或任何子代理参数。nil/未知结果保留空字段，绝不影响上游转发。
+
+### Minimal real-operation matrix
+- Multitask：用户在现有隔离实例中分别执行一个可后台化的长子任务、一次等待该子任务结果的后续操作，以及一次取消或错误收口；采集时只核对 `force_background_subagent_args/result`、`subagent_await_args/result`、`subagent_result` 与相同 requestIdHash 的相邻事件，不读取任务内容。
+- Interaction：用户让 Cursor 在执行前主动询问一个选择或确认，并实际选择一次；必要时触发模式切换或反馈。采集时只核对 `interaction_query`/`interaction_response` 的二层 oneof、方向、顺序和 requestIdHash 关联，不读取问题、选项或回答。
+- 每个矩阵格只有在对应 oneof 真实出现且无异常解码错误时才标为验证；模型未选择该协议路径、用户界面未给出对应动作或会话提前结束均保持“未触发验证”，不视为解析失败。
+
 ## Open [TBD]
 
 ## Decided
