@@ -2,9 +2,11 @@ package mitm
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"io"
@@ -31,10 +33,11 @@ type MirrorCaptureConfig interface {
 }
 
 const (
-	mirrorLogSubdir        = "_debug/mirror"
-	mirrorLogFilename      = "official.raw.jsonl"
-	mirrorBodyMaxBytes     = 128 * 1024
-	mirrorResponseMaxBytes = 1024 * 1024
+	mirrorLogSubdir            = "_debug/mirror"
+	mirrorLogFilename          = "official.raw.jsonl"
+	mirrorBodyMaxBytes         = 128 * 1024
+	mirrorResponseMaxBytes     = 1024 * 1024
+	mirrorConnectFrameMaxBytes = mirrorResponseMaxBytes
 )
 
 // mirrorSensitiveHeaders 记录时一律抹掉的敏感头。
@@ -48,22 +51,23 @@ var mirrorSensitiveHeaders = map[string]bool{
 
 // mirrorRecord 是 official.raw.jsonl 的一行。
 type mirrorRecord struct {
-	TS           time.Time         `json:"ts"`
-	ExchangeID   string            `json:"exchangeId,omitempty"`
-	Phase        mirrorPhase       `json:"phase"`
-	Host         string            `json:"host"`
-	Model        string            `json:"model,omitempty"`
-	Method       string            `json:"method,omitempty"`
-	URL          string            `json:"url,omitempty"`
-	Status       int               `json:"status,omitempty"`
-	Headers      map[string]string `json:"headers,omitempty"`
-	Body         string            `json:"body,omitempty"`
-	BodyEncoding string            `json:"bodyEncoding,omitempty"`
-	BodyBytes    *int              `json:"bodyBytes,omitempty"`
-	BodySHA256   string            `json:"bodySHA256,omitempty"`
-	BodyBase64   *string           `json:"bodyBase64,omitempty"`
-	Protocol     *mirrorProtocol   `json:"protocol,omitempty"`
-	Truncated    bool              `json:"truncated,omitempty"`
+	TS            time.Time            `json:"ts"`
+	ExchangeID    string               `json:"exchangeId,omitempty"`
+	Phase         mirrorPhase          `json:"phase"`
+	Host          string               `json:"host"`
+	Model         string               `json:"model,omitempty"`
+	Method        string               `json:"method,omitempty"`
+	URL           string               `json:"url,omitempty"`
+	Status        int                  `json:"status,omitempty"`
+	Headers       map[string]string    `json:"headers,omitempty"`
+	Body          string               `json:"body,omitempty"`
+	BodyEncoding  string               `json:"bodyEncoding,omitempty"`
+	BodyBytes     *int                 `json:"bodyBytes,omitempty"`
+	BodySHA256    string               `json:"bodySHA256,omitempty"`
+	BodyBase64    *string              `json:"bodyBase64,omitempty"`
+	Protocol      *mirrorProtocol      `json:"protocol,omitempty"`
+	ProtocolFrame *mirrorProtocolFrame `json:"protocolFrame,omitempty"`
+	Truncated     bool                 `json:"truncated,omitempty"`
 }
 
 // mirrorProtocol 是隔离保真记录中的协议结构摘要，不保存请求正文或稳定标识原文。
@@ -74,6 +78,20 @@ type mirrorProtocol struct {
 	AgentMode         string `json:"agentMode,omitempty"`
 	Multitask         bool   `json:"multitask,omitempty"`
 	SubagentAction    string `json:"subagentAction,omitempty"`
+	DecodeError       string `json:"decodeError,omitempty"`
+}
+
+// mirrorProtocolFrame 是隔离 RunSSE 流中的一个完整协议帧。
+// frameBase64 保留线上字节，摘要只保存结构字段而不展开服务端消息内容。
+type mirrorProtocolFrame struct {
+	Direction         string `json:"direction"`
+	Sequence          int    `json:"sequence"`
+	FrameEncoding     string `json:"frameEncoding"`
+	FrameBytes        int    `json:"frameBytes"`
+	FrameSHA256       string `json:"frameSHA256"`
+	FrameBase64       string `json:"frameBase64"`
+	ConnectFlags      *uint8 `json:"connectFlags,omitempty"`
+	ServerMessageKind string `json:"serverMessageKind,omitempty"`
 	DecodeError       string `json:"decodeError,omitempty"`
 }
 
@@ -257,6 +275,22 @@ func (r *mirrorRecorder) recordExchangeResponseChunk(host string, exchange *mirr
 	r.write(rec)
 }
 
+// recordExchangeResponseProtocolFrame 将完整的 RunSSE 协议帧作为独立事件写入。
+// 底层读取块绝不作为协议事件记录，避免网络缓冲行为污染后续协议对照。
+func (r *mirrorRecorder) recordExchangeResponseProtocolFrame(host string, exchange *mirrorExchange, frame mirrorProtocolFrame) {
+	if r == nil || !r.protocolFidelity || frame.FrameBytes == 0 {
+		return
+	}
+	r.write(mirrorRecord{
+		TS:            time.Now(),
+		ExchangeID:    mirrorExchangeID(exchange),
+		Phase:         mirrorPhaseResponseChunk,
+		Host:          host,
+		Model:         mirrorExchangeModel(exchange),
+		ProtocolFrame: &frame,
+	})
+}
+
 // setRecordBody 仅在隔离保真模式中使用 Base64，避免 protobuf 非 UTF-8 字节经 JSON 字符串替换。
 func (r *mirrorRecorder) setRecordBody(rec *mirrorRecord, body []byte) {
 	if rec == nil {
@@ -354,6 +388,188 @@ func mirrorConversationSubagentAction(action *agentv1.ConversationAction) string
 	default:
 		return ""
 	}
+}
+
+// mirrorRunSSEFrameDecoder 在 tee 的记录副本上按协议边界重组 RunSSE 响应。
+// 它只观察字节，不会修改转发给 Cursor 的响应流。
+type mirrorRunSSEFrameDecoder struct {
+	encoding string
+	codec    string
+	buffer   []byte
+	sequence int
+	emit     func(mirrorProtocolFrame)
+	closed   bool
+}
+
+func newMirrorRunSSEFrameDecoder(resp *http.Response, emit func(mirrorProtocolFrame)) *mirrorRunSSEFrameDecoder {
+	if !isRunSSEResponse(resp) || emit == nil {
+		return nil
+	}
+	contentType := strings.ToLower(strings.TrimSpace(strings.Split(resp.Header.Get("Content-Type"), ";")[0]))
+	encoding := ""
+	switch contentType {
+	case "application/connect+proto":
+		encoding = "connect"
+	case "text/event-stream":
+		encoding = "sse"
+	default:
+		return nil
+	}
+	return &mirrorRunSSEFrameDecoder{
+		encoding: encoding,
+		codec:    strings.TrimSpace(resp.Header.Get("Connect-Content-Encoding")),
+		emit:     emit,
+	}
+}
+
+func isRunSSEResponse(resp *http.Response) bool {
+	return resp != nil && resp.Request != nil && resp.Request.URL != nil && resp.Request.URL.Path == "/agent.v1.AgentService/RunSSE"
+}
+
+func (d *mirrorRunSSEFrameDecoder) Write(chunk []byte) {
+	if d == nil || d.closed || len(chunk) == 0 {
+		return
+	}
+	d.buffer = append(d.buffer, chunk...)
+	if d.encoding == "connect" {
+		d.writeConnectFrames()
+		return
+	}
+	d.writeSSEFrames()
+}
+
+func (d *mirrorRunSSEFrameDecoder) writeConnectFrames() {
+	for len(d.buffer) >= 5 {
+		flags := d.buffer[0]
+		payloadLength := int(binary.BigEndian.Uint32(d.buffer[1:5]))
+		if payloadLength > mirrorConnectFrameMaxBytes {
+			d.emitFrame(append([]byte(nil), d.buffer[:5]...), &flags, "connect_frame_length_invalid", "")
+			d.buffer = nil
+			return
+		}
+		frameLength := 5 + payloadLength
+		if len(d.buffer) < frameLength {
+			return
+		}
+		frame := append([]byte(nil), d.buffer[:frameLength]...)
+		d.buffer = d.buffer[frameLength:]
+		kind, decodeError := d.decodeConnectServerMessage(flags, frame[5:])
+		d.emitFrame(frame, &flags, decodeError, kind)
+	}
+}
+
+func (d *mirrorRunSSEFrameDecoder) writeSSEFrames() {
+	for {
+		boundary := mirrorSSEFrameBoundary(d.buffer)
+		if boundary == 0 {
+			return
+		}
+		frame := append([]byte(nil), d.buffer[:boundary]...)
+		d.buffer = d.buffer[boundary:]
+		d.emitFrame(frame, nil, "sse_server_message_unavailable", "")
+	}
+}
+
+func mirrorSSEFrameBoundary(buffer []byte) int {
+	lfBoundary := bytes.Index(buffer, []byte("\n\n"))
+	crlfBoundary := bytes.Index(buffer, []byte("\r\n\r\n"))
+	if lfBoundary < 0 && crlfBoundary < 0 {
+		return 0
+	}
+	if lfBoundary < 0 {
+		return crlfBoundary + 4
+	}
+	if crlfBoundary < 0 || lfBoundary < crlfBoundary {
+		return lfBoundary + 2
+	}
+	return crlfBoundary + 4
+}
+
+func (d *mirrorRunSSEFrameDecoder) decodeConnectServerMessage(flags uint8, payload []byte) (string, string) {
+	decoded := payload
+	if flags&0x01 != 0 {
+		var err error
+		decoded, err = mirrorDecompressConnectPayload(payload, d.codec)
+		if err != nil {
+			return "", err.Error()
+		}
+	}
+	if flags&0x02 != 0 {
+		return "connect_end_stream", ""
+	}
+	message := &agentv1.AgentServerMessage{}
+	if err := proto.Unmarshal(decoded, message); err != nil {
+		return "", "agent_server_unmarshal_failed"
+	}
+	return mirrorActiveOneofName(message), ""
+}
+
+func mirrorDecompressConnectPayload(payload []byte, codec string) ([]byte, error) {
+	if codec != "" && !strings.EqualFold(codec, "gzip") {
+		return nil, mirrorProtocolDecodeError("connect_compression_unsupported")
+	}
+	reader, err := gzip.NewReader(bytes.NewReader(payload))
+	if err != nil {
+		return nil, mirrorProtocolDecodeError("connect_gzip_unmarshal_failed")
+	}
+	defer reader.Close()
+	decoded, err := io.ReadAll(io.LimitReader(reader, mirrorConnectFrameMaxBytes+1))
+	if err != nil || len(decoded) > mirrorConnectFrameMaxBytes {
+		return nil, mirrorProtocolDecodeError("connect_gzip_unmarshal_failed")
+	}
+	return decoded, nil
+}
+
+type mirrorProtocolDecodeError string
+
+func (e mirrorProtocolDecodeError) Error() string { return string(e) }
+
+func mirrorActiveOneofName(message proto.Message) string {
+	if message == nil {
+		return ""
+	}
+	oneofs := message.ProtoReflect().Descriptor().Oneofs()
+	for index := 0; index < oneofs.Len(); index++ {
+		if field := message.ProtoReflect().WhichOneof(oneofs.Get(index)); field != nil {
+			return string(field.Name())
+		}
+	}
+	return ""
+}
+
+func (d *mirrorRunSSEFrameDecoder) emitFrame(frame []byte, flags *uint8, decodeError, serverMessageKind string) {
+	if d == nil || len(frame) == 0 || d.emit == nil {
+		return
+	}
+	sum := sha256.Sum256(frame)
+	d.emit(mirrorProtocolFrame{
+		Direction:         "response",
+		Sequence:          d.sequence,
+		FrameEncoding:     d.encoding,
+		FrameBytes:        len(frame),
+		FrameSHA256:       hex.EncodeToString(sum[:]),
+		FrameBase64:       base64.StdEncoding.EncodeToString(frame),
+		ConnectFlags:      flags,
+		ServerMessageKind: serverMessageKind,
+		DecodeError:       decodeError,
+	})
+	d.sequence++
+}
+
+func (d *mirrorRunSSEFrameDecoder) Close() {
+	if d == nil || d.closed {
+		return
+	}
+	d.closed = true
+	if len(d.buffer) == 0 {
+		return
+	}
+	decodeError := "sse_frame_incomplete"
+	if d.encoding == "connect" {
+		decodeError = "connect_frame_incomplete"
+	}
+	d.emitFrame(append([]byte(nil), d.buffer...), nil, decodeError, "")
+	d.buffer = nil
 }
 
 func mirrorExchangeID(exchange *mirrorExchange) string {

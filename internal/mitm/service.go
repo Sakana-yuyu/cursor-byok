@@ -938,24 +938,35 @@ func (s *ProxyServer) wrapMirrorExchangeResponse(host string, exchange *mirrorEx
 	if resp.Body == nil {
 		return nil
 	}
-	return &mirrorTeeReadCloser{r: resp.Body, rec: s.mirrorRec, host: host, exchange: exchange}
+	tee := &mirrorTeeReadCloser{r: resp.Body, rec: s.mirrorRec, host: host, exchange: exchange}
+	if s.mirrorRec.protocolFidelity {
+		tee.frameDecoder = newMirrorRunSSEFrameDecoder(resp, func(frame mirrorProtocolFrame) {
+			s.mirrorRec.recordExchangeResponseProtocolFrame(host, exchange, frame)
+		})
+	}
+	return tee
 }
 
 // mirrorTeeReadCloser 读取时逐 chunk 记录；累计记录字节数超过 mirrorResponseMaxBytes
 // 后停止记录（数据仍正常透传给客户端），并写一条 truncated 收尾标记。
 type mirrorTeeReadCloser struct {
-	r         io.ReadCloser
-	rec       *mirrorRecorder
-	host      string
-	exchange  *mirrorExchange
-	recorded  int
-	truncated bool
+	r            io.ReadCloser
+	rec          *mirrorRecorder
+	host         string
+	exchange     *mirrorExchange
+	recorded     int
+	truncated    bool
+	frameDecoder *mirrorRunSSEFrameDecoder
+	finished     bool
 }
 
 func (m *mirrorTeeReadCloser) Read(p []byte) (int, error) {
 	n, err := m.r.Read(p)
 	if n > 0 {
 		m.recordChunk(p[:n])
+	}
+	if err == io.EOF {
+		m.finish()
 	}
 	return n, err
 }
@@ -971,11 +982,28 @@ func (m *mirrorTeeReadCloser) recordChunk(chunk []byte) {
 		m.truncated = true
 		return
 	}
-	m.rec.recordExchangeResponseChunk(m.host, m.exchange, chunk)
+	if m.frameDecoder != nil {
+		m.frameDecoder.Write(chunk)
+	} else {
+		m.rec.recordExchangeResponseChunk(m.host, m.exchange, chunk)
+	}
 	m.recorded += len(chunk)
 }
 
-func (m *mirrorTeeReadCloser) Close() error { return m.r.Close() }
+func (m *mirrorTeeReadCloser) finish() {
+	if m == nil || m.finished {
+		return
+	}
+	m.finished = true
+	if m.frameDecoder != nil {
+		m.frameDecoder.Close()
+	}
+}
+
+func (m *mirrorTeeReadCloser) Close() error {
+	m.finish()
+	return m.r.Close()
+}
 
 func newMirrorExchange(ctx *goproxy.ProxyCtx) *mirrorExchange {
 	if ctx == nil {
