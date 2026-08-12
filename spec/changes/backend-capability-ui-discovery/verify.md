@@ -114,3 +114,21 @@
 - 逐项回溯 `internal/bridge/proxy.go`、`internal/client/license.go`、`internal/client/cursor.go`、`internal/client/lifecycle.go`、`internal/bridge/window.go` 与 `internal/app/runner.go`，确认未引用项的固定失败、配置副作用和内部调用者。
 - 使用 PowerShell 从 `frontend/src/services/{clientApi,runtimeControlApi}.js` 提取导出并扫描非 services 消费者：100 个导出，97 个有消费者；余下 3 个均有明确的内部/间接复用理由。
 - 本轮仅更新 Spec 研究与验证台账，不新增测试文件、不修改业务代码、不启动 Cursor、不改真实用户配置或发起官方 API 请求。
+
+## Round 8 - isolated relay capture runtime evidence
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- | --- |
+| V-16 | runtime-evidence | minor | fixed(r8) | 隔离镜像 recorder 是否能接收真实 Cursor 官方 relay 流量此前没有运行时证据。 | 以 `CURSOR_E2E_MIRROR_CAPTURE=1` 启动新的隔离实例后，临时根目录的 `history/_debug/mirror/official.raw.jsonl` 非空。结构化逐行解析得到 72 条记录，全部属于 `api2.cursor.sh` 或 `api3.cursor.sh`；18 个交换同时包含 `request` 与 `response_start`，29 条为 `response_chunk`，且每条均带 `exchangeId`。 | 已证明临时 CA 信任参数、relay hosts 与镜像 recorder 在真实 Cursor 网络栈中联通；记录内容未读取、未输出、未提交。 |
+| V-20 | security-boundary | major | fixed(r8) | 仅临时实例应信任本次 CA，不能使用全局 TLS 忽略或改动真实 Cursor/系统证书库。 | 临时 Cursor 的 network utility 进程命令行包含 `--ignore-certificate-errors-spki-list=<本次临时 CA 的 SPKI 哈希>`，未使用 `--ignore-certificate-errors`；用户数据目录位于本次 `isolated_root`。临时 Cursor 日志内 `ERR_CERT_AUTHORITY_INVALID` 计数为 0。 | SPKI 白名单仅随隔离子进程传递；真实用户配置、Windows 证书库与已安装 Cursor 均未修改。 |
+| V-21 | data-protection | major | fixed(r8) | 真实 relay 抓包不能把凭据型 URL 查询参数以明文带入证据或文档。 | 对临时 JSONL 仅做结构化解析与参数值检查：`key`、`api_key`、`token`、`secret`、`signature`、密码等敏感查询参数的未脱敏值计数为 0。未读取或打印请求/响应正文、认证头、Cookie、token 或完整 URL。 | 验证台账仅保留计数、host、phase 与关联结论；原始 JSONL 继续只留在临时目录。 |
+| V-22 | runtime-evidence | minor | open | 目前捕获的是 Cursor 启动期的官方 relay 流量，尚未由用户在隔离 Cursor 完成登录后主动发起模型或 Agent 请求。 | 本轮启动后未替用户登录、未代表用户提交模型提示词，也未读取业务请求正文；因此不能将 relay 通信等同于完整业务请求验收。 | 保持当前隔离 Cursor 运行。用户在该临时窗口自行登录并发起一次模型或 Agent 请求后，应再次只做 JSONL 结构化核验，确认相应 exchange 的 `request`、`response_start` 与可选流式片段。 |
+
+本轮证据：
+
+- `go test ./cmd/isolated-cursor-e2e ./internal/mitm -count=1`：退出码 0。
+- `go vet ./cmd/isolated-cursor-e2e ./internal/mitm`：退出码 0。
+- `go build ./cmd/isolated-cursor-e2e`：退出码 0。
+- 代码提交 `c43caf3` 仅修改隔离启动器；`git diff --check`、暂存后 `git diff --cached --check` 均退出码 0。
+- 本轮仍未新增测试文件，遵循 `IMPROVEMENT_TASKS.md`。
+- 临时 Cursor 保持运行，用于用户控制的登录后业务请求验证；停止时必须按已记录 launcher PID 的后代树精确结束，不能按 `Cursor.exe` 进程名批量结束。
