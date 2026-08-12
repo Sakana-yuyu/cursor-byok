@@ -30,9 +30,10 @@
 - 隔离镜像验收实际启动后，临时 Cursor 的 `network-shared.log` 对 `https://api2.cursor.sh/extensions-control` 报 `net::ERR_CERT_AUTHORITY_INVALID`；启动器已写入临时 `http.proxy` 和 `NODE_EXTRA_CA_CERTS`，但 Cursor 的 Chromium 网络栈并不以 Node 环境变量信任该 CA | 未信任临时 CA 时，Cursor 官方 relay 不能稳定经 MITM，且默认镜像 hosts 只包含 OpenAI、Anthropic、Gemini，不足以捕获 Cursor 官方协议。
 - Chromium 支持 `--ignore-certificate-errors-spki-list=<base64 SHA-256 SPKI>`，可只信任本次临时 CA 的公钥而不是全局忽略 TLS 错误；临时镜像配置可显式将 `api2.cursor.sh`、`api3.cursor.sh` 加入 hosts，复用现有 `isWhitelistedRelayHost` 的已知官方 relay 范围 | 此参数和 hosts 仅在 `CURSOR_E2E_MIRROR_CAPTURE=1` 的临时 Cursor 子进程生效，不写入系统证书库、真实 Cursor 设置或默认镜像配置；它使后续对接采集覆盖 Cursor relay 与原有三类官方模型 API。
 - 本机实际安装 Cursor 的 bundle 同时包含 `https://api2.cursor.sh`、`https://api3.cursor.sh` 和 `https://api4.cursor.sh`；`isWhitelistedRelayHost` 已将所有 `*.cursor.sh` 纳入 MITM 解密，但隔离镜像配置仅记录显式 hosts | 若不把 `api4.cursor.sh` 加入临时镜像 hosts，经过 MITM 的该 relay 流量不会写入隔离 JSONL，导致后续对接所需协议采集不完整。
+- 用户启用 Multitask 后，隔离 JSONL 出现多条互相重叠的 `RunSSE` 长连接及大量 `BidiAppend` 上行，均使用 `application/connect+proto` 或 `application/proto`；现有记录器却把原始 bytes 直接转换为字符串写入 JSON | 非 UTF-8 protobuf 字节会在 JSON 编码时替换，底层 `Read()` 的 chunk 也不等于 Connect/SSE 消息边界。现有 `BidiAppendRequest`、`AgentClientMessage` 和 `AGENT_MODE_MULTITASK` 的 protobuf 定义及解码器均已存在，但无法可靠消费已损坏的镜像载荷。
+- `BidiAppendRequest` 同时承载外层 `request_id`、`append_seqno` 与内层 `data_binary` Agent 消息；Multitask 的模式、子代理创建/后台化/完成/取消等状态分布在该内层消息和 `RunSSE` 的服务端消息中 | 仅记录 URL、状态和底层分块数量无法还原父子任务关系、事件顺序或可回放格式。
 
 ## Open [TBD]
-- (无开放决策。)
 
 ## Decided
 - [DEC-1] 不进行外部行业调研 | decided from status quo: 本变更只涉及当前 Vue/Wails 前端对本仓库既有服务能力的发现、分层和交互入口，不引入新依赖或外部平台规则。
@@ -52,3 +53,4 @@
 - [DEC-15] 为隔离 E2E 启动器增加默认关闭、仅由 `CURSOR_E2E_MIRROR_CAPTURE=1` 显式启用的官方上游镜像模式 | source: 用户确认“进入下一步”并要求后续抓包完成 Cursor 对接；默认模式继续传入空 `historyRoot` 与 `nil` 镜像配置，维持仅验证代理链路的旧行为。启用后将记录写入临时根目录的 `history/_debug/mirror/official.raw.jsonl`，强制隔离配置为 `routing.mode=upstream` 与 `mirrorCapture.enabled=true`，并跳过本地伪账号注入，让用户自行在隔离 Cursor 中登录和发起官方请求 | reversibility: 取消环境变量或回退该启动器提交即可恢复原隔离代理模式；记录文件与 Cursor 配置均留在临时根目录，不修改真实用户目录。
 - [DEC-16] 不为本轮差异审计中未引用的 18 个 binding 新增前端入口 | decided from status quo: 12 个 ProxyService 方法为已移除/不支持接口、生命周期协调、内部标识，或会裸改 Cursor/系统配置；6 个 WindowService 方法用于原生运行时装配。服务包装层 100 个导出已有 97 个被 UI/状态层消费，余下 3 个分别为内部执行器、被总配置读取覆盖的委派子树读取和由布局包装函数间接复用的浮窗更新；不存在低风险且面向用户的真实缺口。
 - [DEC-17] 隔离镜像验收模式额外记录 `api2.cursor.sh`、`api3.cursor.sh` 与 `api4.cursor.sh`，并仅以本次临时 CA 的 SPKI 指纹启动临时 Cursor | decided from runtime evidence: 当前隔离 Cursor 在正确写入临时 `http.proxy` 后仍因 Chromium 不信任临时 CA 报 `ERR_CERT_AUTHORITY_INVALID`；仅捕获三类直连模型域名也无法采集 Cursor 官方 relay 协议。实际安装的客户端 bundle 还引用 `api4.cursor.sh`，而未列入镜像 hosts 的 relay 流量不会落盘。SPKI 白名单比全局 `--ignore-certificate-errors` 更窄，且环境变量未启用时不改变现有隔离或普通运行模式。
+- [DEC-18] 为隔离 E2E 的显式镜像模式增加协议保真记录与 Multitask 摘要 | source: 用户选择 A，目标是采集所有调用格式以还原 Cursor 功能；仅在 `CURSOR_E2E_MIRROR_CAPTURE=1` 时保存带编码声明、长度和摘要的原始协议字节，复用仓库 protobuf 定义解析 `BidiAppend` 与 Agent 流。凭据型 URL 参数、认证头和 Cookie 继续脱敏，普通镜像模式和前端正文边界不变 | reversibility: 回退本阶段提交即可移除隔离记录中的保真字段和摘要；临时记录目录可整体删除，不影响真实 Cursor 配置、系统证书库或已安装客户端。

@@ -49,12 +49,29 @@ flowchart LR
   - Output: 页面使用“官方上游”与“本地服务”描述业务去向，并单独显示是否仍经本地 MITM；镜像状态只在本地代理实际运行且已写入 Cursor 设置时宣称可捕获。
   - Invariants: 不以 `routing.mode === upstream` 推断 Cursor 已绕过本地代理；不得因更正界面文案而改变用户已启动服务时的镜像记录能力；未启动服务时不能显示“等待官方模型请求”。
 
+- 隔离协议保真记录
+  - Input: 仅 `CURSOR_E2E_MIRROR_CAPTURE=1` 运行的隔离代理中，已脱敏 HTTP 元数据和原始请求/响应 bytes。
+  - Output: 镜像 JSONL 新增 `bodyEncoding`、`bodyBytes`、`bodySHA256`、可选 `bodyBase64`，以及仅用于隔离模式的 `protocol` 摘要。二进制内容只使用 Base64，文本内容可保留既有 `body` 字段。
+  - Invariants: 每份 bytes 只能由一种载荷字段表示；Base64 解码必须等于原输入；认证头、Cookie、URL 凭据一律不进入载荷或摘要；普通镜像模式不写上述保真字段。
+
+- Bidi 与 Agent 摘要
+  - Input: `application/proto` 的 `BidiAppendRequest` 原始 bytes，及其可选 `data_binary`。
+  - Output: `{ requestIdHash, appendSeqno, clientMessageKind, agentMode, multitask, subagentAction?, decodeError? }`。
+  - Invariants: 外层 `request_id` 只写哈希；不写 prompt、完整 ID、文件路径、凭据或原始 protobuf 的 JSON 展开；解析失败不影响保真 bytes 落盘或官方直通。
+
+- RunSSE 帧与时间线
+  - Input: `application/connect+proto` 或 SSE 响应流 bytes。
+  - Output: 每个协议帧一条记录 `{ exchangeId, direction, sequence, frameEncoding, frameBytes, frameSHA256, serverMessageKind?, decodeError? }`，并在独立索引中以 `requestIdHash` 聚合。
+  - Invariants: 协议帧不是底层读取块；同一 `requestIdHash` 的事件按局部序号递增；不同并发请求不共享序号或索引桶；响应上限命中必须以 `response_truncated` 明示。
+
 ## Data Model
 
 - 镜像状态为派生 DTO，不持久化。
 - 记录路径固定为应用 history 根目录下的 `_debug/mirror/official.raw.jsonl`。
 - 文件元数据只包括是否存在、字节大小和 Unix 毫秒级最后修改时间。
 - 每条 JSONL 记录保留现有字段，并新增内部关联字段：`exchangeId`、`phase`、`model`。已有记录没有这些字段时仍可按旧格式读取。
+- 隔离保真字段为向后兼容的可选字段；没有 `bodyEncoding` 的旧记录保持原解释，禁止把旧 `body` 重新解释为完整原始二进制。
+- 协议时间线与原镜像记录分文件保存，均位于隔离临时根目录下的 `_debug/mirror`，不进入普通 history。
 
 ## Key Decisions
 
