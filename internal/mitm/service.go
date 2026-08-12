@@ -388,7 +388,7 @@ func (s *ProxyServer) newGoproxyHandler() *goproxy.ProxyHttpServer {
 	proxy.AllowHTTP2 = true
 	proxy.Logger = &goproxyLogAdapter{}
 	proxy.CertStore = newMITMCertStore()
-	proxy.Tr = netproxy.NewTransport(&http.Transport{
+	transport := &http.Transport{
 		DialContext:           (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          200,
@@ -396,7 +396,12 @@ func (s *ProxyServer) newGoproxyHandler() *goproxy.ProxyHttpServer {
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 		ResponseHeaderTimeout: 60 * time.Second,
-	})
+	}
+	if s.mirrorRec != nil && s.mirrorRec.protocolFidelity {
+		// 保真抓包使用独立上游连接，避免失效 keep-alive 触发带 body 的 Connect 请求回卷失败。
+		transport.DisableKeepAlives = true
+	}
+	proxy.Tr = netproxy.NewTransport(transport)
 	proxy.ConnectionErrHandler = func(conn io.Writer, ctx *goproxy.ProxyCtx, err error) {
 		host := requestHost(ctx)
 		remoteAddr := requestRemoteAddr(ctx)
