@@ -16,7 +16,12 @@ import (
 	"sync"
 	"time"
 
+	"cursor/gen/agentv1"
+	"cursor/gen/aiserverv1"
+	agentprotocol "cursor/internal/backend/agent/protocol"
 	"cursor/internal/logger"
+
+	"google.golang.org/protobuf/proto"
 )
 
 // MirrorCaptureConfig 提供镜像记录所需的配置。
@@ -57,7 +62,19 @@ type mirrorRecord struct {
 	BodyBytes    *int              `json:"bodyBytes,omitempty"`
 	BodySHA256   string            `json:"bodySHA256,omitempty"`
 	BodyBase64   *string           `json:"bodyBase64,omitempty"`
+	Protocol     *mirrorProtocol   `json:"protocol,omitempty"`
 	Truncated    bool              `json:"truncated,omitempty"`
+}
+
+// mirrorProtocol 是隔离保真记录中的协议结构摘要，不保存请求正文或稳定标识原文。
+type mirrorProtocol struct {
+	RequestIDHash     string `json:"requestIdHash,omitempty"`
+	AppendSeqno       *int64 `json:"appendSeqno,omitempty"`
+	ClientMessageKind string `json:"clientMessageKind,omitempty"`
+	AgentMode         string `json:"agentMode,omitempty"`
+	Multitask         bool   `json:"multitask,omitempty"`
+	SubagentAction    string `json:"subagentAction,omitempty"`
+	DecodeError       string `json:"decodeError,omitempty"`
 }
 
 type mirrorPhase string
@@ -168,6 +185,7 @@ func (r *mirrorRecorder) recordExchangeRequest(host string, exchange *mirrorExch
 			recordedBody = body[:mirrorBodyMaxBytes]
 		}
 		r.setRecordBody(&rec, recordedBody)
+		r.setBidiProtocolSummary(&rec, req, recordedBody)
 		req.Body = io.NopCloser(bytes.NewReader(body))
 	}
 	if rec.Model == "" {
@@ -255,6 +273,87 @@ func (r *mirrorRecorder) setRecordBody(rec *mirrorRecord, body []byte) {
 	rec.BodyBytes = &bodyBytes
 	rec.BodySHA256 = hex.EncodeToString(sum[:])
 	rec.BodyBase64 = &bodyBase64
+}
+
+// setBidiProtocolSummary 尽力解析 BidiAppend 的外层和内层 Agent protobuf。
+// 解析结果只供隔离协议对齐使用，原始 ID、prompt、路径和 protobuf JSON 都不写入摘要。
+func (r *mirrorRecorder) setBidiProtocolSummary(rec *mirrorRecord, req *http.Request, body []byte) {
+	if r == nil || !r.protocolFidelity || rec == nil || !isBidiAppendRequest(req) {
+		return
+	}
+	summary := &mirrorProtocol{}
+	rec.Protocol = summary
+	if rec.Truncated {
+		summary.DecodeError = "body_truncated"
+		return
+	}
+	if encoding := strings.TrimSpace(req.Header.Get("Content-Encoding")); encoding != "" && !strings.EqualFold(encoding, "identity") {
+		summary.DecodeError = "unsupported_content_encoding"
+		return
+	}
+	appendRequest := &aiserverv1.BidiAppendRequest{}
+	if err := proto.Unmarshal(body, appendRequest); err != nil {
+		summary.DecodeError = "bidi_append_unmarshal_failed"
+		return
+	}
+	requestID := agentprotocol.ReadAppendRequestID(appendRequest)
+	if requestID != "" {
+		sum := sha256.Sum256([]byte(requestID))
+		summary.RequestIDHash = hex.EncodeToString(sum[:])
+	}
+	appendSeqno := appendRequest.GetAppendSeqno()
+	summary.AppendSeqno = &appendSeqno
+	clientMessage, clientMessageKind, _, err := agentprotocol.DecodeBidiAppendAgentClientMessage(appendRequest.GetData(), appendRequest.GetDataBinary())
+	if err != nil {
+		summary.DecodeError = "agent_client_unmarshal_failed"
+		return
+	}
+	summary.ClientMessageKind = clientMessageKind
+	summary.AgentMode = mirrorAgentMode(clientMessage)
+	summary.Multitask = summary.AgentMode == agentv1.AgentMode_AGENT_MODE_MULTITASK.String()
+	summary.SubagentAction = mirrorSubagentAction(clientMessage)
+}
+
+func isBidiAppendRequest(req *http.Request) bool {
+	return req != nil && req.URL != nil && req.URL.Path == "/aiserver.v1.BidiService/BidiAppend"
+}
+
+func mirrorAgentMode(message *agentv1.AgentClientMessage) string {
+	if message == nil || message.GetRunRequest() == nil || message.GetRunRequest().GetConversationState() == nil {
+		return ""
+	}
+	mode := message.GetRunRequest().GetConversationState().GetMode()
+	if mode == agentv1.AgentMode_AGENT_MODE_UNSPECIFIED {
+		return ""
+	}
+	return mode.String()
+}
+
+func mirrorSubagentAction(message *agentv1.AgentClientMessage) string {
+	if message == nil {
+		return ""
+	}
+	if action := mirrorConversationSubagentAction(message.GetConversationAction()); action != "" {
+		return action
+	}
+	if message.GetRunRequest() == nil {
+		return ""
+	}
+	return mirrorConversationSubagentAction(message.GetRunRequest().GetAction())
+}
+
+func mirrorConversationSubagentAction(action *agentv1.ConversationAction) string {
+	if action == nil {
+		return ""
+	}
+	switch action.GetAction().(type) {
+	case *agentv1.ConversationAction_BackgroundSubagentAction:
+		return "background"
+	case *agentv1.ConversationAction_CancelSubagentAction:
+		return "cancel"
+	default:
+		return ""
+	}
 }
 
 func mirrorExchangeID(exchange *mirrorExchange) string {
