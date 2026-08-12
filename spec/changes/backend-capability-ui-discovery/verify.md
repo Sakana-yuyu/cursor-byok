@@ -132,3 +132,18 @@
 - 代码提交 `c43caf3` 仅修改隔离启动器；`git diff --check`、暂存后 `git diff --cached --check` 均退出码 0。
 - 本轮仍未新增测试文件，遵循 `IMPROVEMENT_TASKS.md`。
 - 临时 Cursor 保持运行，用于用户控制的登录后业务请求验证；停止时必须按已记录 launcher PID 的后代树精确结束，不能按 `Cursor.exe` 进程名批量结束。
+
+## Round 9 - authenticated Agent protocol capture
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- | --- |
+| V-22 | runtime-evidence | minor | fixed(r9) | 隔离 Cursor 登录后主动发起的 Agent 业务请求此前尚无抓包运行时证据。 | 用户在隔离 Cursor 中自行发起请求后，对临时 `official.raw.jsonl` 做了不读取正文的逐行结构化核验：快照时共有 1,326 行，`invalidJsonLines=0`、`missingExchangeId=0`。`mirror-590` 位于 `api2.cursor.sh`，具有 `request`、`response_start`、`response_chunk` 三阶段，HTTP `200`，共 63 个流式片段、65 条关联记录；另有 11 个关联的 `BidiAppend` 交换，均含 `request`、`response_start` 且 HTTP `200`。 | 已证明隔离 CA 信任、MITM、api2 relay 镜像、请求/响应关联与 Agent 流式记录在真实登录后的业务请求中协同工作。 |
+| V-23 | data-protection | major | fixed(r9) | 真实 Agent 协议核验不得因定位端点而读取或输出业务正文、认证头、Cookie、token 或完整 URL。 | 本轮只读取 JSONL 的结构化元数据并按 `exchangeId` 聚合；核验凭据型 URL 查询参数未脱敏值为 0。临时 Cursor 日志中 `ERR_CERT_AUTHORITY_INVALID` 计数为 0。响应记录按设计不重复保存 URL，因此以请求记录识别端点、再以同一 `exchangeId` 回溯响应阶段和状态。 | 验证台账只保留交换数、阶段、状态码和片段计数；原始 JSONL 继续仅保留在临时隔离目录，未加入仓库或前端读取路径。 |
+
+本轮证据：
+
+- 用户在隔离 Cursor 内自行登录和发起 Agent 请求；本会话没有代替用户登录、提交业务提示词或读取业务正文。
+- 镜像快照逐行 JSON 解析通过，所有记录都有 `exchangeId`；敏感查询参数检查结果为 0 个未脱敏值。
+- `RunSSE` 与 `BidiAppend` 仅按请求 URL 的 host/path 识别，响应阶段通过同一 `exchangeId` 关联，符合 recorder 的记录格式。
+- 临时 Cursor 仅携带本次临时 CA 的 SPKI 白名单；未使用全局忽略 TLS 错误参数，且日志中 `ERR_CERT_AUTHORITY_INVALID=0`。
+- 这证明官方 Cursor Agent 协议抓包基础设施已真实工作；不代表本仓库本地模式 forwarder、具体模型供应商或完整端到端兼容性均已验证。
