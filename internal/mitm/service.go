@@ -188,6 +188,16 @@ func logSuppressedProxyMessages(prefix string, suppressed int) {
 
 // NewProxyServer 用于处理与 NewProxyServer 相关的逻辑。
 func NewProxyServer(addr, baseURL, historyRoot string, mirror MirrorCaptureConfig, certManager *certs.Manager) (*ProxyServer, error) {
+	return newProxyServer(addr, baseURL, historyRoot, mirror, certManager, false)
+}
+
+// NewIsolatedMirrorCaptureProxyServer 仅供隔离 E2E 启动器调用，保真记录原始 body bytes。
+// 普通运行必须继续使用 NewProxyServer，以保持既有 JSONL 格式和敏感数据边界。
+func NewIsolatedMirrorCaptureProxyServer(addr, baseURL, historyRoot string, mirror MirrorCaptureConfig, certManager *certs.Manager) (*ProxyServer, error) {
+	return newProxyServer(addr, baseURL, historyRoot, mirror, certManager, true)
+}
+
+func newProxyServer(addr, baseURL, historyRoot string, mirror MirrorCaptureConfig, certManager *certs.Manager, protocolFidelity bool) (*ProxyServer, error) {
 	u, normalizedBaseURL, err := parseBaseURL(baseURL)
 	if err != nil {
 		return nil, err
@@ -212,7 +222,11 @@ func NewProxyServer(addr, baseURL, historyRoot string, mirror MirrorCaptureConfi
 		mirrorConfig: mirror,
 	}
 	if historyRoot != "" {
-		s.mirrorRec = newMirrorRecorder(historyRoot)
+		if protocolFidelity {
+			s.mirrorRec = newProtocolFidelityMirrorRecorder(historyRoot)
+		} else {
+			s.mirrorRec = newMirrorRecorder(historyRoot)
+		}
 	}
 	s.proxy = s.newGoproxyHandler()
 	return s, nil

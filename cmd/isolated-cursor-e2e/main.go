@@ -127,7 +127,12 @@ func run(sourceConfigPath string, cursorPath string) error {
 		historyRoot = filepath.Join(dirs.root, "history")
 		proxyMirrorConfig = mirrorConfig
 	}
-	proxy, err := mitm.NewProxyServer(isolatedConfig.ProxyListenAddr, host.BaseURL(), historyRoot, proxyMirrorConfig, certManager)
+	var proxy *mitm.ProxyServer
+	if mirrorCaptureEnabled {
+		proxy, err = mitm.NewIsolatedMirrorCaptureProxyServer(isolatedConfig.ProxyListenAddr, host.BaseURL(), historyRoot, proxyMirrorConfig, certManager)
+	} else {
+		proxy, err = mitm.NewProxyServer(isolatedConfig.ProxyListenAddr, host.BaseURL(), historyRoot, proxyMirrorConfig, certManager)
+	}
 	if err != nil {
 		return fmt.Errorf("创建隔离 MITM 失败: %w", err)
 	}

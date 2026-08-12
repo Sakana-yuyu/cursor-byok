@@ -3,6 +3,9 @@ package mitm
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -40,17 +43,21 @@ var mirrorSensitiveHeaders = map[string]bool{
 
 // mirrorRecord 是 official.raw.jsonl 的一行。
 type mirrorRecord struct {
-	TS         time.Time         `json:"ts"`
-	ExchangeID string            `json:"exchangeId,omitempty"`
-	Phase      mirrorPhase       `json:"phase"`
-	Host       string            `json:"host"`
-	Model      string            `json:"model,omitempty"`
-	Method     string            `json:"method,omitempty"`
-	URL        string            `json:"url,omitempty"`
-	Status     int               `json:"status,omitempty"`
-	Headers    map[string]string `json:"headers,omitempty"`
-	Body       string            `json:"body,omitempty"`
-	Truncated  bool              `json:"truncated,omitempty"`
+	TS           time.Time         `json:"ts"`
+	ExchangeID   string            `json:"exchangeId,omitempty"`
+	Phase        mirrorPhase       `json:"phase"`
+	Host         string            `json:"host"`
+	Model        string            `json:"model,omitempty"`
+	Method       string            `json:"method,omitempty"`
+	URL          string            `json:"url,omitempty"`
+	Status       int               `json:"status,omitempty"`
+	Headers      map[string]string `json:"headers,omitempty"`
+	Body         string            `json:"body,omitempty"`
+	BodyEncoding string            `json:"bodyEncoding,omitempty"`
+	BodyBytes    *int              `json:"bodyBytes,omitempty"`
+	BodySHA256   string            `json:"bodySHA256,omitempty"`
+	BodyBase64   *string           `json:"bodyBase64,omitempty"`
+	Truncated    bool              `json:"truncated,omitempty"`
 }
 
 type mirrorPhase string
@@ -71,13 +78,18 @@ type mirrorExchange struct {
 // mirrorRecorder 把镜像请求/响应追加写入 <historyRoot>/_debug/mirror/official.raw.jsonl。
 // 记录失败只记日志，绝不阻断代理直通。
 type mirrorRecorder struct {
-	historyRoot string
-	mu          sync.Mutex
-	file        *os.File
+	historyRoot      string
+	protocolFidelity bool
+	mu               sync.Mutex
+	file             *os.File
 }
 
 func newMirrorRecorder(historyRoot string) *mirrorRecorder {
 	return &mirrorRecorder{historyRoot: historyRoot}
+}
+
+func newProtocolFidelityMirrorRecorder(historyRoot string) *mirrorRecorder {
+	return &mirrorRecorder{historyRoot: historyRoot, protocolFidelity: true}
 }
 
 func (r *mirrorRecorder) ensureFile() error {
@@ -144,6 +156,7 @@ func (r *mirrorRecorder) recordExchangeRequest(host string, exchange *mirrorExch
 			return
 		}
 		body = readBody
+		recordedBody := body
 		if len(body) > mirrorBodyMaxBytes {
 			// 记录端截断不影响直通：继续读完剩余部分，重建完整 body 给上游。
 			rest, restErr := io.ReadAll(req.Body)
@@ -152,10 +165,9 @@ func (r *mirrorRecorder) recordExchangeRequest(host string, exchange *mirrorExch
 			}
 			body = append(body, rest...)
 			rec.Truncated = true
-			rec.Body = string(body[:mirrorBodyMaxBytes])
-		} else {
-			rec.Body = string(body)
+			recordedBody = body[:mirrorBodyMaxBytes]
 		}
+		r.setRecordBody(&rec, recordedBody)
 		req.Body = io.NopCloser(bytes.NewReader(body))
 	}
 	if rec.Model == "" {
@@ -216,14 +228,33 @@ func (r *mirrorRecorder) recordExchangeResponseChunk(host string, exchange *mirr
 	if r == nil || len(chunk) == 0 {
 		return
 	}
-	r.write(mirrorRecord{
+	rec := mirrorRecord{
 		TS:         time.Now(),
 		ExchangeID: mirrorExchangeID(exchange),
 		Phase:      mirrorPhaseResponseChunk,
 		Host:       host,
 		Model:      mirrorExchangeModel(exchange),
-		Body:       string(chunk),
-	})
+	}
+	r.setRecordBody(&rec, chunk)
+	r.write(rec)
+}
+
+// setRecordBody 仅在隔离保真模式中使用 Base64，避免 protobuf 非 UTF-8 字节经 JSON 字符串替换。
+func (r *mirrorRecorder) setRecordBody(rec *mirrorRecord, body []byte) {
+	if rec == nil {
+		return
+	}
+	if r == nil || !r.protocolFidelity {
+		rec.Body = string(body)
+		return
+	}
+	sum := sha256.Sum256(body)
+	bodyBytes := len(body)
+	bodyBase64 := base64.StdEncoding.EncodeToString(body)
+	rec.BodyEncoding = "base64"
+	rec.BodyBytes = &bodyBytes
+	rec.BodySHA256 = hex.EncodeToString(sum[:])
+	rec.BodyBase64 = &bodyBase64
 }
 
 func mirrorExchangeID(exchange *mirrorExchange) string {
