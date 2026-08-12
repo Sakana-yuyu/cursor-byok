@@ -218,3 +218,11 @@
 
 - 工具矩阵来自 `C:\Users\Administrator\AppData\Local\Temp\cursor-byok-e2e-171758565` 的隔离 `official.raw.jsonl` 与 `protocol.timeline.jsonl`，解析过程未输出参数或网页内容。
 - `git diff --check` 通过；临时聚合程序已删除，未混入本轮文档提交。
+
+## Round 15 - cursor-ide-browser 自述核验边界
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- | --- |
+| V-39 | runtime-evidence | minor | fixed(r15) | Cursor 对 `cursor-ide-browser` 的工具流程自述与已捕获的非内容工具矩阵一致。 | 已捕获 provider=`cursor-ide-browser`，以及 `browser_tabs`、`browser_lock`、`browser_navigate`、`browser_snapshot`、`browser_click`、`browser_cdp`；无 `computer_use_args/result`。 | 后续对接以直接 MCP 浏览器调用建模，不误标为 OS 鼠标操作或 ComputerUse 协议。 |
+| V-40 | evidence-boundary | minor | open | 具体前台 `viewId`、snapshot ref、点击目标、CDP 脚本、截图和解锁调用仅来自客户端自述，未由当前安全索引独立证实。 | 时间线不保存 MCP args、URL、DOM、页面文本、脚本、tool call ID 或结果正文；保真帧未向文档输出这些内容。 | 保留为客户端自述；若未来确需验证，新增仅保存不可逆标签页关联与工具种类的索引，不保存页面或认证数据。 |
+| V-41 | data-protection | major | fixed(r15) | 客户端自述提及登录态写入，不能成为自动复制或落盘凭据的实现依据。 | 当前研究与时间线均未保存 token 值、认证请求体、存储键或 URL；原始数据仍局限于临时隔离目录。 | 对接界面仅呈现需确认的认证状态变更，不实现或记录自动凭据注入。 |

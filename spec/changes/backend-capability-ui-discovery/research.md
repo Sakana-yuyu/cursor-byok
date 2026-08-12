@@ -97,6 +97,13 @@
 - 同一窗口结构时间线为 `mcp_args=41`、`mcp_result=19`、`mcp_state_exec_args=1`、`tool_call_started=44`、`tool_call_completed=42`、`step_completed=5`、`turn_ended=5`、terminal=5。`mcp_args` 与 `mcp_result` 数量暂不相等，表示部分调用仍由持续流、后续窗口或客户端状态处理；不能将未见同数结果直接解释为失败。
 - 本次 `cursor-ide-browser` 窗口没有 `computer_use_args/result`，也没有 MCP/Shell allowlist 预检，说明它直接以已可用的 MCP 浏览器服务调用，而非经 ComputerUse 桥或逐次审批。后续 UI 应以工具名聚合展示浏览器操作阶段，但不落盘任何工具参数。
 
+### cursor-ide-browser 客户端自述与证据边界（2026-08-12）
+- Cursor 客户端自述其标准浏览器流程为标签页查询/选择、浏览器锁定、导航、可访问性快照、按 ref 点击、再次快照和解锁；同时说明必要时用 `browser_cdp` 执行页面内脚本。已抓包实证的工具矩阵与此一致：`browser_tabs`、`browser_lock`、`browser_navigate`、`browser_snapshot`、`browser_click`、`browser_cdp` 均真实出现。
+- 已实证：请求 provider 是 `cursor-ide-browser`，没有 `computer_use_args/result`，本轮也没有新的 MCP/Shell allowlist；因此它是直接的 IDE 浏览器 MCP 调用，不能误标为桌面鼠标键盘模拟或本仓库 ComputerUse 桥的协议。
+- 仅客户端自述，当前安全索引未独立验证：具体 `viewId`/标签页与右侧面板的可见性映射、snapshot 内 `ref` 值、具体 DOM 点击目标、`browser_take_screenshot`、显式 `unlock` 调用、`Runtime.evaluate` 的实际脚本、SPA 路由方法以及“底层不使用 Playwright”的实现细节。索引不会保存 MCP args、URL、DOM、页面文字、脚本或工具结果正文，不能据此反推这些事实。
+- 自述中涉及浏览器存储的登录态写入和后端登录请求属于敏感认证流程。后续对接只记录“认证状态变更”这一高风险动作及其用户确认，不记录 token 名称、值、请求体、存储键或可复用认证步骤；不得将该自述转写为自动注入凭据方案。
+- 产品交互结论：对正确前台标签页的选择、浏览器锁定状态和解锁归还必须有清晰可见的 UI 状态，但聚合记录只能使用不可逆匿名标签页关联，不能落盘真实 viewId 或页面地址。
+
 ## Open [TBD]
 
 ## Decided

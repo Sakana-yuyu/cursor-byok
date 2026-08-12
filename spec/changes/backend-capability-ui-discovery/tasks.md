@@ -64,3 +64,4 @@
   - [x] 10.3 对已触发事件核对 `runsse_connect`、`bidi_append` 方向、requestIdHash 关联、终态与 `decodeError`；最近约 11,498 条时间线记录的正文、原始帧、凭据、路径、token 和完整 request ID 字段扫描均为 0。
   - [x] 10.4 已将汇总计数、实际 oneof 类型、取消/停止、审批和 IDE 内 Playwright MCP 证据、未触发分支和隐私检查写入 `verify.md` 与本任务清单；临时 JSONL 未提交，文档改动单独提交。
   - [x] 10.5 已针对 `cursor-ide-browser` 解析保真帧中的非内容 MCP 字段，记录 `browser_click`、`browser_cdp`、`browser_lock`、`browser_navigate`、`browser_snapshot`、`browser_tabs` 的实际调用次数；临时聚合器已删除，未读取或保存参数、页面内容、URL、坐标或结果正文。
+  - [x] 10.6 已记录 Cursor 对 IDE 浏览器流程的自述，并与已捕获 MCP 工具矩阵交叉核验；将可验证的工具类型和调用通道与未验证的 `viewId/ref`、DOM/CDP 实现细节、截图/解锁、标签可见性和认证流程严格分开。
