@@ -46,3 +46,20 @@
   - [x] 8.2 用户已在新实例中发送普通请求与 Multitask 请求；只读取新实例的 `official.raw.jsonl` 和 `protocol.timeline.jsonl` 元数据及结构字段。
   - [x] 8.3 已验收 724 条 `runsse_connect`、Bidi 上行结构、gzip/identity Connect、服务端顶层/Exec 内层 oneof、流式增量摘要与 `subagent_args -> create`；724 个原始帧的 Base64、长度和 SHA-256 全部一致，时间线未发现正文、凭据、路径或完整 request ID 字段。`force_background_subagent_args` 与 `subagent_await_args` 本次未触发，保留为未验证分支。
   - [x] 8.4 真实 E2E 数据仅保留在临时目录且未提交；最终报告分别列出代码检查、真实抓包证据和未触发分支。
+
+## Multitask 结果与交互覆盖实施计划
+
+> 目标：补齐子代理结果状态的安全二层索引，并以现有隔离实例真实验证 Multitask 生命周期与用户交互协议。
+> 约束：不新增测试文件、不读取或落盘正文/参数/路径/完整 ID/凭据；不关闭或重启任何既有 Cursor 实例；仅暂存本计划明确列出的文件。
+
+- [ ] 9. 子代理结果的安全二层索引
+  - [ ] 9.1 在 `internal/mitm/mirror.go` 的 `mirrorProtocol` 和 `mirrorTimelineRecord` 增加可选 `clientResultKind`，仅由 `exec_client_message` 的 `subagent_result`、`force_background_subagent_result`、`subagent_await_result` 填写。
+  - [ ] 9.2 新增只读 helper：`SubagentResult.result` 映射 `success/error`；`SubagentAwaitResult.result` 映射 `complete/still_running/not_found/error`；`ForceBackgroundSubagentResult.status` 映射 `accepted/not_found/unspecified`。helper 不读取 agent ID、tool call ID、错误文本、转录路径、最终消息或状态数字。
+  - [ ] 9.3 保持 `interaction_query.query` 到 `serverDetailKind` 与 `interaction_response.result` 到 `clientDetailKind` 的现有通用 reflection 路径；不增加重复字段。nil、未知分支或 protobuf 解码失败保持空结果字段或既有错误码，且不影响代理直通。
+  - [ ] 9.4 运行 `go test ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e`、`go build ./cmd/isolated-cursor-e2e`、`go vet ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e` 与 `git diff --check`；确认未新增测试文件后提交 `feat(mitm): index multitask result states`。
+
+- [ ] 10. 当前隔离实例的真实矩阵验收
+  - [ ] 10.1 保持当前隔离实例运行；用户依次尝试一个可后台化的长子任务、等待该任务结果的后续操作、取消或错误收口，以及一次会要求选择/确认的操作。用户界面未出现某项动作时跳过并记录未触发。
+  - [ ] 10.2 只读检查 `protocol.timeline.jsonl`：Multitask 关注 `force_background_subagent_args/result`、`subagent_await_args/result`、`subagent_result` 与相同 requestIdHash 的顺序；交互关注 `interaction_query` 的 `serverDetailKind` 与 `interaction_response` 的 `clientDetailKind`。
+  - [ ] 10.3 对每项已触发事件核对 `runsse_connect`、方向、requestIdHash 关联、终态与 `decodeError`；复扫时间线字段名，确认没有正文、Base64、prompt、输出、Cookie、认证头、路径、token 或完整 request ID。
+  - [ ] 10.4 将汇总计数、实际 oneof 类型、未触发分支和隐私检查写入 `verify.md` 与本任务清单；不提交临时 JSONL，单独提交 `docs(verify): record multitask interaction coverage`。
