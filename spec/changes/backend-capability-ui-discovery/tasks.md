@@ -23,3 +23,26 @@
 - [x] 5. 台账与独立提交
   - [x] 5.1 更新验证台账，区分构建、字节保真、协议解析和真实 Cursor E2E。
   - [x] 5.2 每个已验证节点单独提交，不混入用户未跟踪文件。
+
+## 上下行完整结构化解析实施计划
+
+> 目标：仅在 `CURSOR_E2E_MIRROR_CAPTURE=1` 的隔离镜像模式中，保留上下行原始字节，并为 Bidi/RunSSE 建立不含正文与凭据的完整已知协议结构索引。
+> 约束：不修改已安装 Cursor、真实用户配置或官方转发字节；不新增测试文件；每个节点单独提交，且不暂存 `.playwright-cli/`、`frontend/.playwright-cli/`、`output/`。
+
+- [ ] 6. 下行 Connect 探测与服务端结构索引
+  - [ ] 6.1 在 `internal/mitm/mirror.go` 为 `text/event-stream` 增加“待判定”状态：收集 5 字节后只接受合法 Connect flags、受 `mirrorConnectFrameMaxBytes` 限制的长度与完整帧；判定成功后回放缓冲并按 Connect 重组，判定失败后才按现有 SSE 空行边界处理。
+  - [ ] 6.2 为 `mirrorProtocolFrame` 和 `mirrorTimelineRecord` 增加 Connect 压缩标识、服务端 Exec 二层 oneof、子代理事件与流式内容摘要字段；用 protobuf reflection 提取 `AgentServerMessage` 和 `ExecServerMessage` 的实际 oneof，不写入任意消息正文。
+  - [ ] 6.3 使 Connect 终态帧、未知压缩、畸形长度、protobuf 解码失败与真实 SSE 都产生稳定错误/状态摘要，并继续只观察 tee 的副本。
+  - [ ] 6.4 运行 `go test ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e`、`go build ./cmd/isolated-cursor-e2e`、`go vet ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e` 与 `git diff --check`；确认不新增测试文件后提交 `feat(mitm): decode connects inside runsse streams`。
+
+- [ ] 7. 上行二层索引与安全时间线字段
+  - [ ] 7.1 为 `mirrorProtocol` 和 `mirrorTimelineRecord` 增加 Bidi payload 来源、字节长度、SHA-256、客户端二层 oneof 与标准化子代理动作字段；沿用 `DecodeBidiAppendAgentClientMessage`，仅记录结构名称与摘要。
+  - [ ] 7.2 对 `run_request`、`exec_client_message`、`exec_client_control_message`、`kv_client_message`、conversation action、interaction response 与 heartbeat 提取已知一层/二层 oneof；缺失、冲突、截断、压缩或解析失败写稳定错误码，不中断请求直通。
+  - [ ] 7.3 复核 `protocol.timeline.jsonl` 不含 `bodyBase64`、`frameBase64`、prompt、模型输出、token、Cookie、认证头、路径或完整 request ID，并保持旧 JSONL 对未知新增字段的兼容。
+  - [ ] 7.4 重复第 6.4 项既有检查并提交 `feat(mitm): index bidirectional protocol structure`。
+
+- [ ] 8. 新隔离实例真实 E2E 验收
+  - [ ] 8.1 保留正在运行的全部 Cursor 实例；仅在上述两笔提交通过检查后启动一个新的 `CURSOR_E2E_MIRROR_CAPTURE=1` 隔离实例，记录新的临时根目录。
+  - [ ] 8.2 由用户在新实例中发送普通请求与 Multitask 请求；只读取新实例的 `official.raw.jsonl` 和 `protocol.timeline.jsonl` 元数据及结构字段。
+  - [ ] 8.3 验收 `runsse_connect`、服务端顶层/Exec 内层 oneof、子代理创建/后台化/等待摘要、Base64 帧长度与 SHA-256 一致性及敏感字段缺失；若未捕获到某一事件，将其标为未验证而不宣称覆盖。
+  - [ ] 8.4 真实 E2E 数据仅在临时目录中保留，不提交；最终报告分别列出代码检查、真实抓包证据和仍未触发的协议分支。
