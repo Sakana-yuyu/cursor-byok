@@ -147,3 +147,19 @@
 - `RunSSE` 与 `BidiAppend` 仅按请求 URL 的 host/path 识别，响应阶段通过同一 `exchangeId` 关联，符合 recorder 的记录格式。
 - 临时 Cursor 仅携带本次临时 CA 的 SPKI 白名单；未使用全局忽略 TLS 错误参数，且日志中 `ERR_CERT_AUTHORITY_INVALID=0`。
 - 这证明官方 Cursor Agent 协议抓包基础设施已真实工作；不代表本仓库本地模式 forwarder、具体模型供应商或完整端到端兼容性均已验证。
+
+## Round 10 - protocol fidelity and Multitask timeline
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- |
+| V-24 | runtime-evidence | minor | open | 新增的 `protocol.timeline.jsonl` 尚未在用户控制的隔离 Cursor Multitask 交互中重新核验。 | 本轮没有启动 Cursor、代替用户登录或代表用户发起官方请求；只以临时本地 protobuf 回环构造 Multitask `BidiAppend`、同一 request ID 的 RunSSE Connect 请求与终止帧。 | 用户在隔离 Cursor 中开启 Multitask 并自行发起一次 Agent 请求后，仅做结构化检查：`official.raw.jsonl` 的 Bidi/RunSSE 记录含保真字段，`protocol.timeline.jsonl` 以同一 `requestIdHash` 关联上行、下行和终止事件，且索引不含完整 request ID、正文或原始帧 Base64。 |
+| V-25 | independent-review | minor | open | 本轮无法执行 spec-workflow 要求的独立 `spec-verifier` 审查。 | `C:\Users\Administrator\.codex\agents\spec-verifier.toml` 不存在；本会话可用工具没有 `spawn_agent`，仅有用户显式创建新任务的接口，不能替代独立审查。 | 已记录为降级验证限制；不得将本轮自检表述为独立审查通过。后续在具备 `spawn_agent` 和已安装 verifier 定义的会话重新运行 `$spec-verify`。 |
+
+本轮证据：
+
+- `go test ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e`：退出码 0。
+- `go build ./cmd/isolated-cursor-e2e`、`go vet ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e`：退出码 0。
+- `git diff --check`：退出码 0；四个实现提交分别为 `9198840`、`26a2db0`、`50299fb`、`77a34df`，未混入 `.playwright-cli/`、`frontend/.playwright-cli/` 或 `output/`。
+- 临时本地回环（执行后已删除，未进入提交）：非法 UTF-8 body 的 Base64/长度/SHA-256 可逆；畸形 Bidi 内层消息写入 `agent_client_unmarshal_failed` 且不阻断上游；两个 Connect 帧共用一个读取块仍写为两条完整协议帧，不完整尾帧写 `connect_frame_incomplete`；Multitask Bidi、RunSSE 请求和终止帧以相同哈希关联，索引不含完整 request ID 或 `frameBase64`。
+- 历史 Round 9 的真实隔离 Agent 抓包证据仍只证明旧的交换关联与流式记录链路；它不能替代本轮新增保真字段和时间线索引的真实 Multitask 验收。
+- `ast-grep` 未安装，未执行 AST 规则包；已对 `internal/mitm/mirror.go` 的新增路径做 charter 手工扫描。记录/解析失败仅记录稳定错误标签并保持代理直通，未发现以旧逻辑作为静默回退或以默认业务结果掩盖失败的分支。
