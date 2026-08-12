@@ -16,6 +16,14 @@ defineProps({
     type: String,
     default: "",
   },
+  title: {
+    type: String,
+    default: "模型测试",
+  },
+  emptyText: {
+    type: String,
+    default: "尚未测试",
+  },
 });
 </script>
 
@@ -24,7 +32,8 @@ defineProps({
     :result="result"
     :stale="stale"
     :show-metrics="true"
-    empty-text="尚未测试 — 点击右上角「保存并测试」检测该模型是否可用"
+    :title="title"
+    :empty-text="emptyText"
   />
 
   <div

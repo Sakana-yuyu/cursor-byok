@@ -293,6 +293,19 @@ const modelTestSummary = computed(() => {
 
 const isQuickMode = computed(() => editorIndex.value < 0);
 const isCursorAccountSource = computed(() => draft.source === MODEL_SOURCE_CURSOR_ACCOUNT);
+const modelTestResultTitle = computed(() => isCursorAccountSource.value ? "账户模型状态" : "模型测试");
+const modelTestResultEmptyText = computed(() => isCursorAccountSource.value
+  ? "执行通道待真实协议验证；保存配置不会发起模型调用。"
+  : "尚未测试 — 点击右上角「保存并测试」检测该模型是否可用");
+const displayedModelTestResult = computed(() => {
+  if (isCursorAccountSource.value) {
+    return null;
+  }
+  if (localTestFailure.value) {
+    return { status: "error", error: "测试失败", summaryText: "测试失败", rawResponse: modelTestSummary.value };
+  }
+  return activeModelTestResult.value;
+});
 const title = computed(() => {
   if (manualAddMode.value) return "手动添加模型";
   return isQuickMode.value ? "快速添加模型" : "编辑模型配置";
@@ -972,6 +985,10 @@ onMounted(async () => {
               <input v-model="draft.tooltipData" type="text" placeholder="可选" class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
             </label>
           </div>
+          <ModelTestResultSection
+            :title="modelTestResultTitle"
+            :empty-text="modelTestResultEmptyText"
+          />
         </div>
 
         <template v-else>
@@ -1433,9 +1450,11 @@ onMounted(async () => {
         </label>
 
         <ModelTestResultSection
-          :result="localTestFailure ? { status: 'error', error: '测试失败', summaryText: '测试失败', rawResponse: modelTestSummary } : activeModelTestResult"
-          :stale="modelTestResultStale"
+          :result="displayedModelTestResult"
+          :stale="!isCursorAccountSource && modelTestResultStale"
           :error="errorMessage"
+          :title="modelTestResultTitle"
+          :empty-text="modelTestResultEmptyText"
         />
         </div>
         </template>
