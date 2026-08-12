@@ -265,3 +265,17 @@
 | V-51 | privacy | major | fixed(r18) | 安装版能力扫描和为测试再生的 protobuf 产物不得暴露安装路径或进入 Git。 | go run ./cmd/cursor-capability-scan --root D:\cursor 退出码 0，输出仅含版本、扩展、能力 marker 和 installRootHash，断言未出现输入根路径；git status --short --ignored 显示 gen/ 为 ignored。 | gen/ 仅是当前隔离 worktree 的本地产物，未暂存；未跟踪 .playwright-cli/、frontend/.playwright-cli/、output/ 保持不变。 |
 
 本轮未启动或修改已安装 Cursor，也没有模拟真实协议。后台化、等待和 ComputerUse oneof 的真实上下行覆盖仍以 V-48 为准。
+
+## Round 19 - Shell 工具气泡流式投影
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- | --- |
+| V-52 | compatibility | minor | fixed(r19) | 当前转发器只发布 `ShellOutputDelta`，而安装版 Cursor 的 Shell 工具气泡还消费 `ToolCallDelta.ShellToolCallDelta`。 | 只读比对上游候选 `9eb24bb` 与当前生成 protobuf：stdout/stderr 分支和 `ShellToolCallDelta` oneof 均存在于当前协议。新增测试覆盖 stdout、stderr 的 call/model identity 与嵌套 oneof 结构。 | 在原 `ShellOutputDelta` 成功发布后，仅为非空 stdout/stderr 追加工具调用增量；保留现有 Shell 输出、历史、watchdog、取消和终态路径。 |
+| V-53 | regression | minor | fixed(r19) | Shell 启动、退出和空片段若生成工具增量，会制造空终端气泡并扰乱客户端流式展示。 | 定向测试对 nil、start、exit、空 stdout 与空 stderr 断言为 nil；测试先因 helper 缺失而失败，再在最小实现后通过。 | 兼容 helper 对非内容事件返回 nil，不新增消息。 |
+| V-54 | scope-control | minor | fixed(r19) | `upstream/main` 与 `fork/main` 和当前 main 无共同祖先，直接合并会引入不兼容结构与无关改动。 | 已刷新远端并以 `git merge-base` 核验；候选图片 blob、checkpoint 和发布配置需要更大架构迁移，本轮没有足够的相同运行时验证。 | 仅选取可独立验证的 Shell 流式协议能力，在当前架构实现；不执行 `--allow-unrelated-histories` 合并。 |
+
+本轮证据：
+
+- 红灯：`go test ./internal/backend/forwarder -run 'TestBuildShellToolCallDeltaMessage' -count=1` 因缺少 `buildShellToolCallDeltaMessage` 失败。
+- 绿灯：实现后同一命令、`go test ./internal/backend/agent/bridge/exec ./internal/backend/forwarder -count=1`、`go vet ./internal/backend/forwarder` 与 `git diff --check` 均退出码 0。
+- 仅暂存 forwarder 的实现/测试和本 Spec 设计、任务、验证台账；`.playwright-cli/`、`frontend/.playwright-cli/` 与 `output/` 保持未跟踪且不纳入提交。

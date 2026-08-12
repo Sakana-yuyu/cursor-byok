@@ -1369,6 +1369,11 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 		}); err != nil {
 			return err
 		}
+		if message := buildShellToolCallDeltaMessage(pending.ToolCallID, pending.ModelCallID, result.ShellOutputDelta); message != nil {
+			if err := service.broker.Publish(intent.RequestID, StreamEvent{Message: message}); err != nil {
+				return err
+			}
+		}
 	}
 	if !result.IsTerminal {
 		if len(result.HookAdditionalContexts) > 0 {

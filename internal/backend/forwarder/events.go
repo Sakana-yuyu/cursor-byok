@@ -253,6 +253,43 @@ func buildShellOutputDeltaMessage(delta *agentv1.ShellOutputDeltaUpdate) *agentv
 	}
 }
 
+// buildShellToolCallDeltaMessage 将非空 Shell 输出投影为 Cursor 终端气泡使用的工具增量。
+func buildShellToolCallDeltaMessage(callID string, modelCallID string, output *agentv1.ShellOutputDeltaUpdate) *agentv1.AgentServerMessage {
+	if output == nil {
+		return nil
+	}
+
+	var delta *agentv1.ShellToolCallDelta
+	switch event := output.GetEvent().(type) {
+	case *agentv1.ShellOutputDeltaUpdate_Stdout:
+		content := event.Stdout.GetData()
+		if content == "" {
+			return nil
+		}
+		delta = &agentv1.ShellToolCallDelta{
+			Delta: &agentv1.ShellToolCallDelta_Stdout{
+				Stdout: &agentv1.ShellToolCallStdoutDelta{Content: content},
+			},
+		}
+	case *agentv1.ShellOutputDeltaUpdate_Stderr:
+		content := event.Stderr.GetData()
+		if content == "" {
+			return nil
+		}
+		delta = &agentv1.ShellToolCallDelta{
+			Delta: &agentv1.ShellToolCallDelta_Stderr{
+				Stderr: &agentv1.ShellToolCallStderrDelta{Content: content},
+			},
+		}
+	default:
+		return nil
+	}
+
+	return buildToolCallDeltaMessage(callID, modelCallID, &agentv1.ToolCallDelta{
+		Delta: &agentv1.ToolCallDelta_ShellToolCallDelta{ShellToolCallDelta: delta},
+	})
+}
+
 // buildTurnEndedMessage 构造 turn 结束消息，并携带标准化后的 token 统计。
 func buildTurnEndedMessage(inputTokens int64, outputTokens int64, cacheReadTokens int64, cacheWriteTokens int64) *agentv1.AgentServerMessage {
 	inputTokensValue := inputTokens
