@@ -2,6 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
@@ -77,6 +81,7 @@ func run(sourceConfigPath string, cursorPath string) error {
 	}
 	if mirrorCaptureEnabled {
 		isolatedConfig.MirrorCapture.Enabled = true
+		isolatedConfig.MirrorCapture.Hosts = isolatedMirrorCaptureHosts(isolatedConfig.MirrorCapture.Hosts)
 		isolatedConfig.Routing.Mode = "upstream"
 		isolatedConfig, err = serverconfig.NormalizeConfig(isolatedConfig)
 		if err != nil {
@@ -93,6 +98,10 @@ func run(sourceConfigPath string, cursorPath string) error {
 	certManager, err := certs.NewPersistentManager(certPath, keyPath)
 	if err != nil {
 		return fmt.Errorf("创建隔离 CA 失败: %w", err)
+	}
+	cursorArgs, err := isolatedCursorArgs(mirrorCaptureEnabled, certPath)
+	if err != nil {
+		return err
 	}
 
 	store := serverconfig.NewStore(configPath, filepath.Join(dirs.home, ".cursor-local-assistant-v2", "logs"))
@@ -137,7 +146,7 @@ func run(sourceConfigPath string, cursorPath string) error {
 		}
 	}
 
-	command := exec.Command(cursorPath)
+	command := exec.Command(cursorPath, cursorArgs...)
 	command.Env = buildCursorChildEnvironment(os.Environ(), dirs, certPath)
 	if err := command.Start(); err != nil {
 		return fmt.Errorf("启动隔离 Cursor 失败: %w", err)
@@ -155,6 +164,54 @@ func run(sourceConfigPath string, cursorPath string) error {
 
 func isolatedMirrorCaptureEnabled() bool {
 	return strings.TrimSpace(os.Getenv(mirrorCaptureEnabledEnv)) == "1"
+}
+
+func isolatedMirrorCaptureHosts(hosts []string) []string {
+	if len(hosts) == 0 {
+		hosts = serverconfig.DefaultMirrorHosts
+	}
+	result := make([]string, 0, len(hosts)+2)
+	seen := make(map[string]struct{}, len(hosts)+2)
+	for _, host := range append(hosts, "api2.cursor.sh", "api3.cursor.sh") {
+		normalized := strings.ToLower(strings.TrimSpace(host))
+		if normalized == "" {
+			continue
+		}
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		result = append(result, normalized)
+	}
+	return result
+}
+
+func isolatedCursorArgs(mirrorCaptureEnabled bool, certPath string) ([]string, error) {
+	if !mirrorCaptureEnabled {
+		return nil, nil
+	}
+	spkiPin, err := isolatedCASPKIPin(certPath)
+	if err != nil {
+		return nil, fmt.Errorf("计算隔离 CA SPKI 指纹失败: %w", err)
+	}
+	return []string{"--ignore-certificate-errors-spki-list=" + spkiPin}, nil
+}
+
+func isolatedCASPKIPin(certPath string) (string, error) {
+	certPEM, err := os.ReadFile(certPath)
+	if err != nil {
+		return "", err
+	}
+	block, _ := pem.Decode(certPEM)
+	if block == nil {
+		return "", errors.New("CA 证书不是有效 PEM")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(cert.RawSubjectPublicKeyInfo)
+	return base64.StdEncoding.EncodeToString(sum[:]), nil
 }
 
 func mirrorRecordPath(dirs isolatedDirectories) string {
