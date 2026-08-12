@@ -151,6 +151,51 @@ func (a *mcpCallerAdapter) FindBrowserServer(scope string) (string, bool) {
 	return "", false
 }
 
+// ResolveBrowserServer 只根据已连接 MCP 的 tools/list 描述符选择浏览器协议。
+// 不依据名称模糊匹配，避免把不兼容服务错误地用于 ComputerUse。
+func (a *mcpCallerAdapter) ResolveBrowserServer(scope string) (computeruse.BrowserMCPResolution, error) {
+	if a.runtime == nil {
+		return computeruse.BrowserMCPResolution{}, fmt.Errorf("browser_mcp_not_connected")
+	}
+
+	var coordinate []computeruse.BrowserMCPResolution
+	for _, snapshot := range a.runtime.Snapshot(scope) {
+		if snapshot.Status != MCPRuntimeConnected {
+			continue
+		}
+		descriptor, ok := a.runtime.Descriptor(scope, snapshot.Identifier)
+		if !ok {
+			continue
+		}
+		toolNames := make([]string, 0, len(descriptor.GetTools()))
+		for _, tool := range descriptor.GetTools() {
+			if tool != nil {
+				toolNames = append(toolNames, tool.GetToolName())
+			}
+		}
+		profile, err := computeruse.ResolveBrowserProfile(snapshot.Identifier, toolNames)
+		if err != nil {
+			continue
+		}
+		resolution := computeruse.BrowserMCPResolution{
+			Identifier: snapshot.Identifier,
+			Profile:    profile,
+			ToolNames:  toolNames,
+		}
+		if profile == computeruse.CursorIDEBrowserProfile {
+			return resolution, nil
+		}
+		coordinate = append(coordinate, resolution)
+	}
+	if len(coordinate) == 1 {
+		return coordinate[0], nil
+	}
+	if len(coordinate) > 1 {
+		return computeruse.BrowserMCPResolution{}, fmt.Errorf("browser_mcp_ambiguous")
+	}
+	return computeruse.BrowserMCPResolution{}, fmt.Errorf("browser_mcp_not_compatible")
+}
+
 // resolveComputerUseExecutor 按当前配置选择执行后端。
 // desktop=DesktopExecutor（Win32）；browser=MCPBrowserExecutor（转发到浏览器 MCP server）。
 func (service *Service) resolveComputerUseExecutor() computeruse.Executor {
@@ -165,7 +210,19 @@ func (service *Service) resolveComputerUseExecutor() computeruse.Executor {
 		}
 	}
 	if mode == "browser" {
-		return computeruse.NewMCPBrowserExecutor(&mcpCallerAdapter{runtime: service.mcpRuntime}, "user", startURL)
+		caller := &mcpCallerAdapter{runtime: service.mcpRuntime}
+		resolution, err := caller.ResolveBrowserServer("user")
+		if err != nil {
+			return computeruse.NewUnavailableExecutor(err.Error())
+		}
+		switch resolution.Profile {
+		case computeruse.CursorIDEBrowserProfile:
+			return computeruse.NewIDEBrowserExecutor(caller, "user", startURL, resolution)
+		case computeruse.CoordinateBrowserProfile:
+			return computeruse.NewMCPBrowserExecutorForServer(caller, "user", startURL, resolution.Identifier)
+		default:
+			return computeruse.NewUnavailableExecutor("browser_mcp_not_compatible")
+		}
 	}
 	return computeruse.DesktopExecutor{}
 }
@@ -201,8 +258,8 @@ func (service *Service) maybeDispatchLocalComputerUse(
 		result := executor.Execute(convertComputerUseActions(actions))
 		synthetic := buildSyntheticExecClientMessageFromResult(pending, result)
 		service.dispatchInboundIntent(InboundIntent{
-			Kind:             "exec_result",
-			RequestID:        requestID,
+			Kind:              "exec_result",
+			RequestID:         requestID,
 			ExecClientMessage: synthetic,
 		})
 	}()
@@ -248,4 +305,3 @@ func buildSyntheticExecClientMessageFromResult(pending runtimecore.PendingExec, 
 		},
 	}
 }
-
