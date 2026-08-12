@@ -439,11 +439,7 @@ func (manager *Manager) LocalResponseCacheSettings() (enabled bool, ttl time.Dur
 	if entries <= 0 {
 		entries = DefaultLocalResponseCacheMaxEntries
 	}
-	persist = cfg.Persist
-	if !cfg.Enabled && cfg.TTLSeconds == 0 && cfg.MaxEntries == 0 && !persist {
-		persist = true
-	}
-	return cfg.Enabled, time.Duration(ttlSeconds) * time.Second, entries, persist
+	return cfg.Enabled, time.Duration(ttlSeconds) * time.Second, entries, cfg.Persist
 }
 
 func (manager *Manager) IsObservabilityLogEnabled(ctx context.Context) bool {
