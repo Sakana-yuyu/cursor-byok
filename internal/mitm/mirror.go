@@ -35,6 +35,7 @@ type MirrorCaptureConfig interface {
 const (
 	mirrorLogSubdir            = "_debug/mirror"
 	mirrorLogFilename          = "official.raw.jsonl"
+	mirrorTimelineLogFilename  = "protocol.timeline.jsonl"
 	mirrorBodyMaxBytes         = 128 * 1024
 	mirrorResponseMaxBytes     = 1024 * 1024
 	mirrorConnectFrameMaxBytes = mirrorResponseMaxBytes
@@ -92,7 +93,25 @@ type mirrorProtocolFrame struct {
 	FrameBase64       string `json:"frameBase64"`
 	ConnectFlags      *uint8 `json:"connectFlags,omitempty"`
 	ServerMessageKind string `json:"serverMessageKind,omitempty"`
+	Terminal          bool   `json:"terminal,omitempty"`
 	DecodeError       string `json:"decodeError,omitempty"`
+}
+
+// mirrorTimelineRecord 是隔离协议索引的一行，不承载任何原始协议字节或正文。
+type mirrorTimelineRecord struct {
+	TS                time.Time `json:"ts"`
+	RequestIDHash     string    `json:"requestIdHash"`
+	ExchangeID        string    `json:"exchangeId"`
+	Direction         string    `json:"direction"`
+	Sequence          int       `json:"sequence"`
+	EventKind         string    `json:"eventKind"`
+	ClientMessageKind string    `json:"clientMessageKind,omitempty"`
+	AgentMode         string    `json:"agentMode,omitempty"`
+	Multitask         bool      `json:"multitask,omitempty"`
+	SubagentAction    string    `json:"subagentAction,omitempty"`
+	ServerMessageKind string    `json:"serverMessageKind,omitempty"`
+	Terminal          bool      `json:"terminal,omitempty"`
+	DecodeError       string    `json:"decodeError,omitempty"`
 }
 
 type mirrorPhase string
@@ -106,8 +125,11 @@ const (
 
 // mirrorExchange 只在代理进程内关联同一镜像 HTTP 交换的各条记录。
 type mirrorExchange struct {
-	id    string
-	model string
+	mu               sync.Mutex
+	id               string
+	model            string
+	requestIDHash    string
+	timelineSequence int
 }
 
 // mirrorRecorder 把镜像请求/响应追加写入 <historyRoot>/_debug/mirror/official.raw.jsonl。
@@ -117,6 +139,7 @@ type mirrorRecorder struct {
 	protocolFidelity bool
 	mu               sync.Mutex
 	file             *os.File
+	timelineFile     *os.File
 }
 
 func newMirrorRecorder(historyRoot string) *mirrorRecorder {
@@ -146,6 +169,25 @@ func (r *mirrorRecorder) ensureFile() error {
 	return nil
 }
 
+func (r *mirrorRecorder) ensureTimelineFile() error {
+	if r == nil || r.historyRoot == "" || !r.protocolFidelity {
+		return nil
+	}
+	if r.timelineFile != nil {
+		return nil
+	}
+	dir := filepath.Join(r.historyRoot, mirrorLogSubdir)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(filepath.Join(dir, mirrorTimelineLogFilename), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	r.timelineFile = f
+	return nil
+}
+
 // Close 关闭底层日志文件，释放句柄。用于服务关闭或测试清理。
 func (r *mirrorRecorder) Close() error {
 	if r == nil {
@@ -153,11 +195,20 @@ func (r *mirrorRecorder) Close() error {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.file == nil {
+	if r.file == nil && r.timelineFile == nil {
 		return nil
 	}
-	err := r.file.Close()
-	r.file = nil
+	var err error
+	if r.file != nil {
+		err = r.file.Close()
+		r.file = nil
+	}
+	if r.timelineFile != nil {
+		if timelineErr := r.timelineFile.Close(); err == nil {
+			err = timelineErr
+		}
+		r.timelineFile = nil
+	}
 	return err
 }
 
@@ -204,15 +255,17 @@ func (r *mirrorRecorder) recordExchangeRequest(host string, exchange *mirrorExch
 		}
 		r.setRecordBody(&rec, recordedBody)
 		r.setBidiProtocolSummary(&rec, req, recordedBody)
+		r.setRunSSERequestSummary(&rec, req, recordedBody)
 		req.Body = io.NopCloser(bytes.NewReader(body))
 	}
 	if rec.Model == "" {
 		rec.Model = mirrorRequestModel(host, req, body)
 	}
 	if exchange != nil {
-		exchange.model = rec.Model
+		exchange.setModel(rec.Model)
 	}
 	r.write(rec)
+	r.recordExchangeRequestTimeline(exchange, req, rec.Protocol)
 }
 
 // recordResponseStart 记录一次镜像响应的起始信息（ts/host/status/脱敏 headers），body 为空。
@@ -289,6 +342,7 @@ func (r *mirrorRecorder) recordExchangeResponseProtocolFrame(host string, exchan
 		Model:         mirrorExchangeModel(exchange),
 		ProtocolFrame: &frame,
 	})
+	r.recordExchangeResponseTimeline(exchange, frame)
 }
 
 // setRecordBody 仅在隔离保真模式中使用 Base64，避免 protobuf 非 UTF-8 字节经 JSON 字符串替换。
@@ -348,8 +402,70 @@ func (r *mirrorRecorder) setBidiProtocolSummary(rec *mirrorRecord, req *http.Req
 	summary.SubagentAction = mirrorSubagentAction(clientMessage)
 }
 
+// setRunSSERequestSummary 读取 RunSSE Connect 请求中的 BidiRequestId，只保留哈希。
+func (r *mirrorRecorder) setRunSSERequestSummary(rec *mirrorRecord, req *http.Request, body []byte) {
+	if r == nil || !r.protocolFidelity || rec == nil || !isRunSSERequest(req) {
+		return
+	}
+	summary := &mirrorProtocol{}
+	rec.Protocol = summary
+	if rec.Truncated {
+		summary.DecodeError = "body_truncated"
+		return
+	}
+	if encoding := strings.TrimSpace(req.Header.Get("Content-Encoding")); encoding != "" && !strings.EqualFold(encoding, "identity") {
+		summary.DecodeError = "unsupported_content_encoding"
+		return
+	}
+	requestID, decodeError := mirrorRunSSERequestID(req, body)
+	if decodeError != "" {
+		summary.DecodeError = decodeError
+		return
+	}
+	sum := sha256.Sum256([]byte(requestID))
+	summary.RequestIDHash = hex.EncodeToString(sum[:])
+}
+
 func isBidiAppendRequest(req *http.Request) bool {
 	return req != nil && req.URL != nil && req.URL.Path == "/aiserver.v1.BidiService/BidiAppend"
+}
+
+func isRunSSERequest(req *http.Request) bool {
+	return req != nil && req.URL != nil && req.URL.Path == "/agent.v1.AgentService/RunSSE"
+}
+
+func mirrorRunSSERequestID(req *http.Request, body []byte) (string, string) {
+	contentType := ""
+	if req != nil {
+		contentType = strings.ToLower(strings.TrimSpace(strings.Split(req.Header.Get("Content-Type"), ";")[0]))
+	}
+	if contentType != "application/connect+proto" {
+		return "", "runsse_request_content_type_unsupported"
+	}
+	if len(body) < 5 {
+		return "", "runsse_request_frame_incomplete"
+	}
+	flags := body[0]
+	payloadLength := int(binary.BigEndian.Uint32(body[1:5]))
+	if payloadLength > mirrorConnectFrameMaxBytes || len(body) != 5+payloadLength {
+		return "", "runsse_request_frame_invalid"
+	}
+	payload := body[5:]
+	if flags&0x01 != 0 {
+		var err error
+		payload, err = mirrorDecompressConnectPayload(payload, req.Header.Get("Connect-Content-Encoding"))
+		if err != nil {
+			return "", err.Error()
+		}
+	}
+	if flags&0x02 != 0 {
+		return "", "runsse_request_end_stream"
+	}
+	requestID := &aiserverv1.BidiRequestId{}
+	if err := proto.Unmarshal(payload, requestID); err != nil || strings.TrimSpace(requestID.GetRequestId()) == "" {
+		return "", "runsse_request_unmarshal_failed"
+	}
+	return strings.TrimSpace(requestID.GetRequestId()), ""
 }
 
 func mirrorAgentMode(message *agentv1.AgentClientMessage) string {
@@ -443,7 +559,7 @@ func (d *mirrorRunSSEFrameDecoder) writeConnectFrames() {
 		flags := d.buffer[0]
 		payloadLength := int(binary.BigEndian.Uint32(d.buffer[1:5]))
 		if payloadLength > mirrorConnectFrameMaxBytes {
-			d.emitFrame(append([]byte(nil), d.buffer[:5]...), &flags, "connect_frame_length_invalid", "")
+			d.emitFrame(append([]byte(nil), d.buffer[:5]...), &flags, false, "connect_frame_length_invalid", "")
 			d.buffer = nil
 			return
 		}
@@ -453,8 +569,8 @@ func (d *mirrorRunSSEFrameDecoder) writeConnectFrames() {
 		}
 		frame := append([]byte(nil), d.buffer[:frameLength]...)
 		d.buffer = d.buffer[frameLength:]
-		kind, decodeError := d.decodeConnectServerMessage(flags, frame[5:])
-		d.emitFrame(frame, &flags, decodeError, kind)
+		kind, terminal, decodeError := d.decodeConnectServerMessage(flags, frame[5:])
+		d.emitFrame(frame, &flags, terminal, decodeError, kind)
 	}
 }
 
@@ -466,7 +582,7 @@ func (d *mirrorRunSSEFrameDecoder) writeSSEFrames() {
 		}
 		frame := append([]byte(nil), d.buffer[:boundary]...)
 		d.buffer = d.buffer[boundary:]
-		d.emitFrame(frame, nil, "sse_server_message_unavailable", "")
+		d.emitFrame(frame, nil, mirrorSSEFrameTerminal(frame), "sse_server_message_unavailable", "")
 	}
 }
 
@@ -485,23 +601,27 @@ func mirrorSSEFrameBoundary(buffer []byte) int {
 	return crlfBoundary + 4
 }
 
-func (d *mirrorRunSSEFrameDecoder) decodeConnectServerMessage(flags uint8, payload []byte) (string, string) {
+func (d *mirrorRunSSEFrameDecoder) decodeConnectServerMessage(flags uint8, payload []byte) (string, bool, string) {
 	decoded := payload
 	if flags&0x01 != 0 {
 		var err error
 		decoded, err = mirrorDecompressConnectPayload(payload, d.codec)
 		if err != nil {
-			return "", err.Error()
+			return "", false, err.Error()
 		}
 	}
 	if flags&0x02 != 0 {
-		return "connect_end_stream", ""
+		return "connect_end_stream", true, ""
 	}
 	message := &agentv1.AgentServerMessage{}
 	if err := proto.Unmarshal(decoded, message); err != nil {
-		return "", "agent_server_unmarshal_failed"
+		return "", false, "agent_server_unmarshal_failed"
 	}
-	return mirrorActiveOneofName(message), ""
+	return mirrorActiveOneofName(message), false, ""
+}
+
+func mirrorSSEFrameTerminal(frame []byte) bool {
+	return bytes.Contains(frame, []byte("data: [DONE]"))
 }
 
 func mirrorDecompressConnectPayload(payload []byte, codec string) ([]byte, error) {
@@ -537,7 +657,7 @@ func mirrorActiveOneofName(message proto.Message) string {
 	return ""
 }
 
-func (d *mirrorRunSSEFrameDecoder) emitFrame(frame []byte, flags *uint8, decodeError, serverMessageKind string) {
+func (d *mirrorRunSSEFrameDecoder) emitFrame(frame []byte, flags *uint8, terminal bool, decodeError, serverMessageKind string) {
 	if d == nil || len(frame) == 0 || d.emit == nil {
 		return
 	}
@@ -551,6 +671,7 @@ func (d *mirrorRunSSEFrameDecoder) emitFrame(frame []byte, flags *uint8, decodeE
 		FrameBase64:       base64.StdEncoding.EncodeToString(frame),
 		ConnectFlags:      flags,
 		ServerMessageKind: serverMessageKind,
+		Terminal:          terminal,
 		DecodeError:       decodeError,
 	})
 	d.sequence++
@@ -568,14 +689,83 @@ func (d *mirrorRunSSEFrameDecoder) Close() {
 	if d.encoding == "connect" {
 		decodeError = "connect_frame_incomplete"
 	}
-	d.emitFrame(append([]byte(nil), d.buffer...), nil, decodeError, "")
+	d.emitFrame(append([]byte(nil), d.buffer...), nil, false, decodeError, "")
 	d.buffer = nil
+}
+
+func (r *mirrorRecorder) recordExchangeRequestTimeline(exchange *mirrorExchange, req *http.Request, summary *mirrorProtocol) {
+	if r == nil || !r.protocolFidelity || exchange == nil || summary == nil || summary.RequestIDHash == "" {
+		return
+	}
+	eventKind := ""
+	if isBidiAppendRequest(req) {
+		eventKind = "bidi_append"
+	} else if isRunSSERequest(req) {
+		eventKind = "runsse_request"
+	}
+	if eventKind == "" {
+		return
+	}
+	exchange.setRequestIDHash(summary.RequestIDHash)
+	r.writeTimeline(mirrorTimelineRecord{
+		TS:                time.Now(),
+		RequestIDHash:     summary.RequestIDHash,
+		ExchangeID:        mirrorExchangeID(exchange),
+		Direction:         "request",
+		Sequence:          exchange.nextTimelineSequence(),
+		EventKind:         eventKind,
+		ClientMessageKind: summary.ClientMessageKind,
+		AgentMode:         summary.AgentMode,
+		Multitask:         summary.Multitask,
+		SubagentAction:    summary.SubagentAction,
+		DecodeError:       summary.DecodeError,
+	})
+}
+
+func (r *mirrorRecorder) recordExchangeResponseTimeline(exchange *mirrorExchange, frame mirrorProtocolFrame) {
+	if r == nil || !r.protocolFidelity || exchange == nil {
+		return
+	}
+	requestIDHash := exchange.requestIDHashValue()
+	if requestIDHash == "" {
+		return
+	}
+	r.writeTimeline(mirrorTimelineRecord{
+		TS:                time.Now(),
+		RequestIDHash:     requestIDHash,
+		ExchangeID:        mirrorExchangeID(exchange),
+		Direction:         frame.Direction,
+		Sequence:          exchange.nextTimelineSequence(),
+		EventKind:         "runsse_" + frame.FrameEncoding,
+		ServerMessageKind: frame.ServerMessageKind,
+		Terminal:          frame.Terminal,
+		DecodeError:       frame.DecodeError,
+	})
+}
+
+func (r *mirrorRecorder) writeTimeline(rec mirrorTimelineRecord) {
+	line, err := json.Marshal(rec)
+	if err != nil {
+		logger.Errorf("mirror timeline marshal failed: %v", err)
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.ensureTimelineFile(); err != nil {
+		logger.Errorf("mirror timeline open failed: %v", err)
+		return
+	}
+	if _, err := r.timelineFile.Write(append(line, '\n')); err != nil {
+		logger.Errorf("mirror timeline write failed: %v", err)
+	}
 }
 
 func mirrorExchangeID(exchange *mirrorExchange) string {
 	if exchange == nil {
 		return ""
 	}
+	exchange.mu.Lock()
+	defer exchange.mu.Unlock()
 	return exchange.id
 }
 
@@ -583,7 +773,47 @@ func mirrorExchangeModel(exchange *mirrorExchange) string {
 	if exchange == nil {
 		return ""
 	}
+	exchange.mu.Lock()
+	defer exchange.mu.Unlock()
 	return exchange.model
+}
+
+func (exchange *mirrorExchange) setRequestIDHash(requestIDHash string) {
+	if exchange == nil || requestIDHash == "" {
+		return
+	}
+	exchange.mu.Lock()
+	exchange.requestIDHash = requestIDHash
+	exchange.mu.Unlock()
+}
+
+func (exchange *mirrorExchange) setModel(model string) {
+	if exchange == nil {
+		return
+	}
+	exchange.mu.Lock()
+	exchange.model = model
+	exchange.mu.Unlock()
+}
+
+func (exchange *mirrorExchange) requestIDHashValue() string {
+	if exchange == nil {
+		return ""
+	}
+	exchange.mu.Lock()
+	defer exchange.mu.Unlock()
+	return exchange.requestIDHash
+}
+
+func (exchange *mirrorExchange) nextTimelineSequence() int {
+	if exchange == nil {
+		return 0
+	}
+	exchange.mu.Lock()
+	defer exchange.mu.Unlock()
+	sequence := exchange.timelineSequence
+	exchange.timelineSequence++
+	return sequence
 }
 
 // mirrorRequestModel 从已读取的请求体或 Gemini URL 尽力提取模型名。
