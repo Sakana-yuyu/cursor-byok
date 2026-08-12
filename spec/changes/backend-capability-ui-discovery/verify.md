@@ -190,3 +190,20 @@
 | V-32 | data-protection | major | fixed(r12) | 本次结构化索引未暴露敏感数据或正文。 | 对最近约 `11,498` 条时间线记录扫描，`body`、`bodyBase64`、`frameBase64`、`prompt`、`output`、`cookie`、`authorization`、`path`、`url`、`token`、`accessToken`、`refreshToken`、`requestId` 均为 0；`decodeError=0`。 | 原始 JSONL 继续只留在临时隔离目录，不进入 Git、研究文档或前端状态。 |
 
 本轮对接结论：已可作为 Cursor Multitask 的协议状态采集基础，覆盖并行任务创建、流式思考/文本/工具调用、交互询问/响应、子代理成功回传、步骤完成和流关闭；尚不足以宣称完成逐子任务归属、后台化/等待、取消/错误及 `Stop All` 的完整还原。
+
+## Round 13 - 子代理引用身份对齐（2026-08-12）
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- | --- |
+| V-33 | protocol-identity | minor | fixed(r13) | 本地聚合与原生 Task 的开始、运行状态和完成消息可能使用不同身份，导致蓝色子代理引用在完成后断链。 | `agent.v1.SubagentArgs` 只有 `tool_call_id`，没有独立 `agent_id`；`da63c77` 修复本地聚合完成态，`d8b7a68` 修复原生执行桥完成态，均统一为 `local-delegation:<tool_call_id>`。 | Task `agent_id`、checkpoint `SubagentRunState.subagent_id`、`parent_tool_call_id` 和完成 ToolCall 按同一父工具调用键关联。 |
+| V-34 | routing | minor | fixed(r13) | 同标题并行任务不能因完成顺序或缺失状态误定位到其他卡片。 | `c21cae7` 回归测试构造两个同标题任务，第二个先完成，并断言各自 `parent_tool_call_id`、状态和 `subagent_id` 独立；缺失键不产生回退路由。 | 只按精确父工具调用键路由，不按标题、数组顺序、完成顺序或 `requestIdHash` 猜测。 |
+| V-35 | client-ui | minor | open | Cursor 客户端蓝色引用的点击、滚动、高亮和状态详情尚未由本仓库完成真实 UI 验证。 | 静态检索确认 `frontend/src` 没有聊天消息/Markdown 子代理引用渲染入口；本仓库可验证协议身份和状态字段，不能替代已安装 Cursor 客户端的人工点击。 | 保持为未验证项；后续需在用户控制的隔离 Cursor 实例中点击蓝色引用，确认定位卡片、滚动、高亮和详情展示。 |
+
+本轮代码证据：
+
+- `go test ./internal/backend/agent/bridge/exec -count=1`：退出码 0。
+- `go test ./internal/backend/forwarder -count=1`：退出码 0。
+- `go vet ./internal/backend/agent/bridge/exec` 与 `go vet ./internal/backend/forwarder`：退出码 0。
+- `git diff --check` 与各次暂存检查：退出码 0。
+- 独立提交：`da63c77`、`d8b7a68`、`c21cae7`；未暂存 `.playwright-cli/`、`frontend/.playwright-cli/`、`output/`。
+- 未读取、提交或写入研究台账的原始抓包正文、认证头、Cookie、token、完整 request ID 或完整响应。

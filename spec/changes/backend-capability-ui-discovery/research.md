@@ -108,3 +108,14 @@
 - [DEC-19] 隔离 E2E 的显式镜像模式启动时，只读导入真实 Cursor 的最小登录态 | source: 用户选择 A 并确认设计，目标是每次新建临时隔离实例时免除重复登录。启动器必须在替换进程 `APPDATA` 前定位真实 `%APPDATA%\Cursor\User\globalStorage\state.vscdb`，仅以 SQLite 只读方式读取 `cursorAuth/accessToken`、`cursorAuth/refreshToken` 和 `cursorAuth/cachedEmail`，然后在本次临时根目录创建只含这三项的最小状态库。不得复制约 1.15 GB 的真实状态库、Cookie、缓存、扩展、工作区、历史或其他 `globalStorage` 项；不得复用会修改 Statsig 开关的模拟账号注入函数；不得写回真实库或向日志、JSONL、Git、终端输出 token、邮箱或完整凭据。真实库忙锁、缺项或读取失败时继续启动并降级为手动登录，只输出不含敏感数据的状态摘要 | verification: 运行既有相关 Go 测试、构建、`go vet` 与 `git diff --check`；在用户授权启动新隔离 Cursor 后，确认无需重新登录，同时核对真实状态库未被修改 | reversibility: 回退该导入实现提交即可恢复每次手动登录；临时凭据仅留在该次隔离根目录，可随目录整体删除。
 - [DEC-20] 隔离镜像的上下行采用“原始字节保真 + 全部已知协议结构化索引” | source: 用户确认 A 并批准设计；`official.raw.jsonl` 保存上下行 Base64、长度和 SHA-256，`protocol.timeline.jsonl` 保存 Bidi/RunSSE 的方向、顺序、顶层与 Exec 内层 oneof、Multitask 子代理事件、终态和解码错误。对 `text/event-stream` 先探测合法 Connect 帧再降级 SSE，以修复真实 Cursor 下行协议被错误分类的问题；不重复存储 prompt、模型输出、token、Cookie、完整 ID 或 protobuf JSON | verification: 定向 Go 检查后，经用户授权启动新的隔离实例，确认出现 `runsse_connect`、服务端结构类型与子代理摘要，且原始帧仍可按 Base64 复核 | reversibility: 回退后续解析实现提交即可恢复当前行为；已产生的隔离临时记录可整体删除，不影响真实 Cursor 或官方直通。
 - [DEC-21] 下一轮真实协议覆盖同时优先 Multitask 生命周期与交互/确认协议 | source: 用户选择 AB；在现有隔离 Cursor 实例中，分别采集子代理后台化、等待、取消、结果回传，以及 `interaction_query`、用户确认、反馈和模式切换等事件。每项只在对应 oneof 与关联闭环真实出现时标记已验证；提示词、响应正文、工具参数、完整 ID、Cookie 和凭据仍不进入时间线或验证台账 | verification: 先设计最小用户操作矩阵，再对 `protocol.timeline.jsonl` 的结构字段、事件顺序、requestIdHash 关联、终态和敏感字段缺失做只读核验；未触发项保持未验证 | reversibility: 本阶段只新增隔离环境下的采集/索引字段与验证台账，回退对应提交即可恢复当前解析行为，临时目录可整体删除。
+
+- [DEC-22] 蓝色子代理引用的协议身份必须由父 `tool_call_id` 派生，不能使用标题、顺序、完成顺序或 `requestIdHash` 推断 | decided from code and regression evidence: 本地聚合与原生 Task 均以 `local-delegation:<tool_call_id>` 同步 Task `agent_id`、checkpoint `subagent_id` 和完成 ToolCall；原生 proto 的 `SubagentArgs` 没有独立 `agent_id` 字段，底层只传 `tool_call_id` | verification: `da63c77`、`d8b7a68`、`c21cae7` 及 forwarder/exec bridge 测试通过 | reversibility: 分别回退三笔提交即可恢复修改前行为。
+- [DEC-23] 本仓库不新增蓝色引用聊天渲染器 | decided from status quo: `frontend/src` 未发现聊天消息/Markdown 子代理引用渲染入口，Cursor 客户端负责蓝色引用的点击、滚动和高亮；本仓库职责是提供可关联的协议身份和状态 | verification: 静态检索未发现对应入口；客户端点击行为保持真实 Cursor 隔离 E2E 未验证 | reversibility: 不新增前端代码，无 UI 回退成本；后续若发现本地渲染入口，再按独立需求补实现。
+
+## 子代理引用对齐研究更新（2026-08-12）
+
+- 原生协议字段确认：`agent.v1.SubagentArgs` 提供 `tool_call_id`，不提供独立 `agent_id`；因此父卡片身份应由 forwarder 以 `local-delegation:<tool_call_id>` 生成。
+- 本地聚合路径已把开始消息、`subagent_runs_by_parent_tool_call_id`、终态和完成 ToolCall 统一到同一父工具调用键。
+- 原生完成路径曾直接沿用客户端返回的 `SubagentSuccess.agent_id`，会在返回空值或不同内部 ID 时断开蓝色引用；现已在执行桥完成态强制恢复父工具调用派生身份。
+- 并行测试证明两个相同标题任务按各自 `parent_tool_call_id` 保持独立，第二个先完成不会污染第一个；缺失键不回退到其他任务。
+- 当前能宣称的是“协议身份可稳定定位”；不能宣称“蓝色引用点击后的滚动/高亮已完成”，因为该 UI 由已安装 Cursor 客户端渲染且本仓库没有可控入口。

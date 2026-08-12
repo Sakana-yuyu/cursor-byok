@@ -62,4 +62,12 @@
   - [ ] 10.1 保持当前隔离实例运行；用户依次尝试一个可后台化的长子任务、等待该任务结果的后续操作、取消或错误收口，以及一次会要求选择/确认的操作。用户界面未出现某项动作时跳过并记录未触发。后台化、等待、取消/错误和父级 `Stop All` 本轮仍未完成真实触发验证。
   - [x] 10.2 只读检查 `protocol.timeline.jsonl`：已确认 `subagent_args/result`、`clientResultKind=success`、`interaction_query/response`、`step_completed`、`turn_ended` 和 `stream_close`；交互闭环按相同 `requestIdHash` 关联。
   - [x] 10.3 对已触发事件核对 `runsse_connect`、`bidi_append` 方向、requestIdHash 关联、终态与 `decodeError`；最近约 11,498 条时间线记录的正文、原始帧、凭据、路径、token 和完整 request ID 字段扫描均为 0。
-  - [x] 10.4 已将汇总计数、实际 oneof 类型、未触发分支和隐私检查写入 `verify.md` 与本任务清单；临时 JSONL 未提交，文档改动单独提交 `docs(verify): record multitask interaction coverage`。
+- [x] 10.4 已将汇总计数、实际 oneof 类型、未触发分支和隐私检查写入 `verify.md` 与本任务清单；临时 JSONL 未提交，文档改动单独提交 `docs(verify): record multitask interaction coverage`。
+
+## 子代理蓝色引用身份对齐
+
+- [x] 11.1 本地聚合 Task 的开始消息、checkpoint、完成结果统一使用 `local-delegation:<tool_call_id>`。
+- [x] 11.2 原生 Cursor Task 的 `SubagentArgs.tool_call_id`、PendingExec 和完成 ToolCall 统一绑定父 `tool_call_id`；客户端返回的内部 `agent_id` 不再改写父卡片引用。
+- [x] 11.3 并行同标题、反向完成和缺失任务状态测试通过；不按标题、数组顺序、完成顺序或 `requestIdHash` 猜测归属。
+- [~] 11.4 Cursor 客户端蓝色引用点击、滚动、高亮和详情面板尚未由本仓库验证；需要用户在隔离实例中实际点击，代码库没有对应聊天渲染入口。
+- [x] 11.5 代码提交拆分为 `da63c77`、`d8b7a68`、`c21cae7`，临时目录未暂存。
