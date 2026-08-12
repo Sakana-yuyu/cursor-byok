@@ -24,6 +24,7 @@ import (
 	"cursor/internal/logger"
 
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // MirrorCaptureConfig 提供镜像记录所需的配置。
@@ -85,33 +86,46 @@ type mirrorProtocol struct {
 // mirrorProtocolFrame 是隔离 RunSSE 流中的一个完整协议帧。
 // frameBase64 保留线上字节，摘要只保存结构字段而不展开服务端消息内容。
 type mirrorProtocolFrame struct {
-	Direction         string `json:"direction"`
-	Sequence          int    `json:"sequence"`
-	FrameEncoding     string `json:"frameEncoding"`
-	FrameBytes        int    `json:"frameBytes"`
-	FrameSHA256       string `json:"frameSHA256"`
-	FrameBase64       string `json:"frameBase64"`
-	ConnectFlags      *uint8 `json:"connectFlags,omitempty"`
-	ServerMessageKind string `json:"serverMessageKind,omitempty"`
-	Terminal          bool   `json:"terminal,omitempty"`
-	DecodeError       string `json:"decodeError,omitempty"`
+	Direction          string `json:"direction"`
+	Sequence           int    `json:"sequence"`
+	FrameEncoding      string `json:"frameEncoding"`
+	FrameBytes         int    `json:"frameBytes"`
+	FrameSHA256        string `json:"frameSHA256"`
+	FrameBase64        string `json:"frameBase64"`
+	ConnectFlags       *uint8 `json:"connectFlags,omitempty"`
+	ConnectCompression string `json:"connectCompression,omitempty"`
+	ServerMessageKind  string `json:"serverMessageKind,omitempty"`
+	ServerDetailKind   string `json:"serverDetailKind,omitempty"`
+	ExecMessageKind    string `json:"execMessageKind,omitempty"`
+	SubagentAction     string `json:"subagentAction,omitempty"`
+	StreamContentKind  string `json:"streamContentKind,omitempty"`
+	StreamDeltaBytes   *int   `json:"streamDeltaBytes,omitempty"`
+	StreamDeltaSHA256  string `json:"streamDeltaSHA256,omitempty"`
+	Terminal           bool   `json:"terminal,omitempty"`
+	DecodeError        string `json:"decodeError,omitempty"`
 }
 
 // mirrorTimelineRecord 是隔离协议索引的一行，不承载任何原始协议字节或正文。
 type mirrorTimelineRecord struct {
-	TS                time.Time `json:"ts"`
-	RequestIDHash     string    `json:"requestIdHash"`
-	ExchangeID        string    `json:"exchangeId"`
-	Direction         string    `json:"direction"`
-	Sequence          int       `json:"sequence"`
-	EventKind         string    `json:"eventKind"`
-	ClientMessageKind string    `json:"clientMessageKind,omitempty"`
-	AgentMode         string    `json:"agentMode,omitempty"`
-	Multitask         bool      `json:"multitask,omitempty"`
-	SubagentAction    string    `json:"subagentAction,omitempty"`
-	ServerMessageKind string    `json:"serverMessageKind,omitempty"`
-	Terminal          bool      `json:"terminal,omitempty"`
-	DecodeError       string    `json:"decodeError,omitempty"`
+	TS                 time.Time `json:"ts"`
+	RequestIDHash      string    `json:"requestIdHash"`
+	ExchangeID         string    `json:"exchangeId"`
+	Direction          string    `json:"direction"`
+	Sequence           int       `json:"sequence"`
+	EventKind          string    `json:"eventKind"`
+	ClientMessageKind  string    `json:"clientMessageKind,omitempty"`
+	AgentMode          string    `json:"agentMode,omitempty"`
+	Multitask          bool      `json:"multitask,omitempty"`
+	SubagentAction     string    `json:"subagentAction,omitempty"`
+	ConnectCompression string    `json:"connectCompression,omitempty"`
+	ServerMessageKind  string    `json:"serverMessageKind,omitempty"`
+	ServerDetailKind   string    `json:"serverDetailKind,omitempty"`
+	ExecMessageKind    string    `json:"execMessageKind,omitempty"`
+	StreamContentKind  string    `json:"streamContentKind,omitempty"`
+	StreamDeltaBytes   *int      `json:"streamDeltaBytes,omitempty"`
+	StreamDeltaSHA256  string    `json:"streamDeltaSHA256,omitempty"`
+	Terminal           bool      `json:"terminal,omitempty"`
+	DecodeError        string    `json:"decodeError,omitempty"`
 }
 
 type mirrorPhase string
@@ -527,7 +541,9 @@ func newMirrorRunSSEFrameDecoder(resp *http.Response, emit func(mirrorProtocolFr
 	case "application/connect+proto":
 		encoding = "connect"
 	case "text/event-stream":
-		encoding = "sse"
+		// Cursor 当前会为 Connect 二进制帧标记 text/event-stream，
+		// 先保留最小缓冲区探测帧头，无法确认时才按文本 SSE 处理。
+		encoding = "pending"
 	default:
 		return nil
 	}
@@ -551,7 +567,41 @@ func (d *mirrorRunSSEFrameDecoder) Write(chunk []byte) {
 		d.writeConnectFrames()
 		return
 	}
+	if d.encoding == "pending" {
+		if len(d.buffer) < 5 {
+			return
+		}
+		if mirrorConnectFrameHeaderValid(d.buffer) && !mirrorConnectFrameComplete(d.buffer) {
+			return
+		}
+		if mirrorConnectFrameComplete(d.buffer) {
+			d.encoding = "connect"
+			d.writeConnectFrames()
+			return
+		}
+		d.encoding = "sse"
+	}
 	d.writeSSEFrames()
+}
+
+func mirrorConnectFrameHeaderValid(buffer []byte) bool {
+	if len(buffer) < 5 {
+		return false
+	}
+	flags := buffer[0]
+	if flags&^uint8(0x03) != 0 {
+		return false
+	}
+	payloadLength := int(binary.BigEndian.Uint32(buffer[1:5]))
+	return payloadLength <= mirrorConnectFrameMaxBytes
+}
+
+func mirrorConnectFrameComplete(buffer []byte) bool {
+	if !mirrorConnectFrameHeaderValid(buffer) {
+		return false
+	}
+	payloadLength := int(binary.BigEndian.Uint32(buffer[1:5]))
+	return len(buffer) >= 5+payloadLength
 }
 
 func (d *mirrorRunSSEFrameDecoder) writeConnectFrames() {
@@ -559,7 +609,7 @@ func (d *mirrorRunSSEFrameDecoder) writeConnectFrames() {
 		flags := d.buffer[0]
 		payloadLength := int(binary.BigEndian.Uint32(d.buffer[1:5]))
 		if payloadLength > mirrorConnectFrameMaxBytes {
-			d.emitFrame(append([]byte(nil), d.buffer[:5]...), &flags, false, "connect_frame_length_invalid", "")
+			d.emitFrame(append([]byte(nil), d.buffer[:5]...), &flags, false, "connect_frame_length_invalid", mirrorProtocolFrame{})
 			d.buffer = nil
 			return
 		}
@@ -569,8 +619,8 @@ func (d *mirrorRunSSEFrameDecoder) writeConnectFrames() {
 		}
 		frame := append([]byte(nil), d.buffer[:frameLength]...)
 		d.buffer = d.buffer[frameLength:]
-		kind, terminal, decodeError := d.decodeConnectServerMessage(flags, frame[5:])
-		d.emitFrame(frame, &flags, terminal, decodeError, kind)
+		summary, terminal, decodeError := d.decodeConnectServerMessage(flags, frame[5:])
+		d.emitFrame(frame, &flags, terminal, decodeError, summary)
 	}
 }
 
@@ -582,7 +632,7 @@ func (d *mirrorRunSSEFrameDecoder) writeSSEFrames() {
 		}
 		frame := append([]byte(nil), d.buffer[:boundary]...)
 		d.buffer = d.buffer[boundary:]
-		d.emitFrame(frame, nil, mirrorSSEFrameTerminal(frame), "sse_server_message_unavailable", "")
+		d.emitFrame(frame, nil, mirrorSSEFrameTerminal(frame), "sse_server_message_unavailable", mirrorProtocolFrame{})
 	}
 }
 
@@ -601,23 +651,91 @@ func mirrorSSEFrameBoundary(buffer []byte) int {
 	return crlfBoundary + 4
 }
 
-func (d *mirrorRunSSEFrameDecoder) decodeConnectServerMessage(flags uint8, payload []byte) (string, bool, string) {
+func (d *mirrorRunSSEFrameDecoder) decodeConnectServerMessage(flags uint8, payload []byte) (mirrorProtocolFrame, bool, string) {
+	frame := mirrorProtocolFrame{ConnectCompression: "identity"}
 	decoded := payload
 	if flags&0x01 != 0 {
+		frame.ConnectCompression = strings.ToLower(strings.TrimSpace(d.codec))
+		if frame.ConnectCompression == "" {
+			frame.ConnectCompression = "gzip"
+		}
 		var err error
 		decoded, err = mirrorDecompressConnectPayload(payload, d.codec)
 		if err != nil {
-			return "", false, err.Error()
+			return frame, false, err.Error()
 		}
 	}
 	if flags&0x02 != 0 {
-		return "connect_end_stream", true, ""
+		return frame, true, ""
 	}
 	message := &agentv1.AgentServerMessage{}
 	if err := proto.Unmarshal(decoded, message); err != nil {
-		return "", false, "agent_server_unmarshal_failed"
+		return frame, false, "agent_server_unmarshal_failed"
 	}
-	return mirrorActiveOneofName(message), false, ""
+	frame.ServerMessageKind = mirrorActiveOneofName(message)
+	if interaction := message.GetInteractionUpdate(); interaction != nil {
+		frame.ServerDetailKind = mirrorActiveOneofName(interaction)
+		frame.StreamContentKind = frame.ServerDetailKind
+		if payload := mirrorInteractionUpdatePayload(interaction); len(payload) > 0 {
+			deltaBytes := len(payload)
+			sum := sha256.Sum256(payload)
+			frame.StreamDeltaBytes = &deltaBytes
+			frame.StreamDeltaSHA256 = hex.EncodeToString(sum[:])
+		}
+	}
+	if execMessage := message.GetExecServerMessage(); execMessage != nil {
+		frame.ExecMessageKind = mirrorActiveOneofName(execMessage)
+		frame.SubagentAction = mirrorExecSubagentAction(frame.ExecMessageKind)
+	}
+	if controlMessage := message.GetExecServerControlMessage(); controlMessage != nil {
+		frame.ServerDetailKind = mirrorActiveOneofName(controlMessage)
+	}
+	if kvMessage := message.GetKvServerMessage(); kvMessage != nil {
+		frame.ServerDetailKind = mirrorActiveOneofName(kvMessage)
+	}
+	if query := message.GetInteractionQuery(); query != nil {
+		frame.ServerDetailKind = mirrorActiveOneofName(query)
+	}
+	return frame, false, ""
+}
+
+func mirrorExecSubagentAction(kind string) string {
+	switch kind {
+	case "subagent_args":
+		return "create"
+	case "force_background_subagent_args":
+		return "background"
+	case "subagent_await_args":
+		return "await"
+	default:
+		return ""
+	}
+}
+
+func mirrorInteractionUpdatePayload(message *agentv1.InteractionUpdate) []byte {
+	if message == nil || message.GetMessage() == nil {
+		return nil
+	}
+	reflect := message.ProtoReflect()
+	oneofs := reflect.Descriptor().Oneofs()
+	for index := 0; index < oneofs.Len(); index++ {
+		field := reflect.WhichOneof(oneofs.Get(index))
+		if field != nil && field.Kind() == protoreflect.MessageKind {
+			return marshalMirrorProtoMessage(reflect.Get(field).Message().Interface())
+		}
+	}
+	return nil
+}
+
+func marshalMirrorProtoMessage(message proto.Message) []byte {
+	if message == nil {
+		return nil
+	}
+	payload, err := proto.Marshal(message)
+	if err != nil {
+		return nil
+	}
+	return payload
 }
 
 func mirrorSSEFrameTerminal(frame []byte) bool {
@@ -657,23 +775,21 @@ func mirrorActiveOneofName(message proto.Message) string {
 	return ""
 }
 
-func (d *mirrorRunSSEFrameDecoder) emitFrame(frame []byte, flags *uint8, terminal bool, decodeError, serverMessageKind string) {
+func (d *mirrorRunSSEFrameDecoder) emitFrame(frame []byte, flags *uint8, terminal bool, decodeError string, summary mirrorProtocolFrame) {
 	if d == nil || len(frame) == 0 || d.emit == nil {
 		return
 	}
 	sum := sha256.Sum256(frame)
-	d.emit(mirrorProtocolFrame{
-		Direction:         "response",
-		Sequence:          d.sequence,
-		FrameEncoding:     d.encoding,
-		FrameBytes:        len(frame),
-		FrameSHA256:       hex.EncodeToString(sum[:]),
-		FrameBase64:       base64.StdEncoding.EncodeToString(frame),
-		ConnectFlags:      flags,
-		ServerMessageKind: serverMessageKind,
-		Terminal:          terminal,
-		DecodeError:       decodeError,
-	})
+	summary.Direction = "response"
+	summary.Sequence = d.sequence
+	summary.FrameEncoding = d.encoding
+	summary.FrameBytes = len(frame)
+	summary.FrameSHA256 = hex.EncodeToString(sum[:])
+	summary.FrameBase64 = base64.StdEncoding.EncodeToString(frame)
+	summary.ConnectFlags = flags
+	summary.Terminal = terminal
+	summary.DecodeError = decodeError
+	d.emit(summary)
 	d.sequence++
 }
 
@@ -686,10 +802,10 @@ func (d *mirrorRunSSEFrameDecoder) Close() {
 		return
 	}
 	decodeError := "sse_frame_incomplete"
-	if d.encoding == "connect" {
+	if d.encoding == "connect" || (d.encoding == "pending" && mirrorConnectFrameHeaderValid(d.buffer)) {
 		decodeError = "connect_frame_incomplete"
 	}
-	d.emitFrame(append([]byte(nil), d.buffer...), nil, false, decodeError, "")
+	d.emitFrame(append([]byte(nil), d.buffer...), nil, false, decodeError, mirrorProtocolFrame{})
 	d.buffer = nil
 }
 
@@ -731,15 +847,22 @@ func (r *mirrorRecorder) recordExchangeResponseTimeline(exchange *mirrorExchange
 		return
 	}
 	r.writeTimeline(mirrorTimelineRecord{
-		TS:                time.Now(),
-		RequestIDHash:     requestIDHash,
-		ExchangeID:        mirrorExchangeID(exchange),
-		Direction:         frame.Direction,
-		Sequence:          exchange.nextTimelineSequence(),
-		EventKind:         "runsse_" + frame.FrameEncoding,
-		ServerMessageKind: frame.ServerMessageKind,
-		Terminal:          frame.Terminal,
-		DecodeError:       frame.DecodeError,
+		TS:                 time.Now(),
+		RequestIDHash:      requestIDHash,
+		ExchangeID:         mirrorExchangeID(exchange),
+		Direction:          frame.Direction,
+		Sequence:           exchange.nextTimelineSequence(),
+		EventKind:          "runsse_" + frame.FrameEncoding,
+		SubagentAction:     frame.SubagentAction,
+		ConnectCompression: frame.ConnectCompression,
+		ServerMessageKind:  frame.ServerMessageKind,
+		ServerDetailKind:   frame.ServerDetailKind,
+		ExecMessageKind:    frame.ExecMessageKind,
+		StreamContentKind:  frame.StreamContentKind,
+		StreamDeltaBytes:   frame.StreamDeltaBytes,
+		StreamDeltaSHA256:  frame.StreamDeltaSHA256,
+		Terminal:           frame.Terminal,
+		DecodeError:        frame.DecodeError,
 	})
 }
 

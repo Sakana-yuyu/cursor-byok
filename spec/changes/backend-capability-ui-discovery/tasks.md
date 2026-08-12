@@ -29,11 +29,11 @@
 > 目标：仅在 `CURSOR_E2E_MIRROR_CAPTURE=1` 的隔离镜像模式中，保留上下行原始字节，并为 Bidi/RunSSE 建立不含正文与凭据的完整已知协议结构索引。
 > 约束：不修改已安装 Cursor、真实用户配置或官方转发字节；不新增测试文件；每个节点单独提交，且不暂存 `.playwright-cli/`、`frontend/.playwright-cli/`、`output/`。
 
-- [ ] 6. 下行 Connect 探测与服务端结构索引
-  - [ ] 6.1 在 `internal/mitm/mirror.go` 为 `text/event-stream` 增加“待判定”状态：收集 5 字节后只接受合法 Connect flags、受 `mirrorConnectFrameMaxBytes` 限制的长度与完整帧；判定成功后回放缓冲并按 Connect 重组，判定失败后才按现有 SSE 空行边界处理。
-  - [ ] 6.2 为 `mirrorProtocolFrame` 和 `mirrorTimelineRecord` 增加 Connect 压缩标识、服务端 Exec 二层 oneof、子代理事件与流式内容摘要字段；用 protobuf reflection 提取 `AgentServerMessage` 和 `ExecServerMessage` 的实际 oneof，不写入任意消息正文。
-  - [ ] 6.3 使 Connect 终态帧、未知压缩、畸形长度、protobuf 解码失败与真实 SSE 都产生稳定错误/状态摘要，并继续只观察 tee 的副本。
-  - [ ] 6.4 运行 `go test ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e`、`go build ./cmd/isolated-cursor-e2e`、`go vet ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e` 与 `git diff --check`；确认不新增测试文件后提交 `feat(mitm): decode connects inside runsse streams`。
+- [x] 6. 下行 Connect 探测与服务端结构索引
+  - [x] 6.1 在 `internal/mitm/mirror.go` 为 `text/event-stream` 增加“待判定”状态：收集 5 字节后只接受合法 Connect flags、受 `mirrorConnectFrameMaxBytes` 限制的长度与完整帧；判定成功后回放缓冲并按 Connect 重组，判定失败后才按现有 SSE 空行边界处理。
+  - [x] 6.2 为 `mirrorProtocolFrame` 和 `mirrorTimelineRecord` 增加 Connect 压缩标识、服务端 Exec 二层 oneof、子代理事件与流式内容摘要字段；用 protobuf reflection 提取 `AgentServerMessage` 和 `ExecServerMessage` 的实际 oneof，不写入任意消息正文。
+  - [x] 6.3 使 Connect 终态帧、未知压缩、畸形长度、protobuf 解码失败与真实 SSE 都产生稳定错误/状态摘要，并继续只观察 tee 的副本。
+  - [x] 6.4 已运行 `go test ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e`、`go build ./cmd/isolated-cursor-e2e`、`go vet ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e` 与 `git diff --check`；未新增测试文件。
 
 - [ ] 7. 上行二层索引与安全时间线字段
   - [ ] 7.1 为 `mirrorProtocol` 和 `mirrorTimelineRecord` 增加 Bidi payload 来源、字节长度、SHA-256、客户端二层 oneof 与标准化子代理动作字段；沿用 `DecodeBidiAppendAgentClientMessage`，仅记录结构名称与摘要。
