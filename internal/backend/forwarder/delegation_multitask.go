@@ -497,7 +497,7 @@ func (service *Service) handleDelegationResult(stream *ActiveStream, payload *st
 	if durationMS < 1 {
 		durationMS = 1
 	}
-	completedToolCall := buildDelegationCompletedTaskToolCall(pending.ArgsJSON, resultPayload, "", uint64(durationMS))
+	completedToolCall := buildDelegationCompletedTaskToolCall(pending.ArgsJSON, resultPayload, delegationSubagentID(pending.ToolCallID), uint64(durationMS))
 	logger.Infof("forwarder delegation terminal task result ready request_id=%s exec_id=%s tool_call_id=%s status=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID), strings.TrimSpace(resultSummary.Status))
 	if err := service.publishToolCallCompleted(stream.RequestID, pending.ToolCallID, pending.ModelCallID, completedToolCall); err != nil {
 		return err

@@ -229,7 +229,7 @@ func TestCursorBubbleUnavailableLatch(t *testing.T) {
 	}
 }
 
-func TestLocalDelegationTaskDoesNotAdvertiseSyntheticSubagentID(t *testing.T) {
+func TestLocalDelegationTaskKeepsSubagentReferenceIdentity(t *testing.T) {
 	invocation := runtimecore.ToolInvocation{
 		ToolName: "Task",
 		CallID:   "task-call",
@@ -237,13 +237,13 @@ func TestLocalDelegationTaskDoesNotAdvertiseSyntheticSubagentID(t *testing.T) {
 	}
 
 	started := buildStartedToolCall(invocation)
-	clearTaskToolCallIdentity(started)
-	if agentID := started.GetTaskToolCall().GetArgs().GetAgentId(); agentID != "" {
-		t.Fatalf("local aggregate Task agent_id = %q, want empty because no native child was opened", agentID)
+	wantID := delegationSubagentID(invocation.CallID)
+	if agentID := started.GetTaskToolCall().GetArgs().GetAgentId(); agentID != wantID {
+		t.Fatalf("local aggregate Task agent_id = %q, want %q", agentID, wantID)
 	}
-	completed := buildDelegationCompletedTaskToolCall(invocation.ArgsJSON, `{"status":"completed"}`, "", 1)
-	if agentID := completed.GetTaskToolCall().GetResult().GetSuccess().GetAgentId(); agentID != "" {
-		t.Fatalf("local aggregate Task result agent_id = %q, want empty", agentID)
+	completed := buildDelegationCompletedTaskToolCall(invocation.ArgsJSON, `{"status":"completed"}`, wantID, 1)
+	if agentID := completed.GetTaskToolCall().GetResult().GetSuccess().GetAgentId(); agentID != wantID {
+		t.Fatalf("local aggregate Task result agent_id = %q, want %q", agentID, wantID)
 	}
 }
 
