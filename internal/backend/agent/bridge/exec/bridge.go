@@ -289,7 +289,7 @@ func (bridge *Bridge) ApplyExecClientMessage(msg *agentv1.ExecClientMessage, pen
 		return result, nil
 	case "subagent":
 		result.ToolResultPayload = summarizeSubagentResult(msg.GetSubagentResult())
-		result.ToolCall = buildTaskCompletedToolCall(pending.ArgsJSON, msg.GetSubagentResult())
+		result.ToolCall = buildTaskCompletedToolCall(pending.ArgsJSON, msg.GetSubagentResult(), pending.ToolCallID)
 		result.IsTerminal = true
 		return result, nil
 	case "subagent_await":

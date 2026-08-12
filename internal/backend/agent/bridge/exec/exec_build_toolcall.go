@@ -7,7 +7,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-
 	"cursor/gen/agentv1"
 	runtimecore "cursor/internal/backend/agent/core"
 )
@@ -246,7 +245,7 @@ func buildReadLintsCompletedToolCall(argsJSON []byte, result *agentv1.Diagnostic
 }
 
 // buildTaskCompletedToolCall 构造 Task 对应的完成态 ToolCall。
-func buildTaskCompletedToolCall(argsJSON []byte, result *agentv1.SubagentResult) *agentv1.ToolCall {
+func buildTaskCompletedToolCall(argsJSON []byte, result *agentv1.SubagentResult, toolCallID string) *agentv1.ToolCall {
 	args, _ := decodeArgsMap(argsJSON)
 	capability, _ := runtimecore.ResolveTaskSubagentCapabilityFromArgs(args)
 	taskArgs := &agentv1.TaskArgs{
@@ -261,7 +260,7 @@ func buildTaskCompletedToolCall(argsJSON []byte, result *agentv1.SubagentResult)
 	if agentID := strings.TrimSpace(readStringArg(args, "agentId", "agent_id")); agentID != "" {
 		taskArgs.AgentId = &agentID
 	}
-	return &agentv1.ToolCall{
+	toolCall := &agentv1.ToolCall{
 		Tool: &agentv1.ToolCall_TaskToolCall{
 			TaskToolCall: &agentv1.TaskToolCall{
 				Args:   taskArgs,
@@ -269,6 +268,27 @@ func buildTaskCompletedToolCall(argsJSON []byte, result *agentv1.SubagentResult)
 			},
 		},
 	}
+	setNativeTaskReferenceIdentity(toolCall, toolCallID)
+	return toolCall
+}
+
+// setNativeTaskReferenceIdentity 保持原生 Task 的完成消息与父工具调用绑定。
+// Cursor 客户端用 TaskArgs.agent_id 找到卡片，不能让子代理返回的内部 ID 改写这条关联。
+func setNativeTaskReferenceIdentity(toolCall *agentv1.ToolCall, toolCallID string) {
+	if toolCall == nil || toolCall.GetTaskToolCall() == nil {
+		return
+	}
+	args := toolCall.GetTaskToolCall().GetArgs()
+	if args == nil {
+		args = &agentv1.TaskArgs{}
+		toolCall.GetTaskToolCall().Args = args
+	}
+	toolCallID = strings.TrimSpace(toolCallID)
+	if toolCallID == "" {
+		return
+	}
+	agentID := "local-delegation:" + toolCallID
+	args.AgentId = &agentID
 }
 
 func taskModeFromReadonly(readonly bool) agentv1.TaskMode {
