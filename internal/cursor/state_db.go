@@ -104,9 +104,14 @@ func sameCursorStateDBPath(left, right string) bool {
 }
 
 func readCursorAuthStateReadOnly(sourcePath string) (map[string]string, error) {
+	sourceURIPath := filepath.ToSlash(sourcePath)
+	if runtime.GOOS == "windows" && !strings.HasPrefix(sourceURIPath, "/") {
+		// Windows 绝对路径需要 file:///C:/...，否则 C: 会被 URI 解析为主机。
+		sourceURIPath = "/" + sourceURIPath
+	}
 	sourceURL := url.URL{
 		Scheme:   "file",
-		Path:     filepath.ToSlash(sourcePath),
+		Path:     sourceURIPath,
 		RawQuery: "mode=ro",
 	}
 	db, err := sql.Open("sqlite", sourceURL.String())
