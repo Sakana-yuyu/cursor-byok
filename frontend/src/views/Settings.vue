@@ -77,17 +77,6 @@ const activeCategoryComponent = computed(() =>
 );
 
 function handleBack() {
-  const previousPath = String(window.history.state?.back || "").trim();
-  if (
-    previousPath
-    && previousPath !== route.fullPath
-    && previousPath !== "/settings"
-    && previousPath !== "/stats-overlay"
-  ) {
-    router.back();
-    return;
-  }
-
   void router.replace("/");
 }
 </script>
