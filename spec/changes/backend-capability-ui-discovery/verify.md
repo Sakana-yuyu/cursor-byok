@@ -163,3 +163,19 @@
 - 临时本地回环（执行后已删除，未进入提交）：非法 UTF-8 body 的 Base64/长度/SHA-256 可逆；畸形 Bidi 内层消息写入 `agent_client_unmarshal_failed` 且不阻断上游；两个 Connect 帧共用一个读取块仍写为两条完整协议帧，不完整尾帧写 `connect_frame_incomplete`；Multitask Bidi、RunSSE 请求和终止帧以相同哈希关联，索引不含完整 request ID 或 `frameBase64`。
 - 历史 Round 9 的真实隔离 Agent 抓包证据仍只证明旧的交换关联与流式记录链路；它不能替代本轮新增保真字段和时间线索引的真实 Multitask 验收。
 - `ast-grep` 未安装，未执行 AST 规则包；已对 `internal/mitm/mirror.go` 的新增路径做 charter 手工扫描。记录/解析失败仅记录稳定错误标签并保持代理直通，未发现以旧逻辑作为静默回退或以默认业务结果掩盖失败的分支。
+
+## Round 11 - bidirectional protocol indexing real E2E
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- | --- |
+| V-24 | runtime-evidence | minor | fixed(r11) | 真实 Cursor `RunSSE` 的响应头为 `text/event-stream`，但实际载荷是 Connect 帧；旧记录器会把这些帧降级为不可解析 SSE。 | 用户在新的隔离 Cursor 实例主动发送普通请求与 Multitask 请求后，临时 `protocol.timeline.jsonl` 有 844 条结构记录：724 条 `runsse_connect`、106 条 `bidi_append`、14 条 `runsse_request`。响应同时出现 `identity` 与 `gzip` Connect 压缩标识。 | `text/event-stream` 先进入待判定缓冲，只有合法且完整的 Connect 帧才切换 Connect 重组；当前真实流不再产生旧的 `runsse_sse` 降级记录。 |
+| V-26 | runtime-evidence | minor | fixed(r11) | 上下行结构索引需证明能覆盖真实流式输出、工具执行和 Multitask 子代理创建，而不输出正文。 | 服务端顶层类型包含 `interaction_update`、`kv_server_message`、`exec_server_message` 与 `conversation_checkpoint_update`；二层出现 `thinking_delta`、`text_delta`、`tool_call_started`、`tool_call_completed`、`grep_args`、`shell_stream_args`，以及 `subagent_args -> create`。上行出现 `kv_client_message`、`exec_client_message`、`exec_client_control_message`、`client_heartbeat`，并记录 payload 来源、长度和 SHA-256。 | 时间线只保留结构名称、长度和哈希；prompt、工具参数、模型输出、token 内容、路径和完整稳定 ID 不进入索引。 |
+| V-27 | data-protection | major | fixed(r11) | 原始帧必须可字节级复核，时间线不得复制原始字节或敏感字段。 | 对 724 个 `protocolFrame` 逐条 Base64 解码并重算长度、SHA-256：`valid=724`、`invalid=0`。对 844 条时间线记录按属性名检查，`body`、`bodyBase64`、`frameBase64`、`prompt`、`output`、`cookie`、`authorization`、`path`、`url`、`token`、`accessToken`、`refreshToken`、完整 `requestId` 的出现数均为 0。 | 原始帧仅保留在临时 `official.raw.jsonl`，结构时间线与 Git 提交均不承载正文、凭据或原始帧。 |
+| V-28 | coverage | minor | open | 本次真实 Multitask 仅触发子代理创建，未观察到后台化或等待分支。 | `execMessageKind=subagent_args` 与 `subagentAction=create` 各 1 条；`force_background_subagent_args`、`subagent_await_args`、`subagentAction=background`、`subagentAction=await` 均为 0。 | 解析逻辑已按已知 proto oneof 支持这两类事件，但当前只能标记为未触发验证；后续需由用户实际触发后台化/等待工作流后再做结构化复核。 |
+
+本轮证据：
+
+- 新隔离目录为 `C:\Users\Administrator\AppData\Local\Temp\cursor-byok-e2e-2309467229`。已有 Cursor 实例未被终止；本轮仅启动新的隔离实例。
+- 用户自行在新实例发起业务请求。本会话未读取或输出请求/响应正文、认证头、Cookie、token、完整 request ID 或完整 URL。
+- 实现前已运行 `go test ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e`、`go build ./cmd/isolated-cursor-e2e`、`go vet ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e` 与 `git diff --check`，均退出码 0。
+- 本轮真实 E2E 仅更新 Spec 台账；临时抓包数据没有暂存、提交、移动到 history 或暴露到前端。

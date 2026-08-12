@@ -41,8 +41,8 @@
   - [x] 7.3 已复核 `protocol.timeline.jsonl` 不新增 `bodyBase64`、`frameBase64`、prompt、模型输出、token、Cookie、认证头、路径或完整 request ID；新增字段均为兼容的可选 JSON 字段。
   - [x] 7.4 已运行 `go test ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e`、`go build ./cmd/isolated-cursor-e2e`、`go vet ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e` 与 `git diff --check`；未新增测试文件。
 
-- [ ] 8. 新隔离实例真实 E2E 验收
-  - [ ] 8.1 保留正在运行的全部 Cursor 实例；仅在上述两笔提交通过检查后启动一个新的 `CURSOR_E2E_MIRROR_CAPTURE=1` 隔离实例，记录新的临时根目录。
-  - [ ] 8.2 由用户在新实例中发送普通请求与 Multitask 请求；只读取新实例的 `official.raw.jsonl` 和 `protocol.timeline.jsonl` 元数据及结构字段。
-  - [ ] 8.3 验收 `runsse_connect`、服务端顶层/Exec 内层 oneof、子代理创建/后台化/等待摘要、Base64 帧长度与 SHA-256 一致性及敏感字段缺失；若未捕获到某一事件，将其标为未验证而不宣称覆盖。
-  - [ ] 8.4 真实 E2E 数据仅在临时目录中保留，不提交；最终报告分别列出代码检查、真实抓包证据和仍未触发的协议分支。
+- [x] 8. 新隔离实例真实 E2E 验收
+  - [x] 8.1 保留正在运行的全部 Cursor 实例；已启动新的 `CURSOR_E2E_MIRROR_CAPTURE=1` 隔离实例，根目录为 `C:\Users\Administrator\AppData\Local\Temp\cursor-byok-e2e-2309467229`。
+  - [x] 8.2 用户已在新实例中发送普通请求与 Multitask 请求；只读取新实例的 `official.raw.jsonl` 和 `protocol.timeline.jsonl` 元数据及结构字段。
+  - [x] 8.3 已验收 724 条 `runsse_connect`、Bidi 上行结构、gzip/identity Connect、服务端顶层/Exec 内层 oneof、流式增量摘要与 `subagent_args -> create`；724 个原始帧的 Base64、长度和 SHA-256 全部一致，时间线未发现正文、凭据、路径或完整 request ID 字段。`force_background_subagent_args` 与 `subagent_await_args` 本次未触发，保留为未验证分支。
+  - [x] 8.4 真实 E2E 数据仅保留在临时目录且未提交；最终报告分别列出代码检查、真实抓包证据和未触发分支。
