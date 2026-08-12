@@ -74,13 +74,17 @@ type mirrorRecord struct {
 
 // mirrorProtocol 是隔离保真记录中的协议结构摘要，不保存请求正文或稳定标识原文。
 type mirrorProtocol struct {
-	RequestIDHash     string `json:"requestIdHash,omitempty"`
-	AppendSeqno       *int64 `json:"appendSeqno,omitempty"`
-	ClientMessageKind string `json:"clientMessageKind,omitempty"`
-	AgentMode         string `json:"agentMode,omitempty"`
-	Multitask         bool   `json:"multitask,omitempty"`
-	SubagentAction    string `json:"subagentAction,omitempty"`
-	DecodeError       string `json:"decodeError,omitempty"`
+	RequestIDHash       string `json:"requestIdHash,omitempty"`
+	AppendSeqno         *int64 `json:"appendSeqno,omitempty"`
+	ClientPayloadSource string `json:"clientPayloadSource,omitempty"`
+	ClientPayloadBytes  *int   `json:"clientPayloadBytes,omitempty"`
+	ClientPayloadSHA256 string `json:"clientPayloadSHA256,omitempty"`
+	ClientMessageKind   string `json:"clientMessageKind,omitempty"`
+	ClientDetailKind    string `json:"clientDetailKind,omitempty"`
+	AgentMode           string `json:"agentMode,omitempty"`
+	Multitask           bool   `json:"multitask,omitempty"`
+	SubagentAction      string `json:"subagentAction,omitempty"`
+	DecodeError         string `json:"decodeError,omitempty"`
 }
 
 // mirrorProtocolFrame 是隔离 RunSSE 流中的一个完整协议帧。
@@ -107,25 +111,29 @@ type mirrorProtocolFrame struct {
 
 // mirrorTimelineRecord 是隔离协议索引的一行，不承载任何原始协议字节或正文。
 type mirrorTimelineRecord struct {
-	TS                 time.Time `json:"ts"`
-	RequestIDHash      string    `json:"requestIdHash"`
-	ExchangeID         string    `json:"exchangeId"`
-	Direction          string    `json:"direction"`
-	Sequence           int       `json:"sequence"`
-	EventKind          string    `json:"eventKind"`
-	ClientMessageKind  string    `json:"clientMessageKind,omitempty"`
-	AgentMode          string    `json:"agentMode,omitempty"`
-	Multitask          bool      `json:"multitask,omitempty"`
-	SubagentAction     string    `json:"subagentAction,omitempty"`
-	ConnectCompression string    `json:"connectCompression,omitempty"`
-	ServerMessageKind  string    `json:"serverMessageKind,omitempty"`
-	ServerDetailKind   string    `json:"serverDetailKind,omitempty"`
-	ExecMessageKind    string    `json:"execMessageKind,omitempty"`
-	StreamContentKind  string    `json:"streamContentKind,omitempty"`
-	StreamDeltaBytes   *int      `json:"streamDeltaBytes,omitempty"`
-	StreamDeltaSHA256  string    `json:"streamDeltaSHA256,omitempty"`
-	Terminal           bool      `json:"terminal,omitempty"`
-	DecodeError        string    `json:"decodeError,omitempty"`
+	TS                  time.Time `json:"ts"`
+	RequestIDHash       string    `json:"requestIdHash"`
+	ExchangeID          string    `json:"exchangeId"`
+	Direction           string    `json:"direction"`
+	Sequence            int       `json:"sequence"`
+	EventKind           string    `json:"eventKind"`
+	ClientPayloadSource string    `json:"clientPayloadSource,omitempty"`
+	ClientPayloadBytes  *int      `json:"clientPayloadBytes,omitempty"`
+	ClientPayloadSHA256 string    `json:"clientPayloadSHA256,omitempty"`
+	ClientMessageKind   string    `json:"clientMessageKind,omitempty"`
+	ClientDetailKind    string    `json:"clientDetailKind,omitempty"`
+	AgentMode           string    `json:"agentMode,omitempty"`
+	Multitask           bool      `json:"multitask,omitempty"`
+	SubagentAction      string    `json:"subagentAction,omitempty"`
+	ConnectCompression  string    `json:"connectCompression,omitempty"`
+	ServerMessageKind   string    `json:"serverMessageKind,omitempty"`
+	ServerDetailKind    string    `json:"serverDetailKind,omitempty"`
+	ExecMessageKind     string    `json:"execMessageKind,omitempty"`
+	StreamContentKind   string    `json:"streamContentKind,omitempty"`
+	StreamDeltaBytes    *int      `json:"streamDeltaBytes,omitempty"`
+	StreamDeltaSHA256   string    `json:"streamDeltaSHA256,omitempty"`
+	Terminal            bool      `json:"terminal,omitempty"`
+	DecodeError         string    `json:"decodeError,omitempty"`
 }
 
 type mirrorPhase string
@@ -410,10 +418,42 @@ func (r *mirrorRecorder) setBidiProtocolSummary(rec *mirrorRecord, req *http.Req
 		summary.DecodeError = "agent_client_unmarshal_failed"
 		return
 	}
+	mirrorSetClientPayloadSummary(summary, appendRequest.GetData(), appendRequest.GetDataBinary())
 	summary.ClientMessageKind = clientMessageKind
+	summary.ClientDetailKind = mirrorClientMessageDetailKind(clientMessage)
 	summary.AgentMode = mirrorAgentMode(clientMessage)
 	summary.Multitask = summary.AgentMode == agentv1.AgentMode_AGENT_MODE_MULTITASK.String()
 	summary.SubagentAction = mirrorSubagentAction(clientMessage)
+}
+
+func mirrorSetClientPayloadSummary(summary *mirrorProtocol, dataHex string, dataBinary []byte) {
+	if summary == nil {
+		return
+	}
+	trimmedHex := strings.TrimSpace(dataHex)
+	var payload []byte
+	switch {
+	case len(dataBinary) > 0 && trimmedHex != "":
+		summary.ClientPayloadSource = "data_and_data_binary"
+		payload = dataBinary
+	case len(dataBinary) > 0:
+		summary.ClientPayloadSource = "data_binary"
+		payload = dataBinary
+	case trimmedHex != "":
+		summary.ClientPayloadSource = "data"
+		decoded, err := hex.DecodeString(trimmedHex)
+		if err != nil {
+			summary.DecodeError = "agent_client_data_hex_invalid"
+			return
+		}
+		payload = decoded
+	default:
+		return
+	}
+	payloadBytes := len(payload)
+	sum := sha256.Sum256(payload)
+	summary.ClientPayloadBytes = &payloadBytes
+	summary.ClientPayloadSHA256 = hex.EncodeToString(sum[:])
 }
 
 // setRunSSERequestSummary 读取 RunSSE Connect 请求中的 BidiRequestId，只保留哈希。
@@ -504,6 +544,28 @@ func mirrorSubagentAction(message *agentv1.AgentClientMessage) string {
 		return ""
 	}
 	return mirrorConversationSubagentAction(message.GetRunRequest().GetAction())
+}
+
+func mirrorClientMessageDetailKind(message *agentv1.AgentClientMessage) string {
+	if message == nil {
+		return ""
+	}
+	switch {
+	case message.GetRunRequest() != nil:
+		return mirrorActiveOneofName(message.GetRunRequest().GetAction())
+	case message.GetExecClientMessage() != nil:
+		return mirrorActiveOneofName(message.GetExecClientMessage())
+	case message.GetExecClientControlMessage() != nil:
+		return mirrorActiveOneofName(message.GetExecClientControlMessage())
+	case message.GetKvClientMessage() != nil:
+		return mirrorActiveOneofName(message.GetKvClientMessage())
+	case message.GetConversationAction() != nil:
+		return mirrorActiveOneofName(message.GetConversationAction())
+	case message.GetInteractionResponse() != nil:
+		return mirrorActiveOneofName(message.GetInteractionResponse())
+	default:
+		return ""
+	}
 }
 
 func mirrorConversationSubagentAction(action *agentv1.ConversationAction) string {
@@ -824,17 +886,21 @@ func (r *mirrorRecorder) recordExchangeRequestTimeline(exchange *mirrorExchange,
 	}
 	exchange.setRequestIDHash(summary.RequestIDHash)
 	r.writeTimeline(mirrorTimelineRecord{
-		TS:                time.Now(),
-		RequestIDHash:     summary.RequestIDHash,
-		ExchangeID:        mirrorExchangeID(exchange),
-		Direction:         "request",
-		Sequence:          exchange.nextTimelineSequence(),
-		EventKind:         eventKind,
-		ClientMessageKind: summary.ClientMessageKind,
-		AgentMode:         summary.AgentMode,
-		Multitask:         summary.Multitask,
-		SubagentAction:    summary.SubagentAction,
-		DecodeError:       summary.DecodeError,
+		TS:                  time.Now(),
+		RequestIDHash:       summary.RequestIDHash,
+		ExchangeID:          mirrorExchangeID(exchange),
+		Direction:           "request",
+		Sequence:            exchange.nextTimelineSequence(),
+		EventKind:           eventKind,
+		ClientPayloadSource: summary.ClientPayloadSource,
+		ClientPayloadBytes:  summary.ClientPayloadBytes,
+		ClientPayloadSHA256: summary.ClientPayloadSHA256,
+		ClientMessageKind:   summary.ClientMessageKind,
+		ClientDetailKind:    summary.ClientDetailKind,
+		AgentMode:           summary.AgentMode,
+		Multitask:           summary.Multitask,
+		SubagentAction:      summary.SubagentAction,
+		DecodeError:         summary.DecodeError,
 	})
 }
 

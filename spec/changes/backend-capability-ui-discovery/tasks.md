@@ -35,11 +35,11 @@
   - [x] 6.3 使 Connect 终态帧、未知压缩、畸形长度、protobuf 解码失败与真实 SSE 都产生稳定错误/状态摘要，并继续只观察 tee 的副本。
   - [x] 6.4 已运行 `go test ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e`、`go build ./cmd/isolated-cursor-e2e`、`go vet ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e` 与 `git diff --check`；未新增测试文件。
 
-- [ ] 7. 上行二层索引与安全时间线字段
-  - [ ] 7.1 为 `mirrorProtocol` 和 `mirrorTimelineRecord` 增加 Bidi payload 来源、字节长度、SHA-256、客户端二层 oneof 与标准化子代理动作字段；沿用 `DecodeBidiAppendAgentClientMessage`，仅记录结构名称与摘要。
-  - [ ] 7.2 对 `run_request`、`exec_client_message`、`exec_client_control_message`、`kv_client_message`、conversation action、interaction response 与 heartbeat 提取已知一层/二层 oneof；缺失、冲突、截断、压缩或解析失败写稳定错误码，不中断请求直通。
-  - [ ] 7.3 复核 `protocol.timeline.jsonl` 不含 `bodyBase64`、`frameBase64`、prompt、模型输出、token、Cookie、认证头、路径或完整 request ID，并保持旧 JSONL 对未知新增字段的兼容。
-  - [ ] 7.4 重复第 6.4 项既有检查并提交 `feat(mitm): index bidirectional protocol structure`。
+- [x] 7. 上行二层索引与安全时间线字段
+  - [x] 7.1 为 `mirrorProtocol` 和 `mirrorTimelineRecord` 增加 Bidi payload 来源、字节长度、SHA-256、客户端二层 oneof 与标准化子代理动作字段；沿用 `DecodeBidiAppendAgentClientMessage`，仅记录结构名称与摘要。
+  - [x] 7.2 对 `run_request`、`exec_client_message`、`exec_client_control_message`、`kv_client_message`、conversation action、interaction response 与 heartbeat 提取已知一层/二层 oneof；缺失、冲突、截断、压缩或解析失败写稳定错误码，不中断请求直通。
+  - [x] 7.3 已复核 `protocol.timeline.jsonl` 不新增 `bodyBase64`、`frameBase64`、prompt、模型输出、token、Cookie、认证头、路径或完整 request ID；新增字段均为兼容的可选 JSON 字段。
+  - [x] 7.4 已运行 `go test ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e`、`go build ./cmd/isolated-cursor-e2e`、`go vet ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e` 与 `git diff --check`；未新增测试文件。
 
 - [ ] 8. 新隔离实例真实 E2E 验收
   - [ ] 8.1 保留正在运行的全部 Cursor 实例；仅在上述两笔提交通过检查后启动一个新的 `CURSOR_E2E_MIRROR_CAPTURE=1` 隔离实例，记录新的临时根目录。
