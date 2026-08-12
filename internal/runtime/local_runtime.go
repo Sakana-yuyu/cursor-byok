@@ -143,6 +143,9 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 
 	normalized := make([]ModelAdapterConfig, 0, len(input))
 	channelIndexByID := make(map[string]int, len(input))
+	// 旧运行时也必须拒绝不同来源或不同连接复用同一渠道 ID。否则按 ID
+	// 解析时会把账户模型和第三方模型混成同一个候选渠道，破坏来源隔离。
+	identityByAdapterID := make(map[string]string, len(input))
 	for _, item := range input {
 		source := NormalizeModelSource(item.Source)
 		if source == "" {
@@ -178,6 +181,11 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			if next.ID == "" {
 				next.ID = modelAdapterIdentity(next)
 			}
+			identity := modelAdapterIdentity(next)
+			if ownerIdentity, exists := identityByAdapterID[next.ID]; exists && ownerIdentity != identity {
+				return nil, errors.New("模型适配器 id 不能被不同模型配置重复使用")
+			}
+			identityByAdapterID[next.ID] = identity
 			normalized = append(normalized, next)
 			continue
 		}
@@ -266,6 +274,9 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			return nil, errors.New("模型适配器 anthropicThinkingEffort 仅支持 low、medium、high、xhigh、max")
 		}
 		next.ID = modelAdapterIdentity(next)
+		if ownerIdentity, exists := identityByAdapterID[next.ID]; exists && ownerIdentity != next.ID {
+			return nil, errors.New("模型适配器 id 不能被不同模型配置重复使用")
+		}
 		if existingIndex, exists := channelIndexByID[next.ID]; exists {
 			existing := normalized[existingIndex]
 			if existing.GroupName == "" {
@@ -284,6 +295,7 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			continue
 		}
 		channelIndexByID[next.ID] = len(normalized)
+		identityByAdapterID[next.ID] = next.ID
 		normalized = append(normalized, next)
 	}
 	return normalized, nil
