@@ -76,6 +76,14 @@
 - Interaction：用户让 Cursor 在执行前主动询问一个选择或确认，并实际选择一次；必要时触发模式切换或反馈。采集时只核对 `interaction_query`/`interaction_response` 的二层 oneof、方向、顺序和 requestIdHash 关联，不读取问题、选项或回答。
 - 每个矩阵格只有在对应 oneof 真实出现且无异常解码错误时才标为验证；模型未选择该协议路径、用户界面未给出对应动作或会话提前结束均保持“未触发验证”，不视为解析失败。
 
+### Multitask 并行审查对接备注（2026-08-12）
+- 用户提供的真实界面截图显示一次 `Project review` 会话同时运行 4 个子任务：`findskills 技能映射`、`Rust 后端栈审查`、`React 前端栈审查`、`安全与部署栈审查`；父级界面显示 `4 Working`，并提供父级 `Stop All`。子任务可分别展示搜索、探索或审查中的阶段文本，模型显示为 `Cursor Grok 4.5 High Fast`。该截图作为 UI 形态和易用性需求记录，不将可见标题、正文或阶段文本写入协议索引。
+- 同一隔离实例的真实时间线已确认：`subagent_args` 5 条、`subagent_result` 5 条、`clientResultKind=success` 4 条（统计窗口内）、`interaction_query` 3 条、`interaction_response` 3 条、`step_completed` 7 条、`turn_ended` 7 条；未出现 `decodeError`。这证明当前解析器能够覆盖子代理创建、成功结果回传、用户交互询问/响应和父级步骤收口。
+- 流式生命周期已出现 `thinking_delta` 557、`thinking_completed` 77、`token_delta` 2084、`text_delta` 218、`tool_call_started` 479、`tool_call_delta` 135、`tool_call_completed` 407、`partial_tool_call` 431，以及大量 `stream_close`。后续界面接入应将“思考、文本、工具调用、交互等待、子代理结果、步骤完成、流关闭”作为独立可更新状态，避免把长流压成单一加载状态。
+- 3 组交互闭环按 `requestIdHash` 关联：`web_search_request_query -> web_search_request_response` 2 组，`web_fetch_request_query -> web_fetch_request_response` 1 组；服务端方向为 `runsse_connect`，客户端响应方向为 `bidi_append`。`requestIdHash` 仅是请求/流级关联键，不能直接当作子代理任务 ID。
+- 当前时间线安全索引不保存 agent ID、tool call ID、任务标题、prompt、工具参数、结果正文、Cookie、Authorization、URL、完整 request ID 或原始帧 Base64；原始保真 JSONL 只留在临时隔离目录。因此目前可以对接协议状态和流式阶段，但不能仅凭索引将 5 个子代理事件逐一映射到截图中的 4 个 UI 标题。后续实现需增加进程内父任务/子任务关联表，落盘时只使用不可逆短哈希或稳定匿名序号。
+- `force_background_subagent_*`、`subagent_await_*`、取消/错误收口和父级 `Stop All` 的真实协议格式本次仍未确认；不能据此宣称已完整还原 Multitask 的后台化、等待、取消或全量停止能力。
+
 ## Open [TBD]
 
 ## Decided

@@ -179,3 +179,14 @@
 - 用户自行在新实例发起业务请求。本会话未读取或输出请求/响应正文、认证头、Cookie、token、完整 request ID 或完整 URL。
 - 实现前已运行 `go test ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e`、`go build ./cmd/isolated-cursor-e2e`、`go vet ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e` 与 `git diff --check`，均退出码 0。
 - 本轮真实 E2E 仅更新 Spec 台账；临时抓包数据没有暂存、提交、移动到 history 或暴露到前端。
+
+## Round 12 - Multitask 并行、流式与交互闭环备注
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- | --- |
+| V-29 | runtime-evidence | minor | fixed(r12) | 本次真实 Multitask 会话已覆盖多路子代理创建与成功结果回传，但协议索引不能把所有事件逐项绑定到截图中的 4 个 UI 子任务。 | 隔离实例时间线统计：`subagent_args=5`、`subagent_result=5`、`clientResultKind=success=4`（统计窗口内）；截图显示 `4 Working` 与 4 个并行审查标题。 | 保留安全结构索引；后续接入使用进程内父/子任务关联模型，不落盘任务正文、标题、完整 ID 或凭据。 |
+| V-30 | runtime-evidence | minor | fixed(r12) | 用户交互询问与响应已形成可关联闭环。 | `interaction_query=3`、`interaction_response=3`；`web_search_request_query -> web_search_request_response` 2 组，`web_fetch_request_query -> web_fetch_request_response` 1 组；方向为 `runsse_connect -> bidi_append`，共享 `requestIdHash`。 | 前端应分别呈现等待询问、用户响应和继续运行状态；`requestIdHash` 只作为流级关联，不当作子代理 ID。 |
+| V-31 | coverage | minor | open | 当前证据仍不能确认后台化、等待、取消/错误和父级 `Stop All` 的真实 oneof、终态与控制链路。 | `force_background_subagent_*`、`subagent_await_*` 以及取消/错误收口未在本次统计窗口中确认；截图中的 `Stop All` 仅证明 UI 控件存在。 | 用户后续实际触发对应动作后，再按上下行方向、oneof、终态、关联键和 `decodeError` 复核；在此之前保持未验证。 |
+| V-32 | data-protection | major | fixed(r12) | 本次结构化索引未暴露敏感数据或正文。 | 对最近约 `11,498` 条时间线记录扫描，`body`、`bodyBase64`、`frameBase64`、`prompt`、`output`、`cookie`、`authorization`、`path`、`url`、`token`、`accessToken`、`refreshToken`、`requestId` 均为 0；`decodeError=0`。 | 原始 JSONL 继续只留在临时隔离目录，不进入 Git、研究文档或前端状态。 |
+
+本轮对接结论：已可作为 Cursor Multitask 的协议状态采集基础，覆盖并行任务创建、流式思考/文本/工具调用、交互询问/响应、子代理成功回传、步骤完成和流关闭；尚不足以宣称完成逐子任务归属、后台化/等待、取消/错误及 `Stop All` 的完整还原。
