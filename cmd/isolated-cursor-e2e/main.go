@@ -56,6 +56,12 @@ func run(sourceConfigPath string, cursorPath string) error {
 		return err
 	}
 	mirrorCaptureEnabled := isolatedMirrorCaptureEnabled()
+	// 必须在替换 APPDATA 前定位真实状态库，否则会错误指向本次隔离目录。
+	sourceStateDBPath := ""
+	var sourceStateDBErr error
+	if mirrorCaptureEnabled {
+		sourceStateDBPath, sourceStateDBErr = resolveCurrentCursorStateDBPath()
+	}
 	dirs, err := newIsolatedDirectories()
 	if err != nil {
 		return err
@@ -145,7 +151,16 @@ func run(sourceConfigPath string, cursorPath string) error {
 	if err := cursor.WriteUserProxySettings(proxyURL); err != nil {
 		return fmt.Errorf("写入隔离 Cursor 代理设置失败: %w", err)
 	}
-	if !mirrorCaptureEnabled {
+	if mirrorCaptureEnabled {
+		destinationStateDBPath := filepath.Join(dirs.appData, "Cursor", "User", "globalStorage", "state.vscdb")
+		if sourceStateDBErr != nil {
+			fmt.Println("isolated_login_import=degraded reason=source_state_unavailable")
+		} else if result, importErr := cursor.ImportCursorAuthState(sourceStateDBPath, destinationStateDBPath); importErr != nil {
+			fmt.Println("isolated_login_import=degraded reason=source_state_unavailable")
+		} else {
+			fmt.Printf("isolated_login_import=success imported_keys=%d\n", result.ImportedKeyCount)
+		}
+	} else {
 		if err := cursor.InjectCursorUserInfo(localruntime.InjectAccountEmail, localruntime.InjectAuthToken); err != nil {
 			return fmt.Errorf("注入隔离 Cursor 状态失败: %w", err)
 		}
@@ -290,6 +305,18 @@ func applyIsolatedEnvironment(dirs isolatedDirectories) error {
 		}
 	}
 	return nil
+}
+
+func resolveCurrentCursorStateDBPath() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	appData := strings.TrimSpace(os.Getenv("APPDATA"))
+	if appData == "" {
+		appData = filepath.Join(homeDir, "AppData", "Roaming")
+	}
+	return filepath.Join(appData, "Cursor", "User", "globalStorage", "state.vscdb"), nil
 }
 
 func buildCursorChildEnvironment(base []string, dirs isolatedDirectories, caPath string) []string {

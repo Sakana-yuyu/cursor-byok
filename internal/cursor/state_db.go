@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -55,6 +56,131 @@ var cursorAuthInjectedKeys = []string{
 var cursorStateDisabledStatsigGates = []string{
 	"decompose_always_local_ext_host",
 	"cursor_extensions_isolation_v2",
+}
+
+// CursorAuthImportResult 描述隔离实例的最小登录态导入结果，不包含任何登录凭据。
+type CursorAuthImportResult struct {
+	ImportedKeyCount int
+}
+
+// ImportCursorAuthState 从真实 Cursor 状态库只读导入最小登录态到隔离状态库。
+// 它只处理 cursorAuthBackupKeys，不复制其他 Cursor 数据，也不会修改 Statsig 配置。
+func ImportCursorAuthState(sourcePath, destinationPath string) (CursorAuthImportResult, error) {
+	sourcePath, err := filepath.Abs(sourcePath)
+	if err != nil {
+		return CursorAuthImportResult{}, errors.New("定位真实 Cursor 登录态失败")
+	}
+	destinationPath, err = filepath.Abs(destinationPath)
+	if err != nil {
+		return CursorAuthImportResult{}, errors.New("定位隔离 Cursor 登录态失败")
+	}
+	if sameCursorStateDBPath(sourcePath, destinationPath) {
+		return CursorAuthImportResult{}, errors.New("隔离 Cursor 登录态路径不能与真实状态库相同")
+	}
+	if info, err := os.Stat(sourcePath); err != nil || info.IsDir() {
+		return CursorAuthImportResult{}, errors.New("读取真实 Cursor 登录态失败")
+	}
+	if _, err := os.Stat(destinationPath); err == nil {
+		return CursorAuthImportResult{}, errors.New("隔离 Cursor 登录态已存在")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return CursorAuthImportResult{}, errors.New("检查隔离 Cursor 登录态失败")
+	}
+
+	values, err := readCursorAuthStateReadOnly(sourcePath)
+	if err != nil {
+		return CursorAuthImportResult{}, err
+	}
+	if err := writeIsolatedCursorAuthState(destinationPath, values); err != nil {
+		return CursorAuthImportResult{}, err
+	}
+	return CursorAuthImportResult{ImportedKeyCount: len(values)}, nil
+}
+
+func sameCursorStateDBPath(left, right string) bool {
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(left, right)
+	}
+	return left == right
+}
+
+func readCursorAuthStateReadOnly(sourcePath string) (map[string]string, error) {
+	sourceURL := url.URL{
+		Scheme:   "file",
+		Path:     filepath.ToSlash(sourcePath),
+		RawQuery: "mode=ro",
+	}
+	db, err := sql.Open("sqlite", sourceURL.String())
+	if err != nil {
+		return nil, errors.New("读取真实 Cursor 登录态失败")
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
+	ctx := context.Background()
+	if _, err := db.ExecContext(ctx, fmt.Sprintf("PRAGMA busy_timeout = %d", cursorStateSQLiteBusyTimeoutMS)); err != nil {
+		return nil, errors.New("读取真实 Cursor 登录态失败")
+	}
+
+	values := make(map[string]string, len(cursorAuthBackupKeys))
+	for _, key := range cursorAuthBackupKeys {
+		var raw []byte
+		err := db.QueryRowContext(ctx, "SELECT value FROM ItemTable WHERE key = ?", key).Scan(&raw)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, errors.New("真实 Cursor 登录态不完整")
+			}
+			return nil, errors.New("读取真实 Cursor 登录态失败")
+		}
+		value := strings.TrimSpace(string(raw))
+		if value == "" {
+			return nil, errors.New("真实 Cursor 登录态不完整")
+		}
+		values[key] = value
+	}
+	return values, nil
+}
+
+func writeIsolatedCursorAuthState(destinationPath string, values map[string]string) error {
+	if err := os.MkdirAll(filepath.Dir(destinationPath), 0o700); err != nil {
+		return errors.New("创建隔离 Cursor 登录态失败")
+	}
+	db, err := sql.Open("sqlite", destinationPath)
+	if err != nil {
+		return errors.New("创建隔离 Cursor 登录态失败")
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
+	ctx := context.Background()
+	if _, err := db.ExecContext(ctx, fmt.Sprintf("PRAGMA busy_timeout = %d", cursorStateSQLiteBusyTimeoutMS)); err != nil {
+		return errors.New("写入隔离 Cursor 登录态失败")
+	}
+	if _, err := db.ExecContext(ctx, "CREATE TABLE ItemTable (key TEXT UNIQUE ON CONFLICT REPLACE, value BLOB)"); err != nil {
+		return errors.New("创建隔离 Cursor 登录态失败")
+	}
+
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{})
+	if err != nil {
+		return errors.New("写入隔离 Cursor 登录态失败")
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	for _, key := range cursorAuthBackupKeys {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO ItemTable(key, value) VALUES(?, ?)", key, values[key]); err != nil {
+			return errors.New("写入隔离 Cursor 登录态失败")
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return errors.New("写入隔离 Cursor 登录态失败")
+	}
+	committed = true
+	return nil
 }
 
 // InjectCursorUserInfo synchronizes the Cursor user-level auth cache used by the
