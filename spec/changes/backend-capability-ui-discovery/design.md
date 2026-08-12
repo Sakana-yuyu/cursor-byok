@@ -90,3 +90,83 @@ flowchart LR
 - 不迁移配置或历史文件；缺少记录文件按“等待官方模型请求”展示。
 - 既有开关、代理修复和日志目录入口保持原语义。
 - 现有 `upstream` 配置不迁移；只更正其运行态解释，并让代理分流按同一配置源作出明确决策。
+
+## 已安装 Cursor 兼容机制
+
+```mermaid
+flowchart LR
+  A[已安装 Cursor
+只读扩展与版本元数据] -->|离线扫描，产生脱敏能力摘要| B[安装版能力报告]
+  B -->|与本地协议目录比较| C[兼容性诊断]
+  D[已连接 MCP Runtime
+真实工具描述符] -->|运行时能力探测| E[浏览器配置解析器]
+  E -->|IDE 浏览器配置| F[IDE 浏览器执行适配器]
+  E -->|坐标浏览器配置| G[通用浏览器执行适配器]
+  H[ComputerUse 动作] -->|仅 browser 模式| E
+  F -->|MCP 调用和合成结果| I[既有执行桥]
+  G -->|MCP 调用和合成结果| I
+  I -->|既有结果收口| J[转发流与任务状态]
+```
+
+安装版扫描与运行时执行严格分离。扫描只回答“当前安装版本声明了哪些已知能力”，不会修改安装目录、加载扩展代码、复制 bundle、读取用户状态库或尝试伪造 Cursor 客户端消息。真正执行仍只能使用当前已连接 MCP runtime 在 `tools/list` 中返回的工具描述符。
+
+本机只读核验的安装版为 `D:\cursor\Cursor.exe`，文件版本 `3.15.6`。其 `cursor-browser-automation` 扩展声明为 Cursor 的浏览器自动化 MCP 服务，且 bundle 可见 `cursor-ide-browser` 与 `browser_tabs`、`browser_navigate`、`browser_lock`、`browser_snapshot`、`browser_click`、`browser_type`、`browser_fill`、`browser_select_option`、`browser_press_key`、`browser_scroll`、`browser_drag`、`browser_take_screenshot`、`browser_cdp`、`browser_mouse_click_xy`。这只构成版本化静态兼容证据；任何一个工具是否在特定会话可用，仍以运行时描述符为准。
+
+### Interfaces
+
+- `cursor capability scan` 开发诊断入口
+  - Input: 可选 `cursorRoot`；省略时仅按当前平台的候选安装根目录查找，不递归扫描任意磁盘。
+  - Output: `{ scannerVersion: string, cursorVersion?: string, installRootHash?: string, extensions: [{ id: string, version?: string }], protocolMarkers: string[], browserToolMarkers: string[], comparedCapabilities: [{ protocolName: string, localStatus: "implemented" | "control" | "unsupported" | "unknown", installedEvidence: "declared" | "absent" | "not_scanned" }], warnings: string[] }`。
+  - Error codes: `cursor_install_not_found`、`cursor_metadata_unreadable`、`extension_manifest_unreadable`、`extension_bundle_unreadable`。缺少单个扩展只生成 warning，不中断其余摘要。
+  - Invariants: 不输出绝对安装路径、完整 bundle 文本、用户目录、Cookie、Token、URL、请求/响应或工具参数；`installRootHash` 是本地路径的不可逆摘要；扫描不写入安装目录，也不影响 Cursor 进程。
+
+- `MCPCaller.ResolveBrowserServer(scope)`
+  - Input: MCP runtime scope。
+  - Output: `{ identifier: string, profile: "cursor_ide_browser" | "coordinate_browser", toolNames: string[] }` 或 `browser_mcp_not_compatible`。
+  - Error codes: `browser_mcp_not_connected`、`browser_mcp_profile_incomplete`、`browser_mcp_ambiguous`。
+  - Invariants: 仅从已连接 runtime 的 `tools/list` 描述符判断；不得仅凭服务显示名中含 `browser` 或 `playwright` 选中服务。优先精确标识 `cursor-ide-browser`，其余服务只有满足坐标型工具集合时才可成为 `coordinate_browser`。
+
+- `IDEBrowserExecutor.Execute(actions)`
+  - Input: ComputerUse 归一化动作序列与 `cursor_ide_browser` profile。
+  - Output: 既有 `computeruse.Result`，只含成功状态、动作数、耗时、稳定错误码和可选截图；不把标签 URL、可访问性树、`ref`、CDP 内容或 MCP 文本结果写入日志、调试记录或模型回放。
+  - Error codes: `ide_browser_no_tab`、`ide_browser_action_unmappable`、`ide_browser_lock_failed`、`ide_browser_snapshot_failed`、`ide_browser_action_failed`、`ide_browser_unlock_failed`。
+  - Invariants: 对已有标签的长操作遵循“列出标签 -> 锁定 -> 操作 -> 解锁”；无可操作标签时只在显式初始地址不是 `about:blank` 时导航创建标签。坐标点击必须先获取本轮截图，再使用安装版声明的坐标点击工具；需要元素语义但 ComputerUse 未提供可稳定映射依据的动作必须失败，不得猜测 `ref`、改用系统鼠标或静默跳到其他标签。
+
+- `CoordinateBrowserExecutor.Execute(actions)`
+  - Input: ComputerUse 归一化动作序列与 `coordinate_browser` profile。
+  - Output: 既有 `computeruse.Result`。
+  - Error codes: 保持既有浏览器 MCP 错误语义。
+  - Invariants: 只在 runtime 声明坐标点击、键盘、等待与截图所需工具时选择；现有 Playwright MCP 参数映射不变。
+
+- 子代理后台化、等待与审批控制
+  - Input: 已有 `ForceBackgroundSubagent`、`SubagentAwait`、Shell/MCP/WebFetch allowlist precheck 的 protobuf oneof。
+  - Output: 保持现有执行桥的 pending、结果与终态语义；另生成不含内容的状态枚举 `background_accepted`、`background_not_found`、`await_still_running`、`await_complete`、`await_not_found`、`await_error`、`allowlist_allowed`、`allowlist_denied`。
+  - Error codes: 不新增协议外错误；未由 Cursor 客户端下发的 oneof 保持 `not_observed`，不得合成请求来凑覆盖率。
+  - Invariants: `await_still_running` 绝不关闭 pending；allowlist 放行不等同工具完成；allowlist 拒绝必须终态收口；父级 Stop All 与单子代理取消继续走既有独立控制链路。
+
+### Data Model
+
+- `InstalledCursorCapabilityReport` 仅为命令输出或本地临时诊断对象，不写入应用配置、会话 history、镜像 JSONL 或 Git。
+- `BrowserMCPProfile` 只允许 `cursor_ide_browser`、`coordinate_browser`；不提供“未知但尝试执行”的默认值。
+- `BrowserMCPResolution` 包含 MCP identifier、profile、已验证工具名集合和诊断状态。工具名集合来自运行时 descriptors，不保存 schema、参数或服务输出。
+- `ExecutionCompatibilityState` 仅保存 `profile`、`actionIndex`、`phase` 和稳定错误码，生命周期随单个 ComputerUse pending exec 结束而释放。
+- `ProtocolLifecycleState` 为状态投影，不写入原始请求：后台化只记录 accepted/not_found/unknown，等待只记录 still_running/complete/not_found/error/unknown，审批只记录 allowed/denied/not_observed。
+
+### Key Decisions
+
+- Problem: 安装版 Cursor 的内置 IDE 浏览器服务以标签、锁、快照和元素引用为中心，而现有浏览器模式按通用 Playwright 坐标工具调用；将两者按名称模糊匹配会把错误参数发送给正确服务，或在失败后退回到不可见的桌面鼠标操作。
+  Solution: 以运行时工具描述符解析为两种互斥 profile，IDE profile 采用锁与当前标签生命周期，坐标 profile 保持既有 Playwright 映射。未知或不完整 profile 直接返回稳定错误。
+  Cost: 需要维护一套小型 profile 规则，并为同一 ComputerUse 动作保留两套映射。
+  Why not the alternatives: 强制统一为坐标 API 与安装版服务的交互模型不符；强制统一为 ref API 则无法从通用 ComputerUse 坐标动作可靠生成 ref；不做适配会让 browser 模式继续只对部分第三方 MCP 可用。
+
+- Problem: 从已安装 bundle 读到协议名只能证明版本中存在代码，不能证明当前 Cursor 会话选择了后台化、等待、ComputerUse 或审批路径；若据此合成上下行消息，会污染真实状态机和抓包证据。
+  Solution: 静态扫描只输出版本化能力报告，执行桥只消费实际 runtime descriptors 与真实 oneof。未出现的分支明确保持 `not_observed`，通过单元协议向量验证格式，而不是伪造安装客户端行为。
+  Cost: 有些分支仍需用户真实触发才能获得 E2E 验证，扫描不能立即把所有条目标为已验证。
+  Why not the alternatives: 直接 patch 安装版 Cursor 会破坏签名和升级路径；以字符串命中宣称功能已运行会混淆静态支持与真实验证；什么都不扫则无法及时发现安装版升级导致的兼容漂移。
+
+### Migration / Compatibility Addendum
+
+- `computerUse.mode=desktop` 完全不变；`computerUse.mode=browser` 继续保留当前配置字段和初始地址，不迁移用户配置。
+- 没有 `cursor-ide-browser` runtime 时，满足坐标工具要求的既有 Playwright MCP 仍使用现有适配器；两类均不可用时返回可操作错误，不退回桌面模式。
+- 已有 `ForceBackgroundSubagent`、`SubagentAwait` 与 allowlist 处理函数不改协议字段；本轮只补状态投影、能力诊断和定向测试，避免与当前 pending/watchdog/取消收口相冲突。
+- 安装目录和 `.cursor-app-formatted/` 均只读；任何生成的扫描报告、格式化快照和临时解析器必须被忽略且不得提交。

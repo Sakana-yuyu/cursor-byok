@@ -29,9 +29,10 @@ type MCPToolResult struct {
 // MCPBrowserExecutor 通过 MCP server（如 Playwright MCP）执行 ComputerUse 动作。
 // 无状态：MCP 连接由 MCPCaller（底层 mcpRuntime）管理，执行器本身不持有连接。
 type MCPBrowserExecutor struct {
-	caller   MCPCaller
-	scope    string
-	startURL string
+	caller     MCPCaller
+	scope      string
+	startURL   string
+	identifier string
 }
 
 // NewMCPBrowserExecutor 创建 MCP 浏览器执行器。caller 由 forwarder 注入。
@@ -45,6 +46,13 @@ func NewMCPBrowserExecutor(caller MCPCaller, scope, startURL string) *MCPBrowser
 	return &MCPBrowserExecutor{caller: caller, scope: scope, startURL: startURL}
 }
 
+// NewMCPBrowserExecutorForServer 固定使用已经由运行时 descriptors 验证过的坐标型服务。
+func NewMCPBrowserExecutorForServer(caller MCPCaller, scope, startURL, identifier string) *MCPBrowserExecutor {
+	executor := NewMCPBrowserExecutor(caller, scope, startURL)
+	executor.identifier = strings.TrimSpace(identifier)
+	return executor
+}
+
 // Execute 实现 Executor：通过 MCP server 执行动作序列。
 func (b *MCPBrowserExecutor) Execute(actions []Action) Result {
 	if len(actions) == 0 {
@@ -54,8 +62,15 @@ func (b *MCPBrowserExecutor) Execute(actions []Action) Result {
 		return Result{Error: "MCP caller 未注入"}
 	}
 
-	identifier, ok := b.caller.FindBrowserServer(b.scope)
-	if !ok {
+	identifier := b.identifier
+	if identifier == "" {
+		var ok bool
+		identifier, ok = b.caller.FindBrowserServer(b.scope)
+		if !ok {
+			return Result{Error: "未找到浏览器 MCP server，请在 mcpServers 配置中添加 Playwright MCP server（启动参数建议含 --caps=vision 以支持坐标操作）"}
+		}
+	}
+	if strings.TrimSpace(identifier) == "" {
 		return Result{Error: "未找到浏览器 MCP server，请在 mcpServers 配置中添加 Playwright MCP server（启动参数建议含 --caps=vision 以支持坐标操作）"}
 	}
 

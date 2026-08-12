@@ -191,19 +191,77 @@
 
 本轮对接结论：已可作为 Cursor Multitask 的协议状态采集基础，覆盖并行任务创建、流式思考/文本/工具调用、交互询问/响应、子代理成功回传、步骤完成和流关闭；尚不足以宣称完成逐子任务归属、后台化/等待、取消/错误及 `Stop All` 的完整还原。
 
-## Round 13 - 子代理引用身份对齐（2026-08-12）
+## Round 13 - 取消、工具审批与 IDE 内 Playwright
 
 | ID | Lens | Severity | Status | Finding | Evidence | Resolution |
 | --- | --- | --- | --- | --- | --- | --- |
-| V-33 | protocol-identity | minor | fixed(r13) | 本地聚合与原生 Task 的开始、运行状态和完成消息可能使用不同身份，导致蓝色子代理引用在完成后断链。 | `agent.v1.SubagentArgs` 只有 `tool_call_id`，没有独立 `agent_id`；`da63c77` 修复本地聚合完成态，`d8b7a68` 修复原生执行桥完成态，均统一为 `local-delegation:<tool_call_id>`。 | Task `agent_id`、checkpoint `SubagentRunState.subagent_id`、`parent_tool_call_id` 和完成 ToolCall 按同一父工具调用键关联。 |
-| V-34 | routing | minor | fixed(r13) | 同标题并行任务不能因完成顺序或缺失状态误定位到其他卡片。 | `c21cae7` 回归测试构造两个同标题任务，第二个先完成，并断言各自 `parent_tool_call_id`、状态和 `subagent_id` 独立；缺失键不产生回退路由。 | 只按精确父工具调用键路由，不按标题、数组顺序、完成顺序或 `requestIdHash` 猜测。 |
-| V-35 | client-ui | minor | open | Cursor 客户端蓝色引用的点击、滚动、高亮和状态详情尚未由本仓库完成真实 UI 验证。 | 静态检索确认 `frontend/src` 没有聊天消息/Markdown 子代理引用渲染入口；本仓库可验证协议身份和状态字段，不能替代已安装 Cursor 客户端的人工点击。 | 保持为未验证项；后续需在用户控制的隔离 Cursor 实例中点击蓝色引用，确认定位卡片、滚动、高亮和详情展示。 |
+| V-31 | coverage | minor | fixed(r13) | 单子代理取消和父级 `Stop All` 的真实上行格式及基本收口已确认。 | 单子代理操作产生 `conversation_action.cancel_subagent_action` 和 `subagentAction=cancel`；父级停止时同一秒出现 4 条独立 `conversation_action.cancel_action`，随后有 `stream_close`、`step_completed`、`turn_ended` 和 terminal。 | 前端区分单任务取消与父级全量停止；逐任务 UI 归属仍需匿名关联模型，不能按 requestIdHash 代替。 |
+| V-33 | runtime-evidence | minor | fixed(r13) | IDE 内 Playwright 浏览器操作通过 MCP 工具链执行，不是 `computer_use`。 | 真实窗口有 `mcp_allowlist_precheck_args/result=10/10`、`mcp_args=10`、`mcp_result=9`、`mcp_state_exec_args=1`；同时有 Shell 审批 `shell_allowlist_precheck_args/result=10/10` 与 `shell_stream_args=9`。 | 以 MCP 审批、MCP 调用/结果和 Shell 审批/流输出作为独立 UI 状态；不把 MCP 批准误标为终端批准。 |
+| V-34 | data-protection | major | fixed(r13) | Playwright 会话的结构索引继续不暴露浏览器或 MCP 敏感内容。 | 仅记录 oneof、方向、长度/哈希和匿名 requestIdHash；不保存 MCP 服务名、浏览器页面、URL、页面内容、操作参数、结果正文或凭据。 | 原始保真数据继续局限于临时隔离目录；后续如需任务卡片归属，只增加不可逆匿名关联键。 |
+| V-35 | coverage | minor | open | 子代理后台化和等待结果的专属工具分支尚未由真实 Cursor 调度器触发。 | 多轮真实长任务、父级等待和并行审查均未出现 `force_background_subagent_*` 或 `subagent_await_*`；出现的 `background_shell_spawn_*` 属于后台终端而非后台子代理。 | 保持当前解析支持但不得标为运行时已验证；待客户端实际下发相应 Exec 工具后复核。 |
 
-本轮代码证据：
+本轮证据：
 
-- `go test ./internal/backend/agent/bridge/exec -count=1`：退出码 0。
-- `go test ./internal/backend/forwarder -count=1`：退出码 0。
-- `go vet ./internal/backend/agent/bridge/exec` 与 `go vet ./internal/backend/forwarder`：退出码 0。
-- `git diff --check` 与各次暂存检查：退出码 0。
-- 独立提交：`da63c77`、`d8b7a68`、`c21cae7`；未暂存 `.playwright-cli/`、`frontend/.playwright-cli/`、`output/`。
-- 未读取、提交或写入研究台账的原始抓包正文、认证头、Cookie、token、完整 request ID 或完整响应。
+- IDE 内 Playwright 操作的 MCP 证据来自 `2026-08-12 14:55:41` 后的隔离时间线；相关请求可在安全索引中按匿名哈希关联，未读取或写入网页/命令正文。
+- 截图中 `Allow / Stop` 的 Shell 审批已确认一组 `shell_allowlist_precheck_args -> shell_allowlist_precheck_result` 闭环；该闭环本身不携带用户最终选择的业务内容。
+- 本轮文档前的最新 Playwright 窗口未出现解码错误；临时 JSONL 未暂存、未提交，也未暴露到前端。
+
+## Round 14 - cursor-ide-browser 工具级调用矩阵
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- | --- |
+| V-36 | runtime-evidence | minor | fixed(r14) | `cursor-ide-browser` 的实际后台浏览器调用已获得工具级计数。 | 从 `15:20:43` 后的保真 Connect 帧只提取 `McpArgs.provider_identifier/tool_name`：`cursor-ide-browser` 的 `browser_click=13`、`browser_cdp=12`、`browser_lock=4`、`browser_navigate=4`、`browser_snapshot=4`、`browser_tabs=4`，合计 41。 | 对接层按服务和工具名聚合浏览器执行状态；不保存 `args`、页面内容、URL、点击位置、tool call ID 或结果正文。 |
+| V-37 | runtime-evidence | minor | fixed(r14) | 本轮浏览器控制直接走 MCP，而没有走 ComputerUse 或新的逐工具审批。 | 结构时间线有 `mcp_args=41`、`mcp_result=19`、`mcp_state_exec_args=1`、`tool_call_started/completed=44/42`、`step_completed/turn_ended/terminal=5/5/5`；`computer_use_args/result=0`，MCP/Shell allowlist 预检均为 0。 | 浏览器 UI 将直接 MCP 调用与经 ComputerUse 转发、需要审批的 MCP/Shell 调用明确区分。 |
+| V-38 | data-protection | major | fixed(r14) | 工具级聚合过程未扩大原始抓包的内容暴露范围。 | 临时解析器仅输出服务标识、工具名和计数，完成后已删除；当前工作树没有该临时文件，原始 JSONL 未暂存或提交。 | 后续实现仅允许同等级非内容字段进入聚合指标；原始帧继续只保留在临时隔离目录。 |
+
+本轮证据：
+
+- 工具矩阵来自 `C:\Users\Administrator\AppData\Local\Temp\cursor-byok-e2e-171758565` 的隔离 `official.raw.jsonl` 与 `protocol.timeline.jsonl`，解析过程未输出参数或网页内容。
+- `git diff --check` 通过；临时聚合程序已删除，未混入本轮文档提交。
+
+## Round 15 - cursor-ide-browser 自述核验边界
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- | --- |
+| V-39 | runtime-evidence | minor | fixed(r15) | Cursor 对 `cursor-ide-browser` 的工具流程自述与已捕获的非内容工具矩阵一致。 | 已捕获 provider=`cursor-ide-browser`，以及 `browser_tabs`、`browser_lock`、`browser_navigate`、`browser_snapshot`、`browser_click`、`browser_cdp`；无 `computer_use_args/result`。 | 后续对接以直接 MCP 浏览器调用建模，不误标为 OS 鼠标操作或 ComputerUse 协议。 |
+| V-40 | evidence-boundary | minor | open | 具体前台 `viewId`、snapshot ref、点击目标、CDP 脚本、截图和解锁调用仅来自客户端自述，未由当前安全索引独立证实。 | 时间线不保存 MCP args、URL、DOM、页面文本、脚本、tool call ID 或结果正文；保真帧未向文档输出这些内容。 | 保留为客户端自述；若未来确需验证，新增仅保存不可逆标签页关联与工具种类的索引，不保存页面或认证数据。 |
+| V-41 | data-protection | major | fixed(r15) | 客户端自述提及登录态写入，不能成为自动复制或落盘凭据的实现依据。 | 当前研究与时间线均未保存 token 值、认证请求体、存储键或 URL；原始数据仍局限于临时隔离目录。 | 对接界面仅呈现需确认的认证状态变更，不实现或记录自动凭据注入。 |
+
+## Round 16 - 后续调度、流式与终态覆盖
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- |
+| V-42 | runtime-evidence | minor | fixed(r16) | 用户执行三组后续操作后，当前索引继续覆盖子代理创建/结果、MCP、Shell、流式状态和终态收口。 | 以 `2026-08-12 15:45:22 +08:00` 为起点的只读窗口有 `subagent_args=3`、`subagent_result.success=2`、`subagent_result.error=1`、`mcp_args=23`、`mcp_result=10`、`mcp_state_exec_args=4`、`shell_stream_args=4`、`shell_stream=11`；下行有 `thinking_delta=1122`、`text_delta=3064`、`tool_call_started/completed=305/290`、`step_completed/turn_ended=9/9` 和 `terminal=8`。 | 对接层可继续以已捕获的状态机驱动子代理、工具、Shell 与流式 UI；这只是协议采集/解析证据，不等同于产品对接完成。 |
+| V-43 | coverage | minor | open | 本轮仍未触发后台化、等待、ComputerUse 或新的审批预检专属协议。 | `force_background_subagent_args/result`、`subagent_await_args/result`、`computer_use_args/result`、`mcp_allowlist_precheck_args/result` 和 `shell_allowlist_precheck_args/result` 均为 `0`；`subagentAction` 仅为 `create=3`。 | 判定为 Cursor 调度器未选择这些 oneof，而非当前统计遗漏。待真实 UI/工具环境自然发出对应操作后，再标记为运行时已验证。 |
+| V-44 | parser-resilience | minor | open | 本轮下行出现至少一条不完整 Connect 帧，但解析器将其显式标记而未静默丢弃。 | 时间线记录 `connect_frame_incomplete`，同时后续仍有流式、步骤完成、回合结束和 terminal 结构事件。 | 保留稳定错误标签并继续透传；在出现可重复的完整业务终态缺失证据前，不将单条截断记录判为协议解析失败。 |
+| V-45 | data-protection | major | fixed(r16) | 后续统计未扩大安全时间线的数据范围。 | 时间线字段名扫描中 `body`、`bodyBase64`、`frameBase64`、`prompt`、`output`、`cookie`、`authorization`、`path`、`url`、`token`、`accessToken`、`refreshToken`、`requestId` 和 `args` 均为 `0`。 | 本轮只写入事件类型、计数、终态和错误标签；原始抓包继续留在临时隔离目录，未暂存或提交。 |
+
+本轮证据：
+
+- 隔离时间线在核验时已持续写入至 `2026-08-12 16:10:54`；统计使用实际 `ts` 字段，而非不存在的 `timestamp` 字段。
+- 本会话未读取或输出请求/响应正文、MCP 或 Shell 参数、页面内容、完整 ID、Cookie、认证头或凭据。
+- 这轮没有代码改动；本提交仅记录经只读抓包核验的覆盖范围和未触发分支。
+
+## Round 17 - 安装版兼容适配与生命周期投影
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- | --- |
+| V-46 | correctness | minor | fixed(r17) | 浏览器模式此前按 MCP 服务名称模糊选择，可能将不兼容服务或多个坐标型服务错误用于 ComputerUse。 | e336c6a 新增运行时 descriptor 驱动的 profile 解析。go test ./internal/computeruse ./internal/backend/forwarder -count=1 退出码 0，覆盖 IDE profile 优先、名称单独匹配拒绝、锁定/点击/解锁序列和实际 descriptor 选择。 | browser 模式仅接受完整的 cursor_ide_browser 或唯一坐标型 profile；不兼容、未连接或歧义均以稳定错误返回，不回退到 DesktopExecutor。 |
+| V-47 | correctness | minor | fixed(r17) | 等待仍运行、后台化和 allowlist 的终态判断散落在执行桥分支中，后续状态展示容易偏离真正收口语义。 | 生命周期分类器只输出 kind、phase、terminal。go test ./internal/backend/agent/bridge/exec ./internal/backend/forwarder -count=1 退出码 0，覆盖 await_still_running 非终态、等待完成、后台化接受/未找到、allowlist 放行/拒绝及已观察未知结果的既有终态兼容。 | ApplyExecClientMessage 保留现有 payload 与 ToolCall 构造，只复用分类器的终态判断；分类器不读取或返回 agent ID、tool call ID、参数、错误正文或转录路径。 |
+| V-48 | runtime-evidence | minor | open | 静态安装扫描和单元测试不能证明当前 Cursor 版本已经真实下发后台化、等待或 ComputerUse oneof。 | Round 16 的实际隔离时间线中 force_background_subagent_args/result、subagent_await_args/result、computer_use_args/result 均为 0；本轮没有伪造协议消息。 | 用户在隔离 Cursor 中自然触发对应功能后，继续只读核验上下行 oneof、终态和安全索引；在此之前仅声明本地映射已测试。 |
+
+本轮证据：
+
+- 安装版只读扫描已在 D:\cursor 的本地副本完成，报告只保留版本、能力 marker 和不可逆安装根哈希；不修改安装、登录态或运行进程。
+- 当前隔离 worktree 缺少被 .gitignore 排除的 protobuf 生成目录，已按项目 build/Taskfile.yml 的现有 protoc 命令仅在本地再生；gen/ 保持 ignored，未暂存或提交。
+- 以上为静态能力、单元和定向集成验证，不替代真实 Cursor E2E；临时抓包、凭据、Cookie、Token、URL、正文和 MCP 参数均未写入本轮提交。
+
+## Round 18 - 兼容适配定向验证
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- | --- |
+| V-49 | verification | minor | fixed(r18) | 安装扫描、浏览器 profile、执行桥状态投影和隔离抓包模块需要在同一生成代码环境中完成定向回归。 | 2026-08-12 运行 go test ./internal/cursorcapabilities ./internal/computeruse ./internal/backend/agent/bridge/exec ./internal/backend/forwarder ./internal/mitm ./cmd/isolated-cursor-e2e -count=1，六个包均退出码 0。 | 验证覆盖扫描器、两类浏览器 profile、生命周期分类、forwarder 接线与既有隔离抓包路径。 |
+| V-50 | build | minor | fixed(r18) | 新命令入口和隔离 E2E 命令必须可独立编译，且新增代码不引入 vet 问题。 | go vet 对上述六个包退出码 0；go build ./cmd/cursor-capability-scan ./cmd/isolated-cursor-e2e 退出码 0。 | 仅证明本地构建与静态分析通过，不替代真实 Cursor 对协议 oneof 的运行时验证。 |
+| V-51 | privacy | major | fixed(r18) | 安装版能力扫描和为测试再生的 protobuf 产物不得暴露安装路径或进入 Git。 | go run ./cmd/cursor-capability-scan --root D:\cursor 退出码 0，输出仅含版本、扩展、能力 marker 和 installRootHash，断言未出现输入根路径；git status --short --ignored 显示 gen/ 为 ignored。 | gen/ 仅是当前隔离 worktree 的本地产物，未暂存；未跟踪 .playwright-cli/、frontend/.playwright-cli/、output/ 保持不变。 |
+
+本轮未启动或修改已安装 Cursor，也没有模拟真实协议。后台化、等待和 ComputerUse oneof 的真实上下行覆盖仍以 V-48 为准。

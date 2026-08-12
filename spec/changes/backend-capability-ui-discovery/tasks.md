@@ -59,15 +59,17 @@
   - [x] 9.4 已运行 `go test ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e`、`go build ./cmd/isolated-cursor-e2e`、`go vet ./internal/mitm ./internal/backend/agent/protocol ./cmd/isolated-cursor-e2e` 与 `git diff --check`；未新增测试文件。
 
 - [~] 10. 当前隔离实例的真实矩阵验收
-  - [ ] 10.1 保持当前隔离实例运行；用户依次尝试一个可后台化的长子任务、等待该任务结果的后续操作、取消或错误收口，以及一次会要求选择/确认的操作。用户界面未出现某项动作时跳过并记录未触发。后台化、等待、取消/错误和父级 `Stop All` 本轮仍未完成真实触发验证。
+  - [~] 10.1 保持当前隔离实例运行；已真实验证单子代理取消、错误结果、父级 `Stop All`、Shell 审批和 MCP 审批/结果。后续真实操作继续捕获 3 次子代理创建、2 次成功回传、1 次错误回传、MCP/Shell 调用、流式状态与终态；后台化、等待、ComputerUse 和新的审批预检专属分支仍未触发：`force_background_subagent_*`、`subagent_await_*`、`computer_use_*`、`*_allowlist_precheck_*` 保持未验证。
   - [x] 10.2 只读检查 `protocol.timeline.jsonl`：已确认 `subagent_args/result`、`clientResultKind=success`、`interaction_query/response`、`step_completed`、`turn_ended` 和 `stream_close`；交互闭环按相同 `requestIdHash` 关联。
   - [x] 10.3 对已触发事件核对 `runsse_connect`、`bidi_append` 方向、requestIdHash 关联、终态与 `decodeError`；最近约 11,498 条时间线记录的正文、原始帧、凭据、路径、token 和完整 request ID 字段扫描均为 0。
-- [x] 10.4 已将汇总计数、实际 oneof 类型、未触发分支和隐私检查写入 `verify.md` 与本任务清单；临时 JSONL 未提交，文档改动单独提交 `docs(verify): record multitask interaction coverage`。
+  - [x] 10.4 已将汇总计数、实际 oneof 类型、取消/停止、审批和 IDE 内 Playwright MCP 证据、未触发分支和隐私检查写入 `verify.md` 与本任务清单；临时 JSONL 未提交，文档改动单独提交。
+  - [x] 10.5 已针对 `cursor-ide-browser` 解析保真帧中的非内容 MCP 字段，记录 `browser_click`、`browser_cdp`、`browser_lock`、`browser_navigate`、`browser_snapshot`、`browser_tabs` 的实际调用次数；临时聚合器已删除，未读取或保存参数、页面内容、URL、坐标或结果正文。
+- [x] 10.6 已记录 Cursor 对 IDE 浏览器流程的自述，并与已捕获 MCP 工具矩阵交叉核验；将可验证的工具类型和调用通道与未验证的 `viewId/ref`、DOM/CDP 实现细节、截图/解锁、标签可见性和认证流程严格分开。
 
-## 子代理蓝色引用身份对齐
+## 安装版 Cursor 兼容适配实施
 
-- [x] 11.1 本地聚合 Task 的开始消息、checkpoint、完成结果统一使用 `local-delegation:<tool_call_id>`。
-- [x] 11.2 原生 Cursor Task 的 `SubagentArgs.tool_call_id`、PendingExec 和完成 ToolCall 统一绑定父 `tool_call_id`；客户端返回的内部 `agent_id` 不再改写父卡片引用。
-- [x] 11.3 并行同标题、反向完成和缺失任务状态测试通过；不按标题、数组顺序、完成顺序或 `requestIdHash` 猜测归属。
-- [~] 11.4 Cursor 客户端蓝色引用点击、滚动、高亮和详情面板尚未由本仓库验证；需要用户在隔离实例中实际点击，代码库没有对应聊天渲染入口。
-- [x] 11.5 代码提交拆分为 `da63c77`、`d8b7a68`、`c21cae7`，临时目录未暂存。
+- [x] 11. 浏览器 profile 与生命周期状态投影
+  - [x] 11.1 仅根据已连接 MCP 的 tools/list 描述符区分 `cursor_ide_browser` 与坐标型浏览器 profile；无有效 profile 或多个坐标型 profile 返回明确错误，不回退到桌面鼠标。
+  - [x] 11.2 IDE 浏览器适配器在动作前列标签并锁定、点击前快照和截图、结束后解锁；不能稳定映射的拖拽、按下和抬起动作明确失败。
+  - [x] 11.3 为后台化、等待与 allowlist precheck oneof 增加不含标识符、参数或正文的生命周期状态投影；保持既有 payload、watchdog 和终态语义。
+  - [x] 11.4 已运行 `go test ./internal/computeruse ./internal/backend/forwarder -count=1` 与 `go test ./internal/backend/agent/bridge/exec ./internal/backend/forwarder -count=1`；真实 Cursor 尚未在本轮发出后台化、等待或 ComputerUse 专属 oneof，保持未验证。

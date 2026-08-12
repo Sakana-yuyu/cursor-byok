@@ -31,6 +31,7 @@
 - Chromium 支持 `--ignore-certificate-errors-spki-list=<base64 SHA-256 SPKI>`，可只信任本次临时 CA 的公钥而不是全局忽略 TLS 错误；临时镜像配置可显式将 `api2.cursor.sh`、`api3.cursor.sh` 加入 hosts，复用现有 `isWhitelistedRelayHost` 的已知官方 relay 范围 | 此参数和 hosts 仅在 `CURSOR_E2E_MIRROR_CAPTURE=1` 的临时 Cursor 子进程生效，不写入系统证书库、真实 Cursor 设置或默认镜像配置；它使后续对接采集覆盖 Cursor relay 与原有三类官方模型 API。
 - 本机实际安装 Cursor 的 bundle 同时包含 `https://api2.cursor.sh`、`https://api3.cursor.sh` 和 `https://api4.cursor.sh`；`isWhitelistedRelayHost` 已将所有 `*.cursor.sh` 纳入 MITM 解密，但隔离镜像配置仅记录显式 hosts | 若不把 `api4.cursor.sh` 加入临时镜像 hosts，经过 MITM 的该 relay 流量不会写入隔离 JSONL，导致后续对接所需协议采集不完整。
 - 用户启用 Multitask 后，隔离 JSONL 出现多条互相重叠的 `RunSSE` 长连接及大量 `BidiAppend` 上行，均使用 `application/connect+proto` 或 `application/proto`；现有记录器却把原始 bytes 直接转换为字符串写入 JSON | 非 UTF-8 protobuf 字节会在 JSON 编码时替换，底层 `Read()` 的 chunk 也不等于 Connect/SSE 消息边界。现有 `BidiAppendRequest`、`AgentClientMessage` 和 `AGENT_MODE_MULTITASK` 的 protobuf 定义及解码器均已存在，但无法可靠消费已损坏的镜像载荷。
+- 最新隔离实例的安全时间线时间字段为 `ts`，不是 `timestamp`；按 `ts` 筛选的后续操作窗口可稳定观察到子代理、MCP、Shell、流式和终态结构事件 | 后续统计必须使用实际 schema，避免把正在持续写入的抓包误判为空窗口。
 - `BidiAppendRequest` 同时承载外层 `request_id`、`append_seqno` 与内层 `data_binary` Agent 消息；Multitask 的模式、子代理创建/后台化/完成/取消等状态分布在该内层消息和 `RunSSE` 的服务端消息中 | 仅记录 URL、状态和底层分块数量无法还原父子任务关系、事件顺序或可回放格式。
 - 当前真实隔离镜像已捕获 `BidiAppend` 上行与 `RunSSE` 下行原始字节：上行可提取 `exec_client_message`、`exec_client_control_message`、`kv_client_message`、心跳等客户端 oneof；下行响应头为 `text/event-stream`，但帧载荷满足 Connect 的 5 字节帧头格式 | `newMirrorRunSSEFrameDecoder` 仅依据响应头选择 SSE 解码，因而把可重组的 Connect 二进制帧记为 `runsse_sse` 与 `sse_server_message_unavailable`，原始 Base64 帧仍保真且未丢失。
 - `AgentServerMessage` 的顶层 oneof 已定义 `interaction_update`、`exec_server_message`、`exec_server_control_message`、`conversation_checkpoint_update`、`kv_server_message` 与 `interaction_query`；`ExecServerMessage` 又定义工具和子代理 oneof，包括 `subagent_args`、`force_background_subagent_args`、`subagent_await_args` | 仅记录顶层服务端 oneof 无法判定 Multitask 的创建、后台化与等待关系，需在不展开正文的前提下建立二层结构索引。
@@ -83,6 +84,26 @@
 - 3 组交互闭环按 `requestIdHash` 关联：`web_search_request_query -> web_search_request_response` 2 组，`web_fetch_request_query -> web_fetch_request_response` 1 组；服务端方向为 `runsse_connect`，客户端响应方向为 `bidi_append`。`requestIdHash` 仅是请求/流级关联键，不能直接当作子代理任务 ID。
 - 当前时间线安全索引不保存 agent ID、tool call ID、任务标题、prompt、工具参数、结果正文、Cookie、Authorization、URL、完整 request ID 或原始帧 Base64；原始保真 JSONL 只留在临时隔离目录。因此目前可以对接协议状态和流式阶段，但不能仅凭索引将 5 个子代理事件逐一映射到截图中的 4 个 UI 标题。后续实现需增加进程内父任务/子任务关联表，落盘时只使用不可逆短哈希或稳定匿名序号。
 - `force_background_subagent_*`、`subagent_await_*`、取消/错误收口和父级 `Stop All` 的真实协议格式本次仍未确认；不能据此宣称已完整还原 Multitask 的后台化、等待、取消或全量停止能力。
+
+### 本轮后续实测补充：取消、审批与 IDE 内 Playwright（2026-08-12）
+- 单子代理取消已真实出现为客户端上行 `conversation_action.cancel_subagent_action`，并由索引标记 `subagentAction=cancel`；父级 `Stop All` 在同一秒出现 4 条独立的 `conversation_action.cancel_action`，随后可观察到执行流 `stream_close` 与父级 `step_completed`、`turn_ended`、terminal 收口。`cancel_action` 表示取消当前会话/任务流，不能仅按单一 requestIdHash 推断其对应的具体 UI 标题。
+- 截图中的 `Allow / Stop` 是子任务工具级审批，不等同于父级 `Stop All`。Shell 审批闭环为服务端 `shell_allowlist_precheck_args` 到客户端 `shell_allowlist_precheck_result`；索引只保存 oneof、方向和关联哈希，不保存命令、审批选择或结果正文，因此需在用户实际点击后通过后续工具结果判断执行是否继续。
+- 用户在 IDE 内使用 Playwright 进行浏览器操作时，真实流走的是 MCP 工具链，而非 `computer_use`：服务端 `mcp_allowlist_precheck_args -> mcp_args`，客户端 `mcp_allowlist_precheck_result -> mcp_result`，并出现一次 `mcp_state_exec_args`。同一会话也会出现 Shell allowlist 和 `shell_stream`，用于 Playwright 配套的本地执行环境；两种审批必须在界面上分别呈现。
+- 本次窗口确认 `mcp_allowlist_precheck_args/result` 10 组、`mcp_args` 10 条、`mcp_result` 9 条、`mcp_state_exec_args` 1 条，以及 `shell_allowlist_precheck_args/result` 10 组、`shell_stream_args` 9 条。安全索引不保存 MCP 服务名、浏览器页面、URL、页面内容、操作参数或结果正文，所以可确认“IDE 内 Playwright 经 MCP 调用”，不能从索引单独断言某一次具体点击/导航。
+- 真实浏览器对接界面应将 MCP 审批、Shell 审批、MCP 执行中、Shell 流输出、MCP 结果、流关闭和任务收口拆分显示；避免把批准 MCP 调用错误显示为批准终端命令。`force_background_subagent_*` 与 `subagent_await_*` 仍未触发，保持未验证。
+
+### cursor-ide-browser 实际工具矩阵（2026-08-12）
+- 用户改用 `cursor-ide-browser` 控制审查浏览器后，`15:20:43` 起的真实保真帧解析出 41 条 `McpArgs`，服务标识均为 `cursor-ide-browser`。仅聚合 `provider_identifier` 与 `tool_name`，不读取或输出 `args`、tool call ID、URL、页面内容、点击位置或 MCP 结果正文。
+- 实际工具和次数为：`browser_click=13`、`browser_cdp=12`、`browser_lock=4`、`browser_navigate=4`、`browser_snapshot=4`、`browser_tabs=4`。这证明浏览器审查覆盖了标签页枚举、导航、页面快照、浏览器锁定、CDP 操作和点击；工具名不能单独说明点击的页面元素或导航目标。
+- 同一窗口结构时间线为 `mcp_args=41`、`mcp_result=19`、`mcp_state_exec_args=1`、`tool_call_started=44`、`tool_call_completed=42`、`step_completed=5`、`turn_ended=5`、terminal=5。`mcp_args` 与 `mcp_result` 数量暂不相等，表示部分调用仍由持续流、后续窗口或客户端状态处理；不能将未见同数结果直接解释为失败。
+- 本次 `cursor-ide-browser` 窗口没有 `computer_use_args/result`，也没有 MCP/Shell allowlist 预检，说明它直接以已可用的 MCP 浏览器服务调用，而非经 ComputerUse 桥或逐次审批。后续 UI 应以工具名聚合展示浏览器操作阶段，但不落盘任何工具参数。
+
+### cursor-ide-browser 客户端自述与证据边界（2026-08-12）
+- Cursor 客户端自述其标准浏览器流程为标签页查询/选择、浏览器锁定、导航、可访问性快照、按 ref 点击、再次快照和解锁；同时说明必要时用 `browser_cdp` 执行页面内脚本。已抓包实证的工具矩阵与此一致：`browser_tabs`、`browser_lock`、`browser_navigate`、`browser_snapshot`、`browser_click`、`browser_cdp` 均真实出现。
+- 已实证：请求 provider 是 `cursor-ide-browser`，没有 `computer_use_args/result`，本轮也没有新的 MCP/Shell allowlist；因此它是直接的 IDE 浏览器 MCP 调用，不能误标为桌面鼠标键盘模拟或本仓库 ComputerUse 桥的协议。
+- 仅客户端自述，当前安全索引未独立验证：具体 `viewId`/标签页与右侧面板的可见性映射、snapshot 内 `ref` 值、具体 DOM 点击目标、`browser_take_screenshot`、显式 `unlock` 调用、`Runtime.evaluate` 的实际脚本、SPA 路由方法以及“底层不使用 Playwright”的实现细节。索引不会保存 MCP args、URL、DOM、页面文字、脚本或工具结果正文，不能据此反推这些事实。
+- 自述中涉及浏览器存储的登录态写入和后端登录请求属于敏感认证流程。后续对接只记录“认证状态变更”这一高风险动作及其用户确认，不记录 token 名称、值、请求体、存储键或可复用认证步骤；不得将该自述转写为自动注入凭据方案。
+- 产品交互结论：对正确前台标签页的选择、浏览器锁定状态和解锁归还必须有清晰可见的 UI 状态，但聚合记录只能使用不可逆匿名标签页关联，不能落盘真实 viewId 或页面地址。
 
 ## Open [TBD]
 
