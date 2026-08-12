@@ -1579,7 +1579,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 54,
+          "line": 46,
           "column": 12
         }
       ]
@@ -1591,7 +1591,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 72,
+          "line": 64,
           "column": 18
         }
       ]
@@ -5975,7 +5975,7 @@
         },
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 78,
+          "line": 70,
           "column": 12
         }
       ]
@@ -6570,7 +6570,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 62,
+          "line": 54,
           "column": 12
         }
       ]
@@ -6587,7 +6587,7 @@
         },
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 110,
+          "line": 102,
           "column": 12
         }
       ]
@@ -6628,7 +6628,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 56,
+          "line": 48,
           "column": 18
         }
       ]
@@ -6966,7 +6966,7 @@
         },
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 112,
+          "line": 104,
           "column": 18
         }
       ]
@@ -7946,7 +7946,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 96,
+          "line": 88,
           "column": 18
         }
       ]
@@ -8771,7 +8771,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 24,
+          "line": 16,
           "column": 12
         }
       ]
@@ -9707,7 +9707,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 30,
+          "line": 22,
           "column": 12
         }
       ]
@@ -10590,7 +10590,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 46,
+          "line": 38,
           "column": 12
         }
       ]
@@ -10891,7 +10891,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 36,
+          "line": 28,
           "column": 12
         }
       ]
@@ -10942,7 +10942,7 @@
         },
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 94,
+          "line": 86,
           "column": 12
         }
       ]
@@ -11120,7 +11120,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 18,
+          "line": 10,
           "column": 12
         }
       ]
@@ -11813,7 +11813,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 80,
+          "line": 72,
           "column": 18
         }
       ]
@@ -11854,7 +11854,7 @@
         },
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 70,
+          "line": 62,
           "column": 12
         }
       ]
@@ -12117,7 +12117,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 104,
+          "line": 96,
           "column": 18
         }
       ]
@@ -14169,7 +14169,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 86,
+          "line": 78,
           "column": 12
         }
       ]
@@ -16062,7 +16062,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 88,
+          "line": 80,
           "column": 18
         }
       ]
@@ -16487,7 +16487,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 64,
+          "line": 56,
           "column": 18
         }
       ]
@@ -17239,7 +17239,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 102,
+          "line": 94,
           "column": 12
         }
       ]
@@ -19434,7 +19434,7 @@
       "refs": [
         {
           "file": "src/components/settings/settingsCategories.js",
-          "line": 48,
+          "line": 40,
           "column": 18
         }
       ]
