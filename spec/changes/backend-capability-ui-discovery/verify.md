@@ -255,3 +255,13 @@
 - 安装版只读扫描已在 D:\cursor 的本地副本完成，报告只保留版本、能力 marker 和不可逆安装根哈希；不修改安装、登录态或运行进程。
 - 当前隔离 worktree 缺少被 .gitignore 排除的 protobuf 生成目录，已按项目 build/Taskfile.yml 的现有 protoc 命令仅在本地再生；gen/ 保持 ignored，未暂存或提交。
 - 以上为静态能力、单元和定向集成验证，不替代真实 Cursor E2E；临时抓包、凭据、Cookie、Token、URL、正文和 MCP 参数均未写入本轮提交。
+
+## Round 18 - 兼容适配定向验证
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- | --- |
+| V-49 | verification | minor | fixed(r18) | 安装扫描、浏览器 profile、执行桥状态投影和隔离抓包模块需要在同一生成代码环境中完成定向回归。 | 2026-08-12 运行 go test ./internal/cursorcapabilities ./internal/computeruse ./internal/backend/agent/bridge/exec ./internal/backend/forwarder ./internal/mitm ./cmd/isolated-cursor-e2e -count=1，六个包均退出码 0。 | 验证覆盖扫描器、两类浏览器 profile、生命周期分类、forwarder 接线与既有隔离抓包路径。 |
+| V-50 | build | minor | fixed(r18) | 新命令入口和隔离 E2E 命令必须可独立编译，且新增代码不引入 vet 问题。 | go vet 对上述六个包退出码 0；go build ./cmd/cursor-capability-scan ./cmd/isolated-cursor-e2e 退出码 0。 | 仅证明本地构建与静态分析通过，不替代真实 Cursor 对协议 oneof 的运行时验证。 |
+| V-51 | privacy | major | fixed(r18) | 安装版能力扫描和为测试再生的 protobuf 产物不得暴露安装路径或进入 Git。 | go run ./cmd/cursor-capability-scan --root D:\cursor 退出码 0，输出仅含版本、扩展、能力 marker 和 installRootHash，断言未出现输入根路径；git status --short --ignored 显示 gen/ 为 ignored。 | gen/ 仅是当前隔离 worktree 的本地产物，未暂存；未跟踪 .playwright-cli/、frontend/.playwright-cli/、output/ 保持不变。 |
+
+本轮未启动或修改已安装 Cursor，也没有模拟真实协议。后台化、等待和 ComputerUse oneof 的真实上下行覆盖仍以 V-48 为准。
