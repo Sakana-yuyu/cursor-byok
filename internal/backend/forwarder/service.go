@@ -3272,6 +3272,11 @@ func (service *Service) closeStreamWithProviderError(
 			usage.ErrorCode = "provider_error"
 		}
 	}
+	// 已知上游「不支持某能力」类错误（如 grok 多代理变体拒绝 client-side tools）
+	// 在原始错误前追加按当前 UI 语言本地化的建议；未命中时保持原样。
+	if hint := knownProviderErrorHint(providerErr); hint != "" {
+		errorText = hint + "\n\n" + errorText
+	}
 	modelCallID := strings.TrimSpace(stream.CurrentModelCallID)
 	if err := service.flushAssistantText(stream, conversationID, turnSeq, requestID, accumulatedText, accumulatedReasoning, accumulatedReasoningSignature, accumulatedReasoningSignatureSource, accumulatedReasoningItemID, accumulatedReasoningStatus, accumulatedReasoningSummary, allowReasoningOnly); err != nil {
 		return fmt.Errorf("flush provider error assistant output: %w", err)

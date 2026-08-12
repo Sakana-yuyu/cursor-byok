@@ -72,10 +72,14 @@ func (s *WindowService) ensureCursorLaunchReady() error {
 }
 
 // SetLocale updates the locale used for subsequently created native windows.
+// 同步更新进程级 i18n locale，使无 locale 上下文的错误提示（如 provider 错误收口）
+// 也能按当前 UI 语言本地化。
 func (s *WindowService) SetLocale(locale string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.locale = i18n.Normalize(locale)
+	normalized := i18n.Normalize(locale)
+	s.locale = normalized
+	i18n.SetCurrentLocale(normalized)
 }
 
 // SetApp 用于处理与 SetApp 相关的逻辑。
