@@ -170,3 +170,7 @@ flowchart LR
 - 没有 `cursor-ide-browser` runtime 时，满足坐标工具要求的既有 Playwright MCP 仍使用现有适配器；两类均不可用时返回可操作错误，不退回桌面模式。
 - 已有 `ForceBackgroundSubagent`、`SubagentAwait` 与 allowlist 处理函数不改协议字段；本轮只补状态投影、能力诊断和定向测试，避免与当前 pending/watchdog/取消收口相冲突。
 - 安装目录和 `.cursor-app-formatted/` 均只读；任何生成的扫描报告、格式化快照和临时解析器必须被忽略且不得提交。
+
+### Shell 工具气泡流式增量兼容
+
+已安装版 Cursor 的 Shell UI 同时消费既有 `ShellOutputDelta` 交互事件和包裹在 `ToolCallDelta.ShellToolCallDelta` 中的 stdout/stderr 片段。转发器应在保留原有输出事件的前提下，针对非空 stdout 或 stderr 额外发送工具调用增量，并沿用 pending exec 的 `ToolCallID` 与 `ModelCallID`。启动、退出、空内容与未知事件不构造第二条消息，避免制造空的终端气泡或改变终态收口。该投影仅作用于已真实收到的客户端 Shell 输出，不改变 Shell 执行、审批、取消、历史写入或 watchdog 逻辑。

@@ -73,3 +73,8 @@
   - [x] 11.2 IDE 浏览器适配器在动作前列标签并锁定、点击前快照和截图、结束后解锁；不能稳定映射的拖拽、按下和抬起动作明确失败。
   - [x] 11.3 为后台化、等待与 allowlist precheck oneof 增加不含标识符、参数或正文的生命周期状态投影；保持既有 payload、watchdog 和终态语义。
   - [x] 11.4 已运行 `go test ./internal/computeruse ./internal/backend/forwarder -count=1` 与 `go test ./internal/backend/agent/bridge/exec ./internal/backend/forwarder -count=1`；真实 Cursor 尚未在本轮发出后台化、等待或 ComputerUse 专属 oneof，保持未验证。
+
+- [x] 12. Shell 工具气泡流式增量兼容
+  - [x] 12.1 仅对非空 stdout/stderr 将既有 Shell 输出投影为 `ToolCallDelta.ShellToolCallDelta`，保留原 `ShellOutputDelta` 发布与全部终态逻辑。
+  - [x] 12.2 以 stdout、stderr、启动、退出与空输出的定向单元测试验证结构和忽略边界。
+  - [x] 12.3 已运行 `go test ./internal/backend/forwarder -run 'TestBuildShellToolCallDeltaMessage' -count=1`、`go test ./internal/backend/agent/bridge/exec ./internal/backend/forwarder -count=1`、`go vet ./internal/backend/forwarder` 与 `git diff --check`。
