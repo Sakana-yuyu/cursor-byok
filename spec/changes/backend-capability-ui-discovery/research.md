@@ -91,6 +91,12 @@
 - 本次窗口确认 `mcp_allowlist_precheck_args/result` 10 组、`mcp_args` 10 条、`mcp_result` 9 条、`mcp_state_exec_args` 1 条，以及 `shell_allowlist_precheck_args/result` 10 组、`shell_stream_args` 9 条。安全索引不保存 MCP 服务名、浏览器页面、URL、页面内容、操作参数或结果正文，所以可确认“IDE 内 Playwright 经 MCP 调用”，不能从索引单独断言某一次具体点击/导航。
 - 真实浏览器对接界面应将 MCP 审批、Shell 审批、MCP 执行中、Shell 流输出、MCP 结果、流关闭和任务收口拆分显示；避免把批准 MCP 调用错误显示为批准终端命令。`force_background_subagent_*` 与 `subagent_await_*` 仍未触发，保持未验证。
 
+### cursor-ide-browser 实际工具矩阵（2026-08-12）
+- 用户改用 `cursor-ide-browser` 控制审查浏览器后，`15:20:43` 起的真实保真帧解析出 41 条 `McpArgs`，服务标识均为 `cursor-ide-browser`。仅聚合 `provider_identifier` 与 `tool_name`，不读取或输出 `args`、tool call ID、URL、页面内容、点击位置或 MCP 结果正文。
+- 实际工具和次数为：`browser_click=13`、`browser_cdp=12`、`browser_lock=4`、`browser_navigate=4`、`browser_snapshot=4`、`browser_tabs=4`。这证明浏览器审查覆盖了标签页枚举、导航、页面快照、浏览器锁定、CDP 操作和点击；工具名不能单独说明点击的页面元素或导航目标。
+- 同一窗口结构时间线为 `mcp_args=41`、`mcp_result=19`、`mcp_state_exec_args=1`、`tool_call_started=44`、`tool_call_completed=42`、`step_completed=5`、`turn_ended=5`、terminal=5。`mcp_args` 与 `mcp_result` 数量暂不相等，表示部分调用仍由持续流、后续窗口或客户端状态处理；不能将未见同数结果直接解释为失败。
+- 本次 `cursor-ide-browser` 窗口没有 `computer_use_args/result`，也没有 MCP/Shell allowlist 预检，说明它直接以已可用的 MCP 浏览器服务调用，而非经 ComputerUse 桥或逐次审批。后续 UI 应以工具名聚合展示浏览器操作阶段，但不落盘任何工具参数。
+
 ## Open [TBD]
 
 ## Decided

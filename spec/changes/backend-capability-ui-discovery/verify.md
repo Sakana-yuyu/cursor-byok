@@ -205,3 +205,16 @@
 - IDE 内 Playwright 操作的 MCP 证据来自 `2026-08-12 14:55:41` 后的隔离时间线；相关请求可在安全索引中按匿名哈希关联，未读取或写入网页/命令正文。
 - 截图中 `Allow / Stop` 的 Shell 审批已确认一组 `shell_allowlist_precheck_args -> shell_allowlist_precheck_result` 闭环；该闭环本身不携带用户最终选择的业务内容。
 - 本轮文档前的最新 Playwright 窗口未出现解码错误；临时 JSONL 未暂存、未提交，也未暴露到前端。
+
+## Round 14 - cursor-ide-browser 工具级调用矩阵
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- | --- |
+| V-36 | runtime-evidence | minor | fixed(r14) | `cursor-ide-browser` 的实际后台浏览器调用已获得工具级计数。 | 从 `15:20:43` 后的保真 Connect 帧只提取 `McpArgs.provider_identifier/tool_name`：`cursor-ide-browser` 的 `browser_click=13`、`browser_cdp=12`、`browser_lock=4`、`browser_navigate=4`、`browser_snapshot=4`、`browser_tabs=4`，合计 41。 | 对接层按服务和工具名聚合浏览器执行状态；不保存 `args`、页面内容、URL、点击位置、tool call ID 或结果正文。 |
+| V-37 | runtime-evidence | minor | fixed(r14) | 本轮浏览器控制直接走 MCP，而没有走 ComputerUse 或新的逐工具审批。 | 结构时间线有 `mcp_args=41`、`mcp_result=19`、`mcp_state_exec_args=1`、`tool_call_started/completed=44/42`、`step_completed/turn_ended/terminal=5/5/5`；`computer_use_args/result=0`，MCP/Shell allowlist 预检均为 0。 | 浏览器 UI 将直接 MCP 调用与经 ComputerUse 转发、需要审批的 MCP/Shell 调用明确区分。 |
+| V-38 | data-protection | major | fixed(r14) | 工具级聚合过程未扩大原始抓包的内容暴露范围。 | 临时解析器仅输出服务标识、工具名和计数，完成后已删除；当前工作树没有该临时文件，原始 JSONL 未暂存或提交。 | 后续实现仅允许同等级非内容字段进入聚合指标；原始帧继续只保留在临时隔离目录。 |
+
+本轮证据：
+
+- 工具矩阵来自 `C:\Users\Administrator\AppData\Local\Temp\cursor-byok-e2e-171758565` 的隔离 `official.raw.jsonl` 与 `protocol.timeline.jsonl`，解析过程未输出参数或网页内容。
+- `git diff --check` 通过；临时聚合程序已删除，未混入本轮文档提交。
