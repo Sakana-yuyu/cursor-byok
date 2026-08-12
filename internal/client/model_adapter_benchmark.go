@@ -142,6 +142,11 @@ func (s *ProxyService) TestModelAdapter(adapter serverconfig.ModelAdapterConfig)
 		s.storeAndEmitModelAdapterTestResult(result)
 		return result, err
 	}
+	if isCursorAccountModelAdapter(normalized) {
+		result := buildErroredModelAdapterTestResult(normalized.ID, requestHash, errCursorAccountModelOperationUnavailable)
+		s.storeAndEmitModelAdapterTestResult(result)
+		return result, errCursorAccountModelOperationUnavailable
+	}
 
 	running := ModelAdapterTestResult{
 		AdapterID:   normalized.ID,
@@ -198,6 +203,9 @@ func (s *ProxyService) RunModelAdapterThroughputProbe(adapter serverconfig.Model
 		return buildErroredModelAdapterTestResult(strings.TrimSpace(adapter.ID), buildModelAdapterTestRequestHash(adapter), err), err
 	}
 	requestHash := buildModelAdapterTestRequestHash(adapter)
+	if isCursorAccountModelAdapter(normalized) {
+		return buildErroredModelAdapterTestResult(normalized.ID, requestHash, errCursorAccountModelOperationUnavailable), errCursorAccountModelOperationUnavailable
+	}
 	return s.runModelAdapterTestWithFallback(normalized, requestHash, false)
 }
 

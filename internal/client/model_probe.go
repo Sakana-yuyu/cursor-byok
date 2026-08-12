@@ -59,6 +59,14 @@ func (s *ProxyService) ProbeModelAdapter(adapter serverconfig.ModelAdapterConfig
 			Message: humanizeModelAdapterProbeError(err, 0),
 		}
 	}
+	if isCursorAccountModelAdapter(normalized) {
+		return ModelAdapterProbeResult{
+			ID:      id,
+			ModelID: strings.TrimSpace(normalized.ModelID),
+			OK:      false,
+			Message: errCursorAccountModelOperationUnavailable.Error(),
+		}
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), modelAdapterProbeTimeout)
 	defer cancel()
