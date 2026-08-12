@@ -1478,33 +1478,22 @@ export async function deleteModelAdaptersBySupplier(baseURLOrIdentity, groupName
   if (baseURLOrIdentity && typeof baseURLOrIdentity === "object" && !Array.isArray(baseURLOrIdentity)) {
     identity = {
       mode: asString(baseURLOrIdentity.mode || "legacy").trim() || "legacy",
+      source: baseURLOrIdentity.source,
       baseURL: baseURLOrIdentity.baseURL,
       groupName: baseURLOrIdentity.groupName,
     };
   } else {
     identity = {
       mode: "legacy",
+      source: "third_party",
       baseURL: baseURLOrIdentity,
       groupName,
     };
   }
 
-  const mode = asString(identity.mode).trim().toLowerCase() || "legacy";
-  const normalizedBaseURL = normalizeBaseURL(identity.baseURL);
-  const normalizedGroupName = asString(identity.groupName).trim();
-
-  const remaining = normalizeModelAdapters(currentConfig.modelAdapters).filter((adapter) => {
-    const adapterBase = normalizeBaseURL(adapter.baseURL);
-    const adapterGroup = asString(adapter.groupName).trim();
-    if (mode === "name") {
-      return adapterGroup !== normalizedGroupName;
-    }
-    if (mode === "connection") {
-      return adapterBase !== normalizedBaseURL;
-    }
-    // legacy: baseURL + groupName
-    return !(adapterBase === normalizedBaseURL && adapterGroup === normalizedGroupName);
-  });
+  const remaining = normalizeModelAdapters(currentConfig.modelAdapters).filter(
+    (adapter) => !adapterMatchesSupplierIdentity(adapter, identity),
+  );
   return persistConfigPayload(
     {
       ...currentConfig,

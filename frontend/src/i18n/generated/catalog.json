@@ -48,7 +48,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 921,
+          "line": 935,
           "column": 18
         }
       ]
@@ -111,6 +111,23 @@
         }
       ]
     },
+    "0244caa166fc53a5": {
+      "source": "账户通道",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/supplier/SupplierModelCard.vue",
+          "line": 93,
+          "column": 58
+        },
+        {
+          "file": "src/views/SupplierDetail.vue",
+          "line": 903,
+          "column": 26
+        }
+      ]
+    },
     "0270272f1598547c": {
       "source": "按渠道归类",
       "kind": "text",
@@ -152,7 +169,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 867,
+          "line": 879,
           "column": 16
         }
       ]
@@ -246,7 +263,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 982,
+          "line": 996,
           "column": 54
         }
       ]
@@ -335,7 +352,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1058,
+          "line": 1072,
           "column": 54
         }
       ]
@@ -470,7 +487,7 @@
         },
         {
           "file": "src/components/supplier/SupplierModelCard.vue",
-          "line": 104,
+          "line": 111,
           "column": 76
         },
         {
@@ -480,7 +497,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 585,
+          "line": 599,
           "column": 79
         },
         {
@@ -526,7 +543,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 339,
+          "line": 351,
           "column": 58
         }
       ]
@@ -562,7 +579,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 840,
+          "line": 852,
           "column": 32
         }
       ]
@@ -704,7 +721,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 191,
+          "line": 203,
           "column": 39
         }
       ]
@@ -752,12 +769,12 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 332,
+          "line": 344,
           "column": 32
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 350,
+          "line": 362,
           "column": 32
         }
       ]
@@ -805,8 +822,8 @@
       "refs": [
         {
           "file": "src/components/supplier/SupplierModelCard.vue",
-          "line": 98,
-          "column": 50
+          "line": 103,
+          "column": 24
         }
       ]
     },
@@ -1047,22 +1064,22 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 529,
+          "line": 539,
           "column": 63
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 545,
+          "line": 555,
           "column": 70
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 554,
+          "line": 564,
           "column": 63
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 703,
+          "line": 714,
           "column": 70
         }
       ]
@@ -1144,7 +1161,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1231,
+          "line": 1245,
           "column": 16
         }
       ]
@@ -1216,7 +1233,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 238,
+          "line": 245,
           "column": 85
         }
       ]
@@ -1370,7 +1387,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1093,
+          "line": 1107,
           "column": 22
         }
       ]
@@ -1430,7 +1447,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 340,
+          "line": 352,
           "column": 18
         }
       ]
@@ -1994,9 +2011,29 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/supplier/SupplierModelCard.vue",
+          "line": 109,
+          "column": 14
+        },
+        {
+          "file": "src/views/ModelConfig.vue",
+          "line": 140,
+          "column": 16
+        },
+        {
+          "file": "src/views/ModelConfig.vue",
+          "line": 539,
+          "column": 86
+        },
+        {
           "file": "src/views/ModelEditor.vue",
           "line": 810,
           "column": 16
+        },
+        {
+          "file": "src/views/SupplierDetail.vue",
+          "line": 910,
+          "column": 118
         }
       ]
     },
@@ -2149,8 +2186,20 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 537,
+          "line": 547,
           "column": 12
+        }
+      ]
+    },
+    "1b7f6d458fc7c388": {
+      "source": "执行状态",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/supplier/SupplierModelCard.vue",
+          "line": 96,
+          "column": 81
         }
       ]
     },
@@ -2286,7 +2335,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 483,
+          "line": 496,
           "column": 163
         }
       ]
@@ -2346,7 +2395,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 480,
+          "line": 493,
           "column": 180
         }
       ]
@@ -2699,7 +2748,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1218,
+          "line": 1232,
           "column": 16
         }
       ]
@@ -2800,7 +2849,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1005,
+          "line": 1019,
           "column": 54
         }
       ]
@@ -2829,7 +2878,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1204,
+          "line": 1218,
           "column": 20
         }
       ]
@@ -2885,17 +2934,17 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 293,
+          "line": 305,
           "column": 27
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 529,
+          "line": 539,
           "column": 30
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 554,
+          "line": 564,
           "column": 30
         }
       ]
@@ -2924,6 +2973,18 @@
         }
       ]
     },
+    "2489beb43561f88f": {
+      "source": "待真实协议验证",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/supplier/SupplierModelCard.vue",
+          "line": 97,
+          "column": 58
+        }
+      ]
+    },
     "24a563db998bdb49": {
       "source": "余额字段路径",
       "kind": "text",
@@ -2931,7 +2992,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1070,
+          "line": 1084,
           "column": 54
         }
       ]
@@ -2955,7 +3016,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1117,
+          "line": 1131,
           "column": 61
         }
       ]
@@ -3061,7 +3122,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 411,
+          "line": 424,
           "column": 85
         }
       ]
@@ -3073,7 +3134,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 320,
+          "line": 332,
           "column": 25
         }
       ]
@@ -3090,12 +3151,12 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 338,
+          "line": 345,
           "column": 99
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 351,
+          "line": 358,
           "column": 18
         }
       ]
@@ -3172,7 +3233,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1138,
+          "line": 1152,
           "column": 156
         }
       ]
@@ -3208,7 +3269,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1139,
+          "line": 1153,
           "column": 53
         }
       ]
@@ -3264,17 +3325,17 @@
         },
         {
           "file": "src/components/supplier/SupplierModelCard.vue",
-          "line": 74,
+          "line": 76,
           "column": 16
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 120,
+          "line": 127,
           "column": 27
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 893,
+          "line": 905,
           "column": 115
         }
       ]
@@ -3310,7 +3371,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1122,
+          "line": 1136,
           "column": 27
         }
       ]
@@ -3457,7 +3518,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 238,
+          "line": 245,
           "column": 30
         }
       ]
@@ -3667,12 +3728,12 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 357,
+          "line": 369,
           "column": 19
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 382,
+          "line": 394,
           "column": 17
         },
         {
@@ -3682,22 +3743,22 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 540,
+          "line": 550,
           "column": 17
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 676,
+          "line": 687,
           "column": 17
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 691,
+          "line": 702,
           "column": 17
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1149,
+          "line": 1163,
           "column": 75
         }
       ]
@@ -3803,7 +3864,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1046,
+          "line": 1060,
           "column": 54
         }
       ]
@@ -3905,27 +3966,27 @@
         },
         {
           "file": "src/components/supplier/SupplierModelCard.vue",
-          "line": 106,
+          "line": 113,
           "column": 75
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 381,
+          "line": 393,
           "column": 18
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 539,
+          "line": 549,
           "column": 18
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 675,
+          "line": 686,
           "column": 18
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 690,
+          "line": 701,
           "column": 18
         }
       ]
@@ -3949,12 +4010,12 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 241,
+          "line": 248,
           "column": 18
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1101,
+          "line": 1115,
           "column": 50
         }
       ]
@@ -4113,7 +4174,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1117,
+          "line": 1131,
           "column": 87
         }
       ]
@@ -4125,7 +4186,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 835,
+          "line": 847,
           "column": 57
         }
       ]
@@ -4173,7 +4234,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1074,
+          "line": 1088,
           "column": 54
         }
       ]
@@ -4404,7 +4465,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1240,
+          "line": 1254,
           "column": 165
         }
       ]
@@ -4440,12 +4501,12 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 928,
-          "column": 106
+          "line": 943,
+          "column": 1
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 951,
+          "line": 965,
           "column": 96
         }
       ]
@@ -4609,7 +4670,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 500,
+          "line": 513,
           "column": 88
         }
       ]
@@ -4633,7 +4694,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1181,
+          "line": 1195,
           "column": 52
         }
       ]
@@ -4645,7 +4706,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 887,
+          "line": 899,
           "column": 125
         }
       ]
@@ -4662,7 +4723,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1207,
+          "line": 1221,
           "column": 20
         }
       ]
@@ -4766,7 +4827,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1103,
+          "line": 1117,
           "column": 70
         }
       ]
@@ -4778,7 +4839,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 318,
+          "line": 330,
           "column": 22
         }
       ]
@@ -4817,7 +4878,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1048,
+          "line": 1062,
           "column": 36
         }
       ]
@@ -4829,7 +4890,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 572,
+          "line": 586,
           "column": 81
         }
       ]
@@ -4870,7 +4931,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1042,
+          "line": 1056,
           "column": 127
         }
       ]
@@ -5061,17 +5122,17 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 261,
+          "line": 273,
           "column": 59
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 295,
+          "line": 302,
           "column": 63
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 793,
+          "line": 805,
           "column": 68
         }
       ]
@@ -5107,7 +5168,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 453,
+          "line": 466,
           "column": 17
         }
       ]
@@ -5183,7 +5244,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 958,
+          "line": 972,
           "column": 21
         }
       ]
@@ -5289,7 +5350,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1147,
+          "line": 1161,
           "column": 20
         }
       ]
@@ -5301,7 +5362,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 379,
+          "line": 391,
           "column": 12
         }
       ]
@@ -5313,8 +5374,8 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 898,
-          "column": 88
+          "line": 912,
+          "column": 1
         }
       ]
     },
@@ -5359,7 +5420,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 239,
+          "line": 246,
           "column": 35
         }
       ]
@@ -5383,7 +5444,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1244,
+          "line": 1258,
           "column": 169
         }
       ]
@@ -5468,7 +5529,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1063,
+          "line": 1077,
           "column": 74
         }
       ]
@@ -5577,7 +5638,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1227,
+          "line": 1241,
           "column": 21
         }
       ]
@@ -5589,7 +5650,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 926,
+          "line": 940,
           "column": 18
         }
       ]
@@ -5642,7 +5703,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 591,
+          "line": 605,
           "column": 27
         }
       ]
@@ -5666,7 +5727,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1187,
+          "line": 1201,
           "column": 155
         }
       ]
@@ -5869,7 +5930,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 114,
+          "line": 115,
           "column": 12
         }
       ]
@@ -6016,7 +6077,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1222,
+          "line": 1236,
           "column": 16
         }
       ]
@@ -6156,22 +6217,22 @@
         },
         {
           "file": "src/components/supplier/SupplierModelCard.vue",
-          "line": 70,
+          "line": 72,
           "column": 16
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 519,
+          "line": 532,
           "column": 89
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 119,
+          "line": 126,
           "column": 25
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 892,
+          "line": 904,
           "column": 113
         }
       ]
@@ -6224,7 +6285,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1127,
+          "line": 1141,
           "column": 22
         }
       ]
@@ -6241,7 +6302,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 489,
+          "line": 499,
           "column": 22
         }
       ]
@@ -6307,7 +6368,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1032,
+          "line": 1046,
           "column": 42
         }
       ]
@@ -6336,7 +6397,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1033,
+          "line": 1047,
           "column": 43
         }
       ]
@@ -6377,7 +6438,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 926,
+          "line": 940,
           "column": 18
         }
       ]
@@ -6616,8 +6677,8 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 895,
-          "column": 88
+          "line": 908,
+          "column": 1
         }
       ]
     },
@@ -6684,22 +6745,22 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 991,
+          "line": 1005,
           "column": 70
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 995,
+          "line": 1009,
           "column": 72
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1067,
+          "line": 1081,
           "column": 76
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1071,
+          "line": 1085,
           "column": 78
         }
       ]
@@ -6728,7 +6789,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1108,
+          "line": 1122,
           "column": 35
         }
       ]
@@ -6740,7 +6801,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 354,
+          "line": 366,
           "column": 14
         }
       ]
@@ -6752,7 +6813,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 332,
+          "line": 344,
           "column": 49
         }
       ]
@@ -7109,7 +7170,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1204,
+          "line": 1218,
           "column": 20
         }
       ]
@@ -7121,7 +7182,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 356,
+          "line": 368,
           "column": 20
         }
       ]
@@ -7198,7 +7259,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1231,
+          "line": 1245,
           "column": 16
         }
       ]
@@ -7403,7 +7464,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 118,
+          "line": 125,
           "column": 26
         }
       ]
@@ -7649,7 +7710,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 518,
+          "line": 531,
           "column": 29
         }
       ]
@@ -7864,7 +7925,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 674,
+          "line": 685,
           "column": 14
         }
       ]
@@ -7876,12 +7937,12 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 212,
+          "line": 224,
           "column": 23
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 223,
+          "line": 230,
           "column": 23
         }
       ]
@@ -8067,7 +8128,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 860,
+          "line": 872,
           "column": 45
         }
       ]
@@ -8101,7 +8162,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 362,
+          "line": 374,
           "column": 30
         }
       ]
@@ -8147,7 +8208,7 @@
       "refs": [
         {
           "file": "src/components/supplier/SupplierModelCard.vue",
-          "line": 105,
+          "line": 112,
           "column": 81
         }
       ]
@@ -8203,7 +8264,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 932,
+          "line": 946,
           "column": 18
         }
       ]
@@ -8594,7 +8655,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 673,
+          "line": 684,
           "column": 12
         }
       ]
@@ -8635,7 +8696,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 547,
+          "line": 561,
           "column": 25
         }
       ]
@@ -8693,12 +8754,12 @@
       "refs": [
         {
           "file": "src/components/supplier/SupplierModelCard.vue",
-          "line": 98,
-          "column": 39
+          "line": 102,
+          "column": 19
         },
         {
           "file": "src/components/supplier/SupplierModelCard.vue",
-          "line": 102,
+          "line": 109,
           "column": 14
         }
       ]
@@ -8735,12 +8796,12 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 272,
+          "line": 284,
           "column": 53
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 272,
+          "line": 284,
           "column": 71
         }
       ]
@@ -8812,12 +8873,12 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 535,
+          "line": 549,
           "column": 84
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 232,
+          "line": 239,
           "column": 30
         }
       ]
@@ -8930,7 +8991,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1105,
+          "line": 1119,
           "column": 64
         }
       ]
@@ -9132,7 +9193,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1085,
+          "line": 1099,
           "column": 61
         }
       ]
@@ -9161,7 +9222,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 419,
+          "line": 432,
           "column": 17
         }
       ]
@@ -9173,7 +9234,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 582,
+          "line": 596,
           "column": 19
         }
       ]
@@ -9262,12 +9323,12 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1115,
+          "line": 1129,
           "column": 68
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1127,
+          "line": 1141,
           "column": 22
         }
       ]
@@ -9363,7 +9424,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 263,
+          "line": 270,
           "column": 45
         }
       ]
@@ -9435,7 +9496,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 130,
+          "line": 131,
           "column": 12
         }
       ]
@@ -9447,7 +9508,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 344,
+          "line": 356,
           "column": 48
         }
       ]
@@ -9584,7 +9645,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 550,
+          "line": 560,
           "column": 52
         }
       ]
@@ -9640,6 +9701,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/supplier/SupplierModelCard.vue",
+          "line": 103,
+          "column": 24
+        },
         {
           "file": "src/views/ModelEditor.vue",
           "line": 298,
@@ -9842,17 +9908,17 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 411,
+          "line": 424,
           "column": 160
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 500,
+          "line": 513,
           "column": 121
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 513,
+          "line": 526,
           "column": 77
         },
         {
@@ -9862,8 +9928,8 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 891,
-          "column": 82
+          "line": 903,
+          "column": 117
         }
       ]
     },
@@ -9891,7 +9957,7 @@
         },
         {
           "file": "src/components/supplier/SupplierModelCard.vue",
-          "line": 102,
+          "line": 109,
           "column": 14
         },
         {
@@ -9906,7 +9972,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1185,
+          "line": 1199,
           "column": 18
         }
       ]
@@ -9930,7 +9996,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1101,
+          "line": 1115,
           "column": 50
         }
       ]
@@ -10002,7 +10068,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 817,
+          "line": 829,
           "column": 32
         }
       ]
@@ -10074,7 +10140,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 688,
+          "line": 699,
           "column": 12
         }
       ]
@@ -10110,7 +10176,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1185,
+          "line": 1199,
           "column": 18
         }
       ]
@@ -10146,7 +10212,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 977,
+          "line": 991,
           "column": 36
         }
       ]
@@ -10199,12 +10265,12 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 896,
+          "line": 908,
           "column": 25
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1000,
+          "line": 1014,
           "column": 40
         }
       ]
@@ -10221,12 +10287,12 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1181,
+          "line": 1195,
           "column": 19
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1196,
+          "line": 1210,
           "column": 19
         }
       ]
@@ -10238,7 +10304,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 952,
+          "line": 966,
           "column": 60
         }
       ]
@@ -10518,7 +10584,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 410,
+          "line": 423,
           "column": 134
         }
       ]
@@ -10571,7 +10637,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 125,
+          "line": 132,
           "column": 28
         }
       ]
@@ -10725,7 +10791,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 966,
+          "line": 980,
           "column": 96
         }
       ]
@@ -10807,7 +10873,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1062,
+          "line": 1076,
           "column": 54
         }
       ]
@@ -11024,7 +11090,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1040,
+          "line": 1054,
           "column": 57
         }
       ]
@@ -11280,17 +11346,17 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 218,
+          "line": 230,
           "column": 39
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 554,
+          "line": 568,
           "column": 93
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 554,
+          "line": 568,
           "column": 93
         },
         {
@@ -11300,12 +11366,12 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 899,
+          "line": 912,
           "column": 25
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1031,
+          "line": 1045,
           "column": 40
         }
       ]
@@ -11397,7 +11463,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1054,
+          "line": 1068,
           "column": 46
         }
       ]
@@ -11498,7 +11564,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 434,
+          "line": 447,
           "column": 15
         }
       ]
@@ -11727,7 +11793,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1147,
+          "line": 1161,
           "column": 20
         }
       ]
@@ -11893,7 +11959,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 537,
+          "line": 551,
           "column": 129
         }
       ]
@@ -12072,7 +12138,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 100,
+          "line": 104,
           "column": 12
         }
       ]
@@ -12204,7 +12270,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 896,
+          "line": 908,
           "column": 25
         }
       ]
@@ -12344,32 +12410,32 @@
         },
         {
           "file": "src/utils/supplierGrouping.js",
-          "line": 63,
+          "line": 72,
           "column": 18
         },
         {
           "file": "src/utils/supplierGrouping.js",
-          "line": 68,
+          "line": 77,
           "column": 19
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 125,
+          "line": 126,
           "column": 59
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 128,
+          "line": 129,
           "column": 36
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 132,
+          "line": 133,
           "column": 32
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 390,
+          "line": 403,
           "column": 67
         },
         {
@@ -12379,7 +12445,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 99,
+          "line": 103,
           "column": 47
         }
       ]
@@ -12504,12 +12570,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1562,
+          "line": 1551,
           "column": 32
         },
         {
           "file": "src/state/appState.js",
-          "line": 1583,
+          "line": 1572,
           "column": 32
         }
       ]
@@ -12550,7 +12616,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 451,
+          "line": 461,
           "column": 26
         }
       ]
@@ -12646,7 +12712,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 355,
+          "line": 367,
           "column": 26
         }
       ]
@@ -12891,7 +12957,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 412,
+          "line": 421,
           "column": 26
         }
       ]
@@ -13019,7 +13085,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 501,
+          "line": 511,
           "column": 44
         }
       ]
@@ -13065,12 +13131,12 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1083,
+          "line": 1097,
           "column": 68
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1093,
+          "line": 1107,
           "column": 22
         }
       ]
@@ -13140,7 +13206,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 224,
+          "line": 231,
           "column": 35
         }
       ]
@@ -13229,7 +13295,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 243,
+          "line": 250,
           "column": 16
         }
       ]
@@ -13299,7 +13365,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1102,
+          "line": 1116,
           "column": 71
         }
       ]
@@ -13518,12 +13584,12 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 65,
+          "line": 69,
           "column": 44
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 67,
+          "line": 71,
           "column": 36
         }
       ]
@@ -13622,7 +13688,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 538,
+          "line": 548,
           "column": 14
         }
       ]
@@ -13675,7 +13741,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1039,
+          "line": 1053,
           "column": 126
         }
       ]
@@ -13805,7 +13871,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1104,
+          "line": 1118,
           "column": 66
         }
       ]
@@ -14208,7 +14274,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1179,
+          "line": 1193,
           "column": 18
         }
       ]
@@ -14519,7 +14585,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 246,
+          "line": 253,
           "column": 16
         }
       ]
@@ -14789,7 +14855,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 259,
+          "line": 266,
           "column": 39
         }
       ]
@@ -15010,7 +15076,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 558,
+          "line": 572,
           "column": 25
         },
         {
@@ -15032,7 +15098,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 932,
+          "line": 946,
           "column": 18
         }
       ]
@@ -15311,7 +15377,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1066,
+          "line": 1080,
           "column": 54
         }
       ]
@@ -15458,7 +15524,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1122,
+          "line": 1136,
           "column": 27
         }
       ]
@@ -15535,12 +15601,12 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 259,
+          "line": 271,
           "column": 66
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 313,
+          "line": 320,
           "column": 56
         }
       ]
@@ -15576,7 +15642,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 410,
+          "line": 423,
           "column": 49
         }
       ]
@@ -15663,17 +15729,17 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 393,
+          "line": 406,
           "column": 29
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 545,
+          "line": 555,
           "column": 30
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 703,
+          "line": 714,
           "column": 30
         }
       ]
@@ -15685,7 +15751,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 591,
+          "line": 605,
           "column": 27
         }
       ]
@@ -15827,12 +15893,12 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 121,
+          "line": 128,
           "column": 31
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 894,
+          "line": 906,
           "column": 119
         }
       ]
@@ -16053,7 +16119,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 432,
+          "line": 441,
           "column": 28
         }
       ]
@@ -16217,7 +16283,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 126,
+          "line": 133,
           "column": 29
         }
       ]
@@ -16234,7 +16300,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 531,
+          "line": 545,
           "column": 89
         }
       ]
@@ -16401,7 +16467,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 323,
+          "line": 335,
           "column": 22
         }
       ]
@@ -16786,7 +16852,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 362,
+          "line": 374,
           "column": 47
         }
       ]
@@ -16803,7 +16869,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1029,
+          "line": 1043,
           "column": 54
         }
       ]
@@ -16950,7 +17016,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1140,
+          "line": 1154,
           "column": 88
         }
       ]
@@ -16984,7 +17050,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 975,
+          "line": 989,
           "column": 54
         }
       ]
@@ -17071,7 +17137,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 124,
+          "line": 131,
           "column": 27
         }
       ]
@@ -17100,7 +17166,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1001,
+          "line": 1015,
           "column": 41
         }
       ]
@@ -17230,7 +17296,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 569,
+          "line": 583,
           "column": 21
         }
       ]
@@ -17302,7 +17368,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 345,
+          "line": 357,
           "column": 18
         }
       ]
@@ -17355,7 +17421,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 990,
+          "line": 1004,
           "column": 54
         }
       ]
@@ -17599,7 +17665,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 994,
+          "line": 1008,
           "column": 54
         }
       ]
@@ -17737,7 +17803,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 539,
+          "line": 553,
           "column": 43
         }
       ]
@@ -17819,7 +17885,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 457,
+          "line": 470,
           "column": 89
         }
       ]
@@ -17897,6 +17963,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/supplier/SupplierModelCard.vue",
+          "line": 102,
+          "column": 19
+        },
         {
           "file": "src/views/ModelEditor.vue",
           "line": 296,
@@ -18163,7 +18234,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 866,
+          "line": 878,
           "column": 14
         }
       ]
@@ -18187,7 +18258,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 380,
+          "line": 392,
           "column": 14
         }
       ]
@@ -18298,7 +18369,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 457,
+          "line": 470,
           "column": 89
         }
       ]
@@ -18578,12 +18649,12 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 458,
+          "line": 471,
           "column": 93
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 934,
+          "line": 948,
           "column": 99
         }
       ]
@@ -18653,7 +18724,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1036,
+          "line": 1050,
           "column": 44
         }
       ]
@@ -18665,12 +18736,12 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 210,
+          "line": 222,
           "column": 12
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 221,
+          "line": 228,
           "column": 12
         }
       ]
@@ -18747,7 +18818,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 969,
+          "line": 983,
           "column": 54
         }
       ]
@@ -18807,7 +18878,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 467,
+          "line": 480,
           "column": 43
         }
       ]
@@ -19000,7 +19071,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 998,
+          "line": 1012,
           "column": 54
         }
       ]
@@ -19029,7 +19100,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 91,
+          "line": 95,
           "column": 12
         }
       ]
@@ -19258,7 +19329,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 481,
+          "line": 494,
           "column": 40
         }
       ]
@@ -19400,7 +19471,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 443,
+          "line": 456,
           "column": 17
         }
       ]
@@ -19603,7 +19674,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1016,
+          "line": 1030,
           "column": 21
         }
       ]
@@ -19697,12 +19768,12 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1179,
+          "line": 1193,
           "column": 18
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1207,
+          "line": 1221,
           "column": 20
         }
       ]
@@ -19780,7 +19851,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 1059,
+          "line": 1073,
           "column": 79
         }
       ]
@@ -19889,12 +19960,12 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 219,
+          "line": 231,
           "column": 36
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 554,
+          "line": 568,
           "column": 93
         }
       ]
@@ -19935,7 +20006,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 534,
+          "line": 548,
           "column": 60
         }
       ]
@@ -19952,7 +20023,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 193,
+          "line": 205,
           "column": 36
         }
       ]
@@ -19968,9 +20039,19 @@
           "column": 49
         },
         {
+          "file": "src/views/ModelConfig.vue",
+          "line": 139,
+          "column": 20
+        },
+        {
           "file": "src/views/ModelEditor.vue",
           "line": 493,
           "column": 41
+        },
+        {
+          "file": "src/views/SupplierDetail.vue",
+          "line": 63,
+          "column": 12
         }
       ]
     },
@@ -20053,7 +20134,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 596,
+          "line": 610,
           "column": 73
         }
       ]
@@ -20123,7 +20204,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 474,
+          "line": 487,
           "column": 13
         }
       ]
@@ -20159,7 +20240,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 364,
+          "line": 376,
           "column": 27
         }
       ]
@@ -20213,7 +20294,7 @@
         },
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 868,
+          "line": 880,
           "column": 20
         }
       ]
@@ -20413,7 +20494,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 689,
+          "line": 700,
           "column": 14
         }
       ]
@@ -20536,7 +20617,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 966,
+          "line": 980,
           "column": 49
         }
       ]
@@ -20548,7 +20629,7 @@
       "refs": [
         {
           "file": "src/views/SupplierDetail.vue",
-          "line": 921,
+          "line": 935,
           "column": 18
         }
       ]
