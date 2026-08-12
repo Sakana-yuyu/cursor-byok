@@ -414,6 +414,11 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 		if resolved.CredentialScope != legacyruntime.CredentialScopeCursorAccount {
 			return fmt.Errorf("Cursor 账户模型 credential scope 无效")
 		}
+		// 配置层会在持久化前拒绝第三方传输字段；这里再次阻断旧调用方或未来
+		// relay 接入绕过配置归一化的场景，避免第三方凭据进入账户专用链路。
+		if resolved.BaseURL != "" || resolved.APIKey != "" || channel.CustomHeadersEnabled || strings.TrimSpace(channel.CustomHeadersJSON) != "" {
+			return fmt.Errorf("Cursor 账户模型不能携带第三方接口地址、API Key 或自定义请求头")
+		}
 		return router.accountGateway.Stream(ctx, resolved, sink)
 	}
 	if resolved.ModelSource != legacyruntime.ModelSourceThirdParty || resolved.CredentialScope != legacyruntime.CredentialScopeAdapterAPIKey {
