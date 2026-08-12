@@ -16,8 +16,9 @@
 - 镜像请求 URL 对凭据型查询参数做本地脱敏，保留端点路径和非敏感查询项 | refs: R-4 | verify: `key`、`api_key`、`token`、`secret`、`signature` 与密码等值不出现在 JSONL，原始 HTTP 请求 URL 不被改写。
 - 将代理请求分流显式接入 `routing.mode`：本地服务模式维持既有 Cursor relay 到 backend；官方上游模式仅在用户未启动服务时允许 Cursor 不经本地代理，在服务运行且镜像记录开启时保留 MITM 直通官方模型 API 的抓包路径 | refs: R-2 | verify: 启动服务后，状态与文案能明确说明 Cursor 是否仍经本地 MITM；停止服务或不注入代理时，不夸大为可抓包。
 - 为 `cmd/isolated-cursor-e2e` 增加默认关闭、仅在 `CURSOR_E2E_MIRROR_CAPTURE=1` 时启用的官方上游镜像模式；启用时使用隔离 `history`、隔离配置管理器且不注入本地伪账号，并输出绝对镜像记录路径 | refs: R-2 | verify: 未设置环境变量时仍以空记录根和 `nil` 镜像配置启动；设置后隔离配置启用镜像和官方上游分流，输出的 `mirror_record` 位于 `isolated_root` 内，启动器不主动调用官方 API。
+- 隔离镜像模式将 `api2.cursor.sh` 与 `api3.cursor.sh` 加入临时镜像 hosts，并仅向临时 Cursor 子进程传入本次隔离 CA 的 Chromium SPKI 信任参数 | refs: R-2 | verify: 隔离 Cursor 不再因临时 MITM CA 报 `ERR_CERT_AUTHORITY_INVALID`；Cursor relay 请求在临时 JSONL 中形成可关联记录；默认模式、真实 Cursor 设置、系统证书库和默认镜像 hosts 不变。
 
-**Not in this change**: 不提供 `official.raw.jsonl` 的应用内浏览、导出、对比或 hosts 编辑；不为已移除的授权/设备接口或不支持的用量查询建立 UI；不改变脱敏、正文截断、镜像域名或代理直通语义；不自动修改真实用户的 Cursor 代理或主动向官方 API 发起测试请求。
+**Not in this change**: 不提供 `official.raw.jsonl` 的应用内浏览、导出、对比或 hosts 编辑；不为已移除的授权/设备接口或不支持的用量查询建立 UI；不改变普通运行模式的脱敏、正文截断、镜像域名或代理直通语义；不自动修改真实用户的 Cursor 代理或系统证书库。
 
 ## How
 - 选择现有 `Settings`、`appState`、`clientApi` 和 browser-preview mock 路径，而不创建新路由或直接调用 Wails binding。
@@ -26,6 +27,7 @@
 - 先将配置数据流作为一个提交，再将高级设置和多语言文案作为第二个提交；后续将状态 binding、状态面板和规格台账分别提交；每个提交都可独立回退，不新增测试文件。
 - 在镜像请求过滤器创建关联上下文写入 `goproxy.ProxyCtx.UserData`，并在响应过滤器读取它；记录器只消费该内部值，绝不修改官方请求头、URL 或正文。镜像 JSONL 写入前只脱敏记录副本的凭据型查询参数。
 - `model` 提取是旁路元数据：OpenAI/Anthropic 从请求 JSON 的顶层 `model` 读取，Gemini 从 URL 路径的 `models/<name>` 段读取；JSON 解析失败或字段缺失时留空。
+- 隔离镜像模式从临时 CA 证书计算 DER `RawSubjectPublicKeyInfo` 的 SHA-256，再以 Base64 形式传入 Chromium 的 `--ignore-certificate-errors-spki-list`；该白名单只覆盖本次生成的 CA。临时配置 hosts 在原有 hosts 基础上合并 Cursor relay 域名，普通配置与默认模式均不变。
 
 ## Risk
 - 开启后会将提示词、响应和工作区上下文写入本地调试文件；开关旁明确路径和敏感性，默认关闭，不在应用内读取原文。
@@ -37,5 +39,6 @@
 - 请求 URL 的 query string 可能携带 API key 或签名；记录器必须在落盘前脱敏常见凭据型参数。该脱敏只影响 JSONL 副本；回退本次提交会恢复此前记录格式，但不建议在共享或备份含旧记录的目录中保留明文 URL 凭据。
 - `ProxyCtx.UserData` 可能被同一代理其他功能使用；镜像记录应使用具名上下文结构，并在只处理镜像域名的分支写入，避免覆盖 relay 流程的上下文数据。
 - `upstream` 的旧文案可能使用户误以为已彻底清除本地代理；实现前需先以请求分流和 Cursor 设置写入的真实状态定义语义，再同步更正文案与抓包就绪判定。回退对应分流提交可恢复现有本地 relay 行为，但不应恢复“绕过代理”的错误承诺。
+- Chromium SPKI 白名单仅应放行临时 CA 公钥；不得使用全局忽略证书错误的启动参数，也不得修改 Windows 证书库。若隔离 Cursor 未能使用该参数，记录真实错误并关闭临时实例；回退对应启动器提交即可恢复此前隔离启动行为。
 
-<!-- APPROVED: 2026-08-12 02:20 (用户确认：进入下一步) -->
+<!-- APPROVED: 2026-08-12 00:00 -->
