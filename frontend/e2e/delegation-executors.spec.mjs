@@ -7,7 +7,7 @@ const executors = [
   { id: "claude-code", displayName: "Claude Code", installURL: "https://code.claude.com/docs/en/quickstart", enabled: true, priority: 10, state: "ready", installed: true, authState: "ready", version: "2.1.226", capabilities: ["read_workspace", "write_workspace"] },
   { id: "codex-cli", displayName: "Codex CLI", installURL: "https://developers.openai.com/codex/cli/", enabled: true, priority: 20, state: "ready", installed: true, authState: "ready", version: "0.147.0", capabilities: ["read_workspace", "write_workspace"] },
   { id: "gemini-cli", displayName: "Gemini CLI", installURL: "https://github.com/google-gemini/gemini-cli", enabled: false, priority: 30, state: "not_installed", installed: false, authState: "unknown", diagnosticCode: "not_installed", diagnosticText: "未检测到 Gemini CLI" },
-  { id: "kiro-cli", displayName: "Kiro CLI", installURL: "https://cli.kiro.dev/install", enabled: false, priority: 35, state: "incompatible", installed: true, authState: "unknown", diagnosticCode: "kiro_incompatible", diagnosticText: "当前 Kiro CLI 未提供 Headless 参数" },
+  { id: "kiro-cli", displayName: "Kiro CLI", installURL: "https://cli.kiro.dev/install", enabled: false, priority: 35, state: "not_installed", installed: false, authState: "unknown", diagnosticCode: "kiro_not_installed", diagnosticText: "未检测到 Kiro CLI" },
   { id: "grok-cli", displayName: "Grok CLI", enabled: false, priority: 40, state: "action_required", installed: false, authState: "required", diagnosticCode: "custom_not_configured", diagnosticText: "请配置可执行文件" },
   { id: "cursor-agent", displayName: "Cursor Agent", installURL: "https://www.cursor.com/downloads", enabled: true, priority: 50, state: "not_installed", installed: false, editorAvailable: false, agentExecutionAvailable: false, authState: "unknown", diagnosticCode: "cursor_editor_not_found", diagnosticText: "未检测到 Cursor 编辑器" },
 ];
@@ -49,14 +49,12 @@ test("紧凑展示执行器健康、版本与 Cursor 编辑器限定状态", asy
     await expect(section.getByText(name, { exact: true })).toBeVisible();
   }
   await expect(section.getByText("2.1.226", { exact: true })).toBeVisible();
-  await expect(section.getByText("未安装", { exact: true })).toHaveCount(2);
-  await expect(section.getByText("不兼容", { exact: true })).toBeVisible();
+  await expect(section.getByText("未安装", { exact: true })).toHaveCount(3);
   await expect(section.getByText("未配置", { exact: true })).toBeVisible();
   await expect(section.getByText("仅编辑器", { exact: true })).toHaveCount(0);
-  const installLinks = section.getByRole("link", { name: "官方下载" });
-  await expect(installLinks).toHaveCount(2);
-  await expect(installLinks.nth(0)).toHaveAttribute("href", "https://github.com/google-gemini/gemini-cli");
-  await expect(installLinks.nth(1)).toHaveAttribute("href", "https://www.cursor.com/downloads");
+  await expect(section.getByRole("link", { name: "官方下载" })).toHaveCount(0);
+  await expect(section.getByRole("button", { name: "安装 Gemini CLI" })).toBeVisible();
+  await expect(section.getByRole("button", { name: "安装 Kiro CLI" })).toBeVisible();
   await expect(section.getByText("备用 CLI", { exact: true })).toBeVisible();
   await expect(section.getByText("未检查", { exact: true })).toBeVisible();
   await expect(section.getByRole("button", { name: "配置 备用 CLI" })).toBeVisible();
@@ -90,10 +88,12 @@ test("进入委派设置时自动探测执行器并展示刷新结果", async ({
   await expect.poll(() => page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "[]").map((item) => item.name), CALLS_KEY)).toContain("RefreshDelegationExecutorProbes");
 });
 
-test("未安装的受支持 CLI 可由用户显式安装并自动复检", async ({ page }) => {
+test("未安装的 Gemini CLI 可由用户显式安装并自动复检", async ({ page }) => {
   const installedExecutors = executors.map((item) => (
     item.id === "gemini-cli"
       ? { ...item, state: "action_required", installed: true, authState: "required", diagnosticText: "Gemini CLI login is required" }
+      : item.id === "kiro-cli"
+        ? { ...item, state: "action_required", installed: true, authState: "required", diagnosticText: "需要配置 KIRO_API_KEY" }
       : item
   ));
   await openDelegationSettingsPage(page, {
@@ -107,8 +107,29 @@ test("未安装的受支持 CLI 可由用户显式安装并自动复检", async 
 
   const section = page.getByRole("heading", { name: "Agent 执行器" }).locator("xpath=ancestor::section");
   await page.getByRole("button", { name: "安装 Gemini CLI" }).click();
+  await expect(section.getByText("需要操作", { exact: true })).toHaveCount(2);
+  await expect.poll(() => page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "[]"), CALLS_KEY)).toEqual(expect.arrayContaining([
+    expect.objectContaining({ name: "InstallDelegationExecutor", args: ["gemini-cli"] }),
+  ]));
+});
+
+test("未安装的 Kiro CLI 可由用户显式安装并自动复检", async ({ page }) => {
+  const installedExecutors = executors.map((item) => (
+    item.id === "kiro-cli"
+      ? { ...item, state: "action_required", installed: true, authState: "required", diagnosticText: "需要配置 KIRO_API_KEY" }
+      : item
+  ));
+  await openDelegationSettingsPage(page, {
+    config,
+    plan: { recordCalls: true, delegationExecutors: executors, installedDelegationExecutors: installedExecutors },
+  });
+
+  const section = page.getByRole("heading", { name: "Agent 执行器" }).locator("xpath=ancestor::section");
+  await page.getByRole("button", { name: "安装 Kiro CLI" }).click();
   await expect(section.getByText("需要操作", { exact: true })).toBeVisible();
-  await expect.poll(() => page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "[]").map((item) => item.name), CALLS_KEY)).toContain("InstallDelegationExecutor");
+  await expect.poll(() => page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "[]"), CALLS_KEY)).toEqual(expect.arrayContaining([
+    expect.objectContaining({ name: "InstallDelegationExecutor", args: ["kiro-cli"] }),
+  ]));
 });
 
 test("刷新探测、启用开关和优先级都走真实保存入口", async ({ page }) => {

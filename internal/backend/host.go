@@ -75,7 +75,7 @@ func NewHost(store *serverconfig.Store, controlPlaneAuth upstream.AuthorizationP
 		configs:           configs,
 		executorRegistry:  delegation.NewExecutorRegistry(delegation.ExecutorRegistryConfig{}),
 		customExecutorIDs: make(map[delegation.ExecutorID]struct{}),
-		executorInstaller: newNPMExecutorInstaller(),
+		executorInstaller: newBuiltInExecutorInstaller(),
 		executorInstalls:  make(map[delegation.ExecutorID]struct{}),
 		healthHTTP:        newLoopbackHTTPClient(),
 		controlPlaneAuth:  controlPlaneAuth,

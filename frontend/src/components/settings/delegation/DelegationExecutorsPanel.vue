@@ -47,7 +47,7 @@ function stateClass(row) {
 }
 
 function canInstall(row) {
-  return row?.state === "not_installed" && ["claude-code", "codex-cli", "gemini-cli"].includes(row?.id);
+  return row?.state === "not_installed" && ["claude-code", "codex-cli", "gemini-cli", "kiro-cli"].includes(row?.id);
 }
 
 function installLabel(row) {
@@ -128,7 +128,6 @@ function saveCustom() {
             <div class="mt-0.5 flex min-w-0 flex-wrap gap-x-2 text-[11px] text-[#777]">
               <span v-if="row.version">{{ row.version }}</span>
               <span v-if="row.diagnosticText" class="max-w-full truncate" :title="row.diagnosticText">{{ row.diagnosticText }}</span>
-              <a v-if="row.state === 'not_installed' && row.installURL" :href="row.installURL" target="_blank" rel="noreferrer" class="shrink-0 text-[#7dd3fc] hover:text-white">官方下载</a>
             </div>
           </div>
           <div class="ml-auto flex shrink-0 items-end gap-2">

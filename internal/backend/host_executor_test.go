@@ -165,6 +165,39 @@ func TestInstallDelegationExecutorUsesFixedPackageAndReprobes(t *testing.T) {
 	}
 }
 
+func TestInstallDelegationExecutorUsesFixedKiroInstallPlanAndReprobes(t *testing.T) {
+	registry := delegation.NewExecutorRegistry(delegation.ExecutorRegistryConfig{})
+	var probeCalls atomic.Int32
+	if err := registry.Register(delegation.ExecutorRegistration{
+		ID:      "kiro-cli",
+		Enabled: true,
+		Probe: func(context.Context) (delegation.ExecutorProbeResult, error) {
+			probeCalls.Add(1)
+			return delegation.ExecutorProbeResult{State: delegation.ExecutorProbeReady}, nil
+		},
+		Execute: func(context.Context, delegation.TaskRequest) delegation.TaskResult { return delegation.TaskResult{} },
+	}); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	installer := &executorInstallRecorder{}
+	host := &Host{
+		executorRegistry:  registry,
+		executorInstaller: installer,
+		executorInstalls:  make(map[delegation.ExecutorID]struct{}),
+	}
+
+	snapshot, err := host.InstallDelegationExecutor(t.Context(), "kiro-cli")
+	if err != nil {
+		t.Fatalf("InstallDelegationExecutor() error = %v", err)
+	}
+	if got, want := installer.packages, []string{"kiro-cli-windows"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("installer packages = %#v, want %#v", got, want)
+	}
+	if probeCalls.Load() != 1 || snapshot.Probe.State != delegation.ExecutorProbeReady {
+		t.Fatalf("post-install probe = calls=%d snapshot=%#v", probeCalls.Load(), snapshot)
+	}
+}
+
 func TestInstallDelegationExecutorRejectsUnsupportedOrUnknownTargets(t *testing.T) {
 	installer := &executorInstallRecorder{}
 	host := &Host{
@@ -172,7 +205,7 @@ func TestInstallDelegationExecutorRejectsUnsupportedOrUnknownTargets(t *testing.
 		executorInstaller: installer,
 		executorInstalls:  make(map[delegation.ExecutorID]struct{}),
 	}
-	for _, id := range []string{"cursor-agent", "kiro-cli", "arbitrary-command"} {
+	for _, id := range []string{"cursor-agent", "arbitrary-command"} {
 		if _, err := host.InstallDelegationExecutor(t.Context(), id); err == nil {
 			t.Fatalf("InstallDelegationExecutor(%q) error = nil, want rejection", id)
 		}
