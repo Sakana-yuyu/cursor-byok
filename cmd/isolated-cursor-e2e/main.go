@@ -170,9 +170,9 @@ func isolatedMirrorCaptureHosts(hosts []string) []string {
 	if len(hosts) == 0 {
 		hosts = serverconfig.DefaultMirrorHosts
 	}
-	result := make([]string, 0, len(hosts)+2)
-	seen := make(map[string]struct{}, len(hosts)+2)
-	for _, host := range append(hosts, "api2.cursor.sh", "api3.cursor.sh") {
+	result := make([]string, 0, len(hosts)+3)
+	seen := make(map[string]struct{}, len(hosts)+3)
+	for _, host := range append(hosts, "api2.cursor.sh", "api3.cursor.sh", "api4.cursor.sh") {
 		normalized := strings.ToLower(strings.TrimSpace(host))
 		if normalized == "" {
 			continue
