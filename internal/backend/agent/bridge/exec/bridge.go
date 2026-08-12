@@ -157,13 +157,13 @@ func (bridge *Bridge) ApplyExecClientMessage(msg *agentv1.ExecClientMessage, pen
 	// 策略拦截（直接以明确终态收口，避免 pending 卡到 watchdog 数十秒级）；allowlisted=true
 	// 表示已放行但执行结果未回，保持挂起等待真实结果（exec watchdog 兜底）。
 	if precheck := msg.GetShellAllowlistPrecheckResult(); precheck != nil {
-		return applyAllowlistPrecheckResult(result, pending, "shell", precheck.GetAllowlisted())
+		return applyAllowlistPrecheckResult(result, pending, "shell", ClassifyExecLifecycle(msg, pending))
 	}
 	if precheck := msg.GetMcpAllowlistPrecheckResult(); precheck != nil {
-		return applyAllowlistPrecheckResult(result, pending, "mcp", precheck.GetAllowlisted())
+		return applyAllowlistPrecheckResult(result, pending, "mcp", ClassifyExecLifecycle(msg, pending))
 	}
 	if precheck := msg.GetWebFetchAllowlistPrecheckResult(); precheck != nil {
-		return applyAllowlistPrecheckResult(result, pending, "web_fetch", precheck.GetAllowlisted())
+		return applyAllowlistPrecheckResult(result, pending, "web_fetch", ClassifyExecLifecycle(msg, pending))
 	}
 	switch pending.ExecKind {
 	case "read":
@@ -285,7 +285,7 @@ func (bridge *Bridge) ApplyExecClientMessage(msg *agentv1.ExecClientMessage, pen
 			return ExecApplyResult{}, fmt.Errorf("force background subagent result is required")
 		}
 		result.ToolResultPayload = summarizeForceBackgroundSubagentResult(msg.GetForceBackgroundSubagentResult())
-		result.IsTerminal = true
+		result.IsTerminal = ClassifyExecLifecycle(msg, pending).Terminal
 		return result, nil
 	case "subagent":
 		result.ToolResultPayload = summarizeSubagentResult(msg.GetSubagentResult())
@@ -298,8 +298,7 @@ func (bridge *Bridge) ApplyExecClientMessage(msg *agentv1.ExecClientMessage, pen
 			return result, nil
 		}
 		result.ToolResultPayload = summarizeSubagentAwaitResult(awaitResult)
-		// still_running 不是终态：模型只能续租/继续等待，不能把它当作子代理结果。
-		result.IsTerminal = awaitResult.GetStillRunning() == nil
+		result.IsTerminal = ClassifyExecLifecycle(msg, pending).Terminal
 		return result, nil
 	case "write_shell_stdin":
 		writeResult := msg.GetWriteShellStdinResult()
@@ -481,13 +480,13 @@ func (bridge *Bridge) nextID() uint32 {
 // applyAllowlistPrecheckResult 处理客户端 allowlist precheck 结果。
 // allowlisted=false：执行被客户端策略拦截，直接以明确终态收口；
 // allowlisted=true：客户端已放行但尚未返回执行结果，保持挂起等待真实结果。
-func applyAllowlistPrecheckResult(result ExecApplyResult, pending runtimecore.PendingExec, execKind string, allowlisted bool) (ExecApplyResult, error) {
-	if !allowlisted {
+func applyAllowlistPrecheckResult(result ExecApplyResult, pending runtimecore.PendingExec, execKind string, state LifecycleState) (ExecApplyResult, error) {
+	if state.Phase == "allowlist_denied" {
 		reason := fmt.Sprintf("tool execution denied by client allowlist (exec_kind=%s, exec_id=%s)", execKind, pending.ExecID)
 		result.ToolResultPayload = fmt.Sprintf(`{"status":"denied","detail":%q,"exec_kind":%q,"allowlisted":false}`, reason, execKind)
-		result.IsTerminal = true
+		result.IsTerminal = state.Terminal
 		return result, nil
 	}
-	result.IsTerminal = false
+	result.IsTerminal = state.Terminal
 	return result, nil
 }

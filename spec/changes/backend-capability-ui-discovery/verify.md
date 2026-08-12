@@ -241,3 +241,17 @@
 - 隔离时间线在核验时已持续写入至 `2026-08-12 16:10:54`；统计使用实际 `ts` 字段，而非不存在的 `timestamp` 字段。
 - 本会话未读取或输出请求/响应正文、MCP 或 Shell 参数、页面内容、完整 ID、Cookie、认证头或凭据。
 - 这轮没有代码改动；本提交仅记录经只读抓包核验的覆盖范围和未触发分支。
+
+## Round 17 - 安装版兼容适配与生命周期投影
+
+| ID | Lens | Severity | Status | Finding | Evidence | Resolution |
+| --- | --- | --- | --- | --- | --- | --- |
+| V-46 | correctness | minor | fixed(r17) | 浏览器模式此前按 MCP 服务名称模糊选择，可能将不兼容服务或多个坐标型服务错误用于 ComputerUse。 | e336c6a 新增运行时 descriptor 驱动的 profile 解析。go test ./internal/computeruse ./internal/backend/forwarder -count=1 退出码 0，覆盖 IDE profile 优先、名称单独匹配拒绝、锁定/点击/解锁序列和实际 descriptor 选择。 | browser 模式仅接受完整的 cursor_ide_browser 或唯一坐标型 profile；不兼容、未连接或歧义均以稳定错误返回，不回退到 DesktopExecutor。 |
+| V-47 | correctness | minor | fixed(r17) | 等待仍运行、后台化和 allowlist 的终态判断散落在执行桥分支中，后续状态展示容易偏离真正收口语义。 | 生命周期分类器只输出 kind、phase、terminal。go test ./internal/backend/agent/bridge/exec ./internal/backend/forwarder -count=1 退出码 0，覆盖 await_still_running 非终态、等待完成、后台化接受/未找到、allowlist 放行/拒绝及已观察未知结果的既有终态兼容。 | ApplyExecClientMessage 保留现有 payload 与 ToolCall 构造，只复用分类器的终态判断；分类器不读取或返回 agent ID、tool call ID、参数、错误正文或转录路径。 |
+| V-48 | runtime-evidence | minor | open | 静态安装扫描和单元测试不能证明当前 Cursor 版本已经真实下发后台化、等待或 ComputerUse oneof。 | Round 16 的实际隔离时间线中 force_background_subagent_args/result、subagent_await_args/result、computer_use_args/result 均为 0；本轮没有伪造协议消息。 | 用户在隔离 Cursor 中自然触发对应功能后，继续只读核验上下行 oneof、终态和安全索引；在此之前仅声明本地映射已测试。 |
+
+本轮证据：
+
+- 安装版只读扫描已在 D:\cursor 的本地副本完成，报告只保留版本、能力 marker 和不可逆安装根哈希；不修改安装、登录态或运行进程。
+- 当前隔离 worktree 缺少被 .gitignore 排除的 protobuf 生成目录，已按项目 build/Taskfile.yml 的现有 protoc 命令仅在本地再生；gen/ 保持 ignored，未暂存或提交。
+- 以上为静态能力、单元和定向集成验证，不替代真实 Cursor E2E；临时抓包、凭据、Cookie、Token、URL、正文和 MCP 参数均未写入本轮提交。
