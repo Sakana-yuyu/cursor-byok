@@ -8,8 +8,15 @@ on:
   workflow_dispatch:
 
 jobs:
+  # 这里刻意不跑 `yarn build`。生产构建需要 frontend/bindings/（gitignore 的生成产物），
+  # 只有 `wails3 generate bindings` 能产出，而 wails3 CLI 在 Linux 上要先 apt 装
+  # GTK/WebKit 开发包才能 go install——那正是 build.yml 里的完整链路。build.yml 与本
+  # 工作流的触发条件相同（push '**' + pull_request），它的 task build:linux:amd64
+  # 已经跑过同一条 `yarn build`（含 assert-build-output.mjs 门禁）且长期是绿的，
+  # 所以在这里重复一遍只会多花两三分钟、拿不到新信号。lint 与 E2E 才是 build.yml
+  # 没有覆盖的部分。
   frontend:
-    name: Frontend lint / build / e2e
+    name: Frontend lint / e2e
     runs-on: ubuntu-24.04
     steps:
       - name: Check out source
@@ -39,17 +46,29 @@ jobs:
         working-directory: frontend
         run: yarn lint
 
-      - name: Build
-        working-directory: frontend
-        run: yarn build
-
       - name: Install Playwright browsers
         working-directory: frontend
         run: npx playwright install --with-deps chromium
 
+      # E2E 跑在 browser-preview 模式的 Vite dev server 上（playwright.config.mjs 的
+      # webServer），绑定层与 @wailsio/runtime 都走内存 mock，不需要 frontend/bindings、
+      # frontend/dist，也不需要真实桌面环境。
       - name: Run button-level E2E tests
         working-directory: frontend
         run: npx playwright test --reporter=line
+
+      # 这条 E2E 此前从未在 CI 上真正执行过（yarn build 先失败了），首次跑起来后留一份
+      # trace/截图，避免只看到一行 "1 failed"。
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
+            frontend/playwright-report
+            frontend/test-results
 
   go:
     name: Go build / vet / test
@@ -102,6 +121,24 @@ jobs:
       # 会在下一次同步时被静默覆盖。
       - name: Compiled proto matches extraction output
         run: git diff --exit-code -- proto/agent_v1.proto proto/aiserver_v1.proto
+
+      # main.go 的 //go:embed all:frontend/dist 同样指向 gitignore 的构建产物。真实产物
+      # 要先生成 wails 绑定再 yarn build（见 frontend job 顶部说明），代价与 build.yml
+      # 重复；而本 job 只做编译检查与跑测试，链接出的二进制不会被分发，所以放占位文件。
+      # 安全前提：没有任何 Go 代码或测试读 frontend/dist 的真实内容——根包没有测试文件，
+      # assets 只是作为参数传进 app.Run。
+      # 注意空目录不行：go:embed 会报 "contains no embeddable files"，目录里至少要有一个
+      # 可嵌入文件。
+      - name: Stub embedded frontend assets
+        run: |
+          set -e
+          if [ -n "$(find frontend/dist -type f 2>/dev/null | head -n 1)" ]; then
+            echo "frontend/dist already has content, leaving it untouched"
+          else
+            mkdir -p frontend/dist
+            printf '<!doctype html><title>ci build stub</title>\n' > frontend/dist/index.html
+            echo "created frontend/dist/index.html stub for go:embed"
+          fi
 
       - name: Build
         run: go build ./...
