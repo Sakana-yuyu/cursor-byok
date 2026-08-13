@@ -22,6 +22,14 @@ func (service *Service) startHistoryMaintenance() {
 	if service == nil || service.store == nil {
 		return
 	}
+	// 新建服务最常见的测试/首次启动场景里，history 根目录尚为空。此时没有任何
+	// 启动期遗留物需要维护；若仍启动 goroutine，它可能晚于服务所有者退出才创建
+	// .history-maintenance.lock，导致临时目录清理竞态，也让生产首次启动做无用工作。
+	historyRoot := strings.TrimSpace(service.store.HistoryDir())
+	entries, err := os.ReadDir(historyRoot)
+	if errors.Is(err, os.ErrNotExist) || (err == nil && len(entries) == 0) {
+		return
+	}
 	safego.Go("forwarder:history-maintenance", func() {
 		if err := service.runHistoryMaintenance(); err != nil {
 			logger.Errorf("forwarder history maintenance failed: %v", err)

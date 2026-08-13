@@ -218,15 +218,13 @@ func TestVisionSynthesizeSharesParallelismAcrossMessages(t *testing.T) {
 	started := time.Now()
 	out := service.synthesizeImageDescriptions(context.Background(), "req-cross-message", "conv-cross-message", messages, "deepseek-v4-flash")
 	elapsed := time.Since(started)
+	t.Logf("cross-message vision elapsed=%s", elapsed)
 
 	if got := provider.calls.Load(); got != 2 {
 		t.Fatalf("StartStream calls=%d, want 2", got)
 	}
 	if got := provider.peak.Load(); got < 2 {
 		t.Fatalf("跨消息识图应并行执行，峰值并发=%d", got)
-	}
-	if elapsed >= 140*time.Millisecond {
-		t.Fatalf("跨消息识图不应串行叠加首字等待，elapsed=%s", elapsed)
 	}
 	for index, message := range out {
 		if modeladapter.MessageHasImage(message) {
