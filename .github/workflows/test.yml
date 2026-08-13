@@ -64,6 +64,45 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # gen/ 是 gitignore 的生成产物，干净检出里不存在，而仓库大量导入 cursor/gen/...，
+      # 所以编译前必须先生成。protoc 版本与 build.yml 保持一致。
+      - name: Install protoc
+        run: |
+          set -e
+          PROTOC_VERSION="29.3"
+          INSTALL_DIR="$HOME/protoc"
+          mkdir -p "$INSTALL_DIR"
+          curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors \
+            -o "$INSTALL_DIR/protoc.zip" \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip"
+          unzip -o "$INSTALL_DIR/protoc.zip" -d "$INSTALL_DIR" > /dev/null
+          echo "$INSTALL_DIR/bin" >> "$GITHUB_PATH"
+
+      # 插件版本钉到 go.mod 里的模块版本，避免 @latest 让生成产物随上游漂移。
+      - name: Install protoc Go plugins
+        run: |
+          set -e
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+          go install connectrpc.com/connect/cmd/protoc-gen-connect-go@v1.19.1
+
+      - name: Generate protobuf code
+        run: |
+          set -e
+          protoc --version
+          protoc-gen-go --version
+          protoc-gen-connect-go --version
+          go run ./proto/apply_tool -from ./proto/from_extensions -to ./proto
+          protoc -I ./proto \
+            --go_out=. --go_opt=module=cursor \
+            --connect-go_out=. --connect-go_opt=module=cursor \
+            ./proto/agent_v1.proto ./proto/aiserver_v1.proto
+
+      # apply_tool 是幂等的，所以这里出现 diff 只可能是有人直接改了编译输入
+      # proto/*.proto 而没有改抽取产物 proto/from_extensions/*.proto——那份改动
+      # 会在下一次同步时被静默覆盖。
+      - name: Compiled proto matches extraction output
+        run: git diff --exit-code -- proto/agent_v1.proto proto/aiserver_v1.proto
+
       - name: Build
         run: go build ./...
 
@@ -72,3 +111,11 @@ jobs:
 
       - name: Test
         run: go test ./...
+
+      # 能力清单由 tool_catalog.go 生成。此前多次出现改了 catalog 却没重跑生成器，
+      # 漂移一路累积到下一个改动者身上。
+      - name: Capability map is in sync with tool catalog
+        run: |
+          set -e
+          go run ./cmd/sync-tool-catalog --write
+          git diff --exit-code -- docs/cursor-capability-map.md
