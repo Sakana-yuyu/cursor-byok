@@ -2,12 +2,64 @@ package modeladapter
 
 import (
 	"encoding/json"
+	"net/url"
 	"strings"
 	"time"
 )
 
+const artifactRedactedValue = "[REDACTED]"
+
+// artifactSensitiveQueryKeys 是可能出现在 provider 入口地址里的凭据参数名。
+// 与 internal/mitm 的镜像脱敏保持同一份词表语义。
+var artifactSensitiveQueryKeys = map[string]bool{
+	"key":           true,
+	"api_key":       true,
+	"apikey":        true,
+	"token":         true,
+	"access_token":  true,
+	"refresh_token": true,
+	"secret":        true,
+	"signature":     true,
+	"sig":           true,
+	"password":      true,
+	"pass":          true,
+}
+
+// redactArtifactURL 去掉请求地址里的凭据。provider 入口地址由用户自行填写，
+// 部分网关会把密钥放在 query 或 userinfo 里；debug 工件会落盘并常被用户贴到
+// issue 里排查，因此写入前必须脱敏。
+func redactArtifactURL(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		// 解析失败时无法定位凭据位置，退化为只保留问号前的部分。
+		if index := strings.IndexByte(trimmed, '?'); index >= 0 {
+			return trimmed[:index] + "?" + artifactRedactedValue
+		}
+		return trimmed
+	}
+	if parsed.User != nil {
+		parsed.User = url.User(artifactRedactedValue)
+	}
+	if parsed.RawQuery != "" {
+		values := parsed.Query()
+		for key := range values {
+			if artifactSensitiveQueryKeys[strings.ToLower(strings.TrimSpace(key))] {
+				values.Set(key, artifactRedactedValue)
+			}
+		}
+		parsed.RawQuery = values.Encode()
+	}
+	parsed.Fragment = ""
+	parsed.RawFragment = ""
+	return parsed.String()
+}
+
 // recordLLMRequestArtifact 记录一次模型调用的原始请求工件。
-func recordLLMRequestArtifact(req StreamRequest, provider string, model string, method string, url string, body any) {
+func recordLLMRequestArtifact(req StreamRequest, provider string, model string, method string, requestURL string, body any) {
 	if req.Observer == nil {
 		return
 	}
@@ -22,7 +74,7 @@ func recordLLMRequestArtifact(req StreamRequest, provider string, model string, 
 		"resolved_channel_id":            strings.TrimSpace(req.ResolvedChannelID),
 		"resolved_channel_name":          strings.TrimSpace(req.ResolvedChannelName),
 		"resolved_context_window_tokens": req.ResolvedContextWindowTokens,
-		"url":                            url,
+		"url":                            redactArtifactURL(requestURL),
 		"method":                         method,
 		"body":                           body,
 		"request_knobs":                  req.RequestKnobs,

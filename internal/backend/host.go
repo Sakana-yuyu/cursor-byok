@@ -248,9 +248,11 @@ func (host *Host) RefreshDelegationExecutorProbes(ctx context.Context) ([]delega
 
 	jobs := make(chan delegation.ExecutorID)
 	var wg sync.WaitGroup
+	// safego 兜底：探测实现可能来自外部执行器适配层，panic 不应拖垮进程；
+	// wg.Done 在 fn 内 defer，恢复后依然会释放，wg.Wait 不会死锁。
 	for range workers {
 		wg.Add(1)
-		go func() {
+		safego.Go("backend:delegation-executor-probe", func() {
 			defer wg.Done()
 			for id := range jobs {
 				if ctx.Err() != nil {
@@ -258,7 +260,7 @@ func (host *Host) RefreshDelegationExecutorProbes(ctx context.Context) ([]delega
 				}
 				_, _ = host.executorRegistry.Probe(ctx, id, true)
 			}
-		}()
+		})
 	}
 	for _, item := range items {
 		select {
@@ -553,8 +555,13 @@ func (host *Host) InProcessHealthCheck() error {
 	return nil
 }
 
+// loopbackHealthTimeout 是本机健康检查的端到端上限。只打本进程的 /health，
+// 正常在毫秒级返回；给出总超时避免后端半死时把检查调用永久挂住。
+const loopbackHealthTimeout = 5 * time.Second
+
 func newLoopbackHTTPClient() *http.Client {
 	return &http.Client{
+		Timeout: loopbackHealthTimeout,
 		Transport: &http.Transport{
 			Proxy: nil,
 			DialContext: (&net.Dialer{

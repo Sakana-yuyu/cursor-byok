@@ -13,9 +13,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"cursor/internal/backend/delegation"
 	delegationexecutors "cursor/internal/backend/delegation/executors"
+	"cursor/internal/netproxy"
 	"cursor/internal/processutil"
 )
 
@@ -29,6 +31,10 @@ const (
 	kiroCLIManifestURL          = "https://prod.download.cli.kiro.dev/stable/latest/manifest.json"
 	kiroCLIDownloadBaseURL      = "https://prod.download.cli.kiro.dev/stable/"
 	kiroCLIMaxInstallerSize     = int64(1024 * 1024 * 1024)
+	// 清单是小 JSON，下载是最大 1GB 的 MSI，因此不设 Client.Timeout（会把正常
+	// 进行中的大文件下载一并掐断），改为按阶段各给一个 context 上限。
+	kiroCLIManifestTimeout = 30 * time.Second
+	kiroCLIDownloadTimeout = 30 * time.Minute
 )
 
 type builtInExecutorInstaller struct {
@@ -49,7 +55,13 @@ type kiroCLIPackage struct {
 }
 
 func newBuiltInExecutorInstaller() delegationExecutorInstaller {
-	return builtInExecutorInstaller{httpClient: &http.Client{}}
+	return builtInExecutorInstaller{httpClient: newKiroCLIHTTPClient()}
+}
+
+// newKiroCLIHTTPClient 走统一的代理感知 transport（自带 ResponseHeaderTimeout），
+// 不设总超时，交由调用方按阶段用 context 限时。
+func newKiroCLIHTTPClient() *http.Client {
+	return netproxy.NewHTTPClient(0)
 }
 
 func (installer builtInExecutorInstaller) Install(ctx context.Context, target string) error {
@@ -79,9 +91,11 @@ func (installer builtInExecutorInstaller) installKiroCLIWindows(ctx context.Cont
 	}
 	client := installer.httpClient
 	if client == nil {
-		client = &http.Client{}
+		client = newKiroCLIHTTPClient()
 	}
-	manifestRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, kiroCLIManifestURL, nil)
+	manifestCtx, cancelManifest := context.WithTimeout(ctx, kiroCLIManifestTimeout)
+	defer cancelManifest()
+	manifestRequest, err := http.NewRequestWithContext(manifestCtx, http.MethodGet, kiroCLIManifestURL, nil)
 	if err != nil {
 		return fmt.Errorf("创建 Kiro CLI 清单请求失败: %w", err)
 	}
@@ -113,7 +127,9 @@ func (installer builtInExecutorInstaller) installKiroCLIWindows(ctx context.Cont
 	defer os.Remove(installerPath)
 	defer installerFile.Close()
 
-	downloadRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, kiroCLIDownloadBaseURL+packageInfo.Download, nil)
+	downloadCtx, cancelDownload := context.WithTimeout(ctx, kiroCLIDownloadTimeout)
+	defer cancelDownload()
+	downloadRequest, err := http.NewRequestWithContext(downloadCtx, http.MethodGet, kiroCLIDownloadBaseURL+packageInfo.Download, nil)
 	if err != nil {
 		return fmt.Errorf("创建 Kiro CLI 下载请求失败: %w", err)
 	}

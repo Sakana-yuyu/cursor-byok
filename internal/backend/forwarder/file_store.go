@@ -132,7 +132,7 @@ func (store *ConversationFileStore) AppendEntries(conversationID string, entries
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := os.MkdirAll(store.conversationDir(normalizedConversationID), 0o755); err != nil {
+	if err := os.MkdirAll(store.conversationDir(normalizedConversationID), historyDirPerm); err != nil {
 		return nil, nil, fmt.Errorf("create conversation directory: %w", err)
 	}
 	release, err := acquireConversationLock(store.lockPath(normalizedConversationID))
@@ -177,7 +177,7 @@ func (store *ConversationFileStore) SaveConversationWithEntries(conversationID s
 	if err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(store.conversationDir(normalizedConversationID), 0o755); err != nil {
+	if err := os.MkdirAll(store.conversationDir(normalizedConversationID), historyDirPerm); err != nil {
 		return nil, fmt.Errorf("create conversation directory: %w", err)
 	}
 	release, err := acquireConversationLock(store.lockPath(normalizedConversationID))
@@ -219,7 +219,7 @@ func (store *ConversationFileStore) UpdateConversationMeta(conversationID string
 	if err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(store.conversationDir(normalizedConversationID), 0o755); err != nil {
+	if err := os.MkdirAll(store.conversationDir(normalizedConversationID), historyDirPerm); err != nil {
 		return nil, fmt.Errorf("create conversation directory: %w", err)
 	}
 	release, err := acquireConversationLock(store.lockPath(normalizedConversationID))
@@ -263,7 +263,7 @@ func (store *ConversationFileStore) ReplaceEntries(conversationID string, entrie
 	if err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(store.conversationDir(normalizedConversationID), 0o755); err != nil {
+	if err := os.MkdirAll(store.conversationDir(normalizedConversationID), historyDirPerm); err != nil {
 		return nil, fmt.Errorf("create conversation directory: %w", err)
 	}
 	release, err := acquireConversationLock(store.lockPath(normalizedConversationID))
@@ -339,7 +339,7 @@ func (store *ConversationFileStore) mutateConversation(conversationID string, cr
 	if err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(store.conversationDir(normalizedConversationID), 0o755); err != nil {
+	if err := os.MkdirAll(store.conversationDir(normalizedConversationID), historyDirPerm); err != nil {
 		return nil, fmt.Errorf("create conversation directory: %w", err)
 	}
 	release, err := acquireConversationLock(store.lockPath(normalizedConversationID))
@@ -816,7 +816,7 @@ func validateConversationID(conversationID string) (string, error) {
 }
 
 func writeJSONFileAtomic(path string, payload any) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), historyDirPerm); err != nil {
 		return fmt.Errorf("create parent directory: %w", err)
 	}
 	data, err := json.Marshal(payload)

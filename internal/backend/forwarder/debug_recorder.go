@@ -352,12 +352,12 @@ func (recorder *debugRecorder) writeJob(job debugWriteJob) {
 		return
 	}
 	defer debugPurge.endWrite()
-	if err := os.MkdirAll(job.dir, 0o755); err != nil {
+	if err := os.MkdirAll(job.dir, historyDirPerm); err != nil {
 		recorder.recordWriteFailure("mkdir", job.filename)
 		return
 	}
 	path := filepath.Join(job.dir, job.filename)
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, historyFilePerm)
 	if err != nil {
 		recorder.recordWriteFailure("open", job.filename)
 		return
@@ -432,7 +432,7 @@ func trimDebugFileTail(path string, reserve int) {
 		return
 	}
 	// 覆盖写回尾部内容（O_TRUNC 清空再写）。
-	if err := os.WriteFile(path, tail, 0o644); err != nil {
+	if err := os.WriteFile(path, tail, historyFilePerm); err != nil {
 		logger.Errorf("debug log rotate failed: trim %s: %v", path, err)
 		return
 	}

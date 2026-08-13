@@ -11,6 +11,15 @@ import (
 	"sync"
 
 	"gopkg.in/yaml.v3"
+
+	"cursor/internal/logger"
+)
+
+const (
+	// configFilePerm / configDirPerm 只允许当前用户读写：用户配置里保存了
+	// 模型供应商 apiKey 与余额查询凭据，不能对同机其他用户可读。
+	configFilePerm os.FileMode = 0o600
+	configDirPerm  os.FileMode = 0o700
 )
 
 type Store struct {
@@ -61,6 +70,8 @@ func (store *Store) Load(_ context.Context) (Config, error) {
 
 	store.mu.Lock()
 	defer store.mu.Unlock()
+
+	restrictExistingPermissions(store.path)
 
 	data, err := os.ReadFile(store.path)
 	if err != nil {
@@ -121,7 +132,7 @@ func (store *Store) Save(_ context.Context, cfg Config) (Config, error) {
 }
 
 func (store *Store) saveLocked(normalized Config) error {
-	if err := os.MkdirAll(filepath.Dir(store.path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(store.path), configDirPerm); err != nil {
 		return fmt.Errorf("创建用户配置目录失败: %w", err)
 	}
 
@@ -131,13 +142,44 @@ func (store *Store) saveLocked(normalized Config) error {
 	}
 
 	tempPath := store.path + ".tmp"
-	if err := os.WriteFile(tempPath, data, 0o644); err != nil {
+	if err := os.WriteFile(tempPath, data, configFilePerm); err != nil {
 		return fmt.Errorf("写入临时配置失败: %w", err)
 	}
+	// WriteFile 只在创建时应用 perm，残留的临时文件可能带着更宽的权限，
+	// 因此重命名前显式收紧一次。
+	if err := os.Chmod(tempPath, configFilePerm); err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("设置临时配置权限失败: %w", err)
+	}
 	if err := os.Rename(tempPath, store.path); err != nil {
+		_ = os.Remove(tempPath)
 		return fmt.Errorf("保存用户配置失败: %w", err)
 	}
 	return nil
+}
+
+// restrictExistingPermissions 收紧已存在配置文件与所在目录的权限。
+// 配置里含 apiKey / balanceAccessToken 等凭据，早期版本以 0644 落盘，
+// 升级后首次读取时就地迁移，避免同机其他用户可读。
+func restrictExistingPermissions(path string) {
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" {
+		return
+	}
+	if dir := filepath.Dir(trimmed); dir != "" {
+		if info, err := os.Stat(dir); err == nil && info.IsDir() && info.Mode().Perm() != configDirPerm {
+			if err := os.Chmod(dir, configDirPerm); err != nil {
+				logger.Warn("收紧用户配置目录权限失败", "error", err)
+			}
+		}
+	}
+	info, err := os.Stat(trimmed)
+	if err != nil || info.IsDir() || info.Mode().Perm() == configFilePerm {
+		return
+	}
+	if err := os.Chmod(trimmed, configFilePerm); err != nil {
+		logger.Warn("收紧用户配置文件权限失败", "error", err)
+	}
 }
 
 func shouldPersistNormalizedConfig(raw []byte, current Config, normalized Config) bool {

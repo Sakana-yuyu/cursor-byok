@@ -16,6 +16,7 @@ import (
 	runtimecore "cursor/internal/backend/agent/core"
 	"cursor/internal/computeruse"
 	"cursor/internal/logger"
+	"cursor/internal/safego"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -254,15 +255,20 @@ func (service *Service) maybeDispatchLocalComputerUse(
 
 	// 按配置选择执行后端（desktop/browser），在 goroutine 中执行。
 	executor := service.resolveComputerUseExecutor()
-	go func() {
-		result := executor.Execute(convertComputerUseActions(actions))
-		synthetic := buildSyntheticExecClientMessageFromResult(pending, result)
+	dispatchResult := func(result computeruse.Result) {
 		service.dispatchInboundIntent(InboundIntent{
 			Kind:              "exec_result",
 			RequestID:         requestID,
-			ExecClientMessage: synthetic,
+			ExecClientMessage: buildSyntheticExecClientMessageFromResult(pending, result),
 		})
-	}()
+	}
+	// panic 兜底必须回填失败终态：这个 goroutine 是该 exec 唯一的结果来源，
+	// 崩掉且不回填的话这次工具调用会永久 pending，Cursor 侧表现为一直等待。
+	safego.GoWithPanicHandler("forwarder:local-computer-use", func() {
+		dispatchResult(executor.Execute(convertComputerUseActions(actions)))
+	}, func(error) {
+		dispatchResult(computeruse.Result{Error: "local computer use panicked"})
+	})
 	logger.Infof("local computer use dispatched locally exec_id=%s actions=%d", pending.ExecID, len(actions))
 	return true
 }

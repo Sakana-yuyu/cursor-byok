@@ -11,6 +11,13 @@ import (
 	"time"
 )
 
+// 用户数据目录下的历史、调试与工件文件都可能包含完整对话正文、provider 请求体
+// 与模型输出，只允许当前用户读写；目录同样收紧，避免同机其他用户遍历会话。
+const (
+	historyFilePerm os.FileMode = 0o600
+	historyDirPerm  os.FileMode = 0o700
+)
+
 // artifactRecorder 只缓存当前 provider call 的请求摘要，用于本轮内 usage/model 信息补齐。
 // 对话恢复事实只存在 state.json 与 context.json。
 type artifactRecorder struct {
@@ -318,7 +325,7 @@ func openUniqueArtifactTempFile(path string) (*os.File, string, error) {
 	base := filepath.Base(path)
 	for attempt := 0; attempt < 32; attempt++ {
 		tempPath := filepath.Join(dir, fmt.Sprintf("%s.tmp-%d-%d", base, os.Getpid(), time.Now().UnixNano()))
-		file, err := os.OpenFile(tempPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+		file, err := os.OpenFile(tempPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, historyFilePerm)
 		if err == nil {
 			return file, tempPath, nil
 		}

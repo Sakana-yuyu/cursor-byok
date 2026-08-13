@@ -193,11 +193,15 @@ func saveResponseCacheToDisk(path string, entries map[string]*responseCacheEntry
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), historyDirPerm); err != nil {
 		return err
 	}
 	tempPath := path + ".tmp"
-	if err := os.WriteFile(tempPath, payload, 0o644); err != nil {
+	if err := os.WriteFile(tempPath, payload, historyFilePerm); err != nil {
+		return err
+	}
+	if err := os.Chmod(tempPath, historyFilePerm); err != nil {
+		_ = os.Remove(tempPath)
 		return err
 	}
 	return os.Rename(tempPath, path)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -751,10 +752,26 @@ func (transport mcpHeaderTransport) RoundTrip(request *http.Request) (*http.Resp
 	return transport.base.RoundTrip(cloned)
 }
 
+// MCP 的 streamable-http / sse transport 都是长连接：响应头之后 body 会持续
+// 推送事件，因此不能设 Client.Timeout（会在流中途掐断）。改为约束建连、TLS
+// 握手与「已连接但迟迟不回响应头」这几个阶段，避免坏掉的 MCP server 永久挂住调用方。
+const (
+	mcpTLSHandshakeTimeout   = 10 * time.Second
+	mcpResponseHeaderTimeout = 30 * time.Second
+)
+
 func mcpHTTPClient(headers map[string]string) *http.Client {
 	base := http.DefaultTransport
 	if transport, ok := http.DefaultTransport.(*http.Transport); ok {
-		base = transport.Clone()
+		cloned := transport.Clone()
+		cloned.DialContext = (&net.Dialer{Timeout: mcpConnectTimeout, KeepAlive: 30 * time.Second}).DialContext
+		if cloned.TLSHandshakeTimeout <= 0 || cloned.TLSHandshakeTimeout > mcpTLSHandshakeTimeout {
+			cloned.TLSHandshakeTimeout = mcpTLSHandshakeTimeout
+		}
+		if cloned.ResponseHeaderTimeout <= 0 || cloned.ResponseHeaderTimeout > mcpResponseHeaderTimeout {
+			cloned.ResponseHeaderTimeout = mcpResponseHeaderTimeout
+		}
+		base = cloned
 	}
 	return &http.Client{Transport: mcpHeaderTransport{base: base, headers: cloneStringMap(headers)}}
 }

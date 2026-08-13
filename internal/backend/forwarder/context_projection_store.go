@@ -47,7 +47,7 @@ func (store *ConversationFileStore) SaveContextProjection(conversationID string,
 	if strings.TrimSpace(state.ConversationID) != normalizedConversationID {
 		return fmt.Errorf("context projection conversation mismatch")
 	}
-	if err := os.MkdirAll(store.conversationDir(normalizedConversationID), 0o755); err != nil {
+	if err := os.MkdirAll(store.conversationDir(normalizedConversationID), historyDirPerm); err != nil {
 		return fmt.Errorf("create conversation directory: %w", err)
 	}
 	release, err := acquireConversationLock(store.lockPath(normalizedConversationID))

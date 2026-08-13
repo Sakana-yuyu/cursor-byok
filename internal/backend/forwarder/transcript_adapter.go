@@ -461,7 +461,7 @@ func countTranscriptTurnEnded(data []byte) int {
 }
 
 func writeCursorTranscriptAtomic(path string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), historyDirPerm); err != nil {
 		return fmt.Errorf("create transcript directory: %w", err)
 	}
 	file, tempPath, err := openUniqueArtifactTempFile(path)
