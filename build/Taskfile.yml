@@ -13,28 +13,49 @@ tasks:
     preconditions:
       - sh: 'test -z "{{.PROTO_INPUT}}" || test -f "{{.PROTO_INPUT}}"'
         msg: "PROTO_INPUT 指向的 Cursor 扩展 bundle 不存在。"
-      - sh: 'test -n "{{.PROTO_INPUT}}" || test -f ./proto/extensions-cursor-app/cursor-always-local/dist/main.js || test -f /Applications/Cursor.app/Contents/Resources/app/extensions/cursor-always-local/dist/main.js'
+      # 除 PROTO_INPUT 外，还认仓库快照与 macOS/Windows/Linux 的默认安装位置。
+      # 只认 /Applications/Cursor.app 时，Windows 上这一步会被无声跳过。
+      - sh: >-
+          test -n "{{.PROTO_INPUT}}"
+          || test -f ./proto/extensions-cursor-app/cursor-always-local/dist/main.js
+          || test -f /Applications/Cursor.app/Contents/Resources/app/extensions/cursor-always-local/dist/main.js
+          || test -f "$LOCALAPPDATA/Programs/cursor/resources/app/extensions/cursor-always-local/dist/main.js"
+          || test -f "$ProgramFiles/Cursor/resources/app/extensions/cursor-always-local/dist/main.js"
+          || test -f /usr/share/cursor/resources/app/extensions/cursor-always-local/dist/main.js
+          || test -f /opt/Cursor/resources/app/extensions/cursor-always-local/dist/main.js
         msg: "未找到 Cursor 扩展 bundle；请传入 PROTO_INPUT=/path/to/cursor-always-local/dist/main.js。"
     cmds:
       - chmod +x ./proto/extract_extensions_proto.sh
       - '{{if .PROTO_INPUT}}./proto/extract_extensions_proto.sh "{{.PROTO_INPUT}}"{{else}}./proto/extract_extensions_proto.sh{{end}}'
 
   sync:proto:
-    summary: 从 Cursor 扩展快照同步 proto 并重新生成 Go 代码
+    summary: 从 Cursor 扩展快照重新抽取 proto，再套用到编译输入并重新生成 Go 代码
     dir: '{{.ROOT_DIR}}'
     deps:
       - task: extract:proto
     cmds:
-      - cp ./proto/from_extensions/agent_v1.proto ./proto/agent_v1.proto
-      - cp ./proto/from_extensions/aiserver_v1.proto ./proto/aiserver_v1.proto
-      - perl -0pi -e 's|option go_package = "react-admin/cursor-server/gen/agent/v1;agentv1";|option go_package = "cursor/gen/agentv1;agentv1";|' ./proto/agent_v1.proto
-      - perl -0pi -e 's|option go_package = "react-admin/cursor-server/gen/aiserver/v1;aiserverv1";|option go_package = "cursor/gen/aiserverv1;aiserverv1";|' ./proto/aiserver_v1.proto
-      - rm -rf ./gen/agentv1 ./gen/aiserverv1
       - task: generate:proto
+
+  apply:proto:
+    summary: 把抽取产物 proto/from_extensions/*.proto 套用为 protoc 编译输入 proto/*.proto
+    dir: '{{.ROOT_DIR}}'
+    sources:
+      - proto/from_extensions/agent_v1.proto
+      - proto/from_extensions/aiserver_v1.proto
+      - proto/apply_tool/main.go
+    generates:
+      - proto/agent_v1.proto
+      - proto/aiserver_v1.proto
+    cmds:
+      - go run ./proto/apply_tool -from ./proto/from_extensions -to ./proto
 
   generate:proto:
     summary: 生成 proto Go/Connect 代码
     dir: '{{.ROOT_DIR}}'
+    # apply:proto 必须留在 deps 里：generate:proto 是 generate:bindings -> build:frontend
+    # 构建链上唯一的 proto 入口，早先 sync:proto 全仓库零引用，抽取产物与编译输入因此漂移了数月。
+    deps:
+      - task: apply:proto
     sources:
       - proto/*.proto
     generates:
