@@ -77,6 +77,16 @@ const (
 	streamTimerTurnStale            streamTimerKind = "turn_stale"
 )
 
+// orphan cancel 在「客户端已断连、但任务仍在推进」时不立刻取消，而是按更长的间隔反复
+// 复查。旧实现在这里 defer 之后直接不续排，兜底交给 turn-stale 与 broker retention，
+// 但两者都覆盖不到这个组合：turn-stale 只在 TurnPhaseWaitingExternal 才挂载，provider
+// 正在生成的断连子流进不了该相位；broker.RemoveIfIdle 拒绝删除有 conversationID 的
+// 非终态流，连内存都不释放。因此这里必须续排，并设总放弃上限。
+const (
+	orphanCancelRecheckInterval = 10 * time.Minute
+	orphanCancelMaxDeferrals    = 12
+)
+
 type streamProviderEvent struct {
 	Token uint64
 	Event modeladapter.ModelEvent
@@ -1363,13 +1373,41 @@ func (service *Service) handleTimerEvent(stream *ActiveStream, payload *streamTi
 			return nil
 		}
 		// 网络波动加固：客户端 RunSSE 断连但任务仍在推进（provider 活跃、有待执行
-		// 工具/交互、或有活跃委派子代理）时，不取消 turn，保留运行等待客户端重连
-		// 订阅；彻底清理交给 turn-stale 看门狗与 broker retention 兜底，避免网络
-		// 波动几秒就误杀长任务。定时器已在 handleTimerEvent 开头清理，不续排。
+		// 工具/交互、或有活跃委派子代理）时，不立刻取消 turn，保留运行等待客户端
+		// 重连订阅——但必须按更长的间隔续排复查，并设总放弃上限。否则「断连 +
+		// provider 仍在生成」的流既进不了 turn-stale 相位、也过不了 RemoveIfIdle
+		// 的非终态门槛，会永远留在 broker 里，磁盘状态也永远停在 running。
 		if providerActive || pendingWork > 0 || service.hasActiveDelegation(stream) {
-			logger.Infof("forwarder orphan cancel deferred active turn request_id=%s subscriber_count=%d provider_active=%t pending=%d",
-				strings.TrimSpace(stream.RequestID), subscriberCount, providerActive, pendingWork)
-			return nil
+			stream.mu.Lock()
+			stream.OrphanCancelDeferrals++
+			deferrals := stream.OrphanCancelDeferrals
+			stream.mu.Unlock()
+			if deferrals <= orphanCancelMaxDeferrals {
+				logger.Infof("forwarder orphan cancel deferred active turn request_id=%s subscriber_count=%d provider_active=%t pending=%d deferrals=%d/%d",
+					strings.TrimSpace(stream.RequestID), subscriberCount, providerActive, pendingWork, deferrals, orphanCancelMaxDeferrals)
+				service.scheduleStreamTimer(stream, providerTimerKey(streamTimerOrphanCancel, ""), orphanCancelRecheckInterval, streamTimerOrphanCancel, "", 0, payload.Reason)
+				return nil
+			}
+			// 到达上限：按 interrupted 收口。不能落成 canceled——canceled 条目会被
+			// sanitizeCanceledReplayEntries 识别并回溯性删掉该回合已发给模型的
+			// assistant_text/tool_call/tool_result。
+			logger.Errorf("forwarder orphan cancel giving up request_id=%s deferrals=%d provider_active=%t pending=%d",
+				strings.TrimSpace(stream.RequestID), deferrals, providerActive, pendingWork)
+			conversationID := ""
+			stream.mu.Lock()
+			conversationID = strings.TrimSpace(stream.ConversationID)
+			stream.mu.Unlock()
+			cancelErr := service.handleCancelIntent(InboundIntent{
+				Kind:                 "cancel",
+				RequestID:            stream.RequestID,
+				CancelReason:         "[interrupted] RunSSE client stayed disconnected",
+				CancelTerminalStatus: conversationStatusInterrupted,
+			})
+			// handleCancelIntent 只在已初始化 checkpoint 时写历史；未初始化时这里兜底，
+			// 保证磁盘状态一定离开 running/waiting_tool。
+			service.forceMarkConversationInterrupted(conversationID, "RunSSE client stayed disconnected")
+			service.terminalizeOrphanedStream(stream)
+			return cancelErr
 		}
 		logger.Infof("forwarder orphan canceling disconnected request request_id=%s subscriber_count=%d active_delegation=%t",
 			strings.TrimSpace(stream.RequestID), subscriberCount, hasActiveDelegationAggregate(stream))
@@ -1381,6 +1419,27 @@ func (service *Service) handleTimerEvent(stream *ActiveStream, payload *streamTi
 	default:
 		return nil
 	}
+}
+
+// terminalizeOrphanedStream 把放弃 orphan cancel 的流强制推到终态。
+//
+// handleCancelIntent 在已初始化 checkpoint 时走的是「发 checkpoint、等客户端确认 blob
+// 后再收口」的路径，而这里的前提恰恰是客户端早就断连、确认永远不会到来。不强制收口，
+// 流会一直非终态地留在 broker 里：RemoveIfIdle 拒绝删除带 conversationID 的非终态流，
+// 终态保留定时器又只对终态流生效，ActiveStream 就此泄漏。
+func (service *Service) terminalizeOrphanedStream(stream *ActiveStream) {
+	if service == nil || stream == nil || service.broker == nil {
+		return
+	}
+	if !streamStillActive(stream) {
+		return
+	}
+	forceCancelStreamProvider(stream)
+	requestID := strings.TrimSpace(stream.RequestID)
+	if err := service.broker.Cancel(requestID, "[interrupted] RunSSE client stayed disconnected"); err != nil && !errors.Is(err, errStreamNotActive) {
+		logger.Errorf("forwarder orphan give-up terminalize failed request_id=%s err=%v", requestID, err)
+	}
+	service.setTurnPhase(stream, TurnPhaseCanceled)
 }
 
 func (service *Service) scheduleOrphanCancelActor(requestID string, reason string) bool {

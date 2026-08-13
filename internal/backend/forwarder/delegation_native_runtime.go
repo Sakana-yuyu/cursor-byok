@@ -400,8 +400,14 @@ func (service *Service) markDelegationConversationProgress(item *nativeDelegatio
 		return false
 	}
 	candidates := make([]string, 0, 2)
-	if parentConversationID := strings.TrimSpace(item.ConversationID); parentConversationID != "" {
-		candidates = append(candidates, parentConversationID)
+	// 已转入后台的子代理不能再拿父会话的活动当自己的进展：follow-up 取消的语义就是
+	// 「父回合被新消息顶掉、子代理继续在后台跑」，父会话紧接着一直在跑新回合，父活动
+	// 会永远续期这个子代理，看门狗永不触发、holdsSlot 永不释放。原生子代理并发上限
+	// 默认只有 4，四个后台化子代理就能彻底堵死这条路。
+	if _, backgrounded := service.backgroundedDelegationRecord(item.ID); !backgrounded {
+		if parentConversationID := strings.TrimSpace(item.ConversationID); parentConversationID != "" {
+			candidates = append(candidates, parentConversationID)
+		}
 	}
 	if childConversationID := service.childConversationIDForNativeDelegation(item); childConversationID != "" {
 		candidates = append(candidates, childConversationID)
@@ -615,6 +621,32 @@ func (service *Service) cancelNativeDelegation(execID string) bool {
 	}
 	_ = service.reconcileStream(stream)
 	return true
+}
+
+// interruptNativeChildConversation 在父回合被硬取消时，把 native 子代理自己的
+// conversation 在磁盘上收口成 interrupted。
+//
+// 此前这条链路完全不触碰子会话的任何文件：handleCancelIntent 只改内存 nativeDelegations
+// 并向客户端发 abort，cancelNativeDelegation 写的 tool_result 落在**父**会话，子会话就此
+// 永远停在 running/waiting_tool。
+//
+// follow-up 取消必须排除：它的语义是「子代理转入后台继续跑」，父侧给子会话写终态会直接说谎。
+//
+// 该反查依赖内存里的 childParentLinks 与仍然活着的 broker 子流，进程重启后查不到——
+// 它是运行期手段，替代不了启动期对账，两者互补。
+func (service *Service) interruptNativeChildConversation(execID string, followUpCancel bool) {
+	if service == nil || followUpCancel {
+		return
+	}
+	item, ok := service.nativeDelegationTask(execID)
+	if !ok || item == nil {
+		return
+	}
+	childConversationID := service.childConversationIDForNativeDelegation(item)
+	if childConversationID == "" {
+		return
+	}
+	service.forceMarkConversationInterrupted(childConversationID, "parent turn canceled")
 }
 
 func subagentResultFailed(result *agentv1.SubagentResult) bool {

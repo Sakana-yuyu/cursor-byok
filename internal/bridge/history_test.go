@@ -204,6 +204,18 @@ func TestNormalizeHistoryStatusMarksInactiveActiveStatesInterrupted(t *testing.T
 	}
 }
 
+// TestNormalizeHistoryStatusPassesThroughPersistedInterrupted 钉死后端新增的
+// 可持久化 interrupted 终态在桥接层原样透传：它既不是 running 也不是
+// waiting_tool，不能再被二次归一化。
+func TestNormalizeHistoryStatusPassesThroughPersistedInterrupted(t *testing.T) {
+	if got := normalizeHistoryStatus("interrupted", false); got != "interrupted" {
+		t.Fatalf("normalizeHistoryStatus(interrupted, inactive) = %q, want interrupted", got)
+	}
+	if got := normalizeHistoryStatus("interrupted", true); got != "interrupted" {
+		t.Fatalf("normalizeHistoryStatus(interrupted, active) = %q, want interrupted", got)
+	}
+}
+
 // TestScanCursorProtocolSessionsIn 只从安全时间线聚合协议结构，忽略畸形行，
 // 且不得让原始抓包可能携带的正文或凭据字段进入对外 DTO。
 func TestScanCursorProtocolSessionsIn(t *testing.T) {

@@ -31,6 +31,12 @@ const (
 	execStreamStateBackgrounded = "backgrounded"
 )
 
+// backgroundedDelegationRetention 限制后台化委派登记的存活时间。
+// 只有 absorbBackgrounded*Result 成功吸收结果时才会删除记录，迟到结果永不到达时
+// （客户端被杀、子代理窗口被关）记录会一直留到进程结束。与 childParentLinkRetention
+// 取同一量级：后台子代理的最长存活由 nativeDelegationProgressTimeout 与 exec 看门狗约束。
+const backgroundedDelegationRetention = 2 * time.Hour
+
 // followUpBackgroundSummary 记录一次 follow-up 取消后台化了多少委派执行，供可观测性使用。
 type followUpBackgroundSummary struct {
 	NativeSubagents int
@@ -206,7 +212,17 @@ func (service *Service) rememberBackgroundedDelegation(record backgroundedDelega
 	if service.backgroundedDelegations == nil {
 		service.backgroundedDelegations = make(map[string]backgroundedDelegationExec)
 	}
+	service.pruneBackgroundedDelegationsLocked(time.Now().UTC())
 	service.backgroundedDelegations[strings.TrimSpace(record.ExecID)] = record
+}
+
+func (service *Service) pruneBackgroundedDelegationsLocked(now time.Time) {
+	cutoff := now.Add(-backgroundedDelegationRetention)
+	for execID, record := range service.backgroundedDelegations {
+		if record.BackgroundedAt.Before(cutoff) {
+			delete(service.backgroundedDelegations, execID)
+		}
+	}
 }
 
 func (service *Service) backgroundedDelegationRecord(execID string) (backgroundedDelegationExec, bool) {

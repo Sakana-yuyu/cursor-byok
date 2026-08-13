@@ -318,14 +318,22 @@ func cursorTranscriptTurnStatus(entry HistoryEntry) (cursorTranscriptLine, bool)
 			Error:  firstNonEmpty(readStringValue(payload.Value["error"]), readStringValue(payload.Value["message"]), "Request failed"),
 		}, true
 	case "control":
-		if strings.TrimSpace(readStringValue(payload.Value["status"])) != "canceled" {
+		switch strings.TrimSpace(readStringValue(payload.Value["status"])) {
+		case "canceled":
+			return cursorTranscriptLine{
+				Type:   "turn_ended",
+				Status: "aborted",
+				Error:  firstNonEmpty(readStringValue(payload.Value["reason"]), readStringValue(payload.Value["message"]), "User aborted request"),
+			}, true
+		case conversationStatusInterrupted:
+			return cursorTranscriptLine{
+				Type:   "turn_ended",
+				Status: "aborted",
+				Error:  "Interrupted: " + firstNonEmpty(readStringValue(payload.Value["reason"]), readStringValue(payload.Value["message"]), "local assistant interrupted the turn"),
+			}, true
+		default:
 			return cursorTranscriptLine{}, false
 		}
-		return cursorTranscriptLine{
-			Type:   "turn_ended",
-			Status: "aborted",
-			Error:  firstNonEmpty(readStringValue(payload.Value["reason"]), readStringValue(payload.Value["message"]), "User aborted request"),
-		}, true
 	default:
 		return cursorTranscriptLine{}, false
 	}

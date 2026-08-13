@@ -232,6 +232,9 @@ type ActiveStream struct {
 	NextCheckpointBlobRequestID   uint32
 	NextCheckpointRevision        uint64
 	PendingCheckpoint             *pendingCheckpointPublish
+	// OrphanCancelDeferrals 记录 orphan-cancel 因「客户端断连但任务仍在推进」而延期复查的次数，
+	// 达到 orphanCancelMaxDeferrals 后不再延期，按 interrupted 收口并释放流。
+	OrphanCancelDeferrals int
 	// TurnStaleGraceStartedAt 记录 turn-staleness 看门狗「阶段一（重对齐 append 序列）」的触发时刻。
 	// 零值表示尚未进入宽限期；非零值表示已重对齐过序列并进入宽限，再次触发即走「阶段二强制收口」。
 	TurnStaleGraceStartedAt time.Time
@@ -584,9 +587,13 @@ type InboundIntent struct {
 	InteractionResponse          *agentv1.InteractionResponse
 	KVClientMessage              *agentv1.KvClientMessage
 	CancelReason                 string
-	IgnoredReason                string
-	Prewarm                      bool
-	ManualCompaction             manualCompactionDirective
+	// CancelTerminalStatus 覆盖本次取消写入 history 的 control 终态取值，
+	// 空值 = "canceled"。目前只有「放弃 orphan cancel」会传 "interrupted"：
+	// 那是被打断而非用户取消，且 canceled 会触发 replay 清洗改写已发前缀。
+	CancelTerminalStatus string
+	IgnoredReason        string
+	Prewarm              bool
+	ManualCompaction     manualCompactionDirective
 	// GoalMode 标记该 run 以 goal 模式执行（由 /goal 命令触发）。
 	GoalMode   bool
 	GoalText   string

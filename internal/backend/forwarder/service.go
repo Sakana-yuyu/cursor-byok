@@ -1059,6 +1059,7 @@ func (service *Service) Shutdown(ctx context.Context) error {
 		return nil
 	}
 	logger.Infof("forwarder shutdown canceling active streams count=%d", len(requestIDs))
+	service.persistShutdownInterruptedTerminals(requestIDs)
 	var firstErr error
 	for _, requestID := range requestIDs {
 		if err := ctx.Err(); err != nil {
@@ -1147,6 +1148,41 @@ func (service *Service) Shutdown(ctx context.Context) error {
 		}
 	}
 	return firstErr
+}
+
+// persistShutdownInterruptedTerminals 在取消循环之前先把所有活动会话的磁盘状态收口。
+//
+// 取消循环给每条流 1.5s 的 actor 往返，而调用方给整个 backendHost.Stop 只有 8s（还要
+// 包含 drain 与 HTTP Shutdown），最多约 5 条流能走完；剩下的会被 ctx.Err() 直接跳过，
+// 永远停在 running/waiting_tool。这一趟只写磁盘：不走 actor、不碰 provider、不发 SSE，
+// 因此不占用取消预算。
+//
+// 幂等取舍：随后被 actor 成功取消的流还会追加 control{status:"canceled"}，
+// deriveRequestLoopStatus 顺序覆盖后结果是 canceled——正常取消成功就该是 canceled，
+// 语义更准，代价只是多一条冗余条目。反过来「只在取消失败时才补 interrupted」做不到
+// 全覆盖：ctx 到期后根本不会走到那些流。已经是终态的会话不会被重复写。
+func (service *Service) persistShutdownInterruptedTerminals(requestIDs []string) {
+	if service == nil || service.store == nil || service.broker == nil {
+		return
+	}
+	handled := make(map[string]struct{}, len(requestIDs))
+	for _, requestID := range requestIDs {
+		stream, ok := service.broker.Get(requestID)
+		if !ok || stream == nil {
+			continue
+		}
+		stream.mu.Lock()
+		conversationID := strings.TrimSpace(stream.ConversationID)
+		stream.mu.Unlock()
+		if conversationID == "" {
+			continue
+		}
+		if _, done := handled[conversationID]; done {
+			continue
+		}
+		handled[conversationID] = struct{}{}
+		service.forceMarkConversationInterrupted(conversationID, "local assistant service shutting down")
+	}
 }
 
 func streamStillActive(stream *ActiveStream) bool {
@@ -1259,6 +1295,9 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 			"reason":        cancelReason,
 			"replay_policy": cancelReplayPolicyForReason(cancelReason),
 		})
+		if strings.TrimSpace(intent.CancelTerminalStatus) == conversationStatusInterrupted {
+			cancelEntry = newInterruptedControlEntry(stream.TurnSeq, intent.RequestID, cancelReason)
+		}
 		if _, err := service.appendConversationEntries(stream, stream.ConversationID, []HistoryEntry{cancelEntry}); err != nil {
 			logger.Errorf("forwarder cancellation metadata persistence failed request_id=%s conversation_id=%s err=%v", stream.RequestID, stream.ConversationID, err)
 			if memoryErr := service.appendCheckpointEntries(stream, []HistoryEntry{cancelEntry}); memoryErr != nil {
@@ -1276,6 +1315,7 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 		}
 		if strings.TrimSpace(pending.ExecKind) == "subagent" {
 			service.updateNativeDelegationStatus(pending.ExecID, delegation.TaskCanceled, "Cursor 子代理已取消", "subagent canceled")
+			service.interruptNativeChildConversation(pending.ExecID, followUpCancel)
 		}
 		if strings.TrimSpace(pending.ExecKind) == "delegation_aggregate" {
 			continue

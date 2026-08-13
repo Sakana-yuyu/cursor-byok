@@ -15,6 +15,9 @@ import (
 const historyMaintenanceLockStaleAfter = 30 * time.Minute
 const historyMaintenanceTempStaleAfter = 5 * time.Minute
 
+// historyReconcileWriteThrottle 是启动期对账每写一条会话后的节流间隔。
+const historyReconcileWriteThrottle = 5 * time.Millisecond
+
 func (service *Service) startHistoryMaintenance() {
 	if service == nil || service.store == nil {
 		return
@@ -50,6 +53,13 @@ func (service *Service) runHistoryMaintenance() error {
 			continue
 		}
 		service.cleanupConversationLegacyArtifacts(filepath.Join(historyRoot, entry.Name()))
+		// 上次进程遗留的非终态会话在这里收口。复用本 pass 的原因：它已经是后台
+		// goroutine、已持有 history 维护文件锁、已经在遍历 history 根目录；另起
+		// 一个入口还要自己解决 newService 在启动链路里被构造多次的重复扫描问题。
+		if service.reconcileStaleConversationLoop(entry.Name()) {
+			// 存量遗留会话可能有几百条、几十 MB，给磁盘留出喘息，避免启动瞬间打满 I/O。
+			time.Sleep(historyReconcileWriteThrottle)
+		}
 	}
 	return nil
 }

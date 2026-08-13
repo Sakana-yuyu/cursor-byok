@@ -169,6 +169,60 @@ func (store *ConversationFileStore) AppendEntries(conversationID string, entries
 	return cloneConversationFile(conversation), assigned, nil
 }
 
+// AppendEntriesConditionally 在会话锁内「先读后决策再追加」。
+//
+//   - build 返回空切片表示不写盘：state.json 与 context.json 的磁盘字节完全不变。
+//   - 会话不存在时直接返回 false，不会凭空创建。
+//   - preserveTimestamps 为 true 时保持 created_at / updated_at 原值：appendEntriesInPlace
+//     会无条件把 UpdatedAt 抬成 now，历史列表按 updated_at 做日内排序，后台对账不能
+//     把成百上千条老会话的修改时间集体推到迁移时刻。新条目的 CreatedAt 会被填成会话
+//     原有的 UpdatedAt，这样 normalizeLoadedConversation 的「向上抬」也不会触发。
+func (store *ConversationFileStore) AppendEntriesConditionally(conversationID string, preserveTimestamps bool, build func(*ConversationFile) []HistoryEntry) (bool, error) {
+	if store == nil {
+		return false, fmt.Errorf("conversation file store is nil")
+	}
+	if build == nil {
+		return false, nil
+	}
+	normalizedConversationID, err := validateConversationID(conversationID)
+	if err != nil {
+		return false, err
+	}
+	release, err := acquireConversationLock(store.lockPath(normalizedConversationID))
+	if err != nil {
+		return false, err
+	}
+	defer release()
+
+	conversation, err := store.readConversationLocked(normalizedConversationID)
+	if err != nil || conversation == nil {
+		return false, err
+	}
+	entries := build(conversation)
+	if len(entries) == 0 {
+		return false, nil
+	}
+	createdAt := conversation.CreatedAt
+	updatedAt := conversation.UpdatedAt
+	if preserveTimestamps {
+		for index := range entries {
+			if entries[index].CreatedAt.IsZero() {
+				entries[index].CreatedAt = updatedAt
+			}
+		}
+	}
+	appendEntriesInPlace(conversation, entries)
+	if preserveTimestamps {
+		conversation.CreatedAt = createdAt
+		conversation.UpdatedAt = updatedAt
+	}
+	deriveConversationLoopState(conversation)
+	if err := store.writeConversationLocked(normalizedConversationID, conversation); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func (store *ConversationFileStore) SaveConversationWithEntries(conversationID string, source *ConversationFile, entries []HistoryEntry) (*ConversationFile, error) {
 	if store == nil {
 		return nil, fmt.Errorf("conversation file store is nil")
@@ -631,8 +685,14 @@ func deriveRequestLoopStatus(entries []HistoryEntry, requestID string, turnSeq i
 				case "failed":
 					terminalStatus = "failed"
 				case "control":
-					if strings.TrimSpace(readStringValue(payload.Value["status"])) == "canceled" {
+					// interrupted 与 canceled 都是终态，但只有 canceled 会被
+					// canceledReplayPolicyForEntry 识别并触发 replay 清洗；
+					// interrupted 的部分输出必须原样留在模型可见历史里。
+					switch strings.TrimSpace(readStringValue(payload.Value["status"])) {
+					case "canceled":
 						terminalStatus = "canceled"
+					case conversationStatusInterrupted:
+						terminalStatus = conversationStatusInterrupted
 					}
 				case "run_request":
 					seenActivity = true
