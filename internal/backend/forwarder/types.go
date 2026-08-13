@@ -288,7 +288,7 @@ type ActiveStream struct {
 	// 信号/超时/取消来避免盲等固定时间窗口。
 	ExecCompletionSignals map[string]chan struct{}
 	TerminalCleanupTimer  *time.Timer
-	TerminalCleanupSeq          atomic.Uint64
+	TerminalCleanupSeq    atomic.Uint64
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
