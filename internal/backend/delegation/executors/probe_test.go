@@ -14,12 +14,19 @@ import (
 
 const cliProbeHelperEnvironment = "GO_WANT_CLI_PROBE_HELPER"
 
+// cliProbeHelperTimeout 只为 helper 进程的启动留余量，不是任何用例的被测行为——
+// helper 在这些模式下立即退出。ProbeCLI 用 os.Executable() 重新拉起测试二进制本身，
+// 冷启动一个大体积二进制在负载高的机器上会超过秒级，取值太紧会让用例偶发报
+// context deadline exceeded 而不是被断言的诊断码。真正验证超时语义的是
+// TestCLIProbeTimeoutAndFailureDiagnosticsAreSanitized，它用 150ms 配 sleep helper。
+const cliProbeHelperTimeout = 30 * time.Second
+
 func TestCLIProbeReadyUsesBoundedNonInteractiveCommand(t *testing.T) {
 	runner := delegation.NewProcessRunner(delegation.ProcessRunnerConfig{})
 	result, err := ProbeCLI(t.Context(), runner, CLIProbeSpec{
 		Executable: cliProbeTestExecutable(t),
 		Args:       cliProbeHelperArgs("version"),
-		Timeout:    2 * time.Second,
+		Timeout:    cliProbeHelperTimeout,
 		Environment: map[string]string{
 			cliProbeHelperEnvironment: "cli-probe-helper-enabled",
 		},
@@ -67,7 +74,7 @@ func TestCLIProbeRejectsEmptyOrTruncatedVersionOutput(t *testing.T) {
 			result, err := ProbeCLI(t.Context(), runner, CLIProbeSpec{
 				Executable: cliProbeTestExecutable(t),
 				Args:       cliProbeHelperArgs(testCase.mode),
-				Timeout:    2 * time.Second,
+				Timeout:    cliProbeHelperTimeout,
 				Environment: map[string]string{
 					cliProbeHelperEnvironment: "cli-probe-helper-enabled",
 				},
