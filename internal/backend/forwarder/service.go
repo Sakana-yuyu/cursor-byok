@@ -1304,6 +1304,9 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 				return memoryErr
 			}
 		}
+		// 等待用户输入的 interaction 必须在这里收口：下面清空 PendingInteractions 之后，
+		// 看门狗到期也查不到它，那条 tool_call 就再没有任何路径能配上 tool_result。
+		service.closeCanceledPendingInteractions(stream, firstNonEmpty(intent.CancelReason, "user aborted"))
 	}
 	for _, pending := range pendingExecs {
 		// 已显式转入后台的执行（用户转后台的长跑 shell、客户端 backgroundSubagentAction
