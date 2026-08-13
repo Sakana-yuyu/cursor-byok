@@ -154,6 +154,16 @@ func (service *Service) dispatchInboundIntent(intent InboundIntent) error {
 			return service.startAdmittedRun(intent)
 		}
 	}
+	// 被 follow-up 取消转入后台的子代理，其父流 actor 早已停止。它的迟到结果必须在
+	// 这里就归属回会话，否则 postStreamCommandAsync 会以 actor_done 拒收并把结果丢掉。
+	if strings.TrimSpace(intent.Kind) == "exec_result" && intent.ExecClientMessage != nil {
+		if service.absorbBackgroundedSubagentExecResult(
+			intent.ExecClientMessage.GetExecId(),
+			subagentTerminalOutcomeFrom(intent.ExecClientMessage.GetSubagentResult()),
+		) {
+			return nil
+		}
+	}
 	stream, err := service.streamForIntent(intent)
 	if err != nil {
 		return err
@@ -1399,28 +1409,6 @@ func (service *Service) scheduleOrphanCancelActor(requestID string, reason strin
 		return false
 	}
 	return true
-}
-
-func (service *Service) cancelOtherConversationActors(conversationID string, keepRequestID string, reason string) {
-	if service == nil || service.broker == nil || strings.TrimSpace(conversationID) == "" {
-		return
-	}
-	for _, requestID := range service.broker.OtherConversationRequestIDs(conversationID, keepRequestID) {
-		stream, ok := service.broker.Get(requestID)
-		if !ok || stream == nil {
-			continue
-		}
-		if err := service.postStreamCommandWait(stream, streamCommand{
-			Kind: streamCommandCancel,
-			Intent: InboundIntent{
-				Kind:         "cancel",
-				RequestID:    requestID,
-				CancelReason: reason,
-			},
-		}); err != nil && !errors.Is(err, errProviderLoopInterrupted) {
-			logger.Errorf("forwarder cancel superseded stream failed request_id=%s err=%v", strings.TrimSpace(requestID), err)
-		}
-	}
 }
 
 func (service *Service) setTurnPhase(stream *ActiveStream, phase TurnPhase) {

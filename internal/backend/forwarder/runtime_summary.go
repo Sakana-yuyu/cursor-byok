@@ -78,6 +78,8 @@ func (service *Service) bootstrapRuntimeConversation(intent InboundIntent) (*Con
 	if strings.TrimSpace(intent.SubagentTypeName) != "" {
 		conversation.SubagentTypeName = strings.TrimSpace(intent.SubagentTypeName)
 	}
+	// 补在 root/mode 兜底之后：父链路来自 RunSSE 头，run_request 里没有任何父信息。
+	service.applyChildParentLink(conversation, intent.RequestID)
 	if intent.MCPToolsProvided {
 		conversation.MCPTools = cloneMCPToolDefinitions(intent.RequestContext.GetTools())
 		conversation.MCPToolsInitialized = true

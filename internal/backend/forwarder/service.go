@@ -107,6 +107,16 @@ type Service struct {
 	visionArchiveLoaded      map[string]struct{}
 	provider400RecoveryMu    sync.Mutex
 	provider400RecoveryTurns map[string]struct{}
+	// backgroundedDelegationMu 保护 backgroundedDelegations：记录因「新消息顶掉当前
+	// turn」而转入后台的委派执行（key = exec_id）。父流随后进入终态，这些执行的迟到
+	// 结果不能写回死流，必须凭该记录按会话归属重新落地。
+	backgroundedDelegationMu sync.Mutex
+	backgroundedDelegations  map[string]backgroundedDelegationExec
+	// childParentLinkMu 保护 childParentLinks：记录客户端在子代理 RunSSE 上发来的
+	// 父链路 HTTP 头（key = 子 request_id）。native 子代理是独立 conversation，
+	// 这些头是后端唯一能拿到父会话/父 tool_call 的来源。
+	childParentLinkMu sync.Mutex
+	childParentLinks  map[string]childParentLink
 	// conversationActivityMu 保护 conversationLastActivity：
 	// 记录每个 conversation 最近一次模型输出/思考/工具活动，供 native 子代理
 	// 无进展看门狗判断「子代理是否仍在工作」，避免长文本生成/长思考被误判超时。
@@ -448,6 +458,8 @@ func (service *Service) RunSSE(ctx context.Context, req *connect.Request[aiserve
 	if requestID == "" {
 		return buildRunSSECustomError(connect.CodeInvalidArgument, "请求参数无效", fmt.Errorf("request_id is required"))
 	}
+	// 子代理的父链路只存在于 RunSSE 请求头里，run_request 不带任何父信息。
+	service.rememberChildParentLink(requestID, req.Header())
 	subscriberID, signal, cursor, err := service.broker.Subscribe(requestID)
 	if err != nil {
 		return buildRunSSECustomError(connect.CodeInvalidArgument, "请求参数无效", err)
@@ -849,6 +861,11 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 			return err
 		}
 	}
+	// 上一回合被新消息顶掉后仍在后台跑完的委派任务，在新回合开头补一条模型可见回放。
+	// 落在回合最前面而不是运行中回合的中段，避免把 user 消息插进 tool_call/tool_result 之间。
+	if replay := service.pendingBackgroundedDelegationEntries(conversation, intent.RequestID, turnSeq); len(replay) > 0 {
+		initialEntries = append(replay, initialEntries...)
+	}
 	if service.store != nil {
 		if rewindDecision.Apply {
 			persisted, err := service.store.ReplaceEntries(
@@ -1191,10 +1208,14 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 		}
 	}
 	stream.mu.Unlock()
-	logger.Infof("forwarder cancel intent received request_id=%s conversation_id=%s reason=%q phase=%s status=%s provider_active=%t pending_execs=%d active_delegations=%d",
-		strings.TrimSpace(intent.RequestID), conversationID, strings.TrimSpace(intent.CancelReason), phase, status, providerActive, pendingExecCount, activeDelegationCount)
+	// 「新消息顶掉当前 turn」只替换父回合，不是让所有工作停下来。上游对仍在前台
+	// 运行的子代理先发 backgroundSubagentAction 转后台，再带着 resolutions 发 cancelAction。
+	followUpCancel := isFollowUpCancelReason(intent.CancelReason)
+	logger.Infof("forwarder cancel intent received request_id=%s conversation_id=%s reason=%q follow_up=%t phase=%s status=%s provider_active=%t pending_execs=%d active_delegations=%d",
+		strings.TrimSpace(intent.RequestID), conversationID, strings.TrimSpace(intent.CancelReason), followUpCancel, phase, status, providerActive, pendingExecCount, activeDelegationCount)
 	service.debug.LogRuntime(context.Background(), intent.RequestID, conversationID, "cancel_intent_received", map[string]any{
 		"reason":                     strings.TrimSpace(intent.CancelReason),
+		"follow_up_cancel":           followUpCancel,
 		"phase":                      string(phase),
 		"status":                     string(status),
 		"provider_active":            providerActive,
@@ -1207,7 +1228,11 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	// 先切断当前 provider 请求，再做 history、工具 abort 和委派清理。
 	// 断线取消不能因为后续持久化或广播变慢而继续消耗上游额度。
 	forceCancelStreamProvider(stream)
-	if service.multitaskDelegation != nil {
+	if followUpCancel {
+		// 后台化必须早于下面的 pendingExecs 快照，否则快照里仍有这些 exec，
+		// abort 循环照样会把它们打掉。
+		service.backgroundFollowUpDelegations(context.Background(), stream)
+	} else if service.multitaskDelegation != nil {
 		service.multitaskDelegation.CancelStream(stream)
 	}
 	hasCheckpoint := checkpointConversationInitialized(stream)
@@ -1242,6 +1267,13 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 		}
 	}
 	for _, pending := range pendingExecs {
+		// 已显式转入后台的执行（用户转后台的长跑 shell、客户端 backgroundSubagentAction
+		// 转后台的子代理）不属于本回合前台工作，任何取消都不得 abort 它们。
+		if isBackgroundedPendingExec(pending) {
+			logger.Infof("forwarder cancel skipped backgrounded exec request_id=%s exec_id=%s exec_kind=%s",
+				strings.TrimSpace(intent.RequestID), strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ExecKind))
+			continue
+		}
 		if strings.TrimSpace(pending.ExecKind) == "subagent" {
 			service.updateNativeDelegationStatus(pending.ExecID, delegation.TaskCanceled, "Cursor 子代理已取消", "subagent canceled")
 		}
@@ -1312,6 +1344,14 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 	}
 	pending, found := selectPendingExec(intent.ExecClientMessage.GetExecId(), intent.ExecClientMessage.GetId(), stream)
 	if !found {
+		// 后台化的子代理已从父流摘除，其最终结果必然走到这里。静默吸收即可，
+		// 不能报 "pending exec not found"，也不能把结果丢掉。
+		if service.absorbBackgroundedSubagentExecResult(
+			intent.ExecClientMessage.GetExecId(),
+			subagentTerminalOutcomeFrom(intent.ExecClientMessage.GetSubagentResult()),
+		) {
+			return nil
+		}
 		if service.observeMissingBackgroundShellExecClientMessage(stream, intent.ExecClientMessage) {
 			return nil
 		}
@@ -1678,7 +1718,9 @@ func (service *Service) scheduleNonStreamingExecRecovery(requestID string, pendi
 	// The actor's handleTimerEvent rechecks pending identity / state under
 	// stream.mu before synthesizing failure, so late arrival between timeout
 	// and actor dispatch is handled correctly.
-	go func() {
+	// safego 兜底：这个 goroutine 会等待计时器并回写 actor，一旦 panic 未捕获
+	// 会拖垮整个进程；恢复后下面的 defer 仍会释放 ExecCompletionSignals 条目。
+	safego.Go("forwarder:non-streaming-recovery-timer", func() {
 		defer func() {
 			// Clean up the map entry on exit (already closed by the
 			// terminal/recovery path, or never needed).
@@ -1723,7 +1765,7 @@ func (service *Service) scheduleNonStreamingExecRecovery(requestID string, pendi
 			logger.Errorf("forwarder non-streaming recovery post failed request_id=%s exec_id=%s err=%v",
 				strings.TrimSpace(requestID), execID, err)
 		}
-	}()
+	})
 }
 
 func (service *Service) recoverNonStreamingExecAfterStreamClose(stream *ActiveStream, pending runtimecore.PendingExec) error {
@@ -1733,6 +1775,11 @@ func (service *Service) recoverNonStreamingExecAfterStreamClose(stream *ActiveSt
 	markExecCompleted(stream, pending)
 	toolName := strings.TrimSpace(deriveToolNameFromPendingExec(pending))
 	resultPayload := fmt.Sprintf("%s transport closed before terminal result arrived", firstNonEmpty(toolName, pending.ExecKind, "tool"))
+	// GitDiff 的两条恢复路径必须交还同一份退路：只说「传输关了」，模型既拿不到 diff
+	// 也不知道该干什么，下一步多半是重试同一个必然再失败的调用。
+	if strings.TrimSpace(pending.ExecKind) == "git_diff" {
+		resultPayload = buildGitDiffUnavailablePayload(pending, gitDiffTransportClosedReason, execTimeoutForKind(pending.ExecKind))
+	}
 	logger.Infof("forwarder synthetic exec recovery request_id=%s tool_call_id=%s message_id=%d exec_id=%s exec_kind=%s", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ToolCallID), pending.MessageID, strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ExecKind))
 	if toolName != "" {
 		if err := service.appendToolResult(stream, pending.ToolCallID, toolName, pending.ArgsJSON, resultPayload, pending.ReasoningContent, nil); err != nil {
@@ -4793,6 +4840,12 @@ func deriveToolNameFromPendingExec(pending runtimecore.PendingExec) string {
 		return "Task"
 	case "delegation_aggregate":
 		return "Task"
+	case "git_diff":
+		return "GitDiff"
+	case "mcp_state":
+		return "GetMcpTools"
+	case "conversation_search":
+		return "SearchConversations"
 	case "fetch":
 		return "Fetch"
 	case "record_screen":
@@ -4858,7 +4911,7 @@ func execKindFromToolName(name string) (string, bool) {
 func isExecTool(name string) bool {
 	switch strings.TrimSpace(name) {
 	case "Read", "Write", "PatchEdit", "Delete", "Shell", "WriteShellStdin", "ForceBackgroundShell", "Grep", "Glob", "Ls", "ReadLints", "CallMcpTool", "FetchMcpResource", "Task",
-		"Fetch", "RecordScreen", "ComputerUse", "ForceBackgroundSubagent", "SubagentAwait":
+		"Fetch", "GitDiff", "GetMcpTools", "SearchConversations", "RecordScreen", "ComputerUse", "ForceBackgroundSubagent", "SubagentAwait":
 		return true
 	default:
 		return false

@@ -456,6 +456,11 @@ func (service *Service) handleDelegationResult(stream *ActiveStream, payload *st
 	pending, ok := stream.PendingExecs[strings.TrimSpace(payload.ExecID)]
 	stream.mu.Unlock()
 	if !ok || strings.TrimSpace(pending.ExecKind) != "delegation_aggregate" {
+		// 聚合被 follow-up 取消后台化后父流已终态：结果不能写回死流，
+		// 改为按会话归属持久化，下一回合回放给模型。
+		if service.absorbBackgroundedAggregateResult(payload) {
+			return nil
+		}
 		return nil
 	}
 	if strings.TrimSpace(payload.AggregateID) != strings.TrimSpace(pending.ExecID) {
@@ -1070,33 +1075,51 @@ func (coordinator *multitaskDelegationCoordinator) awaitAggregate(stream *Active
 	if err != nil {
 		payload = []byte(fmt.Sprintf(`{"aggregate_id":%q,"status":"failed","error":%q}`, aggregate.id, err.Error()))
 	}
-	postErr := coordinator.service.postStreamCommandAsync(stream, streamCommand{
-		Kind: streamCommandDelegationResult,
-		Delegation: &streamDelegationResult{
-			AggregateID:  aggregate.id,
-			ExecID:       pending.ExecID,
-			ToolCallID:   pending.ToolCallID,
-			ProviderPass: pending.ProviderPass,
-			Payload:      string(payload),
-		},
+	coordinator.publishAggregateTerminal(stream, pending, &streamDelegationResult{
+		AggregateID:  aggregate.id,
+		ExecID:       pending.ExecID,
+		ToolCallID:   pending.ToolCallID,
+		ProviderPass: pending.ProviderPass,
+		Payload:      string(payload),
 	})
-	if postErr != nil {
-		requestID := strings.TrimSpace(activeStreamRequestID(stream))
+}
+
+// publishAggregateTerminal 交付委派聚合的终态结果。
+// 父流可能已被 follow-up 取消终态化并把该聚合转入后台：此时 actor 已停止，
+// 结果既不能写回死流，也不能丢弃，改为按会话归属持久化到会话状态里。
+func (coordinator *multitaskDelegationCoordinator) publishAggregateTerminal(stream *ActiveStream, pending runtimecore.PendingExec, delegationResult *streamDelegationResult) {
+	if coordinator == nil || coordinator.service == nil || delegationResult == nil {
+		return
+	}
+	if coordinator.service.absorbBackgroundedAggregateResult(delegationResult) {
+		return
+	}
+	postErr := coordinator.service.postStreamCommandAsync(stream, streamCommand{
+		Kind:       streamCommandDelegationResult,
+		Delegation: delegationResult,
+	})
+	if postErr == nil {
+		return
+	}
+	// 入队失败与后台化在时间上可能交错，再兜一次归属，避免结果落空。
+	if coordinator.service.absorbBackgroundedAggregateResult(delegationResult) {
+		return
+	}
+	requestID := strings.TrimSpace(activeStreamRequestID(stream))
+	logger.Error(
+		"forwarder delegation aggregate post failed",
+		"request_id", requestID,
+		"aggregate_id", strings.TrimSpace(delegationResult.AggregateID),
+		"exec_id", strings.TrimSpace(pending.ExecID),
+		"error", postErr,
+	)
+	if terminalErr := coordinator.service.failStreamIfNonTerminal(stream, "unknown", postErr); terminalErr != nil {
 		logger.Error(
-			"forwarder delegation aggregate post failed",
+			"forwarder delegation post terminalization failed",
 			"request_id", requestID,
-			"aggregate_id", strings.TrimSpace(aggregate.id),
-			"exec_id", strings.TrimSpace(pending.ExecID),
-			"error", postErr,
+			"aggregate_id", strings.TrimSpace(delegationResult.AggregateID),
+			"error", terminalErr,
 		)
-		if terminalErr := coordinator.service.failStreamIfNonTerminal(stream, "unknown", postErr); terminalErr != nil {
-			logger.Error(
-				"forwarder delegation post terminalization failed",
-				"request_id", requestID,
-				"aggregate_id", strings.TrimSpace(aggregate.id),
-				"error", terminalErr,
-			)
-		}
 	}
 }
 

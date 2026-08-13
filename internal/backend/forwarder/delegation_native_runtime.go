@@ -258,25 +258,11 @@ func (service *Service) mirrorNativeChildInteraction(child *ActiveStream, modelC
 	if conversation == nil || strings.TrimSpace(conversation.SubagentTypeName) == "" {
 		return
 	}
-	parentConversationID := strings.TrimSpace(conversation.ParentConversationID)
-	parentToolCallID := strings.TrimSpace(conversation.ParentToolCallID)
-	if childConversationID == "" || parentConversationID == "" || parentToolCallID == "" {
+	if childConversationID == "" {
 		return
 	}
-
-	service.delegationRuntimeMu.Lock()
-	var parentRequestID string
-	for _, item := range service.nativeDelegations {
-		if item == nil || delegatedStatusTerminal(item.Status) {
-			continue
-		}
-		if strings.TrimSpace(item.ConversationID) == parentConversationID && strings.TrimSpace(item.ToolCallID) == parentToolCallID {
-			parentRequestID = strings.TrimSpace(item.ParentRequestID)
-			break
-		}
-	}
-	service.delegationRuntimeMu.Unlock()
-	if parentRequestID == "" {
+	parentRequestID, parentToolCallID := service.nativeParentBindingForChild(child, conversation)
+	if parentRequestID == "" || parentToolCallID == "" {
 		return
 	}
 	if err := service.broker.Publish(parentRequestID, StreamEvent{
@@ -389,8 +375,9 @@ func (service *Service) nativeDelegationProgressTimeout() time.Duration {
 }
 
 // markConversationActivity 记录某 conversation 最近一次模型输出/思考/工具活动的时间。
-// native 子代理与主 agent 共享 conversation_id（本地模式下同一会话的不同 request），
-// 子代理模型仍在生成内容、思考或执行工具时该时间持续刷新，使无进展看门狗不会误杀正常任务。
+// 注意：native 子代理**不**与父 agent 共享 conversation_id，它是客户端新建的独立
+// conversation（磁盘上 873 个 subagent_type_name 非空的子会话即为独立目录）。
+// 这里刷新的是「事件所属会话」的活动时间，父流与子流各记各的。
 func (service *Service) markConversationActivity(conversationID string) {
 	if service == nil || strings.TrimSpace(conversationID) == "" {
 		return
@@ -403,25 +390,37 @@ func (service *Service) markConversationActivity(conversationID string) {
 	service.conversationActivityMu.Unlock()
 }
 
-// markDelegationConversationProgress 检查子代理所属 conversation 最近是否有模型输出/思考
-// 或工具活动；有则续期该子代理的「有效进展」时间并返回 true。
-// 子代理与主 agent 共享 conversation_id（本地模式下同一会话的不同 request），
-// 因此 conversation 级活动可直接反映该子代理是否仍在工作。
+// markDelegationConversationProgress 检查该子代理相关的 conversation 最近是否有模型输出/
+// 思考或工具活动；有则续期该子代理的「有效进展」时间并返回 true。
+// native 子代理跑在自己的 conversation 里，真正能证明它还在工作的是**子**会话的活动；
+// item.ConversationID 记的是父会话，父流此刻正在等 Task 结果、通常完全安静。
+// 因此这里两个会话都看：子会话通过 RunSSE 父链路头解析得到。
 func (service *Service) markDelegationConversationProgress(item *nativeDelegationRuntime) bool {
 	if service == nil || item == nil {
 		return false
 	}
-	conversationID := strings.TrimSpace(item.ConversationID)
-	if conversationID == "" {
+	candidates := make([]string, 0, 2)
+	if parentConversationID := strings.TrimSpace(item.ConversationID); parentConversationID != "" {
+		candidates = append(candidates, parentConversationID)
+	}
+	if childConversationID := service.childConversationIDForNativeDelegation(item); childConversationID != "" {
+		candidates = append(candidates, childConversationID)
+	}
+	if len(candidates) == 0 {
 		return false
 	}
+	timeout := service.nativeDelegationProgressTimeout()
 	service.conversationActivityMu.Lock()
-	last, ok := service.conversationLastActivity[conversationID]
-	service.conversationActivityMu.Unlock()
-	if !ok {
-		return false
+	active := false
+	for _, conversationID := range candidates {
+		last, ok := service.conversationLastActivity[conversationID]
+		if ok && time.Since(last) < timeout {
+			active = true
+			break
+		}
 	}
-	if time.Since(last) >= service.nativeDelegationProgressTimeout() {
+	service.conversationActivityMu.Unlock()
+	if !active {
 		return false
 	}
 	return service.markNativeDelegationEffectiveProgress(item.ID, "")
