@@ -18,6 +18,10 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     locale: "zh-CN",
+    // 与 locale 同一个理由：历史面板按「本地日期」分组，而 browserBindings.js 的预览会话
+    // 用的是 Date.UTC 绝对时间戳。不钉时区时，UTC+8 下 7/30 16:20Z 落进 7月31日、UTC 下
+    // 落进 7月30日，日级分组的会话数随 runner 时区变化，用例断言的字面日期标签必然漂。
+    timezoneId: "Asia/Shanghai",
   },
   projects: [
     {
