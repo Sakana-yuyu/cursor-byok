@@ -6,22 +6,35 @@ import (
 	"path/filepath"
 	"testing"
 
+	"cursor/internal/appdata"
 	"cursor/internal/logger"
 
 	_ "modernc.org/sqlite"
 )
 
-// newTestCursorStateDB 在临时 APPDATA 下创建 Cursor state.vscdb，并写入初始键值。
+// testCursorStateDBPath 将应用数据和 Cursor 配置都隔离到当前用例的临时目录，
+// 并通过生产路径解析函数返回当前平台真正会访问的 state.vscdb。
+func testCursorStateDBPath(t *testing.T) string {
+	t.Helper()
+	logger.Init()
+	cursorConfigRoot := t.TempDir()
+	homeDir := t.TempDir()
+	t.Setenv(appdata.RootDirEnvVar, t.TempDir())
+	t.Setenv("APPDATA", cursorConfigRoot)
+	t.Setenv("XDG_CONFIG_HOME", cursorConfigRoot)
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	statePath, err := resolveCursorStateDBPath()
+	if err != nil {
+		t.Fatalf("resolveCursorStateDBPath: %v", err)
+	}
+	return statePath
+}
+
+// newTestCursorStateDB 在当前平台的临时 Cursor 配置目录下创建 state.vscdb。
 func newTestCursorStateDB(t *testing.T, initial map[string]string) string {
 	t.Helper()
-	// 先固定 logger 到真实日志目录：logger.Infof 会延迟初始化文件句柄，
-	// 若发生在 USERPROFILE 已被改到临时目录之后，句柄将占用 TempDir 导致清理失败。
-	logger.Init()
-	appData := t.TempDir()
-	t.Setenv("APPDATA", appData)
-	t.Setenv("USERPROFILE", t.TempDir())
-
-	statePath := filepath.Join(appData, "Cursor", "User", "globalStorage", "state.vscdb")
+	statePath := testCursorStateDBPath(t)
 	if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -158,7 +171,7 @@ func TestRestoreWithoutBackupClearsInjectedAuth(t *testing.T) {
 
 func TestBackupReplacesNullBackupWhenOfficialValuePresent(t *testing.T) {
 	statePath := newTestCursorStateDB(t, map[string]string{
-		"cursorAuth/accessToken": "official-access",
+		"cursorAuth/accessToken":  "official-access",
 		"cursorAuth/refreshToken": "official-refresh",
 		"cursorAuth/cachedEmail":  "user@real.com",
 	})
@@ -290,11 +303,7 @@ func TestBackupKeepsValidWhenStateStillInjected(t *testing.T) {
 // state.vscdb 不可打开（目录占位）时 RestoreCursorUserInfo 应返回错误，
 // 供 ClearCursorSettings/切直连路径向上传播。
 func TestRestoreCursorUserInfoPropagatesDBError(t *testing.T) {
-	logger.Init()
-	appData := t.TempDir()
-	t.Setenv("APPDATA", appData)
-	t.Setenv("USERPROFILE", t.TempDir())
-	statePath := filepath.Join(appData, "Cursor", "User", "globalStorage", "state.vscdb")
+	statePath := testCursorStateDBPath(t)
 	if err := os.MkdirAll(statePath, 0o755); err != nil {
 		t.Fatalf("mkdir state.vscdb dir: %v", err)
 	}

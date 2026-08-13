@@ -11,11 +11,11 @@ import (
 // TestNormalizeShellProfile 验证 profile 归一化与非法取值拒绝。
 func TestNormalizeShellProfile(t *testing.T) {
 	valid := map[string]string{
-		"":          "auto",
-		"auto":      "auto",
+		"":           "auto",
+		"auto":       "auto",
 		"POWERShell": "powershell",
 		" git-bash ": "git-bash",
-		"pwsh":      "pwsh",
+		"pwsh":       "pwsh",
 	}
 	for input, want := range valid {
 		got, err := normalizeShellProfile(input)
@@ -61,8 +61,16 @@ func TestBuildExplicitShellProfileCommandRoundTrip(t *testing.T) {
 	if !strings.Contains(wrapped, "base64 -d") {
 		t.Fatalf("wrapped command missing base64 decode: %s", wrapped)
 	}
-	start := strings.Index(wrapped, "'") + 1
+	const payloadPrefix = "printf '%s' '"
+	start := strings.Index(wrapped, payloadPrefix)
+	if start < 0 {
+		t.Fatalf("wrapped command missing payload prefix %q: %s", payloadPrefix, wrapped)
+	}
+	start += len(payloadPrefix)
 	end := strings.Index(wrapped[start:], "'") + start
+	if end < start {
+		t.Fatalf("wrapped command missing payload terminator: %s", wrapped)
+	}
 	payload := wrapped[start:end]
 	raw, err := base64.StdEncoding.DecodeString(payload)
 	if err != nil {

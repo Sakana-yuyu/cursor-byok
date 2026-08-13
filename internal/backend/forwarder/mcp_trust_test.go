@@ -197,19 +197,20 @@ func TestMCPTrustSnapshotUsesPersistedFingerprintAndSanitizedPreview(t *testing.
 }
 
 func TestMCPTrustFingerprintCanonicalizesAliasesAndMapOrder(t *testing.T) {
+	configRoot := t.TempDir()
 	left := MCPServerConfig{
 		Identifier: "Example",
 		Scope:      MCPConfigScopeWorkspace,
 		Transport:  "streamable-http",
 		Command:    "runner",
-		ConfigPath: "C:\\Repo\\.cursor\\..\\.cursor\\mcp.json",
+		ConfigPath: filepath.Join(configRoot, ".cursor", "..", ".cursor", "mcp.json"),
 		URL:        "HTTPS://EXAMPLE.COM:443/a?token=one",
 		Env:        map[string]string{"B": "two", "A": "one"},
 		Headers:    map[string]string{"X-B": "two", "X-A": "one"},
 	}
 	right := cloneMCPServerConfig(left)
 	right.Transport = "streamable_http"
-	right.ConfigPath = "C:\\Repo\\.cursor\\mcp.json"
+	right.ConfigPath = filepath.Join(configRoot, ".cursor", "mcp.json")
 	right.URL = "https://example.com:443/other?token=two"
 	right.Env = map[string]string{"A": "changed", "B": "changed"}
 	right.Headers = map[string]string{"X-A": "changed", "X-B": "changed"}

@@ -165,7 +165,10 @@ func cursorExecutableFromLauncher(path string) string {
 	if len(match) < 2 {
 		return ""
 	}
-	return existingCursorExecutable(filepath.Join(filepath.Dir(path), filepath.Clean(string(match[1]))))
+	// .cmd 启动器永远使用 Windows 反斜杠；测试和诊断工具可能在其他平台解析
+	// 这类文件。先转成宿主分隔符，避免 filepath.Clean 在 POSIX 上把反斜杠当普通字符。
+	relative := strings.ReplaceAll(string(match[1]), `\`, `/`)
+	return existingCursorExecutable(filepath.Join(filepath.Dir(path), filepath.FromSlash(relative)))
 }
 
 func existingCursorExecutable(path string) string {
