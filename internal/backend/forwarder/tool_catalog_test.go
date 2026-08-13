@@ -59,7 +59,12 @@ func TestToolAssetsConsistentWithModeWhitelists(t *testing.T) {
 				assetSet[name] = struct{}{}
 			}
 			// 资产 ⊆ 白名单：资产里出现但白名单不放行的工具永远不可用（白写）。
+			// childConversationOnlyToolNames 例外：它们复用 agent 资产的 schema，
+			// 但只对 Task 子会话放行，顶层 mode 白名单里不该出现。
 			for _, name := range names {
+				if _, childOnly := childConversationOnlyToolNames[name]; childOnly {
+					continue
+				}
 				if _, ok := tc.whitelist[name]; !ok {
 					t.Errorf("工具 %q 已加入 %s/tools.json 资产但未加入 %s 白名单（tool_catalog.go），模型将无法使用该工具", name, tc.mode, tc.mode)
 				}
@@ -78,6 +83,21 @@ func TestToolAssetsConsistentWithModeWhitelists(t *testing.T) {
 	for _, name := range loadAssetToolNames(t, prompt.ModeSubagent) {
 		if _, ok := agentModeToolNames[name]; !ok {
 			t.Errorf("subagent 资产工具 %q 不在 agent 白名单中，子代理会话将无法使用该工具", name)
+		}
+	}
+	// 子会话专属工具走 agent 资产的 schema，且不得泄漏进任何顶层 mode 白名单。
+	agentAssetNames := make(map[string]struct{})
+	for _, name := range loadAssetToolNames(t, prompt.ModeAgent) {
+		agentAssetNames[name] = struct{}{}
+	}
+	for name := range childConversationOnlyToolNames {
+		if _, ok := agentAssetNames[name]; !ok {
+			t.Errorf("子会话专属工具 %q 缺少 agent/tools.json schema，子会话将无法使用该工具", name)
+		}
+		for _, tc := range modeWhitelistTests {
+			if _, ok := tc.whitelist[name]; ok {
+				t.Errorf("子会话专属工具 %q 不应出现在 %s 顶层白名单中", name, tc.mode)
+			}
 		}
 	}
 }
@@ -110,6 +130,31 @@ func TestChildConversationCannotDispatchSubagents(t *testing.T) {
 		if !isToolAllowedInMode(agentv1.AgentMode_AGENT_MODE_PLAN, "explore", toolName) {
 			t.Errorf("child invocation guard should allow %q", toolName)
 		}
+	}
+}
+
+func TestConversationSearchIsTopLevelOnlyWhileMcpDiscoveryIsNot(t *testing.T) {
+	_, names, err := NewToolCatalog().Load(agentv1.AgentMode_AGENT_MODE_AGENT, "")
+	if err != nil {
+		t.Fatalf("load agent tools: %v", err)
+	}
+	exposed := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		exposed[name] = struct{}{}
+	}
+	for _, toolName := range []string{"GetMcpTools", "SearchConversations"} {
+		if _, ok := exposed[toolName]; !ok {
+			t.Errorf("top-level agent catalog must expose %q", toolName)
+		}
+	}
+
+	// The client only serves conversation search to a top-level IDE agent, so a
+	// child would call an arm the client refuses; MCP discovery has no such gate.
+	if isToolAllowedInMode(agentv1.AgentMode_AGENT_MODE_AGENT, "explore", "SearchConversations") {
+		t.Error("child invocation guard must reject SearchConversations")
+	}
+	if !isToolAllowedInMode(agentv1.AgentMode_AGENT_MODE_AGENT, "explore", "GetMcpTools") {
+		t.Error("child invocation guard should allow GetMcpTools")
 	}
 }
 
@@ -232,6 +277,9 @@ func TestCursorCapabilityImplementedRoutesReachMappedProtocol(t *testing.T) {
 		{"ListMcpResources", `{"server":"s"}`, "ExecServerMessage.list_mcp_resources_exec_args (ListMcpResourcesExecArgs)"},
 		{"FetchMcpResource", `{"server":"s","uri":"x"}`, "ExecServerMessage.read_mcp_resource_exec_args (ReadMcpResourceExecArgs)"},
 		{"Fetch", `{"url":"https://example.com"}`, "ExecServerMessage.fetch_args (FetchArgs)"},
+		{"GitDiff", `{"base_ref":"main","merge_base":true}`, "ExecServerMessage.git_diff_request (GetDiffRequest)"},
+		{"GetMcpTools", `{"server":"linear"}`, "ExecServerMessage.mcp_state_exec_args (McpStateExecArgs)"},
+		{"SearchConversations", `{"query":"auth bug"}`, "ExecServerMessage.conversation_search_args (ConversationSearchArgs)"},
 		{"RecordScreen", "{}", "ExecServerMessage.record_screen_args (RecordScreenArgs)"},
 		{"ComputerUse", `{"actions":[{"type":"screenshot"}]}`, "ExecServerMessage.computer_use_args (ComputerUseArgs)"},
 		{"ForceBackgroundSubagent", `{"tool_call_id":"target"}`, "ExecServerMessage.force_background_subagent_args (ForceBackgroundSubagentArgs)"},
@@ -254,18 +302,57 @@ func TestCursorCapabilityImplementedRoutesReachMappedProtocol(t *testing.T) {
 				t.Fatalf("OpenExec(%s) arm = %q, want %q", tc.toolName, identity, tc.wantArm)
 			}
 			reached[tc.wantArm] = true
-			if tc.toolName == "ReadLints" {
-				applied, err := execBridge.ApplyExecClientMessage(&agentv1.ExecClientMessage{
-					Id: pending.MessageID, ExecId: pending.ExecID,
+			// These arms are only built when the client result comes back, so the
+			// started-tool-call table below cannot reach them.
+			var clientMessage *agentv1.ExecClientMessage
+			switch tc.toolName {
+			case "ReadLints":
+				clientMessage = &agentv1.ExecClientMessage{
 					Message: &agentv1.ExecClientMessage_DiagnosticsResult{DiagnosticsResult: &agentv1.DiagnosticsResult{}},
-				}, pending)
-				if err != nil {
-					t.Fatalf("ApplyExecClientMessage(ReadLints): %v", err)
 				}
-				reachToolCall(applied.ToolCall)
+			case "GetMcpTools":
+				clientMessage = &agentv1.ExecClientMessage{
+					Message: &agentv1.ExecClientMessage_McpStateExecResult{McpStateExecResult: &agentv1.McpStateExecResult{
+						Result: &agentv1.McpStateExecResult_Success{Success: &agentv1.McpStateSuccess{}},
+					}},
+				}
+			case "SearchConversations":
+				clientMessage = &agentv1.ExecClientMessage{
+					Message: &agentv1.ExecClientMessage_ConversationSearchResult{ConversationSearchResult: &agentv1.ConversationSearchResult{
+						Result: &agentv1.ConversationSearchResult_Success{Success: &agentv1.ConversationSearchSuccess{}},
+					}},
+				}
 			}
+			if clientMessage == nil {
+				return
+			}
+			clientMessage.Id = pending.MessageID
+			clientMessage.ExecId = pending.ExecID
+			applied, err := execBridge.ApplyExecClientMessage(clientMessage, pending)
+			if err != nil {
+				t.Fatalf("ApplyExecClientMessage(%s): %v", tc.toolName, err)
+			}
+			reachToolCall(applied.ToolCall)
 		})
 	}
+
+	// CanvasDiagnostics 不是模型可见工具：Write/PatchEdit 命中 canvas 路径后由 forwarder 内部派发，
+	// 因此不进 execCases 表（那张表同时断言工具已被 prompt 侧的 exec 路由准入）。
+	canvasMessage, _, err := execBridge.OpenExec(execbridge.OpenExecContext{
+		ConversationID: "conversation",
+	}, runtimecore.ToolInvocation{
+		CallID:   "call-CanvasDiagnostics",
+		ToolName: "CanvasDiagnostics",
+		ArgsJSON: []byte(`{"path":"/ws/.cursor/projects/p/canvases/a.canvas.tsx"}`),
+	})
+	if err != nil {
+		t.Fatalf("OpenExec(CanvasDiagnostics): %v", err)
+	}
+	canvasIdentity := capabilityOneofIdentity("ExecServerMessage", canvasMessage.GetExecServerMessage())
+	if canvasIdentity != "ExecServerMessage.canvas_diagnostics_args (CanvasDiagnosticsArgs)" {
+		t.Fatalf("OpenExec(CanvasDiagnostics) arm = %q", canvasIdentity)
+	}
+	reached[canvasIdentity] = true
 
 	hookMessage, _, err := execBridge.OpenExecuteHook(&agentv1.ExecuteHookRequest{
 		Request: &agentv1.ExecuteHookRequest_PreCompact{PreCompact: &agentv1.PreCompactRequestQuery{}},
@@ -316,6 +403,7 @@ func TestCursorCapabilityImplementedRoutesReachMappedProtocol(t *testing.T) {
 		{"Grep", `{"pattern":"x"}`, "ToolCall.grep_tool_call (GrepToolCall)"},
 		{"Read", `{"path":"x"}`, "ToolCall.read_tool_call (ReadToolCall)"},
 		{"TodoWrite", `{"todos":[]}`, "ToolCall.update_todos_tool_call (UpdateTodosToolCall)"},
+		{"ReadTodos", "{}", "ToolCall.read_todos_tool_call (ReadTodosToolCall)"},
 		{"Write", `{"path":"x","contents":"x"}`, "ToolCall.edit_tool_call (EditToolCall)"},
 		{"Ls", `{"path":"."}`, "ToolCall.ls_tool_call (LsToolCall)"},
 		{"CallMcpTool", `{"server":"s","toolName":"t","arguments":{}}`, "ToolCall.mcp_tool_call (McpToolCall)"},
@@ -335,6 +423,7 @@ func TestCursorCapabilityImplementedRoutesReachMappedProtocol(t *testing.T) {
 		{"CreatePr", `{"title":"x"}`, "ToolCall.pr_management_tool_call (PrManagementToolCall)"},
 		{"AwaitShell", `{"shell_id":1}`, "ToolCall.await_tool_call (AwaitToolCall)"},
 		{"send_final_summary", `{"final_summary":"done"}`, "ToolCall.send_final_summary_tool_call (SendFinalSummaryToolCall)"},
+		{"UpdateCurrentStep", `{"current_step":"Running CLI tests"}`, "ToolCall.communicate_update_tool_call (CommunicateUpdateToolCall)"},
 	}
 	for _, tc := range startedCases {
 		toolCall := buildStartedToolCall(runtimecore.ToolInvocation{CallID: "call-" + tc.toolName, ToolName: tc.toolName, ArgsJSON: []byte(tc.argsJSON)})
@@ -345,7 +434,7 @@ func TestCursorCapabilityImplementedRoutesReachMappedProtocol(t *testing.T) {
 		reached[identity] = true
 	}
 
-	for _, toolName := range []string{"GenerateImage", "AwaitShell", "SeeImage", "send_final_summary"} {
+	for _, toolName := range []string{"GenerateImage", "AwaitShell", "SeeImage", "send_final_summary", "UpdateCurrentStep"} {
 		if !isImmediateNativeTool(toolName) {
 			t.Errorf("%s is not admitted by the immediate-native route", toolName)
 		}
@@ -353,8 +442,10 @@ func TestCursorCapabilityImplementedRoutesReachMappedProtocol(t *testing.T) {
 	if buildStartedToolCall(runtimecore.ToolInvocation{CallID: "see-image", ToolName: "SeeImage", ArgsJSON: []byte(`{"image_path":"x.png"}`)}) != nil {
 		t.Error("SeeImage intentionally has no dedicated ToolCall arm")
 	}
-	if !isLocalStateTool("TodoWrite") {
-		t.Error("TodoWrite is not admitted by the local-state route")
+	for _, toolName := range []string{"TodoWrite", "ReadTodos"} {
+		if !isLocalStateTool(toolName) {
+			t.Errorf("%s is not admitted by the local-state route", toolName)
+		}
 	}
 	if !isPatchEditToolName("PatchEdit") {
 		t.Error("PatchEdit is not admitted by the patch-edit route")
@@ -368,7 +459,7 @@ func TestCursorCapabilityImplementedRoutesReachMappedProtocol(t *testing.T) {
 	for _, tc := range interactionCases {
 		reached["PromptTool."+tc.toolName] = true
 	}
-	for _, toolName := range []string{"GenerateImage", "AwaitShell", "SeeImage", "send_final_summary", "TodoWrite", "PatchEdit"} {
+	for _, toolName := range []string{"GenerateImage", "AwaitShell", "SeeImage", "send_final_summary", "UpdateCurrentStep", "TodoWrite", "ReadTodos", "PatchEdit"} {
 		reached["PromptTool."+toolName] = true
 	}
 

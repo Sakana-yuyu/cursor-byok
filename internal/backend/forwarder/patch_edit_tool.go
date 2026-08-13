@@ -19,6 +19,8 @@ const (
 	patchEditReadExecKindName     = "patch_edit_read"
 	patchEditWriteExecKindName    = "patch_edit_write"
 	patchEditPostReadExecKindName = "patch_edit_post_read"
+	// patchEditCanvasDiagnosticsExecKindName 是编辑 canvas 文件后追加的诊断步骤。
+	patchEditCanvasDiagnosticsExecKindName = "patch_edit_canvas_diagnostics"
 )
 
 type patchEditArgs struct {
@@ -60,7 +62,7 @@ func isPatchEditToolName(name string) bool {
 
 func isHiddenPatchEditExecKind(kind string) bool {
 	switch strings.TrimSpace(kind) {
-	case patchEditReadExecKindName, patchEditWriteExecKindName, patchEditPostReadExecKindName:
+	case patchEditReadExecKindName, patchEditWriteExecKindName, patchEditPostReadExecKindName, patchEditCanvasDiagnosticsExecKindName:
 		return true
 	default:
 		return false
@@ -188,6 +190,7 @@ func (service *Service) startHiddenPatchEditRead(stream *ActiveStream, toolCallI
 	stream.mu.Lock()
 	stream.PendingExecs[pendingExec.ExecID] = pendingExec
 	stream.mu.Unlock()
+	service.scheduleExecWatchdog(stream.RequestID, pendingExec)
 	if err := service.publishCheckpoint(stream.RequestID, stream.ConversationID); err != nil {
 		return err
 	}
@@ -241,6 +244,7 @@ func (service *Service) startHiddenPatchEditWrite(stream *ActiveStream, toolCall
 	stream.mu.Lock()
 	stream.PendingExecs[pendingExec.ExecID] = pendingExec
 	stream.mu.Unlock()
+	service.scheduleExecWatchdog(stream.RequestID, pendingExec)
 	if err := service.publishCheckpoint(stream.RequestID, stream.ConversationID); err != nil {
 		return err
 	}
@@ -278,6 +282,7 @@ func (service *Service) startHiddenPatchEditPostRead(stream *ActiveStream, toolC
 	stream.mu.Lock()
 	stream.PendingExecs[pendingExec.ExecID] = pendingExec
 	stream.mu.Unlock()
+	service.scheduleExecWatchdog(stream.RequestID, pendingExec)
 	if err := service.publishCheckpoint(stream.RequestID, stream.ConversationID); err != nil {
 		return err
 	}
@@ -338,10 +343,7 @@ func (service *Service) handleHiddenPatchEditExecResult(stream *ActiveStream, pe
 	case patchEditPostReadExecKindName:
 		markExecCompleted(stream, pending)
 		readResult := message.GetReadResult()
-		if readResult == nil {
-			return service.finishPatchEditOperation(stream, pending.ToolCallID, pending.ModelCallID, pending.ProviderPass, pending.ReasoningContent, payload, buildFinalEditSuccessResult(payload.ResolvedPath, payload.AfterContent, patchEditPayloadAsEditPayload(payload)))
-		}
-		if content, ok := extractReadContentForEdit(readResult); ok {
+		if content, ok := extractReadContentForEdit(readResult); readResult != nil && ok {
 			if success := readResult.GetSuccess(); success != nil {
 				payload.ResolvedPath = firstNonEmpty(strings.TrimSpace(success.GetPath()), payload.ResolvedPath)
 				setPatchEditPayloadPath(&payload, payload.ResolvedPath)
@@ -353,9 +355,12 @@ func (service *Service) handleHiddenPatchEditExecResult(stream *ActiveStream, pe
 			if reconciled {
 				payload.Message = appendPatchEditMessage(payload.Message, "post-read matched after client line-ending normalization")
 			}
-			return service.finishPatchEditOperation(stream, pending.ToolCallID, pending.ModelCallID, pending.ProviderPass, pending.ReasoningContent, payload, buildFinalEditSuccessResult(payload.ResolvedPath, finalAfterContent, patchEditPayloadAsEditPayload(payload)))
+			payload.AfterContent = finalAfterContent
 		}
-		return service.finishPatchEditOperation(stream, pending.ToolCallID, pending.ModelCallID, pending.ProviderPass, pending.ReasoningContent, payload, buildFinalEditSuccessResult(payload.ResolvedPath, payload.AfterContent, patchEditPayloadAsEditPayload(payload)))
+		return service.completePatchEditAfterPostRead(stream, pending, payload)
+	case patchEditCanvasDiagnosticsExecKindName:
+		markExecCompleted(stream, pending)
+		return service.finishPatchEditOperationWithCanvasDiagnostics(stream, pending, payload, formatCanvasDiagnosticsForModel(message.GetCanvasDiagnosticsResult()))
 	default:
 		return fmt.Errorf("unsupported hidden patch edit exec kind: %s", pending.ExecKind)
 	}
@@ -376,13 +381,76 @@ func (service *Service) handleHiddenPatchEditExecControl(stream *ActiveStream, p
 		return err
 	}
 	markExecCompleted(stream, pending)
-	if strings.TrimSpace(pending.ExecKind) == patchEditPostReadExecKindName {
+	switch strings.TrimSpace(pending.ExecKind) {
+	case patchEditPostReadExecKindName:
 		return service.finishPatchEditOperation(stream, pending.ToolCallID, pending.ModelCallID, pending.ProviderPass, pending.ReasoningContent, payload, buildFinalEditSuccessResult(payload.ResolvedPath, payload.AfterContent, patchEditPayloadAsEditPayload(payload)))
+	case patchEditCanvasDiagnosticsExecKindName:
+		// 诊断通道异常只影响诊断本身；编辑早已成功，必须保持 success，否则 canvas 不会渲染。
+		return service.finishPatchEditOperationWithCanvasDiagnostics(stream, pending, payload, "")
+	default:
+		return service.finishPatchEditOperation(stream, pending.ToolCallID, pending.ModelCallID, pending.ProviderPass, pending.ReasoningContent, payload, buildEditErrorResult(payload.ResolvedPath, hiddenPatchEditControlError(message)))
 	}
-	return service.finishPatchEditOperation(stream, pending.ToolCallID, pending.ModelCallID, pending.ProviderPass, pending.ReasoningContent, payload, buildEditErrorResult(payload.ResolvedPath, hiddenPatchEditControlError(message)))
+}
+
+// completePatchEditAfterPostRead 在 post-read 收口后决定直接完成编辑，还是先补一次 canvas 诊断。
+func (service *Service) completePatchEditAfterPostRead(stream *ActiveStream, pending runtimecore.PendingExec, payload pendingPatchEditPayload) error {
+	result := buildFinalEditSuccessResult(payload.ResolvedPath, payload.AfterContent, patchEditPayloadAsEditPayload(payload))
+	if shouldCollectCanvasDiagnostics(result, payload.ResolvedPath) {
+		if err := service.startHiddenPatchEditCanvasDiagnostics(stream, pending, payload); err != nil {
+			// 派发失败降级为跳过诊断：编辑本身已经成功，不能因为诊断链路失败而失败。
+			logger.Errorf("forwarder canvas diagnostics dispatch failed request_id=%s tool_call_id=%s path=%s err=%v",
+				strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ToolCallID), strings.TrimSpace(payload.ResolvedPath), err)
+		} else {
+			return nil
+		}
+	}
+	return service.finishPatchEditOperation(stream, pending.ToolCallID, pending.ModelCallID, pending.ProviderPass, pending.ReasoningContent, payload, result)
+}
+
+// startHiddenPatchEditCanvasDiagnostics 在编辑 canvas 文件后追加一次隐藏的诊断执行桥请求。
+func (service *Service) startHiddenPatchEditCanvasDiagnostics(stream *ActiveStream, pending runtimecore.PendingExec, payload pendingPatchEditPayload) error {
+	serverMessage, pendingExec, err := service.openCanvasDiagnosticsExec(stream, pending.ToolCallID, pending.ModelCallID, payload.ResolvedPath)
+	if err != nil {
+		return err
+	}
+	pendingArgsJSON, err := payload.MarshalJSON()
+	if err != nil {
+		return err
+	}
+	pendingExec.ModelCallID = strings.TrimSpace(pending.ModelCallID)
+	pendingExec.ProviderPass = pending.ProviderPass
+	pendingExec.ToolCallID = strings.TrimSpace(pending.ToolCallID)
+	pendingExec.ReasoningContent = pending.ReasoningContent
+	pendingExec.ReasoningSignature = strings.TrimSpace(pending.ReasoningSignature)
+	pendingExec.ReasoningSignatureSource = strings.TrimSpace(pending.ReasoningSignatureSource)
+	pendingExec.ExecKind = patchEditCanvasDiagnosticsExecKindName
+	pendingExec.ArgsJSON = pendingArgsJSON
+	stream.mu.Lock()
+	stream.PendingExecs[pendingExec.ExecID] = pendingExec
+	stream.mu.Unlock()
+	if err := service.broker.Publish(stream.RequestID, StreamEvent{Message: serverMessage}); err != nil {
+		// 请求没发出去，必须撤销挂起项，否则编辑永远收不了口。
+		markExecCompleted(stream, pendingExec)
+		return err
+	}
+	service.scheduleCanvasDiagnosticsTimeout(stream, pendingExec, payload.ResolvedPath)
+	return nil
+}
+
+// finishPatchEditOperationWithCanvasDiagnostics 用 canvas 诊断文本收口编辑。
+// diagnosticsText 为空表示诊断被跳过，编辑结果仍按成功收口。
+func (service *Service) finishPatchEditOperationWithCanvasDiagnostics(stream *ActiveStream, pending runtimecore.PendingExec, payload pendingPatchEditPayload, diagnosticsText string) error {
+	result := buildFinalEditSuccessResult(payload.ResolvedPath, payload.AfterContent, patchEditPayloadAsEditPayload(payload))
+	return service.finishPatchEditOperationWithNotice(stream, pending.ToolCallID, pending.ModelCallID, pending.ProviderPass, pending.ReasoningContent, payload, result, diagnosticsText)
 }
 
 func (service *Service) finishPatchEditOperation(stream *ActiveStream, toolCallID string, modelCallID string, providerPass int, reasoningContent string, payload pendingPatchEditPayload, result *agentv1.EditResult) error {
+	return service.finishPatchEditOperationWithNotice(stream, toolCallID, modelCallID, providerPass, reasoningContent, payload, result, "")
+}
+
+// finishPatchEditOperationWithNotice 与 finishPatchEditOperation 相同，额外把 modelNotice
+// 追加到模型可见的工具结果末尾（当前用于 canvas TypeScript 诊断）。
+func (service *Service) finishPatchEditOperationWithNotice(stream *ActiveStream, toolCallID string, modelCallID string, providerPass int, reasoningContent string, payload pendingPatchEditPayload, result *agentv1.EditResult, modelNotice string) error {
 	if stream == nil {
 		return nil
 	}
@@ -397,7 +465,8 @@ func (service *Service) finishPatchEditOperation(stream *ActiveStream, toolCallI
 	}
 	toolCall := buildCompletedEditToolCall(path, result)
 	historyToolCall := buildCompletedEditToolCall(path, compactPatchEditHistoryEditResult(path, result))
-	if err := service.appendToolResult(stream, strings.TrimSpace(toolCallID), patchEditToolName, argsJSON, summarizePatchEditResult(path, result), reasoningContent, historyToolCall); err != nil {
+	resultText := appendCanvasDiagnosticsToToolResult(summarizePatchEditResult(path, result), modelNotice)
+	if err := service.appendToolResult(stream, strings.TrimSpace(toolCallID), patchEditToolName, argsJSON, resultText, reasoningContent, historyToolCall); err != nil {
 		return err
 	}
 	if err := service.publishToolCallCompleted(stream.RequestID, strings.TrimSpace(toolCallID), strings.TrimSpace(modelCallID), toolCall); err != nil {

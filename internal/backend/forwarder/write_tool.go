@@ -10,12 +10,15 @@ import (
 	"cursor/gen/agentv1"
 	execbridge "cursor/internal/backend/agent/bridge/exec"
 	runtimecore "cursor/internal/backend/agent/core"
+	"cursor/internal/logger"
 )
 
 const (
 	writeReadExecKind     = "write_read"
 	writeWriteExecKind    = "write_write"
 	writePostReadExecKind = "write_post_read"
+	// writeCanvasDiagnosticsExecKind 是写入 canvas 文件后追加的诊断步骤。
+	writeCanvasDiagnosticsExecKind = "write_canvas_diagnostics"
 )
 
 type writeOperationArgs struct {
@@ -32,7 +35,7 @@ type pendingWritePayload struct {
 
 func isHiddenWriteExecKind(kind string) bool {
 	switch strings.TrimSpace(kind) {
-	case writeReadExecKind, writeWriteExecKind, writePostReadExecKind:
+	case writeReadExecKind, writeWriteExecKind, writePostReadExecKind, writeCanvasDiagnosticsExecKind:
 		return true
 	default:
 		return false
@@ -117,6 +120,7 @@ func (service *Service) startHiddenWriteRead(stream *ActiveStream, toolCallID st
 	stream.mu.Lock()
 	stream.PendingExecs[pendingExec.ExecID] = pendingExec
 	stream.mu.Unlock()
+	service.scheduleExecWatchdog(stream.RequestID, pendingExec)
 	if err := service.publishCheckpoint(stream.RequestID, stream.ConversationID); err != nil {
 		return err
 	}
@@ -160,6 +164,7 @@ func (service *Service) startHiddenWriteExec(stream *ActiveStream, toolCallID st
 	stream.mu.Lock()
 	stream.PendingExecs[pendingExec.ExecID] = pendingExec
 	stream.mu.Unlock()
+	service.scheduleExecWatchdog(stream.RequestID, pendingExec)
 	if err := service.publishCheckpoint(stream.RequestID, stream.ConversationID); err != nil {
 		return err
 	}
@@ -199,6 +204,7 @@ func (service *Service) startHiddenWritePostRead(stream *ActiveStream, toolCallI
 	stream.mu.Lock()
 	stream.PendingExecs[pendingExec.ExecID] = pendingExec
 	stream.mu.Unlock()
+	service.scheduleExecWatchdog(stream.RequestID, pendingExec)
 	if err := service.publishCheckpoint(stream.RequestID, stream.ConversationID); err != nil {
 		return err
 	}
@@ -253,17 +259,16 @@ func (service *Service) handleHiddenWriteExecResult(stream *ActiveStream, pendin
 		writeArgs := payload.VisibleArgs
 		writeArgs.Path = firstNonEmpty(strings.TrimSpace(payload.ResolvedPath), strings.TrimSpace(writeArgs.Path))
 		readResult := message.GetReadResult()
-		if readResult == nil {
-			return service.finishWriteOperation(stream, pending.ToolCallID, pending.ModelCallID, pending.ProviderPass, pending.ReasoningContent, writeArgs, buildSuccessfulWriteResult(writeArgs.Path, payload.BeforeContent, payload.AfterContent))
-		}
-		if content, ok := extractReadContentForEdit(readResult); ok {
+		if content, ok := extractReadContentForEdit(readResult); readResult != nil && ok {
 			if success := readResult.GetSuccess(); success != nil {
 				writeArgs.Path = firstNonEmpty(strings.TrimSpace(success.GetPath()), writeArgs.Path)
 			}
-			finalAfterContent, _ := reconcilePostWriteObservedContent(payload.AfterContent, content)
-			return service.finishWriteOperation(stream, pending.ToolCallID, pending.ModelCallID, pending.ProviderPass, pending.ReasoningContent, writeArgs, buildSuccessfulWriteResult(writeArgs.Path, payload.BeforeContent, finalAfterContent))
+			payload.AfterContent, _ = reconcilePostWriteObservedContent(payload.AfterContent, content)
 		}
-		return service.finishWriteOperation(stream, pending.ToolCallID, pending.ModelCallID, pending.ProviderPass, pending.ReasoningContent, writeArgs, buildSuccessfulWriteResult(writeArgs.Path, payload.BeforeContent, payload.AfterContent))
+		return service.completeWriteAfterPostRead(stream, pending, payload, writeArgs)
+	case writeCanvasDiagnosticsExecKind:
+		markExecCompleted(stream, pending)
+		return service.finishWriteOperationWithCanvasDiagnostics(stream, pending, payload, formatCanvasDiagnosticsForModel(message.GetCanvasDiagnosticsResult()))
 	default:
 		return fmt.Errorf("unsupported hidden write exec kind: %s", pending.ExecKind)
 	}
@@ -284,13 +289,80 @@ func (service *Service) handleHiddenWriteExecControl(stream *ActiveStream, pendi
 		return err
 	}
 	markExecCompleted(stream, pending)
-	if strings.TrimSpace(pending.ExecKind) == writePostReadExecKind {
+	switch strings.TrimSpace(pending.ExecKind) {
+	case writePostReadExecKind:
 		return service.finishWriteOperation(stream, pending.ToolCallID, pending.ModelCallID, pending.ProviderPass, pending.ReasoningContent, payload.VisibleArgs, buildSuccessfulWriteResult(payload.ResolvedPath, payload.BeforeContent, payload.AfterContent))
+	case writeCanvasDiagnosticsExecKind:
+		// 诊断通道异常只影响诊断本身；写入早已成功，必须保持 success，否则 canvas 不会渲染。
+		return service.finishWriteOperationWithCanvasDiagnostics(stream, pending, payload, "")
+	default:
+		return service.finishWriteOperation(stream, pending.ToolCallID, pending.ModelCallID, pending.ProviderPass, pending.ReasoningContent, payload.VisibleArgs, buildEditErrorResult(payload.ResolvedPath, hiddenWriteControlError(message)))
 	}
-	return service.finishWriteOperation(stream, pending.ToolCallID, pending.ModelCallID, pending.ProviderPass, pending.ReasoningContent, payload.VisibleArgs, buildEditErrorResult(payload.ResolvedPath, hiddenWriteControlError(message)))
+}
+
+// completeWriteAfterPostRead 在 post-read 收口后决定直接完成写入，还是先补一次 canvas 诊断。
+func (service *Service) completeWriteAfterPostRead(stream *ActiveStream, pending runtimecore.PendingExec, payload pendingWritePayload, writeArgs writeOperationArgs) error {
+	payload.ResolvedPath = firstNonEmpty(strings.TrimSpace(writeArgs.Path), strings.TrimSpace(payload.ResolvedPath))
+	payload.VisibleArgs = writeArgs
+	result := buildSuccessfulWriteResult(payload.ResolvedPath, payload.BeforeContent, payload.AfterContent)
+	if shouldCollectCanvasDiagnostics(result, payload.ResolvedPath) {
+		if err := service.startHiddenWriteCanvasDiagnostics(stream, pending, payload); err != nil {
+			// 派发失败降级为跳过诊断：写入本身已经成功，不能因为诊断链路失败而失败。
+			logger.Errorf("forwarder canvas diagnostics dispatch failed request_id=%s tool_call_id=%s path=%s err=%v",
+				strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ToolCallID), strings.TrimSpace(payload.ResolvedPath), err)
+		} else {
+			return nil
+		}
+	}
+	return service.finishWriteOperation(stream, pending.ToolCallID, pending.ModelCallID, pending.ProviderPass, pending.ReasoningContent, writeArgs, result)
+}
+
+// startHiddenWriteCanvasDiagnostics 在写入 canvas 文件后追加一次隐藏的诊断执行桥请求。
+func (service *Service) startHiddenWriteCanvasDiagnostics(stream *ActiveStream, pending runtimecore.PendingExec, payload pendingWritePayload) error {
+	serverMessage, pendingExec, err := service.openCanvasDiagnosticsExec(stream, pending.ToolCallID, pending.ModelCallID, payload.ResolvedPath)
+	if err != nil {
+		return err
+	}
+	pendingArgsJSON, err := payload.MarshalJSON()
+	if err != nil {
+		return err
+	}
+	pendingExec.ModelCallID = strings.TrimSpace(pending.ModelCallID)
+	pendingExec.ProviderPass = pending.ProviderPass
+	pendingExec.ToolCallID = strings.TrimSpace(pending.ToolCallID)
+	pendingExec.ReasoningContent = pending.ReasoningContent
+	pendingExec.ReasoningSignature = strings.TrimSpace(pending.ReasoningSignature)
+	pendingExec.ReasoningSignatureSource = strings.TrimSpace(pending.ReasoningSignatureSource)
+	pendingExec.ExecKind = writeCanvasDiagnosticsExecKind
+	pendingExec.ArgsJSON = pendingArgsJSON
+	stream.mu.Lock()
+	stream.PendingExecs[pendingExec.ExecID] = pendingExec
+	stream.mu.Unlock()
+	if err := service.broker.Publish(stream.RequestID, StreamEvent{Message: serverMessage}); err != nil {
+		// 请求没发出去，必须撤销挂起项，否则写入永远收不了口。
+		markExecCompleted(stream, pendingExec)
+		return err
+	}
+	service.scheduleCanvasDiagnosticsTimeout(stream, pendingExec, payload.ResolvedPath)
+	return nil
+}
+
+// finishWriteOperationWithCanvasDiagnostics 用 canvas 诊断文本收口写入。
+// diagnosticsText 为空表示诊断被跳过，写入结果仍按成功收口。
+func (service *Service) finishWriteOperationWithCanvasDiagnostics(stream *ActiveStream, pending runtimecore.PendingExec, payload pendingWritePayload, diagnosticsText string) error {
+	writeArgs := payload.VisibleArgs
+	writeArgs.Path = firstNonEmpty(strings.TrimSpace(payload.ResolvedPath), strings.TrimSpace(writeArgs.Path))
+	result := buildSuccessfulWriteResult(writeArgs.Path, payload.BeforeContent, payload.AfterContent)
+	return service.finishWriteOperationWithNotice(stream, pending.ToolCallID, pending.ModelCallID, pending.ProviderPass, pending.ReasoningContent, writeArgs, result, diagnosticsText)
 }
 
 func (service *Service) finishWriteOperation(stream *ActiveStream, toolCallID string, modelCallID string, providerPass int, reasoningContent string, writeArgs writeOperationArgs, result *agentv1.EditResult) error {
+	return service.finishWriteOperationWithNotice(stream, toolCallID, modelCallID, providerPass, reasoningContent, writeArgs, result, "")
+}
+
+// finishWriteOperationWithNotice 与 finishWriteOperation 相同，额外把 modelNotice
+// 追加到模型可见的工具结果末尾（当前用于 canvas TypeScript 诊断）。
+func (service *Service) finishWriteOperationWithNotice(stream *ActiveStream, toolCallID string, modelCallID string, providerPass int, reasoningContent string, writeArgs writeOperationArgs, result *agentv1.EditResult, modelNotice string) error {
 	if stream == nil {
 		return nil
 	}
@@ -304,7 +376,8 @@ func (service *Service) finishWriteOperation(stream *ActiveStream, toolCallID st
 	}
 	toolCall := buildCompletedWriteToolCall(writeArgs.Path, writeArgs.Contents, result)
 	historyToolCall := buildCompletedWriteHistoryToolCall(writeArgs.Path, result)
-	if err := service.appendToolResult(stream, strings.TrimSpace(toolCallID), "Write", historyArgsJSON, summarizeWriteHistoryResult(writeArgs.Path, result), reasoningContent, historyToolCall); err != nil {
+	resultText := appendCanvasDiagnosticsToToolResult(summarizeWriteHistoryResult(writeArgs.Path, result), modelNotice)
+	if err := service.appendToolResult(stream, strings.TrimSpace(toolCallID), "Write", historyArgsJSON, resultText, reasoningContent, historyToolCall); err != nil {
 		return err
 	}
 	if err := service.publishToolCallCompleted(stream.RequestID, strings.TrimSpace(toolCallID), strings.TrimSpace(modelCallID), toolCall); err != nil {

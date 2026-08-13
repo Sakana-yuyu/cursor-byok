@@ -562,6 +562,13 @@ func (projector *HistoryProjector) ProjectCheckpointProjection(conversation *Con
 	if structuredState.HasTodos {
 		state.Todos = encodeConversationTodoBytes(structuredState.Todos)
 	}
+	// Task 卡片进度只在子会话自身的 checkpoint 上下发，key 是父会话的 Task
+	// tool_call_id（与官方一致）。顶层会话没有 parent tool call，不发这张表。
+	if key := communicateUpdateStateKey(conversation.ParentToolCallID); key != "" {
+		if turnState := projectCommunicateUpdateTurnState(conversation); turnState != nil {
+			state.CommunicateUpdateStatesByParentToolCallId = map[string]*agentv1.CommunicateUpdateTurnState{key: turnState}
+		}
+	}
 	turnIDs, err := projectCheckpointTurnBlobs(conversation, blobs)
 	if err != nil {
 		return nil, err

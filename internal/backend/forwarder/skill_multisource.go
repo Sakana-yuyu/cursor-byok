@@ -2,9 +2,9 @@
 //
 // 原生 Cursor 只扫描 ~/.cursor/skills 和 RequestContext 带来的 descriptor；BYOK 场景下
 // 客户端往往不填 descriptor，导致系统提示里 <agent_skills> 为空，模型无从得知可用技能。
-// 本扫描器汇总主流编码工具（Cursor / Trae / Windsurf / Claude Code / Codex / Gemini /
-// Copilot / Cline / ZCode / 共享 .agents / 旧 BYOK）的技能目录，按 name 去重，
-// 作为 RequestContext.SkillOptions 的补充来源注入。
+// 本扫描器汇总主流编码工具（Cursor 用户目录与客户端内置目录 / Trae / Windsurf /
+// Claude Code / Codex / Gemini / Copilot / Cline / ZCode / 共享 .agents / 旧 BYOK）的
+// 技能目录，按 name 去重，作为 RequestContext.SkillOptions 的补充来源注入。
 //
 // 扫描结果仍交给 SkillStore 的稀疏激活（BM25 Top-K）筛选，不全量注入，遵守 prefix-cache-stability。
 package forwarder
@@ -23,18 +23,22 @@ import (
 type SkillSource string
 
 const (
-	SkillSourceCursor      SkillSource = "cursor"       // ~/.cursor/skills 或 <ws>/.cursor/skills
-	SkillSourceTrae        SkillSource = "trae"         // ~/.trae/skills 或 <ws>/.trae/skills
-	SkillSourceWindsurf    SkillSource = "windsurf"     // ~/.codeium/windsurf/skills 或 <ws>/.windsurf/skills
-	SkillSourceClaude      SkillSource = "claude"       // ~/.claude/skills 或 <ws>/.claude/skills
-	SkillSourceCodex       SkillSource = "codex"        // ~/.codex/skills
-	SkillSourceGemini      SkillSource = "gemini"       // ~/.gemini/skills 或 <ws>/.gemini/skills
-	SkillSourceCopilot     SkillSource = "copilot"      // ~/.copilot/skills
-	SkillSourceCline       SkillSource = "cline"        // ~/.cline/skills 或 <ws>/.cline/skills
-	SkillSourceShared      SkillSource = "shared"       // ~/.agents/skills 或 <ws>/.agents/skills（跨工具共享标准）
-	SkillSourceZCode       SkillSource = "zcode"        // ~/.zcode/skills 或 <ws>/.zcode/skills
-	SkillSourceZCodePlugin SkillSource = "zcode-plugin" // ~/.zcode/cli/plugins/cache/*/*/skills
-	SkillSourceBYOK        SkillSource = "byok"         // ~/.cursor-local-assistant-v2/skills（旧 BYOK，保持兼容）
+	SkillSourceCursor SkillSource = "cursor" // ~/.cursor/skills 或 <ws>/.cursor/skills
+	// SkillSourceCursorBuiltin 是 Cursor 随客户端下发的内置技能（canvas / automate / sdk 等）。
+	// 只登记 ~/.cursor/skills-cursor 这一个确切目录，不做 ~/.cursor/skills* 通配，
+	// 避免 Cursor 升级新增目录时系统提示漂移、破坏前缀缓存。
+	SkillSourceCursorBuiltin SkillSource = "cursor-builtin" // ~/.cursor/skills-cursor
+	SkillSourceTrae          SkillSource = "trae"           // ~/.trae/skills 或 <ws>/.trae/skills
+	SkillSourceWindsurf      SkillSource = "windsurf"       // ~/.codeium/windsurf/skills 或 <ws>/.windsurf/skills
+	SkillSourceClaude        SkillSource = "claude"         // ~/.claude/skills 或 <ws>/.claude/skills
+	SkillSourceCodex         SkillSource = "codex"          // ~/.codex/skills
+	SkillSourceGemini        SkillSource = "gemini"         // ~/.gemini/skills 或 <ws>/.gemini/skills
+	SkillSourceCopilot       SkillSource = "copilot"        // ~/.copilot/skills
+	SkillSourceCline         SkillSource = "cline"          // ~/.cline/skills 或 <ws>/.cline/skills
+	SkillSourceShared        SkillSource = "shared"         // ~/.agents/skills 或 <ws>/.agents/skills（跨工具共享标准）
+	SkillSourceZCode         SkillSource = "zcode"          // ~/.zcode/skills 或 <ws>/.zcode/skills
+	SkillSourceZCodePlugin   SkillSource = "zcode-plugin"   // ~/.zcode/cli/plugins/cache/*/*/skills
+	SkillSourceBYOK          SkillSource = "byok"           // ~/.cursor-local-assistant-v2/skills（旧 BYOK，保持兼容）
 )
 
 // SourcedGlobalSkill 是带来源标签的 GlobalSkill。
@@ -109,8 +113,8 @@ type skillScanRoot struct {
 }
 
 // orderedSkillScanRoots 按优先级返回所有待扫描目录（高优先级在前，去重时先到先得）。
-// 所有工作区根先于用户根；每个作用域内保持 Cursor → Trae → Windsurf → Claude →
-// Codex → Gemini → Copilot → Cline → 共享 .agents → ZCode → ZCode 插件 → 旧 BYOK。
+// 所有工作区根先于用户根；每个作用域内保持 Cursor → Cursor 内置 → Trae → Windsurf →
+// Claude → Codex → Gemini → Copilot → Cline → 共享 .agents → ZCode → ZCode 插件 → 旧 BYOK。
 func orderedSkillScanRoots(workspaceRoot string) []skillScanRoot {
 	home, _ := os.UserHomeDir()
 	home = strings.TrimSpace(home)
@@ -137,6 +141,9 @@ func orderedSkillScanRoots(workspaceRoot string) []skillScanRoot {
 	}
 	if home != "" {
 		add(filepath.Join(home, ".cursor", "skills"), SkillSourceCursor)
+		// Cursor 客户端内置技能目录，与 ~/.cursor/skills 同级但不同名；canvas 技能就在这里。
+		// 排在用户自建的 ~/.cursor/skills 之后，同名时让用户自建版本覆盖官方内置版本。
+		add(filepath.Join(home, ".cursor", "skills-cursor"), SkillSourceCursorBuiltin)
 	}
 	// Trae（IDE，技能放项目 .trae/skills，全局目录兼容）
 	if ws != "" {

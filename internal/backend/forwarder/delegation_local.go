@@ -652,7 +652,10 @@ func filterDelegatedTools(tools []json.RawMessage, permissions map[string]bool, 
 // bridge 转发后无法可靠闭环，会卡住 worker。
 func delegatedToolNeedsCursorInteraction(toolName string) bool {
 	switch strings.TrimSpace(toolName) {
-	case "Shell", "AwaitShell", "WriteShellStdin", "ForceBackgroundShell", "ForceBackgroundSubagent":
+	case "Shell", "AwaitShell", "WriteShellStdin", "ForceBackgroundShell", "ForceBackgroundSubagent",
+		// 本地委派 worker 以子会话身份编译工具，因此会连带拿到 UpdateCurrentStep，
+		// 但它没有 Cursor Task 卡片可写，exec bridge 只会回 "unsupported exec tool"。
+		updateCurrentStepToolName:
 		return true
 	default:
 		return false

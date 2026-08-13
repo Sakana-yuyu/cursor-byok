@@ -79,6 +79,40 @@ func TestBuildBootstrapStatsigConfigJSONDisablesAlwaysLocalDecompositionGate(t *
 	}
 }
 
+// Design Mode 的 composer pill 与 canvas 内联预览完全是客户端本地能力，
+// 唯一的阻塞点是这两个 feature gate。bootstrap payload 里没列出的 gate 会被
+// 客户端当作关闭处理，所以必须显式下发为 enabled。
+func TestBuildBootstrapStatsigConfigJSONEnablesDesignModeAndCanvasPreviewGates(t *testing.T) {
+	payload, err := buildBootstrapStatsigConfigJSON(12345, "test-auth-id")
+	if err != nil {
+		t.Fatalf("build bootstrap statsig config: %v", err)
+	}
+
+	var decoded statsigBootstrapTemplate
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("decode bootstrap statsig config: %v", err)
+	}
+
+	for _, name := range []string{
+		bootstrapStatsigGlassDesignModeComposerPill,
+		bootstrapStatsigCanvasInlinePreview,
+	} {
+		gate, ok := decoded.FeatureGates[name]
+		if !ok {
+			t.Fatalf("missing feature gate %q", name)
+		}
+		if value, _ := gate["value"].(bool); !value {
+			t.Fatalf("expected %q to be enabled, got %#v", name, gate["value"])
+		}
+		if gateName, _ := gate["name"].(string); gateName != name {
+			t.Fatalf("gate %q carries name %q", name, gateName)
+		}
+		if ruleID, _ := gate["rule_id"].(string); ruleID != "local_enabled" {
+			t.Fatalf("gate %q unexpected rule_id: %q", name, ruleID)
+		}
+	}
+}
+
 type fakeSystemSettingService struct {
 	adapters []legacyruntime.ModelAdapterConfig
 }

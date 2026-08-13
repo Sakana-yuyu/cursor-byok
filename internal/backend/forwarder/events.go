@@ -788,6 +788,12 @@ func buildStartedToolCall(invocation runtimecore.ToolInvocation) *agentv1.ToolCa
 				},
 			},
 		}
+	case updateCurrentStepToolName:
+		args, err := decodeUpdateCurrentStepArgs(invocation.ArgsJSON)
+		if err != nil {
+			args = &agentv1.CommunicateUpdateArgs{}
+		}
+		return buildUpdateCurrentStepToolCall(args, nil)
 	default:
 		return nil
 	}

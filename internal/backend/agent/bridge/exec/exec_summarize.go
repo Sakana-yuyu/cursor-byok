@@ -128,6 +128,21 @@ func summarizeDiagnosticsResult(result *agentv1.DiagnosticsResult) string {
 	}
 }
 
+// summarizeCanvasDiagnosticsResult 生成 canvas 诊断对应的执行结果摘要。
+func summarizeCanvasDiagnosticsResult(result *agentv1.CanvasDiagnosticsResult) string {
+	if result == nil {
+		return "canvas diagnostics result missing"
+	}
+	switch item := result.GetResult().(type) {
+	case *agentv1.CanvasDiagnosticsResult_Success:
+		return fmt.Sprintf("canvas diagnostics success path=%s count=%d", item.Success.GetPath(), len(item.Success.GetDiagnostics()))
+	case *agentv1.CanvasDiagnosticsResult_Error:
+		return item.Error.GetError()
+	default:
+		return "unknown canvas diagnostics result"
+	}
+}
+
 // summarizeSubagentResult 生成 Task 对应的执行结果摘要。
 func summarizeSubagentResult(result *agentv1.SubagentResult) string {
 	if result == nil {

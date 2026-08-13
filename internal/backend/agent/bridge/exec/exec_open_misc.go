@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-
 	"cursor/gen/agentv1"
 	runtimecore "cursor/internal/backend/agent/core"
 )
@@ -75,6 +74,47 @@ func (bridge *Bridge) openReadLints(toolCall runtimecore.ToolInvocation) (*agent
 		ToolCallID:  toolCall.CallID,
 		ExecKind:    "diagnostics",
 		StreamState: "opened",
+	}, nil
+}
+
+// openCanvasDiagnostics 构造 Canvas TypeScript 诊断对应的执行桥请求。
+//
+// 与 openReadLints 同构，区别只在于走 canvas_diagnostics_args 分支：客户端的
+// cursor-agent-exec 扩展用随包的 typescript 模块在本地编译 canvas 工程并回传诊断，
+// 服务端只负责发请求。它不是模型可见工具，只由 Write/PatchEdit 命中 canvas 路径后内部调用。
+func (bridge *Bridge) openCanvasDiagnostics(toolCall runtimecore.ToolInvocation) (*agentv1.AgentServerMessage, runtimecore.PendingExec, error) {
+	args, err := decodeArgsMap(toolCall.ArgsJSON)
+	if err != nil {
+		return nil, runtimecore.PendingExec{}, fmt.Errorf("decode CanvasDiagnostics args failed: %w", err)
+	}
+	path := strings.TrimSpace(readStringArg(args, "path"))
+	if path == "" {
+		return nil, runtimecore.PendingExec{}, fmt.Errorf("CanvasDiagnostics path is required")
+	}
+	messageID := bridge.nextID()
+	execID := fmt.Sprintf("exec-canvas-diagnostics-%d", time.Now().UnixNano())
+	serverMessage := &agentv1.AgentServerMessage{
+		Message: &agentv1.AgentServerMessage_ExecServerMessage{
+			ExecServerMessage: &agentv1.ExecServerMessage{
+				Id:     messageID,
+				ExecId: execID,
+				Message: &agentv1.ExecServerMessage_CanvasDiagnosticsArgs{
+					CanvasDiagnosticsArgs: &agentv1.CanvasDiagnosticsArgs{
+						Path:       path,
+						ToolCallId: toolCall.CallID,
+					},
+				},
+			},
+		},
+	}
+	return serverMessage, runtimecore.PendingExec{
+		MessageID:   messageID,
+		ExecID:      execID,
+		ArgsJSON:    append([]byte(nil), toolCall.ArgsJSON...),
+		ToolCallID:  toolCall.CallID,
+		ExecKind:    "canvas_diagnostics",
+		StreamState: "opened",
+		OpenedAt:    time.Now().UTC(),
 	}, nil
 }
 

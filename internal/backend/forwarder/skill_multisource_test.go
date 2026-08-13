@@ -76,6 +76,66 @@ func TestOrderedSkillScanRootsCoversNewSources(t *testing.T) {
 	}
 }
 
+// TestOrderedSkillScanRootsCoversCursorBuiltinSkills 验证 Cursor 客户端内置技能目录
+// ~/.cursor/skills-cursor（canvas 技能所在）进入扫描根，且排在用户自建的
+// ~/.cursor/skills 之后，同名时让用户自建版本覆盖官方内置版本。
+func TestOrderedSkillScanRootsCoversCursorBuiltinSkills(t *testing.T) {
+	home := t.TempDir()
+	setHomeForTest(t, home)
+
+	roots := orderedSkillScanRoots("")
+
+	builtinPath := filepath.Join(home, ".cursor", "skills-cursor")
+	builtinIndex := skillScanRootIndex(roots, builtinPath)
+	if builtinIndex < 0 {
+		t.Fatalf("cursor builtin root %q missing, roots=%v", builtinPath, rootPaths(roots))
+	}
+	if roots[builtinIndex].Source != SkillSourceCursorBuiltin {
+		t.Errorf("cursor builtin root source = %q, want %q", roots[builtinIndex].Source, SkillSourceCursorBuiltin)
+	}
+	userIndex := skillScanRootIndex(roots, filepath.Join(home, ".cursor", "skills"))
+	if userIndex < 0 || userIndex >= builtinIndex {
+		t.Errorf("root order user=%d builtin=%d, want user first", userIndex, builtinIndex)
+	}
+	for _, root := range roots {
+		if root.Source == SkillSourceCursorBuiltin && root.Path != builtinPath {
+			t.Errorf("unexpected extra cursor builtin root %q; only the exact skills-cursor dir may be scanned", root.Path)
+		}
+	}
+}
+
+// TestScanAllSkillsPicksUpCursorBuiltinSkill 验证内置目录里的技能真的被扫出来并带对来源。
+func TestScanAllSkillsPicksUpCursorBuiltinSkill(t *testing.T) {
+	home := t.TempDir()
+	setHomeForTest(t, home)
+	InvalidateSkillScanCache()
+	t.Cleanup(InvalidateSkillScanCache)
+
+	canvasDir := filepath.Join(home, ".cursor", "skills-cursor", "canvas")
+	if err := os.MkdirAll(canvasDir, 0o755); err != nil {
+		t.Fatalf("mkdir canvas skill: %v", err)
+	}
+	manifest := "---\nname: canvas\ndescription: A Cursor Canvas is a live React app.\n---\n\n# Canvas\n"
+	if err := os.WriteFile(filepath.Join(canvasDir, "SKILL.md"), []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write canvas skill: %v", err)
+	}
+
+	skills := ScanAllSkills("")
+	found := false
+	for _, skill := range skills {
+		if !strings.EqualFold(skill.Name, "canvas") {
+			continue
+		}
+		found = true
+		if skill.Source != SkillSourceCursorBuiltin {
+			t.Errorf("canvas skill source = %q, want %q", skill.Source, SkillSourceCursorBuiltin)
+		}
+	}
+	if !found {
+		t.Fatal("canvas skill was not discovered under ~/.cursor/skills-cursor")
+	}
+}
+
 func skillScanRootIndex(roots []skillScanRoot, path string) int {
 	for index, root := range roots {
 		if root.Path == path {

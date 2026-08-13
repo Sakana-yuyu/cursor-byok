@@ -56,6 +56,8 @@ const (
 	bootstrapStatsigTerminalUI2                      = "terminal_ui_2"
 	bootstrapStatsigDisableTerminalOutputUIStreaming = "disable_terminal_output_ui_streaming"
 	bootstrapStatsigBrowserCanvas                    = "browser_canvas"
+	bootstrapStatsigCanvasInlinePreview              = "canvas_inline_preview"
+	bootstrapStatsigGlassDesignModeComposerPill      = "glass_design_mode_composer_pill_enabled"
 	bootstrapStatsigEnableMultitaskMode              = "enable_multitask_mode"
 	bootstrapStatsigDecomposeAlwaysLocalExtHostGate  = "decompose_always_local_ext_host"
 	bootstrapStatsigCursorExtensionsIsolationV2Gate  = "cursor_extensions_isolation_v2"
@@ -151,6 +153,8 @@ var bootstrapStatsigTemplate = statsigBootstrapTemplate{
 		bootstrapStatsigTerminalUI2:                      buildEnabledStatsigGate(bootstrapStatsigTerminalUI2),
 		bootstrapStatsigDisableTerminalOutputUIStreaming: buildEnabledStatsigGate(bootstrapStatsigDisableTerminalOutputUIStreaming),
 		bootstrapStatsigBrowserCanvas:                    buildEnabledStatsigGate(bootstrapStatsigBrowserCanvas),
+		bootstrapStatsigCanvasInlinePreview:              buildEnabledStatsigGate(bootstrapStatsigCanvasInlinePreview),
+		bootstrapStatsigGlassDesignModeComposerPill:      buildEnabledStatsigGate(bootstrapStatsigGlassDesignModeComposerPill),
 		bootstrapStatsigEnableMultitaskMode:              buildEnabledStatsigGate(bootstrapStatsigEnableMultitaskMode),
 		bootstrapStatsigDecomposeAlwaysLocalExtHostGate:  buildDisabledStatsigGate(bootstrapStatsigDecomposeAlwaysLocalExtHostGate),
 		bootstrapStatsigCursorExtensionsIsolationV2Gate:  buildDisabledStatsigGate(bootstrapStatsigCursorExtensionsIsolationV2Gate),

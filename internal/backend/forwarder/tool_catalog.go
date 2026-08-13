@@ -50,6 +50,10 @@ func CursorCapabilityMap() []CursorCapabilityEntry {
 			ReachabilityTest: capabilityRouteTest, Status: "implemented",
 		}
 	}
+	// unsupported means "this repository implements no sender for the arm", not
+	// "the Cursor client cannot execute it". The client's exec registry wires most
+	// of these arms with the same mechanism it uses for arms we do drive, so an
+	// entry here is a statement about our side only. Reasons must be worded that way.
 	unsupported := func(protocolName, reason string) CursorCapabilityEntry {
 		return CursorCapabilityEntry{
 			ProtocolName: protocolName, Class: CursorCapabilityExecutableTool,
@@ -91,10 +95,10 @@ func CursorCapabilityMap() []CursorCapabilityEntry {
 		control("ExecServerMessage.request_context_args (RequestContextArgs)", "Cursor host context request; no provider tool exposes this control arm."),
 		exec("ExecServerMessage.mcp_args (McpArgs)", "internal/backend/agent/bridge/exec/exec_open_misc.go: Bridge.openMcp"),
 		exec("ExecServerMessage.shell_stream_args (ShellArgs)", "internal/backend/agent/bridge/exec/exec_open_shell.go: Bridge.openShell"),
-		unsupported("ExecServerMessage.background_shell_spawn_args (BackgroundShellSpawnArgs)", "No current Shell bridge route emits this arm; backgrounding is reported through ShellStream and ForceBackgroundShell uses its own arm."),
+		unsupported("ExecServerMessage.background_shell_spawn_args (BackgroundShellSpawnArgs)", "Deliberately not sent: the local Shell route reaches the same background shell through shell_stream_args with timeout 0, which additionally streams output before backgrounding. A second sender would register a duplicate shell in the same BackgroundShellState machinery with no output stream."),
 		exec("ExecServerMessage.list_mcp_resources_exec_args (ListMcpResourcesExecArgs)", "internal/backend/agent/bridge/exec/exec_open_misc.go: Bridge.openListMcpResources"),
 		exec("ExecServerMessage.read_mcp_resource_exec_args (ReadMcpResourceExecArgs)", "internal/backend/agent/bridge/exec/exec_open_misc.go: Bridge.openReadMcpResource"),
-		unsupported("ExecServerMessage.mcp_state_exec_args (McpStateExecArgs)", "MCP state synchronization is not exposed as a local executable route."),
+		exec("ExecServerMessage.mcp_state_exec_args (McpStateExecArgs)", "internal/backend/agent/bridge/exec/exec_open_mcp_state.go: Bridge.openGetMcpTools"),
 		exec("ExecServerMessage.fetch_args (FetchArgs)", "internal/backend/agent/bridge/exec/exec_open_task.go: Bridge.openFetch"),
 		exec("ExecServerMessage.record_screen_args (RecordScreenArgs)", "internal/backend/agent/bridge/exec/exec_open_task.go: Bridge.openRecordScreen"),
 		exec("ExecServerMessage.computer_use_args (ComputerUseArgs)", "internal/backend/agent/bridge/exec/exec_open_task.go: Bridge.openComputerUse"),
@@ -105,11 +109,11 @@ func CursorCapabilityMap() []CursorCapabilityEntry {
 		exec("ExecServerMessage.force_background_subagent_args (ForceBackgroundSubagentArgs)", "internal/backend/agent/bridge/exec/exec_open_task.go: Bridge.openForceBackgroundSubagent"),
 		exec("ExecServerMessage.subagent_await_args (SubagentAwaitArgs)", "internal/backend/agent/bridge/exec/exec_subagent_await.go: Bridge.openSubagentAwait"),
 		control("ExecServerMessage.smart_mode_classifier_args (SmartModeClassifierArgs)", "Cursor mode-selection control is not a provider tool."),
-		unsupported("ExecServerMessage.canvas_diagnostics_args (CanvasDiagnosticsArgs)", "Canvas diagnostics require Cursor UI state that the local runtime does not own."),
+		exec("ExecServerMessage.canvas_diagnostics_args (CanvasDiagnosticsArgs)", "internal/backend/agent/bridge/exec/exec_open_misc.go: Bridge.openCanvasDiagnostics"),
 		control("ExecServerMessage.shell_allowlist_precheck_args (ShellAllowlistPrecheckArgs)", "Client allowlist precheck control arm."),
 		control("ExecServerMessage.mcp_allowlist_precheck_args (McpAllowlistPrecheckArgs)", "Client allowlist precheck control arm."),
 		control("ExecServerMessage.web_fetch_allowlist_precheck_args (WebFetchAllowlistPrecheckArgs)", "Client allowlist precheck control arm."),
-		unsupported("ExecServerMessage.git_diff_request (GetDiffRequest)", "The local runtime has no Cursor SCM exec sender."),
+		exec("ExecServerMessage.git_diff_request (GetDiffRequest)", "internal/backend/agent/bridge/exec/exec_open_git.go: Bridge.openGitDiff"),
 		unsupported("ExecServerMessage.pi_read_args (PiReadExecArgs)", "Pi compatibility transport is not routed by the local exec bridge."),
 		unsupported("ExecServerMessage.pi_bash_args (PiBashExecArgs)", "Pi compatibility transport is not routed by the local exec bridge."),
 		unsupported("ExecServerMessage.pi_edit_args (PiEditExecArgs)", "Pi compatibility transport is not routed by the local exec bridge."),
@@ -118,7 +122,7 @@ func CursorCapabilityMap() []CursorCapabilityEntry {
 		unsupported("ExecServerMessage.pi_find_args (PiFindExecArgs)", "Pi compatibility transport is not routed by the local exec bridge."),
 		unsupported("ExecServerMessage.pi_ls_args (PiLsExecArgs)", "Pi compatibility transport is not routed by the local exec bridge."),
 		unsupported("ExecServerMessage.mini_swe_agent_bash_args (ShellArgs)", "The local Shell route emits shell_stream_args and does not opt into the mini-SWE transport."),
-		unsupported("ExecServerMessage.conversation_search_args (ConversationSearchArgs)", "Conversation search is a Cursor-side data service, not a workspace tool."),
+		exec("ExecServerMessage.conversation_search_args (ConversationSearchArgs)", "internal/backend/agent/bridge/exec/exec_open_conversation_search.go: Bridge.openSearchConversations"),
 		control("ExecServerMessage.agent_store_conflict_args (AgentStoreConflictArgs)", "Agent-store conflict synchronization control arm."),
 
 		// ToolCall.oneof inventory. Implemented entries are constructed by real
@@ -129,7 +133,7 @@ func CursorCapabilityMap() []CursorCapabilityEntry {
 		toolCall("ToolCall.grep_tool_call (GrepToolCall)", "internal/backend/forwarder/events.go: buildStartedToolCall(Grep)"),
 		toolCall("ToolCall.read_tool_call (ReadToolCall)", "internal/backend/forwarder/events.go: buildStartedToolCall(Read)"),
 		toolCall("ToolCall.update_todos_tool_call (UpdateTodosToolCall)", "internal/backend/forwarder/events.go: buildStartedToolCall(TodoWrite)"),
-		support("ToolCall.read_todos_tool_call (ReadTodosToolCall)", "ReadTodos remains compatible with persisted state/replay, but no current prompt or service route exposes it."),
+		toolCall("ToolCall.read_todos_tool_call (ReadTodosToolCall)", "internal/backend/forwarder/events.go: buildStartedToolCall(ReadTodos)"),
 		toolCall("ToolCall.edit_tool_call (EditToolCall)", "internal/backend/forwarder/events.go: buildStartedToolCall(Write/PatchEdit)"),
 		toolCall("ToolCall.ls_tool_call (LsToolCall)", "internal/backend/forwarder/events.go: buildStartedToolCall(Ls)"),
 		toolCall("ToolCall.read_lints_tool_call (ReadLintsToolCall)", "internal/backend/agent/bridge/exec/exec_build_toolcall.go: buildReadLintsCompletedToolCall"),
@@ -160,15 +164,31 @@ func CursorCapabilityMap() []CursorCapabilityEntry {
 		support("ToolCall.mcp_auth_tool_call (McpAuthToolCall)", "MCP authentication presentation has no provider-callable local route."),
 		toolCall("ToolCall.await_tool_call (AwaitToolCall)", "internal/backend/forwarder/await_shell_tool.go: buildAwaitShellToolCall"),
 		support("ToolCall.blame_by_file_path_tool_call (BlameByFilePathToolCall)", "Blame presentation is not exposed by the local prompt catalog."),
-		support("ToolCall.get_mcp_tools_tool_call (GetMcpToolsToolCall)", "MCP tool discovery presentation is not exposed as a provider tool."),
+		toolCall("ToolCall.get_mcp_tools_tool_call (GetMcpToolsToolCall)", "internal/backend/agent/bridge/exec/exec_open_mcp_state.go: buildGetMcpToolsCompletedToolCall"),
 		support("ToolCall.report_bug_tool_call (ReportBugToolCall)", "Bug reporting is not exposed by the local prompt catalog."),
 		support("ToolCall.set_active_branch_tool_call (SetActiveBranchToolCall)", "Branch-selection presentation is not exposed by the local prompt catalog."),
-		support("ToolCall.communicate_update_tool_call (CommunicateUpdateToolCall)", "Communication updates are Cursor orchestration bookkeeping."),
+		toolCall("ToolCall.communicate_update_tool_call (CommunicateUpdateToolCall)", "internal/backend/forwarder/events.go: buildStartedToolCall(UpdateCurrentStep)"),
 		toolCall("ToolCall.send_final_summary_tool_call (SendFinalSummaryToolCall)", "internal/backend/forwarder/events.go: buildStartedToolCall(send_final_summary)"),
 		support("ToolCall.update_pr_code_tour_tool_call (UpdatePrCodeTourToolCall)", "PR code-tour updates are not exposed by the local prompt catalog."),
 		support("ToolCall.replace_env_tool_call (ReplaceEnvToolCall)", "Environment replacement is not exposed by the local prompt catalog."),
 		support("ToolCall.edit_pr_labels_tool_call (EditPrLabelsToolCall)", "Standalone PR-label editing is not exposed by the local prompt catalog."),
 		support("ToolCall.record_ci_investigation_findings_tool_call (RecordCiInvestigationFindingsToolCall)", "CI investigation recording is not exposed by the local prompt catalog."),
+		// Arms first observed in Cursor 3.15.6. Every reason below states what this
+		// repository does not implement; none of them claims the client cannot execute the arm.
+		support("ToolCall.send_message_tool_call (SendMessageToolCall)", "Cloud-agent messaging presentation; no local route builds it."),
+		support("ToolCall.fetch_cloud_agent_data_tool_call (FetchCloudAgentDataToolCall)", "Cloud-agent data retrieval presentation; no local route builds it."),
+		support("ToolCall.send_to_user_tool_call (SendToUserToolCall)", "Direct user-message presentation; no local prompt tool emits it."),
+		support("ToolCall.pi_read_tool_call (PiReadToolCall)", "Pi transport presentation; the local exec bridge implements no pi_read_args sender."),
+		support("ToolCall.pi_bash_tool_call (PiBashToolCall)", "Pi transport presentation; the local exec bridge implements no pi_bash_args sender."),
+		support("ToolCall.pi_edit_tool_call (PiEditToolCall)", "Pi transport presentation; the local exec bridge implements no pi_edit_args sender."),
+		support("ToolCall.pi_write_tool_call (PiWriteToolCall)", "Pi transport presentation; the local exec bridge implements no pi_write_args sender."),
+		support("ToolCall.pi_grep_tool_call (PiGrepToolCall)", "Pi transport presentation; the local exec bridge implements no pi_grep_args sender."),
+		support("ToolCall.pi_find_tool_call (PiFindToolCall)", "Pi transport presentation; the local exec bridge implements no pi_find_args sender."),
+		support("ToolCall.pi_ls_tool_call (PiLsToolCall)", "Pi transport presentation; the local exec bridge implements no pi_ls_args sender."),
+		support("ToolCall.connect_scm_tool_call (ConnectScmToolCall)", "SCM connect presentation; no local prompt tool or route drives SCM onboarding."),
+		toolCall("ToolCall.search_conversations_tool_call (SearchConversationsToolCall)", "internal/backend/agent/bridge/exec/exec_open_conversation_search.go: buildSearchConversationsCompletedToolCall"),
+		support("ToolCall.create_goal_tool_call (CreateGoalToolCall)", "Goal creation presentation; the local runtime keeps no goal store."),
+		support("ToolCall.update_goal_tool_call (UpdateGoalToolCall)", "Goal update presentation; the local runtime keeps no goal store."),
 
 		// Every tool schema exposed by any static prompt catalog.
 		promptTool("AskQuestion", "internal/backend/forwarder/interaction_tools.go: Service.handleInteractionToolInvocation -> interaction.Bridge.OpenQuery"),
@@ -183,13 +203,17 @@ func CursorCapabilityMap() []CursorCapabilityEntry {
 		promptTool("ForceBackgroundShell", "internal/backend/forwarder/service.go: Service.handleToolInvocation -> exec.Bridge.OpenExec"),
 		promptTool("ForceBackgroundSubagent", "internal/backend/forwarder/service.go: Service.handleToolInvocation -> exec.Bridge.OpenExec"),
 		promptTool("GenerateImage", "internal/backend/forwarder/interaction_tools.go: Service.handleImmediateNativeToolInvocation"),
+		promptTool("GetMcpTools", "internal/backend/forwarder/service.go: Service.handleToolInvocation -> exec.Bridge.OpenExec"),
+		promptTool("GitDiff", "internal/backend/forwarder/service.go: Service.handleToolInvocation -> exec.Bridge.OpenExec"),
 		promptTool("Glob", "internal/backend/forwarder/service.go: Service.handleToolInvocation -> exec.Bridge.OpenExec"),
 		promptTool("Grep", "internal/backend/forwarder/service.go: Service.handleToolInvocation -> exec.Bridge.OpenExec"),
 		promptTool("Ls", "internal/backend/forwarder/service.go: Service.handleToolInvocation -> exec.Bridge.OpenExec"),
 		promptTool("PatchEdit", "internal/backend/forwarder/patch_edit_tool.go: Service.handlePatchEditToolInvocation"),
 		promptTool("Read", "internal/backend/forwarder/service.go: Service.handleToolInvocation -> exec.Bridge.OpenExec"),
 		promptTool("ReadLints", "internal/backend/forwarder/service.go: Service.handleToolInvocation -> exec.Bridge.OpenExec"),
+		promptTool("ReadTodos", "internal/backend/forwarder/interaction_tools.go: Service.handleLocalStateToolInvocation"),
 		promptTool("RecordScreen", "internal/backend/forwarder/service.go: Service.handleToolInvocation -> exec.Bridge.OpenExec"),
+		promptTool("SearchConversations", "internal/backend/forwarder/service.go: Service.handleToolInvocation -> exec.Bridge.OpenExec"),
 		promptTool("SeeImage", "internal/backend/forwarder/vision_proxy.go: Service.handleSeeImageToolInvocation"),
 		promptTool("send_final_summary", "internal/backend/forwarder/interaction_tools.go: Service.handleSendFinalSummaryToolInvocation"),
 		promptTool("Shell", "internal/backend/forwarder/service.go: Service.handleToolInvocation -> exec.Bridge.OpenExec"),
@@ -197,6 +221,7 @@ func CursorCapabilityMap() []CursorCapabilityEntry {
 		promptTool("SwitchMode", "internal/backend/forwarder/interaction_tools.go: Service.handleInteractionToolInvocation -> interaction.Bridge.OpenQuery"),
 		promptTool("Task", "internal/backend/forwarder/service.go: Service.handleToolInvocation -> delegation or exec.Bridge.OpenExec"),
 		promptTool("TodoWrite", "internal/backend/forwarder/interaction_tools.go: Service.handleLocalStateToolInvocation"),
+		promptTool("UpdateCurrentStep", "internal/backend/forwarder/communicate_update.go: Service.handleUpdateCurrentStepToolInvocation"),
 		promptTool("UpdatePr", "internal/backend/forwarder/interaction_tools.go: Service.handleInteractionToolInvocation -> interaction.Bridge.OpenQuery"),
 		promptTool("WebFetch", "internal/backend/forwarder/interaction_tools.go: Service.handleInteractionToolInvocation -> interaction.Bridge.OpenQuery"),
 		promptTool("WebSearch", "internal/backend/forwarder/interaction_tools.go: Service.handleInteractionToolInvocation -> interaction.Bridge.OpenQuery"),
@@ -313,6 +338,10 @@ var agentModeToolNames = map[string]struct{}{
 	"SwitchMode":              {},
 	"Task":                    {},
 	"TodoWrite":               {},
+	"ReadTodos":               {},
+	"GitDiff":                 {},
+	"GetMcpTools":             {},
+	"SearchConversations":     {},
 	"WebFetch":                {},
 	"WebSearch":               {},
 	"Write":                   {},
@@ -346,6 +375,10 @@ var multitaskModeToolNames = map[string]struct{}{
 	"SwitchMode":              {},
 	"Task":                    {},
 	"TodoWrite":               {},
+	"ReadTodos":               {},
+	"GitDiff":                 {},
+	"GetMcpTools":             {},
+	"SearchConversations":     {},
 	"WebFetch":                {},
 	"WebSearch":               {},
 	"Write":                   {},
@@ -376,6 +409,10 @@ var debugModeToolNames = map[string]struct{}{
 	"ForceBackgroundShell":    {},
 	"Task":                    {},
 	"TodoWrite":               {},
+	"ReadTodos":               {},
+	"GitDiff":                 {},
+	"GetMcpTools":             {},
+	"SearchConversations":     {},
 	"WebFetch":                {},
 	"WebSearch":               {},
 	"Write":                   {},
@@ -405,6 +442,10 @@ var askModeToolNames = map[string]struct{}{
 	"ForceBackgroundShell":    {},
 	"Task":                    {},
 	"TodoWrite":               {},
+	"ReadTodos":               {},
+	"GitDiff":                 {},
+	"GetMcpTools":             {},
+	"SearchConversations":     {},
 	"WebFetch":                {},
 	"WebSearch":               {},
 	"Write":                   {},
@@ -434,6 +475,10 @@ var planModeToolNames = map[string]struct{}{
 	"ForceBackgroundShell": {},
 	"Task":                 {},
 	"TodoWrite":            {},
+	"ReadTodos":            {},
+	"GitDiff":              {},
+	"GetMcpTools":          {},
+	"SearchConversations":  {},
 	"WebFetch":             {},
 	"WebSearch":            {},
 	"SeeImage":             {},
@@ -451,6 +496,17 @@ var childConversationDisallowedAgentToolNames = map[string]struct{}{
 	// This tool is a short history-list summary and terminates the provider
 	// pass. A child must return its full final response through SubagentResult.
 	"send_final_summary": {},
+	// The client only enables conversation search for a top-level IDE agent
+	// (it checks for the absence of subagentConfig / subagentInstanceId), so a
+	// child would call an arm the client refuses to serve.
+	"SearchConversations": {},
+}
+
+// childConversationOnlyToolNames 是只对 Task 子会话开放的工具。它们写的是父会话
+// Task 卡片上的展示状态，顶层会话没有 Task 卡片可写，暴露出去只会浪费 token；
+// 保持顶层不可见也让顶层的 tools 前缀不受影响。
+var childConversationOnlyToolNames = map[string]struct{}{
+	updateCurrentStepToolName: {},
 }
 
 func supportedToolNamesForMode(mode agentv1.AgentMode) map[string]struct{} {
@@ -477,6 +533,7 @@ func isKnownBuiltInToolName(toolName string) bool {
 	}
 	for _, names := range []map[string]struct{}{
 		agentModeToolNames,
+		childConversationOnlyToolNames,
 		multitaskModeToolNames,
 		debugModeToolNames,
 		askModeToolNames,
@@ -497,6 +554,9 @@ func isToolAllowedInMode(mode agentv1.AgentMode, subagentTypeName string, toolNa
 	if isChildConversationSubagentTypeName(subagentTypeName) {
 		if _, disallowed := childConversationDisallowedAgentToolNames[trimmedToolName]; disallowed {
 			return false
+		}
+		if _, childOnly := childConversationOnlyToolNames[trimmedToolName]; childOnly {
+			return true
 		}
 		_, ok := agentModeToolNames[trimmedToolName]
 		return ok

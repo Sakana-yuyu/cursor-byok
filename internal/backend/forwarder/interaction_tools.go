@@ -348,7 +348,7 @@ type generateImageToolCarrier struct {
 
 func isImmediateNativeTool(name string) bool {
 	switch strings.TrimSpace(name) {
-	case "GenerateImage", "AwaitShell", "SeeImage", "send_final_summary":
+	case "GenerateImage", "AwaitShell", "SeeImage", "send_final_summary", updateCurrentStepToolName:
 		return true
 	default:
 		return false
@@ -365,6 +365,8 @@ func (service *Service) handleImmediateNativeToolInvocation(stream *ActiveStream
 		return service.handleSeeImageToolInvocation(stream, invocation)
 	case "send_final_summary":
 		return service.handleSendFinalSummaryToolInvocation(stream, invocation)
+	case updateCurrentStepToolName:
+		return service.handleUpdateCurrentStepToolInvocation(stream, invocation)
 	default:
 		return fmt.Errorf("unsupported immediate native tool: %s", invocation.ToolName)
 	}
@@ -593,7 +595,7 @@ func buildGenerateImageErrorResult(message string) (*agentv1.GenerateImageResult
 
 func isLocalStateTool(name string) bool {
 	switch strings.TrimSpace(name) {
-	case "TodoWrite":
+	case "TodoWrite", "ReadTodos":
 		return true
 	default:
 		return false
@@ -604,6 +606,8 @@ func (service *Service) handleLocalStateToolInvocation(stream *ActiveStream, inv
 	switch strings.TrimSpace(invocation.ToolName) {
 	case "TodoWrite":
 		return service.handleTodoWriteToolInvocation(stream, invocation)
+	case "ReadTodos":
+		return service.handleReadTodosToolInvocation(stream, invocation)
 	default:
 		return fmt.Errorf("unsupported local state tool: %s", invocation.ToolName)
 	}

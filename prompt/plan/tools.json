@@ -672,5 +672,137 @@
         ]
       }
     }
+  },
+  {
+    "function": {
+      "description": "Read the current session todo list, the same list TodoWrite maintains.\n\nUse this to re-check task state instead of guessing: after a long stretch of work, after the conversation has been compacted, or when resuming an existing session. Both filters are optional and combine with AND; omit both to read the whole list.",
+      "name": "ReadTodos",
+      "parameters": {
+        "properties": {
+          "id_filter": {
+            "description": "Only return todos whose id is in this list.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status_filter": {
+            "description": "Only return todos whose status is in this list.",
+            "items": {
+              "enum": [
+                "pending",
+                "in_progress",
+                "completed",
+                "cancelled"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Get a structured git diff for the workspace: per-file added/removed line counts plus the actual hunks, without spawning a shell or parsing `git diff` text yourself.\n\nThe comparison always has a base ref: pass base_ref (optionally with merge_base to see only the current branch's own changes), otherwise the editor resolves the repository's default branch. A repository with no remote may have no resolvable default branch, in which case this tool comes back unavailable and tells you to fall back to Shell - that is never a statement that the repository has no changes.\n\nUse committed_only to exclude uncommitted work and target_paths to scope the query. Large diffs are truncated, so start with output_format=\"name_status_and_numstat\" to see which files changed, then re-query with target_paths for the files you actually need to read.",
+      "name": "GitDiff",
+      "parameters": {
+        "properties": {
+          "base_ref": {
+            "description": "Compare against this ref (branch, tag, or commit). Omit to let the editor resolve the repository's default branch (origin/HEAD, then origin/main, origin/master, origin/develop).",
+            "type": "string"
+          },
+          "committed_only": {
+            "description": "Exclude uncommitted working-tree changes and diff only committed history.",
+            "type": "boolean"
+          },
+          "merge_base": {
+            "description": "Compare against the merge base with base_ref rather than base_ref itself. Use this to review just the current branch's own changes.",
+            "type": "boolean"
+          },
+          "output_format": {
+            "description": "How much detail to return. \"name_status\" lists changed paths only, \"name_status_and_numstat\" adds per-file line counts, \"file_diffs\" (default) adds hunks, \"diffs_with_before_and_after\" also includes full file contents and is very expensive.",
+            "enum": [
+              "name_status",
+              "name_status_and_numstat",
+              "file_diffs",
+              "diffs_with_before_and_after"
+            ],
+            "type": "string"
+          },
+          "ref": {
+            "description": "Diff this ref instead of the working tree.",
+            "type": "string"
+          },
+          "target_paths": {
+            "description": "Restrict the diff to these paths. Use this to keep large diffs readable.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "unified_context_lines": {
+            "description": "Number of context lines around each hunk.",
+            "type": "integer"
+          },
+          "working_directory": {
+            "description": "Repository directory to run against. Defaults to the workspace root.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Look up the MCP servers this client has connected and the tools they expose, including each tool's input schema.\n\nCall this before CallMcpTool whenever you are unsure whether a server is connected, what a tool is named, or what arguments it takes. With no arguments it returns a catalog of every connected server with one-line tool summaries. Pass server=<identifier> to get that server's full tool descriptions and input schemas, or pattern=<regex> to search server and tool names.",
+      "name": "GetMcpTools",
+      "parameters": {
+        "properties": {
+          "pattern": {
+            "description": "Case-insensitive regular expression matched against server and tool names.",
+            "type": "string"
+          },
+          "server": {
+            "description": "Server identifier to inspect. Returns that server's full tool descriptions and input schemas.",
+            "type": "string"
+          },
+          "tool_name": {
+            "description": "Restrict the result to this tool name.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Search this client's index of past conversations (local history plus cached cloud agents) and return matching conversations with a snippet.\n\nUse it to recover earlier context: what was decided, which files were touched, why an approach was dropped. The result reports the index health; when it says the index is rebuilding or only partially built, a miss is not evidence that the conversation does not exist.",
+      "name": "SearchConversations",
+      "parameters": {
+        "properties": {
+          "limit": {
+            "description": "Maximum number of conversations to return. Defaults to 20, capped at 50.",
+            "type": "integer"
+          },
+          "query": {
+            "description": "Keywords to search for in conversation titles and content.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      }
+    },
+    "type": "function"
   }
 ]

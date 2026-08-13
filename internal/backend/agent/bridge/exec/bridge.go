@@ -82,6 +82,8 @@ func (bridge *Bridge) OpenExec(openContext OpenExecContext, toolCall runtimecore
 		return bridge.openGrep(toolCall)
 	case "diagnostics":
 		return bridge.openReadLints(toolCall)
+	case "canvas_diagnostics":
+		return bridge.openCanvasDiagnostics(toolCall)
 	case "ls":
 		return bridge.openLs(toolCall)
 	case "shell":
@@ -98,6 +100,12 @@ func (bridge *Bridge) OpenExec(openContext OpenExecContext, toolCall runtimecore
 		return bridge.openListMcpResources(toolCall)
 	case "read_mcp_resource":
 		return bridge.openReadMcpResource(toolCall)
+	case "mcp_state":
+		return bridge.openGetMcpTools(toolCall)
+	case "conversation_search":
+		return bridge.openSearchConversations(toolCall)
+	case "git_diff":
+		return bridge.openGitDiff(openContext, toolCall)
 	case "fetch":
 		return bridge.openFetch(toolCall)
 	case "record_screen":
@@ -204,6 +212,16 @@ func (bridge *Bridge) ApplyExecClientMessage(msg *agentv1.ExecClientMessage, pen
 		result.ToolCall = buildReadLintsCompletedToolCall(pending.ArgsJSON, msg.GetDiagnosticsResult())
 		result.IsTerminal = true
 		return result, nil
+	case "canvas_diagnostics":
+		result.ToolResultPayload = summarizeCanvasDiagnosticsResult(msg.GetCanvasDiagnosticsResult())
+		result.IsTerminal = true
+		return result, nil
+	case "git_diff":
+		// ToolCall.oneof 没有 git diff 分支，客户端不会渲染卡片；
+		// 结果只以工具文本回给模型（与 SeeImage 同形）。
+		result.ToolResultPayload = summarizeGitDiffResponse(msg.GetGitDiffResponse())
+		result.IsTerminal = true
+		return result, nil
 	case "ls":
 		result.ToolResultPayload = summarizeLsResult(msg.GetLsResult())
 		result.ToolCall = buildLsCompletedToolCall(pending.ToolCallID, pending.ArgsJSON, msg.GetLsResult())
@@ -225,6 +243,18 @@ func (bridge *Bridge) ApplyExecClientMessage(msg *agentv1.ExecClientMessage, pen
 		truncatedResult := truncateReadMcpResourceResultForReplay(msg.GetReadMcpResourceExecResult())
 		result.ToolResultPayload = summarizeReadMcpResourceResult(truncatedResult)
 		result.ToolCall = buildReadMcpResourceCompletedToolCall(pending.ArgsJSON, truncatedResult)
+		result.IsTerminal = true
+		return result, nil
+	case "mcp_state":
+		stateResult := msg.GetMcpStateExecResult()
+		result.ToolResultPayload = summarizeMcpStateResult(stateResult, pending.ArgsJSON)
+		result.ToolCall = buildGetMcpToolsCompletedToolCall(pending.ToolCallID, pending.ArgsJSON, stateResult, result.ToolResultPayload)
+		result.IsTerminal = true
+		return result, nil
+	case "conversation_search":
+		searchResult := msg.GetConversationSearchResult()
+		result.ToolResultPayload = summarizeConversationSearchResult(searchResult, pending.ArgsJSON)
+		result.ToolCall = buildSearchConversationsCompletedToolCall(pending.ToolCallID, pending.ArgsJSON, searchResult)
 		result.IsTerminal = true
 		return result, nil
 	case "fetch":
