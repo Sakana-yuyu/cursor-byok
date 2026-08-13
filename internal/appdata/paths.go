@@ -9,6 +9,9 @@ import (
 const (
 	appDirName       = ".cursor-local-assistant-v2"
 	legacyAppDirName = ".cursor-local-assistant"
+
+	// RootDirEnvVar 用于把应用数据根目录整体重定向到别处。
+	RootDirEnvVar = "CURSOR_BYOK_HOME"
 )
 
 // RootDir 返回应用配置根目录。
@@ -21,11 +24,24 @@ func legacyRootDir() string {
 }
 
 func appRootDir(dirName string) string {
-	homeDir, err := os.UserHomeDir()
-	if err != nil || strings.TrimSpace(homeDir) == "" {
+	homeDir := homeDirForAppData()
+	if homeDir == "" {
 		return dirName
 	}
 	return filepath.Join(homeDir, dirName)
+}
+
+// homeDirForAppData 返回推导应用数据目录时使用的主目录。
+// RootDirEnvVar 优先于操作系统主目录，便于便携部署、多实例并存以及测试隔离。
+func homeDirForAppData() string {
+	if override := strings.TrimSpace(os.Getenv(RootDirEnvVar)); override != "" {
+		return override
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return sandboxHomeIfUnderTest(strings.TrimSpace(homeDir))
 }
 
 // ConfigFilePath 返回统一用户配置文件路径。
