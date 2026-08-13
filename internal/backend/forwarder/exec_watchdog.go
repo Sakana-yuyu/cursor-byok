@@ -16,6 +16,10 @@ const (
 	defaultExecTimeout = 10 * time.Minute
 	// longRunningExecTimeout 是 subagent/delegation aggregate 的最终兜底超时。
 	longRunningExecTimeout = 30 * time.Minute
+	// gitDiffExecTimeout 是 git_diff 的兜底超时。客户端的 git diff 处理器全程同步：
+	// 要么秒级返回结构化 diff，要么在 base ref 解析、merge-base 或响应体积检查处抛错。
+	// 抛错路径不保证回包，通用 10 分钟档位会把模型白白钉死十分钟，因此单独收紧。
+	gitDiffExecTimeout = 45 * time.Second
 	// execWatchdogTick 是 watchdog 扫描间隔。
 	execWatchdogTick = 30 * time.Second
 	// nativeSubagentExecWatchdogMaxDeferrals 是 native 子代理 exec 看门狗的最大延期次数。
@@ -27,11 +31,17 @@ const (
 
 const streamTimerExecWatchdog = "exec_watchdog"
 
+// gitDiffTransportClosedReason 标记由客户端 stream_close 触发的 git_diff 恢复。
+// 这条路径不是「等满了兜底时长」，降级文案不能照抄超时措辞。
+const gitDiffTransportClosedReason = "transport_closed"
+
 // execTimeoutForKind 返回指定执行桥的最终兜底时长。
 func execTimeoutForKind(kind string) time.Duration {
 	switch strings.TrimSpace(kind) {
 	case "subagent", "delegation_aggregate":
 		return longRunningExecTimeout
+	case "git_diff":
+		return gitDiffExecTimeout
 	default:
 		return defaultExecTimeout
 	}
@@ -106,6 +116,11 @@ func (service *Service) recoverExecWithoutTerminal(stream *ActiveStream, pending
 	if stream == nil {
 		return nil
 	}
+	// Write/PatchEdit 的隐藏步骤是一次工具调用内部的中间步骤，通用超时收口会写出一条
+	// 工具名为空的 tool_result 并让整个编辑调用从模型可见历史里消失。见该文件的注释。
+	if isHiddenWriteExecKind(pending.ExecKind) || isHiddenPatchEditExecKind(pending.ExecKind) {
+		return service.recoverHiddenEditExecWithoutTerminal(stream, pending, reason)
+	}
 	// native Cursor 子代理超时收口时，先向客户端执行桥发 abort，真正取消客户端侧
 	// 仍在运行的子代理，避免出现「Cursor 任务还在进行中、byok 已显示超时」的割裂。
 	// 普通工具（read/write/shell 等）不需要 abort，客户端侧没有对应任务在跑。
@@ -158,6 +173,9 @@ func (service *Service) recoverExecWithoutTerminal(stream *ActiveStream, pending
 func buildSyntheticExecResultPayload(pending runtimecore.PendingExec, reason string) string {
 	toolName := deriveToolNameFromPendingExec(pending)
 	timeout := execTimeoutForKind(pending.ExecKind)
+	if strings.TrimSpace(pending.ExecKind) == "git_diff" {
+		return buildGitDiffUnavailablePayload(pending, reason, timeout)
+	}
 	detail := fmt.Sprintf("[exec watchdog] %s timed out or lost terminal signal after %s (exec_id=%s, reason=%s)", toolName, timeout, pending.ExecID, reason)
 	summary := map[string]any{
 		"status":    "timeout",
@@ -171,6 +189,29 @@ func buildSyntheticExecResultPayload(pending runtimecore.PendingExec, reason str
 		return detail
 	}
 	return string(encoded)
+}
+
+// buildGitDiffUnavailablePayload 构造 GitDiff 无响应时交还给模型的降级结果。
+//
+// 这是「工具返回了一个有用的结果」而不是「工具调用失败」：模型拿到的是一条可执行的
+// 退路。措辞有两条硬约束：
+//   - 明说这是环境没给出 diff，不是仓库没有改动。空 diff 的成功文案是 "git diff empty"，
+//     两者必须不可混淆——否则模型会据此断言工作区干净，并把后续结论全建在错误前提上。
+//   - 提示写在开头。工具结果整体截断砍掉的是结尾，提示放末尾会连同内容一起消失。
+//
+// 看门狗超时与客户端 stream_close 共用后三行，只有首行说明成因——共用措辞不等于可以
+// 谎报原因：传输被关掉时并没有等满 timeout。
+func buildGitDiffUnavailablePayload(pending runtimecore.PendingExec, reason string, timeout time.Duration) string {
+	lead := fmt.Sprintf("GitDiff unavailable: the editor client returned no git diff response within %s, so this call carries no diff data at all.", timeout)
+	if strings.TrimSpace(reason) == gitDiffTransportClosedReason {
+		lead = "GitDiff unavailable: the editor client closed the git diff transport before sending any result, so this call carries no diff data at all."
+	}
+	return strings.Join([]string{
+		lead,
+		"This is an environment limitation, NOT a report that there are no changes: the working tree may well be dirty, and this result must not be used to conclude that nothing changed.",
+		"Fall back to the Shell tool and run git yourself, e.g. `git status --porcelain` for the changed paths and `git diff` (or `git diff --stat` first when the diff may be large) for the contents. Base every conclusion about what changed on that output, and do not retry GitDiff with the same arguments.",
+		fmt.Sprintf("[exec watchdog] exec_id=%s reason=%s", strings.TrimSpace(pending.ExecID), strings.TrimSpace(reason)),
+	}, "\n")
 }
 
 // cleanupAllPendingExecs 在 stream 取消/终止时清理所有 pending exec。
