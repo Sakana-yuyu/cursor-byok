@@ -33,6 +33,22 @@ type MirrorCaptureConfig interface {
 	MirrorCaptureHosts() []string
 }
 
+// protocolFidelityProvider 是 MirrorCaptureConfig 的可选扩展。
+// 未实现该接口的配置实现（含测试替身）保持保真记录关闭，行为与既有实现一致。
+type protocolFidelityProvider interface {
+	MirrorCaptureProtocolFidelity() bool
+}
+
+// mirrorProtocolFidelityFunc 把配置实现方暴露的保真开关取成实时读取函数。
+// 返回 nil 表示该配置不支持保真记录，记录器据此走零开销的关闭分支。
+func mirrorProtocolFidelityFunc(mirror MirrorCaptureConfig) func() bool {
+	provider, ok := mirror.(protocolFidelityProvider)
+	if !ok || provider == nil {
+		return nil
+	}
+	return provider.MirrorCaptureProtocolFidelity
+}
+
 const (
 	mirrorLogSubdir            = "_debug/mirror"
 	mirrorLogFilename          = "official.raw.jsonl"
@@ -40,15 +56,50 @@ const (
 	mirrorBodyMaxBytes         = 128 * 1024
 	mirrorResponseMaxBytes     = 1024 * 1024
 	mirrorConnectFrameMaxBytes = mirrorResponseMaxBytes
+	// mirrorDecompressedBodyMaxBytes 是请求体解压输出的硬上限，防解压炸弹。
+	// 记录侧的压缩输入已被 mirrorBodyMaxBytes 卡在 128 KiB（更大的体在解码前就标 body_truncated），
+	// 而隔离抓包实测 BidiAppend 的 gzip 压缩比最高约 9 倍（10 KiB → 87 KiB）。
+	// 取 16 倍输入上限，既高于实测压缩比留足余量，又把单条记录的解压内存钉死在 2 MiB 量级
+	// （与既有 mirrorResponseMaxBytes 同一数量级）。
+	mirrorDecompressedBodyMaxBytes = 16 * mirrorBodyMaxBytes
 )
 
-// mirrorSensitiveHeaders 记录时一律抹掉的敏感头。
+// mirrorSensitiveHeaders 记录时一律抹掉的敏感头，取值来自本仓库实际使用的 provider 鉴权头：
+// authorization（openai / anthropic 适配器与余额查询）、x-api-key（anthropic）、
+// x-goog-api-key（gemini 原生协议，generativelanguage.googleapis.com 属默认镜像域名）、
+// api-key（Azure OpenAI 风格网关，也可能来自自定义请求头）、new-api-user（new-api 网关，
+// 取值可能直接是 apiKey），外加 cookie / proxy-authorization 这类通用会话与代理凭据。
 var mirrorSensitiveHeaders = map[string]bool{
 	"authorization":       true,
 	"proxy-authorization": true,
 	"x-api-key":           true,
+	"x-goog-api-key":      true,
+	"api-key":             true,
+	"new-api-user":        true,
 	"cookie":              true,
 	"set-cookie":          true,
+}
+
+// mirrorSensitiveHeaderHints 兜底匹配未列名的鉴权头：网关与新协议的凭据头几乎都在名字里
+// 自报家门，命中即抹掉，避免名单滞后于上游协议演进。
+var mirrorSensitiveHeaderHints = []string{
+	"key",
+	"token",
+	"secret",
+	"auth",
+	"credential",
+	"password",
+	"passwd",
+	"signature",
+}
+
+// mirrorDiagnosticHeaders 是名字命中 hints 但不含凭据的诊断头，保留原值——抓包的目的就是
+// 对照协议行为，抹掉限流计数、鉴权挑战与幂等键会让镜像失去排查价值。
+var mirrorDiagnosticHeaders = map[string]bool{
+	"www-authenticate":   true,
+	"proxy-authenticate": true,
+	"idempotency-key":    true,
+	"sec-websocket-key":  true,
 }
 
 // mirrorRecord 是 official.raw.jsonl 的一行。
@@ -159,8 +210,10 @@ type mirrorExchange struct {
 // mirrorRecorder 把镜像请求/响应追加写入 <historyRoot>/_debug/mirror/official.raw.jsonl。
 // 记录失败只记日志，绝不阻断代理直通。
 type mirrorRecorder struct {
-	historyRoot      string
-	protocolFidelity bool
+	historyRoot string
+	// protocolFidelity 每次记录时实时求值，使配置热加载无需重建代理即可生效；
+	// nil 表示保真记录不可用，等价于恒为 false。
+	protocolFidelity func() bool
 	mu               sync.Mutex
 	file             *os.File
 	timelineFile     *os.File
@@ -170,8 +223,14 @@ func newMirrorRecorder(historyRoot string) *mirrorRecorder {
 	return &mirrorRecorder{historyRoot: historyRoot}
 }
 
-func newProtocolFidelityMirrorRecorder(historyRoot string) *mirrorRecorder {
-	return &mirrorRecorder{historyRoot: historyRoot, protocolFidelity: true}
+// newConfiguredMirrorRecorder 让保真开关跟随配置实时变化；fidelity 为 nil 时保真记录关闭。
+func newConfiguredMirrorRecorder(historyRoot string, fidelity func() bool) *mirrorRecorder {
+	return &mirrorRecorder{historyRoot: historyRoot, protocolFidelity: fidelity}
+}
+
+// fidelityEnabled 是所有保真分支的唯一判定入口。
+func (r *mirrorRecorder) fidelityEnabled() bool {
+	return r != nil && r.protocolFidelity != nil && r.protocolFidelity()
 }
 
 func (r *mirrorRecorder) ensureFile() error {
@@ -194,7 +253,7 @@ func (r *mirrorRecorder) ensureFile() error {
 }
 
 func (r *mirrorRecorder) ensureTimelineFile() error {
-	if r == nil || r.historyRoot == "" || !r.protocolFidelity {
+	if r == nil || r.historyRoot == "" || !r.fidelityEnabled() {
 		return nil
 	}
 	if r.timelineFile != nil {
@@ -355,7 +414,7 @@ func (r *mirrorRecorder) recordExchangeResponseChunk(host string, exchange *mirr
 // recordExchangeResponseProtocolFrame 将完整的 RunSSE 协议帧作为独立事件写入。
 // 底层读取块绝不作为协议事件记录，避免网络缓冲行为污染后续协议对照。
 func (r *mirrorRecorder) recordExchangeResponseProtocolFrame(host string, exchange *mirrorExchange, frame mirrorProtocolFrame) {
-	if r == nil || !r.protocolFidelity || frame.FrameBytes == 0 {
+	if r == nil || !r.fidelityEnabled() || frame.FrameBytes == 0 {
 		return
 	}
 	r.write(mirrorRecord{
@@ -374,7 +433,7 @@ func (r *mirrorRecorder) setRecordBody(rec *mirrorRecord, body []byte) {
 	if rec == nil {
 		return
 	}
-	if r == nil || !r.protocolFidelity {
+	if !r.fidelityEnabled() {
 		rec.Body = string(body)
 		return
 	}
@@ -390,7 +449,7 @@ func (r *mirrorRecorder) setRecordBody(rec *mirrorRecord, body []byte) {
 // setBidiProtocolSummary 尽力解析 BidiAppend 的外层和内层 Agent protobuf。
 // 解析结果只供隔离协议对齐使用，原始 ID、prompt、路径和 protobuf JSON 都不写入摘要。
 func (r *mirrorRecorder) setBidiProtocolSummary(rec *mirrorRecord, req *http.Request, body []byte) {
-	if r == nil || !r.protocolFidelity || rec == nil || !isBidiAppendRequest(req) {
+	if r == nil || !r.fidelityEnabled() || rec == nil || !isBidiAppendRequest(req) {
 		return
 	}
 	summary := &mirrorProtocol{}
@@ -399,12 +458,13 @@ func (r *mirrorRecorder) setBidiProtocolSummary(rec *mirrorRecord, req *http.Req
 		summary.DecodeError = "body_truncated"
 		return
 	}
-	if encoding := strings.TrimSpace(req.Header.Get("Content-Encoding")); encoding != "" && !strings.EqualFold(encoding, "identity") {
-		summary.DecodeError = "unsupported_content_encoding"
+	decoded, decodeError := mirrorDecodeRequestBody(req, body)
+	if decodeError != "" {
+		summary.DecodeError = decodeError
 		return
 	}
 	appendRequest := &aiserverv1.BidiAppendRequest{}
-	if err := proto.Unmarshal(body, appendRequest); err != nil {
+	if err := proto.Unmarshal(decoded, appendRequest); err != nil {
 		summary.DecodeError = "bidi_append_unmarshal_failed"
 		return
 	}
@@ -461,7 +521,7 @@ func mirrorSetClientPayloadSummary(summary *mirrorProtocol, dataHex string, data
 
 // setRunSSERequestSummary 读取 RunSSE Connect 请求中的 BidiRequestId，只保留哈希。
 func (r *mirrorRecorder) setRunSSERequestSummary(rec *mirrorRecord, req *http.Request, body []byte) {
-	if r == nil || !r.protocolFidelity || rec == nil || !isRunSSERequest(req) {
+	if r == nil || !r.fidelityEnabled() || rec == nil || !isRunSSERequest(req) {
 		return
 	}
 	summary := &mirrorProtocol{}
@@ -470,17 +530,72 @@ func (r *mirrorRecorder) setRunSSERequestSummary(rec *mirrorRecord, req *http.Re
 		summary.DecodeError = "body_truncated"
 		return
 	}
-	if encoding := strings.TrimSpace(req.Header.Get("Content-Encoding")); encoding != "" && !strings.EqualFold(encoding, "identity") {
-		summary.DecodeError = "unsupported_content_encoding"
+	decoded, decodeError := mirrorDecodeRequestBody(req, body)
+	if decodeError != "" {
+		summary.DecodeError = decodeError
 		return
 	}
-	requestID, decodeError := mirrorRunSSERequestID(req, body)
+	requestID, decodeError := mirrorRunSSERequestID(req, decoded)
 	if decodeError != "" {
 		summary.DecodeError = decodeError
 		return
 	}
 	sum := sha256.Sum256([]byte(requestID))
 	summary.RequestIDHash = hex.EncodeToString(sum[:])
+}
+
+// mirrorDecodeRequestBody 把请求体还原成协议字节，供摘要解码使用。
+// 返回的第二个值非空表示放弃解码：调用方只写降级标记，rec.BodyBase64 里的原始字节不受影响，
+// 外部工具仍可自行解压。
+func mirrorDecodeRequestBody(req *http.Request, body []byte) ([]byte, string) {
+	switch mirrorContentCoding(req) {
+	case "":
+		return body, ""
+	case "gzip":
+		decoded, err := mirrorDecompressRequestBody(body)
+		if err != nil {
+			return nil, err.Error()
+		}
+		return decoded, ""
+	default:
+		return nil, "unsupported_content_encoding"
+	}
+}
+
+// mirrorContentCoding 把 Content-Encoding 折叠成单个编码名：取值大小写不敏感，
+// identity 按 RFC 9110 属空操作可从列表中剔除（Cursor 实际发过 "gzip"，列表形式一并兼容）。
+// 多重编码保留原样返回，由调用方按未支持处理，避免猜测叠加顺序。
+func mirrorContentCoding(req *http.Request) string {
+	if req == nil {
+		return ""
+	}
+	codings := make([]string, 0, 2)
+	for _, token := range strings.Split(req.Header.Get("Content-Encoding"), ",") {
+		coding := strings.ToLower(strings.TrimSpace(token))
+		if coding == "" || coding == "identity" {
+			continue
+		}
+		codings = append(codings, coding)
+	}
+	return strings.Join(codings, ",")
+}
+
+// mirrorDecompressRequestBody 解压 gzip 请求体，输出上限为 mirrorDecompressedBodyMaxBytes。
+// 超限与失败是两种不同的降级语义，分别标记，便于回看抓包时区分「体太大」和「流有问题」。
+func mirrorDecompressRequestBody(body []byte) ([]byte, error) {
+	reader, err := gzip.NewReader(bytes.NewReader(body))
+	if err != nil {
+		return nil, mirrorProtocolDecodeError("content_encoding_gzip_failed")
+	}
+	defer reader.Close()
+	decoded, err := io.ReadAll(io.LimitReader(reader, mirrorDecompressedBodyMaxBytes+1))
+	if err != nil {
+		return nil, mirrorProtocolDecodeError("content_encoding_gzip_failed")
+	}
+	if len(decoded) > mirrorDecompressedBodyMaxBytes {
+		return nil, mirrorProtocolDecodeError("content_encoding_gzip_too_large")
+	}
+	return decoded, nil
 }
 
 func isBidiAppendRequest(req *http.Request) bool {
@@ -906,7 +1021,7 @@ func (d *mirrorRunSSEFrameDecoder) Close() {
 }
 
 func (r *mirrorRecorder) recordExchangeRequestTimeline(exchange *mirrorExchange, req *http.Request, summary *mirrorProtocol) {
-	if r == nil || !r.protocolFidelity || exchange == nil || summary == nil || summary.RequestIDHash == "" {
+	if r == nil || !r.fidelityEnabled() || exchange == nil || summary == nil || summary.RequestIDHash == "" {
 		return
 	}
 	eventKind := ""
@@ -940,7 +1055,7 @@ func (r *mirrorRecorder) recordExchangeRequestTimeline(exchange *mirrorExchange,
 }
 
 func (r *mirrorRecorder) recordExchangeResponseTimeline(exchange *mirrorExchange, frame mirrorProtocolFrame) {
-	if r == nil || !r.protocolFidelity || exchange == nil {
+	if r == nil || !r.fidelityEnabled() || exchange == nil {
 		return
 	}
 	requestIDHash := exchange.requestIDHashValue()
@@ -1101,13 +1216,15 @@ func sanitizeMirrorRequestURL(req *http.Request) string {
 	return mirrorURLString(&copyURL)
 }
 
+// isMirrorSensitiveQueryKey 覆盖 query 侧凭据，Gemini 的 ?key= 与网关常见的 token 参数都在内；
+// 未列名的参数沿用与请求头相同的名字兜底规则。
 func isMirrorSensitiveQueryKey(key string) bool {
-	switch strings.ToLower(strings.TrimSpace(key)) {
+	lower := strings.ToLower(strings.TrimSpace(key))
+	switch lower {
 	case "key", "api_key", "apikey", "token", "access_token", "refresh_token", "secret", "signature", "sig", "password", "pass":
 		return true
-	default:
-		return false
 	}
+	return matchesMirrorSensitiveHint(lower)
 }
 
 func mirrorURLString(value *url.URL) string {
@@ -1121,11 +1238,35 @@ func mirrorURLString(value *url.URL) string {
 	return text
 }
 
+func isMirrorSensitiveHeader(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if lower == "" {
+		return false
+	}
+	if mirrorSensitiveHeaders[lower] {
+		return true
+	}
+	// 限流头带 tokens 计数，属于诊断信息而非凭据。
+	if mirrorDiagnosticHeaders[lower] || strings.Contains(lower, "ratelimit") || strings.Contains(lower, "rate-limit") {
+		return false
+	}
+	return matchesMirrorSensitiveHint(lower)
+}
+
+func matchesMirrorSensitiveHint(lower string) bool {
+	for _, hint := range mirrorSensitiveHeaderHints {
+		if strings.Contains(lower, hint) {
+			return true
+		}
+	}
+	return false
+}
+
 func sanitizeHeaders(h http.Header) map[string]string {
 	out := make(map[string]string, len(h))
 	for k, vs := range h {
 		lower := strings.ToLower(k)
-		if mirrorSensitiveHeaders[lower] {
+		if isMirrorSensitiveHeader(lower) {
 			out[lower] = "[REDACTED]"
 			continue
 		}

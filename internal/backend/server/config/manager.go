@@ -479,16 +479,22 @@ func (manager *Manager) MirrorCaptureEnabled(ctx context.Context) bool {
 	return manager.currentConfig().MirrorCapture.Enabled
 }
 
-// MirrorCaptureHosts 返回镜像记录域名列表；空配置回落默认列表。
+// MirrorCaptureHosts 返回镜像记录域名列表；空配置回落默认列表，
+// 开启协议保真时并入 Cursor relay 域名。
 func (manager *Manager) MirrorCaptureHosts() []string {
 	if manager == nil {
 		return nil
 	}
-	hosts := manager.currentConfig().MirrorCapture.Hosts
-	if len(hosts) == 0 {
-		return DefaultMirrorHosts
+	return ResolveMirrorCaptureHosts(manager.currentConfig().MirrorCapture)
+}
+
+// MirrorCaptureProtocolFidelity 返回协议保真记录开关。
+// 调用方总是先经 MirrorCaptureEnabled 触发热加载，因此这里直接读当前快照。
+func (manager *Manager) MirrorCaptureProtocolFidelity() bool {
+	if manager == nil {
+		return false
 	}
-	return hosts
+	return manager.currentConfig().MirrorCapture.ProtocolFidelity
 }
 
 // RoutingMode 返回代理请求分流模式，并在读取前检查配置热加载。

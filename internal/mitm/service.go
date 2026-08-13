@@ -187,17 +187,19 @@ func logSuppressedProxyMessages(prefix string, suppressed int) {
 }
 
 // NewProxyServer 用于处理与 NewProxyServer 相关的逻辑。
+// 保真记录跟随配置的 mirrorCapture.protocolFidelity（默认关闭）实时生效；
+// 配置实现方未提供该开关时保持关闭。
 func NewProxyServer(addr, baseURL, historyRoot string, mirror MirrorCaptureConfig, certManager *certs.Manager) (*ProxyServer, error) {
-	return newProxyServer(addr, baseURL, historyRoot, mirror, certManager, false)
+	return newProxyServer(addr, baseURL, historyRoot, mirror, certManager, mirrorProtocolFidelityFunc(mirror))
 }
 
-// NewIsolatedMirrorCaptureProxyServer 仅供隔离 E2E 启动器调用，保真记录原始 body bytes。
-// 普通运行必须继续使用 NewProxyServer，以保持既有 JSONL 格式和敏感数据边界。
+// NewIsolatedMirrorCaptureProxyServer 仅供隔离 E2E 启动器调用，无条件保真记录原始 body bytes，
+// 不受 mirrorCapture.protocolFidelity 配置影响。
 func NewIsolatedMirrorCaptureProxyServer(addr, baseURL, historyRoot string, mirror MirrorCaptureConfig, certManager *certs.Manager) (*ProxyServer, error) {
-	return newProxyServer(addr, baseURL, historyRoot, mirror, certManager, true)
+	return newProxyServer(addr, baseURL, historyRoot, mirror, certManager, func() bool { return true })
 }
 
-func newProxyServer(addr, baseURL, historyRoot string, mirror MirrorCaptureConfig, certManager *certs.Manager, protocolFidelity bool) (*ProxyServer, error) {
+func newProxyServer(addr, baseURL, historyRoot string, mirror MirrorCaptureConfig, certManager *certs.Manager, protocolFidelity func() bool) (*ProxyServer, error) {
 	u, normalizedBaseURL, err := parseBaseURL(baseURL)
 	if err != nil {
 		return nil, err
@@ -222,11 +224,7 @@ func newProxyServer(addr, baseURL, historyRoot string, mirror MirrorCaptureConfi
 		mirrorConfig: mirror,
 	}
 	if historyRoot != "" {
-		if protocolFidelity {
-			s.mirrorRec = newProtocolFidelityMirrorRecorder(historyRoot)
-		} else {
-			s.mirrorRec = newMirrorRecorder(historyRoot)
-		}
+		s.mirrorRec = newConfiguredMirrorRecorder(historyRoot, protocolFidelity)
 	}
 	s.proxy = s.newGoproxyHandler()
 	return s, nil
@@ -397,8 +395,10 @@ func (s *ProxyServer) newGoproxyHandler() *goproxy.ProxyHttpServer {
 		ExpectContinueTimeout: 1 * time.Second,
 		ResponseHeaderTimeout: 60 * time.Second,
 	}
-	if s.mirrorRec != nil && s.mirrorRec.protocolFidelity {
+	if s.mirrorRec.fidelityEnabled() {
 		// 保真抓包使用独立上游连接，避免失效 keep-alive 触发带 body 的 Connect 请求回卷失败。
+		// transport 无法安全地并发改写，因此只按构造时的开关取值；运行中打开保真开关时
+		// keep-alive 行为与普通镜像记录一致，不构成相对既有镜像模式的回退。
 		transport.DisableKeepAlives = true
 	}
 	proxy.Tr = netproxy.NewTransport(transport)
@@ -944,7 +944,7 @@ func (s *ProxyServer) wrapMirrorExchangeResponse(host string, exchange *mirrorEx
 		return nil
 	}
 	tee := &mirrorTeeReadCloser{r: resp.Body, rec: s.mirrorRec, host: host, exchange: exchange}
-	if s.mirrorRec.protocolFidelity {
+	if s.mirrorRec.fidelityEnabled() {
 		tee.frameDecoder = newMirrorRunSSEFrameDecoder(resp, func(frame mirrorProtocolFrame) {
 			s.mirrorRec.recordExchangeResponseProtocolFrame(host, exchange, frame)
 		})

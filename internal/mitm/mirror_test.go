@@ -53,6 +53,114 @@ func TestMirrorRecorderRequestSanitizesAndTruncates(t *testing.T) {
 	}
 }
 
+// TestMirrorRecorderRequestRedactsProviderCredentialHeaders 覆盖本仓库各 provider 协议实际
+// 使用的鉴权头：gemini 原生的 x-goog-api-key、Azure OpenAI 风格的 api-key、new-api 网关的
+// new-api-user（取值可能直接是 apiKey），以及 URL 上的 ?key=（Gemini 支持 query 传 key）。
+func TestMirrorRecorderRequestRedactsProviderCredentialHeaders(t *testing.T) {
+	rec := newMirrorRecorder(t.TempDir())
+	defer rec.Close()
+	req, err := http.NewRequest(
+		http.MethodPost,
+		"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:streamGenerateContent?alt=sse&key=AIzaSecret",
+		strings.NewReader(`{"contents":[]}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("x-goog-api-key", "AIzaSecret")
+	req.Header.Set("api-key", "azure-secret")
+	req.Header.Set("New-Api-User", "secret-user-token")
+	req.Header.Set("X-Auth-Token", "gateway-secret")
+	req.Header.Set("Content-Type", "application/json")
+
+	rec.recordRequest("generativelanguage.googleapis.com", req)
+
+	raw, err := os.ReadFile(filepath.Join(rec.historyRoot, mirrorLogSubdir, mirrorLogFilename))
+	if err != nil {
+		t.Fatalf("read mirror log: %v", err)
+	}
+	content := string(raw)
+	for _, header := range []string{"x-goog-api-key", "api-key", "new-api-user", "x-auth-token"} {
+		if !strings.Contains(content, `"`+header+`":"[REDACTED]"`) {
+			t.Fatalf("%s not redacted: %s", header, content)
+		}
+	}
+	for _, secret := range []string{"AIzaSecret", "azure-secret", "secret-user-token", "gateway-secret"} {
+		if strings.Contains(content, secret) {
+			t.Fatalf("credential %q leaked into mirror log: %s", secret, content)
+		}
+	}
+	if !strings.Contains(content, `"content-type":"application/json"`) {
+		t.Fatalf("content-type must be preserved: %s", content)
+	}
+	if !strings.Contains(content, "alt=sse") {
+		t.Fatalf("non-sensitive query must be preserved: %s", content)
+	}
+}
+
+// TestIsMirrorSensitiveHeader 固定脱敏策略：已知鉴权头 + 名字自报家门的未知头一律抹掉，
+// 同时保证排查抓包所依赖的诊断头（限流计数、鉴权挑战、幂等键）不被过度脱敏。
+func TestIsMirrorSensitiveHeader(t *testing.T) {
+	sensitive := []string{
+		"Authorization",
+		"Proxy-Authorization",
+		"X-Api-Key",
+		"x-goog-api-key",
+		"api-key",
+		"New-API-User",
+		"Cookie",
+		"Set-Cookie",
+		"X-Auth-Token",
+		"X-Access-Token",
+		"X-Session-Token",
+		"X-Refresh-Token",
+		"X-Client-Secret",
+		"X-Signature",
+		"X-Some-Future-Gateway-Credential",
+	}
+	for _, name := range sensitive {
+		if !isMirrorSensitiveHeader(name) {
+			t.Errorf("header %q must be redacted", name)
+		}
+	}
+
+	safe := []string{
+		"Content-Type",
+		"User-Agent",
+		"anthropic-version",
+		"anthropic-beta",
+		"WWW-Authenticate",
+		"Proxy-Authenticate",
+		"Idempotency-Key",
+		"Sec-WebSocket-Key",
+		"x-ratelimit-remaining-tokens",
+		"anthropic-ratelimit-input-tokens-limit",
+		"x-rate-limit-remaining-tokens",
+	}
+	for _, name := range safe {
+		if isMirrorSensitiveHeader(name) {
+			t.Errorf("header %q must not be redacted (mirror capture would lose diagnostic value)", name)
+		}
+	}
+}
+
+// TestIsMirrorSensitiveQueryKey 覆盖 URL 侧脱敏：Gemini 的 ?key=、常见 token 参数以及
+// 名字含鉴权词的未知参数都要抹掉，协议诊断参数（alt/api-version）保留。
+func TestIsMirrorSensitiveQueryKey(t *testing.T) {
+	sensitive := []string{"key", "api_key", "apiKey", "api-key", "token", "access_token", "refresh_token", "secret", "signature", "sig", "password", "pass", "auth", "x-goog-api-key"}
+	for _, key := range sensitive {
+		if !isMirrorSensitiveQueryKey(key) {
+			t.Errorf("query key %q must be redacted", key)
+		}
+	}
+	safe := []string{"alt", "api-version", "model", "stream"}
+	for _, key := range safe {
+		if isMirrorSensitiveQueryKey(key) {
+			t.Errorf("query key %q must not be redacted", key)
+		}
+	}
+}
+
 func TestMirrorRecorderResponseChunksAppend(t *testing.T) {
 	rec := newMirrorRecorder(t.TempDir())
 	defer rec.Close()
@@ -197,5 +305,91 @@ func TestMirrorTeeReadCloserTruncatesRecording(t *testing.T) {
 	}
 	if last := string(lines[len(lines)-1]); !strings.Contains(last, `"truncated":true`) {
 		t.Fatalf("last line must carry truncated marker: %s", last)
+	}
+}
+
+// fakeFidelityMirrorConfig 实现可选的 protocolFidelityProvider，用于验证保真开关的接线与热切换。
+type fakeFidelityMirrorConfig struct {
+	fakeMirrorConfig
+	fidelity bool
+}
+
+func (f *fakeFidelityMirrorConfig) MirrorCaptureProtocolFidelity() bool { return f.fidelity }
+
+// TestMirrorProtocolFidelityFuncOptIn 固定「未实现 provider 的配置一律关闭保真」这条兜底，
+// 保证默认路径与既有实现零行为差异。
+func TestMirrorProtocolFidelityFuncOptIn(t *testing.T) {
+	if mirrorProtocolFidelityFunc(nil) != nil {
+		t.Fatal("nil config must not expose a fidelity func")
+	}
+	if mirrorProtocolFidelityFunc(&fakeMirrorConfig{}) != nil {
+		t.Fatal("config without the optional provider must not expose a fidelity func")
+	}
+	fidelityFunc := mirrorProtocolFidelityFunc(&fakeFidelityMirrorConfig{fidelity: true})
+	if fidelityFunc == nil || !fidelityFunc() {
+		t.Fatal("config implementing the provider must expose its value")
+	}
+}
+
+// TestMirrorRecorderProtocolFidelityHotSwitch 验证保真开关是每次记录时求值的：
+// 关闭时 body 走既有明文字段，开启后同一个记录器立即改写 Base64 保真字段，无需重建代理。
+func TestMirrorRecorderProtocolFidelityHotSwitch(t *testing.T) {
+	fidelity := false
+	rec := newConfiguredMirrorRecorder(t.TempDir(), func() bool { return fidelity })
+	defer rec.Close()
+
+	rec.recordResponseChunk("api2.cursor.sh", []byte("plain-chunk"))
+	fidelity = true
+	rec.recordResponseChunk("api2.cursor.sh", []byte("fidelity-chunk"))
+
+	raw, err := os.ReadFile(filepath.Join(rec.historyRoot, mirrorLogSubdir, mirrorLogFilename))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := bytes.Split(bytes.TrimSpace(raw), []byte{'\n'})
+	if len(lines) != 2 {
+		t.Fatalf("got %d recorded lines, want 2: %s", len(lines), raw)
+	}
+	if first := string(lines[0]); !strings.Contains(first, `"body":"plain-chunk"`) || strings.Contains(first, `"bodyEncoding"`) {
+		t.Fatalf("fidelity-off line must keep the plain body field: %s", first)
+	}
+	if second := string(lines[1]); !strings.Contains(second, `"bodyEncoding":"base64"`) || !strings.Contains(second, `"bodySHA256"`) {
+		t.Fatalf("fidelity-on line must carry base64 body fields: %s", second)
+	}
+}
+
+// TestNewProxyServerProtocolFidelityFollowsConfig 覆盖构造接线：默认构造关闭保真，
+// 配置打开后同一个代理立即改用保真记录，隔离入口则无条件保真。
+func TestNewProxyServerProtocolFidelityFollowsConfig(t *testing.T) {
+	config := &fakeFidelityMirrorConfig{}
+	proxy, err := NewProxyServer("127.0.0.1:0", "http://127.0.0.1:1", t.TempDir(), config, nil)
+	if err != nil {
+		t.Fatalf("NewProxyServer() error = %v", err)
+	}
+	defer proxy.mirrorRec.Close()
+	if proxy.mirrorRec.fidelityEnabled() {
+		t.Fatal("protocol fidelity must be off while the config disables it")
+	}
+	config.fidelity = true
+	if !proxy.mirrorRec.fidelityEnabled() {
+		t.Fatal("protocol fidelity must follow the config without rebuilding the proxy")
+	}
+
+	plain, err := NewProxyServer("127.0.0.1:0", "http://127.0.0.1:1", t.TempDir(), &fakeMirrorConfig{}, nil)
+	if err != nil {
+		t.Fatalf("NewProxyServer(plain) error = %v", err)
+	}
+	defer plain.mirrorRec.Close()
+	if plain.mirrorRec.fidelityEnabled() {
+		t.Fatal("a config without the fidelity provider must stay in non-fidelity mode")
+	}
+
+	isolated, err := NewIsolatedMirrorCaptureProxyServer("127.0.0.1:0", "http://127.0.0.1:1", t.TempDir(), &fakeMirrorConfig{}, nil)
+	if err != nil {
+		t.Fatalf("NewIsolatedMirrorCaptureProxyServer() error = %v", err)
+	}
+	defer isolated.mirrorRec.Close()
+	if !isolated.mirrorRec.fidelityEnabled() {
+		t.Fatal("the isolated entrypoint must stay unconditionally fidelity-recording")
 	}
 }

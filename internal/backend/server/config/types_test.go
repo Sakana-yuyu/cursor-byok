@@ -173,3 +173,96 @@ func TestManagerMirrorCaptureAccessors(t *testing.T) {
 		t.Fatalf("MirrorCaptureHosts() = %v, want [api.openai.com]", hosts)
 	}
 }
+
+func TestDefaultConfigMirrorCaptureProtocolFidelityDisabledByDefault(t *testing.T) {
+	if DefaultConfig().MirrorCapture.ProtocolFidelity {
+		t.Fatal("mirrorCapture.protocolFidelity must default to disabled")
+	}
+}
+
+func TestNormalizeConfigKeepsMirrorCaptureProtocolFidelity(t *testing.T) {
+	input := DefaultConfig()
+	input.MirrorCapture = MirrorCaptureConfig{Enabled: true, ProtocolFidelity: true, Hosts: []string{"custom.example.com"}}
+	got, err := NormalizeConfig(input)
+	if err != nil {
+		t.Fatalf("NormalizeConfig() error = %v", err)
+	}
+	if !got.MirrorCapture.ProtocolFidelity {
+		t.Fatal("MirrorCapture.ProtocolFidelity must survive NormalizeConfig")
+	}
+}
+
+// TestResolveMirrorCaptureHosts 固定「保真开关决定是否并入 Cursor relay 域名」这条规则：
+// 关闭时的域名集合必须与既有行为逐项一致，开启时才扩大到协议帧所在的 relay 入口。
+func TestResolveMirrorCaptureHosts(t *testing.T) {
+	off := ResolveMirrorCaptureHosts(MirrorCaptureConfig{Enabled: true})
+	if len(off) != len(DefaultMirrorHosts) {
+		t.Fatalf("fidelity off hosts = %v, want %v", off, DefaultMirrorHosts)
+	}
+	for index, host := range DefaultMirrorHosts {
+		if off[index] != host {
+			t.Fatalf("fidelity off hosts = %v, want %v", off, DefaultMirrorHosts)
+		}
+	}
+
+	on := ResolveMirrorCaptureHosts(MirrorCaptureConfig{Enabled: true, ProtocolFidelity: true})
+	for _, relayHost := range CursorRelayMirrorHosts {
+		if !containsMirrorHost(on, relayHost) {
+			t.Fatalf("fidelity on hosts = %v, want to contain %q", on, relayHost)
+		}
+	}
+	if len(on) != len(DefaultMirrorHosts)+len(CursorRelayMirrorHosts) {
+		t.Fatalf("fidelity on hosts = %v, want %d entries", on, len(DefaultMirrorHosts)+len(CursorRelayMirrorHosts))
+	}
+
+	// 大小写、空白与重复项都必须被归一化掉，否则 isMirrorHost 的小写比较会漏匹配。
+	messy := ResolveMirrorCaptureHosts(MirrorCaptureConfig{
+		ProtocolFidelity: true,
+		Hosts:            []string{" API2.Cursor.SH ", "api.openai.com", "api.openai.com", ""},
+	})
+	if len(messy) != 1+len(CursorRelayMirrorHosts) {
+		t.Fatalf("normalized hosts = %v, want %d entries", messy, 1+len(CursorRelayMirrorHosts))
+	}
+	if !containsMirrorHost(messy, "api2.cursor.sh") || !containsMirrorHost(messy, "api.openai.com") {
+		t.Fatalf("normalized hosts = %v", messy)
+	}
+}
+
+func TestManagerMirrorCaptureProtocolFidelityHotReload(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	cfg := DefaultConfig()
+	store := NewStore(path, "")
+	if _, err := store.Save(context.Background(), cfg); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	manager, err := NewManager(context.Background(), store)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+	if manager.MirrorCaptureProtocolFidelity() {
+		t.Fatal("MirrorCaptureProtocolFidelity must default to false")
+	}
+	if containsMirrorHost(manager.MirrorCaptureHosts(), "api2.cursor.sh") {
+		t.Fatal("relay hosts must stay out of the mirror list while fidelity is off")
+	}
+
+	cfg.MirrorCapture.ProtocolFidelity = true
+	if _, err := manager.Save(context.Background(), cfg); err != nil {
+		t.Fatalf("Save(2) error = %v", err)
+	}
+	if !manager.MirrorCaptureProtocolFidelity() {
+		t.Fatal("MirrorCaptureProtocolFidelity must reflect updated config")
+	}
+	if !containsMirrorHost(manager.MirrorCaptureHosts(), "api2.cursor.sh") {
+		t.Fatalf("MirrorCaptureHosts() = %v, want relay hosts merged in", manager.MirrorCaptureHosts())
+	}
+}
+
+func containsMirrorHost(hosts []string, want string) bool {
+	for _, host := range hosts {
+		if host == want {
+			return true
+		}
+	}
+	return false
+}

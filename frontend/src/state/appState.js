@@ -271,6 +271,7 @@ function applyConfigToState(config, { modelAdaptersOnly = false } = {}) {
   appState.includeCacheWriteInHitRate = normalized.homeMetrics.includeCacheWriteInHitRate;
   appState.localResponseCache = normalized.localResponseCache;
   appState.mirrorCaptureEnabled = normalized.mirrorCapture.enabled;
+  appState.mirrorCaptureProtocolFidelity = normalized.mirrorCapture.protocolFidelity;
   appState.delegation = normalized.delegation;
   appState.goal = normalized.goal;
   appState.turnStaleTimeout = normalized.turnStaleTimeout;
@@ -548,6 +549,8 @@ export const appState = reactive({
   // 调试日志开关（log 配置）：控制 forwarder 是否把对话级 debug jsonl 写入磁盘。
   debugLogEnabled: asBoolean(cachedConfig.log),
   mirrorCaptureEnabled: asBoolean(cachedConfig.mirrorCapture?.enabled),
+  // 协议保真记录：镜像记录的子开关，开启后完整协议帧原始字节落盘并产出协议时间线。
+  mirrorCaptureProtocolFidelity: asBoolean(cachedConfig.mirrorCapture?.protocolFidelity),
 
   serviceRunning: asBoolean(cachedState.serviceRunning),
   backendRunning: asBoolean(cachedState.backendRunning),
@@ -1180,11 +1183,25 @@ export async function saveDebugLogEnabled(enabled) {
 
 export async function saveMirrorCaptureEnabled(enabled) {
   const currentConfig = await loadPersistedUserConfig();
+  const nextEnabled = !!enabled;
   return persistConfigPayload({
     ...currentConfig,
     mirrorCapture: {
       ...(currentConfig.mirrorCapture ?? {}),
-      enabled: !!enabled,
+      enabled: nextEnabled,
+      // 关闭镜像记录时一并关闭保真子开关，避免留下一个不生效却仍显示为开启的状态。
+      protocolFidelity: nextEnabled && !!currentConfig.mirrorCapture?.protocolFidelity,
+    },
+  });
+}
+
+export async function saveMirrorCaptureProtocolFidelity(enabled) {
+  const currentConfig = await loadPersistedUserConfig();
+  return persistConfigPayload({
+    ...currentConfig,
+    mirrorCapture: {
+      ...(currentConfig.mirrorCapture ?? {}),
+      protocolFidelity: !!enabled,
     },
   });
 }

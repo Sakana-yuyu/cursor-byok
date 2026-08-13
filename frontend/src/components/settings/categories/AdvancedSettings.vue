@@ -15,6 +15,7 @@ import {
   saveLocalResponseCacheEnabled,
   saveLocalResponseCacheSettings,
   saveMirrorCaptureEnabled,
+  saveMirrorCaptureProtocolFidelity,
   saveRoutingMode,
   startService,
   toUserError,
@@ -40,6 +41,7 @@ const maxEntriesDraft = ref("");
 
 const debugLogDraft = ref(Boolean(appState.debugLogEnabled));
 const mirrorCaptureDraft = ref(Boolean(appState.mirrorCaptureEnabled));
+const protocolFidelityDraft = ref(Boolean(appState.mirrorCaptureProtocolFidelity));
 
 const goalEnabledDraft = ref(Boolean(appState.goal?.enabled));
 
@@ -50,6 +52,12 @@ const debugLogState = reactive({
 });
 
 const mirrorCaptureState = reactive({
+  busy: false,
+  error: "",
+  retry: null,
+});
+
+const protocolFidelityState = reactive({
   busy: false,
   error: "",
   retry: null,
@@ -118,6 +126,14 @@ const cacheEnabledBusy = computed(() => cacheEnabledState.busy || appState.confi
 const cachePersistBusy = computed(() => cachePersistState.busy || appState.configSaving);
 const goalEnabledBusy = computed(() => goalEnabledState.busy || appState.configSaving);
 const mirrorCaptureBusy = computed(() => mirrorCaptureState.busy || appState.configSaving);
+const protocolFidelityBusy = computed(() => protocolFidelityState.busy || appState.configSaving);
+// 保真记录是镜像记录的子开关：镜像记录关闭时它不可能产生任何数据，所以直接禁用。
+const protocolFidelityDisabled = computed(() => protocolFidelityBusy.value || !mirrorCaptureDraft.value);
+const protocolFidelityDescription = computed(() => (
+  mirrorCaptureDraft.value
+    ? "把完整协议帧的原始字节以 Base64 落盘，并额外写出脱敏的结构时间线（history/_debug/mirror/protocol.timeline.jsonl），设置→历史→Cursor 协议页依赖它。原始字节包含完整对话内容、模型回复与工作区上下文，且明显增加落盘体积与运行时开销。开启后镜像域名会自动并入 api2/3/4.cursor.sh，抓包范围从模型 API 扩大到 Cursor 与官方后端之间的全部协议流量。默认关闭，仅排障时临时开启。"
+    : "需要先开启上方的「镜像记录官方请求」。保真记录是它的子开关，单独开启不会产生任何数据。"
+));
 const mirrorCaptureStatusBusy = computed(() => mirrorCaptureStatusState.loading || mirrorCaptureActionState.starting || mirrorCaptureActionState.repairing);
 const mirrorCaptureStatusLabel = computed(() => {
   if (mirrorCaptureStatusState.loading) return "正在检查";
@@ -170,6 +186,16 @@ watch(
   (value) => {
     if (!mirrorCaptureState.busy) {
       mirrorCaptureDraft.value = Boolean(value);
+    }
+  },
+  { immediate: true },
+);
+
+watch(
+  () => appState.mirrorCaptureProtocolFidelity,
+  (value) => {
+    if (!protocolFidelityState.busy) {
+      protocolFidelityDraft.value = Boolean(value);
     }
   },
   { immediate: true },
@@ -292,6 +318,39 @@ async function handleMirrorCaptureChange(enabled) {
     mirrorCaptureState.error = toUserError(error);
   } finally {
     mirrorCaptureState.busy = false;
+  }
+}
+
+async function handleProtocolFidelityChange(enabled) {
+  const nextValue = Boolean(enabled);
+  const previousValue = protocolFidelityDraft.value;
+  if (nextValue) {
+    const confirmed = await showModal({
+      title: "开启协议保真记录",
+      content: "保真记录会把 Cursor 与官方后端之间的完整协议帧原始字节写入本地磁盘，其中包含完整对话内容、模型回复和工作区上下文，并会让抓包范围扩大到 api2/3/4.cursor.sh。仅在排障时临时开启，用完请关闭并清理 history/_debug/mirror 目录。确定开启吗？",
+      confirmText: "开启",
+      cancelText: "取消",
+    });
+    if (!confirmed) return;
+  }
+  protocolFidelityDraft.value = nextValue;
+  protocolFidelityState.retry = () => handleProtocolFidelityChange(nextValue);
+  protocolFidelityState.error = "";
+  protocolFidelityState.busy = true;
+  try {
+    await props.autosave.run("advanced.mirror-capture-protocol-fidelity", async () => {
+      const result = await saveMirrorCaptureProtocolFidelity(nextValue);
+      if (!result?.ok) {
+        throw new Error(result?.error || "保存失败");
+      }
+      message.success(nextValue ? "已开启协议保真记录（即时生效）" : "已关闭协议保真记录（即时生效）");
+      await refreshMirrorCaptureStatus();
+    });
+  } catch (error) {
+    protocolFidelityDraft.value = previousValue;
+    protocolFidelityState.error = toUserError(error);
+  } finally {
+    protocolFidelityState.busy = false;
   }
 }
 
@@ -559,6 +618,24 @@ function handleCacheFieldInput(field, state, valueRef, value) {
           :disabled="mirrorCaptureBusy"
           aria-label="镜像记录官方请求"
           @change="handleMirrorCaptureChange"
+        />
+      </SettingsRow>
+
+      <SettingsRow
+        label="协议保真记录"
+        :description="protocolFidelityDescription"
+        :busy="protocolFidelityBusy"
+        :error="protocolFidelityState.error"
+        @retry="protocolFidelityState.retry?.()"
+      >
+        <Switch
+          compact
+          label=""
+          :enabled="protocolFidelityDraft && mirrorCaptureDraft"
+          :busy="protocolFidelityBusy"
+          :disabled="protocolFidelityDisabled"
+          aria-label="协议保真记录"
+          @change="handleProtocolFidelityChange"
         />
       </SettingsRow>
 

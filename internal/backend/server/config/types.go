@@ -150,8 +150,12 @@ type SkillMCPScanConfig struct {
 
 // MirrorCaptureConfig 是镜像记录配置。
 type MirrorCaptureConfig struct {
-	Enabled bool     `json:"enabled" yaml:"enabled"`
-	Hosts   []string `json:"hosts,omitempty" yaml:"hosts,omitempty"`
+	Enabled bool `json:"enabled" yaml:"enabled"`
+	// ProtocolFidelity 让镜像记录以 Base64 保留完整协议帧原始字节，并解码 Cursor 协议结构时间线。
+	// 默认关闭：关闭时 body 按字符串写入，protobuf 的非 UTF-8 字节会被 JSON 替换成 U+FFFD 而不可还原。
+	// 开启会显著增加落盘体积与运行时开销，且原始字节含完整对话内容与工作区上下文。
+	ProtocolFidelity bool     `json:"protocolFidelity" yaml:"protocolFidelity"`
+	Hosts            []string `json:"hosts,omitempty" yaml:"hosts,omitempty"`
 }
 
 // DefaultMirrorHosts 是 Cursor 官方 key 直连模式使用的模型 API 入口；Hosts 为空时回落。
@@ -159,6 +163,42 @@ var DefaultMirrorHosts = []string{
 	"api.openai.com",
 	"api.anthropic.com",
 	"generativelanguage.googleapis.com",
+}
+
+// CursorRelayMirrorHosts 是 Cursor 客户端与官方后端之间的 relay 入口。
+// 只有这些域名承载 BidiAppend / AgentServerMessage 协议帧，因此协议保真记录必须覆盖它们。
+var CursorRelayMirrorHosts = []string{
+	"api2.cursor.sh",
+	"api3.cursor.sh",
+	"api4.cursor.sh",
+}
+
+// ResolveMirrorCaptureHosts 返回镜像记录实际生效的域名列表（小写去重）。
+// 开启协议保真后并入 CursorRelayMirrorHosts：这些域名本就无条件走 MITM 解密
+// （isWhitelistedRelayHost），并且在本地服务模式下会先被本地 relay 分流，
+// 因此并入只在「官方上游模式 + 镜像记录 + 协议保真」三者同时成立时才产生落盘。
+func ResolveMirrorCaptureHosts(mirror MirrorCaptureConfig) []string {
+	hosts := mirror.Hosts
+	if len(hosts) == 0 {
+		hosts = DefaultMirrorHosts
+	}
+	if mirror.ProtocolFidelity {
+		hosts = append(append(make([]string, 0, len(hosts)+len(CursorRelayMirrorHosts)), hosts...), CursorRelayMirrorHosts...)
+	}
+	resolved := make([]string, 0, len(hosts))
+	seen := make(map[string]struct{}, len(hosts))
+	for _, host := range hosts {
+		normalized := strings.ToLower(strings.TrimSpace(host))
+		if normalized == "" {
+			continue
+		}
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		resolved = append(resolved, normalized)
+	}
+	return resolved
 }
 
 type Config struct {

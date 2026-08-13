@@ -64,6 +64,7 @@ const previewConfig = {
   homeMetrics: { includeCacheWriteInHitRate: false },
   mirrorCapture: {
     enabled: false,
+    protocolFidelity: false,
     hosts: [
       "api.openai.com",
       "api.anthropic.com",

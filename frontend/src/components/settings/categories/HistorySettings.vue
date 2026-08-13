@@ -3,7 +3,7 @@ import Card from "@/components/ui/Card.vue";
 import { useMessage } from "@/composables/useMessage";
 import { showModal } from "@/composables/useModal";
 import { clearHistory, deleteHistoryDebugLogs, deleteHistorySessions, getCursorProtocolSessions, getHistorySessions } from "@/services/runtimeControlApi";
-import { toUserError } from "@/state/appState";
+import { appState, toUserError } from "@/state/appState";
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import copyTextToClipboard from "copy-text-to-clipboard";
@@ -391,6 +391,16 @@ function openInDiagnostics(sessionID) {
   void router.push({ path: "/diagnostics", query: { session: id } });
 }
 
+// 协议时间线只有在「镜像记录 + 协议保真」都开启时才会写盘，
+// 所以空列表要区分「没开开关」和「开了但还没抓到」，而不是一律显示暂无记录。
+const protocolCaptureReady = computed(() => (
+  Boolean(appState.mirrorCaptureEnabled) && Boolean(appState.mirrorCaptureProtocolFidelity)
+));
+
+function openProtocolCaptureSettings() {
+  void router.push({ path: "/settings", query: { category: "advanced" } });
+}
+
 function shortID(value) {
   const text = String(value || "");
   return text.length > 12 ? `${text.slice(0, 8)}…${text.slice(-4)}` : text;
@@ -656,10 +666,25 @@ onMounted(() => {
         class="mt-2.5 min-h-0 flex-1 overflow-auto overscroll-contain rounded-[8px] border border-white/[0.08] bg-[#202124]"
       >
         <div v-if="!loading && !error && cursorProtocolSessions.length === 0" class="grid min-h-full place-items-center py-10 text-center">
-          <div>
+          <div v-if="protocolCaptureReady" class="max-w-[30rem] px-6">
             <span class="icon-[mdi--source-branch] text-[32px] text-[#4a4a4a]" aria-hidden="true" />
             <p class="mt-2 text-sm text-[#858585]">暂无 Cursor 协议记录</p>
-            <p class="mt-1 text-[11px] text-[#5f5f5f]">使用隔离镜像采集后，脱敏的上下行结构会显示在这里</p>
+            <p class="mt-1 text-[11px] leading-5 text-[#5f5f5f]">协议保真记录已开启。需要在「官方上游模式」下由 Cursor 实际发起一次官方请求，脱敏的上下行结构才会出现在这里。</p>
+          </div>
+          <div v-else class="max-w-[30rem] px-6">
+            <span class="icon-[mdi--toggle-switch-off-outline] text-[32px] text-[#4a4a4a]" aria-hidden="true" />
+            <p class="mt-2 text-sm text-[#858585]">协议记录未开启</p>
+            <p class="mt-1 text-[11px] leading-5 text-[#5f5f5f]">
+              该页面读取协议保真记录写出的结构时间线。请到 设置 → 高级 依次开启「镜像记录官方请求」和「协议保真记录」，并切换到「官方上游模式」。保真记录会把完整协议帧原始字节落盘（含对话内容与工作区上下文），排障结束后请及时关闭。
+            </p>
+            <button
+              type="button"
+              class="center-row mx-auto mt-3 h-7 gap-1.5 rounded-[6px] border border-white/[0.09] bg-white/[0.04] px-2.5 text-[11px] text-[#b9b9b9] transition-colors hover:border-[#10AD5D]/30 hover:bg-[#10AD5D]/[0.08] hover:text-white"
+              @click="openProtocolCaptureSettings"
+            >
+              <span class="icon-[mdi--tools] text-[14px]" aria-hidden="true" />
+              前往高级设置
+            </button>
           </div>
         </div>
         <div v-else class="min-w-[720px] text-[11px] text-[#b8b8b8]">

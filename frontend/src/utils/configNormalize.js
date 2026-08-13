@@ -52,6 +52,7 @@ export function normalizeMirrorCapture(source) {
   const hosts = [...new Set(asArray(raw.hosts).map((value) => asString(value).trim()).filter(Boolean))];
   return {
     enabled: asBoolean(raw.enabled),
+    protocolFidelity: asBoolean(raw.protocolFidelity),
     hosts: hosts.length > 0 ? hosts : [...DEFAULT_MIRROR_CAPTURE_HOSTS],
   };
 }
