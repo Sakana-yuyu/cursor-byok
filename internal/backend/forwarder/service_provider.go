@@ -180,9 +180,10 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 			}
 		}
 	}
-	// 自动压缩压力必须基于 canonical 体量：sidecar 生效时 projected compile 会低估，
-	// 导致 UI 已满但 buildAutoCompactionPlan 不触发，主模型请求变慢并出现客户端 stall。
-	if compacted, compactErr := service.maybeCompactBeforeProvider(stream, canonicalConversation, canonicalCompiled); compactErr != nil {
+	// 大窗口下 provider usage 反映 projected 发送体积，UI/ canonical 体量更高时需同步压力标记，
+	// 否则 sidecar 有效时 80% 自动压缩不触发。64K 等小窗口测试场景不受影响。
+	service.syncCanonicalPressureForLargeWindows(canonicalConversation, canonicalCompiled)
+	if compacted, compactErr := service.maybeCompactBeforeProvider(stream, canonicalConversation, compiled); compactErr != nil {
 		// 自动/投影压缩链穷尽（或 preflight 前估算超限）时，先尝试一次强制 legacy 兜底压缩
 		//（自动 /summarize），而不是直接以 context_overflow_after_compaction 终态失败。
 		if escalated, escErr := service.escalateForcedPreflightCompaction(stream, canonicalConversation, canonicalCompiled, compactErr); escErr != nil {
@@ -680,6 +681,20 @@ func providerEventCanQueueAsync(event modeladapter.ModelEvent) bool {
 }
 
 const defaultResolvedContextWindowTokens = 200_000 // align with config.defaultChannelContextWindowTokens
+
+// largeWindowCompactionCanonicalSyncThreshold：仅在大上下文窗口下，将 canonical 编译估算
+// 同步进 TokenDetailsUsedTokens 供自动压缩决策。小窗口 E2E/单测仍走 projected 压力路径。
+const largeWindowCompactionCanonicalSyncThreshold = uint32(500_000)
+
+func (service *Service) syncCanonicalPressureForLargeWindows(conversation *ConversationFile, canonicalCompiled CompiledConversation) {
+	if conversation == nil || conversation.TokenDetailsMaxTokens < largeWindowCompactionCanonicalSyncThreshold {
+		return
+	}
+	canonicalEstimate := estimateCompiledPromptTokens(canonicalCompiled)
+	if canonicalEstimate > int64(conversation.TokenDetailsUsedTokens) {
+		conversation.TokenDetailsUsedTokens = clampInt64ToUint32(canonicalEstimate)
+	}
+}
 
 func (service *Service) resolveContextWindowTokens(modelID string) uint32 {
 	if service == nil || service.resolver == nil {
