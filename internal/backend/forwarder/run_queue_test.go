@@ -290,12 +290,28 @@ func TestDispatchInboundIntentDoesNotPersistQueuedRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	service := &Service{broker: NewStreamBroker(), runQueue: newRunQueue(), store: store}
-	if result, _, _ := service.runQueue.Submit(testRunIntent("conversation-a", "request-1")); result != runQueueStart {
-		t.Fatalf("owner submit = %q", result)
-	}
+	service.registerStreamLifecycleHooks()
+	t.Cleanup(func() {
+		_ = service.Shutdown(context.Background())
+		time.Sleep(checkpointPersistDebounce + 50*time.Millisecond)
+	})
 
-	if err := service.dispatchInboundIntent(testRunIntent("conversation-a", "request-2")); err != nil {
+	first := testRunIntent("conversation-a", "request-1")
+	second := testRunIntent("conversation-a", "request-2")
+	if err := service.dispatchInboundIntent(first); err != nil {
 		t.Fatal(err)
+	}
+	if err := service.dispatchInboundIntent(second); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := service.broker.Get("request-1"); !ok {
+		t.Fatal("owner stream was not opened")
+	}
+	if _, ok := service.broker.Get("request-2"); ok {
+		t.Fatal("queued stream was opened before promotion")
+	}
+	if got := service.runQueue.Len("conversation-a"); got != 1 {
+		t.Fatalf("queue len = %d, want 1", got)
 	}
 
 	conversation, err := store.LoadConversation("conversation-a")

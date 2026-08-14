@@ -81,8 +81,13 @@ func TestThinkingDeltaSamplingKeepsEveryBrokerEvent(t *testing.T) {
 
 func TestDeltaRuntimeLogsUseProviderPassCapturedWithStreamState(t *testing.T) {
 	root := t.TempDir()
-	service := NewService(root, nilResolver{})
-	service.debug = newDebugRecorder(root, service.broker, stubDebugLogConfig{enabled: true, maxBytes: -1})
+	broker := NewStreamBroker()
+	service := &Service{
+		broker: broker,
+		store:  NewConversationFileStore(root),
+	}
+	// 勿用 NewService：会启动 history maintenance，与 t.TempDir 清理竞态（CI 偶发 directory not empty）。
+	service.debug = newDebugRecorder(root, broker, stubDebugLogConfig{enabled: true, maxBytes: -1})
 	stream, err := service.broker.OpenStream("request-provider-pass", "conversation-provider-pass", 1, "model", "model", agentv1.AgentMode_AGENT_MODE_AGENT, "")
 	if err != nil {
 		t.Fatalf("OpenStream() error = %v", err)
