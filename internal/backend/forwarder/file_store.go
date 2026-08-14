@@ -27,13 +27,14 @@ const (
 	legacyConversationLockStaleAfter   = 30 * time.Second
 	conversationLockAcquireTimeout     = 30 * time.Second
 	staleConversationLockRemoveTimeout = 30 * time.Second
-	conversationLockRetryInterval      = 10 * time.Millisecond
 )
 
 var (
 	conversationLockProcessStartedAt = time.Now()
 	conversationProcessLocksMu       sync.Mutex
 	conversationProcessLocks         = make(map[string]*conversationProcessLock)
+	conversationFileLockWaitMu       sync.Mutex
+	conversationFileLockWaiters      = make(map[string][]chan struct{})
 )
 
 type conversationProcessLock struct {
@@ -1012,21 +1013,39 @@ func acquireConversationFileLock(lockPath string) (func(), error) {
 	var staleRemoveDeadline time.Time
 	var lastStaleRemoveErr error
 	for {
-		file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-		if err == nil {
-			owner := conversationLockOwnerToken()
-			_, _ = file.WriteString(fmt.Sprintf("pid=%d\nowner=%s\ncreated_at=%s\n", os.Getpid(), owner, time.Now().UTC().Format(time.RFC3339Nano)))
+		waitDeadline := deadline
+		if lastStaleRemoveErr != nil && staleRemoveDeadline.After(waitDeadline) {
+			waitDeadline = staleRemoveDeadline
+		}
+		remaining := time.Until(waitDeadline)
+		if remaining <= 0 {
+			break
+		}
+
+		if err := os.MkdirAll(filepath.Dir(lockPath), historyDirPerm); err != nil {
+			return nil, fmt.Errorf("create history lock directory: %w", err)
+		}
+
+		file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
+		if err != nil {
+			return nil, fmt.Errorf("open history lock: %w", err)
+		}
+
+		acquired, err := tryLockConversationFileExclusive(file)
+		if err != nil {
 			_ = file.Close()
-			return func() {
-				removeConversationLockIfOwner(lockPath, owner)
-			}, nil
+			return nil, fmt.Errorf("lock history lock: %w", err)
 		}
-		if !errors.Is(err, os.ErrExist) {
-			return nil, fmt.Errorf("create history lock: %w", err)
+		if acquired {
+			return finalizeConversationFileLock(file, lockPath)
 		}
+
 		if stale, staleErr := conversationLockIsStale(lockPath); staleErr != nil {
+			_ = file.Close()
 			return nil, staleErr
 		} else if stale {
+			releaseConversationFileExclusive(file)
+			_ = file.Close()
 			removeErr := os.Remove(lockPath)
 			if removeErr == nil || errors.Is(removeErr, os.ErrNotExist) {
 				lastStaleRemoveErr = nil
@@ -1037,27 +1056,123 @@ func acquireConversationFileLock(lockPath string) (func(), error) {
 				staleRemoveDeadline = time.Now().Add(staleConversationLockRemoveTimeout)
 			}
 			lastStaleRemoveErr = removeErr
-		} else {
-			lastStaleRemoveErr = nil
-			staleRemoveDeadline = time.Time{}
+			continue
 		}
-		waitDeadline := deadline
-		if lastStaleRemoveErr != nil && staleRemoveDeadline.After(waitDeadline) {
-			waitDeadline = staleRemoveDeadline
+
+		lastStaleRemoveErr = nil
+		staleRemoveDeadline = time.Time{}
+
+		lockResult := make(chan error, 1)
+		go func() {
+			lockResult <- lockConversationFileExclusiveBlocking(file)
+		}()
+
+		select {
+		case lockErr := <-lockResult:
+			if lockErr == nil {
+				return finalizeConversationFileLock(file, lockPath)
+			}
+			_ = file.Close()
+		case <-time.After(remaining):
+			_ = file.Close()
+			select {
+			case lockErr := <-lockResult:
+				if lockErr == nil {
+					releaseConversationFileExclusive(file)
+				}
+			case <-time.After(remaining):
+			}
 		}
-		remaining := time.Until(waitDeadline)
-		if remaining <= 0 {
+
+		if !waitForConversationFileLockRelease(lockPath, remaining) {
 			break
 		}
-		if remaining > conversationLockRetryInterval {
-			remaining = conversationLockRetryInterval
-		}
-		time.Sleep(remaining)
 	}
 	if lastStaleRemoveErr != nil {
 		return nil, fmt.Errorf("timeout acquiring history lock %q (stale lock remove failed: %w)", lockPath, lastStaleRemoveErr)
 	}
 	return nil, fmt.Errorf("timeout acquiring history lock %q", lockPath)
+}
+
+func finalizeConversationFileLock(file *os.File, lockPath string) (func(), error) {
+	owner := conversationLockOwnerToken()
+	if err := file.Truncate(0); err != nil {
+		releaseConversationFileExclusive(file)
+		_ = file.Close()
+		return nil, fmt.Errorf("truncate history lock: %w", err)
+	}
+	if _, err := file.Seek(0, 0); err != nil {
+		releaseConversationFileExclusive(file)
+		_ = file.Close()
+		return nil, fmt.Errorf("rewind history lock: %w", err)
+	}
+	if _, err := file.WriteString(fmt.Sprintf("pid=%d\nowner=%s\ncreated_at=%s\n", os.Getpid(), owner, time.Now().UTC().Format(time.RFC3339Nano))); err != nil {
+		releaseConversationFileExclusive(file)
+		_ = file.Close()
+		return nil, fmt.Errorf("write history lock metadata: %w", err)
+	}
+	return func() {
+		releaseConversationFileExclusive(file)
+		_ = file.Close()
+		removeConversationLockIfOwner(lockPath, owner)
+		notifyConversationFileLockWaiters(lockPath)
+	}, nil
+}
+
+func registerConversationFileLockWaiter(lockPath string) chan struct{} {
+	key := filepath.Clean(lockPath)
+	waiter := make(chan struct{}, 1)
+	conversationFileLockWaitMu.Lock()
+	conversationFileLockWaiters[key] = append(conversationFileLockWaiters[key], waiter)
+	conversationFileLockWaitMu.Unlock()
+	return waiter
+}
+
+func unregisterConversationFileLockWaiter(lockPath string, waiter chan struct{}) {
+	key := filepath.Clean(lockPath)
+	conversationFileLockWaitMu.Lock()
+	waiters := conversationFileLockWaiters[key]
+	for index := len(waiters) - 1; index >= 0; index-- {
+		if waiters[index] == waiter {
+			waiters = append(waiters[:index], waiters[index+1:]...)
+			break
+		}
+	}
+	if len(waiters) == 0 {
+		delete(conversationFileLockWaiters, key)
+	} else {
+		conversationFileLockWaiters[key] = waiters
+	}
+	conversationFileLockWaitMu.Unlock()
+}
+
+func notifyConversationFileLockWaiters(lockPath string) {
+	key := filepath.Clean(lockPath)
+	conversationFileLockWaitMu.Lock()
+	waiters := append([]chan struct{}(nil), conversationFileLockWaiters[key]...)
+	conversationFileLockWaitMu.Unlock()
+	for _, waiter := range waiters {
+		select {
+		case waiter <- struct{}{}:
+		default:
+		}
+	}
+}
+
+func waitForConversationFileLockRelease(lockPath string, timeout time.Duration) bool {
+	if timeout <= 0 {
+		return false
+	}
+	waiter := registerConversationFileLockWaiter(lockPath)
+	defer unregisterConversationFileLockWaiter(lockPath, waiter)
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-waiter:
+		return true
+	case <-timer.C:
+		return false
+	}
 }
 
 func conversationLockIsStale(lockPath string) (bool, error) {
