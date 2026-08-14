@@ -599,34 +599,37 @@ export const appState = reactive({
   updatePromptBusy: false,
 });
 
-watchSyncEffect(() => {
+watchSyncEffect((onCleanup) => {
   if (!canUseLocalStorage()) {
     return;
   }
-  try {
-    window.localStorage.setItem(
-      APP_STATE_STORAGE_KEY,
-      JSON.stringify({
-        ...buildCachedConfigPayload(),
-        serviceRunning: appState.serviceRunning,
-        backendRunning: appState.backendRunning,
-        proxyRunning: appState.proxyRunning,
-        serviceListenAddr: appState.serviceListenAddr,
-        configBackendListenAddr: appState.configBackendListenAddr,
-        configProxyListenAddr: appState.configProxyListenAddr,
-        backendListenAddr: appState.backendListenAddr,
-        proxyListenAddr: appState.proxyListenAddr,
-        cursorSettingsApplied: appState.cursorSettingsApplied,
-        netProxySource: appState.netProxySource,
-        netProxyActive: appState.netProxyActive,
-        netProxyUsingSystem: appState.netProxyUsingSystem,
-        netProxyUsingEnv: appState.netProxyUsingEnv,
-        netProxyPacIgnored: appState.netProxyPacIgnored,
-      }),
-    );
-  } catch (_error) {
-    // ignore local persistence failures
-  }
+  const timer = setTimeout(() => {
+    try {
+      window.localStorage.setItem(
+        APP_STATE_STORAGE_KEY,
+        JSON.stringify({
+          ...buildCachedConfigPayload(),
+          serviceRunning: appState.serviceRunning,
+          backendRunning: appState.backendRunning,
+          proxyRunning: appState.proxyRunning,
+          serviceListenAddr: appState.serviceListenAddr,
+          configBackendListenAddr: appState.configBackendListenAddr,
+          configProxyListenAddr: appState.configProxyListenAddr,
+          backendListenAddr: appState.backendListenAddr,
+          proxyListenAddr: appState.proxyListenAddr,
+          cursorSettingsApplied: appState.cursorSettingsApplied,
+          netProxySource: appState.netProxySource,
+          netProxyActive: appState.netProxyActive,
+          netProxyUsingSystem: appState.netProxyUsingSystem,
+          netProxyUsingEnv: appState.netProxyUsingEnv,
+          netProxyPacIgnored: appState.netProxyPacIgnored,
+        }),
+      );
+    } catch (_error) {
+      // ignore local persistence failures
+    }
+  }, 250);
+  onCleanup(() => clearTimeout(timer));
 });
 
 watchSyncEffect((onCleanup) => {
