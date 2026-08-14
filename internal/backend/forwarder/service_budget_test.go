@@ -1,6 +1,7 @@
 package forwarder
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -10,6 +11,7 @@ import (
 
 	"cursor/gen/agentv1"
 	modeladapter "cursor/internal/backend/agent/model"
+	legacyruntime "cursor/internal/runtime"
 )
 
 func TestCompactActiveTurnToolResultsForBudgetKeepsLatestPairAndCanonicalHistory(t *testing.T) {
@@ -200,6 +202,7 @@ func TestDriveProviderShrinksEarlierActiveTurnToolResultsAfterHistoryProjection(
 	provider := &contextProjectionRequestProvider{requests: make(chan ProviderRequest, 1)}
 	broker := NewStreamBroker()
 	service := newServiceWithDependencies(store, NewHistoryProjector(), contextProjectionLifecycleCompiler{}, provider, broker)
+	service.resolver = fixedContextWindowResolver{tokens: 40_000}
 	stream, err := broker.OpenStream(requestID, persisted.ConversationID, turnSeq, "model-a", "model-a", agentv1.AgentMode_AGENT_MODE_AGENT, "inspect the failure")
 	if err != nil {
 		t.Fatalf("OpenStream() error = %v", err)
@@ -301,5 +304,67 @@ func TestValidateProviderRequestContextBudgetAllowsExactSafetyBoundary(t *testin
 
 	if err := validateProviderRequestContextBudget(conversation, compiled, 7); err != nil {
 		t.Fatalf("validateProviderRequestContextBudget() error = %v, want nil", err)
+	}
+}
+
+type unresolvedChannelResolver struct{}
+
+func (unresolvedChannelResolver) SelectChannelForModel(context.Context, string) (*legacyruntime.ResolvedChannel, error) {
+	return nil, legacyruntime.ErrChannelNotAvailable
+}
+func (unresolvedChannelResolver) ProviderStreamIdleTimeout(context.Context) time.Duration { return 0 }
+func (unresolvedChannelResolver) TurnStaleTimeout(context.Context) time.Duration          { return 0 }
+func (unresolvedChannelResolver) NativeDelegationProgressTimeout(context.Context) time.Duration {
+	return 0
+}
+
+type fixedContextWindowResolver struct {
+	tokens int
+}
+
+func (r fixedContextWindowResolver) SelectChannelForModel(context.Context, string) (*legacyruntime.ResolvedChannel, error) {
+	return &legacyruntime.ResolvedChannel{ContextWindowTokens: r.tokens}, nil
+}
+func (fixedContextWindowResolver) ProviderStreamIdleTimeout(context.Context) time.Duration { return 0 }
+func (fixedContextWindowResolver) TurnStaleTimeout(context.Context) time.Duration          { return 0 }
+func (fixedContextWindowResolver) NativeDelegationProgressTimeout(context.Context) time.Duration {
+	return 0
+}
+
+func TestResolveContextWindowTokensFallsBackToDefaultChannelWindow(t *testing.T) {
+	service := &Service{}
+	if got := service.resolveContextWindowTokens("missing-model"); got != defaultResolvedContextWindowTokens {
+		t.Fatalf("nil resolver fallback = %d, want %d", got, defaultResolvedContextWindowTokens)
+	}
+
+	service = &Service{resolver: unresolvedChannelResolver{}}
+	if got := service.resolveContextWindowTokens("missing-model"); got != defaultResolvedContextWindowTokens {
+		t.Fatalf("unresolved channel fallback = %d, want %d", got, defaultResolvedContextWindowTokens)
+	}
+}
+
+func TestContextProjectionPressureNotTriggeredForModeratePromptWith200KWindow(t *testing.T) {
+	service := &Service{resolver: unresolvedChannelResolver{}}
+	conversation := &ConversationFile{TokenDetailsMaxTokens: service.resolveContextWindowTokens("channel-a")}
+	compiled := CompiledConversation{Messages: []modeladapter.Message{
+		{Role: "system", Content: strings.Repeat("system-", 20_000)},
+		{Role: "user", Content: "hello"},
+	}}
+	budgetTokens := int64(float64(conversation.TokenDetailsMaxTokens)*contextProjectionHardRatio) - compactionAutoReserveTokens
+	inputTokens := estimateCompiledPromptTokens(compiled)
+	if inputTokens > budgetTokens {
+		t.Fatalf("test setup input tokens = %d, want <= budget %d", inputTokens, budgetTokens)
+	}
+	if service.contextProjectionPressureExceeded(&ActiveStream{ModelID: "channel-a"}, conversation, compiled) {
+		t.Fatal("contextProjectionPressureExceeded() = true, want false for moderate prompt with 200K fallback window")
+	}
+
+	conversation.TokenDetailsMaxTokens = projectedConversationMaxTokens
+	oldBudget := int64(float64(projectedConversationMaxTokens)*contextProjectionHardRatio) - compactionAutoReserveTokens
+	if inputTokens <= oldBudget {
+		t.Fatalf("test setup input tokens = %d, want above legacy 64K budget %d", inputTokens, oldBudget)
+	}
+	if !service.contextProjectionPressureExceeded(&ActiveStream{ModelID: "channel-a"}, conversation, compiled) {
+		t.Fatal("contextProjectionPressureExceeded() = false, want true when window falls back to 64K")
 	}
 }

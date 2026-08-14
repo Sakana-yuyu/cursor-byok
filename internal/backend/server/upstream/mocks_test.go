@@ -25,8 +25,8 @@ func TestBuildCLIModelDetailsPreservesChannelCredentials(t *testing.T) {
 
 	got := buildCLIModelDetails(adapters)
 	want := []map[string]any{
-		{"modelId": "channel-a", "displayModelId": "channel-a", "apiKeyCredentials": map[string]any{"apiKey": "provider-secret-a", "baseUrl": "https://provider-a.example/v1"}},
-		{"modelId": "channel-b", "displayModelId": "channel-b", "apiKeyCredentials": map[string]any{"apiKey": "", "baseUrl": ""}},
+		{"modelId": "channel-a", "displayModelId": "channel-a", "apiKeyCredentials": map[string]any{"apiKey": "provider-secret-a", "baseUrl": "https://provider-a.example/v1"}, "supportsAutoContext": false},
+		{"modelId": "channel-b", "displayModelId": "channel-b", "apiKeyCredentials": map[string]any{"apiKey": "", "baseUrl": ""}, "supportsAutoContext": false},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("build CLI model details: got %v, want %v", got, want)
@@ -398,6 +398,79 @@ func TestBuildAvailableModelEntriesEnrichesNativeMetadata(t *testing.T) {
 	}
 	if !strings.HasPrefix(tooltipA, "我的渠道备注") {
 		t.Fatalf("tooltip 应以用户备注开头，实际内容:\n%s", tooltipA)
+	}
+}
+
+func TestBuildCLIModelDetailsIncludesAutoContextMetadata(t *testing.T) {
+	adapters := []legacyruntime.ModelAdapterConfig{
+		{
+			ID:                  "channel-a",
+			DisplayName:         "Channel A",
+			ModelID:             "claude-sonnet-4-5",
+			APIKey:              "provider-secret-a",
+			BaseURL:             "https://provider-a.example/v1",
+			ContextWindowTokens: 200000,
+		},
+		{ID: "channel-b", DisplayName: "Channel B", ModelID: "unknown-model-xyz", ContextWindowTokens: 0},
+	}
+	models := buildCLIModelDetails(adapters)
+	if len(models) != 2 {
+		t.Fatalf("model count: got %d, want 2", len(models))
+	}
+	modelA := models[0]
+	if got, ok := modelA["contextTokenLimit"].(int); !ok || got != 200000 {
+		t.Fatalf("contextTokenLimit: got %#v, want 200000", modelA["contextTokenLimit"])
+	}
+	if got, ok := modelA["contextTokenLimitForMaxMode"].(int); !ok || got != 200000 {
+		t.Fatalf("contextTokenLimitForMaxMode: got %#v, want 200000", modelA["contextTokenLimitForMaxMode"])
+	}
+	if got, ok := modelA["autoContextMaxTokens"].(int); !ok || got != 200000 {
+		t.Fatalf("autoContextMaxTokens: got %#v, want 200000", modelA["autoContextMaxTokens"])
+	}
+	if supportsAutoContext, ok := modelA["supportsAutoContext"].(bool); !ok || !supportsAutoContext {
+		t.Fatalf("supportsAutoContext: got %#v, want true", modelA["supportsAutoContext"])
+	}
+	credentials, ok := modelA["apiKeyCredentials"].(map[string]any)
+	if !ok || credentials["apiKey"] != "provider-secret-a" || credentials["baseUrl"] != "https://provider-a.example/v1" {
+		t.Fatalf("apiKeyCredentials: got %#v", modelA["apiKeyCredentials"])
+	}
+	modelB := models[1]
+	for _, field := range []string{"contextTokenLimit", "contextTokenLimitForMaxMode", "autoContextMaxTokens"} {
+		if _, exists := modelB[field]; exists {
+			t.Fatalf("entry for unknown model must not set %q, got %#v", field, modelB[field])
+		}
+	}
+	if supportsAutoContext, ok := modelB["supportsAutoContext"].(bool); !ok || supportsAutoContext {
+		t.Fatalf("supportsAutoContext for unknown model: got %#v, want false", modelB["supportsAutoContext"])
+	}
+	entries := buildAvailableModelEntries(adapters)
+	for _, field := range []string{"contextTokenLimit", "contextTokenLimitForMaxMode", "autoContextMaxTokens", "supportsAutoContext"} {
+		if !reflect.DeepEqual(models[0][field], entries[0][field]) {
+			t.Fatalf("CLI/IDE metadata mismatch for %q: cli=%#v available=%#v", field, models[0][field], entries[0][field])
+		}
+	}
+	payload, err := buildUsableModelsPayload(newRequestContextWithAdapters(adapters))
+	if err != nil {
+		t.Fatalf("build usable models payload: %v", err)
+	}
+	encoded, err := encodeMockProto("aiserver.v1.GetUsableModelsResponse", payload)
+	if err != nil {
+		t.Fatalf("encode usable models payload: %v", err)
+	}
+	response := &agentv1.GetUsableModelsResponse{}
+	if err := proto.Unmarshal(encoded, response); err != nil {
+		t.Fatalf("decode usable models with agent proto: %v", err)
+	}
+	decoded := response.GetModels()[0]
+	if decoded.GetContextTokenLimit() != 200000 || decoded.GetAutoContextMaxTokens() != 200000 || !decoded.GetSupportsAutoContext() {
+		t.Fatalf("decoded CLI metadata: context=%d auto=%d supports=%v", decoded.GetContextTokenLimit(), decoded.GetAutoContextMaxTokens(), decoded.GetSupportsAutoContext())
+	}
+	defaultPayload, err := buildDefaultModelForCliPayload(newRequestContextWithAdapters(adapters))
+	if err != nil {
+		t.Fatalf("build default model for cli payload: %v", err)
+	}
+	if _, err := encodeMockProto("aiserver.v1.GetDefaultModelForCliResponse", defaultPayload); err != nil {
+		t.Fatalf("encode default model for cli payload: %v", err)
 	}
 }
 

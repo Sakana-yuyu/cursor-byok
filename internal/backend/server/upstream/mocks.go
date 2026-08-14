@@ -730,15 +730,7 @@ func buildAvailableModelEntries(adapters []legacyruntime.ModelAdapterConfig) []m
 		// 还原原生模型选择器元数据：上下文窗口（含 max 模式）、自动上下文上限、
 		// 展示价格、长上下文标记与「用户自建」标记。数据源优先 adapter 显式配置，
 		// 其次内置 modelcontext 目录（models.json 规则），缺失时省略对应字段。
-		if contextTokens > 0 && contextTokens <= math.MaxInt32 {
-			entry["contextTokenLimit"] = contextTokens
-			entry["contextTokenLimitForMaxMode"] = contextTokens
-			entry["autoContextMaxTokens"] = contextTokens
-			entry["supportsAutoContext"] = true
-		} else {
-			// 未知上下文时不声明自动上下文能力，避免字段自相矛盾。
-			entry["supportsAutoContext"] = false
-		}
+		applyAvailableModelAutoContextMetadata(entry, contextTokens)
 		entry["isLongContextOnly"] = false
 		entry["isUserAdded"] = true
 		if price := resolveAvailableModelDisplayPrice(adapter); price > 0 {
@@ -855,6 +847,21 @@ func formatModelPrice(price float64, currency string) string {
 	}
 }
 
+func applyAvailableModelAutoContextMetadata(entry map[string]any, contextTokens int) {
+	if entry == nil {
+		return
+	}
+	if contextTokens > 0 && contextTokens <= math.MaxInt32 {
+		entry["contextTokenLimit"] = contextTokens
+		entry["contextTokenLimitForMaxMode"] = contextTokens
+		entry["autoContextMaxTokens"] = contextTokens
+		entry["supportsAutoContext"] = true
+		return
+	}
+	// 未知上下文时不声明自动上下文能力，避免字段自相矛盾。
+	entry["supportsAutoContext"] = false
+}
+
 func buildCLIModelDetails(adapters []legacyruntime.ModelAdapterConfig) []map[string]any {
 	models := make([]map[string]any, 0, len(adapters))
 	for _, adapter := range adapters {
@@ -862,14 +869,16 @@ func buildCLIModelDetails(adapters []legacyruntime.ModelAdapterConfig) []map[str
 		if channelID == "" {
 			continue
 		}
-		models = append(models, map[string]any{
+		detail := map[string]any{
 			"modelId":        channelID,
 			"displayModelId": channelID,
 			"apiKeyCredentials": map[string]any{
 				"apiKey":  strings.TrimSpace(adapter.APIKey),
 				"baseUrl": strings.TrimSpace(adapter.BaseURL),
 			},
-		})
+		}
+		applyAvailableModelAutoContextMetadata(detail, resolveAvailableModelContextTokens(adapter))
+		models = append(models, detail)
 	}
 	return models
 }

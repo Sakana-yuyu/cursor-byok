@@ -3311,6 +3311,10 @@ message ModelDetails {
     AzureCredentials azure_credentials = 9;
     BedrockCredentials bedrock_credentials = 10;
   }
+  optional bool supports_auto_context = 11;
+  optional int32 auto_context_max_tokens = 12;
+  optional int32 context_token_limit = 15;
+  optional int32 context_token_limit_for_max_mode = 16;
 }
 
 // Copied from: local:agent.v1.MountedAgentStore (var: E)

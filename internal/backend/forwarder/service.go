@@ -312,6 +312,7 @@ func newService(historyRoot string, resolver modeladapter.ChannelResolver, regis
 			store.SyncAllCursorTranscriptsBestEffort()
 		})
 	})
+	service.registerStreamLifecycleHooks()
 	return service
 }
 
@@ -361,6 +362,7 @@ func newServiceWithDependencies(store *ConversationFileStore, projector *History
 	service.cursorDelegation = newCursorDelegationBridge(service)
 	service.localDelegation = newLocalDelegatedAgentAdapter(service)
 	service.multitaskDelegation = newMultitaskDelegationCoordinator(service, nil)
+	service.registerStreamLifecycleHooks()
 	return service
 }
 
@@ -3915,6 +3917,9 @@ func (service *Service) claimProvider400Recovery(requestID string, turnSeq int64
 	if _, exists := service.provider400RecoveryTurns[key]; exists {
 		return false
 	}
+	if len(service.provider400RecoveryTurns) >= provider400RecoveryMaxEntries {
+		service.evictProvider400RecoveryLocked(len(service.provider400RecoveryTurns) - provider400RecoveryMaxEntries + 1)
+	}
 	service.provider400RecoveryTurns[key] = struct{}{}
 	return true
 }
@@ -4358,13 +4363,15 @@ func (service *Service) resolveRequestedModelName(message *agentv1.AgentClientMe
 	return strings.TrimSpace(modelID)
 }
 
+const defaultResolvedContextWindowTokens = 200_000 // align with config.defaultChannelContextWindowTokens
+
 func (service *Service) resolveContextWindowTokens(modelID string) uint32 {
 	if service == nil || service.resolver == nil {
-		return projectedConversationMaxTokens
+		return defaultResolvedContextWindowTokens
 	}
 	channel, err := service.resolver.SelectChannelForModel(context.Background(), strings.TrimSpace(modelID))
 	if err != nil || channel == nil || channel.ContextWindowTokens <= 0 {
-		return projectedConversationMaxTokens
+		return defaultResolvedContextWindowTokens
 	}
 	return clampInt64ToUint32(int64(channel.ContextWindowTokens))
 }

@@ -498,6 +498,7 @@ func TestDriveProviderAppliesProjectionStableFrontierOnlyOnce(t *testing.T) {
 	provider := &contextProjectionRequestProvider{requests: make(chan ProviderRequest, 3), emitEvent: true}
 	broker := NewStreamBroker()
 	service := newServiceWithDependencies(store, NewHistoryProjector(), contextProjectionLifecycleCompiler{}, provider, broker)
+	service.resolver = fixedContextWindowResolver{tokens: projectedConversationMaxTokens}
 	stream, err := broker.OpenStream(
 		"request-8",
 		persisted.ConversationID,
