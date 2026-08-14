@@ -3917,9 +3917,6 @@ func (service *Service) claimProvider400Recovery(requestID string, turnSeq int64
 	if _, exists := service.provider400RecoveryTurns[key]; exists {
 		return false
 	}
-	if len(service.provider400RecoveryTurns) >= provider400RecoveryMaxEntries {
-		service.evictProvider400RecoveryLocked(len(service.provider400RecoveryTurns) - provider400RecoveryMaxEntries + 1)
-	}
 	service.provider400RecoveryTurns[key] = struct{}{}
 	return true
 }

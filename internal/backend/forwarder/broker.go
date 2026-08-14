@@ -39,6 +39,42 @@ type StreamBroker struct {
 	// broker.mu 删除前调用它，用于确定性竞态回归测试。测试可通过 channel 阻断清理，
 	// 注入并发的 Subscribe。
 	cleanupIntercept func(requestID string)
+	// onStreamRemoved 在流从 broker 删除后回调；必须在 broker.mu 释放后调用。
+	onStreamRemoved func(info StreamRemovedInfo)
+}
+
+// StreamRemovedInfo 描述刚从 broker 删除的流快照，供 Service 做 map 清理与 run queue 释放。
+type StreamRemovedInfo struct {
+	RequestID      string
+	ConversationID string
+	TurnSeq        int64
+}
+
+// SetStreamRemovedHook 注册流删除回调；重复调用会覆盖旧 hook。
+func (broker *StreamBroker) SetStreamRemovedHook(hook func(StreamRemovedInfo)) {
+	if broker == nil {
+		return
+	}
+	broker.onStreamRemoved = hook
+}
+
+func streamRemovedInfoFrom(stream *ActiveStream, requestID string) StreamRemovedInfo {
+	info := StreamRemovedInfo{RequestID: strings.TrimSpace(requestID)}
+	if stream == nil {
+		return info
+	}
+	stream.mu.Lock()
+	info.ConversationID = strings.TrimSpace(stream.ConversationID)
+	info.TurnSeq = stream.TurnSeq
+	stream.mu.Unlock()
+	return info
+}
+
+func (broker *StreamBroker) invokeStreamRemovedHook(info StreamRemovedInfo) {
+	if broker == nil || broker.onStreamRemoved == nil {
+		return
+	}
+	broker.onStreamRemoved(info)
 }
 
 // NewStreamBroker 创建活动流注册表。
@@ -380,9 +416,11 @@ func (broker *StreamBroker) runScheduledTerminalCleanup(requestID string, sequen
 	if broker.cleanupIntercept != nil {
 		broker.cleanupIntercept(requestID)
 	}
+	removedInfo := streamRemovedInfoFrom(stream, normalizedRequestID)
 	// 直接删除终态流（不再通过 RemoveIfIdle，后者已不再管理终态流）。
 	delete(broker.streams, normalizedRequestID)
 	broker.mu.Unlock()
+	broker.invokeStreamRemovedHook(removedInfo)
 }
 
 // RemoveIfIdle 移除无订阅者的空壳占位流。
@@ -393,9 +431,9 @@ func (broker *StreamBroker) RemoveIfIdle(requestID string) bool {
 		return false
 	}
 	broker.mu.Lock()
-	defer broker.mu.Unlock()
 	stream, ok := broker.streams[normalizedRequestID]
 	if !ok || stream == nil {
+		broker.mu.Unlock()
 		return false
 	}
 	stream.mu.Lock()
@@ -406,17 +444,23 @@ func (broker *StreamBroker) RemoveIfIdle(requestID string) bool {
 	status := stream.Status
 	stream.mu.Unlock()
 	if subscriberCount > 0 {
+		broker.mu.Unlock()
 		return false
 	}
 	// 终态流由定时器独占管理；RemoveIfIdle 不删除它。
 	if status == StreamStatusCompleted || status == StreamStatusCanceled || status == StreamStatusFailed {
+		broker.mu.Unlock()
 		return false
 	}
 	// 非终态占位流：无 provider、无 backlog、无会话信息 → 可安全移除。
 	if isActive || hasBacklog || hasConversation {
+		broker.mu.Unlock()
 		return false
 	}
+	removedInfo := streamRemovedInfoFrom(stream, normalizedRequestID)
 	delete(broker.streams, normalizedRequestID)
+	broker.mu.Unlock()
+	broker.invokeStreamRemovedHook(removedInfo)
 	return true
 }
 
