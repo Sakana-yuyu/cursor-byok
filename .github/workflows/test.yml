@@ -167,6 +167,32 @@ jobs:
       - name: Race (forwarder)
         run: go test -race ./internal/backend/forwarder/...
 
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Vulnerability scan
+        continue-on-error: true
+        run: govulncheck ./...
+
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6
+
+      # 首版仅启用 govet（与 go vet 等价），后续可逐步打开 staticcheck / errcheck。
+      - name: Lint (golangci-lint)
+        run: golangci-lint run ./...
+
+      - name: Reject tracked secrets in cursor-tab-server config
+        run: |
+          set -e
+          if git ls-files --error-unmatch cursor-tab-server/config.yaml >/dev/null 2>&1; then
+            echo "cursor-tab-server/config.yaml must not be tracked; use config.yaml.example"
+            exit 1
+          fi
+          if [ -f cursor-tab-server/config.yaml ] && grep -qE 'token:\s*".{20,}"' cursor-tab-server/config.yaml; then
+            echo "cursor-tab-server/config.yaml looks like it contains a real token"
+            exit 1
+          fi
+
       # 能力清单由 tool_catalog.go 生成。此前多次出现改了 catalog 却没重跑生成器，
       # 漂移一路累积到下一个改动者身上。
       - name: Capability map is in sync with tool catalog
