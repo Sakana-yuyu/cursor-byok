@@ -149,6 +149,7 @@ func (service *Service) dispatchInboundIntent(intent InboundIntent) error {
 		return fmt.Errorf("forwarder service is nil")
 	}
 	if strings.TrimSpace(intent.Kind) == "run" {
+		service.reconcileStaleRunQueueOwner(intent.ConversationID)
 		result, ownerRequestID, queuePosition := service.runQueue.Submit(intent)
 		switch result {
 		case runQueueQueued:
