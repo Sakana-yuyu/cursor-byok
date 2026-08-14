@@ -1,0 +1,3 @@
+# Copy to config.yaml and fill in your Cursor access token.
+# Do not commit config.yaml — it is gitignored.
+token: "your-cursor-access-token-here"

@@ -28,6 +28,7 @@ cmd/ads-server/data/
 cmd/ads-server/ads-server
 cmd/ads-server/ads-server-linux-amd64.tar
 cursor-tab-server/cursor-tab-server-linux-amd64.tar
+cursor-tab-server/config.yaml
 
 # 构建产物
 /cursor.exe
@@ -96,3 +97,4 @@ output/
 .playwright-cli/
 frontend/.playwright-cli/
 .tmp-skill-scan/
+frontend/package-lock.json
