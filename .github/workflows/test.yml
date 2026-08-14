@@ -197,3 +197,6 @@ jobs:
           set -e
           go run ./cmd/sync-tool-catalog --write
           git diff --exit-code -- docs/cursor-capability-map.md
+
+      - name: Bundled skills match .agents/skills
+        run: go run ./cmd/sync-bundled-skills --check

@@ -212,6 +212,11 @@ tasks:
       - cmd: rm -rf .tmp .tmp-skill-scan && rm -f cursor.exe test.exe
         platforms: [darwin, linux]
 
+  sync:skills:
+    summary: 将 .agents/skills 中与 bundled 同名的技能复制到 internal/skills/bundled
+    cmds:
+      - go run ./cmd/sync-bundled-skills
+
   clean:dist:
     internal: true
     cmds:
