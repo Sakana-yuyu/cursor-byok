@@ -268,6 +268,8 @@ type ActiveStream struct {
 	BacklogStartCursor          int
 	Subscribers                 map[string]*StreamSubscriber
 	CheckpointConversation      *ConversationFile
+	CheckpointPersistTimer      *time.Timer
+	CheckpointLastPersistedEntrySeq int64
 	PendingExecs                map[string]runtimecore.PendingExec
 	PendingInteractions         map[string]runtimecore.PendingInteraction
 	PartialToolCallIDs          map[string]struct{}

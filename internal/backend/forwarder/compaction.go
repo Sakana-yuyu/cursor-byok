@@ -732,7 +732,12 @@ func (service *Service) applyCompactionPlan(stream *ActiveStream, conversationID
 		}
 		stream.mu.Lock()
 		stream.CheckpointConversation = persisted
+		syncCheckpointPersistBaseline(stream, persisted)
 		stream.UpdatedAt = time.Now().UTC()
+		if stream.CheckpointPersistTimer != nil {
+			stream.CheckpointPersistTimer.Stop()
+			stream.CheckpointPersistTimer = nil
+		}
 		stream.mu.Unlock()
 		return nil
 	}

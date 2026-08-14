@@ -17,6 +17,7 @@ func (service *Service) replaceCheckpointConversation(stream *ActiveStream, conv
 	}
 	stream.mu.Lock()
 	stream.CheckpointConversation = cloneConversationFile(conversation)
+	syncCheckpointPersistBaseline(stream, stream.CheckpointConversation)
 	stream.mu.Unlock()
 	return nil
 }
@@ -79,27 +80,12 @@ func (service *Service) appendConversationEntries(stream *ActiveStream, conversa
 		stream.mu.Unlock()
 		return nil, fmt.Errorf("checkpoint conversation is not initialized")
 	}
-	working := cloneConversationFile(stream.CheckpointConversation)
-	if service.store != nil {
-		persisted, assigned, err := service.store.AppendEntries(conversationID, resetEntrySequences(entries))
-		if err != nil {
-			stream.mu.Unlock()
-			return nil, err
-		}
-		if persisted != nil {
-			working = persisted
-		} else {
-			appendEntriesInPlace(working, assigned)
-		}
-		stream.CheckpointConversation = working
-		stream.UpdatedAt = time.Now().UTC()
-		stream.mu.Unlock()
-		return assigned, nil
-	}
-	assigned := appendEntriesInPlace(working, entries)
-	stream.CheckpointConversation = working
+	assigned := appendEntriesInPlace(stream.CheckpointConversation, entries)
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
+	if service.store != nil {
+		service.scheduleCheckpointPersist(stream, conversationID)
+	}
 	return assigned, nil
 }
 
@@ -130,18 +116,20 @@ func (service *Service) updateConversationMetaAndCheckpoint(stream *ActiveStream
 		return nil, fmt.Errorf("active stream is required")
 	}
 	stream.mu.Lock()
-	defer stream.mu.Unlock()
 	if stream.CheckpointConversation == nil {
+		stream.mu.Unlock()
 		return nil, fmt.Errorf("checkpoint conversation is not initialized")
 	}
 	conversation := cloneConversationFile(stream.CheckpointConversation)
 	if err := update(conversation); err != nil {
-		return nil, err
-	}
-	if err := service.syncConversationRecord(conversationID, conversation); err != nil {
+		stream.mu.Unlock()
 		return nil, err
 	}
 	stream.CheckpointConversation = conversation
 	stream.UpdatedAt = time.Now().UTC()
+	stream.mu.Unlock()
+	if service.store != nil {
+		service.scheduleCheckpointPersist(stream, conversationID)
+	}
 	return cloneConversationFile(conversation), nil
 }

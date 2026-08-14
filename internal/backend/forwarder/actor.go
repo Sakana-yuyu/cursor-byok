@@ -1477,10 +1477,14 @@ func (service *Service) setTurnPhase(stream *ActiveStream, phase TurnPhase) {
 	stream.mu.Lock()
 	stream.Phase = phase
 	stream.UpdatedAt = time.Now().UTC()
+	conversationID := strings.TrimSpace(stream.ConversationID)
 	// 仅当真正进入「等待外部（工具/交互结果）」阶段时，才挂一个 turn-staleness 看门狗。
 	// 它会通过 handleTurnStaleTimeout 二次校验真实状态，仅在「无进展地卡住」时自救。
 	waitingExternal := phase == TurnPhaseWaitingExternal
 	stream.mu.Unlock()
+	if phase == TurnPhaseCompleted || phase == TurnPhaseFailed || phase == TurnPhaseCanceled {
+		_ = service.flushCheckpointPersistSync(stream, conversationID)
+	}
 	if waitingExternal {
 		service.scheduleTurnStaleWatchdog(stream)
 	} else {

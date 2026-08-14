@@ -1181,6 +1181,7 @@ func (service *Service) persistShutdownInterruptedTerminals(requestIDs []string)
 			continue
 		}
 		handled[conversationID] = struct{}{}
+		_ = service.flushCheckpointPersistSync(stream, conversationID)
 		service.forceMarkConversationInterrupted(conversationID, "local assistant service shutting down")
 	}
 }
@@ -1354,6 +1355,9 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 			checkpointCancellationAction(firstNonEmpty(intent.CancelReason, "[canceled] User aborted request")),
 		); err != nil {
 			return err
+		}
+		if err := service.flushCheckpointPersistSync(stream, conversationID); err != nil {
+			logger.Errorf("forwarder cancellation checkpoint flush failed request_id=%s conversation_id=%s err=%v", stream.RequestID, conversationID, err)
 		}
 		return nil
 	}
