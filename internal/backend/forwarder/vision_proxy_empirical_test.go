@@ -379,7 +379,12 @@ func TestVisionArchiveSurvivesServiceRestart(t *testing.T) {
 	first.storeVisionArchive("conv-restart", keys(first), "[图片识图结果（视觉委派）]\n重启后仍应命中")
 
 	// 第二个实例（模拟进程重启）：归档不在内存，应从磁盘懒加载后命中。
-	second := NewService(historyRoot, nilResolver{})
+	// 勿再调 NewService——history 根目录已有会话子目录时会启动 history maintenance
+	// goroutine，测试结束与 t.TempDir 清理竞态（CI 上偶发 directory not empty）。
+	second := &Service{
+		store:              NewConversationFileStore(historyRoot),
+		visionArchiveLimit: visionArchiveMaxEntries,
+	}
 	if len(second.visionArchive) != 0 {
 		t.Fatalf("新实例不应自带内存归档，got %d 条", len(second.visionArchive))
 	}
