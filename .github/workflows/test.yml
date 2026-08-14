@@ -162,6 +162,11 @@ jobs:
       - name: Test
         run: go test ./...
 
+      # 全量 go test -race 在 runner 上约 15min+ 且易超时；forwarder 是并发最重的包
+      # （文件锁、checkpoint debounce、run queue），优先在这里做竞态检测。
+      - name: Race (forwarder)
+        run: go test -race ./internal/backend/forwarder/...
+
       # 能力清单由 tool_catalog.go 生成。此前多次出现改了 catalog 却没重跑生成器，
       # 漂移一路累积到下一个改动者身上。
       - name: Capability map is in sync with tool catalog

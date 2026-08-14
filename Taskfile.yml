@@ -204,6 +204,14 @@ tasks:
       - docker save "{{.IMAGE_NAME}}" -o "{{.IMAGE_TAR}}"
       - ls -lh "{{.IMAGE_TAR}}"
 
+  clean:
+    summary: 清理本地临时目录与根目录残留 exe（不影响 bin/ 发布产物）
+    cmds:
+      - cmd: powershell -NoProfile -Command "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue '.tmp','.tmp-skill-scan'; Remove-Item -Force -ErrorAction SilentlyContinue 'cursor.exe','test.exe'"
+        platforms: [windows]
+      - cmd: rm -rf .tmp .tmp-skill-scan && rm -f cursor.exe test.exe
+        platforms: [darwin, linux]
+
   clean:dist:
     internal: true
     cmds:

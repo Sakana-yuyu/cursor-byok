@@ -94,3 +94,5 @@ Thumbs.db
 # 本地运行产物。协议抓包记录含完整对话正文、工作区绝对路径与工具参数，禁止进入版本库
 output/
 .playwright-cli/
+frontend/.playwright-cli/
+.tmp-skill-scan/
