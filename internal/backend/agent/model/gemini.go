@@ -211,7 +211,9 @@ func geminiMessageParts(message Message) ([]map[string]any, error) {
 	for _, call := range message.ToolCalls {
 		args := map[string]any{}
 		if strings.TrimSpace(call.Function.Arguments) != "" {
-			_ = json.Unmarshal([]byte(call.Function.Arguments), &args)
+			if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
+				return nil, fmt.Errorf("decode gemini tool call arguments for %q: %w", strings.TrimSpace(call.Function.Name), err)
+			}
 		}
 		parts = append(parts, map[string]any{"functionCall": map[string]any{"name": strings.TrimSpace(call.Function.Name), "args": args}})
 	}
@@ -380,7 +382,10 @@ func (adapter *GeminiAdapter) streamGeminiEvents(resp *http.Response, req Stream
 				if name == "" {
 					continue
 				}
-				args, _ := json.Marshal(part.FunctionCall["args"])
+				args, err := json.Marshal(part.FunctionCall["args"])
+				if err != nil {
+					return inputTokens, outputTokens, cacheReadTokens, finishReason, firstEventAt, fmt.Errorf("encode gemini tool call args for %q: %w", name, err)
+				}
 				callID := stableGeminiToolCallID(req, name, string(args))
 				if _, seen := emittedTools[callID]; seen {
 					continue
