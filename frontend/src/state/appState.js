@@ -1,7 +1,6 @@
 import { computed, reactive, watchSyncEffect } from "vue";
 import { runtimeEvents } from "@/services/runtimeAdapter";
 import dayjs from "dayjs";
-import { getLocale } from "@/i18n/runtime";
 import { contextWindowTokensForModel } from "@/utils/modelContext";
 import { adapterMatchesSupplierIdentity } from "@/utils/supplierGrouping";
 // 基础类型转换与协议元数据已归位 utils/valueCast.js / utils/protocolMeta.js：
@@ -13,7 +12,6 @@ import {
   asPositiveInteger,
   asPositiveIntegerString,
   asString,
-  formatReleaseDate,
 } from "@/utils/valueCast";
 import {
   ANTHROPIC_THINKING_EFFORT_DEFAULT,
@@ -131,9 +129,9 @@ import {
   dismissDefenderExclusion,
 } from "@/services/clientApi";
 import { getHistoryDebugUsage } from "@/services/runtimeControlApi";
-
+import { createServiceViewState } from "@/state/serviceViewState";
+import { createUpdateViewState } from "@/state/updateViewState";
 const APP_STATE_STORAGE_KEY = "cursor-client:runtime-state:v2";
-const GENERIC_SERVICE_ERROR = "服务错误";
 export const ROUTE_MODE_OPTIONS = [
   { label: "本地服务模式", value: "local" },
   { label: "官方上游模式", value: "upstream" },
@@ -702,132 +700,8 @@ watchSyncEffect((onCleanup) => {
   });
 });
 
-export const appViewState = reactive({
-  serviceStatusText: computed(() => {
-    if (appState.proxyRunning && appState.backendRunning) {
-      return "服务运行中";
-    }
-    if (appState.backendRunning) {
-      return "后端已启动，代理未启动";
-    }
-    if (appState.proxyRunning) {
-      return "代理已启动，后端未启动";
-    }
-    return "服务未启动";
-  }),
-  serviceStatusClass: computed(() =>
-    appState.serviceRunning ? "text-[#22c55e]" : "text-[#f59e0b]",
-  ),
-  // serviceButtonText 的「关闭服务」覆盖半启动态：只起来一个组件时也要能关，
-  // 否则用户会卡在既不能启动也不能关闭的状态里。
-  serviceButtonText: computed(() => {
-    const anyRunning = appState.serviceRunning || appState.servicePartiallyRunning;
-    if (appState.serviceBusy) {
-      return anyRunning ? "关闭中..." : "启动中...";
-    }
-    return anyRunning ? "关闭服务" : "启动服务";
-  }),
-});
-
-function localizeUpdateMessage(msg) {
-  if (!msg) return "";
-  if (/当前已是最新版本/u.test(msg)) {
-    const match = msg.match(/v?([0-9]+\.[0-9]+\.[0-9]+)/);
-    const version = match ? match[1] : appState.appVersion || "...";
-    return `当前已是最新版本（v${version}）。`;
-  }
-  return msg;
-}
-
-function localizeReadyContent() {
-  const locale = getLocale ? getLocale() : "zh-CN";
-  const version = appState.updateVersion || appState.appVersion || "...";
-  const date = formatReleaseDate(appState.updateReleaseDate);
-  const notes = appState.updateReleaseNotes || "";
-
-  if (locale === "en-US") {
-    return [
-      `Version: v${version}`,
-      `Release Date: ${date}`,
-      "",
-      notes || "No release notes",
-    ].join("\n");
-  }
-  if (locale === "ja-JP") {
-    return [
-      `バージョン: v${version}`,
-      `リリース日: ${date}`,
-      "",
-      notes || "リリースノートはありません",
-    ].join("\n");
-  }
-  return [
-    `版本：v${version}`,
-    `发布时间：${date}`,
-    "",
-    notes || "无更新说明",
-  ].join("\n");
-}
-
-export const updateViewState = reactive({
-  footerDownloading: computed(() => appState.updateState === "downloading"),
-  footerBusy: computed(() => ["checking", "installing"].includes(appState.updateState)),
-  footerVersionLabel: computed(() => `v${appState.appVersion || "..."}`),
-  footerProgressText: computed(() => `${Math.round(appState.updateProgressPercent || 0)}%`),
-  footerProgressStyle: computed(() => ({
-    width: `${Math.max(0, Math.min(100, appState.updateProgressPercent || 0))}%`,
-  })),
-  promptTitle: computed(() => {
-    const locale = getLocale ? getLocale() : "zh-CN";
-    switch (appState.updatePromptKind) {
-      case "ready":
-        if (locale === "en-US") return "New Version Available";
-        if (locale === "ja-JP") return "新しいバージョンがあります";
-        return "发现新版本";
-      case "error":
-        if (locale === "en-US") return "Update Failed";
-        if (locale === "ja-JP") return "アップデートに失敗しました";
-        return "更新失败";
-      default:
-        if (locale === "en-US") return "Check for Updates";
-        if (locale === "ja-JP") return "アップデートを確認";
-        return "检查更新";
-    }
-  }),
-  promptContent: computed(() => {
-    switch (appState.updatePromptKind) {
-      case "ready":
-        return localizeReadyContent();
-      case "error":
-        return appState.updateError || localizeUpdateMessage(appState.updateMessage) || GENERIC_SERVICE_ERROR;
-      default:
-        return localizeUpdateMessage(appState.updateMessage) || localizeUpdateMessage(`当前已是最新版本（v${appState.appVersion || "..."}）。`);
-    }
-  }),
-  promptConfirmText: computed(() => {
-    const locale = getLocale ? getLocale() : "zh-CN";
-    if (appState.updatePromptKind === "ready") {
-      if (locale === "en-US") return "Restart to Update";
-      if (locale === "ja-JP") return "再起動して更新";
-      return "立即重启更新";
-    }
-    if (locale === "en-US") return "OK";
-    if (locale === "ja-JP") return "OK";
-    return "确定";
-  }),
-  promptCancelText: computed(() => {
-    const locale = getLocale ? getLocale() : "zh-CN";
-    if (appState.updatePromptKind === "ready") {
-      if (locale === "en-US") return "Later";
-      if (locale === "ja-JP") return "後で";
-      return "稍后";
-    }
-    if (locale === "en-US") return "Cancel";
-    if (locale === "ja-JP") return "キャンセル";
-    return "取消";
-  }),
-  promptShowCancel: computed(() => appState.updatePromptKind === "ready"),
-});
+export const appViewState = createServiceViewState(appState);
+export const updateViewState = createUpdateViewState(appState);
 
 export function getModelAdapterTestResultByID(adapterID) {
   const id = asString(adapterID);
