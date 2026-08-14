@@ -899,7 +899,7 @@ func sanitizeMCPRuntimeError(err error, config MCPServerConfig) string {
 	redactions = uniqueMCPRuntimeRedactions(redactions)
 	sort.Slice(redactions, func(i, j int) bool { return len(redactions[i]) > len(redactions[j]) })
 	for _, value := range redactions {
-		pattern, compileErr := regexp.Compile(`(?i)` + regexp.QuoteMeta(value))
+		pattern, compileErr := cachedRegexpCompile(`(?i)` + regexp.QuoteMeta(value))
 		if compileErr == nil {
 			message = pattern.ReplaceAllString(message, "[redacted]")
 		}

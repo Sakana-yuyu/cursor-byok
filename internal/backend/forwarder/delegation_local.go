@@ -1029,7 +1029,7 @@ func localQueryGrep(ctx context.Context, args map[string]any, workspace string, 
 	if pattern == "" {
 		return "", fmt.Errorf("grep pattern is required")
 	}
-	re, err := regexp.Compile(pattern)
+	re, err := cachedRegexpCompile(pattern)
 	if err != nil {
 		return "", fmt.Errorf("invalid grep pattern: %w", err)
 	}
@@ -1037,7 +1037,7 @@ func localQueryGrep(ctx context.Context, args map[string]any, workspace string, 
 	includeGlob := readArg("glob", "include")
 	var includeRe *regexp.Regexp
 	if includeGlob != "" && includeGlob != "*" {
-		includeRe, err = regexp.Compile(globToRegex(includeGlob))
+		includeRe, err = cachedRegexpCompile(globToRegex(includeGlob))
 		if err != nil {
 			return "", fmt.Errorf("invalid grep glob: %w", err)
 		}

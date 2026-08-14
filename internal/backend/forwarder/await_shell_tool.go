@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -250,7 +249,7 @@ func awaitShellPatternMatched(pattern string, output string) (bool, *string, err
 	if trimmed == "" {
 		return false, nil, nil
 	}
-	expr, err := regexp.Compile("(?m)" + trimmed)
+	expr, err := cachedRegexpCompile("(?m)" + trimmed)
 	if err != nil {
 		return false, nil, fmt.Errorf("invalid AwaitShell pattern: %w", err)
 	}
