@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -265,4 +266,49 @@ func containsMirrorHost(hosts []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func TestNormalizeListenAddrRejectsNonLoopbackByDefault(t *testing.T) {
+	for _, addr := range []string{"0.0.0.0:8787", "192.168.1.1:8787", "[::]:8787"} {
+		cfg := DefaultConfig()
+		cfg.BackendListenAddr = addr
+		if _, err := NormalizeConfig(cfg); err == nil {
+			t.Fatalf("NormalizeConfig(%q) error = nil, want non-loopback rejection", addr)
+		}
+	}
+}
+
+func TestNormalizeListenAddrAllowsLoopbackHosts(t *testing.T) {
+	for _, addr := range []string{"127.0.0.1:8787", "[::1]:8787", "localhost:8787"} {
+		cfg := DefaultConfig()
+		cfg.BackendListenAddr = addr
+		got, err := NormalizeConfig(cfg)
+		if err != nil {
+			t.Fatalf("NormalizeConfig(%q) error = %v", addr, err)
+		}
+		host, _, splitErr := net.SplitHostPort(got.BackendListenAddr)
+		if splitErr != nil {
+			t.Fatalf("SplitHostPort(%q) error = %v", got.BackendListenAddr, splitErr)
+		}
+		if !isLoopbackListenHost(host) {
+			t.Fatalf("normalized host %q for input %q is not loopback", host, addr)
+		}
+	}
+}
+
+func TestNormalizeListenAddrAllowsNonLoopbackWithOptIn(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.AllowNonLoopbackListen = true
+	cfg.BackendListenAddr = "0.0.0.0:8787"
+	cfg.ProxyListenAddr = "192.168.0.5:8788"
+	got, err := NormalizeConfig(cfg)
+	if err != nil {
+		t.Fatalf("NormalizeConfig() error = %v", err)
+	}
+	if got.BackendListenAddr != "0.0.0.0:8787" {
+		t.Fatalf("BackendListenAddr = %q, want 0.0.0.0:8787", got.BackendListenAddr)
+	}
+	if got.ProxyListenAddr != "192.168.0.5:8788" {
+		t.Fatalf("ProxyListenAddr = %q, want 192.168.0.5:8788", got.ProxyListenAddr)
+	}
 }

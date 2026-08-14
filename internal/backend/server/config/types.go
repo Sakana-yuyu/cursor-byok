@@ -215,6 +215,9 @@ type Config struct {
 	AutoMatchContextWindow          bool                       `json:"autoMatchContextWindow" yaml:"autoMatchContextWindow"`
 	BackendListenAddr               string                     `json:"backendListenAddr" yaml:"backendListenAddr"`
 	ProxyListenAddr                 string                     `json:"proxyListenAddr" yaml:"proxyListenAddr"`
+	// AllowNonLoopbackListen 显式允许 backend/proxy 绑定非环回地址。
+	// 默认 false：本地 MITM/Agent 面未鉴权，绑定 0.0.0.0 会把服务暴露到局域网。
+	AllowNonLoopbackListen          bool                       `json:"allowNonLoopbackListen" yaml:"allowNonLoopbackListen"`
 	ModelAdapters                   []ModelAdapterConfig       `json:"modelAdapters" yaml:"modelAdapters"`
 	Routing                         RoutingConfig              `json:"routing" yaml:"routing"`
 	HomeMetrics                     HomeMetricsConfig          `json:"homeMetrics" yaml:"homeMetrics"`
@@ -275,11 +278,12 @@ func NormalizeConfig(input Config) (Config, error) {
 	output.TurnStaleTimeout = normalizeTurnStaleTimeout(input.TurnStaleTimeout)
 	output.NativeDelegationProgressTimeout = normalizeNativeDelegationProgressTimeout(input.NativeDelegationProgressTimeout)
 	output.AutoMatchContextWindow = normalizeAutoMatchContextWindow(input.AutoMatchContextWindow)
-	backendListenAddr, err := normalizeListenAddr(input.BackendListenAddr, DefaultBackendListenAddr, "backendListenAddr")
+	output.AllowNonLoopbackListen = input.AllowNonLoopbackListen
+	backendListenAddr, err := normalizeListenAddr(input.BackendListenAddr, DefaultBackendListenAddr, "backendListenAddr", input.AllowNonLoopbackListen)
 	if err != nil {
 		return Config{}, err
 	}
-	proxyListenAddr, err := normalizeListenAddr(input.ProxyListenAddr, DefaultProxyListenAddr, "proxyListenAddr")
+	proxyListenAddr, err := normalizeListenAddr(input.ProxyListenAddr, DefaultProxyListenAddr, "proxyListenAddr", input.AllowNonLoopbackListen)
 	if err != nil {
 		return Config{}, err
 	}
@@ -667,7 +671,7 @@ func normalizeAnthropicThinkingEffort(value string) string {
 	}
 }
 
-func normalizeListenAddr(value string, defaultValue string, fieldName string) (string, error) {
+func normalizeListenAddr(value string, defaultValue string, fieldName string, allowNonLoopback bool) (string, error) {
 	addr := strings.TrimSpace(value)
 	if addr == "" {
 		addr = defaultValue
@@ -676,14 +680,28 @@ func normalizeListenAddr(value string, defaultValue string, fieldName string) (s
 	if err != nil {
 		return "", fmt.Errorf("%s 必须是 host:port 格式", fieldName)
 	}
-	if strings.TrimSpace(host) == "" {
+	host = strings.TrimSpace(host)
+	if host == "" {
 		return "", fmt.Errorf("%s host 不能为空", fieldName)
 	}
 	parsedPort, err := strconv.Atoi(port)
 	if err != nil || parsedPort < 1 || parsedPort > 65535 {
 		return "", fmt.Errorf("%s port 必须在 1-65535 之间", fieldName)
 	}
+	if !allowNonLoopback && !isLoopbackListenHost(host) {
+		return "", fmt.Errorf("%s 仅允许环回地址（127.0.0.1 或 ::1）；绑定非环回地址需设置 allowNonLoopbackListen: true", fieldName)
+	}
 	return net.JoinHostPort(host, strconv.Itoa(parsedPort)), nil
+}
+
+func isLoopbackListenHost(host string) bool {
+	switch strings.ToLower(strings.TrimSpace(host)) {
+	case "localhost":
+		return true
+	default:
+		ip := net.ParseIP(host)
+		return ip != nil && ip.IsLoopback()
+	}
 }
 
 // normalizeLocalResponseCache 归一化本地响应缓存配置：默认启用（Enabled=true），
