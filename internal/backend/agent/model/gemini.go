@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"cursor/gen/agentv1"
@@ -21,6 +22,10 @@ import (
 
 type GeminiAdapter struct {
 	client *http.Client
+}
+
+var geminiStreamBufferPool = sync.Pool{
+	New: func() any { return new(bytes.Buffer) },
 }
 
 func NewGeminiAdapter() *GeminiAdapter {
@@ -367,8 +372,10 @@ func (adapter *GeminiAdapter) streamGeminiEvents(resp *http.Response, req Stream
 			finishReason = geminiFinishReason(candidate.FinishReason)
 			sawTerminalCandidate = true
 		}
-		textSnapshot := bytes.Buffer{}
-		thinkingSnapshot := bytes.Buffer{}
+		textSnapshot := geminiStreamBufferPool.Get().(*bytes.Buffer)
+		textSnapshot.Reset()
+		thinkingSnapshot := geminiStreamBufferPool.Get().(*bytes.Buffer)
+		thinkingSnapshot.Reset()
 		for _, part := range candidate.Content.Parts {
 			if part.Text != "" {
 				if part.Thought {
@@ -398,16 +405,20 @@ func (adapter *GeminiAdapter) streamGeminiEvents(resp *http.Response, req Stream
 				}
 			}
 		}
-		if delta := suffixAfterCommonPrefix(lastThinking, thinkingSnapshot.String()); delta != "" {
-			lastThinking = thinkingSnapshot.String()
+		textValue := textSnapshot.String()
+		thinkingValue := thinkingSnapshot.String()
+		geminiStreamBufferPool.Put(textSnapshot)
+		geminiStreamBufferPool.Put(thinkingSnapshot)
+		if delta := suffixAfterCommonPrefix(lastThinking, thinkingValue); delta != "" {
+			lastThinking = thinkingValue
 			markFirst()
 			streamIdle.MarkEffectiveContent()
 			if err := sink(ModelEvent{Kind: ModelEventKindThinkingDelta, OccurredAt: time.Now().UTC(), Provider: "gemini", Model: modelID, ThinkingStyle: agentv1.ThinkingStyle_THINKING_STYLE_DEFAULT, Text: delta}); err != nil {
 				return inputTokens, outputTokens, cacheReadTokens, finishReason, firstEventAt, err
 			}
 		}
-		if delta := suffixAfterCommonPrefix(lastText, textSnapshot.String()); delta != "" {
-			lastText = textSnapshot.String()
+		if delta := suffixAfterCommonPrefix(lastText, textValue); delta != "" {
+			lastText = textValue
 			markFirst()
 			streamIdle.MarkEffectiveContent()
 			if err := sink(ModelEvent{Kind: ModelEventKindTextDelta, OccurredAt: time.Now().UTC(), Provider: "gemini", Model: modelID, Text: delta}); err != nil {
