@@ -3,7 +3,7 @@ import ResizeObserver from "resize-observer-polyfill";
 import App from "@/App.vue";
 import { installI18nRuntime, prepareInitialLocale } from "@/i18n/runtime";
 import router from "@/router";
-import { bootstrapAppState } from "@/state/appState";
+import { bootstrapAppState, appState } from "@/state/appState";
 import { startRuntimeHealthSupervisor } from "@/services/runtimeHealth";
 import { safeErrorLogAttributes } from "@/utils/errorContract";
 import "@/style/global.css";
@@ -61,6 +61,10 @@ async function mountApp() {
   }
 
   app.mount("#root");
+
+  if (import.meta.env.MODE === "browser-preview") {
+    window.__cursorByokAppState = appState;
+  }
 
   bootstrapAppState().catch((error) => {
     reportFrontendDefect(error, "bootstrapAppState");
