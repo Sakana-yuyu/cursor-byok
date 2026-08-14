@@ -138,7 +138,7 @@ const currentIconItems = computed(() => {
       sessionCount: day.sessionCount,
     }));
   }
-  return (currentDay.value?.sessions || []).map((session) => ({
+  return visibleSessions(currentDay.value).map((session) => ({
     kind: "session",
     key: session.id,
     label: sessionTitle(session),
@@ -791,6 +791,18 @@ onMounted(() => {
             </div>
           </li>
         </ul>
+        <div
+          v-if="historyPath.length === 3 && currentDay && hasMoreSessions(currentDay)"
+          class="flex shrink-0 justify-center border-t border-white/[0.08] py-2"
+        >
+          <button
+            type="button"
+            class="px-3 py-1 text-[11px] text-[#9ecfb5] hover:text-[#c8f2da]"
+            @click="loadMoreSessions(currentDay)"
+          >
+            加载更多
+          </button>
+        </div>
       </div>
 
       <div
