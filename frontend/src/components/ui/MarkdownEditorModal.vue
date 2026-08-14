@@ -1,7 +1,8 @@
 <script setup>
 import { MdEditor } from "md-editor-v3";
 import Button from "@/components/ui/Button.vue";
-import { computed } from "vue";
+import { useDialogFocus } from "@/composables/useDialogFocus";
+import { computed, ref, toRef, useId } from "vue";
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -13,6 +14,17 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["update:visible", "update:modelValue", "save", "cancel"]);
+
+const titleId = useId();
+const dialogRef = ref(null);
+const saveBtnRef = ref(null);
+
+const { onKeydown } = useDialogFocus({
+  visible: toRef(props, "visible"),
+  dialogRef,
+  initialFocusRef: saveBtnRef,
+  onEscape: handleCancel,
+});
 
 const editorContent = computed({
   get: () => props.modelValue,
@@ -39,13 +51,19 @@ function handleCancel() {
       >
         <Transition name="modal-content">
           <div
+            ref="dialogRef"
             v-show="visible"
-            class="relative z-10 w-full max-w-[860px] overflow-hidden rounded-[8px] p-px shadow-[0_25px_50px_-12px_rgba(0,0,0,0.6)]"
+            class="relative z-10 w-full max-w-[860px] overflow-hidden rounded-[8px] p-px shadow-[0_25px_50px_-12px_rgba(0,0,0,0.6)] focus:outline-none"
             style="background: linear-gradient(to bottom, #656565 0%, #3A3A3A 10px, #3A3A3A 100%);"
+            role="dialog"
+            aria-modal="true"
+            :aria-labelledby="titleId"
+            tabindex="-1"
             @click.stop
+            @keydown="onKeydown"
           >
             <div class="flex max-h-[88vh] flex-col rounded-[7px] bg-[#292929] p-5">
-              <h3 class="mb-3 min-w-0 truncate text-base font-medium text-white" :title="title">
+              <h3 :id="titleId" class="mb-3 min-w-0 truncate text-base font-medium text-white" :title="title">
                 {{ title }}
               </h3>
 
@@ -61,7 +79,7 @@ function handleCancel() {
 
               <div class="mt-4 flex justify-end gap-2">
                 <Button variant="default" @click="handleCancel">取消</Button>
-                <Button variant="primary" :disabled="saveBusy" @click="handleSave">
+                <Button ref="saveBtnRef" variant="primary" :disabled="saveBusy" @click="handleSave">
                   {{ saveBusy ? "保存中..." : saveText }}
                 </Button>
               </div>

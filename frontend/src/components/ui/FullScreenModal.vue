@@ -1,10 +1,26 @@
 <script setup>
+import { useDialogFocus } from "@/composables/useDialogFocus";
+import { computed, ref, toRef, useId } from "vue";
+
 const props = defineProps({
   visible: { type: Boolean, default: false },
   title: { type: String, default: "" },
   maxWidth: { type: String, default: "1200px" },
 });
 const emit = defineEmits(["close"]);
+
+const titleId = useId();
+const dialogRef = ref(null);
+const closeBtnRef = ref(null);
+
+const { onKeydown } = useDialogFocus({
+  visible: toRef(props, "visible"),
+  dialogRef,
+  initialFocusRef: closeBtnRef,
+  onEscape: () => emit("close"),
+});
+
+const closeLabel = computed(() => "关闭");
 </script>
 
 <template>
@@ -18,17 +34,23 @@ const emit = defineEmits(["close"]);
         <Transition name="fs-modal-content">
           <div
             v-if="visible"
-            class="relative flex max-h-[calc(100vh-24px)] w-full flex-col overflow-hidden rounded-[8px] border border-white/10 bg-[#1e1e1e] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.6)]"
+            ref="dialogRef"
+            class="relative flex max-h-[calc(100vh-24px)] w-full flex-col overflow-hidden rounded-[8px] border border-white/10 bg-[#1e1e1e] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.6)] focus:outline-none"
             :style="{ maxWidth: maxWidth }"
             role="dialog"
             aria-modal="true"
+            :aria-labelledby="titleId"
+            tabindex="-1"
+            @keydown="onKeydown"
           >
             <!-- 标题栏 -->
             <div class="flex shrink-0 items-center justify-between gap-4 border-b border-[#343434] px-5 py-3">
-              <h2 class="text-base font-medium text-white">{{ title }}</h2>
+              <h2 :id="titleId" class="text-base font-medium text-white">{{ title }}</h2>
               <button
+                ref="closeBtnRef"
                 type="button"
                 class="shrink-0 text-xl leading-none text-[#a3a3a3] transition-colors hover:text-white focus:outline-none"
+                :aria-label="closeLabel"
                 @click="emit('close')"
               >
                 ✕
