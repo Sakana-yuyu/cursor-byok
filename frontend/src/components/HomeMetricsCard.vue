@@ -2,18 +2,22 @@
 import CacheHitRateChart from "@/components/charts/CacheHitRateChart.vue";
 import Switch from "@/components/ui/Switch.vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
-import { fetchLocalCacheStats, fetchMetricsRangeSummary, fetchRecentRequestMetrics, resetUsageMetrics } from "@/services/clientApi";
+import { fetchMetricsRangeSummary, fetchRecentRequestMetrics, resetUsageMetrics } from "@/services/clientApi";
 import { appState, saveIncludeCacheWriteInHitRate, saveLocalResponseCacheEnabled, openMetricsDetailWindow } from "@/state/appState";
 import { formatCompactInteger, formatInteger } from "@/utils/numberFormat";
 import { safeErrorLogAttributes, toUserError } from "@/utils/errorContract";
 import { isBrowserPreview } from "@/services/runtimeAdapter";
 import { usePolling } from "@/composables/usePolling";
+import { useSharedHomeMetricsRefresh } from "@/composables/useSharedHomeMetricsRefresh";
 import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
 const emit = defineEmits(["refresh", "open-ad"]);
 const router = useRouter();
 const AUTO_REFRESH_INTERVAL_MS = 5000; // 5秒自动刷新
+const { localCacheStats: sharedLocalCacheStats, refresh: refreshSharedHomeMetrics } = useSharedHomeMetricsRefresh({
+  intervalMs: AUTO_REFRESH_INTERVAL_MS,
+});
 
 async function handleOpenDetail() {
   if (isBrowserPreview) {
@@ -110,20 +114,19 @@ async function loadEvents() {
   eventsLoading.value = true;
   eventsError.value = "";
   try {
-    const [data, summaryData, cacheStats] = await Promise.all([
+    const [data, summaryData] = await Promise.all([
       fetchRecentRequestMetrics(0),
       fetchMetricsRangeSummary(start, end).catch(() => null),
-      fetchLocalCacheStats().catch(() => null),
     ]);
     if (seq !== loadEventsSeq) return;
     allEvents.value = Array.isArray(data) ? data : [];
     rangeSummary.value = summaryData && typeof summaryData === "object" ? summaryData : null;
-    if (cacheStats && typeof cacheStats === "object") {
+    if (sharedLocalCacheStats.value && typeof sharedLocalCacheStats.value === "object") {
       localCacheStats.value = {
-        hits: Number(cacheStats.hits || 0),
-        misses: Number(cacheStats.misses || 0),
-        savedInputTokens: Number(cacheStats.savedInputTokens || 0),
-        savedOutputTokens: Number(cacheStats.savedOutputTokens || 0),
+        hits: Number(sharedLocalCacheStats.value.hits || 0),
+        misses: Number(sharedLocalCacheStats.value.misses || 0),
+        savedInputTokens: Number(sharedLocalCacheStats.value.savedInputTokens || 0),
+        savedOutputTokens: Number(sharedLocalCacheStats.value.savedOutputTokens || 0),
       };
     }
   } catch (e) {
@@ -428,7 +431,7 @@ async function toggleLocalResponseCache(value) {
 }
 
 async function handleRefresh() {
-  await loadEvents();
+  await Promise.all([loadEvents(), refreshSharedHomeMetrics()]);
   emit("refresh");
 }
 
@@ -454,6 +457,22 @@ async function handleClear() {
 watch([selectedRange, customStart, customEnd], () => {
   void loadEvents();
 });
+
+watch(
+  sharedLocalCacheStats,
+  (cacheStats) => {
+    if (!cacheStats || typeof cacheStats !== "object") {
+      return;
+    }
+    localCacheStats.value = {
+      hits: Number(cacheStats.hits || 0),
+      misses: Number(cacheStats.misses || 0),
+      savedInputTokens: Number(cacheStats.savedInputTokens || 0),
+      savedOutputTokens: Number(cacheStats.savedOutputTokens || 0),
+    };
+  },
+  { immediate: true },
+);
 
 usePolling(loadEvents, { intervalMs: AUTO_REFRESH_INTERVAL_MS });
 </script>

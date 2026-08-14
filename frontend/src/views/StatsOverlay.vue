@@ -1,8 +1,9 @@
 <script setup>
 import StatsOverlayChart from "@/components/charts/StatsOverlayChart.vue";
-import { getHomeMetricsSummary, fetchLocalCacheStats, setStatsOverlayAlwaysOnTop, updateStatsOverlayLayout } from "@/services/clientApi";
+import { setStatsOverlayAlwaysOnTop, updateStatsOverlayLayout } from "@/services/clientApi";
 import { getStatsOverlayPreferences, setStatsOverlayPreferences, hideStatsOverlay, closeApplication, appState } from "@/state/appState";
 import { usePolling } from "@/composables/usePolling";
+import { useSharedHomeMetricsRefresh } from "@/composables/useSharedHomeMetricsRefresh";
 import { formatCompactInteger } from "@/utils/numberFormat";
 import { safeErrorLogAttributes } from "@/utils/errorContract";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
@@ -24,6 +25,9 @@ let lastSavedX = null;
 let lastSavedY = null;
 
 const REFRESH_MS = 10000;
+const { localCacheStats: sharedLocalCacheStats, homeMetricsSummary: sharedHomeMetricsSummary } = useSharedHomeMetricsRefresh({
+  intervalMs: REFRESH_MS,
+});
 const POSITION_CHECK_MS = 300;       // 轮询提速，响应更灵敏
 const SNAP_ENTER_THRESHOLD = 40;     // 进入吸附区的距离（像素）
 const SNAP_LEAVE_THRESHOLD = 80;     // 离开吸附区的距离——比进入阈值大，形成迟滞防抖动
@@ -392,16 +396,15 @@ function markUpdated() {
   updatedTimer = setTimeout(() => { updated.value = false; }, 900);
 }
 
-async function load() {
-  try {
-    const [s, c] = await Promise.allSettled([getHomeMetricsSummary(), fetchLocalCacheStats()]);
-    if (s.status === "fulfilled") summary.value = s.value || {};
-    if (c.status === "fulfilled") localCache.value = c.value || {};
-    markUpdated();
-  } catch (_) {
-    // 浮窗静默失败，不弹错误
+watch([sharedHomeMetricsSummary, sharedLocalCacheStats], () => {
+  if (sharedHomeMetricsSummary.value) {
+    summary.value = sharedHomeMetricsSummary.value;
   }
-}
+  if (sharedLocalCacheStats.value) {
+    localCache.value = sharedLocalCacheStats.value;
+  }
+  markUpdated();
+}, { deep: true });
 
 function syncPreferences() {
   const next = getStatsOverlayPreferences();
@@ -457,7 +460,6 @@ onMounted(() => {
   // 初始同步一次原生窗口尺寸，确保窗口矩形紧贴实际内容
   syncNativeWindowSize();
 });
-usePolling(load, { intervalMs: REFRESH_MS });
 usePolling(checkPosition, { intervalMs: POSITION_CHECK_MS });
 
 onUnmounted(() => {
