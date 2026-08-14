@@ -13,6 +13,7 @@ import (
 
 	"cursor/gen/agentv1"
 	modeladapter "cursor/internal/backend/agent/model"
+	runtimecore "cursor/internal/backend/agent/core"
 )
 
 const todoSectionReminderMessage = "<system_reminder>\nYou are currently under the todo section, be sure to track tasks and do not forget to update.\n</system_reminder>"
@@ -342,7 +343,7 @@ func decodeTodoItemsValue(value any, validate bool) ([]*agentv1.TodoItem, error)
 		if !ok {
 			return nil, fmt.Errorf("todo item must be an object")
 		}
-		status, err := todoStatusFromValue(valueByAlias(item, "status"))
+		status, err := runtimecore.TodoStatusFromValue(valueByAlias(item, "status"))
 		if err != nil {
 			return nil, err
 		}
@@ -374,7 +375,7 @@ func decodeTodoStatusesValue(value any) ([]agentv1.TodoStatus, error) {
 	}
 	statuses := make([]agentv1.TodoStatus, 0, len(items))
 	for _, item := range items {
-		status, err := todoStatusFromValue(item)
+		status, err := runtimecore.TodoStatusFromValue(item)
 		if err != nil {
 			return nil, err
 		}
@@ -460,44 +461,6 @@ func stringSliceValue(value any) []string {
 		result = append(result, text)
 	}
 	return result
-}
-
-func todoStatusFromValue(value any) (agentv1.TodoStatus, error) {
-	switch item := value.(type) {
-	case nil:
-		return agentv1.TodoStatus_TODO_STATUS_UNSPECIFIED, nil
-	case float64:
-		return agentv1.TodoStatus(int32(item)), nil
-	case float32:
-		return agentv1.TodoStatus(int32(item)), nil
-	case int:
-		return agentv1.TodoStatus(item), nil
-	case int32:
-		return agentv1.TodoStatus(item), nil
-	case int64:
-		return agentv1.TodoStatus(item), nil
-	case string:
-		return todoStatusFromString(item)
-	default:
-		return agentv1.TodoStatus_TODO_STATUS_UNSPECIFIED, fmt.Errorf("unsupported todo status type %T", value)
-	}
-}
-
-func todoStatusFromString(raw string) (agentv1.TodoStatus, error) {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "", "unspecified", "todo_status_unspecified":
-		return agentv1.TodoStatus_TODO_STATUS_UNSPECIFIED, nil
-	case "pending", "todo_status_pending":
-		return agentv1.TodoStatus_TODO_STATUS_PENDING, nil
-	case "in_progress", "in-progress", "inprogress", "todo_status_in_progress":
-		return agentv1.TodoStatus_TODO_STATUS_IN_PROGRESS, nil
-	case "completed", "complete", "todo_status_completed":
-		return agentv1.TodoStatus_TODO_STATUS_COMPLETED, nil
-	case "cancelled", "canceled", "todo_status_cancelled":
-		return agentv1.TodoStatus_TODO_STATUS_CANCELLED, nil
-	default:
-		return agentv1.TodoStatus_TODO_STATUS_UNSPECIFIED, fmt.Errorf("unsupported todo status %q", raw)
-	}
 }
 
 func todoStatusLabel(status agentv1.TodoStatus) string {
