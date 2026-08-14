@@ -364,13 +364,17 @@ func contextProjectionCoveredPrefixFingerprint(entries []HistoryEntry, coveredEn
 	if coveredEntrySeq <= 0 {
 		return "", false
 	}
-	prefix := make([]HistoryEntry, 0, len(entries))
+	hasher := sha256.New()
 	found := false
 	for _, entry := range entries {
 		if entry.Seq > coveredEntrySeq {
-			continue
+			break
 		}
-		prefix = append(prefix, entry)
+		encoded, err := json.Marshal(entry)
+		if err != nil {
+			return "", false
+		}
+		hasher.Write(encoded)
 		if entry.Seq == coveredEntrySeq {
 			found = true
 		}
@@ -378,12 +382,7 @@ func contextProjectionCoveredPrefixFingerprint(entries []HistoryEntry, coveredEn
 	if !found {
 		return "", false
 	}
-	encoded, err := json.Marshal(prefix)
-	if err != nil {
-		return "", false
-	}
-	digest := sha256.Sum256(encoded)
-	return "sha256:" + hex.EncodeToString(digest[:]), true
+	return "sha256:" + hex.EncodeToString(hasher.Sum(nil)), true
 }
 
 type contextProjectionTurn struct {

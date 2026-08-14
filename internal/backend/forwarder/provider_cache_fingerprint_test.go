@@ -7,6 +7,7 @@ package forwarder
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync/atomic"
 	"testing"
@@ -198,6 +199,56 @@ func TestProviderCacheDoesNotWaitForInflightStream(t *testing.T) {
 	}
 	if got := inner.calls.Load(); got != 2 {
 		t.Fatalf("并发相同流应各自调用上游，实际调用 %d 次", got)
+	}
+}
+
+// TestProviderCacheKeyStablePrefixOnlyHashesTail 稳定前缀单独摘要，仅 tail 变化时 key 变化。
+func TestProviderCacheKeyStablePrefixOnlyHashesTail(t *testing.T) {
+	baseMessages := []modeladapter.Message{
+		{Role: "system", Content: "stable system"},
+		{Role: "user", Content: "stable user"},
+		{Role: "assistant", Content: "stable assistant"},
+		{Role: "user", Content: "tail one"},
+	}
+	reqA := ProviderRequest{
+		ConversationID:     "conversation-stable-prefix",
+		ModelID:            "model-a",
+		Messages:           append([]modeladapter.Message(nil), baseMessages...),
+		StableMessageCount: 3,
+		MaxTokens:          4000,
+	}
+	reqB := reqA
+	reqB.Messages = append([]modeladapter.Message(nil), baseMessages[:3]...)
+	reqB.Messages = append(reqB.Messages, modeladapter.Message{Role: "user", Content: "tail two"})
+
+	if providerCacheKey(reqA) == providerCacheKey(reqB) {
+		t.Fatal("different tail messages must produce different cache keys when stable prefix is shared")
+	}
+
+	reqAReplay := reqA
+	reqAReplay.Messages = append([]modeladapter.Message(nil), baseMessages...)
+	if providerCacheKey(reqA) != providerCacheKey(reqAReplay) {
+		t.Fatal("identical requests must produce stable cache keys")
+	}
+}
+
+func TestContextProjectionCoveredPrefixFingerprintStable(t *testing.T) {
+	entries := []HistoryEntry{
+		{Seq: 1, Role: "user", Kind: "message", Payload: json.RawMessage(`{"text":"hello"}`)},
+		{Seq: 2, Role: "assistant", Kind: "message", Payload: json.RawMessage(`{"text":"world"}`)},
+	}
+	first, ok := contextProjectionCoveredPrefixFingerprint(entries, 2)
+	if !ok || first == "" {
+		t.Fatalf("fingerprint missing: ok=%v fp=%q", ok, first)
+	}
+	second, ok := contextProjectionCoveredPrefixFingerprint(entries, 2)
+	if !ok || second != first {
+		t.Fatalf("fingerprint unstable: first=%q second=%q", first, second)
+	}
+	extended := append(entries, HistoryEntry{Seq: 3, Role: "user", Kind: "message", Payload: json.RawMessage(`{"text":"more"}`)})
+	third, ok := contextProjectionCoveredPrefixFingerprint(extended, 2)
+	if !ok || third != first {
+		t.Fatalf("prefix fingerprint changed after append-only extension: first=%q third=%q", first, third)
 	}
 }
 

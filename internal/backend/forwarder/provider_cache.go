@@ -490,24 +490,78 @@ func normalizeCacheMaxTokens(value int) int {
 	return (value + 1023) / 1024 * 1024
 }
 
+// providerCacheKeyHead 是除 messages/tools/override 外参与哈希的元数据视图。
+type providerCacheKeyHead struct {
+	ConversationID     string `json:"conversation_id"`
+	ModelID            string `json:"model_id"`
+	Mode               int32  `json:"mode"`
+	ThinkingEffort     string `json:"thinking_effort"`
+	StableMessageCount int    `json:"stable_message_count"`
+	MaxTokens          int    `json:"max_tokens"`
+}
+
 // providerCacheKey 对归一化请求做 sha256，返回稳定的十六进制缓存键；序列化失败返回空串（不缓存）。
+// 稳定前缀 messages[:StableMessageCount] 单独摘要后写入，尾部 messages 直接编码，tools 单独
+// 摘要，避免每次把完整工具定义与全部历史 messages 拼成一个大 JSON 再哈希。
 func providerCacheKey(req ProviderRequest) string {
-	shape := providerCacheKeyShape{
+	messages := normalizeMessagesForCacheKey(req.Messages)
+	head := providerCacheKeyHead{
 		ConversationID:     strings.TrimSpace(req.ConversationID),
 		ModelID:            req.ModelID,
 		Mode:               int32(req.Mode),
 		ThinkingEffort:     req.ThinkingEffort,
-		Messages:           normalizeMessagesForCacheKey(req.Messages),
 		StableMessageCount: req.StableMessageCount,
-		Tools:              req.Tools,
 		MaxTokens:          normalizeCacheMaxTokens(req.MaxTokens),
-		// 移除 RequestKnobs 和 CompileSummary 以避免动态字段污染缓存 key
-		RequestBodyOverride: req.RequestBodyOverride,
 	}
-	encoded, err := json.Marshal(shape)
+	headEncoded, err := json.Marshal(head)
 	if err != nil {
 		return ""
 	}
-	sum := sha256.Sum256(encoded)
-	return hex.EncodeToString(sum[:])
+
+	stable := req.StableMessageCount
+	if stable < 0 {
+		stable = 0
+	}
+	if stable > len(messages) {
+		stable = len(messages)
+	}
+
+	hasher := sha256.New()
+	hasher.Write(headEncoded)
+
+	if stable > 0 {
+		stableEncoded, err := json.Marshal(messages[:stable])
+		if err != nil {
+			return ""
+		}
+		stableDigest := sha256.Sum256(stableEncoded)
+		hasher.Write(stableDigest[:])
+	}
+	if stable < len(messages) {
+		tailEncoded, err := json.Marshal(messages[stable:])
+		if err != nil {
+			return ""
+		}
+		hasher.Write(tailEncoded)
+	} else if len(messages) == 0 {
+		hasher.Write([]byte("[]"))
+	}
+
+	if len(req.Tools) > 0 {
+		toolsEncoded, err := json.Marshal(req.Tools)
+		if err != nil {
+			return ""
+		}
+		toolsDigest := sha256.Sum256(toolsEncoded)
+		hasher.Write(toolsDigest[:])
+	}
+	if len(req.RequestBodyOverride) > 0 {
+		overrideEncoded, err := json.Marshal(req.RequestBodyOverride)
+		if err != nil {
+			return ""
+		}
+		hasher.Write(overrideEncoded)
+	}
+
+	return hex.EncodeToString(hasher.Sum(nil))
 }
