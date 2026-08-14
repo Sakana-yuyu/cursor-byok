@@ -767,13 +767,24 @@ func normalizeOpenAIChatMessageToolCallsJSONShape(messages []map[string]any) {
 		if !ok {
 			continue
 		}
-		payload, err := json.Marshal(raw)
-		if err != nil {
+		calls, ok := raw.([]providerToolCallDescriptor)
+		if !ok {
 			continue
 		}
-		var decoded []any
-		if err := json.Unmarshal(payload, &decoded); err != nil {
-			continue
+		decoded := make([]any, len(calls))
+		for i, call := range calls {
+			item := map[string]any{
+				"function": map[string]any{
+					"arguments": call.Function.Arguments,
+					"name":      call.Function.Name,
+				},
+				"id":   call.ID,
+				"type": call.Type,
+			}
+			if call.Index != 0 {
+				item["index"] = call.Index
+			}
+			decoded[i] = item
 		}
 		message["tool_calls"] = decoded
 	}
