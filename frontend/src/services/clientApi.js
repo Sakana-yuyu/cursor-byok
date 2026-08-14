@@ -101,7 +101,9 @@ function readBrowserPreviewTestPlan() {
 }
 
 function logSuccess(name, payload, result, traceId) {
-  console.debug(`${API_LOG_PREFIX} ${name} response`, { payload: summarizePayload(payload), traceId, result: summarizePayload(result) });
+  if (import.meta.env.DEV) {
+    console.debug(`${API_LOG_PREFIX} ${name} response`, { payload: summarizePayload(payload), traceId, result: summarizePayload(result) });
+  }
 }
 
 function logError(name, payload, _error, normalized) {
