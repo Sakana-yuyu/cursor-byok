@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"cursor/internal/backend/forwarder"
+	"cursor/internal/backend/runtimeconfig"
 )
 
 const (
@@ -20,7 +21,7 @@ const (
 
 func TestMCPTrustGrantsNormalizeDeduplicateSortAndPersistOnlyKeys(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.MCPTrustGrants = []forwarder.MCPTrustRecord{
+	cfg.MCPTrustGrants = []runtimeconfig.MCPTrustRecord{
 		{RuntimeScope: " workspace:/z/repo ", Identifier: " Server-B ", Fingerprint: strings.ToUpper(testMCPFingerprintB)},
 		{RuntimeScope: "workspace:/a/other/../repo", Identifier: "server-a", Fingerprint: testMCPFingerprintA},
 		{RuntimeScope: "workspace:/a/repo", Identifier: " SERVER-A ", Fingerprint: testMCPFingerprintA},
@@ -31,7 +32,7 @@ func TestMCPTrustGrantsNormalizeDeduplicateSortAndPersistOnlyKeys(t *testing.T) 
 	if err != nil {
 		t.Fatalf("NormalizeConfig() error = %v", err)
 	}
-	want := []forwarder.MCPTrustRecord{
+	want := []runtimeconfig.MCPTrustRecord{
 		{RuntimeScope: forwarder.MCPRuntimeScope("/a/repo"), Identifier: "server-a", Fingerprint: testMCPFingerprintA},
 		{RuntimeScope: forwarder.MCPRuntimeScope("/z/repo"), Identifier: "server-b", Fingerprint: testMCPFingerprintB},
 	}

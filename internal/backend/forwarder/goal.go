@@ -61,19 +61,6 @@ func newGoalState(conversationID, goalText string, strict bool) *GoalState {
 	}
 }
 
-// GoalRuntimeConfig 是 forwarder 运行时消费的 goal 配置，由 host 层从
-// server/config 的持久化结构转换而来（仿 delegation.RuntimeConfig）。
-type GoalRuntimeConfig struct {
-	Enabled           bool
-	MaxProviderPasses int
-	MaxDuration       time.Duration
-	MaxCostUSD        float64
-	SelfCheckPasses   int
-	VerifyMaxRetries  int
-	ErrorMaxRetries   int
-	ProgressInterval  int
-}
-
 func defaultGoalRuntimeConfig() GoalRuntimeConfig {
 	return GoalRuntimeConfig{
 		Enabled:           false,

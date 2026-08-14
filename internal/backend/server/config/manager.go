@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"cursor/internal/backend/delegation"
-	"cursor/internal/backend/forwarder"
+	"cursor/internal/backend/runtimeconfig"
 	"cursor/internal/historymetrics"
 	"cursor/internal/logger"
 	legacyruntime "cursor/internal/runtime"
@@ -171,8 +171,8 @@ func (manager *Manager) PricingRates() []historymetrics.PriceRate {
 }
 
 // GoalRuntimeConfig 返回 goal 循环执行的运行时配置（forwarder 消费）。
-func (manager *Manager) GoalRuntimeConfig() forwarder.GoalRuntimeConfig {
-	cfg := forwarder.GoalRuntimeConfig{
+func (manager *Manager) GoalRuntimeConfig() runtimeconfig.GoalRuntimeConfig {
+	cfg := runtimeconfig.GoalRuntimeConfig{
 		MaxProviderPasses: 30,
 		SelfCheckPasses:   2,
 		VerifyMaxRetries:  3,
@@ -303,8 +303,8 @@ func (manager *Manager) SkillMCPScanDisabledMCPServers() map[string]bool {
 	return manager.Current().SkillMCPScan.DisabledMCPServers
 }
 
-func (manager *Manager) SkillMCPScanTrustRecords() []forwarder.MCPTrustRecord {
-	return append([]forwarder.MCPTrustRecord(nil), manager.Current().MCPTrustGrants...)
+func (manager *Manager) SkillMCPScanTrustRecords() []runtimeconfig.MCPTrustRecord {
+	return append([]runtimeconfig.MCPTrustRecord(nil), manager.Current().MCPTrustGrants...)
 }
 
 // PersistChannelMaxTokensCap 将 provider 反馈的 max_tokens 上限持久化到指定渠道。
@@ -602,15 +602,15 @@ func cloneStringMap(input map[string]string) map[string]string {
 	return output
 }
 
-func cloneMCPTrustRecords(input []forwarder.MCPTrustRecord) []forwarder.MCPTrustRecord {
-	return append([]forwarder.MCPTrustRecord(nil), input...)
+func cloneMCPTrustRecords(input []runtimeconfig.MCPTrustRecord) []runtimeconfig.MCPTrustRecord {
+	return append([]runtimeconfig.MCPTrustRecord(nil), input...)
 }
 
 func (manager *Manager) GrantMCPServerTrust(ctx context.Context, workspaceScope string, identifier string, fingerprint string) error {
 	if manager == nil || manager.store == nil {
 		return fmt.Errorf("config manager is not initialized")
 	}
-	grantList := normalizeMCPTrustGrants([]forwarder.MCPTrustRecord{{
+	grantList := normalizeMCPTrustGrants([]runtimeconfig.MCPTrustRecord{{
 		RuntimeScope: workspaceScope,
 		Identifier:   identifier,
 		Fingerprint:  fingerprint,
@@ -638,7 +638,7 @@ func (manager *Manager) RevokeMCPServerTrust(ctx context.Context, workspaceScope
 	manager.saveMu.Lock()
 	defer manager.saveMu.Unlock()
 	current := manager.currentConfig()
-	next := make([]forwarder.MCPTrustRecord, 0, len(current.MCPTrustGrants))
+	next := make([]runtimeconfig.MCPTrustRecord, 0, len(current.MCPTrustGrants))
 	for _, grant := range current.MCPTrustGrants {
 		if grant.RuntimeScope == workspaceScope && grant.Identifier == identifier {
 			continue
@@ -651,7 +651,7 @@ func (manager *Manager) RevokeMCPServerTrust(ctx context.Context, workspaceScope
 }
 
 func (manager *Manager) HasMCPServerTrust(workspaceScope string, identifier string, fingerprint string) bool {
-	wanted := normalizeMCPTrustGrants([]forwarder.MCPTrustRecord{{
+	wanted := normalizeMCPTrustGrants([]runtimeconfig.MCPTrustRecord{{
 		RuntimeScope: workspaceScope,
 		Identifier:   identifier,
 		Fingerprint:  fingerprint,

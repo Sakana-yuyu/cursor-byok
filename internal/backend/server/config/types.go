@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"cursor/internal/backend/forwarder"
+	"cursor/internal/backend/runtimeconfig"
 	"cursor/internal/i18n"
 	"cursor/internal/modelchannel"
 	"cursor/internal/modelcontext"
@@ -223,7 +223,7 @@ type Config struct {
 	HomeMetrics                     HomeMetricsConfig          `json:"homeMetrics" yaml:"homeMetrics"`
 	LocalResponseCache              LocalResponseCacheConfig   `json:"localResponseCache" yaml:"localResponseCache"`
 	SkillMCPScan                    SkillMCPScanConfig         `json:"skillMcpScan" yaml:"skillMcpScan"`
-	MCPTrustGrants                  []forwarder.MCPTrustRecord `json:"mcpTrustGrants,omitempty" yaml:"mcpTrustGrants,omitempty"`
+	MCPTrustGrants                  []runtimeconfig.MCPTrustRecord `json:"mcpTrustGrants,omitempty" yaml:"mcpTrustGrants,omitempty"`
 	Delegation                      DelegationConfig           `json:"delegation" yaml:"delegation"`
 	Goal                            GoalConfig                 `json:"goal" yaml:"goal"`
 	ComputerUse                     ComputerUseConfig          `json:"computerUse" yaml:"computerUse"`
@@ -317,11 +317,11 @@ func NormalizeConfig(input Config) (Config, error) {
 	return output, nil
 }
 
-func normalizeMCPTrustGrants(input []forwarder.MCPTrustRecord) []forwarder.MCPTrustRecord {
+func normalizeMCPTrustGrants(input []runtimeconfig.MCPTrustRecord) []runtimeconfig.MCPTrustRecord {
 	if len(input) == 0 {
 		return nil
 	}
-	unique := make(map[string]forwarder.MCPTrustRecord, len(input))
+	unique := make(map[string]runtimeconfig.MCPTrustRecord, len(input))
 	for _, grant := range input {
 		grant.RuntimeScope = normalizeMCPTrustWorkspaceScope(grant.RuntimeScope)
 		grant.Identifier = strings.ToLower(strings.TrimSpace(grant.Identifier))
@@ -332,7 +332,7 @@ func normalizeMCPTrustGrants(input []forwarder.MCPTrustRecord) []forwarder.MCPTr
 		key := grant.RuntimeScope + "\x00" + grant.Identifier + "\x00" + grant.Fingerprint
 		unique[key] = grant
 	}
-	result := make([]forwarder.MCPTrustRecord, 0, len(unique))
+	result := make([]runtimeconfig.MCPTrustRecord, 0, len(unique))
 	for _, grant := range unique {
 		result = append(result, grant)
 	}
