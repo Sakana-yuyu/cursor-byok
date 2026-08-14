@@ -368,3 +368,99 @@ func TestContextProjectionPressureNotTriggeredForModeratePromptWith200KWindow(t 
 		t.Fatal("contextProjectionPressureExceeded() = false, want true when window falls back to 64K")
 	}
 }
+
+func TestContextProjectionPressureUsesProviderUsageWhenEstimateUndercounts(t *testing.T) {
+	const window = uint32(1_000_000)
+	service := &Service{resolver: fixedContextWindowResolver{tokens: int(window)}}
+	conversation := &ConversationFile{
+		TokenDetailsMaxTokens:        window,
+		TokenDetailsUsedTokens:       850_000,
+		AutoCompactionPending:        true,
+		AutoCompactionPromptTokens:   850_000,
+		AutoCompactionReserveTokens:  compactionAutoReserveTokens,
+	}
+	compiled := CompiledConversation{Messages: []modeladapter.Message{
+		{Role: "user", Content: "hello"},
+	}}
+	budgetTokens := int64(float64(window)*contextProjectionHardRatio) - compactionAutoReserveTokens
+	if estimate := estimateCompiledPromptTokens(compiled); estimate >= budgetTokens {
+		t.Fatalf("test setup estimate = %d, want below budget %d", estimate, budgetTokens)
+	}
+	if int64(conversation.TokenDetailsUsedTokens) <= budgetTokens {
+		t.Fatalf("test setup used tokens = %d, want above budget %d", conversation.TokenDetailsUsedTokens, budgetTokens)
+	}
+	if !service.contextProjectionPressureExceeded(&ActiveStream{ModelID: "model-a"}, conversation, compiled) {
+		t.Fatal("contextProjectionPressureExceeded() = false, want true when provider usage exceeds budget despite low estimate")
+	}
+}
+
+func TestBuildAutoCompactionPlanTriggersWhenProviderUsageExceedsBudget(t *testing.T) {
+	const window = uint32(1_000_000)
+	service := NewService(t.TempDir(), fixedContextWindowResolver{tokens: int(window)})
+	conversation := contextProjectionTestConversation(t, 8)
+	conversation.TokenDetailsMaxTokens = window
+	conversation.TokenDetailsUsedTokens = 850_000
+	conversation.AutoCompactionPending = true
+	conversation.AutoCompactionPromptTokens = 850_000
+	conversation.AutoCompactionReserveTokens = compactionAutoReserveTokens
+	compiled := CompiledConversation{Messages: []modeladapter.Message{
+		{Role: "system", Content: "system"},
+		{Role: "user", Content: "hello"},
+	}}
+	stream := &ActiveStream{
+		ConversationID: conversation.ConversationID,
+		ModelID:        "model-a",
+		ModelName:      "model-a",
+	}
+	plan, err := service.buildAutoCompactionPlan(stream, conversation, compiled)
+	if err != nil {
+		t.Fatalf("buildAutoCompactionPlan() error = %v", err)
+	}
+	if plan == nil {
+		t.Fatal("buildAutoCompactionPlan() = nil, want auto projection plan when provider usage exceeds budget")
+	}
+	if plan.Trigger != contextProjectionTrigger {
+		t.Fatalf("plan trigger = %q, want %q", plan.Trigger, contextProjectionTrigger)
+	}
+}
+
+func TestBuildAutoCompactionPlanUsesCanonicalPressureWhenSidecarReducesProjectedCompile(t *testing.T) {
+	const window = uint32(100_000)
+	service := NewService(t.TempDir(), fixedContextWindowResolver{tokens: int(window)})
+	conversation := contextProjectionTestConversation(t, 8)
+	conversation.TokenDetailsMaxTokens = window
+	conversation.AutoCompactionReserveTokens = compactionAutoReserveTokens
+	budgetTokens := int64(float64(window)*0.8) - compactionAutoReserveTokens
+	largeContent := strings.Repeat("汉", int(budgetTokens*3)+100)
+	canonicalCompiled := CompiledConversation{Messages: []modeladapter.Message{
+		{Role: "user", Content: largeContent},
+	}}
+	projectedCompiled := CompiledConversation{Messages: []modeladapter.Message{
+		{Role: "user", Content: "hi"},
+	}}
+	if tokens := estimateCompiledPromptTokens(canonicalCompiled); tokens <= budgetTokens {
+		t.Fatalf("canonical tokens = %d, want above budget %d", tokens, budgetTokens)
+	}
+	if tokens := estimateCompiledPromptTokens(projectedCompiled); tokens >= budgetTokens {
+		t.Fatalf("projected tokens = %d, want below budget %d", tokens, budgetTokens)
+	}
+	stream := &ActiveStream{
+		ConversationID: conversation.ConversationID,
+		ModelID:        "model-a",
+		ModelName:      "model-a",
+	}
+	planProjected, err := service.buildAutoCompactionPlan(stream, conversation, projectedCompiled)
+	if err != nil {
+		t.Fatalf("buildAutoCompactionPlan(projected) error = %v", err)
+	}
+	if planProjected != nil {
+		t.Fatal("projected compile alone should not trigger compaction without provider usage markers")
+	}
+	planCanonical, err := service.buildAutoCompactionPlan(stream, conversation, canonicalCompiled)
+	if err != nil {
+		t.Fatalf("buildAutoCompactionPlan(canonical) error = %v", err)
+	}
+	if planCanonical == nil {
+		t.Fatal("canonical compile over budget should trigger auto projection compaction plan")
+	}
+}

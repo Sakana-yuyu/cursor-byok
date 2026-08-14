@@ -138,6 +138,7 @@ func (service *Service) buildAutoCompactionPlan(stream *ActiveStream, conversati
 		return nil, nil
 	}
 	estimatedCompiledTokens := estimateCompiledPromptTokens(compiled)
+	contextTokens := resolveContextPressureTokens(conversation, compiled)
 	reserveTokens := service.resolveCompactionReserveTokens(stream.ModelID)
 	if reserveTokens <= 0 {
 		reserveTokens = conversation.AutoCompactionReserveTokens
@@ -147,11 +148,7 @@ func (service *Service) buildAutoCompactionPlan(stream *ActiveStream, conversati
 	}
 	// 使用 80% 的上下文窗口作为预算，留出安全余量防止估算偏差导致 context_length_exceeded。
 	budgetTokens := int64(float64(contextWindowSize)*0.8) - reserveTokens
-	preflightExceeded := estimatedCompiledTokens > 0 && estimatedCompiledTokens > budgetTokens
-	contextTokens := estimatedCompiledTokens
-	if contextTokens <= 0 {
-		contextTokens = conversation.AutoCompactionPromptTokens
-	}
+	preflightExceeded := contextTokens > 0 && contextTokens > budgetTokens
 	pendingExceeded := conversation.AutoCompactionPending && contextTokens > 0 && contextTokens > budgetTokens
 	if !pendingExceeded && !preflightExceeded {
 		return nil, nil
@@ -218,7 +215,7 @@ func (service *Service) contextProjectionPressureExceeded(stream *ActiveStream, 
 	if contextWindowSize <= 0 {
 		return false
 	}
-	estimatedCompiledTokens := estimateCompiledPromptTokens(compiled)
+	contextTokens := resolveContextPressureTokens(conversation, compiled)
 	reserveTokens := service.resolveCompactionReserveTokens(stream.ModelID)
 	if reserveTokens <= 0 {
 		reserveTokens = conversation.AutoCompactionReserveTokens
@@ -227,12 +224,7 @@ func (service *Service) contextProjectionPressureExceeded(stream *ActiveStream, 
 		reserveTokens = compactionAutoReserveTokens
 	}
 	budgetTokens := int64(float64(contextWindowSize)*contextProjectionHardRatio) - reserveTokens
-	contextTokens := estimatedCompiledTokens
-	if contextTokens <= 0 {
-		contextTokens = conversation.AutoCompactionPromptTokens
-	}
-	return (estimatedCompiledTokens > 0 && estimatedCompiledTokens > budgetTokens) ||
-		(conversation.AutoCompactionPending && contextTokens > 0 && contextTokens > budgetTokens)
+	return contextTokens > 0 && contextTokens > budgetTokens
 }
 
 // buildForcedCompactionPlan constructs a sidecar projection after a provider reports
@@ -283,13 +275,26 @@ func (service *Service) buildForcedCompactionPlan(stream *ActiveStream, conversa
 	)
 }
 
+// resolveContextPressureTokens returns the conservative token count for automatic
+// compaction decisions. Local compile estimates can undercount large histories
+// (tokenizer mismatch, omitted cache fields, sidecar projection); persisted
+// provider usage and auto-compaction markers must still trigger at the 80% budget.
+func resolveContextPressureTokens(conversation *ConversationFile, compiled CompiledConversation) int64 {
+	tokens := estimateCompiledPromptTokens(compiled)
+	if conversation == nil {
+		return tokens
+	}
+	tokens = maxPositiveInt64(tokens, int64(conversation.TokenDetailsUsedTokens))
+	if conversation.AutoCompactionPending {
+		tokens = maxPositiveInt64(tokens, conversation.AutoCompactionPromptTokens)
+	}
+	return tokens
+}
+
 func (service *Service) resolveCompactionBaselineTokens(conversationID string, compiled CompiledConversation, conversation *ConversationFile) (int64, error) {
-	contextTokens := estimateCompiledPromptTokens(compiled)
+	contextTokens := resolveContextPressureTokens(conversation, compiled)
 	if contextTokens > 0 {
 		return contextTokens, nil
-	}
-	if conversation != nil && conversation.TokenDetailsUsedTokens > 0 {
-		return int64(conversation.TokenDetailsUsedTokens), nil
 	}
 	if conversationHasLocalCarryForwardState(conversation) {
 		return 0, nil

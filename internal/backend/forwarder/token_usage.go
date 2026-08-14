@@ -88,9 +88,10 @@ func (service *Service) updateConversationTokenState(stream *ActiveStream, conve
 		return nil
 	}
 	now := time.Now().UTC()
+	modelID := activeStreamModelID(stream)
 	autoCompactionReserveTokens := int64(compactionAutoReserveTokens)
 	if finalizeAutoCompaction {
-		autoCompactionReserveTokens = service.resolveCompactionReserveTokens(activeStreamModelID(stream))
+		autoCompactionReserveTokens = service.resolveCompactionReserveTokens(modelID)
 		if autoCompactionReserveTokens <= 0 {
 			autoCompactionReserveTokens = compactionAutoReserveTokens
 		}
@@ -104,7 +105,7 @@ func (service *Service) updateConversationTokenState(stream *ActiveStream, conve
 			item.TokenDetailsUsedTokens = clampInt64ToUint32(promptTokensTotal)
 		}
 		if item.TokenDetailsMaxTokens == 0 {
-			item.TokenDetailsMaxTokens = projectedConversationMaxTokens
+			item.TokenDetailsMaxTokens = service.resolveContextWindowTokens(modelID)
 		}
 		if finalizeAutoCompaction {
 			updateConversationAutoCompactionState(item, usage.requestTokensTotal(), autoCompactionReserveTokens, modelCallID, now)
@@ -133,7 +134,7 @@ func updateConversationAutoCompactionState(conversation *ConversationFile, promp
 	}
 	contextWindowTokens := int64(conversation.TokenDetailsMaxTokens)
 	if contextWindowTokens <= 0 {
-		contextWindowTokens = projectedConversationMaxTokens
+		contextWindowTokens = int64(defaultResolvedContextWindowTokens)
 	}
 	if reserveTokens <= 0 {
 		reserveTokens = compactionAutoReserveTokens

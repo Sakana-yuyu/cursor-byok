@@ -180,7 +180,9 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 			}
 		}
 	}
-	if compacted, compactErr := service.maybeCompactBeforeProvider(stream, canonicalConversation, compiled); compactErr != nil {
+	// 自动压缩压力必须基于 canonical 体量：sidecar 生效时 projected compile 会低估，
+	// 导致 UI 已满但 buildAutoCompactionPlan 不触发，主模型请求变慢并出现客户端 stall。
+	if compacted, compactErr := service.maybeCompactBeforeProvider(stream, canonicalConversation, canonicalCompiled); compactErr != nil {
 		// 自动/投影压缩链穷尽（或 preflight 前估算超限）时，先尝试一次强制 legacy 兜底压缩
 		//（自动 /summarize），而不是直接以 context_overflow_after_compaction 终态失败。
 		if escalated, escErr := service.escalateForcedPreflightCompaction(stream, canonicalConversation, canonicalCompiled, compactErr); escErr != nil {
