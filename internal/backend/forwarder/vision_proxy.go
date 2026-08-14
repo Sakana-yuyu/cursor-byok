@@ -34,13 +34,14 @@ const (
 	visionProxyPassTimeout = 8 * time.Second
 	// 自动触发时单轮内最多并行识图数量，避免大量图片同时打爆识图模型。
 	visionProxyMaxParallel = 3
-	// 同一 request 内识图结果缓存上限；超过后整体清空（均为短生命周期条目）。
-	visionProxyCacheLimit = 512
 	// see_image 工具名。
 	seeImageToolName = "SeeImage"
 	// 注入回原消息的图片识图结果前缀（自动触发场景），明确标注来源为视觉委派。
 	visionProxyResultPrefix = "[图片识图结果（视觉委派"
 )
+
+// visionProxyCacheLimit 是同一 request 内识图结果缓存上限；超过后 LRU 逐条淘汰。
+var visionProxyCacheLimit = 512
 
 // vdbg 输出视觉委派链路调试日志：写 stderr（黑窗调试版即时可见）并进 app.log。
 // 正式构建（-H windowsgui）下 stderr 被系统丢弃，只剩 app.log 中的记录，无副作用。
@@ -1041,6 +1042,30 @@ func (service *Service) visionReplaceFromArchive(conversationID string, messages
 	return result
 }
 
+// touchVisionCacheLocked 将 key 移到 LRU 末尾（最近使用）。
+func (service *Service) touchVisionCacheLocked(key string) {
+	for index, candidate := range service.visionCacheOrder {
+		if candidate == key {
+			service.visionCacheOrder = append(service.visionCacheOrder[:index], service.visionCacheOrder[index+1:]...)
+			break
+		}
+	}
+	service.visionCacheOrder = append(service.visionCacheOrder, key)
+}
+
+// putVisionCacheLocked 写入识图缓存并在超限时逐条淘汰最久未使用的条目。
+func (service *Service) putVisionCacheLocked(key string, entry visionCacheEntry) {
+	if _, exists := service.visionCache[key]; !exists {
+		service.visionCacheOrder = append(service.visionCacheOrder, key)
+	}
+	service.visionCache[key] = entry
+	for len(service.visionCache) > visionProxyCacheLimit && len(service.visionCacheOrder) > 0 {
+		oldest := service.visionCacheOrder[0]
+		service.visionCacheOrder = service.visionCacheOrder[1:]
+		delete(service.visionCache, oldest)
+	}
+}
+
 // cachedVisionDescribe 复用完成缓存，并合并同一键正在进行的识图请求。调用方可在
 // 等待期间取消；leader 的 describe 函数负责实际占用视觉模型并发额度。
 func (service *Service) cachedVisionDescribe(ctx context.Context, key string, describe func(context.Context) (string, error)) (text string, err error) {
@@ -1050,6 +1075,7 @@ func (service *Service) cachedVisionDescribe(ctx context.Context, key string, de
 
 	service.visionCacheMu.Lock()
 	if entry, ok := service.visionCache[key]; ok {
+		service.touchVisionCacheLocked(key)
 		service.visionCacheMu.Unlock()
 		vdbg("[cache] HIT key=%q text_len=%d err=%v", key, len(entry.text), entry.err)
 		return entry.text, entry.err
@@ -1074,10 +1100,7 @@ func (service *Service) cachedVisionDescribe(ctx context.Context, key string, de
 		}
 		service.visionCacheMu.Lock()
 		delete(service.visionInflight, key)
-		if len(service.visionCache) >= visionProxyCacheLimit {
-			service.visionCache = make(map[string]visionCacheEntry)
-		}
-		service.visionCache[key] = visionCacheEntry{text: text, err: err}
+		service.putVisionCacheLocked(key, visionCacheEntry{text: text, err: err})
 		pending.text = text
 		pending.err = err
 		close(pending.done)

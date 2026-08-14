@@ -92,6 +92,7 @@ type Service struct {
 	visionRuns               map[string]*visionDelegationRun
 	visionCacheMu            sync.Mutex
 	visionCache              map[string]visionCacheEntry
+	visionCacheOrder         []string // LRU 顺序：头部最久未使用，尾部最近使用
 	visionInflight           map[string]*visionInflightCall
 	visionImageMu            sync.Mutex
 	visionImageFiles         map[string][]string
