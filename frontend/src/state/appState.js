@@ -728,16 +728,9 @@ export const appViewState = reactive({
 
 function localizeUpdateMessage(msg) {
   if (!msg) return "";
-  if (msg.includes("当前已是最新版本")) {
+  if (/当前已是最新版本/u.test(msg)) {
     const match = msg.match(/v?([0-9]+\.[0-9]+\.[0-9]+)/);
     const version = match ? match[1] : appState.appVersion || "...";
-    const locale = getLocale ? getLocale() : "zh-CN";
-    if (locale === "en-US") {
-      return `You are already on the latest version (v${version}).`;
-    }
-    if (locale === "ja-JP") {
-      return `すでに最新バージョン（v${version}）です。`;
-    }
     return `当前已是最新版本（v${version}）。`;
   }
   return msg;
