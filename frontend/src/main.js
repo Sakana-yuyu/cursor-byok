@@ -1,7 +1,7 @@
 import { createApp } from "vue";
 import ResizeObserver from "resize-observer-polyfill";
 import App from "@/App.vue";
-import { installI18nRuntime } from "@/i18n/runtime";
+import { installI18nRuntime, prepareInitialLocale } from "@/i18n/runtime";
 import router from "@/router";
 import { bootstrapAppState } from "@/state/appState";
 import { startRuntimeHealthSupervisor } from "@/services/runtimeHealth";
@@ -52,8 +52,19 @@ if (typeof window !== "undefined") {
 }
 
 startRuntimeHealthSupervisor();
-app.mount("#root");
 
-bootstrapAppState().catch((error) => {
-  reportFrontendDefect(error, "bootstrapAppState");
-});
+async function mountApp() {
+  try {
+    await prepareInitialLocale();
+  } catch (error) {
+    reportFrontendDefect(error, "prepareInitialLocale");
+  }
+
+  app.mount("#root");
+
+  bootstrapAppState().catch((error) => {
+    reportFrontendDefect(error, "bootstrapAppState");
+  });
+}
+
+mountApp();

@@ -9,16 +9,18 @@ import {
   SUPPORTED_LOCALES,
 } from "@/i18n/config";
 import zhCNMessages from "@/i18n/locales/zh-CN.json";
-import enUSMessages from "@/i18n/locales/en-US.json";
-import jaJPMessages from "@/i18n/locales/ja-JP.json";
-import ruRUMessages from "@/i18n/locales/ru-RU.json";
 
 const localeMessages = {
-  "zh-CN": zhCNMessages,
-  "en-US": enUSMessages,
-  "ja-JP": jaJPMessages,
-  "ru-RU": ruRUMessages,
+  [SOURCE_LOCALE]: zhCNMessages,
 };
+
+const localeLoaders = {
+  "en-US": () => import("@/i18n/locales/en-US.json").then((module) => module.default),
+  "ja-JP": () => import("@/i18n/locales/ja-JP.json").then((module) => module.default),
+  "ru-RU": () => import("@/i18n/locales/ru-RU.json").then((module) => module.default),
+};
+
+const localeLoadPromises = new Map();
 
 const languageLocaleMap = {
   zh: "zh-CN",
@@ -106,6 +108,33 @@ function persistManualLocale(locale) {
   window.localStorage.setItem(LOCALE_STORAGE_SOURCE_KEY, "manual");
 }
 
+function ensureLocaleLoaded(locale) {
+  if (localeMessages[locale]) {
+    return Promise.resolve(localeMessages[locale]);
+  }
+
+  const loader = localeLoaders[locale];
+  if (!loader) {
+    return Promise.resolve(localeMessages[SOURCE_LOCALE]);
+  }
+
+  if (!localeLoadPromises.has(locale)) {
+    const promise = loader()
+      .then((messages) => {
+        localeMessages[locale] = messages;
+        localeLoadPromises.delete(locale);
+        return messages;
+      })
+      .catch((error) => {
+        localeLoadPromises.delete(locale);
+        throw error;
+      });
+    localeLoadPromises.set(locale, promise);
+  }
+
+  return localeLoadPromises.get(locale);
+}
+
 function resolveMessage(id, fallback) {
   const activeMessages = localeMessages[currentLocale.value] || {};
   const sourceMessages = localeMessages[SOURCE_LOCALE] || {};
@@ -155,8 +184,13 @@ export function getLocale() {
   return currentLocale.value;
 }
 
-export function setLocale(locale) {
+export async function prepareInitialLocale() {
+  await ensureLocaleLoaded(currentLocale.value);
+}
+
+export async function setLocale(locale) {
   const nextLocale = matchSupportedLocale(locale) || DEFAULT_LOCALE;
+  await ensureLocaleLoaded(nextLocale);
   currentLocale.value = nextLocale;
   persistManualLocale(nextLocale);
   applyLocaleToDocument(nextLocale);
