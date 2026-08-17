@@ -1,43 +1,20 @@
-## v0.0.94
+## v0.0.95
 
 ### 修复
 
-- **上下文自动压缩**：以 provider 真实用量与 canonical 编译压力触发 80% 阈值，修复大窗口下估算偏低导致未压缩的问题。
-- **会话终态与取消**：新增可持久化 `interrupted` 终态，收口卡死的 running/waiting_tool；用户取消时为 pending interaction 写入 tool_result；run queue 绑定 broker 流生命周期，避免 owner 丢失后会话永久卡住。
-- **Multitask / 子代理**：新消息顶掉父回合时不再误杀正在运行的子代理；补齐 `x-parent-request-id` 等头以恢复父子镜像与看门狗判定。
-- **工具执行**：隐藏编辑步骤超时不再把整次 Write/PatchEdit 从模型可见历史抹掉；GitDiff 单独超时与降级文案；Gemini 畸形 tool arguments 正确报错并中止该轮。
-- **CLI 自动上下文**：补齐 GetUsableModels 等接口的 auto-context 元数据与窗口回退，避免首句误触发 auto_projection。
-- **安全与本地数据**：配置文件与 history/debug 等目录默认 0600/0700；默认拒绝非环回监听；测试进程不再写入真实用户数据目录（`CURSOR_BYOK_HOME`）；HTTP/MCP 建连超时与 computeruse safego 兜底。
-- **Proto 同步**：跨平台 `apply:proto` 接回抽取产物到编译输入，消除数月静默漂移。
-- **前端 a11y**：全屏与 Markdown 模态框焦点管理补全。
+- **独立窗口路由恢复**：从子页面返回主页后，再次从“更多”打开模型配置、会话分析或请求明细时，正确恢复目标页面，不再停留在主页。
 
-### 新功能
-
-- **协议工具能力**：接入 GitDiff、GetMcpTools、SearchConversations、UpdateCurrentStep；Write/PatchEdit 成功后可选 canvas 编译诊断。
-- **协议抓包**：`mirrorCapture` 下可配置保真记录，补齐鉴权头脱敏与 gzip 请求体解码；历史页区分「未开启」与「暂无记录」。
-- **Skills**：新增 `sync:skills` 任务与 CI 一致性校验；扫描 `~/.cursor/skills-cursor` 内置技能目录。
-
-### 优化
-
-- **性能**：forwarder checkpoint 内存优先 + debounce 落盘、正则/LRU 视觉缓存、provider 缓存键与投影指纹增量哈希；Gemini SSE Buffer 池、OpenAI tool_calls 直构；前端语言包按需加载、localStorage 去抖、首页指标共享轮询、历史图标分页复用。
-- **架构**：forwarder 拆分 `service_*.go` 与 `runqueue` 子包；共享 DTO 下沉 `runtimeconfig`；前端 appState 视图状态拆分。
-- **CI / 质量**：干净检出 Go/Frontend 门禁、proto/capability-map 漂移检测、golangci-lint/govulncheck、PR 冒烟构建矩阵、forwarder `-race` 等。
-
-> **Windows 用户注意**：安装时若被 SmartScreen 拦截，点击「更多信息」后选择「仍要运行」。
+> **Windows 用户注意**：安装时若被 SmartScreen 拦截，点击“更多信息”后选择“仍要运行”。
 
 ### 下载哪个文件？（按系统选择）
 
 > 名字里的 x64 / x32 / arm64 表示 CPU 架构，认准自己系统的类型下载即可。
 
-- **Windows 64 位（绝大多数 Windows 电脑）**：下载 `cursor-byok-0.0.94-windows-x64-installer.exe`（安装版，推荐）或 `cursor-byok-0.0.94-windows-x64.zip`（绿色版）
-- **Windows ARM64（骁龙/麒麟等 ARM 处理器的 Windows 电脑）**：下载 `cursor-byok-0.0.94-windows-arm64-installer.exe` 或 `cursor-byok-0.0.94-windows-arm64.zip`
-- **Windows 32 位（很老的低配电脑才需要）**：下载 `cursor-byok-0.0.94-windows-x32-installer.exe` 或 `cursor-byok-0.0.94-windows-x32.zip`
-- **macOS Apple Silicon（M1/M2/M3/M4 芯片）**：下载 `cursor-byok-0.0.94-macos-arm64.dmg` 或 `cursor-byok-0.0.94-macos-arm64.tar.gz`
-- **macOS Intel**：下载 `cursor-byok-0.0.94-macos-x64.dmg` 或 `cursor-byok-0.0.94-macos-x64.tar.gz`
-- **Linux 64 位**：下载 `cursor-byok-0.0.94-linux-x64.tar.gz`
+- **Windows 64 位（绝大多数 Windows 电脑）**：下载 `cursor-byok-0.0.95-windows-x64-installer.exe`（安装版，推荐）或 `cursor-byok-0.0.95-windows-x64.zip`（绿色版）
+- **Windows ARM64（骁龙/麒麟等 ARM 处理器的 Windows 电脑）**：下载 `cursor-byok-0.0.95-windows-arm64-installer.exe` 或 `cursor-byok-0.0.95-windows-arm64.zip`
+- **Windows 32 位（很老的低配电脑才需要）**：下载 `cursor-byok-0.0.95-windows-x32-installer.exe` 或 `cursor-byok-0.0.95-windows-x32.zip`
+- **macOS Apple Silicon（M1/M2/M3/M4 芯片）**：下载 `cursor-byok-0.0.95-macos-arm64.dmg` 或 `cursor-byok-0.0.95-macos-arm64.tar.gz`
+- **macOS Intel**：下载 `cursor-byok-0.0.95-macos-x64.dmg` 或 `cursor-byok-0.0.95-macos-x64.tar.gz`
+- **Linux 64 位**：下载 `cursor-byok-0.0.95-linux-x64.tar.gz`
 
-**如何判断自己的 Windows 是多少位**：右键「此电脑」→「属性」，查看「系统类型」。显示「64 位操作系统」下载 x64，只有显示「32 位」才下载 x32。macOS 可在「关于本机」查看芯片是 Apple 还是 Intel。
-
-### macOS DMG 授权与首次打开
-
-当前版本构建流程只给 `.app` 使用 ad-hoc 临时签名，未执行 Apple Developer ID Application 正式签名、未公证，也没有装订 Apple 公证票据。因此，首次打开时如果 macOS 阻止启动，请在 Finder 中右键应用选择「打开」并确认；仍被拦截时，到「系统设置 → 隐私与安全性」中点击「仍要打开」。仅对确认来源可信的文件执行此操作。
+**如何判断自己的 Windows 是多少位**：右键“此电脑”→“属性”，查看“系统类型”。显示“64 位操作系统”下载 x64，只有显示“32 位”才下载 x32。macOS 可在“关于本机”查看芯片是 Apple 还是 Intel。

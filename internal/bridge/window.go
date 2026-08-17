@@ -175,6 +175,14 @@ func (s *WindowService) OpenConfigWindow() {
 	openDirectory(client.ResolveSettingsRootPath())
 }
 
+// restoreExistingWindowRoute 恢复复用窗口的目标路由，再显示并聚焦窗口。
+// 子窗口内部返回主页后仍会保留窗口实例，重新打开时必须显式恢复目标页面。
+func restoreExistingWindowRoute(window *application.WebviewWindow, route string) {
+	window.SetURL(route)
+	window.Show()
+	window.Focus()
+}
+
 // OpenModelConfigWindow 打开模型配置独立窗口。如果窗口已存在则聚焦。
 func (s *WindowService) OpenModelConfigWindow() {
 	s.mu.Lock()
@@ -185,8 +193,7 @@ func (s *WindowService) OpenModelConfigWindow() {
 	}
 
 	if s.modelConfigWindow != nil {
-		s.modelConfigWindow.Show()
-		s.modelConfigWindow.Focus()
+		restoreExistingWindowRoute(s.modelConfigWindow, "/#/model-config")
 		return
 	}
 
@@ -246,8 +253,7 @@ func (s *WindowService) OpenMetricsDetailWindow() {
 	}
 
 	if s.metricsDetailWindow != nil {
-		s.metricsDetailWindow.Show()
-		s.metricsDetailWindow.Focus()
+		restoreExistingWindowRoute(s.metricsDetailWindow, "/#/metrics-detail")
 		return
 	}
 
@@ -307,8 +313,7 @@ func (s *WindowService) OpenRequestMetricsWindow() {
 	}
 
 	if s.requestMetricsWindow != nil {
-		s.requestMetricsWindow.Show()
-		s.requestMetricsWindow.Focus()
+		restoreExistingWindowRoute(s.requestMetricsWindow, "/#/request-metrics")
 		return
 	}
 
