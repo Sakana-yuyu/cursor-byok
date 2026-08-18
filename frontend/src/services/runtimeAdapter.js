@@ -45,7 +45,7 @@ export const runtimeIsWindows = isBrowserPreview
   ? false
   : typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent);
 export const runtimeIsMacOS =
-  typeof navigator !== "undefined" && /Macintosh|Mac OS X/i.test(navigator.userAgent);
+  typeof navigator !== "undefined" && /Macintosh/i.test(navigator.userAgent);
 
 export function browserPreviewMockProxyState() {
   return {

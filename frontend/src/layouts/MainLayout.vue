@@ -16,6 +16,7 @@ import {
 } from "@/state/appState";
 import { closeApplication as closeApplicationNative } from "@/services/clientApi";
 import { isWindows } from "@/utils/isWindows";
+import { isMacOS } from "@/utils/isMacOS";
 import { safeErrorLogAttributes } from "@/utils/errorContract";
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -213,9 +214,13 @@ usePolling(
     <header
       class="relative flex h-[40px] min-h-0 w-full shrink-0 items-center justify-between px-[20px]"
       style="--wails-draggable: drag"
-      :class="{ '!justify-center': !isWindows }"
+      :class="{ '!justify-center': !isWindows, 'px-[76px] pr-[52px]': isMacOS }"
     >
-      <div class="center-row min-w-0 gap-2 pr-[124px]" style="font-family: var(--font-num);">
+      <div
+        class="center-row min-w-0 gap-2"
+        :class="isMacOS ? 'pr-0' : 'pr-[124px]'"
+        style="font-family: var(--font-num);"
+      >
         <img v-if="showIcon" :src="Logo" class="h-[16px] w-[16px] shrink-0 opacity-90" />
         <div class="center-row min-w-0 gap-[7px]">
           <template v-for="(part, index) in titleParts" :key="index">
@@ -231,8 +236,20 @@ usePolling(
           </template>
         </div>
       </div>
+      <button
+        v-if="isMacOS"
+        type="button"
+        aria-label="打开设置"
+        title="设置"
+        class="absolute right-[14px] top-[6px] z-99999 flex h-[28px] w-[28px] items-center justify-center rounded-[7px] text-[#9a9a9a] transition-colors duration-150 hover:bg-[#3a3a3a] hover:text-[#f0f0f0]"
+        :class="route.path === '/settings' ? 'cursor-default opacity-60' : 'cursor-pointer'"
+        style="--wails-draggable: no-drag"
+        @click="openSettingsWorkspace"
+      >
+        <span class="icon-[mdi--cog-outline] text-[17px]" aria-hidden="true"></span>
+      </button>
       <div
-        v-if="isWindows || isBrowserPreview"
+        v-if="isWindows || (isBrowserPreview && !isMacOS)"
         class="absolute right-[10px] top-[7px] z-99999 flex items-center gap-[1px] rounded-full border border-[#333] bg-[#242424]/90 px-[3px] py-[3px] shadow-[0_1px_4px_rgba(0,0,0,0.35)] backdrop-blur-sm"
         style="--wails-draggable: no-drag"
       >
