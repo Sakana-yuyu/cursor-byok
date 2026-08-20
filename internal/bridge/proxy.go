@@ -663,8 +663,21 @@ func (s *ProxyService) ProbeModelAdapter(adapter ModelAdapterConfig) ModelAdapte
 }
 
 // QueryProviderBalance 查询中转站余额/额度，失败时返回结构化的 unsupported 结果。
+// billingQuery 全局开关关闭时不发起任何上游请求；本地成本估算不受影响。
 func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) ProviderBalance {
+	if !s.billingQueryEnabled() {
+		return ProviderBalance{Supported: false, Source: "disabled", Message: "计费查询已关闭，可在设置中开启"}
+	}
 	return s.core.QueryProviderBalance(request)
+}
+
+// billingQueryEnabled 返回计费查询全局开关的当前状态；读取配置失败时按默认开启处理。
+func (s *ProxyService) billingQueryEnabled() bool {
+	cfg, err := s.core.LoadUserConfig()
+	if err != nil {
+		return true
+	}
+	return cfg.BillingQuery.Enabled
 }
 
 // ProviderBalanceSummaryItem 是首页「站点余额」展示条目：模型通道名 + 余额查询结果。
@@ -697,6 +710,10 @@ func hasBalanceQueryCapability(adapter serverconfig.ModelAdapterConfig) bool {
 func (s *ProxyService) QueryAllProviderBalances() []ProviderBalanceSummaryItem {
 	cfg, err := s.core.LoadUserConfig()
 	if err != nil {
+		return nil
+	}
+	// billingQuery 全局开关关闭时不向上游发起任何余额/计费查询。
+	if !cfg.BillingQuery.Enabled {
 		return nil
 	}
 	type adapterJob struct {

@@ -62,6 +62,7 @@ const previewConfig = {
   proxyListenAddr: "127.0.0.1:8788",
   routing: { mode: "local" },
   homeMetrics: { includeCacheWriteInHitRate: false },
+  billingQuery: { enabled: true },
   mirrorCapture: {
     enabled: false,
     protocolFidelity: false,

@@ -7,8 +7,9 @@ import {
   loadSupplierGroupMode,
   normalizeSupplierBaseURL,
 } from "@/utils/supplierGrouping";
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { usePolling } from "@/composables/usePolling";
+import { appState } from "@/state/appState";
 
 // 全量历史按中转站聚合花费，给首页一眼可见「哪个中转站用了多少额度」。
 const rows = ref([]);
@@ -47,6 +48,12 @@ function toggleBalanceVisible() {
     /* ignore */
   }
 }
+
+// 计费查询全局开关（设置中可关）：关闭后不再向上游查询余额/计费接口。
+// 配置未加载完成前视为开启（与后端默认值一致）。
+const billingQueryEnabled = computed(() => appState.billingQuery?.enabled !== false);
+// 余额面板只在「面板可见 且 计费查询开启」时渲染并拉取数据。
+const showBalancePanel = computed(() => balanceVisible.value && billingQueryEnabled.value);
 
 // supplierHost 从 baseURL 提取 host，用于连接分组标题。
 function supplierHost(baseURL) {
@@ -205,12 +212,27 @@ async function loadBalances() {
   }
 }
 
-// 每分钟刷新一次，与首页其余统计节奏一致
+// 每分钟刷新一次，与首页其余统计节奏一致。
+// 站点消耗是本地聚合，始终轮询；余额查询会打上游接口，仅面板可见且全局开关开启时轮询。
 const REFRESH_INTERVAL_MS = 60_000;
 usePolling(
-  () => Promise.allSettled([load(), loadBalances()]),
+  () => {
+    const tasks = [load()];
+    if (showBalancePanel.value) tasks.push(loadBalances());
+    return Promise.allSettled(tasks);
+  },
   { intervalMs: REFRESH_INTERVAL_MS },
 );
+
+// 面板展开或开关开启时立即查一次余额；关闭时清空旧数据，避免展示过期余额。
+watch(showBalancePanel, (active) => {
+  if (active) {
+    loadBalances();
+  } else {
+    balances.value = [];
+    balancesError.value = "";
+  }
+});
 
 defineExpose({ refresh: load, refreshBalances: loadBalances });
 </script>
@@ -227,6 +249,7 @@ defineExpose({ refresh: load, refreshBalances: loadBalances });
         </div>
         <div class="flex shrink-0 items-start gap-3">
           <button
+            v-if="billingQueryEnabled"
             type="button"
             class="flex items-center gap-1.5 rounded-[5px] border px-2 py-1 text-[11px] transition-colors"
             :class="balanceVisible
@@ -261,9 +284,9 @@ defineExpose({ refresh: load, refreshBalances: loadBalances });
 
       <div
         class="grid min-h-0 flex-1 gap-3 overflow-hidden"
-        :class="balanceVisible ? 'grid-cols-1 grid-rows-2 md:grid-cols-2 md:grid-rows-1' : 'grid-cols-1 grid-rows-1'"
+        :class="showBalancePanel ? 'grid-cols-1 grid-rows-2 md:grid-cols-2 md:grid-rows-1' : 'grid-cols-1 grid-rows-1'"
       >
-        <section v-if="balanceVisible" class="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[6px] bg-[#252525]/20 p-2">
+        <section v-if="showBalancePanel" class="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[6px] bg-[#252525]/20 p-2">
           <div class="mb-2 flex shrink-0 items-center justify-between gap-2">
             <div class="flex items-center gap-2">
               <div class="text-[10px] uppercase tracking-wide text-[#8d8d8d]">站点余额</div>

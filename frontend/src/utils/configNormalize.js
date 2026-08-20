@@ -182,6 +182,7 @@ export function normalizeConfig(source) {
   const raw = source && typeof source === "object" ? source : {};
   const routing = raw.routing && typeof raw.routing === "object" ? raw.routing : {};
   const homeMetrics = raw.homeMetrics && typeof raw.homeMetrics === "object" ? raw.homeMetrics : {};
+  const billingQuery = raw.billingQuery && typeof raw.billingQuery === "object" ? raw.billingQuery : {};
   return {
     log: asBoolean(raw.log),
     providerStreamIdleTimeout: asPositiveInteger(raw.providerStreamIdleTimeout),
@@ -196,6 +197,11 @@ export function normalizeConfig(source) {
     },
     homeMetrics: {
       includeCacheWriteInHitRate: asBoolean(homeMetrics.includeCacheWriteInHitRate),
+    },
+    // 计费查询全局开关：保留在归一化白名单中，避免任何一次配置保存把它清空回默认值。
+    // 字段缺失时按默认开启处理，与后端 config.Load 的键缺失回退语义一致。
+    billingQuery: {
+      enabled: billingQuery.enabled === undefined ? true : asBoolean(billingQuery.enabled),
     },
     // 本地响应缓存配置：保留在归一化白名单中，避免任何一次配置保存把它清空回默认值
     localResponseCache: normalizeLocalResponseCache(raw.localResponseCache),

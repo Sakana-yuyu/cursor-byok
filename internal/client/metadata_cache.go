@@ -16,8 +16,12 @@ import (
 const (
 	// modelCatalogCacheTTL 表示模型列表缓存的存活时长。
 	modelCatalogCacheTTL = 5 * time.Minute
-	// providerBalanceCacheTTL 表示余额查询缓存的存活时长。
+	// providerBalanceCacheTTL 表示余额查询成功结果的缓存存活时长。
 	providerBalanceCacheTTL = 60 * time.Second
+	// providerBalanceNegativeCacheTTL 表示「确定性不支持/失败」余额查询结果的负缓存存活时长。
+	// 上游未开启计费接口时，避免每轮 60s 轮询都全策略链重打上游（单轮最多 6-8 个请求）。
+	// 瞬时传输失败不进负缓存；ForceRefresh 显式刷新可绕过。
+	providerBalanceNegativeCacheTTL = 10 * time.Minute
 )
 
 // metadataCacheEntry 保存单条缓存值及其过期时间。

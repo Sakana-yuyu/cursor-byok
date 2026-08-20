@@ -147,27 +147,13 @@ func (manager *Manager) SaveDelegationConfig(ctx context.Context, cfg Delegation
 }
 
 // PricingRates 返回当前配置中各模型适配器的价格条目快照，供费用估算使用。
+// 与统计页同口径：手动配价/探测价优先，缺省回退内置官方价与均价估算，
+// 条目带 Known/Currency/Source（此前缺失 Known 会让 goal 费用估算恒为未知）。
 func (manager *Manager) PricingRates() []historymetrics.PriceRate {
 	if manager == nil {
 		return nil
 	}
-	rates := make([]historymetrics.PriceRate, 0)
-	for _, adapter := range manager.Current().ModelAdapters {
-		pricing := adapter.Pricing
-		if pricing == nil {
-			continue
-		}
-		rates = append(rates, historymetrics.PriceRate{
-			Model:      adapter.ModelID,
-			Provider:   adapter.Type,
-			BaseURL:    adapter.BaseURL,
-			Input:      pricing.Input,
-			Output:     pricing.Output,
-			CacheRead:  pricing.CacheRead,
-			CacheWrite: pricing.CacheWrite,
-		})
-	}
-	return rates
+	return PriceRatesFromAdapters(manager.Current().ModelAdapters)
 }
 
 // GoalRuntimeConfig 返回 goal 循环执行的运行时配置（forwarder 消费）。

@@ -20,7 +20,6 @@ import (
 	"cursor/internal/cursor"
 	"cursor/internal/historymetrics"
 	"cursor/internal/i18n"
-	"cursor/internal/modelcontext"
 	"cursor/internal/skills"
 
 	"github.com/leaanthony/u"
@@ -149,7 +148,7 @@ func Run(resources EmbeddedResources) error {
 		if err != nil {
 			return nil
 		}
-		return priceRatesFromAdapters(cfg.ModelAdapters)
+		return serverconfig.PriceRatesFromAdapters(cfg.ModelAdapters)
 	}, proxyService.ResetUsageMetrics)
 	windowService := bridge.NewWindowService()
 	windowService.SetCursorLaunchPreflight(proxyService.PrepareCursorLaunch)
@@ -503,61 +502,8 @@ func browserReachableLoopbackBaseURL(listenAddr string) string {
 	return "http://" + net.JoinHostPort(host, port)
 }
 
-// priceRatesFromAdapters 将当前配置的模型渠道价格映射为 historymetrics 价格条目快照。
-// 价格优先级：手动配价 / catalog 探测价（adapter.Pricing）> 内置官方价 > 按币种均价估算。
-// 内置价格仅运行时注入，不写入 config.yaml。
-func priceRatesFromAdapters(adapters []serverconfig.ModelAdapterConfig) []historymetrics.PriceRate {
-	rates := make([]historymetrics.PriceRate, 0, len(adapters))
-	for _, adapter := range adapters {
-		pricing := adapter.Pricing
-		if pricing != nil {
-			rates = append(rates, historymetrics.PriceRate{
-				Model:      adapter.ModelID,
-				Provider:   adapter.Type,
-				BaseURL:    adapter.BaseURL,
-				Input:      pricing.Input,
-				Output:     pricing.Output,
-				CacheRead:  pricing.CacheRead,
-				CacheWrite: pricing.CacheWrite,
-				Currency:   pricing.Currency,
-				Known:      pricing.Known,
-				Source:     pricingSource(pricing.Source, pricing.Known),
-			})
-			continue
-		}
-		// adapter 未配置价格 → 尝试内置官方价兜底。
-		builtin := modelcontext.BuiltinPricingForAdapter(adapter.ModelID, adapter.SupplierID, adapter.Type, adapter.BaseURL)
-		if builtin == nil {
-			builtin = modelcontext.AverageBuiltinPricing(modelcontext.BuiltinPricingCurrencyForAdapter(adapter.SupplierID, adapter.Type, adapter.BaseURL))
-			if builtin == nil {
-				continue
-			}
-		}
-		rates = append(rates, historymetrics.PriceRate{
-			Model:      adapter.ModelID,
-			Provider:   adapter.Type,
-			BaseURL:    adapter.BaseURL,
-			Input:      builtin.Input,
-			Output:     builtin.Output,
-			CacheRead:  builtin.CacheRead,
-			CacheWrite: builtin.CacheWrite,
-			Currency:   builtin.Currency,
-			Known:      true,
-			Source:     pricingSource(builtin.Source, true),
-		})
-	}
-	return rates
-}
-
-func pricingSource(source string, known bool) string {
-	if strings.TrimSpace(source) != "" {
-		return strings.TrimSpace(source)
-	}
-	if known {
-		return "configured"
-	}
-	return ""
-}
+// 价格快照构建（手动价/探测价 > 内置官方价 > 均价估算）由
+// serverconfig.PriceRatesFromAdapters 提供，goal 循环费用估算与统计页共用同一实现。
 
 // logEmbeddedCAInfo 用于处理与 logEmbeddedCAInfo 相关的逻辑。
 func logEmbeddedCAInfo(certPEM []byte) {

@@ -84,8 +84,11 @@ type ProxyService struct {
 
 	// modelCatalogCache 缓存模型列表结果，减少重复网络调用。
 	modelCatalogCache *metadataCache[ModelCatalogResult]
-	// providerBalanceCache 缓存余额查询结果，减少重复网络调用。
+	// providerBalanceCache 缓存余额查询成功结果，减少重复网络调用。
 	providerBalanceCache *metadataCache[ProviderBalance]
+	// providerBalanceNegativeCache 负缓存「确定性不支持/失败」的余额查询结果，
+	// 避免上游不支持计费接口时每轮轮询都全策略链重打上游。
+	providerBalanceNegativeCache *metadataCache[ProviderBalance]
 }
 
 // MarkCAIncomplete 记录 CA 材料不完整状态（应用降级启动时由 runner 调用）。
@@ -191,8 +194,9 @@ func NewProxyService(proxy *mitm.ProxyServer, certManager *certs.Manager, caCert
 		publicClient:     netproxy.NewHTTPClient(publicAPITimeout),
 		modelTestResults: make(map[string]ModelAdapterTestResult),
 
-		modelCatalogCache:    newMetadataCache[ModelCatalogResult](modelCatalogCacheTTL),
-		providerBalanceCache: newMetadataCache[ProviderBalance](providerBalanceCacheTTL),
+		modelCatalogCache:               newMetadataCache[ModelCatalogResult](modelCatalogCacheTTL),
+		providerBalanceCache:            newMetadataCache[ProviderBalance](providerBalanceCacheTTL),
+		providerBalanceNegativeCache:    newMetadataCache[ProviderBalance](providerBalanceNegativeCacheTTL),
 	}
 	service.cursorAccount = cursoraccount.NewManager(
 		filepath.Join(appdata.DataRootPath(), "cursor-account.json"),

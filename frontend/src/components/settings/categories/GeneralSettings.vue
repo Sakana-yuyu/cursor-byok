@@ -4,8 +4,10 @@ import SettingsRow from "@/components/settings/SettingsRow.vue";
 import SettingsSection from "@/components/settings/SettingsSection.vue";
 import Button from "@/components/ui/Button.vue";
 import Select from "@/components/ui/Select.vue";
-import { appState, getStatsOverlayPreferences, openConfigWindow, setStatsOverlayPreferences, toUserError } from "@/state/appState";
-import { computed, onMounted, reactive } from "vue";
+import Switch from "@/components/ui/Switch.vue";
+import { useMessage } from "@/composables/useMessage";
+import { appState, getStatsOverlayPreferences, openConfigWindow, saveBillingQueryEnabled, setStatsOverlayPreferences, toUserError } from "@/state/appState";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 
 const props = defineProps({
   autosave: {
@@ -13,6 +15,8 @@ const props = defineProps({
     required: true,
   },
 });
+
+const message = useMessage();
 
 const closeActionOptions = [
   { value: "tray", label: "隐藏到托盘" },
@@ -33,9 +37,47 @@ const configActionState = reactive({
 
 const currentCloseAction = computed(() => appState.statsOverlayPreferences.closeAction);
 
+// 计费查询全局开关：控制是否向上游查询余额/计费接口（本地成本估算不受影响）。
+const billingQueryDraft = ref(appState.billingQuery?.enabled !== false);
+const billingQueryState = reactive({
+  busy: false,
+  error: "",
+  retry: null,
+});
+
+watch(
+  () => appState.billingQuery?.enabled,
+  (value) => {
+    billingQueryDraft.value = value !== false;
+  },
+);
+
 function retryState(state) {
   if (typeof state.retry === "function") {
     void state.retry();
+  }
+}
+
+async function handleBillingQueryChange(enabled) {
+  const nextValue = Boolean(enabled);
+  const previousValue = billingQueryDraft.value;
+  billingQueryDraft.value = nextValue;
+  billingQueryState.retry = () => handleBillingQueryChange(nextValue);
+  billingQueryState.error = "";
+  billingQueryState.busy = true;
+  try {
+    await props.autosave.run("general.billing-query", async () => {
+      const result = await saveBillingQueryEnabled(nextValue);
+      if (!result?.ok) {
+        throw new Error(result?.error || "保存失败");
+      }
+      message.success(nextValue ? "已开启计费查询" : "已关闭计费查询（不再查询上游计费接口）");
+    });
+  } catch (error) {
+    billingQueryDraft.value = previousValue;
+    billingQueryState.error = toUserError(error);
+  } finally {
+    billingQueryState.busy = false;
   }
 }
 
@@ -116,6 +158,26 @@ onMounted(() => {
         >
           打开
         </Button>
+      </SettingsRow>
+    </SettingsSection>
+
+    <SettingsSection title="计费与余额">
+      <SettingsRow
+        label="计费查询"
+        description="开启后允许向上游中转站查询余额/计费接口（首页站点余额、模型配置页查询余额）。关闭后不再发起任何上游计费请求；本地成本估算不受影响。"
+        :busy="billingQueryState.busy"
+        :error="billingQueryState.error"
+        @retry="retryState(billingQueryState)"
+      >
+        <Switch
+          compact
+          label=""
+          :enabled="billingQueryDraft"
+          :busy="billingQueryState.busy"
+          :disabled="billingQueryState.busy"
+          aria-label="计费查询"
+          @change="handleBillingQueryChange"
+        />
       </SettingsRow>
     </SettingsSection>
   </div>

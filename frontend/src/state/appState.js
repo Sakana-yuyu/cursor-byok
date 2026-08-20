@@ -224,6 +224,7 @@ function buildConfigPayload(source = appState) {
     modelAdapters: normalized.modelAdapters.map(({ balanceQueryHeadersJSON, ...adapter }) => adapter),
     routing: normalized.routing,
     homeMetrics: normalized.homeMetrics,
+    billingQuery: normalized.billingQuery,
     localResponseCache: normalized.localResponseCache,
     mirrorCapture: normalized.mirrorCapture,
     delegation,
@@ -245,6 +246,7 @@ function buildCachedConfigPayload() {
     proxyListenAddr: payload.proxyListenAddr,
     routing: payload.routing,
     homeMetrics: payload.homeMetrics,
+    billingQuery: payload.billingQuery,
     localResponseCache: payload.localResponseCache,
     mirrorCapture: payload.mirrorCapture,
     delegation: payload.delegation,
@@ -267,6 +269,7 @@ function applyConfigToState(config, { modelAdaptersOnly = false } = {}) {
   appState.computerUseMode = normalized.computerUse.mode;
   appState.computerUseBrowserStartURL = normalized.computerUse.browserStartURL;
   appState.includeCacheWriteInHitRate = normalized.homeMetrics.includeCacheWriteInHitRate;
+  appState.billingQuery = normalized.billingQuery;
   appState.localResponseCache = normalized.localResponseCache;
   appState.mirrorCaptureEnabled = normalized.mirrorCapture.enabled;
   appState.mirrorCaptureProtocolFidelity = normalized.mirrorCapture.protocolFidelity;
@@ -534,6 +537,8 @@ export const appState = reactive({
   computerUseMode: cachedConfig.computerUse.mode,
   computerUseBrowserStartURL: cachedConfig.computerUse.browserStartURL,
   includeCacheWriteInHitRate: cachedConfig.homeMetrics.includeCacheWriteInHitRate,
+  // 计费查询全局开关：控制是否向上游查询余额/计费接口（本地成本估算不受影响）。
+  billingQuery: cachedConfig.billingQuery,
   localResponseCache: cachedConfig.localResponseCache,
   delegation: cachedConfig.delegation,
   goal: cachedConfig.goal,
@@ -1049,6 +1054,26 @@ export async function saveDebugLogEnabled(enabled) {
     ...currentConfig,
     log: !!enabled,
   });
+}
+
+// saveBillingQueryEnabled 增量保存计费查询全局开关（失败回滚由调用方按需处理，
+// 与 saveIncludeCacheWriteInHitRate 一致在保存前乐观更新）。
+export async function saveBillingQueryEnabled(enabled) {
+  const currentConfig = await loadPersistedUserConfig();
+  const previous = appState.billingQuery;
+  const nextValue = asBoolean(enabled);
+  appState.billingQuery = { ...(previous ?? {}), enabled: nextValue };
+  const result = await persistConfigPayload({
+    ...currentConfig,
+    billingQuery: {
+      ...(currentConfig.billingQuery ?? {}),
+      enabled: nextValue,
+    },
+  });
+  if (!result.ok) {
+    appState.billingQuery = previous;
+  }
+  return result;
 }
 
 export async function saveMirrorCaptureEnabled(enabled) {

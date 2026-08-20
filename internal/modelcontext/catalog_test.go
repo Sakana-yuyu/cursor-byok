@@ -177,3 +177,38 @@ func TestSupportsVisionKnownModels(t *testing.T) {
 		t.Errorf("SupportsVision(unknown) = %v, want nil", got)
 	}
 }
+
+func TestBuiltinPricingKimiCurrentPricing(t *testing.T) {
+	tests := []struct {
+		modelID    string
+		wantInput  float64
+		wantOutput float64
+		wantCache  float64
+	}{
+		// 2026-08 官方现价（platform.kimi.ai）：K3 = $3/$15/$0.30，
+		// K2.6 = $0.95/$4/$0.16，K2.7(code) = $0.95/$4/$0.19。
+		{"kimi-k3", 3.0, 15.0, 0.3},
+		{"kimi-3.0", 3.0, 15.0, 0.3},
+		{"kimi-k2.6", 0.95, 4.0, 0.16},
+		{"kimi-k2.7", 0.95, 4.0, 0.19},
+	}
+	for _, tt := range tests {
+		c := Capabilities(tt.modelID)
+		if c == nil || c.Pricing == nil {
+			t.Errorf("Capabilities(%q) pricing = nil, want builtin pricing", tt.modelID)
+			continue
+		}
+		if c.Pricing.Input == nil || *c.Pricing.Input != tt.wantInput {
+			t.Errorf("Capabilities(%q) input = %#v, want %v", tt.modelID, c.Pricing.Input, tt.wantInput)
+		}
+		if c.Pricing.Output == nil || *c.Pricing.Output != tt.wantOutput {
+			t.Errorf("Capabilities(%q) output = %#v, want %v", tt.modelID, c.Pricing.Output, tt.wantOutput)
+		}
+		if c.Pricing.CacheRead == nil || *c.Pricing.CacheRead != tt.wantCache {
+			t.Errorf("Capabilities(%q) cacheRead = %#v, want %v", tt.modelID, c.Pricing.CacheRead, tt.wantCache)
+		}
+		if c.Pricing.Currency != "USD" {
+			t.Errorf("Capabilities(%q) currency = %q, want USD", tt.modelID, c.Pricing.Currency)
+		}
+	}
+}

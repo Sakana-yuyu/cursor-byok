@@ -126,8 +126,9 @@ func newProviderBalanceTestService(t *testing.T, client *http.Client) *ProxyServ
 		client = http.DefaultClient
 	}
 	return &ProxyService{
-		store:                serverconfig.NewStore(filepath.Join(t.TempDir(), "config.yml"), t.TempDir()),
-		publicClient:         client,
-		providerBalanceCache: newMetadataCache[ProviderBalance](providerBalanceCacheTTL),
+		store:                        serverconfig.NewStore(filepath.Join(t.TempDir(), "config.yml"), t.TempDir()),
+		publicClient:                 client,
+		providerBalanceCache:         newMetadataCache[ProviderBalance](providerBalanceCacheTTL),
+		providerBalanceNegativeCache: newMetadataCache[ProviderBalance](providerBalanceNegativeCacheTTL),
 	}
 }

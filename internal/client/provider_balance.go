@@ -125,7 +125,11 @@ func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) Prov
 	}
 	if request.ForceRefresh {
 		s.providerBalanceCache.invalidate(cacheKey)
+		s.providerBalanceNegativeCache.invalidate(cacheKey)
 	} else if cached, ok := s.providerBalanceCache.get(cacheKey); ok {
+		return cached
+	} else if cached, ok := s.providerBalanceNegativeCache.get(cacheKey); ok {
+		// 命中负缓存：该上游近期已被判定为确定性不支持/失败，本轮不再发请求。
 		return cached
 	}
 
@@ -197,13 +201,16 @@ func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) Prov
 		if apiKey == "" {
 			return ProviderBalance{Supported: false, Source: "general", Message: "通用模板需要 API Key"}
 		}
-		if balance, matched := queryGeneralBalance(ctx, httpClient, normalized, apiKey); matched {
+		generalTracker := &transientTracker{}
+		if balance, matched := queryGeneralBalance(ctx, httpClient, normalized, apiKey, generalTracker); matched {
 			if balance.Supported {
 				s.providerBalanceCache.set(cacheKey, balance)
 			}
 			return balance
 		}
-		return ProviderBalance{Supported: false, Source: "general", Message: "通用余额模板未返回可识别的 balance 字段"}
+		result := ProviderBalance{Supported: false, Source: "general", Transient: generalTracker.hit, Message: "通用余额模板未返回可识别的 balance 字段"}
+		s.cacheNegativeBalanceResult(cacheKey, result)
+		return result
 	}
 
 	// 官方模板只使用具名 provider 的固定接口，不回退到通用试探链。
@@ -214,6 +221,8 @@ func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) Prov
 		if named, matched := s.queryNamedProviderBalance(ctx, httpClient, normalized, apiKey, request.SupplierID); matched {
 			if named.Supported {
 				s.providerBalanceCache.set(cacheKey, named)
+			} else {
+				s.cacheNegativeBalanceResult(cacheKey, named)
 			}
 			return named
 		}
@@ -271,6 +280,8 @@ func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) Prov
 	if named, matched := s.queryNamedProviderBalance(ctx, httpClient, normalized, apiKey, request.SupplierID); matched {
 		if named.Supported {
 			s.providerBalanceCache.set(cacheKey, named)
+		} else {
+			s.cacheNegativeBalanceResult(cacheKey, named)
 		}
 		return named
 	}
@@ -296,9 +307,21 @@ func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) Prov
 		return balance
 	}
 
-	// 策略 5：均不支持。不缓存，便于后续重试直接命中网络。
-	// 若试探过程中发生过瞬时传输失败，标记 Transient=true，让前端保留上次成功值。
-	return ProviderBalance{Supported: false, Transient: tracker.hit, Message: "该中转站不支持已知的余额查询接口"}
+	// 策略 5：均不支持。确定性失败写入负缓存，避免每轮 60s 轮询全链路重打上游；
+	// 若试探过程中发生过瞬时传输失败，标记 Transient=true（不进负缓存），让前端保留上次成功值。
+	result := ProviderBalance{Supported: false, Transient: tracker.hit, Message: "该中转站不支持已知的余额查询接口"}
+	s.cacheNegativeBalanceResult(cacheKey, result)
+	return result
+}
+
+// cacheNegativeBalanceResult 把「确定性不支持/失败」的余额查询结果写入负缓存。
+// 仅缓存 Supported=false 且非瞬时失败的结果；瞬时传输失败不缓存，交由下轮直接重试。
+// 缓存键与成功缓存一致（含凭据/配置身份），配置或密钥变化后自然失效；ForceRefresh 可显式绕过。
+func (s *ProxyService) cacheNegativeBalanceResult(cacheKey string, result ProviderBalance) {
+	if result.Supported || result.Transient {
+		return
+	}
+	s.providerBalanceNegativeCache.set(cacheKey, result)
 }
 
 const (
@@ -431,9 +454,10 @@ func balanceRequestCacheIdentity(request ProviderBalanceRequest, adapter serverc
 
 // queryGeneralBalance 对齐 cc-switch 的 GENERAL 模板：
 // GET {{baseUrl}}/user/balance，Bearer {{apiKey}}，读取 balance（兼容 remaining/data.balance）。
-func queryGeneralBalance(ctx context.Context, httpClient *http.Client, normalizedBaseURL, apiKey string) (ProviderBalance, bool) {
+// tracker 记录传输层瞬时失败，供调用方区分「确定性不支持」与「网络抖动」。
+func queryGeneralBalance(ctx context.Context, httpClient *http.Client, normalizedBaseURL, apiKey string, tracker *transientTracker) (ProviderBalance, bool) {
 	endpoint := strings.TrimRight(billingAPIRoot(normalizedBaseURL), "/") + "/user/balance"
-	body, ok := doProviderBalanceGET(ctx, httpClient, endpoint, apiKey, nil)
+	body, ok := doProviderBalanceGET(ctx, httpClient, endpoint, apiKey, tracker)
 	if !ok {
 		return ProviderBalance{}, false
 	}

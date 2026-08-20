@@ -630,7 +630,14 @@
       "supportsVision": true,
       "supportsAudio": false,
       "supportsTools": true,
-      "supportsThinking": false
+      "supportsThinking": false,
+      "pricing": {
+        "input": 3.0,
+        "output": 15.0,
+        "cacheRead": 0.3,
+        "currency": "USD",
+        "source": "official"
+      }
     },
     {
       "pattern": "^kimi-?k3(?:-|\\.|$)",
@@ -640,7 +647,14 @@
       "supportsVision": true,
       "supportsAudio": false,
       "supportsTools": true,
-      "supportsThinking": false
+      "supportsThinking": false,
+      "pricing": {
+        "input": 3.0,
+        "output": 15.0,
+        "cacheRead": 0.3,
+        "currency": "USD",
+        "source": "official"
+      }
     },
     {
       "pattern": "^kimi-?k?2[.-]?6(?:-|$)",
@@ -652,9 +666,9 @@
       "supportsTools": true,
       "supportsThinking": false,
       "pricing": {
-        "input": 0.6,
-        "output": 2.5,
-        "cacheRead": 0.06,
+        "input": 0.95,
+        "output": 4.0,
+        "cacheRead": 0.16,
         "currency": "USD",
         "source": "official"
       }
@@ -669,9 +683,9 @@
       "supportsTools": true,
       "supportsThinking": false,
       "pricing": {
-        "input": 0.6,
-        "output": 2.5,
-        "cacheRead": 0.06,
+        "input": 0.95,
+        "output": 4.0,
+        "cacheRead": 0.19,
         "currency": "USD",
         "source": "official"
       }

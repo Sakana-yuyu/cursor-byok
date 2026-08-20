@@ -100,6 +100,11 @@ func (store *Store) Load(_ context.Context) (Config, error) {
 	if !yamlHasKey(data, "goal") {
 		current.Goal = DefaultGoalConfig()
 	}
+	// billingQuery 默认开启：旧配置文件未出现该键（或未写 enabled 子键）时按默认值处理，
+	// 避免 Go 零值 false 把存量用户的计费查询静默关闭。
+	if !yamlHasKey(data, "billingQuery") || !yamlHasNestedKey(data, "billingQuery", "enabled") {
+		current.BillingQuery = BillingQueryConfig{Enabled: DefaultBillingQueryEnabled}
+	}
 	normalized, err := NormalizeConfig(current)
 	if err != nil {
 		return DefaultConfig(), err
@@ -211,6 +216,9 @@ func shouldPersistNormalizedConfig(raw []byte, current Config, normalized Config
 		return true
 	}
 	if !yamlHasKey(raw, "goal") {
+		return true
+	}
+	if !yamlHasKey(raw, "billingQuery") || !yamlHasNestedKey(raw, "billingQuery", "enabled") {
 		return true
 	}
 	return false

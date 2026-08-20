@@ -44,6 +44,9 @@ const (
 	// DefaultSkillMCPScanEnabled 表示是否默认开启跨工具 Skills/MCP 自动扫描与注入。
 	// 开启时扫描主流编码工具的技能/MCP 配置，合并进 RequestContext，还原原生注入。
 	DefaultSkillMCPScanEnabled = true
+	// DefaultBillingQueryEnabled 表示是否默认允许向上游查询余额/计费接口。
+	// 关闭后首页不再轮询、模型配置/供应商详情页的手动查询也会被拦截；本地成本估算不受影响。
+	DefaultBillingQueryEnabled = true
 )
 
 type ModelPricing = legacyruntime.ModelPricing
@@ -110,6 +113,13 @@ type ComputerUseConfig struct {
 
 type HomeMetricsConfig struct {
 	IncludeCacheWriteInHitRate bool `json:"includeCacheWriteInHitRate" yaml:"includeCacheWriteInHitRate"`
+}
+
+// BillingQueryConfig 控制向上游发起余额/计费查询的总开关。
+// 只影响对上游计费/余额接口的调用；基于内置价格表的本地成本估算不受影响。
+type BillingQueryConfig struct {
+	// Enabled 表示是否允许向上游查询余额/计费接口；默认 true。
+	Enabled bool `json:"enabled" yaml:"enabled"`
 }
 
 // LocalResponseCacheConfig 控制本地（进程内）精确匹配 LLM 响应缓存。
@@ -221,6 +231,7 @@ type Config struct {
 	ModelAdapters                   []ModelAdapterConfig       `json:"modelAdapters" yaml:"modelAdapters"`
 	Routing                         RoutingConfig              `json:"routing" yaml:"routing"`
 	HomeMetrics                     HomeMetricsConfig          `json:"homeMetrics" yaml:"homeMetrics"`
+	BillingQuery                    BillingQueryConfig         `json:"billingQuery" yaml:"billingQuery"`
 	LocalResponseCache              LocalResponseCacheConfig   `json:"localResponseCache" yaml:"localResponseCache"`
 	SkillMCPScan                    SkillMCPScanConfig         `json:"skillMcpScan" yaml:"skillMcpScan"`
 	MCPTrustGrants                  []runtimeconfig.MCPTrustRecord `json:"mcpTrustGrants,omitempty" yaml:"mcpTrustGrants,omitempty"`
@@ -241,6 +252,7 @@ func DefaultConfig() Config {
 		BackendListenAddr:               DefaultBackendListenAddr,
 		ProxyListenAddr:                 DefaultProxyListenAddr,
 		ModelAdapters:                   []ModelAdapterConfig{},
+		BillingQuery:                    BillingQueryConfig{Enabled: DefaultBillingQueryEnabled},
 		Routing: RoutingConfig{
 			Mode: DefaultRoutingMode,
 		},
@@ -290,6 +302,7 @@ func NormalizeConfig(input Config) (Config, error) {
 	output.BackendListenAddr = backendListenAddr
 	output.ProxyListenAddr = proxyListenAddr
 	output.HomeMetrics.IncludeCacheWriteInHitRate = input.HomeMetrics.IncludeCacheWriteInHitRate
+	output.BillingQuery = input.BillingQuery
 	output.LocalResponseCache = normalizeLocalResponseCache(input.LocalResponseCache)
 	output.MirrorCapture = input.MirrorCapture
 	output.SkillMCPScan = input.SkillMCPScan
