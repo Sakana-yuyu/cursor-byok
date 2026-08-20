@@ -465,6 +465,23 @@ func normalizeStreamFailure(stream *ActiveStream, cause error) *apperror.AppErro
 	return apperror.Classify("forwarder.stream", cause, apperror.WithTraceID(traceID))
 }
 
+// formatTurnFailureCause 生成单行、限长的失败根因，供 fail_active_stream 旁的
+// 根因日志使用——用户文案是脱敏的通用兜底，真实原因必须落到日志里可查。
+func formatTurnFailureCause(cause error) string {
+	if cause == nil {
+		return ""
+	}
+	text := strings.TrimSpace(cause.Error())
+	text = strings.ReplaceAll(text, "\r\n", " ")
+	text = strings.ReplaceAll(text, "\n", " ")
+	text = strings.ReplaceAll(text, "\t", " ")
+	const causeLogLimit = 480
+	if len(text) > causeLogLimit {
+		text = text[:causeLogLimit] + "...(truncated)"
+	}
+	return text
+}
+
 // failStream 在 provider 或投影失败时把错误写入 history 并收口活动流。
 func (service *Service) failStream(stream *ActiveStream, terminalCode string, cause error) error {
 	if stream == nil {
@@ -474,6 +491,13 @@ func (service *Service) failStream(stream *ActiveStream, terminalCode string, ca
 	if normalized == nil {
 		return nil
 	}
+	// 用户侧只看到脱敏通用文案；真实根因必须落日志，否则磁盘/解析类故障无从定位。
+	logger.Errorf("forwarder turn failed request_id=%s conversation_id=%s terminal_code=%s app_error_code=%s cause=%s",
+		strings.TrimSpace(stream.RequestID),
+		strings.TrimSpace(stream.ConversationID),
+		resolveTerminalCode(terminalCode, cause),
+		string(normalized.Code),
+		formatTurnFailureCause(cause))
 	errorText := normalized.UserMessage
 	resolvedTerminalCode := resolveTerminalCode(terminalCode, cause)
 	metadataType := "failed"
