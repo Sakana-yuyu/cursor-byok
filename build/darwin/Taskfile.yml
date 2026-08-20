@@ -198,6 +198,9 @@ tasks:
       - cp build/darwin/icons.icns "{{.BIN_DIR}}/{{.APP_BUNDLE}}/Contents/Resources"
       - cp "{{.BINARY_PATH}}" "{{.BIN_DIR}}/{{.APP_BUNDLE}}/Contents/MacOS/{{.EXECUTABLE_NAME}}"
       - cp build/darwin/Info.plist "{{.BIN_DIR}}/{{.APP_BUNDLE}}/Contents"
+      - |
+        plutil -replace CFBundleShortVersionString -string "{{.APP_VERSION}}" "{{.BIN_DIR}}/{{.APP_BUNDLE}}/Contents/Info.plist"
+        plutil -replace CFBundleVersion -string "{{.APP_VERSION}}" "{{.BIN_DIR}}/{{.APP_BUNDLE}}/Contents/Info.plist"
       - task: codesign:adhoc
         vars:
           APP_BUNDLE:
