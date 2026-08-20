@@ -444,7 +444,10 @@ func (store *ConversationFileStore) readConversationLocked(conversationID string
 	}
 	var conversation ConversationFile
 	if err := json.Unmarshal(stateBody, &conversation); err != nil {
-		return nil, fmt.Errorf("decode conversation state %q: %w", conversationID, err)
+		// 损坏的 state 不能把会话永久卡死：隔离坏文件后按“会话不存在”处理，
+		// 下一回合从 Cursor 客户端带来的 conversation_state 重建。
+		quarantineCorruptHistoryFile(store.statePath(conversationID), err)
+		return nil, nil
 	}
 	context, err := store.readContextLocked(conversationID)
 	if err != nil {
@@ -465,9 +468,22 @@ func (store *ConversationFileStore) readContextLocked(conversationID string) ([]
 	}
 	var context conversationContextFile
 	if err := json.Unmarshal(body, &context); err != nil {
-		return nil, fmt.Errorf("decode conversation context %q: %w", conversationID, err)
+		// 同 state：隔离坏 context，按空历史继续，客户端状态会重新导入。
+		quarantineCorruptHistoryFile(store.contextPath(conversationID), err)
+		return make([]HistoryEntry, 0, 16), nil
 	}
 	return append([]HistoryEntry(nil), context.Items...), nil
+}
+
+// quarantineCorruptHistoryFile 把无法解析的历史文件改名保留为 .corrupt-<unix时间戳>。
+// 隔离失败不阻塞自愈：随后的整文件原子写会直接覆盖损坏文件。
+func quarantineCorruptHistoryFile(path string, decodeErr error) {
+	quarantined := fmt.Sprintf("%s.corrupt-%d", path, time.Now().Unix())
+	if err := os.Rename(path, quarantined); err != nil {
+		logger.Warnf("forwarder quarantine corrupt history file failed path=%s err=%v", path, err)
+		return
+	}
+	logger.Errorf("forwarder quarantined corrupt history file path=%s -> %s decode_err=%v", path, quarantined, decodeErr)
 }
 
 func (store *ConversationFileStore) writeConversationLocked(conversationID string, conversation *ConversationFile) error {
