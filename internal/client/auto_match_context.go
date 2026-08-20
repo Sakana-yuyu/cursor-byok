@@ -130,7 +130,7 @@ func (s *ProxyService) AutoMatchContextWindows(ctx context.Context, force bool) 
 		catalog, err := s.fetchCatalogForAutoMatch(ctx, representative)
 		if err != nil {
 			// 探测失败不阻断整体流程：这些适配器保持原值（unchanged）。
-			logger.Errorf("auto match context window: probe failed group_key=%s error=%v", key, err)
+			logger.Errorf("auto match context window: probe failed group_key=%s error=%v", redactProbeBucketKeyForLog(key), err)
 			continue
 		}
 		// 建立模型 ID → contextWindowTokens / pricing 的快速查找（大小写不敏感、去 models/ 前缀）。
@@ -201,6 +201,22 @@ func probeBucketKey(adapter config.ModelAdapterConfig) string {
 	baseURL := strings.TrimSpace(adapter.BaseURL)
 	apiKey := strings.TrimSpace(adapter.APIKey)
 	return typeName + "|" + baseURL + "|" + apiKey
+}
+
+// redactProbeBucketKeyForLog 返回脱敏后的分组键：末段 apiKey 只保留首 4/尾 4 字符，
+// 其余以 *** 掩码；过短密钥整体掩码。少于三段（无密钥段）原样返回。日志严禁出现明文密钥。
+func redactProbeBucketKeyForLog(key string) string {
+	segments := strings.Split(key, "|")
+	if len(segments) < 3 {
+		return key
+	}
+	secret := segments[len(segments)-1]
+	if len(secret) <= 8 {
+		segments[len(segments)-1] = "***"
+	} else {
+		segments[len(segments)-1] = secret[:4] + "***" + secret[len(secret)-4:]
+	}
+	return strings.Join(segments, "|")
 }
 
 // fetchCatalogForAutoMatch 用适配器的连接参数构造一次 /models 拉取请求。
