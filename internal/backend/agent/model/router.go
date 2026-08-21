@@ -16,6 +16,7 @@ import (
 	"cursor/internal/apperror"
 	"cursor/internal/logger"
 	"cursor/internal/modelcontext"
+	"cursor/internal/routing"
 	legacyruntime "cursor/internal/runtime"
 )
 
@@ -157,13 +158,43 @@ func classifyRouterError(req StreamRequest, err error) error {
 //     不再对同一端点做无意义的重试；
 //   - 瞬时错误在下一次尝试前施加小幅退避；
 //   - routerMaxStreamAttempts 仍作为尝试次数上限。
-func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(ModelEvent) error) error {
+func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(ModelEvent) error) (err error) {
 	if router == nil || router.resolver == nil {
 		return classifyRouterError(req, fmt.Errorf("model adapter resolver is unavailable"))
 	}
 
 	tried := make(map[string]struct{})
 	startedAt := time.Now()
+	policy := router.currentRoutingPolicy()
+	var rankedChannels []*legacyruntime.ResolvedChannel
+	var routingDecision routing.Decision
+	var selectedChannelID string
+	var attemptCount int
+	var channelFailovers int
+	var lastChannel *legacyruntime.ResolvedChannel
+	var lastChannelKey string
+	if policy.Enabled {
+		channels, resolveErr := router.resolveChannels(ctx, req.ModelID)
+		if resolveErr != nil {
+			return classifyRouterError(req, resolveErr)
+		}
+		routingDecision, rankedChannels = router.rankLiveChannels(policy, req, channels)
+		if effort := strings.TrimSpace(routingDecision.EffectiveThinkingEffort); effort != "" {
+			req.ThinkingEffort = resolveEffectiveThinkingEffort(req.ThinkingEffort, effort)
+		}
+	}
+	defer func() {
+		router.recordLiveRoutingDecision(
+			policy,
+			req,
+			routingDecision,
+			selectedChannelID,
+			attemptCount,
+			startedAt,
+			err,
+			ctx.Err(),
+		)
+	}()
 	var firstErr error
 	var lastErrPermanent bool
 	// streamErr 保存最近一次渠道失败的错误，供提前返回前的 404 判定
@@ -186,9 +217,33 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 			return classifyRouterError(req, err)
 		}
 
-		channel, err := router.selectChannel(ctx, req.ModelID)
-		if err != nil {
-			return classifyRouterError(req, err)
+		var channel *legacyruntime.ResolvedChannel
+		if policy.Enabled && pendingIdleTimeoutRetry && lastChannel != nil {
+			channel = lastChannel
+		} else if policy.Enabled {
+			channel = nextRankedChannel(rankedChannels, routingDecision.Candidates, tried)
+			if channel == nil {
+				if firstErr != nil {
+					return classifyRouterError(req, firstErr)
+				}
+				return classifyRouterError(req, fmt.Errorf("no available channel for model %q", req.ModelID))
+			}
+			channelKey := channelHealthMapKey(channel)
+			if lastChannelKey != "" && channelKey != lastChannelKey {
+				if channelFailovers >= policy.MaxFailoverAttempts {
+					if firstErr != nil {
+						return classifyRouterError(req, firstErr)
+					}
+					return classifyRouterError(req, fmt.Errorf("no available channel for model %q", req.ModelID))
+				}
+				channelFailovers++
+			}
+		} else {
+			var selectErr error
+			channel, selectErr = router.selectChannel(ctx, req.ModelID)
+			if selectErr != nil {
+				return classifyRouterError(req, selectErr)
+			}
 		}
 		if channel == nil {
 			return classifyRouterError(req, fmt.Errorf("no available channel for model %q", req.ModelID))
@@ -235,6 +290,10 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 			pendingIdleTimeoutRetry = false
 		}
 
+		lastChannel = channel
+		lastChannelKey = channelKey
+		selectedChannelID = strings.TrimSpace(channel.ID)
+		attemptCount++
 		observedHealthVersion := router.channelHealthVersion(channel)
 		streamErr = router.streamChannel(ctx, req, channel, sink)
 		if streamErr == nil || ctx.Err() != nil {

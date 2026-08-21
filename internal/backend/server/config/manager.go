@@ -12,6 +12,7 @@ import (
 	"cursor/internal/backend/runtimeconfig"
 	"cursor/internal/historymetrics"
 	"cursor/internal/logger"
+	"cursor/internal/routing"
 	legacyruntime "cursor/internal/runtime"
 )
 
@@ -32,6 +33,7 @@ type Manager struct {
 	reloadError      string
 	selectionMu      sync.Mutex
 	selectionOffsets map[string]int
+	routingHistory   *routing.History
 }
 
 func NewManager(ctx context.Context, store *Store) (*Manager, error) {
@@ -46,6 +48,7 @@ func NewManager(ctx context.Context, store *Store) (*Manager, error) {
 		store:            store,
 		snapshot:         store.snapshot(),
 		selectionOffsets: make(map[string]int),
+		routingHistory:   &routing.History{},
 	}
 	manager.setCurrent(cfg)
 	return manager, nil
@@ -57,6 +60,31 @@ func (manager *Manager) Current() Config {
 	}
 	manager.reloadIfChanged(context.Background())
 	return manager.currentConfig()
+}
+
+func (manager *Manager) RoutingPolicy() routing.Policy {
+	if manager == nil {
+		return routing.DefaultPolicy()
+	}
+	policy, err := routing.NormalizePolicy(manager.Current().Routing.Policy)
+	if err != nil {
+		return routing.DefaultPolicy()
+	}
+	return policy
+}
+
+func (manager *Manager) RoutingHistory() *routing.History {
+	if manager == nil {
+		return nil
+	}
+	return manager.routingHistory
+}
+
+func (manager *Manager) RecordRoutingDecision(record routing.DecisionRecord) {
+	if manager == nil || manager.routingHistory == nil {
+		return
+	}
+	manager.routingHistory.Append(record)
 }
 
 // ComputerUseMode 返回当前的 ComputerUse 执行模式与浏览器初始 URL。

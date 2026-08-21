@@ -185,6 +185,9 @@ func (s *ProxyService) PreviewRoutingDecision(request routing.PreviewRequest) (r
 }
 
 func (s *ProxyService) GetRoutingDecisionHistory(query routing.DecisionQuery) (routing.DecisionPage, error) {
+	if s != nil && s.backendHost != nil {
+		return s.backendHost.RoutingDecisionHistory(query)
+	}
 	if s == nil || s.routingHist == nil {
 		return routing.DecisionPage{Items: []routing.DecisionRecord{}}, nil
 	}

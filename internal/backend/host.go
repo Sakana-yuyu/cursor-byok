@@ -23,6 +23,7 @@ import (
 	"cursor/internal/logger"
 	"cursor/internal/netproxy"
 	"cursor/internal/promptinject"
+	"cursor/internal/routing"
 	legacyruntime "cursor/internal/runtime"
 	"cursor/internal/safego"
 )
@@ -372,6 +373,17 @@ func (host *Host) LoadConfig(ctx context.Context) (serverconfig.Config, error) {
 		return serverconfig.DefaultConfig(), nil
 	}
 	return host.configs.Load(ctx)
+}
+
+func (host *Host) RoutingDecisionHistory(query routing.DecisionQuery) (routing.DecisionPage, error) {
+	if host == nil || host.configs == nil {
+		return routing.DecisionPage{Items: []routing.DecisionRecord{}}, nil
+	}
+	history := host.configs.RoutingHistory()
+	if history == nil {
+		return routing.DecisionPage{Items: []routing.DecisionRecord{}}, nil
+	}
+	return history.List(query)
 }
 
 func (host *Host) SaveConfig(ctx context.Context, cfg serverconfig.Config) (serverconfig.Config, error) {
