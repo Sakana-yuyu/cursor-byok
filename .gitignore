@@ -81,6 +81,13 @@ __pycache__/
 *.sqlite
 *.db
 
+# 控制中心导出与配置回滚快照
+**/request-lab/exports/
+**/agent-ops/exports/
+**/profiles/backups/
+**/profiles/operations/
+**/profiles/exports/
+
 # Cursor 多账户库：凭据、切换备份、操作清单、legacy 迁移备份与恢复包
 **/cursor-accounts/accounts/
 **/cursor-accounts/backups/

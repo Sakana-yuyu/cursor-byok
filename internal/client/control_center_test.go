@@ -15,8 +15,8 @@ func TestGetControlCenterOverviewIsolatesAccountErrors(t *testing.T) {
 	if overview.Accounts.State != "error" {
 		t.Fatalf("accounts.state = %q, want error", overview.Accounts.State)
 	}
-	if overview.RequestLab.State != "unavailable" || overview.Routing.State != "unavailable" || overview.Agents.State != "unavailable" || overview.Profiles.State != "unavailable" {
-		t.Fatalf("unfinished domains should stay unavailable: %+v", overview)
+	if overview.RequestLab.State == "" || overview.Routing.State == "" || overview.Agents.State == "" || overview.Profiles.State == "" {
+		t.Fatalf("domain states must remain independent: %+v", overview)
 	}
 	raw, err := json.Marshal(overview)
 	if err != nil {
