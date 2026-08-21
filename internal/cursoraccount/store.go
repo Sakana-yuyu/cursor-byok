@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 )
@@ -168,6 +169,54 @@ func (s *AccountStore) SetCurrent(id string) (CursorAccountSummary, error) {
 		return CursorAccountSummary{}, err
 	}
 	return s.setCurrentLocked(id)
+}
+
+func (s *AccountStore) UpdateCredentials(id string, value credentials) error {
+	if s == nil {
+		return fmt.Errorf("account store is nil")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.migrateIfNeededLocked(); err != nil {
+		return err
+	}
+	return s.updateCredentialsLocked(id, value)
+}
+
+func (s *AccountStore) UpdateTags(id string, tags []string) (CursorAccountSummary, error) {
+	if s == nil {
+		return CursorAccountSummary{}, fmt.Errorf("account store is nil")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.migrateIfNeededLocked(); err != nil {
+		return CursorAccountSummary{}, err
+	}
+	return s.updateTagsLocked(id, tags)
+}
+
+func (s *AccountStore) Delete(req CursorAccountDeleteRequest) error {
+	if s == nil {
+		return fmt.Errorf("account store is nil")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.migrateIfNeededLocked(); err != nil {
+		return err
+	}
+	return s.deleteLocked(req)
+}
+
+func (s *AccountStore) recordsByIDs(ids []string) ([]accountRecord, error) {
+	if s == nil {
+		return nil, fmt.Errorf("account store is nil")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.migrateIfNeededLocked(); err != nil {
+		return nil, err
+	}
+	return s.recordsByIDsLocked(ids)
 }
 
 func (s *AccountStore) clearCurrent() error {
@@ -440,10 +489,12 @@ func (s *AccountStore) upsertLocked(value credentials) (CursorAccountSummary, er
 	}
 	now := time.Now().UnixMilli()
 	matched := -1
+	matchedByAuthID := false
 	if value.AuthID != "" {
 		for i, record := range records {
 			if strings.TrimSpace(record.AuthID) == value.AuthID {
 				matched = i
+				matchedByAuthID = true
 				break
 			}
 		}
@@ -465,7 +516,7 @@ func (s *AccountStore) upsertLocked(value credentials) (CursorAccountSummary, er
 			records[matched].AuthID = value.AuthID
 		}
 		records[matched].AccessToken = value.AccessToken
-		if value.RefreshToken != "" {
+		if value.RefreshToken != "" && (matchedByAuthID || records[matched].RefreshToken == "") {
 			records[matched].RefreshToken = value.RefreshToken
 		}
 		records[matched].LastUsedAt = now
@@ -546,7 +597,7 @@ func (s *AccountStore) setCurrentLocked(id string) (CursorAccountSummary, error)
 	record, err := s.readAccountLocked(id)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return CursorAccountSummary{}, fmt.Errorf("account not found")
+			return CursorAccountSummary{}, accountError("account_not_found", "account not found")
 		}
 		return CursorAccountSummary{}, err
 	}
@@ -565,6 +616,246 @@ func (s *AccountStore) setCurrentLocked(id string) (CursorAccountSummary, error)
 		return CursorAccountSummary{}, fmt.Errorf("write current account pointer: %w", err)
 	}
 	return recordToSummary(record, true), nil
+}
+
+func (s *AccountStore) updateCredentialsLocked(id string, value credentials) error {
+	if err := validateAccountID(id); err != nil {
+		return err
+	}
+	record, err := s.readAccountLocked(id)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return accountError("account_not_found", "account not found")
+		}
+		return err
+	}
+	value.AccessToken = strings.TrimSpace(value.AccessToken)
+	value.RefreshToken = strings.TrimSpace(value.RefreshToken)
+	value.AuthID = strings.TrimSpace(value.AuthID)
+	value.Email = strings.TrimSpace(value.Email)
+	if value.AccessToken == "" {
+		return fmt.Errorf("access token is empty")
+	}
+	record.AccessToken = value.AccessToken
+	if value.RefreshToken != "" {
+		record.RefreshToken = value.RefreshToken
+	}
+	if value.Email != "" {
+		record.Email = value.Email
+	}
+	if value.AuthID != "" {
+		record.AuthID = value.AuthID
+	}
+	record.LastUsedAt = time.Now().UnixMilli()
+	return s.replaceRecordLocked(record)
+}
+
+func (s *AccountStore) updateTagsLocked(id string, tags []string) (CursorAccountSummary, error) {
+	if err := validateAccountID(id); err != nil {
+		return CursorAccountSummary{}, err
+	}
+	normalized, err := normalizeTags(tags)
+	if err != nil {
+		return CursorAccountSummary{}, err
+	}
+	record, err := s.readAccountLocked(id)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return CursorAccountSummary{}, accountError("account_not_found", "account not found")
+		}
+		return CursorAccountSummary{}, err
+	}
+	record.Tags = normalized
+	if err := s.replaceRecordLocked(record); err != nil {
+		return CursorAccountSummary{}, err
+	}
+	currentID, currentErr := s.readCurrentIDLocked()
+	if currentErr != nil && !errors.Is(currentErr, os.ErrNotExist) {
+		return CursorAccountSummary{}, currentErr
+	}
+	return recordToSummary(record, record.ID == currentID), nil
+}
+
+func (s *AccountStore) replaceRecordLocked(record accountRecord) error {
+	records, err := s.loadRecordsLocked()
+	if err != nil {
+		return err
+	}
+	matched := -1
+	for i, item := range records {
+		if item.ID == record.ID {
+			matched = i
+			break
+		}
+	}
+	if matched < 0 {
+		records = append(records, record)
+		matched = len(records) - 1
+	} else {
+		records[matched] = record
+	}
+	return s.persistRecordAndIndexLocked(records, matched)
+}
+
+func (s *AccountStore) deleteLocked(req CursorAccountDeleteRequest) error {
+	ids, err := collectUniqueIDs(req.AccountIDs, 100)
+	if err != nil {
+		return err
+	}
+	replacementID := strings.TrimSpace(req.ReplacementID)
+	if replacementID != "" && req.ClearCurrent {
+		return fmt.Errorf("replacement id and clear current are mutually exclusive")
+	}
+	if replacementID != "" {
+		if err := validateAccountID(replacementID); err != nil {
+			return err
+		}
+	}
+
+	currentID, err := s.readCurrentIDLocked()
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	deleting := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		deleting[id] = struct{}{}
+		if _, readErr := s.readAccountLocked(id); readErr != nil {
+			if errors.Is(readErr, os.ErrNotExist) {
+				return accountError("account_not_found", "account not found")
+			}
+			return readErr
+		}
+	}
+
+	deletesCurrent := currentID != ""
+	if _, ok := deleting[currentID]; !ok {
+		deletesCurrent = false
+	}
+	if deletesCurrent {
+		if replacementID == "" && !req.ClearCurrent {
+			return fmt.Errorf("deleting the current account requires a replacement or clear current")
+		}
+	} else if replacementID != "" || req.ClearCurrent {
+		return fmt.Errorf("replacement id and clear current are only valid when deleting the current account")
+	}
+	if replacementID != "" {
+		if _, ok := deleting[replacementID]; ok {
+			return fmt.Errorf("replacement account cannot be deleted")
+		}
+		if _, readErr := s.readAccountLocked(replacementID); readErr != nil {
+			if errors.Is(readErr, os.ErrNotExist) {
+				return accountError("account_not_found", "account not found")
+			}
+			return readErr
+		}
+	}
+
+	if replacementID != "" {
+		if _, err := s.setCurrentLocked(replacementID); err != nil {
+			return err
+		}
+	} else if req.ClearCurrent || deletesCurrent {
+		if err := writeJSONFile(s.currentPath(), currentPointer{ID: ""}); err != nil {
+			return err
+		}
+	}
+
+	records, err := s.loadRecordsLocked()
+	if err != nil {
+		return err
+	}
+	kept := make([]accountRecord, 0, len(records))
+	for _, record := range records {
+		if _, ok := deleting[record.ID]; ok {
+			path, pathErr := s.accountPath(record.ID)
+			if pathErr != nil {
+				return pathErr
+			}
+			if removeErr := os.Remove(path); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+				return removeErr
+			}
+			continue
+		}
+		kept = append(kept, record)
+	}
+	return s.writeIndexLocked(kept)
+}
+
+func (s *AccountStore) writeIndexLocked(records []accountRecord) error {
+	entries := make([]indexEntry, 0, len(records))
+	for _, record := range records {
+		entries = append(entries, indexEntryFromRecord(record))
+	}
+	return writeJSONFile(s.indexPath(), accountIndex{Accounts: entries})
+}
+
+func (s *AccountStore) recordsByIDsLocked(ids []string) ([]accountRecord, error) {
+	records := make([]accountRecord, 0, len(ids))
+	for _, id := range ids {
+		record, err := s.readAccountLocked(id)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return nil, accountError("account_not_found", "account not found")
+			}
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, nil
+}
+
+func collectUniqueIDs(ids []string, max int) ([]string, error) {
+	if len(ids) == 0 {
+		return nil, errAccountIDsEmpty
+	}
+	seen := make(map[string]struct{}, len(ids))
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			return nil, errAccountIDEmpty
+		}
+		if err := validateAccountID(id); err != nil {
+			return nil, err
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+		if max > 0 && len(out) > max {
+			return nil, errTooManyAccountIDs
+		}
+	}
+	return out, nil
+}
+
+func normalizeTags(tags []string) ([]string, error) {
+	const (
+		maxTags  = 20
+		maxRunes = 32
+	)
+	out := make([]string, 0, len(tags))
+	seen := make(map[string]struct{}, len(tags))
+	for _, tag := range tags {
+		tag = strings.TrimSpace(tag)
+		if tag == "" {
+			continue
+		}
+		if utf8.RuneCountInString(tag) > maxRunes {
+			return nil, fmt.Errorf("tag exceeds 32 characters")
+		}
+		key := strings.ToLower(tag)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, tag)
+		if len(out) > maxTags {
+			return nil, fmt.Errorf("too many tags")
+		}
+	}
+	return out, nil
 }
 
 func (s *AccountStore) touchIndexLastUsedLocked(record accountRecord) error {
@@ -716,3 +1007,9 @@ func summaryFromIndexEntry(entry indexEntry, isCurrent bool) CursorAccountSummar
 func recordToSummary(record accountRecord, isCurrent bool) CursorAccountSummary {
 	return summaryFromIndexEntry(indexEntryFromRecord(record), isCurrent)
 }
+
+var (
+	errAccountIDsEmpty   = errors.New("account ids are empty")
+	errAccountIDEmpty    = errors.New("account id is empty")
+	errTooManyAccountIDs = errors.New("too many account ids")
+)

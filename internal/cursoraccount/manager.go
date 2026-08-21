@@ -45,6 +45,44 @@ const (
 
 var ErrNotSignedIn = errors.New("尚未在 cursor-byok 中登录 Cursor 账号")
 
+type codedError struct {
+	code string
+	msg  string
+	err  error
+}
+
+func (e *codedError) Error() string {
+	if e == nil {
+		return ""
+	}
+	if e.msg != "" {
+		return e.msg
+	}
+	return e.code
+}
+
+func (e *codedError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.err
+}
+
+func (e *codedError) Code() string {
+	if e == nil {
+		return ""
+	}
+	return e.code
+}
+
+func accountError(code, message string) error {
+	return &codedError{code: code, msg: message}
+}
+
+func wrapAccountError(code, message string, err error) error {
+	return &codedError{code: code, msg: message, err: err}
+}
+
 // Status 是可安全返回给前端的脱敏账号状态。
 type Status struct {
 	State  string `json:"state"`
@@ -89,6 +127,10 @@ type Manager struct {
 	saveMu sync.Mutex
 	// importOffMarkerPath 可覆盖的「主动断开」标记路径；空值使用默认 appdata 路径（测试注入用）。
 	importOffMarkerPath string
+	openLoginURL        func(string) error
+	localAuthReader     func() (credentials, error)
+	exportMu            sync.Mutex
+	pendingExport       *pendingExport
 }
 
 func NewManager(dataRoot, legacyPath string, client *http.Client) *Manager {
@@ -114,6 +156,137 @@ func (manager *Manager) CurrentAccountID() string {
 	return manager.store.CurrentAccountID()
 }
 
+func (manager *Manager) ListAccounts() ([]CursorAccountSummary, error) {
+	if manager == nil || manager.store == nil {
+		return []CursorAccountSummary{}, fmt.Errorf("cursor account store is not initialized")
+	}
+	return manager.store.List()
+}
+
+func (manager *Manager) SetCurrent(id string) (CursorAccountSummary, error) {
+	if manager == nil || manager.store == nil {
+		return CursorAccountSummary{}, fmt.Errorf("cursor account store is not initialized")
+	}
+	if strings.TrimSpace(id) == "" {
+		return CursorAccountSummary{}, accountError("account_not_found", "account id is empty")
+	}
+	summary, err := manager.store.SetCurrent(id)
+	if err != nil {
+		return CursorAccountSummary{}, err
+	}
+	manager.adoptCurrentFromStore()
+	return summary, nil
+}
+
+func (manager *Manager) ImportFromLocal() (CursorAccountSummary, error) {
+	if manager == nil || manager.store == nil {
+		return CursorAccountSummary{}, fmt.Errorf("cursor account store is not initialized")
+	}
+	creds, err := manager.readLocalCursorAuth()
+	if err != nil {
+		return CursorAccountSummary{}, err
+	}
+	return manager.adoptImported(importedAccount{
+		AccessToken:  creds.AccessToken,
+		RefreshToken: creds.RefreshToken,
+		AuthID:       creds.AuthID,
+		Email:        creds.Email,
+	})
+}
+
+func (manager *Manager) ImportToken(ctx context.Context, raw string) (CursorAccountSummary, error) {
+	if manager == nil || manager.store == nil {
+		return CursorAccountSummary{}, fmt.Errorf("cursor account store is not initialized")
+	}
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return CursorAccountSummary{}, accountError("account_import_empty", "import token is empty")
+	}
+	if len(raw) > maxImportTokenBytes {
+		return CursorAccountSummary{}, accountError("account_import_too_large", "import token exceeds 8 kib")
+	}
+	creds := credentials{AccessToken: raw}
+	if profile, err := manager.fetchProfile(ctx, bearer(raw)); err == nil {
+		creds.Email = strings.TrimSpace(profile.GetEmail())
+		creds.AuthID = strings.TrimSpace(profile.GetAuthId())
+	}
+	if creds.Email == "" && creds.AuthID == "" {
+		return CursorAccountSummary{}, accountError("account_import_identity_unavailable", "account identity is unavailable")
+	}
+	return manager.adoptImported(importedAccount{
+		AccessToken:  creds.AccessToken,
+		RefreshToken: creds.RefreshToken,
+		AuthID:       creds.AuthID,
+		Email:        creds.Email,
+	})
+}
+
+func (manager *Manager) ImportJSON(content string) ([]CursorAccountSummary, error) {
+	if manager == nil || manager.store == nil {
+		return []CursorAccountSummary{}, fmt.Errorf("cursor account store is not initialized")
+	}
+	accounts, err := parseImportJSON(content)
+	if err != nil {
+		return nil, err
+	}
+	summaries := make([]CursorAccountSummary, 0, len(accounts))
+	for _, account := range accounts {
+		summary, err := manager.adoptImported(account)
+		if err != nil {
+			return nil, err
+		}
+		summaries = append(summaries, summary)
+	}
+	return summaries, nil
+}
+
+func (manager *Manager) UpdateTags(id string, tags []string) (CursorAccountSummary, error) {
+	if manager == nil || manager.store == nil {
+		return CursorAccountSummary{}, fmt.Errorf("cursor account store is not initialized")
+	}
+	if strings.TrimSpace(id) == "" {
+		return CursorAccountSummary{}, accountError("account_not_found", "account id is empty")
+	}
+	return manager.store.UpdateTags(id, tags)
+}
+
+func (manager *Manager) Delete(req CursorAccountDeleteRequest) error {
+	if manager == nil || manager.store == nil {
+		return fmt.Errorf("cursor account store is not initialized")
+	}
+	if err := manager.store.Delete(req); err != nil {
+		return err
+	}
+	manager.adoptCurrentFromStore()
+	return nil
+}
+
+// SeedAccountForTest upserts a fixture account that uses the test-access/test-refresh
+// tokens. Production callers must not use this helper.
+func (manager *Manager) SeedAccountForTest(authID, email string, setCurrent bool) (CursorAccountSummary, error) {
+	if manager == nil || manager.store == nil {
+		return CursorAccountSummary{}, fmt.Errorf("cursor account store is not initialized")
+	}
+	summary, err := manager.store.Upsert(credentials{
+		AccessToken:  "test-access",
+		RefreshToken: "test-refresh",
+		AuthID:       authID,
+		Email:        email,
+	})
+	if err != nil {
+		return CursorAccountSummary{}, err
+	}
+	if !setCurrent {
+		return summary, nil
+	}
+	summary, err = manager.store.SetCurrent(summary.ID)
+	if err != nil {
+		return CursorAccountSummary{}, err
+	}
+	manager.adoptCurrentFromStore()
+	return summary, nil
+}
+
 func (manager *Manager) Status() Status {
 	if manager == nil {
 		return Status{State: StateSignedOut}
@@ -135,8 +308,8 @@ func (manager *Manager) EnsureEmail(ctx context.Context) {
 	if manager == nil || !manager.SignedIn() {
 		return
 	}
-	current, generation := manager.snapshotCredentials()
-	if strings.TrimSpace(current.Email) != "" {
+	current, accountID, err := manager.store.LoadCurrentCredentials()
+	if err != nil || accountID == "" || strings.TrimSpace(current.Email) != "" {
 		return
 	}
 	authorization, err := manager.Authorization(ctx)
@@ -147,12 +320,19 @@ func (manager *Manager) EnsureEmail(ctx context.Context) {
 	if err != nil || strings.TrimSpace(profile.GetEmail()) == "" {
 		return
 	}
-	current, currentGeneration := manager.snapshotCredentials()
-	if currentGeneration != generation {
+	if manager.store.CurrentAccountID() != accountID {
 		return
 	}
 	current.Email = strings.TrimSpace(profile.GetEmail())
-	_ = manager.commitCredentials(generation, current)
+	if err := manager.store.UpdateCredentials(accountID, current); err != nil {
+		return
+	}
+	if manager.store.CurrentAccountID() != accountID {
+		return
+	}
+	manager.mu.Lock()
+	manager.credentials.Email = current.Email
+	manager.mu.Unlock()
 }
 
 func (manager *Manager) SignedIn() bool {
@@ -195,7 +375,7 @@ func (manager *Manager) StartLogin() (Status, error) {
 	manager.lastError = ""
 	manager.mu.Unlock()
 
-	if err := browser.OpenURL(loginURL); err != nil {
+	if err := manager.openLoginPage(loginURL); err != nil {
 		cancel()
 		manager.finishWithError(generation, fmt.Sprintf("打开 Cursor 登录页面失败: %v", err))
 		return manager.Status(), err
@@ -258,31 +438,57 @@ func (manager *Manager) Authorization(ctx context.Context) (string, error) {
 	manager.refreshMu.Lock()
 	defer manager.refreshMu.Unlock()
 
-	creds, generation := manager.snapshotCredentials()
-	if strings.TrimSpace(creds.AccessToken) == "" {
-		return "", ErrNotSignedIn
-	}
-	if !tokenNeedsRefresh(creds.AccessToken, time.Now()) {
-		return bearer(creds.AccessToken), nil
-	}
-	if strings.TrimSpace(creds.RefreshToken) == "" {
-		manager.setAuthorizationError(generation, "Cursor 登录已过期，请重新登录")
-		return "", fmt.Errorf("Cursor 登录已过期且没有刷新令牌")
-	}
+	return manager.authorizationLocked(ctx)
+}
 
-	updated, shouldLogout, err := manager.refresh(ctx, creds)
-	if err != nil {
-		manager.setAuthorizationError(generation, fmt.Sprintf("刷新 Cursor 登录失败: %v", err))
-		return "", err
-	}
-	if shouldLogout {
-		manager.invalidateAuthorization(generation, "Cursor 登录已失效，请重新登录")
+func (manager *Manager) authorizationLocked(ctx context.Context) (string, error) {
+	if manager.store == nil {
 		return "", ErrNotSignedIn
 	}
-	if err := manager.commitCredentials(generation, updated); err != nil {
-		return "", err
+	const maxAttempts = 4
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		creds, accountID, err := manager.store.LoadCurrentCredentials()
+		if err != nil {
+			return "", err
+		}
+		if accountID == "" || strings.TrimSpace(creds.AccessToken) == "" {
+			return "", ErrNotSignedIn
+		}
+		_, generation := manager.snapshotCredentials()
+		if !tokenNeedsRefresh(creds.AccessToken, time.Now()) {
+			manager.syncMemoryCredentials(creds, generation)
+			return bearer(creds.AccessToken), nil
+		}
+		if strings.TrimSpace(creds.RefreshToken) == "" {
+			if manager.store.CurrentAccountID() != accountID {
+				continue
+			}
+			manager.setAuthorizationError(generation, "Cursor 登录已过期，请重新登录")
+			return "", fmt.Errorf("Cursor 登录已过期且没有刷新令牌")
+		}
+
+		updated, shouldLogout, err := manager.refresh(ctx, creds)
+		if err != nil {
+			if manager.store.CurrentAccountID() != accountID {
+				continue
+			}
+			manager.setAuthorizationError(generation, fmt.Sprintf("刷新 Cursor 登录失败: %v", err))
+			return "", err
+		}
+		if manager.store.CurrentAccountID() != accountID {
+			continue
+		}
+		if shouldLogout {
+			manager.invalidateAuthorization(generation, "Cursor 登录已失效，请重新登录")
+			return "", ErrNotSignedIn
+		}
+		if err := manager.store.UpdateCredentials(accountID, updated); err != nil {
+			return "", err
+		}
+		manager.syncMemoryCredentials(updated, generation)
+		return bearer(updated.AccessToken), nil
 	}
-	return bearer(updated.AccessToken), nil
+	return "", fmt.Errorf("current account changed during refresh")
 }
 
 func (manager *Manager) pollLogin(ctx context.Context, generation uint64, loginID string, verifier string) {
@@ -309,7 +515,7 @@ func (manager *Manager) pollLogin(ctx context.Context, generation uint64, loginI
 			if profile, profileErr := manager.fetchProfile(ctx, bearer(creds.AccessToken)); profileErr == nil {
 				creds.Email = strings.TrimSpace(profile.GetEmail())
 			}
-			_ = manager.commitCredentials(generation, creds)
+			_ = manager.commitOAuthCredentials(generation, creds)
 			return
 		}
 		if err != nil && !isRetryablePollError(err) {
@@ -553,6 +759,137 @@ func (manager *Manager) save(value credentials) error {
 	}
 	_, err = manager.store.SetCurrent(summary.ID)
 	return err
+}
+
+func (manager *Manager) openLoginPage(loginURL string) error {
+	if manager.openLoginURL != nil {
+		return manager.openLoginURL(loginURL)
+	}
+	return browser.OpenURL(loginURL)
+}
+
+func (manager *Manager) readLocalCursorAuth() (credentials, error) {
+	if manager.localAuthReader != nil {
+		return manager.localAuthReader()
+	}
+	path := cursor.CursorAuthBackupPath()
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return credentials{}, accountError("account_import_local_state_missing", "local cursor auth state is missing")
+	}
+	if err != nil {
+		return credentials{}, wrapAccountError("account_import_local_state_missing", "read local cursor auth state", err)
+	}
+	var backup map[string]any
+	if err := json.Unmarshal(data, &backup); err != nil {
+		return credentials{}, wrapAccountError("account_import_invalid_schema", "parse local cursor auth state", err)
+	}
+	accessToken, refreshToken, email := cursor.ReadCursorAuthBackupValues(backup)
+	if strings.TrimSpace(accessToken) == "" {
+		return credentials{}, accountError("account_import_local_state_missing", "local cursor auth state is missing")
+	}
+	return credentials{
+		AccessToken:  strings.TrimSpace(accessToken),
+		RefreshToken: strings.TrimSpace(refreshToken),
+		Email:        strings.TrimSpace(email),
+	}, nil
+}
+
+func (manager *Manager) adoptImported(account importedAccount) (CursorAccountSummary, error) {
+	tags, err := normalizeTags(account.Tags)
+	if err != nil {
+		return CursorAccountSummary{}, err
+	}
+	summary, err := manager.store.Upsert(credentials{
+		AccessToken:  account.AccessToken,
+		RefreshToken: account.RefreshToken,
+		AuthID:       account.AuthID,
+		Email:        account.Email,
+	})
+	if err != nil {
+		return CursorAccountSummary{}, err
+	}
+	if len(tags) > 0 {
+		summary, err = manager.store.UpdateTags(summary.ID, tags)
+		if err != nil {
+			return CursorAccountSummary{}, err
+		}
+	}
+	if strings.TrimSpace(manager.store.CurrentAccountID()) == "" {
+		summary, err = manager.store.SetCurrent(summary.ID)
+		if err != nil {
+			return CursorAccountSummary{}, err
+		}
+		manager.adoptCurrentFromStore()
+	}
+	return summary, nil
+}
+
+func (manager *Manager) adoptCurrentFromStore() {
+	if manager == nil || manager.store == nil {
+		return
+	}
+	creds, _, err := manager.store.LoadCurrentCredentials()
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	if err != nil || strings.TrimSpace(creds.AccessToken) == "" {
+		manager.credentials = credentials{}
+		if manager.state != StateWaiting {
+			manager.state = StateSignedOut
+		}
+		return
+	}
+	manager.credentials = creds
+	if manager.state != StateWaiting {
+		manager.state = StateSignedIn
+		manager.lastError = ""
+	}
+}
+
+func (manager *Manager) syncMemoryCredentials(creds credentials, generation uint64) {
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	if manager.loginGeneration != generation {
+		return
+	}
+	manager.credentials = creds
+	if manager.state != StateWaiting && strings.TrimSpace(creds.AccessToken) != "" {
+		manager.state = StateSignedIn
+		manager.lastError = ""
+	}
+}
+
+func (manager *Manager) commitOAuthCredentials(generation uint64, value credentials) error {
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	if manager.loginGeneration != generation {
+		return ErrNotSignedIn
+	}
+	previous := manager.credentials
+	summary, err := manager.store.Upsert(value)
+	if err != nil {
+		manager.state = StateError
+		manager.lastError = fmt.Sprintf("保存 Cursor 登录凭据失败: %v", err)
+		return err
+	}
+	if strings.TrimSpace(manager.store.CurrentAccountID()) == "" {
+		if _, err := manager.store.SetCurrent(summary.ID); err != nil {
+			manager.state = StateError
+			manager.lastError = fmt.Sprintf("保存 Cursor 登录凭据失败: %v", err)
+			return err
+		}
+		manager.credentials = value
+	} else {
+		manager.credentials = previous
+	}
+	if markerErr := os.Remove(manager.markerPath()); markerErr != nil && !errors.Is(markerErr, os.ErrNotExist) {
+		logger.Errorf("removeAutoImportOffMarker failed: %v", markerErr)
+	}
+	if strings.TrimSpace(manager.credentials.AccessToken) != "" {
+		manager.state = StateSignedIn
+		manager.lastError = ""
+	}
+	return nil
 }
 
 func (manager *Manager) snapshotCredentials() (credentials, uint64) {

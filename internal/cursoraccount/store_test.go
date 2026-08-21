@@ -173,3 +173,36 @@ func TestAccountStoreRepairsMissingIndexFromAccountFiles(t *testing.T) {
 	}
 	assertSummariesOmitSecrets(t, summaries, "test-access", "test-refresh")
 }
+
+func TestAccountStoreUpdateCredentialsDoesNotChangeCurrent(t *testing.T) {
+	store := NewAccountStore(t.TempDir(), "")
+	first, err := store.Upsert(testCredential("auth-a", "a@example.test"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := store.Upsert(testCredential("auth-b", "b@example.test"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.SetCurrent(first.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateCredentials(second.ID, credentials{
+		AccessToken:  "test-access-updated",
+		RefreshToken: "test-refresh-updated",
+		AuthID:       "auth-b",
+		Email:        "b@example.test",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if store.CurrentAccountID() != first.ID {
+		t.Fatal("update credentials changed current")
+	}
+	loaded, id, err := store.LoadCurrentCredentials()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != first.ID || loaded.AccessToken != "test-access" {
+		t.Fatal("current credentials were modified by updating another account")
+	}
+}
