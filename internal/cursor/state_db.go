@@ -148,9 +148,13 @@ func readCursorAuthStateReadOnly(sourcePath string) (map[string]string, error) {
 
 // CursorAuthValues is the authentication whitelist read from Cursor's state DB.
 type CursorAuthValues struct {
-	AccessToken  string
-	RefreshToken string
-	Email        string
+	AccessToken       string
+	RefreshToken      string
+	Email             string
+	AuthID            string
+	MembershipType    string
+	SubscriptionState string
+	SignUpType        string
 }
 
 // CursorStateDBPath returns the current platform's Cursor state.vscdb path.

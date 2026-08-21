@@ -128,3 +128,20 @@ func (s *ProxyService) DeleteCursorAccounts(req cursoraccount.CursorAccountDelet
 	}
 	return s.cursorAccount.Delete(req)
 }
+
+func (s *ProxyService) PrepareCursorClientAccountSwitch(accountID string) (cursoraccount.CursorAccountSwitchPreparation, error) {
+	if s == nil || s.cursorAccount == nil {
+		return cursoraccount.CursorAccountSwitchPreparation{}, fmt.Errorf("Cursor 账号服务未初始化")
+	}
+	if strings.TrimSpace(accountID) == "" {
+		return cursoraccount.CursorAccountSwitchPreparation{}, fmt.Errorf("account id is empty")
+	}
+	return s.cursorAccount.PrepareCursorClientAccountSwitch(accountID)
+}
+
+func (s *ProxyService) ExecuteCursorClientAccountSwitch(confirmationToken string) (cursoraccount.CursorAccountSwitchResult, error) {
+	if s == nil || s.cursorAccount == nil {
+		return cursoraccount.CursorAccountSwitchResult{}, fmt.Errorf("Cursor 账号服务未初始化")
+	}
+	return s.cursorAccount.ExecuteCursorClientAccountSwitch(confirmationToken)
+}

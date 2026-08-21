@@ -131,6 +131,10 @@ type Manager struct {
 	localAuthReader     func() (credentials, error)
 	exportMu            sync.Mutex
 	pendingExport       *pendingExport
+	switchMu            sync.Mutex
+	pendingSwitch       *pendingSwitch
+	cursorRuntime       CursorRuntime
+	stateDBPath         func() (string, error)
 }
 
 func NewManager(dataRoot, legacyPath string, client *http.Client) *Manager {

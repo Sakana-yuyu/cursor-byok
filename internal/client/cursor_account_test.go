@@ -2,6 +2,8 @@ package client
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -12,6 +14,8 @@ import (
 	"time"
 
 	"cursor/internal/cursoraccount"
+
+	_ "modernc.org/sqlite"
 )
 
 func newTestProxyServiceWithAccount(t *testing.T, authID, email string) *ProxyService {
@@ -106,5 +110,48 @@ func TestClientRecoveryExportResultOmitsTokens(t *testing.T) {
 	}
 	if _, err := os.Stat(dest); err != nil {
 		t.Fatalf("expected recovery file: %v", err)
+	}
+}
+
+type clientSwitchRuntime struct{}
+
+func (clientSwitchRuntime) Running() bool               { return false }
+func (clientSwitchRuntime) Stop(context.Context) error  { return nil }
+func (clientSwitchRuntime) Start(context.Context) error { return nil }
+
+func TestClientSwitchResultNeverContainsTokens(t *testing.T) {
+	service := newTestProxyServiceWithAccount(t, "auth-a", "a@example.test")
+	target, err := service.cursorAccount.SeedAccountForTest("auth-b", "b@example.test", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dbPath := filepath.Join(t.TempDir(), "state.vscdb")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("CREATE TABLE IF NOT EXISTS ItemTable (key TEXT UNIQUE ON CONFLICT REPLACE, value BLOB)"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("INSERT INTO ItemTable(key, value) VALUES(?, ?), (?, ?)", "cursorAuth/accessToken", "old", "cursorAuth/cachedEmail", "old@example.test"); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	service.cursorAccount.SetCursorRuntime(clientSwitchRuntime{})
+	service.cursorAccount.SetStateDBPath(func() (string, error) { return dbPath, nil })
+	prepared, err := service.PrepareCursorClientAccountSwitch(target.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.ExecuteCursorClientAccountSwitch(prepared.ConfirmationToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(encoded, []byte("test-access")) || bytes.Contains(encoded, []byte("test-refresh")) {
+		t.Fatal("token leaked through client switch DTO")
 	}
 }
