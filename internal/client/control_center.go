@@ -153,27 +153,14 @@ func (s *ProxyService) PreviewRoutingDecision(request routing.PreviewRequest) (r
 	if strings.TrimSpace(request.ModelID) == "" {
 		return routing.DecisionPreview{}, controlcenter.NewError("routing_requirement_invalid", "model id is required")
 	}
-	cfg, err := s.LoadUserConfig()
+	policy, err := s.GetRoutingPolicy()
 	if err != nil {
 		return routing.DecisionPreview{}, err
 	}
-	candidates := make([]routing.CandidateInput, 0)
-	for i, adapter := range cfg.ModelAdapters {
-		if adapter.ModelID != request.ModelID && adapter.ID != request.ModelID && adapter.DisplayName != request.ModelID {
-			continue
-		}
-		candidates = append(candidates, routing.CandidateInput{
-			ChannelID:    strings.TrimSpace(adapter.ID),
-			ConfigOrder:  i,
-			Available:    true,
-			PricingKnown: adapter.Pricing != nil,
-			Capabilities: []string{adapter.Type},
-		})
-	}
+	candidates := s.routingPreviewCandidates(request.ModelID)
 	if len(candidates) == 0 {
 		return routing.DecisionPreview{}, controlcenter.NewError("routing_no_candidate", "no routing candidate")
 	}
-	policy, _ := routing.NormalizePolicy(cfg.Routing.Policy)
 	decision := routing.Rank(policy, routing.Request{
 		ModelID:                request.ModelID,
 		EstimatedContextTokens: request.EstimatedContextTokens,
@@ -182,6 +169,18 @@ func (s *ProxyService) PreviewRoutingDecision(request routing.PreviewRequest) (r
 		Candidates:             candidates,
 	})
 	return routing.DecisionPreview{DecisionID: decision.DecisionID, Strategy: policy.Strategy, Candidates: decision.Candidates}, nil
+}
+
+func (s *ProxyService) routingPreviewCandidates(modelID string) []routing.CandidateInput {
+	if s != nil && s.backendHost != nil {
+		if candidates := s.backendHost.BuildRoutingCandidates(modelID); len(candidates) > 0 {
+			return candidates
+		}
+	}
+	if s != nil && s.configs != nil {
+		return s.configs.BuildRoutingCandidates(modelID)
+	}
+	return nil
 }
 
 func (s *ProxyService) GetRoutingDecisionHistory(query routing.DecisionQuery) (routing.DecisionPage, error) {
@@ -310,5 +309,23 @@ func (s *ProxyService) ImportConfigProfile(content string) (configprofile.Previe
 	if s == nil || s.profiles == nil {
 		return configprofile.Preview{}, controlcenter.NewError("profile_store_unreadable", "profile store is unreadable")
 	}
-	return s.profiles.Import(content)
+	preview, err := s.profiles.Import(content)
+	if err != nil && preview.Profile.ID == "" {
+		return preview, err
+	}
+	cfg, cfgErr := s.LoadUserConfig()
+	if cfgErr != nil || strings.TrimSpace(preview.Profile.ID) == "" {
+		return preview, err
+	}
+	full, previewErr := s.profiles.Preview(preview.Profile.ID, cfg)
+	if previewErr != nil {
+		if err != nil {
+			return preview, err
+		}
+		return preview, previewErr
+	}
+	if err != nil {
+		return full, err
+	}
+	return full, nil
 }

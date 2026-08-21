@@ -182,6 +182,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 108,
+          "column": 37
+        },
+        {
           "file": "src/components/CursorAccountCard.vue",
           "line": 117,
           "column": 29
@@ -568,6 +573,18 @@
           "file": "src/utils/modelAdapter.js",
           "line": 437,
           "column": 14
+        }
+      ]
+    },
+    "050114b82baf9cd2": {
+      "source": "导入内容为空",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 1407,
+          "column": 70
         }
       ]
     },
@@ -1320,7 +1337,7 @@
       "refs": [
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 120,
+          "line": 145,
           "column": 14
         }
       ]
@@ -1914,7 +1931,7 @@
       "refs": [
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 113,
+          "line": 138,
           "column": 50
         }
       ]
@@ -2438,7 +2455,7 @@
       "refs": [
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 67,
+          "line": 68,
           "column": 37
         }
       ]
@@ -2712,7 +2729,7 @@
       "refs": [
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 15,
+          "line": 16,
           "column": 32
         },
         {
@@ -2741,7 +2758,7 @@
       "refs": [
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 119,
+          "line": 144,
           "column": 57
         }
       ]
@@ -3726,7 +3743,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1418,
+          "line": 1419,
           "column": 15
         }
       ]
@@ -3948,7 +3965,7 @@
       "refs": [
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 120,
+          "line": 145,
           "column": 46
         }
       ]
@@ -4579,7 +4596,7 @@
       "refs": [
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 116,
+          "line": 141,
           "column": 62
         },
         {
@@ -4677,6 +4694,18 @@
           "file": "src/views/SupplierDetail.vue",
           "line": 1105,
           "column": 50
+        }
+      ]
+    },
+    "308737687978a0d1": {
+      "source": "JSON 文件不能超过 1 MiB",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 99,
+          "column": 19
         }
       ]
     },
@@ -6287,6 +6316,18 @@
           "file": "src/components/settings/delegation/DelegationSupervisionPanel.vue",
           "line": 291,
           "column": 51
+        }
+      ]
+    },
+    "43b19408f764b2b1": {
+      "source": "已导入档案 {0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 105,
+          "column": 21
         }
       ]
     },
@@ -8207,7 +8248,7 @@
       "refs": [
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 109,
+          "line": 132,
           "column": 45
         }
       ]
@@ -9138,7 +9179,7 @@
       "refs": [
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 45,
+          "line": 46,
           "column": 37
         },
         {
@@ -9335,7 +9376,7 @@
       "refs": [
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 114,
+          "line": 139,
           "column": 62
         }
       ]
@@ -10089,7 +10130,7 @@
       "refs": [
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 42,
+          "line": 43,
           "column": 21
         }
       ]
@@ -10219,7 +10260,7 @@
         },
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 76,
+          "line": 77,
           "column": 37
         },
         {
@@ -10787,7 +10828,7 @@
       "refs": [
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 115,
+          "line": 140,
           "column": 52
         },
         {
@@ -11062,7 +11103,7 @@
       "refs": [
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 20,
+          "line": 21,
           "column": 30
         },
         {
@@ -13134,7 +13175,7 @@
       "refs": [
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 53,
+          "line": 54,
           "column": 37
         },
         {
@@ -14100,6 +14141,18 @@
         }
       ]
     },
+    "988d81b48b9d0ffe": {
+      "source": "导入 JSON 档案",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 134,
+          "column": 39
+        }
+      ]
+    },
     "98d890a70362bb00": {
       "source": "Cursor 终端与 Python 3",
       "kind": "text",
@@ -14395,7 +14448,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1407,
+          "line": 1408,
           "column": 61
         }
       ]
@@ -16312,7 +16365,7 @@
       "refs": [
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 17,
+          "line": 18,
           "column": 30
         }
       ]
@@ -16527,7 +16580,7 @@
       "refs": [
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 120,
+          "line": 145,
           "column": 14
         }
       ]
@@ -16972,7 +17025,7 @@
       "refs": [
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 16,
+          "line": 17,
           "column": 27
         }
       ]
@@ -17627,7 +17680,7 @@
       "refs": [
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 85,
+          "line": 86,
           "column": 37
         },
         {
@@ -17770,7 +17823,7 @@
       "refs": [
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 61,
+          "line": 62,
           "column": 21
         }
       ]
@@ -18247,7 +18300,7 @@
       "refs": [
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 14,
+          "line": 15,
           "column": 26
         },
         {
@@ -20456,7 +20509,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1421,
+          "line": 1422,
           "column": 26
         }
       ]
@@ -21363,7 +21416,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1422,
+          "line": 1423,
           "column": 26
         },
         {
@@ -21573,7 +21626,7 @@
       "refs": [
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 65,
+          "line": 66,
           "column": 21
         }
       ]
@@ -21935,7 +21988,7 @@
       "refs": [
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 27,
+          "line": 28,
           "column": 37
         }
       ]
@@ -22238,7 +22291,7 @@
         },
         {
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
-          "line": 74,
+          "line": 75,
           "column": 21
         },
         {

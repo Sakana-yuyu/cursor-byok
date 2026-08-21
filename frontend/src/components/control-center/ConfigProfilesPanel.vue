@@ -1,6 +1,6 @@
 <script setup>
 import Button from "@/components/ui/Button.vue";
-import { deleteConfigProfile, exportConfigProfile, listConfigProfiles, prepareConfigProfileApply, executeConfigProfileApply, previewConfigProfile, saveCurrentConfigProfile } from "@/services/clientApi";
+import { deleteConfigProfile, exportConfigProfile, importConfigProfile, listConfigProfiles, prepareConfigProfileApply, executeConfigProfileApply, previewConfigProfile, saveCurrentConfigProfile } from "@/services/clientApi";
 import { useMessage } from "@/composables/useMessage";
 import { onMounted, ref } from "vue";
 
@@ -9,6 +9,7 @@ const profiles = ref([]);
 const name = ref("当前配置");
 const domains = ref(["models", "routing"]);
 const preview = ref(null);
+const importInput = ref(null);
 
 const DOMAIN_OPTIONS = [
   { id: "models", label: "模型" },
@@ -86,6 +87,28 @@ async function remove(id) {
   }
 }
 
+function openImportPicker() {
+  importInput.value?.click();
+}
+
+async function onImportSelected(event) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
+  if (file.size > 1024 * 1024) {
+    message.error("JSON 文件不能超过 1 MiB");
+    return;
+  }
+  try {
+    const content = await file.text();
+    preview.value = await importConfigProfile(content);
+    message.success(`已导入档案 ${preview.value?.profile?.name || ""}`.trim());
+    await load();
+  } catch (error) {
+    message.error(error?.message || "导入失败");
+  }
+}
+
 onMounted(() => {
   void load();
 });
@@ -107,6 +130,8 @@ onMounted(() => {
       </button>
     </div>
     <Button variant="primary" @click="save">保存当前配置为档案</Button>
+    <input ref="importInput" type="file" accept="application/json,.json" class="hidden" @change="onImportSelected" />
+    <Button @click="openImportPicker">导入 JSON 档案</Button>
     <div v-for="profile in profiles" :key="profile.id" class="rounded-[8px] border border-[#343434] bg-[#292929] p-3 text-xs">
       <div class="text-sm text-white">{{ profile.name }}</div>
       <div class="mt-2 flex flex-wrap gap-2">

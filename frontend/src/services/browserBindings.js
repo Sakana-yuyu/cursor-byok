@@ -1402,9 +1402,10 @@ export const ExportConfigProfile = (profileID) => {
   recordPreviewCall("ExportConfigProfile");
   return Promise.resolve({ path: `profile-${profileID}.json`, sha256: "abc" });
 };
-export const ImportConfigProfile = () => {
+export const ImportConfigProfile = (content) => {
   recordPreviewCall("ImportConfigProfile");
-  return Promise.resolve({ profile: { id: "imported", name: "导入档案", domains: ["routing"] }, changes: [], bindings: [], canApply: false });
+  if (!String(content || "").trim()) return Promise.reject(new Error("导入内容为空"));
+  return Promise.resolve({ profile: { id: "imported", name: "导入档案", domains: ["routing"] }, changes: [{ path: "routing.policy.strategy", changeKind: "update", sensitive: false }], bindings: [{ adapterId: "preview-demo-openai", state: "resolved" }], canApply: true });
 };
 
 function previewStructuredQuotaBalance() {
