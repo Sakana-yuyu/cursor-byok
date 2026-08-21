@@ -346,6 +346,7 @@ function buildProbeAdapter(model) {
     apiKey: supplierMeta.value.apiKey,
     customHeadersEnabled: Boolean(supplierMeta.value.customHeadersEnabled),
     customHeadersJSON: supplierMeta.value.customHeadersJSON || "",
+    anthropicAuthMode: supplierMeta.value.anthropicAuthMode || "legacy_dual",
     displayName: model.id,
     modelID: model.id,
     tooltipData: `探测 ${model.id}`,
@@ -426,6 +427,7 @@ async function handleFetchModels() {
       modelCatalogURLsJSON: JSON.stringify(supplierTemplate(supplierMeta.value.supplierID).modelCatalog?.urls || []),
       customHeadersEnabled: Boolean(supplierMeta.value.customHeadersEnabled),
       customHeadersJSON: supplierMeta.value.customHeadersJSON || "",
+      anthropicAuthMode: supplierMeta.value.anthropicAuthMode || "legacy_dual",
     });
     const fetched = Array.isArray(result?.models) ? result.models : [];
     if (!fetched.length) {
@@ -483,6 +485,7 @@ async function handleBatchAddModels() {
          balanceQueryHeaders: supplierMeta.value.balanceQueryHeaders || {},
          customHeadersEnabled: Boolean(supplierMeta.value.customHeadersEnabled),
         customHeadersJSON: supplierMeta.value.customHeadersJSON || "",
+        anthropicAuthMode: supplierMeta.value.anthropicAuthMode || "legacy_dual",
         displayName: model.id,
         modelID: model.id,
         groupName: seedGroupName,
@@ -732,6 +735,7 @@ function createBulkEditDraft() {
     openAIEndpoint: first.openAIEndpoint || "",
     customHeadersEnabled: first.customHeadersEnabled || false,
     customHeadersJSON: first.customHeadersJSON || "",
+    anthropicAuthMode: first.anthropicAuthMode || "legacy_dual",
     balanceQueryURL: first.balanceQueryURL || "",
     balanceQueryField: first.balanceQueryField || "",
     balanceQueryHeadersJSON: first.balanceQueryHeadersJSON || "",

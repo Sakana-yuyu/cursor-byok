@@ -25,7 +25,7 @@ func midStreamInterruptedError(err error) error {
 // 最多 maxStreamReconnects 次，退避复用 providerRetryBaseDelay 指数递增。
 // OpenAI 适配器保留其专属的 prompt_cache_key 适配版本（openai.go），本 helper
 // 供 Anthropic/Gemini 使用。
-func streamWithReconnect(ctx context.Context, sink func(ModelEvent) error, stream func(int, func(ModelEvent) error) error) error {
+func streamWithReconnect(ctx context.Context, sink func(ModelEvent) error, safety ReplaySafety, stream func(int, func(ModelEvent) error) error) error {
 	var connectionAttempt int
 	for {
 		emitted := false
@@ -48,6 +48,9 @@ func streamWithReconnect(ctx context.Context, sink func(ModelEvent) error, strea
 		}
 		if ctx.Err() != nil {
 			return err
+		}
+		if !safety.Safe {
+			return replayUnsafeDropError(safety, err)
 		}
 		connectionAttempt++
 		if connectionAttempt > maxStreamReconnects {

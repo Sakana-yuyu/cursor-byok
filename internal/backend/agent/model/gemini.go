@@ -10,13 +10,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
 
 	"cursor/gen/agentv1"
 	runtimecore "cursor/internal/backend/agent/core"
+	"cursor/internal/modelchannel"
 	"cursor/internal/netproxy"
 )
 
@@ -72,7 +72,7 @@ func (adapter *GeminiAdapter) Stream(ctx context.Context, req StreamRequest, sin
 		return err
 	}
 
-	err = streamWithReconnect(ctx, sink, func(_ int, wrappedSink func(ModelEvent) error) error {
+	err = streamWithReconnect(ctx, sink, requestReplaySafety(req), func(_ int, wrappedSink func(ModelEvent) error) error {
 		streamCtx, streamIdle := newProviderStreamIdleWatchdog(ctx, req.ProviderStreamIdleTimeout)
 		defer streamIdle.Stop()
 		resp, reqErr := doProviderRequestWithGzipFallback(streamCtx, adapter.client, "gemini", req.RequestID, req.ModelCallID, payload, requestURL, func(httpReq *http.Request) error {
@@ -116,21 +116,32 @@ func (adapter *GeminiAdapter) Stream(ctx context.Context, req StreamRequest, sin
 }
 
 func geminiEndpointURL(baseURL string, modelID string, stream bool) string {
-	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
-	model := url.PathEscape(strings.TrimSpace(modelID))
-	method := "generateContent"
-	if stream {
-		method = "streamGenerateContent?alt=sse"
+	plan, err := modelchannel.ResolveTransportPlan(modelchannel.TransportPlanInput{
+		Provider:     "gemini",
+		BaseURL:      baseURL,
+		ModelID:      modelID,
+		ProtocolMode: modelchannel.ProtocolModeFixed,
+		Stream:       stream,
+	})
+	if err != nil {
+		return strings.TrimSpace(baseURL)
 	}
-	if strings.Contains(base, ":generateContent") || strings.Contains(base, ":streamGenerateContent") {
-		return base
-	}
-	return base + "/models/" + model + ":" + method
+	return plan.RequestURL
 }
 
 func geminiRequestBody(req StreamRequest, modelID string) (map[string]any, error) {
 	systemParts := make([]map[string]any, 0, 1)
 	contents := make([]map[string]any, 0, len(req.Messages))
+	providerCallIDs := make(map[string]string)
+	for _, message := range req.Messages {
+		for _, call := range message.ToolCalls {
+			if internalID := strings.TrimSpace(call.ID); internalID != "" {
+				if providerID := strings.TrimSpace(call.OpenAIResponsesCallID); providerID != "" {
+					providerCallIDs[internalID] = providerID
+				}
+			}
+		}
+	}
 	for _, message := range req.Messages {
 		role := strings.TrimSpace(message.Role)
 		if role == "system" {
@@ -139,7 +150,7 @@ func geminiRequestBody(req StreamRequest, modelID string) (map[string]any, error
 			}
 			continue
 		}
-		parts, err := geminiMessageParts(message)
+		parts, err := geminiMessagePartsWithProviderCallIDs(message, providerCallIDs)
 		if err != nil {
 			return nil, err
 		}
@@ -184,6 +195,10 @@ func geminiRole(role string) string {
 }
 
 func geminiMessageParts(message Message) ([]map[string]any, error) {
+	return geminiMessagePartsWithProviderCallIDs(message, nil)
+}
+
+func geminiMessagePartsWithProviderCallIDs(message Message, providerCallIDs map[string]string) ([]map[string]any, error) {
 	role := strings.TrimSpace(message.Role)
 	parts := make([]map[string]any, 0, len(message.ContentParts)+len(message.ToolCalls)+1)
 	if role == "tool" {
@@ -191,7 +206,11 @@ func geminiMessageParts(message Message) ([]map[string]any, error) {
 		if name == "" {
 			name = "tool"
 		}
-		parts = append(parts, map[string]any{"functionResponse": map[string]any{"name": name, "response": map[string]any{"content": protocolMessageText(message)}}})
+		functionResponse := map[string]any{"name": name, "response": map[string]any{"content": protocolMessageText(message)}}
+		if providerID := strings.TrimSpace(providerCallIDs[strings.TrimSpace(message.ToolCallID)]); providerID != "" {
+			functionResponse["id"] = providerID
+		}
+		parts = append(parts, map[string]any{"functionResponse": functionResponse})
 		return parts, nil
 	}
 	if len(message.ContentParts) == 0 && strings.TrimSpace(message.Content) != "" {
@@ -220,7 +239,11 @@ func geminiMessageParts(message Message) ([]map[string]any, error) {
 				return nil, fmt.Errorf("decode gemini tool call arguments for %q: %w", strings.TrimSpace(call.Function.Name), err)
 			}
 		}
-		parts = append(parts, map[string]any{"functionCall": map[string]any{"name": strings.TrimSpace(call.Function.Name), "args": args}})
+		functionCall := map[string]any{"name": strings.TrimSpace(call.Function.Name), "args": args}
+		if providerID := strings.TrimSpace(call.OpenAIResponsesCallID); providerID != "" {
+			functionCall["id"] = providerID
+		}
+		parts = append(parts, map[string]any{"functionCall": functionCall})
 	}
 	return parts, nil
 }
@@ -264,6 +287,8 @@ func geminiFunctionDeclarations(items []json.RawMessage) ([]map[string]any, erro
 
 func geminiThinkingBudget(effort string) int {
 	switch strings.ToLower(strings.TrimSpace(effort)) {
+	case "disabled", "disable", "off", "none", "false", "0":
+		return 0
 	case "low":
 		return 2048
 	case "medium":
@@ -289,16 +314,31 @@ type geminiStreamResponse struct {
 		} `json:"content"`
 		FinishReason string `json:"finishReason"`
 	} `json:"candidates"`
-	UsageMetadata struct {
-		PromptTokenCount        int64 `json:"promptTokenCount"`
-		CandidatesTokenCount    int64 `json:"candidatesTokenCount"`
-		CachedContentTokenCount int64 `json:"cachedContentTokenCount"`
-	} `json:"usageMetadata"`
+	UsageMetadata *struct {
+		PromptTokenCount        *int64 `json:"promptTokenCount"`
+		CandidatesTokenCount    *int64 `json:"candidatesTokenCount"`
+		CachedContentTokenCount *int64 `json:"cachedContentTokenCount"`
+		ThoughtsTokenCount      *int64 `json:"thoughtsTokenCount"`
+		ToolUsePromptTokenCount *int64 `json:"toolUsePromptTokenCount"`
+		TotalTokenCount         *int64 `json:"totalTokenCount"`
+	} `json:"usageMetadata,omitempty"`
 	Error *struct {
 		Code    int    `json:"code"`
 		Message string `json:"message"`
 		Status  string `json:"status"`
 	} `json:"error,omitempty"`
+}
+
+type geminiContentAccumulator struct {
+	emitted string
+}
+
+func (accumulator *geminiContentAccumulator) Delta(value string, _ bool) string {
+	if accumulator == nil || value == "" {
+		return ""
+	}
+	accumulator.emitted += value
+	return value
 }
 
 func (adapter *GeminiAdapter) streamGeminiEvents(resp *http.Response, req StreamRequest, modelID string, startedAt time.Time, streamIdle *providerStreamIdleWatchdog, sink func(ModelEvent) error) (int64, int64, int64, string, time.Time, error) {
@@ -307,10 +347,13 @@ func (adapter *GeminiAdapter) streamGeminiEvents(resp *http.Response, req Stream
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	inputTokens, outputTokens, cacheReadTokens := int64(0), int64(0), int64(0)
+	promptTokens, candidateTokens, reasoningTokens, toolUsePromptTokens := int64(0), int64(0), int64(0), int64(0)
+	usagePresent := false
+	cacheReadPresent := false
 	finishReason := ""
 	firstEventAt := time.Time{}
-	lastText := ""
-	lastThinking := ""
+	textAccumulator := &geminiContentAccumulator{}
+	thinkingAccumulator := &geminiContentAccumulator{}
 	emittedTools := map[string]struct{}{}
 	// sawTerminalCandidate 标记是否收到带 finishReason 的完整候选。
 	// Gemini 原生协议完整响应必然带 finishReason；EOF 前从未出现则说明流被截断。
@@ -355,14 +398,33 @@ func (adapter *GeminiAdapter) streamGeminiEvents(resp *http.Response, req Stream
 		if chunk.Error != nil {
 			return inputTokens, outputTokens, cacheReadTokens, finishReason, firstEventAt, fmt.Errorf("gemini provider error: %s", strings.TrimSpace(chunk.Error.Message))
 		}
-		if chunk.UsageMetadata.PromptTokenCount > 0 {
-			inputTokens = chunk.UsageMetadata.PromptTokenCount
-		}
-		if chunk.UsageMetadata.CandidatesTokenCount > 0 {
-			outputTokens = chunk.UsageMetadata.CandidatesTokenCount
-		}
-		if chunk.UsageMetadata.CachedContentTokenCount > 0 {
-			cacheReadTokens = chunk.UsageMetadata.CachedContentTokenCount
+		if chunk.UsageMetadata != nil {
+			usagePresent = true
+			if chunk.UsageMetadata.PromptTokenCount != nil {
+				promptTokens = maxInt64(*chunk.UsageMetadata.PromptTokenCount, 0)
+			}
+			if chunk.UsageMetadata.CachedContentTokenCount != nil {
+				cacheReadPresent = true
+				cacheReadTokens = clampInt64(*chunk.UsageMetadata.CachedContentTokenCount, 0, promptTokens)
+			}
+			if chunk.UsageMetadata.ToolUsePromptTokenCount != nil {
+				toolUsePromptTokens = maxInt64(*chunk.UsageMetadata.ToolUsePromptTokenCount, 0)
+			}
+			if chunk.UsageMetadata.CandidatesTokenCount != nil {
+				candidateTokens = maxInt64(*chunk.UsageMetadata.CandidatesTokenCount, 0)
+			}
+			if chunk.UsageMetadata.ThoughtsTokenCount != nil {
+				reasoningTokens = maxInt64(*chunk.UsageMetadata.ThoughtsTokenCount, 0)
+			}
+			inputTokens = maxInt64(promptTokens-cacheReadTokens, 0) + toolUsePromptTokens
+			outputTokens = candidateTokens + reasoningTokens
+			if chunk.UsageMetadata.TotalTokenCount != nil {
+				reportedTotal := maxInt64(*chunk.UsageMetadata.TotalTokenCount, 0)
+				accountedTotal := inputTokens + cacheReadTokens + outputTokens
+				if reportedTotal > accountedTotal {
+					outputTokens += reportedTotal - accountedTotal
+				}
+			}
 		}
 		if len(chunk.Candidates) == 0 {
 			continue
@@ -376,7 +438,7 @@ func (adapter *GeminiAdapter) streamGeminiEvents(resp *http.Response, req Stream
 		textSnapshot.Reset()
 		thinkingSnapshot := geminiStreamBufferPool.Get().(*bytes.Buffer)
 		thinkingSnapshot.Reset()
-		for _, part := range candidate.Content.Parts {
+		for partIndex, part := range candidate.Content.Parts {
 			if part.Text != "" {
 				if part.Thought {
 					thinkingSnapshot.WriteString(part.Text)
@@ -393,14 +455,18 @@ func (adapter *GeminiAdapter) streamGeminiEvents(resp *http.Response, req Stream
 				if err != nil {
 					return inputTokens, outputTokens, cacheReadTokens, finishReason, firstEventAt, fmt.Errorf("encode gemini tool call args for %q: %w", name, err)
 				}
-				callID := stableGeminiToolCallID(req, name, string(args))
+				providerCallID := ""
+				if value, exists := part.FunctionCall["id"]; exists && value != nil {
+					providerCallID = strings.TrimSpace(fmt.Sprint(value))
+				}
+				callID := stableGeminiToolCallID(req, name, string(args), partIndex, providerCallID)
 				if _, seen := emittedTools[callID]; seen {
 					continue
 				}
 				emittedTools[callID] = struct{}{}
 				markFirst()
 				streamIdle.MarkEffectiveContent()
-				if err := sink(ModelEvent{Kind: ModelEventKindToolLikeCompleted, OccurredAt: time.Now().UTC(), Provider: "gemini", Model: modelID, ToolCallID: callID, ToolInvocation: &runtimecore.ToolInvocation{CallID: callID, ToolName: name, ArgsJSON: args}}); err != nil {
+				if err := sink(ModelEvent{Kind: ModelEventKindToolLikeCompleted, OccurredAt: time.Now().UTC(), Provider: "gemini", Model: modelID, ProviderCallID: providerCallID, ToolCallID: callID, ToolInvocation: &runtimecore.ToolInvocation{CallID: callID, ToolName: name, ArgsJSON: args, ProviderCallID: providerCallID}}); err != nil {
 					return inputTokens, outputTokens, cacheReadTokens, finishReason, firstEventAt, err
 				}
 			}
@@ -409,16 +475,15 @@ func (adapter *GeminiAdapter) streamGeminiEvents(resp *http.Response, req Stream
 		thinkingValue := thinkingSnapshot.String()
 		geminiStreamBufferPool.Put(textSnapshot)
 		geminiStreamBufferPool.Put(thinkingSnapshot)
-		if delta := suffixAfterCommonPrefix(lastThinking, thinkingValue); delta != "" {
-			lastThinking = thinkingValue
+		terminalCandidate := candidate.FinishReason != ""
+		if delta := thinkingAccumulator.Delta(thinkingValue, terminalCandidate); delta != "" {
 			markFirst()
 			streamIdle.MarkEffectiveContent()
 			if err := sink(ModelEvent{Kind: ModelEventKindThinkingDelta, OccurredAt: time.Now().UTC(), Provider: "gemini", Model: modelID, ThinkingStyle: agentv1.ThinkingStyle_THINKING_STYLE_DEFAULT, Text: delta}); err != nil {
 				return inputTokens, outputTokens, cacheReadTokens, finishReason, firstEventAt, err
 			}
 		}
-		if delta := suffixAfterCommonPrefix(lastText, textValue); delta != "" {
-			lastText = textValue
+		if delta := textAccumulator.Delta(textValue, terminalCandidate); delta != "" {
 			markFirst()
 			streamIdle.MarkEffectiveContent()
 			if err := sink(ModelEvent{Kind: ModelEventKindTextDelta, OccurredAt: time.Now().UTC(), Provider: "gemini", Model: modelID, Text: delta}); err != nil {
@@ -439,7 +504,7 @@ func (adapter *GeminiAdapter) streamGeminiEvents(resp *http.Response, req Stream
 		return inputTokens, outputTokens, cacheReadTokens, finishReason, firstEventAt, streamChunkTimeoutError()
 	}
 	if !sawTerminalCandidate {
-		if lastText == "" && lastThinking == "" && len(emittedTools) == 0 {
+		if textAccumulator.emitted == "" && thinkingAccumulator.emitted == "" && len(emittedTools) == 0 {
 			// 流提前结束且无任何输出：视为瞬时空响应，交回 router 重试。
 			return inputTokens, outputTokens, cacheReadTokens, finishReason, firstEventAt, fmt.Errorf("gemini stream ended before terminal candidate (no output)")
 		}
@@ -447,7 +512,7 @@ func (adapter *GeminiAdapter) streamGeminiEvents(resp *http.Response, req Stream
 		// 附加 ErrMidStreamInterrupted 标记避免 router 整体重试造成重复输出。
 		return inputTokens, outputTokens, cacheReadTokens, finishReason, firstEventAt, midStreamInterruptedError(fmt.Errorf("gemini stream truncated before terminal candidate"))
 	}
-	if lastThinking != "" {
+	if thinkingAccumulator.emitted != "" {
 		if err := sink(ModelEvent{Kind: ModelEventKindThinkingCompleted, OccurredAt: time.Now().UTC(), Provider: "gemini", Model: modelID}); err != nil {
 			return inputTokens, outputTokens, cacheReadTokens, finishReason, firstEventAt, err
 		}
@@ -455,7 +520,17 @@ func (adapter *GeminiAdapter) streamGeminiEvents(resp *http.Response, req Stream
 	if finishReason == "" {
 		finishReason = "stop"
 	}
-	return inputTokens, outputTokens, cacheReadTokens, finishReason, firstEventAt, sink(ModelEvent{Kind: ModelEventKindTurnFinished, OccurredAt: time.Now().UTC(), Provider: "gemini", Model: modelID, FinishReason: finishReason, InputTokens: inputTokens, OutputTokens: outputTokens, CacheReadTokens: cacheReadTokens, UsagePresent: inputTokens > 0 || outputTokens > 0 || cacheReadTokens > 0, CacheReadPresent: cacheReadTokens > 0})
+	return inputTokens, outputTokens, cacheReadTokens, finishReason, firstEventAt, sink(ModelEvent{Kind: ModelEventKindTurnFinished, OccurredAt: time.Now().UTC(), Provider: "gemini", Model: modelID, FinishReason: finishReason, InputTokens: inputTokens, OutputTokens: outputTokens, ReasoningTokens: reasoningTokens, CacheReadTokens: cacheReadTokens, UsagePresent: usagePresent, CacheReadPresent: cacheReadPresent})
+}
+
+func clampInt64(value, minimum, maximum int64) int64 {
+	if value < minimum {
+		return minimum
+	}
+	if value > maximum {
+		return maximum
+	}
+	return value
 }
 
 func geminiFinishReason(reason string) string {
@@ -471,9 +546,9 @@ func geminiFinishReason(reason string) string {
 	}
 }
 
-func stableGeminiToolCallID(req StreamRequest, name string, args string) string {
-	base := strings.TrimSpace(req.ModelCallID) + ":" + strings.TrimSpace(name) + ":" + strings.TrimSpace(args)
-	if base == "::" {
+func stableGeminiToolCallID(req StreamRequest, name string, args string, ordinal int, providerCallID string) string {
+	base := strings.TrimSpace(req.ModelCallID) + ":" + strings.TrimSpace(providerCallID) + ":" + fmt.Sprintf("%d", ordinal) + ":" + strings.TrimSpace(name) + ":" + strings.TrimSpace(args)
+	if strings.Trim(base, ":0") == "" {
 		base = time.Now().UTC().Format(time.RFC3339Nano)
 	}
 	sum := sha256.Sum256([]byte(base))

@@ -57,31 +57,34 @@ type ModelAdapterConfig struct {
 	GroupName   string `json:"groupName,omitempty" yaml:"groupName,omitempty"`
 	Type        string `json:"type" yaml:"type"`
 	// SupplierID 是品牌供应商标识，仅用于模板、展示和供应商专用能力；协议仍由 Type 决定。
-	SupplierID                  string        `json:"supplierID,omitempty" yaml:"supplierID,omitempty"`
-	ProtocolMode                string        `json:"protocolMode,omitempty" yaml:"protocolMode,omitempty"`
-	ProtocolGroup               string        `json:"protocolGroup,omitempty" yaml:"protocolGroup,omitempty"`
-	BaseURL                     string        `json:"baseURL" yaml:"baseURL"`
-	APIKey                      string        `json:"apiKey" yaml:"apiKey"`
-	TooltipData                 string        `json:"tooltipData" yaml:"tooltipData"`
-	ModelID                     string        `json:"modelID" yaml:"modelID"`
-	ReasoningEffort             string        `json:"reasoningEffort" yaml:"reasoningEffort"`
-	OpenAIEndpoint              string        `json:"openAIEndpoint" yaml:"openAIEndpoint"`
-	OpenAIRequestGroup          string        `json:"openAIRequestGroup,omitempty" yaml:"openAIRequestGroup,omitempty"`
-	OpenAIExtraParamsEnabled    bool          `json:"openAIExtraParamsEnabled" yaml:"openAIExtraParamsEnabled"`
-	OpenAIExtraParamsJSON       string        `json:"openAIExtraParamsJSON" yaml:"openAIExtraParamsJSON"`
-	CustomHeadersEnabled        bool          `json:"customHeadersEnabled" yaml:"customHeadersEnabled"`
-	CustomHeadersJSON           string        `json:"customHeadersJSON" yaml:"customHeadersJSON"`
-	AnthropicExtraParamsEnabled bool          `json:"anthropicExtraParamsEnabled" yaml:"anthropicExtraParamsEnabled"`
-	AnthropicExtraParamsJSON    string        `json:"anthropicExtraParamsJSON" yaml:"anthropicExtraParamsJSON"`
-	ContextWindowTokens         int           `json:"contextWindowTokens" yaml:"contextWindowTokens"`
-	MaxCompletionTokens         int           `json:"maxCompletionTokens" yaml:"maxCompletionTokens"`
-	AnthropicMaxTokens          int           `json:"anthropicMaxTokens" yaml:"anthropicMaxTokens"`
-	AnthropicThinkingEffort     string        `json:"anthropicThinkingEffort,omitempty" yaml:"anthropicThinkingEffort,omitempty"`
-	ThinkingBudgetTokens        int           `json:"thinkingBudgetTokens" yaml:"thinkingBudgetTokens"`
-	Pricing                     *ModelPricing `json:"pricing,omitempty" yaml:"pricing,omitempty"`
-	FastMode                    bool          `json:"fastMode,omitempty" yaml:"fastMode,omitempty"`
-	OpenAIServiceTier           string        `json:"openAIServiceTier,omitempty" yaml:"openAIServiceTier,omitempty"`
-	ModelCatalogURL             string        `json:"modelCatalogURL,omitempty" yaml:"modelCatalogURL,omitempty"`
+	SupplierID                  string `json:"supplierID,omitempty" yaml:"supplierID,omitempty"`
+	ProtocolMode                string `json:"protocolMode,omitempty" yaml:"protocolMode,omitempty"`
+	ProtocolGroup               string `json:"protocolGroup,omitempty" yaml:"protocolGroup,omitempty"`
+	BaseURL                     string `json:"baseURL" yaml:"baseURL"`
+	APIKey                      string `json:"apiKey" yaml:"apiKey"`
+	TooltipData                 string `json:"tooltipData" yaml:"tooltipData"`
+	ModelID                     string `json:"modelID" yaml:"modelID"`
+	ReasoningEffort             string `json:"reasoningEffort" yaml:"reasoningEffort"`
+	OpenAIEndpoint              string `json:"openAIEndpoint" yaml:"openAIEndpoint"`
+	OpenAIRequestGroup          string `json:"openAIRequestGroup,omitempty" yaml:"openAIRequestGroup,omitempty"`
+	OpenAIExtraParamsEnabled    bool   `json:"openAIExtraParamsEnabled" yaml:"openAIExtraParamsEnabled"`
+	OpenAIExtraParamsJSON       string `json:"openAIExtraParamsJSON" yaml:"openAIExtraParamsJSON"`
+	CustomHeadersEnabled        bool   `json:"customHeadersEnabled" yaml:"customHeadersEnabled"`
+	CustomHeadersJSON           string `json:"customHeadersJSON" yaml:"customHeadersJSON"`
+	AnthropicExtraParamsEnabled bool   `json:"anthropicExtraParamsEnabled" yaml:"anthropicExtraParamsEnabled"`
+	AnthropicExtraParamsJSON    string `json:"anthropicExtraParamsJSON" yaml:"anthropicExtraParamsJSON"`
+	// AnthropicAuthMode controls generated Messages authentication. Missing legacy
+	// values normalize to legacy_dual to preserve existing proxy compatibility.
+	AnthropicAuthMode       string        `json:"anthropicAuthMode,omitempty" yaml:"anthropicAuthMode,omitempty"`
+	ContextWindowTokens     int           `json:"contextWindowTokens" yaml:"contextWindowTokens"`
+	MaxCompletionTokens     int           `json:"maxCompletionTokens" yaml:"maxCompletionTokens"`
+	AnthropicMaxTokens      int           `json:"anthropicMaxTokens" yaml:"anthropicMaxTokens"`
+	AnthropicThinkingEffort string        `json:"anthropicThinkingEffort,omitempty" yaml:"anthropicThinkingEffort,omitempty"`
+	ThinkingBudgetTokens    int           `json:"thinkingBudgetTokens" yaml:"thinkingBudgetTokens"`
+	Pricing                 *ModelPricing `json:"pricing,omitempty" yaml:"pricing,omitempty"`
+	FastMode                bool          `json:"fastMode,omitempty" yaml:"fastMode,omitempty"`
+	OpenAIServiceTier       string        `json:"openAIServiceTier,omitempty" yaml:"openAIServiceTier,omitempty"`
+	ModelCatalogURL         string        `json:"modelCatalogURL,omitempty" yaml:"modelCatalogURL,omitempty"`
 	// 余额查询（可配置兜底）：全部可选，零值即「未启用」。
 	// 具名 provider 未命中时，若 BalanceQueryURL 非空，则用它发一次 GET 并按点分路径取值。
 	// URL/Headers 支持 {{apiKey}}、{{baseUrl}}、{{accessToken}}、{{userId}} 占位符替换。
@@ -218,27 +221,27 @@ type Config struct {
 	MirrorCapture MirrorCaptureConfig `json:"mirrorCapture" yaml:"mirrorCapture"`
 	// DebugLogMaxBytes 限制每个 debug jsonl 文件的最大字节数；超过后保留尾部（错误附近）。
 	// 0 表示用默认值（50MB），负数表示不限制。热加载即时生效。
-	DebugLogMaxBytes                int                        `json:"debugLogMaxBytes" yaml:"debugLogMaxBytes"`
-	ProviderStreamIdleTimeout       int                        `json:"providerStreamIdleTimeout" yaml:"providerStreamIdleTimeout"`
-	TurnStaleTimeout                int                        `json:"turnStaleTimeout" yaml:"turnStaleTimeout"`
-	NativeDelegationProgressTimeout int                        `json:"nativeDelegationProgressTimeout" yaml:"nativeDelegationProgressTimeout"`
-	AutoMatchContextWindow          bool                       `json:"autoMatchContextWindow" yaml:"autoMatchContextWindow"`
-	BackendListenAddr               string                     `json:"backendListenAddr" yaml:"backendListenAddr"`
-	ProxyListenAddr                 string                     `json:"proxyListenAddr" yaml:"proxyListenAddr"`
+	DebugLogMaxBytes                int    `json:"debugLogMaxBytes" yaml:"debugLogMaxBytes"`
+	ProviderStreamIdleTimeout       int    `json:"providerStreamIdleTimeout" yaml:"providerStreamIdleTimeout"`
+	TurnStaleTimeout                int    `json:"turnStaleTimeout" yaml:"turnStaleTimeout"`
+	NativeDelegationProgressTimeout int    `json:"nativeDelegationProgressTimeout" yaml:"nativeDelegationProgressTimeout"`
+	AutoMatchContextWindow          bool   `json:"autoMatchContextWindow" yaml:"autoMatchContextWindow"`
+	BackendListenAddr               string `json:"backendListenAddr" yaml:"backendListenAddr"`
+	ProxyListenAddr                 string `json:"proxyListenAddr" yaml:"proxyListenAddr"`
 	// AllowNonLoopbackListen 显式允许 backend/proxy 绑定非环回地址。
 	// 默认 false：本地 MITM/Agent 面未鉴权，绑定 0.0.0.0 会把服务暴露到局域网。
-	AllowNonLoopbackListen          bool                       `json:"allowNonLoopbackListen" yaml:"allowNonLoopbackListen"`
-	ModelAdapters                   []ModelAdapterConfig       `json:"modelAdapters" yaml:"modelAdapters"`
-	Routing                         RoutingConfig              `json:"routing" yaml:"routing"`
-	HomeMetrics                     HomeMetricsConfig          `json:"homeMetrics" yaml:"homeMetrics"`
-	BillingQuery                    BillingQueryConfig         `json:"billingQuery" yaml:"billingQuery"`
-	LocalResponseCache              LocalResponseCacheConfig   `json:"localResponseCache" yaml:"localResponseCache"`
-	SkillMCPScan                    SkillMCPScanConfig         `json:"skillMcpScan" yaml:"skillMcpScan"`
-	MCPTrustGrants                  []runtimeconfig.MCPTrustRecord `json:"mcpTrustGrants,omitempty" yaml:"mcpTrustGrants,omitempty"`
-	Delegation                      DelegationConfig           `json:"delegation" yaml:"delegation"`
-	Goal                            GoalConfig                 `json:"goal" yaml:"goal"`
-	ComputerUse                     ComputerUseConfig          `json:"computerUse" yaml:"computerUse"`
-	LastAgentModelHash              string                     `json:"lastAgentModelHash" yaml:"lastAgentModelHash"`
+	AllowNonLoopbackListen bool                           `json:"allowNonLoopbackListen" yaml:"allowNonLoopbackListen"`
+	ModelAdapters          []ModelAdapterConfig           `json:"modelAdapters" yaml:"modelAdapters"`
+	Routing                RoutingConfig                  `json:"routing" yaml:"routing"`
+	HomeMetrics            HomeMetricsConfig              `json:"homeMetrics" yaml:"homeMetrics"`
+	BillingQuery           BillingQueryConfig             `json:"billingQuery" yaml:"billingQuery"`
+	LocalResponseCache     LocalResponseCacheConfig       `json:"localResponseCache" yaml:"localResponseCache"`
+	SkillMCPScan           SkillMCPScanConfig             `json:"skillMcpScan" yaml:"skillMcpScan"`
+	MCPTrustGrants         []runtimeconfig.MCPTrustRecord `json:"mcpTrustGrants,omitempty" yaml:"mcpTrustGrants,omitempty"`
+	Delegation             DelegationConfig               `json:"delegation" yaml:"delegation"`
+	Goal                   GoalConfig                     `json:"goal" yaml:"goal"`
+	ComputerUse            ComputerUseConfig              `json:"computerUse" yaml:"computerUse"`
+	LastAgentModelHash     string                         `json:"lastAgentModelHash" yaml:"lastAgentModelHash"`
 }
 
 func DefaultConfig() Config {
@@ -474,6 +477,7 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			OpenAIRequestGroup:        modelchannel.NormalizeOpenAIRequestGroup(nextType, openAIEndpoint, protocolGroup),
 			ContextWindowTokens:       modelcontext.Resolve(item.ModelID, normalizeMaxCompletionTokens(item.ContextWindowTokens)),
 			MaxCompletionTokens:       normalizeMaxCompletionTokens(item.MaxCompletionTokens),
+			AnthropicAuthMode:         modelchannel.NormalizeAnthropicAuthMode(item.AnthropicAuthMode),
 			AnthropicMaxTokens:        normalizeMaxCompletionTokens(item.AnthropicMaxTokens),
 			ThinkingBudgetTokens:      normalizeMaxCompletionTokens(item.ThinkingBudgetTokens),
 			Pricing:                   item.Pricing,
@@ -529,6 +533,8 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			if err := validateHeadersJSON(next.CustomHeadersJSON); err != nil {
 				return nil, err
 			}
+		case next.AnthropicAuthMode == "":
+			return nil, i18n.NewError("error.model_adapter.anthropic_auth_mode_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 anthropicAuthMode 仅支持 legacy_dual、auto、x_api_key 或 bearer")
 		case next.Type == "anthropic" && next.AnthropicExtraParamsEnabled:
 			if err := validateJSONMap(next.AnthropicExtraParamsJSON, "anthropicExtraParamsJSON"); err != nil {
 				return nil, err
@@ -536,11 +542,11 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 		case next.Type == "anthropic" && next.AnthropicThinkingEffort == "":
 			return nil, i18n.NewError("error.model_adapter.thinking_effort_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 anthropicThinkingEffort 仅支持 low、medium、high、xhigh、max")
 		}
-		identity := modelAdapterConfigIdentity(next)
+		identity := modelAdapterConfigDedupeIdentity(next)
 		explicitID := strings.TrimSpace(item.ID)
 		next.ID = explicitID
 		if next.ID == "" {
-			next.ID = identity
+			next.ID = modelAdapterConfigStableID(next)
 		}
 		if ownerIdentity, exists := identityByAdapterID[next.ID]; exists && ownerIdentity != identity {
 			return nil, i18n.NewError("error.model_adapter.id_duplicate", i18n.CodeInvalidModelAdapter, "模型适配器 id 不能被不同模型配置重复使用")
@@ -610,15 +616,31 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 	return normalized, nil
 }
 
-func modelAdapterConfigIdentity(adapter ModelAdapterConfig) string {
+func modelAdapterConfigStableID(adapter ModelAdapterConfig) string {
 	channelID := modelchannel.BuildChannelID(
 		adapter.BaseURL,
 		adapter.ModelID,
 		adapter.APIKey,
 		adapter.DisplayName,
 		adapter.OpenAIEndpoint,
-	)
-	return channelID + "\n" + strings.TrimSpace(adapter.GroupName)
+	) + "\n" + strings.TrimSpace(adapter.GroupName)
+	if mode := modelchannel.NormalizeAnthropicAuthMode(adapter.AnthropicAuthMode); mode != "" && mode != modelchannel.AnthropicAuthModeLegacyDual {
+		return channelID + "-auth-" + mode
+	}
+	return channelID
+}
+
+func modelAdapterConfigDedupeIdentity(adapter ModelAdapterConfig) string {
+	return strings.Join([]string{
+		modelAdapterConfigStableID(adapter),
+		strings.TrimSpace(adapter.GroupName),
+		strings.TrimSpace(adapter.ProtocolMode),
+		strings.TrimSpace(adapter.ProtocolGroup),
+		strings.TrimSpace(adapter.OpenAIRequestGroup),
+		strings.TrimSpace(adapter.AnthropicAuthMode),
+		strconv.FormatBool(adapter.CustomHeadersEnabled),
+		strings.TrimSpace(adapter.CustomHeadersJSON),
+	}, "\n")
 }
 
 func firstNonEmptyProtocolGroup(values ...string) string {

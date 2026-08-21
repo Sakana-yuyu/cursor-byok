@@ -49,31 +49,48 @@ type ProviderBalanceRequest struct {
 	// Empty values preserve the legacy generic resolver for old callers/configurations.
 	UsageStatus   string `json:"usageStatus,omitempty"`
 	UsageProvider string `json:"usageProvider,omitempty"`
-	BaseURL    string `json:"baseURL"`
-	APIKey     string `json:"apiKey"`
+	BaseURL       string `json:"baseURL"`
+	APIKey        string `json:"apiKey"`
 	// ForceRefresh 为 true 时绕过进程内 TTL 缓存，强制重新查询（供 UI 显式刷新使用）。
 	ForceRefresh bool `json:"forceRefresh,omitempty"`
 	// 以下字段可覆盖 adapter 持久化配置（同一次查询内优先用请求值）。
-	BalanceProfile            string `json:"balanceProfile,omitempty"`
-	BalanceAccessToken        string `json:"balanceAccessToken,omitempty"`
-	BalanceUserID             string `json:"balanceUserID,omitempty"`
-	BalanceCodingPlanProvider string `json:"balanceCodingPlanProvider,omitempty"`
-	BalanceQueryURL           string `json:"balanceQueryURL,omitempty"`
-	BalanceQueryField         string `json:"balanceQueryField,omitempty"`
+	BalanceProfile            string            `json:"balanceProfile,omitempty"`
+	BalanceAccessToken        string            `json:"balanceAccessToken,omitempty"`
+	BalanceUserID             string            `json:"balanceUserID,omitempty"`
+	BalanceCodingPlanProvider string            `json:"balanceCodingPlanProvider,omitempty"`
+	BalanceQueryURL           string            `json:"balanceQueryURL,omitempty"`
+	BalanceQueryField         string            `json:"balanceQueryField,omitempty"`
 	BalanceQueryHeaders       map[string]string `json:"balanceQueryHeaders,omitempty"`
+}
+
+// ProviderUsageWindow 是单个时间窗口的结构化用量。
+// Fraction 字段使用 0-1；金额字段的单位由 Unit 指定。未知值保持 nil，避免把缺失数据误报为 0。
+type ProviderUsageWindow struct {
+	ID                string   `json:"id"`
+	Label             string   `json:"label"`
+	Unit              string   `json:"unit"`
+	Used              *float64 `json:"used,omitempty"`
+	Limit             *float64 `json:"limit,omitempty"`
+	Remaining         *float64 `json:"remaining,omitempty"`
+	UsedFraction      *float64 `json:"usedFraction,omitempty"`
+	RemainingFraction *float64 `json:"remainingFraction,omitempty"`
+	ResetsAt          string   `json:"resetsAt,omitempty"`
+	Status            string   `json:"status"` // "ok" | "warning" | "exhausted" | "unknown"
 }
 
 // ProviderBalance 是统一的余额/额度查询结果，带 JSON 标签供 Wails 前端使用。
 type ProviderBalance struct {
-	Supported bool     `json:"supported"`
-	Source    string   `json:"source"`             // "openai_billing" | "newapi" | "token_plan" | ...
-	Currency  string   `json:"currency"`           // "USD" | "CNY" | "%"
-	Unlimited bool     `json:"unlimited"`          // true 表示不限额度（One/NewAPI 无限令牌哨兵值）
-	Total     *float64 `json:"total"`              // 总额度，未知为 nil；不限额时为 nil
-	Used      *float64 `json:"used"`               // 已用金额，未知为 nil
-	Remaining *float64 `json:"remaining"`          // 剩余额度，未知为 nil；不限额时为 nil
-	PlanName  string   `json:"planName,omitempty"` // 套餐名 / Token Plan 窗口摘要
-	Message   string   `json:"message"`            // 人类可读状态 / 错误信息
+	Supported bool                  `json:"supported"`
+	Source    string                `json:"source"`             // "openai_billing" | "newapi" | "token_plan" | ...
+	Currency  string                `json:"currency"`           // "USD" | "CNY" | "%"
+	Unlimited bool                  `json:"unlimited"`          // true 表示不限额度（One/NewAPI 无限令牌哨兵值）
+	Total     *float64              `json:"total"`              // 总额度，未知为 nil；不限额时为 nil
+	Used      *float64              `json:"used"`               // 已用金额，未知为 nil
+	Remaining *float64              `json:"remaining"`          // 剩余额度，未知为 nil；不限额时为 nil
+	PlanName  string                `json:"planName,omitempty"` // 套餐名 / Token Plan 窗口摘要
+	Windows   []ProviderUsageWindow `json:"windows,omitempty"`
+	FetchedAt string                `json:"fetchedAt,omitempty"`
+	Message   string                `json:"message"` // 人类可读状态 / 错误信息
 	// Transient 标记本次失败是否为瞬时传输失败（网络不可达/超时/读体中断）。
 	// true：前端可保留并继续展示上一次成功值（keep-last-good）。
 	// false：确定性失败（空 key/鉴权失败/非 2xx/非法 JSON/不支持），前端应清空为不可用。

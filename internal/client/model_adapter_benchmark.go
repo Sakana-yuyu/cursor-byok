@@ -223,6 +223,8 @@ func (s *ProxyService) executeModelAdapterNonStreamingTest(ctx context.Context, 
 		return s.executeOpenAIStreamingTest(ctx, adapter)
 	case "anthropic":
 		return s.executeAnthropicStreamingTest(ctx, adapter)
+	case "gemini":
+		return s.executeGeminiStreamingTest(ctx, adapter)
 	default:
 		return nil, fmt.Errorf("unsupported provider %q", strings.TrimSpace(adapter.Type))
 	}
@@ -330,6 +332,7 @@ func (s *ProxyService) executeAnthropicStreamingTest(ctx context.Context, adapte
 		CustomHeadersJSON:           strings.TrimSpace(adapter.CustomHeadersJSON),
 		AnthropicExtraParamsEnabled: adapter.AnthropicExtraParamsEnabled,
 		AnthropicExtraParamsJSON:    strings.TrimSpace(adapter.AnthropicExtraParamsJSON),
+		AnthropicAuthMode:           strings.TrimSpace(adapter.AnthropicAuthMode),
 		ThinkingBudgetTokens:        adapter.ThinkingBudgetTokens,
 		Messages:                    []modeladapter.Message{{Role: "user", Content: modelAdapterTestPrompt}},
 		MaxTokens:                   maxTokens,
@@ -340,6 +343,78 @@ func (s *ProxyService) executeAnthropicStreamingTest(ctx context.Context, adapte
 	}
 	metrics.effectiveThinkingEffort = thinkingEffort
 	err := modeladapter.NewAnthropicAdapter().Stream(ctx, req, func(event modeladapter.ModelEvent) error {
+		now := time.Now().UTC()
+		if metrics.firstResponseAt.IsZero() && isBenchmarkEffectiveResponseEvent(event) {
+			metrics.firstResponseAt = now
+		}
+		switch event.Kind {
+		case modeladapter.ModelEventKindTextDelta:
+			if strings.TrimSpace(event.Text) != "" && metrics.firstTextTokenAt.IsZero() {
+				metrics.firstTextTokenAt = now
+			}
+			_, _ = metrics.text.WriteString(event.Text)
+		case modeladapter.ModelEventKindTurnFinished:
+			metrics.finishedAt = now
+			metrics.reasoningTokens = event.ReasoningTokens
+			if event.OutputTokens > 0 {
+				metrics.outputTokens = event.OutputTokens
+				metrics.outputProvided = true
+			}
+		case modeladapter.ModelEventKindProviderError:
+			if event.Err != nil {
+				return event.Err
+			}
+			return errors.New("provider error")
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if metrics.finishedAt.IsZero() {
+		metrics.finishedAt = time.Now().UTC()
+	}
+	metrics.rawResponse = observer.RawResponse()
+	if strings.TrimSpace(metrics.rawResponse) == "" {
+		metrics.rawResponse = strings.TrimSpace(metrics.text.String())
+	}
+	return metrics, nil
+}
+
+func (s *ProxyService) executeGeminiStreamingTest(ctx context.Context, adapter serverconfig.ModelAdapterConfig) (*modelAdapterTestMetrics, error) {
+	_ = s
+	metrics := &modelAdapterTestMetrics{}
+	observer := &modelAdapterTestArtifactObserver{}
+	maxTokens := modelAdapterTestConfiguredGeminiMaxTokens(adapter)
+	thinkingEffort := normalizeModelAdapterTestReasoning(adapter.ReasoningEffort)
+	requestID := "model-adapter-test-" + buildModelAdapterTestRequestHash(adapter)
+	req := modeladapter.StreamRequest{
+		RequestID:                   requestID,
+		RunID:                       requestID,
+		ModelCallID:                 requestID,
+		ModelID:                     strings.TrimSpace(adapter.ID),
+		Provider:                    "gemini",
+		ProtocolMode:                strings.TrimSpace(adapter.ProtocolMode),
+		ProtocolGroup:               strings.TrimSpace(adapter.ProtocolGroup),
+		BaseURL:                     strings.TrimSpace(adapter.BaseURL),
+		APIKey:                      strings.TrimSpace(adapter.APIKey),
+		ProviderModelID:             strings.TrimSpace(adapter.ModelID),
+		ResolvedChannelID:           strings.TrimSpace(adapter.ID),
+		ResolvedChannelName:         strings.TrimSpace(adapter.DisplayName),
+		ResolvedContextWindowTokens: adapter.ContextWindowTokens,
+		ReasoningEffort:             thinkingEffort,
+		ThinkingEffort:              thinkingEffort,
+		CustomHeadersEnabled:        adapter.CustomHeadersEnabled,
+		CustomHeadersJSON:           strings.TrimSpace(adapter.CustomHeadersJSON),
+		Messages:                    []modeladapter.Message{{Role: "user", Content: modelAdapterTestPrompt}},
+		MaxTokens:                   maxTokens,
+		Stream:                      true,
+		RequestKnobs:                map[string]any{"stream": true, "max_tokens": maxTokens, "thinking_effort": thinkingEffort},
+		Observer:                    observer,
+		ProviderStreamIdleTimeout:   modelAdapterTestTimeout,
+	}
+	metrics.effectiveThinkingEffort = thinkingEffort
+	err := modeladapter.NewGeminiAdapter().Stream(ctx, req, func(event modeladapter.ModelEvent) error {
 		now := time.Now().UTC()
 		if metrics.firstResponseAt.IsZero() && isBenchmarkEffectiveResponseEvent(event) {
 			metrics.firstResponseAt = now
@@ -703,6 +778,7 @@ func buildModelAdapterTestRequestHash(adapter serverconfig.ModelAdapterConfig) s
 		source.CustomHeadersJSON,
 		strconv.Itoa(source.AnthropicExtraParamsEnabled),
 		source.AnthropicExtraParamsJSON,
+		source.AnthropicAuthMode,
 		strconv.Itoa(source.ContextWindowTokens),
 		strconv.Itoa(source.MaxCompletionTokens),
 		strconv.Itoa(source.AnthropicMaxTokens),
@@ -730,6 +806,7 @@ type modelAdapterTestHashSource struct {
 	CustomHeadersJSON           string
 	AnthropicExtraParamsEnabled int
 	AnthropicExtraParamsJSON    string
+	AnthropicAuthMode           string
 	ContextWindowTokens         int
 	MaxCompletionTokens         int
 	AnthropicMaxTokens          int
@@ -757,6 +834,7 @@ func normalizeModelAdapterTestHashSource(adapter serverconfig.ModelAdapterConfig
 		CustomHeadersJSON:           normalizeModelAdapterTestCustomHeadersJSON(adapter),
 		AnthropicExtraParamsEnabled: normalizeModelAdapterTestBool(adapter.Type == "anthropic" && adapter.AnthropicExtraParamsEnabled),
 		AnthropicExtraParamsJSON:    normalizeModelAdapterTestAnthropicExtraParamsJSON(adapter),
+		AnthropicAuthMode:           modelchannel.NormalizeAnthropicAuthMode(adapter.AnthropicAuthMode),
 		ContextWindowTokens:         normalizeModelAdapterTestInt(adapter.ContextWindowTokens),
 		MaxCompletionTokens:         normalizeModelAdapterTestInt(adapter.MaxCompletionTokens),
 		AnthropicMaxTokens:          normalizeModelAdapterTestInt(adapter.AnthropicMaxTokens),
@@ -785,7 +863,8 @@ func normalizeModelAdapterTestReasoning(value string) string {
 }
 
 func normalizeModelAdapterTestProviderReasoning(adapter serverconfig.ModelAdapterConfig) string {
-	if normalizeModelAdapterTestType(adapter.Type) != "openai" {
+	provider := normalizeModelAdapterTestType(adapter.Type)
+	if provider != "openai" && provider != "gemini" {
 		return ""
 	}
 	return normalizeModelAdapterTestReasoning(adapter.ReasoningEffort)
@@ -823,6 +902,13 @@ func modelAdapterTestConfiguredOpenAIMaxTokens(adapter serverconfig.ModelAdapter
 	}
 	if adapter.AnthropicMaxTokens > 0 {
 		return adapter.AnthropicMaxTokens
+	}
+	return modelAdapterTestDefaultMaxTokens
+}
+
+func modelAdapterTestConfiguredGeminiMaxTokens(adapter serverconfig.ModelAdapterConfig) int {
+	if adapter.MaxCompletionTokens > 0 {
+		return adapter.MaxCompletionTokens
 	}
 	return modelAdapterTestDefaultMaxTokens
 }

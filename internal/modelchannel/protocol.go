@@ -61,8 +61,9 @@ func ClassifyProtocolGroup(providerType string, modelID string, baseURL string, 
 	if configured := NormalizeProtocolGroup(provider, configuredGroup); configured != "" {
 		return configured
 	}
-	endpointLower := strings.ToLower(strings.TrimSpace(endpoint))
-	baseLower := strings.ToLower(strings.TrimSpace(baseURL))
+	endpointLower := strings.ToLower(URLPathForProtocol(endpoint))
+	baseLower := strings.ToLower(URLPathForProtocol(baseURL))
+	baseHost := URLHostForProtocol(baseURL)
 	model := strings.ToLower(strings.TrimSpace(modelID))
 	if strings.HasSuffix(baseLower, "/responses") {
 		return ProtocolGroupResponses
@@ -70,7 +71,7 @@ func ClassifyProtocolGroup(providerType string, modelID string, baseURL string, 
 	if strings.HasSuffix(baseLower, "/chat/completions") {
 		return ProtocolGroupChatCompletions
 	}
-	if strings.Contains(baseLower, "api.openai.com") ||
+	if baseHost == "api.openai.com" ||
 		strings.HasPrefix(model, "gpt-") ||
 		strings.HasPrefix(model, "o1") ||
 		strings.HasPrefix(model, "o3") ||

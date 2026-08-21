@@ -1,4 +1,5 @@
 <script setup>
+import ProviderUsageWindows from "@/components/provider/ProviderUsageWindows.vue";
 import Card from "@/components/ui/Card.vue";
 import { fetchProviderSpendSummary, queryAllProviderBalances } from "@/services/clientApi";
 import {
@@ -100,9 +101,16 @@ function balanceGroupTitle(group) {
   return group.host || group.baseURL || "未设置 URL";
 }
 
+function balanceGroupMain(group) {
+  return group.items.find((item) => item.balance.supported && item.balance.windows?.length)
+    || group.items.find((item) => item.balance.supported)
+    || group.items[0]
+    || null;
+}
+
 // balanceGroupSubText 分组副文本：主条目余额摘要 + 组内模型数量。
 function balanceGroupSubText(group) {
-  const main = group.items.find((item) => item.balance.supported) || group.items[0];
+  const main = balanceGroupMain(group);
   const parts = [];
   if (main) {
     const text = balanceSubText(main);
@@ -114,8 +122,8 @@ function balanceGroupSubText(group) {
 
 // balanceGroupRemaining 分组剩余额度：取组内首个有余额的主条目。
 function balanceGroupRemaining(group) {
-  const main = group.items.find((item) => item.balance.supported);
-  if (!main) return "—";
+  const main = balanceGroupMain(group);
+  if (!main?.balance?.supported) return "—";
   const balance = main.balance;
   if (balance.unlimited) return "不限额度";
   if (Number.isFinite(Number(balance.remaining))) {
@@ -314,26 +322,33 @@ defineExpose({ refresh: load, refreshBalances: loadBalances });
           <div
             v-for="group in balanceGroups"
             :key="group.key"
-            class="flex min-h-[50px] min-w-0 items-center gap-2 rounded-[5px] border border-[#2d2d2d] bg-[#202020]/40 px-2 py-1.5 transition-colors hover:border-[#10AD5D]/20 hover:bg-[#202020]/65"
+            class="min-h-[50px] min-w-0 rounded-[5px] border border-[#2d2d2d] bg-[#202020]/40 px-2 py-1.5 transition-colors hover:border-[#10AD5D]/20 hover:bg-[#202020]/65"
           >
-            <span class="size-2 shrink-0 rounded-full" :class="group.items.some((item) => item.balance.supported) ? 'bg-[#6ee7a5]' : 'bg-[#fca5a5]'" />
-            <div class="min-w-0 flex-1">
-              <div class="truncate text-xs text-white" :title="balanceGroupTitle(group)">
-                {{ balanceGroupTitle(group) }}
-              </div>
-              <div class="mt-0.5 truncate text-[11px] text-[#858585]" :title="balanceGroupSubText(group)">
-                {{ balanceGroupSubText(group) }}
-              </div>
-            </div>
-            <div class="shrink-0 text-right" style="font-family: var(--font-num)">
-              <template v-if="group.items.some((item) => item.balance.supported)">
-                <div class="text-sm font-semibold text-[#6ee7a5]">
-                  {{ balanceGroupRemaining(group) }}
+            <div class="flex min-w-0 items-center gap-2">
+              <span class="size-2 shrink-0 rounded-full" :class="group.items.some((item) => item.balance.supported) ? 'bg-[#6ee7a5]' : 'bg-[#fca5a5]'" />
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-xs text-white" :title="balanceGroupTitle(group)">
+                  {{ balanceGroupTitle(group) }}
                 </div>
-                <div class="mt-0.5 text-[10px] text-[#737373]">剩余</div>
-              </template>
-              <div v-else class="text-[11px] text-[#fca5a5]">不可用</div>
+                <div class="mt-0.5 truncate text-[11px] text-[#858585]" :title="balanceGroupSubText(group)">
+                  {{ balanceGroupSubText(group) }}
+                </div>
+              </div>
+              <div class="shrink-0 text-right" style="font-family: var(--font-num)">
+                <template v-if="group.items.some((item) => item.balance.supported)">
+                  <div class="text-sm font-semibold text-[#6ee7a5]">
+                    {{ balanceGroupRemaining(group) }}
+                  </div>
+                  <div class="mt-0.5 text-[10px] text-[#737373]">剩余</div>
+                </template>
+                <div v-else class="text-[11px] text-[#fca5a5]">不可用</div>
+              </div>
             </div>
+            <ProviderUsageWindows
+              v-if="balanceGroupMain(group)?.balance?.windows?.length"
+              :windows="balanceGroupMain(group).balance.windows"
+              :max-items="2"
+            />
           </div>
         </div>
           </div>

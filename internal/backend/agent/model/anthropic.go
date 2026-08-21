@@ -10,6 +10,7 @@ import (
 	"unicode/utf16"
 
 	"cursor/gen/agentv1"
+	"cursor/internal/modelchannel"
 	"cursor/internal/netproxy"
 )
 
@@ -142,16 +143,16 @@ func NewAnthropicAdapter() *AnthropicAdapter {
 }
 
 func anthropicEndpointURL(baseURL string) string {
-	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
-	if ProviderURLHasEndpoint(base, "/v1/messages", "/messages") {
-		return base
+	plan, err := modelchannel.ResolveTransportPlan(modelchannel.TransportPlanInput{
+		Provider:     "anthropic",
+		BaseURL:      baseURL,
+		ProtocolMode: modelchannel.ProtocolModeFixed,
+		Stream:       true,
+	})
+	if err != nil {
+		return strings.TrimSpace(baseURL)
 	}
-	// baseURL 已含版本前缀（如 https://api.example.com/v1）时，
-	// 只追加 /messages，避免拼出 /v1/v1/messages 导致 404。
-	if anthropicBaseURLHasVersionSuffix(base) {
-		return base + "/messages"
-	}
-	return base + "/v1/messages"
+	return plan.RequestURL
 }
 
 // anthropicBaseURLHasVersionSuffix 判断 URL path 末段是否为 /v1、/v2 等版本前缀。
@@ -185,25 +186,21 @@ func shouldRelocateAnthropicImages(baseURL string) bool {
 	return !strings.Contains(base, "api.anthropic.com")
 }
 
-// ApplyAnthropicCompatibleAuthHeaders 同时兼容 Anthropic 原生 x-api-key 和 Bearer token 代理。
-func ApplyAnthropicCompatibleAuthHeaders(httpReq *http.Request, apiKey string) {
+// ApplyAnthropicCompatibleAuthHeaders applies generated headers only when custom
+// headers have not explicitly taken ownership of either authentication scheme.
+func ApplyAnthropicCompatibleAuthHeaders(httpReq *http.Request, requestURL, mode, apiKey string, customHeaders http.Header) error {
 	if httpReq == nil {
-		return
+		return nil
 	}
-	token := anthropicCompatibleAuthToken(apiKey)
-	if token == "" {
-		return
+	if !modelchannel.HasExplicitAnthropicAuthHeader(customHeaders) {
+		for name, values := range modelchannel.AnthropicGeneratedAuthHeaders(requestURL, mode, apiKey) {
+			httpReq.Header.Del(name)
+			for _, value := range values {
+				httpReq.Header.Add(name, value)
+			}
+		}
 	}
-	httpReq.Header.Set("x-api-key", token)
-	httpReq.Header.Set("Authorization", "Bearer "+token)
-}
-
-func anthropicCompatibleAuthToken(apiKey string) string {
-	token := strings.TrimSpace(apiKey)
-	if len(token) >= len("Bearer ") && strings.EqualFold(token[:len("Bearer ")], "Bearer ") {
-		token = strings.TrimSpace(token[len("Bearer "):])
-	}
-	return token
+	return ApplyHeaderSet(httpReq, customHeaders)
 }
 
 func anthropicProviderSystemBlocks(systemParts []string) []map[string]any {
@@ -234,7 +231,6 @@ func anthropicTrailingTagPrefixLength(text string, tag string) int {
 	}
 	return 0
 }
-
 
 func emitAnthropicToolProgress(
 	sink func(ModelEvent) error,

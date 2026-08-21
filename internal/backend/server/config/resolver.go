@@ -96,6 +96,7 @@ func resolveModelAdapterChannel(adapters []ModelAdapterConfig, requestedModel st
 		CustomHeadersJSON:           strings.TrimSpace(matched.CustomHeadersJSON),
 		AnthropicExtraParamsEnabled: matched.AnthropicExtraParamsEnabled,
 		AnthropicExtraParamsJSON:    strings.TrimSpace(matched.AnthropicExtraParamsJSON),
+		AnthropicAuthMode:           strings.TrimSpace(matched.AnthropicAuthMode),
 		ContextWindowTokens:         defaultChannelContextWindowTokens,
 		MaxTokens:                   defaultChannelMaxTokens,
 		ReasoningEffort:             strings.TrimSpace(matched.ReasoningEffort),

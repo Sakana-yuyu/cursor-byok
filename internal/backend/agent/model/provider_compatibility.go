@@ -2,6 +2,8 @@ package modeladapter
 
 import (
 	"strings"
+
+	"cursor/internal/modelchannel"
 )
 
 // ProviderCompatibility is the conservative compatibility policy for an
@@ -126,6 +128,10 @@ func upgradeOpenAIClaudeToAnthropic(resolved *StreamRequest) bool {
 	}
 	resolved.Provider = "anthropic"
 	resolved.ProtocolGroup = "messages"
+	resolved.BaseURL = modelchannel.BaseURLWithoutKnownOpenAIEndpoint(resolved.BaseURL)
+	if strings.TrimSpace(resolved.AnthropicThinkingEffort) == "" {
+		resolved.AnthropicThinkingEffort = normalizeRuntimeThinkingEffort(resolved.ReasoningEffort)
+	}
 	// OpenAI 专属字段不再适用，避免残留导致误解。
 	resolved.OpenAIEndpoint = ""
 	resolved.OpenAIRequestGroup = ""

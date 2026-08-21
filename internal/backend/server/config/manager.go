@@ -536,6 +536,7 @@ func (manager *Manager) LegacyRuntimeSnapshot(_ context.Context) (legacyruntime.
 			CustomHeadersJSON:           item.CustomHeadersJSON,
 			AnthropicExtraParamsEnabled: item.AnthropicExtraParamsEnabled,
 			AnthropicExtraParamsJSON:    item.AnthropicExtraParamsJSON,
+			AnthropicAuthMode:           item.AnthropicAuthMode,
 			ContextWindowTokens:         item.ContextWindowTokens,
 			MaxCompletionTokens:         item.MaxCompletionTokens,
 			AnthropicMaxTokens:          item.AnthropicMaxTokens,

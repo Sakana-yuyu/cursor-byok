@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"cursor/internal/modelchannel"
@@ -68,6 +69,8 @@ type ModelAdapterConfig struct {
 	AnthropicExtraParamsEnabled bool `json:"anthropicExtraParamsEnabled"`
 	// AnthropicExtraParamsJSON 表示 Anthropic 额外请求参数 JSON 对象。
 	AnthropicExtraParamsJSON string `json:"anthropicExtraParamsJSON"`
+	// AnthropicAuthMode controls generated Messages authentication headers.
+	AnthropicAuthMode string `json:"anthropicAuthMode,omitempty"`
 	// ContextWindowTokens 表示当前声明中的 ContextWindowTokens。
 	ContextWindowTokens int `json:"contextWindowTokens"`
 	// MaxCompletionTokens 表示当前声明中的 MaxCompletionTokens。
@@ -133,6 +136,7 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			OpenAIRequestGroup:   modelchannel.NormalizeOpenAIRequestGroup(nextType, openAIEndpoint, protocolGroup),
 			ContextWindowTokens:  modelcontext.Resolve(item.ModelID, normalizeMaxCompletionTokens(item.ContextWindowTokens)),
 			MaxCompletionTokens:  normalizeMaxCompletionTokens(item.MaxCompletionTokens),
+			AnthropicAuthMode:    modelchannel.NormalizeAnthropicAuthMode(item.AnthropicAuthMode),
 			AnthropicMaxTokens:   normalizeMaxCompletionTokens(item.AnthropicMaxTokens),
 			ThinkingBudgetTokens: normalizeMaxCompletionTokens(item.ThinkingBudgetTokens),
 			Pricing:              item.Pricing,
@@ -180,6 +184,8 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			if err := validateHeadersJSON(next.CustomHeadersJSON); err != nil {
 				return nil, err
 			}
+		case next.AnthropicAuthMode == "":
+			return nil, errors.New("模型适配器 anthropicAuthMode 仅支持 legacy_dual、auto、x_api_key 或 bearer")
 		case next.Type == "anthropic" && next.AnthropicExtraParamsEnabled:
 			if err := validateJSONMap(next.AnthropicExtraParamsJSON, "anthropicExtraParamsJSON"); err != nil {
 				return nil, err
@@ -187,8 +193,12 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 		case next.Type == "anthropic" && next.AnthropicThinkingEffort == "":
 			return nil, errors.New("模型适配器 anthropicThinkingEffort 仅支持 low、medium、high、xhigh、max")
 		}
-		next.ID = modelchannel.BuildChannelID(next.BaseURL, next.ModelID, next.APIKey, next.DisplayName, next.OpenAIEndpoint)
-		if existingIndex, exists := channelIndexByID[next.ID]; exists {
+		next.ID = modelchannel.BuildChannelID(next.BaseURL, next.ModelID, next.APIKey, next.DisplayName, next.OpenAIEndpoint) + "\n" + strings.TrimSpace(next.GroupName)
+		if next.AnthropicAuthMode != modelchannel.AnthropicAuthModeLegacyDual {
+			next.ID += "-auth-" + next.AnthropicAuthMode
+		}
+		dedupeKey := strings.Join([]string{modelchannel.BuildChannelID(next.BaseURL, next.ModelID, next.APIKey, next.DisplayName, next.OpenAIEndpoint), strings.TrimSpace(next.ProtocolMode), strings.TrimSpace(next.ProtocolGroup), strings.TrimSpace(next.AnthropicAuthMode), strconv.FormatBool(next.CustomHeadersEnabled), strings.TrimSpace(next.CustomHeadersJSON)}, "\n")
+		if existingIndex, exists := channelIndexByID[dedupeKey]; exists {
 			existing := normalized[existingIndex]
 			if existing.GroupName == "" {
 				existing.GroupName = next.GroupName
@@ -205,7 +215,7 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			normalized[existingIndex] = existing
 			continue
 		}
-		channelIndexByID[next.ID] = len(normalized)
+		channelIndexByID[dedupeKey] = len(normalized)
 		normalized = append(normalized, next)
 	}
 	return normalized, nil
@@ -337,6 +347,8 @@ type ResolvedChannel struct {
 	AnthropicExtraParamsEnabled bool
 	// AnthropicExtraParamsJSON 表示 Anthropic 额外请求参数 JSON 对象。
 	AnthropicExtraParamsJSON string
+	// AnthropicAuthMode controls generated Messages authentication headers.
+	AnthropicAuthMode string
 	// AnthropicMaxTokens 表示当前声明中的 AnthropicMaxTokens。
 	AnthropicMaxTokens int
 	// AnthropicThinkingEffort 表示 Anthropic adaptive thinking 的 output_config.effort。

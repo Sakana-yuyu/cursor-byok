@@ -24,6 +24,12 @@ const credits = [
     detail: "默认提示词模板来源（MIT License，copyright 2026 yynxxxxx）。本仓库仅消费其公开示例目录，不执行或分发其代码。",
     link: "https://github.com/yynxxxxx/Codex-X",
   },
+  {
+    name: "Oh My Pi",
+    detail: "供应商多时间窗口额度、运行诊断、冷却状态与多厂商协议兼容行为参考（MIT License）。本项目使用原生 Go/Vue 实现，并保留完整第三方许可声明。",
+    link: "https://github.com/can1357/oh-my-pi",
+    noticeLink: "/THIRD_PARTY_NOTICES.md",
+  },
 ];
 </script>
 
@@ -40,17 +46,30 @@ const credits = [
       >
         <div class="flex items-center justify-between gap-3">
           <span class="text-sm font-medium text-white">{{ item.name }}</span>
-          <a
-            v-if="item.link"
-            :href="item.link"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="shrink-0 text-xs text-[#10d06f] hover:underline"
-          >
-            {{ item.link }}
-          </a>
+          <span class="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
+            <a
+              v-if="item.link"
+              :href="item.link"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-xs text-[#10d06f] hover:underline"
+            >
+              {{ item.link }}
+            </a>
+            <a
+              v-if="item.noticeLink"
+              :href="item.noticeLink"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-xs text-[#a3a3a3] hover:text-white hover:underline"
+            >
+              第三方许可
+            </a>
+          </span>
         </div>
-        <p class="mt-1.5 text-xs leading-5 text-[#8f8f8f]">{{ item.detail }}</p>
+        <p class="mt-1.5 text-xs leading-5 text-[#8f8f8f]">
+          {{ item.detail }}
+        </p>
       </li>
     </ul>
   </SettingsSection>

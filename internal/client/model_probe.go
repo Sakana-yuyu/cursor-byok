@@ -145,6 +145,7 @@ func runModelAdapterProbeStream(ctx context.Context, adapter serverconfig.ModelA
 	case "anthropic":
 		req := base
 		req.Provider = "anthropic"
+		req.AnthropicAuthMode = strings.TrimSpace(adapter.AnthropicAuthMode)
 		req.AnthropicMaxTokens = modelAdapterProbeMaxTokens
 		req.RequestKnobs = map[string]any{
 			"stream":               true,
@@ -163,9 +164,29 @@ func runModelAdapterProbeStream(ctx context.Context, adapter serverconfig.ModelA
 		req.RequestKnobs = map[string]any{"stream": true, "max_tokens": modelAdapterProbeMaxTokens}
 		err := modeladapter.NewOpenAIAdapter().Stream(ctx, req, sink)
 		return sawContent, err
+	case "gemini":
+		req := base
+		req.Provider = "gemini"
+		thinkingEffort := geminiProbeThinkingEffort(adapter.ModelID)
+		req.ReasoningEffort = thinkingEffort
+		req.ThinkingEffort = thinkingEffort
+		req.RequestKnobs = map[string]any{"stream": true, "max_tokens": modelAdapterProbeMaxTokens}
+		if thinkingEffort != "" {
+			req.RequestKnobs["thinking_effort"] = thinkingEffort
+		}
+		err := modeladapter.NewGeminiAdapter().Stream(ctx, req, sink)
+		return sawContent, err
 	default:
 		return false, fmt.Errorf("不支持的供应商类型 %q", strings.TrimSpace(adapter.Type))
 	}
+}
+
+func geminiProbeThinkingEffort(modelID string) string {
+	model := strings.ToLower(strings.TrimSpace(modelID))
+	if strings.Contains(model, "gemini-2.5-flash") {
+		return "disabled"
+	}
+	return ""
 }
 
 // parseModelAdapterProbeStatus 解析上游 HTTP 状态码。

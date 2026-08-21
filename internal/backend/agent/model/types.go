@@ -130,6 +130,8 @@ type StreamRequest struct {
 	AnthropicExtraParamsEnabled bool
 	// AnthropicExtraParamsJSON 表示 Anthropic 额外请求参数 JSON 对象。
 	AnthropicExtraParamsJSON string
+	// AnthropicAuthMode controls generated Messages authentication headers.
+	AnthropicAuthMode string
 	// AnthropicMaxTokens 表示 Anthropic 兼容 provider 的 max_tokens。
 	AnthropicMaxTokens int
 	// AnthropicThinkingEffort 表示 Anthropic adaptive thinking 的 output_config.effort。

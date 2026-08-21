@@ -126,6 +126,7 @@ Section
 
     SetOutPath $INSTDIR
     File "/oname=${PRODUCT_EXECUTABLE}" "${ARG_WAILS_386_BINARY}"
+    File "/oname=THIRD_PARTY_NOTICES.md" "THIRD_PARTY_NOTICES.md"
 
     SetOutPath $INSTDIR
 

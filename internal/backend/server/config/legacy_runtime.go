@@ -32,6 +32,7 @@ func (store *Store) LegacyRuntimeSnapshot(ctx context.Context) (legacyruntime.Ru
 			CustomHeadersJSON:           item.CustomHeadersJSON,
 			AnthropicExtraParamsEnabled: item.AnthropicExtraParamsEnabled,
 			AnthropicExtraParamsJSON:    item.AnthropicExtraParamsJSON,
+			AnthropicAuthMode:           item.AnthropicAuthMode,
 			ContextWindowTokens:         item.ContextWindowTokens,
 			MaxCompletionTokens:         item.MaxCompletionTokens,
 			AnthropicMaxTokens:          item.AnthropicMaxTokens,

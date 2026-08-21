@@ -37,6 +37,22 @@ export {
 const SUPPORTED_MODEL_ADAPTER_TYPES = new Set(["openai", "anthropic", "gemini"]);
 const SUPPORTED_REASONING_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 const SUPPORTED_ANTHROPIC_THINKING_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
+export const ANTHROPIC_AUTH_MODE_LEGACY_DUAL = "legacy_dual";
+export const ANTHROPIC_AUTH_MODE_AUTO = "auto";
+export const ANTHROPIC_AUTH_MODE_X_API_KEY = "x_api_key";
+export const ANTHROPIC_AUTH_MODE_BEARER = "bearer";
+export const SUPPORTED_ANTHROPIC_AUTH_MODES = new Set([
+  ANTHROPIC_AUTH_MODE_LEGACY_DUAL,
+  ANTHROPIC_AUTH_MODE_AUTO,
+  ANTHROPIC_AUTH_MODE_X_API_KEY,
+  ANTHROPIC_AUTH_MODE_BEARER,
+]);
+
+export function normalizeAnthropicAuthMode(value, { legacy = true } = {}) {
+  const normalized = asString(value).trim().toLowerCase();
+  if (!normalized) return legacy ? ANTHROPIC_AUTH_MODE_LEGACY_DUAL : ANTHROPIC_AUTH_MODE_AUTO;
+  return SUPPORTED_ANTHROPIC_AUTH_MODES.has(normalized) ? normalized : "";
+}
 export const OPENAI_EXTRA_PARAMS_DEFAULT_JSON = `{
 }`;
 export const EXTRA_PARAMS_DEFAULT_JSON = `{
@@ -69,6 +85,9 @@ export function buildModelAdapterIdentityKey(adapter) {
     asString(adapter.modelID).toLowerCase(),
     asString(adapter.apiKey),
     adapter.type === "openai" ? normalizeOpenAIEndpoint(adapter.openAIEndpoint) : "",
+    adapter.type === "anthropic" ? asString(adapter.anthropicAuthMode) : "",
+    String(Boolean(adapter.customHeadersEnabled)),
+    adapter.customHeadersEnabled ? asString(adapter.customHeadersJSON) : "",
     asString(adapter.groupName).trim(),
   ].join("\n");
 }
@@ -99,6 +118,7 @@ export function buildModelAdapterTestRequestHash(source) {
     adapter.customHeadersEnabled ? asString(adapter.customHeadersJSON) : "",
     adapter.type === "anthropic" ? String(Boolean(adapter.anthropicExtraParamsEnabled)) : "false",
     adapter.type === "anthropic" && adapter.anthropicExtraParamsEnabled ? asString(adapter.anthropicExtraParamsJSON) : "",
+    adapter.type === "anthropic" ? asString(adapter.anthropicAuthMode) : "",
     String(asPositiveInteger(adapter.contextWindowTokens)),
     String(asPositiveInteger(adapter.maxCompletionTokens)),
     String(asPositiveInteger(adapter.anthropicMaxTokens)),
@@ -137,6 +157,7 @@ export function createEmptyModelAdapter() {
     customHeadersJSON: CUSTOM_HEADERS_DEFAULT_JSON,
     anthropicExtraParamsEnabled: false,
     anthropicExtraParamsJSON: EXTRA_PARAMS_DEFAULT_JSON,
+    anthropicAuthMode: ANTHROPIC_AUTH_MODE_AUTO,
     contextWindowTokens: 0,
     maxCompletionTokens: 0,
     anthropicMaxTokens: 0,
@@ -198,6 +219,7 @@ export function normalizeModelAdapter(source) {
   const anthropicExtraParamsJSON = normalizedType === "anthropic"
     ? asString(raw.anthropicExtraParamsJSON ?? raw.anthropic_extra_params_json) || EXTRA_PARAMS_DEFAULT_JSON
     : "";
+  const anthropicAuthMode = normalizeAnthropicAuthMode(raw.anthropicAuthMode ?? raw.anthropic_auth_mode);
   const balanceQueryURL = asString(raw.balanceQueryURL ?? raw.balance_query_url).trim();
   const balanceQueryField = asString(raw.balanceQueryField ?? raw.balance_query_field).trim();
   const balanceQueryHeadersJSONRaw = asString(
@@ -258,6 +280,7 @@ export function normalizeModelAdapter(source) {
         ? normalizedAnthropicThinkingEffort
         : ANTHROPIC_THINKING_EFFORT_DEFAULT)
       : "",
+    anthropicAuthMode,
     thinkingBudgetTokens: asPositiveInteger(
       raw.thinkingBudgetTokens ?? raw.thinking_budget_tokens,
     ),
@@ -397,6 +420,9 @@ export function validateModelAdapters(source) {
       if (balanceHeadersError) {
         return `${prefix} 的 ${balanceHeadersError}`;
       }
+    }
+    if (!SUPPORTED_ANTHROPIC_AUTH_MODES.has(adapter.anthropicAuthMode)) {
+      return `${prefix} 的 Anthropic 鉴权模式仅支持 legacy_dual、auto、x_api_key、bearer`;
     }
     if (adapter.type === "anthropic" && adapter.anthropicExtraParamsEnabled) {
       const extraParamsError = validateAnthropicExtraParamsJSON(adapter.anthropicExtraParamsJSON);

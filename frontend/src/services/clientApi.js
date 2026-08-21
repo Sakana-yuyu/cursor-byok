@@ -1,6 +1,6 @@
 import {
   GetState, GetMirrorCaptureStatus, LoadUserConfig, SaveUserConfig, StartProxy, StopProxy, TestModelAdapter,
-  GetModelAdapterTestResults, FetchModelCatalog, ProbeModelAdapter, QueryProviderBalance,
+  GetModelAdapterTestResults, FetchModelCatalog, ProbeModelAdapter, QueryProviderBalance, GetProviderDiagnostics,
   GetPromptInjectionSettings,
   SavePromptInjectionSettings, RefreshPromptInjection, RefreshPromptInjectionCatalog,
   AutoMatchContextWindows, DiagnoseModelAdapters, ApplyDiagnosticFixes,
@@ -53,7 +53,7 @@ const desktopMethods = {
   GetRecentRequestMetricsCount, GetRecentRequestMetricsAbnormalCount, GetRecentRequestMetricsDegradedCount,
   GetProviderEvents,
   ResetUsageMetrics,
-  FetchModelCatalog, ProbeModelAdapter, QueryProviderBalance, GetPromptInjectionSettings,
+  FetchModelCatalog, ProbeModelAdapter, QueryProviderBalance, GetProviderDiagnostics, GetPromptInjectionSettings,
   SavePromptInjectionSettings, RefreshPromptInjection,
   RefreshPromptInjectionCatalog, ExportLogs, AutoMatchContextWindows, DiagnoseModelAdapters, ApplyDiagnosticFixes,
   DetectCursorPath, LaunchCursor, RestartCursor, IsCursorRunning, GetSkillsMCPScanSnapshot, RefreshSkillsMCPScan, SaveSkillsMCPScanConfig,
@@ -413,6 +413,11 @@ export function queryProviderBalance(request) {
   }
   return withApiLogging("QueryProviderBalance", request, () => invoke("@bindings/cursor/internal/bridge/proxyservice.js", "QueryProviderBalance", [request]));
 }
+
+export function getProviderDiagnostics() {
+  return desktopOrMock(() => GetProviderDiagnostics(), "@bindings/cursor/internal/bridge/proxyservice.js", "GetProviderDiagnostics");
+}
+
 export function queryAllProviderBalances() {
   return desktopOrMock(() => QueryAllProviderBalances(), "@bindings/cursor/internal/bridge/proxyservice.js", "QueryAllProviderBalances");
 }

@@ -1,4 +1,5 @@
 <script setup>
+import ProviderDiagnosticsPanel from "@/components/diagnostics/ProviderDiagnosticsPanel.vue";
 import Button from "@/components/ui/Button.vue";
 import { applyDiagnosticFixes, diagnoseModelAdapters } from "@/services/clientApi";
 import { exportSessionDebugBundle, listSessionDebugFiles, readSessionDebugTail } from "@/services/runtimeControlApi";
@@ -18,7 +19,7 @@ const hasFixableIssues = computed(() =>
 async function scan() {
   loading.value = true;
   error.value = "";
-  try { result.value = await diagnoseModelAdapters(); } catch (err) { error.value = String(err); }
+  try { result.value = await diagnoseModelAdapters(); } catch (err) { error.value = toUserError(err); }
   finally { loading.value = false; }
 }
 async function fixAll() {
@@ -29,7 +30,7 @@ async function fixAll() {
   fixing.value = true;
   error.value = "";
   try { result.value = await applyDiagnosticFixes(fixable.map((issue) => issue.channelId)); }
-  catch (err) { error.value = String(err); }
+  catch (err) { error.value = toUserError(err); }
   finally { fixing.value = false; }
 }
 
@@ -149,11 +150,14 @@ onMounted(() => {
 </script>
 
 <template>
-  <main class="mx-auto max-w-4xl px-6 py-8 text-white">
-    <div class="mb-6">
-      <h1 class="text-xl font-semibold">诊断</h1>
-      <p class="mt-1 text-sm text-zinc-400">模型协议诊断与会话排查证据。</p>
-    </div>
+  <main class="h-full min-h-0 w-full overflow-y-auto text-white">
+    <div class="mx-auto max-w-4xl px-6 py-8">
+      <div class="mb-6">
+        <h1 class="text-xl font-semibold">诊断</h1>
+        <p class="mt-1 text-sm text-zinc-400">模型协议诊断与会话排查证据。</p>
+      </div>
+
+    <ProviderDiagnosticsPanel />
 
     <!-- 会话证据 -->
     <section class="mb-8 rounded-[10px] border border-white/10 bg-black/20 p-5">
@@ -268,5 +272,6 @@ onMounted(() => {
         </article>
       </div>
     </section>
+    </div>
   </main>
 </template>

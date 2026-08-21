@@ -81,6 +81,28 @@ test("手动添加：保存失败时展示错误信息且不跳转", async ({ pa
   await expect(page).toHaveURL(/\/model-editor/);
 });
 
+test("Anthropic 鉴权模式可保存到模型配置", async ({ page }) => {
+  await openModelEditorPage(page);
+  await page.getByRole("button", { name: "手动添加", exact: true }).click();
+  await page.getByText("供应商类型", { exact: true }).locator("..").getByRole("button").click();
+  await page.getByRole("option", { name: "Anthropic", exact: true }).click();
+  await page.getByRole("button", { name: /协议与高级设置/ }).click();
+
+  await expect(page.getByText("Anthropic 鉴权模式", { exact: true })).toBeVisible();
+  await page.getByText("Anthropic 鉴权模式", { exact: true }).locator("..").getByRole("button").click();
+  await page.getByRole("option", { name: "仅 Bearer", exact: true }).click();
+
+  await fieldInput(page, "显示名称").fill("Anthropic Auth Test");
+  await fieldInput(page, "模型标识").fill("claude-auth-test");
+  await fieldInput(page, "接口地址").fill("https://gateway.example/v1");
+  await fieldInput(page, "访问密钥").fill("token");
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+
+  const stored = await readStoredPreviewConfig(page);
+  const saved = stored?.modelAdapters?.find((adapter) => adapter.modelID === "claude-auth-test");
+  expect(saved?.anthropicAuthMode).toBe("bearer");
+});
+
 test("编辑既有模型：加载草稿并支持保存并测试", async ({ page }) => {
   await openModelEditorPage(page, {
     plan: {

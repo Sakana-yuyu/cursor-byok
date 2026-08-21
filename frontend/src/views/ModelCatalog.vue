@@ -103,6 +103,7 @@ function buildProbeAdapter(model) {
        modelCatalogURL: String(d.modelCatalogURL || "").trim(),
        customHeadersEnabled: Boolean(d.customHeadersEnabled),
     customHeadersJSON: d.customHeadersJSON || "",
+    anthropicAuthMode: d.anthropicAuthMode || "legacy_dual",
     displayName: model.id,
     modelID: model.id,
     tooltipData: `探测 ${model.id}`,
@@ -155,6 +156,7 @@ async function fetchModels() {
       modelCatalogURLsJSON: d.modelCatalogURLsJSON || JSON.stringify(supplierTemplate(d.supplierID).modelCatalog?.urls || []),
       customHeadersEnabled: Boolean(d.customHeadersEnabled),
       customHeadersJSON: d.customHeadersJSON || "",
+      anthropicAuthMode: d.anthropicAuthMode || "legacy_dual",
     });
     const fetched = Array.isArray(result?.models) ? result.models : [];
     models.value = fetched;
@@ -218,6 +220,7 @@ async function handleBatchAdd() {
         apiKey: d.apiKey || "",
         customHeadersEnabled: Boolean(d.customHeadersEnabled),
         customHeadersJSON: d.customHeadersJSON || "",
+        anthropicAuthMode: d.anthropicAuthMode || "legacy_dual",
         displayName: model.id,
          modelID: model.id,
          supplierID: d.supplierID || "custom",
@@ -304,6 +307,7 @@ onMounted(async () => {
       modelCatalogURLsJSON: parsed.modelCatalogURLsJSON || JSON.stringify(supplierTemplate(parsed.supplierID).modelCatalog?.urls || []),
       customHeadersEnabled: Boolean(parsed.customHeadersEnabled),
       customHeadersJSON: parsed.customHeadersJSON || "",
+      anthropicAuthMode: String(parsed.anthropicAuthMode || "legacy_dual").trim().toLowerCase(),
       tooltipData: String(parsed.tooltipData || "").trim(),
       groupMode: normalizeSupplierGroupMode(parsed.groupMode),
     };

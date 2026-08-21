@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  basePreviewConfig,
   openSupplierPage,
   supportedBalance,
   testResultSuccess,
@@ -23,6 +24,68 @@ test("余额查询成功时页头展示余额明细，刷新按钮再次发起�
 
   await page.getByTitle("刷新余额").click();
   await expect(page.getByText(/余额 \$76\.50/)).toBeVisible();
+});
+
+test("Token Plan 余额展示多个结构化额度窗口", async ({ page }) => {
+  await openSupplierPage(page, {
+    plan: {
+      balance: supportedBalance({
+        source: "token_plan",
+        currency: "%",
+        total: 100,
+        used: 25,
+        remaining: 75,
+        planName: "Kimi For Coding",
+        fetchedAt: "2026-08-20T08:00:00Z",
+        windows: [
+          { id: "5h", label: "5小时", unit: "%", used: 25, limit: 100, remaining: 75, usedFraction: 0.25, remainingFraction: 0.75, status: "ok" },
+          { id: "1h", label: "1小时", unit: "%", used: 40, limit: 100, remaining: 60, usedFraction: 0.4, remainingFraction: 0.6, status: "ok" },
+          { id: "7d", label: "周限额", unit: "%", used: 88, limit: 100, remaining: 12, usedFraction: 0.88, remainingFraction: 0.12, status: "warning" },
+        ],
+      }),
+    },
+  });
+
+  await expect(page.getByText(/Kimi For Coding · 已用 25% \/ 剩余 75%/)).toBeVisible();
+  const windows = page.getByTestId("provider-usage-window");
+  await expect(windows).toHaveCount(3);
+  await expect(windows.nth(0)).toContainText("5小时");
+  await expect(windows.nth(0)).toContainText("剩余 75%");
+  await expect(windows.nth(1)).toContainText("1小时");
+  await expect(windows.nth(1)).toContainText("剩余 60%");
+  await expect(windows.nth(2)).toContainText("周限额");
+  await expect(windows.nth(2)).toContainText("剩余 12%");
+});
+
+test("结构化额度窗口在英文界面使用本地化标签", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("cursor-client:locale:v1", "en-US");
+    localStorage.setItem("cursor-client:locale-source:v1", "manual");
+  });
+  await openSupplierPage(page, {
+    config: basePreviewConfig(),
+    plan: {
+      balance: supportedBalance({
+        source: "token_plan",
+        currency: "%",
+        total: 100,
+        used: 25,
+        remaining: 75,
+        planName: "Kimi For Coding",
+        windows: [
+          { id: "5h", label: "5小时", unit: "%", usedFraction: 0.25, remainingFraction: 0.75, resetsAt: "2026-08-20T12:00:00Z", status: "ok" },
+          { id: "7d", label: "周限额", unit: "%", usedFraction: 0.88, remainingFraction: 0.12, status: "warning" },
+        ],
+      }),
+    },
+  });
+
+  const windows = page.getByTestId("provider-usage-window");
+  await expect(windows.nth(0)).toContainText("5 hours");
+  await expect(windows.nth(0)).toContainText("Remaining 75%");
+  await expect(windows.nth(0)).toContainText("Resets at");
+  await expect(windows.nth(1)).toContainText("Weekly limit");
+  await expect(windows.nth(1)).toContainText("Remaining 12%");
 });
 
 test("余额瞬时失败时保留上次成功值并标记可能过期", async ({ page }) => {

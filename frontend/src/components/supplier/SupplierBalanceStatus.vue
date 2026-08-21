@@ -1,4 +1,6 @@
 <script setup>
+import ProviderUsageWindows from "@/components/provider/ProviderUsageWindows.vue";
+
 // 余额状态仅负责根据父页面提供的派生值渲染，并把刷新意图上送。
 // 请求、缓存、旧值保留、告警阈值与服务端错误处理均由父页面保持。
 defineProps({
@@ -26,6 +28,11 @@ const emit = defineEmits(["refresh"]);
       :title="data.unlimited ? '该账户额度不限' : (alert ? alert.text : secondaryText)"
     ><span v-if="alert" class="text-[11px]">⚠</span>{{ primaryText }}<span v-if="stale" class="text-[11px] text-[#8f8f8f]">（可能过期）</span></span>
     <span v-if="!data.unlimited && secondaryText" class="hidden text-[#666] sm:inline">{{ secondaryText }}</span>
+    <ProviderUsageWindows
+      v-if="!data.unlimited && data.windows?.length"
+      :windows="data.windows"
+      variant="inline"
+    />
   </template>
   <span
     v-else-if="loaded"

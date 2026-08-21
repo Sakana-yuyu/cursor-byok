@@ -40,15 +40,25 @@ func requestBodyToMap(input any) (map[string]any, error) {
 	return body, nil
 }
 
+var openAIProtectedExtraParamKeys = map[string]struct{}{
+	"model": {}, "stream": {}, "stream_options": {}, "messages": {}, "input": {}, "instructions": {}, "tools": {},
+	"max_tokens": {}, "max_completion_tokens": {}, "max_output_tokens": {}, "reasoning_effort": {}, "reasoning": {},
+	"thinking": {}, "enable_thinking": {},
+}
+
+var anthropicProtectedExtraParamKeys = map[string]struct{}{
+	"model": {}, "stream": {}, "system": {}, "messages": {}, "tools": {}, "max_tokens": {}, "thinking": {}, "output_config": {},
+}
+
 func ApplyOpenAIExtraParams(body map[string]any, enabled bool, paramsJSON string) error {
-	return applyExtraParams(body, enabled, paramsJSON, "openai extra params json")
+	return applyExtraParams(body, enabled, paramsJSON, "openai extra params json", openAIProtectedExtraParamKeys)
 }
 
 func ApplyAnthropicExtraParams(body map[string]any, enabled bool, paramsJSON string) error {
-	return applyExtraParams(body, enabled, paramsJSON, "anthropic extra params json")
+	return applyExtraParams(body, enabled, paramsJSON, "anthropic extra params json", anthropicProtectedExtraParamKeys)
 }
 
-func applyExtraParams(body map[string]any, enabled bool, paramsJSON string, label string) error {
+func applyExtraParams(body map[string]any, enabled bool, paramsJSON string, label string, protected map[string]struct{}) error {
 	if !enabled {
 		return nil
 	}
@@ -64,30 +74,52 @@ func applyExtraParams(body map[string]any, enabled bool, paramsJSON string, labe
 		if name == "" {
 			continue
 		}
+		if _, blocked := protected[strings.ToLower(name)]; blocked {
+			continue
+		}
 		body[name] = value
 	}
 	return nil
 }
 
-func ApplyCustomHeaders(httpReq *http.Request, enabled bool, headersJSON string) error {
+func ParseCustomHeaders(enabled bool, headersJSON string) (http.Header, error) {
+	headers := make(http.Header)
 	if !enabled {
-		return nil
+		return headers, nil
 	}
-	if httpReq == nil {
-		return fmt.Errorf("custom headers target request is nil")
-	}
-	headers, err := parseStringJSONMap(headersJSON, "custom headers json")
+	values, err := parseStringJSONMap(headersJSON, "custom headers json")
 	if err != nil {
-		return err
+		return nil, err
 	}
-	for key, value := range headers {
+	for key, value := range values {
 		name := strings.TrimSpace(key)
 		if name == "" {
 			continue
 		}
-		httpReq.Header.Set(name, value)
+		headers.Set(name, value)
+	}
+	return headers, nil
+}
+
+func ApplyHeaderSet(httpReq *http.Request, headers http.Header) error {
+	if httpReq == nil {
+		return fmt.Errorf("custom headers target request is nil")
+	}
+	for key, values := range headers {
+		httpReq.Header.Del(key)
+		for _, value := range values {
+			httpReq.Header.Add(key, value)
+		}
 	}
 	return nil
+}
+
+func ApplyCustomHeaders(httpReq *http.Request, enabled bool, headersJSON string) error {
+	headers, err := ParseCustomHeaders(enabled, headersJSON)
+	if err != nil {
+		return err
+	}
+	return ApplyHeaderSet(httpReq, headers)
 }
 
 func parseJSONMap(value string, label string) (map[string]any, error) {

@@ -25,16 +25,17 @@ const (
 
 // ModelCatalogRequest 是拉取模型列表所需的临时连接参数，不会写入配置。
 type ModelCatalogRequest struct {
-	Type                 string `json:"type"`
-	SupplierID           string `json:"supplierID,omitempty"`
-	ModelCatalogStatus   string `json:"modelCatalogStatus,omitempty"`
-	AppendModelCatalogCandidates *bool `json:"appendModelCatalogCandidates,omitempty"`
-	BaseURL              string `json:"baseURL"`
-	APIKey               string `json:"apiKey"`
-	CustomHeadersEnabled bool   `json:"customHeadersEnabled"`
-	CustomHeadersJSON    string `json:"customHeadersJSON"`
-	ModelCatalogURL      string `json:"modelCatalogURL,omitempty"`
-	ModelCatalogURLsJSON string `json:"modelCatalogURLsJSON,omitempty"`
+	Type                         string `json:"type"`
+	SupplierID                   string `json:"supplierID,omitempty"`
+	ModelCatalogStatus           string `json:"modelCatalogStatus,omitempty"`
+	AppendModelCatalogCandidates *bool  `json:"appendModelCatalogCandidates,omitempty"`
+	BaseURL                      string `json:"baseURL"`
+	APIKey                       string `json:"apiKey"`
+	CustomHeadersEnabled         bool   `json:"customHeadersEnabled"`
+	CustomHeadersJSON            string `json:"customHeadersJSON"`
+	AnthropicAuthMode            string `json:"anthropicAuthMode,omitempty"`
+	ModelCatalogURL              string `json:"modelCatalogURL,omitempty"`
+	ModelCatalogURLsJSON         string `json:"modelCatalogURLsJSON,omitempty"`
 	// ForceRefresh 为 true 时绕过进程内 TTL 缓存，强制重新拉取（供 UI 显式刷新使用）。
 	ForceRefresh bool `json:"forceRefresh,omitempty"`
 }
@@ -85,7 +86,18 @@ func (s *ProxyService) FetchModelCatalog(request ModelCatalogRequest) (ModelCata
 		return ModelCatalogResult{}, err
 	}
 	headerIdentity := modelCatalogHeadersIdentity(customHeaders)
-	cacheKey := metadataCacheKey(typeName, request.BaseURL, apiKey) + "|supplier=" + strings.ToLower(strings.TrimSpace(request.SupplierID)) + "|catalog=" + strings.Join(candidates, "\x1f") + "|headers=" + headerIdentity
+	anthropicAuthMode := modelchannel.NormalizeAnthropicAuthMode(request.AnthropicAuthMode)
+	if anthropicAuthMode == "" {
+		return ModelCatalogResult{}, i18n.NewError("error.model_adapter.anthropic_auth_mode_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 anthropicAuthMode 仅支持 legacy_dual、auto、x_api_key 或 bearer")
+	}
+	cacheKey := metadataIdentityHash(
+		"model_catalog",
+		metadataCacheKey(typeName, request.BaseURL, apiKey),
+		strings.ToLower(strings.TrimSpace(request.SupplierID)),
+		anthropicAuthMode,
+		strings.Join(candidates, "\x1f"),
+		headerIdentity,
+	)
 	if request.ForceRefresh {
 		s.modelCatalogCache.invalidate(cacheKey)
 	} else if cached, ok := s.modelCatalogCache.get(cacheKey); ok {
@@ -94,8 +106,15 @@ func (s *ProxyService) FetchModelCatalog(request ModelCatalogRequest) (ModelCata
 
 	headers := make(http.Header)
 	if typeName == "anthropic" {
-		headers.Set("x-api-key", apiKey)
 		headers.Set("anthropic-version", "2023-06-01")
+		if !modelchannel.HasExplicitAnthropicAuthHeader(customHeaders) {
+			for name, values := range modelchannel.AnthropicGeneratedAuthHeaders(request.BaseURL, anthropicAuthMode, apiKey) {
+				headers.Del(name)
+				for _, value := range values {
+					headers.Add(name, value)
+				}
+			}
+		}
 	} else if typeName == "gemini" {
 		headers.Set("x-goog-api-key", apiKey)
 	} else {
@@ -104,14 +123,15 @@ func (s *ProxyService) FetchModelCatalog(request ModelCatalogRequest) (ModelCata
 	for name, values := range customHeaders {
 		headers.Del(name)
 		for _, value := range values {
-			headers.Set(name, value)
+			headers.Add(name, value)
 		}
 	}
 
-	client := s.publicClient
-	if client == nil {
-		client = http.DefaultClient
+	baseClient := s.publicClient
+	if baseClient == nil {
+		baseClient = http.DefaultClient
 	}
+	client := modelCatalogRedirectSafeClient(baseClient, request.BaseURL, customHeaders)
 	ctx, cancel := context.WithTimeout(context.Background(), modelCatalogTimeout)
 	defer cancel()
 	lastStatus := 0
@@ -119,19 +139,21 @@ func (s *ProxyService) FetchModelCatalog(request ModelCatalogRequest) (ModelCata
 	for _, endpoint := range candidates {
 		httpRequest, requestErr := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 		if requestErr != nil {
-			lastErr = requestErr
+			lastErr = fmt.Errorf("模型目录候选地址无效")
 			continue
 		}
-		httpRequest.Header = headers.Clone()
+		if modelchannel.SameEffectiveOrigin(request.BaseURL, endpoint) {
+			httpRequest.Header = headers.Clone()
+		}
 		response, requestErr := client.Do(httpRequest)
 		if requestErr != nil {
-			lastErr = requestErr
+			lastErr = fmt.Errorf("模型目录网络请求失败")
 			continue
 		}
 		body, readErr := io.ReadAll(io.LimitReader(response.Body, modelCatalogMaxBodyBytes+1))
 		response.Body.Close()
 		if readErr != nil {
-			lastErr = readErr
+			lastErr = fmt.Errorf("读取模型目录响应失败")
 			continue
 		}
 		lastStatus = response.StatusCode
@@ -160,6 +182,45 @@ func (s *ProxyService) FetchModelCatalog(request ModelCatalogRequest) (ModelCata
 		message = message + "：" + lastErr.Error()
 	}
 	return ModelCatalogResult{}, i18n.NewError("error.model_catalog.request_failed", i18n.CodeModelCatalog, message)
+}
+
+func modelCatalogRedirectSafeClient(base *http.Client, trustedBaseURL string, customHeaders http.Header) *http.Client {
+	clone := *base
+	previous := clone.CheckRedirect
+	sensitiveNames := map[string]struct{}{
+		strings.ToLower("Authorization"):       {},
+		strings.ToLower("Proxy-Authorization"): {},
+		strings.ToLower("Cookie"):              {},
+		strings.ToLower("Referer"):             {},
+		strings.ToLower("x-api-key"):           {},
+		strings.ToLower("x-goog-api-key"):      {},
+	}
+	for name := range customHeaders {
+		sensitiveNames[strings.ToLower(strings.TrimSpace(name))] = struct{}{}
+	}
+	clone.CheckRedirect = func(request *http.Request, via []*http.Request) error {
+		if previous != nil {
+			if err := previous(request, via); err != nil {
+				return err
+			}
+		}
+		crossedUntrustedOrigin := !modelchannel.SameEffectiveOrigin(trustedBaseURL, request.URL.String())
+		for _, previousRequest := range via {
+			if previousRequest == nil || previousRequest.URL == nil || !modelchannel.SameEffectiveOrigin(trustedBaseURL, previousRequest.URL.String()) {
+				crossedUntrustedOrigin = true
+				break
+			}
+		}
+		if crossedUntrustedOrigin {
+			for name := range request.Header {
+				if _, sensitive := sensitiveNames[strings.ToLower(strings.TrimSpace(name))]; sensitive {
+					request.Header.Del(name)
+				}
+			}
+		}
+		return nil
+	}
+	return &clone
 }
 
 func modelCatalogHeadersIdentity(headers http.Header) string {

@@ -22,6 +22,7 @@ import {
 import { MODEL_CATALOG_DRAFT_KEY } from "@/utils/modelCatalogDraft";
 import {
   ANTHROPIC_THINKING_EFFORT_DEFAULT,
+  ANTHROPIC_AUTH_MODE_AUTO,
   appState,
   BALANCE_QUERY_HEADERS_DEFAULT_JSON,
   buildModelAdapterTestRequestHash,
@@ -50,6 +51,7 @@ import {
   toUserError,
   validateModelAdapters,
 } from "@/state/appState";
+import { anthropicAuthModeOptions } from "@/utils/anthropicAuthMeta";
 import { runtimeWindow } from "@/services/runtimeAdapter";
 import { isBrowserPreview } from "@/services/runtimeAdapter";
 import { computed, onMounted, reactive, ref, watch } from "vue";
@@ -83,6 +85,7 @@ const createEmptyModelAdapter = () => ({
   customHeadersJSON: CUSTOM_HEADERS_DEFAULT_JSON,
   anthropicExtraParamsEnabled: false,
   anthropicExtraParamsJSON: EXTRA_PARAMS_DEFAULT_JSON,
+  anthropicAuthMode: ANTHROPIC_AUTH_MODE_AUTO,
   contextWindowTokens: 0,
   maxCompletionTokens: 0,
   anthropicMaxTokens: 0,
@@ -347,7 +350,9 @@ async function loadContext() {
     const ctx = await getModelEditorContext();
     editorIndex.value = typeof ctx.index === "number" ? ctx.index : -1;
     const parsed = JSON.parse(ctx.adapterJSON || "{}");
-    const normalized = normalizeModelAdapter(parsed);
+    const normalized = editorIndex.value < 0 && Object.keys(parsed || {}).length === 0
+      ? createEmptyModelAdapter()
+      : normalizeModelAdapter(parsed);
     Object.assign(draft, normalized);
     draft.balanceProfile = resolveBalanceProfileForAdapter(normalized);
     if (!draft.type) {
@@ -465,6 +470,7 @@ function applySupplierTemplate(id, { force = false } = {}) {
     draft.protocolGroup = draft.openAIRequestGroup;
   } else if (template.type === "anthropic") {
     draft.protocolGroup = PROTOCOL_GROUP_ANTHROPIC_MESSAGES;
+    if (force || !draft.anthropicAuthMode) draft.anthropicAuthMode = ANTHROPIC_AUTH_MODE_AUTO;
   } else if (template.type === "gemini") {
     draft.protocolGroup = PROTOCOL_GROUP_GEMINI_NATIVE;
   }
@@ -535,6 +541,7 @@ function handleModelTypeChange(type) {
       : classifyModelProtocol(type, draft.modelID, draft.baseURL, draft.openAIEndpoint, "");
   } else if (type === "anthropic") {
     draft.protocolGroup = PROTOCOL_GROUP_ANTHROPIC_MESSAGES;
+    if (!draft.anthropicAuthMode) draft.anthropicAuthMode = ANTHROPIC_AUTH_MODE_AUTO;
     ensureAnthropicThinkingEffort();
   } else if (type === "gemini") {
     draft.protocolGroup = PROTOCOL_GROUP_GEMINI_NATIVE;
@@ -589,6 +596,7 @@ async function openCatalogPage() {
         modelCatalogURLsJSON: JSON.stringify(supplierTemplate(draft.supplierID).modelCatalog?.urls || []),
         customHeadersEnabled: Boolean(draft.customHeadersEnabled),
         customHeadersJSON: draft.customHeadersJSON || "",
+        anthropicAuthMode: draft.anthropicAuthMode || ANTHROPIC_AUTH_MODE_AUTO,
         tooltipData: String(draft.tooltipData || "").trim(),
         groupMode: mode,
         // 渠道名只在拉取页填写，避免与本页重复
@@ -1154,6 +1162,11 @@ onMounted(async () => {
         </div>
 
         <div v-if="draft.type === 'anthropic'" class="rounded-[8px] border border-[#343434] bg-[#232323] p-3">
+          <label class="mb-3 flex flex-col gap-1">
+            <span class="text-sm text-[#d4d4d4]">Anthropic 鉴权模式</span>
+            <Select v-model="draft.anthropicAuthMode" :options="anthropicAuthModeOptions" />
+            <span class="text-xs text-[#a3a3a3]">自定义 Authorization 或 X-Api-Key 请求头会完全接管鉴权，并抑制自动生成的鉴权头。</span>
+          </label>
           <div class="flex items-center justify-between gap-3">
             <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
               <Tooltip :content="fieldTips.anthropicExtraParams" />

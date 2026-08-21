@@ -6,6 +6,7 @@
 //   - Zhipu GLM / Zhipu GLM Team（团队版须显式 BalanceCodingPlanProvider=zhipu_team）
 //   - MiniMax
 //   - ZenMux
+//
 // 火山方舟 Coding Plan 依赖 AK/SK 签名，本仓库暂提示配置，不在此自动查询。
 package client
 
@@ -14,6 +15,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"sort"
 	"strconv"
@@ -124,35 +126,76 @@ func queryKimiCodingPlan(ctx context.Context, httpClient *http.Client, apiKey st
 		return namedBalanceFail("token_plan", "响应解析失败", false)
 	}
 
+	return codingPlanBalanceFromTiers("Kimi For Coding", parseKimiTiers(root))
+}
+
+func parseKimiTiers(root map[string]any) []codingPlanTier {
 	var tiers []codingPlanTier
+	positions := make(map[string]int)
+	appendTier := func(tier codingPlanTier) {
+		if position, exists := positions[tier.ID]; exists {
+			current := tiers[position]
+			if (!current.Known && tier.Known) || (current.Known && tier.Known && tier.Utilization > current.Utilization) {
+				tiers[position] = tier
+			}
+			return
+		}
+		positions[tier.ID] = len(tiers)
+		tiers = append(tiers, tier)
+	}
+
 	if limits, ok := root["limits"].([]any); ok {
-		for _, item := range limits {
+		for index, item := range limits {
 			obj, _ := item.(map[string]any)
 			detail, _ := obj["detail"].(map[string]any)
 			if detail == nil {
 				continue
 			}
-			limit := anyToFloat(detail["limit"], 1)
-			remaining := anyToFloat(detail["remaining"], 0)
-			used := maxFloat(0, limit-remaining)
-			util := 0.0
-			if limit > 0 {
-				util = used / limit * 100
-			}
-			tiers = append(tiers, codingPlanTier{Name: "5小时", Utilization: util, ResetsAt: anyToReset(detail["resetTime"])})
+			id, label := kimiWindowIdentity(obj["window"], index)
+			utilization, known := quotaUtilizationPercent(detail["limit"], detail["remaining"])
+			appendTier(codingPlanTier{
+				Known:       known,
+				ID:          id,
+				Name:        label,
+				Utilization: utilization,
+				ResetsAt:    anyToReset(detail["resetTime"]),
+			})
 		}
 	}
 	if usage, ok := root["usage"].(map[string]any); ok {
-		limit := anyToFloat(usage["limit"], 1)
-		remaining := anyToFloat(usage["remaining"], 0)
-		used := maxFloat(0, limit-remaining)
-		util := 0.0
-		if limit > 0 {
-			util = used / limit * 100
-		}
-		tiers = append(tiers, codingPlanTier{Name: "周限额", Utilization: util, ResetsAt: anyToReset(usage["resetTime"])})
+		utilization, known := quotaUtilizationPercent(usage["limit"], usage["remaining"])
+		appendTier(codingPlanTier{
+			Known:       known,
+			ID:          "7d",
+			Name:        "周限额",
+			Utilization: utilization,
+			ResetsAt:    anyToReset(usage["resetTime"]),
+		})
 	}
-	return codingPlanBalanceFromTiers("Kimi For Coding", tiers)
+	return tiers
+}
+
+func kimiWindowIdentity(value any, index int) (string, string) {
+	window, _ := value.(map[string]any)
+	duration, durationOK := asInt64(window["duration"])
+	unit, _ := window["timeUnit"].(string)
+	if durationOK && duration > 0 {
+		switch strings.ToUpper(strings.TrimSpace(unit)) {
+		case "TIME_UNIT_MINUTE", "MINUTE", "MINUTES":
+			if duration%60 == 0 {
+				hours := duration / 60
+				return fmt.Sprintf("%dh", hours), fmt.Sprintf("%d小时", hours)
+			}
+			return fmt.Sprintf("%dm", duration), fmt.Sprintf("%d分钟", duration)
+		case "TIME_UNIT_HOUR", "HOUR", "HOURS":
+			return fmt.Sprintf("%dh", duration), fmt.Sprintf("%d小时", duration)
+		case "TIME_UNIT_DAY", "DAY", "DAYS":
+			return fmt.Sprintf("%dd", duration), fmt.Sprintf("%d天", duration)
+		case "TIME_UNIT_SECOND", "SECOND", "SECONDS":
+			return fmt.Sprintf("%ds", duration), fmt.Sprintf("%d秒", duration)
+		}
+	}
+	return fmt.Sprintf("limit-%d", index+1), fmt.Sprintf("额度窗口 %d", index+1)
 }
 
 func queryZhipuCodingPlan(ctx context.Context, httpClient *http.Client, baseURL, apiKey string, team bool) ProviderBalance {
@@ -206,6 +249,7 @@ func parseZhipuTiers(data map[string]any) []codingPlanTier {
 	type entry struct {
 		resetMS *int64
 		pct     float64
+		known   bool
 		reset   string
 		kind    int // 1=5h 2=week 0=unknown
 	}
@@ -221,12 +265,12 @@ func parseZhipuTiers(data map[string]any) []codingPlanTier {
 		if !strings.EqualFold(typ, "TOKENS_LIMIT") {
 			continue
 		}
-		pct := anyToFloat(item["percentage"], 0)
+		pct, known := asFloat(item["percentage"])
 		var resetMS *int64
 		if v, ok := asInt64(item["nextResetTime"]); ok {
 			resetMS = &v
 		}
-		e := entry{resetMS: resetMS, pct: pct, reset: millisToISO(resetMS), kind: 0}
+		e := entry{resetMS: resetMS, pct: pct, known: known, reset: millisToISO(resetMS), kind: 0}
 		switch unit, _ := asInt64(item["unit"]); unit {
 		case 3:
 			e.kind = 1
@@ -271,10 +315,10 @@ func parseZhipuTiers(data map[string]any) []codingPlanTier {
 	}
 	var tiers []codingPlanTier
 	if five != nil {
-		tiers = append(tiers, codingPlanTier{Name: "5小时", Utilization: five.pct, ResetsAt: five.reset})
+		tiers = append(tiers, codingPlanTier{Known: five.known, ID: "5h", Name: "5小时", Utilization: five.pct, ResetsAt: five.reset})
 	}
 	if weekly != nil {
-		tiers = append(tiers, codingPlanTier{Name: "周限额", Utilization: weekly.pct, ResetsAt: weekly.reset})
+		tiers = append(tiers, codingPlanTier{Known: weekly.known, ID: "7d", Name: "周限额", Utilization: weekly.pct, ResetsAt: weekly.reset})
 	}
 	return tiers
 }
@@ -338,7 +382,7 @@ func parseMiniMaxTiers(root map[string]any) []codingPlanTier {
 			v := ms
 			reset = millisToISO(&v)
 		}
-		tiers = append(tiers, codingPlanTier{Name: "5小时", Utilization: 100 - remainPct, ResetsAt: reset})
+		tiers = append(tiers, codingPlanTier{Known: true, ID: "5h", Name: "5小时", Utilization: 100 - remainPct, ResetsAt: reset})
 	}
 	if status, _ := asInt64(item["current_weekly_status"]); status == 1 {
 		if remainPct, ok := asFloat(item["current_weekly_remaining_percent"]); ok {
@@ -347,7 +391,7 @@ func parseMiniMaxTiers(root map[string]any) []codingPlanTier {
 				v := ms
 				reset = millisToISO(&v)
 			}
-			tiers = append(tiers, codingPlanTier{Name: "周限额", Utilization: 100 - remainPct, ResetsAt: reset})
+			tiers = append(tiers, codingPlanTier{Known: true, ID: "7d", Name: "周限额", Utilization: 100 - remainPct, ResetsAt: reset})
 		}
 	}
 	return tiers
@@ -390,17 +434,7 @@ func queryZenMuxCodingPlan(ctx context.Context, httpClient *http.Client, baseURL
 	if data == nil {
 		return namedBalanceFail("token_plan", "响应缺少 data", false)
 	}
-	var tiers []codingPlanTier
-	if q5, ok := data["quota_5_hour"].(map[string]any); ok {
-		util := anyToFloat(q5["usage_percentage"], 0) * 100
-		reset, _ := q5["resets_at"].(string)
-		tiers = append(tiers, codingPlanTier{Name: "5小时", Utilization: util, ResetsAt: reset})
-	}
-	if q7, ok := data["quota_7_day"].(map[string]any); ok {
-		util := anyToFloat(q7["usage_percentage"], 0) * 100
-		reset, _ := q7["resets_at"].(string)
-		tiers = append(tiers, codingPlanTier{Name: "周限额", Utilization: util, ResetsAt: reset})
-	}
+	tiers := parseZenMuxTiers(data)
 	label := "ZenMux"
 	if plan, ok := data["plan"].(map[string]any); ok {
 		if tier, _ := plan["tier"].(string); strings.TrimSpace(tier) != "" {
@@ -414,40 +448,120 @@ func queryZenMuxCodingPlan(ctx context.Context, httpClient *http.Client, baseURL
 	return codingPlanBalanceFromTiers(label, tiers)
 }
 
+func parseZenMuxTiers(data map[string]any) []codingPlanTier {
+	var tiers []codingPlanTier
+	if q5, ok := data["quota_5_hour"].(map[string]any); ok {
+		value, known := asFloat(q5["usage_percentage"])
+		reset, _ := q5["resets_at"].(string)
+		tiers = append(tiers, codingPlanTier{Known: known, ID: "5h", Name: "5小时", Utilization: value * 100, ResetsAt: reset})
+	}
+	if q7, ok := data["quota_7_day"].(map[string]any); ok {
+		value, known := asFloat(q7["usage_percentage"])
+		reset, _ := q7["resets_at"].(string)
+		tiers = append(tiers, codingPlanTier{Known: known, ID: "7d", Name: "周限额", Utilization: value * 100, ResetsAt: reset})
+	}
+	return tiers
+}
+
 type codingPlanTier struct {
-	Name         string
-	Utilization  float64 // 已用百分比 0-100
-	ResetsAt     string
+	Known       bool
+	ID          string
+	Name        string
+	Utilization float64 // 已用百分比 0-100
+	ResetsAt    string
 }
 
 func codingPlanBalanceFromTiers(planName string, tiers []codingPlanTier) ProviderBalance {
 	if len(tiers) == 0 {
 		return namedBalanceFail("token_plan", "未返回可用额度窗口", false)
 	}
-	// 主展示取第一个窗口（通常是 5 小时）的剩余百分比。
-	primary := tiers[0]
-	used := primary.Utilization
-	remaining := maxFloat(0, 100-used)
-	total := 100.0
+
+	windows := make([]ProviderUsageWindow, 0, len(tiers))
 	parts := make([]string, 0, len(tiers))
-	for _, t := range tiers {
-		line := fmt.Sprintf("%s 已用 %.0f%%", t.Name, t.Utilization)
-		if strings.TrimSpace(t.ResetsAt) != "" {
-			line += " · 重置 " + t.ResetsAt
+	primaryIndex := -1
+	for index, tier := range tiers {
+		window := codingPlanUsageWindow(tier, index)
+		windows = append(windows, window)
+		line := window.Label + " 用量未知"
+		if window.Used != nil {
+			line = fmt.Sprintf("%s 已用 %.0f%%", window.Label, *window.Used)
+			if primaryIndex < 0 {
+				primaryIndex = index
+			}
+		}
+		if strings.TrimSpace(window.ResetsAt) != "" {
+			line += " · 重置 " + window.ResetsAt
 		}
 		parts = append(parts, line)
 	}
-	msg := strings.Join(parts, "；")
+	if primaryIndex < 0 {
+		return namedBalanceFail("token_plan", "额度窗口缺少可识别的用量", false)
+	}
+
+	primary := windows[primaryIndex]
 	return ProviderBalance{
 		Supported: true,
 		Source:    "token_plan",
 		Currency:  "%",
-		Remaining: &remaining,
-		Used:      &used,
-		Total:     &total,
+		Remaining: primary.Remaining,
+		Used:      primary.Used,
+		Total:     primary.Limit,
 		PlanName:  planName,
-		Message:   msg,
+		Windows:   windows,
+		FetchedAt: time.Now().UTC().Format(time.RFC3339),
+		Message:   strings.Join(parts, "；"),
 	}
+}
+
+func codingPlanUsageWindow(tier codingPlanTier, index int) ProviderUsageWindow {
+	id := strings.TrimSpace(tier.ID)
+	if id == "" {
+		id = fmt.Sprintf("window-%d", index+1)
+	}
+	label := strings.TrimSpace(tier.Name)
+	if label == "" {
+		label = fmt.Sprintf("额度窗口 %d", index+1)
+	}
+	window := ProviderUsageWindow{
+		ID:       id,
+		Label:    label,
+		Unit:     "%",
+		ResetsAt: strings.TrimSpace(tier.ResetsAt),
+		Status:   "unknown",
+	}
+	if !tier.Known || math.IsNaN(tier.Utilization) || math.IsInf(tier.Utilization, 0) {
+		return window
+	}
+
+	used := minMaxFloat(tier.Utilization, 0, 100)
+	limit := 100.0
+	remaining := limit - used
+	usedFraction := used / limit
+	remainingFraction := remaining / limit
+	window.Used = &used
+	window.Limit = &limit
+	window.Remaining = &remaining
+	window.UsedFraction = &usedFraction
+	window.RemainingFraction = &remainingFraction
+	switch {
+	case usedFraction >= 1:
+		window.Status = "exhausted"
+	case usedFraction >= 0.8:
+		window.Status = "warning"
+	default:
+		window.Status = "ok"
+	}
+	return window
+}
+
+func minMaxFloat(value, minValue, maxValue float64) float64 {
+	if value < minValue {
+		return minValue
+	}
+	if value > maxValue {
+		return maxValue
+	}
+	return value
 }
 
 func codingPlanGET(ctx context.Context, httpClient *http.Client, endpoint string, headers map[string]string) (body []byte, status int, transient bool, err error) {
@@ -478,6 +592,15 @@ func codingPlanGET(ctx context.Context, httpClient *http.Client, endpoint string
 	return buf, resp.StatusCode, false, nil
 }
 
+func quotaUtilizationPercent(limitValue, remainingValue any) (float64, bool) {
+	limit, limitOK := asFloat(limitValue)
+	remaining, remainingOK := asFloat(remainingValue)
+	if !limitOK || !remainingOK || limit <= 0 {
+		return 0, false
+	}
+	return (limit - remaining) / limit * 100, true
+}
+
 func anyToFloat(v any, fallback float64) float64 {
 	if f, ok := asFloat(v); ok {
 		return f
@@ -486,24 +609,32 @@ func anyToFloat(v any, fallback float64) float64 {
 }
 
 func asFloat(v any) (float64, bool) {
+	var value float64
+	var ok bool
 	switch n := v.(type) {
 	case float64:
-		return n, true
+		value, ok = n, true
 	case float32:
-		return float64(n), true
+		value, ok = float64(n), true
 	case int:
-		return float64(n), true
+		value, ok = float64(n), true
 	case int64:
-		return float64(n), true
+		value, ok = float64(n), true
 	case json.Number:
-		f, err := n.Float64()
-		return f, err == nil
+		var err error
+		value, err = n.Float64()
+		ok = err == nil
 	case string:
-		f, err := strconv.ParseFloat(strings.TrimSpace(n), 64)
-		return f, err == nil
+		var err error
+		value, err = strconv.ParseFloat(strings.TrimSpace(n), 64)
+		ok = err == nil
 	default:
 		return 0, false
 	}
+	if !ok || math.IsNaN(value) || math.IsInf(value, 0) {
+		return 0, false
+	}
+	return value, true
 }
 
 func asInt64(v any) (int64, bool) {

@@ -23,6 +23,8 @@ contents:
     dst: "/usr/share/icons/hicolor/128x128/apps/Cursor助手.png"
   - src: "./build/linux/Cursor助手.desktop"
     dst: "/usr/share/applications/Cursor助手.desktop"
+  - src: "./THIRD_PARTY_NOTICES.md"
+    dst: "/usr/share/doc/cursor-byok/THIRD_PARTY_NOTICES.md"
 
 # Default dependencies for Debian 12/Ubuntu 22.04+ with WebKit 4.1
 depends:

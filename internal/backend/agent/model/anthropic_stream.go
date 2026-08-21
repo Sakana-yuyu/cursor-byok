@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -115,6 +116,13 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 	applyProviderCompatibilitySanitization(body, baseURL, modelID)
 	recordLLMRequestArtifact(req, "anthropic", modelID, "POST", requestURL, body)
 
+	customHeaders, err := ParseCustomHeaders(req.CustomHeadersEnabled, req.CustomHeadersJSON)
+	if err != nil {
+		finishedAt = time.Now().UTC()
+		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "anthropic", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))
+		return err
+	}
+
 	payload, err := json.Marshal(body)
 	if err != nil {
 		finishedAt = time.Now().UTC()
@@ -122,19 +130,15 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 		return err
 	}
 
-	err = streamWithReconnect(ctx, sink, func(_ int, wrappedSink func(ModelEvent) error) error {
+	err = streamWithReconnect(ctx, sink, requestReplaySafety(req), func(_ int, wrappedSink func(ModelEvent) error) error {
 		streamCtx, streamIdle := newProviderStreamIdleWatchdog(ctx, req.ProviderStreamIdleTimeout)
 		defer streamIdle.Stop()
 
 		resp, err := doProviderRequestWithGzipFallback(streamCtx, adapter.client, "anthropic", req.RequestID, req.ModelCallID, payload, requestURL, func(httpReq *http.Request) error {
-			ApplyAnthropicCompatibleAuthHeaders(httpReq, apiKey)
 			httpReq.Header.Set("anthropic-version", "2023-06-01")
 			httpReq.Header.Set("content-type", "application/json")
 			httpReq.Header.Set("User-Agent", AnthropicClaudeCodeUserAgent)
-			if err := ApplyCustomHeaders(httpReq, req.CustomHeadersEnabled, req.CustomHeadersJSON); err != nil {
-				return err
-			}
-			return nil
+			return ApplyAnthropicCompatibleAuthHeaders(httpReq, requestURL, req.AnthropicAuthMode, apiKey, customHeaders)
 		})
 		if err != nil {
 			if idleErr := streamIdle.Err(); idleErr != nil {
@@ -194,6 +198,9 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 		}
 
 		toolBlocks := make(map[int]*anthropicToolAccumulator)
+		openContentBlocks := make(map[int]struct{})
+		messageStarted := false
+		terminalMessageDelta := false
 		thinkingStarted := time.Time{}
 		currentThinkingSignature := ""
 		thinkParser := &anthropicThinkTagParser{}
@@ -205,8 +212,9 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 		usagePresent := false
 		cacheReadPresent := false
 		cacheWritePresent := false
-		finishReason := "message_stop"
+		finishReason := ""
 		messageStopped := false
+		outwardEvent := false
 		firstEventAt := time.Time{}
 		fail := func(streamErr error) error {
 			finishedAt = time.Now().UTC()
@@ -238,6 +246,7 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 			}); err != nil {
 				return err
 			}
+			outwardEvent = true
 			thinkingStarted = time.Time{}
 			currentThinkingSignature = ""
 			return nil
@@ -250,6 +259,7 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 			if err := flushThinkingCompleted(); err != nil {
 				return err
 			}
+			outwardEvent = true
 			return wrappedSink(ModelEvent{
 				Kind:       ModelEventKindTextDelta,
 				OccurredAt: time.Now().UTC(),
@@ -266,6 +276,7 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 			if thinkingStarted.IsZero() {
 				thinkingStarted = time.Now()
 			}
+			outwardEvent = true
 			return wrappedSink(ModelEvent{
 				Kind:          ModelEventKindThinkingDelta,
 				OccurredAt:    time.Now().UTC(),
@@ -317,8 +328,44 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 				cacheWriteTokens = maxInt64(*usage.CacheCreationInputTokens, 0)
 			}
 		}
+		emitTurnFinished := func() error {
+			if messageStopped {
+				return nil
+			}
+			if len(openContentBlocks) != 0 {
+				return fmt.Errorf("anthropic stream completed with open content blocks: %w", io.ErrUnexpectedEOF)
+			}
+			if err := flushTaggedTextTail(); err != nil {
+				return err
+			}
+			if err := flushThinkingCompleted(); err != nil {
+				return err
+			}
+			if finishReason == "" {
+				finishReason = "message_stop"
+			}
+			if err := wrappedSink(ModelEvent{
+				Kind:              ModelEventKindTurnFinished,
+				OccurredAt:        time.Now().UTC(),
+				Provider:          "anthropic",
+				Model:             currentModel,
+				InputTokens:       inputTokens,
+				OutputTokens:      outputTokens,
+				CacheReadTokens:   cacheReadTokens,
+				CacheWriteTokens:  cacheWriteTokens,
+				UsagePresent:      usagePresent,
+				CacheReadPresent:  cacheReadPresent,
+				CacheWritePresent: cacheWritePresent,
+				FinishReason:      finishReason,
+			}); err != nil {
+				return err
+			}
+			messageStopped = true
+			return nil
+		}
 		errorFromEvent := func(event anthropicEvent) error {
 			finishReason = "error"
+			providerErr := error(fmt.Errorf("anthropic provider error"))
 			if event.Error != nil {
 				parts := make([]string, 0, 4)
 				if value := strings.TrimSpace(event.Error.Type); value != "" {
@@ -332,15 +379,18 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 				}
 				if message := strings.TrimSpace(event.Error.Message); message != "" {
 					if len(parts) > 0 {
-						return fmt.Errorf("anthropic provider error %s: %s", strings.Join(parts, " "), message)
+						providerErr = fmt.Errorf("anthropic provider error %s: %s", strings.Join(parts, " "), message)
+					} else {
+						providerErr = fmt.Errorf("anthropic provider error: %s", message)
 					}
-					return fmt.Errorf("anthropic provider error: %s", message)
-				}
-				if len(parts) > 0 {
-					return fmt.Errorf("anthropic provider error %s", strings.Join(parts, " "))
+				} else if len(parts) > 0 {
+					providerErr = fmt.Errorf("anthropic provider error %s", strings.Join(parts, " "))
 				}
 			}
-			return fmt.Errorf("anthropic provider error")
+			if outwardEvent {
+				return fmt.Errorf("anthropic provider stream failed after output: %w: %w", providerErr, io.ErrUnexpectedEOF)
+			}
+			return providerErr
 		}
 		scanner := bufio.NewScanner(resp.Body)
 		scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
@@ -367,11 +417,13 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 
 			switch currentEvent {
 			case "message_start":
+				messageStarted = true
 				if strings.TrimSpace(event.Message.Model) != "" {
 					currentModel = strings.TrimSpace(event.Message.Model)
 				}
 				applyUsage(event.Message.Usage)
 			case "content_block_start":
+				openContentBlocks[event.Index] = struct{}{}
 				if strings.TrimSpace(event.ContentBlock.Type) == "tool_use" {
 					if err := flushTaggedTextTail(); err != nil {
 						return err
@@ -390,6 +442,7 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 					}
 					toolBlocks[event.Index] = accumulator
 					streamIdle.MarkEffectiveContent()
+					outwardEvent = true
 					if err := emitAnthropicToolProgress(wrappedSink, currentModel, accumulator, ""); err != nil {
 						return err
 					}
@@ -421,6 +474,7 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 					}
 				}
 			case "content_block_stop":
+				delete(openContentBlocks, event.Index)
 				accumulator := toolBlocks[event.Index]
 				if accumulator != nil {
 					argsJSON, err := completedAnthropicToolArgsJSON(accumulator)
@@ -428,6 +482,7 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 						delete(toolBlocks, event.Index)
 						return err
 					}
+					outwardEvent = true
 					if err := emitAnthropicToolProgress(wrappedSink, currentModel, accumulator, ""); err != nil {
 						return err
 					}
@@ -458,33 +513,12 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 				applyUsage(event.Usage)
 				if strings.TrimSpace(event.Delta.StopReason) != "" {
 					finishReason = strings.TrimSpace(event.Delta.StopReason)
+					terminalMessageDelta = true
 				}
-				// 当前 MVP 阶段只在 message_stop 时统一收口，不在这里重复发 turn finished。
+				// Only message_stop or the strict relay EOF predicate finalizes the turn.
 				return nil
 			case "message_stop":
-				messageStopped = true
-				if err := flushTaggedTextTail(); err != nil {
-					return err
-				}
-				if err := flushThinkingCompleted(); err != nil {
-					return err
-				}
-				if err := wrappedSink(ModelEvent{
-					Kind:              ModelEventKindTurnFinished,
-					OccurredAt:        time.Now().UTC(),
-					Provider:          "anthropic",
-					Model:             currentModel,
-					InputTokens:       inputTokens,
-					OutputTokens:      outputTokens,
-					CacheReadTokens:   cacheReadTokens,
-					CacheWriteTokens:  cacheWriteTokens,
-					UsagePresent:      usagePresent,
-					CacheReadPresent:  cacheReadPresent,
-					CacheWritePresent: cacheWritePresent,
-					FinishReason:      finishReason,
-				}); err != nil {
-					return err
-				}
+				return emitTurnFinished()
 			}
 			return nil
 		}
@@ -543,37 +577,14 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 			return fail(streamChunkTimeoutError())
 		}
 		if !messageStopped {
-			// 部分 Anthropic 兼容网关在完整输出后直接关闭 SSE，不发 message_stop。
-			// 流正常结束（无读错误、无逐块超时）时视为正常收口：补发 TurnFinished。
-			if scanner.Err() == nil && !chunkTimedOut {
-				if finishReason == "" {
-					finishReason = "stop"
-				}
-				if err := flushTaggedTextTail(); err != nil {
+			// Some compatible relays omit only message_stop. Accept that narrow case
+			// only after the protocol has otherwise proved turn completion.
+			if messageStarted && terminalMessageDelta && len(openContentBlocks) == 0 {
+				if err := emitTurnFinished(); err != nil {
 					return fail(err)
 				}
-				if err := flushThinkingCompleted(); err != nil {
-					return fail(err)
-				}
-				if err := wrappedSink(ModelEvent{
-					Kind:              ModelEventKindTurnFinished,
-					OccurredAt:        time.Now().UTC(),
-					Provider:          "anthropic",
-					Model:             currentModel,
-					InputTokens:       inputTokens,
-					OutputTokens:      outputTokens,
-					CacheReadTokens:   cacheReadTokens,
-					CacheWriteTokens:  cacheWriteTokens,
-					UsagePresent:      usagePresent,
-					CacheReadPresent:  cacheReadPresent,
-					CacheWritePresent: cacheWritePresent,
-					FinishReason:      finishReason,
-				}); err != nil {
-					return fail(err)
-				}
-				messageStopped = true
 			} else {
-				return fail(fmt.Errorf("anthropic stream ended before message_stop"))
+				return fail(fmt.Errorf("anthropic stream truncated before terminal completion: %w", io.ErrUnexpectedEOF))
 			}
 		}
 		if err := flushTaggedTextTail(); err != nil {

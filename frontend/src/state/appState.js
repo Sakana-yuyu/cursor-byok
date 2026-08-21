@@ -33,6 +33,12 @@ import {
   validateOpenAIExtraParamsJSON,
 } from "@/utils/configValidators";
 import {
+  ANTHROPIC_AUTH_MODE_AUTO,
+  ANTHROPIC_AUTH_MODE_LEGACY_DUAL,
+  ANTHROPIC_AUTH_MODE_X_API_KEY,
+  ANTHROPIC_AUTH_MODE_BEARER,
+  SUPPORTED_ANTHROPIC_AUTH_MODES,
+  normalizeAnthropicAuthMode,
   buildModelAdapterIdentityKey,
   buildModelAdapterTestRequestHash,
   dedupeModelAdapters,
@@ -65,6 +71,12 @@ export { getCursorManualPath, setCursorManualPath } from "@/utils/cursorLaunch";
 export {
   OPENAI_EXTRA_PARAMS_DEFAULT_JSON,
   EXTRA_PARAMS_DEFAULT_JSON,
+  ANTHROPIC_AUTH_MODE_AUTO,
+  ANTHROPIC_AUTH_MODE_LEGACY_DUAL,
+  ANTHROPIC_AUTH_MODE_X_API_KEY,
+  ANTHROPIC_AUTH_MODE_BEARER,
+  SUPPORTED_ANTHROPIC_AUTH_MODES,
+  normalizeAnthropicAuthMode,
   CUSTOM_HEADERS_DEFAULT_JSON,
   buildModelAdapterTestRequestHash,
   createEmptyModelAdapter,

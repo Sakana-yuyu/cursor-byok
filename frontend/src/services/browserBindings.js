@@ -668,7 +668,28 @@ export const QueryProviderBalance = (adapter) => {
   if (override) return Promise.resolve(clone(override));
   return Promise.resolve({ supported: false, source: "", currency: "USD", total: null, used: null, remaining: null, message: "浏览器预览模式：未查询余额", transient: false });
 };
-export const QueryAllProviderBalances = () => Promise.resolve([
+export const GetProviderDiagnostics = () => {
+  recordPreviewCall("GetProviderDiagnostics");
+  const plan = readPreviewTestPlan();
+  if (plan?.providerDiagnosticsError) return Promise.reject(new Error("provider diagnostics unavailable"));
+  const override = plan?.providerDiagnostics;
+  if (override && typeof override === "object") return Promise.resolve(clone(override));
+  const now = Date.now();
+  return Promise.resolve({
+    generatedAtUnixMs: now,
+    state: "ready",
+    routerAvailable: true,
+    channels: [
+      { channelId: "preview-demo-openai", displayName: "Demo GPT", groupName: "OpenAI 官方", provider: "openai", protocolMode: "auto", protocolGroup: "responses", modelId: "gpt-4.1-mini", endpointScheme: "https", endpointHost: "api.openai.com", contextWindowTokens: 1047576, maxCompletionTokens: 32768, credentialConfigured: true, customHeadersConfigured: false, healthState: "ready" },
+      { channelId: "preview-demo-gemini", displayName: "Demo Gemini", groupName: "Gemini 官方", provider: "gemini", protocolMode: "auto", protocolGroup: "generate_content", modelId: "gemini-2.5-pro", endpointScheme: "https", endpointHost: "generativelanguage.googleapis.com", contextWindowTokens: 1048576, maxCompletionTokens: 65536, credentialConfigured: true, customHeadersConfigured: false, healthState: "cooldown", cooldownUntilUnixMs: now + 180000 },
+    ],
+    modelCatalogCache: { entryCount: 2, ttlSeconds: 300, oldestStoredAtUnixMs: now - 60000, nextExpiryAtUnixMs: now + 240000 },
+  });
+};
+export const QueryAllProviderBalances = () => {
+  const override = readPreviewTestPlan()?.allBalances;
+  if (Array.isArray(override)) return Promise.resolve(clone(override));
+  return Promise.resolve([
   {
     adapterId: "preview-demo-openai",
     displayName: "Demo GPT",
@@ -683,7 +704,7 @@ export const QueryAllProviderBalances = () => Promise.resolve([
     groupName: "Gemini 官方",
     baseURL: "https://generativelanguage.googleapis.com/v1beta",
     modelID: "gemini-2.5-pro",
-    balance: { supported: true, source: "token_plan", currency: "%", total: 100, used: 32, remaining: 68, planName: "2H 使用窗口", message: "" },
+    balance: previewStructuredQuotaBalance(),
   },
   {
     adapterId: "preview-demo-claude",
@@ -717,7 +738,8 @@ export const QueryAllProviderBalances = () => Promise.resolve([
     modelID: "kimi-k2.5",
     balance: { supported: true, source: "newapi", currency: "CNY", total: 50, used: null, remaining: null, planName: "", message: "" },
   },
-]);
+  ]);
+};
 export const ProbeModelAdapter = (adapter) => Promise.resolve({ id: adapter?.id || "", modelID: adapter?.modelID || "", ok: true, status: 200, message: "", rawResponse: "" });
 export const GetPromptInjectionSettings = () => Promise.resolve({});
 export const SavePromptInjectionSettings = (value) => Promise.resolve(value);
@@ -1047,3 +1069,21 @@ export const StartCursorAccountLogin = () =>
   Promise.resolve({ state: "waiting", authId: "", email: "", error: "浏览器预览模式：模拟登录中" });
 export const DisconnectCursorAccount = () =>
   Promise.resolve({ state: "signed_out", authId: "", email: "", error: "" });
+
+function previewStructuredQuotaBalance() {
+  return {
+    supported: true,
+    source: "token_plan",
+    currency: "%",
+    total: 100,
+    used: 32,
+    remaining: 68,
+    planName: "Gemini 使用套餐",
+    fetchedAt: "2026-08-20T08:00:00Z",
+    windows: [
+      { id: "5h", label: "5小时", unit: "%", used: 32, limit: 100, remaining: 68, usedFraction: 0.32, remainingFraction: 0.68, resetsAt: "2026-08-20T12:00:00Z", status: "ok" },
+      { id: "7d", label: "周限额", unit: "%", used: 84, limit: 100, remaining: 16, usedFraction: 0.84, remainingFraction: 0.16, resetsAt: "2026-08-24T00:00:00Z", status: "warning" },
+    ],
+    message: "",
+  };
+}

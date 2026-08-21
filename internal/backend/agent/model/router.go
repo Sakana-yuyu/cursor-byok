@@ -3,6 +3,8 @@ package modeladapter
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -29,10 +31,12 @@ type Router struct {
 	resolver        ChannelResolver
 	healthMu        sync.Mutex
 	healthByChannel map[string]channelHealth
+	healthVersion   uint64
 }
 
 type channelHealth struct {
 	cooldownUntil time.Time
+	version       uint64
 }
 
 type ChannelResolver interface {
@@ -165,6 +169,9 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 	// streamErr 保存最近一次渠道失败的错误，供提前返回前的 404 判定
 	//（提前返回检查发生在 streamChannel 调用之前，因此需在循环外声明）。
 	var streamErr error
+	// replaySafety 在整个调用内保持不变：请求是否可安全透明重发由输入决定，
+	// 不随渠道/尝试轮次变化。
+	replaySafety := requestReplaySafety(req)
 	// idleTimeoutRetries 累计本次调用中「上游静默卡死」的透明重试次数。
 	var idleTimeoutRetries int
 	// pendingIdleTimeoutRetry 标记上一轮失败为静默卡死：下一轮尝试跳过
@@ -186,10 +193,10 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 		if channel == nil {
 			return classifyRouterError(req, fmt.Errorf("no available channel for model %q", req.ModelID))
 		}
-		channelID := strings.TrimSpace(channel.ID)
+		channelKey := channelHealthMapKey(channel)
 
 		if attempt > 0 {
-			_, repeatedChannel := tried[channelID]
+			_, repeatedChannel := tried[channelKey]
 			// 游标回到已尝试过的渠道，说明没有其它可用端点。
 			if repeatedChannel {
 				// OpenAI 兼容端点的 404：已无新渠道可换（单渠道必然如此；多渠道
@@ -228,10 +235,11 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 			pendingIdleTimeoutRetry = false
 		}
 
+		observedHealthVersion := router.channelHealthVersion(channel)
 		streamErr = router.streamChannel(ctx, req, channel, sink)
 		if streamErr == nil || ctx.Err() != nil {
 			if streamErr == nil {
-				router.clearChannelFailure(channelID)
+				router.clearChannelFailure(channel, observedHealthVersion)
 			}
 			return classifyRouterError(req, streamErr)
 		}
@@ -240,11 +248,16 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 		if errors.Is(streamErr, ErrMidStreamInterrupted) {
 			return classifyRouterError(req, streamErr)
 		}
-		router.recordChannelFailure(channelID, streamErr)
+		router.recordChannelFailure(channel, streamErr)
 		if firstErr == nil {
 			firstErr = streamErr
 		}
-		tried[channelID] = struct{}{}
+		// 不具重放安全性的请求：上游可能在断开前已处理（计费/hosted 工具/存储），
+		// 禁止同调用内继续重试或跨渠道重发，直接返回供调用方决定。
+		if !replaySafety.Safe {
+			return classifyRouterError(req, replayUnsafeDropError(replaySafety, firstErr))
+		}
+		tried[channelKey] = struct{}{}
 		lastErrPermanent = isPermanentProviderError(streamErr)
 
 		// 上游静默卡死：连接已建立但到空闲看门狗时长仍无任何有效内容，尚未向
@@ -299,18 +312,20 @@ func (router *Router) preferHealthyChannel(channels []*legacyruntime.ResolvedCha
 	now := time.Now()
 	router.healthMu.Lock()
 	defer router.healthMu.Unlock()
+	for key, health := range router.healthByChannel {
+		if !health.cooldownUntil.After(now) {
+			delete(router.healthByChannel, key)
+		}
+	}
 	var earliest *legacyruntime.ResolvedChannel
 	var earliestUntil time.Time
 	for _, channel := range channels {
 		if channel == nil {
 			continue
 		}
-		id := strings.TrimSpace(channel.ID)
-		health, cooled := router.healthByChannel[id]
-		if !cooled || !health.cooldownUntil.After(now) {
-			if cooled {
-				delete(router.healthByChannel, id)
-			}
+		key := channelHealthMapKey(channel)
+		health, cooled := router.healthByChannel[key]
+		if !cooled {
 			return channel
 		}
 		if earliest == nil || health.cooldownUntil.Before(earliestUntil) {
@@ -321,26 +336,93 @@ func (router *Router) preferHealthyChannel(channels []*legacyruntime.ResolvedCha
 	return earliest
 }
 
-func (router *Router) recordChannelFailure(channelID string, err error) {
-	if router == nil || strings.TrimSpace(channelID) == "" || err == nil {
+func (router *Router) channelHealthVersion(channel *legacyruntime.ResolvedChannel) uint64 {
+	if router == nil || channel == nil || strings.TrimSpace(channel.ID) == "" {
+		return 0
+	}
+	key := channelHealthMapKey(channel)
+	router.healthMu.Lock()
+	defer router.healthMu.Unlock()
+	return router.healthByChannel[key].version
+}
+
+func (router *Router) recordChannelFailure(channel *legacyruntime.ResolvedChannel, err error) {
+	if router == nil || channel == nil || strings.TrimSpace(channel.ID) == "" || err == nil {
 		return
 	}
 	cooldown := channelFailureCooldown(err)
 	if cooldown <= 0 {
 		return
 	}
+	key := channelHealthMapKey(channel)
+	deadline := time.Now().Add(cooldown)
 	router.healthMu.Lock()
-	router.healthByChannel[strings.TrimSpace(channelID)] = channelHealth{cooldownUntil: time.Now().Add(cooldown)}
+	router.healthVersion++
+	existing, ok := router.healthByChannel[key]
+	if ok && existing.cooldownUntil.After(deadline) {
+		deadline = existing.cooldownUntil
+	}
+	router.healthByChannel[key] = channelHealth{
+		cooldownUntil: deadline,
+		version:       router.healthVersion,
+	}
 	router.healthMu.Unlock()
 }
 
-func (router *Router) clearChannelFailure(channelID string) {
-	if router == nil || strings.TrimSpace(channelID) == "" {
+func (router *Router) clearChannelFailure(channel *legacyruntime.ResolvedChannel, observedVersion uint64) {
+	if router == nil || channel == nil || strings.TrimSpace(channel.ID) == "" {
 		return
 	}
+	key := channelHealthMapKey(channel)
 	router.healthMu.Lock()
-	delete(router.healthByChannel, strings.TrimSpace(channelID))
+	health, ok := router.healthByChannel[key]
+	if ok && health.version <= observedVersion {
+		delete(router.healthByChannel, key)
+	}
 	router.healthMu.Unlock()
+}
+
+func channelHealthMapKey(channel *legacyruntime.ResolvedChannel) string {
+	return channelConfigurationFingerprint(channel)
+}
+
+func channelConfigurationFingerprint(channel *legacyruntime.ResolvedChannel) string {
+	if channel == nil {
+		return ""
+	}
+	fields := []string{
+		strings.TrimSpace(channel.ID),
+		strings.TrimSpace(channel.Provider),
+		strings.TrimSpace(channel.ProtocolMode),
+		strings.TrimSpace(channel.ProtocolGroup),
+		strings.TrimSpace(channel.BaseURL),
+		strings.TrimSpace(channel.APIKey),
+		strings.TrimSpace(channel.Model),
+		strconv.Itoa(channel.ContextWindowTokens),
+		strconv.Itoa(channel.MaxTokens),
+		strings.TrimSpace(channel.ReasoningEffort),
+		strings.TrimSpace(channel.OpenAIEndpoint),
+		strings.TrimSpace(channel.OpenAIRequestGroup),
+		strconv.FormatBool(channel.OpenAIExtraParamsEnabled),
+		strings.TrimSpace(channel.OpenAIExtraParamsJSON),
+		strconv.FormatBool(channel.CustomHeadersEnabled),
+		strings.TrimSpace(channel.CustomHeadersJSON),
+		strconv.FormatBool(channel.AnthropicExtraParamsEnabled),
+		strings.TrimSpace(channel.AnthropicExtraParamsJSON),
+		strings.TrimSpace(channel.AnthropicAuthMode),
+		strconv.Itoa(channel.AnthropicMaxTokens),
+		strings.TrimSpace(channel.AnthropicThinkingEffort),
+		strconv.FormatBool(channel.FastMode),
+		strings.TrimSpace(channel.OpenAIServiceTier),
+		strconv.Itoa(channel.ThinkingBudgetTokens),
+	}
+	hasher := sha256.New()
+	for _, field := range fields {
+		_, _ = fmt.Fprintf(hasher, "%d:", len(field))
+		_, _ = hasher.Write([]byte(field))
+		_, _ = hasher.Write([]byte{0})
+	}
+	return hex.EncodeToString(hasher.Sum(nil))
 }
 
 func channelFailureCooldown(err error) time.Duration {
@@ -419,6 +501,7 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 	resolved.CustomHeadersJSON = strings.TrimSpace(channel.CustomHeadersJSON)
 	resolved.AnthropicExtraParamsEnabled = channel.AnthropicExtraParamsEnabled
 	resolved.AnthropicExtraParamsJSON = strings.TrimSpace(channel.AnthropicExtraParamsJSON)
+	resolved.AnthropicAuthMode = strings.TrimSpace(channel.AnthropicAuthMode)
 	resolved.AnthropicMaxTokens = channel.AnthropicMaxTokens
 	resolved.AnthropicThinkingEffort = strings.TrimSpace(channel.AnthropicThinkingEffort)
 	resolved.ThinkingBudgetTokens = channel.ThinkingBudgetTokens
@@ -574,8 +657,8 @@ func applyStreamKnobs(resolved *StreamRequest, runtimeThinkingEffort string) {
 }
 
 // shouldFallbackToOpenAI 判断一次 anthropic 协议请求失败后是否应降级回 openai 协议。
-// 仅当错误表明 messages 端点不存在/不支持（404/405/400）时才回退；5xx/429/网络错误不属于
-// 「协议不支持」，交给外层正常重试，避免误回退掩盖真实错误。
+// Only an absent/unsupported Messages endpoint (404/405) may downgrade. A normal
+// 400 commonly means invalid tools, thinking, or context and must surface unchanged.
 func shouldFallbackToOpenAI(err error) bool {
 	if err == nil {
 		return false
@@ -585,7 +668,7 @@ func shouldFallbackToOpenAI(err error) bool {
 		return false
 	}
 	switch statusErr.StatusCode {
-	case 400, 404, 405:
+	case 404, 405:
 		return true
 	}
 	return false

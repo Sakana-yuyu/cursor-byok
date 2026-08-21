@@ -81,13 +81,57 @@ func (c *metadataCache[T]) invalidate(key string) {
 	delete(c.entries, key)
 }
 
-// metadataCacheKey 依据 (type, 归一化 baseURL, apiKey 哈希) 构造稳定缓存键。
-// apiKey 只以 sha256 哈希参与，避免在内存键或日志中暴露明文密钥。
+type metadataCacheDiagnostics struct {
+	EntryCount           int
+	TTLSeconds           int64
+	OldestStoredAtUnixMS int64
+	NextExpiryAtUnixMS   int64
+}
+
+// diagnostics returns aggregate live-entry metadata only. Cache keys and values
+// never cross this boundary.
+func (c *metadataCache[T]) diagnostics(now time.Time) metadataCacheDiagnostics {
+	if c == nil {
+		return metadataCacheDiagnostics{}
+	}
+	if now.IsZero() {
+		now = time.Now()
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	result := metadataCacheDiagnostics{TTLSeconds: int64(c.ttl / time.Second)}
+	for _, entry := range c.entries {
+		if !entry.expiresAt.After(now) {
+			continue
+		}
+		result.EntryCount++
+		storedAt := entry.expiresAt.Add(-c.ttl).UnixMilli()
+		if result.OldestStoredAtUnixMS == 0 || storedAt < result.OldestStoredAtUnixMS {
+			result.OldestStoredAtUnixMS = storedAt
+		}
+		expiresAt := entry.expiresAt.UnixMilli()
+		if result.NextExpiryAtUnixMS == 0 || expiresAt < result.NextExpiryAtUnixMS {
+			result.NextExpiryAtUnixMS = expiresAt
+		}
+	}
+	return result
+}
+
+// metadataCacheKey hashes the complete normalized identity so neither credentials
+// nor endpoint URLs appear in cache keys, diagnostics, crash dumps, or logs.
 func metadataCacheKey(typeName, baseURL, apiKey string) string {
 	normalizedBaseURL := strings.TrimSpace(baseURL)
 	if resolved, err := modelchannel.NormalizeBaseURL(baseURL); err == nil {
 		normalizedBaseURL = resolved
 	}
-	sum := sha256.Sum256([]byte(strings.TrimSpace(apiKey)))
-	return strings.ToLower(strings.TrimSpace(typeName)) + "|" + normalizedBaseURL + "|" + hex.EncodeToString(sum[:])
+	return metadataIdentityHash(
+		strings.ToLower(strings.TrimSpace(typeName)),
+		normalizedBaseURL,
+		strings.TrimSpace(apiKey),
+	)
+}
+
+func metadataIdentityHash(parts ...string) string {
+	sum := sha256.Sum256([]byte(strings.Join(parts, "\n")))
+	return hex.EncodeToString(sum[:])
 }

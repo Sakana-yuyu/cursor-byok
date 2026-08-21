@@ -119,6 +119,7 @@ Section
     SetOutPath $INSTDIR
     
     !insertmacro wails.files
+    File "/oname=THIRD_PARTY_NOTICES.md" "THIRD_PARTY_NOTICES.md"
 
     SetOutPath $INSTDIR
 

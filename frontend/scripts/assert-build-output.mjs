@@ -63,4 +63,10 @@ if (!editorChunkFound) {
   throw new Error("Markdown editor chunk was not generated; the editor feature may be unreachable");
 }
 
-console.log("build output assertion passed: Markdown editor and parser remain lazy and reachable");
+const sourceNotices = await readFile(path.resolve(frontendRoot, "..", "THIRD_PARTY_NOTICES.md"), "utf8");
+const bundledNotices = await readFile(path.join(distRoot, "THIRD_PARTY_NOTICES.md"), "utf8");
+if (bundledNotices !== sourceNotices || !bundledNotices.includes("can1357/oh-my-pi")) {
+  throw new Error("production assets do not contain the synchronized third-party notices");
+}
+
+console.log("build output assertion passed: lazy Markdown assets and third-party notices are present");

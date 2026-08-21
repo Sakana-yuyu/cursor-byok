@@ -10,6 +10,25 @@ import (
 	"cursor/internal/modelchannel"
 )
 
+func TestExecuteGeminiStreamingTest(t *testing.T) {
+	server := newGeminiTestServer(t, "gemini-test", func(body map[string]any) {
+		generation, _ := body["generationConfig"].(map[string]any)
+		if maxOutput, ok := generation["maxOutputTokens"].(float64); !ok || maxOutput != 128 {
+			t.Fatalf("benchmark maxOutputTokens = %#v, want 128", generation["maxOutputTokens"])
+		}
+	})
+	defer server.Close()
+
+	service := &ProxyService{}
+	metrics, err := service.executeGeminiStreamingTest(t.Context(), geminiBenchmarkAdapter(server.URL))
+	if err != nil {
+		t.Fatalf("executeGeminiStreamingTest() error = %v", err)
+	}
+	if !containsGeminiText(metrics.text.String()) || metrics.outputTokens != 2 || !metrics.outputProvided {
+		t.Fatalf("unexpected Gemini benchmark metrics: text=%q output=%d provided=%v", metrics.text.String(), metrics.outputTokens, metrics.outputProvided)
+	}
+}
+
 func TestCalculateGenerationTokensPerSecondExcludesFirstResponseLatency(t *testing.T) {
 	startedAt := time.Unix(0, 0)
 	firstResponseAt := startedAt.Add(20 * time.Second)

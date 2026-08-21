@@ -91,11 +91,14 @@ tasks:
       # File 使用无 `..` 的本地文件名。
       - |
         {{if eq OS "windows"}}
-        powershell -NoProfile -Command "Copy-Item -Force '{{.PROJECT_ROOT}}/{{.OUTPUT}}' 'app-windows-{{.ARCH}}.exe'"
+        powershell -NoProfile -Command "Copy-Item -Force '{{.PROJECT_ROOT}}/{{.OUTPUT}}' 'app-windows-{{.ARCH}}.exe'; Copy-Item -Force '{{.PROJECT_ROOT}}/THIRD_PARTY_NOTICES.md' 'THIRD_PARTY_NOTICES.md'"
         makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DOUTPUT_INSTALLER="cursor-byok-windows-{{.INSTALLER_ARCH}}-installer.exe" -DARG_WAILS_{{.ARG_FLAG}}_BINARY="app-windows-{{.ARCH}}.exe" project.nsi
+        powershell -NoProfile -Command "Remove-Item -Force -ErrorAction SilentlyContinue 'THIRD_PARTY_NOTICES.md'"
         {{else}}
         cp -f '{{.PROJECT_ROOT}}/{{.OUTPUT}}' 'app-windows-{{.ARCH}}.exe'
+        cp -f '{{.PROJECT_ROOT}}/THIRD_PARTY_NOTICES.md' 'THIRD_PARTY_NOTICES.md'
         makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DOUTPUT_INSTALLER="cursor-byok-windows-{{.INSTALLER_ARCH}}-installer.exe" -DARG_WAILS_{{.ARG_FLAG}}_BINARY="app-windows-{{.ARCH}}.exe" project.nsi
+        rm -f 'THIRD_PARTY_NOTICES.md'
         {{end}}
     vars:
       PROJECT_ROOT: '{{.TASKFILE_DIR}}/../..'
@@ -122,11 +125,14 @@ tasks:
       # 与 create:nsis:installer 相同：先复制二进制到脚本目录，File 使用本地文件名。
       - |
         {{if eq OS "windows"}}
-        powershell -NoProfile -Command "Copy-Item -Force '{{.PROJECT_ROOT}}/{{.OUTPUT}}' 'app-windows-x32.exe'"
+        powershell -NoProfile -Command "Copy-Item -Force '{{.PROJECT_ROOT}}/{{.OUTPUT}}' 'app-windows-x32.exe'; Copy-Item -Force '{{.PROJECT_ROOT}}/THIRD_PARTY_NOTICES.md' 'THIRD_PARTY_NOTICES.md'"
         makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DARG_WAILS_386_BINARY="app-windows-x32.exe" project-386.nsi
+        powershell -NoProfile -Command "Remove-Item -Force -ErrorAction SilentlyContinue 'THIRD_PARTY_NOTICES.md'"
         {{else}}
         cp -f '{{.PROJECT_ROOT}}/{{.OUTPUT}}' 'app-windows-x32.exe'
+        cp -f '{{.PROJECT_ROOT}}/THIRD_PARTY_NOTICES.md' 'THIRD_PARTY_NOTICES.md'
         makensis -DINFO_PRODUCTVERSION="{{.APP_VERSION}}" -DARG_WAILS_386_BINARY="app-windows-x32.exe" project-386.nsi
+        rm -f 'THIRD_PARTY_NOTICES.md'
         {{end}}
     vars:
       PROJECT_ROOT: '{{.TASKFILE_DIR}}/../..'
@@ -189,9 +195,9 @@ tasks:
         platforms: [windows]
       - cmd: mkdir -p "{{.STAGING_DIR}}"
         platforms: [darwin, linux]
-      - cmd: powershell -NoProfile -Command "Copy-Item -Force {{.OUTPUT}} bin/.zip-{{.ARCH}}/"
+      - cmd: powershell -NoProfile -Command "Copy-Item -Force {{.OUTPUT}} bin/.zip-{{.ARCH}}/; Copy-Item -Force THIRD_PARTY_NOTICES.md bin/.zip-{{.ARCH}}/"
         platforms: [windows]
-      - cmd: cp "{{.OUTPUT}}" "{{.STAGING_DIR}}/"
+      - cmd: cp "{{.OUTPUT}}" THIRD_PARTY_NOTICES.md "{{.STAGING_DIR}}/"
         platforms: [darwin, linux]
       - cmd: powershell -NoProfile -Command "Add-Type -AssemblyName System.IO.Compression.FileSystem; if (Test-Path 'bin/{{.ZIP_NAME}}') { Remove-Item -Force 'bin/{{.ZIP_NAME}}' }; [System.IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path 'bin/.zip-{{.ARCH}}'), (Join-Path (Resolve-Path 'bin') '{{.ZIP_NAME}}'))"
         platforms: [windows]

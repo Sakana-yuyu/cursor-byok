@@ -449,36 +449,26 @@ func openAITextLooksLikeImageGenerationRequest(text string) bool {
 }
 
 func OpenAIEndpointURL(baseURL string, endpoint string) string {
-	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
-	normalizedEndpoint := strings.TrimSpace(endpoint)
+	normalizedEndpoint := modelchannel.NormalizeOpenAIEndpoint("openai", endpoint)
 	if normalizedEndpoint == "" {
 		normalizedEndpoint = modelchannel.OpenAIEndpointResponses
 	}
-	if !strings.HasPrefix(normalizedEndpoint, "/") {
-		normalizedEndpoint = "/" + normalizedEndpoint
+	group := modelchannel.ProtocolGroupChatCompletions
+	if normalizedEndpoint == modelchannel.OpenAIEndpointResponses {
+		group = modelchannel.ProtocolGroupResponses
 	}
-	// 规则0：自定义路径模式
-	// - baseURL 已含 endpoint 后缀（/chat/completions 或 /responses）→ 直接用 base
-	// - 否则追加 /chat/completions（默认协议形态，覆盖 Z.AI /v4 等场景）
-	if normalizedEndpoint == modelchannel.OpenAIEndpointCustom {
-		if OpenAIEndpointFromBaseURL(base) != "" {
-			return base
-		}
-		return base + "/chat/completions"
+	plan, err := modelchannel.ResolveTransportPlan(modelchannel.TransportPlanInput{
+		Provider:       "openai",
+		BaseURL:        baseURL,
+		ProtocolMode:   modelchannel.ProtocolModeFixed,
+		ProtocolGroup:  group,
+		OpenAIEndpoint: normalizedEndpoint,
+		Stream:         true,
+	})
+	if err != nil {
+		return strings.TrimSpace(baseURL)
 	}
-	// 规则1：baseURL 已含 endpoint 后缀 → 直接用 base
-	if OpenAIEndpointFromBaseURL(base) != "" {
-		return base
-	}
-	// 规则2：baseURL 以 /vN 结尾时，剥离 endpoint 的版本前缀（/v1/、/v2/ 等）
-	// 这样 base=.../v4 + endpoint=/v1/chat/completions → .../v4/chat/completions
-	if _, ok := trailingVersionSegment(base); ok {
-		if rest, stripped := stripEndpointVersionPrefix(normalizedEndpoint); stripped {
-			return base + rest
-		}
-	}
-	// 规则3：兜底原样拼接
-	return base + normalizedEndpoint
+	return plan.RequestURL
 }
 
 // trailingVersionSegment 检测 URL 末尾是否以 /vN 形式结尾（N 为数字），
@@ -609,7 +599,7 @@ func (adapter *OpenAIAdapter) Stream(ctx context.Context, req StreamRequest, sin
 // runOpenAIStreamWithReconnect 统一处理 OpenAI 两种流协议的连接级 pre-output 重连。
 // 对自动生成的 prompt_cache_key，若上游 400 明确给出最大长度，会用该长度生成
 // 确定性短键并重试一次；其他 HTTP 400 仍不在 adapter 层重试。
-func (adapter *OpenAIAdapter) runOpenAIStreamWithReconnect(ctx context.Context, sink func(ModelEvent) error, adaptPromptCacheKey bool, stream func(int, func(ModelEvent) error) error) error {
+func (adapter *OpenAIAdapter) runOpenAIStreamWithReconnect(ctx context.Context, sink func(ModelEvent) error, adaptPromptCacheKey bool, safety ReplaySafety, stream func(int, func(ModelEvent) error) error) error {
 	var connectionAttempt int
 	promptCacheKeyMaximumLength := 0
 	promptCacheKeyAdapted := false
@@ -641,6 +631,9 @@ func (adapter *OpenAIAdapter) runOpenAIStreamWithReconnect(ctx context.Context, 
 		}
 		if ctx.Err() != nil {
 			return err
+		}
+		if !safety.Safe {
+			return replayUnsafeDropError(safety, err)
 		}
 		connectionAttempt++
 		if connectionAttempt > maxStreamReconnects {
@@ -683,7 +676,7 @@ func openAIPromptCacheKeyMaximumLength(err error) (int, bool) {
 // 移植自 Reasonix streamWithReconnect 的 emitted 标记策略。
 func (adapter *OpenAIAdapter) streamChatCompletionsWithReconnect(ctx context.Context, req StreamRequest, baseURL string, apiKey string, modelID string, sink func(ModelEvent) error) error {
 	manualPromptCacheKey := hasExplicitOpenAIPromptCacheKey(req)
-	return adapter.runOpenAIStreamWithReconnect(ctx, sink, !manualPromptCacheKey, func(maximumLength int, wrappedSink func(ModelEvent) error) error {
+	return adapter.runOpenAIStreamWithReconnect(ctx, sink, !manualPromptCacheKey, requestReplaySafety(req), func(maximumLength int, wrappedSink func(ModelEvent) error) error {
 		return adapter.streamChatCompletions(ctx, req, baseURL, apiKey, modelID, maximumLength, manualPromptCacheKey, wrappedSink)
 	})
 }
@@ -692,7 +685,7 @@ func (adapter *OpenAIAdapter) streamChatCompletionsWithReconnect(ctx context.Con
 // pre-output 保护；请求体在每次 streamResponses 调用中重新构建，因此不会复用已消费 body。
 func (adapter *OpenAIAdapter) streamResponsesWithReconnect(ctx context.Context, req StreamRequest, baseURL string, apiKey string, modelID string, sink func(ModelEvent) error) error {
 	manualPromptCacheKey := hasExplicitOpenAIPromptCacheKey(req)
-	return adapter.runOpenAIStreamWithReconnect(ctx, sink, !manualPromptCacheKey, func(maximumLength int, wrappedSink func(ModelEvent) error) error {
+	return adapter.runOpenAIStreamWithReconnect(ctx, sink, !manualPromptCacheKey, requestReplaySafety(req), func(maximumLength int, wrappedSink func(ModelEvent) error) error {
 		return adapter.streamResponses(ctx, req, baseURL, apiKey, modelID, maximumLength, manualPromptCacheKey, wrappedSink)
 	})
 }
@@ -883,8 +876,6 @@ func buildOpenAIChatBodyMap(req StreamRequest, baseURL string, modelID string, p
 	}
 	return body, nil
 }
-
-
 
 func trailingTagPrefixLength(text string, tag string) int {
 	maxLen := len(text)

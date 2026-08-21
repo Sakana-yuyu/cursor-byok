@@ -22,6 +22,19 @@ test("long-running model operations use explicit timeout budgets", async () => {
   );
 });
 
+test("provider diagnostics binding is registered through desktop and browser preview", async () => {
+  const [source, bindingsSource] = await Promise.all([
+    readFile(sourceURL, "utf8"),
+    readFile(browserBindingsURL, "utf8"),
+  ]);
+
+  assert.match(source, /GetProviderDiagnostics/);
+  assert.match(source, /export function getProviderDiagnostics\(\)/);
+  assert.match(source, /desktopOrMock\(\(\) => GetProviderDiagnostics\(\)/);
+  assert.match(bindingsSource, /export const GetProviderDiagnostics =/);
+  assert.match(bindingsSource, /recordPreviewCall\("GetProviderDiagnostics"\)/);
+});
+
 test("skills scan settings use an explicit enablement whitelist", async () => {
   const [bindingsSource, settingsSource, configSource] = await Promise.all([
     readFile(browserBindingsURL, "utf8"),
