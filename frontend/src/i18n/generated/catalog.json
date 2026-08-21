@@ -53,6 +53,18 @@
         }
       ]
     },
+    "004d7327183c4e74": {
+      "source": "准备重试",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/AgentOpsPanel.vue",
+          "line": 63,
+          "column": 64
+        }
+      ]
+    },
     "0075396266932fad": {
       "source": "一键测试 ({0})",
       "kind": "template",
@@ -950,7 +962,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1135,
+          "line": 1154,
           "column": 35
         }
       ]
@@ -1053,6 +1065,35 @@
           "file": "src/components/settings/categories/AdvancedSettings.vue",
           "line": 135,
           "column": 7
+        }
+      ]
+    },
+    "0a8b91a093c13236": {
+      "source": "已请求取消",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/AgentOpsPanel.vue",
+          "line": 22,
+          "column": 21
+        }
+      ]
+    },
+    "0a9156766e0a2c67": {
+      "source": "未知模型",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RequestLabPanel.vue",
+          "line": 71,
+          "column": 14
+        },
+        {
+          "file": "src/components/control-center/RequestLabPanel.vue",
+          "line": 85,
+          "column": 14
         }
       ]
     },
@@ -1269,6 +1310,18 @@
           "file": "src/components/CursorAccountCard.vue",
           "line": 189,
           "column": 12
+        }
+      ]
+    },
+    "0c70665b6eb65f1a": {
+      "source": "否",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 120,
+          "column": 14
         }
       ]
     },
@@ -1515,7 +1568,7 @@
       "refs": [
         {
           "file": "src/views/ControlCenter.vue",
-          "line": 9,
+          "line": 13,
           "column": 31
         }
       ]
@@ -1700,6 +1753,18 @@
         }
       ]
     },
+    "1217d8bc63cb1763": {
+      "source": "成本权重",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RoutingPanel.vue",
+          "line": 70,
+          "column": 14
+        }
+      ]
+    },
     "124be3f86f197802": {
       "source": "Token 消耗",
       "kind": "text",
@@ -1842,6 +1907,18 @@
         }
       ]
     },
+    "13d61fea9f174905": {
+      "source": "预览",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 113,
+          "column": 50
+        }
+      ]
+    },
     "13dd7bc204e1ad80": {
       "source": "该目录缺少有效的 SKILL.md，不会被技能扫描启用",
       "kind": "text",
@@ -1904,6 +1981,18 @@
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
           "line": 150,
           "column": 112
+        }
+      ]
+    },
+    "14f3cac7218b9448": {
+      "source": "手动顺序",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RoutingPanel.vue",
+          "line": 61,
+          "column": 32
         }
       ]
     },
@@ -2032,6 +2121,18 @@
         }
       ]
     },
+    "1637414c8964f535": {
+      "source": "对比不存在",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 1298,
+          "column": 100
+        }
+      ]
+    },
     "1638cc8f639fc2df": {
       "source": "自适应路由",
       "kind": "text",
@@ -2039,7 +2140,7 @@
       "refs": [
         {
           "file": "src/views/ControlCenter.vue",
-          "line": 10,
+          "line": 14,
           "column": 27
         }
       ]
@@ -2101,6 +2202,30 @@
           "file": "src/components/DelegationTaskStrip.vue",
           "line": 288,
           "column": 80
+        }
+      ]
+    },
+    "178443f4b4cea807": {
+      "source": "稳定性",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RoutingPanel.vue",
+          "line": 65,
+          "column": 35
+        }
+      ]
+    },
+    "18045b8c40f135cd": {
+      "source": "延迟",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RoutingPanel.vue",
+          "line": 63,
+          "column": 33
         }
       ]
     },
@@ -2212,6 +2337,18 @@
         }
       ]
     },
+    "18ef047407afdbb3": {
+      "source": "条，不含请求正文。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RoutingPanel.vue",
+          "line": 83,
+          "column": 67
+        }
+      ]
+    },
     "195a6689428e6120": {
       "source": "官方请求镜像记录（调试）",
       "kind": "text",
@@ -2291,6 +2428,18 @@
           "file": "src/components/ModelAdapterTestCard.vue",
           "line": 168,
           "column": 74
+        }
+      ]
+    },
+    "1aac91aa8634d84a": {
+      "source": "应用失败",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 67,
+          "column": 37
         }
       ]
     },
@@ -2426,7 +2575,7 @@
       "refs": [
         {
           "file": "src/views/ControlCenter.vue",
-          "line": 12,
+          "line": 16,
           "column": 28
         }
       ]
@@ -2562,6 +2711,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 15,
+          "column": 32
+        },
+        {
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 1112,
           "column": 7
@@ -2577,6 +2731,18 @@
           "file": "src/components/CursorAccountCard.vue",
           "line": 359,
           "column": 85
+        }
+      ]
+    },
+    "1d1ee7baf2b8ab0e": {
+      "source": "可应用",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 119,
+          "column": 57
         }
       ]
     },
@@ -2669,7 +2835,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 539,
+          "line": 633,
           "column": 66
         }
       ]
@@ -3358,6 +3524,18 @@
         }
       ]
     },
+    "2588b5b9bacc1df6": {
+      "source": "均衡",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RoutingPanel.vue",
+          "line": 62,
+          "column": 34
+        }
+      ]
+    },
     "259720e969e5619a": {
       "source": "按会话回合统计，区分有效与异常。",
       "kind": "text",
@@ -3548,7 +3726,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1268,
+          "line": 1418,
           "column": 15
         }
       ]
@@ -3679,6 +3857,18 @@
         }
       ]
     },
+    "283a7f514f66bd17": {
+      "source": "当前配置",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 9,
+          "column": 18
+        }
+      ]
+    },
     "2843e6537264d798": {
       "source": "已成功把以下目录加入 Windows Defender 排除项：\n\n{0}\n\n本地 CA 私钥不会再被误删。",
       "kind": "template",
@@ -3748,6 +3938,18 @@
           "file": "src/views/ModelGroups.vue",
           "line": 72,
           "column": 182
+        }
+      ]
+    },
+    "2900986044ea7014": {
+      "source": "· 变更",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 120,
+          "column": 46
         }
       ]
     },
@@ -3835,6 +4037,18 @@
           "file": "src/views/RequestMetrics.vue",
           "line": 423,
           "column": 47
+        }
+      ]
+    },
+    "2a5d88777b6f9a4e": {
+      "source": "取消失败",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/AgentOpsPanel.vue",
+          "line": 25,
+          "column": 37
         }
       ]
     },
@@ -3987,6 +4201,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/control-center/AgentOpsPanel.vue",
+          "line": 62,
+          "column": 66
+        },
         {
           "file": "src/components/CursorAccountCard.vue",
           "line": 384,
@@ -4359,6 +4578,11 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 116,
+          "column": 62
+        },
+        {
           "file": "src/components/CursorAccountCard.vue",
           "line": 241,
           "column": 22
@@ -4511,7 +4735,7 @@
       "refs": [
         {
           "file": "src/views/ControlCenter.vue",
-          "line": 8,
+          "line": 12,
           "column": 28
         }
       ]
@@ -4711,7 +4935,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 378,
+          "line": 472,
           "column": 99
         }
       ]
@@ -5432,6 +5656,18 @@
         }
       ]
     },
+    "3bc9fd424b0e77f3": {
+      "source": "档案不存在",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 1382,
+          "column": 49
+        }
+      ]
+    },
     "3bf8512aa520ed21": {
       "source": "本地服务模式",
       "kind": "text",
@@ -5872,6 +6108,18 @@
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
           "line": 926,
           "column": 22
+        }
+      ]
+    },
+    "418843e5cffca5d6": {
+      "source": "启用自适应路由",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RoutingPanel.vue",
+          "line": 57,
+          "column": 13
         }
       ]
     },
@@ -6824,7 +7072,7 @@
       "refs": [
         {
           "file": "src/views/ControlCenter.vue",
-          "line": 11,
+          "line": 15,
           "column": 26
         }
       ]
@@ -6965,6 +7213,18 @@
         }
       ]
     },
+    "4f6b9f586fe32cfe": {
+      "source": "延迟权重",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RoutingPanel.vue",
+          "line": 69,
+          "column": 14
+        }
+      ]
+    },
     "4f838809a0191dcd": {
       "source": "浏览器预览模式：使用模拟环境。",
       "kind": "text",
@@ -6977,7 +7237,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 278,
+          "line": 372,
           "column": 24
         }
       ]
@@ -7030,6 +7290,18 @@
         }
       ]
     },
+    "50b14fd726eba6ed": {
+      "source": "本地 Provider",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RequestLabPanel.vue",
+          "line": 76,
+          "column": 46
+        }
+      ]
+    },
     "50db7447b966f5ef": {
       "source": "大小",
       "kind": "text",
@@ -7039,18 +7311,6 @@
           "file": "src/components/settings/categories/HistorySettings.vue",
           "line": 820,
           "column": 67
-        }
-      ]
-    },
-    "50df3e06e5aa4a01": {
-      "source": "暂不可用。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/ControlCenter.vue",
-          "line": 72,
-          "column": 71
         }
       ]
     },
@@ -7286,7 +7546,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 474,
+          "line": 568,
           "column": 128
         }
       ]
@@ -7424,12 +7684,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1240,
+          "line": 1259,
           "column": 37
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 1254,
+          "line": 1273,
           "column": 37
         }
       ]
@@ -7544,6 +7804,18 @@
           "file": "src/views/Diagnostics.vue",
           "line": 248,
           "column": 43
+        }
+      ]
+    },
+    "54930c4a50ac0df9": {
+      "source": "保存策略",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RoutingPanel.vue",
+          "line": 75,
+          "column": 45
         }
       ]
     },
@@ -7810,6 +8082,18 @@
         }
       ]
     },
+    "57a7885d12c8e8cf": {
+      "source": "路由策略已保存",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RoutingPanel.vue",
+          "line": 36,
+          "column": 21
+        }
+      ]
+    },
     "57add9b3db0eff0f": {
       "source": "保真记录会把 Cursor 与官方后端之间的完整协议帧原始字节写入本地磁盘，其中包含完整对话内容、模型回复和工作区上下文，并会让抓包范围扩大到 api2/3/4.cursor.sh。仅在排障时临时开启，用完请关闭并清理 history/_debug/mirror 目录。确定开启吗？",
       "kind": "text",
@@ -7913,6 +8197,18 @@
           "file": "src/components/settings/delegation/DelegationVisionPanel.vue",
           "line": 89,
           "column": 11
+        }
+      ]
+    },
+    "58cf718cfb6d406f": {
+      "source": "保存当前配置为档案",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 109,
+          "column": 45
         }
       ]
     },
@@ -8089,6 +8385,18 @@
         }
       ]
     },
+    "5aeedc37a232f093": {
+      "source": "未命名运行",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/AgentOpsPanel.vue",
+          "line": 59,
+          "column": 42
+        }
+      ]
+    },
     "5b31f09799a82c9a": {
       "source": "稍后重启",
       "kind": "text",
@@ -8208,6 +8516,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/control-center/AgentOpsPanel.vue",
+          "line": 60,
+          "column": 40
+        },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
           "line": 430,
@@ -8348,6 +8661,18 @@
         }
       ]
     },
+    "5f889aee44e89e57": {
+      "source": "可靠权重",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RoutingPanel.vue",
+          "line": 71,
+          "column": 14
+        }
+      ]
+    },
     "5f8faa43a270fcb3": {
       "source": "实时统计",
       "kind": "text",
@@ -8393,6 +8718,18 @@
           "file": "src/views/Home.vue",
           "line": 324,
           "column": 5180
+        }
+      ]
+    },
+    "5ff5835a6ff6fe8c": {
+      "source": "原始输入不在当前进程中，无法重试",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/AgentOpsPanel.vue",
+          "line": 33,
+          "column": 21
         }
       ]
     },
@@ -8770,6 +9107,18 @@
         }
       ]
     },
+    "62ca0d3a3e95e2e4": {
+      "source": "预览模型 ID",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RoutingPanel.vue",
+          "line": 77,
+          "column": 52
+        }
+      ]
+    },
     "62dec91d1bd054f8": {
       "source": "没有可清理的调试日志",
       "kind": "text",
@@ -8787,6 +9136,16 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 45,
+          "column": 37
+        },
+        {
+          "file": "src/components/control-center/RoutingPanel.vue",
+          "line": 38,
+          "column": 37
+        },
         {
           "file": "src/components/HomeMetricsCard.vue",
           "line": 406,
@@ -8945,6 +9304,18 @@
         }
       ]
     },
+    "639de58eb608d490": {
+      "source": "成本",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RoutingPanel.vue",
+          "line": 64,
+          "column": 30
+        }
+      ]
+    },
     "63c6e0bb0efb7b2f": {
       "source": "火山方舟 (Volcengine)",
       "kind": "text",
@@ -8954,6 +9325,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 125,
           "column": 12
+        }
+      ]
+    },
+    "63c73c4730f4473e": {
+      "source": "应用",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 114,
+          "column": 62
         }
       ]
     },
@@ -9046,18 +9429,6 @@
           "file": "src/components/ModelAdapterTestCard.vue",
           "line": 119,
           "column": 19
-        }
-      ]
-    },
-    "651dd126a68d3c3a": {
-      "source": "该功能",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/views/ControlCenter.vue",
-          "line": 72,
-          "column": 10
         }
       ]
     },
@@ -9711,6 +10082,18 @@
         }
       ]
     },
+    "6ce4058ba9865835": {
+      "source": "已保存无凭据档案",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 42,
+          "column": 21
+        }
+      ]
+    },
     "6d0a96720b118cf7": {
       "source": "已清理所选调试日志，释放 {0}",
       "kind": "template",
@@ -9829,6 +10212,21 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/control-center/AgentOpsPanel.vue",
+          "line": 46,
+          "column": 37
+        },
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 76,
+          "column": 37
+        },
+        {
+          "file": "src/components/control-center/RequestLabPanel.vue",
+          "line": 49,
+          "column": 37
+        },
         {
           "file": "src/components/CursorAccountCard.vue",
           "line": 206,
@@ -10346,6 +10744,18 @@
         }
       ]
     },
+    "75ee73d518ca7912": {
+      "source": "暂无运行中的 Agent 任务。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/AgentOpsPanel.vue",
+          "line": 57,
+          "column": 61
+        }
+      ]
+    },
     "76277eb8d00630ab": {
       "source": "已修复 Cursor 代理配置，请重启 Cursor 后再发起模型请求",
       "kind": "text",
@@ -10375,6 +10785,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 115,
+          "column": 52
+        },
         {
           "file": "src/components/CursorAccountCard.vue",
           "line": 197,
@@ -10645,6 +11060,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 20,
+          "column": 30
+        },
         {
           "file": "src/components/settings/settingsCategories.js",
           "line": 30,
@@ -12082,6 +12502,18 @@
         }
       ]
     },
+    "8916ae01482395e7": {
+      "source": "原始输入不在当前进程中",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 1352,
+          "column": 35
+        }
+      ]
+    },
     "8989b881f3eb35e4": {
       "source": "删除中",
       "kind": "text",
@@ -12127,6 +12559,18 @@
           "file": "src/components/settings/categories/AdvancedSettings.vue",
           "line": 151,
           "column": 63
+        }
+      ]
+    },
+    "89f8ab585db0ea2e": {
+      "source": "· 分数",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RoutingPanel.vue",
+          "line": 81,
+          "column": 90
         }
       ]
     },
@@ -12553,6 +12997,18 @@
         }
       ]
     },
+    "8f3f95b311040f31": {
+      "source": "暂无官方镜像记录。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RequestLabPanel.vue",
+          "line": 73,
+          "column": 69
+        }
+      ]
+    },
     "8f66eacbdebab6f6": {
       "source": "删除模型组",
       "kind": "text",
@@ -12668,6 +13124,23 @@
           "file": "src/utils/errorHumanizer.js",
           "line": 47,
           "column": 12
+        }
+      ]
+    },
+    "9094e63b8f4516ac": {
+      "source": "预览失败",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 53,
+          "column": 37
+        },
+        {
+          "file": "src/components/control-center/RoutingPanel.vue",
+          "line": 46,
+          "column": 37
         }
       ]
     },
@@ -12878,7 +13351,7 @@
       "refs": [
         {
           "file": "src/services/clientApi.js",
-          "line": 174,
+          "line": 184,
           "column": 37
         }
       ]
@@ -13451,6 +13924,23 @@
         }
       ]
     },
+    "97cdcdb8a9bce222": {
+      "source": "未标注",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RequestLabPanel.vue",
+          "line": 71,
+          "column": 43
+        },
+        {
+          "file": "src/components/control-center/RequestLabPanel.vue",
+          "line": 85,
+          "column": 43
+        }
+      ]
+    },
     "97d646d0debe57da": {
       "source": "Cursor 账号",
       "kind": "text",
@@ -13460,6 +13950,18 @@
           "file": "src/components/CursorAccountCard.vue",
           "line": 311,
           "column": 60
+        }
+      ]
+    },
+    "97dae63c09fa2927": {
+      "source": "故障切换次数",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RoutingPanel.vue",
+          "line": 74,
+          "column": 43
         }
       ]
     },
@@ -13694,6 +14196,18 @@
         }
       ]
     },
+    "99ecffeea1057a40": {
+      "source": "运行不存在",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 1330,
+          "column": 49
+        }
+      ]
+    },
     "9a5da3d896e806d7": {
       "source": "重启将关闭所有 Cursor 窗口，未保存的内容可能丢失。确认要重启 Cursor 吗？",
       "kind": "text",
@@ -13749,7 +14263,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1128,
+          "line": 1147,
           "column": 79
         }
       ]
@@ -13814,6 +14328,18 @@
         }
       ]
     },
+    "9b128785a21b64ab": {
+      "source": "匹配等级",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RequestLabPanel.vue",
+          "line": 95,
+          "column": 44
+        }
+      ]
+    },
     "9b17fa889b307f7f": {
       "source": "有效轮次：{0}",
       "kind": "template",
@@ -13847,6 +14373,30 @@
           "file": "src/views/RequestMetrics.vue",
           "line": 399,
           "column": 65
+        }
+      ]
+    },
+    "9b5862a85becd896": {
+      "source": "对比失败",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RequestLabPanel.vue",
+          "line": 39,
+          "column": 37
+        }
+      ]
+    },
+    "9b75a28c74e2cc4f": {
+      "source": "导入档案",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 1407,
+          "column": 61
         }
       ]
     },
@@ -13927,6 +14477,18 @@
         }
       ]
     },
+    "9c8eb75c7e58b497": {
+      "source": "策略",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RoutingPanel.vue",
+          "line": 58,
+          "column": 44
+        }
+      ]
+    },
     "9cf9a0cce3d1be02": {
       "source": "余额 / 套餐查询",
       "kind": "text",
@@ -13984,6 +14546,18 @@
           "file": "src/components/settings/categories/AdvancedSettings.vue",
           "line": 134,
           "column": 7
+        }
+      ]
+    },
+    "9da4a6bf016249bb": {
+      "source": "不可重试",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/AgentOpsPanel.vue",
+          "line": 37,
+          "column": 37
         }
       ]
     },
@@ -14457,6 +15031,18 @@
         }
       ]
     },
+    "a3823b6af1e409e3": {
+      "source": "模型 ID 无效",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 1312,
+          "column": 79
+        }
+      ]
+    },
     "a3ba22684f6ac01d": {
       "source": "新增角色",
       "kind": "text",
@@ -14865,6 +15451,18 @@
         }
       ]
     },
+    "a71eb2bcc761aedd": {
+      "source": "余额权重",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RoutingPanel.vue",
+          "line": 72,
+          "column": 14
+        }
+      ]
+    },
     "a728e278ed9d6f16": {
       "source": "缓存读取 {0} · 缓存写入 {1}",
       "kind": "template",
@@ -14874,6 +15472,18 @@
           "file": "src/views/RequestMetrics.vue",
           "line": 468,
           "column": 130
+        }
+      ]
+    },
+    "a74ce7c7257d73d8": {
+      "source": "导出脱敏报告",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RequestLabPanel.vue",
+          "line": 92,
+          "column": 61
         }
       ]
     },
@@ -15097,6 +15707,18 @@
           "file": "src/services/browserBindings.js",
           "line": 704,
           "column": 16
+        }
+      ]
+    },
+    "a93226388d3e62d4": {
+      "source": "· 尝试",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/AgentOpsPanel.vue",
+          "line": 60,
+          "column": 67
         }
       ]
     },
@@ -15487,17 +16109,17 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1172,
+          "line": 1191,
           "column": 49
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 1179,
+          "line": 1198,
           "column": 49
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 1197,
+          "line": 1216,
           "column": 49
         }
       ]
@@ -15562,6 +16184,23 @@
           "file": "src/views/ModelEditor.vue",
           "line": 1079,
           "column": 22
+        }
+      ]
+    },
+    "b03d2fbde90316fb": {
+      "source": "档案",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 1366,
+          "column": 35
+        },
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 1393,
+          "column": 48
         }
       ]
     },
@@ -15663,6 +16302,18 @@
           "file": "src/components/RuntimeHealthBanner.vue",
           "line": 7,
           "column": 15
+        }
+      ]
+    },
+    "b2326d04b4145e51": {
+      "source": "委派",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 17,
+          "column": 30
         }
       ]
     },
@@ -15866,6 +16517,18 @@
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
           "line": 465,
           "column": 76
+        }
+      ]
+    },
+    "b5141d3d19e9a048": {
+      "source": "是",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 120,
+          "column": 14
         }
       ]
     },
@@ -16213,6 +16876,18 @@
         }
       ]
     },
+    "b87c64da9529a8a0": {
+      "source": "加载路由策略失败",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RoutingPanel.vue",
+          "line": 29,
+          "column": 37
+        }
+      ]
+    },
     "b89e38f551fcd0c0": {
       "source": "拉取中...",
       "kind": "text",
@@ -16287,6 +16962,18 @@
           "file": "src/components/HomeMetricsCard.vue",
           "line": 392,
           "column": 5
+        }
+      ]
+    },
+    "b9670c85a4ab939e": {
+      "source": "路由",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 16,
+          "column": 27
         }
       ]
     },
@@ -16822,6 +17509,18 @@
         }
       ]
     },
+    "c0359f779aafb6c5": {
+      "source": "加载 Agent 运行失败",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/AgentOpsPanel.vue",
+          "line": 15,
+          "column": 37
+        }
+      ]
+    },
     "c0a812005d29d6c4": {
       "source": "OAuth 专用入口，不走普通 API Key 余额查询",
       "kind": "text",
@@ -16848,6 +17547,30 @@
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
           "line": 151,
           "column": 17
+        }
+      ]
+    },
+    "c0cb78e2e84f945f": {
+      "source": "加载请求来源失败",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RequestLabPanel.vue",
+          "line": 25,
+          "column": 37
+        }
+      ]
+    },
+    "c0ded62056b51516": {
+      "source": "只读预览",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RoutingPanel.vue",
+          "line": 78,
+          "column": 40
         }
       ]
     },
@@ -16902,6 +17625,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 85,
+          "column": 37
+        },
         {
           "file": "src/components/CursorAccountCard.vue",
           "line": 249,
@@ -16994,6 +17722,18 @@
         }
       ]
     },
+    "c35343e17bb99fc1": {
+      "source": "官方镜像",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RequestLabPanel.vue",
+          "line": 62,
+          "column": 46
+        }
+      ]
+    },
     "c353eb2fcd7b9d94": {
       "source": "选择默认模板文件；模板列表为空时可手动输入文件名。",
       "kind": "text",
@@ -17020,6 +17760,18 @@
           "file": "src/views/ModelGroups.vue",
           "line": 80,
           "column": 141
+        }
+      ]
+    },
+    "c371f6ba963abd4f": {
+      "source": "凭据绑定缺失或歧义，无法应用",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 61,
+          "column": 21
         }
       ]
     },
@@ -17396,13 +18148,18 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1158,
+          "line": 1177,
           "column": 37
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 1219,
+          "line": 1238,
           "column": 37
+        },
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 1398,
+          "column": 78
         }
       ]
     },
@@ -17488,6 +18245,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 14,
+          "column": 26
+        },
         {
           "file": "src/components/DelegationRuntimePanel.vue",
           "line": 422,
@@ -18597,6 +19359,18 @@
         }
       ]
     },
+    "d771ef854f231ca0": {
+      "source": "暂无本地 Provider 记录。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RequestLabPanel.vue",
+          "line": 87,
+          "column": 66
+        }
+      ]
+    },
     "d7889896c5b7732a": {
       "source": "Anthropic 额外参数 JSON",
       "kind": "text",
@@ -18611,6 +19385,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 1173,
           "column": 21
+        }
+      ]
+    },
+    "d7d07c9bbc01729a": {
+      "source": "请选择左右两个来源",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RequestLabPanel.vue",
+          "line": 33,
+          "column": 19
         }
       ]
     },
@@ -19670,7 +20456,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1271,
+          "line": 1421,
           "column": 26
         }
       ]
@@ -20035,6 +20821,18 @@
         }
       ]
     },
+    "e791ce531f151169": {
+      "source": "对比结构",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RequestLabPanel.vue",
+          "line": 91,
+          "column": 70
+        }
+      ]
+    },
     "e7ae51666b548a55": {
       "source": "本地缓存命中（应用自身的精确匹配响应缓存）",
       "kind": "text",
@@ -20133,6 +20931,18 @@
           "file": "src/views/ModelConfig.vue",
           "line": 468,
           "column": 1
+        }
+      ]
+    },
+    "e912c26e9b347b45": {
+      "source": "决策历史",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/RoutingPanel.vue",
+          "line": 83,
+          "column": 41
         }
       ]
     },
@@ -20553,7 +21363,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1272,
+          "line": 1422,
           "column": 26
         },
         {
@@ -20752,6 +21562,18 @@
         {
           "file": "src/views/Home.vue",
           "line": 67,
+          "column": 21
+        }
+      ]
+    },
+    "f1c39b7ecdecc768": {
+      "source": "档案已应用",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 65,
           "column": 21
         }
       ]
@@ -21106,6 +21928,18 @@
         }
       ]
     },
+    "f4e5ca4931963c4b": {
+      "source": "加载档案失败",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 27,
+          "column": 37
+        }
+      ]
+    },
     "f4f0ead1116b5b62": {
       "source": "启用",
       "kind": "text",
@@ -21392,6 +22226,28 @@
         }
       ]
     },
+    "f7860b0dc066b1bb": {
+      "source": "已导出 {0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/control-center/AgentOpsPanel.vue",
+          "line": 44,
+          "column": 21
+        },
+        {
+          "file": "src/components/control-center/ConfigProfilesPanel.vue",
+          "line": 74,
+          "column": 21
+        },
+        {
+          "file": "src/components/control-center/RequestLabPanel.vue",
+          "line": 47,
+          "column": 21
+        }
+      ]
+    },
     "f7b7de6302eb16b3": {
       "source": "一键修正协议",
       "kind": "text",
@@ -21449,6 +22305,18 @@
           "file": "src/components/DelegationTaskStrip.vue",
           "line": 304,
           "column": 70
+        }
+      ]
+    },
+    "f854d12d3f698b95": {
+      "source": "导出报告",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/AgentOpsPanel.vue",
+          "line": 64,
+          "column": 50
         }
       ]
     },
@@ -21589,7 +22457,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1132,
+          "line": 1151,
           "column": 85
         }
       ]

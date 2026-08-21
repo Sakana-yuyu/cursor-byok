@@ -16,6 +16,11 @@ import {
   SetCurrentCursorAccount, UpdateCursorAccountTags, DeleteCursorAccounts,
   PrepareCursorClientAccountSwitch, ExecuteCursorClientAccountSwitch,
   BeginCursorAccountLogin, GetCursorAccountLoginStatus, CancelCursorAccountLogin,
+  ListRequestSources, BuildRequestComparison, ExportSanitizedRequestComparison,
+  GetRoutingPolicy, SaveRoutingPolicy, PreviewRoutingDecision, GetRoutingDecisionHistory,
+  GetAgentRuns, GetAgentRun, CancelAgentRun, PrepareAgentRunRetry, ExecuteAgentRunRetry, ExportSanitizedAgentRunReport,
+  ListConfigProfiles, SaveCurrentConfigProfile, DeleteConfigProfile, PreviewConfigProfile,
+  PrepareConfigProfileApply, ExecuteConfigProfileApply, ExportConfigProfile, ImportConfigProfile,
   RepairCACorruption, GetCARepairStatus,
   OfferDefenderExclusion, GetDefenderExclusionState, DismissDefenderExclusion,
   GetTerminalEnvironmentStatus, ApplyTerminalEnvironment, InstallTerminalDependency,
@@ -73,6 +78,11 @@ const desktopMethods = {
   SetCurrentCursorAccount, UpdateCursorAccountTags, DeleteCursorAccounts,
   PrepareCursorClientAccountSwitch, ExecuteCursorClientAccountSwitch,
   BeginCursorAccountLogin, GetCursorAccountLoginStatus, CancelCursorAccountLogin,
+  ListRequestSources, BuildRequestComparison, ExportSanitizedRequestComparison,
+  GetRoutingPolicy, SaveRoutingPolicy, PreviewRoutingDecision, GetRoutingDecisionHistory,
+  GetAgentRuns, GetAgentRun, CancelAgentRun, PrepareAgentRunRetry, ExecuteAgentRunRetry, ExportSanitizedAgentRunReport,
+  ListConfigProfiles, SaveCurrentConfigProfile, DeleteConfigProfile, PreviewConfigProfile,
+  PrepareConfigProfileApply, ExecuteConfigProfileApply, ExportConfigProfile, ImportConfigProfile,
   RepairCACorruption, GetCARepairStatus,
   OfferDefenderExclusion, GetDefenderExclusionState, DismissDefenderExclusion,
   GetTerminalEnvironmentStatus, ApplyTerminalEnvironment, InstallTerminalDependency,
@@ -256,6 +266,90 @@ export function getCursorAccountLoginStatus(sessionID) {
 
 export function cancelCursorAccountLogin(sessionID) {
   return withApiLogging("CancelCursorAccountLogin", undefined, () => desktopOrMockRaw(() => CancelCursorAccountLogin(sessionID), "@bindings/cursor/internal/bridge/proxyservice.js", "CancelCursorAccountLogin", [sessionID]));
+}
+
+export function listRequestSources(query) {
+  return withApiLogging("ListRequestSources", { kind: query?.kind }, () => desktopOrMockRaw(() => ListRequestSources(query), "@bindings/cursor/internal/bridge/proxyservice.js", "ListRequestSources", [query]));
+}
+
+export function buildRequestComparison(request) {
+  return withApiLogging("BuildRequestComparison", undefined, () => desktopOrMockRaw(() => BuildRequestComparison(request), "@bindings/cursor/internal/bridge/proxyservice.js", "BuildRequestComparison", [request]));
+}
+
+export function exportSanitizedRequestComparison(comparisonID) {
+  return withApiLogging("ExportSanitizedRequestComparison", undefined, () => desktopOrMockRaw(() => ExportSanitizedRequestComparison(comparisonID), "@bindings/cursor/internal/bridge/proxyservice.js", "ExportSanitizedRequestComparison", [comparisonID]));
+}
+
+export function getRoutingPolicy() {
+  return withApiLogging("GetRoutingPolicy", undefined, () => desktopOrMockRaw(() => GetRoutingPolicy(), "@bindings/cursor/internal/bridge/proxyservice.js", "GetRoutingPolicy"));
+}
+
+export function saveRoutingPolicy(policy) {
+  return withApiLogging("SaveRoutingPolicy", { strategy: policy?.strategy }, () => desktopOrMockRaw(() => SaveRoutingPolicy(policy), "@bindings/cursor/internal/bridge/proxyservice.js", "SaveRoutingPolicy", [policy]));
+}
+
+export function previewRoutingDecision(request) {
+  return withApiLogging("PreviewRoutingDecision", { modelId: request?.modelId }, () => desktopOrMockRaw(() => PreviewRoutingDecision(request), "@bindings/cursor/internal/bridge/proxyservice.js", "PreviewRoutingDecision", [request]));
+}
+
+export function getRoutingDecisionHistory(query) {
+  return withApiLogging("GetRoutingDecisionHistory", undefined, () => desktopOrMockRaw(() => GetRoutingDecisionHistory(query), "@bindings/cursor/internal/bridge/proxyservice.js", "GetRoutingDecisionHistory", [query]));
+}
+
+export function getAgentRuns(query) {
+  return withApiLogging("GetAgentRuns", undefined, () => desktopOrMockRaw(() => GetAgentRuns(query), "@bindings/cursor/internal/bridge/proxyservice.js", "GetAgentRuns", [query]));
+}
+
+export function getAgentRun(runID) {
+  return withApiLogging("GetAgentRun", undefined, () => desktopOrMockRaw(() => GetAgentRun(runID), "@bindings/cursor/internal/bridge/proxyservice.js", "GetAgentRun", [runID]));
+}
+
+export function cancelAgentRun(runID) {
+  return withApiLogging("CancelAgentRun", undefined, () => desktopOrMockRaw(() => CancelAgentRun(runID), "@bindings/cursor/internal/bridge/proxyservice.js", "CancelAgentRun", [runID]));
+}
+
+export function prepareAgentRunRetry(runID) {
+  return withApiLogging("PrepareAgentRunRetry", undefined, () => desktopOrMockRaw(() => PrepareAgentRunRetry(runID), "@bindings/cursor/internal/bridge/proxyservice.js", "PrepareAgentRunRetry", [runID]));
+}
+
+export function executeAgentRunRetry(confirmationToken) {
+  return withApiLogging("ExecuteAgentRunRetry", undefined, () => desktopOrMockRaw(() => ExecuteAgentRunRetry(confirmationToken), "@bindings/cursor/internal/bridge/proxyservice.js", "ExecuteAgentRunRetry", [confirmationToken]));
+}
+
+export function exportSanitizedAgentRunReport(runID) {
+  return withApiLogging("ExportSanitizedAgentRunReport", undefined, () => desktopOrMockRaw(() => ExportSanitizedAgentRunReport(runID), "@bindings/cursor/internal/bridge/proxyservice.js", "ExportSanitizedAgentRunReport", [runID]));
+}
+
+export function listConfigProfiles() {
+  return withApiLogging("ListConfigProfiles", undefined, () => desktopOrMockRaw(() => ListConfigProfiles(), "@bindings/cursor/internal/bridge/proxyservice.js", "ListConfigProfiles"));
+}
+
+export function saveCurrentConfigProfile(request) {
+  return withApiLogging("SaveCurrentConfigProfile", { name: request?.name }, () => desktopOrMockRaw(() => SaveCurrentConfigProfile(request), "@bindings/cursor/internal/bridge/proxyservice.js", "SaveCurrentConfigProfile", [request]));
+}
+
+export function deleteConfigProfile(profileID) {
+  return withApiLogging("DeleteConfigProfile", undefined, () => desktopOrMockRaw(() => DeleteConfigProfile(profileID), "@bindings/cursor/internal/bridge/proxyservice.js", "DeleteConfigProfile", [profileID]));
+}
+
+export function previewConfigProfile(profileID) {
+  return withApiLogging("PreviewConfigProfile", undefined, () => desktopOrMockRaw(() => PreviewConfigProfile(profileID), "@bindings/cursor/internal/bridge/proxyservice.js", "PreviewConfigProfile", [profileID]));
+}
+
+export function prepareConfigProfileApply(profileID) {
+  return withApiLogging("PrepareConfigProfileApply", undefined, () => desktopOrMockRaw(() => PrepareConfigProfileApply(profileID), "@bindings/cursor/internal/bridge/proxyservice.js", "PrepareConfigProfileApply", [profileID]));
+}
+
+export function executeConfigProfileApply(confirmationToken) {
+  return withApiLogging("ExecuteConfigProfileApply", undefined, () => desktopOrMockRaw(() => ExecuteConfigProfileApply(confirmationToken), "@bindings/cursor/internal/bridge/proxyservice.js", "ExecuteConfigProfileApply", [confirmationToken]));
+}
+
+export function exportConfigProfile(profileID) {
+  return withApiLogging("ExportConfigProfile", undefined, () => desktopOrMockRaw(() => ExportConfigProfile(profileID), "@bindings/cursor/internal/bridge/proxyservice.js", "ExportConfigProfile", [profileID]));
+}
+
+export function importConfigProfile(content) {
+  return withApiLogging("ImportConfigProfile", undefined, () => desktopOrMockRaw(() => ImportConfigProfile(content), "@bindings/cursor/internal/bridge/proxyservice.js", "ImportConfigProfile", [content]));
 }
 
 export function getProxyState() {

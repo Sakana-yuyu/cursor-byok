@@ -1,5 +1,9 @@
 <script setup>
+import AgentOpsPanel from "@/components/control-center/AgentOpsPanel.vue";
+import ConfigProfilesPanel from "@/components/control-center/ConfigProfilesPanel.vue";
 import CursorAccountCard from "@/components/CursorAccountCard.vue";
+import RequestLabPanel from "@/components/control-center/RequestLabPanel.vue";
+import RoutingPanel from "@/components/control-center/RoutingPanel.vue";
 import { getControlCenterOverview } from "@/services/clientApi";
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -24,6 +28,14 @@ const activeTab = computed(() => {
 
 function selectTab(tab) {
   void router.replace({ path: "/control-center", query: { tab } });
+}
+
+function domainCount(tab) {
+  if (tab === "accounts") return overview.value?.accounts?.count;
+  if (tab === "request-lab") return overview.value?.requestLab?.count;
+  if (tab === "agents") return overview.value?.agents?.count;
+  if (tab === "profiles") return overview.value?.profiles?.count;
+  return 0;
 }
 
 watch(
@@ -62,14 +74,15 @@ onMounted(() => {
         @click="selectTab(tab.id)"
       >
         {{ tab.label }}
-        <span v-if="tab.id === 'accounts' && overview?.accounts?.count" class="ml-1 text-[11px] text-[#8a8a8a]">{{ overview.accounts.count }}</span>
+        <span v-if="domainCount(tab.id)" class="ml-1 text-[11px] text-[#8a8a8a]">{{ domainCount(tab.id) }}</span>
       </button>
     </div>
     <div v-if="activeTab === 'accounts'" class="min-h-0 flex-1 overflow-y-auto">
       <CursorAccountCard :show-control-center-link="false" />
     </div>
-    <div v-else class="rounded-[8px] border border-[#343434] bg-[#292929] px-4 py-6 text-sm text-[#a3a3a3]">
-      {{ TABS.find((item) => item.id === activeTab)?.label || "该功能" }}暂不可用。
-    </div>
+    <RequestLabPanel v-else-if="activeTab === 'request-lab'" />
+    <RoutingPanel v-else-if="activeTab === 'routing'" />
+    <AgentOpsPanel v-else-if="activeTab === 'agents'" />
+    <ConfigProfilesPanel v-else-if="activeTab === 'profiles'" />
   </div>
 </template>

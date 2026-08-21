@@ -1085,6 +1085,25 @@ let previewCursorAccounts = cloneAccounts(previewTestPlan?.cursorAccounts);
 let previewLoginSession = null;
 let previewPendingSwitch = null;
 let previewPendingExport = null;
+let previewRoutingPolicy = {
+  enabled: false,
+  strategy: "manual",
+  sessionAffinity: false,
+  maxFailoverAttempts: 0,
+  latencyWeight: 25,
+  costWeight: 25,
+  reliabilityWeight: 25,
+  balanceWeight: 25,
+};
+let previewAgentRuns = [];
+let previewConfigProfiles = [];
+let previewComparison = null;
+const previewOfficialSources = [
+  { ref: { kind: "official_mirror", id: "off-preview-1" }, timestampUnixMs: Date.now(), model: "gpt-test", provider: "official", protocol: "POST", status: "200", shapeAvailable: true },
+];
+const previewLocalSources = [
+  { ref: { kind: "local_provider", id: "loc-preview-1" }, timestampUnixMs: Date.now(), model: "gpt-test", provider: "local", protocol: "provider", status: "ok", shapeAvailable: true },
+];
 
 function upsertPreviewAccount(account) {
   const next = {
@@ -1108,10 +1127,10 @@ export const GetControlCenterOverview = () => {
   recordPreviewCall("GetControlCenterOverview");
   return Promise.resolve({
     accounts: { state: previewCursorAccounts.length > 0 ? "ready" : "empty", count: previewCursorAccounts.length },
-    requestLab: { state: "unavailable" },
-    routing: { state: "unavailable" },
-    agents: { state: "unavailable" },
-    profiles: { state: "unavailable" },
+    requestLab: { state: "ready", count: 2 },
+    routing: { state: previewRoutingPolicy.enabled ? "ready" : "empty" },
+    agents: { state: previewAgentRuns.length > 0 ? "ready" : "empty", count: previewAgentRuns.length },
+    profiles: { state: previewConfigProfiles.length > 0 ? "ready" : "empty", count: previewConfigProfiles.length },
   });
 };
 export const ListCursorAccounts = () => {
@@ -1255,6 +1274,137 @@ export const CancelCursorAccountLogin = (sessionID) => {
   }
   previewLoginSession = null;
   return Promise.resolve({ operationId: sessionID, state: "succeeded", finishedAtUnixMs: Date.now() });
+};
+
+export const ListRequestSources = (query) => {
+  recordPreviewCall("ListRequestSources", [{ kind: query?.kind }]);
+  const items = query?.kind === "local_provider" ? previewLocalSources : previewOfficialSources;
+  return Promise.resolve({ items, nextCursor: "" });
+};
+export const BuildRequestComparison = (request) => {
+  recordPreviewCall("BuildRequestComparison");
+  previewComparison = {
+    id: "cmp-preview-1",
+    left: previewOfficialSources[0],
+    right: previewLocalSources[0],
+    matchLevel: "explicit",
+    matchReasons: ["user_selected"],
+    sections: [{ name: "messages", diffs: [{ path: "/messages/count", kind: "count", leftSummary: "count=2", rightSummary: "count=1" }] }],
+  };
+  return Promise.resolve(previewComparison);
+};
+export const ExportSanitizedRequestComparison = (comparisonID) => {
+  recordPreviewCall("ExportSanitizedRequestComparison");
+  if (!previewComparison || previewComparison.id !== comparisonID) return Promise.reject(new Error("对比不存在"));
+  return Promise.resolve({ path: "comparison-preview.json", sha256: "abc" });
+};
+export const GetRoutingPolicy = () => {
+  recordPreviewCall("GetRoutingPolicy");
+  return Promise.resolve({ ...previewRoutingPolicy });
+};
+export const SaveRoutingPolicy = (policy) => {
+  recordPreviewCall("SaveRoutingPolicy", [{ strategy: policy?.strategy }]);
+  previewRoutingPolicy = { ...previewRoutingPolicy, ...policy };
+  return Promise.resolve({ ...previewRoutingPolicy });
+};
+export const PreviewRoutingDecision = (request) => {
+  recordPreviewCall("PreviewRoutingDecision", [{ modelId: request?.modelId }]);
+  if (!String(request?.modelId || "").trim()) return Promise.reject(new Error("模型 ID 无效"));
+  return Promise.resolve({
+    decisionId: "dec-preview",
+    strategy: previewRoutingPolicy.strategy,
+    candidates: [{ channelId: "preview-demo-openai", eligible: true, score: 100, reasonCodes: ["manual_order"], pricingKnown: false }],
+  });
+};
+export const GetRoutingDecisionHistory = () => {
+  recordPreviewCall("GetRoutingDecisionHistory");
+  return Promise.resolve({ items: [] });
+};
+export const GetAgentRuns = () => {
+  recordPreviewCall("GetAgentRuns");
+  return Promise.resolve({ items: previewAgentRuns });
+};
+export const GetAgentRun = (runID) => {
+  recordPreviewCall("GetAgentRun");
+  const summary = previewAgentRuns.find((item) => item.runId === runID);
+  if (!summary) return Promise.reject(new Error("运行不存在"));
+  return Promise.resolve({ summary, attempts: [], children: [] });
+};
+export const CancelAgentRun = (runID) => {
+  recordPreviewCall("CancelAgentRun");
+  return Promise.resolve({ operationId: runID, state: "succeeded", finishedAtUnixMs: Date.now() });
+};
+export const PrepareAgentRunRetry = (runID) => {
+  recordPreviewCall("PrepareAgentRunRetry");
+  return Promise.resolve({
+    operationId: `retry-${runID}`,
+    confirmationToken: "preview-retry",
+    expiresAtUnixMs: Date.now() + 60_000,
+    impactCodes: ["agent_retry"],
+    rollbackAvailable: false,
+    run: { runId: runID, status: "failed", retryable: true, sideEffectObserved: false },
+    originalInputAlive: false,
+    retrySafe: true,
+  });
+};
+export const ExecuteAgentRunRetry = () => {
+  recordPreviewCall("ExecuteAgentRunRetry");
+  return Promise.reject(new Error("原始输入不在当前进程中"));
+};
+export const ExportSanitizedAgentRunReport = (runID) => {
+  recordPreviewCall("ExportSanitizedAgentRunReport");
+  return Promise.resolve({ path: `agent-run-${runID}.json`, sha256: "abc" });
+};
+export const ListConfigProfiles = () => {
+  recordPreviewCall("ListConfigProfiles");
+  return Promise.resolve(previewConfigProfiles.map((item) => ({ ...item })));
+};
+export const SaveCurrentConfigProfile = (request) => {
+  recordPreviewCall("SaveCurrentConfigProfile", [{ name: request?.name }]);
+  const profile = {
+    id: `profile-${previewConfigProfiles.length + 1}`,
+    name: String(request?.name || "档案"),
+    domains: Array.isArray(request?.domains) ? request.domains : ["models"],
+    createdAtUnixMs: Date.now(),
+    updatedAtUnixMs: Date.now(),
+  };
+  previewConfigProfiles = [...previewConfigProfiles, profile];
+  return Promise.resolve(profile);
+};
+export const DeleteConfigProfile = (profileID) => {
+  recordPreviewCall("DeleteConfigProfile");
+  previewConfigProfiles = previewConfigProfiles.filter((item) => item.id !== profileID);
+  return Promise.resolve({ operationId: profileID, state: "succeeded", finishedAtUnixMs: Date.now() });
+};
+export const PreviewConfigProfile = (profileID) => {
+  recordPreviewCall("PreviewConfigProfile");
+  const profile = previewConfigProfiles.find((item) => item.id === profileID);
+  if (!profile) return Promise.reject(new Error("档案不存在"));
+  return Promise.resolve({ profile, changes: [{ path: "/routing", changeKind: "update", sensitive: false }], bindings: [], canApply: true });
+};
+export const PrepareConfigProfileApply = (profileID) => {
+  recordPreviewCall("PrepareConfigProfileApply");
+  return Promise.resolve({
+    operationId: `apply-${profileID}`,
+    confirmationToken: "preview-apply",
+    expiresAtUnixMs: Date.now() + 60_000,
+    impactCodes: ["config_rewrite"],
+    rollbackAvailable: true,
+    preview: { profile: { id: profileID, name: "档案", domains: ["routing"] }, changes: [], bindings: [], canApply: true },
+  });
+};
+export const ExecuteConfigProfileApply = (confirmationToken) => {
+  recordPreviewCall("ExecuteConfigProfileApply");
+  if (confirmationToken !== "preview-apply") return Promise.reject(new Error("确认令牌无效或已过期"));
+  return Promise.resolve({ operationId: "apply-preview", state: "succeeded", finishedAtUnixMs: Date.now() });
+};
+export const ExportConfigProfile = (profileID) => {
+  recordPreviewCall("ExportConfigProfile");
+  return Promise.resolve({ path: `profile-${profileID}.json`, sha256: "abc" });
+};
+export const ImportConfigProfile = () => {
+  recordPreviewCall("ImportConfigProfile");
+  return Promise.resolve({ profile: { id: "imported", name: "导入档案", domains: ["routing"] }, changes: [], bindings: [], canApply: false });
 };
 
 function previewStructuredQuotaBalance() {
