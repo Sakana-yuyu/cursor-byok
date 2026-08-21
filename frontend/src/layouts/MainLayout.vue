@@ -120,6 +120,13 @@ function openSettingsWorkspace() {
   void router.push("/settings");
 }
 
+function openControlCenter() {
+  if (route.path === "/control-center") {
+    return;
+  }
+  void router.push({ path: "/control-center", query: { tab: "accounts" } });
+}
+
 async function handleCheckForUpdates() {
   if (updateViewState.footerBusy || updateViewState.footerDownloading) {
     return;
@@ -236,23 +243,47 @@ usePolling(
           </template>
         </div>
       </div>
-      <button
+      <div
         v-if="isMacOS"
-        type="button"
-        aria-label="打开设置"
-        title="设置"
-        class="absolute right-[14px] top-[6px] z-99999 flex h-[28px] w-[28px] items-center justify-center rounded-[7px] text-[#9a9a9a] transition-colors duration-150 hover:bg-[#3a3a3a] hover:text-[#f0f0f0]"
-        :class="route.path === '/settings' ? 'cursor-default opacity-60' : 'cursor-pointer'"
+        class="absolute right-[14px] top-[6px] z-99999 flex items-center gap-1"
         style="--wails-draggable: no-drag"
-        @click="openSettingsWorkspace"
       >
-        <span class="icon-[mdi--cog-outline] text-[17px]" aria-hidden="true"></span>
-      </button>
+        <button
+          type="button"
+          aria-label="打开控制中心"
+          title="控制中心"
+          class="flex h-[28px] w-[28px] items-center justify-center rounded-[7px] text-[#9a9a9a] transition-colors duration-150 hover:bg-[#3a3a3a] hover:text-[#f0f0f0]"
+          :class="route.path === '/control-center' ? 'cursor-default opacity-60' : 'cursor-pointer'"
+          @click="openControlCenter"
+        >
+          <span class="icon-[mdi--view-dashboard-outline] text-[17px]" aria-hidden="true"></span>
+        </button>
+        <button
+          type="button"
+          aria-label="打开设置"
+          title="设置"
+          class="flex h-[28px] w-[28px] items-center justify-center rounded-[7px] text-[#9a9a9a] transition-colors duration-150 hover:bg-[#3a3a3a] hover:text-[#f0f0f0]"
+          :class="route.path === '/settings' ? 'cursor-default opacity-60' : 'cursor-pointer'"
+          @click="openSettingsWorkspace"
+        >
+          <span class="icon-[mdi--cog-outline] text-[17px]" aria-hidden="true"></span>
+        </button>
+      </div>
       <div
         v-if="isWindows || (isBrowserPreview && !isMacOS)"
         class="absolute right-[10px] top-[7px] z-99999 flex items-center gap-[1px] rounded-full border border-[#333] bg-[#242424]/90 px-[3px] py-[3px] shadow-[0_1px_4px_rgba(0,0,0,0.35)] backdrop-blur-sm"
         style="--wails-draggable: no-drag"
       >
+        <button
+          type="button"
+          aria-label="打开控制中心"
+          title="控制中心"
+          class="flex h-[20px] w-[26px] items-center justify-center rounded-full text-[#9a9a9a] transition-colors duration-150 hover:bg-[#3a3a3a] hover:text-[#f0f0f0]"
+          :class="route.path === '/control-center' ? 'cursor-default opacity-60' : 'cursor-pointer'"
+          @click="openControlCenter"
+        >
+          <span class="icon-[mdi--view-dashboard-outline] text-[15px]" aria-hidden="true"></span>
+        </button>
         <button
           type="button"
           aria-label="打开设置"

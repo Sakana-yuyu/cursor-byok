@@ -99,6 +99,30 @@
         }
       ]
     },
+    "00c4d8d91eb4c7cc": {
+      "source": "清除并删除",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 258,
+          "column": 20
+        }
+      ]
+    },
+    "00e69a36afda9c87": {
+      "source": "读取账号失败",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 291,
+          "column": 26
+        }
+      ]
+    },
     "0106245d7137741c": {
       "source": "供应商状态读取失败",
       "kind": "text",
@@ -137,6 +161,23 @@
           "file": "src/views/MetricsDetail.vue",
           "line": 360,
           "column": 30
+        }
+      ]
+    },
+    "01aaebc96af187a9": {
+      "source": "导入失败",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 117,
+          "column": 29
+        },
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 144,
+          "column": 27
         }
       ]
     },
@@ -661,6 +702,28 @@
         }
       ]
     },
+    "0675bb3a3f649c65": {
+      "source": "导入恢复包",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 332,
+          "column": 233
+        },
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 374,
+          "column": 141
+        },
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 375,
+          "column": 62
+        }
+      ]
+    },
     "067c8a97ec89a4ad": {
       "source": "遇到 bug、测试失败或意外行为时，先建立证据链再提出修复方案，避免盲改代码。",
       "kind": "text",
@@ -877,6 +940,18 @@
           "file": "src/services/browserBindings.js",
           "line": 754,
           "column": 21
+        }
+      ]
+    },
+    "090ee49364c3365e": {
+      "source": "浏览器预览模式：不支持的导入方式",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 1135,
+          "column": 35
         }
       ]
     },
@@ -1143,12 +1218,12 @@
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 148,
+          "line": 155,
           "column": 30
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 148,
+          "line": 155,
           "column": 48
         },
         {
@@ -1182,6 +1257,18 @@
           "file": "src/components/ui/ModelTreeSelect.vue",
           "line": 481,
           "column": 13
+        }
+      ]
+    },
+    "0c638f1bd7054315": {
+      "source": "导出恢复包",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 189,
+          "column": 12
         }
       ]
     },
@@ -1262,7 +1349,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 171,
+          "line": 178,
           "column": 27
         }
       ]
@@ -1368,6 +1455,18 @@
         }
       ]
     },
+    "0ef8a02a2a7cc91e": {
+      "source": "确定删除 {0}？",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 274,
+          "column": 14
+        }
+      ]
+    },
     "0f07b59103751626": {
       "source": "按渠道归类时请填写渠道名称",
       "kind": "text",
@@ -1406,6 +1505,18 @@
           "file": "src/components/settings/categories/OverlaySettings.vue",
           "line": 213,
           "column": 11
+        }
+      ]
+    },
+    "0fdc6b51017e80c0": {
+      "source": "请求实验室",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/ControlCenter.vue",
+          "line": 9,
+          "column": 31
         }
       ]
     },
@@ -1526,6 +1637,18 @@
           "file": "src/components/settings/categories/HistorySettings.vue",
           "line": 692,
           "column": 160
+        }
+      ]
+    },
+    "11258947cdee68c2": {
+      "source": "还没有保存的 Cursor 账号。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 338,
+          "column": 137
         }
       ]
     },
@@ -1909,6 +2032,18 @@
         }
       ]
     },
+    "1638cc8f639fc2df": {
+      "source": "自适应路由",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/ControlCenter.vue",
+          "line": 10,
+          "column": 27
+        }
+      ]
+    },
     "165a4b5e768d56c7": {
       "source": "用于区分模型、渠道分组和供应商预设。",
       "kind": "text",
@@ -1976,7 +2111,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 279,
+          "line": 310,
           "column": 11
         }
       ]
@@ -2183,7 +2318,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 294,
+          "line": 325,
           "column": 11
         }
       ]
@@ -2284,6 +2419,18 @@
         }
       ]
     },
+    "1bc96e670a8e29f2": {
+      "source": "配置档案",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/ControlCenter.vue",
+          "line": 12,
+          "column": 28
+        }
+      ]
+    },
     "1bd91a7d0c53c936": {
       "source": "已保存",
       "kind": "text",
@@ -2329,18 +2476,6 @@
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
           "line": 120,
           "column": 85
-        }
-      ]
-    },
-    "1c631615c1d85c9e": {
-      "source": "登录 Cursor",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/CursorAccountCard.vue",
-          "line": 171,
-          "column": 14
         }
       ]
     },
@@ -2433,6 +2568,30 @@
         }
       ]
     },
+    "1d0fd5f9336d9103": {
+      "source": "标签",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 359,
+          "column": 85
+        }
+      ]
+    },
+    "1d3c7c25917e2c2b": {
+      "source": "添加账户",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 326,
+          "column": 77
+        }
+      ]
+    },
     "1d53fec8eb9888e0": {
       "source": "安装完成。",
       "kind": "text",
@@ -2488,8 +2647,8 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 193,
-          "column": 1
+          "line": 192,
+          "column": 52
         },
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
@@ -2510,7 +2669,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 477,
+          "line": 539,
           "column": 66
         }
       ]
@@ -2597,7 +2756,7 @@
       "refs": [
         {
           "file": "src/router/index.js",
-          "line": 44,
+          "line": 45,
           "column": 39
         },
         {
@@ -2868,6 +3027,28 @@
         }
       ]
     },
+    "214657496841f431": {
+      "source": "打开控制中心",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 323,
+          "column": 96
+        },
+        {
+          "file": "src/layouts/MainLayout.vue",
+          "line": 253,
+          "column": 11
+        },
+        {
+          "file": "src/layouts/MainLayout.vue",
+          "line": 279,
+          "column": 11
+        }
+      ]
+    },
     "214d8e3ba13b53de": {
       "source": "搜索模型名 / 标识",
       "kind": "text",
@@ -2901,6 +3082,18 @@
           "file": "src/components/DelegationRuntimePanel.vue",
           "line": 485,
           "column": 25
+        }
+      ]
+    },
+    "21c86745003a85eb": {
+      "source": "设为当前",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 357,
+          "column": 109
         }
       ]
     },
@@ -3271,6 +3464,18 @@
         }
       ]
     },
+    "268dc7e550ddfa44": {
+      "source": "已从本地 Cursor 导入",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 115,
+          "column": 23
+        }
+      ]
+    },
     "26a3855aed1d8d17": {
       "source": "服务未启动",
       "kind": "text",
@@ -3280,6 +3485,18 @@
           "file": "src/state/serviceViewState.js",
           "line": 20,
           "column": 44
+        }
+      ]
+    },
+    "26b0aa3145c37025": {
+      "source": "赞助开发",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 318,
+          "column": 169
         }
       ]
     },
@@ -3331,7 +3548,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1081,
+          "line": 1268,
           "column": 15
         }
       ]
@@ -3669,6 +3886,18 @@
         }
       ]
     },
+    "2bf4b8c80e7204a0": {
+      "source": "将关闭 Cursor 并切换到 {0}。将备份 {1} 个状态文件。",
+      "kind": "template",
+      "placeholders": 2,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 169,
+          "column": 16
+        }
+      ]
+    },
     "2c109fe2e209c73e": {
       "source": "自定义提示词",
       "kind": "text",
@@ -3678,6 +3907,18 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 729,
           "column": 15
+        }
+      ]
+    },
+    "2c111792aea74205": {
+      "source": "从本地 Cursor 导入",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 330,
+          "column": 232
         }
       ]
     },
@@ -3748,8 +3989,13 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 74,
-          "column": 17
+          "line": 384,
+          "column": 64
+        },
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 402,
+          "column": 61
         },
         {
           "file": "src/components/DelegationTaskStrip.vue",
@@ -3921,7 +4167,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 187,
+          "line": 194,
           "column": 27
         }
       ]
@@ -3945,8 +4191,8 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AboutSettings.vue",
-          "line": 66,
-          "column": 1
+          "line": 65,
+          "column": 15
         }
       ]
     },
@@ -4003,8 +4249,8 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 299,
-          "column": 1
+          "line": 298,
+          "column": 41
         }
       ]
     },
@@ -4113,6 +4359,21 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 241,
+          "column": 22
+        },
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 275,
+          "column": 18
+        },
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 361,
+          "column": 84
+        },
+        {
           "file": "src/components/settings/categories/DelegationSettings.vue",
           "line": 968,
           "column": 18
@@ -4219,6 +4480,18 @@
         }
       ]
     },
+    "31022ecf6c69db46": {
+      "source": "登录超时",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 106,
+          "column": 19
+        }
+      ]
+    },
     "311a81f5686483f5": {
       "source": "贴边自动收缩：关闭（点击开启）",
       "kind": "text",
@@ -4228,6 +4501,18 @@
           "file": "src/views/StatsOverlay.vue",
           "line": 534,
           "column": 17
+        }
+      ]
+    },
+    "311bb313fdeca6aa": {
+      "source": "账号",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/ControlCenter.vue",
+          "line": 8,
+          "column": 28
         }
       ]
     },
@@ -4397,7 +4682,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 179,
+          "line": 186,
           "column": 27
         }
       ]
@@ -4426,7 +4711,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 316,
+          "line": 378,
           "column": 99
         }
       ]
@@ -4573,6 +4858,18 @@
         }
       ]
     },
+    "35be66ba72312488": {
+      "source": "已添加 Cursor 账号",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 94,
+          "column": 23
+        }
+      ]
+    },
     "3620e4ae2b78e287": {
       "source": "Agent 执行器",
       "kind": "text",
@@ -4630,6 +4927,23 @@
           "file": "src/components/DelegationRuntimePanel.vue",
           "line": 493,
           "column": 25
+        }
+      ]
+    },
+    "36cce41384cc2bd4": {
+      "source": "删除当前账号",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 239,
+          "column": 16
+        },
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 256,
+          "column": 14
         }
       ]
     },
@@ -4705,12 +5019,12 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 242,
-          "column": 9
+          "line": 263,
+          "column": 11
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 258,
+          "line": 289,
           "column": 11
         }
       ]
@@ -4855,6 +5169,18 @@
         }
       ]
     },
+    "3995561a1c7d3d52": {
+      "source": "所选账号",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 169,
+          "column": 52
+        }
+      ]
+    },
     "39fb6557cf251616": {
       "source": "会话 ID（UUID）",
       "kind": "text",
@@ -4922,28 +5248,6 @@
           "file": "src/views/Home.vue",
           "line": 324,
           "column": 7316
-        }
-      ]
-    },
-    "3ab8cc15939f3b5c": {
-      "source": "退出登录",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/CursorAccountCard.vue",
-          "line": 71,
-          "column": 12
-        },
-        {
-          "file": "src/components/CursorAccountCard.vue",
-          "line": 73,
-          "column": 18
-        },
-        {
-          "file": "src/components/CursorAccountCard.vue",
-          "line": 161,
-          "column": 11
         }
       ]
     },
@@ -5152,6 +5456,18 @@
         }
       ]
     },
+    "3c819442e684ddb5": {
+      "source": "没有可替换的账号，将清除当前账号指针。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 257,
+          "column": 16
+        }
+      ]
+    },
     "3d13868593ae4eeb": {
       "source": "界面语言",
       "kind": "text",
@@ -5174,7 +5490,7 @@
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 380,
+          "line": 411,
           "column": 11
         }
       ]
@@ -5197,11 +5513,6 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/components/CursorAccountCard.vue",
-          "line": 35,
-          "column": 10
-        },
-        {
           "file": "src/components/DelegationRuntimePanel.vue",
           "line": 57,
           "column": 17
@@ -5220,8 +5531,8 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 164,
-          "column": 1
+          "line": 163,
+          "column": 7
         }
       ]
     },
@@ -5445,7 +5756,7 @@
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 295,
+          "line": 326,
           "column": 19
         },
         {
@@ -5542,7 +5853,7 @@
       "refs": [
         {
           "file": "src/router/index.js",
-          "line": 70,
+          "line": 71,
           "column": 39
         },
         {
@@ -5762,8 +6073,8 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 125,
-          "column": 1
+          "line": 124,
+          "column": 49
         }
       ]
     },
@@ -5895,8 +6206,8 @@
       "refs": [
         {
           "file": "src/views/Diagnostics.vue",
-          "line": 215,
-          "column": 1
+          "line": 214,
+          "column": 181
         }
       ]
     },
@@ -6506,6 +6817,18 @@
         }
       ]
     },
+    "4dd048215dbdc3bd": {
+      "source": "Agent 运行台",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/ControlCenter.vue",
+          "line": 11,
+          "column": 26
+        }
+      ]
+    },
     "4ddb1a2e0183747a": {
       "source": "隐藏到托盘",
       "kind": "text",
@@ -6518,7 +6841,7 @@
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 295,
+          "line": 326,
           "column": 19
         }
       ]
@@ -6654,7 +6977,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 216,
+          "line": 278,
           "column": 24
         }
       ]
@@ -6716,6 +7039,18 @@
           "file": "src/components/settings/categories/HistorySettings.vue",
           "line": 820,
           "column": 67
+        }
+      ]
+    },
+    "50df3e06e5aa4a01": {
+      "source": "暂不可用。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/ControlCenter.vue",
+          "line": 72,
+          "column": 71
         }
       ]
     },
@@ -6799,6 +7134,28 @@
         }
       ]
     },
+    "51da9693e6cbbbb4": {
+      "source": "控制中心",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/layouts/MainLayout.vue",
+          "line": 254,
+          "column": 11
+        },
+        {
+          "file": "src/layouts/MainLayout.vue",
+          "line": 280,
+          "column": 11
+        },
+        {
+          "file": "src/router/index.js",
+          "line": 81,
+          "column": 39
+        }
+      ]
+    },
     "51f4278a3da6224d": {
       "source": "历史图标视图",
       "kind": "text",
@@ -6837,6 +7194,18 @@
           "file": "src/views/ModelCatalog.vue",
           "line": 288,
           "column": 28
+        }
+      ]
+    },
+    "52298326dcaa8424": {
+      "source": "用于 Skills / MCP 的独立 Cursor 身份，可保存多个账号。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 312,
+          "column": 22
         }
       ]
     },
@@ -6917,7 +7286,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 412,
+          "line": 474,
           "column": 128
         }
       ]
@@ -7045,6 +7414,23 @@
           "file": "src/views/SupplierDetail.vue",
           "line": 1112,
           "column": 35
+        }
+      ]
+    },
+    "5393b52022ca28e0": {
+      "source": "登录会话无效",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 1240,
+          "column": 37
+        },
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 1254,
+          "column": 37
         }
       ]
     },
@@ -7216,8 +7602,8 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 290,
-          "column": 1
+          "line": 289,
+          "column": 41
         }
       ]
     },
@@ -7395,6 +7781,18 @@
         }
       ]
     },
+    "576d81bb0631b165": {
+      "source": "导入",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 385,
+          "column": 100
+        }
+      ]
+    },
     "577e9588f0a97225": {
       "source": "个站点",
       "kind": "text",
@@ -7432,6 +7830,18 @@
         {
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 136,
+          "column": 23
+        }
+      ]
+    },
+    "584398ab45eece76": {
+      "source": "已切换并重新启动 Cursor",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 176,
           "column": 23
         }
       ]
@@ -7506,18 +7916,6 @@
         }
       ]
     },
-    "58c6b0935a7216da": {
-      "source": "打开贡献者主页失败",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/CursorAccountCard.vue",
-          "line": 49,
-          "column": 27
-        }
-      ]
-    },
     "58d09ae02e56b9c7": {
       "source": "从 JSON 响应中取值的点分路径，例如 data.balance 或 data.0.total_balance。仅自定义模板需要。",
       "kind": "text",
@@ -7527,6 +7925,18 @@
           "file": "src/utils/modelEditorMeta.js",
           "line": 58,
           "column": 22
+        }
+      ]
+    },
+    "58f1a51e4809912d": {
+      "source": "关闭并切换",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 170,
+          "column": 20
         }
       ]
     },
@@ -7554,7 +7964,7 @@
         },
         {
           "file": "src/router/index.js",
-          "line": 24,
+          "line": 25,
           "column": 38
         }
       ]
@@ -7628,6 +8038,18 @@
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
           "line": 354,
           "column": 21
+        }
+      ]
+    },
+    "5a9d403c570531fa": {
+      "source": "用逗号分隔",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 399,
+          "column": 11
         }
       ]
     },
@@ -7933,7 +8355,7 @@
       "refs": [
         {
           "file": "src/router/index.js",
-          "line": 65,
+          "line": 66,
           "column": 39
         }
       ]
@@ -8177,8 +8599,8 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 237,
-          "column": 1
+          "line": 236,
+          "column": 9
         }
       ]
     },
@@ -8583,7 +9005,7 @@
         },
         {
           "file": "src/router/index.js",
-          "line": 39,
+          "line": 40,
           "column": 39
         },
         {
@@ -8603,6 +9025,18 @@
         }
       ]
     },
+    "64bdd081579843d9": {
+      "source": "再次确认导出",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 195,
+          "column": 12
+        }
+      ]
+    },
     "64d2730f2ae37997": {
       "source": "原始返回",
       "kind": "text",
@@ -8612,6 +9046,18 @@
           "file": "src/components/ModelAdapterTestCard.vue",
           "line": 119,
           "column": 19
+        }
+      ]
+    },
+    "651dd126a68d3c3a": {
+      "source": "该功能",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/ControlCenter.vue",
+          "line": 72,
+          "column": 10
         }
       ]
     },
@@ -8871,8 +9317,8 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 171,
-          "column": 14
+          "line": 326,
+          "column": 77
         }
       ]
     },
@@ -8902,6 +9348,28 @@
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
           "line": 1102,
           "column": 22
+        }
+      ]
+    },
+    "6908c3c789b5a530": {
+      "source": "导入 Token",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 331,
+          "column": 225
+        },
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 374,
+          "column": 141
+        },
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 375,
+          "column": 62
         }
       ]
     },
@@ -9099,16 +9567,6 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/components/CursorAccountCard.vue",
-          "line": 41,
-          "column": 30
-        },
-        {
-          "file": "src/components/CursorAccountCard.vue",
-          "line": 41,
-          "column": 48
-        },
-        {
           "file": "src/state/updateViewState.js",
           "line": 5,
           "column": 68
@@ -9142,7 +9600,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 268,
+          "line": 299,
           "column": 11
         }
       ]
@@ -9185,6 +9643,30 @@
           "file": "src/components/DelegationTaskStrip.vue",
           "line": 300,
           "column": 73
+        }
+      ]
+    },
+    "6bb8bc24d680d6aa": {
+      "source": "未命名账号",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 349,
+          "column": 60
+        }
+      ]
+    },
+    "6be905771366d854": {
+      "source": "登录 Cursor 失败",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 82,
+          "column": 27
         }
       ]
     },
@@ -9347,6 +9829,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 206,
+          "column": 27
+        },
         {
           "file": "src/views/Home.vue",
           "line": 94,
@@ -9679,6 +10166,18 @@
         }
       ]
     },
+    "726c9ae3418779d3": {
+      "source": "官方登录",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 329,
+          "column": 222
+        }
+      ]
+    },
     "72b1f5ded305b983": {
       "source": "启用 {0}",
       "kind": "template",
@@ -9868,6 +10367,23 @@
           "file": "src/components/HomeMetricsCard.vue",
           "line": 391,
           "column": 5
+        }
+      ]
+    },
+    "76420433f22d1c80": {
+      "source": "导出",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 197,
+          "column": 18
+        },
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 360,
+          "column": 84
         }
       ]
     },
@@ -10107,7 +10623,7 @@
         },
         {
           "file": "src/router/index.js",
-          "line": 54,
+          "line": 55,
           "column": 39
         }
       ]
@@ -10215,6 +10731,18 @@
           "file": "src/utils/modelEditorMeta.js",
           "line": 40,
           "column": 16
+        }
+      ]
+    },
+    "7a378e624808c7bb": {
+      "source": "粘贴 Cursor Token，提交后立即从内存清除。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 376,
+          "column": 51
         }
       ]
     },
@@ -10399,6 +10927,18 @@
           "file": "src/views/RequestMetrics.vue",
           "line": 470,
           "column": 62
+        }
+      ]
+    },
+    "7c9691192f1b7340": {
+      "source": "继续",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 191,
+          "column": 18
         }
       ]
     },
@@ -10681,7 +11221,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 330,
+          "line": 361,
           "column": 15
         },
         {
@@ -10976,6 +11516,18 @@
         }
       ]
     },
+    "8268a9c7629f7e50": {
+      "source": "另一账号",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 240,
+          "column": 47
+        }
+      ]
+    },
     "82c3a73e89028ca9": {
       "source": "速度 t/s",
       "kind": "text",
@@ -10995,7 +11547,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 280,
+          "line": 311,
           "column": 19
         }
       ]
@@ -11036,6 +11588,18 @@
         }
       ]
     },
+    "839ecc6b7fe1c41e": {
+      "source": "删除后将改用 {0} 作为当前账号。",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 240,
+          "column": 18
+        }
+      ]
+    },
     "83b01cd6a428f122": {
       "source": "浮窗样式",
       "kind": "text",
@@ -11050,18 +11614,6 @@
           "file": "src/components/settings/categories/OverlaySettings.vue",
           "line": 193,
           "column": 13
-        }
-      ]
-    },
-    "83be9cac28873059": {
-      "source": "Cursor 控制面账号",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/CursorAccountCard.vue",
-          "line": 109,
-          "column": 56
         }
       ]
     },
@@ -11429,6 +11981,18 @@
         }
       ]
     },
+    "889077dc62cc0f29": {
+      "source": "粘贴恢复包 JSON，提交后立即从内存清除。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 376,
+          "column": 51
+        }
+      ]
+    },
     "88a5b49bacd1908b": {
       "source": "，使用当前 API Key 查询 balance。",
       "kind": "text",
@@ -11748,6 +12312,18 @@
         }
       ]
     },
+    "8cb76550992bbc24": {
+      "source": "切换 Cursor 账号",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 168,
+          "column": 14
+        }
+      ]
+    },
     "8cbcf741e727dbf7": {
       "source": "模型配置",
       "kind": "text",
@@ -11760,12 +12336,12 @@
         },
         {
           "file": "src/router/index.js",
-          "line": 29,
+          "line": 30,
           "column": 39
         },
         {
           "file": "src/router/index.js",
-          "line": 34,
+          "line": 35,
           "column": 39
         },
         {
@@ -12112,6 +12688,18 @@
         }
       ]
     },
+    "90dae60048b13eea": {
+      "source": "已导入账号",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 141,
+          "column": 21
+        }
+      ]
+    },
     "90dd1ef5a5b3a874": {
       "source": "---\nname: {0}\ndescription: {1}\n---\n\n# {2}\n\n{3}\n\n## 使用场景\n\n- 调试与排查\n- 编写测试\n- 回归验证\n",
       "kind": "template",
@@ -12290,7 +12878,7 @@
       "refs": [
         {
           "file": "src/services/clientApi.js",
-          "line": 164,
+          "line": 174,
           "column": 37
         }
       ]
@@ -12426,7 +13014,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 127,
+          "line": 134,
           "column": 44
         }
       ]
@@ -12647,6 +13235,23 @@
         }
       ]
     },
+    "96476bdca5262c25": {
+      "source": "切换 Cursor 账号失败",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 179,
+          "column": 27
+        },
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 181,
+          "column": 27
+        }
+      ]
+    },
     "964a52c0f340831c": {
       "source": "适用于不提供 /models 接口的供应商",
       "kind": "text",
@@ -12843,6 +13448,18 @@
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
           "line": 166,
           "column": 19
+        }
+      ]
+    },
+    "97d646d0debe57da": {
+      "source": "Cursor 账号",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 311,
+          "column": 60
         }
       ]
     },
@@ -13125,6 +13742,18 @@
         }
       ]
     },
+    "9a7cc243ec518e50": {
+      "source": "浏览器预览模式：未提供 Token",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 1128,
+          "column": 79
+        }
+      ]
+    },
     "9a9acd39e5361188": {
       "source": "状态筛选",
       "kind": "text",
@@ -13134,6 +13763,18 @@
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
           "line": 846,
           "column": 15
+        }
+      ]
+    },
+    "9ae54faf592eb87a": {
+      "source": "更新标签失败",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 228,
+          "column": 27
         }
       ]
     },
@@ -13672,6 +14313,18 @@
         }
       ]
     },
+    "a2a045a5a4fc082a": {
+      "source": "该账号",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 274,
+          "column": 39
+        }
+      ]
+    },
     "a2b60a34a75b7a8e": {
       "source": "工具权限",
       "kind": "text",
@@ -13713,6 +14366,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 403,
+          "column": 75
+        },
         {
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
           "line": 1126,
@@ -13883,8 +14541,8 @@
       "refs": [
         {
           "file": "src/views/Diagnostics.vue",
-          "line": 210,
-          "column": 1
+          "line": 209,
+          "column": 139
         }
       ]
     },
@@ -14154,8 +14812,8 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 122,
-          "column": 1
+          "line": 121,
+          "column": 11
         }
       ]
     },
@@ -14598,7 +15256,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 269,
+          "line": 300,
           "column": 11
         }
       ]
@@ -14670,8 +15328,8 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 182,
-          "column": 1
+          "line": 181,
+          "column": 52
         }
       ]
     },
@@ -14716,8 +15374,8 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 281,
-          "column": 1
+          "line": 280,
+          "column": 41
         }
       ]
     },
@@ -14819,6 +15477,28 @@
           "file": "src/components/charts/StatsOverlayChart.vue",
           "line": 134,
           "column": 11
+        }
+      ]
+    },
+    "af8bb650882332a2": {
+      "source": "账号不存在",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 1172,
+          "column": 49
+        },
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 1179,
+          "column": 49
+        },
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 1197,
+          "column": 49
         }
       ]
     },
@@ -15752,6 +16432,18 @@
         }
       ]
     },
+    "bc0465f167f4f54d": {
+      "source": "切换到 Cursor",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 358,
+          "column": 84
+        }
+      ]
+    },
     "bc407d20b65a706b": {
       "source": "渠道名称",
       "kind": "text",
@@ -15886,6 +16578,18 @@
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
           "line": 134,
           "column": 17
+        }
+      ]
+    },
+    "bddbd8dd1ca206b5": {
+      "source": "恢复包包含登录凭据。确定导出？",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 196,
+          "column": 14
         }
       ]
     },
@@ -16199,6 +16903,21 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 249,
+          "column": 31
+        },
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 266,
+          "column": 29
+        },
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 283,
+          "column": 27
+        },
+        {
           "file": "src/views/ModelConfig.vue",
           "line": 393,
           "column": 29
@@ -16313,18 +17032,6 @@
           "file": "src/components/settings/delegation/DelegationSupervisionPanel.vue",
           "line": 141,
           "column": 7
-        }
-      ]
-    },
-    "c3d46b387eeadb23": {
-      "source": "只会退出 cursor-byok 中的 Cursor 账号，不会退出 Cursor 客户端。是否继续？",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/CursorAccountCard.vue",
-          "line": 72,
-          "column": 14
         }
       ]
     },
@@ -16682,6 +17389,23 @@
         }
       ]
     },
+    "c88f16a6acbb4126": {
+      "source": "确认令牌无效或已过期",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 1158,
+          "column": 37
+        },
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 1219,
+          "column": 37
+        }
+      ]
+    },
     "c8978a04355d894a": {
       "source": "用户分组名称",
       "kind": "text",
@@ -16691,18 +17415,6 @@
           "file": "src/components/model-editor/ModelIdentityFields.vue",
           "line": 43,
           "column": 42
-        }
-      ]
-    },
-    "c8a52b66651d294c": {
-      "source": "退出登录失败",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/CursorAccountCard.vue",
-          "line": 83,
-          "column": 27
         }
       ]
     },
@@ -16998,6 +17710,18 @@
         }
       ]
     },
+    "cb62ebd689ee8f20": {
+      "source": "当前",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 350,
+          "column": 130
+        }
+      ]
+    },
     "cb9d23b5b60b6966": {
       "source": "浏览器预览模式：模拟登录中",
       "kind": "text",
@@ -17075,6 +17799,18 @@
         }
       ]
     },
+    "cd3266d91ae10abc": {
+      "source": "删除账号",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 273,
+          "column": 12
+        }
+      ]
+    },
     "cd7976c9d24ec893": {
       "source": "清空所有会话统计（不可恢复）",
       "kind": "text",
@@ -17096,6 +17832,23 @@
           "file": "src/utils/configValidators.js",
           "line": 11,
           "column": 12
+        }
+      ]
+    },
+    "cdcd9666ff7354e7": {
+      "source": "编辑标签",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 394,
+          "column": 128
+        },
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 395,
+          "column": 59
         }
       ]
     },
@@ -17229,18 +17982,6 @@
         }
       ]
     },
-    "cfa6c803eb3fc713": {
-      "source": "等待浏览器登录",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/CursorAccountCard.vue",
-          "line": 34,
-          "column": 42
-        }
-      ]
-    },
     "d00971a97bb58e6f": {
       "source": "切换模板 {0}",
       "kind": "template",
@@ -17270,6 +18011,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 179,
+          "column": 66
+        },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
           "line": 265,
@@ -17335,7 +18081,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 141,
+          "line": 148,
           "column": 19
         }
       ]
@@ -17803,18 +18549,6 @@
         }
       ]
     },
-    "d6ce4f0f88178144": {
-      "source": "独立用于插件、Skills 和 MCP；不会改变 Cursor 客户端当前账号",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/CursorAccountCard.vue",
-          "line": 143,
-          "column": 53
-        }
-      ]
-    },
     "d6e61888b07853ea": {
       "source": "高级",
       "kind": "text",
@@ -18125,6 +18859,18 @@
           "file": "src/views/StatsOverlay.vue",
           "line": 574,
           "column": 87
+        }
+      ]
+    },
+    "dad6b0308cc47c38": {
+      "source": "感谢",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 316,
+          "column": 51
         }
       ]
     },
@@ -18462,7 +19208,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 280,
+          "line": 311,
           "column": 19
         }
       ]
@@ -18496,6 +19242,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 54,
+          "column": 18
+        },
         {
           "file": "src/views/Home.vue",
           "line": 196,
@@ -18559,17 +19310,17 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 243,
-          "column": 9
+          "line": 264,
+          "column": 11
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 259,
+          "line": 290,
           "column": 11
         },
         {
           "file": "src/router/index.js",
-          "line": 75,
+          "line": 76,
           "column": 39
         }
       ]
@@ -18856,7 +19607,7 @@
       "refs": [
         {
           "file": "src/router/index.js",
-          "line": 59,
+          "line": 60,
           "column": 39
         },
         {
@@ -18919,7 +19670,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1084,
+          "line": 1271,
           "column": 26
         }
       ]
@@ -19015,8 +19766,8 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 62,
-          "column": 27
+          "line": 99,
+          "column": 39
         }
       ]
     },
@@ -19041,18 +19792,6 @@
           "file": "src/components/HomeMetricsCard.vue",
           "line": 373,
           "column": 22
-        }
-      ]
-    },
-    "e4c0daa3c4bea691": {
-      "source": "感谢 @aike0210 对 Cursor 控制面账号功能的贡献。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/CursorAccountCard.vue",
-          "line": 120,
-          "column": 20
         }
       ]
     },
@@ -19153,18 +19892,6 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 458,
           "column": 59
-        }
-      ]
-    },
-    "e53580f8031f13c0": {
-      "source": "请在浏览器完成登录，完成后返回 Cursor 重新打开插件市场",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/CursorAccountCard.vue",
-          "line": 146,
-          "column": 81
         }
       ]
     },
@@ -19382,18 +20109,6 @@
           "file": "src/components/settings/delegation/SubagentProfilesPanel.vue",
           "line": 31,
           "column": 115
-        }
-      ]
-    },
-    "e8a0a6053998ebfa": {
-      "source": "已经登录",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/CursorAccountCard.vue",
-          "line": 33,
-          "column": 43
         }
       ]
     },
@@ -19785,8 +20500,8 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 275,
-          "column": 1
+          "line": 274,
+          "column": 41
         }
       ]
     },
@@ -19838,7 +20553,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1085,
+          "line": 1272,
           "column": 26
         },
         {
@@ -20220,6 +20935,18 @@
         }
       ]
     },
+    "f376d54e6151af2f": {
+      "source": "已导出恢复包",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 204,
+          "column": 21
+        }
+      ]
+    },
     "f38d4a34aba38f9f": {
       "source": "已省输入：{0}",
       "kind": "template",
@@ -20482,6 +21209,18 @@
         {
           "file": "src/utils/modelAdapter.js",
           "line": 443,
+          "column": 14
+        }
+      ]
+    },
+    "f622b28e61c51e68": {
+      "source": "将把所选账号的凭据写入本地恢复文件，请确认目标设备可信。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 190,
           "column": 14
         }
       ]
@@ -20814,7 +21553,7 @@
       "refs": [
         {
           "file": "src/router/index.js",
-          "line": 49,
+          "line": 50,
           "column": 39
         }
       ]
@@ -20840,6 +21579,18 @@
           "file": "src/components/settings/categories/AdvancedSettings.vue",
           "line": 675,
           "column": 9
+        }
+      ]
+    },
+    "fab7396836be9c35": {
+      "source": "浏览器预览模式：未提供恢复包",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/services/browserBindings.js",
+          "line": 1132,
+          "column": 85
         }
       ]
     },
@@ -20870,7 +21621,7 @@
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 149,
+          "line": 156,
           "column": 18
         },
         {
@@ -21073,6 +21824,18 @@
         }
       ]
     },
+    "fc7b37bb20d11399": {
+      "source": "设置当前账号失败",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 156,
+          "column": 27
+        }
+      ]
+    },
     "fc9a17211b3e3a16": {
       "source": "模型目录缓存",
       "kind": "text",
@@ -21080,8 +21843,8 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 204,
-          "column": 1
+          "line": 203,
+          "column": 52
         }
       ]
     },
@@ -21263,7 +22026,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 338,
+          "line": 369,
           "column": 15
         }
       ]

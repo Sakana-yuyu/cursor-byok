@@ -152,6 +152,7 @@ func Run(resources EmbeddedResources) error {
 	}, proxyService.ResetUsageMetrics)
 	windowService := bridge.NewWindowService()
 	windowService.SetCursorLaunchPreflight(proxyService.PrepareCursorLaunch)
+	bridge.WireCursorRuntime(proxyService, windowService)
 	adCore := ads.NewService(ads.Options{
 		StoreRoot:    appdata.AdsRootPath(),
 		HTTPClient:   netproxy.NewHTTPClient(30 * time.Second),

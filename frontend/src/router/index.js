@@ -14,6 +14,7 @@ const MetricsDetail = () => import("@/views/MetricsDetail.vue");
 const StatsOverlay = () => import("@/views/StatsOverlay.vue");
 const Diagnostics = () => import("@/views/Diagnostics.vue");
 const Settings = () => import("@/views/Settings.vue");
+const ControlCenter = () => import("@/views/ControlCenter.vue");
 
 const router = createRouter({
   history: isBrowserPreview ? createWebHistory() : createWebHashHistory(),
@@ -73,6 +74,11 @@ const router = createRouter({
       path: "/settings",
       component: Settings,
       meta: { showIcon: false, title: "设置", directlyClose: false },
+    },
+    {
+      path: "/control-center",
+      component: ControlCenter,
+      meta: { showIcon: false, title: "控制中心", directlyClose: false },
     },
 
   ],

@@ -121,6 +121,8 @@ type Manager struct {
 	lastError       string
 	loginCancel     context.CancelFunc
 	loginGeneration uint64
+	loginSessionID  string
+	loginExpiresAt  int64
 
 	refreshMu sync.Mutex
 	// saveMu 串行化 save 写入（固定 .tmp 文件名并发竞争防护）。
@@ -361,6 +363,7 @@ func (manager *Manager) StartLogin() (Status, error) {
 	challengeBytes := sha256.Sum256([]byte(verifier))
 	challenge := base64.RawURLEncoding.EncodeToString(challengeBytes[:])
 	loginID := uuid.NewString()
+	sessionID := uuid.NewString()
 
 	loginURL, err := buildLoginURL(loginID, challenge)
 	if err != nil {
@@ -375,6 +378,8 @@ func (manager *Manager) StartLogin() (Status, error) {
 	manager.loginGeneration++
 	generation := manager.loginGeneration
 	manager.loginCancel = cancel
+	manager.loginSessionID = sessionID
+	manager.loginExpiresAt = time.Now().Add(loginTimeout).UnixMilli()
 	manager.state = StateWaiting
 	manager.lastError = ""
 	manager.mu.Unlock()

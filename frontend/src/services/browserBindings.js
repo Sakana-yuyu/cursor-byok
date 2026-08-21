@@ -1070,6 +1070,193 @@ export const StartCursorAccountLogin = () =>
 export const DisconnectCursorAccount = () =>
   Promise.resolve({ state: "signed_out", authId: "", email: "", error: "" });
 
+function cloneAccounts(items) {
+  return Array.isArray(items) ? items.map((item) => ({
+    id: String(item?.id || ""),
+    email: String(item?.email || ""),
+    authIdHint: String(item?.authIdHint || "").slice(0, 12),
+    tags: Array.isArray(item?.tags) ? item.tags.map((tag) => String(tag)) : [],
+    isCurrent: Boolean(item?.isCurrent),
+    lastUsedAtUnixMs: Number(item?.lastUsedAtUnixMs || 0),
+  })) : [];
+}
+
+let previewCursorAccounts = cloneAccounts(previewTestPlan?.cursorAccounts);
+let previewLoginSession = null;
+let previewPendingSwitch = null;
+let previewPendingExport = null;
+
+function upsertPreviewAccount(account) {
+  const next = {
+    id: String(account.id || `preview-${previewCursorAccounts.length + 1}`),
+    email: String(account.email || ""),
+    authIdHint: String(account.authIdHint || "").slice(0, 12),
+    tags: Array.isArray(account.tags) ? account.tags.map((tag) => String(tag)) : [],
+    isCurrent: Boolean(account.isCurrent),
+    lastUsedAtUnixMs: Number(account.lastUsedAtUnixMs || Date.now()),
+  };
+  const index = previewCursorAccounts.findIndex((item) => item.id === next.id);
+  if (next.isCurrent) {
+    previewCursorAccounts = previewCursorAccounts.map((item) => ({ ...item, isCurrent: false }));
+  }
+  if (index >= 0) previewCursorAccounts[index] = { ...previewCursorAccounts[index], ...next };
+  else previewCursorAccounts.push(next);
+  return { ...next };
+}
+
+export const GetControlCenterOverview = () => {
+  recordPreviewCall("GetControlCenterOverview");
+  return Promise.resolve({
+    accounts: { state: previewCursorAccounts.length > 0 ? "ready" : "empty", count: previewCursorAccounts.length },
+    requestLab: { state: "unavailable" },
+    routing: { state: "unavailable" },
+    agents: { state: "unavailable" },
+    profiles: { state: "unavailable" },
+  });
+};
+export const ListCursorAccounts = () => {
+  recordPreviewCall("ListCursorAccounts");
+  return Promise.resolve(cloneAccounts(previewCursorAccounts));
+};
+export const ImportCursorAccount = (request) => {
+  recordPreviewCall("ImportCursorAccount", [{ mode: request?.mode }]);
+  const mode = String(request?.mode || "");
+  if (mode === "local_cursor") {
+    return Promise.resolve(upsertPreviewAccount({ id: "preview-local", email: "local@preview.test", authIdHint: "local", isCurrent: previewCursorAccounts.every((item) => !item.isCurrent) }));
+  }
+  if (mode === "token") {
+    if (!String(request?.token || "").trim()) return Promise.reject(new Error("浏览器预览模式：未提供 Token"));
+    return Promise.resolve(upsertPreviewAccount({ id: "preview-token", email: "token@preview.test", authIdHint: "token", isCurrent: previewCursorAccounts.every((item) => !item.isCurrent) }));
+  }
+  if (mode === "recovery_json") {
+    if (!String(request?.jsonContent || "").trim()) return Promise.reject(new Error("浏览器预览模式：未提供恢复包"));
+    return Promise.resolve(upsertPreviewAccount({ id: "preview-json", email: "json@preview.test", authIdHint: "json", isCurrent: previewCursorAccounts.every((item) => !item.isCurrent) }));
+  }
+  return Promise.reject(new Error("浏览器预览模式：不支持的导入方式"));
+};
+export const PrepareCursorAccountRecoveryExport = (request) => {
+  recordPreviewCall("PrepareCursorAccountRecoveryExport", [{ count: request?.accountIds?.length ?? 0 }]);
+  previewPendingExport = {
+    operationId: "preview-export",
+    confirmationToken: "preview-export-token",
+    expiresAtUnixMs: Date.now() + 60_000,
+    impactCodes: ["credential_file_created"],
+    rollbackAvailable: false,
+    count: Array.isArray(request?.accountIds) ? request.accountIds.length : 0,
+  };
+  return Promise.resolve({
+    operationId: previewPendingExport.operationId,
+    confirmationToken: previewPendingExport.confirmationToken,
+    expiresAtUnixMs: previewPendingExport.expiresAtUnixMs,
+    impactCodes: previewPendingExport.impactCodes,
+    rollbackAvailable: false,
+  });
+};
+export const ExecuteCursorAccountRecoveryExport = (confirmationToken) => {
+  recordPreviewCall("ExecuteCursorAccountRecoveryExport");
+  if (!previewPendingExport || confirmationToken !== previewPendingExport.confirmationToken) {
+    return Promise.reject(new Error("确认令牌无效或已过期"));
+  }
+  const count = previewPendingExport.count;
+  previewPendingExport = null;
+  return Promise.resolve({
+    operationId: "preview-export",
+    state: "succeeded",
+    exportedCount: count,
+    finishedAtUnixMs: Date.now(),
+  });
+};
+export const SetCurrentCursorAccount = (accountID) => {
+  recordPreviewCall("SetCurrentCursorAccount", [accountID]);
+  const account = previewCursorAccounts.find((item) => item.id === accountID);
+  if (!account) return Promise.reject(new Error("账号不存在"));
+  previewCursorAccounts = previewCursorAccounts.map((item) => ({ ...item, isCurrent: item.id === accountID }));
+  return Promise.resolve({ ...account, isCurrent: true });
+};
+export const UpdateCursorAccountTags = (accountID, tags) => {
+  recordPreviewCall("UpdateCursorAccountTags", [accountID]);
+  const account = previewCursorAccounts.find((item) => item.id === accountID);
+  if (!account) return Promise.reject(new Error("账号不存在"));
+  account.tags = Array.isArray(tags) ? tags.map((tag) => String(tag)) : [];
+  return Promise.resolve({ ...account });
+};
+export const DeleteCursorAccounts = (request) => {
+  recordPreviewCall("DeleteCursorAccounts", [{ count: request?.accountIds?.length ?? 0, clearCurrent: Boolean(request?.clearCurrent) }]);
+  const ids = new Set((request?.accountIds || []).map((id) => String(id)));
+  previewCursorAccounts = previewCursorAccounts.filter((item) => !ids.has(item.id));
+  if (request?.replacementId) {
+    previewCursorAccounts = previewCursorAccounts.map((item) => ({ ...item, isCurrent: item.id === request.replacementId }));
+  } else if (request?.clearCurrent) {
+    previewCursorAccounts = previewCursorAccounts.map((item) => ({ ...item, isCurrent: false }));
+  }
+  return Promise.resolve();
+};
+export const PrepareCursorClientAccountSwitch = (accountID) => {
+  recordPreviewCall("PrepareCursorClientAccountSwitch", [accountID]);
+  const account = previewCursorAccounts.find((item) => item.id === accountID);
+  if (!account) return Promise.reject(new Error("账号不存在"));
+  previewPendingSwitch = {
+    operationId: "preview-switch",
+    confirmationToken: "preview-switch-token",
+    expiresAtUnixMs: Date.now() + 60_000,
+    account,
+  };
+  return Promise.resolve({
+    operationId: previewPendingSwitch.operationId,
+    confirmationToken: previewPendingSwitch.confirmationToken,
+    expiresAtUnixMs: previewPendingSwitch.expiresAtUnixMs,
+    impactCodes: ["cursor_restart_required", "cursor_state_auth_overwrite"],
+    rollbackAvailable: true,
+    account: { ...account },
+    cursorRunning: true,
+    requiresRestart: true,
+    backupFileCount: 1,
+  });
+};
+export const ExecuteCursorClientAccountSwitch = (confirmationToken) => {
+  recordPreviewCall("ExecuteCursorClientAccountSwitch");
+  if (!previewPendingSwitch || confirmationToken !== previewPendingSwitch.confirmationToken) {
+    return Promise.reject(new Error("确认令牌无效或已过期"));
+  }
+  const account = previewPendingSwitch.account;
+  previewPendingSwitch = null;
+  previewCursorAccounts = previewCursorAccounts.map((item) => ({ ...item, isCurrent: item.id === account.id }));
+  return Promise.resolve({
+    operationId: "preview-switch",
+    state: "succeeded",
+    account: { ...account, isCurrent: true },
+    cursorRestarted: true,
+    finishedAtUnixMs: Date.now(),
+  });
+};
+export const BeginCursorAccountLogin = () => {
+  recordPreviewCall("BeginCursorAccountLogin");
+  previewLoginSession = { sessionId: "preview-login", state: "waiting", expiresAtUnixMs: Date.now() + 60_000 };
+  return Promise.resolve({ ...previewLoginSession });
+};
+export const GetCursorAccountLoginStatus = (sessionID) => {
+  recordPreviewCall("GetCursorAccountLoginStatus");
+  if (!previewLoginSession || previewLoginSession.sessionId !== sessionID) {
+    return Promise.reject(new Error("登录会话无效"));
+  }
+  upsertPreviewAccount({
+    id: "preview-oauth",
+    email: "oauth@preview.test",
+    authIdHint: "oauth",
+    isCurrent: previewCursorAccounts.every((item) => !item.isCurrent),
+  });
+  previewLoginSession = { ...previewLoginSession, state: "signed_in" };
+  return Promise.resolve({ sessionId: sessionID, state: "signed_in" });
+};
+export const CancelCursorAccountLogin = (sessionID) => {
+  recordPreviewCall("CancelCursorAccountLogin");
+  if (!previewLoginSession || previewLoginSession.sessionId !== sessionID) {
+    return Promise.reject(new Error("登录会话无效"));
+  }
+  previewLoginSession = null;
+  return Promise.resolve({ operationId: sessionID, state: "succeeded", finishedAtUnixMs: Date.now() });
+};
+
 function previewStructuredQuotaBalance() {
   return {
     supported: true,

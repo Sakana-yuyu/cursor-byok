@@ -3,9 +3,11 @@ package client
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"cursor/internal/appdata"
 	"cursor/internal/controlcenter"
 	"cursor/internal/cursoraccount"
 )
@@ -94,7 +96,11 @@ func (s *ProxyService) ExecuteCursorAccountRecoveryExport(confirmationToken, des
 	if s == nil || s.cursorAccount == nil {
 		return cursoraccount.CursorAccountRecoveryExportResult{}, fmt.Errorf("Cursor 账号服务未初始化")
 	}
-	return s.cursorAccount.ExecuteRecoveryExport(confirmationToken, destinationPath)
+	dest := strings.TrimSpace(destinationPath)
+	if dest == "" {
+		dest = filepath.Join(appdata.DataRootPath(), "cursor-account-recovery.json")
+	}
+	return s.cursorAccount.ExecuteRecoveryExport(confirmationToken, dest)
 }
 
 func (s *ProxyService) SetCurrentCursorAccount(accountID string) (cursoraccount.CursorAccountSummary, error) {
@@ -144,4 +150,11 @@ func (s *ProxyService) ExecuteCursorClientAccountSwitch(confirmationToken string
 		return cursoraccount.CursorAccountSwitchResult{}, fmt.Errorf("Cursor 账号服务未初始化")
 	}
 	return s.cursorAccount.ExecuteCursorClientAccountSwitch(confirmationToken)
+}
+
+func (s *ProxyService) AttachCursorRuntime(runtime cursoraccount.CursorRuntime) {
+	if s == nil || s.cursorAccount == nil || runtime == nil {
+		return
+	}
+	s.cursorAccount.SetCursorRuntime(runtime)
 }
