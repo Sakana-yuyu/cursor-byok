@@ -14,6 +14,7 @@ import (
 	"cursor/internal/i18n"
 	"cursor/internal/modelchannel"
 	"cursor/internal/modelcontext"
+	"cursor/internal/routing"
 	legacyruntime "cursor/internal/runtime"
 )
 
@@ -104,7 +105,8 @@ type ModelAdapterConfig struct {
 }
 
 type RoutingConfig struct {
-	Mode string `json:"mode" yaml:"mode"`
+	Mode   string         `json:"mode" yaml:"mode"`
+	Policy routing.Policy `json:"policy,omitempty" yaml:"policy,omitempty"`
 }
 
 // ComputerUseConfig 控制 ComputerUse 工具的本地执行后端。
@@ -257,7 +259,8 @@ func DefaultConfig() Config {
 		ModelAdapters:                   []ModelAdapterConfig{},
 		BillingQuery:                    BillingQueryConfig{Enabled: DefaultBillingQueryEnabled},
 		Routing: RoutingConfig{
-			Mode: DefaultRoutingMode,
+			Mode:   DefaultRoutingMode,
+			Policy: routing.DefaultPolicy(),
 		},
 		SkillMCPScan: SkillMCPScanConfig{
 			Enabled: DefaultSkillMCPScanEnabled,
@@ -315,6 +318,11 @@ func NormalizeConfig(input Config) (Config, error) {
 	if output.Routing.Mode == "" {
 		output.Routing.Mode = DefaultRoutingMode
 	}
+	policy, err := routing.NormalizePolicy(input.Routing.Policy)
+	if err != nil {
+		policy = routing.DefaultPolicy()
+	}
+	output.Routing.Policy = policy
 	output.ComputerUse.Mode = normalizeComputerUseMode(input.ComputerUse.Mode)
 	output.ComputerUse.BrowserStartURL = strings.TrimSpace(input.ComputerUse.BrowserStartURL)
 	if output.ComputerUse.BrowserStartURL == "" {
