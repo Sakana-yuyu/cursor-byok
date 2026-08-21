@@ -10,13 +10,14 @@ import (
 // OpenAI-compatible provider. It is intentionally request-shape agnostic so
 // Chat Completions and Responses can share the same provider decisions.
 type ProviderCompatibility struct {
-	Kind                 string
-	PromptCacheKey       bool
-	ThinkingDisableKind  string
-	StripPrivateFields   bool
-	FilterResponsesTools bool
-	DropResponsesFields  bool
-	DropGrok45Sampling   bool
+	Kind                      string
+	PromptCacheKey            bool
+	ThinkingDisableKind       string
+	StripPrivateFields        bool
+	FilterResponsesTools      bool
+	DropResponsesFields       bool
+	DropGrok45Sampling        bool
+	AllowResponsesEOFFallback bool
 }
 
 func classifyProviderCompatibility(baseURL, modelID string) ProviderCompatibility {
@@ -29,7 +30,7 @@ func classifyProviderCompatibility(baseURL, modelID string) ProviderCompatibilit
 	// conversation 复用前缀缓存，显著提升缓存命中率。仅对已知会因未知字段报错的 provider 显式关闭。
 	policy := ProviderCompatibility{PromptCacheKey: true}
 	switch {
-	case strings.Contains(base, "api.openai.com") || strings.Contains(base, "chatgpt.com/backend-api/codex"):
+	case isOfficialOpenAIBaseURL(baseURL):
 		// OpenAI 官方端点，继承默认 PromptCacheKey=true。
 	case strings.Contains(signal, "githubcopilot") || strings.Contains(signal, "copilot"):
 		policy.Kind = "copilot"
@@ -63,8 +64,24 @@ func classifyProviderCompatibility(baseURL, modelID string) ProviderCompatibilit
 	case strings.Contains(signal, "stepfun") || strings.Contains(signal, "step-"):
 		policy.Kind = "stepfun"
 	}
+	// Native OpenAI Responses supplies response.completed/incomplete. Preserve a
+	// narrow [DONE]-only fallback for non-official compatibility relays, which
+	// historically closed without native terminal envelopes.
+	policy.AllowResponsesEOFFallback = !isOfficialOpenAIBaseURL(baseURL)
 	policy.ThinkingDisableKind = compatibilityThinkingDisableKind(policy.Kind, modelID)
 	return policy
+}
+
+func isOfficialOpenAIBaseURL(baseURL string) bool {
+	host := modelchannel.URLHostForProtocol(baseURL)
+	if host == "api.openai.com" {
+		return true
+	}
+	if host != "chatgpt.com" {
+		return false
+	}
+	path := strings.ToLower(strings.TrimRight(modelchannel.URLPathForProtocol(baseURL), "/"))
+	return strings.HasPrefix(path, "/backend-api/codex")
 }
 
 func compatibilityThinkingDisableKind(kind, modelID string) string {

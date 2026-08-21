@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -180,8 +181,21 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 	finishReason := ""
 	turnFinishedPending := false
 	streamTerminated := false
+	sawDoneMarker := false
+	responseCompleted := false
 	emittedToolInvocation := false
 	emittedText := false
+	emittedReasoning := false
+	observedNonTextOutput := false
+	clientVisible := false
+	forwardEvent := sink
+	emitEvent := func(event ModelEvent) error {
+		err := forwardEvent(event)
+		if err == nil {
+			clientVisible = true
+		}
+		return err
+	}
 	thinkingStarted := time.Time{}
 	thinkingActive := false
 	emittedReasoningSignature := ""
@@ -210,7 +224,8 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		if duration < 0 {
 			duration = 0
 		}
-		if err := sink(ModelEvent{
+		emittedReasoning = true
+		if err := emitEvent(ModelEvent{
 			Kind:               ModelEventKindThinkingCompleted,
 			OccurredAt:         time.Now().UTC(),
 			Provider:           "openai",
@@ -228,7 +243,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			return nil
 		}
 		turnFinishedPending = false
-		return sink(ModelEvent{
+		return emitEvent(ModelEvent{
 			Kind:              ModelEventKindTurnFinished,
 			OccurredAt:        time.Now().UTC(),
 			Provider:          "openai",
@@ -253,7 +268,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			return err
 		}
 		emittedText = true
-		return sink(ModelEvent{
+		return emitEvent(ModelEvent{
 			Kind:       ModelEventKindTextDelta,
 			OccurredAt: time.Now().UTC(),
 			Provider:   "openai",
@@ -266,11 +281,12 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			return nil
 		}
 		streamIdle.MarkEffectiveContent()
+		emittedReasoning = true
 		if !thinkingActive {
 			thinkingStarted = time.Now()
 			thinkingActive = true
 		}
-		return sink(ModelEvent{
+		return emitEvent(ModelEvent{
 			Kind:          ModelEventKindThinkingDelta,
 			OccurredAt:    time.Now().UTC(),
 			Provider:      "openai",
@@ -407,7 +423,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			return argsErr
 		}
 		emittedToolInvocation = true
-		if err := sink(ModelEvent{
+		if err := emitEvent(ModelEvent{
 			Kind:       ModelEventKindToolLikeCompleted,
 			OccurredAt: time.Now().UTC(),
 			Provider:   "openai",
@@ -454,7 +470,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			return nil
 		}
 		accumulator.StartedEmitted = true
-		return sink(ModelEvent{
+		return emitEvent(ModelEvent{
 			Kind:       ModelEventKindPartialToolCall,
 			OccurredAt: time.Now().UTC(),
 			Provider:   "openai",
@@ -495,7 +511,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			return err
 		}
 		emittedToolInvocation = true
-		if err := sink(ModelEvent{
+		if err := emitEvent(ModelEvent{
 			Kind:       ModelEventKindToolLikeCompleted,
 			OccurredAt: time.Now().UTC(),
 			Provider:   "openai",
@@ -536,7 +552,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			thinkingStarted = time.Time{}
 		}
 		emittedReasoningSignature = trimmedSignature
-		return sink(ModelEvent{
+		return emitEvent(ModelEvent{
 			Kind:                    ModelEventKindThinkingCompleted,
 			OccurredAt:              time.Now().UTC(),
 			Provider:                "openai",
@@ -581,7 +597,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			argsTextDelta = item.Arguments
 		}
 		if argsTextDelta != "" || (strings.TrimSpace(accumulator.Name) == "CreatePlan" && accumulator.Args.Len() > 0) {
-			if err := emitOpenAIToolProgress(sink, currentModel, accumulator, argsTextDelta); err != nil {
+			if err := emitOpenAIToolProgress(emitEvent, currentModel, accumulator, argsTextDelta); err != nil {
 				return err
 			}
 		}
@@ -594,6 +610,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 	applyOutputItem := func(item openAIResponsesOutputItem, outputIndex int, complete bool) error {
 		switch strings.TrimSpace(item.Type) {
 		case "reasoning":
+			observedNonTextOutput = true
 			// The added event only announces the reasoning item. Its encrypted
 			// content and complete summary are finalized on output_item.done;
 			// completing here would split a later summary into a second Cursor
@@ -603,8 +620,10 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			}
 			return emitReasoningSignature(item.EncryptedContent, item.ID, outputIndex, item.Status, item.Summary)
 		case "function_call":
+			observedNonTextOutput = true
 			return applyFunctionCallItem(item, outputIndex, complete)
 		case "image_generation_call":
+			observedNonTextOutput = true
 			accumulator := rememberImageGenerationItem(item, outputIndex)
 			if !complete {
 				return emitImageGenerationStarted(accumulator)
@@ -613,6 +632,9 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			delete(imageGenerations, key)
 			return completeImageGeneration(key, accumulator)
 		default:
+			if strings.TrimSpace(item.Type) != "" {
+				observedNonTextOutput = true
+			}
 			return nil
 		}
 	}
@@ -630,8 +652,9 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			code = firstNonEmptyString(strings.TrimSpace(event.Response.Error.Code), code)
 			message = firstNonEmptyString(strings.TrimSpace(event.Response.Error.Message), message)
 		}
+		var providerErr error
 		if message != "" {
-			return fmt.Errorf("openai responses stream error %s: %s", openAIStreamErrorDetails(errorType, code, event.RequestID), message)
+			providerErr = fmt.Errorf("openai responses stream error %s: %s", openAIStreamErrorDetails(errorType, code, event.RequestID), message)
 		}
 
 		details := make([]string, 0, 5)
@@ -654,10 +677,17 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 				}
 			}
 		}
-		if len(details) == 0 {
-			return fmt.Errorf("openai responses stream failed without error details")
+		if providerErr == nil {
+			if len(details) == 0 {
+				providerErr = fmt.Errorf("openai responses stream failed without error details")
+			} else {
+				providerErr = fmt.Errorf("openai responses stream failed %s", strings.Join(details, " "))
+			}
 		}
-		return fmt.Errorf("openai responses stream failed %s", strings.Join(details, " "))
+		if clientVisible {
+			return midStreamInterruptedError(providerErr)
+		}
+		return providerErr
 	}
 
 	// A2 SSE 逐块读超时：每次 Scan 前设置读 deadline，块到达后清除（不累积）。
@@ -669,6 +699,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 	chunkReadTimeout := providerStreamChunkTimeout(req.ProviderStreamIdleTimeout)
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), openAIStreamMaxTokenSize)
+scanLoop:
 	for {
 		disarm := func() bool { return false }
 		if d, ok := resetStreamReadDeadline(resp, chunkReadTimeout); ok {
@@ -690,32 +721,20 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		}
 		payloadLine := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
 		if payloadLine == "[DONE]" {
-			streamTerminated = true
-			if err := flushTaggedContentTail(); err != nil {
-				return fail(err)
-			}
-			if err := flushThinkingCompleted(); err != nil {
-				return fail(err)
-			}
-			for key, accumulator := range tools {
-				if err := completeTool(key, accumulator); err != nil {
-					return fail(err)
-				}
-			}
-			for key, accumulator := range imageGenerations {
-				if err := completeImageGeneration(key, accumulator); err != nil {
-					return fail(err)
-				}
-			}
-			if err := flushTurnFinished(); err != nil {
-				return fail(err)
-			}
+			// [DONE] only proves transport completion. It may activate the narrow
+			// compatibility fallback below, but never counts as native completion.
+			sawDoneMarker = true
 			break
 		}
 
 		var event openAIResponsesStreamEvent
 		if err := json.Unmarshal([]byte(payloadLine), &event); err != nil {
 			return fail(err)
+		}
+		if streamTerminated {
+			// Ignore malformed/late events after a terminal Responses envelope before
+			// they can overwrite the terminal model or usage accounting.
+			continue
 		}
 		if event.Response != nil {
 			if strings.TrimSpace(event.Response.Model) != "" {
@@ -745,7 +764,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			if event.Delta != "" {
 				_, _ = accumulator.Args.WriteString(event.Delta)
 				streamIdle.MarkEffectiveContent()
-				if err := emitOpenAIToolProgress(sink, currentModel, accumulator, event.Delta); err != nil {
+				if err := emitOpenAIToolProgress(emitEvent, currentModel, accumulator, event.Delta); err != nil {
 					return fail(err)
 				}
 			}
@@ -759,7 +778,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			if event.Arguments != "" && accumulator.Args.Len() == 0 {
 				_, _ = accumulator.Args.WriteString(event.Arguments)
 				streamIdle.MarkEffectiveContent()
-				if err := emitOpenAIToolProgress(sink, currentModel, accumulator, event.Arguments); err != nil {
+				if err := emitOpenAIToolProgress(emitEvent, currentModel, accumulator, event.Arguments); err != nil {
 					return fail(err)
 				}
 			}
@@ -801,6 +820,7 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			}
 		case "response.completed", "response.incomplete":
 			streamTerminated = true
+			responseCompleted = strings.TrimSpace(event.Type) == "response.completed"
 			if event.Response != nil && !emittedText {
 				if strings.TrimSpace(event.Response.OutputText) != "" {
 					if err := emitTaggedContentParts(thinkParser.Consume(event.Response.OutputText)); err != nil {
@@ -827,6 +847,10 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			}
 			if event.Response != nil {
 				for index, item := range event.Response.Output {
+					itemCompleted := strings.EqualFold(strings.TrimSpace(item.Status), "completed")
+					if !responseCompleted && !itemCompleted {
+						continue
+					}
 					if err := applyOutputItem(item, index, true); err != nil {
 						return fail(err)
 					}
@@ -837,18 +861,9 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 				}
 			}
 			turnFinishedPending = true
+			break scanLoop
 		case "response.failed", "error":
 			return fail(errorFromEvent(event))
-		}
-	}
-	for key, accumulator := range tools {
-		if err := completeTool(key, accumulator); err != nil {
-			return fail(err)
-		}
-	}
-	for key, accumulator := range imageGenerations {
-		if err := completeImageGeneration(key, accumulator); err != nil {
-			return fail(err)
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -864,12 +879,24 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		return fail(streamChunkTimeoutError())
 	}
 	if !streamTerminated {
-		// 部分 OpenAI 兼容中转在完整输出后直接关闭 SSE，不发 response.completed。
-		// 流正常结束（无读错误、无逐块超时）时视为正常收口：补发 TurnFinished。
-		if scanner.Err() == nil && !chunkTimedOut {
+		compatibility := classifyProviderCompatibility(baseURL, modelID)
+		if compatibility.AllowResponsesEOFFallback && sawDoneMarker && emittedText && !emittedReasoning && !emittedToolInvocation && !observedNonTextOutput && len(tools) == 0 && len(imageGenerations) == 0 {
+			finishReason = "compat_done"
 			turnFinishedPending = true
 		} else {
-			return fail(fmt.Errorf("provider stream ended before terminal event"))
+			return fail(fmt.Errorf("openai responses stream truncated before terminal event: %w", io.ErrUnexpectedEOF))
+		}
+	}
+	if responseCompleted {
+		for key, accumulator := range tools {
+			if err := completeTool(key, accumulator); err != nil {
+				return fail(err)
+			}
+		}
+		for key, accumulator := range imageGenerations {
+			if err := completeImageGeneration(key, accumulator); err != nil {
+				return fail(err)
+			}
 		}
 	}
 	if err := flushTaggedContentTail(); err != nil {
