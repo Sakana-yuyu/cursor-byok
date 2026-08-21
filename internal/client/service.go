@@ -194,11 +194,12 @@ func NewProxyService(proxy *mitm.ProxyServer, certManager *certs.Manager, caCert
 		publicClient:     netproxy.NewHTTPClient(publicAPITimeout),
 		modelTestResults: make(map[string]ModelAdapterTestResult),
 
-		modelCatalogCache:               newMetadataCache[ModelCatalogResult](modelCatalogCacheTTL),
-		providerBalanceCache:            newMetadataCache[ProviderBalance](providerBalanceCacheTTL),
-		providerBalanceNegativeCache:    newMetadataCache[ProviderBalance](providerBalanceNegativeCacheTTL),
+		modelCatalogCache:            newMetadataCache[ModelCatalogResult](modelCatalogCacheTTL),
+		providerBalanceCache:         newMetadataCache[ProviderBalance](providerBalanceCacheTTL),
+		providerBalanceNegativeCache: newMetadataCache[ProviderBalance](providerBalanceNegativeCacheTTL),
 	}
 	service.cursorAccount = cursoraccount.NewManager(
+		appdata.DataRootPath(),
 		filepath.Join(appdata.DataRootPath(), "cursor-account.json"),
 		netproxy.NewHTTPClient(publicAPITimeout),
 	)

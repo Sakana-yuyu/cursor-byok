@@ -74,7 +74,7 @@ type refreshResponse struct {
 
 // Manager 持有 cursor-byok 自己的 Cursor 登录态，不读写 Cursor 客户端状态库。
 type Manager struct {
-	path   string
+	store  *AccountStore
 	client *http.Client
 
 	mu              sync.RWMutex
@@ -91,12 +91,12 @@ type Manager struct {
 	importOffMarkerPath string
 }
 
-func NewManager(path string, client *http.Client) *Manager {
+func NewManager(dataRoot, legacyPath string, client *http.Client) *Manager {
 	if client == nil {
 		client = &http.Client{Timeout: 15 * time.Second}
 	}
 	manager := &Manager{
-		path:   strings.TrimSpace(path),
+		store:  NewAccountStore(dataRoot, legacyPath),
 		client: client,
 		state:  StateSignedOut,
 	}
@@ -105,6 +105,13 @@ func NewManager(path string, client *http.Client) *Manager {
 		manager.lastError = fmt.Sprintf("读取 Cursor 账号凭据失败: %v", err)
 	}
 	return manager
+}
+
+func (manager *Manager) CurrentAccountID() string {
+	if manager == nil || manager.store == nil {
+		return ""
+	}
+	return manager.store.CurrentAccountID()
 }
 
 func (manager *Manager) Status() Status {
@@ -214,13 +221,14 @@ func (manager *Manager) Disconnect() (Status, error) {
 	manager.lastError = ""
 	manager.mu.Unlock()
 
-	err := os.Remove(manager.path)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		manager.mu.Lock()
-		manager.state = StateError
-		manager.lastError = fmt.Sprintf("清除 Cursor 账号凭据失败: %v", err)
-		manager.mu.Unlock()
-		return manager.Status(), err
+	if manager.store != nil {
+		if err := manager.store.clearCurrent(); err != nil && !errors.Is(err, os.ErrNotExist) {
+			manager.mu.Lock()
+			manager.state = StateError
+			manager.lastError = fmt.Sprintf("清除 Cursor 账号凭据失败: %v", err)
+			manager.mu.Unlock()
+			return manager.Status(), err
+		}
 	}
 	// 标记「主动断开」，阻止下次启动自动导入；手动 PKCE 登录会清除该标记。
 	if markerErr := writeAutoImportOffMarker(manager.markerPath()); markerErr != nil {
@@ -433,18 +441,11 @@ func (manager *Manager) refresh(ctx context.Context, current credentials) (crede
 }
 
 func (manager *Manager) load() error {
-	if manager.path == "" {
-		return fmt.Errorf("Cursor 账号凭据路径为空")
+	if manager.store == nil {
+		return fmt.Errorf("cursor account store is not initialized")
 	}
-	data, err := os.ReadFile(manager.path)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
+	loaded, _, err := manager.store.LoadCurrentCredentials()
 	if err != nil {
-		return err
-	}
-	loaded := credentials{}
-	if err := json.Unmarshal(data, &loaded); err != nil {
 		return err
 	}
 	loaded.AccessToken = strings.TrimSpace(loaded.AccessToken)
@@ -543,29 +544,15 @@ func (manager *Manager) ImportFromCursorBackup(backupPath string) (bool, error) 
 func (manager *Manager) save(value credentials) error {
 	manager.saveMu.Lock()
 	defer manager.saveMu.Unlock()
-	if manager.path == "" {
-		return fmt.Errorf("Cursor 账号凭据路径为空")
+	if manager.store == nil {
+		return fmt.Errorf("cursor account store is not initialized")
 	}
-	if err := os.MkdirAll(filepath.Dir(manager.path), 0o700); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(value, "", "  ")
+	summary, err := manager.store.Upsert(value)
 	if err != nil {
 		return err
 	}
-	tempPath := manager.path + ".tmp"
-	if err := os.WriteFile(tempPath, append(data, '\n'), 0o600); err != nil {
-		return err
-	}
-	if err := os.Chmod(tempPath, 0o600); err != nil {
-		_ = os.Remove(tempPath)
-		return err
-	}
-	if err := os.Rename(tempPath, manager.path); err != nil {
-		_ = os.Remove(tempPath)
-		return err
-	}
-	return os.Chmod(manager.path, 0o600)
+	_, err = manager.store.SetCurrent(summary.ID)
+	return err
 }
 
 func (manager *Manager) snapshotCredentials() (credentials, uint64) {
@@ -625,7 +612,9 @@ func (manager *Manager) invalidateAuthorization(generation uint64, message strin
 	manager.credentials = credentials{}
 	manager.state = StateError
 	manager.lastError = strings.TrimSpace(message)
-	_ = os.Remove(manager.path)
+	if manager.store != nil {
+		_ = manager.store.clearCurrent()
+	}
 }
 
 func buildLoginURL(loginID string, challenge string) (string, error) {

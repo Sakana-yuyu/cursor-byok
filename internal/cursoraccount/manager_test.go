@@ -25,15 +25,16 @@ func writeBackupFile(t *testing.T, path string, values map[string]any) {
 func TestImportFromCursorBackup(t *testing.T) {
 	dir := t.TempDir()
 	backupPath := filepath.Join(dir, "cursor-auth-backup.json")
-	credPath := filepath.Join(dir, "cursor-account.json")
 
 	t.Run("imports_real_values", func(t *testing.T) {
+		root := t.TempDir()
+		credPath := filepath.Join(root, "cursor-account.json")
 		writeBackupFile(t, backupPath, map[string]any{
 			"cursorAuth/accessToken":  "access-token-123",
 			"cursorAuth/refreshToken": "refresh-token-456",
 			"cursorAuth/cachedEmail":  "user@example.com",
 		})
-		manager := NewManager(credPath, nil)
+		manager := NewManager(root, credPath, nil)
 		imported, err := manager.ImportFromCursorBackup(backupPath)
 		if err != nil {
 			t.Fatal(err)
@@ -49,20 +50,21 @@ func TestImportFromCursorBackup(t *testing.T) {
 			t.Fatalf("email mismatch: %q", status.Email)
 		}
 		// 已持久化，重新构造 Manager 应仍是登录态。
-		reloaded := NewManager(credPath, nil)
+		reloaded := NewManager(root, credPath, nil)
 		if reloaded.Status().State != StateSignedIn {
 			t.Fatal("expected persisted credentials to reload as signed_in")
 		}
 	})
 
 	t.Run("null_values_do_not_import", func(t *testing.T) {
-		credPath2 := filepath.Join(dir, "cursor-account-null.json")
+		root := t.TempDir()
+		credPath := filepath.Join(root, "cursor-account.json")
 		writeBackupFile(t, backupPath, map[string]any{
 			"cursorAuth/accessToken":  nil,
 			"cursorAuth/refreshToken": nil,
 			"cursorAuth/cachedEmail":  nil,
 		})
-		manager := NewManager(credPath2, nil)
+		manager := NewManager(root, credPath, nil)
 		imported, err := manager.ImportFromCursorBackup(backupPath)
 		if err != nil {
 			t.Fatal(err)
@@ -76,8 +78,9 @@ func TestImportFromCursorBackup(t *testing.T) {
 	})
 
 	t.Run("missing_file_does_not_import", func(t *testing.T) {
-		credPath3 := filepath.Join(dir, "cursor-account-missing.json")
-		manager := NewManager(credPath3, nil)
+		root := t.TempDir()
+		credPath := filepath.Join(root, "cursor-account.json")
+		manager := NewManager(root, credPath, nil)
 		imported, err := manager.ImportFromCursorBackup(filepath.Join(dir, "does-not-exist.json"))
 		if err != nil {
 			t.Fatal(err)
@@ -88,8 +91,9 @@ func TestImportFromCursorBackup(t *testing.T) {
 	})
 
 	t.Run("already_signed_in_not_overwritten", func(t *testing.T) {
-		credPath4 := filepath.Join(dir, "cursor-account-existing.json")
-		manager := NewManager(credPath4, nil)
+		root := t.TempDir()
+		credPath := filepath.Join(root, "cursor-account.json")
+		manager := NewManager(root, credPath, nil)
 		manager.mu.Lock()
 		manager.credentials = credentials{AccessToken: "manual-token", Email: "manual@example.com"}
 		manager.state = StateSignedIn
@@ -112,27 +116,31 @@ func TestImportFromCursorBackup(t *testing.T) {
 	})
 
 	t.Run("corrupt_backup_returns_error", func(t *testing.T) {
-		credPath5 := filepath.Join(dir, "cursor-account-corrupt.json")
+		root := t.TempDir()
+		credPath := filepath.Join(root, "cursor-account.json")
 		if err := os.WriteFile(backupPath, []byte("{not-json"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		manager := NewManager(credPath5, nil)
+		manager := NewManager(root, credPath, nil)
 		if _, err := manager.ImportFromCursorBackup(backupPath); err == nil {
 			t.Fatal("expected error for corrupt backup")
 		}
 	})
 
 	t.Run("save_failure_rolls_back_state", func(t *testing.T) {
-		// path 指向一个已存在的目录：temp 写入成功后 rename 覆盖目录必失败。
-		dirAsPath := filepath.Join(dir, "a-directory")
-		if err := os.MkdirAll(dirAsPath, 0o700); err != nil {
+		root := t.TempDir()
+		accountsPath := filepath.Join(root, "cursor-accounts", "accounts")
+		if err := os.MkdirAll(filepath.Dir(accountsPath), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(accountsPath, []byte("not-a-directory"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		writeBackupFile(t, backupPath, map[string]any{
 			"cursorAuth/accessToken": "access-token-rollback",
 			"cursorAuth/cachedEmail": "rollback@example.com",
 		})
-		manager := NewManager(dirAsPath, nil)
+		manager := NewManager(root, filepath.Join(root, "cursor-account.json"), nil)
 		imported, err := manager.ImportFromCursorBackup(backupPath)
 		if err == nil {
 			t.Fatal("expected error when save fails")
@@ -146,13 +154,14 @@ func TestImportFromCursorBackup(t *testing.T) {
 	})
 
 	t.Run("waiting_login_not_overwritten_by_stale_finish", func(t *testing.T) {
-		credPath7 := filepath.Join(dir, "cursor-account-waiting.json")
+		root := t.TempDir()
+		credPath := filepath.Join(root, "cursor-account.json")
 		writeBackupFile(t, backupPath, map[string]any{
 			"cursorAuth/accessToken":  "imported-token",
 			"cursorAuth/refreshToken": "imported-refresh",
 			"cursorAuth/cachedEmail":  "imported@example.com",
 		})
-		manager := NewManager(credPath7, nil)
+		manager := NewManager(root, credPath, nil)
 		manager.mu.Lock()
 		manager.state = StateWaiting
 		manager.loginGeneration = 7
@@ -175,13 +184,14 @@ func TestImportFromCursorBackup(t *testing.T) {
 	})
 
 	t.Run("disconnect_marker_blocks_reimport", func(t *testing.T) {
-		credPath8 := filepath.Join(dir, "cursor-account-marker.json")
-		markerPath := filepath.Join(dir, "auto-import-off.marker")
+		root := t.TempDir()
+		credPath := filepath.Join(root, "cursor-account.json")
+		markerPath := filepath.Join(root, "auto-import-off.marker")
 		writeBackupFile(t, backupPath, map[string]any{
 			"cursorAuth/accessToken": "access-token-marker",
 			"cursorAuth/cachedEmail": "marker@example.com",
 		})
-		manager := NewManager(credPath8, nil)
+		manager := NewManager(root, credPath, nil)
 		manager.importOffMarkerPath = markerPath
 		if err := os.WriteFile(markerPath, []byte("1\n"), 0o600); err != nil {
 			t.Fatal(err)
@@ -199,9 +209,10 @@ func TestImportFromCursorBackup(t *testing.T) {
 	})
 
 	t.Run("commit_credentials_clears_marker", func(t *testing.T) {
-		credPath9 := filepath.Join(dir, "cursor-account-clear-marker.json")
-		markerPath := filepath.Join(dir, "auto-import-off-clear.marker")
-		manager := NewManager(credPath9, nil)
+		root := t.TempDir()
+		credPath := filepath.Join(root, "cursor-account.json")
+		markerPath := filepath.Join(root, "auto-import-off-clear.marker")
+		manager := NewManager(root, credPath, nil)
 		manager.importOffMarkerPath = markerPath
 		if err := writeAutoImportOffMarker(markerPath); err != nil {
 			t.Fatal(err)

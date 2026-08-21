@@ -81,6 +81,20 @@ __pycache__/
 *.sqlite
 *.db
 
+# Cursor 多账户库：凭据、切换备份、操作清单、legacy 迁移备份与恢复包
+**/cursor-accounts/accounts/
+**/cursor-accounts/backups/
+**/cursor-accounts/operations/
+**/cursor-accounts/index.json
+**/cursor-accounts/current.json
+**/cursor-accounts.tmp/
+**/legacy/cursor-account.json.bak
+**/cursor-account.json
+state.vscdb*
+**/state.vscdb*
+**/*cursor-account-recovery*.json
+**/*cursor-accounts-recovery*.json
+
 # IDE / 系统文件
 .vscode/
 .idea/
