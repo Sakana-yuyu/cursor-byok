@@ -237,3 +237,26 @@ func TestImportFromCursorBackup(t *testing.T) {
 		}
 	})
 }
+
+func TestManagerLoadsCurrentWhenLegacyMoveBlocked(t *testing.T) {
+	root := t.TempDir()
+	legacy := filepath.Join(root, "cursor-account.json")
+	writeTestJSON(t, legacy, map[string]string{
+		"accessToken":  "test-access",
+		"refreshToken": "test-refresh",
+		"authId":       "auth-a",
+		"email":        "a@example.test",
+	})
+	if err := os.WriteFile(filepath.Join(root, "legacy"), []byte("not-a-directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := NewManager(root, legacy, nil)
+	status := manager.Status()
+	if status.State != StateSignedIn {
+		t.Fatalf("expected signed_in after store commit, got %q err=%q", status.State, status.Error)
+	}
+	if status.Email != "a@example.test" {
+		t.Fatalf("email mismatch: %q", status.Email)
+	}
+}

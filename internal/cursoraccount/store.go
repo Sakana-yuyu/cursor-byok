@@ -195,7 +195,6 @@ func (s *AccountStore) CurrentAccountID() string {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_ = s.migrateIfNeededLocked()
 	id, err := s.readCurrentIDLocked()
 	if err != nil {
 		return ""
@@ -213,9 +212,26 @@ func (s *AccountStore) migrateIfNeededLocked() error {
 	if s.root == "" {
 		return fmt.Errorf("account store root is empty")
 	}
-	if !s.needsMigration() {
-		return nil
+	if s.needsMigration() {
+		if err := s.commitLegacyMigrationLocked(); err != nil {
+			return err
+		}
 	}
+	if s.storeDirExists() {
+		if moveErr := s.moveLegacyBackup(); moveErr != nil {
+			// Store commit already succeeded. A leftover legacy file is retried
+			// on the next List/load and must not fail current-credential reads.
+		}
+	}
+	return nil
+}
+
+func (s *AccountStore) storeDirExists() bool {
+	_, err := os.Stat(s.dir)
+	return err == nil
+}
+
+func (s *AccountStore) commitLegacyMigrationLocked() error {
 	creds, err := s.readLegacyCredentials()
 	if err != nil {
 		return err
@@ -244,7 +260,7 @@ func (s *AccountStore) migrateIfNeededLocked() error {
 		_ = os.RemoveAll(staging)
 		return fmt.Errorf("commit account store: %w", err)
 	}
-	return s.moveLegacyBackup()
+	return nil
 }
 
 func writeStoreTree(dir string, records []accountRecord, currentID string) error {

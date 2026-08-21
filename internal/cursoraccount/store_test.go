@@ -78,6 +78,83 @@ func TestAccountStoreMigratesLegacyCredentialsOnce(t *testing.T) {
 	}
 }
 
+func TestAccountStoreCompletesLegacyMoveAfterStoreCommit(t *testing.T) {
+	root := t.TempDir()
+	legacy := filepath.Join(root, "cursor-account.json")
+	writeTestJSON(t, legacy, map[string]string{
+		"accessToken":  "test-access",
+		"refreshToken": "test-refresh",
+		"authId":       "auth-a",
+		"email":        "a@example.test",
+	})
+	blocker := filepath.Join(root, "legacy")
+	if err := os.WriteFile(blocker, []byte("not-a-directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	store := NewAccountStore(root, legacy)
+	creds, id, err := store.LoadCurrentCredentials()
+	if err != nil {
+		t.Fatalf("load after store commit should succeed even if legacy move fails: %v", err)
+	}
+	if id == "" || creds.Email != "a@example.test" || creds.AuthID != "auth-a" || creds.AccessToken != "test-access" {
+		t.Fatal("expected migrated current credentials after store commit")
+	}
+	if _, err := os.Stat(legacy); err != nil {
+		t.Fatalf("expected leftover legacy file after blocked move: %v", err)
+	}
+
+	if err := os.Remove(blocker); err != nil {
+		t.Fatal(err)
+	}
+	summaries, err := store.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(summaries) != 1 || summaries[0].ID != id || !summaries[0].IsCurrent {
+		t.Fatalf("unexpected summaries after leftover move: %#v", summaries)
+	}
+	if _, err := os.Stat(filepath.Join(root, "legacy", "cursor-account.json.bak")); err != nil {
+		t.Fatalf("expected leftover legacy to be moved on retry: %v", err)
+	}
+	if _, err := os.Stat(legacy); !os.IsNotExist(err) {
+		t.Fatalf("expected original legacy file gone, stat err=%v", err)
+	}
+}
+
+func TestAccountStoreCurrentAccountIDDoesNotMigrate(t *testing.T) {
+	root := t.TempDir()
+	legacy := filepath.Join(root, "cursor-account.json")
+	writeTestJSON(t, legacy, map[string]string{
+		"accessToken":  "test-access",
+		"refreshToken": "test-refresh",
+		"authId":       "auth-a",
+		"email":        "a@example.test",
+	})
+	store := NewAccountStore(root, legacy)
+
+	if got := store.CurrentAccountID(); got != "" {
+		t.Fatalf("current id getter should not migrate, got %q", got)
+	}
+	if _, err := os.Stat(legacy); err != nil {
+		t.Fatalf("legacy file should remain until List or load: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "cursor-accounts")); !os.IsNotExist(err) {
+		t.Fatalf("getter should not create the account store, stat err=%v", err)
+	}
+
+	summaries, err := store.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(summaries) != 1 {
+		t.Fatalf("unexpected summaries: %#v", summaries)
+	}
+	if got := store.CurrentAccountID(); got != summaries[0].ID {
+		t.Fatalf("current id %q != summary id %q", got, summaries[0].ID)
+	}
+}
+
 func TestAccountStoreRepairsMissingIndexFromAccountFiles(t *testing.T) {
 	store := NewAccountStore(t.TempDir(), "")
 	_, err := store.Upsert(testCredential("auth-a", "a@example.test"))
