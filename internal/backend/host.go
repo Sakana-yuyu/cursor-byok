@@ -386,6 +386,20 @@ func (host *Host) RoutingDecisionHistory(query routing.DecisionQuery) (routing.D
 	return history.List(query)
 }
 
+func (host *Host) SetRoutingMetricsSnapshot(snapshot *routing.MetricsSnapshot) {
+	if host == nil || host.configs == nil {
+		return
+	}
+	host.configs.SetRoutingMetricsSnapshot(snapshot)
+}
+
+func (host *Host) BuildRoutingCandidates(modelID string) []routing.CandidateInput {
+	if host == nil || host.configs == nil {
+		return nil
+	}
+	return host.configs.BuildRoutingCandidates(modelID)
+}
+
 func (host *Host) SaveConfig(ctx context.Context, cfg serverconfig.Config) (serverconfig.Config, error) {
 	if host == nil || host.configs == nil {
 		return serverconfig.Config{}, fmt.Errorf("backend config manager is not initialized")

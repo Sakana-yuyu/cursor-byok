@@ -45,11 +45,12 @@ type ProxyService struct {
 	// backendHost 表示当前嵌入式 backend 服务。
 	backendHost *backend.Host
 	// cursorAccount 持有仅供插件、Skills 和 MCP 控制面使用的真实 Cursor 身份。
-	cursorAccount *cursoraccount.Manager
-	requestLab    *requestlab.Lab
-	routingHist   *routing.History
-	agentOps      *agentops.Console
-	profiles      *configprofile.Store
+	cursorAccount  *cursoraccount.Manager
+	requestLab     *requestlab.Lab
+	routingHist    *routing.History
+	routingMetrics *routing.MetricsSnapshot
+	agentOps       *agentops.Console
+	profiles       *configprofile.Store
 
 	// lifecycleMu serializes start/stop transitions so a Cursor launch cannot
 	// observe a partially started proxy while the automatic startup is running.
@@ -217,6 +218,7 @@ func NewProxyService(proxy *mitm.ProxyServer, certManager *certs.Manager, caCert
 		filepath.Join(appdata.DataRootPath(), "request-lab", "exports"),
 	)
 	service.routingHist = &routing.History{}
+	service.routingMetrics = routing.NewMetricsSnapshot()
 	service.profiles = configprofile.New(filepath.Join(appdata.DataRootPath(), "profiles"))
 	service.agentOps = agentops.New(
 		filepath.Join(appdata.DataRootPath(), "agent-ops", "exports"),
@@ -237,6 +239,7 @@ func NewProxyService(proxy *mitm.ProxyServer, certManager *certs.Manager, caCert
 	service.store = serverconfig.NewStore(service.configPath, service.logsRoot)
 	if m, err := serverconfig.NewManager(context.Background(), service.store); err == nil {
 		service.configs = m
+		m.SetRoutingMetricsSnapshot(service.routingMetrics)
 	} else {
 		// 配置管理器初始化失败不影响启动：镜像开关关闭（镜像记录不启用），回落语义不变。
 		logger.Warnf("init mirror capture config manager failed: %v", err)
@@ -246,8 +249,21 @@ func NewProxyService(proxy *mitm.ProxyServer, certManager *certs.Manager, caCert
 		logger.Errorf("init backend host failed: %v", err)
 	} else {
 		service.backendHost = host
+		host.SetRoutingMetricsSnapshot(service.routingMetrics)
 	}
 	return service
+}
+
+func (s *ProxyService) wireRoutingMetricsSnapshot() {
+	if s == nil || s.routingMetrics == nil {
+		return
+	}
+	if s.backendHost != nil {
+		s.backendHost.SetRoutingMetricsSnapshot(s.routingMetrics)
+	}
+	if s.configs != nil {
+		s.configs.SetRoutingMetricsSnapshot(s.routingMetrics)
+	}
 }
 
 func (s *ProxyService) ensureBackendHost() error {
@@ -262,6 +278,7 @@ func (s *ProxyService) ensureBackendHost() error {
 		return err
 	}
 	s.backendHost = host
+	s.wireRoutingMetricsSnapshot()
 	return nil
 }
 

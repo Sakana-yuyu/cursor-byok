@@ -63,17 +63,18 @@ type Request struct {
 }
 
 type CandidateInput struct {
-	ChannelID                string   `json:"channelId"`
-	ConfigOrder              int      `json:"configOrder"`
-	Available                bool     `json:"available"`
-	Cooldown                 bool     `json:"cooldown"`
-	RecentTTFTMS             int64    `json:"recentTtftMs,omitempty"`
-	RecentSuccessBasisPoints int      `json:"recentSuccessBasisPoints,omitempty"`
-	EstimatedCostMicrosUSD   int64    `json:"estimatedCostMicrosUsd,omitempty"`
-	PricingKnown             bool     `json:"pricingKnown"`
-	BalanceMicrosUSD         int64    `json:"balanceMicrosUsd,omitempty"`
-	BalanceKnown             bool     `json:"balanceKnown"`
-	Capabilities             []string `json:"capabilities,omitempty"`
+	ChannelID                 string   `json:"channelId"`
+	ConfigOrder               int      `json:"configOrder"`
+	Available                 bool     `json:"available"`
+	Cooldown                  bool     `json:"cooldown"`
+	RecentTTFTMS              int64    `json:"recentTtftMs,omitempty"`
+	RecentSuccessBasisPoints  int      `json:"recentSuccessBasisPoints,omitempty"`
+	EstimatedCostMicrosUSD    int64    `json:"estimatedCostMicrosUsd,omitempty"`
+	PricingKnown              bool     `json:"pricingKnown"`
+	BalanceMicrosUSD          int64    `json:"balanceMicrosUsd,omitempty"`
+	BalanceKnown              bool     `json:"balanceKnown"`
+	UsageRemainingBasisPoints int      `json:"usageRemainingBasisPoints,omitempty"`
+	Capabilities              []string `json:"capabilities,omitempty"`
 }
 
 type CandidateScore struct {
@@ -276,11 +277,22 @@ func weightedScore(policy Policy, candidate CandidateInput) int {
 	latency := latencyScore(candidate.RecentTTFTMS) * policy.LatencyWeight
 	cost := costScore(candidate) * policy.CostWeight
 	reliability := candidate.RecentSuccessBasisPoints * policy.ReliabilityWeight / 100
-	balance := 0
-	if candidate.BalanceKnown {
-		balance = int(min64(candidate.BalanceMicrosUSD/1_000_000, 100)) * policy.BalanceWeight
-	}
+	balance := balanceScore(candidate) * policy.BalanceWeight
 	return latency + cost + reliability + balance
+}
+
+func balanceScore(candidate CandidateInput) int {
+	if candidate.UsageRemainingBasisPoints > 0 {
+		score := candidate.UsageRemainingBasisPoints / 100
+		if score > 100 {
+			return 100
+		}
+		return score
+	}
+	if candidate.BalanceKnown {
+		return int(min64(candidate.BalanceMicrosUSD/1_000_000, 100))
+	}
+	return 0
 }
 
 func latencyScore(ttft int64) int {

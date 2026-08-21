@@ -209,6 +209,51 @@ func TestRouterStreamEnabledPolicyStopsAfterObservableOutput(t *testing.T) {
 	}
 }
 
+func TestRouterStreamEnabledBalancedPolicyPrefersHigherUsageRemaining(t *testing.T) {
+	adapter := &channelCallAdapter{}
+	history := &routing.History{}
+	resolver := &policyAwareResolver{
+		diagnosticsResolverStub: diagnosticsResolverStub{channels: expensiveCheapChannels()},
+		policy: routing.Policy{
+			Enabled: true, Strategy: routing.StrategyBalanced,
+			LatencyWeight: 0, CostWeight: 0, ReliabilityWeight: 0, BalanceWeight: 100,
+			MaxFailoverAttempts: 1,
+		},
+		history: history,
+		metrics: map[string]routing.CandidateInput{
+			"expensive": {ChannelID: "expensive", Available: true, BalanceKnown: true, UsageRemainingBasisPoints: 1000, PricingKnown: true, EstimatedCostMicrosUSD: 9_000_000},
+			"cheap":     {ChannelID: "cheap", Available: true, BalanceKnown: true, UsageRemainingBasisPoints: 9000, PricingKnown: true, EstimatedCostMicrosUSD: 1_000},
+		},
+	}
+	router := newPolicyRouter(resolver, adapter)
+	if err := router.Stream(context.Background(), StreamRequest{ModelID: "model-1", Messages: []Message{{Role: "user", Content: "hi"}}}, func(ModelEvent) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if got := adapter.seen(); len(got) != 1 || got[0] != "cheap" {
+		t.Fatalf("usage-aware balanced policy selected %v, want cheap", got)
+	}
+}
+
+func TestRouterStreamEnabledPolicySkipsExhaustedUsageWindow(t *testing.T) {
+	adapter := &channelCallAdapter{}
+	resolver := &policyAwareResolver{
+		diagnosticsResolverStub: diagnosticsResolverStub{channels: expensiveCheapChannels()},
+		policy: routing.Policy{
+			Enabled: true, Strategy: routing.StrategyBalanced, BalanceWeight: 100,
+		},
+		metrics: map[string]routing.CandidateInput{
+			"expensive": {ChannelID: "expensive", Available: true, BalanceKnown: true, UsageRemainingBasisPoints: 9000},
+			"cheap":     {ChannelID: "cheap", Available: false},
+		},
+	}
+	router := newPolicyRouter(resolver, adapter)
+	if err := router.Stream(context.Background(), StreamRequest{ModelID: "model-1", Messages: []Message{{Role: "user", Content: "hi"}}}, func(ModelEvent) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if got := adapter.seen(); len(got) != 1 || got[0] != "expensive" {
+		t.Fatalf("calls = %v, want expensive only", got)
+	}
+}
 func TestRouterStreamEnabledCostPolicyDoesNotTreatUnknownPriceAsFree(t *testing.T) {
 	adapter := &channelCallAdapter{}
 	resolver := &policyAwareResolver{

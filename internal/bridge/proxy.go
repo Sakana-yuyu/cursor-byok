@@ -753,6 +753,7 @@ func (s *ProxyService) QueryAllProviderBalances() []ProviderBalanceSummaryItem {
 				ModelID:     adapter.ModelID,
 			}
 			item.Balance = s.queryProviderBalanceSafe(adapter)
+			s.core.RecordRoutingMetrics(adapter.ID, item.Balance)
 			results[index] = item
 		}(index, job.adapter)
 	}

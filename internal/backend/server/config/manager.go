@@ -34,6 +34,7 @@ type Manager struct {
 	selectionMu      sync.Mutex
 	selectionOffsets map[string]int
 	routingHistory   *routing.History
+	routingMetrics   *routing.MetricsSnapshot
 }
 
 func NewManager(ctx context.Context, store *Store) (*Manager, error) {
