@@ -62,6 +62,16 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 	}
 	normalizeOpenAIResponsesRequestToolSchemas(bodyMap)
 	applyOpenAIResponsesCompatibility(bodyMap, baseURL, modelID, manualPromptCacheKey)
+	admission, err := admitOpenAITools(bodyMap, true, req.Tools)
+	if err != nil {
+		finishedAt = time.Now().UTC()
+		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))
+		return err
+	}
+	req.ToolAdmission = admission
+	if req.RequestKnobs != nil {
+		req.RequestKnobs["tool_admission"] = admission.diagnostics()
+	}
 
 	requestURL := OpenAIEndpointURL(baseURL, req.OpenAIEndpoint)
 	recordLLMRequestArtifact(req, "openai", modelID, "POST", requestURL, bodyMap)
@@ -588,8 +598,12 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		} else if strings.TrimSpace(item.ID) != "" {
 			accumulator.CallID = namespaceToolCallID(req.ModelCallID, item.ID)
 		}
-		if strings.TrimSpace(item.Name) != "" {
-			accumulator.Name = strings.TrimSpace(item.Name)
+		if providerName := strings.TrimSpace(item.Name); providerName != "" {
+			sourceName, admitted := req.ToolAdmission.ResolveFunction(providerName)
+			if !admitted {
+				return toolAdmissionError("provider returned tool not advertised for this request")
+			}
+			accumulator.Name = sourceName
 		}
 		argsTextDelta := ""
 		if item.Arguments != "" && accumulator.Args.Len() == 0 {
@@ -624,6 +638,9 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 			return applyFunctionCallItem(item, outputIndex, complete)
 		case "image_generation_call":
 			observedNonTextOutput = true
+			if !req.ToolAdmission.AllowsHostedImage() {
+				return toolAdmissionError("provider returned hosted image tool not advertised for this request")
+			}
 			accumulator := rememberImageGenerationItem(item, outputIndex)
 			if !complete {
 				return emitImageGenerationStarted(accumulator)

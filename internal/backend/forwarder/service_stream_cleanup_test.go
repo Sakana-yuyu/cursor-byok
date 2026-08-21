@@ -49,8 +49,8 @@ func TestProvider400RecoveryPurgedOnStreamRemoval(t *testing.T) {
 		provider400RecoveryTurns: make(map[string]struct{}),
 	}
 	requestID := "req-recovery-purge"
-	service.claimProvider400Recovery(requestID, 1)
-	service.claimProvider400Recovery(requestID, 2)
+	service.claimProvider400Recovery(provider400RecoveryContentExists, requestID, 1)
+	service.claimProvider400Recovery(provider400RecoveryToolSchema, requestID, 2)
 
 	service.purgeProvider400RecoveryForRequest(requestID)
 
@@ -66,7 +66,7 @@ func TestProvider400RecoveryMaxEntriesEvictsOldestClaims(t *testing.T) {
 		provider400RecoveryTurns: make(map[string]struct{}),
 	}
 	for index := 0; index < provider400RecoveryMaxEntries+4; index++ {
-		if !service.claimProvider400Recovery("req-cap", int64(index)) {
+		if !service.claimProvider400Recovery(provider400RecoveryContentExists, "req-cap", int64(index)) {
 			t.Fatalf("claimProvider400Recovery(%d) = false, want true", index)
 		}
 	}

@@ -368,6 +368,8 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 	stream.ProviderThinkingSuppressedCount = 0
 	stream.ProviderFinishReason = ""
 	stream.ProviderUsage = turnUsageSnapshot{}
+	stream.ProviderToolQuarantine = nil
+	stream.ProviderPassToolNames = nil
 	stream.ToolInvocationCount = 0
 	stream.AutoMultitaskDelegationStarted = false
 	stream.ProviderTurnStartedAt = time.Now().UTC()
@@ -437,7 +439,8 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 		"client_requested_cancel":    true,
 		"cancel_replay_policy_value": cancelReplayPolicyForReason(intent.CancelReason),
 	})
-	service.clearProvider400Recovery(intent.RequestID, turnSeq)
+	service.clearProvider400Recovery(provider400RecoveryContentExists, intent.RequestID, turnSeq)
+	service.clearProvider400Recovery(provider400RecoveryToolSchema, intent.RequestID, turnSeq)
 	// 先切断当前 provider 请求，再做 history、工具 abort 和委派清理。
 	// 断线取消不能因为后续持久化或广播变慢而继续消耗上游额度。
 	forceCancelStreamProvider(stream)

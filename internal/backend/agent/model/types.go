@@ -144,6 +144,9 @@ type StreamRequest struct {
 	StableMessageCount int
 	// Tools 表示原始工具描述 JSON 列表。
 	Tools []json.RawMessage
+	// ToolAdmission is a request-local provider-name-to-canonical-tool map. It is
+	// built after request shaping and is never persisted with conversation history.
+	ToolAdmission *ToolAdmission
 	// MaxTokens 表示本轮最大输出 token 数。
 	MaxTokens int
 	// Stream 表示当前请求必须使用流式。

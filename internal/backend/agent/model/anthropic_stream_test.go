@@ -2,6 +2,7 @@ package modeladapter
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -115,7 +116,10 @@ func TestAnthropicStreamRejectsRelayEOFWithOpenToolBlock(t *testing.T) {
 	server := newAnthropicTestServer(t, nil)
 	defer server.Close()
 	adapter := &AnthropicAdapter{client: server.Client()}
-	_, err := runAnthropicTestStream(t, adapter, StreamRequest{BaseURL: server.URL + "/v1", APIKey: "token", ProviderModelID: "claude-test", ModelCallID: "call-1"}, strings.Join([]string{
+	_, err := runAnthropicTestStream(t, adapter, StreamRequest{
+		BaseURL: server.URL + "/v1", APIKey: "token", ProviderModelID: "claude-test", ModelCallID: "call-1",
+		Tools: []json.RawMessage{json.RawMessage(`{"type":"function","function":{"name":"Read","parameters":{"type":"object","properties":{},"required":[]}}}`)},
+	}, strings.Join([]string{
 		"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-test\"}}\n\n",
 		"event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"tool-1\",\"name\":\"Read\"}}\n\n",
 		"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"}}\n\n",

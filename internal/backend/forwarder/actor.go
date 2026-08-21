@@ -306,6 +306,8 @@ func (service *Service) reopenTerminalStreamForNewTurn(stream *ActiveStream) err
 	stream.PendingProviderAction = providerActionNone
 	stream.PendingProviderCompletion = nil
 	stream.PendingCompaction = nil
+	stream.ProviderToolQuarantine = nil
+	stream.ProviderPassToolNames = nil
 	stream.Status = StreamStatusCreated
 	stream.Phase = TurnPhaseIdle
 	stream.ActorMailbox = nil
@@ -342,6 +344,8 @@ func (service *Service) prepareStreamForForcedTurn(intent InboundIntent) error {
 	stream.PendingCompaction = nil
 	stream.PendingInteractions = make(map[string]runtimecore.PendingInteraction)
 	stream.PartialToolCallIDs = make(map[string]struct{})
+	stream.ProviderToolQuarantine = nil
+	stream.ProviderPassToolNames = nil
 	stream.PatchEditQueues = make(map[string][]queuedPatchEditOperation)
 	stream.Status = StreamStatusCreated
 	stream.Phase = TurnPhaseIdle
@@ -1068,16 +1072,26 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 			strings.TrimSpace(accumulatedReasoningSignature) == "" &&
 			len(accumulatedReasoningSummary) == 0 &&
 			!hadToolInvocation {
-			if service.claimProvider400Recovery(requestID, turnSeq) {
+			quarantinedTool := ""
+			accepted := false
+			if reason == provider400RecoveryToolSchema {
+				name, ok := service.claimToolSchema400Recovery(stream, requestID, turnSeq, payload.Err)
+				accepted = ok
+				quarantinedTool = name
+			} else {
+				accepted = service.claimProvider400Recovery(reason, requestID, turnSeq)
+			}
+			if accepted {
 				if service.debug != nil {
 					service.debug.LogRuntime(context.Background(), requestID, conversationID, "provider_400_recovery_triggered", map[string]any{
-						"reason":        string(reason),
-						"provider_pass": providerPass,
-						"attempt_limit": 1,
-						"condition":     "pre_output_and_no_tool_invocation",
+						"reason":           string(reason),
+						"provider_pass":    providerPass,
+						"attempt_limit":    1,
+						"condition":        "pre_output_and_no_tool_invocation",
+						"quarantined_tool": quarantinedTool,
 					})
 				}
-				logger.Infof("forwarder provider 400 recovery request_id=%s reason=%s pass=%d", strings.TrimSpace(requestID), string(reason), providerPass)
+				logger.Infof("forwarder provider 400 recovery request_id=%s reason=%s pass=%d quarantined_tool=%q", strings.TrimSpace(requestID), string(reason), providerPass, quarantinedTool)
 				if err := service.requestProviderAction(stream, providerActionResume); err != nil {
 					return service.failStreamIfNonTerminal(stream, "unknown", err)
 				}

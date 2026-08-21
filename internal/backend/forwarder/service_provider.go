@@ -231,6 +231,11 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	if !service.visionProxyEnabled() {
 		compiled.Tools = filterToolDescriptorByName(compiled.Tools, seeImageToolName)
 	}
+	// descriptor-400 恢复：provider 明确拒绝某工具 schema 时，本回合把它从后续
+	// provider 请求中剔除（见 handleProviderDoneEvent 的 tool_schema recovery）。
+	if quarantined := snapshotProviderToolQuarantine(stream); len(quarantined) > 0 {
+		compiled.Tools = filterToolDescriptorsByNameSet(compiled.Tools, quarantined)
+	}
 	maxTokens, requestKnobs := service.resolveProviderOutputBudget(modelID, modelName, conversation, compiled)
 	// max_tokens 超限恢复：若本回合因中转站 400 触发过降级重试，用恢复上限覆盖预算，
 	// 确保重试请求的 max_tokens 不超过中转站真实限制。
@@ -288,6 +293,7 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	stream.mu.Lock()
 	stream.ProviderActive = true
 	stream.ProviderCancel = cancel
+	stream.ProviderPassToolNames = toolDescriptorNames(compiled.Tools)
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
 	service.setTurnPhase(stream, TurnPhaseProviderRunning)

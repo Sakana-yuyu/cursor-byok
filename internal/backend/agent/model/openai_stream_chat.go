@@ -43,6 +43,16 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 	}
 	normalizeOpenAIRequestToolSchemas(bodyMap)
 	applyOpenAIChatCompletionsCompatibility(bodyMap, baseURL, modelID, manualPromptCacheKey)
+	admission, err := admitOpenAITools(bodyMap, false, req.Tools)
+	if err != nil {
+		finishedAt = time.Now().UTC()
+		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, err))
+		return err
+	}
+	req.ToolAdmission = admission
+	if req.RequestKnobs != nil {
+		req.RequestKnobs["tool_admission"] = admission.diagnostics()
+	}
 	if modelchannel.OpenAIRequestGroupSupportsAdvancedFields(req.OpenAIRequestGroup) {
 		applyOpenAIServiceTier(bodyMap, req)
 	}
@@ -452,8 +462,12 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 			if strings.TrimSpace(item.ID) != "" {
 				accumulator.CallID = namespaceToolCallID(req.ModelCallID, item.ID)
 			}
-			if strings.TrimSpace(item.Function.Name) != "" {
-				accumulator.Name = strings.TrimSpace(item.Function.Name)
+			if providerName := strings.TrimSpace(item.Function.Name); providerName != "" {
+				sourceName, admitted := req.ToolAdmission.ResolveFunction(providerName)
+				if !admitted {
+					return fail(toolAdmissionError("provider returned tool not advertised for this request"))
+				}
+				accumulator.Name = sourceName
 			}
 			argsTextDelta := ""
 			if item.Function.Arguments != "" {

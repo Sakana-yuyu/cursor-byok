@@ -252,6 +252,14 @@ type ActiveStream struct {
 	// MaxTokensRecoveryAttempts 记录本回合因 max_tokens 超限触发降级重试的次数，
 	// 用于限制重试次数避免无限循环。
 	MaxTokensRecoveryAttempts int
+	// ProviderToolQuarantine 记录本回合因 provider 明确拒绝其 schema/descriptor
+	// 而被隔离的 provider 侧工具名（providerToolSchema400ToolName 提取）。driveProvider
+	// 构建请求时把这些工具从 compiled.Tools 中剔除后重试一次；回合结束即清空。
+	ProviderToolQuarantine []string
+	// ProviderPassToolNames 记录最近一次 provider pass 实际下发（compiled.Tools）的
+	// canonical 工具名快照，供 descriptor-400 恢复时校验「被命名的工具确实已 advertise」，
+	// 避免把误报的引号名（如 "parameter 'temperature'"）当作隔离对象。
+	ProviderPassToolNames []string
 	// ShellSyntheticRecoveryInTurn 标记本回合发生过 shell 合成结果恢复（<shell-incomplete>），
 	// 下一次 provider_call 记录 usage 时消费并标记 degraded（工具「假成功」，见 token_usage.go）。
 	ShellSyntheticRecoveryInTurn bool

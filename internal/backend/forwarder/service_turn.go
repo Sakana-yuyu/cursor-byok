@@ -217,7 +217,7 @@ func (service *Service) completeSuccessfulTurn(stream *ActiveStream, completion 
 	if turnSeq <= 0 {
 		turnSeq = stream.TurnSeq
 	}
-	service.clearProvider400Recovery(requestID, turnSeq)
+	service.clearAllProvider400Recovery(requestID, turnSeq)
 	usage := completion.Usage
 	if err := service.recordTurnUsageSnapshot(stream, conversationID, turnSeq, requestID, modelCallID, "completed", usage, "", false); err != nil {
 		return fmt.Errorf("record completed turn usage: %w", err)
@@ -568,7 +568,7 @@ func (service *Service) failActiveStreamWithDetails(stream *ActiveStream, conver
 	status := stream.Status
 	stream.mu.Unlock()
 	logger.Infof("forwarder fail_active_stream request_id=%s conversation_id=%s model_call_id=%s terminal_code=%s phase=%s status=%s pending_execs=%d message=%q", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), strings.TrimSpace(modelCallID), strings.TrimSpace(terminalCode), phase, status, activePending, strings.TrimSpace(terminalMessage))
-	service.clearProvider400Recovery(requestID, stream.TurnSeq)
+	service.clearAllProvider400Recovery(requestID, stream.TurnSeq)
 	clearPendingProviderCompletion(stream)
 	stream.mu.Lock()
 	cancel := stream.ProviderCancel
@@ -599,19 +599,19 @@ func (service *Service) failActiveStreamWithDetails(stream *ActiveStream, conver
 	return errors.Join(terminalizationErrors...)
 }
 
-func provider400RecoveryKey(requestID string, turnSeq int64) string {
+func provider400RecoveryKey(reason provider400RecoveryReason, requestID string, turnSeq int64) string {
 	requestID = strings.TrimSpace(requestID)
 	if requestID == "" {
 		return ""
 	}
-	return fmt.Sprintf("%s:%d", requestID, turnSeq)
+	return fmt.Sprintf("%s:%d:%s", requestID, turnSeq, strings.TrimSpace(string(reason)))
 }
 
-func (service *Service) claimProvider400Recovery(requestID string, turnSeq int64) bool {
+func (service *Service) claimProvider400Recovery(reason provider400RecoveryReason, requestID string, turnSeq int64) bool {
 	if service == nil {
 		return false
 	}
-	key := provider400RecoveryKey(requestID, turnSeq)
+	key := provider400RecoveryKey(reason, requestID, turnSeq)
 	if key == "" {
 		return false
 	}
@@ -630,15 +630,25 @@ func (service *Service) claimProvider400Recovery(requestID string, turnSeq int64
 	return true
 }
 
-func (service *Service) clearProvider400Recovery(requestID string, turnSeq int64) {
+func (service *Service) clearProvider400Recovery(reason provider400RecoveryReason, requestID string, turnSeq int64) {
 	if service == nil {
 		return
 	}
-	key := provider400RecoveryKey(requestID, turnSeq)
+	key := provider400RecoveryKey(reason, requestID, turnSeq)
 	if key == "" {
 		return
 	}
 	service.provider400RecoveryMu.Lock()
 	delete(service.provider400RecoveryTurns, key)
 	service.provider400RecoveryMu.Unlock()
+}
+
+// clearAllProvider400Recovery 清空指定回合的全部 400 恢复命名空间（content_exists 与
+// tool_schema），用于回合收尾（完成/失败）时解除恢复状态。
+func (service *Service) clearAllProvider400Recovery(requestID string, turnSeq int64) {
+	if service == nil {
+		return
+	}
+	service.clearProvider400Recovery(provider400RecoveryContentExists, requestID, turnSeq)
+	service.clearProvider400Recovery(provider400RecoveryToolSchema, requestID, turnSeq)
 }

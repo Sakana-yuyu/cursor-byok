@@ -114,6 +114,16 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 	}
 	applyAnthropicProviderCompatibility(body, req, baseURL, modelID)
 	applyProviderCompatibilitySanitization(body, baseURL, modelID)
+	admission, admissionErr := admitAnthropicTools(body)
+	if admissionErr != nil {
+		finishedAt = time.Now().UTC()
+		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "anthropic", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, admissionErr))
+		return admissionErr
+	}
+	req.ToolAdmission = admission
+	if req.RequestKnobs != nil {
+		req.RequestKnobs["tool_admission"] = admission.diagnostics()
+	}
 	recordLLMRequestArtifact(req, "anthropic", modelID, "POST", requestURL, body)
 
 	customHeaders, err := ParseCustomHeaders(req.CustomHeadersEnabled, req.CustomHeadersJSON)
@@ -431,9 +441,14 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 					if err := flushThinkingCompleted(); err != nil {
 						return err
 					}
+					providerName := strings.TrimSpace(event.ContentBlock.Name)
+					sourceName, admitted := req.ToolAdmission.ResolveFunction(providerName)
+					if !admitted {
+						return toolAdmissionError("provider returned tool not advertised for this request")
+					}
 					accumulator := &anthropicToolAccumulator{
 						CallID: namespaceToolCallID(req.ModelCallID, event.ContentBlock.ID),
-						Name:   strings.TrimSpace(event.ContentBlock.Name),
+						Name:   sourceName,
 					}
 					if !isEmptyAnthropicToolInput(event.ContentBlock.Input) {
 						if encoded, err := json.Marshal(event.ContentBlock.Input); err == nil && string(encoded) != "null" {

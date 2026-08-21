@@ -226,6 +226,11 @@ func runOpenAIResponsesTerminalStream(t *testing.T, rawEvents []string) ([]Model
 			"model":  "gpt-test",
 			"input":  []any{},
 			"stream": true,
+			"tools": []any{
+				map[string]any{"type": "function", "name": "Read", "parameters": map[string]any{"type": "object", "properties": map[string]any{}, "required": []any{}}},
+				map[string]any{"type": "function", "name": "Write", "parameters": map[string]any{"type": "object", "properties": map[string]any{}, "required": []any{}}},
+				map[string]any{"type": "image_generation"},
+			},
 		},
 	}, server.URL, "test-key", "gpt-test", 0, false, func(event ModelEvent) error {
 		events = append(events, event)

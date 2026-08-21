@@ -62,6 +62,16 @@ func (adapter *GeminiAdapter) Stream(ctx context.Context, req StreamRequest, sin
 		}
 	}
 	applyProviderCompatibilitySanitization(body, baseURL, modelID)
+	admission, admissionErr := admitGeminiTools(body)
+	if admissionErr != nil {
+		finishedAt = time.Now().UTC()
+		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "gemini", modelID, startedAt, time.Time{}, finishedAt, "", 0, 0, 0, 0, admissionErr))
+		return admissionErr
+	}
+	req.ToolAdmission = admission
+	if req.RequestKnobs != nil {
+		req.RequestKnobs["tool_admission"] = admission.diagnostics()
+	}
 	requestURL := geminiEndpointURL(baseURL, modelID, true)
 	recordLLMRequestArtifact(req, "gemini", modelID, "POST", requestURL, body)
 
@@ -451,6 +461,10 @@ func (adapter *GeminiAdapter) streamGeminiEvents(resp *http.Response, req Stream
 				if name == "" {
 					continue
 				}
+				sourceName, admitted := req.ToolAdmission.ResolveFunction(name)
+				if !admitted {
+					return inputTokens, outputTokens, cacheReadTokens, finishReason, firstEventAt, toolAdmissionError("provider returned tool not advertised for this request")
+				}
 				args, err := json.Marshal(part.FunctionCall["args"])
 				if err != nil {
 					return inputTokens, outputTokens, cacheReadTokens, finishReason, firstEventAt, fmt.Errorf("encode gemini tool call args for %q: %w", name, err)
@@ -466,7 +480,7 @@ func (adapter *GeminiAdapter) streamGeminiEvents(resp *http.Response, req Stream
 				emittedTools[callID] = struct{}{}
 				markFirst()
 				streamIdle.MarkEffectiveContent()
-				if err := sink(ModelEvent{Kind: ModelEventKindToolLikeCompleted, OccurredAt: time.Now().UTC(), Provider: "gemini", Model: modelID, ProviderCallID: providerCallID, ToolCallID: callID, ToolInvocation: &runtimecore.ToolInvocation{CallID: callID, ToolName: name, ArgsJSON: args, ProviderCallID: providerCallID}}); err != nil {
+				if err := sink(ModelEvent{Kind: ModelEventKindToolLikeCompleted, OccurredAt: time.Now().UTC(), Provider: "gemini", Model: modelID, ProviderCallID: providerCallID, ToolCallID: callID, ToolInvocation: &runtimecore.ToolInvocation{CallID: callID, ToolName: sourceName, ArgsJSON: args, ProviderCallID: providerCallID}}); err != nil {
 					return inputTokens, outputTokens, cacheReadTokens, finishReason, firstEventAt, err
 				}
 			}
