@@ -772,26 +772,21 @@ func (manager *Manager) readLocalCursorAuth() (credentials, error) {
 	if manager.localAuthReader != nil {
 		return manager.localAuthReader()
 	}
-	path := cursor.CursorAuthBackupPath()
-	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return credentials{}, accountError("account_import_local_state_missing", "local cursor auth state is missing")
-	}
+	path, err := cursor.CursorStateDBPath()
 	if err != nil {
-		return credentials{}, wrapAccountError("account_import_local_state_missing", "read local cursor auth state", err)
+		return credentials{}, wrapAccountError("account_import_local_state_missing", "local cursor auth state is missing", err)
 	}
-	var backup map[string]any
-	if err := json.Unmarshal(data, &backup); err != nil {
-		return credentials{}, wrapAccountError("account_import_invalid_schema", "parse local cursor auth state", err)
+	values, err := cursor.ReadCursorAuth(path)
+	if err != nil {
+		return credentials{}, wrapAccountError("account_import_local_state_missing", "local cursor auth state is missing", err)
 	}
-	accessToken, refreshToken, email := cursor.ReadCursorAuthBackupValues(backup)
-	if strings.TrimSpace(accessToken) == "" {
+	if strings.TrimSpace(values.AccessToken) == "" {
 		return credentials{}, accountError("account_import_local_state_missing", "local cursor auth state is missing")
 	}
 	return credentials{
-		AccessToken:  strings.TrimSpace(accessToken),
-		RefreshToken: strings.TrimSpace(refreshToken),
-		Email:        strings.TrimSpace(email),
+		AccessToken:  strings.TrimSpace(values.AccessToken),
+		RefreshToken: strings.TrimSpace(values.RefreshToken),
+		Email:        strings.TrimSpace(values.Email),
 	}, nil
 }
 
@@ -904,8 +899,12 @@ func (manager *Manager) finishWithError(generation uint64, message string) {
 	if manager.loginGeneration != generation {
 		return
 	}
-	manager.state = StateError
 	manager.lastError = strings.TrimSpace(message)
+	if strings.TrimSpace(manager.credentials.AccessToken) != "" {
+		manager.state = StateSignedIn
+		return
+	}
+	manager.state = StateError
 }
 
 func (manager *Manager) commitCredentials(generation uint64, value credentials) error {

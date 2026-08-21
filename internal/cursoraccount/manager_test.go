@@ -3,6 +3,7 @@ package cursoraccount
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"cursor/internal/appdata"
+	"cursor/internal/cursor"
+	"cursor/internal/logger"
+
+	_ "modernc.org/sqlite"
 )
 
 func writeBackupFile(t *testing.T, path string, values map[string]any) {
@@ -440,6 +447,138 @@ func TestManagerImportFromLocalUsesInjectedReader(t *testing.T) {
 	}
 	if got.AuthIDHint != "auth-local" || !got.IsCurrent {
 		t.Fatalf("unexpected imported account: %#v", got)
+	}
+}
+
+func isolateCursorStateEnv(t *testing.T) {
+	t.Helper()
+	logger.Init()
+	cursorConfigRoot := t.TempDir()
+	homeDir := t.TempDir()
+	t.Setenv(appdata.RootDirEnvVar, t.TempDir())
+	t.Setenv("APPDATA", cursorConfigRoot)
+	t.Setenv("XDG_CONFIG_HOME", cursorConfigRoot)
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+}
+
+func writeIsolatedCursorStateDB(t *testing.T, values map[string]string) string {
+	t.Helper()
+	statePath, err := cursor.CursorStateDBPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec("CREATE TABLE IF NOT EXISTS ItemTable (key TEXT UNIQUE ON CONFLICT REPLACE, value BLOB)"); err != nil {
+		t.Fatal(err)
+	}
+	for key, value := range values {
+		if _, err := db.Exec("INSERT OR REPLACE INTO ItemTable(key, value) VALUES(?, ?)", key, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return statePath
+}
+
+func readIsolatedCursorStateValue(t *testing.T, statePath, key string) string {
+	t.Helper()
+	db, err := sql.Open("sqlite", statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var raw []byte
+	if err := db.QueryRow("SELECT value FROM ItemTable WHERE key = ?", key).Scan(&raw); err != nil {
+		t.Fatal(err)
+	}
+	return string(raw)
+}
+
+func accountErrorCode(err error) string {
+	var coded *codedError
+	if errors.As(err, &coded) {
+		return coded.Code()
+	}
+	return ""
+}
+
+func TestManagerImportFromLocalReadsLiveStateDB(t *testing.T) {
+	isolateCursorStateEnv(t)
+	statePath := writeIsolatedCursorStateDB(t, map[string]string{
+		"cursorAuth/accessToken":  "test-access-live",
+		"cursorAuth/refreshToken": "test-refresh-live",
+		"cursorAuth/cachedEmail":  "live@example.test",
+		"workbench.colorTheme":    "dark",
+	})
+	writeBackupFile(t, cursor.CursorAuthBackupPath(), map[string]any{
+		"cursorAuth/accessToken":  "test-access-backup",
+		"cursorAuth/refreshToken": "test-refresh-backup",
+		"cursorAuth/cachedEmail":  "backup@example.test",
+	})
+	manager := newTestManager(t, nil)
+	got, err := manager.ImportFromLocal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Email != "live@example.test" || !got.IsCurrent {
+		t.Fatalf("expected live state db account, got %#v", got)
+	}
+	encoded, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "test-access-live") || strings.Contains(string(encoded), "test-access-backup") {
+		t.Fatal("summary leaked token")
+	}
+	if readIsolatedCursorStateValue(t, statePath, "cursorAuth/accessToken") != "test-access-live" {
+		t.Fatal("live state db was written")
+	}
+	if readIsolatedCursorStateValue(t, statePath, "workbench.colorTheme") != "dark" {
+		t.Fatal("unrelated live state key changed")
+	}
+}
+
+func TestManagerImportFromLocalMissingStateDB(t *testing.T) {
+	isolateCursorStateEnv(t)
+	writeBackupFile(t, cursor.CursorAuthBackupPath(), map[string]any{
+		"cursorAuth/accessToken":  "test-access-backup",
+		"cursorAuth/refreshToken": "test-refresh-backup",
+		"cursorAuth/cachedEmail":  "backup@example.test",
+	})
+	manager := newTestManager(t, nil)
+	_, err := manager.ImportFromLocal()
+	if err == nil {
+		t.Fatal("expected missing live state db")
+	}
+	if accountErrorCode(err) != "account_import_local_state_missing" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestManagerFailedLoginKeepsCurrentAccountSignedIn(t *testing.T) {
+	manager := newTestManager(t, nil)
+	if _, err := manager.AddCredentialsForTest(testCredential("auth-a", "a@example.test"), true); err != nil {
+		t.Fatal(err)
+	}
+	manager.openLoginURL = func(string) error {
+		return errors.New("open login page failed")
+	}
+	status, err := manager.StartLogin()
+	if err == nil {
+		t.Fatal("expected start login failure")
+	}
+	if status.State != StateSignedIn {
+		t.Fatalf("expected signed_in after failed extra login, got %q err=%q", status.State, status.Error)
+	}
+	if status.Email != "a@example.test" || status.AuthID != "auth-a" {
+		t.Fatalf("current account identity lost: %#v", status)
 	}
 }
 
