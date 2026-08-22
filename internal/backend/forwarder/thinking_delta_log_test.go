@@ -106,35 +106,39 @@ func TestDeltaRuntimeLogsUseProviderPassCapturedWithStreamState(t *testing.T) {
 	}
 
 	path := filepath.Join(root, stream.ConversationID, "debug", "runtime.jsonl")
-	var payload []byte
+	// 落盘走异步 worker 队列：两条事件可能分批写入。轮询到文件非空就立即解析
+	// 会在慢 runner（CI -race）上读到只有第一条的快照，必须等两条事件都齐。
+	seen := map[string]int{}
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		data, readErr := os.ReadFile(path)
 		if readErr == nil && len(data) > 0 {
-			payload = data
-			break
+			seen = map[string]int{}
+			for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+				if strings.TrimSpace(line) == "" {
+					continue
+				}
+				var entry struct {
+					Event        string `json:"event"`
+					ProviderPass int    `json:"provider_pass"`
+				}
+				if err := json.Unmarshal([]byte(line), &entry); err != nil {
+					// 半行写入视作尚未就绪，继续轮询；超时后由下方断言报错。
+					seen = nil
+					break
+				}
+				if entry.Event == "text_delta_forwarded" || entry.Event == "thinking_delta_forwarded" {
+					seen[entry.Event] = entry.ProviderPass
+				}
+			}
+			if seen != nil && seen["text_delta_forwarded"] == 7 && seen["thinking_delta_forwarded"] == 7 {
+				break
+			}
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if len(payload) == 0 {
+	if seen == nil {
 		t.Fatalf("runtime log was not written: %s", path)
-	}
-
-	seen := map[string]int{}
-	for _, line := range strings.Split(strings.TrimSpace(string(payload)), "\n") {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		var entry struct {
-			Event        string `json:"event"`
-			ProviderPass int    `json:"provider_pass"`
-		}
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			t.Fatalf("unmarshal runtime entry: %v", err)
-		}
-		if entry.Event == "text_delta_forwarded" || entry.Event == "thinking_delta_forwarded" {
-			seen[entry.Event] = entry.ProviderPass
-		}
 	}
 	for _, eventName := range []string{"text_delta_forwarded", "thinking_delta_forwarded"} {
 		if got := seen[eventName]; got != 7 {
