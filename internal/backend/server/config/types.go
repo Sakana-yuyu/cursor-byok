@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	modeladapter "cursor/internal/backend/agent/model"
 	"cursor/internal/backend/runtimeconfig"
 	"cursor/internal/i18n"
 	"cursor/internal/modelchannel"
@@ -102,6 +103,17 @@ type ModelAdapterConfig struct {
 	// Token Plan 显式供应商：kimi | zhipu | zhipu_team | minimax | zenmux | volcengine。
 	// 空则按 baseURL 自动检测（zhipu_team 无法自动区分，须显式指定）。
 	BalanceCodingPlanProvider string `json:"balanceCodingPlanProvider,omitempty" yaml:"balanceCodingPlanProvider,omitempty"`
+	// CompatibilityKind 显式指定 OpenAI 兼容供应商的兼容策略类别（quirk kind）。
+	// 非空且合法时优先生效，跳过按 baseURL/模型名的字符串信号自动匹配，避免上游
+	// 改 URL 前缀导致误判。合法值：openai、copilot、deepseek、xai、kimi、openrouter、
+	// siliconflow、zhipu、qwen、mimo、minimax、stepfun；"openai" 表示强制默认策略。
+	// 空（默认，自动匹配）或非法值（记 warning）均回落自动匹配。
+	CompatibilityKind string `json:"compatibilityKind,omitempty" yaml:"compatibilityKind,omitempty"`
+	// ToolCallMode 控制工具调用协议：native（默认，原生 tool_calls）或
+	// xml_prompt（无原生工具调用能力的弱模型/本地模型改用 in-band XML 协议：
+	// 工具目录注入系统提示，模型以 <tool_call> 文本块发起调用）。仅 OpenAI
+	// chat completions 路径实现；空值等价 native。
+	ToolCallMode string `json:"toolCallMode,omitempty" yaml:"toolCallMode,omitempty"`
 }
 
 type RoutingConfig struct {
@@ -495,10 +507,12 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			BalanceQueryURL:           strings.TrimSpace(item.BalanceQueryURL),
 			BalanceQueryField:         strings.TrimSpace(item.BalanceQueryField),
 			BalanceQueryHeaders:       item.BalanceQueryHeaders,
+			ToolCallMode:              normalizeToolCallMode(item.ToolCallMode),
 			BalanceProfile:            strings.ToLower(strings.TrimSpace(item.BalanceProfile)),
 			BalanceAccessToken:        strings.TrimSpace(item.BalanceAccessToken),
 			BalanceUserID:             strings.TrimSpace(item.BalanceUserID),
 			BalanceCodingPlanProvider: strings.ToLower(strings.TrimSpace(item.BalanceCodingPlanProvider)),
+			CompatibilityKind:         strings.ToLower(strings.TrimSpace(item.CompatibilityKind)),
 		}
 		if next.Type == "openai" {
 			next.OpenAIExtraParamsEnabled = item.OpenAIExtraParamsEnabled
@@ -547,6 +561,8 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			if err := validateJSONMap(next.AnthropicExtraParamsJSON, "anthropicExtraParamsJSON"); err != nil {
 				return nil, err
 			}
+		case next.ToolCallMode != "" && next.ToolCallMode != modeladapter.ToolCallModeNative && next.ToolCallMode != modeladapter.ToolCallModeXMLPrompt:
+			return nil, i18n.NewError("error.model_adapter.tool_call_mode_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 toolCallMode 仅支持 native 或 xml_prompt")
 		case next.Type == "anthropic" && next.AnthropicThinkingEffort == "":
 			return nil, i18n.NewError("error.model_adapter.thinking_effort_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 anthropicThinkingEffort 仅支持 low、medium、high、xhigh、max")
 		}
@@ -611,6 +627,9 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			if existing.BalanceCodingPlanProvider == "" {
 				existing.BalanceCodingPlanProvider = next.BalanceCodingPlanProvider
 			}
+			if existing.CompatibilityKind == "" {
+				existing.CompatibilityKind = next.CompatibilityKind
+			}
 			normalized[existingIndex] = existing
 			continue
 		}
@@ -647,8 +666,16 @@ func modelAdapterConfigDedupeIdentity(adapter ModelAdapterConfig) string {
 		strings.TrimSpace(adapter.OpenAIRequestGroup),
 		strings.TrimSpace(adapter.AnthropicAuthMode),
 		strconv.FormatBool(adapter.CustomHeadersEnabled),
+		strings.TrimSpace(adapter.ToolCallMode),
 		strings.TrimSpace(adapter.CustomHeadersJSON),
 	}, "\n")
+}
+
+// normalizeToolCallMode 规范化工具调用协议模式：大小写不敏感；空值保持空
+// （等价 native 默认）；非法值返回原样小写，由 NormalizeModelAdapterConfigs
+// 的校验分支报错，避免拼写错误被静默吞掉。
+func normalizeToolCallMode(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
 }
 
 func firstNonEmptyProtocolGroup(values ...string) string {

@@ -102,8 +102,10 @@ func routerRetryDelay(nextAttempt int, repeatedChannel bool, err error, elapsed 
 	if !repeatedChannel {
 		return 0, true
 	}
-	classified := apperror.Classify("model.stream.retry", err)
-	if isPermanentProviderError(err) || classified.Disposition != apperror.DispositionRetryable {
+	// 分类收敛：是否可重试统一由 isPermanentProviderError 单点判定（其内部以
+	// apperror.Classify 为权威基线并叠加适配器层确定性覆盖，优先序见其注释），
+	// 此处不再并行调用 apperror.Classify 形成第二决策点。
+	if isPermanentProviderError(err) {
 		return 0, false
 	}
 	if elapsed < 0 {
@@ -203,6 +205,14 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 	// replaySafety 在整个调用内保持不变：请求是否可安全透明重发由输入决定，
 	// 不随渠道/尝试轮次变化。
 	replaySafety := requestReplaySafety(req)
+	// clientVisibleEvents 统计本轮 Stream 已向客户端转发的事件数。forwarder 侧
+	// 没有现成的「已 flush」信号，这里在适配器入口对 sink 做写入计数推断：
+	// 一旦大于 0，本轮输出不可重放，后续任何失败都不得自动重试（见下方失败分支）。
+	clientVisibleEvents := 0
+	wrappedSink := func(event ModelEvent) error {
+		clientVisibleEvents++
+		return sink(event)
+	}
 	// idleTimeoutRetries 累计本次调用中「上游静默卡死」的透明重试次数。
 	var idleTimeoutRetries int
 	// pendingIdleTimeoutRetry 标记上一轮失败为静默卡死：下一轮尝试跳过
@@ -295,17 +305,25 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 		selectedChannelID = strings.TrimSpace(channel.ID)
 		attemptCount++
 		observedHealthVersion := router.channelHealthVersion(channel)
-		streamErr = router.streamChannel(ctx, req, channel, sink)
+		streamErr = router.streamChannel(ctx, req, channel, wrappedSink)
 		if streamErr == nil || ctx.Err() != nil {
 			if streamErr == nil {
 				router.clearChannelFailure(channel, observedHealthVersion)
 			}
 			return classifyRouterError(req, streamErr)
 		}
-		// 流已向客户端转发部分内容后中断：整体重试必然重复输出/重复工具调用，
-		// 直接返回当前错误，不做渠道冷却与 failover。
+		// replay-safety 最终防线——流已向客户端产出可见内容后失败：整体重试必然
+		// 重复输出/重复工具调用，直接返回错误交由上层决定 failover 或终止，
+		// 不做渠道冷却与同调用内重试。两条识别路径：
+		//   - ErrMidStreamInterrupted：适配器层（streamWithReconnect 等）对已产出后
+		//     连接级中断打的显式标记；
+		//   - clientVisibleEvents > 0：适配器未打标记（如上游业务错误事件、sink 写
+		//     失败）时的写入计数兜底。
 		if errors.Is(streamErr, ErrMidStreamInterrupted) {
 			return classifyRouterError(req, streamErr)
+		}
+		if clientVisibleEvents > 0 {
+			return classifyRouterError(req, midStreamInterruptedError(streamErr))
 		}
 		router.recordChannelFailure(channel, streamErr)
 		if firstErr == nil {
@@ -474,6 +492,7 @@ func channelConfigurationFingerprint(channel *legacyruntime.ResolvedChannel) str
 		strconv.FormatBool(channel.FastMode),
 		strings.TrimSpace(channel.OpenAIServiceTier),
 		strconv.Itoa(channel.ThinkingBudgetTokens),
+		strings.TrimSpace(channel.ToolCallMode),
 	}
 	hasher := sha256.New()
 	for _, field := range fields {
@@ -551,6 +570,7 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 	resolved.ConfiguredThinkingEffortMaximum = configuredThinkingEffortMaximum
 	resolved.ReasoningEffort = openAIReasoningEffortFromRuntime(channel.ReasoningEffort)
 	resolved.OpenAIEndpoint = strings.TrimSpace(channel.OpenAIEndpoint)
+	resolved.ToolCallMode = strings.TrimSpace(channel.ToolCallMode)
 	resolved.OpenAIRequestGroup = strings.TrimSpace(channel.OpenAIRequestGroup)
 	resolved.OpenAIExtraParamsEnabled = channel.OpenAIExtraParamsEnabled
 	resolved.OpenAIExtraParamsJSON = strings.TrimSpace(channel.OpenAIExtraParamsJSON)
@@ -749,37 +769,54 @@ func downgradeAnthropicBackToOpenAI(resolved *StreamRequest, channel *legacyrunt
 	return true
 }
 
-// isPermanentProviderError 判断 provider 错误是否为永久错误（4xx，429 除外）。
-// 适配器错误由 buildHTTPStatusError 生成，形如 "... status=<code> ..."。
+// isPermanentProviderError 是「provider 错误是否永久（不可自动重试）」的单一决策点。
+// routerRetryDelay 与 lastErrPermanent 均以此为准，不再并行调用 apperror.Classify
+// 形成第二判定来源。优先序（从高到低）：
+//  1. 适配器层确定性覆盖：流内上下文超限错误由输入决定，重试必然复现，直接判永久；
+//  2. 已知瞬时白名单：部分中转网关（如 daoxe.com）对合法请求偶发返回
+//     400 "Invalid request for the selected model"，压过 Classify 对 400 的
+//     Blocked 处置，允许退避后重试；
+//  2.5. 已知 pre-output 瞬时哨兵：上游静默卡死（空闲看门狗超时）发生在任何内容
+//       转发给客户端之前，重发不会重复输出，属可重试瞬时失败；该错误无结构化
+//       状态码，Classify 会误落 Internal/Fatal，须显式放行。
+//  3. apperror.Classify 的结构化处置为权威基线：仅 DispositionRetryable 视为非永久，
+//     其余（Blocked/Fatal/Canceled/Degraded）一律视为永久。对只携带历史
+//     "status=<code>" 文本、无结构化状态码的错误，Classify 会落到 Internal/Fatal，
+//     此处按 4xx（429 除外）永久兜底，与 Classify 的 4xx→Blocked 结论保持一致。
 func isPermanentProviderError(err error) bool {
 	if err == nil {
 		return false
 	}
 	msg := err.Error()
-	// 流式 SSE 层的确定性错误：OpenAI Responses adapter 把流内 error event（如
-	// context_too_large / context_length_exceeded）包装成 "openai responses stream error
-	// code=..."，不含 HTTP status，因此下面的 status 解析会返回 0 被当作瞬时错误。
-	// 但这类错误由输入本身决定（上下文超限），重试不可能改变结果——若不识别为永久错误，
-	// 单渠道下 router 会盲目重试 routerMaxStreamAttempts(=10) 次，每次都收到同样错误，
-	// 造成约一分钟空转后才冒泡到 forwarder 的 context-overflow 压缩恢复。
-	// 这里提前识别，让 router 立即放弃重试，把控制权交给 forwarder 的恢复机制。
+	// 优先级 1：流式 SSE 层的确定性错误。OpenAI Responses adapter 把流内 error event
+	// （如 context_too_large / context_length_exceeded）包装成 "openai responses stream
+	// error code=..."，不含结构化 HTTP status，但这类错误由输入本身决定（上下文超限），
+	// 重试不可能改变结果——若不识别为永久错误，单渠道下 router 会盲目重试
+	// routerMaxStreamAttempts 次，每次都收到同样错误，造成约一分钟空转后才冒泡到
+	// forwarder 的 context-overflow 压缩恢复。这里提前识别，让 router 立即放弃重试，
+	// 把控制权交给 forwarder 的恢复机制。
 	if isContextOverflowStreamError(msg) {
 		return true
 	}
 	status := parseProviderErrorStatus(msg)
-	if status < 400 || status >= 500 {
-		return false
-	}
-	if status == 429 {
-		return false
-	}
-	// 某些中转网关（如 daoxe.com）对同一合法请求偶发返回
-	// 400 "Invalid request for the selected model"，属于服务端瞬时故障。
-	// 将该特定消息视为非永久错误，允许路由器在退避后重试同一渠道。
+	// 优先级 2：网关偶发 400 属服务端瞬时故障，压过 Classify 的 400→Blocked 判定。
 	if status == 400 && strings.Contains(msg, "Invalid request for the selected model") {
 		return false
 	}
-	return true
+	// 优先级 2.5：已知 pre-output 瞬时哨兵——上游静默卡死（空闲看门狗超时）发生在
+	// 任何内容转发给客户端之前，重发不会重复输出，属可重试瞬时失败；该错误无结构化
+	// 状态码，Classify 会误落 Internal/Fatal，须在此显式放行。
+	if IsProviderStreamIdleTimeout(err) {
+		return false
+	}
+	// 优先级 3：Classify 处置为权威基线。
+	classified := apperror.Classify("model.stream.retry", err)
+	if classified.Disposition != apperror.DispositionRetryable {
+		return true
+	}
+	// Classify 判为可重试，但错误只有历史 "status=<code>" 文本（无结构化 statusCoder）
+	// 时按 4xx（429 除外）永久兜底。
+	return status >= 400 && status < 500 && status != http.StatusTooManyRequests
 }
 
 // isOpenAINotFoundError 判断是否为 OpenAI 兼容端点的 404（模型名/路径未就绪）。

@@ -81,6 +81,7 @@ func applyOpenAIResponsesCompatibility(body map[string]any, baseURL string, mode
 	}
 	policy := classifyProviderCompatibility(baseURL, modelID)
 	applyProviderCompatibilitySanitization(body, baseURL, modelID)
+	normalizeOpenAIToolSchemasForProvider(body, baseURL, modelID)
 	if !policy.PromptCacheKey && !preservePromptCacheKey {
 		delete(body, "prompt_cache_key")
 	}
@@ -198,10 +199,12 @@ func applyOpenAIChatCompletionsCompatibility(body map[string]any, baseURL string
 	}
 	policy := classifyProviderCompatibility(baseURL, modelID)
 	applyProviderCompatibilitySanitization(body, baseURL, modelID)
-	kind := policy.Kind
+	// 工具 schema 清洗必须在所有 kind 分支之前无条件执行，与 Responses 路径对称。
+	normalizeOpenAIToolSchemasForProvider(body, baseURL, modelID)
 	if !policy.PromptCacheKey && !preservePromptCacheKey {
 		delete(body, "prompt_cache_key")
 	}
+	kind := policy.Kind
 	if kind == "" {
 		return
 	}

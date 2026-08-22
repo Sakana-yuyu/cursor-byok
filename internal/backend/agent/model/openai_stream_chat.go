@@ -235,10 +235,19 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 			ThinkingStyle: agentv1.ThinkingStyle_THINKING_STYLE_DEFAULT,
 		})
 	}
+	// routeXMLText 在 toolCallMode=xml_prompt 时接管文本增量出口（做 <tool_call>
+	// 扫描与伪造结果剥离）；非 xml 模式保持 nil，文本仍直接走 emitTextDelta。
+	var routeXMLText func(string) error
 	emitTaggedContentParts := func(parts []openAIContentPart) error {
 		for _, part := range parts {
 			switch part.Kind {
 			case openAIContentPartText:
+				if routeXMLText != nil {
+					if err := routeXMLText(part.Text); err != nil {
+						return err
+					}
+					continue
+				}
 				if err := emitTextDelta(part.Text); err != nil {
 					return err
 				}
@@ -256,6 +265,60 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 	}
 	flushTaggedContentTail := func() error {
 		return emitTaggedContentParts(thinkParser.Flush())
+	}
+	// xml_prompt 模式：构建 in-band XML 工具协议扫描器并接管文本增量出口。
+	// admission 已在上方 admitOpenAITools 构建（xml 模式下 body 无原生 tools，
+	// admission 仅含 sourceTools 的名称映射），用于把模型输出的工具名解析回
+	// 规范名并拒绝未声明工具。完成后发出的事件与原生 tool_calls 路径同构。
+	var xmlScanner *xmlToolCallScanner
+	if xmlToolCallPromptMode(req) {
+		xmlScanner = newXMLToolCallScanner(req.ModelCallID, xmlToolNameAdmission(req.Tools))
+		if req.RequestKnobs != nil {
+			req.RequestKnobs["tool_call_mode"] = ToolCallModeXMLPrompt
+		}
+	}
+	dispatchXMLScannerEvent := func(event xmlScannerEvent) error {
+		if event.Call == nil {
+			return emitTextDelta(event.Text)
+		}
+		if err := flushTaggedContentTail(); err != nil {
+			return err
+		}
+		if err := flushThinkingCompleted(); err != nil {
+			return err
+		}
+		if err := sink(ModelEvent{
+			Kind:           ModelEventKindToolLikeCompleted,
+			OccurredAt:     time.Now().UTC(),
+			Provider:       "openai",
+			Model:          currentModel,
+			ToolInvocation: event.Call,
+		}); err != nil {
+			return err
+		}
+		streamIdle.MarkEffectiveContent()
+		return nil
+	}
+	if xmlScanner != nil {
+		routeXMLText = func(text string) error {
+			for _, event := range xmlScanner.Feed(text) {
+				if err := dispatchXMLScannerEvent(event); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}
+	flushXMLScanner := func() error {
+		if xmlScanner == nil {
+			return nil
+		}
+		for _, event := range xmlScanner.Flush() {
+			if err := dispatchXMLScannerEvent(event); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 	fail := func(streamErr error) error {
 		finishedAt = time.Now().UTC()
@@ -390,6 +453,9 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 			if err := flushTaggedContentTail(); err != nil {
 				return fail(err)
 			}
+			if err := flushXMLScanner(); err != nil {
+				return fail(err)
+			}
 			if err := flushThinkingCompleted(); err != nil {
 				return fail(err)
 			}
@@ -412,6 +478,9 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 			}
 			applyUsage(chunk.Usage)
 			if err := flushTaggedContentTail(); err != nil {
+				return fail(err)
+			}
+			if err := flushXMLScanner(); err != nil {
 				return fail(err)
 			}
 			if err := flushThinkingCompleted(); err != nil {
@@ -486,6 +555,9 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 			if err := flushTaggedContentTail(); err != nil {
 				return fail(err)
 			}
+			if err := flushXMLScanner(); err != nil {
+				return fail(err)
+			}
 			if err := flushThinkingCompleted(); err != nil {
 				return fail(err)
 			}
@@ -558,6 +630,9 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		}
 	}
 	if err := flushTaggedContentTail(); err != nil {
+		return fail(err)
+	}
+	if err := flushXMLScanner(); err != nil {
 		return fail(err)
 	}
 	if err := flushThinkingCompleted(); err != nil {

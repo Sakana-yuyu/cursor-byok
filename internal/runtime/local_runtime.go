@@ -357,6 +357,8 @@ type ResolvedChannel struct {
 	FastMode bool
 	// OpenAIServiceTier 表示显式 OpenAI service tier。
 	OpenAIServiceTier string
+	// ToolCallMode 表示工具调用协议模式：native（默认）或 xml_prompt。
+	ToolCallMode string
 	// ThinkingBudgetTokens 表示当前声明中的 ThinkingBudgetTokens。
 	ThinkingBudgetTokens int
 }

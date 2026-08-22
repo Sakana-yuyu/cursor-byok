@@ -43,6 +43,9 @@ type Message struct {
 	ToolCallID string `json:"tool_call_id,omitempty"`
 	// Name 表示 tool role 的工具名。
 	Name string `json:"name,omitempty"`
+	// xmlToolResultCarrier 标记该消息是 XML 工具协议转换产生的 <tool_result>
+	// 载体（user 消息），用于把相邻 tool 结果合并进同一消息。不参与 JSON 序列化。
+	xmlToolResultCarrier bool
 }
 
 type ToolCallDescriptor struct {
@@ -112,6 +115,10 @@ type StreamRequest struct {
 	ReasoningEffort string
 	// OpenAIEndpoint 表示 OpenAI 兼容 provider 使用的 API 端点。
 	OpenAIEndpoint string
+	// ToolCallMode 表示工具调用协议模式：ToolCallModeNative（默认，原生
+	// tool_calls）或 ToolCallModeXMLPrompt（in-band XML 协议，见
+	// xml_tool_protocol.go）。仅 OpenAI chat completions 路径实现。
+	ToolCallMode string
 	// OpenAIRequestGroup 表示 OpenAI 兼容 provider 采用的请求分组/协议模板。
 	OpenAIRequestGroup string
 	// OpenAIExtraParamsEnabled 表示是否启用 OpenAI 额外请求参数。

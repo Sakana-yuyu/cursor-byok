@@ -65,6 +65,8 @@ type openAIToolAccumulator struct {
 	ProviderItemID         string
 	ProviderCallID         string
 	ProviderStatus         string
+	// 流式进度节流：记录上次尝试部分解析时的累计参数长度，0 表示尚未尝试过。
+	progressParsedAtLen int
 }
 
 // completedOpenAIToolArgsJSON 校验累积的工具调用参数：必须是空或合法的 JSON 对象。
@@ -837,11 +839,21 @@ func buildOpenAIResponsesBodyMap(req StreamRequest, modelID string, promptCacheK
 // messages 为 nil 时仍写入 key（值为 null），stream_options 在 compat shape
 // 下为 nil（对应原 struct 中 nil map 输出 null）。
 func buildOpenAIChatBodyMap(req StreamRequest, baseURL string, modelID string, promptCacheKeyMaximumLength int) (map[string]any, error) {
-	normalizedMessages, err := normalizeOpenAIProviderMessages(req.Messages, strings.TrimSpace(req.ReasoningEffort) != "", isKimiOpenAIRequest(baseURL, modelID))
+	// xml_prompt 模式：先把历史消息转换为文本形态（tool_call/tool_result 块），
+	// 且不发送原生 tools 字段（工具目录改为注入系统提示）。
+	messages := req.Messages
+	xmlPromptMode := xmlToolCallPromptMode(req)
+	if xmlPromptMode {
+		messages = xmlToolProtocolMessages(messages)
+	}
+	normalizedMessages, err := normalizeOpenAIProviderMessages(messages, strings.TrimSpace(req.ReasoningEffort) != "", isKimiOpenAIRequest(baseURL, modelID))
 	if err != nil {
 		return nil, err
 	}
 	normalizeOpenAIChatMessageToolCallsJSONShape(normalizedMessages)
+	if xmlPromptMode {
+		normalizedMessages = appendXMLToolCatalogToMessages(normalizedMessages, xmlToolCatalogPrompt(req.Tools))
+	}
 	body := map[string]any{
 		"model":    modelID,
 		"messages": toJSONAnySlice(normalizedMessages),
@@ -861,7 +873,7 @@ func buildOpenAIChatBodyMap(req StreamRequest, baseURL string, modelID string, p
 			body["reasoning_effort"] = req.ReasoningEffort
 		}
 	}
-	if len(req.Tools) > 0 {
+	if len(req.Tools) > 0 && !xmlPromptMode {
 		tools, err := normalizeOpenAIChatTools(req.Tools)
 		if err != nil {
 			return nil, err
@@ -978,6 +990,12 @@ func redactOpenAIImagePayloadFields(value any) bool {
 	return changed
 }
 
+// openAIToolArgsProgressThrottleBytes 是流式进度部分解析的节流阈值：自上次
+// 尝试解析以来累计参数至少新增这么多字节才重试，避免每个 delta 都对累积
+// JSON 做全量 parse（CreatePlan 路径为 json.Unmarshal + protojson.Marshal）
+// 造成二次方 CPU 开销。首次调用不受节流限制，保证早期进度仍能及时发出。
+const openAIToolArgsProgressThrottleBytes = 256
+
 func emitOpenAIToolProgress(
 	sink func(ModelEvent) error,
 	model string,
@@ -987,6 +1005,14 @@ func emitOpenAIToolProgress(
 	if accumulator == nil {
 		return nil
 	}
+	// 节流：首次必试；此后仅当新增字节达到阈值才重新尝试部分解析。
+	// 被跳过的内容不会丢失——下次按累积全文重新提取；流结束时的
+	// completedOpenAIToolArgsJSON 完整解析行为保持不变。
+	if total := accumulator.Args.Len(); accumulator.progressParsedAtLen > 0 &&
+		total-accumulator.progressParsedAtLen < openAIToolArgsProgressThrottleBytes {
+		return nil
+	}
+	accumulator.progressParsedAtLen = accumulator.Args.Len()
 	toolName := strings.TrimSpace(accumulator.Name)
 	if toolName == "CreatePlan" {
 		return emitCreatePlanToolProgress(

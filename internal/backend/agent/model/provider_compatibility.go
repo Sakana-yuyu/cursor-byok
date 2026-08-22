@@ -2,7 +2,9 @@ package modeladapter
 
 import (
 	"strings"
+	"sync"
 
+	"cursor/internal/logger"
 	"cursor/internal/modelchannel"
 )
 
@@ -20,49 +22,120 @@ type ProviderCompatibility struct {
 	AllowResponsesEOFFallback bool
 }
 
+// validCompatibilityKinds 列出显式 compatibilityKind 字段允许的全部取值，
+// 与自动匹配可产生的 Kind 一一对应；额外提供 "openai" 表示强制走默认 OpenAI
+// 兼容策略（Kind 为空），用于在 baseURL/模型名含误导性字符串信号时关闭自动 quirk。
+var validCompatibilityKinds = map[string]struct{}{
+	"openai":      {},
+	"copilot":     {},
+	"deepseek":    {},
+	"xai":         {},
+	"kimi":        {},
+	"openrouter":  {},
+	"siliconflow": {},
+	"zhipu":       {},
+	"qwen":        {},
+	"mimo":        {},
+	"minimax":     {},
+	"stepfun":     {},
+}
+
+// 显式兼容 kind 覆盖表：键为规范化 "baseURL\nmodelID"。由配置解析层在每次渠道
+// 解析前全量同步，热加载后自动收敛到最新值；classify 请求侧只读。
+var (
+	explicitKindMu        sync.RWMutex
+	explicitKindByChannel map[string]string
+	invalidKindWarnMu     sync.Mutex
+	invalidKindWarned     = map[string]struct{}{}
+)
+
+// SetExplicitCompatibilityKindOverrides 全量替换显式兼容 kind 覆盖表。
+// 值会被规范化为小写；非法值记 warning 并跳过（运行时回落自动匹配）。
+func SetExplicitCompatibilityKindOverrides(overrides map[string]string) {
+	next := make(map[string]string, len(overrides))
+	for key, kind := range overrides {
+		normalized := strings.ToLower(strings.TrimSpace(kind))
+		if normalized == "" {
+			continue
+		}
+		if _, valid := validCompatibilityKinds[normalized]; !valid {
+			warnInvalidCompatibilityKindOnce(normalized)
+			continue
+		}
+		next[strings.ToLower(strings.TrimSpace(key))] = normalized
+	}
+	explicitKindMu.Lock()
+	explicitKindByChannel = next
+	explicitKindMu.Unlock()
+}
+
+func explicitCompatibilityKind(baseURL, modelID string) (string, bool) {
+	explicitKindMu.RLock()
+	defer explicitKindMu.RUnlock()
+	if len(explicitKindByChannel) == 0 {
+		return "", false
+	}
+	key := strings.ToLower(strings.TrimSpace(baseURL)) + "\n" + strings.ToLower(strings.TrimSpace(modelID))
+	kind, ok := explicitKindByChannel[key]
+	return kind, ok
+}
+
+// warnInvalidCompatibilityKindOnce 对同一个非法值只告警一次，避免逐请求刷日志。
+func warnInvalidCompatibilityKindOnce(kind string) {
+	invalidKindWarnMu.Lock()
+	defer invalidKindWarnMu.Unlock()
+	if _, seen := invalidKindWarned[kind]; seen {
+		return
+	}
+	invalidKindWarned[kind] = struct{}{}
+	logger.Warnf("模型适配器 compatibilityKind 非法值 %q，回落为自动匹配（合法值：openai、copilot、deepseek、xai、kimi、openrouter、siliconflow、zhipu、qwen、mimo、minimax、stepfun）", kind)
+}
+
 func classifyProviderCompatibility(baseURL, modelID string) ProviderCompatibility {
 	base := strings.ToLower(strings.TrimSpace(baseURL))
 	model := strings.ToLower(strings.TrimSpace(modelID))
-	signal := base + " " + model
 	// prompt_cache_key 默认对所有 provider 开启。绝大多数 OpenAI 兼容服务
 	// （OpenAI 官方、xAI Grok、智谱 GLM、通义 Qwen、月之暗面 Kimi、DeepSeek 及各类第三方中转）
 	// 要么原生支持 prompt_cache_key，要么会忽略未知字段，因此默认发送，让 provider 按
 	// conversation 复用前缀缓存，显著提升缓存命中率。仅对已知会因未知字段报错的 provider 显式关闭。
 	policy := ProviderCompatibility{PromptCacheKey: true}
+	// 用户显式指定的 compatibilityKind 优先于字符串信号匹配：上游改 URL 前缀或模型改名
+	// 不再影响分类。非法值记 warning 后回落自动匹配。
+	if kind, ok := explicitCompatibilityKind(baseURL, modelID); ok {
+		if _, valid := validCompatibilityKinds[kind]; valid {
+			applyCompatibilityKindPolicy(&policy, kind, base, model)
+			policy.AllowResponsesEOFFallback = !isOfficialOpenAIBaseURL(baseURL)
+			policy.ThinkingDisableKind = compatibilityThinkingDisableKind(policy.Kind, modelID)
+			return policy
+		}
+		warnInvalidCompatibilityKindOnce(kind)
+	}
+	signal := base + " " + model
 	switch {
 	case isOfficialOpenAIBaseURL(baseURL):
 		// OpenAI 官方端点，继承默认 PromptCacheKey=true。
 	case strings.Contains(signal, "githubcopilot") || strings.Contains(signal, "copilot"):
-		policy.Kind = "copilot"
-		// Copilot 会因未知字段报错，显式关闭。
-		policy.PromptCacheKey = false
-		policy.StripPrivateFields = true
+		applyCompatibilityKindPolicy(&policy, "copilot", base, model)
 	case strings.Contains(signal, "deepseek"):
-		policy.Kind = "deepseek"
-		policy.StripPrivateFields = true
+		applyCompatibilityKindPolicy(&policy, "deepseek", base, model)
 	case strings.Contains(signal, "api.x.ai") || strings.Contains(model, "grok"):
-		policy.Kind = "xai"
-		policy.StripPrivateFields = true
-		policy.FilterResponsesTools = true
-		policy.DropResponsesFields = true
-		policy.DropGrok45Sampling = strings.Contains(model, "grok-4.5")
+		applyCompatibilityKindPolicy(&policy, "xai", base, model)
 	case strings.Contains(signal, "kimi") || strings.Contains(signal, "moonshot"):
-		policy.Kind = "kimi"
-		// Kimi 继承默认 PromptCacheKey=true；api.kimi.com/coding 端点原生支持。
+		applyCompatibilityKindPolicy(&policy, "kimi", base, model)
 	case strings.Contains(signal, "openrouter"):
-		policy.Kind = "openrouter"
+		applyCompatibilityKindPolicy(&policy, "openrouter", base, model)
 	case strings.Contains(signal, "siliconflow"):
-		policy.Kind = "siliconflow"
+		applyCompatibilityKindPolicy(&policy, "siliconflow", base, model)
 	case strings.Contains(signal, "bigmodel") || strings.Contains(signal, "z.ai") || strings.Contains(signal, "zhipu") || (strings.Contains(model, "glm") && isZhipuOfficialBaseURL(base)):
-		policy.Kind = "zhipu"
+		applyCompatibilityKindPolicy(&policy, "zhipu", base, model)
 	case strings.Contains(signal, "dashscope") || strings.Contains(signal, "qwen") || strings.Contains(signal, "aliyun") || strings.Contains(signal, "bailian"):
-		policy.Kind = "qwen"
+		applyCompatibilityKindPolicy(&policy, "qwen", base, model)
 	case strings.Contains(signal, "xiaomimimo") || strings.Contains(signal, "mimo"):
-		policy.Kind = "mimo"
+		applyCompatibilityKindPolicy(&policy, "mimo", base, model)
 	case strings.Contains(signal, "minimax"):
-		policy.Kind = "minimax"
+		applyCompatibilityKindPolicy(&policy, "minimax", base, model)
 	case strings.Contains(signal, "stepfun") || strings.Contains(signal, "step-"):
-		policy.Kind = "stepfun"
+		applyCompatibilityKindPolicy(&policy, "stepfun", base, model)
 	}
 	// Native OpenAI Responses supplies response.completed/incomplete. Preserve a
 	// narrow [DONE]-only fallback for non-official compatibility relays, which
@@ -70,6 +143,35 @@ func classifyProviderCompatibility(baseURL, modelID string) ProviderCompatibilit
 	policy.AllowResponsesEOFFallback = !isOfficialOpenAIBaseURL(baseURL)
 	policy.ThinkingDisableKind = compatibilityThinkingDisableKind(policy.Kind, modelID)
 	return policy
+}
+
+// applyCompatibilityKindPolicy 按 kind 填充对应的请求整形策略。
+// 自动匹配与用户显式指定的 compatibilityKind 共用本函数，保证两条路径行为一致。
+func applyCompatibilityKindPolicy(policy *ProviderCompatibility, kind, base, model string) {
+	switch kind {
+	case "copilot":
+		// Copilot 会因未知字段报错，显式关闭 prompt_cache_key。
+		policy.Kind = "copilot"
+		policy.PromptCacheKey = false
+		policy.StripPrivateFields = true
+	case "deepseek":
+		policy.Kind = "deepseek"
+		policy.StripPrivateFields = true
+	case "xai":
+		policy.Kind = "xai"
+		policy.StripPrivateFields = true
+		policy.FilterResponsesTools = true
+		policy.DropResponsesFields = true
+		policy.DropGrok45Sampling = strings.Contains(model, "grok-4.5")
+	default:
+		// kimi 继承默认 PromptCacheKey=true（api.kimi.com/coding 端点原生支持）；
+		// openrouter/siliconflow/zhipu/qwen/mimo/minimax/stepfun 仅需标记 Kind；
+		// "openai" 表示强制默认 OpenAI 兼容策略，Kind 保持为空。
+		policy.Kind = kind
+		if kind == "openai" {
+			policy.Kind = ""
+		}
+	}
 }
 
 func isOfficialOpenAIBaseURL(baseURL string) bool {

@@ -77,3 +77,13 @@
 - **增强2 · appState 配置白名单**：`localResponseCache` 纳入 `normalizeConfig`/`buildConfigPayload`/`applyConfigToState`/`appState`，杜绝任何一次配置保存把它清空回默认值（修掉 FE-C 子代理标记的隐藏回归风险）。
 - **增强3 · Home 站点消耗卡片**：新增 `components/StationSpendCard.vue`，首页一眼可见「哪个中转站用了多少额度」(Top6 + 合计花费 + 未计价降级)，每分钟刷新；`Home.vue` 挂载于 HomeMetricsCard 下。
 - 最终验证（深化后）：`go build ./...` ✅ · `npm run build` ✅
+
+## omp 移植系列（E1-E6，2026-08）
+> 来源：`omp` harness 机制调研（供应商适配/上下文管理/重试策略）。约束同上：不写测试、prefix-cache-stability、不改已安装 Cursor 客户端。
+- **E1** 输入侧工具 Schema 清洗器：新增 `agent/model/tool_schema_normalize.go` 纯函数 walker（剥不支持关键字语义入 description、nullable 折叠、strict 管线、超限 fail-open），接线 chat/responses/anthropic/gemini 四出口；与 400 工具隔离恢复兼容。从「失败后救」升级为「事前防」。
+- **E2** in-band XML 工具协议：新增 `xml_tool_protocol.go` + `xml_tool_call_scanner.go`。适配器新增 `toolCallMode: native(默认)|xml_prompt`；请求侧目录注入（按名称排序确定性序列化）+ 历史 tool_call/tool_result 文本重放；响应侧流式扫描还原结构化调用（JSON 修复、伪造 tool_result 剥离、坏块降级透传）。仅 OpenAI chat completions 路径。
+- **E3** 重试收敛 + replay-safety：已产出可见输出后任何错误包 `midStreamInterruptedError` 不再重试/failover（sink 写入计数兜底）；分类收敛到 `isPermanentProviderError` 单一决策点；修复空闲看门狗超时被 Classify 误判 Fatal 的回归。`stream_reconnect.go`/`router.go`。
+- **E4** 流式部分 JSON 节流：工具参数进度解析 ≥256B 增量才重试，消除逐 delta 全量 parse 的 O(n²)；终态解析逐字节不变。`openai.go`。
+- **E5** 切点审计 + 近端保护加固：审计确认无配对破坏缺陷（委派 split-turn 单摘要因 tail 全量回放信息无损，不实施）；主路径近端保护升级为「轮数+token≥20% 预算」双水位（`context_projection.go`，下限基准 min(hardBudget, Σ内容量) 保护小会话自适应降级）。
+- **E6** 显式兼容 kind：`ModelAdapterConfig.compatibilityKind`（12 合法值，空=自动匹配）；显式优先、非法 warn-once 回落；补 `NormalizeModelAdapterConfigs` 白名单拷贝。`server/config/{types,resolver}.go`、`provider_compatibility.go`。
+- 最终验证：`go build ./...` ✅ · `go vet ./internal/...` ✅ · `go test ./internal/backend/...` ✅
