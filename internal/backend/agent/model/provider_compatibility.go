@@ -1,6 +1,7 @@
 package modeladapter
 
 import (
+	"regexp"
 	"strings"
 	"sync"
 
@@ -20,7 +21,23 @@ type ProviderCompatibility struct {
 	DropResponsesFields       bool
 	DropGrok45Sampling        bool
 	AllowResponsesEOFFallback bool
+	// MaxTokensField 表示 Chat Completions 输出 token 上限使用的字段名：
+	// maxTokensFieldLegacy（默认）或 maxTokensFieldCompletion。官方 OpenAI
+	// 推理系模型（o 系、gpt-5）的 chat completions 端点已废弃 max_tokens，
+	// 必须改发 max_completion_tokens，否则上游直接 400。
+	MaxTokensField string
 }
+
+// Chat Completions 输出 token 上限字段的两个合法取值。
+const (
+	maxTokensFieldLegacy     = "max_tokens"
+	maxTokensFieldCompletion = "max_completion_tokens"
+)
+
+// openAIReasoningModelMaxCompletionPattern 匹配官方 OpenAI 要求
+// max_completion_tokens 的模型名：o1/o3/o4 系列（^o\d 统一覆盖 o1-preview、
+// o4-mini 等变体）与 gpt-5 系列。
+var openAIReasoningModelMaxCompletionPattern = regexp.MustCompile(`^(o\d|gpt-5)`)
 
 // validCompatibilityKinds 列出显式 compatibilityKind 字段允许的全部取值，
 // 与自动匹配可产生的 Kind 一一对应；额外提供 "openai" 表示强制走默认 OpenAI
@@ -106,6 +123,7 @@ func classifyProviderCompatibility(baseURL, modelID string) ProviderCompatibilit
 			applyCompatibilityKindPolicy(&policy, kind, base, model)
 			policy.AllowResponsesEOFFallback = !isOfficialOpenAIBaseURL(baseURL)
 			policy.ThinkingDisableKind = compatibilityThinkingDisableKind(policy.Kind, modelID)
+			policy.MaxTokensField = resolveOpenAIMaxTokensField(policy.Kind, modelID)
 			return policy
 		}
 		warnInvalidCompatibilityKindOnce(kind)
@@ -142,6 +160,7 @@ func classifyProviderCompatibility(baseURL, modelID string) ProviderCompatibilit
 	// historically closed without native terminal envelopes.
 	policy.AllowResponsesEOFFallback = !isOfficialOpenAIBaseURL(baseURL)
 	policy.ThinkingDisableKind = compatibilityThinkingDisableKind(policy.Kind, modelID)
+	policy.MaxTokensField = resolveOpenAIMaxTokensField(policy.Kind, modelID)
 	return policy
 }
 
@@ -172,6 +191,25 @@ func applyCompatibilityKindPolicy(policy *ProviderCompatibility, kind, base, mod
 			policy.Kind = ""
 		}
 	}
+}
+
+// resolveOpenAIMaxTokensField 决定 Chat Completions 输出 token 上限字段名。
+// 优先序：已知 provider kind（copilot/deepseek/xai/kimi(moonshot)/zhipu/
+// openrouter/siliconflow/qwen/mimo/minimax/stepfun 等，含用户显式指定的
+// compatibilityKind）固定发传统 max_tokens——这些非 OpenAI 官方后端不认识
+// max_completion_tokens，因此 kind 优先于模型名推断；仅当无任何 kind 信号
+// （OpenAI 官方端点或未知中转）时按模型名推断：o 系（^o\d）/gpt-5 系列发
+// max_completion_tokens，其余发 max_tokens。本函数是 (kind, modelID) 的纯
+// 函数，同一 adapter 配置恒定映射到同一字段，满足 prefix-cache 确定性约束。
+func resolveOpenAIMaxTokensField(kind, modelID string) string {
+	if kind != "" {
+		return maxTokensFieldLegacy
+	}
+	model := strings.ToLower(strings.TrimSpace(modelID))
+	if openAIReasoningModelMaxCompletionPattern.MatchString(model) {
+		return maxTokensFieldCompletion
+	}
+	return maxTokensFieldLegacy
 }
 
 func isOfficialOpenAIBaseURL(baseURL string) bool {

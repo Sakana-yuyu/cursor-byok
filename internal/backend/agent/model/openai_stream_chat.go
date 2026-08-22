@@ -13,6 +13,7 @@ import (
 
 	"cursor/gen/agentv1"
 	runtimecore "cursor/internal/backend/agent/core"
+	"cursor/internal/logger"
 	"cursor/internal/modelchannel"
 )
 
@@ -102,7 +103,9 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		ID       string `json:"id"`
 		Function struct {
 			Name      string `json:"name"`
-			Arguments string `json:"arguments"`
+			// 部分供应商（如 MiniMax）把 arguments 按 JSON 对象下发而非字符串，
+			// 这里用 RawMessage 接住双态，延迟到分片处理时再判定。
+			Arguments json.RawMessage `json:"arguments"`
 		} `json:"function"`
 	}
 	type openAIChunk struct {
@@ -161,6 +164,29 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 	thinkingStarted := time.Time{}
 	thinkingActive := false
 	thinkParser := &openAIThinkTagParser{}
+	// V-2：流内是否发出过结构化工具调用，用于 finish_reason 提升判定。
+	emittedToolInvocation := false
+	compatKind := classifyProviderCompatibility(baseURL, modelID).Kind
+	textStripper := newDeepSeekSpecialTokenStripper(compatKind == "deepseek")
+	argsStripper := newDeepSeekSpecialTokenStripper(compatKind == "deepseek")
+	toolObjectArgs := make(map[int]map[string]any)
+	lastToolIndex := -1
+	finishPromotionLogged := false
+	effectiveFinishReason := func() string {
+		// 对齐 Responses 侧的终态提升逻辑：上游中转偶发在实际携带结构化
+		// tool_calls 的回合误报 finish_reason=stop（或不带 finish_reason），
+		// 下游会误判回合结束而跳过工具执行。流内已发出结构化工具调用且
+		// 终态为空/stop 时提升为 tool_calls；仅提升、绝不降级。
+		reason := strings.TrimSpace(finishReason)
+		if emittedToolInvocation && (reason == "" || reason == "stop") {
+			if !finishPromotionLogged {
+				finishPromotionLogged = true
+				logger.Info("openai chat 流 finish_reason 提升", "from", reason, "to", "tool_calls", "model_call_id", req.ModelCallID)
+			}
+			return "tool_calls"
+		}
+		return reason
+	}
 	flushThinkingCompleted := func() error {
 		if !thinkingActive {
 			return nil
@@ -200,7 +226,7 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 			UsagePresent:      usagePresent,
 			CacheReadPresent:  cacheReadPresent,
 			CacheWritePresent: cacheWritePresent,
-			FinishReason:      finishReason,
+			FinishReason:      effectiveFinishReason(),
 		})
 	}
 	emitTextDelta := func(text string) error {
@@ -296,6 +322,7 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		}); err != nil {
 			return err
 		}
+		emittedToolInvocation = true
 		streamIdle.MarkEffectiveContent()
 		return nil
 	}
@@ -322,8 +349,8 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 	}
 	fail := func(streamErr error) error {
 		finishedAt = time.Now().UTC()
-		logProviderStreamTiming("openai", currentModel, req, startedAt, firstEventAt, finishedAt, finishReason, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, streamErr)
-		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", currentModel, startedAt, firstEventAt, finishedAt, finishReason, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, streamErr))
+		logProviderStreamTiming("openai", currentModel, req, startedAt, firstEventAt, finishedAt, effectiveFinishReason(), inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, streamErr)
+		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", currentModel, startedAt, firstEventAt, finishedAt, effectiveFinishReason(), inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, streamErr))
 		return streamErr
 	}
 	errorFromChunk := func(chunk openAIChunk) error {
@@ -508,8 +535,11 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		// 当本片段同时携带 reasoning 与 content，且二者相同时，视为思考阶段的重复输出，跳过 content。
 		skipContent := reasoning != "" && choice.Delta.Content == choice.Delta.ReasoningContent && choice.Delta.ReasoningContent != ""
 		if text := choice.Delta.Content; text != "" && !skipContent {
-			if err := emitTaggedContentParts(thinkParser.Consume(text)); err != nil {
-				return fail(err)
+			// V-3：剥离偶发泄漏进正文的 DeepSeek 模板特殊 token（跨分片缓冲）。
+			if stripped := textStripper.Feed(text); stripped != "" {
+				if err := emitTaggedContentParts(thinkParser.Consume(stripped)); err != nil {
+					return fail(err)
+				}
 			}
 		}
 
@@ -539,9 +569,44 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 				accumulator.Name = sourceName
 			}
 			argsTextDelta := ""
-			if item.Function.Arguments != "" {
-				_, _ = accumulator.Args.WriteString(item.Function.Arguments)
-				argsTextDelta = item.Function.Arguments
+			if rawArgs := item.Function.Arguments; len(rawArgs) > 0 {
+				trimmed := strings.TrimSpace(string(rawArgs))
+				if trimmed != "" && trimmed != "null" && trimmed[0] == '{' {
+					// V-1：MiniMax 等供应商把工具参数按 JSON 对象（而非字符串
+					// 分片）下发，固定按字符串拼接会让终态 unmarshal 失败断流。
+					// 对象分片递归深合并到累积对象后回写 Args 快照，进度解析与
+					// completedOpenAIToolArgsJSON 终态校验路径无需感知差异。
+					var objDelta map[string]any
+					if err := json.Unmarshal(rawArgs, &objDelta); err != nil {
+						return fail(fmt.Errorf("openai chat 工具参数对象分片解析失败: %w", err))
+					}
+					merged := toolObjectArgs[item.Index]
+					if merged == nil {
+						merged = make(map[string]any)
+						toolObjectArgs[item.Index] = merged
+					}
+					deepMergeJSONObject(merged, objDelta)
+					snapshot, snapErr := json.Marshal(merged)
+					if snapErr != nil {
+						return fail(snapErr)
+					}
+					accumulator.Args.Reset()
+					accumulator.Args.Write(snapshot)
+				} else {
+					// 标准形态：arguments 是 JSON 字符串字面量（RawMessage 含引号
+					// 与转义），先解码还原为明文分片再拼接，行为与旧 string 字段一致；
+					// 非字符串也非对象的值按解析失败处理（与旧整块 unmarshal 失败等价）。
+					var piece string
+					if err := json.Unmarshal(rawArgs, &piece); err != nil {
+						return fail(fmt.Errorf("openai chat 工具参数分片类型不支持: %w", err))
+					}
+					if stripped := argsStripper.Feed(piece); stripped != "" {
+						// V-3：剥离泄漏进工具参数的 DeepSeek 特殊 token。
+						_, _ = accumulator.Args.WriteString(stripped)
+						argsTextDelta = stripped
+					}
+				}
+				lastToolIndex = item.Index
 			}
 			if argsTextDelta != "" || (strings.TrimSpace(accumulator.Name) == "CreatePlan" && accumulator.Args.Len() > 0) {
 				if err := emitOpenAIToolProgress(sink, currentModel, accumulator, argsTextDelta); err != nil {
@@ -560,6 +625,12 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 			}
 			if err := flushThinkingCompleted(); err != nil {
 				return fail(err)
+			}
+			// 剥离器可能仍缓冲着最后一个工具参数的半截标记，先放行再终态校验。
+			if tail := argsStripper.Flush(); tail != "" && lastToolIndex >= 0 {
+				if acc := tools[lastToolIndex]; acc != nil {
+					acc.Args.WriteString(tail)
+				}
 			}
 			for _, accumulator := range tools {
 				argsJSON, argsErr := completedOpenAIToolArgsJSON(accumulator)
@@ -581,9 +652,16 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 				}
 				streamIdle.MarkEffectiveContent()
 			}
+			emittedToolInvocation = true
 			tools = make(map[int]*openAIToolAccumulator)
 			finishReason = strings.TrimSpace(*choice.FinishReason)
 			turnFinishedPending = true
+		}
+	}
+	// 剥离器可能仍缓冲着最后一个工具参数的半截标记，先放行再终态校验。
+	if tail := argsStripper.Flush(); tail != "" && lastToolIndex >= 0 {
+		if acc := tools[lastToolIndex]; acc != nil {
+			acc.Args.WriteString(tail)
 		}
 	}
 	for _, accumulator := range tools {
@@ -605,6 +683,7 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 			return fail(err)
 		}
 		streamIdle.MarkEffectiveContent()
+		emittedToolInvocation = true
 	}
 	if err := scanner.Err(); err != nil {
 		if chunkTimedOut {
@@ -642,7 +721,7 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		return fail(err)
 	}
 	finishedAt = time.Now().UTC()
-	logProviderStreamTiming("openai", currentModel, req, startedAt, firstEventAt, finishedAt, finishReason, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, nil)
-	recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", currentModel, startedAt, firstEventAt, finishedAt, finishReason, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, nil))
+	logProviderStreamTiming("openai", currentModel, req, startedAt, firstEventAt, finishedAt, effectiveFinishReason(), inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, nil)
+	recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", currentModel, startedAt, firstEventAt, finishedAt, effectiveFinishReason(), inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, nil))
 	return nil
 }

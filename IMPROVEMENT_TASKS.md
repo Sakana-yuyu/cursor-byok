@@ -87,3 +87,12 @@
 - **E5** 切点审计 + 近端保护加固：审计确认无配对破坏缺陷（委派 split-turn 单摘要因 tail 全量回放信息无损，不实施）；主路径近端保护升级为「轮数+token≥20% 预算」双水位（`context_projection.go`，下限基准 min(hardBudget, Σ内容量) 保护小会话自适应降级）。
 - **E6** 显式兼容 kind：`ModelAdapterConfig.compatibilityKind`（12 合法值，空=自动匹配）；显式优先、非法 warn-once 回落；补 `NormalizeModelAdapterConfigs` 白名单拷贝。`server/config/{types,resolver}.go`、`provider_compatibility.go`。
 - 最终验证：`go build ./...` ✅ · `go vet ./internal/...` ✅ · `go test ./internal/backend/...` ✅
+
+## 厂商点状优化（V1-V4，2026-08）
+> 来源：omp provider-quirks 差距审计。全部落在 openai chat 链路。
+- **V1** MiniMax 对象参数深合并：tool_call arguments 兼容 string/object 双态，对象分片递归深合并（嵌套合并、数组/标量替换），零配置自动生效。`openai_stream_chat.go` + 新增 `openai_stream_chat_compat.go`。
+- **V2** chat 侧 finish_reason 提升：流内已发结构化 tool_calls 而 finish=stop 时提升为 tool_calls（对齐 responses 侧），仅提升不降级、去重日志。
+- **V3** DeepSeek 特殊 token 缓冲剥离：<｜...｜> 全角标记整体剥离（跨 chunk 半截缓冲、超长未闭合放行），deepseek kind 预激活 + 任意供应商模式检测自动激活。
+- **V4** maxTokens 字段分派：ProviderCompatibility.MaxTokensField——已知 kind（含显式 compatibilityKind）恒发 max_tokens；无 kind 信号时模型名 ^o\d|gpt-5 发 max_completion_tokens；纯函数确定性分派满足 prefix-cache-stability。
+- 未实施（评估关闭）：Kimi 空 content 占位/Mistral 工具 ID/Azure 映射（场景不符）、reasoning_effort 降档与空补全重试（次优先级，待真实反馈）、max_completion_tokens 400 降档重试（可选，涉及跨文件签名变更）。
+- 最终验证：`go build ./...` ✅ · `go vet` ✅ · `go test -count=1 ./internal/backend/agent/model/` ✅
