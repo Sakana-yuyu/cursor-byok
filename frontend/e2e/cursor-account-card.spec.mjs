@@ -27,7 +27,7 @@ test("控制中心非法标签回落到账号页", async ({ page }) => {
 test("控制中心请求实验室可以对比结构且不展示原文", async ({ page }) => {
   await seedPreviewTestPlan(page, { cursorAccounts: previewAccounts }, basePreviewConfig());
   await page.goto("/control-center?tab=request-lab");
-  await expect(page.getByText("官方镜像")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "官方镜像" })).toBeVisible();
   await page.getByRole("button", { name: /gpt-test/ }).first().click();
   await page.getByRole("button", { name: /gpt-test/ }).nth(1).click();
   await page.getByRole("button", { name: "对比结构" }).click();
