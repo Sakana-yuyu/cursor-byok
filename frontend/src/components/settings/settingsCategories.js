@@ -1,14 +1,6 @@
-export const SETTINGS_CATEGORY_STORAGE_KEY = "cursor-byok.settings.category";
+import { defineAsyncComponent } from "vue";
 
-import GeneralSettings from "@/components/settings/categories/GeneralSettings.vue";
-import CursorServiceSettings from "@/components/settings/categories/CursorServiceSettings.vue";
-import DelegationSettings from "@/components/settings/categories/DelegationSettings.vue";
-import SkillsMcpSettings from "@/components/settings/categories/SkillsMcpSettings.vue";
-import PromptSettings from "@/components/settings/categories/PromptSettings.vue";
-import OverlaySettings from "@/components/settings/categories/OverlaySettings.vue";
-import HistorySettings from "@/components/settings/categories/HistorySettings.vue";
-import AdvancedSettings from "@/components/settings/categories/AdvancedSettings.vue";
-import AboutSettings from "@/components/settings/categories/AboutSettings.vue";
+export const SETTINGS_CATEGORY_STORAGE_KEY = "cursor-byok.settings.category";
 
 // 设置侧边栏分组：每组一个标题，组内按使用频率排序。
 // nav 决定入口层级：common 常驻显示，more 收纳到可展开的「更多设置」。
@@ -115,17 +107,17 @@ export const SETTINGS_CATEGORIES = [
 ];
 
 // 分类组件映射：与 SETTINGS_CATEGORIES 的 id 一一对应。
-// 设置页保持单页内静态加载，避免动态 import 在 dev/preview 环境下的解析差异。
+// 仅在打开对应分类时下载其实现，避免低频配置和日志视图拖慢设置页首开。
 export const SETTINGS_CATEGORY_COMPONENTS = {
-  general: GeneralSettings,
-  "cursor-service": CursorServiceSettings,
-  delegation: DelegationSettings,
-  "skills-mcp": SkillsMcpSettings,
-  prompts: PromptSettings,
-  overlay: OverlaySettings,
-  history: HistorySettings,
-  advanced: AdvancedSettings,
-  about: AboutSettings,
+  general: defineAsyncComponent(() => import("@/components/settings/categories/GeneralSettings.vue")),
+  "cursor-service": defineAsyncComponent(() => import("@/components/settings/categories/CursorServiceSettings.vue")),
+  delegation: defineAsyncComponent(() => import("@/components/settings/categories/DelegationSettings.vue")),
+  "skills-mcp": defineAsyncComponent(() => import("@/components/settings/categories/SkillsMcpSettings.vue")),
+  prompts: defineAsyncComponent(() => import("@/components/settings/categories/PromptSettings.vue")),
+  overlay: defineAsyncComponent(() => import("@/components/settings/categories/OverlaySettings.vue")),
+  history: defineAsyncComponent(() => import("@/components/settings/categories/HistorySettings.vue")),
+  advanced: defineAsyncComponent(() => import("@/components/settings/categories/AdvancedSettings.vue")),
+  about: defineAsyncComponent(() => import("@/components/settings/categories/AboutSettings.vue")),
 };
 
 export function resolveSettingsCategoryComponent(categoryID) {

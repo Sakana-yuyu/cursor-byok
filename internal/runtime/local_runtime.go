@@ -18,6 +18,41 @@ var (
 	ErrChannelNotAvailable = errors.New("model channel not available")
 )
 
+const (
+	// ModelSourceThirdParty 表示用户配置的第三方 API 渠道。
+	ModelSourceThirdParty = "third_party"
+	// ModelSourceCursorAccount 表示 cursor-byok 自己维护的 Cursor 账户授权渠道。
+	ModelSourceCursorAccount = "cursor_account"
+
+	// CredentialScopeAdapterAPIKey 表示凭据由当前模型适配器保存的 API Key 提供。
+	CredentialScopeAdapterAPIKey = "adapter_api_key"
+	// CredentialScopeCursorAccount 表示凭据只能由 Cursor 账户网关在转发时注入。
+	CredentialScopeCursorAccount = "cursor_account"
+)
+
+func NormalizeModelSource(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", ModelSourceThirdParty:
+		return ModelSourceThirdParty
+	case ModelSourceCursorAccount:
+		return ModelSourceCursorAccount
+	default:
+		return ""
+	}
+}
+
+func NormalizeCredentialScope(source string, value string) string {
+	if NormalizeModelSource(source) == ModelSourceCursorAccount {
+		return CredentialScopeCursorAccount
+	}
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", CredentialScopeAdapterAPIKey:
+		return CredentialScopeAdapterAPIKey
+	default:
+		return ""
+	}
+}
+
 type ModelPricing struct {
 	Input      *float64 `json:"input,omitempty"`
 	Output     *float64 `json:"output,omitempty"`
@@ -31,6 +66,10 @@ type ModelPricing struct {
 // ModelAdapterConfig 定义了当前模块中的 ModelAdapterConfig 类型。
 type ModelAdapterConfig struct {
 	ID string `json:"id,omitempty"`
+	// Source 表示模型请求的凭据和执行来源。缺省值兼容为 third_party。
+	Source string `json:"source,omitempty"`
+	// CredentialScope 表示真实凭据只能在哪个边界被注入。
+	CredentialScope string `json:"credentialScope,omitempty"`
 	// DisplayName 表示当前声明中的 DisplayName。
 	DisplayName string `json:"displayName"`
 	// GroupName 表示模型渠道所属的用户可编辑分组名称。
@@ -107,7 +146,52 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 
 	normalized := make([]ModelAdapterConfig, 0, len(input))
 	channelIndexByID := make(map[string]int, len(input))
+	// 旧运行时也必须拒绝不同来源或不同连接复用同一渠道 ID。否则按 ID
+	// 解析时会把账户模型和第三方模型混成同一个候选渠道，破坏来源隔离。
+	identityByAdapterID := make(map[string]string, len(input))
 	for _, item := range input {
+		source := NormalizeModelSource(item.Source)
+		if source == "" {
+			return nil, errors.New("模型适配器 source 仅支持 third_party 或 cursor_account")
+		}
+		credentialScope := NormalizeCredentialScope(source, item.CredentialScope)
+		if credentialScope == "" {
+			return nil, errors.New("模型适配器 credentialScope 与 source 不匹配")
+		}
+		if source == ModelSourceCursorAccount {
+			if strings.TrimSpace(item.BaseURL) != "" || strings.TrimSpace(item.APIKey) != "" || item.CustomHeadersEnabled || strings.TrimSpace(item.CustomHeadersJSON) != "" {
+				return nil, errors.New("Cursor 账户模型不能配置第三方接口地址、API Key 或自定义请求头")
+			}
+			next := ModelAdapterConfig{
+				Source:              source,
+				CredentialScope:     credentialScope,
+				DisplayName:         strings.TrimSpace(item.DisplayName),
+				GroupName:           strings.TrimSpace(item.GroupName),
+				Type:                ModelSourceCursorAccount,
+				TooltipData:         strings.TrimSpace(item.TooltipData),
+				ModelID:             strings.TrimSpace(item.ModelID),
+				ContextWindowTokens: modelcontext.Resolve(item.ModelID, normalizeMaxCompletionTokens(item.ContextWindowTokens)),
+				MaxCompletionTokens: normalizeMaxCompletionTokens(item.MaxCompletionTokens),
+				Pricing:             item.Pricing,
+			}
+			if next.TooltipData == "" {
+				next.TooltipData = "Cursor 账户模型"
+			}
+			if next.DisplayName == "" || next.ModelID == "" {
+				return nil, errors.New("Cursor 账户模型 displayName 和 modelID 不能为空")
+			}
+			next.ID = strings.TrimSpace(item.ID)
+			if next.ID == "" {
+				next.ID = modelAdapterIdentity(next)
+			}
+			identity := modelAdapterIdentity(next)
+			if ownerIdentity, exists := identityByAdapterID[next.ID]; exists && ownerIdentity != identity {
+				return nil, errors.New("模型适配器 id 不能被不同模型配置重复使用")
+			}
+			identityByAdapterID[next.ID] = identity
+			normalized = append(normalized, next)
+			continue
+		}
 		baseURL, err := modelchannel.NormalizeBaseURL(item.BaseURL)
 		if err != nil {
 			return nil, err
@@ -120,11 +204,13 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			openAIEndpoint = modelchannel.OpenAIEndpointForProtocolGroup(protocolGroup, openAIEndpoint)
 		}
 		next := ModelAdapterConfig{
-			DisplayName:  strings.TrimSpace(item.DisplayName),
-			GroupName:    strings.TrimSpace(item.GroupName),
-			Type:         nextType,
-			SupplierID:   strings.TrimSpace(item.SupplierID),
-			ProtocolMode: protocolMode,
+			Source:          source,
+			CredentialScope: credentialScope,
+			DisplayName:     strings.TrimSpace(item.DisplayName),
+			GroupName:       strings.TrimSpace(item.GroupName),
+			Type:            nextType,
+			SupplierID:      strings.TrimSpace(item.SupplierID),
+			ProtocolMode:    protocolMode,
 
 			ProtocolGroup:        protocolGroup,
 			BaseURL:              baseURL,
@@ -193,11 +279,14 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 		case next.Type == "anthropic" && next.AnthropicThinkingEffort == "":
 			return nil, errors.New("模型适配器 anthropicThinkingEffort 仅支持 low、medium、high、xhigh、max")
 		}
-		next.ID = modelchannel.BuildChannelID(next.BaseURL, next.ModelID, next.APIKey, next.DisplayName, next.OpenAIEndpoint) + "\n" + strings.TrimSpace(next.GroupName)
+		next.ID = modelAdapterIdentity(next) + "\n" + strings.TrimSpace(next.GroupName)
 		if next.AnthropicAuthMode != modelchannel.AnthropicAuthModeLegacyDual {
 			next.ID += "-auth-" + next.AnthropicAuthMode
 		}
-		dedupeKey := strings.Join([]string{modelchannel.BuildChannelID(next.BaseURL, next.ModelID, next.APIKey, next.DisplayName, next.OpenAIEndpoint), strings.TrimSpace(next.ProtocolMode), strings.TrimSpace(next.ProtocolGroup), strings.TrimSpace(next.AnthropicAuthMode), strconv.FormatBool(next.CustomHeadersEnabled), strings.TrimSpace(next.CustomHeadersJSON)}, "\n")
+		if ownerIdentity, exists := identityByAdapterID[next.ID]; exists && ownerIdentity != next.ID {
+			return nil, errors.New("模型适配器 id 不能被不同模型配置重复使用")
+		}
+		dedupeKey := strings.Join([]string{modelAdapterIdentity(next), strings.TrimSpace(next.ProtocolMode), strings.TrimSpace(next.ProtocolGroup), strings.TrimSpace(next.AnthropicAuthMode), strconv.FormatBool(next.CustomHeadersEnabled), strings.TrimSpace(next.CustomHeadersJSON)}, "\n")
 		if existingIndex, exists := channelIndexByID[dedupeKey]; exists {
 			existing := normalized[existingIndex]
 			if existing.GroupName == "" {
@@ -216,9 +305,21 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			continue
 		}
 		channelIndexByID[dedupeKey] = len(normalized)
+		identityByAdapterID[next.ID] = next.ID
 		normalized = append(normalized, next)
 	}
 	return normalized, nil
+}
+
+func modelAdapterIdentity(adapter ModelAdapterConfig) string {
+	return modelchannel.BuildSourcedChannelID(
+		adapter.Source,
+		adapter.BaseURL,
+		adapter.ModelID,
+		adapter.APIKey,
+		adapter.DisplayName,
+		adapter.OpenAIEndpoint,
+	)
 }
 
 func firstNonEmptyProtocolGroup(values ...string) string {
@@ -309,6 +410,10 @@ func normalizeModelAdapterType(value string) string {
 type ResolvedChannel struct {
 	// ID 表示当前声明中的 ID。
 	ID string
+	// Source 表示本次渠道的模型来源。
+	Source string
+	// CredentialScope 表示凭据注入边界。
+	CredentialScope string
 	// Name 表示当前声明中的 Name。
 	Name string
 	// GroupName 表示当前声明中的 GroupName。

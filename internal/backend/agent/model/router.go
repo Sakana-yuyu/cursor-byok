@@ -28,6 +28,8 @@ type Router struct {
 	anthropic ModelAdapter
 	// gemini 负责 Gemini native 流式请求。
 	gemini ModelAdapter
+	// accountGateway 只处理 Cursor 账户模型，不向第三方协议适配器暴露账户凭据。
+	accountGateway AccountModelGateway
 	// resolver 负责从本地配置中解析实际模型通道。
 	resolver        ChannelResolver
 	healthMu        sync.Mutex
@@ -61,6 +63,7 @@ func NewRouter(resolver ChannelResolver) *Router {
 		openai:          NewOpenAIAdapter(),
 		anthropic:       NewAnthropicAdapter(),
 		gemini:          NewGeminiAdapter(),
+		accountGateway:  unavailableAccountModelGateway{},
 		resolver:        resolver,
 		healthByChannel: make(map[string]channelHealth),
 	}
@@ -548,6 +551,10 @@ func resolveProviderStreamIdleTimeout(requested time.Duration, configured time.D
 // streamChannel 使用已解析的渠道构造请求并驱动对应 provider 适配器。此函数不改变模型可见的请求内容。
 func (router *Router) streamChannel(ctx context.Context, req StreamRequest, channel *legacyruntime.ResolvedChannel, sink func(ModelEvent) error) error {
 	resolved := req
+	// ResolvedChannel 也会被旧调用方和已有测试直接构造；空来源必须保持为旧的
+	// 第三方 API 语义，而不是在路由边界误判为非法渠道。
+	resolved.ModelSource = legacyruntime.NormalizeModelSource(channel.Source)
+	resolved.CredentialScope = legacyruntime.NormalizeCredentialScope(resolved.ModelSource, channel.CredentialScope)
 	resolved.Provider = strings.TrimSpace(channel.Provider)
 	resolved.ProtocolMode = strings.TrimSpace(channel.ProtocolMode)
 	resolved.ProtocolGroup = strings.TrimSpace(channel.ProtocolGroup)
@@ -562,6 +569,20 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 		if catalogMax := modelcontext.WindowTokens(req.ModelID); catalogMax > 0 {
 			resolved.ResolvedContextWindowTokens = catalogMax
 		}
+	}
+	if resolved.ModelSource == legacyruntime.ModelSourceCursorAccount {
+		if resolved.CredentialScope != legacyruntime.CredentialScopeCursorAccount {
+			return fmt.Errorf("Cursor 账户模型 credential scope 无效")
+		}
+		// 配置层会在持久化前拒绝第三方传输字段；这里再次阻断旧调用方或未来
+		// relay 接入绕过配置归一化的场景，避免第三方凭据进入账户专用链路。
+		if resolved.BaseURL != "" || resolved.APIKey != "" || channel.CustomHeadersEnabled || strings.TrimSpace(channel.CustomHeadersJSON) != "" {
+			return fmt.Errorf("Cursor 账户模型不能携带第三方接口地址、API Key 或自定义请求头")
+		}
+		return router.accountGateway.Stream(ctx, resolved, sink)
+	}
+	if resolved.ModelSource != legacyruntime.ModelSourceThirdParty || resolved.CredentialScope != legacyruntime.CredentialScopeAdapterAPIKey {
+		return fmt.Errorf("第三方模型来源或凭据作用域无效")
 	}
 	configuredThinkingEffortMaximum := normalizeRuntimeThinkingEffort(channel.ReasoningEffort)
 	if resolved.Provider == "anthropic" {

@@ -3,6 +3,8 @@
 export const SUPPLIER_GROUP_MODE_NAME = "name";
 export const SUPPLIER_GROUP_MODE_CONNECTION = "connection";
 export const SUPPLIER_GROUP_MODE_LEGACY = "legacy"; // baseURL + groupName（兼容旧链接）
+export const SUPPLIER_MODEL_SOURCE_THIRD_PARTY = "third_party";
+export const SUPPLIER_MODEL_SOURCE_CURSOR_ACCOUNT = "cursor_account";
 
 const STORAGE_KEY = "cursor-byok.supplierGroupMode";
 
@@ -58,6 +60,13 @@ export function normalizeSupplierBaseURL(value) {
   }
 }
 
+/** 供应商身份使用的模型来源；缺省配置兼容为第三方 API。 */
+export function normalizeSupplierModelSource(value) {
+  return String(value || "").trim().toLowerCase() === SUPPLIER_MODEL_SOURCE_CURSOR_ACCOUNT
+    ? SUPPLIER_MODEL_SOURCE_CURSOR_ACCOUNT
+    : SUPPLIER_MODEL_SOURCE_THIRD_PARTY;
+}
+
 export function displayGroupName(groupName) {
   const name = String(groupName || "").trim();
   return name || "默认分组";
@@ -79,23 +88,25 @@ export function groupModelAdaptersAsSuppliers(adapters, mode = SUPPLIER_GROUP_MO
   const map = new Map();
 
   for (const adapter of adapters || []) {
+    const source = normalizeSupplierModelSource(adapter.source);
     const baseURL = normalizeSupplierBaseURL(adapter.baseURL);
     const groupNameRaw = String(adapter.groupName || "").trim();
     const groupNameDisplay = displayGroupName(groupNameRaw);
 
     let key;
     if (resolved === SUPPLIER_GROUP_MODE_NAME) {
-      key = `name::${groupNameRaw}`;
+      key = `name::${source}::${groupNameRaw}`;
     } else if (resolved === SUPPLIER_GROUP_MODE_LEGACY) {
-      key = `legacy::${baseURL}::${groupNameRaw}`;
+      key = `legacy::${source}::${baseURL}::${groupNameRaw}`;
     } else {
-      key = `connection::${baseURL}`;
+      key = `connection::${source}::${baseURL}`;
     }
 
     if (!map.has(key)) {
       map.set(key, {
         key,
         mode: resolved,
+        source,
         baseURL,
         groupName: groupNameDisplay,
         groupNameRaw,
@@ -122,11 +133,14 @@ export function groupModelAdaptersAsSuppliers(adapters, mode = SUPPLIER_GROUP_MO
 export function adapterMatchesSupplierIdentity(adapter, identity) {
   if (!adapter || !identity) return false;
   const mode = normalizeSupplierGroupMode(identity.mode || SUPPLIER_GROUP_MODE_LEGACY);
+  const adapterSource = normalizeSupplierModelSource(adapter.source);
+  const identitySource = normalizeSupplierModelSource(identity.source);
   const adapterBase = normalizeSupplierBaseURL(adapter.baseURL);
   const adapterGroup = String(adapter.groupName || "").trim();
   const idBase = normalizeSupplierBaseURL(identity.baseURL);
   const idGroup = String(identity.groupName || "").trim();
 
+  if (adapterSource !== identitySource) return false;
   if (mode === SUPPLIER_GROUP_MODE_NAME) {
     return adapterGroup === idGroup;
   }
@@ -139,7 +153,7 @@ export function adapterMatchesSupplierIdentity(adapter, identity) {
 
 export function supplierToRouteQuery(supplier) {
   const mode = normalizeSupplierGroupMode(supplier?.mode || SUPPLIER_GROUP_MODE_CONNECTION);
-  const query = { mode };
+  const query = { mode, source: normalizeSupplierModelSource(supplier?.source) };
   if (mode === SUPPLIER_GROUP_MODE_NAME) {
     query.groupName = supplier.groupNameRaw ?? rawGroupNameFromDisplay(supplier.groupName);
   } else if (mode === SUPPLIER_GROUP_MODE_CONNECTION) {
@@ -162,6 +176,7 @@ export function supplierIdentityFromRouteQuery(query) {
   }
   return {
     mode,
+    source: normalizeSupplierModelSource(q.source),
     baseURL: String(q.baseURL || "").trim(),
     groupName: String(q.groupName || "").trim(),
   };

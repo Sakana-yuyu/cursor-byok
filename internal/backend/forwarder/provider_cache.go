@@ -83,22 +83,35 @@ type localResponseCacheSettingsProvider interface {
 	LocalResponseCacheSettings() (enabled bool, ttl time.Duration, maxEntries int, persist bool)
 }
 
+type modelSourceCacheResolver interface {
+	ModelSourceForModel(context.Context, string) string
+}
+
 // cachingProviderGateway 是包装底层 ProviderGateway 的响应缓存网关。
 type cachingProviderGateway struct {
-	inner    ProviderGateway
-	settings func() (enabled bool, ttl time.Duration, maxEntries int, persist bool)
-	store    *responseCacheStore
-	keyCache *cacheKeyCache // 缓存 key 哈希计算结果
+	inner       ProviderGateway
+	settings    func() (enabled bool, ttl time.Duration, maxEntries int, persist bool)
+	modelSource func(context.Context, string) string
+	store       *responseCacheStore
+	keyCache    *cacheKeyCache // 缓存 key 哈希计算结果
 }
 
 // newCachingProviderGateway 构造响应缓存网关。persistPath 为空时不做磁盘持久化。
-func newCachingProviderGateway(inner ProviderGateway, settings func() (bool, time.Duration, int, bool), persistPath string) *cachingProviderGateway {
+func newCachingProviderGateway(inner ProviderGateway, settings func() (bool, time.Duration, int, bool), persistPath string, modelSources ...func(context.Context, string) string) *cachingProviderGateway {
+	var modelSource func(context.Context, string) string
+	if len(modelSources) > 0 {
+		modelSource = modelSources[0]
+	}
 	return &cachingProviderGateway{
-		inner:    inner,
-		settings: settings,
+		inner:       inner,
+		settings:    settings,
+		modelSource: modelSource,
 		store: newResponseCacheStore(persistPath, func() time.Duration {
 			_, ttl, _, _ := settings()
 			return ttl
+		}, func() bool {
+			_, _, _, persist := settings()
+			return persist
 		}),
 		keyCache: newCacheKeyCache(1024), // 缓存最近 1024 个请求的 key
 	}
@@ -112,6 +125,14 @@ func (gateway *cachingProviderGateway) StartStream(ctx context.Context, req Prov
 	if !enabled {
 		// 禁用路径：与今日完全一致，不做哈希、不录制、不产生额外延迟。
 		return gateway.inner.StartStream(ctx, req, sink)
+	}
+	if strings.TrimSpace(req.ModelSource) == "" {
+		req.ModelSource = "third_party"
+		if gateway.modelSource != nil {
+			if resolved := strings.TrimSpace(gateway.modelSource(ctx, req.ModelID)); resolved != "" {
+				req.ModelSource = resolved
+			}
+		}
 	}
 
 	key := gateway.keyCache.get(req)
@@ -241,29 +262,53 @@ type responseCacheEntry struct {
 
 // responseCacheStore 是带 TTL 与 LRU 淘汰上限的内存响应缓存，可持久化到磁盘。
 type responseCacheStore struct {
-	mu          sync.Mutex
-	path        string               // 磁盘持久化路径；空表示不持久化
-	ttlProvider func() time.Duration // 当前 TTL（热加载），用于磁盘恢复时续期
-	loaded      bool
-	dirty       bool
-	saveTimer   *time.Timer
-	entries     map[string]*responseCacheEntry
-	order       []string // LRU 顺序：头部最久未使用，尾部最近使用
+	mu                  sync.Mutex
+	path                string               // 磁盘持久化路径；空表示不支持持久化
+	ttlProvider         func() time.Duration // 当前 TTL（热加载），用于磁盘恢复时续期
+	persistenceProvider func() bool          // 当前是否允许读写磁盘缓存（支持设置热加载）
+	persistActive       bool
+	loaded              bool
+	dirty               bool
+	saveTimer           *time.Timer
+	entries             map[string]*responseCacheEntry
+	order               []string // LRU 顺序：头部最久未使用，尾部最近使用
 }
 
-func newResponseCacheStore(path string, ttlProvider func() time.Duration) *responseCacheStore {
-	return &responseCacheStore{
-		path:        path,
-		ttlProvider: ttlProvider,
-		entries:     make(map[string]*responseCacheEntry),
+func newResponseCacheStore(path string, ttlProvider func() time.Duration, persistenceProviders ...func() bool) *responseCacheStore {
+	var persistenceProvider func() bool
+	if len(persistenceProviders) > 0 {
+		persistenceProvider = persistenceProviders[0]
 	}
+	return &responseCacheStore{
+		path:                path,
+		ttlProvider:         ttlProvider,
+		persistenceProvider: persistenceProvider,
+		persistActive:       path != "",
+		entries:             make(map[string]*responseCacheEntry),
+	}
+}
+
+// syncPersistenceLocked 在每次缓存读写前同步设置。关闭时放弃尚未落盘的脏状态，
+// 保证用户关闭开关后不再把仅内存期间的条目写回磁盘。
+func (store *responseCacheStore) syncPersistenceLocked() {
+	wantPersist := store.path != ""
+	if wantPersist && store.persistenceProvider != nil {
+		wantPersist = store.persistenceProvider()
+	}
+	if store.persistActive && !wantPersist {
+		store.dirty = false
+	}
+	store.persistActive = wantPersist
 }
 
 // ensureLoaded 懒加载磁盘缓存（首次访问时执行一次）。
 // 加载时按「最近访问时间 + 当前 TTL」续期：TTL 语义是"多久未访问则失效"，
 // 用户调长 TTL 后，此前写入的条目（旧 ExpiresAt）不应立即过期，而应继续可用。
 func (store *responseCacheStore) ensureLoaded() {
-	if store.loaded || store.path == "" {
+	if store.loaded || !store.persistActive {
+		return
+	}
+	if store.path == "" {
 		store.loaded = true
 		return
 	}
@@ -282,6 +327,10 @@ func (store *responseCacheStore) ensureLoaded() {
 			}
 		}
 		if now.After(entry.expiresAt) {
+			continue
+		}
+		if _, exists := store.entries[key]; exists {
+			// 运行中先写入内存的条目更新，不能被稍后启用持久化时读取的旧磁盘副本覆盖。
 			continue
 		}
 		store.entries[key] = entry
@@ -326,6 +375,7 @@ func (store *responseCacheStore) touchLocked(key string) {
 func (store *responseCacheStore) get(key string, now time.Time) (*responseCacheEntry, bool) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
+	store.syncPersistenceLocked()
 	store.ensureLoaded()
 	entry, ok := store.entries[key]
 	if !ok {
@@ -349,6 +399,7 @@ func (store *responseCacheStore) put(key string, entry *responseCacheEntry, maxE
 	}
 	store.mu.Lock()
 	defer store.mu.Unlock()
+	store.syncPersistenceLocked()
 	store.ensureLoaded()
 	if _, exists := store.entries[key]; !exists {
 		store.order = append(store.order, key)
@@ -365,7 +416,7 @@ func (store *responseCacheStore) put(key string, entry *responseCacheEntry, maxE
 
 // markDirtyLocked 标记缓存已变更并调度节流落盘（2s 合并多次写入）。
 func (store *responseCacheStore) markDirtyLocked() {
-	if store.path == "" {
+	if !store.persistActive {
 		return
 	}
 	store.dirty = true
@@ -382,7 +433,8 @@ func (store *responseCacheStore) flushToDisk() {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	store.saveTimer = nil
-	if !store.dirty || store.path == "" {
+	store.syncPersistenceLocked()
+	if !store.dirty || !store.persistActive {
 		return
 	}
 	snapshot := make(map[string]*responseCacheEntry, len(store.entries))
@@ -412,6 +464,7 @@ func (store *responseCacheStore) flushToDisk() {
 type providerCacheKeyShape struct {
 	ConversationID     string                   `json:"conversation_id"`
 	ModelID            string                   `json:"model_id"`
+	ModelSource        string                   `json:"model_source"`
 	Mode               int32                    `json:"mode"`
 	ThinkingEffort     string                   `json:"thinking_effort"`
 	Messages           []normalizedCacheMessage `json:"messages"`
@@ -491,9 +544,12 @@ func normalizeCacheMaxTokens(value int) int {
 }
 
 // providerCacheKeyHead 是除 messages/tools/override 外参与哈希的元数据视图。
+// ModelSource 参与哈希：账户模型与第三方模型即使 provider-visible 请求一致，
+// 也不能共享本地响应缓存条目。
 type providerCacheKeyHead struct {
 	ConversationID     string `json:"conversation_id"`
 	ModelID            string `json:"model_id"`
+	ModelSource        string `json:"model_source"`
 	Mode               int32  `json:"mode"`
 	ThinkingEffort     string `json:"thinking_effort"`
 	StableMessageCount int    `json:"stable_message_count"`
@@ -508,6 +564,7 @@ func providerCacheKey(req ProviderRequest) string {
 	head := providerCacheKeyHead{
 		ConversationID:     strings.TrimSpace(req.ConversationID),
 		ModelID:            req.ModelID,
+		ModelSource:        strings.TrimSpace(req.ModelSource),
 		Mode:               int32(req.Mode),
 		ThinkingEffort:     req.ThinkingEffort,
 		StableMessageCount: req.StableMessageCount,

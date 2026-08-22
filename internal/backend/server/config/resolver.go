@@ -23,6 +23,37 @@ func (manager *Manager) SelectChannelForModel(ctx context.Context, modelID strin
 	return channels[0], nil
 }
 
+// ModelSourceForModel 返回当前配置中模型应使用的来源，仅供缓存等不应跨来源共享
+// 的本地元数据域使用。它不推进轮询游标，也不触发任何网络请求。
+func (manager *Manager) ModelSourceForModel(_ context.Context, modelID string) string {
+	if manager == nil {
+		return legacyruntime.ModelSourceThirdParty
+	}
+	adapters, err := NormalizeModelAdapterConfigs(manager.Current().ModelAdapters)
+	if err != nil {
+		return legacyruntime.ModelSourceThirdParty
+	}
+	matches := modelchannel.ResolveAdapterIndexes(
+		adapters,
+		modelID,
+		func(adapter ModelAdapterConfig) string { return adapter.ID },
+		func(adapter ModelAdapterConfig) string { return adapter.ModelID },
+		func(adapter ModelAdapterConfig) string {
+			return modelchannel.BuildLegacyChannelID(adapter.BaseURL, adapter.ModelID, adapter.APIKey, adapter.DisplayName)
+		},
+		func(adapter ModelAdapterConfig) string {
+			return modelchannel.BuildChannelID(adapter.BaseURL, adapter.ModelID, adapter.APIKey, adapter.DisplayName, adapter.OpenAIEndpoint)
+		},
+	)
+	if len(matches) == 0 {
+		return legacyruntime.ModelSourceThirdParty
+	}
+	if source := selectModelSource(adapters, matches, modelID); source != "" {
+		return source
+	}
+	return legacyruntime.ModelSourceThirdParty
+}
+
 func (manager *Manager) SelectChannelsForModel(_ context.Context, modelID string) ([]*legacyruntime.ResolvedChannel, error) {
 	if manager == nil {
 		return nil, legacyruntime.ErrChannelNotAvailable
@@ -40,21 +71,37 @@ func (manager *Manager) SelectChannelsForModel(_ context.Context, modelID string
 		func(adapter ModelAdapterConfig) string {
 			return modelchannel.BuildLegacyChannelID(adapter.BaseURL, adapter.ModelID, adapter.APIKey, adapter.DisplayName)
 		},
+		func(adapter ModelAdapterConfig) string {
+			return modelchannel.BuildChannelID(adapter.BaseURL, adapter.ModelID, adapter.APIKey, adapter.DisplayName, adapter.OpenAIEndpoint)
+		},
 	)
 	if len(matches) == 0 {
+		return nil, legacyruntime.ErrChannelNotAvailable
+	}
+	selectedSource := selectModelSource(adapters, matches, modelID)
+	if selectedSource == "" {
+		return nil, legacyruntime.ErrChannelNotAvailable
+	}
+	filteredMatches := make([]int, 0, len(matches))
+	for _, index := range matches {
+		if adapters[index].Source == selectedSource {
+			filteredMatches = append(filteredMatches, index)
+		}
+	}
+	if len(filteredMatches) == 0 {
 		return nil, legacyruntime.ErrChannelNotAvailable
 	}
 	manager.selectionMu.Lock()
 	if manager.selectionOffsets == nil {
 		manager.selectionOffsets = make(map[string]int)
 	}
-	key := strings.TrimSpace(modelID)
-	offset := manager.selectionOffsets[key] % len(matches)
-	manager.selectionOffsets[key] = (offset + 1) % len(matches)
+	key := selectedSource + "\x00" + strings.TrimSpace(modelID)
+	offset := manager.selectionOffsets[key] % len(filteredMatches)
+	manager.selectionOffsets[key] = (offset + 1) % len(filteredMatches)
 	manager.selectionMu.Unlock()
-	channels := make([]*legacyruntime.ResolvedChannel, 0, len(matches))
-	for index := 0; index < len(matches); index++ {
-		adapter := adapters[matches[(offset+index)%len(matches)]]
+	channels := make([]*legacyruntime.ResolvedChannel, 0, len(filteredMatches))
+	for index := 0; index < len(filteredMatches); index++ {
+		adapter := adapters[filteredMatches[(offset+index)%len(filteredMatches)]]
 		channel, resolveErr := resolveModelAdapterChannel([]ModelAdapterConfig{adapter}, adapter.ID)
 		if resolveErr != nil {
 			return nil, resolveErr
@@ -62,6 +109,21 @@ func (manager *Manager) SelectChannelsForModel(_ context.Context, modelID string
 		channels = append(channels, channel)
 	}
 	return channels, nil
+}
+
+func selectModelSource(adapters []ModelAdapterConfig, matches []int, requestedModel string) string {
+	requestedModel = strings.TrimSpace(requestedModel)
+	for _, index := range matches {
+		if strings.TrimSpace(adapters[index].ID) == requestedModel {
+			return adapters[index].Source
+		}
+	}
+	for _, index := range matches {
+		if adapters[index].Source == legacyruntime.ModelSourceThirdParty {
+			return legacyruntime.ModelSourceThirdParty
+		}
+	}
+	return adapters[matches[0]].Source
 }
 
 func resolveModelAdapterChannel(adapters []ModelAdapterConfig, requestedModel string) (*legacyruntime.ResolvedChannel, error) {
@@ -73,6 +135,9 @@ func resolveModelAdapterChannel(adapters []ModelAdapterConfig, requestedModel st
 		func(adapter ModelAdapterConfig) string {
 			return modelchannel.BuildLegacyChannelID(adapter.BaseURL, adapter.ModelID, adapter.APIKey, adapter.DisplayName)
 		},
+		func(adapter ModelAdapterConfig) string {
+			return modelchannel.BuildChannelID(adapter.BaseURL, adapter.ModelID, adapter.APIKey, adapter.DisplayName, adapter.OpenAIEndpoint)
+		},
 	)
 	if len(matchIndexes) == 0 {
 		return nil, legacyruntime.ErrChannelNotAvailable
@@ -82,6 +147,8 @@ func resolveModelAdapterChannel(adapters []ModelAdapterConfig, requestedModel st
 
 	resolved := &legacyruntime.ResolvedChannel{
 		ID:                          strings.TrimSpace(matched.ID),
+		Source:                      strings.TrimSpace(matched.Source),
+		CredentialScope:             strings.TrimSpace(matched.CredentialScope),
 		Name:                        strings.TrimSpace(matched.DisplayName),
 		GroupName:                   strings.TrimSpace(matched.GroupName),
 		Provider:                    strings.TrimSpace(matched.Type),

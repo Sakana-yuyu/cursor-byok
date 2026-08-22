@@ -29,11 +29,15 @@ import {
   classifyModelProtocol,
   inferProviderType,
   CUSTOM_HEADERS_DEFAULT_JSON,
+  CREDENTIAL_SCOPE_ADAPTER_API_KEY,
+  CREDENTIAL_SCOPE_CURSOR_ACCOUNT,
   EXTRA_PARAMS_DEFAULT_JSON,
   getModelAdapterTestResult,
   getModelAdapterTestResultByID,
   isModelAdapterTestResultStale,
   normalizeModelAdapter,
+  MODEL_SOURCE_CURSOR_ACCOUNT,
+  MODEL_SOURCE_THIRD_PARTY,
   OPENAI_ENDPOINT_CHAT_COMPLETIONS,
   OPENAI_ENDPOINT_CUSTOM,
   OPENAI_ENDPOINT_RESPONSES,
@@ -67,6 +71,8 @@ import {
 
 const createEmptyModelAdapter = () => ({
   id: "",
+  source: MODEL_SOURCE_THIRD_PARTY,
+  credentialScope: CREDENTIAL_SCOPE_ADAPTER_API_KEY,
   displayName: "",
   groupName: "",
   type: "openai",
@@ -143,6 +149,10 @@ const openAIRequestGroupOptions = [
 ];
 
 const providerTypeOptions = providerSelectOptions();
+const modelSourceOptions = [
+  { label: "第三方 API", value: MODEL_SOURCE_THIRD_PARTY, icon: "icon-[mdi--api]" },
+  { label: "Cursor 账户", value: MODEL_SOURCE_CURSOR_ACCOUNT, icon: "icon-[mdi--account-key-outline]" },
+];
 const supplierOptions = computed(() => supplierSelectOptions(draft.supplierID));
 const currentSupplierTemplate = computed(() => supplierTemplate(draft.supplierID));
 const currentSupplierCatalog = computed(() => currentSupplierTemplate.value.modelCatalog || {});
@@ -285,6 +295,20 @@ const modelTestSummary = computed(() => {
 });
 
 const isQuickMode = computed(() => editorIndex.value < 0);
+const isCursorAccountSource = computed(() => draft.source === MODEL_SOURCE_CURSOR_ACCOUNT);
+const modelTestResultTitle = computed(() => isCursorAccountSource.value ? "账户模型状态" : "模型测试");
+const modelTestResultEmptyText = computed(() => isCursorAccountSource.value
+  ? "执行通道待真实协议验证；保存配置不会发起模型调用。"
+  : "尚未测试 — 点击右上角「保存并测试」检测该模型是否可用");
+const displayedModelTestResult = computed(() => {
+  if (isCursorAccountSource.value) {
+    return null;
+  }
+  if (localTestFailure.value) {
+    return { status: "error", error: "测试失败", summaryText: "测试失败", rawResponse: modelTestSummary.value };
+  }
+  return activeModelTestResult.value;
+});
 const title = computed(() => {
   if (manualAddMode.value) return "手动添加模型";
   return isQuickMode.value ? "快速添加模型" : "编辑模型配置";
@@ -440,6 +464,44 @@ async function handleSave() {
     return;
   }
   await closeEditor();
+}
+
+function handleModelSourceChange(source) {
+  if (source === MODEL_SOURCE_CURSOR_ACCOUNT) {
+    manualAddMode.value = true;
+    Object.assign(draft, {
+      source: MODEL_SOURCE_CURSOR_ACCOUNT,
+      credentialScope: CREDENTIAL_SCOPE_CURSOR_ACCOUNT,
+      type: MODEL_SOURCE_CURSOR_ACCOUNT,
+      supplierID: "cursor_account",
+      baseURL: "",
+      apiKey: "",
+      protocolMode: PROTOCOL_MODE_AUTO,
+      protocolGroup: "",
+      openAIEndpoint: "",
+      openAIRequestGroup: "",
+      openAIExtraParamsEnabled: false,
+      openAIExtraParamsJSON: OPENAI_EXTRA_PARAMS_DEFAULT_JSON,
+      customHeadersEnabled: false,
+      customHeadersJSON: "",
+      anthropicExtraParamsEnabled: false,
+      anthropicExtraParamsJSON: EXTRA_PARAMS_DEFAULT_JSON,
+      modelCatalogURL: "",
+      balanceQueryURL: "",
+      balanceQueryField: "",
+      balanceQueryHeaders: {},
+      balanceQueryHeadersJSON: BALANCE_QUERY_HEADERS_DEFAULT_JSON,
+      balanceProfile: "none",
+      balanceAccessToken: "",
+      balanceUserID: "",
+      balanceCodingPlanProvider: "",
+      tooltipData: draft.tooltipData || "Cursor 账户模型",
+    });
+    return;
+  }
+  draft.source = MODEL_SOURCE_THIRD_PARTY;
+  draft.credentialScope = CREDENTIAL_SCOPE_ADAPTER_API_KEY;
+  handleModelTypeChange("openai");
 }
 
 async function handleCancel() {
@@ -611,6 +673,10 @@ async function openCatalogPage() {
 }
 
 async function handleTest() {
+  if (isCursorAccountSource.value) {
+    localTestFailure.value = "Cursor 账户模型执行通道尚待真实协议验证，当前不能测试调用。";
+    return;
+  }
   localTestFailure.value = "";
   try {
     const saved = await persistDraft();
@@ -748,8 +814,8 @@ onMounted(async () => {
       <div class="flex items-center gap-2">
         <Button variant="default" @click="handleCancel">取消</Button>
         <template v-if="manualAddMode || !isQuickMode">
-          <Button variant="default" :disabled="isCurrentConfigTesting || appState.configSaving" @click="handleTest">
-            {{ isCurrentConfigTesting ? "测试中..." : "保存并测试" }}
+          <Button variant="default" :disabled="isCursorAccountSource || isCurrentConfigTesting || appState.configSaving" @click="handleTest">
+            {{ isCursorAccountSource ? "账户通道待验证" : (isCurrentConfigTesting ? "测试中..." : "保存并测试") }}
           </Button>
           <Button variant="primary" :disabled="appState.configSaving" @click="handleSave">
             {{ appState.configSaving ? "保存中..." : "保存" }}
@@ -789,6 +855,15 @@ onMounted(async () => {
               <div class="mt-0.5 text-xs text-[#8f8f8f]">选择模板会自动带入接口协议和常用模型，也可以手动覆盖。</div>
             </div>
             <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label class="flex flex-col gap-1">
+                <span class="text-sm text-[#d4d4d4]">模型来源</span>
+                <Select
+                  :model-value="draft.source"
+                  :options="modelSourceOptions"
+                  button-class="h-9 text-sm"
+                  @update:model-value="handleModelSourceChange"
+                />
+              </label>
               <label class="flex flex-col gap-1">
                 <span class="text-sm text-[#d4d4d4]">模型类型</span>
                 <Select
@@ -881,6 +956,47 @@ onMounted(async () => {
           <div v-if="catalogError" class="rounded-[8px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-sm text-[#fca5a5]">
             {{ catalogError }}
           </div>
+        </div>
+
+        <template v-else>
+        <div class="rounded-[8px] border border-[#343434] bg-[#252525] px-3 py-2.5 text-sm text-[#d4d4d4]">
+          <label class="flex flex-col gap-1">
+            <span class="text-sm text-[#d4d4d4]">模型来源</span>
+            <Select
+              :model-value="draft.source"
+              :options="modelSourceOptions"
+              button-class="h-9 text-sm"
+              @update:model-value="handleModelSourceChange"
+            />
+          </label>
+        </div>
+
+        <div v-if="isCursorAccountSource" class="flex flex-col gap-4">
+          <div class="rounded-[8px] border border-[#785b26] bg-[#302714] px-3 py-2.5 text-sm leading-6 text-[#ead7a0]">
+            当前账户登录仅用于 Plugins、Skills 和 MCP 控制面。Agent 内置模型的真实 Cursor 请求协议尚未完成逐请求验证，因此该来源可以保存，但不会调用第三方 API，也不能测试执行。
+          </div>
+          <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <label class="flex flex-col gap-1">
+              <span class="text-sm text-[#d4d4d4]">显示名称</span>
+              <input v-model="draft.displayName" type="text" placeholder="例如：Cursor 账户模型" class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
+            </label>
+            <label class="flex flex-col gap-1">
+              <span class="text-sm text-[#d4d4d4]">模型标识</span>
+              <input v-model="draft.modelID" type="text" placeholder="按已验证的 Cursor 模型标识填写" class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
+            </label>
+            <label class="flex flex-col gap-1">
+              <span class="text-sm text-[#d4d4d4]">用户分组名称</span>
+              <input v-model="draft.groupName" type="text" placeholder="可选" class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
+            </label>
+            <label class="flex flex-col gap-1">
+              <span class="text-sm text-[#d4d4d4]">备注</span>
+              <input v-model="draft.tooltipData" type="text" placeholder="可选" class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]" />
+            </label>
+          </div>
+          <ModelTestResultSection
+            :title="modelTestResultTitle"
+            :empty-text="modelTestResultEmptyText"
+          />
         </div>
 
         <template v-else>
@@ -1347,11 +1463,14 @@ onMounted(async () => {
         </label>
 
         <ModelTestResultSection
-          :result="localTestFailure ? { status: 'error', error: '测试失败', summaryText: '测试失败', rawResponse: modelTestSummary } : activeModelTestResult"
-          :stale="modelTestResultStale"
+          :result="displayedModelTestResult"
+          :stale="!isCursorAccountSource && modelTestResultStale"
           :error="errorMessage"
+          :title="modelTestResultTitle"
+          :empty-text="modelTestResultEmptyText"
         />
         </div>
+        </template>
         </template>
       </div>
     </div>

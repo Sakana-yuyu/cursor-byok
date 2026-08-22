@@ -22,6 +22,7 @@ import {
   loadSupplierGroupMode,
   saveSupplierGroupMode,
   supplierToRouteQuery,
+  SUPPLIER_MODEL_SOURCE_CURSOR_ACCOUNT,
 } from "@/utils/supplierGrouping";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -134,6 +135,13 @@ function nameSummary(supplier) {
 }
 
 function modelHeader(supplier) {
+  if (supplier.source === SUPPLIER_MODEL_SOURCE_CURSOR_ACCOUNT) {
+    return {
+      displayName: "Cursor 账户模型",
+      modelID: "账户通道待验证",
+      hasMore: (supplier?.models || []).length > 1,
+    };
+  }
   const isNameMode = groupMode.value === SUPPLIER_GROUP_MODE_NAME;
   return {
     displayName: isNameMode ? nameSummary(supplier) : hostSummary(supplier),
@@ -155,6 +163,10 @@ function healthSummary(supplier) {
     else if (result.status === "error") fail += 1;
   }
   return { ok, fail, tested, total: models.length, untested: models.length - tested };
+}
+
+function isCursorAccountSupplier(supplier) {
+  return supplier?.source === SUPPLIER_MODEL_SOURCE_CURSOR_ACCOUNT;
 }
 
 /** 供应商卡片备注：同组模型上出现次数最多的非空 tooltipData（表单「备注」字段）。 */
@@ -387,6 +399,7 @@ async function handleDeleteSupplier(supplier) {
   try {
     const result = await deleteModelAdaptersBySupplier({
       mode: supplier.mode || groupMode.value,
+      source: supplier.source,
       baseURL: supplier.baseURL,
       groupName: supplier.groupNameRaw ?? (supplier.groupName === "默认分组" ? "" : supplier.groupName),
     });
@@ -535,9 +548,10 @@ onBeforeUnmount(() => {
                     :title="remarkSummary(supplier)"
                   >{{ remarkSummary(supplier) }}</span>
                 </div>
-                <div class="truncate text-[#737373]">Key {{ maskSecret(supplier.apiKey) }}</div>
+                <div v-if="isCursorAccountSupplier(supplier)" class="text-[#67e8f9]">账户通道待验证</div>
+                <div v-else class="truncate text-[#737373]">Key {{ maskSecret(supplier.apiKey) }}</div>
                 <!-- 余额（懒加载：点击查询，结果缓存） -->
-                <div class="center-row justify-start gap-1.5 text-[11px]">
+                <div v-if="!isCursorAccountSupplier(supplier)" class="center-row justify-start gap-1.5 text-[11px]">
                   <template v-if="balanceEntry(supplier.key)">
                     <span v-if="balanceEntry(supplier.key).loading" class="center-row gap-1 text-[#8f8f8f]">
                       <span class="icon-[mdi--loading] animate-spin text-[12px]"></span>查询余额…

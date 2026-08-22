@@ -46,6 +46,7 @@ import {
   displayGroupName,
   normalizeSupplierBaseURL,
   supplierIdentityFromRouteQuery,
+  SUPPLIER_MODEL_SOURCE_CURSOR_ACCOUNT,
 } from "@/utils/supplierGrouping";
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -58,6 +59,9 @@ const queryBaseURL = computed(() => String(route.query.baseURL || "").trim());
 const queryGroupName = computed(() => String(route.query.groupName || "").trim());
 
 const title = computed(() => {
+  if (supplierIdentity.value.source === SUPPLIER_MODEL_SOURCE_CURSOR_ACCOUNT) {
+    return "Cursor 账户模型";
+  }
   const mode = supplierIdentity.value.mode;
   if (mode === SUPPLIER_GROUP_MODE_CONNECTION) {
     try {
@@ -107,6 +111,9 @@ const supplierAdapters = computed(() =>
   appState.modelAdapters.filter((adapter) =>
     adapterMatchesSupplierIdentity(adapter, supplierIdentity.value),
   ),
+);
+const isCursorAccountSupplier = computed(() =>
+  supplierIdentity.value.source === SUPPLIER_MODEL_SOURCE_CURSOR_ACCOUNT,
 );
 
 // 搜索 / 过滤 / 排序
@@ -359,6 +366,7 @@ function buildProbeAdapter(model) {
 }
 
 async function handleProbeCatalog() {
+  if (isCursorAccountSupplier.value) return;
   if (!catalogModels.value.length) return;
   await catalogProbe.probeAll(catalogModels.value, buildProbeAdapter, { concurrency: 3 });
   // 探测完成后仅移除明确失败的模型，绝不重新勾选用户已手动取消的项，
@@ -409,6 +417,7 @@ function toggleAllCatalogModels() {
 
 async function handleFetchModels() {
   catalogError.value = "";
+  if (isCursorAccountSupplier.value) return;
   if (!supplierMeta.value) {
     catalogError.value = "当前供应商没有已有模型，无法确定拉取参数";
     return;
@@ -447,6 +456,7 @@ async function handleFetchModels() {
 
 async function handleBatchAddModels() {
   catalogError.value = "";
+  if (isCursorAccountSupplier.value) return;
   if (!supplierMeta.value) return;
   const selected = catalogModels.value.filter((m) => isCatalogModelSelected(m.id));
   if (!selected.length) {
@@ -561,6 +571,7 @@ async function duplicateAdapter(adapter) {
 function testResult(adapter) { return getModelAdapterTestResultByID(adapter?.id); }
 function isTesting(adapter) { return testResult(adapter)?.status === "running"; }
 async function testAdapter(adapter) {
+  if (isCursorAccountSupplier.value) return;
   try {
     await runModelAdapterTest(adapter);
     await reloadUserConfig({ modelAdaptersOnly: true });
@@ -584,7 +595,7 @@ const batchProgress = computed(() => {
 });
 
 async function testAllAdapters() {
-  if (batchTesting.value || supplierAdapters.value.length === 0) return;
+  if (isCursorAccountSupplier.value || batchTesting.value || supplierAdapters.value.length === 0) return;
   batchTesting.value = true;
   batchCancelled.value = false;
   try {
@@ -648,7 +659,7 @@ function toggleSelectionMode() {
 
 async function testSelectedAdapters() {
   const targets = selectedAdapters.value;
-  if (batchTesting.value || targets.length === 0) return;
+  if (isCursorAccountSupplier.value || batchTesting.value || targets.length === 0) return;
   batchTesting.value = true;
   batchCancelled.value = false;
   try {
@@ -711,7 +722,7 @@ async function removeAdapters(targets) {
 
 onMounted(async () => {
   await reloadUserConfig({ modelAdaptersOnly: true }).catch(() => {});
-  if (supplierMeta.value && !balanceState.loaded && !balanceState.loading) void loadBalance();
+  if (!isCursorAccountSupplier.value && supplierMeta.value && !balanceState.loaded && !balanceState.loading) void loadBalance();
 });
 
 // ─── 批量编辑供应商配置 ─────────────────────────────────────────────────────
@@ -748,6 +759,7 @@ function createBulkEditDraft() {
 const bulkEditDraft = reactive(createBulkEditDraft());
 
 function toggleBulkEdit() {
+  if (isCursorAccountSupplier.value) return;
   bulkEditExpanded.value = !bulkEditExpanded.value;
   if (bulkEditExpanded.value) {
     Object.assign(bulkEditDraft, createBulkEditDraft());
@@ -892,17 +904,19 @@ async function saveBulkEdit(force = false) {
             <div class="min-w-0">
               <h2 class="truncate text-base font-medium text-white">{{ title }}</h2>
               <div class="center-row flex-wrap gap-2 text-xs text-[#8f8f8f]">
-                <span>{{ formatHost(subtitle) }} · {{ supplierAdapters.length }} 个模型</span>
+                <span>{{ isCursorAccountSupplier ? '账户通道' : formatHost(subtitle) }} · {{ supplierAdapters.length }} 个模型</span>
                 <span v-if="healthStats.ok > 0" class="rounded-full bg-[#10AD5D]/15 px-2 py-0.5 text-[#6ee7a5]">可用 {{ healthStats.ok }}</span>
                 <span v-if="healthStats.fail > 0" class="rounded-full bg-[#f87171]/15 px-2 py-0.5 text-[#fca5a5]">失败 {{ healthStats.fail }}</span>
                 <span v-if="healthStats.untested > 0" class="rounded-full bg-[#3f3f3f]/60 px-2 py-0.5 text-[#a3a3a3]">未测 {{ healthStats.untested }}</span>
-                <span class="rounded-full bg-[#3f3f3f]/60 px-2 py-0.5 text-[#a3a3a3]">
+                <span v-if="!isCursorAccountSupplier" class="rounded-full bg-[#3f3f3f]/60 px-2 py-0.5 text-[#a3a3a3]">
                   目录 {{ supplierCapability.catalog.status === 'manual_only' ? '手动' : '自动' }}
                 </span>
-                <span class="rounded-full bg-[#3f3f3f]/60 px-2 py-0.5 text-[#a3a3a3]">
+                <span v-if="isCursorAccountSupplier" class="rounded-full bg-[#164e63]/40 px-2 py-0.5 text-[#67e8f9]">账户通道待验证</span>
+                <span v-else class="rounded-full bg-[#3f3f3f]/60 px-2 py-0.5 text-[#a3a3a3]">
                   用量 {{ supplierCapability.usage.status === 'none' ? '暂无自动查询' : supplierCapability.usage.source || supplierCapability.usage.status }}
                 </span>
                 <SupplierBalanceStatus
+                  v-if="!isCursorAccountSupplier"
                   :loading="balanceState.loading"
                   :loaded="balanceState.loaded"
                   :data="balanceState.data"
@@ -919,7 +933,7 @@ async function saveBulkEdit(force = false) {
           <div class="center-row gap-2">
             <Button
               variant="default"
-              :disabled="batchTesting || supplierAdapters.length === 0"
+              :disabled="batchTesting || supplierAdapters.length === 0 || isCursorAccountSupplier"
               @click="testAllAdapters"
             >
               {{ batchTesting
@@ -929,10 +943,10 @@ async function saveBulkEdit(force = false) {
             <Button variant="default" :disabled="supplierAdapters.length === 0" @click="toggleSelectionMode">
               {{ selectionMode ? "退出多选" : "多选" }}
             </Button>
-            <Button variant="default" :disabled="supplierAdapters.length === 0" @click="toggleBulkEdit">
+            <Button variant="default" :disabled="supplierAdapters.length === 0 || isCursorAccountSupplier" @click="toggleBulkEdit">
               编辑供应商
             </Button>
-            <Button variant="default" :disabled="catalogLoading || !supplierMeta" @click="handleFetchModels">
+            <Button variant="default" :disabled="catalogLoading || !supplierMeta || isCursorAccountSupplier" @click="handleFetchModels">
               {{ catalogLoading ? "拉取中..." : "拉取模型" }}
             </Button>
             <Button variant="primary" :disabled="appState.configSaving" @click="openEditor(null)">新增模型</Button>

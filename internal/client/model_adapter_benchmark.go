@@ -142,6 +142,11 @@ func (s *ProxyService) TestModelAdapter(adapter serverconfig.ModelAdapterConfig)
 		s.storeAndEmitModelAdapterTestResult(result)
 		return result, err
 	}
+	if isCursorAccountModelAdapter(normalized) {
+		result := buildErroredModelAdapterTestResult(normalized.ID, requestHash, errCursorAccountModelOperationUnavailable)
+		s.storeAndEmitModelAdapterTestResult(result)
+		return result, errCursorAccountModelOperationUnavailable
+	}
 
 	running := ModelAdapterTestResult{
 		AdapterID:   normalized.ID,
@@ -188,6 +193,20 @@ func normalizeSingleModelAdapterConfig(adapter serverconfig.ModelAdapterConfig) 
 
 func (s *ProxyService) runModelAdapterTest(adapter serverconfig.ModelAdapterConfig, requestHash string) (ModelAdapterTestResult, error) {
 	return s.runModelAdapterTestWithFallback(adapter, requestHash, true)
+}
+
+// RunModelAdapterThroughputProbe 只测试当前渠道已配置的协议组合。
+// 它不触发协议回退、不保存测速结果，也不会改写用户配置，适合隔离性能取证。
+func (s *ProxyService) RunModelAdapterThroughputProbe(adapter serverconfig.ModelAdapterConfig) (ModelAdapterTestResult, error) {
+	normalized, err := normalizeSingleModelAdapterConfig(adapter)
+	if err != nil {
+		return buildErroredModelAdapterTestResult(strings.TrimSpace(adapter.ID), buildModelAdapterTestRequestHash(adapter), err), err
+	}
+	requestHash := buildModelAdapterTestRequestHash(adapter)
+	if isCursorAccountModelAdapter(normalized) {
+		return buildErroredModelAdapterTestResult(normalized.ID, requestHash, errCursorAccountModelOperationUnavailable), errCursorAccountModelOperationUnavailable
+	}
+	return s.runModelAdapterTestWithFallback(normalized, requestHash, false)
 }
 
 func (s *ProxyService) runModelAdapterTestWithFallback(adapter serverconfig.ModelAdapterConfig, requestHash string, allowEndpointFallback bool) (ModelAdapterTestResult, error) {

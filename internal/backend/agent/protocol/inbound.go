@@ -125,7 +125,10 @@ func MapClientMessageToCommandKind(message *agentv1.AgentClientMessage, clientKi
 			*agentv1.ConversationAction_CancelSubagentAction,
 			*agentv1.ConversationAction_BackgroundShellAction,
 			*agentv1.ConversationAction_BackgroundTaskCompletionAction,
-			*agentv1.ConversationAction_BackgroundSubagentAction:
+			*agentv1.ConversationAction_BackgroundSubagentAction,
+			*agentv1.ConversationAction_SubscriptionNotificationAction:
+			// 订阅通知是客户端编排事件。当前本地运行时不拥有对应订阅源，
+			// 因此只记录元数据，不能把通知内容注入模型上下文或启动新回合。
 			return runtimecore.CommandKindConversationActionRecordOnly, nil
 		default:
 			return "", fmt.Errorf("unsupported conversation_action payload")

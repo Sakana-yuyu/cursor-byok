@@ -48,6 +48,7 @@ import {
   SetMainWindowCloseAction, CloseApplication, DetectCursorPath, LaunchCursor, RestartCursor, IsCursorRunning, OpenMirrorCaptureDirectory,
 } from "@bindings/cursor/internal/bridge/windowservice.js";
 import { isBrowserPreview, browserPreviewMockMetrics } from "@/services/runtimeAdapter";
+import router from "@/router";
 import {
   reportRuntimeOperationFailure,
   reportRuntimeOperationSuccess,
@@ -456,7 +457,6 @@ export function openModelEditor(index, adapterJSON) {
     [index, adapterJSON],
   ).then(async () => {
     if (!isBrowserPreview) return undefined;
-    const { default: router } = await import("@/router");
     return router.push({ path: "/model-editor", query: { index: String(index ?? -1) } });
   });
 }

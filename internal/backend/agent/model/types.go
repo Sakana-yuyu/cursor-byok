@@ -95,6 +95,10 @@ type StreamRequest struct {
 	MaxMode bool
 	// Provider 表示目标 provider 类型，例如 openai 或 anthropic。
 	Provider string
+	// ModelSource 表示请求的凭据和执行来源。账户来源只能交由专用网关处理。
+	ModelSource string
+	// CredentialScope 表示真实凭据允许被注入的边界。
+	CredentialScope string
 	// ProtocolMode 表示协议选择模式：auto 或 fixed。
 	ProtocolMode string
 	// ProtocolGroup 表示最终模型请求协议分组。

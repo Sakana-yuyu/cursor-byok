@@ -10,6 +10,7 @@ import {
   resolvedOpenAIEndpoint,
   resolvedOpenAIRequestGroup,
 } from "@/utils/supplierDetail";
+import { SUPPLIER_MODEL_SOURCE_CURSOR_ACCOUNT } from "@/utils/supplierGrouping";
 
 // 供应商模型卡片：仅负责单模型展示与上报用户意图。
 // 健康状态、测试结果、选中状态、保存/测试忙碌由父页面派生传入，
@@ -46,6 +47,7 @@ defineProps({
 });
 
 const emit = defineEmits(["toggle-select", "test", "edit", "duplicate", "delete"]);
+const isCursorAccountModel = (adapter) => adapter?.source === SUPPLIER_MODEL_SOURCE_CURSOR_ACCOUNT;
 </script>
 
 <template>
@@ -88,18 +90,23 @@ const emit = defineEmits(["toggle-select", "test", "edit", "duplicate", "delete"
         <div class="grid grid-cols-2 gap-2 text-sm text-[#a3a3a3]">
           <div class="rounded-[8px] bg-[#232323] px-3 py-2">
             <div class="text-[12px] uppercase tracking-[0.08em] text-[#666]">Host</div>
-            <div class="mt-1 truncate text-[#d4d4d4]">{{ formatHost(adapter.baseURL) }}</div>
+            <div class="mt-1 truncate text-[#d4d4d4]">{{ isCursorAccountModel(adapter) ? '账户通道' : formatHost(adapter.baseURL) }}</div>
           </div>
           <div class="rounded-[8px] bg-[#232323] px-3 py-2">
-            <div class="text-[12px] uppercase tracking-[0.08em] text-[#666]">API Key</div>
-            <div class="mt-1 truncate text-[#d4d4d4]">{{ maskSecret(adapter.apiKey) }}</div>
+            <div class="text-[12px] uppercase tracking-[0.08em] text-[#666]">{{ isCursorAccountModel(adapter) ? '执行状态' : 'API Key' }}</div>
+            <div class="mt-1 truncate text-[#d4d4d4]">{{ isCursorAccountModel(adapter) ? '待真实协议验证' : maskSecret(adapter.apiKey) }}</div>
           </div>
         </div>
-        <ModelAdapterTestCard compact title="测试" empty-text="未测试" :result="result" />
+        <ModelAdapterTestCard
+          compact
+          :title="isCursorAccountModel(adapter) ? '账户模型状态' : '测试'"
+          :empty-text="isCursorAccountModel(adapter) ? '执行通道待真实协议验证；保存配置不会发起模型调用。' : '未测试'"
+          :result="result"
+        />
       </div>
       <div class="center-row flex-wrap justify-end gap-2 border-t border-[#343434] pt-3">
-        <Button variant="default" :disabled="saving || testing" @click="emit('test')">
-          {{ testing ? "测试中..." : "测试" }}
+        <Button variant="default" :disabled="saving || testing || isCursorAccountModel(adapter)" @click="emit('test')">
+          {{ isCursorAccountModel(adapter) ? "账户通道待验证" : (testing ? "测试中..." : "测试") }}
         </Button>
         <Button variant="default" :disabled="saving" @click="emit('edit')">编辑</Button>
         <Button variant="default" :disabled="saving" @click="emit('duplicate')">复制</Button>

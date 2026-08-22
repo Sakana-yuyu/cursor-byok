@@ -108,7 +108,7 @@ func (s *ProxyService) AutoMatchContextWindows(ctx context.Context, force bool) 
 				detail.Source = "catalog"
 				result.FromCatalog++
 			}
-		} else {
+		} else if !isCursorAccountModelAdapter(adapters[i]) {
 			// 目录未命中：放入待探测桶，稍后由 provider /models 兜底。
 			key := probeBucketKey(adapters[i])
 			if _, ok := buckets[key]; !ok {
@@ -116,6 +116,9 @@ func (s *ProxyService) AutoMatchContextWindows(ctx context.Context, force bool) 
 				bucketOrder = append(bucketOrder, key)
 			}
 			buckets[key].indices = append(buckets[key].indices, i)
+		} else {
+			// Cursor 账户模型没有第三方接口地址或 API Key；目录未命中时不能
+			// 借自动配对走 /models 发现链路，保留用户已保存的上下文窗口。
 		}
 		result.Details = append(result.Details, detail)
 	}

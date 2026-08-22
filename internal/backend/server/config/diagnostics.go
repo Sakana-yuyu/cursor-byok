@@ -10,6 +10,7 @@ import (
 
 	"cursor/internal/modelchannel"
 	"cursor/internal/modelcontext"
+	legacyruntime "cursor/internal/runtime"
 )
 
 // DiagnosticSeverity 表示诊断问题的严重程度。
@@ -77,6 +78,11 @@ func DiagnoseModelAdapters(adapters []ModelAdapterConfig) DiagnosticResult {
 	result := DiagnosticResult{Total: len(adapters)}
 	for i := range adapters {
 		adapter := &adapters[i]
+		// Cursor 账户模型不走第三方 provider 协议或 /models 目录发现；其执行
+		// 状态由专用账户网关维护，不能把尚未验证误报成可手工修正的配置缺陷。
+		if legacyruntime.NormalizeModelSource(adapter.Source) == legacyruntime.ModelSourceCursorAccount {
+			continue
+		}
 		modelID := strings.TrimSpace(adapter.ModelID)
 		if modelID == "" {
 			continue

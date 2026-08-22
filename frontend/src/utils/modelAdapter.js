@@ -53,6 +53,10 @@ export function normalizeAnthropicAuthMode(value, { legacy = true } = {}) {
   if (!normalized) return legacy ? ANTHROPIC_AUTH_MODE_LEGACY_DUAL : ANTHROPIC_AUTH_MODE_AUTO;
   return SUPPORTED_ANTHROPIC_AUTH_MODES.has(normalized) ? normalized : "";
 }
+export const MODEL_SOURCE_THIRD_PARTY = "third_party";
+export const MODEL_SOURCE_CURSOR_ACCOUNT = "cursor_account";
+export const CREDENTIAL_SCOPE_ADAPTER_API_KEY = "adapter_api_key";
+export const CREDENTIAL_SCOPE_CURSOR_ACCOUNT = "cursor_account";
 export const OPENAI_EXTRA_PARAMS_DEFAULT_JSON = `{
 }`;
 export const EXTRA_PARAMS_DEFAULT_JSON = `{
@@ -80,6 +84,7 @@ export function normalizeBaseURL(value) {
 
 export function buildModelAdapterIdentityKey(adapter) {
   return [
+    normalizeModelSource(adapter.source),
     asString(adapter.type).toLowerCase(),
     normalizeBaseURL(adapter.baseURL),
     asString(adapter.modelID).toLowerCase(),
@@ -104,6 +109,7 @@ function hashStringFNV32a(value) {
 export function buildModelAdapterTestRequestHash(source) {
   const adapter = normalizeModelAdapter(source);
   return hashStringFNV32a([
+    adapter.source,
     asString(adapter.type),
     normalizeBaseURL(adapter.baseURL),
     asString(adapter.apiKey),
@@ -138,6 +144,8 @@ export function normalizeModelAdapterTestResults(source) {
 export function createEmptyModelAdapter() {
   return {
     id: "",
+    source: MODEL_SOURCE_THIRD_PARTY,
+    credentialScope: CREDENTIAL_SCOPE_ADAPTER_API_KEY,
     displayName: "",
     groupName: "",
     type: "openai",
@@ -178,8 +186,16 @@ export function createEmptyModelAdapter() {
   };
 }
 
+export function normalizeModelSource(value) {
+  return asString(value).trim().toLowerCase() === MODEL_SOURCE_CURSOR_ACCOUNT
+    ? MODEL_SOURCE_CURSOR_ACCOUNT
+    : MODEL_SOURCE_THIRD_PARTY;
+}
+
 export function normalizeModelAdapter(source) {
   const raw = source && typeof source === "object" ? source : {};
+  const sourceType = normalizeModelSource(raw.source ?? raw.modelSource ?? raw.model_source);
+  const isCursorAccount = sourceType === MODEL_SOURCE_CURSOR_ACCOUNT;
   const normalizedType = asString(raw.type).toLowerCase();
   const normalizedReasoningEffort = asString(raw.reasoningEffort || raw.reasoning_effort).toLowerCase();
   const normalizedAnthropicThinkingEffort = asString(
@@ -242,8 +258,35 @@ export function normalizeModelAdapter(source) {
     raw.balanceCodingPlanProvider ?? raw.balance_coding_plan_provider,
   ).trim().toLowerCase();
   const modelCatalogURL = asString(raw.modelCatalogURL ?? raw.model_catalog_url).trim();
+  if (isCursorAccount) {
+    return {
+      ...createEmptyModelAdapter(),
+      id: asString(raw.id),
+      source: MODEL_SOURCE_CURSOR_ACCOUNT,
+      credentialScope: CREDENTIAL_SCOPE_CURSOR_ACCOUNT,
+      displayName: asString(raw.displayName || raw.name),
+      groupName: asString(raw.groupName || raw.group_name),
+      type: MODEL_SOURCE_CURSOR_ACCOUNT,
+      supplierID: "cursor_account",
+      tooltipData: asString(raw.tooltipData) || "Cursor 账户模型",
+      modelID: asString(raw.modelID),
+      customHeadersEnabled: false,
+      customHeadersJSON: "",
+      contextWindowTokens: contextWindowTokensForModel(
+        raw.modelID,
+        raw.contextWindowTokens ?? raw.context_window_tokens ?? raw.maxInputTokens ?? raw.max_input_tokens,
+      ),
+      maxCompletionTokens: asPositiveInteger(
+        raw.maxCompletionTokens ?? raw.max_completion_tokens ?? raw.max_tokens ?? raw.max_token,
+      ),
+      pricing: normalizePricing(raw.pricing),
+      balanceProfile: "none",
+    };
+  }
   return {
     id: asString(raw.id),
+    source: MODEL_SOURCE_THIRD_PARTY,
+    credentialScope: CREDENTIAL_SCOPE_ADAPTER_API_KEY,
     displayName: asString(raw.displayName || raw.name),
     groupName: asString(raw.groupName || raw.group_name),
     type: SUPPORTED_MODEL_ADAPTER_TYPES.has(normalizedType) ? normalizedType : "",
@@ -369,11 +412,28 @@ export function dedupeModelAdapters(source) {
 }
 
 export function validateModelAdapters(source) {
+  for (const [index, rawAdapter] of asArray(source).entries()) {
+    if (normalizeModelSource(rawAdapter?.source) !== MODEL_SOURCE_CURSOR_ACCOUNT) {
+      continue;
+    }
+    if (asString(rawAdapter?.baseURL || rawAdapter?.url).trim()
+      || asString(rawAdapter?.apiKey || rawAdapter?.key).trim()
+      || asBoolean(rawAdapter?.customHeadersEnabled ?? rawAdapter?.custom_headers_enabled)
+      || asString(rawAdapter?.customHeadersJSON ?? rawAdapter?.custom_headers_json).trim()) {
+      return `模型 ${index + 1} 的 Cursor 账户来源不能配置第三方接口地址、访问密钥或自定义请求头`;
+    }
+  }
   const adapters = dedupeModelAdapters(source);
   for (const [index, adapter] of adapters.entries()) {
     const prefix = `模型 ${index + 1}`;
     if (!adapter.displayName) {
       return `${prefix} 的显示名称不能为空`;
+    }
+    if (adapter.source === MODEL_SOURCE_CURSOR_ACCOUNT) {
+      if (!adapter.modelID) {
+        return `${prefix} 的模型标识不能为空`;
+      }
+      continue;
     }
     if (!SUPPORTED_MODEL_ADAPTER_TYPES.has(adapter.type)) {
       return `${prefix} 的类型仅支持 OpenAI、Anthropic 或 Gemini`;

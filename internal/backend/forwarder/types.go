@@ -395,11 +395,13 @@ type PendingCompaction struct {
 }
 
 type ProviderRequest struct {
-	RequestID           string
-	ConversationID      string
-	RunID               string
-	ModelCallID         string
-	ModelID             string
+	RequestID      string
+	ConversationID string
+	RunID          string
+	ModelCallID    string
+	ModelID        string
+	// ModelSource 是来源隔离域；本地响应缓存必须把它纳入键空间。
+	ModelSource         string
 	ModelName           string
 	Role                string
 	ParentModel         string
