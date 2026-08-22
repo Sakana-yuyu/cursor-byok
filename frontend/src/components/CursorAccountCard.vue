@@ -19,6 +19,7 @@ import {
   setCurrentCursorAccount,
   updateCursorAccountTags,
 } from "@/services/clientApi";
+import { notifyAccountSync } from "@/utils/accountSync";
 import { toUserError } from "@/state/appState";
 import { Browser } from "@wailsio/runtime";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
@@ -26,6 +27,7 @@ import { useRouter } from "vue-router";
 
 const props = defineProps({
   showControlCenterLink: { type: Boolean, default: true },
+  variant: { type: String, default: "home" }, // home | panel
 });
 
 const CURSOR_ACCOUNT_CONTRIBUTOR_URL = "https://github.com/aike0210";
@@ -40,7 +42,17 @@ const importValue = ref("");
 const tagDialog = ref(null);
 const tagValue = ref("");
 
-const loginWaiting = computed(() => Boolean(loginSessionId.value));
+const isPanel = computed(() => props.variant === "panel");
+
+function accountInitial(email) {
+  const text = String(email || "?").trim();
+  return text.charAt(0).toUpperCase();
+}
+
+function accountHint(account) {
+  const hint = String(account?.authIdHint || "").trim();
+  return hint ? `ID ${hint}` : "";
+}
 
 function openControlCenter() {
   void router.push({ path: "/control-center", query: { tab: "accounts" } });
@@ -58,6 +70,13 @@ async function showActionError(title, error) {
 async function reloadAccounts() {
   const listed = await listCursorAccounts();
   accounts.value = Array.isArray(listed) ? listed : [];
+}
+
+// 账号变更后仅广播刷新事件；余额同步由后端在账号变更钩子中后台执行，
+// 前端不再重复触发全量上游查询（此前会触发 2-3 轮重复同步）。
+async function afterAccountChanged() {
+  await reloadAccounts();
+  notifyAccountSync();
 }
 
 function clearImportDialog() {
@@ -90,7 +109,7 @@ async function pollLogin(sessionId) {
     const status = await getCursorAccountLoginStatus(sessionId);
     if (status?.state === "signed_in") {
       loginSessionId.value = "";
-      await reloadAccounts();
+      await afterAccountChanged();
       message.success("已添加 Cursor 账号");
       return;
     }
@@ -111,7 +130,7 @@ async function handleImport(mode) {
     busy.value = true;
     try {
       await importCursorAccount({ mode });
-      await reloadAccounts();
+      await afterAccountChanged();
       message.success("已从本地 Cursor 导入");
     } catch (error) {
       await showActionError("导入失败", error);
@@ -137,7 +156,7 @@ async function confirmImport() {
       await importCursorAccount({ mode: "recovery_json", jsonContent: value });
     }
     clearImportDialog();
-    await reloadAccounts();
+    await afterAccountChanged();
     message.success("已导入账号");
   } catch (error) {
     clearImportDialog();
@@ -151,7 +170,7 @@ async function handleSetCurrent(account) {
   busy.value = true;
   try {
     await setCurrentCursorAccount(account.id);
-    await reloadAccounts();
+    await afterAccountChanged();
   } catch (error) {
     await showActionError("设置当前账号失败", error);
   } finally {
@@ -172,7 +191,7 @@ async function handleSwitch(account) {
     if (!confirmed) return;
     const result = await executeCursorClientAccountSwitch(preparation.confirmationToken);
     if (result?.state === "succeeded") {
-      await reloadAccounts();
+      await afterAccountChanged();
       message.success("已切换并重新启动 Cursor");
       return;
     }
@@ -244,7 +263,7 @@ async function handleDelete(account) {
       busy.value = true;
       try {
         await deleteCursorAccounts({ accountIds: [account.id], replacementId: others[0].id });
-        await reloadAccounts();
+        await afterAccountChanged();
       } catch (error) {
         await showActionError("删除失败", error);
       } finally {
@@ -261,7 +280,7 @@ async function handleDelete(account) {
     busy.value = true;
     try {
       await deleteCursorAccounts({ accountIds: [account.id], clearCurrent: true });
-      await reloadAccounts();
+      await afterAccountChanged();
     } catch (error) {
       await showActionError("删除失败", error);
     } finally {
@@ -278,7 +297,7 @@ async function handleDelete(account) {
   busy.value = true;
   try {
     await deleteCursorAccounts({ accountIds: [account.id] });
-    await reloadAccounts();
+    await afterAccountChanged();
   } catch (error) {
     await showActionError("删除失败", error);
   } finally {
@@ -305,7 +324,7 @@ onBeforeUnmount(() => {
 <template>
   <Card>
     <div class="flex flex-col gap-3">
-      <div class="flex flex-wrap items-center justify-between gap-2">
+      <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0">
           <div class="center-row gap-2">
             <h2 class="text-base font-semibold text-white">Cursor 账号</h2>
@@ -313,52 +332,110 @@ onBeforeUnmount(() => {
               <span class="icon-[mdi--information-outline] text-[15px] text-[#858585]" />
             </Tooltip>
           </div>
-          <p class="mt-1 text-xs text-[#8a8a8a]">
+          <p v-if="!isPanel" class="mt-1 text-xs text-[#8a8a8a]">
             感谢
             <button type="button" class="text-[#7dd3a0] underline-offset-2 hover:underline" @click="Browser.OpenURL(CURSOR_ACCOUNT_CONTRIBUTOR_URL)">@aike0210</button>
             赞助开发
+          </p>
+          <p v-else class="mt-1 text-xs text-[#8a8a8a]">
+            管理控制面身份与 Cursor 客户端登录；切换后会自动刷新各厂商余额。
           </p>
         </div>
         <div class="center-row flex-wrap gap-2">
           <Button v-if="props.showControlCenterLink" variant="text" @click="openControlCenter">打开控制中心</Button>
           <ActionMenu>
             <template #trigger>
-              <Button variant="primary" :disabled="busy || loginWaiting">{{ loginWaiting ? "等待登录..." : "添加账户" }}</Button>
+              <Button variant="primary" :disabled="busy || loginWaiting">
+                <span v-if="loginWaiting" class="icon-[mdi--loading] animate-spin text-[14px]" />
+                {{ loginWaiting ? "等待登录…" : "添加账号" }}
+              </Button>
             </template>
             <template #items="{ close }">
-              <button type="button" class="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm text-[#d4d4d4] hover:bg-white/5" role="menuitem" @click="() => { close(); void handleOAuthLogin(); }">官方登录</button>
-              <button type="button" class="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm text-[#d4d4d4] hover:bg-white/5" role="menuitem" @click="() => { close(); void handleImport('local_cursor'); }">从本地 Cursor 导入</button>
-              <button type="button" class="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm text-[#d4d4d4] hover:bg-white/5" role="menuitem" @click="() => { close(); void handleImport('token'); }">导入 Token</button>
-              <button type="button" class="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm text-[#d4d4d4] hover:bg-white/5" role="menuitem" @click="() => { close(); void handleImport('recovery_json'); }">导入恢复包</button>
+              <button type="button" class="menu-item" role="menuitem" @click="() => { close(); void handleOAuthLogin(); }">
+                <span class="icon-[mdi--login]" /> 官方 OAuth 登录
+              </button>
+              <button type="button" class="menu-item" role="menuitem" @click="() => { close(); void handleImport('local_cursor'); }">
+                <span class="icon-[mdi--download-outline]" /> 从本地 Cursor 导入
+              </button>
+              <button type="button" class="menu-item" role="menuitem" @click="() => { close(); void handleImport('token'); }">
+                <span class="icon-[mdi--key-outline]" /> 导入 Token
+              </button>
+              <button type="button" class="menu-item" role="menuitem" @click="() => { close(); void handleImport('recovery_json'); }">
+                <span class="icon-[mdi--file-restore-outline]" /> 导入恢复包
+              </button>
             </template>
           </ActionMenu>
         </div>
       </div>
 
-      <div v-if="accounts.length === 0" class="rounded-[8px] border border-[#343434] bg-[#252525]/70 px-3 py-3 text-sm text-[#a3a3a3]">
-        还没有保存的 Cursor 账号。
+      <div v-if="busy && !accounts.length" class="rounded-[8px] border border-[#343434] bg-[#252525]/70 px-3 py-6 text-center text-sm text-[#8a8a8a]">
+        <span class="icon-[mdi--loading] animate-spin text-[18px]" /> 读取账号…
       </div>
+
+      <div
+        v-else-if="accounts.length === 0"
+        class="flex flex-col items-center rounded-[8px] border border-dashed border-[#3f3f3f] bg-[#252525]/40 px-4 py-8 text-center"
+      >
+        <span class="icon-[mdi--account-plus-outline] text-[36px] text-[#4a4a4a]" aria-hidden="true" />
+        <p class="mt-3 text-sm text-[#a3a3a3]">还没有保存的 Cursor 账号</p>
+        <p class="mt-1 max-w-sm text-xs text-[#737373]">添加后可分别设置控制面当前账号，或写入 Cursor 客户端登录态。</p>
+      </div>
+
       <div v-else class="flex flex-col gap-2">
         <div
           v-for="account in accounts"
           :key="account.id"
-          class="flex flex-wrap items-center justify-between gap-2 rounded-[8px] border border-[#343434] bg-[#252525]/70 px-3 py-2"
+          class="rounded-[8px] border px-3 py-3 transition-colors"
+          :class="account.isCurrent ? 'border-[#2f6b49]/60 bg-[#1f3a2c]/40' : 'border-[#343434] bg-[#252525]/70'"
         >
-          <div class="min-w-0">
-            <div class="center-row min-w-0 gap-2">
-              <span class="truncate text-sm text-white">{{ account.email || "未命名账号" }}</span>
-              <span v-if="account.isCurrent" class="rounded-full border border-[#2f6b49] px-2 py-0.5 text-[11px] text-[#7dd3a0]">当前</span>
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="center-row min-w-0 gap-3">
+              <div
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-sm font-semibold"
+                :class="account.isCurrent ? 'border-[#2f6b49] bg-[#1f3a2c] text-[#7dd3a0]' : 'border-[#3f3f3f] bg-[#232323] text-[#d4d4d4]'"
+              >
+                {{ accountInitial(account.email) }}
+              </div>
+              <div class="min-w-0">
+                <div class="center-row min-w-0 flex-wrap gap-2">
+                  <span class="truncate text-sm font-medium text-white">{{ account.email || "未命名账号" }}</span>
+                  <span v-if="account.isCurrent" class="rounded-full border border-[#2f6b49] px-2 py-0.5 text-[10px] text-[#7dd3a0]">控制面当前</span>
+                </div>
+                <div v-if="accountHint(account)" class="mt-0.5 text-[11px] text-[#737373]">{{ accountHint(account) }}</div>
+                <div v-if="account.tags?.length" class="mt-2 flex flex-wrap gap-1">
+                  <span v-for="tag in account.tags" :key="tag" class="rounded-full border border-[#3f3f3f] px-2 py-0.5 text-[10px] text-[#a3a3a3]">{{ tag }}</span>
+                </div>
+              </div>
             </div>
-            <div v-if="account.tags?.length" class="mt-1 flex flex-wrap gap-1">
-              <span v-for="tag in account.tags" :key="tag" class="rounded-full border border-[#3f3f3f] px-2 py-0.5 text-[11px] text-[#a3a3a3]">{{ tag }}</span>
+
+            <div class="center-row flex-wrap justify-end gap-1.5">
+              <Button
+                variant="primary"
+                :disabled="busy"
+                @click="handleSwitch(account)"
+              >
+                切换到 Cursor
+              </Button>
+              <Button variant="default" :disabled="busy || account.isCurrent" @click="handleSetCurrent(account)">
+                设为当前
+              </Button>
+              <ActionMenu>
+                <template #trigger>
+                  <Button variant="text" :disabled="busy">更多</Button>
+                </template>
+                <template #items="{ close }">
+                  <button type="button" class="menu-item" role="menuitem" @click="() => { close(); openTagDialog(account); }">
+                    <span class="icon-[mdi--tag-outline]" /> 编辑标签
+                  </button>
+                  <button type="button" class="menu-item" role="menuitem" @click="() => { close(); void handleExport(account); }">
+                    <span class="icon-[mdi--export]" /> 导出恢复包
+                  </button>
+                  <button type="button" class="menu-item text-[#fca5a5]" role="menuitem" @click="() => { close(); void handleDelete(account); }">
+                    <span class="icon-[mdi--delete-outline]" /> 删除账号
+                  </button>
+                </template>
+              </ActionMenu>
             </div>
-          </div>
-          <div class="center-row flex-wrap justify-end gap-1">
-            <Button variant="text" :disabled="busy || account.isCurrent" @click="handleSetCurrent(account)">设为当前</Button>
-            <Button variant="text" :disabled="busy" @click="handleSwitch(account)">切换到 Cursor</Button>
-            <Button variant="text" :disabled="busy" @click="openTagDialog(account)">标签</Button>
-            <Button variant="text" :disabled="busy" @click="handleExport(account)">导出</Button>
-            <Button variant="text" :disabled="busy" @click="handleDelete(account)">删除</Button>
           </div>
         </div>
       </div>
@@ -406,3 +483,21 @@ onBeforeUnmount(() => {
     </div>
   </Teleport>
 </template>
+
+<style scoped>
+.menu-item {
+  display: flex;
+  width: 100%;
+  cursor: pointer;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  text-align: left;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: #d4d4d4;
+}
+.menu-item:hover {
+  background: rgb(255 255 255 / 0.05);
+}
+</style>

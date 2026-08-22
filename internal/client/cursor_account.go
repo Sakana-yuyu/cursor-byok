@@ -49,9 +49,13 @@ func (s *ProxyService) ImportCursorAccount(req cursoraccount.CursorAccountImport
 	if s == nil || s.cursorAccount == nil {
 		return cursoraccount.CursorAccountSummary{}, fmt.Errorf("Cursor 账号服务未初始化")
 	}
+	var (
+		summary cursoraccount.CursorAccountSummary
+		err     error
+	)
 	switch strings.TrimSpace(req.Mode) {
 	case "local_cursor":
-		return s.cursorAccount.ImportFromLocal()
+		summary, err = s.cursorAccount.ImportFromLocal()
 	case "token":
 		if strings.TrimSpace(req.Token) == "" {
 			return cursoraccount.CursorAccountSummary{}, fmt.Errorf("import token is empty")
@@ -59,7 +63,7 @@ func (s *ProxyService) ImportCursorAccount(req cursoraccount.CursorAccountImport
 		if len(req.Token) > 8*1024 {
 			return cursoraccount.CursorAccountSummary{}, fmt.Errorf("import token exceeds 8 kib")
 		}
-		return s.cursorAccount.ImportToken(context.Background(), req.Token)
+		summary, err = s.cursorAccount.ImportToken(context.Background(), req.Token)
 	case "recovery_json":
 		if strings.TrimSpace(req.JSONContent) == "" {
 			return cursoraccount.CursorAccountSummary{}, fmt.Errorf("import json is empty")
@@ -67,17 +71,22 @@ func (s *ProxyService) ImportCursorAccount(req cursoraccount.CursorAccountImport
 		if len(req.JSONContent) > 1<<20 {
 			return cursoraccount.CursorAccountSummary{}, fmt.Errorf("import json exceeds 1 mib")
 		}
-		summaries, err := s.cursorAccount.ImportJSON(req.JSONContent)
+		var summaries []cursoraccount.CursorAccountSummary
+		summaries, err = s.cursorAccount.ImportJSON(req.JSONContent)
 		if err != nil {
 			return cursoraccount.CursorAccountSummary{}, err
 		}
 		if len(summaries) == 0 {
 			return cursoraccount.CursorAccountSummary{}, fmt.Errorf("import json is empty")
 		}
-		return summaries[0], nil
+		summary = summaries[0]
 	default:
 		return cursoraccount.CursorAccountSummary{}, fmt.Errorf("unsupported import mode")
 	}
+	if err == nil {
+		s.triggerProviderBalanceSyncAfterAccountChange()
+	}
+	return summary, err
 }
 
 func (s *ProxyService) PrepareCursorAccountRecoveryExport(req cursoraccount.CursorAccountRecoveryExportRequest) (controlcenter.PreparedOperation, error) {
@@ -110,7 +119,11 @@ func (s *ProxyService) SetCurrentCursorAccount(accountID string) (cursoraccount.
 	if strings.TrimSpace(accountID) == "" {
 		return cursoraccount.CursorAccountSummary{}, fmt.Errorf("account id is empty")
 	}
-	return s.cursorAccount.SetCurrent(accountID)
+	summary, err := s.cursorAccount.SetCurrent(accountID)
+	if err == nil {
+		s.triggerProviderBalanceSyncAfterAccountChange()
+	}
+	return summary, err
 }
 
 func (s *ProxyService) UpdateCursorAccountTags(accountID string, tags []string) (cursoraccount.CursorAccountSummary, error) {
@@ -149,7 +162,11 @@ func (s *ProxyService) ExecuteCursorClientAccountSwitch(confirmationToken string
 	if s == nil || s.cursorAccount == nil {
 		return cursoraccount.CursorAccountSwitchResult{}, fmt.Errorf("Cursor 账号服务未初始化")
 	}
-	return s.cursorAccount.ExecuteCursorClientAccountSwitch(confirmationToken)
+	result, err := s.cursorAccount.ExecuteCursorClientAccountSwitch(confirmationToken)
+	if err == nil && result.State == "succeeded" {
+		s.triggerProviderBalanceSyncAfterAccountChange()
+	}
+	return result, err
 }
 
 func (s *ProxyService) AttachCursorRuntime(runtime cursoraccount.CursorRuntime) {

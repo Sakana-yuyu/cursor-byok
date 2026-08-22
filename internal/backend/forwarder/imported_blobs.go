@@ -9,6 +9,7 @@ import (
 	"cursor/gen/agentv1"
 	modeladapter "cursor/internal/backend/agent/model"
 	promptengine "cursor/internal/backend/agent/prompt"
+	"cursor/internal/logger"
 )
 
 type importedBlobStore map[string][]byte
@@ -108,9 +109,8 @@ func importedBlobTurnMessages(turn *agentv1.ConversationTurnStructure, blobs imp
 	if len(agentTurn.GetUserMessage()) > 0 {
 		userMessage, err := decodeImportedUserMessage(agentTurn.GetUserMessage(), blobs)
 		if err != nil {
-			return nil, err
-		}
-		if replay, ok := promptengine.BuildUserMessageReplayMessage(userMessage); ok {
+			logger.Infof("forwarder imported turn user message skipped err=%v", err)
+		} else if replay, ok := promptengine.BuildUserMessageReplayMessage(userMessage); ok {
 			messages = append(messages, toModelMessage(replay))
 		}
 	}
@@ -120,7 +120,9 @@ func importedBlobTurnMessages(turn *agentv1.ConversationTurnStructure, blobs imp
 		}
 		step, err := decodeImportedStep(rawStep, blobs)
 		if err != nil {
-			return nil, err
+			// 单个 step 的 blob 缺失只跳过该 step，不让整个导入失败。
+			logger.Infof("forwarder imported turn step skipped err=%v", err)
+			continue
 		}
 		for _, replay := range promptengine.BuildLegacyMessagesFromConversationStep(step) {
 			messages = append(messages, toModelMessage(replay))

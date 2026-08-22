@@ -11,7 +11,7 @@ import (
 
 	"cursor/gen/agentv1"
 	modeladapter "cursor/internal/backend/agent/model"
-	promptengine "cursor/internal/backend/agent/prompt"
+	"cursor/internal/logger"
 )
 
 func (service *Service) importConversationState(item *ConversationFile, state *agentv1.ConversationStateStructure, prefetchedBlobs []*agentv1.PreFetchedBlob) ([]HistoryEntry, error) {
@@ -22,6 +22,10 @@ func (service *Service) importConversationState(item *ConversationFile, state *a
 	if err != nil {
 		return nil, err
 	}
+	// 新版客户端把 root_prompt_messages_json / turns 全部换成了内容寻址引用，
+	// 请求本身不再携带内联 JSON；先从客户端本地磁盘 KV 批量水合再解码。
+	blobs = enrichImportedBlobsFromDisk(blobs, state.GetRootPromptMessagesJson())
+	blobs = enrichImportedBlobsFromDisk(blobs, state.GetTurns())
 	importedIDs, err := importedTurnIDs(state.GetTurns(), blobs)
 	if err != nil {
 		return nil, err
@@ -90,10 +94,14 @@ func importedConversationStateModelMessages(state *agentv1.ConversationStateStru
 		return nil, nil
 	}
 	if len(state.GetRootPromptMessagesJson()) > 0 {
-		decoded, err := promptengine.DecodeReplayMessages(state.GetRootPromptMessagesJson())
-		if err != nil {
-			return nil, fmt.Errorf("decode imported replay messages: %w", err)
+		decoded, skipped := decodeReplayBlobItems(state.GetRootPromptMessagesJson(), blobs)
+		if skipped > 0 {
+			logger.Infof("forwarder imported replay messages hydrated with gaps total=%d skipped=%d", len(state.GetRootPromptMessagesJson()), skipped)
 		}
+		// restoreImportedReplayUserMessages 需要解码 turn 及其内嵌的 user_message 引用，
+		// 先把两层引用批量水合。
+		blobs = enrichImportedBlobsFromDisk(blobs, state.GetTurns())
+		blobs = enrichImportedBlobsFromDisk(blobs, importedTurnsNestedRefs(state.GetTurns(), blobs))
 		decoded = restoreImportedReplayUserMessages(decoded, state.GetTurns(), blobs)
 		decoded = filterLegacyPlainWriteReplay(decoded)
 		decoded = filterInternalPromptContextReplay(decoded)
@@ -110,6 +118,9 @@ func importedConversationStateModelMessages(state *agentv1.ConversationStateStru
 		return nil, nil
 	}
 	messages := make([]modeladapter.Message, 0, len(state.GetTurns())*2)
+	blobs = enrichImportedBlobsFromDisk(blobs, state.GetTurns())
+	blobs = enrichImportedBlobsFromDisk(blobs, importedTurnsNestedRefs(state.GetTurns(), blobs))
+	skippedTurns := 0
 	for _, rawTurn := range state.GetTurns() {
 		if len(rawTurn) == 0 {
 			continue
@@ -119,7 +130,8 @@ func importedConversationStateModelMessages(state *agentv1.ConversationStateStru
 			return nil, err
 		}
 		if turn == nil && len(turnID) > 0 {
-			return nil, fmt.Errorf("missing prefetched turn blob %x", turnID)
+			skippedTurns++
+			continue
 		}
 		turnMessages, err := importedBlobTurnMessages(turn, blobs)
 		if err != nil {
@@ -127,7 +139,47 @@ func importedConversationStateModelMessages(state *agentv1.ConversationStateStru
 		}
 		messages = append(messages, turnMessages...)
 	}
+	if skippedTurns > 0 {
+		logger.Infof("forwarder imported turn blobs hydrated with gaps total=%d skipped=%d", len(state.GetTurns()), skippedTurns)
+		if len(messages) == 0 {
+			// 全部 turn 都未能水合：导入会「成功」但续聊没有任何历史上下文，
+			// 用户感知是模型失忆而非报错，必须留下 error 级痕迹便于排查。
+			logger.Warnf("forwarder imported conversation lost all history: total_turns=%d skipped_turns=%d (disk kv unavailable or blob keys missing)",
+				len(state.GetTurns()), skippedTurns)
+		}
+	}
 	return normalizeReplayMessageSequence(messages), nil
+}
+
+// importedTurnNestedRefs 收集 turn 内部仍以内容寻址引用的 user_message / step 条目，
+// 供水合器批量从客户端磁盘 KV 解析。
+func importedTurnNestedRefs(turn *agentv1.ConversationTurnStructure) [][]byte {
+	agentTurn := turn.GetAgentConversationTurn()
+	if agentTurn == nil {
+		return nil
+	}
+	refs := make([][]byte, 0, 1+len(agentTurn.GetSteps()))
+	if len(agentTurn.GetUserMessage()) > 0 {
+		refs = append(refs, agentTurn.GetUserMessage())
+	}
+	refs = append(refs, agentTurn.GetSteps()...)
+	return refs
+}
+
+// importedTurnsNestedRefs 解码整批 turn 后收集全部嵌套引用。
+func importedTurnsNestedRefs(turns [][]byte, blobs importedBlobStore) [][]byte {
+	var refs [][]byte
+	for _, rawTurn := range turns {
+		if len(rawTurn) == 0 {
+			continue
+		}
+		turn, _, err := decodeImportedTurn(rawTurn, blobs)
+		if err != nil || turn == nil {
+			continue
+		}
+		refs = append(refs, importedTurnNestedRefs(turn)...)
+	}
+	return refs
 }
 
 func importedConversationStateSummary(state *agentv1.ConversationStateStructure) (string, bool, error) {

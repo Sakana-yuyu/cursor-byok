@@ -8,9 +8,10 @@ import {
   loadSupplierGroupMode,
   normalizeSupplierBaseURL,
 } from "@/utils/supplierGrouping";
-import { computed, ref, watch } from "vue";
+import { computed, ref, watch, onBeforeUnmount, onMounted } from "vue";
 import { usePolling } from "@/composables/usePolling";
 import { appState } from "@/state/appState";
+import { onAccountSync } from "@/utils/accountSync";
 
 // 全量历史按中转站聚合花费，给首页一眼可见「哪个中转站用了多少额度」。
 const rows = ref([]);
@@ -243,6 +244,16 @@ watch(showBalancePanel, (active) => {
 });
 
 defineExpose({ refresh: load, refreshBalances: loadBalances });
+
+let stopAccountSync = () => {};
+onMounted(() => {
+  stopAccountSync = onAccountSync(() => {
+    void loadBalances();
+  });
+});
+onBeforeUnmount(() => {
+  stopAccountSync();
+});
 </script>
 
 <template>

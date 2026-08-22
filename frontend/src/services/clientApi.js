@@ -8,6 +8,7 @@ import {
   ReadSkillFile, SaveSkillFile, GenerateSkillSummary,
   GetRecentWorkspaceRoot,
   QueryAllProviderBalances,
+  SyncProviderBalancesAfterAccountChange,
   RepairProxySettings,
   GetDelegationConfig, SaveDelegationConfig, GetDelegationExecutorSnapshots, RefreshDelegationExecutorProbes, InstallDelegationExecutor,
   GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
@@ -70,6 +71,7 @@ const desktopMethods = {
   ReadSkillFile, SaveSkillFile, GenerateSkillSummary,
   GetRecentWorkspaceRoot,
   QueryAllProviderBalances,
+  SyncProviderBalancesAfterAccountChange,
   RepairProxySettings,
   GetDelegationConfig, SaveDelegationConfig, GetDelegationExecutorSnapshots, RefreshDelegationExecutorProbes, InstallDelegationExecutor,
   GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
@@ -576,6 +578,10 @@ export function getProviderDiagnostics() {
 
 export function queryAllProviderBalances() {
   return desktopOrMock(() => QueryAllProviderBalances(), "@bindings/cursor/internal/bridge/proxyservice.js", "QueryAllProviderBalances");
+}
+
+export function syncProviderBalancesAfterAccountChange() {
+  return desktopOrMock(() => SyncProviderBalancesAfterAccountChange(), "@bindings/cursor/internal/bridge/proxyservice.js", "SyncProviderBalancesAfterAccountChange");
 }
 
 // 按中转站聚合区间内的用量与美元花费（GroupName → baseURL host → provider 类型）。

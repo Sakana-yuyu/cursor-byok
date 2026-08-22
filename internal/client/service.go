@@ -99,6 +99,11 @@ type ProxyService struct {
 	// providerBalanceNegativeCache 负缓存「确定性不支持/失败」的余额查询结果，
 	// 避免上游不支持计费接口时每轮轮询都全策略链重打上游。
 	providerBalanceNegativeCache *metadataCache[ProviderBalance]
+
+	// syncProviderBalancesMu 串行化账号变更后的余额同步，多入口并发触发时合并执行。
+	syncProviderBalancesMu sync.Mutex
+	loginSyncMu            sync.Mutex
+	syncedLoginSessions    map[string]struct{}
 }
 
 // MarkCAIncomplete 记录 CA 材料不完整状态（应用降级启动时由 runner 调用）。

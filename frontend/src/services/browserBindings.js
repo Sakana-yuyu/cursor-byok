@@ -740,6 +740,10 @@ export const QueryAllProviderBalances = () => {
   },
   ]);
 };
+export const SyncProviderBalancesAfterAccountChange = () => {
+  recordPreviewCall("SyncProviderBalancesAfterAccountChange");
+  return Promise.resolve(6);
+};
 export const ProbeModelAdapter = (adapter) => Promise.resolve({ id: adapter?.id || "", modelID: adapter?.modelID || "", ok: true, status: 200, message: "", rawResponse: "" });
 export const GetPromptInjectionSettings = () => Promise.resolve({});
 export const SavePromptInjectionSettings = (value) => Promise.resolve(value);

@@ -288,16 +288,17 @@ func TestProjectCheckpointProjectionKeepsVisibleTurnsAcrossCompaction(t *testing
 	}
 }
 
-func TestImportedConversationStateRejectsBlobTurnIDsWithoutPrefetchedData(t *testing.T) {
+func TestImportedConversationStateSkipsUnhydratableBlobTurnIDs(t *testing.T) {
+	stubDiskKVBlobs(t, nil)
 	turnID := sha256.Sum256([]byte("imported turn"))
 	state := &agentv1.ConversationStateStructure{Turns: [][]byte{turnID[:]}}
-	if _, err := importedConversationStateModelMessages(state, nil); err == nil {
-		t.Fatal("importedConversationStateModelMessages() accepted unresolved Blob turn")
+	if _, err := importedConversationStateModelMessages(state, nil); err != nil {
+		t.Fatalf("importedConversationStateModelMessages() error = %v", err)
 	}
 	conversation := testConversation(nil)
 	service := &Service{}
-	if _, err := service.importConversationState(conversation, state, nil); err == nil {
-		t.Fatal("importConversationState() accepted unresolved Blob turn")
+	if _, err := service.importConversationState(conversation, state, nil); err != nil {
+		t.Fatalf("importConversationState() error = %v", err)
 	}
 }
 

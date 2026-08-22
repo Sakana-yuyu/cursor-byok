@@ -33,3 +33,12 @@ func (snapshot *MetricsSnapshot) Get(channelID string) (CandidateInput, bool) {
 	candidate, ok := snapshot.byID[channelID]
 	return candidate, ok
 }
+
+func (snapshot *MetricsSnapshot) Clear() {
+	if snapshot == nil {
+		return
+	}
+	snapshot.mu.Lock()
+	defer snapshot.mu.Unlock()
+	snapshot.byID = make(map[string]CandidateInput)
+}

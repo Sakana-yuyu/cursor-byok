@@ -10,6 +10,7 @@ import (
 	"cursor/internal/cursoraccount"
 	"cursor/internal/requestlab"
 	"cursor/internal/routing"
+	"cursor/internal/safego"
 )
 
 func (s *ProxyService) GetControlCenterOverview() (controlcenter.ControlCenterOverview, error) {
@@ -94,7 +95,14 @@ func (s *ProxyService) GetCursorAccountLoginStatus(sessionID string) (cursoracco
 	if s == nil || s.cursorAccount == nil {
 		return cursoraccount.CursorAccountLoginStatus{}, fmt.Errorf("Cursor 账号服务未初始化")
 	}
-	return s.cursorAccount.LoginStatus(strings.TrimSpace(sessionID))
+	status, err := s.cursorAccount.LoginStatus(strings.TrimSpace(sessionID))
+	if err == nil && status.State == cursoraccount.StateSignedIn {
+		// 全量余额刷新可能持续数十秒，放后台执行，绝不阻塞登录状态轮询响应。
+		safego.Go("client:登录完成后余额同步", func() {
+			s.maybeSyncAfterLoginSession(strings.TrimSpace(sessionID))
+		})
+	}
+	return status, err
 }
 
 func (s *ProxyService) CancelCursorAccountLogin(sessionID string) (controlcenter.OperationResult, error) {
