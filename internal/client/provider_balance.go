@@ -104,7 +104,7 @@ type ProviderBalance struct {
 type transientTracker struct{ hit bool }
 
 // QueryProviderBalance 依次尝试各余额查询策略，返回第一个成功结果。
-func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) ProviderBalance {
+func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) (result ProviderBalance) {
 	usageStatus := strings.ToLower(strings.TrimSpace(request.UsageStatus))
 	usageProvider := strings.ToLower(strings.TrimSpace(request.UsageProvider))
 	if usageStatus == "none" {
@@ -117,6 +117,11 @@ func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) Prov
 	}
 
 	configuredAdapter, hasConfiguredAdapter := s.findAdapterForBalance(request.Type, request.SupplierID, normalized, apiKey)
+	defer func() {
+		if hasConfiguredAdapter && result.Supported {
+			s.RecordRoutingMetrics(configuredAdapter.ID, result)
+		}
+	}()
 	creds := resolveBalanceCredentials(request, configuredAdapter, hasConfiguredAdapter)
 	profile := resolveBalanceProfile(creds, normalized)
 	// A declared capability always wins over a stale persisted profile.
@@ -326,7 +331,7 @@ func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) Prov
 
 	// 策略 5：均不支持。确定性失败写入负缓存，避免每轮 60s 轮询全链路重打上游；
 	// 若试探过程中发生过瞬时传输失败，标记 Transient=true（不进负缓存），让前端保留上次成功值。
-	result := ProviderBalance{Supported: false, Transient: tracker.hit, Message: "该中转站不支持已知的余额查询接口"}
+	result = ProviderBalance{Supported: false, Transient: tracker.hit, Message: "该中转站不支持已知的余额查询接口"}
 	s.cacheNegativeBalanceResult(cacheKey, result)
 	return result
 }

@@ -107,6 +107,7 @@ func Save(mode string, result FetchResult) error {
 // 返回第一个成功的响应；全部失败时返回聚合错误。
 func Fetch(ctx context.Context, mode string) (*FetchResult, error) {
 	manager := cursoraccount.NewManager(
+		appdata.DataRootPath(),
 		filepath.Join(appdata.DataRootPath(), "cursor-account.json"),
 		http.DefaultClient,
 	)

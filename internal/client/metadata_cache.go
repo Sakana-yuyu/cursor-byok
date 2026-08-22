@@ -81,6 +81,15 @@ func (c *metadataCache[T]) invalidate(key string) {
 	delete(c.entries, key)
 }
 
+func (c *metadataCache[T]) clearAll() {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries = make(map[string]metadataCacheEntry[T])
+}
+
 type metadataCacheDiagnostics struct {
 	EntryCount           int
 	TTLSeconds           int64

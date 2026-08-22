@@ -146,6 +146,47 @@ func readCursorAuthStateReadOnly(sourcePath string) (map[string]string, error) {
 	return values, nil
 }
 
+// CursorAuthValues is the authentication whitelist read from Cursor's state DB.
+type CursorAuthValues struct {
+	AccessToken       string
+	RefreshToken      string
+	Email             string
+	AuthID            string
+	MembershipType    string
+	SubscriptionState string
+	SignUpType        string
+}
+
+// CursorStateDBPath returns the current platform's Cursor state.vscdb path.
+func CursorStateDBPath() (string, error) {
+	return resolveCursorStateDBPath()
+}
+
+// ReadCursorAuth reads cursorAuth access/refresh/email keys from a state DB
+// in read-only mode. It does not write the database.
+func ReadCursorAuth(path string) (CursorAuthValues, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return CursorAuthValues{}, fmt.Errorf("cursor state db path is empty")
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return CursorAuthValues{}, err
+	}
+	if info.IsDir() {
+		return CursorAuthValues{}, os.ErrNotExist
+	}
+	values, err := readCursorAuthStateReadOnly(path)
+	if err != nil {
+		return CursorAuthValues{}, err
+	}
+	return CursorAuthValues{
+		AccessToken:  strings.TrimSpace(values["cursorAuth/accessToken"]),
+		RefreshToken: strings.TrimSpace(values["cursorAuth/refreshToken"]),
+		Email:        strings.TrimSpace(values["cursorAuth/cachedEmail"]),
+	}, nil
+}
+
 func writeIsolatedCursorAuthState(destinationPath string, values map[string]string) error {
 	if err := os.MkdirAll(filepath.Dir(destinationPath), 0o700); err != nil {
 		return errors.New("创建隔离 Cursor 登录态失败")

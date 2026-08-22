@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	modeladapter "cursor/internal/backend/agent/model"
 	"cursor/internal/modelchannel"
 	legacyruntime "cursor/internal/runtime"
 )
@@ -30,6 +31,7 @@ func (manager *Manager) SelectChannelsForModel(_ context.Context, modelID string
 	if err != nil {
 		return nil, err
 	}
+	syncExplicitCompatibilityKindOverrides(adapters)
 	matches := modelchannel.ResolveAdapterIndexes(
 		adapters,
 		modelID,
@@ -104,6 +106,7 @@ func resolveModelAdapterChannel(adapters []ModelAdapterConfig, requestedModel st
 		AnthropicThinkingEffort:     defaultChannelAnthropicEffort,
 		FastMode:                    matched.FastMode,
 		OpenAIServiceTier:           strings.TrimSpace(matched.OpenAIServiceTier),
+		ToolCallMode:                strings.TrimSpace(matched.ToolCallMode),
 	}
 	if matched.ContextWindowTokens > 0 {
 		resolved.ContextWindowTokens = matched.ContextWindowTokens
@@ -121,4 +124,20 @@ func resolveModelAdapterChannel(adapters []ModelAdapterConfig, requestedModel st
 		resolved.AnthropicThinkingEffort = strings.TrimSpace(matched.AnthropicThinkingEffort)
 	}
 	return resolved, nil
+}
+
+// syncExplicitCompatibilityKindOverrides 把当前配置中的显式 compatibilityKind
+// 全量同步到 modeladapter 运行时覆盖表。每次渠道选择都执行，保证热加载/删除渠道后
+// 覆盖表自动收敛（用户清空字段或删除适配器不会残留旧值）。键为 baseURL+modelID，
+// 与 classify 请求侧可用的信号一致。
+func syncExplicitCompatibilityKindOverrides(adapters []ModelAdapterConfig) {
+	overrides := make(map[string]string, len(adapters))
+	for _, adapter := range adapters {
+		if strings.TrimSpace(adapter.CompatibilityKind) == "" {
+			continue
+		}
+		key := strings.ToLower(strings.TrimSpace(adapter.BaseURL)) + "\n" + strings.ToLower(strings.TrimSpace(adapter.ModelID))
+		overrides[key] = adapter.CompatibilityKind
+	}
+	modeladapter.SetExplicitCompatibilityKindOverrides(overrides)
 }

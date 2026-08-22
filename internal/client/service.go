@@ -9,15 +9,20 @@ import (
 	"sync"
 	"time"
 
+	"cursor/internal/agentops"
 	"cursor/internal/appdata"
 	backend "cursor/internal/backend"
+	"cursor/internal/backend/forwarder"
 	serverconfig "cursor/internal/backend/server/config"
 	"cursor/internal/certs"
+	"cursor/internal/configprofile"
 	"cursor/internal/cursoraccount"
 	"cursor/internal/historymetrics"
 	"cursor/internal/logger"
 	"cursor/internal/mitm"
 	"cursor/internal/netproxy"
+	"cursor/internal/requestlab"
+	"cursor/internal/routing"
 )
 
 const (
@@ -40,7 +45,12 @@ type ProxyService struct {
 	// backendHost 表示当前嵌入式 backend 服务。
 	backendHost *backend.Host
 	// cursorAccount 持有仅供插件、Skills 和 MCP 控制面使用的真实 Cursor 身份。
-	cursorAccount *cursoraccount.Manager
+	cursorAccount  *cursoraccount.Manager
+	requestLab     *requestlab.Lab
+	routingHist    *routing.History
+	routingMetrics *routing.MetricsSnapshot
+	agentOps       *agentops.Console
+	profiles       *configprofile.Store
 
 	// lifecycleMu serializes start/stop transitions so a Cursor launch cannot
 	// observe a partially started proxy while the automatic startup is running.
@@ -89,6 +99,15 @@ type ProxyService struct {
 	// providerBalanceNegativeCache 负缓存「确定性不支持/失败」的余额查询结果，
 	// 避免上游不支持计费接口时每轮轮询都全策略链重打上游。
 	providerBalanceNegativeCache *metadataCache[ProviderBalance]
+
+	// syncProviderBalancesMu 串行化账号变更后的余额同步，多入口并发触发时合并执行。
+	syncProviderBalancesMu sync.Mutex
+	// syncGeneration 是余额同步的代际号：每完成一轮全量刷新自增一次。
+	// 并发触发方在获锁前快照该值，获锁后发现代际已前进即说明排队期间
+	// 已有更新一轮同步完成，可直接返回，避免 N 个入口各自重复全量刷新。
+	syncGeneration      uint64
+	loginSyncMu         sync.Mutex
+	syncedLoginSessions map[string]struct{}
 }
 
 // MarkCAIncomplete 记录 CA 材料不完整状态（应用降级启动时由 runner 调用）。
@@ -194,18 +213,42 @@ func NewProxyService(proxy *mitm.ProxyServer, certManager *certs.Manager, caCert
 		publicClient:     netproxy.NewHTTPClient(publicAPITimeout),
 		modelTestResults: make(map[string]ModelAdapterTestResult),
 
-		modelCatalogCache:               newMetadataCache[ModelCatalogResult](modelCatalogCacheTTL),
-		providerBalanceCache:            newMetadataCache[ProviderBalance](providerBalanceCacheTTL),
-		providerBalanceNegativeCache:    newMetadataCache[ProviderBalance](providerBalanceNegativeCacheTTL),
+		modelCatalogCache:            newMetadataCache[ModelCatalogResult](modelCatalogCacheTTL),
+		providerBalanceCache:         newMetadataCache[ProviderBalance](providerBalanceCacheTTL),
+		providerBalanceNegativeCache: newMetadataCache[ProviderBalance](providerBalanceNegativeCacheTTL),
 	}
 	service.cursorAccount = cursoraccount.NewManager(
+		appdata.DataRootPath(),
 		filepath.Join(appdata.DataRootPath(), "cursor-account.json"),
 		netproxy.NewHTTPClient(publicAPITimeout),
+	)
+	service.requestLab = requestlab.New(
+		appdata.HistoryRootPath(),
+		filepath.Join(appdata.DataRootPath(), "request-lab", "exports"),
+	)
+	service.routingHist = &routing.History{}
+	service.routingMetrics = routing.NewMetricsSnapshot()
+	service.profiles = configprofile.New(filepath.Join(appdata.DataRootPath(), "profiles"))
+	service.agentOps = agentops.New(
+		filepath.Join(appdata.DataRootPath(), "agent-ops", "exports"),
+		func() []forwarder.DelegationTaskSnapshot {
+			if service.backendHost == nil {
+				return nil
+			}
+			return service.backendHost.DelegationTaskSnapshots()
+		},
+		func(id string) bool {
+			if service.backendHost == nil {
+				return false
+			}
+			return service.backendHost.CancelDelegationTask(id)
+		},
 	)
 	service.loadPersistedModelAdapterTestResults()
 	service.store = serverconfig.NewStore(service.configPath, service.logsRoot)
 	if m, err := serverconfig.NewManager(context.Background(), service.store); err == nil {
 		service.configs = m
+		m.SetRoutingMetricsSnapshot(service.routingMetrics)
 	} else {
 		// 配置管理器初始化失败不影响启动：镜像开关关闭（镜像记录不启用），回落语义不变。
 		logger.Warnf("init mirror capture config manager failed: %v", err)
@@ -215,8 +258,21 @@ func NewProxyService(proxy *mitm.ProxyServer, certManager *certs.Manager, caCert
 		logger.Errorf("init backend host failed: %v", err)
 	} else {
 		service.backendHost = host
+		host.SetRoutingMetricsSnapshot(service.routingMetrics)
 	}
 	return service
+}
+
+func (s *ProxyService) wireRoutingMetricsSnapshot() {
+	if s == nil || s.routingMetrics == nil {
+		return
+	}
+	if s.backendHost != nil {
+		s.backendHost.SetRoutingMetricsSnapshot(s.routingMetrics)
+	}
+	if s.configs != nil {
+		s.configs.SetRoutingMetricsSnapshot(s.routingMetrics)
+	}
 }
 
 func (s *ProxyService) ensureBackendHost() error {
@@ -231,6 +287,7 @@ func (s *ProxyService) ensureBackendHost() error {
 		return err
 	}
 	s.backendHost = host
+	s.wireRoutingMetricsSnapshot()
 	return nil
 }
 

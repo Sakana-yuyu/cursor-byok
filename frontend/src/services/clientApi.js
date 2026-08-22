@@ -8,9 +8,20 @@ import {
   ReadSkillFile, SaveSkillFile, GenerateSkillSummary,
   GetRecentWorkspaceRoot,
   QueryAllProviderBalances,
+  SyncProviderBalancesAfterAccountChange,
   RepairProxySettings,
   GetDelegationConfig, SaveDelegationConfig, GetDelegationExecutorSnapshots, RefreshDelegationExecutorProbes, InstallDelegationExecutor,
   GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
+  GetControlCenterOverview, ListCursorAccounts, ImportCursorAccount,
+  PrepareCursorAccountRecoveryExport, ExecuteCursorAccountRecoveryExport,
+  SetCurrentCursorAccount, UpdateCursorAccountTags, DeleteCursorAccounts,
+  PrepareCursorClientAccountSwitch, ExecuteCursorClientAccountSwitch,
+  BeginCursorAccountLogin, GetCursorAccountLoginStatus, CancelCursorAccountLogin,
+  ListRequestSources, BuildRequestComparison, ExportSanitizedRequestComparison,
+  GetRoutingPolicy, SaveRoutingPolicy, PreviewRoutingDecision, GetRoutingDecisionHistory,
+  GetAgentRuns, GetAgentRun, CancelAgentRun, PrepareAgentRunRetry, ExecuteAgentRunRetry, ExportSanitizedAgentRunReport,
+  ListConfigProfiles, SaveCurrentConfigProfile, DeleteConfigProfile, PreviewConfigProfile,
+  PrepareConfigProfileApply, ExecuteConfigProfileApply, ExportConfigProfile, ImportConfigProfile,
   RepairCACorruption, GetCARepairStatus,
   OfferDefenderExclusion, GetDefenderExclusionState, DismissDefenderExclusion,
   GetTerminalEnvironmentStatus, ApplyTerminalEnvironment, InstallTerminalDependency,
@@ -60,9 +71,20 @@ const desktopMethods = {
   ReadSkillFile, SaveSkillFile, GenerateSkillSummary,
   GetRecentWorkspaceRoot,
   QueryAllProviderBalances,
+  SyncProviderBalancesAfterAccountChange,
   RepairProxySettings,
   GetDelegationConfig, SaveDelegationConfig, GetDelegationExecutorSnapshots, RefreshDelegationExecutorProbes, InstallDelegationExecutor,
   GetCursorAccountStatus, StartCursorAccountLogin, DisconnectCursorAccount,
+  GetControlCenterOverview, ListCursorAccounts, ImportCursorAccount,
+  PrepareCursorAccountRecoveryExport, ExecuteCursorAccountRecoveryExport,
+  SetCurrentCursorAccount, UpdateCursorAccountTags, DeleteCursorAccounts,
+  PrepareCursorClientAccountSwitch, ExecuteCursorClientAccountSwitch,
+  BeginCursorAccountLogin, GetCursorAccountLoginStatus, CancelCursorAccountLogin,
+  ListRequestSources, BuildRequestComparison, ExportSanitizedRequestComparison,
+  GetRoutingPolicy, SaveRoutingPolicy, PreviewRoutingDecision, GetRoutingDecisionHistory,
+  GetAgentRuns, GetAgentRun, CancelAgentRun, PrepareAgentRunRetry, ExecuteAgentRunRetry, ExportSanitizedAgentRunReport,
+  ListConfigProfiles, SaveCurrentConfigProfile, DeleteConfigProfile, PreviewConfigProfile,
+  PrepareConfigProfileApply, ExecuteConfigProfileApply, ExportConfigProfile, ImportConfigProfile,
   RepairCACorruption, GetCARepairStatus,
   OfferDefenderExclusion, GetDefenderExclusionState, DismissDefenderExclusion,
   GetTerminalEnvironmentStatus, ApplyTerminalEnvironment, InstallTerminalDependency,
@@ -196,6 +218,142 @@ export function disconnectCursorAccount() {
   return withApiLogging("DisconnectCursorAccount", undefined, () => desktopOrMockRaw(CURSOR_ACCOUNT_SIGNED_OUT_MOCK, "@bindings/cursor/internal/bridge/proxyservice.js", "DisconnectCursorAccount"));
 }
 
+export function getControlCenterOverview() {
+  return withApiLogging("GetControlCenterOverview", undefined, () => desktopOrMockRaw(() => GetControlCenterOverview(), "@bindings/cursor/internal/bridge/proxyservice.js", "GetControlCenterOverview"));
+}
+
+export function listCursorAccounts() {
+  return withApiLogging("ListCursorAccounts", undefined, () => desktopOrMockRaw(() => ListCursorAccounts(), "@bindings/cursor/internal/bridge/proxyservice.js", "ListCursorAccounts"));
+}
+
+export function importCursorAccount(request) {
+  return withApiLogging("ImportCursorAccount", { mode: request?.mode }, () => desktopOrMockRaw(() => ImportCursorAccount(request), "@bindings/cursor/internal/bridge/proxyservice.js", "ImportCursorAccount", [request]));
+}
+
+export function prepareCursorAccountRecoveryExport(request) {
+  return withApiLogging("PrepareCursorAccountRecoveryExport", { count: request?.accountIds?.length ?? 0 }, () => desktopOrMockRaw(() => PrepareCursorAccountRecoveryExport(request), "@bindings/cursor/internal/bridge/proxyservice.js", "PrepareCursorAccountRecoveryExport", [request]));
+}
+
+export function executeCursorAccountRecoveryExport(confirmationToken) {
+  return withApiLogging("ExecuteCursorAccountRecoveryExport", undefined, () => desktopOrMockRaw(() => ExecuteCursorAccountRecoveryExport(confirmationToken, ""), "@bindings/cursor/internal/bridge/proxyservice.js", "ExecuteCursorAccountRecoveryExport", [confirmationToken, ""]));
+}
+
+export function setCurrentCursorAccount(accountID) {
+  return withApiLogging("SetCurrentCursorAccount", { accountID }, () => desktopOrMockRaw(() => SetCurrentCursorAccount(accountID), "@bindings/cursor/internal/bridge/proxyservice.js", "SetCurrentCursorAccount", [accountID]));
+}
+
+export function updateCursorAccountTags(accountID, tags) {
+  return withApiLogging("UpdateCursorAccountTags", { accountID }, () => desktopOrMockRaw(() => UpdateCursorAccountTags(accountID, tags), "@bindings/cursor/internal/bridge/proxyservice.js", "UpdateCursorAccountTags", [accountID, tags]));
+}
+
+export function deleteCursorAccounts(request) {
+  return withApiLogging("DeleteCursorAccounts", { count: request?.accountIds?.length ?? 0 }, () => desktopOrMockRaw(() => DeleteCursorAccounts(request), "@bindings/cursor/internal/bridge/proxyservice.js", "DeleteCursorAccounts", [request]));
+}
+
+export function prepareCursorClientAccountSwitch(accountID) {
+  return withApiLogging("PrepareCursorClientAccountSwitch", { accountID }, () => desktopOrMockRaw(() => PrepareCursorClientAccountSwitch(accountID), "@bindings/cursor/internal/bridge/proxyservice.js", "PrepareCursorClientAccountSwitch", [accountID]));
+}
+
+export function executeCursorClientAccountSwitch(confirmationToken) {
+  return withApiLogging("ExecuteCursorClientAccountSwitch", undefined, () => desktopOrMockRaw(() => ExecuteCursorClientAccountSwitch(confirmationToken), "@bindings/cursor/internal/bridge/proxyservice.js", "ExecuteCursorClientAccountSwitch", [confirmationToken]));
+}
+
+export function beginCursorAccountLogin() {
+  return withApiLogging("BeginCursorAccountLogin", undefined, () => desktopOrMockRaw(() => BeginCursorAccountLogin(), "@bindings/cursor/internal/bridge/proxyservice.js", "BeginCursorAccountLogin"));
+}
+
+export function getCursorAccountLoginStatus(sessionID) {
+  return withApiLogging("GetCursorAccountLoginStatus", undefined, () => desktopOrMockRaw(() => GetCursorAccountLoginStatus(sessionID), "@bindings/cursor/internal/bridge/proxyservice.js", "GetCursorAccountLoginStatus", [sessionID]));
+}
+
+export function cancelCursorAccountLogin(sessionID) {
+  return withApiLogging("CancelCursorAccountLogin", undefined, () => desktopOrMockRaw(() => CancelCursorAccountLogin(sessionID), "@bindings/cursor/internal/bridge/proxyservice.js", "CancelCursorAccountLogin", [sessionID]));
+}
+
+export function listRequestSources(query) {
+  return withApiLogging("ListRequestSources", { kind: query?.kind }, () => desktopOrMockRaw(() => ListRequestSources(query), "@bindings/cursor/internal/bridge/proxyservice.js", "ListRequestSources", [query]));
+}
+
+export function buildRequestComparison(request) {
+  return withApiLogging("BuildRequestComparison", undefined, () => desktopOrMockRaw(() => BuildRequestComparison(request), "@bindings/cursor/internal/bridge/proxyservice.js", "BuildRequestComparison", [request]));
+}
+
+export function exportSanitizedRequestComparison(comparisonID) {
+  return withApiLogging("ExportSanitizedRequestComparison", undefined, () => desktopOrMockRaw(() => ExportSanitizedRequestComparison(comparisonID), "@bindings/cursor/internal/bridge/proxyservice.js", "ExportSanitizedRequestComparison", [comparisonID]));
+}
+
+export function getRoutingPolicy() {
+  return withApiLogging("GetRoutingPolicy", undefined, () => desktopOrMockRaw(() => GetRoutingPolicy(), "@bindings/cursor/internal/bridge/proxyservice.js", "GetRoutingPolicy"));
+}
+
+export function saveRoutingPolicy(policy) {
+  return withApiLogging("SaveRoutingPolicy", { strategy: policy?.strategy }, () => desktopOrMockRaw(() => SaveRoutingPolicy(policy), "@bindings/cursor/internal/bridge/proxyservice.js", "SaveRoutingPolicy", [policy]));
+}
+
+export function previewRoutingDecision(request) {
+  return withApiLogging("PreviewRoutingDecision", { modelId: request?.modelId }, () => desktopOrMockRaw(() => PreviewRoutingDecision(request), "@bindings/cursor/internal/bridge/proxyservice.js", "PreviewRoutingDecision", [request]));
+}
+
+export function getRoutingDecisionHistory(query) {
+  return withApiLogging("GetRoutingDecisionHistory", undefined, () => desktopOrMockRaw(() => GetRoutingDecisionHistory(query), "@bindings/cursor/internal/bridge/proxyservice.js", "GetRoutingDecisionHistory", [query]));
+}
+
+export function getAgentRuns(query) {
+  return withApiLogging("GetAgentRuns", undefined, () => desktopOrMockRaw(() => GetAgentRuns(query), "@bindings/cursor/internal/bridge/proxyservice.js", "GetAgentRuns", [query]));
+}
+
+export function getAgentRun(runID) {
+  return withApiLogging("GetAgentRun", undefined, () => desktopOrMockRaw(() => GetAgentRun(runID), "@bindings/cursor/internal/bridge/proxyservice.js", "GetAgentRun", [runID]));
+}
+
+export function cancelAgentRun(runID) {
+  return withApiLogging("CancelAgentRun", undefined, () => desktopOrMockRaw(() => CancelAgentRun(runID), "@bindings/cursor/internal/bridge/proxyservice.js", "CancelAgentRun", [runID]));
+}
+
+export function prepareAgentRunRetry(runID) {
+  return withApiLogging("PrepareAgentRunRetry", undefined, () => desktopOrMockRaw(() => PrepareAgentRunRetry(runID), "@bindings/cursor/internal/bridge/proxyservice.js", "PrepareAgentRunRetry", [runID]));
+}
+
+export function executeAgentRunRetry(confirmationToken) {
+  return withApiLogging("ExecuteAgentRunRetry", undefined, () => desktopOrMockRaw(() => ExecuteAgentRunRetry(confirmationToken), "@bindings/cursor/internal/bridge/proxyservice.js", "ExecuteAgentRunRetry", [confirmationToken]));
+}
+
+export function exportSanitizedAgentRunReport(runID) {
+  return withApiLogging("ExportSanitizedAgentRunReport", undefined, () => desktopOrMockRaw(() => ExportSanitizedAgentRunReport(runID), "@bindings/cursor/internal/bridge/proxyservice.js", "ExportSanitizedAgentRunReport", [runID]));
+}
+
+export function listConfigProfiles() {
+  return withApiLogging("ListConfigProfiles", undefined, () => desktopOrMockRaw(() => ListConfigProfiles(), "@bindings/cursor/internal/bridge/proxyservice.js", "ListConfigProfiles"));
+}
+
+export function saveCurrentConfigProfile(request) {
+  return withApiLogging("SaveCurrentConfigProfile", { name: request?.name }, () => desktopOrMockRaw(() => SaveCurrentConfigProfile(request), "@bindings/cursor/internal/bridge/proxyservice.js", "SaveCurrentConfigProfile", [request]));
+}
+
+export function deleteConfigProfile(profileID) {
+  return withApiLogging("DeleteConfigProfile", undefined, () => desktopOrMockRaw(() => DeleteConfigProfile(profileID), "@bindings/cursor/internal/bridge/proxyservice.js", "DeleteConfigProfile", [profileID]));
+}
+
+export function previewConfigProfile(profileID) {
+  return withApiLogging("PreviewConfigProfile", undefined, () => desktopOrMockRaw(() => PreviewConfigProfile(profileID), "@bindings/cursor/internal/bridge/proxyservice.js", "PreviewConfigProfile", [profileID]));
+}
+
+export function prepareConfigProfileApply(profileID) {
+  return withApiLogging("PrepareConfigProfileApply", undefined, () => desktopOrMockRaw(() => PrepareConfigProfileApply(profileID), "@bindings/cursor/internal/bridge/proxyservice.js", "PrepareConfigProfileApply", [profileID]));
+}
+
+export function executeConfigProfileApply(confirmationToken) {
+  return withApiLogging("ExecuteConfigProfileApply", undefined, () => desktopOrMockRaw(() => ExecuteConfigProfileApply(confirmationToken), "@bindings/cursor/internal/bridge/proxyservice.js", "ExecuteConfigProfileApply", [confirmationToken]));
+}
+
+export function exportConfigProfile(profileID) {
+  return withApiLogging("ExportConfigProfile", undefined, () => desktopOrMockRaw(() => ExportConfigProfile(profileID), "@bindings/cursor/internal/bridge/proxyservice.js", "ExportConfigProfile", [profileID]));
+}
+
+export function importConfigProfile(content) {
+  return withApiLogging("ImportConfigProfile", undefined, () => desktopOrMockRaw(() => ImportConfigProfile(content), "@bindings/cursor/internal/bridge/proxyservice.js", "ImportConfigProfile", [content]));
+}
+
 export function getProxyState() {
   return withApiLogging("GetState", undefined, () => desktopOrMockRaw(() => GetState(), "@bindings/cursor/internal/bridge/proxyservice.js", "GetState"));
 }
@@ -231,6 +389,9 @@ export function installTerminalDependency(target) {
 
 // 安装进度事件名（与后端 terminalenv.EventInstallProgress 一致）。
 export const TERMINAL_INSTALL_PROGRESS_EVENT = "terminalenv:install-progress";
+
+// 余额同步完成事件名（与后端 Wails 事件 provider-balances-synced 一致）。
+export const PROVIDER_BALANCES_SYNCED_EVENT = "provider-balances-synced";
 
 export function getHomeMetricsSummary() {
   return withApiLogging("GetHomeMetricsSummary", undefined, () => desktopOrMockRaw(browserPreviewMockMetrics(), "@bindings/cursor/internal/bridge/metricsservice.js", "GetHomeMetricsSummary"));
@@ -420,6 +581,10 @@ export function getProviderDiagnostics() {
 
 export function queryAllProviderBalances() {
   return desktopOrMock(() => QueryAllProviderBalances(), "@bindings/cursor/internal/bridge/proxyservice.js", "QueryAllProviderBalances");
+}
+
+export function syncProviderBalancesAfterAccountChange() {
+  return desktopOrMock(() => SyncProviderBalancesAfterAccountChange(), "@bindings/cursor/internal/bridge/proxyservice.js", "SyncProviderBalancesAfterAccountChange");
 }
 
 // 按中转站聚合区间内的用量与美元花费（GroupName → baseURL host → provider 类型）。

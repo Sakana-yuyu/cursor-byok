@@ -23,6 +23,11 @@ const (
 	contextProjectionStableHeadTurns = 1
 	contextProjectionRecentTailTurns = 5
 	contextProjectionHardRatio       = 0.8
+	// 近端保留区的 token 下限比例：近端保留区估算 token 低于
+	// min(hardBudget, 会话全部轮次内容量) × 该比例时，向更早方向扩大保留区，
+	// 与 recentTailTurns 轮数阈值构成「轮数 + token」双阈值近端保护。
+	// 口径对齐委派路径 delegatedCompactionPreserveRatio 的「按预算比例保留」思路。
+	contextProjectionRecentTailTokenFloorRatio = 0.2
 )
 
 type contextProjectionState struct {
@@ -482,6 +487,37 @@ func buildContextProjectionSummaryPlanWithRecentTail(conversation *ConversationF
 		if eligibleStart >= eligibleEnd {
 			return nil, nil
 		}
+	}
+
+	// Token 下限保护（与轮数阈值取交集）：轮数阈值只保证保留的「轮次数」，
+	// 超长对话中尾轮普遍偏短时，按轮数保留的近端区估算 token 可能远低于安全
+	// 水位，模型可见的近期工作上下文过薄。这里在轮数阈值之外再加 token 下限：
+	// 保留区估算 token 低于下限时，向更早方向扩大保留区（eligibleEnd 前移），
+	// 直到满足下限或无可再保留。
+	// 下限基准取 hardBudget 与会话全部轮次内容量的较小者：保留需求不可能超过
+	// 会话本身的内容量；否则在轮次稀少的新会话（如刚启动的子代理）上会吞掉
+	// 整个可压缩区间并返回无计划，破坏自适应降级「始终能压出空间」的保证。
+	// 扩大以下 eligibleStart 为界（更早的轮次已被既有摘要覆盖，无「保留」意义），
+	// 即使仍不达下限也按现状生成计划，交由后续 overflow 重试与
+	// compactActiveTurnToolResultsForBudget 紧急裁剪兜底。
+	totalTurnTokens := int64(0)
+	for index := range turns {
+		totalTurnTokens += turns[index].EstimatedTokens
+	}
+	recentTailFloorBase := hardBudget
+	if totalTurnTokens < recentTailFloorBase {
+		recentTailFloorBase = totalTurnTokens
+	}
+	recentTailTokenFloor := int64(float64(recentTailFloorBase) * contextProjectionRecentTailTokenFloorRatio)
+	retainedTokens := int64(0)
+	for index := eligibleEnd; index < len(turns); index++ {
+		retainedTokens += turns[index].EstimatedTokens
+	}
+	// 下限以保留至少 1 轮可压缩轮次为硬边界：即使扩大到最早可压缩边界仍不达
+	// 下限，也按现状生成计划，保证滑动窗口始终能压出空间。
+	for retainedTokens < recentTailTokenFloor && eligibleEnd > eligibleStart+1 {
+		eligibleEnd--
+		retainedTokens += turns[eligibleEnd].EstimatedTokens
 	}
 
 	reclaimTokens := contextTokens - hardBudget

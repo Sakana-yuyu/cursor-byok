@@ -113,6 +113,7 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 		return err
 	}
 	applyAnthropicProviderCompatibility(body, req, baseURL, modelID)
+	normalizeAnthropicToolSchemasForProvider(body)
 	applyProviderCompatibilitySanitization(body, baseURL, modelID)
 	admission, admissionErr := admitAnthropicTools(body)
 	if admissionErr != nil {

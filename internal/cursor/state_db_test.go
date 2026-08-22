@@ -318,3 +318,80 @@ func TestRestoreCursorUserInfoPropagatesDBError(t *testing.T) {
 		t.Fatal("state.vscdb 不可打开时 RestoreCursorUserInfo 应返回错误")
 	}
 }
+
+func TestReadCursorAuthReadsWhitelistWithoutWriting(t *testing.T) {
+	statePath := newTestCursorStateDB(t, map[string]string{
+		"cursorAuth/accessToken":  "test-access-live",
+		"cursorAuth/refreshToken": "test-refresh-live",
+		"cursorAuth/cachedEmail":  "live@example.test",
+		"workbench.colorTheme":    "dark",
+	})
+	got, err := ReadCursorAuth(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.AccessToken != "test-access-live" || got.RefreshToken != "test-refresh-live" || got.Email != "live@example.test" {
+		t.Fatal("unexpected live cursor auth whitelist")
+	}
+	if value, ok := readCursorAuthValue(t, statePath, "workbench.colorTheme"); !ok || value != "dark" {
+		t.Fatal("unrelated state key changed")
+	}
+	if value, ok := readCursorAuthValue(t, statePath, "cursorAuth/accessToken"); !ok || value != "test-access-live" {
+		t.Fatal("live access value was rewritten")
+	}
+}
+
+func TestReadCursorAuthMissingFile(t *testing.T) {
+	_, err := ReadCursorAuth(filepath.Join(t.TempDir(), "missing-state.vscdb"))
+	if err == nil {
+		t.Fatal("expected missing state db error")
+	}
+}
+
+func TestReplaceCursorAuthKeepsUnrelatedState(t *testing.T) {
+	dbPath := newTestCursorStateDB(t, map[string]string{
+		"cursorAuth/accessToken": "old",
+		"cursorAuth/cachedEmail": "old@example.test",
+		"workbench.colorTheme":   "dark",
+	})
+	err := ReplaceCursorAuth(dbPath, CursorAuthValues{AccessToken: "new", Email: "new@example.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := readCursorAuthValue(t, dbPath, "workbench.colorTheme"); got != "dark" {
+		t.Fatalf("unrelated key changed: %q", got)
+	}
+	if got, _ := readCursorAuthValue(t, dbPath, "cursorAuth/accessToken"); got != "new" {
+		t.Fatalf("got %q", got)
+	}
+	if got, _ := readCursorAuthValue(t, dbPath, "cursorAuth/cachedEmail"); got != "new@example.test" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestBackupAndRestoreCursorStateFiles(t *testing.T) {
+	dbPath := newTestCursorStateDB(t, map[string]string{
+		"cursorAuth/accessToken": "keep-me",
+		"cursorAuth/cachedEmail": "keep@example.test",
+	})
+	if err := os.WriteFile(dbPath+"-wal", []byte("wal-bytes"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dest := t.TempDir()
+	backup, err := BackupCursorStateFiles(dbPath, dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(backup.Files) != 2 {
+		t.Fatalf("expected db and wal, got %#v", backup.Files)
+	}
+	if err := os.WriteFile(dbPath, []byte("corrupted"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := RestoreCursorStateFiles(backup); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := readCursorAuthValue(t, dbPath, "cursorAuth/accessToken"); got != "keep-me" {
+		t.Fatalf("restored access = %q", got)
+	}
+}

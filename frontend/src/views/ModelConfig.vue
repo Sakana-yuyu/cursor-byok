@@ -23,8 +23,9 @@ import {
   saveSupplierGroupMode,
   supplierToRouteQuery,
 } from "@/utils/supplierGrouping";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { onAccountSync } from "@/utils/accountSync";
 
 const router = useRouter();
 const route = useRoute();
@@ -397,7 +398,18 @@ async function handleDeleteSupplier(supplier) {
   }
 }
 
-onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }).catch(() => {}); });
+onMounted(() => {
+  void reloadUserConfig({ modelAdaptersOnly: true }).catch(() => {});
+  stopAccountSync = onAccountSync(() => {
+    for (const supplier of suppliers.value) {
+      void loadSupplierBalance(supplier, true);
+    }
+  });
+});
+let stopAccountSync = () => {};
+onBeforeUnmount(() => {
+  stopAccountSync();
+});
 </script>
 
 <template>

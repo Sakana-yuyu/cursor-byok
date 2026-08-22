@@ -93,18 +93,21 @@ func TestCLIProbeTimeoutAndFailureDiagnosticsAreSanitized(t *testing.T) {
 	secret := "sk-cli-probe-secret-value"
 	runner := delegation.NewProcessRunner(delegation.ProcessRunnerConfig{})
 	for _, testCase := range []struct {
-		name string
-		mode string
-		code string
+		name    string
+		mode    string
+		code    string
+		timeout time.Duration
 	}{
-		{name: "timeout", mode: "sleep", code: CLIProbeDiagnosticTimeout},
-		{name: "failed", mode: "fail", code: CLIProbeDiagnosticFailed},
+		// timeout 用例需要短预算触发真实超时；failed 用例是重启测试二进制自身，
+		// Windows 高负载下拉起进程可能超过 150ms 被误判为 probe_timeout，故放宽。
+		{name: "timeout", mode: "sleep", code: CLIProbeDiagnosticTimeout, timeout: 150 * time.Millisecond},
+		{name: "failed", mode: "fail", code: CLIProbeDiagnosticFailed, timeout: 5 * time.Second},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			result, err := ProbeCLI(t.Context(), runner, CLIProbeSpec{
 				Executable: cliProbeTestExecutable(t),
 				Args:       cliProbeHelperArgs(testCase.mode),
-				Timeout:    150 * time.Millisecond,
+				Timeout:    testCase.timeout,
 				Environment: map[string]string{
 					cliProbeHelperEnvironment: "cli-probe-helper-enabled",
 					"CLI_PROBE_SECRET":        secret,

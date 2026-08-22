@@ -62,6 +62,7 @@ func (adapter *GeminiAdapter) Stream(ctx context.Context, req StreamRequest, sin
 		}
 	}
 	applyProviderCompatibilitySanitization(body, baseURL, modelID)
+	normalizeGeminiToolSchemasForProvider(body)
 	admission, admissionErr := admitGeminiTools(body)
 	if admissionErr != nil {
 		finishedAt = time.Now().UTC()

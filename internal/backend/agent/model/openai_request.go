@@ -81,6 +81,7 @@ func applyOpenAIResponsesCompatibility(body map[string]any, baseURL string, mode
 	}
 	policy := classifyProviderCompatibility(baseURL, modelID)
 	applyProviderCompatibilitySanitization(body, baseURL, modelID)
+	normalizeOpenAIToolSchemasForProvider(body, baseURL, modelID)
 	if !policy.PromptCacheKey && !preservePromptCacheKey {
 		delete(body, "prompt_cache_key")
 	}
@@ -198,10 +199,15 @@ func applyOpenAIChatCompletionsCompatibility(body map[string]any, baseURL string
 	}
 	policy := classifyProviderCompatibility(baseURL, modelID)
 	applyProviderCompatibilitySanitization(body, baseURL, modelID)
-	kind := policy.Kind
+	// 工具 schema 清洗必须在所有 kind 分支之前无条件执行，与 Responses 路径对称。
+	normalizeOpenAIToolSchemasForProvider(body, baseURL, modelID)
 	if !policy.PromptCacheKey && !preservePromptCacheKey {
 		delete(body, "prompt_cache_key")
 	}
+	kind := policy.Kind
+	// 按 provider 策略重命名输出 token 上限键：必须在 kind 空值提前返回之前执行，
+	// OpenAI 官方端点（无 kind）上的 o 系/gpt-5 模型同样需要 max_completion_tokens。
+	renameOpenAIMaxTokensField(body, policy.MaxTokensField)
 	if kind == "" {
 		return
 	}
@@ -242,6 +248,21 @@ func applyOpenAIChatCompletionsCompatibility(body map[string]any, baseURL string
 		} else {
 			body["reasoning_effort"] = stepFunReasoningEffort(effort)
 		}
+	}
+}
+
+// renameOpenAIMaxTokensField 把请求体里的 max_tokens 键按 provider 策略迁移到
+// 目标字段（max_completion_tokens）。仅当目标键尚不存在时才迁移——extra params
+// 已显式提供 max_completion_tokens 时保留用户值、只丢弃旧键，避免同一请求携带
+// 两个语义重复的输出上限字段。body 内容与策略共同决定结果，确定性可回放。
+func renameOpenAIMaxTokensField(body map[string]any, target string) {
+	value, ok := body["max_tokens"]
+	if !ok || target == "" || target == maxTokensFieldLegacy {
+		return
+	}
+	delete(body, "max_tokens")
+	if _, exists := body["max_completion_tokens"]; !exists {
+		body["max_completion_tokens"] = value
 	}
 }
 

@@ -77,3 +77,31 @@
 - **增强2 · appState 配置白名单**：`localResponseCache` 纳入 `normalizeConfig`/`buildConfigPayload`/`applyConfigToState`/`appState`，杜绝任何一次配置保存把它清空回默认值（修掉 FE-C 子代理标记的隐藏回归风险）。
 - **增强3 · Home 站点消耗卡片**：新增 `components/StationSpendCard.vue`，首页一眼可见「哪个中转站用了多少额度」(Top6 + 合计花费 + 未计价降级)，每分钟刷新；`Home.vue` 挂载于 HomeMetricsCard 下。
 - 最终验证（深化后）：`go build ./...` ✅ · `npm run build` ✅
+
+## omp 移植系列（E1-E6，2026-08）
+> 来源：`omp` harness 机制调研（供应商适配/上下文管理/重试策略）。约束同上：不写测试、prefix-cache-stability、不改已安装 Cursor 客户端。
+- **E1** 输入侧工具 Schema 清洗器：新增 `agent/model/tool_schema_normalize.go` 纯函数 walker（剥不支持关键字语义入 description、nullable 折叠、strict 管线、超限 fail-open），接线 chat/responses/anthropic/gemini 四出口；与 400 工具隔离恢复兼容。从「失败后救」升级为「事前防」。
+- **E2** in-band XML 工具协议：新增 `xml_tool_protocol.go` + `xml_tool_call_scanner.go`。适配器新增 `toolCallMode: native(默认)|xml_prompt`；请求侧目录注入（按名称排序确定性序列化）+ 历史 tool_call/tool_result 文本重放；响应侧流式扫描还原结构化调用（JSON 修复、伪造 tool_result 剥离、坏块降级透传）。仅 OpenAI chat completions 路径。
+- **E3** 重试收敛 + replay-safety：已产出可见输出后任何错误包 `midStreamInterruptedError` 不再重试/failover（sink 写入计数兜底）；分类收敛到 `isPermanentProviderError` 单一决策点；修复空闲看门狗超时被 Classify 误判 Fatal 的回归。`stream_reconnect.go`/`router.go`。
+- **E4** 流式部分 JSON 节流：工具参数进度解析 ≥256B 增量才重试，消除逐 delta 全量 parse 的 O(n²)；终态解析逐字节不变。`openai.go`。
+- **E5** 切点审计 + 近端保护加固：审计确认无配对破坏缺陷（委派 split-turn 单摘要因 tail 全量回放信息无损，不实施）；主路径近端保护升级为「轮数+token≥20% 预算」双水位（`context_projection.go`，下限基准 min(hardBudget, Σ内容量) 保护小会话自适应降级）。
+- **E6** 显式兼容 kind：`ModelAdapterConfig.compatibilityKind`（12 合法值，空=自动匹配）；显式优先、非法 warn-once 回落；补 `NormalizeModelAdapterConfigs` 白名单拷贝。`server/config/{types,resolver}.go`、`provider_compatibility.go`。
+- 最终验证：`go build ./...` ✅ · `go vet ./internal/...` ✅ · `go test ./internal/backend/...` ✅
+
+## 厂商点状优化（V1-V4，2026-08）
+> 来源：omp provider-quirks 差距审计。全部落在 openai chat 链路。
+- **V1** MiniMax 对象参数深合并：tool_call arguments 兼容 string/object 双态，对象分片递归深合并（嵌套合并、数组/标量替换），零配置自动生效。`openai_stream_chat.go` + 新增 `openai_stream_chat_compat.go`。
+- **V2** chat 侧 finish_reason 提升：流内已发结构化 tool_calls 而 finish=stop 时提升为 tool_calls（对齐 responses 侧），仅提升不降级、去重日志。
+- **V3** DeepSeek 特殊 token 缓冲剥离：<｜...｜> 全角标记整体剥离（跨 chunk 半截缓冲、超长未闭合放行），deepseek kind 预激活 + 任意供应商模式检测自动激活。
+- **V4** maxTokens 字段分派：ProviderCompatibility.MaxTokensField——已知 kind（含显式 compatibilityKind）恒发 max_tokens；无 kind 信号时模型名 ^o\d|gpt-5 发 max_completion_tokens；纯函数确定性分派满足 prefix-cache-stability。
+- 未实施（评估关闭）：Kimi 空 content 占位/Mistral 工具 ID/Azure 映射（场景不符）、reasoning_effort 降档与空补全重试（次优先级，待真实反馈）、max_completion_tokens 400 降档重试（可选，涉及跨文件签名变更）。
+- 最终验证：`go build ./...` ✅ · `go vet` ✅ · `go test -count=1 ./internal/backend/agent/model/` ✅
+
+## 找虫与修复（Bug Hunt，2026-08）
+> 三路审查代理对 E/V/修复系列做新鲜眼光复审，发现 1 P0 + 7 P2 + 9 P3，全部修复。
+- **P0** chat 流 finish_reason 分支无条件置位 emittedToolInvocation，纯文本回合 stop 被误提升为 tool_calls → 下游空 resume 重复输出。置位移入工具循环。`openai_stream_chat.go`
+- **P2** textStripper 收尾未 Flush 丢尾部正文；xml 扫描器 Flush holdback 裁剪丢流末字节；tool_result 定界符未转义可被内容逃逸；带图工具结果丢失全部文本块；控制中心概览条重复渲染；余额同步「已清未回填」窗口竞态；模板缺 `</button>` 致 i18n 扫描崩溃。
+- **P3** 混合形态分片防护、对象模式进度摘要+UseNumber 精度、目录注入类型分支、schema walker 排序确定性、dedupe 身份补 compatibilityKind、同步代际号 dirty 合并、立即同步吞错、billingQueryEnabled 守卫绕过、概览加载守卫。
+- **新机制**：后端同步完成事件 `provider-balances-synced`（RegisterEvent + Event.Emit），前端订阅后回读快照，消除竞态窗口。
+- **测试抖动**：`TestCLIProbeTimeoutAndFailureDiagnosticsAreSanitized/failed` 在高负载下误报——failed 用例是重启测试二进制自身，150ms 预算在 Windows 载荷下不够；放宽至 5s（timeout 用例保留短预算）。
+ - 最终验证：`go build ./...` ✅ · `go test ./...` 全绿 ✅ · `yarn build` ✅ · lint 0 error ✅ · 单测 38/38 ✅

@@ -691,19 +691,18 @@ type ProviderBalanceSummaryItem struct {
 }
 
 // hasBalanceQueryCapability 判断模型通道是否配置了余额查询能力。
-// auto/空/none 需要至少一个显式凭据才算配置；其余 profile 视为显式启用。
 func hasBalanceQueryCapability(adapter serverconfig.ModelAdapterConfig) bool {
-	profile := strings.ToLower(strings.TrimSpace(adapter.BalanceProfile))
-	if profile == "none" || profile == "" || profile == "auto" {
-		return strings.TrimSpace(adapter.BalanceQueryURL) != "" ||
-			strings.TrimSpace(adapter.BalanceAccessToken) != "" ||
-			strings.TrimSpace(adapter.BalanceUserID) != ""
-	}
-	return true
+	return client.HasBalanceQueryCapability(adapter)
 }
 
 // QueryAllProviderBalances 汇总所有已配置余额查询的模型通道余额，供首页展示。
-// 复用单通道查询的 TTL 缓存与凭据补齐逻辑；未配置余额查询的通道不会发起请求。
+func (s *ProxyService) SyncProviderBalancesAfterAccountChange() int {
+	if s == nil || s.core == nil {
+		return 0
+	}
+	return s.core.SyncProviderBalancesAfterAccountChange()
+}
+
 // QueryAllProviderBalances 并发查询所有已配置余额能力的供应商余额。
 // 每个适配器独立查询并隔离 panic：单个供应商的解析/网络异常绝不崩掉整个进程
 // （此前串行同步查询，任何一步 panic 都会导致 Wails 主进程闪退）。
@@ -753,6 +752,7 @@ func (s *ProxyService) QueryAllProviderBalances() []ProviderBalanceSummaryItem {
 				ModelID:     adapter.ModelID,
 			}
 			item.Balance = s.queryProviderBalanceSafe(adapter)
+			s.core.RecordRoutingMetrics(adapter.ID, item.Balance)
 			results[index] = item
 		}(index, job.adapter)
 	}
