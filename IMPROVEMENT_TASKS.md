@@ -96,3 +96,12 @@
 - **V4** maxTokens 字段分派：ProviderCompatibility.MaxTokensField——已知 kind（含显式 compatibilityKind）恒发 max_tokens；无 kind 信号时模型名 ^o\d|gpt-5 发 max_completion_tokens；纯函数确定性分派满足 prefix-cache-stability。
 - 未实施（评估关闭）：Kimi 空 content 占位/Mistral 工具 ID/Azure 映射（场景不符）、reasoning_effort 降档与空补全重试（次优先级，待真实反馈）、max_completion_tokens 400 降档重试（可选，涉及跨文件签名变更）。
 - 最终验证：`go build ./...` ✅ · `go vet` ✅ · `go test -count=1 ./internal/backend/agent/model/` ✅
+
+## 找虫与修复（Bug Hunt，2026-08）
+> 三路审查代理对 E/V/修复系列做新鲜眼光复审，发现 1 P0 + 7 P2 + 9 P3，全部修复。
+- **P0** chat 流 finish_reason 分支无条件置位 emittedToolInvocation，纯文本回合 stop 被误提升为 tool_calls → 下游空 resume 重复输出。置位移入工具循环。`openai_stream_chat.go`
+- **P2** textStripper 收尾未 Flush 丢尾部正文；xml 扫描器 Flush holdback 裁剪丢流末字节；tool_result 定界符未转义可被内容逃逸；带图工具结果丢失全部文本块；控制中心概览条重复渲染；余额同步「已清未回填」窗口竞态；模板缺 `</button>` 致 i18n 扫描崩溃。
+- **P3** 混合形态分片防护、对象模式进度摘要+UseNumber 精度、目录注入类型分支、schema walker 排序确定性、dedupe 身份补 compatibilityKind、同步代际号 dirty 合并、立即同步吞错、billingQueryEnabled 守卫绕过、概览加载守卫。
+- **新机制**：后端同步完成事件 `provider-balances-synced`（RegisterEvent + Event.Emit），前端订阅后回读快照，消除竞态窗口。
+- **测试抖动**：`TestCLIProbeTimeoutAndFailureDiagnosticsAreSanitized/failed` 在高负载下误报——failed 用例是重启测试二进制自身，150ms 预算在 Windows 载荷下不够；放宽至 5s（timeout 用例保留短预算）。
+ - 最终验证：`go build ./...` ✅ · `go test ./...` 全绿 ✅ · `yarn build` ✅ · lint 0 error ✅ · 单测 38/38 ✅

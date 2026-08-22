@@ -2,11 +2,16 @@
 import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
 import ControlCenterSection from "@/components/control-center/ControlCenterSection.vue";
-import { queryAllProviderBalances, syncProviderBalancesAfterAccountChange } from "@/services/clientApi";
+import {
+  PROVIDER_BALANCES_SYNCED_EVENT,
+  queryAllProviderBalances,
+  syncProviderBalancesAfterAccountChange,
+} from "@/services/clientApi";
+import { runtimeEvents } from "@/services/runtimeAdapter";
 import { appState } from "@/state/appState";
 import { formatMoney } from "@/utils/format";
 import { onAccountSync } from "@/utils/accountSync";
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
 const router = useRouter();
@@ -23,11 +28,13 @@ const supportedCount = computed(() => balances.value.filter((item) => item?.bala
 let loadSeq = 0;
 
 async function load() {
+  // 无论走哪个分支都先作废在飞响应，避免关闭计费查询后旧结果回填。
+  const seq = ++loadSeq;
   if (!billingQueryEnabled.value) {
     balances.value = [];
+    loading.value = false;
     return;
   }
-  const seq = ++loadSeq;
   loading.value = true;
   error.value = "";
   try {
@@ -40,20 +47,46 @@ async function load() {
   }
 }
 
+// 开关计费查询后立即按新状态重载，避免停留在旧数据或空列表。
+watch(billingQueryEnabled, () => {
+  void load();
+});
+
 async function handleSync() {
   if (syncing.value || loading.value) return;
   syncing.value = true;
+  let syncError = "";
   try {
-    await syncProviderBalancesAfterAccountChange();
+    try {
+      await syncProviderBalancesAfterAccountChange();
+    } catch (cause) {
+      syncError = String(cause?.message || cause || "同步厂商余额失败");
+    }
+    // 同步失败也读一次快照，尽量展示最近一次可用数据。
     await load();
+    if (syncError) error.value = syncError;
   } finally {
     syncing.value = false;
   }
 }
 
-function openModelConfig() {
-  void router.push("/model-config");
-}
+let stopAccountSync = () => {};
+let stopSyncedEvent = () => {};
+onMounted(() => {
+  void load();
+  stopAccountSync = onAccountSync(() => {
+    // 后端已在账号变更钩子中完成全量同步，这里只读快照，避免重复上游查询。
+    void load();
+  });
+  // 后端每轮余额同步结束（含提前返回）都会发该事件，收到即快照已定论，安全重载。
+  stopSyncedEvent = runtimeEvents.On(PROVIDER_BALANCES_SYNCED_EVENT, () => {
+    void load();
+  });
+});
+onBeforeUnmount(() => {
+  stopAccountSync();
+  stopSyncedEvent();
+});
 
 function balanceLabel(item) {
   const balance = item?.balance || {};
@@ -64,18 +97,6 @@ function balanceLabel(item) {
   }
   return formatMoney(balance.remaining, balance.currency);
 }
-
-let stopAccountSync = () => {};
-onMounted(() => {
-  void load();
-  stopAccountSync = onAccountSync(() => {
-    // 后端已在账号变更钩子中完成全量同步，这里只读快照，避免重复上游查询。
-    void load();
-  });
-});
-onBeforeUnmount(() => {
-  stopAccountSync();
-});
 </script>
 
 <template>

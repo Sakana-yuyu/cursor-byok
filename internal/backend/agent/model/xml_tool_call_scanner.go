@@ -149,7 +149,10 @@ func (s *xmlToolCallScanner) Flush() []xmlScannerEvent {
 			events = append(events, xmlScannerEvent{Text: text})
 		}
 	default:
-		if text := s.emitReady(len(s.pending)); text != "" {
+		// 流已结束，不再有后续 delta 来判定尾部疑似标签前缀；此时若仍走
+		// emitReady 的 holdback 裁剪，末尾以 "<" 等前缀收尾的可见文本会被
+		// 扣留并随下方清空一起丢失。直接透传全部残留缓冲（fail-open）。
+		if text := s.pending; text != "" {
 			events = append(events, xmlScannerEvent{Text: text})
 		}
 	}

@@ -102,8 +102,12 @@ type ProxyService struct {
 
 	// syncProviderBalancesMu 串行化账号变更后的余额同步，多入口并发触发时合并执行。
 	syncProviderBalancesMu sync.Mutex
-	loginSyncMu            sync.Mutex
-	syncedLoginSessions    map[string]struct{}
+	// syncGeneration 是余额同步的代际号：每完成一轮全量刷新自增一次。
+	// 并发触发方在获锁前快照该值，获锁后发现代际已前进即说明排队期间
+	// 已有更新一轮同步完成，可直接返回，避免 N 个入口各自重复全量刷新。
+	syncGeneration      uint64
+	loginSyncMu         sync.Mutex
+	syncedLoginSessions map[string]struct{}
 }
 
 // MarkCAIncomplete 记录 CA 材料不完整状态（应用降级启动时由 runner 调用）。

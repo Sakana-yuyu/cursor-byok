@@ -74,24 +74,75 @@ func xmlToolProtocolMessages(messages []Message) []Message {
 
 // appendXMLToolResultMessage 把一条 tool 结果消息追加到 out：
 // 相邻多条 tool 结果合并在同一个 user 消息内（每条一个 <tool_result> 块，
-// 换行分隔），减少消息数并保证确定性分组。ContentParts（如工具返回的图片）
-// 原样透传给 openAIContentValue 处理。
+// 换行分隔），减少消息数并保证确定性分组。
+//
+// ContentParts（如工具返回的图片）原样保留：下游 openAIContentValue 在存在
+// 图片 part 时走 parts 分支并忽略 message.Content，因此这里把非空 Content
+// （即累积的 <tool_result> 文本块）作为首个 text part 注入，确保带图结果
+// 不丢失全部文本；无图片时仍走纯文本路径，Content 单独生效，不会重复。
 func appendXMLToolResultMessage(out []Message, message Message) []Message {
 	name := strings.TrimSpace(message.Name)
-	block := "<tool_result name=\"" + name + "\">" + message.Content + xmlToolResultCloseTag
+	escaped := xmlEscapeToolResultContent(message.Content)
+	block := "<tool_result name=\"" + name + "\">" + escaped + xmlToolResultCloseTag
 	// 相邻合并：上一条消息是本轮转换产生的 tool_result 载体时直接追加块。
 	if last := len(out) - 1; last >= 0 && out[last].xmlToolResultCarrier {
-		out[last].Content = joinXMLTextContent(out[last].Content, block)
+		prev := out[last].Content
+		out[last].Content = joinXMLTextContent(prev, block)
 		out[last].ContentParts = append(out[last].ContentParts, message.ContentParts...)
+		xmlSyncCarrierTextPart(&out[last], prev)
 		return out
 	}
 	carrier := Message{
-		Role:                "user",
-		Content:             block,
-		ContentParts:        append([]ContentPart(nil), message.ContentParts...),
+		Role:                 "user",
+		Content:              block,
+		ContentParts:         append([]ContentPart(nil), message.ContentParts...),
 		xmlToolResultCarrier: true,
 	}
+	xmlSyncCarrierTextPart(&carrier, "")
 	return append(out, carrier)
+}
+
+// xmlEscapeToolResultContent 转义结果文本中的 <tool_result 定界符前缀
+// （大小写不敏感），改写为 "<\/tool_result"（JSON 风格转义斜杠约定）：
+// 改写后的形态不再匹配字面 "</tool_result"，既无法提前闭合结果块，也不会被
+// 响应侧的伪造结果剥离逻辑误伤——模型侧约定为「<\/ 即字面斜杠」。
+// 确定性：纯字节级替换，同输入必得同输出。
+func xmlEscapeToolResultContent(content string) string {
+	marker := "</tool_result"
+	if !strings.Contains(strings.ToLower(content), marker) {
+		return content
+	}
+	lower := strings.ToLower(content)
+	var b strings.Builder
+	b.Grow(len(content))
+	for i := 0; i < len(content); {
+		if strings.HasPrefix(lower[i:], marker) {
+			b.WriteString("<\\/tool_result")
+			i += len(marker)
+			continue
+		}
+		b.WriteByte(content[i])
+		i++
+	}
+	return b.String()
+}
+
+// xmlSyncCarrierTextPart 保证带图载体的 <tool_result> 文本块在下游 parts
+// 分支可见：openAIContentValue 存在图片 part 时忽略 message.Content，因此
+// 把非空 Content 作为首个 text part 注入。injected 为上一轮注入的文本快照：
+// 若当前头部文本 part 恰为该快照（即此前注入的副本），就地更新为最新全文，
+// 保证相邻合并多次追加时不产生重复副本；无图片或 Content 为空时不做任何
+// 修改，纯文本路径逐字节不变。
+func xmlSyncCarrierTextPart(carrier *Message, injected string) {
+	if !hasImageContentParts(carrier.ContentParts) || strings.TrimSpace(carrier.Content) == "" {
+		return
+	}
+	if len(carrier.ContentParts) > 0 && carrier.ContentParts[0].Type == contentPartTypeText && carrier.ContentParts[0].Text == injected {
+		carrier.ContentParts[0].Text = carrier.Content
+		return
+	}
+	text := ContentPart{Type: contentPartTypeText, Text: carrier.Content}
+	carrier.ContentParts = append([]ContentPart{text}, carrier.ContentParts...)
 }
 
 // xmlRenderAssistantToolCalls 把 assistant 结构化工具调用渲染为连续的
@@ -251,13 +302,19 @@ func appendXMLToolCatalogToMessages(items []map[string]any, catalog string) []ma
 		if strings.TrimSpace(fmt.Sprint(item["role"])) != "system" {
 			continue
 		}
+		// provider messages 的 content 实际只会是 string 或 []map[string]any
+		// （JSON 反序列化产物）；[]any 分支仅为兼容手工构造的等价形态保留。
 		switch content := item["content"].(type) {
 		case string:
 			item["content"] = joinXMLPromptText(content, catalog)
+		case []map[string]any:
+			item["content"] = append(content, map[string]any{"type": "text", "text": catalog})
 		case []any:
 			item["content"] = append(content, map[string]any{"type": "text", "text": catalog})
 		default:
-			item["content"] = joinXMLPromptText(fmt.Sprint(item["content"]), catalog)
+			// 兜底只覆盖 nil/未知形态：不再用 fmt.Sprint 拼接（nil 会产生
+			// "<nil>" 垃圾串），直接以目录文本替换，保证系统消息可用且确定。
+			item["content"] = catalog
 		}
 		return items
 	}

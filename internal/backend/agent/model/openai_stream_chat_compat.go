@@ -5,7 +5,10 @@ package modeladapter
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
+
+	"cursor/internal/logger"
 )
 
 // deepMergeJSONObject 把 src 递归深合并进 dst：嵌套对象逐字段合并，
@@ -21,6 +24,45 @@ func deepMergeJSONObject(dst, src map[string]any) {
 		}
 		dst[key] = value
 	}
+}
+
+// openai 工具参数分片形态标记（按 tool call index 记录，用于混合形态防护）。
+const (
+	openAIToolShardModeString = "string"
+	openAIToolShardModeObject = "object"
+)
+
+// decodeJSONObjectArgs 解码对象型工具参数分片。使用 json.Decoder + UseNumber
+// 保留数字字面量（json.Number），避免大整数经 float64 往返丢失精度；null 分片
+// 归一化为空对象。
+func decodeJSONObjectArgs(raw []byte) (map[string]any, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var obj map[string]any
+	if err := decoder.Decode(&obj); err != nil {
+		return nil, err
+	}
+	if obj == nil {
+		return map[string]any{}, nil
+	}
+	return obj, nil
+}
+
+// absorbStringArgsIntoObject 处理分片形态混用（同一 tool call 先字符串后对象）：
+// 把先前按字符串分片累积的内容整体解析为 JSON 对象深合并进 merged；无法解析时
+// 告警并丢弃先前内容——不静默、不断流，此后以对象分片为准继续累积。
+func absorbStringArgsIntoObject(modelCallID string, toolIndex int, prior string, merged map[string]any) {
+	trimmed := strings.TrimSpace(prior)
+	if trimmed == "" || trimmed == "{}" || trimmed == "null" {
+		return
+	}
+	priorObj, err := decodeJSONObjectArgs([]byte(trimmed))
+	if err != nil || len(priorObj) == 0 {
+		logger.Warn("openai chat 工具参数分片形态混用：先前字符串分片无法解析为 JSON 对象，已忽略",
+			"model_call_id", modelCallID, "tool_index", toolIndex, "bytes", len(prior), "err", err)
+		return
+	}
+	deepMergeJSONObject(merged, priorObj)
 }
 
 const (

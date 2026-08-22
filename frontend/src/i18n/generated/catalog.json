@@ -405,7 +405,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 123,
+          "line": 144,
           "column": 50
         }
       ]
@@ -2465,6 +2465,18 @@
         }
       ]
     },
+    "194641c86737556a": {
+      "source": "同步厂商余额失败",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
+          "line": 63,
+          "column": 53
+        }
+      ]
+    },
     "195a6689428e6120": {
       "source": "官方请求镜像记录（调试）",
       "kind": "text",
@@ -2944,7 +2956,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 639,
+          "line": 642,
           "column": 66
         }
       ]
@@ -3997,7 +4009,7 @@
       "refs": [
         {
           "file": "src/views/ControlCenter.vue",
-          "line": 80,
+          "line": 84,
           "column": 45
         }
       ]
@@ -4839,7 +4851,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 37,
+          "line": 44,
           "column": 74
         }
       ]
@@ -5116,7 +5128,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 474,
+          "line": 477,
           "column": 99
         }
       ]
@@ -5359,7 +5371,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 93,
+          "line": 114,
           "column": 16
         }
       ]
@@ -6700,7 +6712,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 141,
+          "line": 162,
           "column": 20
         },
         {
@@ -7332,7 +7344,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 141,
+          "line": 162,
           "column": 20
         },
         {
@@ -7439,7 +7451,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 93,
+          "line": 114,
           "column": 16
         },
         {
@@ -7735,7 +7747,7 @@
         },
         {
           "file": "src/views/ControlCenter.vue",
-          "line": 79,
+          "line": 83,
           "column": 56
         }
       ]
@@ -7870,7 +7882,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 570,
+          "line": 573,
           "column": 128
         }
       ]
@@ -8372,17 +8384,17 @@
         },
         {
           "file": "src/views/ControlCenter.vue",
-          "line": 85,
+          "line": 89,
           "column": 9
         },
         {
           "file": "src/views/ControlCenter.vue",
-          "line": 86,
+          "line": 90,
           "column": 9
         },
         {
           "file": "src/views/ControlCenter.vue",
-          "line": 91,
+          "line": 95,
           "column": 15
         },
         {
@@ -10418,7 +10430,7 @@
       "refs": [
         {
           "file": "src/views/ControlCenter.vue",
-          "line": 137,
+          "line": 139,
           "column": 17
         }
       ]
@@ -10782,7 +10794,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 119,
+          "line": 140,
           "column": 9
         }
       ]
@@ -12022,7 +12034,7 @@
       "refs": [
         {
           "file": "src/views/ControlCenter.vue",
-          "line": 101,
+          "line": 103,
           "column": 9
         }
       ]
@@ -12363,7 +12375,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 84,
+          "line": 105,
           "column": 7
         }
       ]
@@ -13344,7 +13356,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 90,
+          "line": 111,
           "column": 59
         },
         {
@@ -14868,7 +14880,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 63,
+          "line": 96,
           "column": 12
         }
       ]
@@ -15345,7 +15357,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 61,
+          "line": 94,
           "column": 33
         },
         {
@@ -16937,7 +16949,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 124,
+          "line": 145,
           "column": 60
         }
       ]
@@ -17514,7 +17526,7 @@
         },
         {
           "file": "src/views/ControlCenter.vue",
-          "line": 138,
+          "line": 140,
           "column": 56
         },
         {
@@ -17828,7 +17840,7 @@
       "refs": [
         {
           "file": "src/views/ControlCenter.vue",
-          "line": 62,
+          "line": 66,
           "column": 61
         }
       ]
@@ -19133,7 +19145,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 114,
+          "line": 135,
           "column": 71
         }
       ]
@@ -19856,7 +19868,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 101,
+          "line": 122,
           "column": 9
         }
       ]
@@ -21850,7 +21862,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 85,
+          "line": 106,
           "column": 7
         }
       ]
@@ -23107,7 +23119,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 60,
+          "line": 93,
           "column": 53
         },
         {

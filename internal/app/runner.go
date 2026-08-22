@@ -17,6 +17,7 @@ import (
 	"cursor/internal/appdata"
 	serverconfig "cursor/internal/backend/server/config"
 	"cursor/internal/buildinfo"
+	"cursor/internal/client"
 	"cursor/internal/cursor"
 	"cursor/internal/historymetrics"
 	"cursor/internal/i18n"
@@ -64,6 +65,7 @@ func init() {
 	application.RegisterEvent[bridge.ProxyState]("proxy:state")
 	application.RegisterEvent[bridge.UserConfig]("user-config:changed")
 	application.RegisterEvent[bridge.ModelAdapterTestResultsPayload]("model-adapter-test:updated")
+	application.RegisterEvent[client.ProviderBalancesSyncedPayload]("provider-balances-synced")
 	application.RegisterEvent[bridge.AdRuntime](ads.EventUpdated)
 	application.RegisterEvent[updater.StatePayload](updater.EventState)
 	application.RegisterEvent[updater.ProgressPayload](updater.EventProgress)

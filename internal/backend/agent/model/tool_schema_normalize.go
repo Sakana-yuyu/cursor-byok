@@ -104,12 +104,19 @@ func walkToolSchemaNode(policy toolSchemaPolicy, value any, depth int, nodes *in
 			if key == "properties" {
 				// properties 容器本身不是 schema 节点：只递归各属性值，
 				// 避免把与保留关键字同名的属性名误当关键字剥离。
+				// 键按字典序排序后再递归：nodes 预算超限时截断的是确定
+				// 的前缀集合，保证超限 schema 的清洗结果逐字节确定。
 				propertyMap, ok := child.(map[string]any)
 				if !ok {
 					continue
 				}
-				for _, property := range propertyMap {
-					walkToolSchemaNode(policy, property, depth+1, nodes)
+				propertyNames := make([]string, 0, len(propertyMap))
+				for propertyName := range propertyMap {
+					propertyNames = append(propertyNames, propertyName)
+				}
+				sort.Strings(propertyNames)
+				for _, propertyName := range propertyNames {
+					walkToolSchemaNode(policy, propertyMap[propertyName], depth+1, nodes)
 				}
 				continue
 			}

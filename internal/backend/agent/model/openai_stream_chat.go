@@ -170,6 +170,7 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 	textStripper := newDeepSeekSpecialTokenStripper(compatKind == "deepseek")
 	argsStripper := newDeepSeekSpecialTokenStripper(compatKind == "deepseek")
 	toolObjectArgs := make(map[int]map[string]any)
+	toolArgsShardModes := make(map[int]string)
 	lastToolIndex := -1
 	finishPromotionLogged := false
 	effectiveFinishReason := func() string {
@@ -576,14 +577,19 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 					// 分片）下发，固定按字符串拼接会让终态 unmarshal 失败断流。
 					// 对象分片递归深合并到累积对象后回写 Args 快照，进度解析与
 					// completedOpenAIToolArgsJSON 终态校验路径无需感知差异。
-					var objDelta map[string]any
-					if err := json.Unmarshal(rawArgs, &objDelta); err != nil {
-						return fail(fmt.Errorf("openai chat 工具参数对象分片解析失败: %w", err))
+					objDelta, objErr := decodeJSONObjectArgs(rawArgs)
+					if objErr != nil {
+						return fail(fmt.Errorf("openai chat 工具参数对象分片解析失败: %w", objErr))
 					}
 					merged := toolObjectArgs[item.Index]
 					if merged == nil {
 						merged = make(map[string]any)
 						toolObjectArgs[item.Index] = merged
+					}
+					if toolArgsShardModes[item.Index] == openAIToolShardModeString {
+						// F-3：混合形态防护——此前按字符串分片累积，先把已累积内容
+						// 整体解析为对象并入 merged；无法解析时告警丢弃，不静默、不断流。
+						absorbStringArgsIntoObject(req.ModelCallID, item.Index, accumulator.Args.String(), merged)
 					}
 					deepMergeJSONObject(merged, objDelta)
 					snapshot, snapErr := json.Marshal(merged)
@@ -592,6 +598,10 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 					}
 					accumulator.Args.Reset()
 					accumulator.Args.Write(snapshot)
+					toolArgsShardModes[item.Index] = openAIToolShardModeObject
+					// F-4：对象模式没有明文增量，快照变化后以摘要触发一次进度事件，
+					// 避免普通工具的流式进度事件整体缺失。
+					argsTextDelta = fmt.Sprintf("[merged-object-args %d bytes]", len(snapshot))
 				} else {
 					// 标准形态：arguments 是 JSON 字符串字面量（RawMessage 含引号
 					// 与转义），先解码还原为明文分片再拼接，行为与旧 string 字段一致；
@@ -600,10 +610,32 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 					if err := json.Unmarshal(rawArgs, &piece); err != nil {
 						return fail(fmt.Errorf("openai chat 工具参数分片类型不支持: %w", err))
 					}
-					if stripped := argsStripper.Feed(piece); stripped != "" {
-						// V-3：剥离泄漏进工具参数的 DeepSeek 特殊 token。
-						_, _ = accumulator.Args.WriteString(stripped)
-						argsTextDelta = stripped
+					switch toolArgsShardModes[item.Index] {
+					case openAIToolShardModeObject:
+						// F-3：混合形态防护——此前已按对象分片累积，字符串分片仅在
+						// 能整体解析为 JSON 对象时并入 merged 并回写快照；否则告警并
+						// 忽略该分片（不追加进 Args 快照、不断流）。
+						pieceObj, pieceErr := decodeJSONObjectArgs([]byte(piece))
+						if pieceErr == nil && len(pieceObj) > 0 {
+							deepMergeJSONObject(toolObjectArgs[item.Index], pieceObj)
+							snapshot, snapErr := json.Marshal(toolObjectArgs[item.Index])
+							if snapErr != nil {
+								return fail(snapErr)
+							}
+							accumulator.Args.Reset()
+							accumulator.Args.Write(snapshot)
+							argsTextDelta = fmt.Sprintf("[merged-object-args %d bytes]", len(snapshot))
+						} else {
+							logger.Warn("openai chat 工具参数分片形态混用：对象模式下收到不可解析的字符串分片，已忽略",
+								"model_call_id", req.ModelCallID, "tool_index", item.Index, "bytes", len(piece), "err", pieceErr)
+						}
+					default:
+						if stripped := argsStripper.Feed(piece); stripped != "" {
+							// V-3：剥离泄漏进工具参数的 DeepSeek 特殊 token。
+							_, _ = accumulator.Args.WriteString(stripped)
+							argsTextDelta = stripped
+						}
+						toolArgsShardModes[item.Index] = openAIToolShardModeString
 					}
 				}
 				lastToolIndex = item.Index
@@ -651,8 +683,11 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 					return fail(err)
 				}
 				streamIdle.MarkEffectiveContent()
+				// F-1：只在真正发出 ToolLikeCompleted 后置位；纯文本回合的
+				// stop 不得被提升为 tool_calls（否则下游 forwarder 空 resume
+				// 会重复输出甚至循环）。
+				emittedToolInvocation = true
 			}
-			emittedToolInvocation = true
 			tools = make(map[int]*openAIToolAccumulator)
 			finishReason = strings.TrimSpace(*choice.FinishReason)
 			turnFinishedPending = true
@@ -706,6 +741,14 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 			turnFinishedPending = true
 		} else {
 			return fail(fmt.Errorf("provider stream ended before terminal event"))
+		}
+	}
+	// F-2：收尾时放行正文剥离器缓冲的残余。[DONE] 分支 break 与无终止事件的
+	// EOF 两条路径都汇合到此处，若不 Flush，deepseek 剥离器跨分片缓冲的尾部
+	// 正文会被静默丢弃。
+	if tail := textStripper.Flush(); tail != "" {
+		if err := emitTaggedContentParts(thinkParser.Consume(tail)); err != nil {
+			return fail(err)
 		}
 	}
 	if err := flushTaggedContentTail(); err != nil {

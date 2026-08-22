@@ -390,6 +390,9 @@ export function installTerminalDependency(target) {
 // 安装进度事件名（与后端 terminalenv.EventInstallProgress 一致）。
 export const TERMINAL_INSTALL_PROGRESS_EVENT = "terminalenv:install-progress";
 
+// 余额同步完成事件名（与后端 Wails 事件 provider-balances-synced 一致）。
+export const PROVIDER_BALANCES_SYNCED_EVENT = "provider-balances-synced";
+
 export function getHomeMetricsSummary() {
   return withApiLogging("GetHomeMetricsSummary", undefined, () => desktopOrMockRaw(browserPreviewMockMetrics(), "@bindings/cursor/internal/bridge/metricsservice.js", "GetHomeMetricsSummary"));
 }

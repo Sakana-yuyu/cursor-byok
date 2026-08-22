@@ -667,6 +667,7 @@ func modelAdapterConfigDedupeIdentity(adapter ModelAdapterConfig) string {
 		strings.TrimSpace(adapter.AnthropicAuthMode),
 		strconv.FormatBool(adapter.CustomHeadersEnabled),
 		strings.TrimSpace(adapter.ToolCallMode),
+		strings.TrimSpace(adapter.CompatibilityKind),
 		strings.TrimSpace(adapter.CustomHeadersJSON),
 	}, "\n")
 }

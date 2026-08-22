@@ -52,16 +52,20 @@ watch(
 );
 
 // 概览加载与面板渲染解耦：概览失败或挂起时各 tab 面板仍可独立加载。
+let overviewSeq = 0;
 async function loadOverview() {
+  const seq = ++overviewSeq;
   overviewLoading.value = true;
   overviewError.value = "";
   try {
-    overview.value = await getControlCenterOverview();
+    const data = await getControlCenterOverview();
+    if (seq === overviewSeq) overview.value = data;
   } catch (error) {
+    if (seq !== overviewSeq) return;
     overview.value = null;
     overviewError.value = error?.message || String(error || "加载概览失败");
   } finally {
-    overviewLoading.value = false;
+    if (seq === overviewSeq) overviewLoading.value = false;
   }
 }
 
@@ -91,8 +95,6 @@ onMounted(() => {
         <span>返回</span>
       </button>
     </header>
-
-    <ControlCenterOverviewBar :overview="overview" :active-tab="activeTab" />
 
     <div class="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
       <nav
