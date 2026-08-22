@@ -22,61 +22,6 @@ import (
 	"cursor/internal/localcache"
 )
 
-// cacheKeyCache 缓存请求 → 缓存 key 的映射，避免对相同请求重复 JSON 序列化 + SHA256。
-// 使用轻量级指纹作为 lookup key，在大多数情况下可跳过昂贵的 json.Marshal 调用。
-type cacheKeyCache struct {
-	mu      sync.RWMutex
-	entries map[string]string // fingerprint → hex key
-	order   []string          // FIFO 队列
-	maxSize int
-}
-
-func newCacheKeyCache(maxSize int) *cacheKeyCache {
-	return &cacheKeyCache{
-		entries: make(map[string]string, maxSize),
-		order:   make([]string, 0, maxSize),
-		maxSize: maxSize,
-	}
-}
-
-// fingerprint must have the same semantic shape as providerCacheKey. Keeping a
-// separate partial encoder here previously let tool calls and multi-digit budgets
-// collide, so the memoized lookup could return a key for another request.
-func (c *cacheKeyCache) fingerprint(req ProviderRequest) string {
-	return providerCacheKey(req)
-}
-
-func (c *cacheKeyCache) get(req ProviderRequest) string {
-	fp := c.fingerprint(req)
-	c.mu.RLock()
-	key, ok := c.entries[fp]
-	c.mu.RUnlock()
-	if ok {
-		return key
-	}
-	return ""
-}
-
-func (c *cacheKeyCache) put(req ProviderRequest, key string) {
-	fp := c.fingerprint(req)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if _, exists := c.entries[fp]; exists {
-		return // 已存在，无需更新
-	}
-
-	// FIFO 淘汰
-	if len(c.entries) >= c.maxSize {
-		oldest := c.order[0]
-		delete(c.entries, oldest)
-		c.order = c.order[1:]
-	}
-
-	c.entries[fp] = key
-	c.order = append(c.order, fp)
-}
-
 // localResponseCacheSettingsProvider 由 resolver（配置管理器）实现，用于按调用即时读取
 // 本地响应缓存的启用状态、TTL、最大条目数与持久化开关（支持配置热加载）。
 type localResponseCacheSettingsProvider interface {
@@ -93,7 +38,6 @@ type cachingProviderGateway struct {
 	settings    func() (enabled bool, ttl time.Duration, maxEntries int, persist bool)
 	modelSource func(context.Context, string) string
 	store       *responseCacheStore
-	keyCache    *cacheKeyCache // 缓存 key 哈希计算结果
 }
 
 // newCachingProviderGateway 构造响应缓存网关。persistPath 为空时不做磁盘持久化。
@@ -113,7 +57,6 @@ func newCachingProviderGateway(inner ProviderGateway, settings func() (bool, tim
 			_, _, _, persist := settings()
 			return persist
 		}),
-		keyCache: newCacheKeyCache(1024), // 缓存最近 1024 个请求的 key
 	}
 }
 
@@ -135,13 +78,7 @@ func (gateway *cachingProviderGateway) StartStream(ctx context.Context, req Prov
 		}
 	}
 
-	key := gateway.keyCache.get(req)
-	if key == "" {
-		key = providerCacheKey(req)
-		if key != "" {
-			gateway.keyCache.put(req, key)
-		}
-	}
+	key := providerCacheKey(req)
 	if key == "" {
 		// 无法归一化 key（序列化失败）：直接透传，不参与缓存与合并。
 		return gateway.inner.StartStream(ctx, req, sink)

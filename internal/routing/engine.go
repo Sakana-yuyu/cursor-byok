@@ -274,10 +274,13 @@ func scoreCandidate(policy Policy, request Request, candidate CandidateInput) Ca
 }
 
 func weightedScore(policy Policy, candidate CandidateInput) int {
+	// 四个子分统一到 0–1000 口径再乘权重：latency/cost 天然 0–1000；
+	// reliability 是 bp（0–10000）÷10、balance 是百分比（0–100）×10。
+	// 否则同等权重下可靠性与余额贡献被系统性压低一个数量级。
 	latency := latencyScore(candidate.RecentTTFTMS) * policy.LatencyWeight
 	cost := costScore(candidate) * policy.CostWeight
-	reliability := candidate.RecentSuccessBasisPoints * policy.ReliabilityWeight / 100
-	balance := balanceScore(candidate) * policy.BalanceWeight
+	reliability := candidate.RecentSuccessBasisPoints / 10 * policy.ReliabilityWeight
+	balance := balanceScore(candidate) * 10 * policy.BalanceWeight
 	return latency + cost + reliability + balance
 }
 

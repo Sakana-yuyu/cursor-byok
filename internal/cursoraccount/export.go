@@ -191,8 +191,7 @@ func (manager *Manager) ExecuteRecoveryExport(confirmationToken, destinationPath
 
 	records, err := manager.store.recordsByIDs(ids)
 	if err != nil {
-		logger.Infof("cursor account recovery export failed count=%d file=%s", len(ids), filepath.Base(dest))
-		return failedExportResult(operationID, "account_export_write_failed"), err
+		return failedExportResult(operationID, "account_export_write_failed"), fmt.Errorf("cursor account recovery export %s: %w", operationID, err)
 	}
 	pack := recoveryPack{
 		Version:  recoveryPackVersion,
@@ -212,8 +211,7 @@ func (manager *Manager) ExecuteRecoveryExport(confirmationToken, destinationPath
 		})
 	}
 	if err := writeJSONFile(dest, pack); err != nil {
-		logger.Infof("cursor account recovery export failed count=%d file=%s", len(ids), filepath.Base(dest))
-		return failedExportResult(operationID, "account_export_write_failed"), accountError("account_export_write_failed", "account export write failed")
+		return failedExportResult(operationID, "account_export_write_failed"), fmt.Errorf("cursor account recovery export %s: %w", operationID, err)
 	}
 	logger.Infof("cursor account recovery export succeeded count=%d file=%s", len(ids), filepath.Base(dest))
 	return CursorAccountRecoveryExportResult{

@@ -142,9 +142,9 @@ func (manager *Manager) ExecuteCursorClientAccountSwitch(confirmationToken strin
 	ctx := context.Background()
 	result, err := manager.executeSwitch(ctx, pending)
 	if err != nil {
-		logger.Infof("cursor client account switch failed operation=%s", pending.operationID)
+		return result, fmt.Errorf("cursor client account switch %s: %w", pending.operationID, err)
 	}
-	return result, err
+	return result, nil
 }
 
 func (manager *Manager) executeSwitch(ctx context.Context, pending *pendingSwitch) (result CursorAccountSwitchResult, err error) {
@@ -167,20 +167,19 @@ func (manager *Manager) executeSwitch(ctx context.Context, pending *pendingSwitc
 		backedUp   bool
 		backup     cursor.CursorStateBackup
 		currentSet bool
-		previousID = pending.previousID
+		previousID string
 	)
 	defer func() {
 		if err == nil {
 			return
 		}
-		result = manager.rollbackSwitch(ctx, runtime, backup, backedUp, started, currentSet, previousID, pending.operationID, result.ErrorCode, err)
+		result = manager.rollbackSwitch(ctx, runtime, backup, backedUp, started, stopped, currentSet, previousID, pending.operationID, result.ErrorCode, err)
 	}()
 
 	if err = runtime.Stop(ctx); err != nil {
 		return failedSwitchResult(pending.operationID, "cursor_process_close_failed"), wrapAccountError("cursor_process_close_failed", "close cursor failed", err)
 	}
 	stopped = true
-	_ = stopped
 
 	dest := filepath.Join(manager.store.root, storeDirName, "backups", pending.operationID)
 	backup, err = cursor.BackupCursorStateFiles(dbPath, dest)
@@ -201,6 +200,9 @@ func (manager *Manager) executeSwitch(ctx context.Context, pending *pendingSwitc
 		return failedSwitchResult(pending.operationID, "account_switch_verify_failed"), wrapAccountError("account_switch_verify_failed", "verify cursor auth failed", err)
 	}
 
+	// 回滚指针以执行时的实时当前账号为准：prepare 到 execute 之间当前账号
+	// 可能已被其他操作改变，不能用 prepare 时刻的冻结值，否则会回滚到过期指针。
+	previousID = manager.store.CurrentAccountID()
 	if _, err = manager.store.SetCurrent(record.ID); err != nil {
 		return failedSwitchResult(pending.operationID, "account_switch_write_failed"), err
 	}
@@ -231,6 +233,7 @@ func (manager *Manager) rollbackSwitch(
 	backup cursor.CursorStateBackup,
 	backedUp bool,
 	started bool,
+	stopped bool,
 	currentSet bool,
 	previousID string,
 	operationID string,
@@ -252,8 +255,14 @@ func (manager *Manager) rollbackSwitch(
 		}
 		manager.adoptCurrentFromStore()
 	}
+	// 切换流程关闭了用户的 Cursor 时，回滚完状态后必须把它重新拉起，
+	// 否则任何失败路径都会把客户端留在关闭状态（包括 cursor_restart_failed）。
+	if stopped && !started && runtime != nil {
+		restoreErr = errors.Join(restoreErr, runtime.Start(ctx))
+	}
 	if restoreErr != nil {
-		logger.Infof("cursor client account switch rollback failed operation=%s", operationID)
+		// restoreErr 只在这里落地（结果结构体只携带状态码），带上根因方便排障。
+		logger.Infof("cursor client account switch rollback incomplete operation=%s cause=%v", operationID, restoreErr)
 		return CursorAccountSwitchResult{
 			OperationResult: controlcenter.OperationResult{
 				OperationID:      operationID,

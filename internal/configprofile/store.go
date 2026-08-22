@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -222,10 +223,36 @@ func (store *Store) ExecuteApply(confirmationToken string, current serverconfig.
 	merged := mergeConfig(current, incoming, profile.Summary.Domains)
 	normalized, err := persist(merged)
 	if err != nil {
-		_, _ = persist(current)
-		return controlcenter.OperationResult{OperationID: pending.token, State: "rolled_back", ErrorCode: "profile_apply_failed", RollbackState: "succeeded", FinishedAtUnixMS: time.Now().UnixMilli()}, controlcenter.NewError("profile_apply_failed", "apply failed")
+		rollbackState := "failed"
+		if _, rollbackErr := persist(current); rollbackErr == nil {
+			rollbackState = "succeeded"
+		}
+		return controlcenter.OperationResult{OperationID: pending.token, State: "rolled_back", ErrorCode: "profile_apply_failed", RollbackState: rollbackState, FinishedAtUnixMS: time.Now().UnixMilli()}, controlcenter.NewError("profile_apply_failed", "apply failed")
 	}
-	_ = normalized
+	// 保存后重新读取的归一化校验：persist 回调本身是 Save(归一化)+Load(重读)。
+	// 这里做防退化兜底——models 域不在本次应用范围时适配器列表必须原样保留，
+	// 在范围内时也不允许被清空；否则视为应用失败并自动恢复快照。
+	modelsRequested := false
+	for _, domain := range profile.Summary.Domains {
+		if domain == "models" {
+			modelsRequested = true
+			break
+		}
+	}
+	dropped := false
+	if !modelsRequested && len(normalized.ModelAdapters) < len(current.ModelAdapters) {
+		dropped = true
+	}
+	if modelsRequested && len(merged.ModelAdapters) > 0 && len(normalized.ModelAdapters) == 0 {
+		dropped = true
+	}
+	if dropped {
+		rollbackState := "failed"
+		if _, rollbackErr := persist(current); rollbackErr == nil {
+			rollbackState = "succeeded"
+		}
+		return controlcenter.OperationResult{OperationID: pending.token, State: "rolled_back", ErrorCode: "profile_apply_verification_failed", RollbackState: rollbackState, FinishedAtUnixMS: time.Now().UnixMilli()}, controlcenter.NewError("profile_apply_verification_failed", "re-read config lost model adapters")
+	}
 	store.cleanupBackups()
 	return controlcenter.OperationResult{OperationID: pending.token, State: "succeeded", RollbackState: "available", FinishedAtUnixMS: time.Now().UnixMilli()}, nil
 }
@@ -510,14 +537,133 @@ func resolveBindings(current serverconfig.Config, incoming profilePayload) []Cre
 }
 
 func diffPayload(current serverconfig.Config, incoming profilePayload, domains []string) []Change {
-	changes := make([]Change, 0)
+	wanted := map[string]struct{}{}
 	for _, domain := range domains {
-		changes = append(changes, Change{Path: "/" + domain, ChangeKind: "update", Sensitive: false})
+		wanted[domain] = struct{}{}
 	}
-	if incoming.Routing != nil && incoming.Routing.Mode != current.Routing.Mode {
-		changes = append(changes, Change{Path: "/routing/mode", ChangeKind: "update", Sensitive: false})
+	changes := make([]Change, 0)
+	if incoming.Routing != nil {
+		if _, ok := wanted["routing"]; ok && incoming.Routing.Mode != current.Routing.Mode {
+			changes = append(changes, Change{Path: "/routing/mode", ChangeKind: "update", Sensitive: false})
+		}
+	}
+	if incoming.Delegation != nil {
+		if _, ok := wanted["delegation"]; ok && !reflect.DeepEqual(*incoming.Delegation, current.Delegation) {
+			changes = append(changes, Change{Path: "/delegation", ChangeKind: "update", Sensitive: false})
+		}
+	}
+	if incoming.SkillMCP != nil {
+		if _, ok := wanted["skills_mcp"]; ok && !reflect.DeepEqual(*incoming.SkillMCP, current.SkillMCPScan) {
+			changes = append(changes, Change{Path: "/skills_mcp", ChangeKind: "update", Sensitive: false})
+		}
+	}
+	if incoming.ComputerUse != nil {
+		if _, ok := wanted["computer_use"]; ok && !reflect.DeepEqual(*incoming.ComputerUse, current.ComputerUse) {
+			changes = append(changes, Change{Path: "/computer_use", ChangeKind: "update", Sensitive: false})
+		}
+	}
+	if incoming.HomeMetrics != nil {
+		if _, ok := wanted["appearance"]; ok && !reflect.DeepEqual(*incoming.HomeMetrics, current.HomeMetrics) {
+			changes = append(changes, Change{Path: "/appearance", ChangeKind: "update", Sensitive: false})
+		}
+	}
+	if incoming.Adapters != nil {
+		if _, ok := wanted["models"]; ok {
+			byID := map[string]map[string]any{}
+			for _, adapter := range incoming.Adapters {
+				id, _ := adapter["id"].(string)
+				byID[strings.TrimSpace(id)] = adapter
+			}
+			for i := range current.ModelAdapters {
+				id := strings.TrimSpace(current.ModelAdapters[i].ID)
+				patch, ok := byID[id]
+				if !ok {
+					continue
+				}
+				for _, field := range adapterPatchFieldDiffs(&current.ModelAdapters[i], patch) {
+					changes = append(changes, Change{Path: "/models/" + id + "/" + field, ChangeKind: "update", Sensitive: false})
+				}
+			}
+		}
 	}
 	return changes
+}
+
+// adapterPatchFieldDiffs 返回会被 applyAdapterPatch 实际改写的字段名，
+// 语义与 applyAdapterPatch 一一对应：空字符串不覆盖、凭据字段不参与。
+func adapterPatchFieldDiffs(adapter *serverconfig.ModelAdapterConfig, patch map[string]any) []string {
+	var fields []string
+	stringDiffers := func(key string, current string) bool {
+		value, ok := patch[key].(string)
+		return ok && value != "" && value != current
+	}
+	intDiffers := func(key string, current int) bool {
+		value, ok := patch[key].(float64)
+		return ok && int(value) != current
+	}
+	boolDiffers := func(key string, current bool) bool {
+		value, ok := patch[key].(bool)
+		return ok && value != current
+	}
+	if stringDiffers("displayName", adapter.DisplayName) {
+		fields = append(fields, "displayName")
+	}
+	if value, ok := patch["groupName"].(string); ok && value != adapter.GroupName {
+		fields = append(fields, "groupName")
+	}
+	if stringDiffers("type", adapter.Type) {
+		fields = append(fields, "type")
+	}
+	if value, ok := patch["supplierID"].(string); ok && value != adapter.SupplierID {
+		fields = append(fields, "supplierID")
+	}
+	if stringDiffers("protocolMode", adapter.ProtocolMode) {
+		fields = append(fields, "protocolMode")
+	}
+	if stringDiffers("baseURL", adapter.BaseURL) {
+		fields = append(fields, "baseURL")
+	}
+	if stringDiffers("modelID", adapter.ModelID) {
+		fields = append(fields, "modelID")
+	}
+	if stringDiffers("reasoningEffort", adapter.ReasoningEffort) {
+		fields = append(fields, "reasoningEffort")
+	}
+	if stringDiffers("openAIEndpoint", adapter.OpenAIEndpoint) {
+		fields = append(fields, "openAIEndpoint")
+	}
+	if value, ok := patch["openAIServiceTier"].(string); ok && value != adapter.OpenAIServiceTier {
+		fields = append(fields, "openAIServiceTier")
+	}
+	if stringDiffers("anthropicThinkingEffort", adapter.AnthropicThinkingEffort) {
+		fields = append(fields, "anthropicThinkingEffort")
+	}
+	if intDiffers("contextWindowTokens", adapter.ContextWindowTokens) {
+		fields = append(fields, "contextWindowTokens")
+	}
+	if intDiffers("maxCompletionTokens", adapter.MaxCompletionTokens) {
+		fields = append(fields, "maxCompletionTokens")
+	}
+	if intDiffers("anthropicMaxTokens", adapter.AnthropicMaxTokens) {
+		fields = append(fields, "anthropicMaxTokens")
+	}
+	if intDiffers("thinkingBudgetTokens", adapter.ThinkingBudgetTokens) {
+		fields = append(fields, "thinkingBudgetTokens")
+	}
+	if boolDiffers("fastMode", adapter.FastMode) {
+		fields = append(fields, "fastMode")
+	}
+	if boolDiffers("customHeadersEnabled", adapter.CustomHeadersEnabled) {
+		fields = append(fields, "customHeadersEnabled")
+	}
+	if value, ok := patch["pricing"]; ok {
+		incoming, incomingErr := json.Marshal(value)
+		current, currentErr := json.Marshal(adapter.Pricing)
+		if (incomingErr == nil && currentErr == nil && string(incoming) != string(current)) || (adapter.Pricing == nil) != (value == nil) {
+			fields = append(fields, "pricing")
+		}
+	}
+	return fields
 }
 
 func mergeConfig(current serverconfig.Config, incoming profilePayload, domains []string) serverconfig.Config {
@@ -559,24 +705,84 @@ func mergeConfig(current serverconfig.Config, incoming profilePayload, domains [
 				byID[strings.TrimSpace(id)] = adapter
 			}
 			for i := range current.ModelAdapters {
-				id := strings.TrimSpace(current.ModelAdapters[i].ID)
-				patch, ok := byID[id]
+				patch, ok := byID[strings.TrimSpace(current.ModelAdapters[i].ID)]
 				if !ok {
 					continue
 				}
-				if value, ok := patch["displayName"].(string); ok {
-					current.ModelAdapters[i].DisplayName = value
-				}
-				if value, ok := patch["groupName"].(string); ok {
-					current.ModelAdapters[i].GroupName = value
-				}
-				if value, ok := patch["modelID"].(string); ok {
-					current.ModelAdapters[i].ModelID = value
-				}
+				applyAdapterPatch(&current.ModelAdapters[i], patch)
 			}
 		}
 	}
 	return current
+}
+
+// applyAdapterPatch 把 profile 快照里的非凭据字段回写到现有适配器。
+// 凭据（APIKey/请求头 JSON 等）不在快照里，天然保留当前值；字符串字段为空
+// 视为快照缺失，不用空值覆盖现状；数值与布尔按快照原样回写（快照来自已
+// 归一化配置，零值就是用户配置的真实状态）。
+func applyAdapterPatch(adapter *serverconfig.ModelAdapterConfig, patch map[string]any) {
+	if value, ok := patch["id"].(string); ok && strings.TrimSpace(value) != "" {
+		adapter.ID = strings.TrimSpace(value)
+	}
+	if value, ok := patch["displayName"].(string); ok && value != "" {
+		adapter.DisplayName = value
+	}
+	if value, ok := patch["groupName"].(string); ok {
+		adapter.GroupName = value
+	}
+	if value, ok := patch["type"].(string); ok && value != "" {
+		adapter.Type = value
+	}
+	if value, ok := patch["supplierID"].(string); ok {
+		adapter.SupplierID = value
+	}
+	if value, ok := patch["protocolMode"].(string); ok && value != "" {
+		adapter.ProtocolMode = value
+	}
+	if value, ok := patch["baseURL"].(string); ok && value != "" {
+		adapter.BaseURL = value
+	}
+	if value, ok := patch["modelID"].(string); ok && value != "" {
+		adapter.ModelID = value
+	}
+	if value, ok := patch["reasoningEffort"].(string); ok && value != "" {
+		adapter.ReasoningEffort = value
+	}
+	if value, ok := patch["openAIEndpoint"].(string); ok && value != "" {
+		adapter.OpenAIEndpoint = value
+	}
+	if value, ok := patch["openAIServiceTier"].(string); ok {
+		adapter.OpenAIServiceTier = value
+	}
+	if value, ok := patch["anthropicThinkingEffort"].(string); ok && value != "" {
+		adapter.AnthropicThinkingEffort = value
+	}
+	if value, ok := patch["contextWindowTokens"].(float64); ok {
+		adapter.ContextWindowTokens = int(value)
+	}
+	if value, ok := patch["maxCompletionTokens"].(float64); ok {
+		adapter.MaxCompletionTokens = int(value)
+	}
+	if value, ok := patch["anthropicMaxTokens"].(float64); ok {
+		adapter.AnthropicMaxTokens = int(value)
+	}
+	if value, ok := patch["thinkingBudgetTokens"].(float64); ok {
+		adapter.ThinkingBudgetTokens = int(value)
+	}
+	if value, ok := patch["fastMode"].(bool); ok {
+		adapter.FastMode = value
+	}
+	if value, ok := patch["customHeadersEnabled"].(bool); ok {
+		adapter.CustomHeadersEnabled = value
+	}
+	if value, ok := patch["pricing"]; ok && value != nil {
+		if encoded, err := json.Marshal(value); err == nil {
+			var pricing serverconfig.ModelPricing
+			if err := json.Unmarshal(encoded, &pricing); err == nil {
+				adapter.Pricing = &pricing
+			}
+		}
+	}
 }
 
 func containsSecret(raw []byte) bool {

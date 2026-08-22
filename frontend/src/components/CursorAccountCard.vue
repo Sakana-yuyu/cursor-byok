@@ -340,6 +340,9 @@ onBeforeUnmount(() => {
           <p v-else class="mt-1 text-xs text-[#8a8a8a]">
             管理控制面身份与 Cursor 客户端登录；切换后会自动刷新各厂商余额。
           </p>
+          <p class="mt-1 text-xs leading-5 text-[#8f8f8f]">
+            Agent 内置模型执行通道仍需与真实 Cursor 请求协议完成比对验证，当前不会将账户授权用于第三方 API。
+          </p>
         </div>
         <div class="center-row flex-wrap gap-2">
           <Button v-if="props.showControlCenterLink" variant="text" @click="openControlCenter">打开控制中心</Button>

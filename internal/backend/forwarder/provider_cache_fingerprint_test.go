@@ -37,14 +37,13 @@ func visionDescribeReq(data []byte, path string) ProviderRequest {
 
 // TestCacheKeyFingerprintDistinguishesImages 验证不同图片 → 不同指纹。
 func TestCacheKeyFingerprintDistinguishesImages(t *testing.T) {
-	kc := newCacheKeyCache(64)
 	reqA := visionDescribeReq([]byte("first-image-bytes-AAAA"), "c:/a.png")
 	reqB := visionDescribeReq([]byte("second-image-bytes-BBBB"), "c:/b.png")
 	reqA2 := visionDescribeReq([]byte("first-image-bytes-AAAA"), "c:/a.png") // 与 A 完全相同
 
-	fpA := kc.fingerprint(reqA)
-	fpB := kc.fingerprint(reqB)
-	fpA2 := kc.fingerprint(reqA2)
+	fpA := providerCacheKey(reqA)
+	fpB := providerCacheKey(reqB)
+	fpA2 := providerCacheKey(reqA2)
 
 	if fpA == fpB {
 		t.Fatalf("不同图片必须产生不同指纹，实际碰撞: %q == %q", fpA, fpB)
@@ -254,14 +253,13 @@ func TestContextProjectionCoveredPrefixFingerprintStable(t *testing.T) {
 
 // TestProviderCacheKeyTextOnlyStable 相同纯文本请求指纹稳定（回归旧行为不破坏）。
 func TestProviderCacheKeyTextOnlyStable(t *testing.T) {
-	kc := newCacheKeyCache(64)
 	req := ProviderRequest{
 		ModelID: "deepseek-v4-flash",
 		Messages: []modeladapter.Message{
 			{Role: "user", Content: fmt.Sprintf("你好，%d", 1)},
 		},
 	}
-	if kc.fingerprint(req) != kc.fingerprint(req) {
+	if providerCacheKey(req) != providerCacheKey(req) {
 		t.Fatal("相同纯文本请求指纹必须稳定")
 	}
 }
@@ -269,7 +267,6 @@ func TestProviderCacheKeyTextOnlyStable(t *testing.T) {
 // TestCacheKeyFingerprintIsolatesConversations 完全相同 provider-visible 请求但属于
 // 不同 conversation 时，本地响应缓存必须给出不同键：不能把 A 会话的完成流回放给 B。
 func TestCacheKeyFingerprintIsolatesConversations(t *testing.T) {
-	kc := newCacheKeyCache(64)
 	base := ProviderRequest{
 		ModelID:   "deepseek-v4-flash",
 		ModelName: "deepseek-v4-flash",
@@ -283,8 +280,8 @@ func TestCacheKeyFingerprintIsolatesConversations(t *testing.T) {
 	reqB := base
 	reqB.ConversationID = "conversation-b"
 
-	fpA := kc.fingerprint(reqA)
-	fpB := kc.fingerprint(reqB)
+	fpA := providerCacheKey(reqA)
+	fpB := providerCacheKey(reqB)
 	if fpA == "" || fpB == "" {
 		t.Fatalf("conversation-scoped fingerprints must be non-empty: %q %q", fpA, fpB)
 	}
@@ -293,17 +290,16 @@ func TestCacheKeyFingerprintIsolatesConversations(t *testing.T) {
 	}
 	reqA2 := base
 	reqA2.ConversationID = "conversation-a"
-	if kc.fingerprint(reqA) != kc.fingerprint(reqA2) {
+	if providerCacheKey(reqA) != providerCacheKey(reqA2) {
 		t.Fatal("同一 conversation 相同请求必须稳定命中")
 	}
 	empty := base
-	if kc.fingerprint(empty) != kc.fingerprint(empty) {
+	if providerCacheKey(empty) != providerCacheKey(empty) {
 		t.Fatal("空 conversation 请求指纹必须稳定")
 	}
 }
 
 func TestCacheKeyFingerprintTracksAllCacheKeySemantics(t *testing.T) {
-	kc := newCacheKeyCache(64)
 	base := ProviderRequest{
 		ModelID: "model-a",
 		Messages: []modeladapter.Message{{
@@ -323,13 +319,13 @@ func TestCacheKeyFingerprintTracksAllCacheKeySemantics(t *testing.T) {
 	toolVariant.Messages[0] = base.Messages[0]
 	toolVariant.Messages[0].ToolCalls = append([]modeladapter.ToolCallDescriptor(nil), base.Messages[0].ToolCalls...)
 	toolVariant.Messages[0].ToolCalls[0].Function.Arguments = `{"query":"two"}`
-	if kc.fingerprint(base) == kc.fingerprint(toolVariant) {
+	if providerCacheKey(base) == providerCacheKey(toolVariant) {
 		t.Fatal("different tool call semantics must produce different cache lookup fingerprints")
 	}
 
 	budgetVariant := base
 	budgetVariant.MaxTokens = 25_600
-	if kc.fingerprint(base) == kc.fingerprint(budgetVariant) {
+	if providerCacheKey(base) == providerCacheKey(budgetVariant) {
 		t.Fatal("different output budgets must produce different cache lookup fingerprints")
 	}
 }

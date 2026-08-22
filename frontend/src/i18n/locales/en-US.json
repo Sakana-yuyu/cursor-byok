@@ -849,6 +849,7 @@
   "7c9691192f1b7340": "Continue",
   "7cb08373b31cc6a0": "{0}/{1}/{2}",
   "7ccbe64b8c475eec": "Please fill in the endpoint URL first",
+  "7cce8662e60231d7": "The built-in agent model execution channel still needs verification against the real Cursor request protocol; account credentials are not used for third-party APIs for now.",
   "7cd1cc48655378ec": "Reading accounts…",
   "7cd62623180b7781": "✗ Unavailable",
   "7ce4193db2a0ebd0": "Edge auto-collapse: On (click to disable)",

@@ -149,6 +149,7 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 	// 旧运行时也必须拒绝不同来源或不同连接复用同一渠道 ID。否则按 ID
 	// 解析时会把账户模型和第三方模型混成同一个候选渠道，破坏来源隔离。
 	identityByAdapterID := make(map[string]string, len(input))
+	explicitIDByIdentity := make(map[string]string, len(input))
 	for _, item := range input {
 		source := NormalizeModelSource(item.Source)
 		if source == "" {
@@ -180,15 +181,39 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			if next.DisplayName == "" || next.ModelID == "" {
 				return nil, errors.New("Cursor 账户模型 displayName 和 modelID 不能为空")
 			}
-			next.ID = strings.TrimSpace(item.ID)
+			// 账户身份与 server/config 的 modelAdapterConfigIdentity 保持一致：
+			// 来源哈希 + GroupName，避免两侧对同一份配置算出不同的身份域；
+			// 去重与显式 id 冲突检测同样对齐 server 侧行为。
+			identity := modelAdapterIdentity(next) + "\n" + strings.TrimSpace(next.GroupName)
+			explicitID := strings.TrimSpace(item.ID)
+			next.ID = explicitID
 			if next.ID == "" {
-				next.ID = modelAdapterIdentity(next)
+				next.ID = identity
 			}
-			identity := modelAdapterIdentity(next)
 			if ownerIdentity, exists := identityByAdapterID[next.ID]; exists && ownerIdentity != identity {
 				return nil, errors.New("模型适配器 id 不能被不同模型配置重复使用")
 			}
+			if existingIndex, exists := channelIndexByID[identity]; exists {
+				if explicitID != "" {
+					existing := normalized[existingIndex]
+					if previousExplicitID := explicitIDByIdentity[identity]; previousExplicitID != "" && previousExplicitID != explicitID {
+						return nil, errors.New("相同模型连接不能配置不同的持久化 id")
+					}
+					if existing.ID != explicitID {
+						delete(identityByAdapterID, existing.ID)
+						existing.ID = explicitID
+						identityByAdapterID[explicitID] = identity
+						explicitIDByIdentity[identity] = explicitID
+						normalized[existingIndex] = existing
+					}
+				}
+				continue
+			}
+			channelIndexByID[identity] = len(normalized)
 			identityByAdapterID[next.ID] = identity
+			if explicitID != "" {
+				explicitIDByIdentity[identity] = explicitID
+			}
 			normalized = append(normalized, next)
 			continue
 		}
@@ -283,10 +308,14 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 		if next.AnthropicAuthMode != modelchannel.AnthropicAuthModeLegacyDual {
 			next.ID += "-auth-" + next.AnthropicAuthMode
 		}
-		if ownerIdentity, exists := identityByAdapterID[next.ID]; exists && ownerIdentity != next.ID {
+		dedupeKey := strings.Join([]string{modelAdapterIdentity(next), strings.TrimSpace(next.ProtocolMode), strings.TrimSpace(next.ProtocolGroup), strings.TrimSpace(next.AnthropicAuthMode), strconv.FormatBool(next.CustomHeadersEnabled), strings.TrimSpace(next.CustomHeadersJSON)}, "\n")
+		// 身份注册用 dedupeKey（含协议字段），与 server/config 的
+		// modelAdapterConfigDedupeIdentity 语义对齐：同一连接配不同协议族时
+		// 自动生成的 ID 相同但身份不同，必须在归一化阶段报错，而不是把
+		// 两条不同协议的适配器以重复 ID 输出。
+		if ownerIdentity, exists := identityByAdapterID[next.ID]; exists && ownerIdentity != dedupeKey {
 			return nil, errors.New("模型适配器 id 不能被不同模型配置重复使用")
 		}
-		dedupeKey := strings.Join([]string{modelAdapterIdentity(next), strings.TrimSpace(next.ProtocolMode), strings.TrimSpace(next.ProtocolGroup), strings.TrimSpace(next.AnthropicAuthMode), strconv.FormatBool(next.CustomHeadersEnabled), strings.TrimSpace(next.CustomHeadersJSON)}, "\n")
 		if existingIndex, exists := channelIndexByID[dedupeKey]; exists {
 			existing := normalized[existingIndex]
 			if existing.GroupName == "" {
@@ -305,7 +334,7 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			continue
 		}
 		channelIndexByID[dedupeKey] = len(normalized)
-		identityByAdapterID[next.ID] = next.ID
+		identityByAdapterID[next.ID] = dedupeKey
 		normalized = append(normalized, next)
 	}
 	return normalized, nil

@@ -791,17 +791,17 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 364,
+          "line": 367,
           "column": 67
         },
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 451,
+          "line": 454,
           "column": 141
         },
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 452,
+          "line": 455,
           "column": 62
         }
       ]
@@ -1419,7 +1419,7 @@
         },
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 431,
+          "line": 434,
           "column": 57
         }
       ]
@@ -3394,7 +3394,7 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 345,
+          "line": 348,
           "column": 96
         },
         {
@@ -3452,7 +3452,7 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 420,
+          "line": 423,
           "column": 1
         }
       ]
@@ -4349,7 +4349,7 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 358,
+          "line": 361,
           "column": 63
         }
       ]
@@ -4438,12 +4438,12 @@
         },
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 461,
+          "line": 464,
           "column": 64
         },
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 479,
+          "line": 482,
           "column": 61
         },
         {
@@ -5634,7 +5634,7 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 424,
+          "line": 427,
           "column": 59
         },
         {
@@ -6432,7 +6432,7 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 355,
+          "line": 358,
           "column": 52
         }
       ]
@@ -8564,7 +8564,7 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 462,
+          "line": 465,
           "column": 100
         }
       ]
@@ -8848,7 +8848,7 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 476,
+          "line": 479,
           "column": 11
         }
       ]
@@ -9121,7 +9121,7 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 381,
+          "line": 384,
           "column": 57
         }
       ]
@@ -10245,17 +10245,17 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 361,
+          "line": 364,
           "column": 58
         },
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 451,
+          "line": 454,
           "column": 141
         },
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 452,
+          "line": 455,
           "column": 62
         }
       ]
@@ -10540,7 +10540,7 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 401,
+          "line": 404,
           "column": 76
         }
       ]
@@ -11761,7 +11761,7 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 453,
+          "line": 456,
           "column": 51
         }
       ]
@@ -12010,6 +12010,18 @@
         }
       ]
     },
+    "7cce8662e60231d7": {
+      "source": "Agent 内置模型执行通道仍需与真实 Cursor 请求协议完成比对验证，当前不会将账户授权用于第三方 API。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/CursorAccountCard.vue",
+          "line": 344,
+          "column": 1
+        }
+      ]
+    },
     "7cd1cc48655378ec": {
       "source": "读取账号…",
       "kind": "text",
@@ -12017,7 +12029,7 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 372,
+          "line": 375,
           "column": 71
         }
       ]
@@ -13104,7 +13116,7 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 453,
+          "line": 456,
           "column": 51
         }
       ]
@@ -13217,7 +13229,7 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 402,
+          "line": 405,
           "column": 134
         }
       ]
@@ -13715,7 +13727,7 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 350,
+          "line": 353,
           "column": 20
         }
       ]
@@ -13973,7 +13985,7 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 350,
+          "line": 353,
           "column": 20
         }
       ]
@@ -15730,7 +15742,7 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 480,
+          "line": 483,
           "column": 75
         },
         {
@@ -18035,7 +18047,7 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 417,
+          "line": 420,
           "column": 1
         }
       ]
@@ -19523,7 +19535,7 @@
         },
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 434,
+          "line": 437,
           "column": 65
         }
       ]
@@ -19583,17 +19595,17 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 428,
+          "line": 431,
           "column": 62
         },
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 471,
+          "line": 474,
           "column": 128
         },
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 472,
+          "line": 475,
           "column": 59
         }
       ]
@@ -20179,7 +20191,7 @@
       "refs": [
         {
           "file": "src/components/CursorAccountCard.vue",
-          "line": 380,
+          "line": 383,
           "column": 48
         }
       ]
