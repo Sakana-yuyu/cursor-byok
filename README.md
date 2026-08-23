@@ -196,9 +196,9 @@ Linux.do 发布文案位于 docs/promotion/linuxdo-post.md，欢迎反馈安装�
 
 <!-- contributors-start -->
 <table><tr>
-<td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://avatars.githubusercontent.com/u/20703959?v=4&s=80" width="48" height="48" alt="Sakana-yuyu" title="Sakana-yuyu (463 次提交)"/></a></td>
+<td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://avatars.githubusercontent.com/u/20703959?v=4&s=80" width="48" height="48" alt="Sakana-yuyu" title="Sakana-yuyu (465 次提交)"/></a></td>
 <td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://secure.gravatar.com/avatar/e91e20e8d5f83234900a3878086e1fe7?d=identicon&s=80" width="48" height="48" alt="呆呆可达鸭鸭" title="呆呆可达鸭鸭 (236 次提交)"/></a></td>
-<td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://avatars.githubusercontent.com/u/41898282?v=4&s=80" width="48" height="48" alt="github-actions[bot]" title="github-actions[bot] (48 次提交)"/></a></td>
+<td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://avatars.githubusercontent.com/u/41898282?v=4&s=80" width="48" height="48" alt="github-actions[bot]" title="github-actions[bot] (49 次提交)"/></a></td>
 <td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://avatars.githubusercontent.com/u/131544788?v=4&s=80" width="48" height="48" alt="leookun" title="leookun (18 次提交)"/></a></td>
 <td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://secure.gravatar.com/avatar/e32a23a62c503dd189268d84dbd12c2d?d=identicon&s=80" width="48" height="48" alt="hudawang" title="hudawang (7 次提交)"/></a></td>
 <td><a href="https://github.com/Sakana-yuyu/cursor-byok"><img src="https://secure.gravatar.com/avatar/4fa4116634f7a272554140a170e7e300?d=identicon&s=80" width="48" height="48" alt="DedSecer" title="DedSecer (5 次提交)"/></a></td>
