@@ -437,6 +437,7 @@ async function handleFetchModels() {
       customHeadersEnabled: Boolean(supplierMeta.value.customHeadersEnabled),
       customHeadersJSON: supplierMeta.value.customHeadersJSON || "",
       anthropicAuthMode: supplierMeta.value.anthropicAuthMode || "legacy_dual",
+      forceRefresh: true,
     });
     const fetched = Array.isArray(result?.models) ? result.models : [];
     if (!fetched.length) {

@@ -176,12 +176,25 @@ func (s *ProxyService) FetchModelCatalog(request ModelCatalogRequest) (ModelCata
 		return result, nil
 	}
 	message := "所有模型目录候选地址均失败"
-	if lastStatus > 0 {
+	switch {
+	case lastStatus == http.StatusUnauthorized || lastStatus == http.StatusForbidden:
+		message = "模型列表鉴权失败，请检查访问密钥是否有效、是否有模型列表权限"
+	case lastStatus > 0:
 		message = fmt.Sprintf("所有模型目录候选地址均失败，最后响应 HTTP %d", lastStatus)
-	} else if lastErr != nil {
+	}
+	if lastErr != nil && lastStatus != http.StatusUnauthorized && lastStatus != http.StatusForbidden {
 		message = message + "：" + lastErr.Error()
 	}
 	return ModelCatalogResult{}, i18n.NewError("error.model_catalog.request_failed", i18n.CodeModelCatalog, message)
+}
+
+// invalidateModelCatalogCaches 清空进程内模型列表缓存。
+// 配置保存、账户切换或连接参数变更后调用，避免拉取页命中陈旧列表。
+func (s *ProxyService) invalidateModelCatalogCaches() {
+	if s == nil || s.modelCatalogCache == nil {
+		return
+	}
+	s.modelCatalogCache.clearAll()
 }
 
 func modelCatalogRedirectSafeClient(base *http.Client, trustedBaseURL string, customHeaders http.Header) *http.Client {

@@ -274,9 +274,7 @@ func (s *ProxyService) QueryProviderBalance(request ProviderBalanceRequest) (res
 			}
 			return balance
 		}
-		if profile == balanceProfileNewAPI {
-			return ProviderBalance{Supported: false, Transient: false, Message: "New API 余额查询失败：请检查请求地址、访问令牌与用户 ID"}
-		}
+		// newapi 显式模式在未配置访问令牌/用户 ID，或凭据无效时，继续尝试渠道 sk 的通用余额策略。
 	}
 
 	// 策略 0c：显式配置查询。provider 若配置了 BalanceQueryURL，按模板发一次 GET 并按点分路径取值。
@@ -772,8 +770,9 @@ func queryNewAPIBalance(ctx context.Context, httpClient *http.Client, normalized
 	return balance, true
 }
 
-// doNewAPIUserGET 以 NewAPI 兼容方式发送用户信息查询：同时带 Bearer 与 New-API-User 头，
-// 提升不同部署的兼容性。非 200/读取失败返回 ok=false。
+// doNewAPIUserGET 以渠道 sk 查询 NewAPI / OneAPI 风格的 /api/user/self。
+// 该端点多数部署仅接受 Web 登录态 access token；此处仅带 Bearer sk，不再误填 New-Api-User。
+// 非 200/读取失败返回 ok=false。
 func doNewAPIUserGET(ctx context.Context, httpClient *http.Client, endpoint, apiKey string, tracker *transientTracker) ([]byte, bool) {
 	reqCtx, cancel := context.WithTimeout(ctx, providerBalancePerRequestTimeout)
 	defer cancel()
@@ -782,7 +781,6 @@ func doNewAPIUserGET(ctx context.Context, httpClient *http.Client, endpoint, api
 		return nil, false
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("New-API-User", apiKey)
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := httpClient.Do(req)

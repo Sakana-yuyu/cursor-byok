@@ -58,6 +58,7 @@ func (s *ProxyService) SaveUserConfig(cfg UserConfig) error {
 	if err != nil {
 		return err
 	}
+	s.invalidateModelCatalogCaches()
 	// 直连模式（routingMode=upstream）：Cursor 直连官方，必须恢复官方登录态，
 	// 否则 state.vscdb 中的模拟账号残留会导致官方连接 401/账号异常。
 	// 恢复失败向上传播：配置虽已保存，但账号态未恢复，不能让调用方误以为一切正常。

@@ -49,6 +49,7 @@ func (s *ProxyService) invalidateProviderBalanceCaches() {
 	if s.providerBalanceNegativeCache != nil {
 		s.providerBalanceNegativeCache.clearAll()
 	}
+	s.invalidateModelCatalogCaches()
 }
 
 // syncedLoginSessionsMax 限制登录去重集合容量：sessionID 只增不删会让长期驻留的

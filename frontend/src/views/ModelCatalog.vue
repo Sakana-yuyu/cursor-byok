@@ -38,6 +38,69 @@ const selected = ref(new Set());
 const channelName = ref("");
 const draft = ref(null);
 const catalogProbe = useModelProbe();
+const lastFetchIdentity = ref("");
+
+function parseCatalogDraft(raw) {
+  const parsed = raw ? JSON.parse(raw) : null;
+  if (!parsed || typeof parsed !== "object") return null;
+  return {
+    type: parsed.type || "openai",
+    supplierID: String(parsed.supplierID || "custom").trim().toLowerCase(),
+    baseURL: String(parsed.baseURL || "").trim(),
+    apiKey: String(parsed.apiKey || "").trim(),
+    modelCatalogURL: String(parsed.modelCatalogURL || "").trim(),
+    balanceProfile: String(parsed.balanceProfile || "auto").trim().toLowerCase(),
+    balanceAccessToken: String(parsed.balanceAccessToken || "").trim(),
+    balanceUserID: String(parsed.balanceUserID || "").trim(),
+    balanceCodingPlanProvider: String(parsed.balanceCodingPlanProvider || "").trim().toLowerCase(),
+    balanceQueryURL: String(parsed.balanceQueryURL || "").trim(),
+    balanceQueryField: String(parsed.balanceQueryField || "").trim(),
+    balanceQueryHeadersJSON: String(parsed.balanceQueryHeadersJSON || "").trim(),
+    modelCatalogStatus: parsed.modelCatalogStatus || supplierTemplate(parsed.supplierID).modelCatalog?.status || "",
+    appendModelCatalogCandidates: parsed.appendModelCatalogCandidates !== false && supplierTemplate(parsed.supplierID).modelCatalog?.appendCandidates !== false,
+    modelCatalogURLsJSON: parsed.modelCatalogURLsJSON || JSON.stringify(supplierTemplate(parsed.supplierID).modelCatalog?.urls || []),
+    customHeadersEnabled: Boolean(parsed.customHeadersEnabled),
+    customHeadersJSON: parsed.customHeadersJSON || "",
+    anthropicAuthMode: String(parsed.anthropicAuthMode || "legacy_dual").trim().toLowerCase(),
+    tooltipData: String(parsed.tooltipData || "").trim(),
+    groupMode: normalizeSupplierGroupMode(parsed.groupMode),
+    channelName: String(parsed.channelName || "").trim(),
+  };
+}
+
+function reloadDraftFromSession() {
+  try {
+    const raw = sessionStorage.getItem(MODEL_CATALOG_DRAFT_KEY);
+    const parsed = parseCatalogDraft(raw);
+    if (!parsed) {
+      draft.value = null;
+      return false;
+    }
+    draft.value = parsed;
+    if (parsed.channelName) {
+      channelName.value = parsed.channelName;
+    }
+    return true;
+  } catch {
+    draft.value = null;
+    return false;
+  }
+}
+
+function catalogFetchIdentity(d) {
+  if (!d) return "";
+  return [
+    d.type,
+    d.baseURL,
+    d.apiKey,
+    d.modelCatalogURL,
+    d.modelCatalogURLsJSON,
+    d.customHeadersEnabled,
+    d.customHeadersJSON,
+    d.anthropicAuthMode,
+    d.supplierID,
+  ].join("\u001f");
+}
 
 const groupMode = computed(() =>
   normalizeSupplierGroupMode(draft.value?.groupMode || SUPPLIER_GROUP_MODE_CONNECTION),
@@ -128,19 +191,23 @@ async function handleProbe() {
   selected.value = next;
 }
 
-async function fetchModels() {
+async function fetchModels({ forceRefresh = false } = {}) {
   catalogError.value = "";
-  const d = draft.value;
-  if (!d) {
+  if (!reloadDraftFromSession()) {
     catalogError.value = "缺少连接参数，请从「快速添加」重新进入";
     return;
   }
+  const d = draft.value;
   const baseURL = String(d.baseURL || "").trim();
   const apiKey = String(d.apiKey || "").trim();
   if (!baseURL || !apiKey) {
     catalogError.value = "请先填写接口地址和访问密钥";
     return;
   }
+
+  const identity = catalogFetchIdentity(d);
+  const shouldForceRefresh = forceRefresh || identity !== lastFetchIdentity.value;
+  lastFetchIdentity.value = identity;
 
   catalogLoading.value = true;
   catalogProbe.reset();
@@ -157,6 +224,7 @@ async function fetchModels() {
       customHeadersEnabled: Boolean(d.customHeadersEnabled),
       customHeadersJSON: d.customHeadersJSON || "",
       anthropicAuthMode: d.anthropicAuthMode || "legacy_dual",
+      forceRefresh: shouldForceRefresh,
     });
     const fetched = Array.isArray(result?.models) ? result.models : [];
     models.value = fetched;
@@ -282,38 +350,11 @@ async function handleBack() {
 
 onMounted(async () => {
   try {
-    const raw = sessionStorage.getItem(MODEL_CATALOG_DRAFT_KEY);
-    const parsed = raw ? JSON.parse(raw) : null;
-    if (!parsed || typeof parsed !== "object") {
+    if (!reloadDraftFromSession()) {
       catalogError.value = "缺少连接参数，请从「快速添加」重新进入";
-      draft.value = null;
       return;
     }
-    draft.value = {
-      type: parsed.type || "openai",
-      supplierID: String(parsed.supplierID || "custom").trim().toLowerCase(),
-      baseURL: String(parsed.baseURL || "").trim(),
-      apiKey: String(parsed.apiKey || "").trim(),
-      modelCatalogURL: String(parsed.modelCatalogURL || "").trim(),
-      balanceProfile: String(parsed.balanceProfile || "auto").trim().toLowerCase(),
-      balanceAccessToken: String(parsed.balanceAccessToken || "").trim(),
-      balanceUserID: String(parsed.balanceUserID || "").trim(),
-      balanceCodingPlanProvider: String(parsed.balanceCodingPlanProvider || "").trim().toLowerCase(),
-      balanceQueryURL: String(parsed.balanceQueryURL || "").trim(),
-      balanceQueryField: String(parsed.balanceQueryField || "").trim(),
-      balanceQueryHeadersJSON: String(parsed.balanceQueryHeadersJSON || "").trim(),
-      modelCatalogStatus: parsed.modelCatalogStatus || supplierTemplate(parsed.supplierID).modelCatalog?.status || "",
-      appendModelCatalogCandidates: parsed.appendModelCatalogCandidates !== false && supplierTemplate(parsed.supplierID).modelCatalog?.appendCandidates !== false,
-      modelCatalogURLsJSON: parsed.modelCatalogURLsJSON || JSON.stringify(supplierTemplate(parsed.supplierID).modelCatalog?.urls || []),
-      customHeadersEnabled: Boolean(parsed.customHeadersEnabled),
-      customHeadersJSON: parsed.customHeadersJSON || "",
-      anthropicAuthMode: String(parsed.anthropicAuthMode || "legacy_dual").trim().toLowerCase(),
-      tooltipData: String(parsed.tooltipData || "").trim(),
-      groupMode: normalizeSupplierGroupMode(parsed.groupMode),
-    };
-    // 渠道模式：可预填已有渠道名；URL 模式不需要
-    channelName.value = String(parsed.channelName || "").trim();
-    await fetchModels();
+    await fetchModels({ forceRefresh: true });
   } catch (error) {
     catalogError.value = toUserError(error);
   } finally {
@@ -337,7 +378,7 @@ onMounted(async () => {
         <Button
           variant="default"
           :disabled="catalogLoading || !draft"
-          @click="fetchModels"
+          @click="fetchModels({ forceRefresh: true })"
         >
           {{ catalogLoading ? "拉取中..." : "重新拉取" }}
         </Button>

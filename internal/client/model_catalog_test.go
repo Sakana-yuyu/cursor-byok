@@ -215,6 +215,94 @@ func TestFetchModelCatalogCrossOriginFailureFallsBackToAuthenticatedSameOrigin(t
 	}
 }
 
+func TestFetchModelCatalogForceRefreshBypassesCache(t *testing.T) {
+	var requestCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requestCount++
+		w.Header().Set("Content-Type", "application/json")
+		modelID := "model-a"
+		if requestCount > 1 {
+			modelID = "model-b"
+		}
+		_, _ = w.Write([]byte(`{"data":[{"id":"` + modelID + `"}]}`))
+	}))
+	defer server.Close()
+
+	service := &ProxyService{
+		publicClient:      server.Client(),
+		modelCatalogCache: newMetadataCache[ModelCatalogResult](modelCatalogCacheTTL),
+	}
+	appendGenerated := true
+	request := ModelCatalogRequest{
+		Type:                         "openai",
+		SupplierID:                   "custom",
+		BaseURL:                      server.URL + "/v1",
+		APIKey:                       "sk-catalog-secret",
+		AppendModelCatalogCandidates: &appendGenerated,
+	}
+
+	first, err := service.FetchModelCatalog(request)
+	if err != nil {
+		t.Fatalf("first FetchModelCatalog() error = %v", err)
+	}
+	if len(first.Models) != 1 || first.Models[0].ID != "model-a" {
+		t.Fatalf("first models = %#v, want model-a", first.Models)
+	}
+	if requestCount != 1 {
+		t.Fatalf("requestCount after first fetch = %d, want 1", requestCount)
+	}
+
+	second, err := service.FetchModelCatalog(request)
+	if err != nil {
+		t.Fatalf("second FetchModelCatalog() error = %v", err)
+	}
+	if second.Models[0].ID != "model-a" {
+		t.Fatalf("cached models = %#v, want model-a", second.Models)
+	}
+	if requestCount != 1 {
+		t.Fatalf("requestCount after cached fetch = %d, want 1", requestCount)
+	}
+
+	request.ForceRefresh = true
+	third, err := service.FetchModelCatalog(request)
+	if err != nil {
+		t.Fatalf("third FetchModelCatalog() error = %v", err)
+	}
+	if third.Models[0].ID != "model-b" {
+		t.Fatalf("refreshed models = %#v, want model-b", third.Models)
+	}
+	if requestCount != 2 {
+		t.Fatalf("requestCount after force refresh = %d, want 2", requestCount)
+	}
+}
+
+func TestInvalidateModelCatalogCaches(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"model-a"}]}`))
+	}))
+	defer server.Close()
+
+	service := &ProxyService{
+		publicClient:      server.Client(),
+		modelCatalogCache: newMetadataCache[ModelCatalogResult](modelCatalogCacheTTL),
+	}
+	appendGenerated := true
+	request := ModelCatalogRequest{
+		Type:                         "openai",
+		BaseURL:                      server.URL + "/v1",
+		APIKey:                       "sk-catalog-secret",
+		AppendModelCatalogCandidates: &appendGenerated,
+	}
+	if _, err := service.FetchModelCatalog(request); err != nil {
+		t.Fatalf("FetchModelCatalog() error = %v", err)
+	}
+	service.invalidateModelCatalogCaches()
+	if len(service.modelCatalogCache.entries) != 0 {
+		t.Fatalf("cache entries = %d, want 0 after invalidate", len(service.modelCatalogCache.entries))
+	}
+}
+
 func TestFetchModelCatalogTransportErrorRedactsCandidateURL(t *testing.T) {
 	service := &ProxyService{
 		publicClient: &http.Client{Transport: roundTripperFunc(func(request *http.Request) (*http.Response, error) {
