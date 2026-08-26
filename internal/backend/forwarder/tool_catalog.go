@@ -646,9 +646,10 @@ func rewriteReadonlyShellTool(item json.RawMessage) (json.RawMessage, error) {
 		if properties, ok := parameters["properties"].(map[string]any); ok {
 			delete(properties, "notify_on_output")
 			delete(properties, "profile")
+			delete(properties, "required_permissions")
 		}
 		if required, ok := parameters["required"].([]any); ok {
-			parameters["required"] = removeSchemaFields(required, "notify_on_output", "profile")
+			parameters["required"] = removeSchemaFields(required, "notify_on_output", "profile", "required_permissions")
 		}
 	}
 	return json.Marshal(tool)

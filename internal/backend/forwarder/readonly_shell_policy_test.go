@@ -61,6 +61,35 @@ func TestApplyReadonlyShellPolicyStripsAdvertisedOptionalArgs(t *testing.T) {
 	}
 }
 
+func TestApplyReadonlyShellPolicyStripsRequiredPermissionsBeforeWhitelist(t *testing.T) {
+	argsJSON := `{"command":"git status","required_permissions":["all"],"notify_on_output":{"pattern":"never"},"profile":"powershell"}`
+	rewritten, err := applyReadonlyShellPolicy([]byte(argsJSON), []string{`E:\\workspace\\repo`})
+	if err != nil {
+		t.Fatalf("applyReadonlyShellPolicy() error = %v", err)
+	}
+	args := decodePolicyArgs(t, rewritten)
+	if _, found := args["required_permissions"]; found {
+		t.Fatalf("required_permissions survived the strip: %s", rewritten)
+	}
+	if _, found := args["notify_on_output"]; found {
+		t.Fatalf("notify_on_output survived the strip: %s", rewritten)
+	}
+	if profile, found := args["profile"]; found && profile != "auto" {
+		t.Fatalf("profile = %v, want auto", profile)
+	}
+	if got := args["command"]; got != "git --no-pager --no-optional-locks status" {
+		t.Fatalf("command = %v, want readonly rewrite", got)
+	}
+}
+
+func TestApplyReadonlyShellPolicyRequiredPermissionsDoesNotBypassWhitelist(t *testing.T) {
+	argsJSON := `{"command":"curl https://example.com","required_permissions":["all"]}`
+	_, err := applyReadonlyShellPolicy([]byte(argsJSON), nil)
+	if err == nil || !strings.Contains(err.Error(), "not in the read-only whitelist") {
+		t.Fatalf("applyReadonlyShellPolicy() error = %v, want whitelist rejection", err)
+	}
+}
+
 func TestApplyReadonlyShellPolicyRemarshalsWhenOnlyArgsMutated(t *testing.T) {
 	// 回归：曾经只有 git 词元被改写时才 re-marshal，非 git 命令上的剥离会被静默丢弃。
 	argsJSON := `{"command":"tasklist","notify_on_output":{"pattern":"$^"}}`
@@ -194,7 +223,7 @@ func TestApplyReadonlyShellPolicyBoundariesUnchanged(t *testing.T) {
 }
 
 func TestRewriteReadonlyShellToolRemovesUnsupportedSchemaFields(t *testing.T) {
-	item := json.RawMessage(`{"function":{"name":"Shell","description":"orig","parameters":{"type":"object","properties":{"command":{"type":"string"},"notify_on_output":{"type":"object"},"profile":{"type":"string"}},"required":["command","notify_on_output"]}}}`)
+	item := json.RawMessage(`{"function":{"name":"Shell","description":"orig","parameters":{"type":"object","properties":{"command":{"type":"string"},"notify_on_output":{"type":"object"},"profile":{"type":"string"},"required_permissions":{"type":"array"}},"required":["command","notify_on_output","required_permissions"]}}}`)
 	rewritten, err := rewriteReadonlyShellTool(item)
 	if err != nil {
 		t.Fatalf("rewriteReadonlyShellTool() error = %v", err)
@@ -211,6 +240,9 @@ func TestRewriteReadonlyShellToolRemovesUnsupportedSchemaFields(t *testing.T) {
 	}
 	if _, found := properties["profile"]; found {
 		t.Fatalf("profile still present in schema properties")
+	}
+	if _, found := properties["required_permissions"]; found {
+		t.Fatalf("required_permissions still present in schema properties")
 	}
 	if _, found := properties["command"]; !found {
 		t.Fatalf("command property must survive the rewrite")

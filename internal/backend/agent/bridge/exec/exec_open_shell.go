@@ -28,6 +28,7 @@ func decodeShellArgs(raw []byte) (shellResultArgs, error) {
 	if result.Command == "" {
 		return result, fmt.Errorf("Shell command is required")
 	}
+	result.RequestedSandboxPolicy = decodeShellRequestedSandboxPolicy(args)
 	if blockUntilMS, found, err := runtimecore.ReadFloat64Arg(args, "block_until_ms", "blockUntilMS"); err != nil {
 		return result, err
 	} else if found {
@@ -40,6 +41,45 @@ func decodeShellArgs(raw []byte) (shellResultArgs, error) {
 	}
 	result.NotifyOnOutput = notifyOnOutput
 	return result, nil
+}
+
+func decodeShellRequestedSandboxPolicy(args map[string]any) *agentv1.SandboxPolicy {
+	raw, ok := args["required_permissions"]
+	if !ok || raw == nil {
+		return nil
+	}
+	permissions, ok := raw.([]any)
+	if !ok || len(permissions) == 0 {
+		return nil
+	}
+	fullNetwork := false
+	for _, permission := range permissions {
+		name, ok := permission.(string)
+		if !ok {
+			continue
+		}
+		name = strings.TrimSpace(name)
+		switch name {
+		case "all":
+			return &agentv1.SandboxPolicy{
+				Type:          agentv1.SandboxPolicy_TYPE_INSECURE_NONE,
+				NetworkAccess: boolPtr(true),
+			}
+		case "full_network":
+			fullNetwork = true
+		}
+	}
+	if !fullNetwork {
+		return nil
+	}
+	return &agentv1.SandboxPolicy{
+		Type:          agentv1.SandboxPolicy_TYPE_WORKSPACE_READWRITE,
+		NetworkAccess: boolPtr(true),
+	}
+}
+
+func boolPtr(value bool) *bool {
+	return &value
 }
 
 func decodeShellOutputNotificationArgs(args map[string]any) (*shellOutputNotificationArgs, error) {
@@ -141,6 +181,7 @@ func (bridge *Bridge) openShell(toolCall runtimecore.ToolInvocation) (*agentv1.A
 						HardTimeout:              int32Ptr(86400000),
 						Description:              stringPtr(args.Description),
 						OutputNotification:       outputNotification,
+						RequestedSandboxPolicy:   args.RequestedSandboxPolicy,
 					},
 				},
 			},

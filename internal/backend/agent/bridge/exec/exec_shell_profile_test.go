@@ -6,6 +6,9 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf16"
+
+	"cursor/gen/agentv1"
+	runtimecore "cursor/internal/backend/agent/core"
 )
 
 // TestNormalizeShellProfile 验证 profile 归一化与非法取值拒绝。
@@ -43,6 +46,63 @@ func TestDecodeShellArgsProfile(t *testing.T) {
 	_, err = decodeShellArgs([]byte(`{"command":"echo hi","profile":"fish"}`))
 	if err == nil {
 		t.Fatal("decodeShellArgs(fish) = nil error, want rejection")
+	}
+}
+
+func TestDecodeShellArgsRequiredPermissions(t *testing.T) {
+	tests := []struct {
+		name          string
+		permissions   string
+		wantType      agentv1.SandboxPolicy_Type
+		wantNetwork   bool
+		wantPolicyNil bool
+	}{
+		{name: "missing", permissions: ``, wantPolicyNil: true},
+		{name: "full network", permissions: `{"required_permissions":["full_network"]}`, wantType: agentv1.SandboxPolicy_TYPE_WORKSPACE_READWRITE, wantNetwork: true},
+		{name: "all", permissions: `{"required_permissions":["all"]}`, wantType: agentv1.SandboxPolicy_TYPE_INSECURE_NONE, wantNetwork: true},
+		{name: "all takes priority", permissions: `{"required_permissions":["full_network","all"]}`, wantType: agentv1.SandboxPolicy_TYPE_INSECURE_NONE, wantNetwork: true},
+		{name: "unknown", permissions: `{"required_permissions":["unknown"]}`, wantPolicyNil: true},
+		{name: "empty", permissions: `{"required_permissions":[]}`, wantPolicyNil: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			argsJSON := `{"command":"echo hi"}`
+			if tt.permissions != "" {
+				argsJSON = `{"command":"echo hi",` + strings.TrimPrefix(tt.permissions, "{")
+			}
+			args, err := decodeShellArgs([]byte(argsJSON))
+			if err != nil {
+				t.Fatalf("decodeShellArgs() error = %v", err)
+			}
+			if tt.wantPolicyNil {
+				if args.RequestedSandboxPolicy != nil {
+					t.Fatalf("RequestedSandboxPolicy = %#v, want nil", args.RequestedSandboxPolicy)
+				}
+				return
+			}
+			policy := args.RequestedSandboxPolicy
+			if policy == nil {
+				t.Fatal("RequestedSandboxPolicy = nil")
+			}
+			if policy.Type != tt.wantType {
+				t.Fatalf("policy.Type = %s, want %s", policy.Type, tt.wantType)
+			}
+			if policy.NetworkAccess == nil || *policy.NetworkAccess != tt.wantNetwork {
+				t.Fatalf("policy.NetworkAccess = %v, want %t", policy.NetworkAccess, tt.wantNetwork)
+			}
+		})
+	}
+}
+
+func TestOpenShellIncludesRequestedSandboxPolicy(t *testing.T) {
+	bridge := NewBridge()
+	message, _, err := bridge.OpenExec(OpenExecContext{}, runtimecore.ToolInvocation{ToolName: "Shell", CallID: "call", ArgsJSON: []byte(`{"command":"echo hi","required_permissions":["full_network"]}`)})
+	if err != nil {
+		t.Fatalf("OpenExec() error = %v", err)
+	}
+	policy := message.GetExecServerMessage().GetShellStreamArgs().GetRequestedSandboxPolicy()
+	if policy == nil || policy.Type != agentv1.SandboxPolicy_TYPE_WORKSPACE_READWRITE || policy.NetworkAccess == nil || !*policy.NetworkAccess {
+		t.Fatalf("requested sandbox policy = %#v, want workspace readwrite with network access", policy)
 	}
 }
 

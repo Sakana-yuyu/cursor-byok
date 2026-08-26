@@ -50,6 +50,54 @@ func loadAssetToolNames(t *testing.T, mode prompt.Mode) []string {
 	return names
 }
 
+func TestShellRequiredPermissionsSchemaIsOptionalAndScoped(t *testing.T) {
+	for _, mode := range []prompt.Mode{prompt.ModeAgent, prompt.ModeAsk, prompt.ModeDebug, prompt.ModeMultitask, prompt.ModePlan} {
+		t.Run(string(mode), func(t *testing.T) {
+			rawTools, err := prompt.ReadTools(mode)
+			if err != nil {
+				t.Fatalf("read %s/tools.json: %v", mode, err)
+			}
+			var items []map[string]any
+			if err := json.Unmarshal(rawTools, &items); err != nil {
+				t.Fatalf("decode %s/tools.json: %v", mode, err)
+			}
+			var shell map[string]any
+			for _, item := range items {
+				function, _ := item["function"].(map[string]any)
+				if function != nil && function["name"] == "Shell" {
+					shell = function
+					break
+				}
+			}
+			if shell == nil {
+				t.Fatal("Shell schema is missing")
+			}
+			parameters, _ := shell["parameters"].(map[string]any)
+			properties, _ := parameters["properties"].(map[string]any)
+			permissions, _ := properties["required_permissions"].(map[string]any)
+			if permissions["type"] != "array" {
+				t.Fatalf("required_permissions type = %v, want array", permissions["type"])
+			}
+			itemsSchema, _ := permissions["items"].(map[string]any)
+			gotEnum, _ := itemsSchema["enum"].([]any)
+			if len(gotEnum) != 2 || gotEnum[0] != "full_network" || gotEnum[1] != "all" {
+				t.Fatalf("required_permissions enum = %#v, want [full_network all]", gotEnum)
+			}
+			required, _ := parameters["required"].([]any)
+			for _, field := range required {
+				if field == "required_permissions" {
+					t.Fatal("required_permissions must remain optional")
+				}
+			}
+		})
+	}
+	for _, name := range loadAssetToolNames(t, prompt.ModeSubagent) {
+		if name == "Shell" {
+			t.Fatal("subagent/tools.json must not add Shell")
+		}
+	}
+}
+
 func TestToolAssetsConsistentWithModeWhitelists(t *testing.T) {
 	for _, tc := range modeWhitelistTests {
 		t.Run(string(tc.mode), func(t *testing.T) {

@@ -50,6 +50,11 @@ func applyReadonlyShellPolicy(argsJSON []byte, workspacePaths []string) ([]byte,
 		return nil, fmt.Errorf("decode Shell args: %w", err)
 	}
 	mutated := false
+	// required_permissions 可能请求更宽松的 sandbox；inspect/readonly 不能借此提权，静默剥离即可。
+	if _, found := args["required_permissions"]; found {
+		delete(args, "required_permissions")
+		mutated = true
+	}
 	// notify_on_output 只对后台命令有意义；inspect 强制短前台窗口，静默剥离即可，不改变语义。
 	for _, key := range []string{"notify_on_output", "notifyOnOutput"} {
 		if _, found := args[key]; found {

@@ -329,6 +329,17 @@
             "description": "The absolute path to the working directory to execute the command in (defaults to current directory)",
             "type": "string"
           },
+          "required_permissions": {
+            "description": "Optional permissions requested for this shell. Use \"full_network\" for network access with workspace read-write sandbox, or \"all\" for unrestricted execution and network access. Inspect/readonly subagents cannot use this field to escalate.",
+            "items": {
+              "enum": [
+                "full_network",
+                "all"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
           "notify_on_output": {
             "description": "Optional watcher for backgrounded command output. You will be notified at the end of your turn whenever output matches the regex pattern. Use stable sentinel lines and simple anchored regexes; do not match all output. Completion notifications are separate and do not require this field.",
             "properties": {

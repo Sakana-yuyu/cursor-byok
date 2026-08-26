@@ -14,13 +14,14 @@ import (
 )
 
 type shellResultArgs struct {
-	Command          string                       `json:"command"`
-	Description      string                       `json:"description,omitempty"`
-	WorkingDirectory string                       `json:"working_directory,omitempty"`
-	Profile          string                       `json:"profile,omitempty"`
-	BlockUntilMS     float64                      `json:"block_until_ms,omitempty"`
-	BlockUntilMSSet  bool                         `json:"-"`
-	NotifyOnOutput   *shellOutputNotificationArgs `json:"notify_on_output,omitempty"`
+	Command                string                       `json:"command"`
+	Description            string                       `json:"description,omitempty"`
+	WorkingDirectory       string                       `json:"working_directory,omitempty"`
+	Profile                string                       `json:"profile,omitempty"`
+	BlockUntilMS           float64                      `json:"block_until_ms,omitempty"`
+	BlockUntilMSSet        bool                         `json:"-"`
+	NotifyOnOutput         *shellOutputNotificationArgs `json:"notify_on_output,omitempty"`
+	RequestedSandboxPolicy *agentv1.SandboxPolicy       `json:"-"`
 }
 
 type shellOutputNotificationArgs struct {
