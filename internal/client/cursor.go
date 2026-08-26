@@ -40,6 +40,10 @@ func (s *ProxyService) ApplyCursorSettings() error {
 		if err := cursor.SetSystemNodeExtraCACerts(caCertPath); err != nil {
 			return fmt.Errorf("set node extra ca certs: %w", err)
 		}
+	case "linux":
+		if err := cursor.EnsureCACertInstalled(s.caCertPEM, caCertPath); err != nil {
+			return fmt.Errorf("install ca cert: %w", err)
+		}
 	}
 
 	if err := cursor.WriteUserProxySettings(cursor.ProxyURLFromListenAddr(s.proxy.Snapshot().ListenAddr)); err != nil {
@@ -56,7 +60,7 @@ func (s *ProxyService) ApplyCursorSettings() error {
 
 // ClearCursorSettings 用于处理与 ClearCursorSettings 相关的逻辑。
 func (s *ProxyService) ClearCursorSettings() error {
-	if goruntime.GOOS == "darwin" || goruntime.GOOS == "windows" {
+	if goruntime.GOOS == "darwin" || goruntime.GOOS == "windows" || goruntime.GOOS == "linux" {
 		if err := cursor.ClearSystemNodeExtraCACerts(); err != nil {
 			return err
 		}

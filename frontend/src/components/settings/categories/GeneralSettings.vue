@@ -6,6 +6,7 @@ import Button from "@/components/ui/Button.vue";
 import Select from "@/components/ui/Select.vue";
 import Switch from "@/components/ui/Switch.vue";
 import { useMessage } from "@/composables/useMessage";
+import { getAutostartEnabled, loadDesktopSettings, saveDesktopSettings, setAutostartEnabled } from "@/services/clientApi";
 import { appState, getStatsOverlayPreferences, openConfigWindow, saveBillingQueryEnabled, setStatsOverlayPreferences, toUserError } from "@/state/appState";
 import { computed, onMounted, reactive, ref, watch } from "vue";
 
@@ -34,6 +35,10 @@ const configActionState = reactive({
   error: "",
   retry: null,
 });
+
+const desktopSettings = reactive({ silentStart: false });
+const autostartDraft = ref(false);
+const desktopSettingsState = reactive({ busy: false, error: "", retry: null });
 
 const currentCloseAction = computed(() => appState.statsOverlayPreferences.closeAction);
 
@@ -108,8 +113,46 @@ async function handleOpenConfigWindow() {
   }
 }
 
-onMounted(() => {
+async function handleAutostartChange(enabled) {
+  const previous = autostartDraft.value;
+  autostartDraft.value = Boolean(enabled);
+  desktopSettingsState.retry = () => handleAutostartChange(enabled);
+  desktopSettingsState.error = "";
+  desktopSettingsState.busy = true;
+  try {
+    await setAutostartEnabled(autostartDraft.value);
+  } catch (error) {
+    autostartDraft.value = previous;
+    desktopSettingsState.error = toUserError(error);
+  } finally {
+    desktopSettingsState.busy = false;
+  }
+}
+
+async function handleSilentStartChange(enabled) {
+  const previous = desktopSettings.silentStart;
+  desktopSettings.silentStart = Boolean(enabled);
+  desktopSettingsState.retry = () => handleSilentStartChange(enabled);
+  desktopSettingsState.error = "";
+  desktopSettingsState.busy = true;
+  try {
+    await saveDesktopSettings({ ...desktopSettings });
+  } catch (error) {
+    desktopSettings.silentStart = previous;
+    desktopSettingsState.error = toUserError(error);
+  } finally {
+    desktopSettingsState.busy = false;
+  }
+}
+
+onMounted(async () => {
   getStatsOverlayPreferences();
+  try {
+    Object.assign(desktopSettings, await loadDesktopSettings());
+    autostartDraft.value = await getAutostartEnabled();
+  } catch (error) {
+    desktopSettingsState.error = toUserError(error);
+  }
 });
 </script>
 
@@ -158,6 +201,42 @@ onMounted(() => {
         >
           打开
         </Button>
+      </SettingsRow>
+
+      <SettingsRow
+        label="静默启动"
+        description="启动应用时保持主窗口隐藏，仅显示托盘图标"
+        :busy="desktopSettingsState.busy"
+        :error="desktopSettingsState.error"
+        @retry="retryState(desktopSettingsState)"
+      >
+        <Switch
+          compact
+          label=""
+          :enabled="desktopSettings.silentStart"
+          :busy="desktopSettingsState.busy"
+          :disabled="desktopSettingsState.busy"
+          aria-label="静默启动"
+          @change="handleSilentStartChange"
+        />
+      </SettingsRow>
+
+      <SettingsRow
+        label="登录时自动启动"
+        description="Linux 下为当前用户创建安全的 autostart desktop entry"
+        :busy="desktopSettingsState.busy"
+        :error="desktopSettingsState.error"
+        @retry="retryState(desktopSettingsState)"
+      >
+        <Switch
+          compact
+          label=""
+          :enabled="autostartDraft"
+          :busy="desktopSettingsState.busy"
+          :disabled="desktopSettingsState.busy"
+          aria-label="登录时自动启动"
+          @change="handleAutostartChange"
+        />
       </SettingsRow>
     </SettingsSection>
 

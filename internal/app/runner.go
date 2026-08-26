@@ -276,6 +276,11 @@ func Run(resources EmbeddedResources) error {
 	windowService.SetApp(app)
 	windowService.SetUpdater(updateManager)
 
+	desktopSettings, desktopSettingsErr := appdata.LoadDesktopSettings()
+	if desktopSettingsErr != nil {
+		logger.Warnf("读取桌面设置失败，使用默认启动行为: %v", desktopSettingsErr)
+	}
+
 	mainWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:               appName,
 		Width:               1280,
@@ -285,7 +290,7 @@ func Run(resources EmbeddedResources) error {
 		DisableResize:       false,
 		Frameless:           goruntime.GOOS == "windows",
 		URL:                 "/#/",
-		Hidden:              false,
+		Hidden:              desktopSettings.SilentStart,
 		HideOnEscape:        false,
 		MinimiseButtonState: application.ButtonEnabled,
 		MaximiseButtonState: application.ButtonEnabled,

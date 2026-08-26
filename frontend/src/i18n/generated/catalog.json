@@ -636,7 +636,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1411,
+          "line": 1415,
           "column": 70
         }
       ]
@@ -813,7 +813,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 757,
+          "line": 761,
           "column": 41
         }
       ]
@@ -967,7 +967,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 893,
+          "line": 897,
           "column": 12
         }
       ]
@@ -1020,7 +1020,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 758,
+          "line": 762,
           "column": 21
         }
       ]
@@ -1044,7 +1044,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1158,
+          "line": 1162,
           "column": 35
         }
       ]
@@ -1472,7 +1472,7 @@
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 799,
+          "line": 803,
           "column": 78
         }
       ]
@@ -2280,7 +2280,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1302,
+          "line": 1306,
           "column": 100
         }
       ]
@@ -2405,7 +2405,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 806,
+          "line": 810,
           "column": 90
         }
       ]
@@ -3024,12 +3024,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 605,
+          "line": 609,
           "column": 61
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 642,
+          "line": 660,
           "column": 66
         }
       ]
@@ -3157,7 +3157,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 720,
+          "line": 724,
           "column": 16
         }
       ]
@@ -3220,7 +3220,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 880,
+          "line": 884,
           "column": 12
         }
       ]
@@ -3932,7 +3932,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1423,
+          "line": 1427,
           "column": 15
         }
       ]
@@ -4106,7 +4106,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 854,
+          "line": 858,
           "column": 12
         }
       ]
@@ -4130,7 +4130,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/GeneralSettings.vue",
-          "line": 121,
+          "line": 164,
           "column": 9
         }
       ]
@@ -4301,7 +4301,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1005,
+          "line": 1009,
           "column": 49
         }
       ]
@@ -5061,7 +5061,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/GeneralSettings.vue",
-          "line": 149,
+          "line": 192,
           "column": 9
         }
       ]
@@ -5220,12 +5220,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 611,
+          "line": 615,
           "column": 97
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 477,
+          "line": 495,
           "column": 99
         }
       ]
@@ -5415,7 +5415,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 596,
+          "line": 600,
           "column": 169
         }
       ]
@@ -5994,7 +5994,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1386,
+          "line": 1390,
           "column": 49
         }
       ]
@@ -6047,12 +6047,12 @@
         },
         {
           "file": "src/components/settings/categories/GeneralSettings.vue",
-          "line": 120,
+          "line": 163,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/GeneralSettings.vue",
-          "line": 125,
+          "line": 168,
           "column": 11
         },
         {
@@ -6192,7 +6192,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/GeneralSettings.vue",
-          "line": 74,
+          "line": 79,
           "column": 35
         }
       ]
@@ -6408,7 +6408,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 806,
+          "line": 810,
           "column": 21
         }
       ]
@@ -7101,7 +7101,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 761,
+          "line": 765,
           "column": 27
         }
       ]
@@ -7524,7 +7524,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/GeneralSettings.vue",
-          "line": 22,
+          "line": 23,
           "column": 27
         },
         {
@@ -7687,7 +7687,7 @@
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 375,
+          "line": 377,
           "column": 24
         }
       ]
@@ -7996,12 +7996,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 669,
+          "line": 673,
           "column": 126
         },
         {
           "file": "src/services/clientApi.js",
-          "line": 573,
+          "line": 591,
           "column": 128
         }
       ]
@@ -8149,12 +8149,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1263,
+          "line": 1267,
           "column": 37
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 1277,
+          "line": 1281,
           "column": 37
         }
       ]
@@ -9387,7 +9387,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 806,
+          "line": 810,
           "column": 159
         }
       ]
@@ -9425,6 +9425,18 @@
           "file": "src/components/settings/delegation/DelegationSupervisionPanel.vue",
           "line": 123,
           "column": 7
+        }
+      ]
+    },
+    "613b49e08f0f0837": {
+      "source": "Linux 下为当前用户创建安全的 autostart desktop entry",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/GeneralSettings.vue",
+          "line": 226,
+          "column": 9
         }
       ]
     },
@@ -9471,7 +9483,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/GeneralSettings.vue",
-          "line": 167,
+          "line": 246,
           "column": 9
         }
       ]
@@ -9717,7 +9729,7 @@
         },
         {
           "file": "src/components/settings/categories/GeneralSettings.vue",
-          "line": 72,
+          "line": 77,
           "column": 42
         },
         {
@@ -10199,12 +10211,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/GeneralSettings.vue",
-          "line": 130,
+          "line": 173,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/GeneralSettings.vue",
-          "line": 140,
+          "line": 183,
           "column": 13
         }
       ]
@@ -10499,12 +10511,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 683,
+          "line": 687,
           "column": 79
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 696,
+          "line": 700,
           "column": 16
         }
       ]
@@ -11135,7 +11147,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1014,
+          "line": 1018,
           "column": 58
         }
       ]
@@ -11416,7 +11428,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 712,
+          "line": 716,
           "column": 16
         }
       ]
@@ -11737,7 +11749,7 @@
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 799,
+          "line": 803,
           "column": 71
         }
       ]
@@ -11945,7 +11957,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 828,
+          "line": 832,
           "column": 12
         }
       ]
@@ -12911,7 +12923,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/GeneralSettings.vue",
-          "line": 131,
+          "line": 174,
           "column": 9
         }
       ]
@@ -13181,7 +13193,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/GeneralSettings.vue",
-          "line": 23,
+          "line": 24,
           "column": 27
         }
       ]
@@ -13217,7 +13229,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1356,
+          "line": 1360,
           "column": 35
         }
       ]
@@ -13939,7 +13951,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 790,
+          "line": 794,
           "column": 14
         }
       ]
@@ -14134,7 +14146,7 @@
       "refs": [
         {
           "file": "src/services/clientApi.js",
-          "line": 187,
+          "line": 189,
           "column": 37
         }
       ]
@@ -14175,7 +14187,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 810,
+          "line": 814,
           "column": 35
         }
       ]
@@ -14371,7 +14383,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 906,
+          "line": 910,
           "column": 12
         }
       ]
@@ -14534,6 +14546,23 @@
           "file": "src/components/DelegationRuntimePanel.vue",
           "line": 100,
           "column": 108
+        }
+      ]
+    },
+    "965d614c62e7ce1b": {
+      "source": "登录时自动启动",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/GeneralSettings.vue",
+          "line": 225,
+          "column": 9
+        },
+        {
+          "file": "src/components/settings/categories/GeneralSettings.vue",
+          "line": 237,
+          "column": 11
         }
       ]
     },
@@ -14986,7 +15015,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1334,
+          "line": 1338,
           "column": 49
         }
       ]
@@ -15046,7 +15075,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1151,
+          "line": 1155,
           "column": 79
         }
       ]
@@ -15178,7 +15207,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1412,
+          "line": 1416,
           "column": 61
         }
       ]
@@ -15231,7 +15260,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 728,
+          "line": 732,
           "column": 16
         }
       ]
@@ -15366,7 +15395,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 984,
+          "line": 988,
           "column": 25
         }
       ]
@@ -15651,6 +15680,23 @@
         }
       ]
     },
+    "a1b8c98f29374a2f": {
+      "source": "静默启动",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/GeneralSettings.vue",
+          "line": 207,
+          "column": 9
+        },
+        {
+          "file": "src/components/settings/categories/GeneralSettings.vue",
+          "line": 219,
+          "column": 11
+        }
+      ]
+    },
     "a1c21237a273fa2a": {
       "source": "最大纠偏",
       "kind": "text",
@@ -15838,7 +15884,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1316,
+          "line": 1320,
           "column": 79
         }
       ]
@@ -15891,7 +15937,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 919,
+          "line": 923,
           "column": 12
         }
       ]
@@ -15939,12 +15985,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 786,
+          "line": 790,
           "column": 47
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 798,
+          "line": 802,
           "column": 49
         }
       ]
@@ -16505,12 +16551,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 684,
+          "line": 688,
           "column": 82
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 704,
+          "line": 708,
           "column": 16
         }
       ]
@@ -16953,17 +16999,17 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1195,
+          "line": 1199,
           "column": 49
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 1202,
+          "line": 1206,
           "column": 49
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 1220,
+          "line": 1224,
           "column": 49
         }
       ]
@@ -17038,12 +17084,12 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1370,
+          "line": 1374,
           "column": 35
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 1397,
+          "line": 1401,
           "column": 48
         }
       ]
@@ -17055,7 +17101,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 731,
+          "line": 735,
           "column": 114
         }
       ]
@@ -17091,7 +17137,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1013,
+          "line": 1017,
           "column": 49
         }
       ]
@@ -17192,7 +17238,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 867,
+          "line": 871,
           "column": 12
         }
       ]
@@ -18929,7 +18975,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/GeneralSettings.vue",
-          "line": 148,
+          "line": 191,
           "column": 9
         }
       ]
@@ -19006,7 +19052,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/GeneralSettings.vue",
-          "line": 158,
+          "line": 201,
           "column": 11
         }
       ]
@@ -19105,17 +19151,17 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1181,
+          "line": 1185,
           "column": 37
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 1242,
+          "line": 1246,
           "column": 37
         },
         {
           "file": "src/services/browserBindings.js",
-          "line": 1402,
+          "line": 1406,
           "column": 78
         }
       ]
@@ -19453,7 +19499,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1073,
+          "line": 1077,
           "column": 69
         }
       ]
@@ -19506,7 +19552,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 736,
+          "line": 740,
           "column": 16
         }
       ]
@@ -20010,7 +20056,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/GeneralSettings.vue",
-          "line": 74,
+          "line": 79,
           "column": 47
         }
       ]
@@ -20145,7 +20191,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 805,
+          "line": 809,
           "column": 50
         }
       ]
@@ -20552,7 +20598,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/GeneralSettings.vue",
-          "line": 164,
+          "line": 243,
           "column": 22
         }
       ]
@@ -21623,7 +21669,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1426,
+          "line": 1430,
           "column": 26
         }
       ]
@@ -21884,7 +21930,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1015,
+          "line": 1019,
           "column": 35
         }
       ]
@@ -22000,6 +22046,18 @@
         }
       ]
     },
+    "e77a22edbb7a0361": {
+      "source": "启动应用时保持主窗口隐藏，仅显示托盘图标",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/GeneralSettings.vue",
+          "line": 208,
+          "column": 9
+        }
+      ]
+    },
     "e77e3d58b0dcffaa": {
       "source": "耗时",
       "kind": "text",
@@ -22067,7 +22125,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 806,
+          "line": 810,
           "column": 170
         }
       ]
@@ -22484,12 +22542,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/GeneralSettings.vue",
-          "line": 166,
+          "line": 245,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/GeneralSettings.vue",
-          "line": 178,
+          "line": 257,
           "column": 11
         }
       ]
@@ -22578,7 +22636,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1427,
+          "line": 1431,
           "column": 26
         },
         {
@@ -22723,7 +22781,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 799,
+          "line": 803,
           "column": 21
         }
       ]
@@ -22909,7 +22967,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 841,
+          "line": 845,
           "column": 12
         }
       ]
@@ -23087,7 +23145,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 723,
+          "line": 727,
           "column": 139
         }
       ]
@@ -23365,7 +23423,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 584,
+          "line": 588,
           "column": 58
         }
       ]
@@ -23740,7 +23798,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1155,
+          "line": 1159,
           "column": 85
         }
       ]
@@ -23946,7 +24004,7 @@
       "refs": [
         {
           "file": "src/services/browserBindings.js",
-          "line": 1007,
+          "line": 1011,
           "column": 46
         }
       ]

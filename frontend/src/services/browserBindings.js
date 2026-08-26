@@ -562,6 +562,10 @@ export const DismissDefenderExclusion = () => {
 };
 export const GetTerminalEnvironmentStatus = () => Promise.resolve({ platform: "browser-preview", shellPath: "/bin/zsh", shellName: "zsh", shellVersion: "", pythonPath: "/usr/bin/python3", pythonVersion: "Python 3", upgradeRecommended: false, upgradeMessage: "", configurationNotice: "浏览器预览模式：使用模拟环境。" });
 export const ApplyTerminalEnvironment = GetTerminalEnvironmentStatus;
+export const LoadDesktopSettings = () => Promise.resolve({ silentStart: false });
+export const SaveDesktopSettings = (settings) => Promise.resolve(clone(settings || { silentStart: false }));
+export const GetAutostartEnabled = () => Promise.resolve(false);
+export const SetAutostartEnabled = () => Promise.resolve();
 // 浏览器预览没有 winget；安装为无操作（真实进度走事件，预览模式无事件通道）。
 export const InstallTerminalDependency = () => Promise.resolve();
 export const GetAdRuntime = () => Promise.resolve({ available: false, slots: [], window: {} });

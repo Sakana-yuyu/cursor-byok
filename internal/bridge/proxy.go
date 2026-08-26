@@ -90,6 +90,9 @@ type ProviderBalanceRequest = client.ProviderBalanceRequest
 // ProviderBalance 定义中转站余额查询结果。
 type ProviderBalance = client.ProviderBalance
 
+// DesktopSettings 定义桌面原生设置。
+type DesktopSettings = appdata.DesktopSettings
+
 // PromptInjectionConfig 定义提示词注入设置。不会包含模型 API key。
 type PromptInjectionConfig = promptinject.Config
 
@@ -825,6 +828,26 @@ func (s *ProxyService) QueryUsageRecords(req UsageRecordsRequest) (UsageRecordsR
 // ApplyCursorSettings 用于处理与 ApplyCursorSettings 相关的逻辑。
 func (s *ProxyService) ApplyCursorSettings() error {
 	return s.core.ApplyCursorSettings()
+}
+
+// LoadDesktopSettings returns native desktop preferences.
+func (s *ProxyService) LoadDesktopSettings() (DesktopSettings, error) {
+	return s.core.LoadDesktopSettings()
+}
+
+// SaveDesktopSettings persists native desktop preferences.
+func (s *ProxyService) SaveDesktopSettings(settings DesktopSettings) error {
+	return s.core.SaveDesktopSettings(settings)
+}
+
+// GetAutostartEnabled reports whether Linux user-session autostart is enabled.
+func (s *ProxyService) GetAutostartEnabled() (bool, error) {
+	return s.core.GetAutostartEnabled()
+}
+
+// SetAutostartEnabled updates Linux user-session autostart.
+func (s *ProxyService) SetAutostartEnabled(enabled bool) error {
+	return s.core.SetAutostartEnabled(enabled)
 }
 
 // ClearCursorSettings 用于处理与 ClearCursorSettings 相关的逻辑。

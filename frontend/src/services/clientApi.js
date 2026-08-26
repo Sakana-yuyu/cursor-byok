@@ -25,6 +25,7 @@ import {
   RepairCACorruption, GetCARepairStatus,
   OfferDefenderExclusion, GetDefenderExclusionState, DismissDefenderExclusion,
   GetTerminalEnvironmentStatus, ApplyTerminalEnvironment, InstallTerminalDependency,
+  LoadDesktopSettings, SaveDesktopSettings, GetAutostartEnabled, SetAutostartEnabled,
 } from "@bindings/cursor/internal/bridge/proxyservice.js";
 import { GetAdRuntime, OpenExternalURL } from "@bindings/cursor/internal/bridge/adservice.js";
 import {
@@ -89,6 +90,7 @@ const desktopMethods = {
   RepairCACorruption, GetCARepairStatus,
   OfferDefenderExclusion, GetDefenderExclusionState, DismissDefenderExclusion,
   GetTerminalEnvironmentStatus, ApplyTerminalEnvironment, InstallTerminalDependency,
+  LoadDesktopSettings, SaveDesktopSettings, GetAutostartEnabled, SetAutostartEnabled,
 };
 
 const API_LOG_PREFIX = "[clientApi]";
@@ -381,6 +383,22 @@ export function getTerminalEnvironmentStatus() {
 
 export function applyTerminalEnvironment() {
   return withApiLogging("ApplyTerminalEnvironment", undefined, () => desktopOrMockRaw(BROWSER_TERMINAL_ENVIRONMENT, "@bindings/cursor/internal/bridge/proxyservice.js", "ApplyTerminalEnvironment"));
+}
+
+export function loadDesktopSettings() {
+  return withApiLogging("LoadDesktopSettings", undefined, () => desktopOrMockRaw({ silentStart: false }, "@bindings/cursor/internal/bridge/proxyservice.js", "LoadDesktopSettings"));
+}
+
+export function saveDesktopSettings(settings) {
+  return withApiLogging("SaveDesktopSettings", settings, () => desktopOrMockRaw(undefined, "@bindings/cursor/internal/bridge/proxyservice.js", "SaveDesktopSettings", [settings]));
+}
+
+export function getAutostartEnabled() {
+  return withApiLogging("GetAutostartEnabled", undefined, () => desktopOrMockRaw(false, "@bindings/cursor/internal/bridge/proxyservice.js", "GetAutostartEnabled"));
+}
+
+export function setAutostartEnabled(enabled) {
+  return withApiLogging("SetAutostartEnabled", enabled, () => desktopOrMockRaw(undefined, "@bindings/cursor/internal/bridge/proxyservice.js", "SetAutostartEnabled", [Boolean(enabled)]));
 }
 
 // 通过 winget 异步安装 PowerShell 7 / Python 3；立即返回，进度走事件。
