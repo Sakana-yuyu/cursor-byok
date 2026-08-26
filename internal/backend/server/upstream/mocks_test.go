@@ -470,7 +470,8 @@ func TestDecodeAvailableModelsRequestPreservesOptionalPresence(t *testing.T) {
 		{name: "exploded", request: aiserverv1.AvailableModelsRequest{UseModelParameters: boolPtr(true), VariantsWillBeShownInExplodedList: boolPtr(true)}, usePresent: true, useValue: true, expPresent: true, expValue: true},
 		{name: "legacy", request: aiserverv1.AvailableModelsRequest{UseModelParameters: boolPtr(false)}, usePresent: true, useValue: false},
 	}
-	for _, tc := range cases {
+	for i := range cases {
+		tc := &cases[i]
 		t.Run(tc.name, func(t *testing.T) {
 			body, err := proto.Marshal(&tc.request)
 			if err != nil {
@@ -514,7 +515,7 @@ func TestAvailableModelsPayloadUsesCompactEffortPickerContract(t *testing.T) {
 		ContextWindowTokens: 272000,
 	}}
 
-	for _, tc := range []struct {
+	effortCases := []struct {
 		name                 string
 		request              aiserverv1.AvailableModelsRequest
 		wantCompact          bool
@@ -545,7 +546,9 @@ func TestAvailableModelsPayloadUsesCompactEffortPickerContract(t *testing.T) {
 				UseModelParameters: boolPtr(false),
 			},
 		},
-	} {
+	}
+	for i := range effortCases {
+		tc := &effortCases[i]
 		t.Run(tc.name, func(t *testing.T) {
 			body, err := proto.Marshal(&tc.request)
 			if err != nil {
