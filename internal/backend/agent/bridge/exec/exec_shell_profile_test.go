@@ -62,6 +62,10 @@ func TestDecodeShellArgsRequiredPermissions(t *testing.T) {
 		{name: "all", permissions: `{"required_permissions":["all"]}`, wantType: agentv1.SandboxPolicy_TYPE_INSECURE_NONE, wantNetwork: true},
 		{name: "all takes priority", permissions: `{"required_permissions":["full_network","all"]}`, wantType: agentv1.SandboxPolicy_TYPE_INSECURE_NONE, wantNetwork: true},
 		{name: "unknown", permissions: `{"required_permissions":["unknown"]}`, wantPolicyNil: true},
+		{name: "whitespace around all is not enum", permissions: `{"required_permissions":[" all "]}`, wantPolicyNil: true},
+		{name: "whitespace around full network is not enum", permissions: `{"required_permissions":[" full_network "]}`, wantPolicyNil: true},
+		{name: "non-string permission is ignored", permissions: `{"required_permissions":[true,42,null]}`, wantPolicyNil: true},
+		{name: "malformed permissions value", permissions: `{"required_permissions":"all"}`, wantPolicyNil: true},
 		{name: "empty", permissions: `{"required_permissions":[]}`, wantPolicyNil: true},
 	}
 	for _, tt := range tests {
@@ -95,14 +99,30 @@ func TestDecodeShellArgsRequiredPermissions(t *testing.T) {
 }
 
 func TestOpenShellIncludesRequestedSandboxPolicy(t *testing.T) {
-	bridge := NewBridge()
-	message, _, err := bridge.OpenExec(OpenExecContext{}, runtimecore.ToolInvocation{ToolName: "Shell", CallID: "call", ArgsJSON: []byte(`{"command":"echo hi","required_permissions":["full_network"]}`)})
-	if err != nil {
-		t.Fatalf("OpenExec() error = %v", err)
+	tests := []struct {
+		name        string
+		permissions string
+		wantType    agentv1.SandboxPolicy_Type
+	}{
+		{name: "full network", permissions: "full_network", wantType: agentv1.SandboxPolicy_TYPE_WORKSPACE_READWRITE},
+		{name: "all", permissions: "all", wantType: agentv1.SandboxPolicy_TYPE_INSECURE_NONE},
 	}
-	policy := message.GetExecServerMessage().GetShellStreamArgs().GetRequestedSandboxPolicy()
-	if policy == nil || policy.Type != agentv1.SandboxPolicy_TYPE_WORKSPACE_READWRITE || policy.NetworkAccess == nil || !*policy.NetworkAccess {
-		t.Fatalf("requested sandbox policy = %#v, want workspace readwrite with network access", policy)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bridge := NewBridge()
+			argsJSON := []byte(`{"command":"echo hi","required_permissions":["` + tt.permissions + `"]}`)
+			message, _, err := bridge.OpenExec(OpenExecContext{}, runtimecore.ToolInvocation{ToolName: "Shell", CallID: "call", ArgsJSON: argsJSON})
+			if err != nil {
+				t.Fatalf("OpenExec() error = %v", err)
+			}
+			policy := message.GetExecServerMessage().GetShellStreamArgs().GetRequestedSandboxPolicy()
+			if policy == nil || policy.Type != tt.wantType {
+				t.Fatalf("requested sandbox policy = %#v, want type %s", policy, tt.wantType)
+			}
+			if policy.NetworkAccess == nil || !*policy.NetworkAccess {
+				t.Fatalf("policy.NetworkAccess = %v, want true", policy.NetworkAccess)
+			}
+		})
 	}
 }
 

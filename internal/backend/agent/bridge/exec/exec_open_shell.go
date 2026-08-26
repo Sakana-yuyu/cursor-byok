@@ -58,7 +58,6 @@ func decodeShellRequestedSandboxPolicy(args map[string]any) *agentv1.SandboxPoli
 		if !ok {
 			continue
 		}
-		name = strings.TrimSpace(name)
 		switch name {
 		case "all":
 			return &agentv1.SandboxPolicy{

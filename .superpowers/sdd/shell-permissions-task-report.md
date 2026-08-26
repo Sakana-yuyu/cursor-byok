@@ -27,7 +27,25 @@
 - `git diff --check`
   - 通过；仅显示现有工作树文件的 LF/CRLF 转换提示，无 whitespace error。
 
+## 批次 1 审查修复
+
+- `decodeShellRequestedSandboxPolicy` 现在严格匹配原始 enum 字符串，不再对权限值执行 `TrimSpace`；`" all "`、`" full_network "`、非字符串和 malformed 非数组值均不会授权。
+- 增加 malformed/带空白权限值测试。
+- `openShell` 测试现在分别断言 `full_network` 和 `all` 的 proto enum 与 `network_access=true`，包括 `all -> INSECURE_NONE`。
+- 强化 readonly schema 测试，断言 `required_permissions`、`notify_on_output`、`profile` 同时从 properties 和 required 列表移除，并通过 `DefaultToolCatalog.Load(PLAN, "explore")` 集成路径确认 `command`、`working_directory`、`block_until_ms` 等既有字段仍保留。
+
+### 审查修复命令与结果
+
+- `go test ./internal/backend/agent/bridge/exec ./internal/backend/forwarder -run 'Test(DecodeShellArgsRequiredPermissions|OpenShellIncludesRequestedSandboxPolicy|RewriteReadonlyShellToolRemovesUnsupportedSchemaFields|ReadonlyExploreShellSchemaRemovesEscalationAndUnsupportedFields)'`
+  - 通过。
+- `go test ./internal/backend/agent/bridge/exec ./internal/backend/forwarder`
+  - 通过。
+- prompt/schema JSON 校验：agent、ask、debug、multitask、plan 的 Shell `required_permissions` 为 optional array，枚举为 `full_network`/`all`；subagent 无 Shell
+  - 通过。
+- `git diff --check`
+  - 通过。
+
 ## 遗留疑问
 
 - 未运行整个仓库的 `go test ./...`；本批次运行了受影响的 exec 和 forwarder 包测试及 prompt/schema 校验。
-- 未恢复或修改用户保护的 `stash@{0}`，也未引入 Rust/Tauri 文件。
+- 未恢复或修改 `stash@{0}`，也未引入 Rust/Tauri 文件。

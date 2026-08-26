@@ -150,6 +150,46 @@ func TestToolAssetsConsistentWithModeWhitelists(t *testing.T) {
 	}
 }
 
+func TestReadonlyExploreShellSchemaRemovesEscalationAndUnsupportedFields(t *testing.T) {
+	tools, names, err := NewToolCatalog().Load(agentv1.AgentMode_AGENT_MODE_PLAN, "explore")
+	if err != nil {
+		t.Fatalf("load readonly explore tools: %v", err)
+	}
+	var shell json.RawMessage
+	for index, name := range names {
+		if name == "Shell" {
+			shell = tools[index]
+			break
+		}
+	}
+	if shell == nil {
+		t.Fatal("readonly explore catalog must contain Shell")
+	}
+	var tool map[string]any
+	if err := json.Unmarshal(shell, &tool); err != nil {
+		t.Fatalf("decode readonly Shell schema: %v", err)
+	}
+	function, _ := tool["function"].(map[string]any)
+	parameters, _ := function["parameters"].(map[string]any)
+	properties, _ := parameters["properties"].(map[string]any)
+	for _, field := range []string{"required_permissions", "notify_on_output", "profile"} {
+		if _, found := properties[field]; found {
+			t.Fatalf("readonly Shell schema still exposes %q", field)
+		}
+	}
+	for _, field := range []string{"command", "working_directory", "block_until_ms"} {
+		if _, found := properties[field]; !found {
+			t.Fatalf("readonly Shell schema lost existing field %q", field)
+		}
+	}
+	required, _ := parameters["required"].([]any)
+	for _, field := range required {
+		if field == "required_permissions" || field == "notify_on_output" || field == "profile" {
+			t.Fatalf("readonly Shell required list still exposes %q", field)
+		}
+	}
+}
+
 func TestChildConversationCannotDispatchSubagents(t *testing.T) {
 	tools, names, err := NewToolCatalog().Load(agentv1.AgentMode_AGENT_MODE_PLAN, "explore")
 	if err != nil {

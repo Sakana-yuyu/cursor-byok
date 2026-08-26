@@ -249,7 +249,7 @@ func TestRewriteReadonlyShellToolRemovesUnsupportedSchemaFields(t *testing.T) {
 	}
 	required, _ := parameters["required"].([]any)
 	for _, field := range required {
-		if field == "notify_on_output" || field == "profile" {
+		if field == "notify_on_output" || field == "profile" || field == "required_permissions" {
 			t.Fatalf("required still lists removed field %v", field)
 		}
 	}
