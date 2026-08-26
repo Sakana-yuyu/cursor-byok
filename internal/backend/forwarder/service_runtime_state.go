@@ -113,22 +113,44 @@ func (service *Service) rewriteCheckpointTokenDetailsForClient(stream *ActiveStr
 		state.TokenDetails = &agentv1.ConversationTokenDetails{}
 	}
 	state.TokenDetails.MaxTokens = clampInt64ToUint32(service.checkpointDisplayMaxTokens(stream, conversation))
-	compiled, hasCompiled := service.checkpointCompiledConversation(stream, conversation)
-	state.TokenDetails.UsedTokens = clampInt64ToUint32(service.checkpointDisplayUsedTokens(conversation, state, compiled, hasCompiled))
+	compiled, hasCompiled, projectionActive := service.checkpointCompiledConversation(stream, conversation)
+	state.TokenDetails.UsedTokens = clampInt64ToUint32(
+		service.checkpointDisplayUsedTokens(
+			conversation,
+			state,
+			compiled,
+			hasCompiled,
+			projectionActive,
+		),
+	)
 	state.TokenDetails.Breakdown = estimateCheckpointPromptTokenBreakdown(compiled, hasCompiled, state.TokenDetails.UsedTokens, state.TokenDetails.MaxTokens)
 }
 
-func (service *Service) checkpointCompiledConversation(stream *ActiveStream, conversation *ConversationFile) (CompiledConversation, bool) {
+func (service *Service) checkpointCompiledConversation(stream *ActiveStream, conversation *ConversationFile) (CompiledConversation, bool, bool) {
 	if service == nil || service.compiler == nil || conversation == nil {
-		return CompiledConversation{}, false
+		return CompiledConversation{}, false, false
 	}
 	_, modelName, latestUserText, mode := checkpointPromptContext(stream)
 	compiled, err := service.compiler.Compile(conversation, mode, latestUserText, modelName, stream.CustomSystemPrompt, stream.Goal != nil)
 	if err != nil {
 		logger.Errorf("forwarder checkpoint token estimate failed request_id=%s conversation_id=%s err=%v", strings.TrimSpace(activeStreamRequestID(stream)), strings.TrimSpace(conversation.ConversationID), err)
-		return CompiledConversation{}, false
+		return CompiledConversation{}, false, false
 	}
-	return guardCompiledConversationForProvider(compiled), true
+	compiled = guardCompiledConversationForProvider(compiled)
+	_, manualCompactionRequested := streamManualCompactionDirective(stream)
+	if manualCompactionRequested || !service.contextProjectionPressureExceeded(stream, conversation, compiled) {
+		return compiled, true, false
+	}
+	projectedConversation, _, active, _ := service.prepareConversationContextProjectionState(conversation, contextProjectionModelKey(stream))
+	if !active {
+		return compiled, true, false
+	}
+	projectedCompiled, err := service.compiler.Compile(projectedConversation, mode, latestUserText, modelName, stream.CustomSystemPrompt, stream.Goal != nil)
+	if err != nil {
+		logger.Errorf("forwarder projected checkpoint token estimate failed request_id=%s conversation_id=%s err=%v", strings.TrimSpace(activeStreamRequestID(stream)), strings.TrimSpace(conversation.ConversationID), err)
+		return compiled, true, false
+	}
+	return guardCompiledConversationForProvider(projectedCompiled), true, true
 }
 
 func (service *Service) checkpointDisplayMaxTokens(stream *ActiveStream, conversation *ConversationFile) int64 {
@@ -140,7 +162,17 @@ func (service *Service) checkpointDisplayMaxTokens(stream *ActiveStream, convers
 	return maxTokens
 }
 
-func (service *Service) checkpointDisplayUsedTokens(conversation *ConversationFile, state *agentv1.ConversationStateStructure, compiled CompiledConversation, hasCompiled bool) int64 {
+func (service *Service) checkpointDisplayUsedTokens(
+	conversation *ConversationFile,
+	state *agentv1.ConversationStateStructure,
+	compiled CompiledConversation,
+	hasCompiled bool,
+	projectionActive bool,
+) int64 {
+	if hasCompiled && projectionActive {
+		return estimateCompiledPromptTokens(compiled)
+	}
+
 	usedTokens := int64(0)
 	if state != nil && state.TokenDetails != nil {
 		usedTokens = int64(state.TokenDetails.GetUsedTokens())

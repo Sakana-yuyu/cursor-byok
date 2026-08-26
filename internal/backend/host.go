@@ -375,6 +375,47 @@ func (host *Host) LoadConfig(ctx context.Context) (serverconfig.Config, error) {
 	return host.configs.Load(ctx)
 }
 
+// agentContractModels 返回给 VS Code 扩展的非敏感模型通道摘要。
+// API Key、完整 BaseURL、自定义请求头和账户凭据只留在 Runtime 内部，不能进入 Contract 响应。
+func (host *Host) agentContractModels(ctx context.Context) ([]forwarder.AgentContractModel, error) {
+	if host == nil || host.configs == nil {
+		return []forwarder.AgentContractModel{}, nil
+	}
+	cfg, err := host.configs.Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]forwarder.AgentContractModel, 0, len(cfg.ModelAdapters))
+	for _, adapter := range cfg.ModelAdapters {
+		id := strings.TrimSpace(adapter.ID)
+		modelID := strings.TrimSpace(adapter.ModelID)
+		if id == "" || modelID == "" {
+			continue
+		}
+		name := strings.TrimSpace(adapter.DisplayName)
+		if name == "" {
+			name = modelID
+		}
+		provider := strings.TrimSpace(adapter.SupplierID)
+		if provider == "" {
+			provider = strings.TrimSpace(adapter.Type)
+		}
+		if provider == "" {
+			provider = strings.TrimSpace(adapter.Source)
+		}
+		items = append(items, forwarder.AgentContractModel{
+			ID:                  id,
+			Name:                name,
+			Provider:            provider,
+			ModelID:             modelID,
+			ContextWindowTokens: adapter.ContextWindowTokens,
+			ReasoningEffort:     adapter.ReasoningEffort,
+			FastMode:            adapter.FastMode,
+		})
+	}
+	return items, nil
+}
+
 func (host *Host) RoutingDecisionHistory(query routing.DecisionQuery) (routing.DecisionPage, error) {
 	if host == nil || host.configs == nil {
 		return routing.DecisionPage{Items: []routing.DecisionRecord{}}, nil
@@ -612,6 +653,7 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 	host.listenAddr = cfg.BackendListenAddr
 	agentModule := forwarder.NewModuleWithExecutorRegistry(appdata.HistoryRootPath(), host.configs, host.executorRegistry)
 	host.agentModule = agentModule
+	agentContractHandler := forwarder.NewAgentContractHandler(agentModule.Service, host.agentContractModels)
 	legacyBidiAppendProcedure := "/aiserver.v1.BidiService/BidiAppend"
 	legacyRunSSEProcedure := "/agent.v1.AgentService/RunSSE"
 	routeDeps := upstream.Dependencies{
@@ -626,6 +668,7 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 			server.ErrorEncoder(),
 		),
 		server.Mount(ads.RoutePrefix, ads.NewHTTPHandler(appdata.AdsRootPath())),
+		server.Mount("/agent/v1", agentContractHandler),
 		server.GET(healthPath,
 			server.Name("healthz"),
 			server.HTTP(),

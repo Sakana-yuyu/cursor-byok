@@ -321,6 +321,12 @@ func TestAutomaticContextProjectionSummaryTimesOutIntoRecentTail(t *testing.T) {
 	if fallback == nil || fallback.Mode != contextProjectionModeRecentTail {
 		t.Fatalf("fallback projection = %#v，want recent-tail", fallback)
 	}
+
+	select {
+	case <-provider.summaryStarted:
+		t.Fatal("recent-tail fallback unexpectedly retried automatic summary")
+	case <-time.After(contextProjectionSummaryTimeout + 250*time.Millisecond):
+	}
 }
 
 func TestCompactionSummaryTimeoutOnlyAppliesToAutomaticProjection(t *testing.T) {
@@ -1536,6 +1542,71 @@ func TestBuildContextProjectionSummaryPlanExtendsExistingSummaryAcrossCompleteTu
 	}
 	if len(plan.CompactedTurns) != 2 {
 		t.Fatalf("new compacted turns = %d, want turns 4 and 5", len(plan.CompactedTurns))
+	}
+}
+
+func TestBuildAutoCompactionPlanSkipsValidRecentTailFallback(t *testing.T) {
+	store := NewConversationFileStore(t.TempDir())
+	conversation := contextProjectionHighPressureConversation(t)
+	conversation.TokenDetailsMaxTokens = projectedConversationMaxTokens
+	conversation.CurrentTurnSeq = 8
+	conversation.CurrentRequestID = "request-8"
+	persisted, err := store.SaveConversationWithEntries(
+		conversation.ConversationID,
+		conversation,
+		conversation.Entries,
+	)
+	if err != nil {
+		t.Fatalf("SaveConversationWithEntries() error = %v", err)
+	}
+	fallback, err := newContextProjectionState(
+		persisted,
+		"model-a",
+		firstEntrySeqForTurn(persisted.Entries, 2),
+		lastEntrySeqForTurn(persisted.Entries, 3),
+		"temporary summary",
+	)
+	if err != nil {
+		t.Fatalf("newContextProjectionState() error = %v", err)
+	}
+	fallback.Mode = contextProjectionModeRecentTail
+	fallback.Summary = ""
+	if err := store.SaveContextProjection(persisted.ConversationID, fallback); err != nil {
+		t.Fatalf("SaveContextProjection() error = %v", err)
+	}
+
+	compiler := contextProjectionLifecycleCompiler{}
+	compiled, err := compiler.Compile(
+		persisted,
+		agentv1.AgentMode_AGENT_MODE_AGENT,
+		"question 8",
+		"model-a",
+		"",
+		false,
+	)
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	service := newServiceWithDependencies(store, NewHistoryProjector(), compiler, nil, NewStreamBroker())
+	stream, err := service.broker.OpenStream(
+		"request-8",
+		persisted.ConversationID,
+		8,
+		"model-a",
+		"model-a",
+		agentv1.AgentMode_AGENT_MODE_AGENT,
+		"question 8",
+	)
+	if err != nil {
+		t.Fatalf("OpenStream() error = %v", err)
+	}
+
+	plan, err := service.buildAutoCompactionPlan(stream, persisted, compiled)
+	if err != nil {
+		t.Fatalf("buildAutoCompactionPlan() error = %v", err)
+	}
+	if plan != nil {
+		t.Fatalf("buildAutoCompactionPlan() = %#v, want nil for valid recent-tail fallback", plan)
 	}
 }
 

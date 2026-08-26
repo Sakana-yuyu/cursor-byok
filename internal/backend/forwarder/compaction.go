@@ -163,6 +163,9 @@ func (service *Service) buildAutoCompactionPlan(stream *ActiveStream, conversati
 			existing = nil
 		}
 	}
+	if contextProjectionStateMode(existing) == contextProjectionModeRecentTail {
+		return nil, nil
+	}
 	plan, err := buildContextProjectionSummaryPlan(
 		conversation,
 		contextProjectionModelKey(stream),

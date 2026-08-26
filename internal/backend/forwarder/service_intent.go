@@ -988,6 +988,7 @@ func extractRequestedMaxMode(message *agentv1.AgentClientMessage) bool {
 func isRuntimeThinkingEffortParameterID(raw string) bool {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case runtimeThinkingEffortParameterID,
+		"effort",
 		"reasoning",
 		"reasoning_effort",
 		"thinking_intensity",

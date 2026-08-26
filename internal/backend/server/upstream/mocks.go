@@ -11,15 +11,20 @@ import (
 	"strings"
 	"time"
 
+	"cursor/gen/aiserverv1"
 	"cursor/internal/modelcontext"
 	legacyruntime "cursor/internal/runtime"
+
+	"google.golang.org/protobuf/proto"
 )
 
 const (
 	availableModelsDisableUnusedHours = 2400000
 	availableModelsUpgradeHours       = 2
 
-	modelRuntimeThinkingEffortParameterID = "thinking_effort"
+	modelRuntimeThinkingEffortParameterID = "effort"
+	modelRuntimeContextParameterID        = "context"
+	modelRuntimeFastParameterID           = "fast"
 
 	// localPathEncryptionKey — стабильный ключ шифрования путей для индексации
 	// репозитория, который cursor-agent CLI запрашивает через GetServerConfig
@@ -65,6 +70,12 @@ const (
 	bootstrapStatsigExperimentName                   = "free_user_model_picker"
 	bootstrapStatsigVariantParam                     = "variant"
 	bootstrapStatsigVariantControl                   = "control"
+	bootstrapStatsigModelPickerExperimentsLayer      = "model_picker_experiments"
+	bootstrapStatsigEffortFirstVariantParam          = "effort_first_variant"
+	bootstrapStatsigEffortFirstCompactModelIDsParam  = "effort_first_compact_model_ids"
+	bootstrapStatsigEffortFirstVariantTreatment      = "treatment"
+	bootstrapStatsigEffortFirstSubmenuExperiment     = "effort_first_submenu_2026_08"
+	bootstrapStatsigExperimentEnabledParam           = "enabled"
 	bootstrapStatsigVariantLockedPicker              = "locked_picker"
 	bootstrapStatsigVariantGrayedModels              = "grayed_models"
 	bootstrapStatsigProductTipsConfigName            = "product_tips_config"
@@ -166,6 +177,11 @@ var bootstrapStatsigTemplate = statsigBootstrapTemplate{
 			map[string]any{bootstrapStatsigVariantParam: bootstrapStatsigVariantControl},
 			bootstrapStatsigVariantControl,
 		),
+		bootstrapStatsigEffortFirstSubmenuExperiment: buildStatsigDynamicConfigActive(
+			bootstrapStatsigEffortFirstSubmenuExperiment,
+			map[string]any{bootstrapStatsigExperimentEnabledParam: true},
+		),
+
 		bootstrapStatsigProductTipsConfigName: buildStatsigDynamicConfig(
 			bootstrapStatsigProductTipsConfigName,
 			map[string]any{
@@ -340,7 +356,15 @@ var bootstrapStatsigTemplate = statsigBootstrapTemplate{
 			bootstrapStatsigLocalDefaultRule,
 		),
 	},
-	LayerConfigs: map[string]map[string]any{},
+	LayerConfigs: map[string]map[string]any{
+		bootstrapStatsigModelPickerExperimentsLayer: buildStatsigLayerConfig(
+			bootstrapStatsigModelPickerExperimentsLayer,
+			map[string]any{
+				bootstrapStatsigEffortFirstVariantParam:         bootstrapStatsigEffortFirstVariantTreatment,
+				bootstrapStatsigEffortFirstCompactModelIDsParam: []string{},
+			},
+		),
+	},
 	User: map[string]any{
 		"userID": localUltraPaymentID,
 		"email":  legacyruntime.InjectAccountEmail,
@@ -354,6 +378,36 @@ var bootstrapStatsigTemplate = statsigBootstrapTemplate{
 		"stableID":                  localUltraPaymentID,
 		"disableDiagnosticsLogging": true,
 	},
+}
+
+func buildStatsigLayerConfig(name string, value map[string]any) map[string]any {
+	return map[string]any{
+		"name":                            name,
+		"value":                           value,
+		"rule_id":                         bootstrapStatsigLocalDefaultRule,
+		"ruleID":                          bootstrapStatsigLocalDefaultRule,
+		"group_name":                      bootstrapStatsigLocalDefaultRule,
+		"groupName":                       bootstrapStatsigLocalDefaultRule,
+		"secondary_exposures":             []statsigSecondaryExposure{},
+		"secondaryExposures":              []statsigSecondaryExposure{},
+		"undelegated_secondary_exposures": []statsigSecondaryExposure{},
+		"undelegatedSecondaryExposures":   []statsigSecondaryExposure{},
+		"is_device_based":                 false,
+		"isDeviceBased":                   false,
+		"is_experiment_active":            true,
+		"isExperimentActive":              true,
+		"is_user_in_experiment":           true,
+		"isUserInExperiment":              true,
+	}
+}
+
+func buildStatsigDynamicConfigActive(name string, value map[string]any) statsigDynamicConfigTemplate {
+	config := buildStatsigDynamicConfig(name, value, bootstrapStatsigLocalDefaultRule)
+	config.IsExperimentActive = true
+	config.IsExperimentActiveCamel = true
+	config.IsUserInExperiment = true
+	config.IsUserInExperimentCamel = true
+	return config
 }
 
 func buildStatsigDynamicConfig(name string, value map[string]any, ruleID string) statsigDynamicConfigTemplate {
@@ -450,16 +504,22 @@ func buildServerConfigPayload(*RequestContext) (map[string]any, error) {
 }
 
 func buildAvailableModelsPayload(reqCtx *RequestContext) (map[string]any, error) {
+	request, err := decodeAvailableModelsRequest(availableModelsRequestBody(reqCtx))
+	if err != nil {
+		return nil, err
+	}
 	adapters, err := loadConfiguredModelAdapters(reqCtx)
 	if err != nil {
 		return nil, err
 	}
+	useModelParameters := request.UseModelParameters == nil || request.GetUseModelParameters()
+	explodedVariants := request.GetVariantsWillBeShownInExplodedList()
 	modelRefs := collectModelAdapterRefs(adapters)
 	defaultModel := ""
 	if len(modelRefs) > 0 {
 		defaultModel = modelRefs[0]
 	}
-	modelEntries := buildAvailableModelEntries(adapters)
+	modelEntries := buildAvailableModelEntriesForMode(adapters, useModelParameters, explodedVariants)
 	return map[string]any{
 		"backgroundComposerModelConfig": map[string]any{
 			"bestOfNDefaultModels": append([]string(nil), modelRefs...),
@@ -478,6 +538,23 @@ func buildAvailableModelsPayload(reqCtx *RequestContext) (map[string]any, error)
 		"deepSearchModelConfig": map[string]any{
 			"defaultModel": defaultModel,
 		},
+		"displayConfiguration": map[string]any{
+			"namedModelsViewConfig": map[string]any{
+				"namedViewToRoutedModelViewToggle": map[string]any{
+					"markdown": "Auto",
+				},
+			},
+			"routedModelViewConfig": map[string]any{
+				"hideSearchBar": false,
+				"routedModelViewToNamedViewToggle": map[string]any{
+					"setToLastNamedModel": true,
+					"subtitle":            "Balanced quality and speed, recommended for most tasks",
+					"titleMarkdown":       "Auto",
+				},
+			},
+			"hideAddModels": false,
+			"hideSearchBar": false,
+		},
 		"disableUnusedModelsAfterNHours": availableModelsDisableUnusedHours,
 		"models":                         modelEntries,
 		"planExecutionModelConfig": map[string]any{
@@ -490,7 +567,7 @@ func buildAvailableModelsPayload(reqCtx *RequestContext) (map[string]any, error)
 		"specModelConfig": map[string]any{
 			"defaultModel": defaultModel,
 		},
-		"useModelParameters":                true,
+		"useModelParameters":                useModelParameters,
 		"upgradeUnchangedModelsAfterNHours": availableModelsUpgradeHours,
 	}, nil
 }
@@ -536,9 +613,17 @@ func buildDefaultModelPayload(reqCtx *RequestContext) (map[string]any, error) {
 }
 
 func buildBootstrapStatsigPayload(reqCtx *RequestContext) (map[string]any, error) {
+	adapters, err := loadConfiguredModelAdapters(reqCtx)
+	if err != nil {
+		return nil, err
+	}
 	generatedAtMs := uint64(time.Now().UnixMilli())
 	authID := resolveBootstrapStatsigAuthID(reqCtx)
-	configJSON, err := buildBootstrapStatsigConfigJSON(int64(generatedAtMs), authID)
+	configJSON, err := buildBootstrapStatsigConfigJSONForModelIDs(
+		int64(generatedAtMs),
+		authID,
+		collectModelAdapterRefs(adapters),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -680,7 +765,29 @@ func loadConfiguredModelAdapters(reqCtx *RequestContext) ([]legacyruntime.ModelA
 	return reqCtx.Deps.SystemSettingService.ResolveModelAdapters(ctx)
 }
 
+func availableModelsRequestBody(reqCtx *RequestContext) []byte {
+	if reqCtx == nil {
+		return nil
+	}
+	return reqCtx.RequestBody
+}
+
+func decodeAvailableModelsRequest(body []byte) (*aiserverv1.AvailableModelsRequest, error) {
+	request := &aiserverv1.AvailableModelsRequest{}
+	if len(body) == 0 {
+		return request, nil
+	}
+	if err := proto.Unmarshal(body, request); err != nil {
+		return nil, fmt.Errorf("decode AvailableModelsRequest: %w", err)
+	}
+	return request, nil
+}
+
 func buildAvailableModelEntries(adapters []legacyruntime.ModelAdapterConfig) []map[string]any {
+	return buildAvailableModelEntriesForMode(adapters, true, true)
+}
+
+func buildAvailableModelEntriesForMode(adapters []legacyruntime.ModelAdapterConfig, useModelParameters bool, explodedVariants bool) []map[string]any {
 	if len(adapters) == 0 {
 		return []map[string]any{}
 	}
@@ -698,35 +805,43 @@ func buildAvailableModelEntries(adapters []legacyruntime.ModelAdapterConfig) []m
 			modelDisplayName = modelID
 		}
 		defaultThinkingEffort := defaultThinkingEffortForAdapter(adapter)
+		if !explodedVariants {
+			defaultThinkingEffort = compactThinkingEffortDefault(defaultThinkingEffort)
+		}
 		// 上下文窗口与 tooltip markdown 需在 entry 构建前算出（tooltip 展示用）。
 		contextTokens := resolveAvailableModelContextTokens(adapter)
 		tooltipMarkdown := buildModelTooltipMarkdown(tooltipData, adapter, contextTokens)
 		entry := map[string]any{
-			"clientDisplayName":                  displayName,
+			"clientDisplayName":                  modelDisplayName,
 			"defaultOn":                          true,
 			"degradationStatus":                  "DEGRADATION_STATUS_UNSPECIFIED",
-			"inputboxShortModelName":             displayName,
+			"inputboxShortModelName":             modelDisplayName,
 			"isRecommendedForBackgroundComposer": false,
 			"name":                               channelID,
-			"namedModelSectionIndex":             1,
-			"parameterDefinitions":               buildThinkingEffortParameterDefinitions(adapter.Type),
-			"serverModelName":                    channelID,
-			"supportsAgent":                      true,
-			"supportsImages":                     true,
-			"supportsMaxMode":                    false,
-			"supportsNonMaxMode":                 true,
-			"supportsPlanMode":                   true,
-			"supportsSandboxing":                 true,
-			"supportsThinking":                   true,
-			"tagline":                            thinkingEffortDisplayName(defaultThinkingEffort),
+			"visibleInRoutedModelView":           true,
+
+			"namedModelSectionIndex": 1,
+			"serverModelName":        channelID,
+			"supportsAgent":          true,
+			"supportsImages":         true,
+			"supportsMaxMode":        false,
+			"supportsNonMaxMode":     true,
+			"supportsPlanMode":       true,
+			"supportsSandboxing":     true,
+			"supportsThinking":       true,
+			"tagline":                thinkingEffortDisplayName(defaultThinkingEffort),
 			"tooltipData": map[string]any{
 				"markdownContent": tooltipMarkdown,
 			},
 			"tooltipDataForMaxMode": map[string]any{
 				"markdownContent": tooltipMarkdown,
 			},
-			"variants": buildThinkingEffortVariants(adapter.Type, channelID, modelDisplayName, tooltipMarkdown, defaultThinkingEffort),
 		}
+		if useModelParameters {
+			entry["parameterDefinitions"] = buildModelParameterDefinitions(adapter, contextTokens, explodedVariants)
+			entry["variants"] = buildModelVariants(adapter, channelID, modelDisplayName, tooltipMarkdown, defaultThinkingEffort, contextTokens, explodedVariants)
+		}
+
 		// 还原原生模型选择器元数据：上下文窗口（含 max 模式）、自动上下文上限、
 		// 展示价格、长上下文标记与「用户自建」标记。数据源优先 adapter 显式配置，
 		// 其次内置 modelcontext 目录（models.json 规则），缺失时省略对应字段。
@@ -869,22 +984,68 @@ func buildCLIModelDetails(adapters []legacyruntime.ModelAdapterConfig) []map[str
 		if channelID == "" {
 			continue
 		}
+		modelID := strings.TrimSpace(adapter.ModelID)
+		modelDisplayName := strings.TrimSpace(adapter.DisplayName)
+		if modelDisplayName == "" {
+			modelDisplayName = modelID
+		}
 		detail := map[string]any{
-			"modelId":        channelID,
-			"displayModelId": channelID,
+			"modelId":          channelID,
+			"displayModelId":   modelID,
+			"displayName":      modelDisplayName,
+			"displayNameShort": modelDisplayName,
 			"apiKeyCredentials": map[string]any{
 				"apiKey":  strings.TrimSpace(adapter.APIKey),
 				"baseUrl": strings.TrimSpace(adapter.BaseURL),
 			},
 		}
+
 		applyAvailableModelAutoContextMetadata(detail, resolveAvailableModelContextTokens(adapter))
 		models = append(models, detail)
 	}
 	return models
 }
 
-func buildThinkingEffortParameterDefinitions(adapterType string) []map[string]any {
+func buildModelParameterDefinitions(adapter legacyruntime.ModelAdapterConfig, contextTokens int, explodedVariants bool) []map[string]any {
+	definitions := buildThinkingEffortParameterDefinitions(adapter.Type, explodedVariants)
+	if contextTokens > 0 {
+		definitions = append(definitions, map[string]any{
+			"id":              modelRuntimeContextParameterID,
+			"markdownTooltip": "Context size the model has available.",
+			"name":            "Context",
+			"parameterType": map[string]any{
+				"enumParameter": map[string]any{
+					"values": []map[string]any{{
+						"value":       strconv.Itoa(contextTokens),
+						"displayName": formatCompactTokenCount(contextTokens),
+					}},
+				},
+			},
+		})
+	}
+	if adapter.FastMode {
+		definitions = append(definitions, map[string]any{
+			"id":              modelRuntimeFastParameterID,
+			"markdownTooltip": "Use the provider's priority service tier when available.",
+			"name":            "Fast",
+			"parameterType": map[string]any{
+				"booleanParameter": map[string]any{
+					"values": []map[string]any{
+						{"value": "false", "displayName": "Off"},
+						{"value": "true", "displayName": "On"},
+					},
+				},
+			},
+		})
+	}
+	return definitions
+}
+
+func buildThinkingEffortParameterDefinitions(adapterType string, explodedVariants bool) []map[string]any {
 	values := thinkingEffortValuesForAdapter(adapterType)
+	if !explodedVariants {
+		values = compactThinkingEffortValues(values)
+	}
 	options := make([]map[string]any, 0, len(values))
 	for _, value := range values {
 		options = append(options, map[string]any{
@@ -896,8 +1057,8 @@ func buildThinkingEffortParameterDefinitions(adapterType string) []map[string]an
 	return []map[string]any{{
 		"id":                  modelRuntimeThinkingEffortParameterID,
 		"isCycleableByHotkey": true,
-		"markdownTooltip":     "Controls the model thinking intensity for this run.",
-		"name":                "Thinking intensity",
+		"markdownTooltip":     "Controls how much reasoning effort the model uses.",
+		"name":                "Effort",
 		"parameterType": map[string]any{
 			"enumParameter": map[string]any{
 				"values": options,
@@ -906,23 +1067,38 @@ func buildThinkingEffortParameterDefinitions(adapterType string) []map[string]an
 	}}
 }
 
-func buildThinkingEffortVariants(adapterType string, channelID string, modelDisplayName string, tooltipData string, defaultThinkingEffort string) []map[string]any {
-	values := orderThinkingEffortValues(thinkingEffortValuesForAdapter(adapterType), defaultThinkingEffort)
+func buildModelVariants(adapter legacyruntime.ModelAdapterConfig, channelID string, modelDisplayName string, tooltipData string, defaultThinkingEffort string, contextTokens int, explodedVariants bool) []map[string]any {
+	values := orderThinkingEffortValues(thinkingEffortValuesForAdapter(adapter.Type), defaultThinkingEffort)
+	if !explodedVariants {
+		values = compactThinkingEffortValues(values)
+	}
+	if len(values) == 0 {
+		values = []string{"disabled"}
+	}
 	channelID = strings.TrimSpace(channelID)
 	modelDisplayName = strings.TrimSpace(modelDisplayName)
 	variants := make([]map[string]any, 0, len(values))
 	for _, value := range values {
-		effortDisplayName := thinkingEffortDisplayName(value)
-		variantDisplayName := buildThinkingEffortVariantDisplayName(modelDisplayName, value)
+		parameterValues := []map[string]any{{"id": modelRuntimeThinkingEffortParameterID, "value": value}}
+		if contextTokens > 0 {
+			parameterValues = append(parameterValues, map[string]any{"id": modelRuntimeContextParameterID, "value": strconv.Itoa(contextTokens)})
+		}
+		if adapter.FastMode {
+			parameterValues = append(parameterValues, map[string]any{"id": modelRuntimeFastParameterID, "value": "false"})
+		}
+		variantDisplayName := modelDisplayName
+		if explodedVariants {
+			variantDisplayName = buildThinkingEffortVariantDisplayName(modelDisplayName, value)
+		}
 		variant := map[string]any{
 			"displayName":              variantDisplayName,
 			"displayNameOutsidePicker": variantDisplayName,
 			"isDefaultNonMaxConfig":    value == defaultThinkingEffort,
 			"isMaxMode":                false,
-			"parameterValues":          []map[string]any{{"id": modelRuntimeThinkingEffortParameterID, "value": value}},
+			"parameterValues":          parameterValues,
 		}
-		if normalizeAvailableModelThinkingEffort(value, true, "") != "disabled" {
-			variant["tagline"] = effortDisplayName
+		if explodedVariants && normalizeAvailableModelThinkingEffort(value, true, "") != "disabled" {
+			variant["tagline"] = thinkingEffortDisplayName(value)
 		}
 		if channelID != "" {
 			variant["variantStringRepresentation"] = channelID + ":" + value
@@ -933,6 +1109,20 @@ func buildThinkingEffortVariants(adapterType string, channelID string, modelDisp
 		variants = append(variants, variant)
 	}
 	return variants
+}
+
+func buildThinkingEffortVariants(adapterType string, channelID string, modelDisplayName string, tooltipData string, defaultThinkingEffort string) []map[string]any {
+	return buildModelVariants(legacyruntime.ModelAdapterConfig{Type: adapterType}, channelID, modelDisplayName, tooltipData, defaultThinkingEffort, 0, true)
+}
+
+func formatCompactTokenCount(tokens int) string {
+	if tokens >= 1000000 {
+		return strconv.FormatFloat(float64(tokens)/1000000, 'f', 1, 64) + "M"
+	}
+	if tokens >= 1000 {
+		return strconv.Itoa(int(math.Round(float64(tokens)/1000))) + "K"
+	}
+	return strconv.Itoa(tokens)
 }
 
 func buildThinkingEffortVariantDisplayName(modelDisplayName string, effortValue string) string {
@@ -954,6 +1144,33 @@ func thinkingEffortValuesForAdapter(adapterType string) []string {
 		values = append(values, "max")
 	}
 	return values
+}
+
+func compactThinkingEffortValues(values []string) []string {
+	compactValues := []string{"low", "medium", "high", "xhigh"}
+	available := make(map[string]bool, len(values))
+	for _, value := range values {
+		available[value] = true
+	}
+
+	output := make([]string, 0, len(compactValues))
+	for _, value := range compactValues {
+		if available[value] {
+			output = append(output, value)
+		}
+	}
+	return output
+}
+
+func compactThinkingEffortDefault(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "low", "medium", "high", "xhigh":
+		return strings.ToLower(strings.TrimSpace(value))
+	case "max":
+		return "xhigh"
+	default:
+		return "medium"
+	}
 }
 
 func orderThinkingEffortValues(values []string, defaultValue string) []string {
@@ -1007,7 +1224,7 @@ func thinkingEffortDisplayName(value string) string {
 	case "high":
 		return "High"
 	case "xhigh":
-		return "XHigh"
+		return "Extra High"
 	case "max":
 		return "Max"
 	default:
@@ -1029,6 +1246,28 @@ func collectModelAdapterRefs(adapters []legacyruntime.ModelAdapterConfig) []stri
 
 // firstModelAdapterRef возвращает канал первого адаптера или пустую строку,
 // если ни один адаптер не сконфигурирован.
+func collectNonEmptyStrings(values []string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			result = append(result, value)
+		}
+	}
+	return result
+}
+
+func cloneStatsigLayerConfigs(source map[string]map[string]any) map[string]map[string]any {
+	result := make(map[string]map[string]any, len(source))
+	for name, layer := range source {
+		clone := make(map[string]any, len(layer))
+		for key, value := range layer {
+			clone[key] = value
+		}
+		result[name] = clone
+	}
+	return result
+}
+
 func firstModelAdapterRef(adapters []legacyruntime.ModelAdapterConfig) string {
 	refs := collectModelAdapterRefs(adapters)
 	if len(refs) == 0 {
@@ -1079,6 +1318,10 @@ func authIDFromJWT(token string) string {
 }
 
 func buildBootstrapStatsigConfigJSON(nowMs int64, authID string) ([]byte, error) {
+	return buildBootstrapStatsigConfigJSONForModelIDs(nowMs, authID, []string{})
+}
+
+func buildBootstrapStatsigConfigJSONForModelIDs(nowMs int64, authID string, compactModelIDs []string) ([]byte, error) {
 	authID = strings.TrimSpace(authID)
 	if authID == "" {
 		authID = localUltraPaymentID
@@ -1092,6 +1335,14 @@ func buildBootstrapStatsigConfigJSON(nowMs int64, authID string) ([]byte, error)
 			"localUserID": authID,
 		},
 	}
+	template.LayerConfigs = cloneStatsigLayerConfigs(template.LayerConfigs)
+	template.LayerConfigs[bootstrapStatsigModelPickerExperimentsLayer] = buildStatsigLayerConfig(
+		bootstrapStatsigModelPickerExperimentsLayer,
+		map[string]any{
+			bootstrapStatsigEffortFirstVariantParam:         bootstrapStatsigEffortFirstVariantTreatment,
+			bootstrapStatsigEffortFirstCompactModelIDsParam: collectNonEmptyStrings(compactModelIDs),
+		},
+	)
 
 	// This template mirrors the Statsig initialize/bootstrap response shape that
 	// the bundled client reads for experiments. hash_used stays "none" so the

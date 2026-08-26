@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"reflect"
 	"strings"
@@ -16,6 +17,110 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+func TestBuildAvailableModelMetadataUsesDisplayNameAndFastCapability(t *testing.T) {
+	adapters := []legacyruntime.ModelAdapterConfig{
+		{
+			ID:                  "channel-gpt",
+			DisplayName:         "GPT-5.6 Sol",
+			ModelID:             "gpt-5.6",
+			ReasoningEffort:     "medium",
+			FastMode:            true,
+			ContextWindowTokens: 272000,
+		},
+		{
+			ID:          "channel-local",
+			DisplayName: "Local Model",
+			ModelID:     "local-model",
+			FastMode:    false,
+		},
+	}
+
+	entries := buildAvailableModelEntries(adapters)
+	if len(entries) != 2 {
+		t.Fatalf("entry count: got %d, want 2", len(entries))
+	}
+	fast := entries[0]
+	if fast["name"] != "channel-gpt" || fast["serverModelName"] != "channel-gpt" {
+		t.Fatalf("routing IDs: name=%v server=%v", fast["name"], fast["serverModelName"])
+	}
+	for field, want := range map[string]any{
+		"clientDisplayName":      "GPT-5.6 Sol",
+		"inputboxShortModelName": "GPT-5.6 Sol",
+		"contextTokenLimit":      272000,
+	} {
+		if fast[field] != want {
+			t.Fatalf("%s: got %#v, want %#v", field, fast[field], want)
+		}
+	}
+	parameterDefs, ok := fast["parameterDefinitions"].([]map[string]any)
+	if !ok || len(parameterDefs) < 2 {
+		t.Fatalf("parameter definitions: got %#v, want effort and fast", fast["parameterDefinitions"])
+	}
+	if parameterDefs[0]["id"] != "effort" || parameterDefs[0]["name"] != "Effort" {
+		t.Fatalf("effort parameter: got %#v", parameterDefs[0])
+	}
+	if _, exists := findModelParameterDefinition(fast, "fast"); !exists {
+		t.Fatalf("fast parameter missing: got %#v", fast["parameterDefinitions"])
+	}
+	variants, ok := fast["variants"].([]map[string]any)
+	if !ok || len(variants) == 0 {
+		t.Fatalf("variants: got %#v", fast["variants"])
+	}
+	if got := variants[0]["displayNameOutsidePicker"]; got == nil || !strings.Contains(got.(string), "GPT-5.6 Sol") {
+		t.Fatalf("variant outside-picker display name: got %#v", got)
+	}
+
+	slow := entries[1]
+	if _, exists := findModelParameterDefinition(slow, "fast"); exists {
+		t.Fatal("fast must not be advertised for an adapter with FastMode=false")
+	}
+}
+
+func findModelParameterDefinition(entry map[string]any, id string) (map[string]any, bool) {
+	definitions, ok := entry["parameterDefinitions"].([]map[string]any)
+	if !ok {
+		return nil, false
+	}
+	for _, definition := range definitions {
+		if definition["id"] == id {
+			return definition, true
+		}
+	}
+	return nil, false
+}
+
+func TestBuildCLIModelDetailsUsesDisplayMetadataWithoutLeakingCredentials(t *testing.T) {
+	adapters := []legacyruntime.ModelAdapterConfig{{
+		ID:                  "channel-a",
+		DisplayName:         "GPT-5.6 Sol",
+		ModelID:             "gpt-5.6",
+		ContextWindowTokens: 272000,
+		APIKey:              "provider-secret-a",
+		BaseURL:             "https://provider-a.example/v1",
+	}}
+	models := buildCLIModelDetails(adapters)
+	if len(models) != 1 {
+		t.Fatalf("model count: got %d, want 1", len(models))
+	}
+	model := models[0]
+	for field, want := range map[string]any{
+		"modelId":           "channel-a",
+		"displayModelId":    "gpt-5.6",
+		"displayName":       "GPT-5.6 Sol",
+		"displayNameShort":  "GPT-5.6 Sol",
+		"contextTokenLimit": 272000,
+	} {
+		if model[field] != want {
+			t.Fatalf("%s: got %#v, want %#v", field, model[field], want)
+		}
+	}
+	for _, field := range []string{"displayModelId", "displayName", "displayNameShort"} {
+		if strings.Contains(fmt.Sprint(model[field]), "provider-secret-a") || strings.Contains(fmt.Sprint(model[field]), "provider-a.example") {
+			t.Fatalf("%s leaked relay credentials: %#v", field, model[field])
+		}
+	}
+}
+
 func TestBuildCLIModelDetailsPreservesChannelCredentials(t *testing.T) {
 	adapters := []legacyruntime.ModelAdapterConfig{
 		{ID: " channel-a ", ModelID: "model-a", APIKey: "provider-secret-a", BaseURL: "https://provider-a.example/v1"},
@@ -25,8 +130,8 @@ func TestBuildCLIModelDetailsPreservesChannelCredentials(t *testing.T) {
 
 	got := buildCLIModelDetails(adapters)
 	want := []map[string]any{
-		{"modelId": "channel-a", "displayModelId": "channel-a", "apiKeyCredentials": map[string]any{"apiKey": "provider-secret-a", "baseUrl": "https://provider-a.example/v1"}, "supportsAutoContext": false},
-		{"modelId": "channel-b", "displayModelId": "channel-b", "apiKeyCredentials": map[string]any{"apiKey": "", "baseUrl": ""}, "supportsAutoContext": false},
+		{"modelId": "channel-a", "displayModelId": "model-a", "displayName": "model-a", "displayNameShort": "model-a", "apiKeyCredentials": map[string]any{"apiKey": "provider-secret-a", "baseUrl": "https://provider-a.example/v1"}, "supportsAutoContext": false},
+		{"modelId": "channel-b", "displayModelId": "model-a", "displayName": "model-a", "displayNameShort": "model-a", "apiKeyCredentials": map[string]any{"apiKey": "", "baseUrl": ""}, "supportsAutoContext": false},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("build CLI model details: got %v, want %v", got, want)
@@ -34,7 +139,7 @@ func TestBuildCLIModelDetailsPreservesChannelCredentials(t *testing.T) {
 }
 
 func TestEncodeCLIModelsUsesAgentModelDetailsWireFormat(t *testing.T) {
-	payload := map[string]any{"models": buildCLIModelDetails([]legacyruntime.ModelAdapterConfig{{ID: "channel-a", APIKey: "provider-secret", BaseURL: "https://provider.example/v1"}})}
+	payload := map[string]any{"models": buildCLIModelDetails([]legacyruntime.ModelAdapterConfig{{ID: "channel-a", DisplayName: "GPT-5.6 Sol", ModelID: "model-a", APIKey: "provider-secret", BaseURL: "https://provider.example/v1"}})}
 	encoded, err := encodeMockProto("aiserver.v1.GetUsableModelsResponse", payload)
 	if err != nil {
 		t.Fatalf("encode CLI models: %v", err)
@@ -48,8 +153,8 @@ func TestEncodeCLIModelsUsesAgentModelDetailsWireFormat(t *testing.T) {
 		t.Fatalf("decoded model count: got %d, want 1", len(response.Models))
 	}
 	model := response.Models[0]
-	if model.GetModelId() != "channel-a" || model.GetDisplayModelId() != "channel-a" {
-		t.Fatalf("decoded channel IDs: model=%q display=%q", model.GetModelId(), model.GetDisplayModelId())
+	if model.GetModelId() != "channel-a" || model.GetDisplayModelId() != "model-a" || model.GetDisplayName() != "GPT-5.6 Sol" {
+		t.Fatalf("decoded model identity: model=%q display=%q name=%q", model.GetModelId(), model.GetDisplayModelId(), model.GetDisplayName())
 	}
 	if credentials := model.GetApiKeyCredentials(); credentials == nil || credentials.GetApiKey() != "provider-secret" || credentials.GetBaseUrl() != "https://provider.example/v1" {
 		t.Fatalf("decoded relay credentials: %#v", credentials)
@@ -82,6 +187,76 @@ func TestBuildBootstrapStatsigConfigJSONDisablesAlwaysLocalDecompositionGate(t *
 // Design Mode 的 composer pill 与 canvas 内联预览完全是客户端本地能力，
 // 唯一的阻塞点是这两个 feature gate。bootstrap payload 里没列出的 gate 会被
 // 客户端当作关闭处理，所以必须显式下发为 enabled。
+func TestBuildBootstrapStatsigConfigJSONEnablesEffortFirstPickerLayer(t *testing.T) {
+	payload, err := buildBootstrapStatsigConfigJSON(12345, "test-auth-id")
+	if err != nil {
+		t.Fatalf("build bootstrap statsig config: %v", err)
+	}
+
+	var decoded statsigBootstrapTemplate
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("decode bootstrap statsig config: %v", err)
+	}
+	layer, ok := decoded.LayerConfigs[bootstrapStatsigModelPickerExperimentsLayer]
+	if !ok {
+		t.Fatalf("missing layer %q", bootstrapStatsigModelPickerExperimentsLayer)
+	}
+	value, ok := layer["value"].(map[string]any)
+	if !ok {
+		t.Fatalf("layer value: got %#v", layer["value"])
+	}
+	if got := value[bootstrapStatsigEffortFirstVariantParam]; got != bootstrapStatsigEffortFirstVariantTreatment {
+		t.Fatalf("effort-first variant: got %#v, want %q", got, bootstrapStatsigEffortFirstVariantTreatment)
+	}
+	if name, _ := layer["name"].(string); name != bootstrapStatsigModelPickerExperimentsLayer {
+		t.Fatalf("layer name: got %q, want %q", name, bootstrapStatsigModelPickerExperimentsLayer)
+	}
+}
+
+func TestBuildBootstrapStatsigConfigJSONEnablesEffortFirstSubmenuExperiment(t *testing.T) {
+	payload, err := buildBootstrapStatsigConfigJSON(12345, "test-auth-id")
+	if err != nil {
+		t.Fatalf("build bootstrap statsig config: %v", err)
+	}
+
+	var decoded statsigBootstrapTemplate
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("decode bootstrap statsig config: %v", err)
+	}
+	config, ok := decoded.DynamicConfigs["effort_first_submenu_2026_08"]
+	if !ok {
+		t.Fatal("missing effort-first submenu experiment")
+	}
+	if enabled, _ := config.Value["enabled"].(bool); !enabled {
+		t.Fatalf("submenu experiment enabled: got %#v", config.Value["enabled"])
+	}
+	if !config.IsExperimentActive || !config.IsUserInExperiment {
+		t.Fatalf("submenu experiment assignment: %#v", config)
+	}
+}
+
+func TestBuildBootstrapStatsigConfigJSONUsesConfiguredCompactModelIDs(t *testing.T) {
+	payload, err := buildBootstrapStatsigConfigJSONForModelIDs(
+		12345,
+		"test-auth-id",
+		[]string{" channel-a ", "", "channel-b"},
+	)
+	if err != nil {
+		t.Fatalf("build bootstrap statsig config: %v", err)
+	}
+
+	var decoded statsigBootstrapTemplate
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("decode bootstrap statsig config: %v", err)
+	}
+	layer := decoded.LayerConfigs[bootstrapStatsigModelPickerExperimentsLayer]
+	value := layer["value"].(map[string]any)
+	ids := value[bootstrapStatsigEffortFirstCompactModelIDsParam].([]any)
+	if !reflect.DeepEqual(ids, []any{"channel-a", "channel-b"}) {
+		t.Fatalf("compact model IDs: got %#v", ids)
+	}
+}
+
 func TestBuildBootstrapStatsigConfigJSONEnablesDesignModeAndCanvasPreviewGates(t *testing.T) {
 	payload, err := buildBootstrapStatsigConfigJSON(12345, "test-auth-id")
 	if err != nil {
@@ -130,7 +305,7 @@ func newRequestContextWithAdapters(adapters []legacyruntime.ModelAdapterConfig) 
 }
 
 func TestEncodeDefaultModelForCliUsesAgentModelDetailsWireFormat(t *testing.T) {
-	reqCtx := newRequestContextWithAdapters([]legacyruntime.ModelAdapterConfig{{ID: "channel-a", APIKey: "provider-secret", BaseURL: "https://provider.example/v1"}})
+	reqCtx := newRequestContextWithAdapters([]legacyruntime.ModelAdapterConfig{{ID: "channel-a", DisplayName: "GPT-5.6 Sol", ModelID: "model-a", APIKey: "provider-secret", BaseURL: "https://provider.example/v1"}})
 	payload, err := buildDefaultModelForCliPayload(reqCtx)
 	if err != nil {
 		t.Fatalf("build default model for cli: %v", err)
@@ -148,8 +323,8 @@ func TestEncodeDefaultModelForCliUsesAgentModelDetailsWireFormat(t *testing.T) {
 	if model == nil {
 		t.Fatal("decoded default model is nil")
 	}
-	if model.GetModelId() != "channel-a" || model.GetDisplayModelId() != "channel-a" {
-		t.Fatalf("decoded channel IDs: model=%q display=%q", model.GetModelId(), model.GetDisplayModelId())
+	if model.GetModelId() != "channel-a" || model.GetDisplayModelId() != "model-a" || model.GetDisplayName() != "GPT-5.6 Sol" {
+		t.Fatalf("decoded model identity: model=%q display=%q name=%q", model.GetModelId(), model.GetDisplayModelId(), model.GetDisplayName())
 	}
 	if credentials := model.GetApiKeyCredentials(); credentials == nil || credentials.GetApiKey() != "provider-secret" || credentials.GetBaseUrl() != "https://provider.example/v1" {
 		t.Fatalf("decoded relay credentials: %#v", credentials)
@@ -281,6 +456,198 @@ func TestAllMockBuildersCompatibleWithCurrentProto(t *testing.T) {
 	}
 }
 
+func TestDecodeAvailableModelsRequestPreservesOptionalPresence(t *testing.T) {
+	cases := []struct {
+		name       string
+		request    aiserverv1.AvailableModelsRequest
+		usePresent bool
+		useValue   bool
+		expPresent bool
+		expValue   bool
+	}{
+		{name: "empty", request: aiserverv1.AvailableModelsRequest{}},
+		{name: "compact", request: aiserverv1.AvailableModelsRequest{UseModelParameters: boolPtr(true), VariantsWillBeShownInExplodedList: boolPtr(false)}, usePresent: true, useValue: true, expPresent: true, expValue: false},
+		{name: "exploded", request: aiserverv1.AvailableModelsRequest{UseModelParameters: boolPtr(true), VariantsWillBeShownInExplodedList: boolPtr(true)}, usePresent: true, useValue: true, expPresent: true, expValue: true},
+		{name: "legacy", request: aiserverv1.AvailableModelsRequest{UseModelParameters: boolPtr(false)}, usePresent: true, useValue: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body, err := proto.Marshal(&tc.request)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			decoded, err := decodeAvailableModelsRequest(body)
+			if err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if (decoded.UseModelParameters != nil) != tc.usePresent || decoded.GetUseModelParameters() != tc.useValue {
+				t.Fatalf("use_model_parameters: present=%v value=%v", decoded.UseModelParameters != nil, decoded.GetUseModelParameters())
+			}
+			if (decoded.VariantsWillBeShownInExplodedList != nil) != tc.expPresent || decoded.GetVariantsWillBeShownInExplodedList() != tc.expValue {
+				t.Fatalf("exploded variants: present=%v value=%v", decoded.VariantsWillBeShownInExplodedList != nil, decoded.GetVariantsWillBeShownInExplodedList())
+			}
+		})
+	}
+}
+
+func TestDecodeAvailableModelsRequestRejectsMalformedBody(t *testing.T) {
+	if _, err := decodeAvailableModelsRequest([]byte{0xff, 0xff}); err == nil {
+		t.Fatal("malformed protobuf must be rejected")
+	}
+	decoded, err := decodeAvailableModelsRequest(nil)
+	if err != nil {
+		t.Fatalf("empty body: %v", err)
+	}
+	if decoded.UseModelParameters != nil || decoded.VariantsWillBeShownInExplodedList != nil {
+		t.Fatalf("empty body should preserve absent optional fields: %#v", decoded)
+	}
+}
+
+func TestAvailableModelsPayloadUsesCompactEffortPickerContract(t *testing.T) {
+	adapters := []legacyruntime.ModelAdapterConfig{{
+		ID:                  "channel-gpt",
+		DisplayName:         "GPT-5.6 Sol",
+		ModelID:             "gpt-5.6",
+		Type:                "openai",
+		ReasoningEffort:     "medium",
+		FastMode:            true,
+		ContextWindowTokens: 272000,
+	}}
+
+	for _, tc := range []struct {
+		name                 string
+		request              aiserverv1.AvailableModelsRequest
+		wantCompact          bool
+		wantParameterID      string
+		wantVariantCountMore bool
+	}{
+		{
+			name: "explicit compact request keeps only default parameter combination",
+			request: aiserverv1.AvailableModelsRequest{
+				UseModelParameters:                boolPtr(true),
+				VariantsWillBeShownInExplodedList: boolPtr(false),
+			},
+			wantCompact:     true,
+			wantParameterID: "effort",
+		},
+		{
+			name: "explicit exploded request preserves effort-specific variants",
+			request: aiserverv1.AvailableModelsRequest{
+				UseModelParameters:                boolPtr(true),
+				VariantsWillBeShownInExplodedList: boolPtr(true),
+			},
+			wantParameterID:      "effort",
+			wantVariantCountMore: true,
+		},
+		{
+			name: "legacy request disables parameter metadata",
+			request: aiserverv1.AvailableModelsRequest{
+				UseModelParameters: boolPtr(false),
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body, err := proto.Marshal(&tc.request)
+			if err != nil {
+				t.Fatalf("marshal request: %v", err)
+			}
+			reqCtx := newRequestContextWithAdapters(adapters)
+			reqCtx.RequestBody = body
+			payload, err := AvailableModelsMockBuilder(reqCtx)
+			if err != nil {
+				t.Fatalf("builder: %v", err)
+			}
+			if got := payload["useModelParameters"]; got != (tc.wantParameterID != "") {
+				t.Fatalf("useModelParameters: got %v, want %v", got, tc.wantParameterID != "")
+			}
+			entry := payload["models"].([]map[string]any)[0]
+			if tc.wantParameterID == "" {
+				if _, exists := entry["parameterDefinitions"]; exists {
+					t.Fatalf("legacy entry has parameterDefinitions: %#v", entry)
+				}
+				if _, exists := entry["variants"]; exists {
+					t.Fatalf("legacy entry has variants: %#v", entry)
+				}
+				return
+			}
+
+			definition, exists := findModelParameterDefinition(entry, tc.wantParameterID)
+			if !exists || definition["name"] != "Effort" {
+				t.Fatalf("effort definition: got %#v", definition)
+			}
+			if tc.wantCompact {
+				assertCompactEffortParameterLabels(t, definition)
+			}
+			if _, exists := findModelParameterDefinition(entry, "fast"); !exists {
+
+				t.Fatalf("fast definition missing: %#v", entry["parameterDefinitions"])
+			}
+			variants := entry["variants"].([]map[string]any)
+			if tc.wantCompact {
+				if len(variants) != 4 {
+					t.Fatalf("compact variants: got %#v, want one per effort value", variants)
+				}
+				seenEfforts := make(map[string]bool, len(variants))
+				for _, variant := range variants {
+					if variant["displayName"] != "GPT-5.6 Sol" || variant["displayNameOutsidePicker"] != "GPT-5.6 Sol" {
+						t.Fatalf("compact display names: %#v", variant)
+					}
+					parameters := modelVariantParameters(variant)
+					effort := parameters["effort"]
+					seenEfforts[effort] = true
+					if parameters["context"] != "272000" || parameters["fast"] != "false" {
+						t.Fatalf("compact variant parameters: got %#v", parameters)
+					}
+				}
+				if !reflect.DeepEqual(seenEfforts, map[string]bool{
+					"low":    true,
+					"medium": true,
+					"high":   true,
+					"xhigh":  true,
+				}) {
+					t.Fatalf("compact effort values: got %#v", seenEfforts)
+				}
+			}
+			if tc.wantVariantCountMore && len(variants) < 2 {
+				t.Fatalf("exploded variants: got %#v, want all effort variants", variants)
+			}
+		})
+	}
+}
+
+func assertCompactEffortParameterLabels(t *testing.T, definition map[string]any) {
+	t.Helper()
+
+	parameterType := definition["parameterType"].(map[string]any)
+	enumParameter := parameterType["enumParameter"].(map[string]any)
+	values := enumParameter["values"].([]map[string]any)
+	labels := make(map[string]string, len(values))
+	for _, value := range values {
+		labels[value["value"].(string)] = value["displayName"].(string)
+	}
+	if !reflect.DeepEqual(labels, map[string]string{
+		"low":    "Low",
+		"medium": "Medium",
+		"high":   "High",
+		"xhigh":  "Extra High",
+	}) {
+		t.Fatalf("compact effort labels: got %#v", labels)
+	}
+}
+
+func modelVariantParameters(variant map[string]any) map[string]string {
+	parameters, _ := variant["parameterValues"].([]map[string]any)
+	result := make(map[string]string, len(parameters))
+	for _, parameter := range parameters {
+		id, _ := parameter["id"].(string)
+		value, _ := parameter["value"].(string)
+		result[id] = value
+	}
+	return result
+}
+
+func boolPtr(value bool) *bool { return &value }
+
 func TestAvailableModelsPayloadDecodesWithAdapters(t *testing.T) {
 	reqCtx := newAuthRequestContext()
 	payload, err := AvailableModelsMockBuilder(reqCtx)
@@ -307,6 +674,35 @@ func TestAvailableModelsPayloadDecodesWithAdapters(t *testing.T) {
 	}
 	if model.GetPrice() != 3.0 {
 		t.Fatalf("price: got %v, want 3.0", model.GetPrice())
+	}
+	if !model.GetVisibleInRoutedModelView() {
+		t.Fatal("visibleInRoutedModelView: want true")
+	}
+
+	displayConfiguration := response.GetDisplayConfiguration()
+	if displayConfiguration == nil {
+		t.Fatal("displayConfiguration: want routed/named model picker configuration")
+	}
+	routedConfig := displayConfiguration.GetRoutedModelViewConfig()
+	if routedConfig == nil {
+		t.Fatal("routedModelViewConfig: want configuration")
+	}
+	if routedConfig.GetHideSearchBar() {
+		t.Fatal("routedModelViewConfig.hideSearchBar: want false")
+	}
+	routedToggle := routedConfig.GetRoutedModelViewToNamedViewToggle()
+	if routedToggle == nil {
+		t.Fatal("routedModelViewToNamedViewToggle: want toggle")
+	}
+	if routedToggle.GetTitleMarkdown() != "Auto" || routedToggle.GetSubtitle() != "Balanced quality and speed, recommended for most tasks" || !routedToggle.GetSetToLastNamedModel() {
+		t.Fatalf("routed model toggle: got %#v", routedToggle)
+	}
+	namedConfig := displayConfiguration.GetNamedModelsViewConfig()
+	if namedConfig == nil || namedConfig.GetNamedViewToRoutedModelViewToggle() == nil {
+		t.Fatal("namedModelsViewConfig: want named-to-routed toggle")
+	}
+	if got := namedConfig.GetNamedViewToRoutedModelViewToggle().GetMarkdown(); got != "Auto" {
+		t.Fatalf("named-to-routed toggle markdown: got %q, want Auto", got)
 	}
 }
 
