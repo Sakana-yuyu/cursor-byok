@@ -29,6 +29,21 @@ html.stats-overlay-page #root {
 }
 :root{
   color-scheme: dark;
+  /* 主题 token：新页面（侧边栏/模型主从布局/面板）统一引用；旧页面逐步迁移 */
+  --bg-app: #191919;
+  --bg-sidebar: #1c1c1c;
+  --bg-card: #232323;
+  --bg-hover: #252525;
+  --border-1: #242424;
+  --border-2: #343434;
+  --brand: #10ad5d;
+  --brand-soft: #6ee7a5;
+  --text-primary: #f7f7f7;
+  --text-secondary: #a3a3a3;
+  --text-muted: #8f8f8f;
+  --text-faint: #6f6f6f;
+  --active-bg: #1f3a2c;
+  --active-text: #4ade80;
 }
 
 /* WebKit/Blink (Chrome, Safari, Edge, Opera) */

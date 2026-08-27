@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"cursor/internal/appdata"
@@ -359,6 +360,7 @@ func deleteHistoryDebugLogs(sessionIDs []string) (int64, error) {
 		}
 		return firstErr
 	})
+	invalidateHistoryDebugUsageCache()
 	return freed, err
 }
 
@@ -387,12 +389,36 @@ func purgeAllHistoryDebugLogs() (int64, error) {
 		}
 		return firstErr
 	})
+	invalidateHistoryDebugUsageCache()
 	return freed, err
 }
 
 // historyDebugUsage 统计所有调试日志的总占用字节数（含孤儿日志）。
 // 用于首页全局提醒（debug 日志占用过大时提示用户清理）。
+// 统计需要全量遍历历史目录，会话多时开销明显；前端会周期性轮询该值，
+// 因此用 15 秒 TTL 缓存平滑重复请求（删除/清理路径不走此缓存）。
+var (
+	historyDebugUsageMu       sync.Mutex
+	historyDebugUsageCache    int64
+	historyDebugUsageCachedAt time.Time
+)
+
+const historyDebugUsageTTL = 15 * time.Second
+
+// invalidateHistoryDebugUsageCache 在删除/清理调试日志后立即使统计缓存失效，
+// 避免前端刚清理完仍读到最长 15 秒的旧占用值。
+func invalidateHistoryDebugUsageCache() {
+	historyDebugUsageMu.Lock()
+	historyDebugUsageCachedAt = time.Time{}
+	historyDebugUsageMu.Unlock()
+}
+
 func historyDebugUsage() (int64, error) {
+	historyDebugUsageMu.Lock()
+	defer historyDebugUsageMu.Unlock()
+	if !historyDebugUsageCachedAt.IsZero() && time.Since(historyDebugUsageCachedAt) < historyDebugUsageTTL {
+		return historyDebugUsageCache, nil
+	}
 	dirs, err := historyDebugDirs()
 	if err != nil {
 		return 0, err
@@ -401,6 +427,8 @@ func historyDebugUsage() (int64, error) {
 	for _, dir := range dirs {
 		total += dirSize(dir)
 	}
+	historyDebugUsageCache = total
+	historyDebugUsageCachedAt = time.Now()
 	return total, nil
 }
 
@@ -446,6 +474,7 @@ func clearHistory(resetUsage func() error) (int, error) {
 	} else if err := historymetrics.ResetUsageFile(appdata.UsageFilePath()); err != nil && firstErr == nil {
 		firstErr = err
 	}
+	invalidateHistoryDebugUsageCache()
 	return deleted, firstErr
 }
 

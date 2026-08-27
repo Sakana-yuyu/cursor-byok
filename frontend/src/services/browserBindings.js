@@ -164,6 +164,7 @@ function previewAdapterForStorage(adapter) {
   }
   const safeAdapter = { ...adapter };
   delete safeAdapter.apiKey;
+  delete safeAdapter.apiKeys;
   delete safeAdapter.balanceAccessToken;
   delete safeAdapter.customHeadersJSON;
   delete safeAdapter.balanceQueryHeadersJSON;

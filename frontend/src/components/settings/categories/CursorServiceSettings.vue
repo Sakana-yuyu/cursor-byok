@@ -10,7 +10,6 @@ import {
   COMPUTER_USE_MODE_OPTIONS,
   appState,
   getCursorManualPath,
-  openModelConfigWindow,
   persistUserConfig,
   saveRoutingMode,
   saveComputerUse,
@@ -300,11 +299,7 @@ async function handleOpenModelConfig() {
   modelConfigState.error = "";
   modelConfigState.busy = true;
   try {
-    if (isBrowserPreview) {
-      await router.push("/model-config");
-      return;
-    }
-    await openModelConfigWindow();
+    await router.push("/model-config");
   } catch (error) {
     modelConfigState.error = toUserError(error);
   } finally {

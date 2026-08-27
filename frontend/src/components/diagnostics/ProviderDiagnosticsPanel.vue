@@ -108,7 +108,7 @@ onUnmounted(() => {
 <template>
   <section
     id="provider-runtime"
-    class="mb-8 rounded-[10px] border border-white/10 bg-black/20 p-5"
+    class="rounded-[10px] border border-white/10 bg-black/20 p-5"
     aria-labelledby="provider-runtime-title"
     :aria-busy="loading"
     data-testid="provider-diagnostics-panel"

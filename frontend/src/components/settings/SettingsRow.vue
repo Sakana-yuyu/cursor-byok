@@ -28,7 +28,7 @@ function formatError(error) {
 
     <div class="min-w-0">
       <div
-        class="flex min-h-[36px] min-w-0 items-center justify-start"
+        class="flex min-h-[36px] min-w-0 items-center justify-end"
         :class="busy ? 'opacity-80' : ''"
       >
         <slot />

@@ -1,6 +1,6 @@
 // protocolMeta.js 承载 OpenAI/协议元数据常量与归一化纯函数，全部从
 // appState.js 逐字搬移（零行为变化）。
-import { asString } from "./valueCast";
+import { asString } from "./valueCast.js";
 
 export const ANTHROPIC_THINKING_EFFORT_DEFAULT = "xhigh";
 export const OPENAI_ENDPOINT_RESPONSES = "/v1/responses";

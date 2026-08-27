@@ -10,7 +10,8 @@ test("桌面设置工作区使用侧栏以外的可用宽度", async ({ page }) 
 
   const box = await header.boundingBox();
   expect(box).not.toBeNull();
-  expect(box.width).toBeGreaterThan(860);
+  // 主窗口新增 180px 全局侧边栏后，设置工作区可用宽度相应收窄
+  expect(box.width).toBeGreaterThan(650);
 });
 
 test("窄屏设置页不产生横向滚动", async ({ page }) => {

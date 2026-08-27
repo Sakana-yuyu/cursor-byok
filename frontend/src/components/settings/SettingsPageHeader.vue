@@ -11,8 +11,6 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(["back"]);
-
 const statusLabel = computed(() => {
   if (props.status === "saving") {
     return "正在保存";
@@ -45,17 +43,6 @@ const statusClass = computed(() => {
       <div class="pt-1 text-xs font-medium" :class="statusClass">
         {{ statusLabel }}
       </div>
-
-      <button
-        type="button"
-        aria-label="返回"
-        title="返回"
-        class="flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-white/10 bg-black/15 px-2 text-sm font-medium text-[#9a9a9a] shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition-colors hover:border-white/15 hover:bg-[#292929] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10AD5D]/35"
-        @click="emit('back')"
-      >
-        <span class="icon-[mdi--keyboard-return] text-[16px]" aria-hidden="true"></span>
-        <span>返回</span>
-      </button>
     </div>
   </header>
 </template>

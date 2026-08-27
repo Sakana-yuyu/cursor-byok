@@ -9,6 +9,7 @@ import ModelTestResultSection from "@/components/model-editor/ModelTestResultSec
 import Select from "@/components/ui/Select.vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
 import { getModelEditorContext } from "@/services/clientApi";
+import { popModelEditorReturn, popModelEditorSeed, stashModelEditorReturn } from "@/utils/modelEditorSeed";
 import { showModal } from "@/composables/useModal";
 import { isModelCovered, resolveModelContextWindow, resolveModelCapabilities } from "@/utils/modelContext";
 import { providerIcon, providerLabel, providerSelectOptions } from "@/utils/providerMeta";
@@ -56,10 +57,8 @@ import {
   validateModelAdapters,
 } from "@/state/appState";
 import { anthropicAuthModeOptions } from "@/utils/anthropicAuthMeta";
-import { runtimeWindow } from "@/services/runtimeAdapter";
-import { isBrowserPreview } from "@/services/runtimeAdapter";
 import { computed, onMounted, reactive, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRouter, useRoute } from "vue-router";
 // 静态元数据（选项/档位/字段提示/余额头覆盖判定）已归位 utils/modelEditorMeta.js。
 import {
   CONTEXT_TIERS,
@@ -168,6 +167,7 @@ const supplierPresetOptions = computed(() => (supplierTemplate(draft.supplierID)
 
 const editorIndex = ref(-1);
 const router = useRouter();
+const route = useRoute();
 const draft = reactive(createEmptyModelAdapter());
 const errorMessage = ref("");
 const loading = ref(true);
@@ -196,6 +196,26 @@ function createOptionalPositiveIntegerModel(key) {
 
 const maxCompletionTokensInput = createOptionalPositiveIntegerModel("maxCompletionTokens");
 const anthropicMaxTokensInput = createOptionalPositiveIntegerModel("anthropicMaxTokens");
+
+// 备用密钥池：textarea 每行一把密钥，去空、去重、剔除与主密钥重复项；
+// 请求时后端按渠道维度轮换，单把密钥限流只冷却该密钥。
+const apiKeysPoolText = computed({
+  get() {
+    return Array.isArray(draft.apiKeys) ? draft.apiKeys.join("\n") : "";
+  },
+  set(value) {
+    const primary = String(draft.apiKey || "").trim();
+    const seen = new Set();
+    const pool = [];
+    for (const line of String(value || "").split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed === primary || seen.has(trimmed)) continue;
+      seen.add(trimmed);
+      pool.push(trimmed);
+    }
+    draft.apiKeys = pool;
+  },
+});
 const contextWindowTokensInput = createOptionalPositiveIntegerModel("contextWindowTokens");
 const pricingInput = computed({
   get: () => draft.pricing?.input == null ? "" : String(draft.pricing.input),
@@ -370,6 +390,30 @@ function ensureOpenAIRequestGroup() {
 }
 
 async function loadContext() {
+  // 独立窗口已收敛为主窗口路由：优先读 ?index=（负数=新建），
+  // 新建时消费 sessionStorage 预填种子；后端窗口上下文仅作旧入口兜底。
+  // 从「拉取模型」页返回时，优先回填离开前的草稿（含未保存修改）。
+  const returned = popModelEditorReturn();
+  if (returned) {
+    editorIndex.value = Number.isInteger(returned.editorIndex) ? returned.editorIndex : -1;
+    applyAdapterDraft(returned.draft);
+    initialDraftSnapshot.value = snapshotOfDraft();
+    loading.value = false;
+    return;
+  }
+  const queryIndex = Number(route.query.index);
+  if (Number.isInteger(queryIndex)) {
+    editorIndex.value = queryIndex;
+    if (queryIndex >= 0 && appState.modelAdapters[queryIndex]) {
+      applyAdapterDraft(appState.modelAdapters[queryIndex]);
+    } else {
+      const seed = popModelEditorSeed();
+      applyAdapterDraft(seed && Object.keys(seed).length ? seed : {});
+    }
+    initialDraftSnapshot.value = snapshotOfDraft();
+    loading.value = false;
+    return;
+  }
   try {
     const ctx = await getModelEditorContext();
     editorIndex.value = typeof ctx.index === "number" ? ctx.index : -1;
@@ -393,6 +437,16 @@ async function loadContext() {
 
 // 草稿快照：用于取消/关闭时检测未保存修改。
 const initialDraftSnapshot = ref("");
+
+function applyAdapterDraft(source) {
+  const seed = source && Object.keys(source).length ? source : {};
+  const normalized = normalizeModelAdapter({ ...createEmptyModelAdapter(), ...seed });
+  Object.assign(draft, normalized);
+  draft.balanceProfile = resolveBalanceProfileForAdapter(normalized);
+  if (!draft.type) {
+    draft.type = "openai";
+  }
+}
 
 function snapshotOfDraft() {
   return JSON.stringify(normalizeModelAdapter(draft));
@@ -445,15 +499,14 @@ async function persistDraft() {
 }
 
 async function closeEditor() {
+  // 编辑器已收敛进主窗口：关闭即返回模型配置页，不再关闭 OS 窗口。
   try {
-    if (isBrowserPreview) {
-      await router.push("/model-config");
+    if (window.history.state && window.history.state.back) {
+      await router.back();
       return;
     }
-    await runtimeWindow.Close();
+    await router.push("/model-config");
   } catch (error) {
-    // 窗口关闭或导航失败不应让 rejection 冒泡到点击处理器造成未处理异常，
-    // 记录到错误提示即可；用户仍可通过原生关闭按钮离开。
     errorMessage.value = toUserError(error) || "关闭窗口失败";
   }
 }
@@ -669,6 +722,8 @@ async function openCatalogPage() {
     catalogError.value = toUserError(error) || "无法写入临时连接参数";
     return;
   }
+  // 暂存当前草稿，返回编辑器时回填未保存的填写内容
+  stashModelEditorReturn(normalizeModelAdapter(draft), editorIndex.value);
   await router.push({ path: "/model-catalog" });
 }
 
@@ -829,24 +884,21 @@ onMounted(async () => {
     </div>
 
     <div v-else class="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
-      <div class="mx-auto flex w-full max-w-[960px] flex-col gap-4">
+      <div class="flex w-full flex-col gap-4">
         <div v-if="isQuickMode && !manualAddMode" class="flex flex-col gap-3">
-          <div class="flex items-start gap-3">
-            <span class="mt-0.5 icon-[mdi--flash-outline] shrink-0 text-[18px] text-[#6ee7a5]"></span>
-            <div>
-              <div class="text-sm font-medium text-[#e5e5e5]">快捷添加</div>
-              <div class="mt-0.5 text-xs leading-5 text-[#8f8f8f]">先填写连接信息，再从模型目录批量导入可用模型。</div>
-            </div>
-          </div>
-          <div class="center-row justify-between gap-3 rounded-[8px] border border-[#343434] bg-[#252525] px-3 py-2">
-            <div class="center-row min-w-0 gap-2">
-              <span class="icon-[mdi--information-outline] shrink-0 text-[16px] text-[#8f8f8f]"></span>
-              <div class="min-w-0">
-                <div class="truncate text-sm text-[#d4d4d4]">没有模型列表？手动添加单个模型</div>
-                <div class="truncate text-xs text-[#8f8f8f]">适用于不提供 /models 接口的供应商</div>
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <span class="icon-[mdi--flash-outline] shrink-0 text-[18px] text-[#6ee7a5]"></span>
+              <div>
+                <div class="text-sm font-medium text-[#e5e5e5]">快捷添加</div>
+                <div class="mt-0.5 text-xs leading-5 text-[#8f8f8f]">先填写连接信息，再从模型目录批量导入可用模型。</div>
               </div>
             </div>
-            <Button variant="default" @click="manualAddMode = true">手动添加</Button>
+            <div class="center-row gap-2 text-xs text-[#8f8f8f]">
+              <span class="icon-[mdi--information-outline] shrink-0 text-[15px]"></span>
+              <span>没有模型列表？适用于不提供 /models 接口的供应商</span>
+              <Button variant="default" @click="manualAddMode = true">手动添加</Button>
+            </div>
           </div>
 
           <div class="flex flex-col gap-3 rounded-[8px] border border-[#343434] bg-[#252525] p-3">
@@ -854,7 +906,7 @@ onMounted(async () => {
               <div class="text-sm font-medium text-[#e5e5e5]">供应商与连接</div>
               <div class="mt-0.5 text-xs text-[#8f8f8f]">选择模板会自动带入接口协议和常用模型，也可以手动覆盖。</div>
             </div>
-            <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
               <label class="flex flex-col gap-1">
                 <span class="text-sm text-[#d4d4d4]">模型来源</span>
                 <Select
@@ -888,9 +940,9 @@ onMounted(async () => {
                 </span>
               </label>
             </div>
-            <label class="flex flex-col gap-1 md:col-span-2">
+            <label class="flex flex-col gap-1 md:col-span-3">
               <span class="text-sm text-[#d4d4d4]">供应商模板</span>
-              <div class="grid max-h-56 grid-cols-2 gap-1.5 overflow-y-auto pr-0.5 sm:grid-cols-3 lg:grid-cols-4">
+              <div class="grid max-h-56 grid-cols-2 gap-1.5 overflow-y-auto pr-0.5 sm:grid-cols-4 lg:grid-cols-6">
                 <button
                   v-for="option in supplierOptions"
                   :key="option.value"
@@ -916,42 +968,57 @@ onMounted(async () => {
                 选择固定供应商会自动填充接口地址、协议和常用模型；仍可在下方覆盖。
               </span>
             </label>
-            <label class="flex flex-col gap-1">
-              <span class="text-sm text-[#d4d4d4]">{{ quickBaseURLLabel }}</span>
-              <input
-                v-model="draft.baseURL"
-                type="text"
-                :placeholder="interfacePlaceholder"
-                class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
-                @blur="ensureV1Suffix"
-              />
-            </label>
-            <label class="flex flex-col gap-1">
-              <span class="text-sm text-[#d4d4d4]">访问密钥</span>
-              <Input
-                v-model="draft.apiKey"
-                type="password"
-                allow-visibility-toggle
-                placeholder="例如：sk-xxxxxx"
-                autocomplete="off"
-              />
-            </label>
-            <label class="flex flex-col gap-1">
-              <span class="text-sm text-[#d4d4d4]">备注</span>
-              <textarea
-                v-model="draft.tooltipData"
-                rows="2"
-                placeholder="可选，例如：用于日常代码补全"
-                class="resize-none rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 py-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
-              ></textarea>
-            </label>
-            <Button
-              variant="primary"
-              :disabled="!draft.baseURL || !draft.apiKey"
-              @click="openCatalogPage"
-            >
-              拉取模型
-            </Button>
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label class="flex flex-col gap-1">
+                <span class="text-sm text-[#d4d4d4]">{{ quickBaseURLLabel }}</span>
+                <input
+                  v-model="draft.baseURL"
+                  type="text"
+                  :placeholder="interfacePlaceholder"
+                  class="h-9 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+                  @blur="ensureV1Suffix"
+                />
+              </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-sm text-[#d4d4d4]">访问密钥</span>
+                <Input
+                  v-model="draft.apiKey"
+                  type="password"
+                  allow-visibility-toggle
+                  placeholder="例如：sk-xxxxxx"
+                  autocomplete="off"
+                />
+              </label>
+              <label class="flex flex-col gap-1 md:col-span-1">
+                <span class="text-sm text-[#d4d4d4]">备注</span>
+                <textarea
+                  v-model="draft.tooltipData"
+                  rows="2"
+                  placeholder="可选，例如：用于日常代码补全"
+                  class="resize-none rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 py-2 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+                ></textarea>
+              </label>
+              <label class="flex flex-col gap-1 md:col-span-1">
+                <span class="text-sm text-[#d4d4d4]">备用密钥（可选）</span>
+                <textarea
+                  v-model="apiKeysPoolText"
+                  rows="2"
+                  placeholder="每行一把，请求自动轮换"
+                  autocomplete="off"
+                  spellcheck="false"
+                  class="resize-none rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 py-2 font-mono text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+                ></textarea>
+              </label>
+            </div>
+            <div class="flex justify-end">
+              <Button
+                variant="primary"
+                :disabled="!draft.baseURL || !draft.apiKey"
+                @click="openCatalogPage"
+              >
+                拉取模型
+              </Button>
+            </div>
           </div>
           <div v-if="catalogError" class="rounded-[8px] border border-[#4b1d1d] bg-[#2a1313] px-3 py-2 text-sm text-[#fca5a5]">
             {{ catalogError }}
@@ -959,16 +1026,45 @@ onMounted(async () => {
         </div>
 
         <template v-else>
-        <div class="rounded-[8px] border border-[#343434] bg-[#252525] px-3 py-2.5 text-sm text-[#d4d4d4]">
-          <label class="flex flex-col gap-1">
-            <span class="text-sm text-[#d4d4d4]">模型来源</span>
-            <Select
-              :model-value="draft.source"
-              :options="modelSourceOptions"
-              button-class="h-9 text-sm"
-              @update:model-value="handleModelSourceChange"
-            />
-          </label>
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div :class="isCursorAccountSource ? 'md:col-span-2' : ''" class="rounded-[8px] border border-[#343434] bg-[#252525] px-3 py-2.5 text-sm text-[#d4d4d4]">
+            <label class="flex flex-col gap-1">
+              <span class="text-sm text-[#d4d4d4]">模型来源</span>
+              <Select
+                :model-value="draft.source"
+                :options="modelSourceOptions"
+                button-class="h-9 text-sm"
+                @update:model-value="handleModelSourceChange"
+              />
+            </label>
+          </div>
+
+          <template v-if="!isCursorAccountSource">
+            <div class="rounded-[8px] border border-[#343434] bg-[#252525] px-3 py-2.5 text-sm text-[#d4d4d4]">
+              <template v-if="manualAddMode">
+                <label class="flex flex-col gap-1">
+                  <span class="text-sm text-[#d4d4d4]">供应商类型</span>
+                  <Select
+                    :model-value="draft.type"
+                    :options="providerTypeOptions"
+                    button-class="h-9 text-sm"
+                    @update:model-value="handleModelTypeChange"
+                  />
+                </label>
+              </template>
+              <template v-else>
+                <label class="flex flex-col gap-1">
+                  <span class="text-sm text-[#d4d4d4]">供应商</span>
+                  <div class="center-row justify-start gap-2">
+                    <span class="center-row size-7 shrink-0 justify-center rounded-[6px] bg-[#232323]">
+                      <span :class="[providerIcon(draft.type), 'text-[16px]']"></span>
+                    </span>
+                    <span class="font-medium text-white">{{ providerLabel(draft.type) }}</span>
+                  </div>
+                </label>
+              </template>
+            </div>
+          </template>
         </div>
 
         <div v-if="isCursorAccountSource" class="flex flex-col gap-4">
@@ -999,30 +1095,7 @@ onMounted(async () => {
           />
         </div>
 
-        <template v-else>
-        <div class="rounded-[8px] border border-[#343434] bg-[#252525] px-3 py-2.5 text-sm text-[#d4d4d4]">
-          <template v-if="manualAddMode">
-            <label class="flex flex-col gap-1">
-              <span class="text-sm text-[#d4d4d4]">供应商类型</span>
-              <Select
-                :model-value="draft.type"
-                :options="providerTypeOptions"
-                button-class="h-9 text-sm"
-                @update:model-value="handleModelTypeChange"
-              />
-            </label>
-          </template>
-          <template v-else>
-            <div class="center-row justify-start gap-2">
-              <span class="center-row size-7 shrink-0 justify-center rounded-[6px] bg-[#232323]">
-                <span :class="[providerIcon(draft.type), 'text-[16px]']"></span>
-              </span>
-              <span class="text-xs text-[#8f8f8f]">供应商</span>
-              <span class="font-medium text-white">{{ providerLabel(draft.type) }}</span>
-            </div>
-          </template>
-        </div>
-
+        <template v-if="!isCursorAccountSource">
         <div class="text-xs font-medium uppercase tracking-[0.08em] text-[#737373]">基础信息</div>
 
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -1034,7 +1107,7 @@ onMounted(async () => {
             <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
           <label class="flex flex-col gap-1 md:col-span-2">
             <span class="text-sm text-[#d4d4d4]">供应商模板</span>
-            <div class="grid max-h-56 grid-cols-2 gap-1.5 overflow-y-auto pr-0.5 sm:grid-cols-3 lg:grid-cols-4">
+            <div class="grid max-h-56 grid-cols-2 gap-1.5 overflow-y-auto pr-0.5 sm:grid-cols-4 lg:grid-cols-6">
               <button
                 v-for="option in supplierOptions"
                 :key="option.value"
@@ -1059,7 +1132,7 @@ onMounted(async () => {
             <span class="text-xs text-[#8f8f8f]">选择固定供应商会自动填充接口地址、协议和常用模型；仍可在下方覆盖。</span>
           </label>
 
-          <label class="flex flex-col gap-1 md:col-span-2">
+          <label class="flex flex-col gap-1">
             <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
               <Tooltip :content="fieldTips.baseURL" />
               <span>接口地址</span>
@@ -1084,6 +1157,18 @@ onMounted(async () => {
               placeholder="例如：sk-xxxxxx"
               autocomplete="off"
             />
+          </label>
+
+          <label class="flex flex-col gap-1 md:col-span-2">
+            <span class="text-sm text-[#d4d4d4]">备用密钥（可选）</span>
+            <textarea
+              v-model="apiKeysPoolText"
+              rows="2"
+              placeholder="每行一把，请求自动轮换；单把限流只冷却该密钥"
+              autocomplete="off"
+              spellcheck="false"
+              class="resize-none rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 py-2 font-mono text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+            ></textarea>
           </label>
 
           <label class="flex flex-col gap-1 md:col-span-2">

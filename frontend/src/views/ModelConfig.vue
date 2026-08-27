@@ -1,20 +1,21 @@
 <script setup>
+// 模型配置：主从布局。左栏供应商/模型树，右栏详情面板（SupplierPanel / ModelPanel），
+// 供应商管理与编辑不再跳页，加模型的完整链路收敛在本页 + 窗口内编辑器路由。
 import Button from "@/components/ui/Button.vue";
-import Card from "@/components/ui/Card.vue";
+import ModelPanel from "@/components/model-config/ModelPanel.vue";
+import SupplierPanel from "@/components/model-config/SupplierPanel.vue";
 import { showModal } from "@/composables/useModal";
 import {
   appState,
   createEmptyModelAdapter,
   deleteModelAdaptersBySupplier,
-  openModelEditorWindow,
+  getModelAdapterTestResultByID,
   reloadUserConfig,
   toUserError,
 } from "@/state/appState";
 import { providerIcon, providerLabel } from "@/utils/providerMeta";
-import { supplierModelCatalog, supplierUsageRequest } from "@/utils/supplierCatalog";
-import { formatMoney } from "@/utils/format";
-import { getModelAdapterTestResultByID } from "@/state/appState";
-import { queryProviderBalance, diagnoseModelAdapters, applyDiagnosticFixes, autoMatchContextWindows } from "@/services/clientApi";
+import { diagnoseModelAdapters, applyDiagnosticFixes, autoMatchContextWindows } from "@/services/clientApi";
+import { stashModelEditorSeed } from "@/utils/modelEditorSeed";
 import {
   SUPPLIER_GROUP_MODE_CONNECTION,
   SUPPLIER_GROUP_MODE_NAME,
@@ -97,13 +98,6 @@ function formatHost(value) {
   try { return new URL(text).host || text; } catch { return text.replace(/^https?:\/\//, ""); }
 }
 
-function maskSecret(value) {
-  const text = String(value || "").trim();
-  if (!text) return "-";
-  if (text.length <= 8) return `${"*".repeat(Math.max(text.length - 2, 0))}${text.slice(-2)}`;
-  return `${text.slice(0, 4)}****${text.slice(-4)}`;
-}
-
 function hostSummary(supplier) {
   if (groupMode.value === SUPPLIER_GROUP_MODE_NAME) {
     const hosts = [
@@ -134,20 +128,20 @@ function nameSummary(supplier) {
   return supplier.groupName || "默认分组";
 }
 
-function modelHeader(supplier) {
+function supplierTitle(supplier) {
   if (supplier.source === SUPPLIER_MODEL_SOURCE_CURSOR_ACCOUNT) {
-    return {
-      displayName: "Cursor 账户模型",
-      modelID: "账户通道待验证",
-      hasMore: (supplier?.models || []).length > 1,
-    };
+    return "Cursor 账户模型";
   }
   const isNameMode = groupMode.value === SUPPLIER_GROUP_MODE_NAME;
-  return {
-    displayName: isNameMode ? nameSummary(supplier) : hostSummary(supplier),
-    modelID: isNameMode ? hostSummary(supplier) : nameSummary(supplier),
-    hasMore: (supplier?.models || []).length > 1,
-  };
+  return isNameMode ? nameSummary(supplier) : hostSummary(supplier);
+}
+
+function supplierSubtitle(supplier) {
+  if (supplier.source === SUPPLIER_MODEL_SOURCE_CURSOR_ACCOUNT) {
+    return "账户通道待验证";
+  }
+  const isNameMode = groupMode.value === SUPPLIER_GROUP_MODE_NAME;
+  return isNameMode ? hostSummary(supplier) : nameSummary(supplier);
 }
 
 function healthSummary(supplier) {
@@ -165,146 +159,92 @@ function healthSummary(supplier) {
   return { ok, fail, tested, total: models.length, untested: models.length - tested };
 }
 
+function modelTestState(adapter) {
+  const result = getModelAdapterTestResultByID(adapter.id);
+  if (!result || !result.status) return "untested";
+  if (result.status === "success") return "ok";
+  if (result.status === "running") return "running";
+  return "fail";
+}
+
 function isCursorAccountSupplier(supplier) {
   return supplier?.source === SUPPLIER_MODEL_SOURCE_CURSOR_ACCOUNT;
 }
 
-/** 供应商卡片备注：同组模型上出现次数最多的非空 tooltipData（表单「备注」字段）。 */
-function remarkSummary(supplier) {
-  const counts = new Map();
-  for (const model of supplier.models || []) {
-    const text = String(model?.tooltipData || "").trim();
-    if (!text) continue;
-    counts.set(text, (counts.get(text) || 0) + 1);
+// ─── 主从选择状态 ────────────────────────────────────────────────────────────
+// selection: { type: "supplier", key } | { type: "model", id }
+const selection = ref(null);
+const expandedSupplierKeys = ref(new Set());
+
+const selectedSupplier = computed(() => {
+  if (selection.value?.type !== "supplier") return null;
+  return suppliers.value.find((s) => s.key === selection.value.key) || null;
+});
+const selectedAdapter = computed(() => {
+  if (selection.value?.type !== "model") return null;
+  const id = selection.value.id;
+  return appState.modelAdapters.find((a) => a.id === id) || null;
+});
+const selectedSupplierOfModel = computed(() => {
+  if (!selectedAdapter.value) return null;
+  return allSuppliers.value.find((s) => (s.models || []).some((m) => m.id === selectedAdapter.value.id)) || null;
+});
+const selectedSupplierIdentity = computed(() =>
+  selectedSupplier.value ? supplierToRouteQuery(selectedSupplier.value) : { mode: groupMode.value },
+);
+const autoExpandEdit = ref(false);
+
+// 选中项被删除/分组切换后回退到合理默认
+watch([suppliers, () => appState.modelAdapters.length], () => {
+  if (selection.value?.type === "supplier" && !suppliers.value.some((s) => s.key === selection.value.key)) {
+    selection.value = null;
   }
-  if (counts.size === 0) return "";
-  let best = "";
-  let bestCount = 0;
-  for (const [text, count] of counts) {
-    if (count > bestCount || (count === bestCount && text.localeCompare(best) < 0)) {
-      best = text;
-      bestCount = count;
-    }
+  if (selection.value?.type === "model" && !appState.modelAdapters.some((a) => a.id === selection.value.id)) {
+    selection.value = null;
   }
-  return best;
+});
+
+function toggleExpanded(key) {
+  const next = new Set(expandedSupplierKeys.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  expandedSupplierKeys.value = next;
 }
 
-// 按供应商懒加载余额（点击查询，结果缓存于组件状态，避免重复请求）
-const balanceBySupplier = ref({}); // key -> { loading, loaded, data }
-
-function balanceEntry(key) {
-  return balanceBySupplier.value[key] || null;
+function selectSupplier(supplier) {
+  autoExpandEdit.value = false;
+  selection.value = { type: "supplier", key: supplier.key };
+  if (!expandedSupplierKeys.value.has(supplier.key)) toggleExpanded(supplier.key);
 }
 
-function balanceSourceLabel(source) {
-  if (source === "openai_billing") return "openai billing";
-  if (source === "sub2api_usage") return "sub2api usage";
-  if (source === "newapi") return "New API";
-  if (source === "token_plan") return "Token Plan";
-  if (source === "configured") return "自定义查询";
-  if (source === "deepseek") return "DeepSeek";
-  if (source === "stepfun") return "阶跃星辰";
-  if (source === "siliconflow") return "SiliconFlow";
-  if (source === "openrouter") return "OpenRouter";
-  if (source === "novita") return "Novita";
-  if (source === "moonshot") return "Moonshot / Kimi";
-  return String(source || "").trim();
+function selectModel(supplier, adapter) {
+  autoExpandEdit.value = false;
+  selection.value = { type: "model", id: adapter.id };
+  if (!expandedSupplierKeys.value.has(supplier.key)) toggleExpanded(supplier.key);
 }
 
-function balanceTooltip(key) {
-  const data = balanceEntry(key)?.data;
-  if (!data || !data.supported) return "";
-  const source = balanceSourceLabel(data.source);
-  const hasUsedTotal =
-    (data.used != null && Number.isFinite(Number(data.used))) ||
-    (data.total != null && Number.isFinite(Number(data.total)));
-  let text = "";
-  if (hasUsedTotal) {
-    text = `已用 ${formatMoney(data.used, data.currency)} / 总额 ${formatMoney(data.total, data.currency)}`;
+function backToList() {
+  selection.value = null;
+  autoExpandEdit.value = false;
+}
+
+async function openEditor(index, seed) {
+  if (index < 0 && seed) {
+    stashModelEditorSeed(seed);
   }
-  if (source) text += `${text ? " · " : ""}来源: ${source}`;
-  return text;
+  await router.push({ path: "/model-editor", query: { index: String(index) } });
 }
 
-function balanceMessage(key) {
-  const data = balanceEntry(key)?.data;
-  if (data?.source === "none") return "暂无自动查询";
-  return (data && data.message) || "余额不可用";
+async function openNewModel() {
+  await openEditor(-1, { ...createEmptyModelAdapter(), type: "openai" });
 }
 
-async function loadSupplierBalance(supplier, forceRefresh = false) {
-  const key = supplier.key;
-  const existing = balanceBySupplier.value[key];
-  if (existing && existing.loading) return;
-  balanceBySupplier.value = {
-    ...balanceBySupplier.value,
-    [key]: { loading: true, loaded: false, data: existing?.data || null },
-  };
-  const rep = (supplier.models && supplier.models[0]) || supplier;
-  const usage = supplierUsageRequest(rep);
-  const catalog = supplierModelCatalog(rep.supplierID || supplier.supplierID);
-  const prevData = existing?.data || null;
-  const hasLastGood = Boolean(prevData && prevData.supported);
-  let data = null;
-  try {
-    const request = {
-      type: supplier.type,
-      supplierID: rep.supplierID || supplier.supplierID,
-      usageStatus: usage.status,
-      usageProvider: usage.provider,
-      modelCatalogURLsJSON: JSON.stringify(catalog.urls || []),
-      modelCatalogStatus: catalog.status || "",
-      appendModelCatalogCandidates: catalog.appendCandidates !== false,
-      baseURL: rep.baseURL || supplier.baseURL,
-      apiKey: rep.apiKey || supplier.apiKey,
-      balanceProfile: rep.balanceProfile || "auto",
-      balanceAccessToken: rep.balanceAccessToken || "",
-      balanceUserID: rep.balanceUserID || "",
-      balanceCodingPlanProvider: rep.balanceCodingPlanProvider || "",
-      balanceQueryURL: rep.balanceQueryURL || "",
-      balanceQueryField: rep.balanceQueryField || "",
-      balanceQueryHeaders: rep.balanceQueryHeaders || {},
-    };
-    if (forceRefresh) request.forceRefresh = true;
-    data = await queryProviderBalance(request);
-  } catch (_e) {
-    // invoke 层异常按瞬时处理：有上次成功值则保留（keep-last-good），否则置不可用。
-    data = hasLastGood ? prevData : { supported: false, message: "查询失败" };
-  }
-  const normalized = data || { supported: false, message: "无返回结果" };
-  // 瞬时失败且已有上次成功值：保留旧值（keep-last-good），不透出「余额不可用」。
-  const nextData =
-    !normalized.supported && normalized.transient && hasLastGood ? prevData : normalized;
-  balanceBySupplier.value = {
-    ...balanceBySupplier.value,
-    [key]: { loading: false, loaded: true, data: nextData },
-  };
-}
-
-async function showActionError(title, error) {
-  await showModal({ title, content: String(error || "服务错误").trim() || "服务错误" });
-}
-
-function openSupplier(supplier) {
-  router.push({
-    path: "/supplier",
-    query: supplierToRouteQuery(supplier),
-  });
-}
-
-function openSupplierEditor(supplier) {
-  router.push({
-    path: "/supplier",
-    query: { ...supplierToRouteQuery(supplier), edit: "1" },
-  });
-}
-
-async function openEditor() {
-  try {
-    await openModelEditorWindow(-1, { ...createEmptyModelAdapter(), type: "openai" });
-  } catch (error) {
-    await showActionError("打开失败", toUserError(error));
-  }
+function openNewModelInSupplier(supplier) {
+  const seed = supplier.models?.[0] || null;
+  const draft = seed
+    ? { ...createEmptyModelAdapter(), ...seed, id: "", displayName: "", modelID: "" }
+    : { ...createEmptyModelAdapter(), type: "openai" };
+  void openEditor(-1, draft);
 }
 
 const diagnosing = ref(false);
@@ -374,7 +314,7 @@ async function handleDiagnose() {
     await reloadUserConfig({ modelAdaptersOnly: true });
     await showModal({ title: "修正完成", content: `已修正 ${mismatchIssues.length} 个模型的协议配置。\n\n${alignSummary}` });
   } catch (error) {
-    await showActionError("诊断失败", toUserError(error));
+    await showModal({ title: "诊断失败", content: toUserError(error) || "服务错误" });
   } finally {
     diagnosing.value = false;
   }
@@ -404,7 +344,7 @@ async function handleDeleteSupplier(supplier) {
       groupName: supplier.groupNameRaw ?? (supplier.groupName === "默认分组" ? "" : supplier.groupName),
     });
     if (!result.ok) {
-      await showActionError("删除失败", result.error);
+      await showModal({ title: "删除失败", content: String(result.error || "服务错误").trim() || "服务错误" });
     }
   } finally {
     deletingSupplierKey.value = "";
@@ -414,9 +354,7 @@ async function handleDeleteSupplier(supplier) {
 onMounted(() => {
   void reloadUserConfig({ modelAdaptersOnly: true }).catch(() => {});
   stopAccountSync = onAccountSync(() => {
-    for (const supplier of suppliers.value) {
-      void loadSupplierBalance(supplier, true);
-    }
+    void reloadUserConfig({ modelAdaptersOnly: true }).catch(() => {});
   });
 });
 let stopAccountSync = () => {};
@@ -426,203 +364,192 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col overflow-hidden p-4 pt-0 text-[#e5e5e5]">
-    <div class="min-h-0 flex-1 overflow-y-auto pr-1">
-      <div class="flex flex-col gap-4 pb-2">
-        <!-- 顶部操作栏 -->
-        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[#343434] pb-3">
-          <div class="min-w-0 text-sm text-[#a3a3a3]">
-            <template v-if="searchQuery.trim()">筛选出 <span class="text-white">{{ suppliers.length }}</span>/{{ allSuppliers.length }} 个供应商</template>
-            <template v-else><span class="text-white">{{ suppliers.length }}</span> 个供应商 · <span class="text-white">{{ appState.modelAdapters.length }}</span> 个模型</template>
+  <div class="flex h-full min-h-0 text-[#e5e5e5]">
+    <!-- 左栏：供应商 + 模型树 -->
+    <div class="flex w-[280px] shrink-0 flex-col border-r border-[#242424]">
+      <div class="flex flex-col gap-2 border-b border-[#242424] p-3">
+        <div class="flex items-center justify-between gap-2">
+          <div class="min-w-0 truncate text-[12px] text-[#8f8f8f]">
+            <span class="text-white">{{ suppliers.length }}</span> 供应商 ·
+            <span class="text-white">{{ appState.modelAdapters.length }}</span> 模型
           </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <div class="relative">
-              <span class="icon-[mdi--magnify] pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[16px] text-[#737373]"></span>
-              <input
-                v-model="searchQuery"
-                type="text"
-                placeholder="搜索供应商 / 模型 / host"
-                class="h-8 w-52 rounded-[8px] border border-[#3f3f3f] bg-[#232323] pl-7 pr-7 text-[12px] text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
-              />
-              <button
-                v-if="searchQuery"
-                type="button"
-                class="absolute right-2 top-1/2 -translate-y-1/2 text-[#737373] hover:text-white"
-                @click="searchQuery = ''"
-              >
-                <span class="icon-[mdi--close-circle] text-[14px]"></span>
-              </button>
-            </div>
-            <div
-              class="inline-flex rounded-[8px] border border-[#3f3f3f] bg-[#232323] p-0.5 text-[12px]"
-              role="group"
-              aria-label="供应商分组方式"
-            >
-              <button
-                type="button"
-                class="rounded-[6px] px-2.5 py-1 transition-colors"
-                :class="groupMode === SUPPLIER_GROUP_MODE_NAME
-                  ? 'bg-[#10AD5D]/25 text-[#6ee7a5]'
-                  : 'text-[#a3a3a3] hover:text-white'"
-                @click="groupMode = SUPPLIER_GROUP_MODE_NAME"
-              >
-                名称分组
-              </button>
-              <button
-                type="button"
-                class="rounded-[6px] px-2.5 py-1 transition-colors"
-                :class="groupMode === SUPPLIER_GROUP_MODE_CONNECTION
-                  ? 'bg-[#10AD5D]/25 text-[#6ee7a5]'
-                  : 'text-[#a3a3a3] hover:text-white'"
-                @click="groupMode = SUPPLIER_GROUP_MODE_CONNECTION"
-              >
-                连接分组
-              </button>
-            </div>
-            <Button variant="default" :disabled="diagnosing" @click="handleDiagnose">{{ diagnosing ? "诊断中..." : "一键诊断优化" }}</Button>
-            <Button variant="primary" :disabled="appState.configSaving" @click="openEditor">新增模型</Button>
-          </div>
-        </div>
-
-        <!-- 分组聚焦提示条：来自「模型分组」页跳转 -->
-        <div
-          v-if="focusedGroupKey"
-          class="flex items-center justify-between gap-3 rounded-[8px] border border-[#10AD5D]/40 bg-[#10AD5D]/10 px-3 py-2 text-xs text-[#6ee7a5]"
-        >
-          <span class="min-w-0 truncate">
-            正在查看分组「{{ focusedGroupLabel || focusedGroupKey }}」
-          </span>
           <button
             type="button"
-            class="shrink-0 rounded-[6px] border border-[#10AD5D]/40 px-2 py-0.5 text-[#6ee7a5] transition-colors hover:bg-[#10AD5D]/20"
-            @click="clearGroupFocus"
+            aria-label="新增模型"
+            :title="$ls('e552c2accdbf5178')"
+            class="flex h-[24px] w-[24px] shrink-0 cursor-pointer items-center justify-center rounded-[6px] bg-gradient-to-b from-[#10AD5D] to-[#0F8A4C] text-white transition-transform duration-150 hover:from-[#12b966] hover:to-[#119a55] active:scale-105"
+            @click="openNewModel"
           >
-            查看全部
+            <span class="icon-[mdi--plus] shrink-0 text-[16px]"></span>
           </button>
         </div>
-
-        <!-- 供应商列表 -->
-        <div v-if="!suppliers.length && searchQuery.trim()" class="rounded-[8px] border border-dashed border-[#3a3a3a] bg-[#232323] px-4 py-8 text-center text-sm text-[#a3a3a3]">
-          没有匹配「{{ searchQuery.trim() }}」的供应商或模型。
-        </div>
-        <div v-else-if="!suppliers.length" class="rounded-[8px] border border-dashed border-[#3a3a3a] bg-[#232323] px-4 py-8 text-center text-sm text-[#a3a3a3]">
-          当前还没有配置任何模型，点击右上角"新增模型"开始添加。
-        </div>
-
-        <div v-else class="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
-          <Card
-            v-for="supplier in suppliers"
-            :key="supplier.key"
-            class="group cursor-pointer transition-colors hover:border-[#10AD5D]/40"
-            @click="openSupplier(supplier)"
+        <div class="relative">
+          <span class="icon-[mdi--magnify] pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[16px] text-[#737373]"></span>
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="搜索供应商 / 模型 / host"
+            class="h-8 w-full rounded-[8px] border border-[#3f3f3f] bg-[#232323] pl-7 pr-7 text-[12px] text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+          />
+          <button
+            v-if="searchQuery"
+            type="button"
+            class="absolute right-2 top-1/2 -translate-y-1/2 text-[#737373] hover:text-white"
+            @click="searchQuery = ''"
           >
-            <div class="flex h-full flex-col gap-3">
-              <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0 flex-1">
-                  <div class="truncate text-sm font-semibold text-white">{{ modelHeader(supplier).displayName }}</div>
-                  <div class="mt-0.5 truncate text-xs text-[#8f8f8f]">
-                    {{ modelHeader(supplier).modelID }}
-                    <span v-if="modelHeader(supplier).hasMore" class="text-[#737373]"> · 等 {{ supplier.models.length }} 个模型</span>
-                  </div>
-                </div>
-                <span
-                  class="center-row size-7 shrink-0 justify-center text-[#a3a3a3]"
-                  :title="providerLabel(supplier.type)"
-                >
-                  <span :class="[providerIcon(supplier.type), 'text-[32px]']"></span>
-                </span>
-              </div>
+            <span class="icon-[mdi--close-circle] text-[14px]"></span>
+          </button>
+        </div>
+        <div class="flex items-center gap-2">
+          <div
+            class="inline-flex flex-1 rounded-[8px] border border-[#3f3f3f] bg-[#232323] p-0.5 text-[12px]"
+            role="group"
+            aria-label="供应商分组方式"
+          >
+            <button
+              type="button"
+              class="flex-1 rounded-[6px] px-2 py-1 transition-colors"
+              :class="groupMode === SUPPLIER_GROUP_MODE_NAME ? 'bg-[#10AD5D]/25 text-[#6ee7a5]' : 'text-[#a3a3a3] hover:text-white'"
+              @click="groupMode = SUPPLIER_GROUP_MODE_NAME"
+            >
+              名称分组
+            </button>
+            <button
+              type="button"
+              class="flex-1 rounded-[6px] px-2 py-1 transition-colors"
+              :class="groupMode === SUPPLIER_GROUP_MODE_CONNECTION ? 'bg-[#10AD5D]/25 text-[#6ee7a5]' : 'text-[#a3a3a3] hover:text-white'"
+              @click="groupMode = SUPPLIER_GROUP_MODE_CONNECTION"
+            >
+              连接分组
+            </button>
+          </div>
+          <button
+            type="button"
+            class="center-row h-[26px] shrink-0 justify-center rounded-[8px] border border-[#3f3f3f] bg-[#232323] px-2 text-[#a3a3a3] transition-colors hover:text-white"
+            :title="diagnosing ? '诊断中...' : '一键诊断优化'"
+            :disabled="diagnosing"
+            @click="handleDiagnose"
+          >
+            <span :class="diagnosing ? 'icon-[mdi--loading] animate-spin' : 'icon-[mdi--stethoscope]'" class="text-[15px]"></span>
+          </button>
+        </div>
+        <div
+          v-if="focusedGroupKey"
+          class="flex items-center justify-between gap-2 rounded-[8px] border border-[#10AD5D]/40 bg-[#10AD5D]/10 px-2 py-1.5 text-[11px] text-[#6ee7a5]"
+        >
+          <span class="min-w-0 truncate">分组「{{ focusedGroupLabel || focusedGroupKey }}」</span>
+          <button type="button" class="shrink-0 underline-offset-2 hover:underline" @click="clearGroupFocus">查看全部</button>
+        </div>
+      </div>
 
-              <div class="flex flex-col gap-1 text-xs">
-                <div class="center-row justify-start gap-1.5 text-[#a3a3a3]">
-                  <span class="text-[#d4d4d4]">{{ supplier.models.length }} 个模型</span>
-                  <span
-                    v-if="healthSummary(supplier).tested > 0"
-                    class="rounded-full px-1.5 py-0.5 text-[11px]"
-                    :class="healthSummary(supplier).fail > 0 ? 'bg-[#f87171]/15 text-[#fca5a5]' : 'bg-[#10AD5D]/15 text-[#6ee7a5]'"
-                    :title="`已测 ${healthSummary(supplier).tested}/${healthSummary(supplier).total}，可用 ${healthSummary(supplier).ok}，失败 ${healthSummary(supplier).fail}`"
-                  >{{ healthSummary(supplier).ok }}/{{ healthSummary(supplier).total }} 可用</span>
-                  <span
-                    v-if="remarkSummary(supplier)"
-                    class="min-w-0 flex-1 truncate text-[11px] text-[#8f8f8f]"
-                    :title="remarkSummary(supplier)"
-                  >{{ remarkSummary(supplier) }}</span>
-                </div>
-                <div v-if="isCursorAccountSupplier(supplier)" class="text-[#67e8f9]">账户通道待验证</div>
-                <div v-else class="truncate text-[#737373]">Key {{ maskSecret(supplier.apiKey) }}</div>
-                <!-- 余额（懒加载：点击查询，结果缓存） -->
-                <div v-if="!isCursorAccountSupplier(supplier)" class="center-row justify-start gap-1.5 text-[11px]">
-                  <template v-if="balanceEntry(supplier.key)">
-                    <span v-if="balanceEntry(supplier.key).loading" class="center-row gap-1 text-[#8f8f8f]">
-                      <span class="icon-[mdi--loading] animate-spin text-[12px]"></span>查询余额…
-                    </span>
-                    <template v-else-if="balanceEntry(supplier.key).data && balanceEntry(supplier.key).data.supported">
-                      <span class="text-[#6ee7a5]" :title="balanceEntry(supplier.key).data.unlimited ? '该账户额度不限' : balanceTooltip(supplier.key)">
-                        <template v-if="balanceEntry(supplier.key).data.unlimited">余额 不限额</template>
-                        <template v-else-if="balanceEntry(supplier.key).data.source === 'token_plan' || balanceEntry(supplier.key).data.currency === '%'">
-                          {{ balanceEntry(supplier.key).data.planName ? `${balanceEntry(supplier.key).data.planName} · ` : '' }}已用 {{ Number(balanceEntry(supplier.key).data.used || 0).toFixed(0) }}%
-                        </template>
-                        <template v-else>
-                          余额 {{ formatMoney(balanceEntry(supplier.key).data.remaining, balanceEntry(supplier.key).data.currency) }}
-                          <span v-if="balanceEntry(supplier.key).data.planName" class="text-[#a3a3a3]"> · {{ balanceEntry(supplier.key).data.planName }}</span>
-                        </template>
-                      </span>
-                      <button
-                        type="button"
-                        class="center-row text-[#737373] transition-colors hover:text-white"
-                        title="刷新余额"
-                        @click.stop="loadSupplierBalance(supplier, true)"
-                      >
-                        <span class="icon-[mdi--refresh] text-[12px]"></span>
-                      </button>
-                    </template>
-                    <template v-else>
-                      <span class="text-[#737373]" :title="balanceMessage(supplier.key)">{{ balanceMessage(supplier.key) === '暂无自动查询' ? '暂无自动查询' : '余额不可用' }}</span>
-                      <button
-                        type="button"
-                        class="center-row text-[#737373] transition-colors hover:text-white"
-                        title="重试"
-                        @click.stop="loadSupplierBalance(supplier, true)"
-                      >
-                        <span class="icon-[mdi--refresh] text-[12px]"></span>
-                      </button>
-                    </template>
-                  </template>
-                  <button
-                    v-else
-                    type="button"
-                    class="center-row gap-0.5 text-[#8f8f8f] transition-colors hover:text-[#6ee7a5]"
-                    title="查询该供应商余额"
-                    @click.stop="loadSupplierBalance(supplier)"
-                  >
-                    <span class="icon-[mdi--wallet-outline] text-[12px]"></span>查询余额
-                  </button>
-                </div>
-              </div>
+      <div class="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+        <div v-if="!suppliers.length && searchQuery.trim()" class="px-2 py-6 text-center text-[12px] text-[#8f8f8f]">
+          没有匹配「{{ searchQuery.trim() }}」的结果。
+        </div>
+        <div v-else-if="!suppliers.length" class="px-2 py-6 text-center text-[12px] text-[#8f8f8f]">
+          还没有配置任何模型，点击「新增模型」开始添加。
+        </div>
 
-              <div class="center-row mt-auto justify-end gap-3 border-t border-[#343434] pt-2.5">
-                <button
-                  type="button"
-                  class="center-row gap-1 text-xs text-[#a3a3a3] transition-colors hover:text-white"
-                  :disabled="appState.configSaving"
-                  title="编辑供应商及其全部模型的连接配置"
-                  @click.stop="openSupplierEditor(supplier)"
-                >
-                  <span class="icon-[mdi--pencil-outline] text-[15px]"></span>编辑
-                </button>
-                <button
-                  type="button"
-                  class="center-row justify-center text-[#8f8f8f] transition-colors hover:text-[#f87171] disabled:opacity-50"
-                  :disabled="appState.configSaving || deletingSupplierKey === supplier.key"
-                  :title="deletingSupplierKey === supplier.key ? '删除中...' : '删除该供应商'"
-                  @click.stop="handleDeleteSupplier(supplier)"
-                >
-                  <span class="icon-[mdi--trash-can-outline] text-[16px]"></span>
-                </button>
-                <span class="center-row gap-0.5 text-xs text-[#6ee7a5]">进入<span class="icon-[mdi--arrow-right] text-[14px]"></span></span>
-              </div>
-            </div>
-          </Card>
+        <div v-for="supplier in suppliers" :key="supplier.key" class="mb-0.5">
+          <div
+            class="group flex h-[30px] cursor-pointer items-center gap-1.5 rounded-[6px] px-1.5 text-[13px] transition-colors"
+            :class="selection?.type === 'supplier' && selection.key === supplier.key ? 'bg-[#1f3a2c] text-[#4ade80]' : 'text-[#d4d4d4] hover:bg-[#252525]'"
+            @click="selectSupplier(supplier)"
+          >
+            <button
+              type="button"
+              class="center-row h-[20px] w-[16px] shrink-0 justify-center text-[#737373]"
+              :title="expandedSupplierKeys.has(supplier.key) ? '收起' : '展开'"
+              @click.stop="toggleExpanded(supplier.key)"
+            >
+              <span
+                class="text-[14px] transition-transform"
+                :class="[expandedSupplierKeys.has(supplier.key) ? 'icon-[mdi--chevron-down]' : 'icon-[mdi--chevron-right]']"
+              ></span>
+            </button>
+            <span :class="providerIcon(supplier.type)" class="shrink-0 text-[16px]" :title="providerLabel(supplier.type)" aria-hidden="true"></span>
+            <span class="min-w-0 flex-1 truncate">{{ supplierTitle(supplier) }}</span>
+            <span
+              v-if="healthSummary(supplier).tested > 0"
+              class="shrink-0 rounded-full px-1.5 text-[10px] leading-[16px]"
+              :class="healthSummary(supplier).fail > 0 ? 'bg-[#f87171]/15 text-[#fca5a5]' : 'bg-[#10AD5D]/15 text-[#6ee7a5]'"
+              :title="`已测 ${healthSummary(supplier).tested}/${healthSummary(supplier).total}，可用 ${healthSummary(supplier).ok}，失败 ${healthSummary(supplier).fail}`"
+            >{{ healthSummary(supplier).ok }}/{{ healthSummary(supplier).total }}</span>
+            <span class="shrink-0 text-[11px] text-[#6f6f6f]">{{ supplier.models.length }}</span>
+          </div>
+
+          <div v-if="expandedSupplierKeys.has(supplier.key) || (selection?.type === 'model' && selectedSupplierOfModel?.key === supplier.key)">
+            <button
+              v-for="model in supplier.models"
+              :key="model.id"
+              type="button"
+              class="flex h-[26px] w-full cursor-pointer items-center gap-2 rounded-[6px] pl-[38px] pr-2 text-[12px] transition-colors"
+              :class="selection?.type === 'model' && selection.id === model.id ? 'bg-[#1f3a2c] text-[#4ade80]' : 'text-[#a3a3a3] hover:bg-[#252525] hover:text-[#e5e5e5]'"
+              @click="selectModel(supplier, model)"
+            >
+              <span
+                class="h-[6px] w-[6px] shrink-0 rounded-full"
+                :class="{
+                  'bg-[#10AD5D]': modelTestState(model) === 'ok',
+                  'bg-[#f87171]': modelTestState(model) === 'fail',
+                  'bg-[#38bdf8] animate-pulse': modelTestState(model) === 'running',
+                  'bg-[#4b4b4b]': modelTestState(model) === 'untested',
+                }"
+                :title="{ ok: '可用', fail: '测试失败', running: '测试中', untested: '未测试' }[modelTestState(model)]"
+              ></span>
+              <span class="min-w-0 flex-1 truncate">{{ model.displayName || model.modelID }}</span>
+              <span
+                v-if="model.fastMode"
+                class="shrink-0 rounded-full bg-[#67e8f9]/15 px-1 text-[10px] leading-[16px] text-[#67e8f9]"
+                title="Fast 模式"
+              >F</span>
+            </button>
+            <button
+              v-if="!isCursorAccountSupplier(supplier)"
+              type="button"
+              class="flex h-[26px] w-full cursor-pointer items-center gap-2 rounded-[6px] pl-[38px] pr-2 text-[12px] text-[#6f6f6f] transition-colors hover:text-[#6ee7a5]"
+              @click="openNewModelInSupplier(supplier)"
+            >
+              <span class="icon-[mdi--plus] text-[14px]"></span>
+              <span>在此供应商下新增</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右栏：详情面板 -->
+    <div class="min-h-0 min-w-0 flex-1 overflow-hidden">
+      <div class="h-full min-h-0 overflow-y-auto">
+        <SupplierPanel
+          v-if="selectedSupplier"
+          :key="`supplier-${selectedSupplier.key}`"
+          :identity="selectedSupplierIdentity"
+          :auto-expand-edit="autoExpandEdit"
+          @back="backToList"
+        >
+          <template #actions>
+            <button
+              type="button"
+              class="center-row gap-1 text-xs text-[#a3a3a3] transition-colors hover:text-[#f87171]"
+              :disabled="deletingSupplierKey === selectedSupplier.key"
+              :title="deletingSupplierKey === selectedSupplier.key ? '删除中...' : '删除该供应商'"
+              @click="handleDeleteSupplier(selectedSupplier)"
+            >
+              <span class="icon-[mdi--trash-can-outline] text-[16px]"></span>删除
+            </button>
+          </template>
+        </SupplierPanel>
+        <div v-else-if="selectedAdapter" class="h-full p-4 pt-0">
+          <ModelPanel
+            :adapter="selectedAdapter"
+            @deleted="backToList"
+          />
+        </div>
+        <div v-else class="flex h-full flex-col items-center justify-center gap-3 text-[#6f6f6f]">
+          <span class="icon-[mdi--layers-triple-outline] text-[40px] opacity-50" aria-hidden="true"></span>
+          <div class="text-sm">左侧选择供应商或模型查看详情</div>
+          <Button variant="primary" @click="openNewModel">新增模型</Button>
         </div>
       </div>
     </div>

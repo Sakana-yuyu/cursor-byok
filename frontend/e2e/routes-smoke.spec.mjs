@@ -57,8 +57,8 @@ for (const route of routes) {
   });
 }
 
-test.describe("macOS 标题栏", () => {
-  test("显示设置入口且不显示 Windows 窗口按钮", async ({ browser }) => {
+test.describe("macOS 布局", () => {
+  test("侧边栏显示设置入口且不显示 Windows 窗口按钮", async ({ browser }) => {
     const context = await browser.newContext({
       userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 Safari/605.1.15",
       viewport: { width: 375, height: 800 },
@@ -69,23 +69,21 @@ test.describe("macOS 标题栏", () => {
       await seedPreviewTestPlan(page, {}, basePreviewConfig());
       await page.goto("/");
 
-      const settings = page.getByRole("button", { name: "打开设置" });
+      const settings = page.getByRole("button", { name: "设置", exact: true }).first();
       await expect(settings).toBeVisible();
       await expect(page.getByRole("button", { name: "最小化窗口" })).toHaveCount(0);
       await expect(page.getByRole("button", { name: "最大化窗口" })).toHaveCount(0);
       await expect(page.getByRole("button", { name: "关闭窗口" })).toHaveCount(0);
 
-      const header = page.locator("header");
-      const [settingsBox, titleBox] = await Promise.all([
+      const sidebar = page.locator("aside");
+      await expect(sidebar).toBeVisible();
+      const [settingsBox, sidebarBox] = await Promise.all([
         settings.boundingBox(),
-        header.locator("div.center-row").first().boundingBox(),
+        sidebar.boundingBox(),
       ]);
       expect(settingsBox).not.toBeNull();
-      expect(titleBox).not.toBeNull();
-      expect(settingsBox.x).toBeGreaterThanOrEqual(0);
-      expect(settingsBox.x + settingsBox.width).toBeLessThanOrEqual(375);
-      expect(titleBox.x).toBeGreaterThanOrEqual(76);
-      expect(titleBox.x + titleBox.width).toBeLessThanOrEqual(settingsBox.x);
+      expect(sidebarBox).not.toBeNull();
+      expect(settingsBox.x + settingsBox.width).toBeLessThanOrEqual(sidebarBox.x + sidebarBox.width + 1);
 
       await settings.click();
       await expect(page).toHaveURL(/#?\/settings/);

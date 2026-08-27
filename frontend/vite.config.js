@@ -35,14 +35,13 @@ export default defineConfig(({ mode }) => {
     cssTarget: "safari13",
     rollupOptions: {
       output: {
-        // 按供应商分包：把 echarts / chart.js / vue 等共享依赖拆出入口 chunk。
+        // 按供应商分包：把 echarts / vue 等共享依赖拆出入口 chunk。
         // Markdown 编辑器必须保留在动态导入子图中，否则 Rollup 会把手工 vendor
         // chunk 预载到 index.html，抵消 Skills/MCP 页面里的懒加载边界。
         manualChunks(id) {
           if (!id.includes("node_modules")) return undefined;
           if (id.includes("echarts")) return "vendor-echarts";
           if (id.includes("md-editor-v3") || id.includes("codemirror") || id.includes("@lezer")) return undefined;
-          if (id.includes("chart.js") || id.includes("vue-chartjs")) return "vendor-chartjs";
           if (id.includes("marked")) return "vendor-marked";
           if (id.includes("@iconify")) return "vendor-iconify";
           if (id.includes("@wailsio")) return "vendor-wails";

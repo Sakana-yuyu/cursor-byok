@@ -151,8 +151,8 @@ onMounted(() => {
 
 <template>
   <main class="h-full min-h-0 w-full overflow-y-auto text-white">
-    <div class="mx-auto max-w-4xl px-6 py-8">
-      <div class="mb-6">
+    <div class="flex flex-col gap-4 p-4">
+      <div>
         <h1 class="text-xl font-semibold">诊断</h1>
         <p class="mt-1 text-sm text-zinc-400">模型协议诊断与会话排查证据。</p>
       </div>
@@ -160,7 +160,7 @@ onMounted(() => {
     <ProviderDiagnosticsPanel />
 
     <!-- 会话证据 -->
-    <section class="mb-8 rounded-[10px] border border-white/10 bg-black/20 p-5">
+    <section class="rounded-[10px] border border-white/10 bg-black/20 p-5">
       <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 class="text-sm font-medium">会话证据</h2>

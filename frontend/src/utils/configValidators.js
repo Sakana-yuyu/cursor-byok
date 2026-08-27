@@ -1,6 +1,6 @@
 // configValidators.js 承载配置 JSON 校验与余额查询头解析纯函数，全部从
 // appState.js 逐字搬移（零行为变化）。
-import { asString } from "./valueCast";
+import { asString } from "./valueCast.js";
 
 export const BALANCE_QUERY_HEADERS_DEFAULT_JSON = `{
 }`;
