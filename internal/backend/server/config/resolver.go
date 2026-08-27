@@ -91,17 +91,21 @@ func (manager *Manager) SelectChannelsForModel(_ context.Context, modelID string
 	if len(filteredMatches) == 0 {
 		return nil, legacyruntime.ErrChannelNotAvailable
 	}
+	// 展开备用密钥池：带 apiKeys 的 adapter 复制成每把密钥一个独立渠道。
+	// 轮换游标在展开后的完整列表上推进，密钥池天然参与轮换；冷却指纹包含
+	// apiKey，单把密钥被限流只冷却该克隆渠道，不影响同渠道其他密钥。
+	candidates := expandAdapterKeyPools(adapters, filteredMatches)
 	manager.selectionMu.Lock()
 	if manager.selectionOffsets == nil {
 		manager.selectionOffsets = make(map[string]int)
 	}
 	key := selectedSource + "\x00" + strings.TrimSpace(modelID)
-	offset := manager.selectionOffsets[key] % len(filteredMatches)
-	manager.selectionOffsets[key] = (offset + 1) % len(filteredMatches)
+	offset := manager.selectionOffsets[key] % len(candidates)
+	manager.selectionOffsets[key] = (offset + 1) % len(candidates)
 	manager.selectionMu.Unlock()
-	channels := make([]*legacyruntime.ResolvedChannel, 0, len(filteredMatches))
-	for index := 0; index < len(filteredMatches); index++ {
-		adapter := adapters[filteredMatches[(offset+index)%len(filteredMatches)]]
+	channels := make([]*legacyruntime.ResolvedChannel, 0, len(candidates))
+	for index := 0; index < len(candidates); index++ {
+		adapter := candidates[(offset+index)%len(candidates)]
 		channel, resolveErr := resolveModelAdapterChannel([]ModelAdapterConfig{adapter}, adapter.ID)
 		if resolveErr != nil {
 			return nil, resolveErr
@@ -109,6 +113,30 @@ func (manager *Manager) SelectChannelsForModel(_ context.Context, modelID string
 		channels = append(channels, channel)
 	}
 	return channels, nil
+}
+
+// expandAdapterKeyPools 把命中的 adapter 列表按备用密钥池展开成逐密钥的候选渠道。
+func expandAdapterKeyPools(adapters []ModelAdapterConfig, matches []int) []ModelAdapterConfig {
+	capacity := 0
+	for _, index := range matches {
+		capacity += 1 + len(adapters[index].APIKeys)
+	}
+	candidates := make([]ModelAdapterConfig, 0, capacity)
+	for _, index := range matches {
+		adapter := adapters[index]
+		if len(adapter.APIKeys) == 0 {
+			candidates = append(candidates, adapter)
+			continue
+		}
+		// 主 apiKey 渠道保持首位，再跟备用密钥克隆
+		candidates = append(candidates, adapter)
+		for _, apiKey := range adapter.APIKeys {
+			clone := adapter
+			clone.APIKey = apiKey
+			candidates = append(candidates, clone)
+		}
+	}
+	return candidates
 }
 
 func selectModelSource(adapters []ModelAdapterConfig, matches []int, requestedModel string) string {

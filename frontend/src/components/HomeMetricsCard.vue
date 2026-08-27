@@ -3,10 +3,10 @@ import CacheHitRateChart from "@/components/charts/CacheHitRateChart.vue";
 import Switch from "@/components/ui/Switch.vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
 import { fetchMetricsRangeSummary, fetchRecentRequestMetrics, resetUsageMetrics } from "@/services/clientApi";
-import { appState, saveIncludeCacheWriteInHitRate, saveLocalResponseCacheEnabled, openMetricsDetailWindow } from "@/state/appState";
+import { appState, saveIncludeCacheWriteInHitRate, saveLocalResponseCacheEnabled } from "@/state/appState";
 import { formatCompactInteger, formatInteger } from "@/utils/numberFormat";
 import { safeErrorLogAttributes, toUserError } from "@/utils/errorContract";
-import { isBrowserPreview } from "@/services/runtimeAdapter";
+
 import { usePolling } from "@/composables/usePolling";
 import { useSharedHomeMetricsRefresh } from "@/composables/useSharedHomeMetricsRefresh";
 import { computed, ref, watch } from "vue";
@@ -20,11 +20,7 @@ const { localCacheStats: sharedLocalCacheStats, refresh: refreshSharedHomeMetric
 });
 
 async function handleOpenDetail() {
-  if (isBrowserPreview) {
-    await router.push("/metrics-detail");
-    return;
-  }
-  await openMetricsDetailWindow();
+  await router.push("/metrics-detail");
 }
 
 const props = defineProps({
@@ -474,7 +470,12 @@ watch(
   { immediate: true },
 );
 
-usePolling(loadEvents, { intervalMs: AUTO_REFRESH_INTERVAL_MS });
+// 自动刷新：窗口隐藏时跳过，避免最小化后仍每 5s 发 4 次 IPC
+usePolling(() => {
+  if (!document.hidden) {
+    loadEvents();
+  }
+}, { intervalMs: AUTO_REFRESH_INTERVAL_MS });
 </script>
 
 <template>

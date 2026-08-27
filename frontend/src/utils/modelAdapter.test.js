@@ -50,3 +50,37 @@ test("成功结果忽略旧摘要并保留新增测速字段", () => {
   assert.equal(result.reasoningTokens, 127);
   assert.equal(result.effectiveThinkingEffort, "medium");
 });
+
+test("normalizeModelAdapter：备用密钥池去空、去重并剔除主密钥", async () => {
+  const { normalizeModelAdapter } = await import("./modelAdapter.js");
+  const adapter = normalizeModelAdapter({
+    displayName: "池测试",
+    type: "openai",
+    baseURL: "https://api.example.com/v1",
+    apiKey: "sk-primary",
+    apiKeys: ["sk-a", "", "sk-a", "sk-primary", "sk-b"],
+    modelID: "m-1",
+  });
+  assert.deepEqual(adapter.apiKeys, ["sk-a", "sk-b"]);
+});
+
+test("normalizeModelAdapter：无密钥池时输出空数组且不生成幻影条目", async () => {
+  const { normalizeModelAdapter } = await import("./modelAdapter.js");
+  const adapter = normalizeModelAdapter({
+    displayName: "无池",
+    type: "anthropic",
+    baseURL: "https://api.example.com",
+    apiKey: "sk-only",
+    modelID: "claude-x",
+  });
+  assert.deepEqual(adapter.apiKeys, []);
+  const legacy = normalizeModelAdapter({
+    displayName: "旧字段",
+    type: "openai",
+    baseURL: "https://api.example.com/v1",
+    apiKey: "sk-main",
+    api_keys: ["sk-main"],
+    modelID: "m-2",
+  });
+  assert.deepEqual(legacy.apiKeys, []);
+});

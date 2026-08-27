@@ -164,7 +164,6 @@ const UPDATE_PROGRESS_EVENT = "update:progress";
 const UPDATE_READY_EVENT = "update:ready";
 const UPDATE_ERROR_EVENT = "update:error";
 const MODEL_ADAPTER_TEST_UPDATED_EVENT = "model-adapter-test:updated";
-const HOME_METRICS_MIN_LOADING_MS = 600;
 export const DEBUG_LOG_WARNING_BYTES = 100 * 1024 * 1024;
 
 
@@ -172,11 +171,6 @@ function canUseLocalStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
 
-function delay(ms) {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, Math.max(0, ms));
-  });
-}
 
 function createEmptyHomeMetrics() {
   return {
@@ -618,32 +612,42 @@ export const appState = reactive({
   updatePromptBusy: false,
 });
 
+// 持久化快照拆成两层 computed：normalizeConfig 这类深遍历只在「配置」字段真正变化时重跑，
+// 运行状态字段（每 5–10s 被轮询刷新）命中缓存，不再反复触发全量序列化。
+const cachedConfigPayloadComputed = computed(() => buildCachedConfigPayload());
+const cachedStatusPayloadComputed = computed(() => ({
+  serviceRunning: appState.serviceRunning,
+  backendRunning: appState.backendRunning,
+  proxyRunning: appState.proxyRunning,
+  serviceListenAddr: appState.serviceListenAddr,
+  configBackendListenAddr: appState.configBackendListenAddr,
+  configProxyListenAddr: appState.configProxyListenAddr,
+  backendListenAddr: appState.backendListenAddr,
+  proxyListenAddr: appState.proxyListenAddr,
+  cursorSettingsApplied: appState.cursorSettingsApplied,
+  netProxySource: appState.netProxySource,
+  netProxyActive: appState.netProxyActive,
+  netProxyUsingSystem: appState.netProxyUsingSystem,
+  netProxyUsingEnv: appState.netProxyUsingEnv,
+  netProxyPacIgnored: appState.netProxyPacIgnored,
+}));
+
+let lastPersistedStateRaw = "";
 watchSyncEffect((onCleanup) => {
   if (!canUseLocalStorage()) {
     return;
   }
+  const configPart = cachedConfigPayloadComputed.value;
+  const statusPart = cachedStatusPayloadComputed.value;
   const timer = setTimeout(() => {
     try {
-      window.localStorage.setItem(
-        APP_STATE_STORAGE_KEY,
-        JSON.stringify({
-          ...buildCachedConfigPayload(),
-          serviceRunning: appState.serviceRunning,
-          backendRunning: appState.backendRunning,
-          proxyRunning: appState.proxyRunning,
-          serviceListenAddr: appState.serviceListenAddr,
-          configBackendListenAddr: appState.configBackendListenAddr,
-          configProxyListenAddr: appState.configProxyListenAddr,
-          backendListenAddr: appState.backendListenAddr,
-          proxyListenAddr: appState.proxyListenAddr,
-          cursorSettingsApplied: appState.cursorSettingsApplied,
-          netProxySource: appState.netProxySource,
-          netProxyActive: appState.netProxyActive,
-          netProxyUsingSystem: appState.netProxyUsingSystem,
-          netProxyUsingEnv: appState.netProxyUsingEnv,
-          netProxyPacIgnored: appState.netProxyPacIgnored,
-        }),
-      );
+      const raw = JSON.stringify({ ...statusPart, ...configPart });
+      // 内容未变化时跳过同步 setItem（轮询期间两次快照往往完全一致）
+      if (raw === lastPersistedStateRaw) {
+        return;
+      }
+      window.localStorage.setItem(APP_STATE_STORAGE_KEY, raw);
+      lastPersistedStateRaw = raw;
     } catch (_error) {
       // ignore local persistence failures
     }
@@ -1432,6 +1436,13 @@ export async function syncServiceState() {
   return state;
 }
 
+// 轻量版状态同步：只拉代理运行状态（有 proxy:state 推送兜底），不含磁盘遍历的调试日志统计。
+export async function syncProxyState() {
+  const state = await getProxyState();
+  applyProxyState(state);
+  return state;
+}
+
 // refreshDebugLogUsage 刷新调试日志占用统计。
 // 读取失败时保留上一次的有效值并单独记录错误，绝不把「读不到」当成「占用为 0」——
 // 后者会让首页的清理提醒凭空消失，用户以为磁盘已经干净了。
@@ -1446,7 +1457,6 @@ export async function refreshDebugLogUsage() {
 }
 
 export async function syncHomeMetrics() {
-  const startedAt = Date.now();
   appState.homeMetricsLoading = true;
   try {
     const summary = await getHomeMetricsSummary();
@@ -1462,10 +1472,6 @@ export async function syncHomeMetrics() {
       error: appState.homeMetricsError,
     };
   } finally {
-    const elapsed = Date.now() - startedAt;
-    if (elapsed < HOME_METRICS_MIN_LOADING_MS) {
-      await delay(HOME_METRICS_MIN_LOADING_MS - elapsed);
-    }
     appState.homeMetricsLoading = false;
   }
 }
@@ -1648,15 +1654,20 @@ export async function bootstrapAppState() {
     // gate so category components never race their own config fetch against this load.
     appState.configReady = true;
   }
-  await refreshModelAdapterTestResults().catch(() => {});
-  try {
-    appState.appVersion = await getAppVersion();
-  } catch (_error) {
-    appState.appVersion = "";
-  }
-  await syncServiceState().catch(() => {});
-  await syncHomeMetrics().catch(() => {});
-  
+  // 首屏数据就绪后，其余互不依赖的初始化并行执行，缩短启动时间
+  await Promise.all([
+    refreshModelAdapterTestResults().catch(() => {}),
+    getAppVersion()
+      .then((version) => {
+        appState.appVersion = version;
+      })
+      .catch(() => {
+        appState.appVersion = "";
+      }),
+    syncServiceState().catch(() => {}),
+    syncHomeMetrics().catch(() => {}),
+  ]);
+
   // 根据用户偏好自动打开悬浮窗
   const overlayPrefs = getStatsOverlayPreferences();
   await setMainWindowCloseAction(overlayPrefs.closeAction).catch(() => {});

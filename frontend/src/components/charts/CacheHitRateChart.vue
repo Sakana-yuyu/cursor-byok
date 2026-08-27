@@ -1,13 +1,9 @@
 <script setup>
-import {
-  ArcElement,
-  Chart as ChartJS,
-  Tooltip,
-} from "chart.js";
 import { computed } from "vue";
-import { Doughnut } from "vue-chartjs";
 
-ChartJS.register(ArcElement, Tooltip);
+// 纯 SVG 半圆环：原实现依赖 chart.js（仅此一处使用，却拖入整套引擎与依赖）。
+const RADIUS = 46;
+const HALF_CIRCUMFERENCE = Math.PI * RADIUS;
 
 const props = defineProps({
   rate: {
@@ -32,79 +28,9 @@ const label = computed(() => {
   return `${percentage.value.toFixed(2)}%`;
 });
 
-function getSegmentBorderRadius(dataIndex) {
-  const radius = 5;
-
-  if (percentage.value <= 0) {
-    return dataIndex === 1
-      ? {
-          outerStart: radius,
-          outerEnd: radius,
-          innerStart: radius,
-          innerEnd: radius,
-        }
-      : 0;
-  }
-
-  if (percentage.value >= 100) {
-    return dataIndex === 0
-      ? {
-          outerStart: radius,
-          outerEnd: radius,
-          innerStart: radius,
-          innerEnd: radius,
-        }
-      : 0;
-  }
-
-  return dataIndex === 0
-    ? {
-        outerStart: radius,
-        outerEnd: 0,
-        innerStart: radius,
-        innerEnd: 0,
-      }
-    : {
-        outerStart: 0,
-        outerEnd: radius,
-        innerStart: 0,
-        innerEnd: radius,
-      };
-}
-
-const chartData = computed(() => ({
-  labels: ["命中", "未命中"],
-  datasets: [
-    {
-      data: [percentage.value, Math.max(0, 100 - percentage.value)],
-      backgroundColor: ["#4ade80", "#373737"],
-      borderWidth: 0,
-      hoverBorderWidth: 0,
-      selfJoin: false,
-      borderRadius: ({ dataIndex }) => getSegmentBorderRadius(dataIndex),
-    },
-  ],
-}));
-
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  cutout: "82%",
-  rotation: -90,
-  circumference: 180,
-  animation: {
-    duration: 450,
-  },
-  events: [],
-  plugins: {
-    legend: {
-      display: false,
-    },
-    tooltip: {
-      enabled: false,
-    },
-  },
-};
+const hitDash = computed(
+  () => (percentage.value / 100) * HALF_CIRCUMFERENCE,
+);
 </script>
 
 <template>
@@ -114,7 +40,28 @@ const chartOptions = {
       role="img"
       :aria-label="`缓存命中率 ${label}`"
     >
-      <Doughnut class="h-full w-full" :data="chartData" :options="chartOptions" />
+      <svg
+        class="h-full w-full"
+        viewBox="0 0 100 64"
+        aria-hidden="true"
+      >
+        <path
+          d="M 4 58 A 46 46 0 0 1 96 58"
+          fill="none"
+          stroke="#373737"
+          stroke-width="9"
+          stroke-linecap="round"
+        />
+        <path
+          class="cache-hit-arc"
+          d="M 4 58 A 46 46 0 0 1 96 58"
+          fill="none"
+          stroke="#4ade80"
+          stroke-width="9"
+          stroke-linecap="round"
+          :stroke-dasharray="`${hitDash} ${HALF_CIRCUMFERENCE}`"
+        />
+      </svg>
       <div class="pointer-events-none absolute inset-x-0 bottom-[8px] flex justify-center">
         <div
           class="text-[16px] leading-none text-white"
@@ -126,3 +73,9 @@ const chartOptions = {
     </div>
   </div>
 </template>
+
+<style scoped>
+.cache-hit-arc {
+  transition: stroke-dasharray 0.45s ease;
+}
+</style>

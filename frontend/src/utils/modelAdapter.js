@@ -1,5 +1,5 @@
 // modelAdapter.js 承载模型适配器元数据与归一化纯函数，全部从 appState.js 逐字搬移（零行为变化）。
-import { asArray, asBoolean, asNumber, asPositiveInteger, asString } from "./valueCast";
+import { asArray, asBoolean, asNumber, asPositiveInteger, asString } from "./valueCast.js";
 import {
   ANTHROPIC_THINKING_EFFORT_DEFAULT,
   OPENAI_ENDPOINT_RESPONSES,
@@ -12,7 +12,7 @@ import {
   normalizeOpenAIRequestGroup,
   normalizeProtocolGroup,
   normalizeProtocolMode,
-} from "./protocolMeta";
+} from "./protocolMeta.js";
 import {
   BALANCE_QUERY_HEADERS_DEFAULT_JSON,
   balanceQueryHeadersToJSON,
@@ -24,8 +24,8 @@ import {
   validateHeadersJSON,
   validateJSONObject,
   validateOpenAIExtraParamsJSON,
-} from "./configValidators";
-import { contextWindowTokensForModel } from "./modelContext";
+} from "./configValidators.js";
+import { contextWindowTokensForModel } from "./modelContext.js";
 import { normalizeModelAdapterTestResult } from "./modelAdapterTestResult.js";
 
 export {
@@ -154,6 +154,7 @@ export function createEmptyModelAdapter() {
     protocolGroup: OPENAI_REQUEST_GROUP_RESPONSES,
     baseURL: "",
     apiKey: "",
+    apiKeys: [],
     tooltipData: "备注",
     modelID: "",
     reasoningEffort: "medium",
@@ -258,6 +259,14 @@ export function normalizeModelAdapter(source) {
     raw.balanceCodingPlanProvider ?? raw.balance_coding_plan_provider,
   ).trim().toLowerCase();
   const modelCatalogURL = asString(raw.modelCatalogURL ?? raw.model_catalog_url).trim();
+  // 备用密钥池：去空、去重、剔除与主密钥重复项，保持顺序
+  const primaryApiKey = asString(raw.apiKey || raw.key);
+  const apiKeysPool = [];
+  for (const value of asArray(raw.apiKeys ?? raw.api_keys)) {
+    const trimmed = asString(value).trim();
+    if (!trimmed || trimmed === primaryApiKey || apiKeysPool.includes(trimmed)) continue;
+    apiKeysPool.push(trimmed);
+  }
   if (isCursorAccount) {
     return {
       ...createEmptyModelAdapter(),
@@ -294,7 +303,8 @@ export function normalizeModelAdapter(source) {
     protocolMode,
     protocolGroup,
     baseURL: normalizeBaseURL(raw.baseURL || raw.url),
-    apiKey: asString(raw.apiKey || raw.key),
+    apiKey: primaryApiKey,
+    apiKeys: apiKeysPool,
     tooltipData: asString(raw.tooltipData),
     modelID: asString(raw.modelID),
     reasoningEffort: SUPPORTED_REASONING_EFFORTS.has(normalizedReasoningEffort)

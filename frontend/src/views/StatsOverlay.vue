@@ -455,12 +455,28 @@ onMounted(() => {
   const saved = getStatsOverlayPreferences();
   if (typeof saved.x === "number") lastSavedX = saved.x;
   if (typeof saved.y === "number") lastSavedY = saved.y;
-  startOrbCycle();
-  startPillCycle();
+  // 轮换定时器按需启动：球体样式才转 orbIndex；胶囊轮换只在收缩态有意义
+  if ((style.value || "card") === "orb") startOrbCycle();
+  if (isCollapsed.value) startPillCycle();
   // 初始同步一次原生窗口尺寸，确保窗口矩形紧贴实际内容
   syncNativeWindowSize();
 });
-usePolling(checkPosition, { intervalMs: POSITION_CHECK_MS });
+// 样式切换到/离开球体时启停轮换
+watch(style, (next) => {
+  if (next === "orb") startOrbCycle();
+  else stopOrbCycle();
+});
+// 进入/离开收缩态时启停胶囊轮换
+watch(isCollapsed, (collapsed) => {
+  if (collapsed) startPillCycle();
+  else stopPillCycle();
+});
+usePolling(() => {
+  // 窗口隐藏时跳过位置检查（screenX 等属性读取虽轻，但没必要在后台跑）
+  if (!document.hidden) {
+    checkPosition();
+  }
+}, { intervalMs: POSITION_CHECK_MS });
 
 onUnmounted(() => {
   if (updatedTimer) clearTimeout(updatedTimer);

@@ -68,8 +68,11 @@ type ModelAdapterConfig struct {
 	ProtocolGroup               string `json:"protocolGroup,omitempty" yaml:"protocolGroup,omitempty"`
 	BaseURL                     string `json:"baseURL" yaml:"baseURL"`
 	APIKey                      string `json:"apiKey" yaml:"apiKey"`
-	TooltipData                 string `json:"tooltipData" yaml:"tooltipData"`
-	ModelID                     string `json:"modelID" yaml:"modelID"`
+	// APIKeys 是同渠道的备用密钥池（不含主 apiKey）：请求时按渠道维度轮换使用，
+	// 每把密钥是独立的冷却单元——单把限流/失效只冷却该密钥，不拖垮整个模型。
+	APIKeys      []string `json:"apiKeys,omitempty" yaml:"apiKeys,omitempty"`
+	TooltipData  string   `json:"tooltipData" yaml:"tooltipData"`
+	ModelID      string   `json:"modelID" yaml:"modelID"`
 	ReasoningEffort             string `json:"reasoningEffort" yaml:"reasoningEffort"`
 	OpenAIEndpoint              string `json:"openAIEndpoint" yaml:"openAIEndpoint"`
 	OpenAIRequestGroup          string `json:"openAIRequestGroup,omitempty" yaml:"openAIRequestGroup,omitempty"`
@@ -559,6 +562,7 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 
 			BaseURL:                   baseURL,
 			APIKey:                    strings.TrimSpace(item.APIKey),
+			APIKeys:                   normalizeAPIKeyPool(item.APIKeys, strings.TrimSpace(item.APIKey)),
 			TooltipData:               strings.TrimSpace(item.TooltipData),
 			ModelID:                   strings.TrimSpace(item.ModelID),
 			ReasoningEffort:           normalizeReasoningEffort(item.ReasoningEffort),
@@ -699,6 +703,9 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			if existing.CompatibilityKind == "" {
 				existing.CompatibilityKind = next.CompatibilityKind
 			}
+			if len(existing.APIKeys) == 0 {
+				existing.APIKeys = next.APIKeys
+			}
 			normalized[existingIndex] = existing
 			continue
 		}
@@ -754,7 +761,37 @@ func modelAdapterConfigDedupeIdentity(adapter ModelAdapterConfig) string {
 		strings.TrimSpace(adapter.ToolCallMode),
 		strings.TrimSpace(adapter.CompatibilityKind),
 		strings.TrimSpace(adapter.CustomHeadersJSON),
+		// 密钥池参与去重：同一连接不同备用密钥组合是不同的渠道配置，
+		// 但不进 StableID，避免增删密钥导致既有渠道 ID 与测试记录漂移。
+		strings.Join(adapter.APIKeys, "\x1f"),
 	}, "\n")
+}
+
+// normalizeAPIKeyPool 规范化备用密钥池：去空白、去空串、去重（含与主 apiKey 重复项）。
+func normalizeAPIKeyPool(values []string, primaryKey string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	pool := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values)+1)
+	if primaryKey != "" {
+		seen[primaryKey] = struct{}{}
+	}
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		if _, exists := seen[trimmed]; exists {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		pool = append(pool, trimmed)
+	}
+	if len(pool) == 0 {
+		return nil
+	}
+	return pool
 }
 
 // normalizeToolCallMode 规范化工具调用协议模式：大小写不敏感；空值保持空

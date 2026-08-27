@@ -2,20 +2,23 @@
 import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
 import { useRouter } from "vue-router";
-import { appState, openModelEditorWindow, reloadUserConfig } from "@/state/appState";
+import { appState, reloadUserConfig } from "@/state/appState";
 import { providerLabel } from "@/utils/providerMeta";
 import {
   SUPPLIER_GROUP_MODE_NAME,
   groupModelAdaptersAsSuppliers,
   loadSupplierGroupMode,
 } from "@/utils/supplierGrouping";
-import { computed, onMounted } from "vue";
+import { computed, onMounted, ref } from "vue";
 
 const router = useRouter();
 
+// setup 时读一次（localStorage 非响应式源，放 computed 内会导致缓存失效时机错误）
+const groupMode = ref(loadSupplierGroupMode());
+
 // 与模型配置页一致的分组偏好（名称 / 连接）
 const groups = computed(() => {
-  const mode = loadSupplierGroupMode();
+  const mode = groupMode.value;
   return groupModelAdaptersAsSuppliers(appState.modelAdapters, mode).map((supplier) => {
     let host = supplier.baseURL || "未设置 URL";
     try { host = new URL(host).host || host; } catch { host = String(host).replace(/^https?:\/\//, ""); }
@@ -50,7 +53,7 @@ async function openGroup(group) {
 }
 
 async function edit(index) {
-  await openModelEditorWindow(index, appState.modelAdapters[index]);
+  await router.push({ path: "/model-editor", query: { index: String(index) } });
 }
 
 onMounted(() => { void reloadUserConfig({ modelAdaptersOnly: true }); });

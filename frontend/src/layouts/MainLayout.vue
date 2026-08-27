@@ -11,7 +11,8 @@ import {
   appState,
   checkForAppUpdates,
   getStatsOverlayPreferences,
-  syncServiceState,
+  refreshDebugLogUsage,
+  syncProxyState,
   updateViewState,
 } from "@/state/appState";
 import { closeApplication as closeApplicationNative } from "@/services/clientApi";
@@ -19,21 +20,14 @@ import { isWindows } from "@/utils/isWindows";
 import { isMacOS } from "@/utils/isMacOS";
 import { safeErrorLogAttributes } from "@/utils/errorContract";
 import { computed, onMounted, ref } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute } from "vue-router";
 import { usePolling } from "@/composables/usePolling";
 import Logo from "@/assets/logo.png";
+import AppSidebar from "@/components/layout/AppSidebar.vue";
 
 const route = useRoute();
-const router = useRouter();
 const message = useMessage();
 const showIcon = computed(() => route.meta.showIcon !== false);
-const title = computed(() => route.meta.title ?? "Cursor助手｜永久免费｜自定义API");
-const titleParts = computed(() =>
-  String(title.value)
-    .split(/[｜|]/)
-    .map((part) => part.trim())
-    .filter(Boolean),
-);
 const directlyClose = computed(() => route.meta.directlyClose === true);
 const mainCloseAction = computed(() => appState.statsOverlayPreferences.closeAction === "quit" ? "quit" : "tray");
 const showFooter = computed(() => route.path === "/");
@@ -83,6 +77,14 @@ const proxyBadgeTitle = computed(() => {
 
 const isMaximised = ref(false);
 
+const SIDEBAR_COLLAPSED_KEY = "cursor-byok.sidebarCollapsed";
+const sidebarCollapsed = ref(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1");
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value;
+  localStorage.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed.value ? "1" : "0");
+}
+const sidebarWidthClass = computed(() => (sidebarCollapsed.value ? "left-[48px]" : "left-[180px]"));
+
 async function syncMaximiseState() {
   try {
     isMaximised.value = Boolean(await runtimeWindow.IsMaximised());
@@ -110,21 +112,6 @@ async function closeWindow() {
     return;
   }
   await runtimeWindow.Hide();
-}
-
-function openSettingsWorkspace() {
-  if (route.path === "/settings") {
-    return;
-  }
-
-  void router.push("/settings");
-}
-
-function openControlCenter() {
-  if (route.path === "/control-center") {
-    return;
-  }
-  void router.push({ path: "/control-center", query: { tab: "accounts" } });
 }
 
 async function handleCheckForUpdates() {
@@ -200,220 +187,236 @@ onMounted(() => {
   void loadFooterAuthorInfo();
   void syncMaximiseState();
 });
+// 首页轮询：代理状态 10s（另有 proxy:state 推送兜底）；磁盘占用统计变化慢，60s 才刷一次
 usePolling(
   () => {
     if (showFooter.value) {
-      return syncServiceState().catch(() => {});
+      return syncProxyState().catch(() => {});
     }
     return undefined;
   },
   { intervalMs: proxyStatePollIntervalMs },
 );
+usePolling(
+  () => {
+    if (showFooter.value) {
+      return refreshDebugLogUsage().catch(() => {});
+    }
+    return undefined;
+  },
+  { intervalMs: 60000 },
+);
 </script>
 
 <template>
-  <div class="flex h-screen w-screen overflow-hidden flex-col">
+  <div class="flex h-screen w-screen overflow-hidden">
     <div
-      class="fixed top-0 w-screen h-[40px] z-9999 w-full"
+      class="fixed top-0 h-[40px] z-9999"
+      :class="sidebarWidthClass"
       style="--wails-draggable: drag"
-    ></div>
+    />
 
-    <header
-      class="relative flex h-[40px] min-h-0 w-full shrink-0 items-center justify-between px-[20px]"
-      style="--wails-draggable: drag"
-      :class="{ '!justify-center': !isWindows, 'px-[76px] pr-[52px]': isMacOS }"
-    >
-      <div
-        class="center-row min-w-0 gap-2"
-        :class="isMacOS ? 'pr-0' : 'pr-[124px]'"
-        style="font-family: var(--font-num);"
-      >
-        <img v-if="showIcon" :src="Logo" class="h-[16px] w-[16px] shrink-0 opacity-90" />
-        <div class="center-row min-w-0 gap-[7px]">
-          <template v-for="(part, index) in titleParts" :key="index">
-            <span
-              aria-hidden="true"
-              v-if="index > 0"
-              class="h-[10px] w-px shrink-0 bg-[#333]"
-            ></span>
-            <span
-              class="truncate text-[12px] leading-none"
-              :class="index === 0 ? 'font-medium text-[#b0b0b0]' : 'text-[#6f6f6f]'"
-            >{{ part }}</span>
-          </template>
-        </div>
-      </div>
-      <div
-        v-if="isMacOS"
-        class="absolute right-[14px] top-[6px] z-99999 flex items-center gap-1"
-        style="--wails-draggable: no-drag"
-      >
-        <button
-          type="button"
-          aria-label="打开控制中心"
-          title="控制中心"
-          class="flex h-[28px] w-[28px] items-center justify-center rounded-[7px] text-[#9a9a9a] transition-colors duration-150 hover:bg-[#3a3a3a] hover:text-[#f0f0f0]"
-          :class="route.path === '/control-center' ? 'cursor-default opacity-60' : 'cursor-pointer'"
-          @click="openControlCenter"
-        >
-          <span class="icon-[mdi--view-dashboard-outline] text-[17px]" aria-hidden="true"></span>
-        </button>
-        <button
-          type="button"
-          aria-label="打开设置"
-          title="设置"
-          class="flex h-[28px] w-[28px] items-center justify-center rounded-[7px] text-[#9a9a9a] transition-colors duration-150 hover:bg-[#3a3a3a] hover:text-[#f0f0f0]"
-          :class="route.path === '/settings' ? 'cursor-default opacity-60' : 'cursor-pointer'"
-          @click="openSettingsWorkspace"
-        >
-          <span class="icon-[mdi--cog-outline] text-[17px]" aria-hidden="true"></span>
-        </button>
-      </div>
-      <div
-        v-if="isWindows || (isBrowserPreview && !isMacOS)"
-        class="absolute right-[10px] top-[7px] z-99999 flex items-center gap-[1px] rounded-full border border-[#333] bg-[#242424]/90 px-[3px] py-[3px] shadow-[0_1px_4px_rgba(0,0,0,0.35)] backdrop-blur-sm"
-        style="--wails-draggable: no-drag"
-      >
-        <button
-          type="button"
-          aria-label="打开控制中心"
-          title="控制中心"
-          class="flex h-[20px] w-[26px] items-center justify-center rounded-full text-[#9a9a9a] transition-colors duration-150 hover:bg-[#3a3a3a] hover:text-[#f0f0f0]"
-          :class="route.path === '/control-center' ? 'cursor-default opacity-60' : 'cursor-pointer'"
-          @click="openControlCenter"
-        >
-          <span class="icon-[mdi--view-dashboard-outline] text-[15px]" aria-hidden="true"></span>
-        </button>
-        <button
-          type="button"
-          aria-label="打开设置"
-          title="设置"
-          class="flex h-[20px] w-[26px] items-center justify-center rounded-full text-[#9a9a9a] transition-colors duration-150 hover:bg-[#3a3a3a] hover:text-[#f0f0f0]"
-          :class="route.path === '/settings' ? 'cursor-default opacity-60' : 'cursor-pointer'"
-          @click="openSettingsWorkspace"
-        >
-          <span class="icon-[mdi--cog-outline] text-[15px]" aria-hidden="true"></span>
-        </button>
-        <button
-          type="button"
-          aria-label="最小化窗口"
-          title="最小化"
-          class="flex h-[20px] w-[26px] cursor-pointer items-center justify-center rounded-full text-[#9a9a9a] transition-colors duration-150 hover:bg-[#3a3a3a] hover:text-[#f0f0f0]"
-          @click="minimizeWindow"
-        >
-          <svg class="h-[14px] w-[14px]" viewBox="0 0 16 16" aria-hidden="true" fill="none">
-            <path d="M3.5 8H12.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          aria-label="最大化窗口"
-          :title="isMaximised ? '还原' : '最大化'"
-          class="flex h-[20px] w-[26px] cursor-pointer items-center justify-center rounded-full text-[#9a9a9a] transition-colors duration-150 hover:bg-[#3a3a3a] hover:text-[#f0f0f0]"
-          @click="toggleMaximiseWindow"
-        >
-          <svg v-if="!isMaximised" class="h-[13px] w-[13px]" viewBox="0 0 16 16" aria-hidden="true" fill="none">
-            <rect x="3.5" y="3.5" width="9" height="9" rx="1.6" stroke="currentColor" stroke-width="1.4" />
-          </svg>
-          <svg v-else class="h-[13px] w-[13px]" viewBox="0 0 16 16" aria-hidden="true" fill="none">
-            <rect x="5" y="5" width="7.5" height="7.5" rx="1.4" stroke="currentColor" stroke-width="1.4" />
-            <path d="M4 10.5V4.5C4 3.95 4.45 3.5 5 3.5H11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          aria-label="关闭窗口"
-          :title="directlyClose || mainCloseAction === 'quit' ? '关闭' : '隐藏到托盘'"
-          class="flex h-[20px] w-[26px] cursor-pointer items-center justify-center rounded-full text-[#9a9a9a] transition-colors duration-150 hover:bg-[#b23b3b] hover:text-white"
-          @click="closeWindow"
-        >
-          <svg class="h-[14px] w-[14px]" viewBox="0 0 16 16" aria-hidden="true" fill="none">
-            <path d="M4 4L12 12M12 4L4 12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-          </svg>
-        </button>
-      </div>
-    </header>
+    <AppSidebar
+      :collapsed="sidebarCollapsed"
+      @toggle="toggleSidebar"
+    />
 
-    <main class="flex-1 min-h-0 overflow-hidden flex flex-col w-full">
-      <router-view />
-    </main>
-
-    <footer
-      v-if="showFooter"
-      class="flex !pr-1 h-[30px] shrink-0 items-center gap-[8px] border-t border-[#242424] px-[14px] text-[12px] text-[#8f8f8f]"
-    >
-      <div
-        v-if="proxyBadgeText"
-        class="center-row  border-none gap-[2px]  border-none  px-[0px] py-[3px] leading-none "
-        aria-live="polite"
+    <div class="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
+      <header
+        class="relative flex h-[40px] min-h-0 w-full shrink-0 items-center justify-between px-[20px]"
+        style="--wails-draggable: drag"
+        :class="{ '!justify-center': !isWindows, 'px-[76px] pr-[52px]': isMacOS }"
       >
-        <span class="icon-[mdi--wifi] text-[15px]"></span>
-        <span class="truncate">{{ proxyBadgeText }}</span>
-      </div>
-      <button
-        v-if="!updateViewState.footerDownloading"
-        type="button"
-        class="center-row shrink-0 gap-[6px] cursor-pointer rounded-[6px] px-[6px] py-[3px] transition-colors duration-150 hover:bg-[#1f1f1f] hover:text-[#e5e5e5]"
-        :disabled="updateViewState.footerBusy"
-        @click="handleCheckForUpdates"
-      >
-        <span>{{ updateViewState.footerVersionLabel }}</span>
-        <span>检查更新</span>
-      </button>
-      <button
-        type="button"
-        class="center-row shrink-0 gap-[2px]  cursor-pointer rounded-[6px] px-[6px] py-[3px] transition-colors duration-150 hover:bg-[#1f1f1f] hover:text-[#e5e5e5]"
-        @click="handleOpenUsageDocs"
-      >
-        <span class="icon-[mdi--file-document-outline] text-[15px]"></span>
-        <span>使用教程</span>
-      </button>
-      <button
-        v-if="localizedAuthorInfo"
-        type="button"
-        class="center-row shrink-0 gap-[6px] cursor-pointer rounded-[6px] px-[6px] py-[3px] transition-colors duration-150 hover:bg-[#1f1f1f] hover:text-[#e5e5e5]"
-        @click="handleOpenAuthorHome"
-      >
-        <span class="icon-[ant-design--bilibili-outlined] text-[14px]"></span>
-        <span>{{ localizedAuthorInfo.buttonText }}</span>
-      </button>
-      <button
-        type="button"
-        title="GitHub"
-        class="center-row shrink-0 gap-[6px] cursor-pointer rounded-[6px] px-[6px] py-[3px] transition-colors duration-150 hover:bg-[#1f1f1f] hover:text-[#e5e5e5]"
-        @click="handleOpenGitHubRepo"
-      >
-        <span class="icon-[mdi--github] text-[15px]"></span>
-        <span>GitHub</span>
-      </button>
-      <div
-        v-if="updateViewState.footerDownloading"
-        class="flex min-w-0 flex-1 items-center gap-[10px]"
-      >
-        <span class="shrink-0">{{ updateViewState.footerVersionLabel }}</span>
-        <div class="center-row min-w-0 gap-[8px]">
-          <div
-            class="h-[6px] w-[120px] overflow-hidden rounded-full bg-[#1f1f1f]"
+        <div
+          class="center-row min-w-0 gap-2"
+          :class="isMacOS ? 'pr-0' : 'pr-[124px]'"
+          style="font-family: var(--font-num);"
+        >
+          <img
+            v-if="showIcon"
+            :src="Logo"
+            class="h-[16px] w-[16px] shrink-0 opacity-90"
           >
-            <div
-              class="h-full rounded-full bg-gradient-to-r from-[#10AD5D] to-[#29c776]"
-              :style="updateViewState.footerProgressStyle"
-            ></div>
-          </div>
-          <span class="shrink-0 text-[#d4d4d4]">{{
-            updateViewState.footerProgressText
-          }}</span>
         </div>
-      </div>
-      <div class="ml-auto flex shrink-0 items-center gap-[8px]">
-        <LocaleSelect
-          :border="false"
-          aria-label="界面语言"
-          wrapper-class="w-auto"
-          button-class="h-[24px] bg-transparent px-1.5 text-[12px] !text-[#8f8f8f] !hover:text-[#e5e5e5]"
-          menu-class="text-[12px]"
-        />
-      </div>
-    </footer>
+        <div
+          v-if="isWindows || (isBrowserPreview && !isMacOS)"
+          class="absolute right-[10px] top-[7px] z-99999 flex items-center gap-[1px] rounded-full border border-[#333] bg-[#242424]/90 px-[3px] py-[3px] shadow-[0_1px_4px_rgba(0,0,0,0.35)] backdrop-blur-sm"
+          style="--wails-draggable: no-drag"
+        >
+          <button
+            type="button"
+            aria-label="最小化窗口"
+            title="最小化"
+            class="flex h-[20px] w-[26px] cursor-pointer items-center justify-center rounded-full text-[#9a9a9a] transition-colors duration-150 hover:bg-[#3a3a3a] hover:text-[#f0f0f0]"
+            @click="minimizeWindow"
+          >
+            <svg
+              class="h-[14px] w-[14px]"
+              viewBox="0 0 16 16"
+              aria-hidden="true"
+              fill="none"
+            >
+              <path
+                d="M3.5 8H12.5"
+                stroke="currentColor"
+                stroke-width="1.4"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
+            aria-label="最大化窗口"
+            :title="isMaximised ? '还原' : '最大化'"
+            class="flex h-[20px] w-[26px] cursor-pointer items-center justify-center rounded-full text-[#9a9a9a] transition-colors duration-150 hover:bg-[#3a3a3a] hover:text-[#f0f0f0]"
+            @click="toggleMaximiseWindow"
+          >
+            <svg
+              v-if="!isMaximised"
+              class="h-[13px] w-[13px]"
+              viewBox="0 0 16 16"
+              aria-hidden="true"
+              fill="none"
+            >
+              <rect
+                x="3.5"
+                y="3.5"
+                width="9"
+                height="9"
+                rx="1.6"
+                stroke="currentColor"
+                stroke-width="1.4"
+              />
+            </svg>
+            <svg
+              v-else
+              class="h-[13px] w-[13px]"
+              viewBox="0 0 16 16"
+              aria-hidden="true"
+              fill="none"
+            >
+              <rect
+                x="5"
+                y="5"
+                width="7.5"
+                height="7.5"
+                rx="1.4"
+                stroke="currentColor"
+                stroke-width="1.4"
+              />
+              <path
+                d="M4 10.5V4.5C4 3.95 4.45 3.5 5 3.5H11"
+                stroke="currentColor"
+                stroke-width="1.4"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
+            aria-label="关闭窗口"
+            :title="directlyClose || mainCloseAction === 'quit' ? '关闭' : '隐藏到托盘'"
+            class="flex h-[20px] w-[26px] cursor-pointer items-center justify-center rounded-full text-[#9a9a9a] transition-colors duration-150 hover:bg-[#b23b3b] hover:text-white"
+            @click="closeWindow"
+          >
+            <svg
+              class="h-[14px] w-[14px]"
+              viewBox="0 0 16 16"
+              aria-hidden="true"
+              fill="none"
+            >
+              <path
+                d="M4 4L12 12M12 4L4 12"
+                stroke="currentColor"
+                stroke-width="1.4"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <main class="flex-1 min-h-0 overflow-hidden flex flex-col w-full">
+        <router-view />
+      </main>
+
+      <footer
+        v-if="showFooter"
+        class="flex !pr-1 h-[30px] shrink-0 items-center gap-[8px] border-t border-[#242424] px-[14px] text-[12px] text-[#8f8f8f]"
+      >
+        <div
+          v-if="proxyBadgeText"
+          class="center-row  border-none gap-[2px]  border-none  px-[0px] py-[3px] leading-none "
+          aria-live="polite"
+        >
+          <span class="icon-[mdi--wifi] text-[15px]" />
+          <span class="truncate">{{ proxyBadgeText }}</span>
+        </div>
+        <button
+          v-if="!updateViewState.footerDownloading"
+          type="button"
+          class="center-row shrink-0 gap-[6px] cursor-pointer rounded-[6px] px-[6px] py-[3px] transition-colors duration-150 hover:bg-[#1f1f1f] hover:text-[#e5e5e5]"
+          :disabled="updateViewState.footerBusy"
+          @click="handleCheckForUpdates"
+        >
+          <span>{{ updateViewState.footerVersionLabel }}</span>
+          <span>检查更新</span>
+        </button>
+        <button
+          type="button"
+          class="center-row shrink-0 gap-[2px]  cursor-pointer rounded-[6px] px-[6px] py-[3px] transition-colors duration-150 hover:bg-[#1f1f1f] hover:text-[#e5e5e5]"
+          @click="handleOpenUsageDocs"
+        >
+          <span class="icon-[mdi--file-document-outline] text-[15px]" />
+          <span>使用教程</span>
+        </button>
+        <button
+          v-if="localizedAuthorInfo"
+          type="button"
+          class="center-row shrink-0 gap-[6px] cursor-pointer rounded-[6px] px-[6px] py-[3px] transition-colors duration-150 hover:bg-[#1f1f1f] hover:text-[#e5e5e5]"
+          @click="handleOpenAuthorHome"
+        >
+          <span class="icon-[ant-design--bilibili-outlined] text-[14px]" />
+          <span>{{ localizedAuthorInfo.buttonText }}</span>
+        </button>
+        <button
+          type="button"
+          title="GitHub"
+          class="center-row shrink-0 gap-[6px] cursor-pointer rounded-[6px] px-[6px] py-[3px] transition-colors duration-150 hover:bg-[#1f1f1f] hover:text-[#e5e5e5]"
+          @click="handleOpenGitHubRepo"
+        >
+          <span class="icon-[mdi--github] text-[15px]" />
+          <span>GitHub</span>
+        </button>
+        <div
+          v-if="updateViewState.footerDownloading"
+          class="flex min-w-0 flex-1 items-center gap-[10px]"
+        >
+          <span class="shrink-0">{{ updateViewState.footerVersionLabel }}</span>
+          <div class="center-row min-w-0 gap-[8px]">
+            <div
+              class="h-[6px] w-[120px] overflow-hidden rounded-full bg-[#1f1f1f]"
+            >
+              <div
+                class="h-full rounded-full bg-gradient-to-r from-[#10AD5D] to-[#29c776]"
+                :style="updateViewState.footerProgressStyle"
+              />
+            </div>
+            <span class="shrink-0 text-[#d4d4d4]">{{
+              updateViewState.footerProgressText
+            }}</span>
+          </div>
+        </div>
+        <div class="ml-auto flex shrink-0 items-center gap-[8px]">
+          <LocaleSelect
+            :border="false"
+            aria-label="界面语言"
+            wrapper-class="w-auto"
+            button-class="h-[24px] bg-transparent px-1.5 text-[12px] !text-[#8f8f8f] !hover:text-[#e5e5e5]"
+            menu-class="text-[12px]"
+          />
+        </div>
+      </footer>
+    </div>
   </div>
 </template>

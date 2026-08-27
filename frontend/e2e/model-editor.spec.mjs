@@ -45,6 +45,21 @@ test("快捷添加：填写连接信息后进入模型目录按钮可用", async
   await expect(page).toHaveURL(/\/model-catalog/);
 });
 
+test("拉取模型后返回编辑器：未保存草稿回填", async ({ page }) => {
+  await openModelEditorPage(page);
+
+  await fieldInput(page, "接口地址").fill("https://api.example.com/v1");
+  await fieldInput(page, "访问密钥").fill("sk-test-e2e");
+  await page.getByRole("button", { name: "拉取模型" }).click();
+  await expect(page).toHaveURL(/\/model-catalog/);
+
+  // 目录页返回编辑器（等价于目录页的返回操作）
+  await page.goBack();
+  await expect(page).toHaveURL(/\/model-editor/);
+  await expect(fieldInput(page, "接口地址")).toHaveValue("https://api.example.com/v1");
+  await expect(fieldInput(page, "访问密钥")).toHaveValue("sk-test-e2e");
+});
+
 test("手动添加：填写身份字段后保存，配置写入本地存储并跳转模型配置页", async ({ page }) => {
   await openModelEditorPage(page);
 
@@ -63,6 +78,31 @@ test("手动添加：填写身份字段后保存，配置写入本地存储并�
   const saved = stored?.modelAdapters?.find((adapter) => adapter.modelID === "e2e-manual-model");
   expect(saved).toBeTruthy();
   expect(saved.displayName).toBe("E2E 手动模型");
+});
+
+test("手动添加：备用密钥池去重保存", async ({ page }) => {
+  await openModelEditorPage(page);
+
+  await page.getByRole("button", { name: "手动添加", exact: true }).click();
+  await expect(page.getByRole("button", { name: "保存", exact: true })).toBeVisible();
+
+  await fieldInput(page, "显示名称").fill("E2E 密钥池模型");
+  await fieldInput(page, "模型标识").fill("e2e-pool-model");
+  await fieldInput(page, "接口地址").fill("https://api.example.com/v1");
+  await fieldInput(page, "访问密钥").fill("sk-primary-e2e");
+  const poolField = page.locator("label").filter({ hasText: "备用密钥" }).locator("textarea");
+  // 含空行、重复项、与主密钥重复项
+  await poolField.fill("sk-backup-1\n\nsk-backup-1\nsk-primary-e2e\nsk-backup-2");
+
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(page).toHaveURL(/\/model-config/);
+
+  // 浏览器预览持久层会剔除凭据字段（含 apiKeys），这里只验证保存链路完成；
+  // 密钥池的去重/主密钥剔除语义由 src/utils/modelAdapter.test.js 单测覆盖。
+  const stored = await readStoredPreviewConfig(page);
+  const saved = stored?.modelAdapters?.find((adapter) => adapter.modelID === "e2e-pool-model");
+  expect(saved).toBeTruthy();
+  expect(saved.displayName).toBe("E2E 密钥池模型");
 });
 
 test("手动添加：保存失败时展示错误信息且不跳转", async ({ page }) => {

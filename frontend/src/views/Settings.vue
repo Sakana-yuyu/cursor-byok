@@ -6,10 +6,8 @@ import {
   SETTINGS_CATEGORIES,
   normalizeSettingsCategory,
   readStoredSettingsCategory,
-  readStoredSidebarCollapsed,
   resolveSettingsCategoryComponent,
   writeStoredSettingsCategory,
-  writeStoredSidebarCollapsed,
 } from "@/components/settings/settingsCategories";
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -26,17 +24,6 @@ function settingsCategoryFromRoute(value) {
 
 const initialCategory = settingsCategoryFromRoute(route.query.category);
 const selectedCategory = ref(initialCategory || readStoredSettingsCategory());
-const moreExpanded = ref(true);
-const sidebarCollapsed = ref(readStoredSidebarCollapsed());
-
-function syncMoreExpanded(categoryID) {
-  const category = SETTINGS_CATEGORIES.find((item) => item.id === normalizeSettingsCategory(categoryID));
-  if (category?.nav === "more") {
-    moreExpanded.value = true;
-  }
-}
-
-syncMoreExpanded(selectedCategory.value);
 
 watch(selectedCategory, (value) => {
   const normalized = normalizeSettingsCategory(value);
@@ -45,7 +32,6 @@ watch(selectedCategory, (value) => {
     return;
   }
   writeStoredSettingsCategory(normalized);
-  syncMoreExpanded(normalized);
 
   const routeCategory = settingsCategoryFromRoute(route.query.category);
   if (routeCategory !== normalized) {
@@ -54,10 +40,6 @@ watch(selectedCategory, (value) => {
       query: { ...route.query, category: normalized },
     });
   }
-});
-
-watch(sidebarCollapsed, (value) => {
-  writeStoredSidebarCollapsed(value);
 });
 
 watch(() => route.query.category, (value) => {
@@ -76,38 +58,33 @@ const activeCategoryComponent = computed(() =>
   resolveSettingsCategoryComponent(activeCategory.value.id),
 );
 
-function handleBack() {
-  void router.replace("/");
-}
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-col overflow-hidden bg-[#202020] text-[#e5e5e5]">
-    <div class="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,1fr)] gap-4 px-3 py-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-6 sm:px-6 sm:py-5 lg:gap-8 lg:px-8">
-      <SettingsSidebar
-        v-model="selectedCategory"
-        v-model:more-expanded="moreExpanded"
-        v-model:collapsed="sidebarCollapsed"
-        :categories="SETTINGS_CATEGORIES"
-        class="min-w-0 self-start sm:sticky sm:top-0"
-      />
+  <div class="flex h-full min-h-0 flex-col overflow-hidden text-[#e5e5e5]">
+    <!-- 顶部横排分类 chips（无页内纵向侧栏，避免与全局侧边栏叠层） -->
+    <SettingsSidebar
+      v-model="selectedCategory"
+      :categories="SETTINGS_CATEGORIES"
+      class="shrink-0"
+    />
 
-      <main class="flex min-h-0 min-w-0 flex-1 flex-col">
+    <main class="min-h-0 flex-1 overflow-hidden">
+      <div class="mx-auto h-full w-full max-w-[1400px] px-4 py-4 sm:px-6">
         <div class="w-full min-w-0">
           <SettingsPageHeader
             :title="activeCategory.label"
             :description="activeCategory.description"
             :status="autosaveStatus"
-            @back="handleBack"
           />
         </div>
 
         <div
-          class="min-h-0 min-w-0 flex-1 overflow-x-hidden overscroll-contain pr-1 sm:pr-2"
-          :class="activeCategory.id === 'history' ? 'overflow-y-hidden' : 'overflow-y-auto'"
+          class="min-h-0 min-w-0 overflow-x-hidden overscroll-contain pr-1 sm:pr-2"
+          :class="activeCategory.id === 'history' ? 'h-[calc(100%-4.5rem)] overflow-y-hidden' : 'h-[calc(100%-4.5rem)] overflow-y-auto'"
         >
           <div
-            class="flex w-full min-w-0 flex-col gap-6 pt-6 2xl:max-w-[1280px]"
+            class="flex w-full min-w-0 flex-col gap-6 pt-5"
             :class="activeCategory.id === 'history' ? 'h-full min-h-0 pb-0' : 'pb-8'"
           >
             <Transition name="settings-category" mode="out-in">
@@ -125,8 +102,8 @@ function handleBack() {
             </Transition>
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </main>
   </div>
 </template>
 
