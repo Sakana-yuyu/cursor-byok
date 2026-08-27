@@ -84,6 +84,10 @@ func (manager *Manager) SelectChannelsForModel(_ context.Context, modelID string
 	}
 	filteredMatches := make([]int, 0, len(matches))
 	for _, index := range matches {
+		// 已停用渠道不参与路由（测试失败自动停用的模型不再被选中）
+		if adapters[index].Disabled {
+			continue
+		}
 		if adapters[index].Source == selectedSource {
 			filteredMatches = append(filteredMatches, index)
 		}

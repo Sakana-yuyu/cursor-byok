@@ -57,9 +57,10 @@ const customStart = ref("");
 const customEnd = ref("");
 const rangeNow = ref(Date.now());
 
-const chipBaseClass = "rounded-[6px] px-2.5 py-1 text-xs transition-colors border";
-const chipActiveClass = "border-[#10AD5D] bg-[#10AD5D] text-white";
-const chipIdleClass = "border-[#3f3f3f] bg-[#232323] text-[#a0a0a0] hover:border-[#4a4a4a] hover:text-white";
+// 与控制中心 tab 一致的胶囊选中态（active-bg/active-text），避免高饱和实心绿突兀
+const chipBaseClass = "rounded-full px-3 py-1 text-xs transition-colors";
+const chipActiveClass = "bg-[var(--active-bg)] text-[var(--active-text)]";
+const chipIdleClass = "text-[#9a9a9a] hover:bg-[var(--bg-hover)] hover:text-[#e5e5e5]";
 
 const rangeStart = computed(() => {
   const now = new Date(rangeNow.value);
@@ -541,7 +542,7 @@ usePolling(() => {
 
       <!-- 4 个指标卡片 -->
       <div
-        class="mt-[-4px] grid grid-cols-4 gap-0 rounded-[8px] border border-[#343434] bg-[#242424] min-h-[110px]"
+        class="mt-[-4px] grid grid-cols-4 gap-0 rounded-[8px] border border-[#343434] bg-[var(--bg-card,#232323)] min-h-[110px]"
       >
         <!-- 缓存命中率 -->
         <div class="min-w-0 px-3 py-2.5 flex flex-col justify-between">

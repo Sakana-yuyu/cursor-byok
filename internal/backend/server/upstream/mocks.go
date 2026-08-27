@@ -980,6 +980,10 @@ func applyAvailableModelAutoContextMetadata(entry map[string]any, contextTokens 
 func buildCLIModelDetails(adapters []legacyruntime.ModelAdapterConfig) []map[string]any {
 	models := make([]map[string]any, 0, len(adapters))
 	for _, adapter := range adapters {
+		// 已停用渠道不暴露给客户端（测试失败自动停用的模型不出现在 Cursor 模型列表）
+		if adapter.Disabled {
+			continue
+		}
 		channelID := strings.TrimSpace(adapter.ID)
 		if channelID == "" {
 			continue

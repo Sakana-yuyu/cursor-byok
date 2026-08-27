@@ -46,7 +46,7 @@ defineProps({
   },
 });
 
-const emit = defineEmits(["toggle-select", "test", "edit", "duplicate", "delete"]);
+const emit = defineEmits(["toggle-select", "test", "edit", "duplicate", "delete", "enable"]);
 const isCursorAccountModel = (adapter) => adapter?.source === SUPPLIER_MODEL_SOURCE_CURSOR_ACCOUNT;
 </script>
 
@@ -74,6 +74,11 @@ const isCursorAccountModel = (adapter) => adapter?.source === SUPPLIER_MODEL_SOU
                 v-else-if="health === 'fail'"
                 class="shrink-0 rounded-full bg-[#f87171]/15 px-1.5 py-0.5 text-[10px] text-[#fca5a5]"
               >失败</span>
+              <span
+                v-if="adapter.disabled"
+                title="该模型不会进入 Cursor 模型列表"
+                class="shrink-0 rounded-full bg-[#f59e0b]/15 px-1.5 py-0.5 text-[10px] text-[#fcd34d]"
+              >已停用</span>
             </div>
             <div class="mt-1 truncate text-sm text-[#8f8f8f]">{{ adapter.modelID }}</div>
             <div v-if="adapter.type === 'openai'" class="mt-1 flex flex-wrap gap-1.5 text-xs text-[#737373]">
@@ -108,6 +113,12 @@ const isCursorAccountModel = (adapter) => adapter?.source === SUPPLIER_MODEL_SOU
         <Button variant="default" :disabled="saving || testing || isCursorAccountModel(adapter)" @click="emit('test')">
           {{ isCursorAccountModel(adapter) ? "账户通道待验证" : (testing ? "测试中..." : "测试") }}
         </Button>
+        <Button
+          v-if="adapter.disabled"
+          variant="default"
+          :disabled="saving"
+          @click="emit('enable')"
+        >启用</Button>
         <Button variant="default" :disabled="saving" @click="emit('edit')">编辑</Button>
         <Button variant="default" :disabled="saving" @click="emit('duplicate')">复制</Button>
         <Button variant="text" :disabled="saving" @click="emit('delete')">删除</Button>

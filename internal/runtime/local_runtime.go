@@ -126,6 +126,8 @@ type ModelAdapterConfig struct {
 	FastMode bool `json:"fastMode,omitempty"`
 	// OpenAIServiceTier 表示显式 OpenAI service tier。
 	OpenAIServiceTier string `json:"openAIServiceTier,omitempty"`
+	// Disabled 表示渠道已停用：不出现在客户端模型列表，也不参与请求路由。
+	Disabled bool `json:"disabled,omitempty"`
 }
 
 // RuntimeConfigSnapshot 定义了当前模块中的 RuntimeConfigSnapshot 类型。

@@ -305,6 +305,8 @@ export function normalizeModelAdapter(source) {
     baseURL: normalizeBaseURL(raw.baseURL || raw.url),
     apiKey: primaryApiKey,
     apiKeys: apiKeysPool,
+    // 停用状态：测试失败自动置位、成功自动清除；停用的模型不进入 Cursor 模型列表
+    disabled: asBoolean(raw.disabled),
     tooltipData: asString(raw.tooltipData),
     modelID: asString(raw.modelID),
     reasoningEffort: SUPPORTED_REASONING_EFFORTS.has(normalizedReasoningEffort)

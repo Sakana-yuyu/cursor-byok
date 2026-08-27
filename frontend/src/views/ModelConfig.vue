@@ -11,6 +11,7 @@ import {
   deleteModelAdaptersBySupplier,
   getModelAdapterTestResultByID,
   reloadUserConfig,
+  setAutoDisableFailedModels,
   toUserError,
 } from "@/state/appState";
 import { providerIcon, providerLabel } from "@/utils/providerMeta";
@@ -383,6 +384,18 @@ onBeforeUnmount(() => {
             <span class="icon-[mdi--plus] shrink-0 text-[16px]"></span>
           </button>
         </div>
+        <label class="flex items-start gap-2 rounded-[8px] border border-[#343434] bg-[#232323] px-2 py-1.5 text-[11px]">
+          <input
+            type="checkbox"
+            class="mt-0.5 size-3.5 accent-[#10AD5D]"
+            :checked="appState.autoDisableFailedModels"
+            @change="setAutoDisableFailedModels($event.target.checked)"
+          />
+          <span class="min-w-0 text-[#a3a3a3]">
+            <span class="block text-[#d4d4d4]">测试失败自动停用</span>
+            <span class="block leading-4">失败模型不会进入 Cursor 列表</span>
+          </span>
+        </label>
         <div class="relative">
           <span class="icon-[mdi--magnify] pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[16px] text-[#737373]"></span>
           <input

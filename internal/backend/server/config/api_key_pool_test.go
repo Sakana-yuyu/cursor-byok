@@ -90,3 +90,52 @@ func TestExpandAdapterKeyPoolsClonesDoNotShareSlices(t *testing.T) {
 		t.Fatalf("single-key clone lost its pool metadata")
 	}
 }
+
+// 已停用（disabled）渠道：不参与模型路由，即使它是该模型的唯一渠道。
+func TestSelectChannelsForModelSkipsDisabledAdapters(t *testing.T) {
+	manager, err := NewManager(context.Background(), NewStore(filepath.Join(t.TempDir(), "config.yaml"), ""))
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+	cfg := manager.Current()
+	cfg.ModelAdapters = []ModelAdapterConfig{
+		{
+			ID:           "active-channel",
+			DisplayName:  "Active",
+			Type:         "openai",
+			ProtocolMode: "auto",
+			TooltipData:  "disabled test",
+			BaseURL:      "https://a.example.com/v1",
+			APIKey:       "sk-a",
+			ModelID:      "shared-model",
+		},
+		{
+			ID:           "disabled-channel",
+			DisplayName:  "Disabled",
+			Type:         "anthropic",
+			ProtocolMode: "auto",
+			TooltipData:  "disabled test",
+			BaseURL:      "https://b.example.com/v1",
+			APIKey:       "sk-b",
+			ModelID:      "shared-model",
+			Disabled:     true,
+		},
+	}
+	if _, err := manager.Save(context.Background(), cfg); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	if !manager.Current().ModelAdapters[1].Disabled {
+		t.Fatalf("normalize dropped the Disabled flag")
+	}
+	for i := 0; i < 4; i++ {
+		channels, err := manager.SelectChannelsForModel(context.Background(), "shared-model")
+		if err != nil {
+			t.Fatalf("select %d error = %v", i, err)
+		}
+		for _, channel := range channels {
+			if channel.ID == "disabled-channel" {
+				t.Fatalf("select %d returned disabled channel", i)
+			}
+		}
+	}
+}

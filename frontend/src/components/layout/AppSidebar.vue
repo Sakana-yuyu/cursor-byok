@@ -61,7 +61,7 @@ function selectItem(item) {
       >Cursor助手</span>
     </div>
 
-    <nav class="flex min-h-0 flex-1 flex-col gap-[2px] overflow-y-auto px-[6px] py-[8px]">
+    <nav class="flex min-h-0 flex-1 flex-col gap-[2px] overflow-y-auto overflow-x-hidden px-[6px] py-[8px]">
       <button
         v-for="item in navItems"
         :key="item.path"

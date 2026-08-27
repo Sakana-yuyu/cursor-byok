@@ -22,12 +22,10 @@ import { safeErrorLogAttributes } from "@/utils/errorContract";
 import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { usePolling } from "@/composables/usePolling";
-import Logo from "@/assets/logo.png";
 import AppSidebar from "@/components/layout/AppSidebar.vue";
 
 const route = useRoute();
 const message = useMessage();
-const showIcon = computed(() => route.meta.showIcon !== false);
 const directlyClose = computed(() => route.meta.directlyClose === true);
 const mainCloseAction = computed(() => appState.statsOverlayPreferences.closeAction === "quit" ? "quit" : "tray");
 const showFooter = computed(() => route.path === "/");
@@ -227,17 +225,6 @@ usePolling(
         style="--wails-draggable: drag"
         :class="{ '!justify-center': !isWindows, 'px-[76px] pr-[52px]': isMacOS }"
       >
-        <div
-          class="center-row min-w-0 gap-2"
-          :class="isMacOS ? 'pr-0' : 'pr-[124px]'"
-          style="font-family: var(--font-num);"
-        >
-          <img
-            v-if="showIcon"
-            :src="Logo"
-            class="h-[16px] w-[16px] shrink-0 opacity-90"
-          >
-        </div>
         <div
           v-if="isWindows || (isBrowserPreview && !isMacOS)"
           class="absolute right-[10px] top-[7px] z-99999 flex items-center gap-[1px] rounded-full border border-[#333] bg-[#242424]/90 px-[3px] py-[3px] shadow-[0_1px_4px_rgba(0,0,0,0.35)] backdrop-blur-sm"

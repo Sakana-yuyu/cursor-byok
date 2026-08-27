@@ -232,6 +232,7 @@ function buildConfigPayload(source = appState) {
     proxyListenAddr: normalized.proxyListenAddr,
     // balanceQueryHeadersJSON 仅前端编辑态使用，落盘只保留 map 形态的 balanceQueryHeaders。
     modelAdapters: normalized.modelAdapters.map(({ balanceQueryHeadersJSON, ...adapter }) => adapter),
+    autoDisableFailedModels: normalized.autoDisableFailedModels,
     routing: normalized.routing,
     homeMetrics: normalized.homeMetrics,
     billingQuery: normalized.billingQuery,
@@ -273,6 +274,7 @@ function applyConfigToState(config, { modelAdaptersOnly = false } = {}) {
     return normalized;
   }
   appState.modelAdapters = normalized.modelAdapters;
+  appState.autoDisableFailedModels = normalized.autoDisableFailedModels;
   appState.configBackendListenAddr = normalized.backendListenAddr;
   appState.configProxyListenAddr = normalized.proxyListenAddr;
   appState.routingMode = normalized.routing.mode;
@@ -540,6 +542,7 @@ const cachedConfig = normalizeConfig(cachedState);
 export const appState = reactive({
   appVersion: "",
   modelAdapters: cachedConfig.modelAdapters,
+  autoDisableFailedModels: cachedConfig.autoDisableFailedModels,
   modelAdapterTestResults: {},
   configBackendListenAddr: cachedConfig.backendListenAddr,
   configProxyListenAddr: cachedConfig.proxyListenAddr,
@@ -759,7 +762,7 @@ export async function refreshModelAdapterTestResults() {
 
 export function startModelAdapterTest(adapter) {
   const normalized = normalizeModelAdapter(adapter);
-  return testModelAdapter(normalized).then((rawResult) => {
+  return testModelAdapter(normalized).then(async (rawResult) => {
     const result = normalizeModelAdapterTestResult(rawResult);
     if (result.adapterID) {
       const existing = appState.modelAdapterTestResults[result.adapterID];
@@ -771,13 +774,57 @@ export function startModelAdapterTest(adapter) {
           [result.adapterID]: result,
         };
       }
+      // 测试结果联动启用状态：失败自动停用（不再进入 Cursor 模型列表），
+      // 成功自动恢复。批量测试并发时在持久化队列内读-改-写，避免互相覆盖。
+      if (result.status === "success" || (result.status === "error" && appState.autoDisableFailedModels)) {
+        await setModelAdapterDisabledFlag(result.adapterID, result.status === "error");
+      }
     }
     return result;
   });
 }
 
+// 把「测试失败 → 停用 / 成功 → 恢复」落到配置。目标状态已达成时跳过保存。
+// 排队进 configPersistTail 执行，保证读-改-写原子性。
+export function setModelAdapterDisabledFlag(adapterID, disabled) {
+  const pending = configPersistTail.catch(() => {}).then(async () => {
+    const currentConfig = await loadPersistedUserConfig();
+    let changed = false;
+    const adapters = (currentConfig.modelAdapters || []).map((item) => {
+      if (item.id !== adapterID) return item;
+      if (Boolean(item.disabled) === disabled) return item;
+      changed = true;
+      return normalizeModelAdapter({ ...item, disabled });
+    });
+    if (!changed) {
+      return { ok: true, error: "" };
+    }
+    appState.modelAdapters = adapters;
+    return persistConfigPayload({
+      ...currentConfig,
+      modelAdapters: adapters,
+    }, { modelAdaptersOnly: true });
+  });
+  configPersistTail = pending.catch(() => {});
+  return pending;
+}
+
 export async function runModelAdapterTest(adapter) {
   return startModelAdapterTest(adapter);
+}
+
+export async function setAutoDisableFailedModels(enabled) {
+  const currentConfig = await loadPersistedUserConfig();
+  const nextValue = Boolean(enabled);
+  if (currentConfig.autoDisableFailedModels === nextValue) {
+    appState.autoDisableFailedModels = nextValue;
+    return { ok: true, error: "" };
+  }
+  appState.autoDisableFailedModels = nextValue;
+  return persistConfigPayload({
+    ...currentConfig,
+    autoDisableFailedModels: nextValue,
+  });
 }
 
 export async function persistUserConfig() {

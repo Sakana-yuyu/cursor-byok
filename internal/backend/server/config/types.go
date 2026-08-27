@@ -63,25 +63,25 @@ type ModelAdapterConfig struct {
 	GroupName       string `json:"groupName,omitempty" yaml:"groupName,omitempty"`
 	Type            string `json:"type" yaml:"type"`
 	// SupplierID 是品牌供应商标识，仅用于模板、展示和供应商专用能力；协议仍由 Type 决定。
-	SupplierID                  string `json:"supplierID,omitempty" yaml:"supplierID,omitempty"`
-	ProtocolMode                string `json:"protocolMode,omitempty" yaml:"protocolMode,omitempty"`
-	ProtocolGroup               string `json:"protocolGroup,omitempty" yaml:"protocolGroup,omitempty"`
-	BaseURL                     string `json:"baseURL" yaml:"baseURL"`
-	APIKey                      string `json:"apiKey" yaml:"apiKey"`
+	SupplierID    string `json:"supplierID,omitempty" yaml:"supplierID,omitempty"`
+	ProtocolMode  string `json:"protocolMode,omitempty" yaml:"protocolMode,omitempty"`
+	ProtocolGroup string `json:"protocolGroup,omitempty" yaml:"protocolGroup,omitempty"`
+	BaseURL       string `json:"baseURL" yaml:"baseURL"`
+	APIKey        string `json:"apiKey" yaml:"apiKey"`
 	// APIKeys 是同渠道的备用密钥池（不含主 apiKey）：请求时按渠道维度轮换使用，
 	// 每把密钥是独立的冷却单元——单把限流/失效只冷却该密钥，不拖垮整个模型。
-	APIKeys      []string `json:"apiKeys,omitempty" yaml:"apiKeys,omitempty"`
-	TooltipData  string   `json:"tooltipData" yaml:"tooltipData"`
-	ModelID      string   `json:"modelID" yaml:"modelID"`
-	ReasoningEffort             string `json:"reasoningEffort" yaml:"reasoningEffort"`
-	OpenAIEndpoint              string `json:"openAIEndpoint" yaml:"openAIEndpoint"`
-	OpenAIRequestGroup          string `json:"openAIRequestGroup,omitempty" yaml:"openAIRequestGroup,omitempty"`
-	OpenAIExtraParamsEnabled    bool   `json:"openAIExtraParamsEnabled" yaml:"openAIExtraParamsEnabled"`
-	OpenAIExtraParamsJSON       string `json:"openAIExtraParamsJSON" yaml:"openAIExtraParamsJSON"`
-	CustomHeadersEnabled        bool   `json:"customHeadersEnabled" yaml:"customHeadersEnabled"`
-	CustomHeadersJSON           string `json:"customHeadersJSON" yaml:"customHeadersJSON"`
-	AnthropicExtraParamsEnabled bool   `json:"anthropicExtraParamsEnabled" yaml:"anthropicExtraParamsEnabled"`
-	AnthropicExtraParamsJSON    string `json:"anthropicExtraParamsJSON" yaml:"anthropicExtraParamsJSON"`
+	APIKeys                     []string `json:"apiKeys,omitempty" yaml:"apiKeys,omitempty"`
+	TooltipData                 string   `json:"tooltipData" yaml:"tooltipData"`
+	ModelID                     string   `json:"modelID" yaml:"modelID"`
+	ReasoningEffort             string   `json:"reasoningEffort" yaml:"reasoningEffort"`
+	OpenAIEndpoint              string   `json:"openAIEndpoint" yaml:"openAIEndpoint"`
+	OpenAIRequestGroup          string   `json:"openAIRequestGroup,omitempty" yaml:"openAIRequestGroup,omitempty"`
+	OpenAIExtraParamsEnabled    bool     `json:"openAIExtraParamsEnabled" yaml:"openAIExtraParamsEnabled"`
+	OpenAIExtraParamsJSON       string   `json:"openAIExtraParamsJSON" yaml:"openAIExtraParamsJSON"`
+	CustomHeadersEnabled        bool     `json:"customHeadersEnabled" yaml:"customHeadersEnabled"`
+	CustomHeadersJSON           string   `json:"customHeadersJSON" yaml:"customHeadersJSON"`
+	AnthropicExtraParamsEnabled bool     `json:"anthropicExtraParamsEnabled" yaml:"anthropicExtraParamsEnabled"`
+	AnthropicExtraParamsJSON    string   `json:"anthropicExtraParamsJSON" yaml:"anthropicExtraParamsJSON"`
 	// AnthropicAuthMode controls generated Messages authentication. Missing legacy
 	// values normalize to legacy_dual to preserve existing proxy compatibility.
 	AnthropicAuthMode       string        `json:"anthropicAuthMode,omitempty" yaml:"anthropicAuthMode,omitempty"`
@@ -121,6 +121,9 @@ type ModelAdapterConfig struct {
 	// 工具目录注入系统提示，模型以 <tool_call> 文本块发起调用）。仅 OpenAI
 	// chat completions 路径实现；空值等价 native。
 	ToolCallMode string `json:"toolCallMode,omitempty" yaml:"toolCallMode,omitempty"`
+	// Disabled 停用该渠道：不出现在 Cursor 的模型列表，也不参与请求路由。
+	// 由「测试失败自动停用 / 测试成功自动恢复」联动维护，也可在界面手动启停。
+	Disabled bool `json:"disabled,omitempty" yaml:"disabled,omitempty"`
 }
 
 type RoutingConfig struct {
@@ -586,6 +589,7 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			BalanceUserID:             strings.TrimSpace(item.BalanceUserID),
 			BalanceCodingPlanProvider: strings.ToLower(strings.TrimSpace(item.BalanceCodingPlanProvider)),
 			CompatibilityKind:         strings.ToLower(strings.TrimSpace(item.CompatibilityKind)),
+			Disabled:                  item.Disabled,
 		}
 		if next.Type == "openai" {
 			next.OpenAIExtraParamsEnabled = item.OpenAIExtraParamsEnabled

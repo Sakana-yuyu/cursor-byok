@@ -192,6 +192,9 @@ export function normalizeConfig(source) {
     backendListenAddr: asString(raw.configBackendListenAddr) || asString(raw.backendListenAddr),
     proxyListenAddr: asString(raw.configProxyListenAddr) || asString(raw.proxyListenAddr),
     modelAdapters: dedupeModelAdapters(raw.modelAdapters),
+    autoDisableFailedModels: raw.autoDisableFailedModels === undefined
+      ? false
+      : asBoolean(raw.autoDisableFailedModels),
     routing: {
       mode: normalizeRouteMode(routing.mode ?? raw.routingMode),
     },

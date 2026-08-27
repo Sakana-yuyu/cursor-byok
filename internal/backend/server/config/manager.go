@@ -572,6 +572,7 @@ func (manager *Manager) LegacyRuntimeSnapshot(_ context.Context) (legacyruntime.
 			Pricing:                     item.Pricing,
 			FastMode:                    item.FastMode,
 			OpenAIServiceTier:           item.OpenAIServiceTier,
+			Disabled:                    item.Disabled,
 		})
 	}
 	return legacyruntime.RuntimeConfigSnapshot{

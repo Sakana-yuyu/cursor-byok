@@ -15,6 +15,7 @@ import {
   reloadUserConfig,
   runModelAdapterTest,
   saveModelAdaptersBatch,
+  setModelAdapterDisabledFlag,
   startModelAdapterTest,
   resolveBalanceProfileForAdapter,
   syncBalanceConfigToSameURL,
@@ -582,6 +583,16 @@ async function duplicateAdapter(adapter) {
 
 function testResult(adapter) { return getModelAdapterTestResultByID(adapter?.id); }
 function isTesting(adapter) { return testResult(adapter)?.status === "running"; }
+async function enableAdapter(adapter) {
+  if (!adapter?.id) return;
+  try {
+    await setModelAdapterDisabledFlag(adapter.id, false);
+    await reloadUserConfig({ modelAdaptersOnly: true });
+  } catch (_error) {
+    /* card remains visible with the existing state */
+  }
+}
+
 async function testAdapter(adapter) {
   if (isCursorAccountSupplier.value) return;
   try {
@@ -1291,6 +1302,7 @@ async function saveBulkEdit(force = false) {
             @edit="openEditor(adapter)"
             @duplicate="duplicateAdapter(adapter)"
             @delete="deleteAdapter(adapter)"
+            @enable="enableAdapter(adapter)"
           />
         </div>
       </div>
