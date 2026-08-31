@@ -76,6 +76,21 @@ func TestBuildAvailableModelMetadataUsesDisplayNameAndFastCapability(t *testing.
 	}
 }
 
+func TestBuildAvailableModelMetadataMarksOnlyCursorAccountVendor(t *testing.T) {
+	entries := buildAvailableModelEntries([]legacyruntime.ModelAdapterConfig{
+		{ID: "cursor-model", Source: legacyruntime.ModelSourceCursorAccount, DisplayName: "Cursor Model", ModelID: "cursor-model"},
+		{ID: "third-party-model", Source: legacyruntime.ModelSourceThirdParty, DisplayName: "Third Party Model", ModelID: "third-party-model"},
+	})
+
+	cursorVendor, ok := entries[0]["vendor"].(map[string]any)
+	if !ok || cursorVendor["id"] != "MODEL_VENDOR_ID_CURSOR" || cursorVendor["displayName"] != "Cursor" {
+		t.Fatalf("cursor vendor: got %#v", entries[0]["vendor"])
+	}
+	if _, exists := entries[1]["vendor"]; exists {
+		t.Fatalf("third-party model must not be marked as Cursor vendor: %#v", entries[1]["vendor"])
+	}
+}
+
 func findModelParameterDefinition(entry map[string]any, id string) (map[string]any, bool) {
 	definitions, ok := entry["parameterDefinitions"].([]map[string]any)
 	if !ok {
@@ -187,7 +202,7 @@ func TestBuildBootstrapStatsigConfigJSONDisablesAlwaysLocalDecompositionGate(t *
 // Design Mode 的 composer pill 与 canvas 内联预览完全是客户端本地能力，
 // 唯一的阻塞点是这两个 feature gate。bootstrap payload 里没列出的 gate 会被
 // 客户端当作关闭处理，所以必须显式下发为 enabled。
-func TestBuildBootstrapStatsigConfigJSONUsesModelFirstPickerLayer(t *testing.T) {
+func TestBuildBootstrapStatsigConfigJSONUsesEffortFirstPickerLayer(t *testing.T) {
 	payload, err := buildBootstrapStatsigConfigJSON(12345, "test-auth-id")
 	if err != nil {
 		t.Fatalf("build bootstrap statsig config: %v", err)
@@ -205,15 +220,15 @@ func TestBuildBootstrapStatsigConfigJSONUsesModelFirstPickerLayer(t *testing.T) 
 	if !ok {
 		t.Fatalf("layer value: got %#v", layer["value"])
 	}
-	if got := value[bootstrapStatsigEffortFirstVariantParam]; got != bootstrapStatsigVariantControl {
-		t.Fatalf("effort-first variant: got %#v, want %q", got, bootstrapStatsigVariantControl)
+	if got := value[bootstrapStatsigEffortFirstVariantParam]; got != "treatment" {
+		t.Fatalf("effort-first variant: got %#v, want treatment", got)
 	}
 	if name, _ := layer["name"].(string); name != bootstrapStatsigModelPickerExperimentsLayer {
 		t.Fatalf("layer name: got %q, want %q", name, bootstrapStatsigModelPickerExperimentsLayer)
 	}
 }
 
-func TestBuildBootstrapStatsigConfigJSONEnablesEffortFirstSubmenuExperiment(t *testing.T) {
+func TestBuildBootstrapStatsigConfigJSONEnablesEffortFirstPickerExperiments(t *testing.T) {
 	payload, err := buildBootstrapStatsigConfigJSON(12345, "test-auth-id")
 	if err != nil {
 		t.Fatalf("build bootstrap statsig config: %v", err)
@@ -223,24 +238,25 @@ func TestBuildBootstrapStatsigConfigJSONEnablesEffortFirstSubmenuExperiment(t *t
 	if err := json.Unmarshal(payload, &decoded); err != nil {
 		t.Fatalf("decode bootstrap statsig config: %v", err)
 	}
-	config, ok := decoded.DynamicConfigs["effort_first_submenu_2026_08"]
-	if !ok {
-		t.Fatal("missing effort-first submenu experiment")
-	}
-	if enabled, _ := config.Value["enabled"].(bool); !enabled {
-		t.Fatalf("submenu experiment enabled: got %#v", config.Value["enabled"])
-	}
-	if !config.IsExperimentActive || !config.IsUserInExperiment {
-		t.Fatalf("submenu experiment assignment: %#v", config)
+	for _, name := range []string{
+		"effort_first_submenu_2026_08",
+		"effort_first_grouped_models_2026_08",
+	} {
+		config, ok := decoded.DynamicConfigs[name]
+		if !ok {
+			t.Fatalf("missing effort-first picker experiment %q", name)
+		}
+		if enabled, _ := config.Value["enabled"].(bool); !enabled {
+			t.Fatalf("picker experiment %q enabled: got %#v", name, config.Value["enabled"])
+		}
+		if !config.IsExperimentActive || !config.IsUserInExperiment {
+			t.Fatalf("picker experiment %q assignment: %#v", name, config)
+		}
 	}
 }
 
-func TestBuildBootstrapStatsigConfigJSONUsesConfiguredCompactModelIDs(t *testing.T) {
-	payload, err := buildBootstrapStatsigConfigJSONForModelIDs(
-		12345,
-		"test-auth-id",
-		[]string{" channel-a ", "", "channel-b"},
-	)
+func TestBuildBootstrapStatsigConfigJSONKeepsCompactModelIDsEmpty(t *testing.T) {
+	payload, err := buildBootstrapStatsigConfigJSON(12345, "test-auth-id")
 	if err != nil {
 		t.Fatalf("build bootstrap statsig config: %v", err)
 	}
@@ -252,8 +268,8 @@ func TestBuildBootstrapStatsigConfigJSONUsesConfiguredCompactModelIDs(t *testing
 	layer := decoded.LayerConfigs[bootstrapStatsigModelPickerExperimentsLayer]
 	value := layer["value"].(map[string]any)
 	ids := value[bootstrapStatsigEffortFirstCompactModelIDsParam].([]any)
-	if !reflect.DeepEqual(ids, []any{"channel-a", "channel-b"}) {
-		t.Fatalf("compact model IDs: got %#v", ids)
+	if len(ids) != 0 {
+		t.Fatalf("compact model IDs: got %#v, want empty", ids)
 	}
 }
 
@@ -592,11 +608,12 @@ func TestAvailableModelsPayloadUsesCompactEffortPickerContract(t *testing.T) {
 				}
 				seenEfforts := make(map[string]bool, len(variants))
 				for _, variant := range variants {
-					if variant["displayName"] != "GPT-5.6 Sol" || variant["displayNameOutsidePicker"] != "GPT-5.6 Sol" {
-						t.Fatalf("compact display names: %#v", variant)
-					}
 					parameters := modelVariantParameters(variant)
 					effort := parameters["effort"]
+					displayName, _ := variant["displayName"].(string)
+					if !strings.Contains(displayName, "GPT-5.6 Sol") || !strings.Contains(displayName, thinkingEffortDisplayName(effort)) || variant["displayNameOutsidePicker"] != displayName {
+						t.Fatalf("compact display names: %#v", variant)
+					}
 					seenEfforts[effort] = true
 					if parameters["context"] != "272000" || parameters["fast"] != "false" {
 						t.Fatalf("compact variant parameters: got %#v", parameters)

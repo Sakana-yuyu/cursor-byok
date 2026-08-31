@@ -40,66 +40,68 @@ const (
 	localUltraDashboardUserID      = 1
 	localUltraBillingCycleDuration = 30 * 24 * time.Hour
 
-	bootstrapStatsigGlassModeAvailableGate           = "glass_mode_available"
-	bootstrapStatsigGlassOpenAgentInWindowGate       = "glass.enable_open_agent_in_window"
-	bootstrapStatsigOpenAgentsTitlebarGate           = "glass_open_agents_titlebar_button"
-	bootstrapStatsigOpenAgentWindowTopGate           = "open_agent_window_top"
-	bootstrapStatsigOpenAgentWindowBottomGate        = "open_agent_window_bottom_convo"
-	bootstrapStatsigNALAgentRetriesGate              = "nal_agent_retries"
-	bootstrapStatsigNALFreshRetryIDsGate             = "nal_fresh_retry_ids"
-	bootstrapStatsigUseModelParametersGate           = "use_model_parameters"
-	bootstrapStatsigUseReactModelPickerGate          = "use_react_model_picker"
-	bootstrapStatsigIDECmdEnterSubmitGate            = "ide_cmd_enter_submit"
-	bootstrapStatsigContextVisualizerGate            = "context_visualizer"
-	bootstrapStatsigWysiwygMarkdownGate              = "wysiwyg_markdown"
-	bootstrapStatsigWysiwygMarkdownDefaultGate       = "wysiwyg_markdown_default"
-	bootstrapStatsigSubagentSupportInterrupt         = "subagent_support_interrupt"
-	bootstrapStatsigExplicitSubagentModels           = "explicit_subagent_models"
-	bootstrapStatsigMcpDirectClientToolFetch         = "mcp_direct_client_tool_fetch"
-	bootstrapStatsigGlassCustomThemeSupport          = "glass_custom_theme_support"
-	bootstrapStatsigGlassAutomationsUI               = "glass_automations_ui"
-	bootstrapStatsigTerminalUI2                      = "terminal_ui_2"
-	bootstrapStatsigDisableTerminalOutputUIStreaming = "disable_terminal_output_ui_streaming"
-	bootstrapStatsigBrowserCanvas                    = "browser_canvas"
-	bootstrapStatsigCanvasInlinePreview              = "canvas_inline_preview"
-	bootstrapStatsigGlassDesignModeComposerPill      = "glass_design_mode_composer_pill_enabled"
-	bootstrapStatsigEnableMultitaskMode              = "enable_multitask_mode"
-	bootstrapStatsigDecomposeAlwaysLocalExtHostGate  = "decompose_always_local_ext_host"
-	bootstrapStatsigCursorExtensionsIsolationV2Gate  = "cursor_extensions_isolation_v2"
-	bootstrapStatsigCursorAgentWorkerExtension       = "enable_cursor_agent_worker_extension"
-	bootstrapStatsigExperimentName                   = "free_user_model_picker"
-	bootstrapStatsigVariantParam                     = "variant"
-	bootstrapStatsigVariantControl                   = "control"
-	bootstrapStatsigModelPickerExperimentsLayer      = "model_picker_experiments"
-	bootstrapStatsigEffortFirstVariantParam          = "effort_first_variant"
-	bootstrapStatsigEffortFirstCompactModelIDsParam  = "effort_first_compact_model_ids"
-	bootstrapStatsigEffortFirstSubmenuExperiment     = "effort_first_submenu_2026_08"
-	bootstrapStatsigExperimentEnabledParam           = "enabled"
-	bootstrapStatsigVariantLockedPicker              = "locked_picker"
-	bootstrapStatsigVariantGrayedModels              = "grayed_models"
-	bootstrapStatsigProductTipsConfigName            = "product_tips_config"
-	bootstrapStatsigIdleExtensionHostKiller          = "idle_extension_host_killer_config"
-	bootstrapStatsigIdleMinutesToKill                = "idleMinutesToKillExtensionHost"
-	bootstrapStatsigFreeMemoryPercentageToKill       = "freeMemoryPercentageToKillExtensionHost"
-	bootstrapStatsigHTTP2PingConfig                  = "http2_ping_config"
-	bootstrapStatsigHTTP1KeepaliveConfig             = "http1_keepalive_config"
-	bootstrapStatsigHTTP2AgentPoolConfig             = "http2_agent_connection_pool_config"
-	bootstrapStatsigCanvasPromptTextConfig           = "canvas_prompt_text_config"
-	bootstrapStatsigEditorBugbotConfig               = "editor_bugbot_config"
-	bootstrapStatsigExtensionMonitorControl          = "extension_monitor_control"
-	bootstrapStatsigExtensionSignatureBypass         = "extension_signature_verification_bypass_list"
-	bootstrapStatsigGCTraceControl                   = "gc_trace_control"
-	bootstrapStatsigInlineDiffPerformance            = "inline_diff_performance_config"
-	bootstrapStatsigLeakedDisposablesTracker         = "leaked_disposables_tracker"
-	bootstrapStatsigMcpIPCTimeouts                   = "mcp_ipc_timeouts"
-	bootstrapStatsigMcpWakeProbeConfig               = "mcp_wake_probe_config"
-	bootstrapStatsigNALStallDetectorTimeout          = "nal_stall_detector_timeout_config"
-	bootstrapStatsigSimulatedThinkingErrorTimeout    = "simulated_thinking_error_timeout"
-	bootstrapStatsigPlaywrightLogConfigs             = "playwright_log_configs"
-	bootstrapStatsigRetryInterceptorParams           = "retry_interceptor_params_config"
-	bootstrapStatsigSandboxNetworkAllowlist          = "sandbox_default_network_allowlist"
-	bootstrapStatsigUpdatePromptConfig               = "update_prompt_config"
-	bootstrapStatsigLocalDefaultRule                 = "local_default"
+	bootstrapStatsigGlassModeAvailableGate             = "glass_mode_available"
+	bootstrapStatsigGlassOpenAgentInWindowGate         = "glass.enable_open_agent_in_window"
+	bootstrapStatsigOpenAgentsTitlebarGate             = "glass_open_agents_titlebar_button"
+	bootstrapStatsigOpenAgentWindowTopGate             = "open_agent_window_top"
+	bootstrapStatsigOpenAgentWindowBottomGate          = "open_agent_window_bottom_convo"
+	bootstrapStatsigNALAgentRetriesGate                = "nal_agent_retries"
+	bootstrapStatsigNALFreshRetryIDsGate               = "nal_fresh_retry_ids"
+	bootstrapStatsigUseModelParametersGate             = "use_model_parameters"
+	bootstrapStatsigUseReactModelPickerGate            = "use_react_model_picker"
+	bootstrapStatsigIDECmdEnterSubmitGate              = "ide_cmd_enter_submit"
+	bootstrapStatsigContextVisualizerGate              = "context_visualizer"
+	bootstrapStatsigWysiwygMarkdownGate                = "wysiwyg_markdown"
+	bootstrapStatsigWysiwygMarkdownDefaultGate         = "wysiwyg_markdown_default"
+	bootstrapStatsigSubagentSupportInterrupt           = "subagent_support_interrupt"
+	bootstrapStatsigExplicitSubagentModels             = "explicit_subagent_models"
+	bootstrapStatsigMcpDirectClientToolFetch           = "mcp_direct_client_tool_fetch"
+	bootstrapStatsigGlassCustomThemeSupport            = "glass_custom_theme_support"
+	bootstrapStatsigGlassAutomationsUI                 = "glass_automations_ui"
+	bootstrapStatsigTerminalUI2                        = "terminal_ui_2"
+	bootstrapStatsigDisableTerminalOutputUIStreaming   = "disable_terminal_output_ui_streaming"
+	bootstrapStatsigBrowserCanvas                      = "browser_canvas"
+	bootstrapStatsigCanvasInlinePreview                = "canvas_inline_preview"
+	bootstrapStatsigGlassDesignModeComposerPill        = "glass_design_mode_composer_pill_enabled"
+	bootstrapStatsigEnableMultitaskMode                = "enable_multitask_mode"
+	bootstrapStatsigDecomposeAlwaysLocalExtHostGate    = "decompose_always_local_ext_host"
+	bootstrapStatsigCursorExtensionsIsolationV2Gate    = "cursor_extensions_isolation_v2"
+	bootstrapStatsigCursorAgentWorkerExtension         = "enable_cursor_agent_worker_extension"
+	bootstrapStatsigExperimentName                     = "free_user_model_picker"
+	bootstrapStatsigVariantParam                       = "variant"
+	bootstrapStatsigVariantControl                     = "control"
+	bootstrapStatsigEffortFirstVariantTreatment        = "treatment"
+	bootstrapStatsigModelPickerExperimentsLayer        = "model_picker_experiments"
+	bootstrapStatsigEffortFirstVariantParam            = "effort_first_variant"
+	bootstrapStatsigEffortFirstCompactModelIDsParam    = "effort_first_compact_model_ids"
+	bootstrapStatsigEffortFirstSubmenuExperiment       = "effort_first_submenu_2026_08"
+	bootstrapStatsigEffortFirstGroupedModelsExperiment = "effort_first_grouped_models_2026_08"
+	bootstrapStatsigExperimentEnabledParam             = "enabled"
+	bootstrapStatsigVariantLockedPicker                = "locked_picker"
+	bootstrapStatsigVariantGrayedModels                = "grayed_models"
+	bootstrapStatsigProductTipsConfigName              = "product_tips_config"
+	bootstrapStatsigIdleExtensionHostKiller            = "idle_extension_host_killer_config"
+	bootstrapStatsigIdleMinutesToKill                  = "idleMinutesToKillExtensionHost"
+	bootstrapStatsigFreeMemoryPercentageToKill         = "freeMemoryPercentageToKillExtensionHost"
+	bootstrapStatsigHTTP2PingConfig                    = "http2_ping_config"
+	bootstrapStatsigHTTP1KeepaliveConfig               = "http1_keepalive_config"
+	bootstrapStatsigHTTP2AgentPoolConfig               = "http2_agent_connection_pool_config"
+	bootstrapStatsigCanvasPromptTextConfig             = "canvas_prompt_text_config"
+	bootstrapStatsigEditorBugbotConfig                 = "editor_bugbot_config"
+	bootstrapStatsigExtensionMonitorControl            = "extension_monitor_control"
+	bootstrapStatsigExtensionSignatureBypass           = "extension_signature_verification_bypass_list"
+	bootstrapStatsigGCTraceControl                     = "gc_trace_control"
+	bootstrapStatsigInlineDiffPerformance              = "inline_diff_performance_config"
+	bootstrapStatsigLeakedDisposablesTracker           = "leaked_disposables_tracker"
+	bootstrapStatsigMcpIPCTimeouts                     = "mcp_ipc_timeouts"
+	bootstrapStatsigMcpWakeProbeConfig                 = "mcp_wake_probe_config"
+	bootstrapStatsigNALStallDetectorTimeout            = "nal_stall_detector_timeout_config"
+	bootstrapStatsigSimulatedThinkingErrorTimeout      = "simulated_thinking_error_timeout"
+	bootstrapStatsigPlaywrightLogConfigs               = "playwright_log_configs"
+	bootstrapStatsigRetryInterceptorParams             = "retry_interceptor_params_config"
+	bootstrapStatsigSandboxNetworkAllowlist            = "sandbox_default_network_allowlist"
+	bootstrapStatsigUpdatePromptConfig                 = "update_prompt_config"
+	bootstrapStatsigLocalDefaultRule                   = "local_default"
 )
 
 type statsigSecondaryExposure struct {
@@ -178,6 +180,10 @@ var bootstrapStatsigTemplate = statsigBootstrapTemplate{
 		),
 		bootstrapStatsigEffortFirstSubmenuExperiment: buildStatsigDynamicConfigActive(
 			bootstrapStatsigEffortFirstSubmenuExperiment,
+			map[string]any{bootstrapStatsigExperimentEnabledParam: true},
+		),
+		bootstrapStatsigEffortFirstGroupedModelsExperiment: buildStatsigDynamicConfigActive(
+			bootstrapStatsigEffortFirstGroupedModelsExperiment,
 			map[string]any{bootstrapStatsigExperimentEnabledParam: true},
 		),
 
@@ -359,7 +365,7 @@ var bootstrapStatsigTemplate = statsigBootstrapTemplate{
 		bootstrapStatsigModelPickerExperimentsLayer: buildStatsigLayerConfig(
 			bootstrapStatsigModelPickerExperimentsLayer,
 			map[string]any{
-				bootstrapStatsigEffortFirstVariantParam:         bootstrapStatsigVariantControl,
+				bootstrapStatsigEffortFirstVariantParam:         bootstrapStatsigEffortFirstVariantTreatment,
 				bootstrapStatsigEffortFirstCompactModelIDsParam: []string{},
 			},
 		),
@@ -612,17 +618,9 @@ func buildDefaultModelPayload(reqCtx *RequestContext) (map[string]any, error) {
 }
 
 func buildBootstrapStatsigPayload(reqCtx *RequestContext) (map[string]any, error) {
-	adapters, err := loadConfiguredModelAdapters(reqCtx)
-	if err != nil {
-		return nil, err
-	}
 	generatedAtMs := uint64(time.Now().UnixMilli())
 	authID := resolveBootstrapStatsigAuthID(reqCtx)
-	configJSON, err := buildBootstrapStatsigConfigJSONForModelIDs(
-		int64(generatedAtMs),
-		authID,
-		collectModelAdapterRefs(adapters),
-	)
+	configJSON, err := buildBootstrapStatsigConfigJSON(int64(generatedAtMs), authID)
 	if err != nil {
 		return nil, err
 	}
@@ -835,6 +833,10 @@ func buildAvailableModelEntriesForMode(adapters []legacyruntime.ModelAdapterConf
 			"tooltipDataForMaxMode": map[string]any{
 				"markdownContent": tooltipMarkdown,
 			},
+		}
+		if legacyruntime.NormalizeModelSource(adapter.Source) == legacyruntime.ModelSourceCursorAccount {
+			entry["vendorName"] = "Cursor"
+			entry["vendor"] = map[string]any{"id": "MODEL_VENDOR_ID_CURSOR", "displayName": "Cursor"}
 		}
 		if useModelParameters {
 			entry["parameterDefinitions"] = buildModelParameterDefinitions(adapter, contextTokens, explodedVariants)
@@ -1089,10 +1091,7 @@ func buildModelVariants(adapter legacyruntime.ModelAdapterConfig, channelID stri
 		if adapter.FastMode {
 			parameterValues = append(parameterValues, map[string]any{"id": modelRuntimeFastParameterID, "value": "false"})
 		}
-		variantDisplayName := modelDisplayName
-		if explodedVariants {
-			variantDisplayName = buildThinkingEffortVariantDisplayName(modelDisplayName, value)
-		}
+		variantDisplayName := buildThinkingEffortVariantDisplayName(modelDisplayName, value)
 		variant := map[string]any{
 			"displayName":              variantDisplayName,
 			"displayNameOutsidePicker": variantDisplayName,
@@ -1247,18 +1246,6 @@ func collectModelAdapterRefs(adapters []legacyruntime.ModelAdapterConfig) []stri
 	return output
 }
 
-// firstModelAdapterRef возвращает канал первого адаптера или пустую строку,
-// если ни один адаптер не сконфигурирован.
-func collectNonEmptyStrings(values []string) []string {
-	result := make([]string, 0, len(values))
-	for _, value := range values {
-		if value = strings.TrimSpace(value); value != "" {
-			result = append(result, value)
-		}
-	}
-	return result
-}
-
 func cloneStatsigLayerConfigs(source map[string]map[string]any) map[string]map[string]any {
 	result := make(map[string]map[string]any, len(source))
 	for name, layer := range source {
@@ -1321,10 +1308,6 @@ func authIDFromJWT(token string) string {
 }
 
 func buildBootstrapStatsigConfigJSON(nowMs int64, authID string) ([]byte, error) {
-	return buildBootstrapStatsigConfigJSONForModelIDs(nowMs, authID, []string{})
-}
-
-func buildBootstrapStatsigConfigJSONForModelIDs(nowMs int64, authID string, compactModelIDs []string) ([]byte, error) {
 	authID = strings.TrimSpace(authID)
 	if authID == "" {
 		authID = localUltraPaymentID
@@ -1342,8 +1325,8 @@ func buildBootstrapStatsigConfigJSONForModelIDs(nowMs int64, authID string, comp
 	template.LayerConfigs[bootstrapStatsigModelPickerExperimentsLayer] = buildStatsigLayerConfig(
 		bootstrapStatsigModelPickerExperimentsLayer,
 		map[string]any{
-			bootstrapStatsigEffortFirstVariantParam:         bootstrapStatsigVariantControl,
-			bootstrapStatsigEffortFirstCompactModelIDsParam: collectNonEmptyStrings(compactModelIDs),
+			bootstrapStatsigEffortFirstVariantParam:         bootstrapStatsigEffortFirstVariantTreatment,
+			bootstrapStatsigEffortFirstCompactModelIDsParam: []string{},
 		},
 	)
 
