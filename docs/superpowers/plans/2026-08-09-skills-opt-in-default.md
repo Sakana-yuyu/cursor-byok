@@ -36,7 +36,7 @@
 
 - [x] **Step 1: Write failing tests for opt-in activation**
 
-Add tests that create valid skills and assert an empty whitelist produces no prompt, an explicit lowercase whitelist entry enables one skill, a newly added unlisted skill stays disabled, and Goal mode cannot inject `goal-loop` until whitelisted. Add a config test asserting defaults contain no enabled skills and legacy `disabledSkills` does not populate the whitelist.
+Add tests that create valid skills and assert an empty whitelist produces no prompt, an explicit lowercase whitelist entry enables one skill, and a newly added unlisted skill stays disabled. Add a config test asserting defaults contain no enabled skills and legacy `disabledSkills` does not populate the whitelist. Historical `goal-loop` was removed on 2026-08-31 and is no longer a forced-injection case.
 
 - [x] **Step 2: Run focused tests and verify failure**
 

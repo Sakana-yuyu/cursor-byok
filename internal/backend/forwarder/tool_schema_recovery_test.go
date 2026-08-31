@@ -12,9 +12,9 @@ import (
 
 func TestClassifyProvider400RecoveryNamedToolRequired(t *testing.T) {
 	tests := []struct {
-		name    string
-		err     error
-		want    provider400RecoveryReason
+		name string
+		err  error
+		want provider400RecoveryReason
 	}{
 		{name: "named tool schema rejected", err: &modeladapter.HTTPStatusError{StatusCode: 400, Message: "Invalid schema for tool 'Read': must be object"}, want: provider400RecoveryToolSchema},
 		{name: "backtick named tool rejected", err: &modeladapter.HTTPStatusError{StatusCode: 400, Message: "invalid tool `mcp_tool_unsafe` schema"}, want: provider400RecoveryToolSchema},
@@ -111,8 +111,8 @@ func TestClaimToolSchema400RecoveryRequiresAdvertisedAndOnce(t *testing.T) {
 		provider400RecoveryTurns: make(map[string]struct{}),
 	}
 	stream := &ActiveStream{
-		RequestID:           "request-recovery",
-		TurnSeq:             7,
+		RequestID:             "request-recovery",
+		TurnSeq:               7,
 		ProviderPassToolNames: []string{"Read", "mcp tool/unsafe"},
 	}
 
@@ -146,7 +146,7 @@ func TestClaimToolSchema400RecoveryRequiresAdvertisedAndOnce(t *testing.T) {
 
 type quarantineLifecycleCompiler struct{}
 
-func (quarantineLifecycleCompiler) Compile(_ *ConversationFile, mode agentv1.AgentMode, _ string, _ string, _ string, _ bool) (CompiledConversation, error) {
+func (quarantineLifecycleCompiler) Compile(_ *ConversationFile, mode agentv1.AgentMode, _ string, _ string, _ string) (CompiledConversation, error) {
 	return CompiledConversation{
 		Mode: mode,
 		Tools: []json.RawMessage{

@@ -39,7 +39,7 @@ EnabledSkills map[string]bool `json:"enabledSkills,omitempty" yaml:"enabledSkill
 4. `SkillActivator` 只对过滤后的候选构建或复用 BM25 索引并执行 Top-K 激活。
 5. 客户端显式传入的技能继续走 request context 回放，不纳入该白名单过滤；页面提示清楚说明这一边界。
 
-`find-skills`、`goal-loop` 等现有常驻或强制激活逻辑也必须先通过白名单过滤。用户未明确启用时，它们不能绕过默认关闭策略。
+`find-skills` 等现有常驻或强制激活逻辑也必须先通过白名单过滤。用户未明确启用时，它们不能绕过默认关闭策略。历史上的 `goal-loop` 已在 2026-08-31 移除，`/goal` 交给 Cursor 原生能力处理。
 
 ## 前端行为
 
@@ -69,7 +69,7 @@ Skills 列表的逐项状态改为读取 `enabledSkills`：
 - 配置默认值和缺失 `enabledSkills` 时不激活任何扫描技能。
 - 白名单中的有效技能可以进入激活候选，未列出的技能不会进入。
 - 后来新增的技能默认关闭。
-- `find-skills` 和 Goal 模式下的 `goal-loop` 未在白名单时不会被强制注入。
+- `find-skills` 未在白名单时不会被强制注入；历史 `goal-loop` 不再作为内置技能发布。
 - 旧 `disabledSkills` 配置不会产生隐式启用。
 - MCP 扫描、禁用和连接行为保持原样。
 - 前端浏览器绑定与真实 API 使用相同的 `enabledSkills` 结构，逐项开关正确保存和回滚。

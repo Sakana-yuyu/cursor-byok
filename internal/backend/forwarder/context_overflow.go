@@ -62,7 +62,7 @@ func (service *Service) recoverFromContextOverflow(stream *ActiveStream, convers
 	if err != nil {
 		return false, err
 	}
-	compiled, err := service.compiler.Compile(conversation, mode, latestUserText, modelName, stream.CustomSystemPrompt, stream.Goal != nil)
+	compiled, err := service.compiler.Compile(conversation, mode, latestUserText, modelName, stream.CustomSystemPrompt)
 	if err != nil {
 		return false, err
 	}
@@ -147,11 +147,11 @@ func (service *Service) maybeHalveContextWindowForOverflow(stream *ActiveStream,
 		return
 	}
 	service.debug.LogRuntime(context.Background(), requestID, conversationID, "context_window_halved", map[string]any{
-		"channel_id":     channelID,
-		"model_id":       strings.TrimSpace(modelID),
-		"before":         currentWindow,
-		"after":          halved,
-		"floor":          contextWindowHalveFloor,
+		"channel_id": channelID,
+		"model_id":   strings.TrimSpace(modelID),
+		"before":     currentWindow,
+		"after":      halved,
+		"floor":      contextWindowHalveFloor,
 	})
 	logger.Infof("forwarder context window halved request_id=%s channel_id=%s model_id=%s %d -> %d",
 		strings.TrimSpace(requestID), channelID, strings.TrimSpace(modelID), currentWindow, halved)

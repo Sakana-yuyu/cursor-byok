@@ -1,5 +1,7 @@
 # cursor-byok Goal 循环执行（codex-style goal）设计文档
 
+> 状态：已废弃。2026-08-31 起，cursor-byok 已移除自研 Goal 循环、配置、前端开关和内置 `goal-loop` 技能；`/goal` 原样交给 Cursor 官方原生能力处理。本文仅作为历史方案与回滚评估参考，不代表当前实现。
+>
 > 配套实施计划：`docs/superpowers/plans/2026-08-07-goal-loop.md`（10 个任务，TDD 拆解）
 > 借鉴来源：Reasonix Goal 模式（`docs/GUIDE.md::s022`、`docs/GOAL_ENFORCEMENT.zh-CN.md`）
 

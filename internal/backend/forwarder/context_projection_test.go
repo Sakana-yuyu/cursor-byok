@@ -90,7 +90,7 @@ func (provider *contextProjectionTimeoutProvider) StartStream(ctx context.Contex
 
 type contextProjectionLifecycleCompiler struct{}
 
-func (contextProjectionLifecycleCompiler) Compile(conversation *ConversationFile, mode agentv1.AgentMode, _ string, _ string, _ string, _ bool) (CompiledConversation, error) {
+func (contextProjectionLifecycleCompiler) Compile(conversation *ConversationFile, mode agentv1.AgentMode, _ string, _ string, _ string) (CompiledConversation, error) {
 	messages, err := NewHistoryProjector().ProjectPromptReplay(conversation)
 	if err != nil {
 		return CompiledConversation{}, err
@@ -675,7 +675,6 @@ func TestDriveProviderManualCompactionUsesCanonicalCompileWhenProjectionIsValid(
 		"question 8",
 		"model-a",
 		"",
-		false,
 	)
 	if err != nil {
 		t.Fatalf("Compile(canonical) error = %v", err)
@@ -690,7 +689,6 @@ func TestDriveProviderManualCompactionUsesCanonicalCompileWhenProjectionIsValid(
 		"question 8",
 		"model-a",
 		"",
-		false,
 	)
 	if err != nil {
 		t.Fatalf("Compile(projected) error = %v", err)
@@ -1582,7 +1580,6 @@ func TestBuildAutoCompactionPlanSkipsValidRecentTailFallback(t *testing.T) {
 		"question 8",
 		"model-a",
 		"",
-		false,
 	)
 	if err != nil {
 		t.Fatalf("Compile() error = %v", err)

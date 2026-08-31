@@ -1,5 +1,7 @@
 # Assistant Goal Removal And Sidebar Spacing Implementation Plan
 
+> **状态：部分过时（2026-08-31）。** 当时目标是移除独立 Goal 面板但保留 cursor-byok 自研 `/goal` 执行链。当前实现已进一步移除自研 Goal 能力，`/goal` 交给 Cursor 官方原生能力处理。本文仅作历史参考。
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Remove the standalone assistant Goal panel while retaining Cursor `/goal`, and loosen normal settings sidebar item spacing.
@@ -80,4 +82,3 @@
 - [ ] Run the frontend build to rescan catalogs.
 - [ ] Confirm every locale has identical non-empty keys and matching placeholders.
 - [ ] Run unit tests, E2E tests, lint, build, Go tests, `git diff --check`, and live browser inspection.
-

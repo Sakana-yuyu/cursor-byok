@@ -57,21 +57,6 @@ export function normalizeMirrorCapture(source) {
   };
 }
 
-// normalizeGoal 归一化 goal 循环执行配置（与后端 GoalConfig 字段对齐）。
-export function normalizeGoal(source) {
-  const raw = source && typeof source === "object" ? source : {};
-  return {
-    enabled: asBoolean(raw.enabled),
-    maxProviderPasses: asPositiveInteger(raw.maxProviderPasses),
-    maxDurationSeconds: asPositiveInteger(raw.maxDurationSeconds),
-    maxCostUsd: typeof raw.maxCostUsd === "number" && Number.isFinite(raw.maxCostUsd) ? raw.maxCostUsd : 0,
-    selfCheckPasses: asPositiveInteger(raw.selfCheckPasses),
-    verifyMaxRetries: asPositiveInteger(raw.verifyMaxRetries),
-    errorMaxRetries: asPositiveInteger(raw.errorMaxRetries),
-    progressInterval: asPositiveInteger(raw.progressInterval),
-  };
-}
-
 export function normalizeDelegation(source) {
   const raw = source && typeof source === "object" ? source : {};
   const executorPolicy = normalizeDelegationExecutorPolicy(raw);
@@ -210,7 +195,6 @@ export function normalizeConfig(source) {
     localResponseCache: normalizeLocalResponseCache(raw.localResponseCache),
     mirrorCapture: normalizeMirrorCapture(raw.mirrorCapture),
     delegation: normalizeDelegation(raw.delegation),
-    goal: normalizeGoal(raw.goal),
     computerUse: normalizeComputerUse(raw.computerUse),
     lastAgentModelHash: asString(raw.lastAgentModelHash),
   };

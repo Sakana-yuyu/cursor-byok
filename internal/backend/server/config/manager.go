@@ -177,36 +177,12 @@ func (manager *Manager) SaveDelegationConfig(ctx context.Context, cfg Delegation
 
 // PricingRates 返回当前配置中各模型适配器的价格条目快照，供费用估算使用。
 // 与统计页同口径：手动配价/探测价优先，缺省回退内置官方价与均价估算，
-// 条目带 Known/Currency/Source（此前缺失 Known 会让 goal 费用估算恒为未知）。
+// 条目带 Known/Currency/Source。
 func (manager *Manager) PricingRates() []historymetrics.PriceRate {
 	if manager == nil {
 		return nil
 	}
 	return PriceRatesFromAdapters(manager.Current().ModelAdapters)
-}
-
-// GoalRuntimeConfig 返回 goal 循环执行的运行时配置（forwarder 消费）。
-func (manager *Manager) GoalRuntimeConfig() runtimeconfig.GoalRuntimeConfig {
-	cfg := runtimeconfig.GoalRuntimeConfig{
-		MaxProviderPasses: 30,
-		SelfCheckPasses:   2,
-		VerifyMaxRetries:  3,
-		ErrorMaxRetries:   3,
-		ProgressInterval:  5,
-	}
-	if manager == nil {
-		return cfg
-	}
-	current := manager.Current().Goal
-	cfg.Enabled = current.Enabled
-	cfg.MaxProviderPasses = current.MaxProviderPasses
-	cfg.MaxDuration = time.Duration(current.MaxDurationSeconds) * time.Second
-	cfg.MaxCostUSD = current.MaxCostUSD
-	cfg.SelfCheckPasses = current.SelfCheckPasses
-	cfg.VerifyMaxRetries = current.VerifyMaxRetries
-	cfg.ErrorMaxRetries = current.ErrorMaxRetries
-	cfg.ProgressInterval = current.ProgressInterval
-	return cfg
 }
 
 func (manager *Manager) DelegationRuntimeConfig() delegation.RuntimeConfig {

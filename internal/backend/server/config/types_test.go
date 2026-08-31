@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestStoreLoadBackfillsGoalDefaultsForLegacyConfig(t *testing.T) {
+func TestStoreLoadDoesNotBackfillLocalGoalConfig(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	legacy := []byte("backendListenAddr: 127.0.0.1:18090\nproxyListenAddr: 127.0.0.1:18080\n")
 	if err := os.WriteFile(path, legacy, 0o644); err != nil {
@@ -19,16 +19,15 @@ func TestStoreLoadBackfillsGoalDefaultsForLegacyConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	want := DefaultGoalConfig()
-	if got.Goal != want {
-		t.Fatalf("Goal = %+v, want legacy config defaults %+v", got.Goal, want)
+	if got.BackendListenAddr != "127.0.0.1:18090" {
+		t.Fatalf("BackendListenAddr = %q, want legacy value", got.BackendListenAddr)
 	}
 	persisted, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read migrated config: %v", err)
 	}
-	if !yamlHasKey(persisted, "goal") {
-		t.Fatal("migrated config does not persist goal defaults")
+	if yamlHasKey(persisted, "goal") {
+		t.Fatal("local goal config must not be backfilled after switching to Cursor native /goal")
 	}
 }
 

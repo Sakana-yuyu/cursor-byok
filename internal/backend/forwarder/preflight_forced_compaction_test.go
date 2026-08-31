@@ -15,7 +15,7 @@ import (
 // 中稳定触发 auto force-retry 穷尽 / preflight 超限路径。
 type preflightOverflowCompiler struct{}
 
-func (preflightOverflowCompiler) Compile(_ *ConversationFile, mode agentv1.AgentMode, _ string, _ string, _ string, _ bool) (CompiledConversation, error) {
+func (preflightOverflowCompiler) Compile(_ *ConversationFile, mode agentv1.AgentMode, _ string, _ string, _ string) (CompiledConversation, error) {
 	big := strings.Repeat("x", 600_000)
 	return CompiledConversation{
 		Mode: mode,

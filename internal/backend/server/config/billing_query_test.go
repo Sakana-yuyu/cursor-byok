@@ -1,6 +1,6 @@
 // billing_query_test.go 验证计费查询全局开关的配置默认值与价格快照兜底：
 // 旧配置缺 billingQuery 键时按默认开启处理，显式关闭被保留；
-// PricingRates 对未配价渠道回退内置官方价且 Known=true（goal 费用估算依赖该标记）。
+// PricingRates 对未配价渠道回退内置官方价且 Known=true，供统计页费用估算使用。
 package config
 
 import (
@@ -65,7 +65,7 @@ func TestPricingRatesIncludesBuiltinFallback(t *testing.T) {
 	}
 	rate := rates[0]
 	if !rate.Known {
-		t.Fatal("expected builtin fallback rate to be Known=true (goal cost estimation relies on it)")
+		t.Fatal("expected builtin fallback rate to be Known=true")
 	}
 	if rate.Input == nil || *rate.Input != 3.0 {
 		t.Fatalf("expected kimi-k3 builtin input price 3.0, got %#v", rate.Input)

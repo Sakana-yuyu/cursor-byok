@@ -31,8 +31,7 @@ func shouldResumeAfterToolResults(finishReason string) bool {
 	}
 }
 
-// parentAgentProviderPassSafetyLimit 是父 agent（非 goal）单次回合 provider pass 的硬上限。
-// goal 模式拥有独立的预算体系（goalBudgetExceeded），不受此限制。
+// parentAgentProviderPassSafetyLimit 是父 agent 单次回合 provider pass 的硬上限。
 // 正常 agent 回合的工具调用循环远低于该值；达到上限说明模型陷入死循环，兜底收口防止无限空转。
 const parentAgentProviderPassSafetyLimit = 200
 
@@ -55,16 +54,14 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 		stream.mu.Unlock()
 		return nil
 	}
-	// 非 goal 回合的安全预算兜底：防止模型陷入工具调用死循环无限空转。
-	if stream.Goal == nil {
-		if stream.ProviderPassCount >= parentAgentProviderPassSafetyLimit {
-			stream.mu.Unlock()
-			return service.closeStreamWithTurnBudgetExceeded(stream, fmt.Sprintf("达到单回合 provider 调用上限 %d，疑似死循环，已安全停止", parentAgentProviderPassSafetyLimit))
-		}
-		if !stream.ProviderTurnStartedAt.IsZero() && time.Since(stream.ProviderTurnStartedAt) >= parentAgentProviderTurnDurationLimit {
-			stream.mu.Unlock()
-			return service.closeStreamWithTurnBudgetExceeded(stream, fmt.Sprintf("达到单回合时长上限 %s，已安全停止", parentAgentProviderTurnDurationLimit))
-		}
+	// 单回合安全预算兜底：防止模型陷入工具调用死循环无限空转。
+	if stream.ProviderPassCount >= parentAgentProviderPassSafetyLimit {
+		stream.mu.Unlock()
+		return service.closeStreamWithTurnBudgetExceeded(stream, fmt.Sprintf("达到单回合 provider 调用上限 %d，疑似死循环，已安全停止", parentAgentProviderPassSafetyLimit))
+	}
+	if !stream.ProviderTurnStartedAt.IsZero() && time.Since(stream.ProviderTurnStartedAt) >= parentAgentProviderTurnDurationLimit {
+		stream.mu.Unlock()
+		return service.closeStreamWithTurnBudgetExceeded(stream, fmt.Sprintf("达到单回合时长上限 %s，已安全停止", parentAgentProviderTurnDurationLimit))
 	}
 	stream.ProviderPassCount++
 	currentPass := stream.ProviderPassCount
@@ -98,17 +95,11 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	maxMode := stream.MaxMode
 	mode := stream.Mode
 	latestUserText := stream.LatestUserText
-	goal := stream.Goal
 	customSystemPrompt := stream.CustomSystemPrompt
 	thinkingCompletedPublished := stream.ProviderSyntheticThinkingPublished
 	thinkingDeltaCount := stream.ProviderThinkingDeltaCount
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
-	if goal != nil {
-		if frag := goalSystemPromptFragment(goal, service.currentGoalConfig()); frag != "" {
-			customSystemPrompt = joinNonEmpty(customSystemPrompt, frag)
-		}
-	}
 	logger.Infof("forwarder provider pass started request_id=%s model_call_id=%s provider_pass=%d thinking_completed=%t thinking_delta_count=%d", strings.TrimSpace(requestID), strings.TrimSpace(modelCallID), currentPass, thinkingCompletedPublished, thinkingDeltaCount)
 	if service.debug != nil {
 		service.debug.LogRuntime(context.Background(), requestID, conversationID, "provider_pass_started", map[string]any{
@@ -134,7 +125,7 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 		service.setTurnPhase(stream, TurnPhaseFailed)
 		return service.failStream(stream, "unknown", err)
 	}
-	compiled, err := service.compiler.Compile(conversation, mode, latestUserText, modelName, customSystemPrompt, stream.Goal != nil)
+	compiled, err := service.compiler.Compile(conversation, mode, latestUserText, modelName, customSystemPrompt)
 	if err != nil {
 		service.setTurnPhase(stream, TurnPhaseFailed)
 		return service.failStream(stream, "unknown", err)
@@ -150,7 +141,7 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	if !manualCompactionRequested && service.contextProjectionPressureExceeded(stream, canonicalConversation, canonicalCompiled) {
 		projectedConversation, projectionState, active, invalidationReason := service.prepareConversationContextProjectionState(canonicalConversation, contextProjectionModelKey(stream))
 		if active {
-			projectedCompiled, compileErr := service.compiler.Compile(projectedConversation, mode, latestUserText, modelName, customSystemPrompt, stream.Goal != nil)
+			projectedCompiled, compileErr := service.compiler.Compile(projectedConversation, mode, latestUserText, modelName, customSystemPrompt)
 			if compileErr != nil {
 				service.setTurnPhase(stream, TurnPhaseFailed)
 				return service.failStream(stream, "unknown", compileErr)

@@ -3,13 +3,12 @@ package skills
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
-// TestSyncToCursorSkillsDirReleasesGoalLoop 验证随包分发的 goal-loop 能首次同步到
-// 目标技能目录，且再次同步时内容未变化则全部跳过。
-func TestSyncToCursorSkillsDirReleasesGoalLoop(t *testing.T) {
+// TestSyncToCursorSkillsDirSkipsRemovedGoalLoop 验证自研 goal-loop 不再随包释放，
+// 其他内置技能仍会同步，且再次同步时内容未变化则全部跳过。
+func TestSyncToCursorSkillsDirSkipsRemovedGoalLoop(t *testing.T) {
 	target := t.TempDir()
 
 	first, err := SyncToCursorSkillsDir(target)
@@ -20,20 +19,14 @@ func TestSyncToCursorSkillsDirReleasesGoalLoop(t *testing.T) {
 		t.Fatalf("first sync failed files: %d", first.Failed)
 	}
 
-	skillPath := filepath.Join(target, "goal-loop", "SKILL.md")
-	data, err := os.ReadFile(skillPath)
-	if err != nil {
-		t.Fatalf("read released goal-loop: %v", err)
+	if _, err := os.Stat(filepath.Join(target, "goal-loop", "SKILL.md")); !os.IsNotExist(err) {
+		t.Fatalf("goal-loop must not be released, stat error=%v", err)
 	}
-	content := string(data)
-	if !strings.Contains(content, "name: goal-loop") {
-		t.Fatalf("released goal-loop missing front matter name, got: %q", content[:min(len(content), 120)])
-	}
-	if !strings.Contains(content, "/goal") {
-		t.Fatalf("released goal-loop must document /goal trigger")
+	if _, err := os.Stat(filepath.Join(target, "technical-stacks", "SKILL.md")); err != nil {
+		t.Fatalf("expected another bundled skill to be released: %v", err)
 	}
 	if first.Written == 0 {
-		t.Fatalf("expected goal-loop to be written on first sync, result=%+v", first)
+		t.Fatalf("expected bundled skills to be written on first sync, result=%+v", first)
 	}
 
 	second, err := SyncToCursorSkillsDir(target)
@@ -54,10 +47,10 @@ func TestSyncToCursorSkillsDirUpgradesOverwrittenFile(t *testing.T) {
 		t.Fatalf("initial sync: %v", err)
 	}
 
-	skillPath := filepath.Join(target, "goal-loop", "SKILL.md")
+	skillPath := filepath.Join(target, "technical-stacks", "SKILL.md")
 	original, err := os.ReadFile(skillPath)
 	if err != nil {
-		t.Fatalf("read initial goal-loop: %v", err)
+		t.Fatalf("read initial bundled skill: %v", err)
 	}
 	if err := os.WriteFile(skillPath, []byte("# user edited\n"), 0o644); err != nil {
 		t.Fatalf("simulate user edit: %v", err)
@@ -80,7 +73,7 @@ func TestSyncToCursorSkillsDirUpgradesOverwrittenFile(t *testing.T) {
 	}
 	restored, err := os.ReadFile(skillPath)
 	if err != nil {
-		t.Fatalf("read restored goal-loop: %v", err)
+		t.Fatalf("read restored bundled skill: %v", err)
 	}
 	if string(restored) != string(original) {
 		t.Fatalf("bundled file not restored to built-in version")
@@ -88,11 +81,4 @@ func TestSyncToCursorSkillsDirUpgradesOverwrittenFile(t *testing.T) {
 	if _, err := os.Stat(userOwned); err != nil {
 		t.Fatalf("user-owned skill must be preserved: %v", err)
 	}
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

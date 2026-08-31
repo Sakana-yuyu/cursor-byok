@@ -127,7 +127,7 @@ func (service *Service) closeStreamWithOutputTruncation(
 	})
 }
 
-// closeStreamWithTurnBudgetExceeded 在非 goal 回合触发 provider pass / 时长硬上限时安全收口。
+// closeStreamWithTurnBudgetExceeded 在回合触发 provider pass / 时长硬上限时安全收口。
 // 防死循环兜底：正常 agent 回合的工具循环远低于上限；超过说明模型陷入死循环，结束回合并告知用户。
 func (service *Service) closeStreamWithTurnBudgetExceeded(stream *ActiveStream, reason string) error {
 	if stream == nil {

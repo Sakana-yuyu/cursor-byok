@@ -267,7 +267,9 @@ func TestCursorCapabilityMapClassifiesReachableProtocolEntries(t *testing.T) {
 	for protocolName, want := range map[string]CursorCapabilityClass{
 		"ExecServerMessage.agent_store_conflict_args (AgentStoreConflictArgs)": CursorCapabilityControlMessage,
 		"AbortArgs": CursorCapabilitySharedArgument,
-		"ToolCall.sem_search_tool_call (SemSearchToolCall)": CursorCapabilityProtocolSupport,
+		"ToolCall.sem_search_tool_call (SemSearchToolCall)":   CursorCapabilityProtocolSupport,
+		"ToolCall.create_goal_tool_call (CreateGoalToolCall)": CursorCapabilityProtocolSupport,
+		"ToolCall.update_goal_tool_call (UpdateGoalToolCall)": CursorCapabilityProtocolSupport,
 	} {
 		if got := byProtocol[protocolName]; got.Class != want {
 			t.Errorf("%s class = %q, want %q", protocolName, got.Class, want)

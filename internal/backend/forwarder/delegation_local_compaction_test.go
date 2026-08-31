@@ -16,7 +16,7 @@ import (
 
 type fakeDelegatedCompiler struct{}
 
-func (fakeDelegatedCompiler) Compile(_ *ConversationFile, _ agentv1.AgentMode, _ string, _ string, _ string, _ bool) (CompiledConversation, error) {
+func (fakeDelegatedCompiler) Compile(_ *ConversationFile, _ agentv1.AgentMode, _ string, _ string, _ string) (CompiledConversation, error) {
 	return CompiledConversation{
 		Messages: []modeladapter.Message{{Role: "system", Content: "sys"}},
 		Tools:    []json.RawMessage{},
@@ -256,7 +256,7 @@ func TestExecuteResetsOverflowWindowAfterRecoveredToolPass(t *testing.T) {
 
 type delegatedOverflowCompiler struct{}
 
-func (delegatedOverflowCompiler) Compile(_ *ConversationFile, _ agentv1.AgentMode, _ string, _ string, _ string, _ bool) (CompiledConversation, error) {
+func (delegatedOverflowCompiler) Compile(_ *ConversationFile, _ agentv1.AgentMode, _ string, _ string, _ string) (CompiledConversation, error) {
 	messages := []modeladapter.Message{{Role: "system", Content: "sys"}, {Role: "user", Content: "task"}}
 	for i := 0; i < 8; i++ {
 		messages = append(messages, modeladapter.Message{Role: "user", Content: strings.Repeat("x", 100_000)})
@@ -273,7 +273,7 @@ func (delegatedOverflowCompiler) DerivePromptContexts(_ *ConversationFile, _ age
 
 type delegatedMisconfiguredWindowCompiler struct{}
 
-func (delegatedMisconfiguredWindowCompiler) Compile(_ *ConversationFile, _ agentv1.AgentMode, _ string, _ string, _ string, _ bool) (CompiledConversation, error) {
+func (delegatedMisconfiguredWindowCompiler) Compile(_ *ConversationFile, _ agentv1.AgentMode, _ string, _ string, _ string) (CompiledConversation, error) {
 	messages := []modeladapter.Message{
 		{Role: "system", Content: "sys"},
 		{Role: "user", Content: "delegated task"},

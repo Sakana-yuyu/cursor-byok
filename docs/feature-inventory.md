@@ -8,7 +8,7 @@
 cursor-byok 是 Cursor 客户端的本地代理（MITM + 后端 agent + 前端管理面板）：
 
 - `internal/mitm`：HTTPS MITM 代理，拦截/转发 Cursor 客户端请求，注入本地配置与模型路由。
-- `internal/backend`：核心 agent 运行时（forwarder 驱动 provider 循环、工具执行、委派、goal 循环）。
+- `internal/backend`：核心 agent 运行时（forwarder 驱动 provider 循环、工具执行、委派）。
 - `frontend`：Wails 桌面管理面板（12 个页面），通过 @bindings 与后端通信。
 - `internal/client`：模型渠道探测/基准测试/余额查询；`internal/updater`：自更新。
 - `cmd`：可执行入口（服务端、CLI、安装器辅助等）。
@@ -27,7 +27,7 @@ cursor-byok 是 Cursor 客户端的本地代理（MITM + 后端 agent + 前端�
 | `/request-metrics` | 请求明细 | 请求级指标列表、异常/降级筛选 | clientApi |
 | `/stats-overlay` | 实时统计浮窗 | 独立小窗口：实时指标、本地缓存统计、置顶/布局 | echarts |
 | `/diagnostics` | 诊断 | 模型适配器诊断与一键修复 | clientApi |
-| `/settings` | 设置 | 分节设置：通用/委派/Goal/Skills/MCP/更新等 | md-editor-v3（按需） |
+| `/settings` | 设置 | 分节设置：通用/委派/Skills/MCP/更新等 | md-editor-v3（按需） |
 
 共享能力：`@wailsio/runtime` 绑定层、`clientApi`/`runtimeControlApi` 统一服务封装、i18n（zh/en 等）、供应商目录/分组工具链、错误人性化提示、输入模态框、Markdown 渲染（marked）与 Markdown 编辑器（md-editor-v3，异步加载）。
 
@@ -35,13 +35,13 @@ cursor-byok 是 Cursor 客户端的本地代理（MITM + 后端 agent + 前端�
 
 | 包 | 功能 | 备注 |
 | --- | --- | --- |
-| `internal/backend/forwarder` | agent 主循环：RunSSE/BidiAppend 协议、provider 循环、工具派发、交互等待、上下文压缩/投影、运行队列、goal 循环、委派聚合、摘要/用量/费用记录、响应缓存 | 核心枢纽 |
+| `internal/backend/forwarder` | agent 主循环：RunSSE/BidiAppend 协议、provider 循环、工具派发、交互等待、上下文压缩/投影、运行队列、委派聚合、摘要/用量/费用记录、响应缓存；`/goal` 原样交给 Cursor 原生能力 | 核心枢纽 |
 | `internal/backend/agent/model` | 模型适配器：OpenAI chat/responses、Anthropic messages、Gemini native；路由、流式解析、错误分类、思考块转发 | 三协议 |
 | `internal/backend/agent/core` | agent 核心类型/工具参数校验 | |
 | `internal/backend/agent/prompt` | 提示词编译、摘要延续、上下文投影 | |
 | `internal/backend/agent/bridge` | 工具执行桥（exec/interaction） | |
-| `internal/backend/delegation` | 子代理/多任务委派：调度器、本地委派 worker、Cursor 协议适配、goal 自检子代理 | |
-| `internal/backend/server` | 配置管理（适配器/委派/Goal/代理）、upstream HTTP 转发、Bidi 服务 | |
+| `internal/backend/delegation` | 子代理/多任务委派：调度器、本地委派 worker、Cursor 协议适配、监督 contract | |
+| `internal/backend/server` | 配置管理（适配器/委派/代理）、upstream HTTP 转发、Bidi 服务 | |
 | `internal/backend/promptsync` | 云端提示词同步（多 provider 拉取 + 缓存） | |
 | `internal/mitm` | MITM 代理：证书、CONNECT 隧道、请求改写、广告/UA 处理 | |
 | `internal/client` | 模型探测、基准测试、供应商余额、自动匹配上下文 | |
@@ -74,9 +74,9 @@ cursor-byok 是 Cursor 客户端的本地代理（MITM + 后端 agent + 前端�
 | 400 恢复 | 首次 pass、无输出、无工具调用时注入提示续跑（每回合一次幂等） |
 | 流空闲看门狗 | `ProviderStreamIdleTimeout`（默认 90s）防“连接后无数据”悬挂 |
 | 响应头超时 | netproxy 客户端 `ResponseHeaderTimeout` 10 分钟，防“永不响应”悬挂 |
-| 回合预算兜底 | 非 goal 回合 provider pass 上限 200 / 时长 3 小时，防死循环无限空转 |
+| 回合预算兜底 | provider pass 上限 200 / 时长 3 小时，防死循环无限空转 |
 | 响应缓存安全 | 含工具调用的回合不写入响应缓存（防回放重复派发工具）；TTL/LRU/落盘 |
-| goal 预算 | passes/时长/费用三重预算；`[goal:complete]` 显式声明 + 子代理校验审计 |
+| Cursor 原生 Goal | `/goal` 不再由 cursor-byok 本地解析；生命周期、停止语义和完成判定交给 Cursor 官方客户端 |
 | 截断恢复 | `max_output_tokens` 截断且零输出时注入提示续写一轮（每回合一次幂等） |
 | 交互等待超时 | 等待用户输入 15 分钟兜底收口 |
 | 视觉委派 | 主模型不支持图片时自动委派识图模型；同步 pass 挂接 stream 取消句柄 + 内置超时 |
@@ -84,7 +84,7 @@ cursor-byok 是 Cursor 客户端的本地代理（MITM + 后端 agent + 前端�
 ## 六、健壮性加固（第二轮 2026-08-09）
 
 - 新增 `internal/safego`：统一 panic 兜底封装，覆盖全部 15 处后台 goroutine（MITM 转发、delegation executor、checkpoint 心跳、历史维护、native 委派看门狗、shutdown 取消、广告刷新、自动启动等），未捕获 panic 不再拖垮整个进程。
-- 前端 `npm run lint` 恢复全绿：清理 `clientApi.js` 残留死导入（`GetGoals/StartGoal/StopGoal/EnableReaderMCP`，对应包装函数已在前轮删除）。
+- 前端 `npm run lint` 恢复全绿：清理 `clientApi.js` 残留死导入（历史 Goal 面板包装函数与 `EnableReaderMCP`，对应包装函数已在前轮删除）。
 
 ## 七、健壮性加固（第三轮 2026-08-09）
 

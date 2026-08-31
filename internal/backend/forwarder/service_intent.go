@@ -216,11 +216,6 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 	if err := service.prepareStreamForForcedTurn(intent); err != nil {
 		return err
 	}
-	if !intent.GoalMode {
-		// 仅当 goal.enabled 开启时才识别 /goal 与 /goal --strict；
-		// 关闭时消息原样保留，按普通对话处理。
-		applyGoalCommandIfEnabled(&intent, service.currentGoalConfig().Enabled)
-	}
 	if service.shouldReuseActiveRun(intent) {
 		logger.Infof("forwarder duplicate run reused request_id=%s conversation_id=%s", strings.TrimSpace(intent.RequestID), strings.TrimSpace(intent.ConversationID))
 		return nil
@@ -296,15 +291,6 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 	}
 	if stream == nil {
 		return fmt.Errorf("open stream failed")
-	}
-	if intent.GoalMode {
-		goalState := newGoalState(intent.ConversationID, intent.GoalText, intent.GoalStrict)
-		stream.Goal = goalState
-		if service.debug != nil {
-			service.debug.LogRuntime(context.Background(), intent.RequestID, intent.ConversationID, "goal_started", map[string]any{
-				"goal_text": intent.GoalText,
-			})
-		}
 	}
 	if err := service.replaceCheckpointConversation(stream, conversation); err != nil {
 		return err

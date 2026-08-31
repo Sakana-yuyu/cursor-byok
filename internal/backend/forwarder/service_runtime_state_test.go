@@ -41,7 +41,6 @@ func TestRewriteCheckpointTokenDetailsUsesActiveContextProjection(t *testing.T) 
 		"question 8",
 		"model-a",
 		"",
-		false,
 	)
 	if err != nil {
 		t.Fatalf("Compile(canonical) error = %v", err)
@@ -56,7 +55,6 @@ func TestRewriteCheckpointTokenDetailsUsesActiveContextProjection(t *testing.T) 
 		"question 8",
 		"model-a",
 		"",
-		false,
 	)
 	if err != nil {
 		t.Fatalf("Compile(projected) error = %v", err)
@@ -143,7 +141,6 @@ func TestRewriteCheckpointTokenDetailsFallsBackForInvalidContextProjection(t *te
 		"question 8",
 		"model-a",
 		"",
-		false,
 	)
 	if err != nil {
 		t.Fatalf("Compile(canonical) error = %v", err)

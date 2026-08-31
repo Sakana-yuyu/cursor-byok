@@ -131,7 +131,7 @@ func (service *Service) checkpointCompiledConversation(stream *ActiveStream, con
 		return CompiledConversation{}, false, false
 	}
 	_, modelName, latestUserText, mode := checkpointPromptContext(stream)
-	compiled, err := service.compiler.Compile(conversation, mode, latestUserText, modelName, stream.CustomSystemPrompt, stream.Goal != nil)
+	compiled, err := service.compiler.Compile(conversation, mode, latestUserText, modelName, stream.CustomSystemPrompt)
 	if err != nil {
 		logger.Errorf("forwarder checkpoint token estimate failed request_id=%s conversation_id=%s err=%v", strings.TrimSpace(activeStreamRequestID(stream)), strings.TrimSpace(conversation.ConversationID), err)
 		return CompiledConversation{}, false, false
@@ -145,7 +145,7 @@ func (service *Service) checkpointCompiledConversation(stream *ActiveStream, con
 	if !active {
 		return compiled, true, false
 	}
-	projectedCompiled, err := service.compiler.Compile(projectedConversation, mode, latestUserText, modelName, stream.CustomSystemPrompt, stream.Goal != nil)
+	projectedCompiled, err := service.compiler.Compile(projectedConversation, mode, latestUserText, modelName, stream.CustomSystemPrompt)
 	if err != nil {
 		logger.Errorf("forwarder projected checkpoint token estimate failed request_id=%s conversation_id=%s err=%v", strings.TrimSpace(activeStreamRequestID(stream)), strings.TrimSpace(conversation.ConversationID), err)
 		return compiled, true, false

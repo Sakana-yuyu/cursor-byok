@@ -76,9 +76,7 @@ type Service struct {
 	localDelegation          *localDelegatedAgentAdapter
 	delegationConfig         delegation.RuntimeConfigProvider
 	executorRegistry         *delegation.ExecutorRegistry
-	goalConfig               goalConfigProvider
 	computerUseCfg           computerUseConfigProvider
-	usageCostEstimator       goalUsageCostEstimator
 	multitaskDelegation      *multitaskDelegationCoordinator
 	delegationRuntimeMu      sync.Mutex
 	nativeDelegations        map[string]*nativeDelegationRuntime
@@ -244,10 +242,6 @@ func newService(historyRoot string, resolver modeladapter.ChannelResolver, regis
 	if candidate, ok := resolver.(delegation.RuntimeConfigProvider); ok {
 		delegationConfig = candidate
 	}
-	var goalCfg goalConfigProvider
-	if candidate, ok := resolver.(goalConfigProvider); ok {
-		goalCfg = candidate
-	}
 	var computerUseCfg computerUseConfigProvider
 	if candidate, ok := resolver.(computerUseConfigProvider); ok {
 		computerUseCfg = candidate
@@ -271,9 +265,7 @@ func newService(historyRoot string, resolver modeladapter.ChannelResolver, regis
 		scanConfig:             scanConfig,
 		delegationConfig:       delegationConfig,
 		executorRegistry:       registry,
-		goalConfig:             goalCfg,
 		computerUseCfg:         computerUseCfg,
-		usageCostEstimator:     &defaultUsageCostEstimator{lookup: newPricingLookupFromConfig(resolver)},
 		mcpRuntime:             SharedMCPRuntimeRegistry(),
 		broker:                 broker,
 		recorder:               newArtifactRecorder(store, broker, debug),

@@ -187,8 +187,8 @@ func CursorCapabilityMap() []CursorCapabilityEntry {
 		support("ToolCall.pi_ls_tool_call (PiLsToolCall)", "Pi transport presentation; the local exec bridge implements no pi_ls_args sender."),
 		support("ToolCall.connect_scm_tool_call (ConnectScmToolCall)", "SCM connect presentation; no local prompt tool or route drives SCM onboarding."),
 		toolCall("ToolCall.search_conversations_tool_call (SearchConversationsToolCall)", "internal/backend/agent/bridge/exec/exec_open_conversation_search.go: buildSearchConversationsCompletedToolCall"),
-		support("ToolCall.create_goal_tool_call (CreateGoalToolCall)", "Goal creation presentation; the local runtime keeps no goal store."),
-		support("ToolCall.update_goal_tool_call (UpdateGoalToolCall)", "Goal update presentation; the local runtime keeps no goal store."),
+		support("ToolCall.create_goal_tool_call (CreateGoalToolCall)", "Cursor native /goal presentation; cursor-byok does not synthesize local goal tool calls."),
+		support("ToolCall.update_goal_tool_call (UpdateGoalToolCall)", "Cursor native /goal presentation; cursor-byok does not synthesize local goal tool calls."),
 
 		// Every tool schema exposed by any static prompt catalog.
 		promptTool("AskQuestion", "internal/backend/forwarder/interaction_tools.go: Service.handleInteractionToolInvocation -> interaction.Bridge.OpenQuery"),

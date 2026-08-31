@@ -153,8 +153,6 @@ type providerCallTiming struct {
 type ActiveStream struct {
 	mu sync.Mutex
 
-	// Goal 挂载 goal 会话状态；nil = 非 goal 会话（全路径旁路）。
-	Goal                         *GoalState
 	RequestID                    string
 	ConversationID               string
 	TurnSeq                      int64
@@ -176,7 +174,7 @@ type ActiveStream struct {
 	ProviderCancel     func()
 	ProviderPassCount  int
 	// ProviderTurnStartedAt 记录当前回合（handleRunIntent）的起始时间，
-	// 用于非 goal 回合的墙钟时长兜底（见 driveProvider 的预算检查）。
+	// 用于墙钟时长兜底（见 driveProvider 的预算检查）。
 	ProviderTurnStartedAt          time.Time
 	MultitaskStartupCanceled       bool
 	MultitaskCanceledProviderPass  int
@@ -272,27 +270,27 @@ type ActiveStream struct {
 	lastDoomLoopSignature string
 	pendingDoomLoopNotice string
 
-	Backlog                     []StreamEvent
-	BacklogStartCursor          int
-	Subscribers                 map[string]*StreamSubscriber
-	CheckpointConversation      *ConversationFile
-	CheckpointPersistTimer      *time.Timer
+	Backlog                         []StreamEvent
+	BacklogStartCursor              int
+	Subscribers                     map[string]*StreamSubscriber
+	CheckpointConversation          *ConversationFile
+	CheckpointPersistTimer          *time.Timer
 	CheckpointLastPersistedEntrySeq int64
-	PendingExecs                map[string]runtimecore.PendingExec
-	PendingInteractions         map[string]runtimecore.PendingInteraction
-	PartialToolCallIDs          map[string]struct{}
-	PatchEditQueues             map[string][]queuedPatchEditOperation
-	MCPToolServers              map[string]string
-	MCPToolNames                map[string]string
-	WorkspacePaths              []string
-	TerminalsFolder             string
-	RequestFileContents         map[string]string
-	RecentCompletedExecs        map[uint32]time.Time
-	RecentCompletedInteractions map[string]time.Time
-	BackgroundShells            map[string]*BackgroundShellState
-	BackgroundShellsByMessageID map[uint32]string
-	BackgroundShellsByExecID    map[string]string
-	BackgroundShellActions      map[string]time.Time
+	PendingExecs                    map[string]runtimecore.PendingExec
+	PendingInteractions             map[string]runtimecore.PendingInteraction
+	PartialToolCallIDs              map[string]struct{}
+	PatchEditQueues                 map[string][]queuedPatchEditOperation
+	MCPToolServers                  map[string]string
+	MCPToolNames                    map[string]string
+	WorkspacePaths                  []string
+	TerminalsFolder                 string
+	RequestFileContents             map[string]string
+	RecentCompletedExecs            map[uint32]time.Time
+	RecentCompletedInteractions     map[string]time.Time
+	BackgroundShells                map[string]*BackgroundShellState
+	BackgroundShellsByMessageID     map[uint32]string
+	BackgroundShellsByExecID        map[string]string
+	BackgroundShellActions          map[string]time.Time
 	// ExecCompletionSignals 为每个非流式 exec 提供事件驱动完成信号。
 	// key = exec_id。当终端结果到达时 closed；wait goroutine 通过 select
 	// 信号/超时/取消来避免盲等固定时间窗口。
@@ -606,10 +604,6 @@ type InboundIntent struct {
 	IgnoredReason        string
 	Prewarm              bool
 	ManualCompaction     manualCompactionDirective
-	// GoalMode 标记该 run 以 goal 模式执行（由 /goal 命令触发）。
-	GoalMode   bool
-	GoalText   string
-	GoalStrict bool // /goal --strict 标记（借鉴 Reasonix Strict 模式）
 }
 
 // normalizeMode 对外部传入的 mode 做最小归一化，但不再静默降级。

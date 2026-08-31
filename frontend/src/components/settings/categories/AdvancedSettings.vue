@@ -11,7 +11,6 @@ import {
   appState,
   repairProxyAction,
   saveDebugLogEnabled,
-  saveGoalSettings,
   saveLocalResponseCacheEnabled,
   saveLocalResponseCacheSettings,
   saveMirrorCaptureEnabled,
@@ -42,8 +41,6 @@ const maxEntriesDraft = ref("");
 const debugLogDraft = ref(Boolean(appState.debugLogEnabled));
 const mirrorCaptureDraft = ref(Boolean(appState.mirrorCaptureEnabled));
 const protocolFidelityDraft = ref(Boolean(appState.mirrorCaptureProtocolFidelity));
-
-const goalEnabledDraft = ref(Boolean(appState.goal?.enabled));
 
 const debugLogState = reactive({
   busy: false,
@@ -84,12 +81,6 @@ const mirrorCaptureActionState = reactive({
   openingDirectory: false,
 });
 
-const goalEnabledState = reactive({
-  busy: false,
-  error: "",
-  retry: null,
-});
-
 const directModeState = reactive({
   busy: false,
   error: "",
@@ -124,7 +115,6 @@ const cacheEnabled = computed(() => cacheEnabledDraft.value);
 const directModeBusy = computed(() => directModeState.busy || appState.configSaving);
 const cacheEnabledBusy = computed(() => cacheEnabledState.busy || appState.configSaving);
 const cachePersistBusy = computed(() => cachePersistState.busy || appState.configSaving);
-const goalEnabledBusy = computed(() => goalEnabledState.busy || appState.configSaving);
 const mirrorCaptureBusy = computed(() => mirrorCaptureState.busy || appState.configSaving);
 const protocolFidelityBusy = computed(() => protocolFidelityState.busy || appState.configSaving);
 // 保真记录是镜像记录的子开关：镜像记录关闭时它不可能产生任何数据，所以直接禁用。
@@ -196,16 +186,6 @@ watch(
   (value) => {
     if (!protocolFidelityState.busy) {
       protocolFidelityDraft.value = Boolean(value);
-    }
-  },
-  { immediate: true },
-);
-
-watch(
-  () => appState.goal,
-  (value) => {
-    if (!goalEnabledState.busy) {
-      goalEnabledDraft.value = Boolean(value?.enabled);
     }
   },
   { immediate: true },
@@ -440,29 +420,6 @@ function formatMirrorCaptureSize(bytes) {
 function formatMirrorCaptureTime(timestamp) {
   if (!timestamp) return "未知时间";
   return new Date(timestamp).toLocaleString();
-}
-
-async function handleGoalEnabledChange(enabled) {
-  const nextValue = Boolean(enabled);
-  const previousValue = goalEnabledDraft.value;
-  goalEnabledDraft.value = nextValue;
-  goalEnabledState.retry = () => handleGoalEnabledChange(nextValue);
-  goalEnabledState.error = "";
-  goalEnabledState.busy = true;
-  try {
-    await props.autosave.run("advanced.goal-enabled", async () => {
-      const result = await saveGoalSettings({ enabled: nextValue });
-      if (!result?.ok) {
-        throw new Error(result?.error || "保存失败");
-      }
-      message.success(nextValue ? "已启用 Goal 命令" : "已关闭 Goal 命令（/goal 按普通对话处理）");
-    });
-  } catch (error) {
-    goalEnabledDraft.value = Boolean(appState.goal?.enabled ?? previousValue);
-    goalEnabledState.error = toUserError(error);
-  } finally {
-    goalEnabledState.busy = false;
-  }
 }
 
 async function handleCacheEnabledChange(enabled) {
@@ -748,24 +705,5 @@ function handleCacheFieldInput(field, state, valueRef, value) {
       </template>
     </SettingsSection>
 
-    <SettingsSection title="Goal 命令">
-      <SettingsRow
-        label="启用 Goal 命令"
-        description="开启后 /goal 与 /goal --strict 由系统识别并进入 Goal 执行；关闭时当作普通对话。"
-        :busy="goalEnabledBusy"
-        :error="goalEnabledState.error"
-        @retry="retryState(goalEnabledState)"
-      >
-        <Switch
-          compact
-          label=""
-          :enabled="goalEnabledDraft"
-          :busy="goalEnabledBusy"
-          :disabled="goalEnabledBusy"
-          aria-label="启用 Goal 命令"
-          @change="handleGoalEnabledChange"
-        />
-      </SettingsRow>
-    </SettingsSection>
   </div>
 </template>

@@ -57,7 +57,6 @@ import {
   normalizeConfig,
   normalizeDelegation,
   normalizeDelegationForAdapters,
-  normalizeGoal,
   normalizeHomeMetrics,
   normalizeLocalResponseCache,
   normalizeRouteMode,
@@ -239,7 +238,6 @@ function buildConfigPayload(source = appState) {
     localResponseCache: normalized.localResponseCache,
     mirrorCapture: normalized.mirrorCapture,
     delegation,
-    goal: normalized.goal,
     computerUse: normalized.computerUse,
     lastAgentModelHash: normalized.lastAgentModelHash,
   };
@@ -261,7 +259,6 @@ function buildCachedConfigPayload() {
     localResponseCache: payload.localResponseCache,
     mirrorCapture: payload.mirrorCapture,
     delegation: payload.delegation,
-    goal: payload.goal,
     computerUse: payload.computerUse,
     lastAgentModelHash: payload.lastAgentModelHash,
   };
@@ -286,7 +283,6 @@ function applyConfigToState(config, { modelAdaptersOnly = false } = {}) {
   appState.mirrorCaptureEnabled = normalized.mirrorCapture.enabled;
   appState.mirrorCaptureProtocolFidelity = normalized.mirrorCapture.protocolFidelity;
   appState.delegation = normalized.delegation;
-  appState.goal = normalized.goal;
   appState.turnStaleTimeout = normalized.turnStaleTimeout;
   appState.nativeDelegationProgressTimeout = normalized.nativeDelegationProgressTimeout;
   appState.autoMatchContextWindow = normalized.autoMatchContextWindow;
@@ -554,7 +550,6 @@ export const appState = reactive({
   billingQuery: cachedConfig.billingQuery,
   localResponseCache: cachedConfig.localResponseCache,
   delegation: cachedConfig.delegation,
-  goal: cachedConfig.goal,
   // 浮窗偏好是纯前端 UX 状态：localStorage 持久化 + 跨窗口 storage 事件广播。
   // 不进后端 config（后端 config 不含 overlay 字段）。初始给默认值，真实值由
   // getStatsOverlayPreferences() 在首次读取时从 localStorage 填充，避免模块求值顺序依赖。
@@ -898,29 +893,6 @@ export async function saveLocalResponseCacheSettings(partial) {
   });
   if (!result.ok) {
     appState.localResponseCache = previous;
-  }
-  return result;
-}
-
-// saveGoalSettings 增量保存 goal 配置字段（合并当前配置，失败回滚）。
-export async function saveGoalSettings(partial) {
-  const currentConfig = await loadPersistedUserConfig();
-  const previous = appState.goal;
-  const nextGoal = normalizeGoal({
-    ...currentConfig.goal,
-    ...previous,
-    ...(partial && typeof partial === "object" ? partial : {}),
-  });
-  appState.goal = nextGoal;
-  const result = await persistConfigPayload({
-    ...currentConfig,
-    goal: {
-      ...currentConfig.goal,
-      ...nextGoal,
-    },
-  });
-  if (!result.ok) {
-    appState.goal = previous;
   }
   return result;
 }

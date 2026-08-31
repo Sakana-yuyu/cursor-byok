@@ -1,5 +1,5 @@
 // pricing.go 提供从模型渠道配置构建 historymetrics 价格条目快照的共享逻辑，
-// 供统计页（bridge MetricsService）与 goal 循环费用估算统一口径：
+// 供统计页（bridge MetricsService）等费用估算统一口径：
 // 手动配价 / catalog 探测价（adapter.Pricing）> 内置官方价 > 按币种均价估算。
 // 内置价格仅运行时注入，不写入 config.yaml。
 package config
