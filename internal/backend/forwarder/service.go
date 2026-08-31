@@ -439,6 +439,47 @@ func shouldAcknowledgeInterruptedInboundIntent(intent InboundIntent, err error) 
 	}
 }
 
+func (service *Service) waitForRunSSEContinuation(ctx context.Context, requestID string, cursor int, signal <-chan struct{}, grace time.Duration) bool {
+	if service == nil || service.broker == nil || grace <= 0 {
+		return false
+	}
+	hasContinuation := func() bool {
+		if backlog, err := service.broker.ReadFromCursor(requestID, cursor); err == nil && len(backlog) > 0 {
+			return true
+		}
+		stream, ok := service.broker.Get(requestID)
+		if !ok || stream == nil {
+			return false
+		}
+		stream.mu.Lock()
+		defer stream.mu.Unlock()
+		if isTerminalStreamStatus(stream.Status) {
+			return false
+		}
+		switch stream.Phase {
+		case TurnPhaseCompleted, TurnPhaseFailed, TurnPhaseCanceled:
+			return false
+		default:
+			return true
+		}
+	}
+
+	timer := time.NewTimer(grace)
+	defer timer.Stop()
+	for {
+		if hasContinuation() {
+			return true
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-signal:
+		case <-timer.C:
+			return hasContinuation()
+		}
+	}
+}
+
 // RunSSE 订阅指定 request 的活动流，优先回放 backlog，在 backlog 清空期间按 5 秒周期发送心跳。
 func (service *Service) RunSSE(ctx context.Context, req *connect.Request[aiserverv1.BidiRequestId], stream *connect.ServerStream[agentv1.AgentServerMessage]) error {
 	if service == nil {
@@ -503,6 +544,10 @@ func (service *Service) RunSSE(ctx context.Context, req *connect.Request[aiserve
 				}
 				cursor++
 				if event.End {
+					if event.TerminalErrorCode == "" && event.TerminalErrorMessage == "" &&
+						service.waitForRunSSEContinuation(ctx, requestID, cursor, signal, 500*time.Millisecond) {
+						continue
+					}
 					service.debug.LogRunSSE(ctx, requestID, "", "terminal", map[string]any{
 						"cursor":                 cursor,
 						"terminal_error_code":    strings.TrimSpace(event.TerminalErrorCode),
