@@ -211,14 +211,22 @@ func validateReadonlyShellCommandTokens(tokens []string) ([]string, error) {
 }
 
 func validateReadonlyGitCommand(tokens []string) ([]string, error) {
-	if len(tokens) < 2 {
+	subcommandIndex := 1
+	for subcommandIndex < len(tokens) {
+		flag := strings.ToLower(tokens[subcommandIndex])
+		if flag != "--no-pager" && flag != "--no-optional-locks" {
+			break
+		}
+		subcommandIndex++
+	}
+	if subcommandIndex >= len(tokens) {
 		return nil, fmt.Errorf("inspect Shell git requires a read-only subcommand")
 	}
-	subcommand := strings.ToLower(tokens[1])
+	subcommand := strings.ToLower(tokens[subcommandIndex])
 	if _, ok := gitReadonlySubcommands[subcommand]; !ok {
-		return nil, fmt.Errorf("inspect Shell git subcommand %q is not read-only", tokens[1])
+		return nil, fmt.Errorf("inspect Shell git subcommand %q is not read-only", tokens[subcommandIndex])
 	}
-	rest := tokens[2:]
+	rest := tokens[subcommandIndex+1:]
 	if _, listOnly := gitListOnlySubcommands[subcommand]; listOnly {
 		for _, token := range rest {
 			if !strings.HasPrefix(token, "-") {
@@ -253,7 +261,7 @@ func validateReadonlyGitCommand(tokens []string) ([]string, error) {
 		}
 	}
 	// 注入 --no-pager --no-optional-locks，确保无分页器阻塞且不写 index 锁。
-	return append([]string{tokens[0], "--no-pager", "--no-optional-locks"}, tokens[1:]...), nil
+	return append([]string{tokens[0], "--no-pager", "--no-optional-locks", tokens[subcommandIndex]}, rest...), nil
 }
 
 func isAllowedGitListFlag(token string) bool {

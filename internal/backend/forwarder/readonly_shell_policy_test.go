@@ -155,6 +155,18 @@ func TestApplyReadonlyShellPolicyQuotedPathSurvivesGitRewrite(t *testing.T) {
 	}
 }
 
+func TestApplyReadonlyShellPolicyAcceptsAlreadyNormalizedGitCommand(t *testing.T) {
+	argsJSON := `{"command":"git --no-pager --no-optional-locks status --short"}`
+	rewritten, err := applyReadonlyShellPolicy([]byte(argsJSON), nil)
+	if err != nil {
+		t.Fatalf("applyReadonlyShellPolicy() error = %v", err)
+	}
+	args := decodePolicyArgs(t, rewritten)
+	if got := args["command"]; got != "git --no-pager --no-optional-locks status --short" {
+		t.Fatalf("command = %v, want stable readonly rewrite", got)
+	}
+}
+
 func TestValidateReadonlyGitCommandWhitelist(t *testing.T) {
 	tests := []struct {
 		name    string
