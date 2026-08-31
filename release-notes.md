@@ -1,19 +1,23 @@
-## v1.0.2
+## v1.0.3
 
 ### 新功能
 
-- **测试失败自动停用开关**：模型配置页顶部新增开关，用户可自行开启。开启后，测试失败的模型会自动停用，不会进入 Cursor 模型列表；测试成功后自动恢复。
-- **停用模型手动恢复**：模型卡片显示“已停用”状态，并提供“启用”按钮。
+- **请求日志入口**：侧边栏和首页“更多”菜单恢复请求明细入口，可查看模型、供应商、Token、耗时、状态和费用。
+- **绘图工具兼容**：OpenAI Responses 请求识别 `image2` 等绘图工具别名，并正确启用原生 `image_generation`。
+- **失败模型自动停用**：模型测试失败自动停用配置可完整保存、读取和缓存，避免失效渠道继续参与路由。
 
 ### 修复
 
-- **模型路由一致性**：停用渠道同时从 Cursor 模型列表和请求路由中排除，避免客户端选择不可用模型。
-- **配置持久化**：测试结果触发的启用状态变更会等待配置落盘，且状态未变化时跳过重复写入。
-- **界面细节**：继续优化模型配置页、首页主题卡片、侧边栏滚动条和重复导航元素。
+- **排队对话自动续跑**：当前对话完成后会正确进入下一条排队对话，补齐最终回复，避免界面停在等待状态。
+- **官方模型选择器**：恢复官方原版模型列表和选择器结构，已选模型同时显示模型名称与思考强度。
+- **Explorer Git 检查**：只读 Shell 策略可重复识别 `--no-pager --no-optional-locks`，避免合法 Git 检查刷出 `Skipped git` 并触发子代理熔断。
+- **请求日志菜单**：清除首页重复的“请求明细”菜单项，并补充浏览器回归检查。
 
 ### 优化
 
-- **启动与运行效率**：保留并延续 v1.0.1 的启动并行化、轮询降频、缓存去重和 SVG 图表优化。
+- **原生 Goal 能力**：移除旧的自研 Goal 页面和设置，统一使用 Cursor 原生 Goal 能力。
+- **会话标题**：针对绘图、模型和修复类请求生成更简洁的历史会话标题。
+- **多语言资源**：同步清理失效文案并补齐当前界面的多语言目录。
 
 > **Windows 用户注意**：安装时若被 SmartScreen 拦截，点击「更多信息」->「仍要运行」即可。
 
@@ -21,9 +25,9 @@
 
 > 名字里的 x64 / x32 / arm64 表示 CPU 架构，认准自己系统的类型下载即可。
 
-- **Windows 64 位（绝大多数 Windows 电脑）**：下载 `cursor-byok-1.0.2-windows-x64-installer.exe`（安装版，推荐）或 `cursor-byok-1.0.2-windows-x64.zip`（绿色版）
-- **Windows ARM64（骁龙/麒麟等 ARM 处理器的 Windows 电脑）**：下载 `cursor-byok-1.0.2-windows-arm64-installer.exe` 或 `cursor-byok-1.0.2-windows-arm64.zip`
-- **Windows 32 位（很老的低配电脑才需要）**：下载 `cursor-byok-1.0.2-windows-x32-installer.exe` 或 `cursor-byok-1.0.2-windows-x32.zip`
-- **macOS Apple Silicon（M1/M2/M3/M4 芯片）**：下载 `cursor-byok-1.0.2-macos-arm64.dmg` 或 `cursor-byok-1.0.2-macos-arm64.tar.gz`
-- **macOS Intel**：下载 `cursor-byok-1.0.2-macos-x64.dmg` 或 `cursor-byok-1.0.2-macos-x64.tar.gz`
-- **Linux 64 位**：下载 `cursor-byok-1.0.2-linux-x64.tar.gz`
+- **Windows 64 位（绝大多数 Windows 电脑）**：下载 `cursor-byok-1.0.3-windows-x64-installer.exe`（安装版，推荐）或 `cursor-byok-1.0.3-windows-x64.zip`（绿色版）
+- **Windows ARM64（骁龙/麒麟等 ARM 处理器的 Windows 电脑）**：下载 `cursor-byok-1.0.3-windows-arm64-installer.exe` 或 `cursor-byok-1.0.3-windows-arm64.zip`
+- **Windows 32 位（很老的低配电脑才需要）**：下载 `cursor-byok-1.0.3-windows-x32-installer.exe` 或 `cursor-byok-1.0.3-windows-x32.zip`
+- **macOS Apple Silicon（M1/M2/M3/M4 芯片）**：下载 `cursor-byok-1.0.3-macos-arm64.dmg` 或 `cursor-byok-1.0.3-macos-arm64.tar.gz`
+- **macOS Intel**：下载 `cursor-byok-1.0.3-macos-x64.dmg` 或 `cursor-byok-1.0.3-macos-x64.tar.gz`
+- **Linux 64 位**：下载 `cursor-byok-1.0.3-linux-x64.tar.gz`
