@@ -16,6 +16,7 @@ const navItems = [
   { path: "/model-config", label: "模型", icon: "icon-[mdi--layers-triple-outline]" },
   { path: "/control-center", label: "控制中心", icon: "icon-[mdi--view-dashboard-outline]" },
   { path: "/metrics-detail", label: "会话分析", icon: "icon-[mdi--chart-box-outline]" },
+  { path: "/request-metrics", label: "请求日志", icon: "icon-[mdi--text-box-search-outline]" },
   { path: "/diagnostics", label: "诊断", icon: "icon-[mdi--stethoscope]" },
   { path: "/settings", label: "设置", icon: "icon-[mdi--cog-outline]" },
 ];
@@ -29,7 +30,7 @@ const activePath = computed(() => {
       case "/model-config":
         return ["/model-editor", "/model-catalog", "/model-groups", "/supplier"].includes(path);
       case "/metrics-detail":
-        return ["/request-metrics"].includes(path);
+        return false;
       default:
         return false;
     }

@@ -251,6 +251,7 @@ function buildCachedConfigPayload() {
     turnStaleTimeout: payload.turnStaleTimeout,
     nativeDelegationProgressTimeout: payload.nativeDelegationProgressTimeout,
     autoMatchContextWindow: payload.autoMatchContextWindow,
+    autoDisableFailedModels: payload.autoDisableFailedModels,
     backendListenAddr: payload.backendListenAddr,
     proxyListenAddr: payload.proxyListenAddr,
     routing: payload.routing,

@@ -103,6 +103,31 @@ func legacyOpenAIChatBodyPipeline(req StreamRequest, modelID string, baseURL str
 	return json.Marshal(bodyMap)
 }
 
+func TestBuildOpenAIResponsesBodyMapAddsImageGenerationForImage2(t *testing.T) {
+	req := StreamRequest{
+		Messages: []Message{{Role: "user", Content: "请绘制一张图片"}},
+		Tools:    []json.RawMessage{json.RawMessage(`{"type":"function","name":"image2","parameters":{"type":"object","properties":{}}}`)},
+	}
+	body, err := buildOpenAIResponsesBodyMap(req, "gpt-5.6", 0)
+	if err != nil {
+		t.Fatalf("build responses body: %v", err)
+	}
+	tools, ok := body["tools"].([]any)
+	if !ok {
+		t.Fatalf("tools = %#v, want array", body["tools"])
+	}
+	found := false
+	for _, raw := range tools {
+		tool, ok := raw.(map[string]any)
+		if ok && tool["type"] == "image_generation" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("tools = %#v, want image_generation tool", tools)
+	}
+}
+
 func TestBuildOpenAIResponsesBodyMapUsesSupportedReasoningIncludes(t *testing.T) {
 	body, err := buildOpenAIResponsesBodyMap(StreamRequest{ReasoningEffort: "medium"}, "gpt-5.6-sol", 0)
 	if err != nil {

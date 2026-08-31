@@ -31,6 +31,24 @@ func TestStoreLoadDoesNotBackfillLocalGoalConfig(t *testing.T) {
 	}
 }
 
+func TestStoreRoundTripsAutoDisableFailedModels(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	store := NewStore(path, "")
+	cfg := DefaultConfig()
+	cfg.AutoDisableFailedModels = true
+
+	if _, err := store.Save(context.Background(), cfg); err != nil {
+		t.Fatalf("保存配置失败: %v", err)
+	}
+	got, err := store.Load(context.Background())
+	if err != nil {
+		t.Fatalf("读取配置失败: %v", err)
+	}
+	if !got.AutoDisableFailedModels {
+		t.Fatal("autoDisableFailedModels 应在保存后回读为 true")
+	}
+}
+
 func TestSkillScanDefaultsToEmptyEnabledSkills(t *testing.T) {
 	cfg := DefaultConfig()
 	if len(cfg.SkillMCPScan.EnabledSkills) != 0 {

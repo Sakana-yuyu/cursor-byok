@@ -327,7 +327,7 @@ func hasExplicitOpenAIPromptCacheKey(req StreamRequest) bool {
 }
 
 func shouldExposeOpenAIResponsesImageGeneration(req StreamRequest, tools []map[string]any) bool {
-	if !openAIResponsesToolNamePresent(tools, "GenerateImage") {
+	if !openAIResponsesImageToolPresent(tools) {
 		return false
 	}
 	// 若用户最新消息已携带图片附件，说明这是识图请求而非生成请求，
@@ -358,6 +358,20 @@ func ensureOpenAIResponsesImageGenerationTool(tools []map[string]any) []map[stri
 		}
 	}
 	return append(tools, map[string]any{"type": "image_generation"})
+}
+
+func openAIResponsesImageToolPresent(tools []map[string]any) bool {
+	for _, tool := range tools {
+		name := strings.TrimSpace(fmt.Sprint(tool["name"]))
+		if functionShape, ok := tool["function"].(map[string]any); ok {
+			name = strings.TrimSpace(fmt.Sprint(functionShape["name"]))
+		}
+		switch strings.ToLower(name) {
+		case "generateimage", "generate_image", "image2", "image_generation", "imagegen":
+			return true
+		}
+	}
+	return false
 }
 
 func openAIResponsesToolNamePresent(tools []map[string]any, name string) bool {

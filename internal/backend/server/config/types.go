@@ -250,6 +250,7 @@ type Config struct {
 	TurnStaleTimeout                int    `json:"turnStaleTimeout" yaml:"turnStaleTimeout"`
 	NativeDelegationProgressTimeout int    `json:"nativeDelegationProgressTimeout" yaml:"nativeDelegationProgressTimeout"`
 	AutoMatchContextWindow          bool   `json:"autoMatchContextWindow" yaml:"autoMatchContextWindow"`
+	AutoDisableFailedModels         bool   `json:"autoDisableFailedModels" yaml:"autoDisableFailedModels"`
 	BackendListenAddr               string `json:"backendListenAddr" yaml:"backendListenAddr"`
 	ProxyListenAddr                 string `json:"proxyListenAddr" yaml:"proxyListenAddr"`
 	// AllowNonLoopbackListen 显式允许 backend/proxy 绑定非环回地址。
@@ -275,6 +276,7 @@ func DefaultConfig() Config {
 		TurnStaleTimeout:                DefaultTurnStaleTimeoutSeconds,
 		NativeDelegationProgressTimeout: DefaultNativeDelegationProgressTimeoutSeconds,
 		AutoMatchContextWindow:          DefaultAutoMatchContextWindow,
+		AutoDisableFailedModels:         false,
 		BackendListenAddr:               DefaultBackendListenAddr,
 		ProxyListenAddr:                 DefaultProxyListenAddr,
 		ModelAdapters:                   []ModelAdapterConfig{},
@@ -316,6 +318,7 @@ func NormalizeConfig(input Config) (Config, error) {
 	output.TurnStaleTimeout = normalizeTurnStaleTimeout(input.TurnStaleTimeout)
 	output.NativeDelegationProgressTimeout = normalizeNativeDelegationProgressTimeout(input.NativeDelegationProgressTimeout)
 	output.AutoMatchContextWindow = normalizeAutoMatchContextWindow(input.AutoMatchContextWindow)
+	output.AutoDisableFailedModels = input.AutoDisableFailedModels
 	output.AllowNonLoopbackListen = input.AllowNonLoopbackListen
 	backendListenAddr, err := normalizeListenAddr(input.BackendListenAddr, DefaultBackendListenAddr, "backendListenAddr", input.AllowNonLoopbackListen)
 	if err != nil {

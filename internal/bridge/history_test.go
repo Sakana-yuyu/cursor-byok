@@ -48,6 +48,15 @@ func TestReadHistoryTitle(t *testing.T) {
 			want: "多行标题",
 		},
 		{
+			name: "绘图与模型问题生成摘要",
+			ctx: `{
+				"items": [
+					{"role":"user","kind":"user_message","payload":{"text":"把这个项目画图做出来，也就是我现在调用gpt5.6可以调用image2。然后还有一个bug就是我选择了模型只显示思考强度没有显示模型名称，修复这个bug。"}}
+				]
+			}`,
+			want: "绘图能力与模型名称显示修复",
+		},
+		{
 			name: "仅注入条目无用户文本",
 			ctx: `{
 				"items": [

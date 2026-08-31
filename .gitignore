@@ -20,6 +20,8 @@ cmd/ads-server/*.db
 cmd/ads-server/*.db-*
 
 # Playwright E2E 产物
+/test-results/
+/playwright-report/
 frontend/test-results/
 frontend/playwright-report/
 cmd/ads-server/*.sqlite

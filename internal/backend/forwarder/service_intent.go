@@ -1026,7 +1026,9 @@ func (service *Service) resolveRequestedModelName(message *agentv1.AgentClientMe
 		if runRequest := message.GetRunRequest(); runRequest != nil {
 			if name := firstNonEmpty(
 				runRequest.GetModelDetails().GetDisplayName(),
+				runRequest.GetModelDetails().GetDisplayNameShort(),
 				runRequest.GetModelDetails().GetDisplayModelId(),
+				runRequest.GetModelDetails().GetModelId(),
 			); name != "" {
 				return name
 			}
@@ -1034,7 +1036,9 @@ func (service *Service) resolveRequestedModelName(message *agentv1.AgentClientMe
 		if prewarm := message.GetPrewarmRequest(); prewarm != nil {
 			if name := firstNonEmpty(
 				prewarm.GetModelDetails().GetDisplayName(),
+				prewarm.GetModelDetails().GetDisplayNameShort(),
 				prewarm.GetModelDetails().GetDisplayModelId(),
+				prewarm.GetModelDetails().GetModelId(),
 			); name != "" {
 				return name
 			}

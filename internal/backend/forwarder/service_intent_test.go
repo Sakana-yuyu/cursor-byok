@@ -6,6 +6,18 @@ import (
 	"cursor/gen/agentv1"
 )
 
+func TestResolveRequestedModelNameUsesShortDisplayName(t *testing.T) {
+	message := &agentv1.AgentClientMessage{
+		Message: &agentv1.AgentClientMessage_RunRequest{RunRequest: &agentv1.AgentRunRequest{
+			ModelDetails: &agentv1.ModelDetails{ModelId: "gpt-5.6", DisplayNameShort: "GPT-5.6", DisplayModelId: "gpt-5.6"},
+		}},
+	}
+	service := &Service{}
+	if got := service.resolveRequestedModelName(message, "gpt-5.6"); got != "GPT-5.6" {
+		t.Fatalf("model name = %q, want GPT-5.6", got)
+	}
+}
+
 func TestExtractRuntimeThinkingEffortAcceptsEffortParameter(t *testing.T) {
 	if got := extractRuntimeThinkingEffort(messageWithModelParameter("effort", "high")); got != "high" {
 		t.Fatalf("thinking effort: got %q, want high", got)

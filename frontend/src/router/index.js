@@ -57,7 +57,7 @@ const router = createRouter({
     {
       path: "/request-metrics",
       component: RequestMetrics,
-      meta: { showIcon: false, title: "请求明细", directlyClose: true },
+      meta: { showIcon: false, title: "请求日志", directlyClose: true },
     },
     {
       // 统计浮窗：独立小窗口，App.vue 按 path 分流为纯 router-view（不带 MainLayout）。

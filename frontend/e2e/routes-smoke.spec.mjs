@@ -57,6 +57,14 @@ for (const route of routes) {
   });
 }
 
+test("首页更多菜单只显示一个请求明细入口", async ({ page }) => {
+  await seedPreviewTestPlan(page, {}, basePreviewConfig());
+  await page.goto("/");
+
+  await page.locator("button").filter({ hasText: "更多" }).click();
+  await expect(page.getByRole("menuitem", { name: "请求明细", exact: true })).toHaveCount(1);
+});
+
 test.describe("macOS 布局", () => {
   test("侧边栏显示设置入口且不显示 Windows 窗口按钮", async ({ browser }) => {
     const context = await browser.newContext({

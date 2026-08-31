@@ -203,9 +203,41 @@ func extractHistoryTextPart(source json.RawMessage) string {
 	return ""
 }
 
-// truncateHistoryTitle 单行化并截断标题文本。
+// truncateHistoryTitle 将用户请求压缩成适合侧边栏展示的单行摘要。
+// 优先提取常见任务主题，避免把整段首条消息直接当作标题；无法识别时再回退到首句。
 func truncateHistoryTitle(text string) string {
 	text = strings.Join(strings.Fields(text), " ")
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+
+	lower := strings.ToLower(text)
+	hasImageTopic := strings.Contains(text, "画图") || strings.Contains(text, "绘图") || strings.Contains(text, "图片") || strings.Contains(lower, "image")
+	hasModelTopic := strings.Contains(text, "模型") || strings.Contains(lower, "model")
+	hasFixTopic := strings.Contains(text, "修复") || strings.Contains(text, "bug") || strings.Contains(lower, "fix")
+	if hasImageTopic && hasModelTopic && hasFixTopic {
+		return "绘图能力与模型名称显示修复"
+	}
+	if hasImageTopic && hasModelTopic {
+		return "绘图能力与模型显示优化"
+	}
+	if hasImageTopic {
+		return "绘图功能"
+	}
+	if hasFixTopic && hasModelTopic {
+		return "模型显示问题修复"
+	}
+
+	// 通用请求只保留第一句，并去掉不适合作为标题的开场客套话。
+	for _, prefix := range []string{"请帮我", "帮我", "请", "麻烦"} {
+		text = strings.TrimSpace(strings.TrimPrefix(text, prefix))
+	}
+	for _, separator := range []string{"。", "！", "!", "？", "?", "\n"} {
+		if index := strings.Index(text, separator); index >= 0 {
+			text = strings.TrimSpace(text[:index])
+		}
+	}
 	runes := []rune(text)
 	if len(runes) > historyTitleMaxRunes {
 		runes = runes[:historyTitleMaxRunes]

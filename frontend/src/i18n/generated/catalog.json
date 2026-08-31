@@ -159,12 +159,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 625,
+          "line": 582,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 637,
+          "line": 594,
           "column": 11
         }
       ]
@@ -256,12 +256,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 234,
+          "line": 245,
           "column": 19
         },
         {
           "file": "src/views/Home.vue",
-          "line": 244,
+          "line": 255,
           "column": 19
         }
       ]
@@ -396,7 +396,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 246,
+          "line": 257,
           "column": 19
         }
       ]
@@ -456,7 +456,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 320,
+          "line": 331,
           "column": 1106
         }
       ]
@@ -521,12 +521,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 693,
+          "line": 650,
           "column": 11
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 705,
+          "line": 662,
           "column": 13
         }
       ]
@@ -622,7 +622,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 190,
+          "line": 201,
           "column": 29
         }
       ]
@@ -789,7 +789,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 412,
+          "line": 392,
           "column": 55
         }
       ]
@@ -888,7 +888,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 119,
+          "line": 130,
           "column": 21
         }
       ]
@@ -912,7 +912,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 401,
+          "line": 381,
           "column": 12
         }
       ]
@@ -1090,7 +1090,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 320,
+          "line": 331,
           "column": 2445
         }
       ]
@@ -1155,7 +1155,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 135,
+          "line": 125,
           "column": 7
         }
       ]
@@ -1487,7 +1487,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 121,
+          "line": 132,
           "column": 27
         }
       ]
@@ -1516,7 +1516,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 568,
+          "line": 525,
           "column": 9
         }
       ]
@@ -1629,7 +1629,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 711,
+          "line": 668,
           "column": 11
         }
       ]
@@ -1867,7 +1867,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 242,
+          "line": 253,
           "column": 19
         }
       ]
@@ -2146,8 +2146,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 320,
-          "column": 6582
+          "line": 331,
+          "column": 6907
         }
       ]
     },
@@ -2259,7 +2259,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 565,
+          "line": 522,
           "column": 22
         }
       ]
@@ -2559,7 +2559,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 605,
+          "line": 562,
           "column": 22
         }
       ]
@@ -2644,7 +2644,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 218,
+          "line": 229,
           "column": 16
         }
       ]
@@ -2810,7 +2810,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1284,
+          "line": 1257,
           "column": 32
         }
       ]
@@ -2846,7 +2846,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 290,
+          "line": 270,
           "column": 35
         }
       ]
@@ -3297,7 +3297,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 390,
+          "line": 370,
           "column": 21
         }
       ]
@@ -3543,7 +3543,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 109,
+          "line": 120,
           "column": 36
         }
       ]
@@ -3620,6 +3620,11 @@
           "file": "src/views/Home.vue",
           "line": 102,
           "column": 122
+        },
+        {
+          "file": "src/views/Home.vue",
+          "line": 111,
+          "column": 27
         }
       ]
     },
@@ -3784,7 +3789,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 144,
+          "line": 155,
           "column": 29
         }
       ]
@@ -4081,7 +4086,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 240,
+          "line": 251,
           "column": 19
         }
       ]
@@ -4189,7 +4194,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 152,
+          "line": 142,
           "column": 52
         }
       ]
@@ -4477,17 +4482,17 @@
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 252,
+          "line": 232,
           "column": 19
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 332,
+          "line": 312,
           "column": 19
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 404,
+          "line": 384,
           "column": 17
         },
         {
@@ -4547,17 +4552,17 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 103,
+          "line": 114,
           "column": 230
         },
         {
           "file": "src/views/Home.vue",
-          "line": 136,
+          "line": 147,
           "column": 19
         },
         {
           "file": "src/views/Home.vue",
-          "line": 165,
+          "line": 176,
           "column": 17
         },
         {
@@ -4608,7 +4613,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 192,
+          "line": 203,
           "column": 30
         }
       ]
@@ -4668,12 +4673,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 217,
+          "line": 228,
           "column": 14
         },
         {
           "file": "src/views/Home.vue",
-          "line": 255,
+          "line": 266,
           "column": 14
         }
       ]
@@ -4791,8 +4796,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 320,
-          "column": 7017
+          "line": 331,
+          "column": 7342
         }
       ]
     },
@@ -4902,7 +4907,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 320,
+          "line": 331,
           "column": 502
         }
       ]
@@ -5063,8 +5068,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 320,
-          "column": 6535
+          "line": 331,
+          "column": 6860
         }
       ]
     },
@@ -5186,7 +5191,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 149,
+          "line": 139,
           "column": 67
         }
       ]
@@ -5275,7 +5280,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 219,
+          "line": 230,
           "column": 20
         }
       ]
@@ -5311,12 +5316,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 302,
+          "line": 313,
           "column": 64
         },
         {
           "file": "src/views/Home.vue",
-          "line": 320,
+          "line": 331,
           "column": 2342
         }
       ]
@@ -5352,7 +5357,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 185,
+          "line": 196,
           "column": 20
         }
       ]
@@ -5453,7 +5458,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 149,
+          "line": 160,
           "column": 52
         }
       ]
@@ -5648,7 +5653,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 320,
+          "line": 331,
           "column": 3634
         }
       ]
@@ -5798,8 +5803,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 320,
-          "column": 6686
+          "line": 331,
+          "column": 7011
         }
       ]
     },
@@ -5938,7 +5943,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 731,
+          "line": 688,
           "column": 11
         }
       ]
@@ -5991,7 +5996,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 152,
+          "line": 151,
           "column": 12
         }
       ]
@@ -6189,7 +6194,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 643,
+          "line": 600,
           "column": 9
         }
       ]
@@ -6335,13 +6340,13 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 302,
+          "line": 313,
           "column": 89
         },
         {
           "file": "src/views/Home.vue",
-          "line": 320,
-          "column": 6240
+          "line": 331,
+          "column": 6565
         }
       ]
     },
@@ -6352,12 +6357,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 607,
+          "line": 564,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 619,
+          "line": 576,
           "column": 11
         }
       ]
@@ -6429,7 +6434,7 @@
       "refs": [
         {
           "file": "src/components/layout/AppSidebar.vue",
-          "line": 19,
+          "line": 20,
           "column": 34
         },
         {
@@ -6724,7 +6729,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 187,
+          "line": 198,
           "column": 20
         }
       ]
@@ -7045,7 +7050,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 313,
+          "line": 293,
           "column": 53
         }
       ]
@@ -7207,7 +7212,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 588,
+          "line": 545,
           "column": 9
         }
       ]
@@ -7272,7 +7277,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 389,
+          "line": 369,
           "column": 55
         }
       ]
@@ -7284,7 +7289,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 157,
+          "line": 156,
           "column": 12
         }
       ]
@@ -7373,7 +7378,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 741,
+          "line": 698,
           "column": 15
         }
       ]
@@ -7495,7 +7500,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 158,
+          "line": 157,
           "column": 12
         }
       ]
@@ -7611,13 +7616,13 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 164,
+          "line": 175,
           "column": 18
         },
         {
           "file": "src/views/Home.vue",
-          "line": 320,
-          "column": 5545
+          "line": 331,
+          "column": 5870
         }
       ]
     },
@@ -8063,12 +8068,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 151,
+          "line": 162,
           "column": 60
         },
         {
           "file": "src/views/Home.vue",
-          "line": 287,
+          "line": 298,
           "column": 63
         }
       ]
@@ -8348,7 +8353,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 151,
+          "line": 162,
           "column": 30
         }
       ]
@@ -8420,7 +8425,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 135,
+          "line": 146,
           "column": 20
         }
       ]
@@ -8478,7 +8483,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 301,
+          "line": 312,
           "column": 16
         }
       ]
@@ -8584,7 +8589,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 330,
+          "line": 310,
           "column": 16
         }
       ]
@@ -8882,7 +8887,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 109,
+          "line": 120,
           "column": 166
         }
       ]
@@ -8979,12 +8984,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 251,
+          "line": 231,
           "column": 20
         },
         {
           "file": "src/views/Home.vue",
-          "line": 103,
+          "line": 114,
           "column": 208
         }
       ]
@@ -9023,7 +9028,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 296,
+          "line": 307,
           "column": 66
         }
       ]
@@ -9047,7 +9052,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 290,
+          "line": 270,
           "column": 47
         }
       ]
@@ -9083,7 +9088,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 144,
+          "line": 134,
           "column": 51
         }
       ]
@@ -9131,7 +9136,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 162,
+          "line": 173,
           "column": 12
         }
       ]
@@ -9201,8 +9206,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 320,
-          "column": 4550
+          "line": 331,
+          "column": 4875
         }
       ]
     },
@@ -9264,7 +9269,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 320,
+          "line": 331,
           "column": 1084
         }
       ]
@@ -9653,37 +9658,32 @@
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 288,
+          "line": 268,
           "column": 42
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 311,
+          "line": 291,
           "column": 42
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 344,
+          "line": 324,
           "column": 42
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 456,
+          "line": 436,
           "column": 42
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 479,
+          "line": 458,
           "column": 42
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 501,
-          "column": 42
-        },
-        {
-          "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 523,
+          "line": 480,
           "column": 44
         },
         {
@@ -9956,7 +9956,7 @@
         },
         {
           "file": "src/utils/configNormalize.js",
-          "line": 84,
+          "line": 69,
           "column": 44
         }
       ]
@@ -9980,7 +9980,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 237,
+          "line": 248,
           "column": 50
         }
       ]
@@ -10028,7 +10028,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1361,
+          "line": 1334,
           "column": 32
         }
       ]
@@ -10040,7 +10040,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 441,
+          "line": 421,
           "column": 26
         }
       ]
@@ -10166,7 +10166,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 212,
+          "line": 223,
           "column": 30
         }
       ]
@@ -10366,7 +10366,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 149,
+          "line": 160,
           "column": 34
         }
       ]
@@ -10673,18 +10673,6 @@
         }
       ]
     },
-    "6dd4af23e22bb8f2": {
-      "source": "Goal 命令",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 751,
-          "column": 22
-        }
-      ]
-    },
     "6df9a984e591ade8": {
       "source": "读取尾部...",
       "kind": "text",
@@ -10716,8 +10704,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 320,
-          "column": 4906
+          "line": 331,
+          "column": 5231
         }
       ]
     },
@@ -10907,7 +10895,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 346,
+          "line": 326,
           "column": 35
         }
       ]
@@ -10936,18 +10924,6 @@
         }
       ]
     },
-    "6fc1c7b963980b18": {
-      "source": "开启后 /goal 与 /goal --strict 由系统识别并进入 Goal 执行；关闭时当作普通对话。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 754,
-          "column": 9
-        }
-      ]
-    },
     "6fc38ef3602fe789": {
       "source": "上下文",
       "kind": "text",
@@ -10967,7 +10943,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 109,
+          "line": 120,
           "column": 146
         }
       ]
@@ -11075,18 +11051,6 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 676,
           "column": 15
-        }
-      ]
-    },
-    "71b0e868e6f9179c": {
-      "source": "已关闭 Goal 命令（/goal 按普通对话处理）",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 458,
-          "column": 51
         }
       ]
     },
@@ -11330,7 +11294,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 413,
+          "line": 393,
           "column": 21
         }
       ]
@@ -11496,7 +11460,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 290,
+          "line": 301,
           "column": 69
         }
       ]
@@ -11581,7 +11545,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 329,
+          "line": 309,
           "column": 14
         }
       ]
@@ -12307,7 +12271,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 248,
+          "line": 259,
           "column": 32
         }
       ]
@@ -12336,12 +12300,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 674,
+          "line": 631,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 686,
+          "line": 643,
           "column": 11
         }
       ]
@@ -12377,7 +12341,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 150,
+          "line": 140,
           "column": 98
         }
       ]
@@ -12568,7 +12532,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 295,
+          "line": 306,
           "column": 18
         }
       ]
@@ -12580,13 +12544,13 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 320,
-          "column": 4116
+          "line": 331,
+          "column": 4441
         },
         {
           "file": "src/views/Home.vue",
-          "line": 320,
-          "column": 5545
+          "line": 331,
+          "column": 5870
         }
       ]
     },
@@ -13146,7 +13110,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 313,
+          "line": 293,
           "column": 35
         }
       ]
@@ -13307,7 +13271,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 151,
+          "line": 141,
           "column": 63
         }
       ]
@@ -13382,7 +13346,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 402,
+          "line": 382,
           "column": 14
         }
       ]
@@ -13581,7 +13545,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 282,
+          "line": 293,
           "column": 11
         }
       ]
@@ -13646,18 +13610,6 @@
         }
       ]
     },
-    "8d746a3e6dc1a417": {
-      "source": "已启用 Goal 命令",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 458,
-          "column": 35
-        }
-      ]
-    },
     "8da7f18d3cbd7912": {
       "source": "留空/0 = 默认 30 天",
       "kind": "text",
@@ -13665,7 +13617,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 722,
+          "line": 679,
           "column": 15
         }
       ]
@@ -13682,7 +13634,7 @@
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 331,
+          "line": 311,
           "column": 20
         }
       ]
@@ -13831,7 +13783,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 660,
+          "line": 617,
           "column": 77
         }
       ]
@@ -14154,7 +14106,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1324,
+          "line": 1297,
           "column": 32
         }
       ]
@@ -14232,8 +14184,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 320,
-          "column": 7159
+          "line": 331,
+          "column": 7484
         },
         {
           "file": "src/views/RequestMetrics.vue",
@@ -14439,7 +14391,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 287,
+          "line": 298,
           "column": 32
         }
       ]
@@ -14845,12 +14797,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 249,
+          "line": 229,
           "column": 14
         },
         {
           "file": "src/views/Home.vue",
-          "line": 103,
+          "line": 114,
           "column": 92
         }
       ]
@@ -14862,12 +14814,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1528,
+          "line": 1501,
           "column": 32
         },
         {
           "file": "src/state/appState.js",
-          "line": 1549,
+          "line": 1522,
           "column": 32
         }
       ]
@@ -14879,7 +14831,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 163,
+          "line": 174,
           "column": 14
         }
       ]
@@ -14968,7 +14920,7 @@
       "refs": [
         {
           "file": "src/components/layout/AppSidebar.vue",
-          "line": 61,
+          "line": 62,
           "column": 8
         }
       ]
@@ -15052,7 +15004,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 134,
+          "line": 145,
           "column": 16
         }
       ]
@@ -15172,8 +15124,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 320,
-          "column": 5879
+          "line": 331,
+          "column": 6204
         }
       ]
     },
@@ -15381,7 +15333,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 134,
+          "line": 124,
           "column": 7
         }
       ]
@@ -15480,7 +15432,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 608,
+          "line": 565,
           "column": 9
         }
       ]
@@ -15921,7 +15873,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 237,
+          "line": 248,
           "column": 34
         }
       ]
@@ -16271,23 +16223,6 @@
           "file": "src/views/ModelEditor.vue",
           "line": 873,
           "column": 16
-        }
-      ]
-    },
-    "a6966e1ff91acef6": {
-      "source": "启用 Goal 命令",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 753,
-          "column": 9
-        },
-        {
-          "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 765,
-          "column": 11
         }
       ]
     },
@@ -16853,7 +16788,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 179,
+          "line": 190,
           "column": 17
         }
       ]
@@ -17017,7 +16952,7 @@
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 657,
+          "line": 614,
           "column": 80
         },
         {
@@ -17343,12 +17278,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 250,
+          "line": 230,
           "column": 16
         },
         {
           "file": "src/views/Home.vue",
-          "line": 103,
+          "line": 114,
           "column": 113
         }
       ]
@@ -17478,12 +17413,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 268,
+          "line": 248,
           "column": 48
         },
         {
           "file": "src/views/Home.vue",
-          "line": 113,
+          "line": 124,
           "column": 44
         }
       ]
@@ -17529,18 +17464,18 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 403,
+          "line": 383,
           "column": 18
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 663,
+          "line": 620,
           "column": 87
         },
         {
           "file": "src/views/Home.vue",
-          "line": 320,
-          "column": 4116
+          "line": 331,
+          "column": 4441
         }
       ]
     },
@@ -17909,8 +17844,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 320,
-          "column": 7159
+          "line": 331,
+          "column": 7484
         },
         {
           "file": "src/views/RequestMetrics.vue",
@@ -18335,7 +18270,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 143,
+          "line": 133,
           "column": 63
         }
       ]
@@ -18777,7 +18712,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 148,
+          "line": 138,
           "column": 49
         }
       ]
@@ -18825,7 +18760,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 142,
+          "line": 132,
           "column": 98
         }
       ]
@@ -18960,7 +18895,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1380,
+          "line": 1353,
           "column": 32
         }
       ]
@@ -19116,7 +19051,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 141,
+          "line": 131,
           "column": 67
         }
       ]
@@ -19355,7 +19290,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 320,
+          "line": 331,
           "column": 502
         }
       ]
@@ -19433,7 +19368,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 286,
+          "line": 297,
           "column": 18
         }
       ]
@@ -19498,7 +19433,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 320,
+          "line": 331,
           "column": 2342
         }
       ]
@@ -19657,12 +19592,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 587,
+          "line": 544,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 599,
+          "line": 556,
           "column": 11
         }
       ]
@@ -19809,7 +19744,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 283,
+          "line": 294,
           "column": 11
         }
       ]
@@ -19821,12 +19756,12 @@
       "refs": [
         {
           "file": "src/components/layout/AppSidebar.vue",
-          "line": 89,
+          "line": 90,
           "column": 22
         },
         {
           "file": "src/components/layout/AppSidebar.vue",
-          "line": 90,
+          "line": 91,
           "column": 17
         }
       ]
@@ -19980,7 +19915,7 @@
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 265,
+          "line": 245,
           "column": 42
         },
         {
@@ -19990,7 +19925,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 103,
+          "line": 114,
           "column": 358
         }
       ]
@@ -20079,8 +20014,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 320,
-          "column": 5392
+          "line": 331,
+          "column": 5717
         }
       ]
     },
@@ -20248,7 +20183,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1405,
+          "line": 1378,
           "column": 14
         }
       ]
@@ -20371,7 +20306,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 712,
+          "line": 669,
           "column": 11
         }
       ]
@@ -20727,12 +20662,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 296,
+          "line": 307,
           "column": 36
         },
         {
           "file": "src/views/Home.vue",
-          "line": 302,
+          "line": 313,
           "column": 34
         }
       ]
@@ -20756,7 +20691,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 290,
+          "line": 301,
           "column": 31
         }
       ]
@@ -20780,7 +20715,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 139,
+          "line": 129,
           "column": 48
         }
       ]
@@ -20792,7 +20727,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 180,
+          "line": 191,
           "column": 36
         }
       ]
@@ -20816,7 +20751,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 666,
+          "line": 623,
           "column": 92
         }
       ]
@@ -21078,7 +21013,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 346,
+          "line": 326,
           "column": 55
         }
       ]
@@ -21090,7 +21025,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 256,
+          "line": 267,
           "column": 16
         }
       ]
@@ -21126,7 +21061,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 285,
+          "line": 296,
           "column": 38
         }
       ]
@@ -21143,8 +21078,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 320,
-          "column": 4550
+          "line": 331,
+          "column": 4875
         }
       ]
     },
@@ -21249,7 +21184,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 145,
+          "line": 135,
           "column": 10
         }
       ]
@@ -21261,7 +21196,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 585,
+          "line": 542,
           "column": 22
         },
         {
@@ -21375,22 +21310,22 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 192,
+          "line": 203,
           "column": 60
         },
         {
           "file": "src/views/Home.vue",
-          "line": 237,
+          "line": 248,
           "column": 93
         },
         {
           "file": "src/views/Home.vue",
-          "line": 248,
+          "line": 259,
           "column": 63
         },
         {
           "file": "src/views/Home.vue",
-          "line": 257,
+          "line": 268,
           "column": 20
         }
       ]
@@ -21436,7 +21371,7 @@
       "refs": [
         {
           "file": "src/components/layout/AppSidebar.vue",
-          "line": 20,
+          "line": 21,
           "column": 31
         },
         {
@@ -21751,9 +21686,9 @@
       "placeholders": 0,
       "refs": [
         {
-          "file": "src/router/index.js",
-          "line": 60,
-          "column": 39
+          "file": "src/views/Home.vue",
+          "line": 331,
+          "column": 4050
         },
         {
           "file": "src/views/RequestMetrics.vue",
@@ -21998,22 +21933,22 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 567,
+          "line": 524,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 579,
+          "line": 536,
           "column": 11
         },
         {
           "file": "src/state/appState.js",
-          "line": 153,
+          "line": 152,
           "column": 12
         },
         {
           "file": "src/views/Home.vue",
-          "line": 320,
+          "line": 331,
           "column": 1049
         }
       ]
@@ -22280,6 +22215,23 @@
           "file": "src/services/browserBindings.js",
           "line": 811,
           "column": 170
+        }
+      ]
+    },
+    "e8129af3936b108d": {
+      "source": "请求日志",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/layout/AppSidebar.vue",
+          "line": 19,
+          "column": 38
+        },
+        {
+          "file": "src/router/index.js",
+          "line": 60,
+          "column": 39
         }
       ]
     },
@@ -22748,12 +22700,12 @@
       "refs": [
         {
           "file": "src/components/layout/AppSidebar.vue",
-          "line": 89,
+          "line": 90,
           "column": 22
         },
         {
           "file": "src/components/layout/AppSidebar.vue",
-          "line": 90,
+          "line": 91,
           "column": 17
         }
       ]
@@ -22898,7 +22850,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 296,
+          "line": 307,
           "column": 93
         }
       ]
@@ -22922,13 +22874,13 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 320,
+          "line": 331,
           "column": 3217
         },
         {
           "file": "src/views/Home.vue",
-          "line": 320,
-          "column": 6068
+          "line": 331,
+          "column": 6393
         }
       ]
     },
@@ -23144,12 +23096,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 268,
+          "line": 248,
           "column": 33
         },
         {
           "file": "src/views/Home.vue",
-          "line": 113,
+          "line": 124,
           "column": 29
         }
       ]
@@ -23202,7 +23154,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 153,
+          "line": 143,
           "column": 10
         }
       ]
@@ -23497,8 +23449,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 320,
-          "column": 6686
+          "line": 331,
+          "column": 7011
         }
       ]
     },
@@ -23758,7 +23710,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 694,
+          "line": 651,
           "column": 11
         }
       ]
@@ -23799,7 +23751,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 140,
+          "line": 130,
           "column": 49
         },
         {
@@ -23876,7 +23828,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/AdvancedSettings.vue",
-          "line": 675,
+          "line": 632,
           "column": 9
         }
       ]
@@ -24070,7 +24022,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 220,
+          "line": 231,
           "column": 19
         }
       ]
@@ -24082,7 +24034,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 109,
+          "line": 120,
           "column": 57
         }
       ]
@@ -24178,18 +24130,18 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 133,
+          "line": 144,
           "column": 14
         },
         {
           "file": "src/views/Home.vue",
-          "line": 320,
+          "line": 331,
           "column": 3217
         },
         {
           "file": "src/views/Home.vue",
-          "line": 320,
-          "column": 6068
+          "line": 331,
+          "column": 6393
         }
       ]
     },
@@ -24224,12 +24176,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 172,
+          "line": 183,
           "column": 29
         },
         {
           "file": "src/views/Home.vue",
-          "line": 271,
+          "line": 282,
           "column": 29
         }
       ]
