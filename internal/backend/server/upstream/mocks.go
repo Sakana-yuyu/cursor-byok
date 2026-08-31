@@ -73,7 +73,6 @@ const (
 	bootstrapStatsigModelPickerExperimentsLayer      = "model_picker_experiments"
 	bootstrapStatsigEffortFirstVariantParam          = "effort_first_variant"
 	bootstrapStatsigEffortFirstCompactModelIDsParam  = "effort_first_compact_model_ids"
-	bootstrapStatsigEffortFirstVariantTreatment      = "treatment"
 	bootstrapStatsigEffortFirstSubmenuExperiment     = "effort_first_submenu_2026_08"
 	bootstrapStatsigExperimentEnabledParam           = "enabled"
 	bootstrapStatsigVariantLockedPicker              = "locked_picker"
@@ -360,7 +359,7 @@ var bootstrapStatsigTemplate = statsigBootstrapTemplate{
 		bootstrapStatsigModelPickerExperimentsLayer: buildStatsigLayerConfig(
 			bootstrapStatsigModelPickerExperimentsLayer,
 			map[string]any{
-				bootstrapStatsigEffortFirstVariantParam:         bootstrapStatsigEffortFirstVariantTreatment,
+				bootstrapStatsigEffortFirstVariantParam:         bootstrapStatsigVariantControl,
 				bootstrapStatsigEffortFirstCompactModelIDsParam: []string{},
 			},
 		),
@@ -1343,7 +1342,7 @@ func buildBootstrapStatsigConfigJSONForModelIDs(nowMs int64, authID string, comp
 	template.LayerConfigs[bootstrapStatsigModelPickerExperimentsLayer] = buildStatsigLayerConfig(
 		bootstrapStatsigModelPickerExperimentsLayer,
 		map[string]any{
-			bootstrapStatsigEffortFirstVariantParam:         bootstrapStatsigEffortFirstVariantTreatment,
+			bootstrapStatsigEffortFirstVariantParam:         bootstrapStatsigVariantControl,
 			bootstrapStatsigEffortFirstCompactModelIDsParam: collectNonEmptyStrings(compactModelIDs),
 		},
 	)

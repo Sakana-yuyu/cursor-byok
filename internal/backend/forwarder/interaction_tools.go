@@ -493,10 +493,9 @@ func buildGenerateImageToolCall(args *agentv1.GenerateImageArgs, result *agentv1
 	}
 }
 
-// handleSendFinalSummaryToolInvocation 处理 Cursor 终结工具 send_final_summary：
-// 模型用它声明"任务完成并发送最终总结"。forwarder 把 final_summary 参数作为
-// 可见文本增量转发给客户端，完成工具调用，并把本工具标记为终结工具调用——
-// 之后 provider pass 收口时不再 resume（避免 unsupported 错误导致无限循环）。
+// handleSendFinalSummaryToolInvocation 处理 Cursor 的 send_final_summary 工具：
+// final_summary 只用于会话列表摘要，不是面向用户的最终答复。完成工具调用后由
+// provider 继续生成正文；重复调用由通用工具调用熔断处理，不能提前终止正常续写。
 func (service *Service) handleSendFinalSummaryToolInvocation(stream *ActiveStream, invocation runtimecore.ToolInvocation) error {
 	args, decodeErr := decodeSendFinalSummaryArgs(invocation.ArgsJSON)
 	if decodeErr != nil {
@@ -504,17 +503,8 @@ func (service *Service) handleSendFinalSummaryToolInvocation(stream *ActiveStrea
 		return service.completeImmediateToolResult(stream, invocation, payload, buildSendFinalSummaryToolCall(args, result))
 	}
 	summary := strings.TrimSpace(args.GetFinalSummary())
-	if summary != "" {
-		if err := service.broker.Publish(stream.RequestID, StreamEvent{Message: buildTextDeltaMessage(summary)}); err != nil {
-			return err
-		}
-	}
 	result, payload := buildSendFinalSummarySuccessResult(summary)
-	if err := service.completeImmediateToolResult(stream, invocation, payload, buildSendFinalSummaryToolCall(args, result)); err != nil {
-		return err
-	}
-	markProviderTerminalToolInvocation(stream)
-	return nil
+	return service.completeImmediateToolResult(stream, invocation, payload, buildSendFinalSummaryToolCall(args, result))
 }
 
 type sendFinalSummaryArgsJSON struct {

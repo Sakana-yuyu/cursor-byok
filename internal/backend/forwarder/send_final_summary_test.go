@@ -1,15 +1,55 @@
-// send_final_summary_test.go 验证 send_final_summary 终结工具处理：
-// - 工具被识别为本地即时终结工具（isImmediateNativeTool）
+// send_final_summary_test.go 验证 send_final_summary 工具处理：
+// - 工具被识别为本地即时工具（isImmediateNativeTool）
 // - 参数解析 final_summary 文本
-// - 调用后发布最终总结文本并标记终结工具调用（不再 resume 死循环）
+// - 调用后只记录摘要工具结果，不冒充最终正文，并继续 provider 生成真正回复
 package forwarder
 
 import (
+	"context"
+	"encoding/json"
+	"sync"
 	"testing"
+	"time"
 
 	"cursor/gen/agentv1"
 	runtimecore "cursor/internal/backend/agent/core"
+	modeladapter "cursor/internal/backend/agent/model"
 )
+
+type sendFinalSummaryContinuationProvider struct {
+	mu        sync.Mutex
+	passCount int
+	done      chan struct{}
+	doneOnce  sync.Once
+}
+
+func (provider *sendFinalSummaryContinuationProvider) StartStream(_ context.Context, _ ProviderRequest, sink func(modeladapter.ModelEvent) error) error {
+	provider.mu.Lock()
+	provider.passCount++
+	pass := provider.passCount
+	provider.mu.Unlock()
+
+	if pass == 1 {
+		if err := sink(modeladapter.ModelEvent{
+			Kind: modeladapter.ModelEventKindToolLikeCompleted,
+			ToolInvocation: &runtimecore.ToolInvocation{
+				CallID:   "call-final-summary",
+				ToolName: "send_final_summary",
+				ArgsJSON: []byte(`{"final_summary":"完成队列验收"}`),
+			},
+		}); err != nil {
+			return err
+		}
+		return sink(modeladapter.ModelEvent{Kind: modeladapter.ModelEventKindTurnFinished, FinishReason: "tool_calls"})
+	}
+
+	if err := sink(modeladapter.ModelEvent{Kind: modeladapter.ModelEventKindTextDelta, Text: "QUEUE-B-DONE"}); err != nil {
+		return err
+	}
+	err := sink(modeladapter.ModelEvent{Kind: modeladapter.ModelEventKindTurnFinished, FinishReason: "stop"})
+	provider.doneOnce.Do(func() { close(provider.done) })
+	return err
+}
 
 func TestIsImmediateNativeToolSendFinalSummary(t *testing.T) {
 	if !isImmediateNativeTool("send_final_summary") {
@@ -77,9 +117,8 @@ func TestBuildStartedToolCallSendFinalSummary(t *testing.T) {
 	}
 }
 
-// TestHandleSendFinalSummaryToolInvocation 验证终结工具调用完整流程：
-// final_summary 文本被发布为 text delta，且 stream 被标记终结工具调用
-// （ProviderTerminalToolInvocation=true），provider pass 收口后不再 resume。
+// TestHandleSendFinalSummaryToolInvocation 验证摘要工具调用完整流程：
+// final_summary 仅落为工具结果，stream 保持可续写，等待 provider 生成真正的最终正文。
 func TestHandleSendFinalSummaryToolInvocation(t *testing.T) {
 	broker := NewStreamBroker()
 	service := &Service{
@@ -105,6 +144,8 @@ func TestHandleSendFinalSummaryToolInvocation(t *testing.T) {
 		NextTurnSeq:    2,
 		NextEntrySeq:   1,
 	}
+	stream.ProviderActive = true
+	stream.Status = StreamStatusStreaming
 
 	invocation := runtimecore.ToolInvocation{
 		CallID:   "call-final-1",
@@ -117,21 +158,104 @@ func TestHandleSendFinalSummaryToolInvocation(t *testing.T) {
 
 	stream.mu.Lock()
 	terminal := stream.ProviderTerminalToolInvocation
+	status := stream.Status
 	stream.mu.Unlock()
-	if !terminal {
-		t.Fatal("ProviderTerminalToolInvocation must be true after send_final_summary")
+	if terminal {
+		t.Fatal("send_final_summary must not terminate before the provider writes the final reply")
 	}
-	if stream.Status == StreamStatusStreaming {
-		t.Fatal("stream must not stay in streaming after send_final_summary")
+	if status != StreamStatusStreaming {
+		t.Fatalf("stream status = %q, want streaming", status)
 	}
 
-	// 工具调用已完成（历史含 tool_result）。
+	// 工具调用已完成，但摘要不能作为 assistant_text 冒充用户可见的最终答复。
 	conversation := stream.CheckpointConversation
 	if conversation == nil {
 		t.Fatal("checkpoint conversation is nil")
 	}
-	entry := conversation.Entries[len(conversation.Entries)-1]
-	if entry.Kind != "tool_result" {
-		t.Fatalf("last entry kind = %q, want tool_result", entry.Kind)
+	foundToolResult := false
+	for _, entry := range conversation.Entries {
+		switch entry.Kind {
+		case "assistant_text":
+			t.Fatal("final summary must not be persisted as assistant_text")
+		case "tool_result":
+			foundToolResult = true
+		}
 	}
+	if !foundToolResult {
+		t.Fatal("send_final_summary tool_result is missing")
+	}
+}
+
+func TestSendFinalSummaryContinuesToVisibleFinalReply(t *testing.T) {
+	store := NewConversationFileStore(t.TempDir())
+	conversation := testConversation([]HistoryEntry{
+		testUserMessageEntry(t, 1, "request-final-continuation", "只回复 QUEUE-B-DONE"),
+	})
+	persisted, err := store.SaveConversationWithEntries(conversation.ConversationID, conversation, conversation.Entries)
+	if err != nil {
+		t.Fatalf("SaveConversationWithEntries() error = %v", err)
+	}
+	provider := &sendFinalSummaryContinuationProvider{done: make(chan struct{})}
+	broker := NewStreamBroker()
+	service := newServiceWithDependencies(store, NewHistoryProjector(), contextProjectionLifecycleCompiler{}, provider, broker)
+	stream, err := broker.OpenStream(
+		"request-final-continuation",
+		persisted.ConversationID,
+		1,
+		"model-a",
+		"model-a",
+		agentv1.AgentMode_AGENT_MODE_AGENT,
+		"只回复 QUEUE-B-DONE",
+	)
+	if err != nil {
+		t.Fatalf("OpenStream() error = %v", err)
+	}
+	stream.CheckpointConversation = cloneConversationFile(persisted)
+	t.Cleanup(func() {
+		_ = broker.Cancel(stream.RequestID, "test cleanup")
+		stream.mu.Lock()
+		done := stream.ActorDone
+		stream.mu.Unlock()
+		if done != nil {
+			select {
+			case <-done:
+			case <-time.After(time.Second):
+			}
+		}
+	})
+
+	if err := service.requestProviderAction(stream, providerActionStart); err != nil {
+		t.Fatalf("requestProviderAction(start) error = %v", err)
+	}
+	select {
+	case <-provider.done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("provider did not continue after send_final_summary")
+	}
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		stream.mu.Lock()
+		passCount := stream.ProviderPassCount
+		entries := append([]HistoryEntry(nil), stream.CheckpointConversation.Entries...)
+		stream.mu.Unlock()
+		foundVisibleReply := false
+		for _, entry := range entries {
+			if entry.Kind != "assistant_text" {
+				continue
+			}
+			var payload assistantTextPayload
+			if err := json.Unmarshal(entry.Payload, &payload); err != nil {
+				t.Fatalf("decode assistant text payload: %v", err)
+			}
+			if payload.Text == "QUEUE-B-DONE" {
+				foundVisibleReply = true
+			}
+		}
+		if passCount == 2 && foundVisibleReply {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("provider continuation did not persist the visible final reply")
 }
