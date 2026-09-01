@@ -6,7 +6,7 @@
 name: "Cursor助手"
 arch: ${GOARCH}
 platform: "linux"
-version: "1.0.3"
+version: "1.0.4"
 section: "default"
 priority: "extra"
 maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
