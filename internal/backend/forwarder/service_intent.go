@@ -206,6 +206,18 @@ func (service *Service) shouldReuseActiveRun(intent InboundIntent) bool {
 			return false
 		}
 	}
+	if incomingMessageID := strings.TrimSpace(intent.UserMessage.GetMessageId()); intent.StartsRun && incomingMessageID != "" && stream.CheckpointConversation != nil {
+		matchesCurrentTurn := false
+		for _, match := range findUserMessageEntriesByMessageID(stream.CheckpointConversation.Entries, incomingMessageID) {
+			if match.Entry.TurnSeq == stream.TurnSeq && strings.TrimSpace(match.Entry.RequestID) == strings.TrimSpace(stream.RequestID) {
+				matchesCurrentTurn = true
+				break
+			}
+		}
+		if !matchesCurrentTurn {
+			return false
+		}
+	}
 	// RunSSE 重连会重复提交同一个 run_request；只要该 request 仍处于活动回合，
 	// 就不能重新初始化 checkpoint、pending exec 或 provider pass。
 	return stream.TurnSeq > 0 || stream.ProviderActive || len(stream.PendingExecs) > 0 || len(stream.PendingInteractions) > 0

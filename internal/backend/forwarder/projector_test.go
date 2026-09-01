@@ -79,6 +79,39 @@ func TestProjectCheckpointProjectionBuildsBlobBackedTurns(t *testing.T) {
 	}
 }
 
+func TestProjectCheckpointProjectionUsesScopedAliasesForManagedCanvasLinks(t *testing.T) {
+	const source = "打开 [项目架构](C:/Users/Administrator/.cursor/projects/e-MyProject-according/canvases/project-architecture.canvas.tsx) 与 [技术审查](</Users/demo/.cursor/projects/sample/canvases/technology audit.canvas.tsx>)；保留 [普通文件](C:/repo/notes.md) 和 [非受管 Canvas](C:/repo/demo.canvas.tsx)。"
+	const want = "打开 [项目架构](artifacts/canvases/project-architecture.canvas.bundle.gz) 与 [技术审查](<artifacts/canvases/technology audit.canvas.bundle.gz>)；保留 [普通文件](C:/repo/notes.md) 和 [非受管 Canvas](C:/repo/demo.canvas.tsx)。"
+
+	conversation := testConversation([]HistoryEntry{
+		testUserMessageEntry(t, 1, "request-1", "创建 Canvas"),
+		newAssistantTextEntry(1, "request-1", source, "", ""),
+	})
+	projection, err := NewHistoryProjector().ProjectCheckpointProjection(conversation)
+	if err != nil {
+		t.Fatalf("ProjectCheckpointProjection() error = %v", err)
+	}
+
+	var got string
+	for _, blob := range projection.Blobs {
+		step := &agentv1.ConversationStep{}
+		if proto.Unmarshal(blob.Data, step) == nil && step.GetAssistantMessage() != nil {
+			got = step.GetAssistantMessage().GetText()
+		}
+	}
+	if got != want {
+		t.Fatalf("checkpoint assistant text = %q, want %q", got, want)
+	}
+
+	replay, err := NewHistoryProjector().ProjectPromptReplay(conversation)
+	if err != nil {
+		t.Fatalf("ProjectPromptReplay() error = %v", err)
+	}
+	if len(replay) != 2 || replay[1].Content != source {
+		t.Fatalf("prompt replay = %#v, want original Canvas source link", replay)
+	}
+}
+
 func TestProjectLegacyCheckpointLargeModelHistoryUsesRootReplay(t *testing.T) {
 	entries := make([]HistoryEntry, 0, 400)
 	for turn := int64(1); turn <= 200; turn++ {

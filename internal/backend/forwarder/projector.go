@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -16,6 +17,11 @@ import (
 )
 
 const projectedConversationMaxTokens = 64000
+
+var (
+	markdownInlineLinkPattern = regexp.MustCompile(`(!?\[[^\]\r\n]*\])\((?:<([^>\r\n]+)>|([^\s)\r\n]+))((?:\s+(?:"[^"\r\n]*"|'[^'\r\n]*'|\([^\)\r\n]*\)))?)\)`)
+	managedCanvasSourcePath   = regexp.MustCompile(`(?i)(?:^|/)\.cursor/projects/[^/]+/canvases/([^/]+)\.canvas\.tsx$`)
+)
 
 type HistoryProjector struct {
 }
@@ -667,7 +673,7 @@ func projectCheckpointTurnBlobs(conversation *ConversationFile, blobs *checkpoin
 				}
 				stepID, err := addCheckpointStepBlob(blobs, &agentv1.ConversationStep{
 					Message: &agentv1.ConversationStep_AssistantMessage{
-						AssistantMessage: &agentv1.AssistantMessage{Text: strings.TrimSpace(payload.Text)},
+						AssistantMessage: &agentv1.AssistantMessage{Text: rewriteManagedCanvasLinksForCheckpoint(strings.TrimSpace(payload.Text))},
 					},
 				})
 				if err != nil {
@@ -770,6 +776,33 @@ func projectCheckpointTurnBlobs(conversation *ConversationFile, blobs *checkpoin
 		turnIDs = append(turnIDs, blobs.add(turnPayload))
 	}
 	return turnIDs, nil
+}
+
+// rewriteManagedCanvasLinksForCheckpoint 让旧版客户端走会绑定当前任务的 Canvas bundle 打开路径。
+func rewriteManagedCanvasLinksForCheckpoint(text string) string {
+	if !strings.Contains(strings.ToLower(text), ".canvas.tsx") {
+		return text
+	}
+	return markdownInlineLinkPattern.ReplaceAllStringFunc(text, func(link string) string {
+		parts := markdownInlineLinkPattern.FindStringSubmatch(link)
+		if len(parts) != 5 || strings.HasPrefix(parts[1], "!") {
+			return link
+		}
+		target := parts[2]
+		angleWrapped := target != ""
+		if target == "" {
+			target = parts[3]
+		}
+		pathParts := managedCanvasSourcePath.FindStringSubmatch(strings.ReplaceAll(target, `\`, "/"))
+		if len(pathParts) != 2 {
+			return link
+		}
+		alias := "artifacts/canvases/" + pathParts[1] + ".canvas.bundle.gz"
+		if angleWrapped || strings.ContainsAny(alias, " \t") {
+			alias = "<" + alias + ">"
+		}
+		return parts[1] + "(" + alias + parts[4] + ")"
+	})
 }
 
 func addCheckpointStepBlob(blobs *checkpointBlobGraph, step *agentv1.ConversationStep) ([]byte, error) {

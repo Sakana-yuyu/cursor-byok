@@ -53,6 +53,74 @@ func TestWaitForRunSSEContinuationIgnoresStaleSignal(t *testing.T) {
 	}
 }
 
+func TestStreamForIntentReopensCompletedSameRequestWithoutForceFlag(t *testing.T) {
+	service, stream := completedRunSSEHTTPTestStream(t, "request-runsse-queued-turn")
+	done := make(chan struct{})
+	close(done)
+	stream.mu.Lock()
+	stream.ActorMailbox = make(chan streamCommandEnvelope, 1)
+	stream.ActorDone = done
+	stream.mu.Unlock()
+
+	reopened, err := service.streamForIntent(InboundIntent{
+		Kind:           "run",
+		RequestID:      stream.RequestID,
+		ConversationID: stream.ConversationID,
+		ModelID:        "model-id",
+		ModelName:      "model-name",
+		Mode:           agentv1.AgentMode_AGENT_MODE_MULTITASK,
+	})
+	if err != nil {
+		t.Fatalf("重开排队回合: %v", err)
+	}
+	if reopened != stream {
+		t.Fatal("同一 request 的排队回合应复用原 stream")
+	}
+	stream.mu.Lock()
+	defer stream.mu.Unlock()
+	if stream.Status != StreamStatusCreated || stream.Phase != TurnPhaseIdle {
+		t.Fatalf("重开后状态 = %s/%s，期望 created/idle", stream.Status, stream.Phase)
+	}
+	if stream.ActorMailbox != nil || stream.ActorDone != nil {
+		t.Fatal("重开后不应保留已退出的旧 actor")
+	}
+}
+
+func TestShouldReuseActiveRunDistinguishesQueuedUserMessageFromReconnect(t *testing.T) {
+	service, stream := completedRunSSEHTTPTestStream(t, "request-runsse-queued-message")
+	stream.mu.Lock()
+	stream.Status = StreamStatusStreaming
+	stream.Phase = TurnPhaseProviderRunning
+	stream.TurnSeq = 3
+	stream.CheckpointConversation = &ConversationFile{
+		ConversationID: stream.ConversationID,
+		Entries: []HistoryEntry{
+			testUserMessageEntry(t, 3, stream.RequestID, "first message"),
+		},
+	}
+	stream.mu.Unlock()
+
+	currentMessageID := "message-3"
+	baseIntent := InboundIntent{
+		Kind:           "run",
+		RequestID:      stream.RequestID,
+		ConversationID: stream.ConversationID,
+		StartsRun:      true,
+		ModelID:        stream.ModelID,
+	}
+	reconnect := baseIntent
+	reconnect.UserMessage = &agentv1.UserMessage{MessageId: currentMessageID, Text: "first message"}
+	if !service.shouldReuseActiveRun(reconnect) {
+		t.Fatal("相同 user message ID 的 RunSSE 重连应复用当前回合")
+	}
+
+	queued := baseIntent
+	queued.UserMessage = &agentv1.UserMessage{MessageId: "message-4", Text: "queued message"}
+	if service.shouldReuseActiveRun(queued) {
+		t.Fatal("不同 user message ID 的排队消息不应被误判为 RunSSE 重连")
+	}
+}
+
 func TestRunSSETerminalContinuation(t *testing.T) {
 	t.Run("成功终态承接同 request 新回合", func(t *testing.T) {
 		service, stream := completedRunSSEHTTPTestStream(t, "request-runsse-success")

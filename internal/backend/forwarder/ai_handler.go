@@ -3,15 +3,19 @@ package forwarder
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"connectrpc.com/connect"
 
+	"cursor/gen/agentv1"
 	"cursor/gen/aiserverv1"
 	"cursor/gen/aiserverv1/aiserverv1connect"
+	modeladapter "cursor/internal/backend/agent/model"
 	"cursor/internal/logger"
+	"github.com/google/uuid"
 )
 
 type usageLookupRecord struct {
@@ -23,6 +27,9 @@ type usageLookupRecord struct {
 const (
 	dashboardServiceGetTokenUsageProcedure                  = "/aiserver.v1.DashboardService/GetTokenUsage"
 	dashboardServiceGetGlassEarlyPreviewEnrollmentProcedure = "/aiserver.v1.DashboardService/GetGlassEarlyPreviewEnrollment"
+	nameTabInputMaxRunes                                    = 4000
+	nameTabOutputMaxRunes                                   = 24
+	nameTabMaxOutputTokens                                  = 96
 )
 
 func newAIHandler(service *Service) http.Handler {
@@ -50,6 +57,10 @@ func newAIHandler(service *Service) http.Handler {
 	mux.Handle(
 		aiserverv1connect.AiServiceWriteGitCommitMessageProcedure,
 		connect.NewUnaryHandler(aiserverv1connect.AiServiceWriteGitCommitMessageProcedure, service.WriteGitCommitMessage),
+	)
+	mux.Handle(
+		aiserverv1connect.AiServiceNameTabProcedure,
+		connect.NewUnaryHandler(aiserverv1connect.AiServiceNameTabProcedure, service.NameTab),
 	)
 	mux.Handle(
 		aiserverv1connect.AiServiceCreateExperimentalIndexProcedure,
@@ -104,6 +115,112 @@ func newAIHandler(service *Service) http.Handler {
 		connect.NewUnaryHandler(aiserverv1connect.AiServiceFetchRelevantKnowledgeForConversationProcedure, service.FetchRelevantKnowledgeForConversation),
 	)
 	return mux
+}
+
+// NameTab 为 Cursor 新任务生成侧边栏和标题栏使用的简短摘要。
+func (service *Service) NameTab(ctx context.Context, req *connect.Request[aiserverv1.NameTabRequest]) (*connect.Response[aiserverv1.NameTabResponse], error) {
+	if req == nil || req.Msg == nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("name tab request is required"))
+	}
+	source := nameTabSourceText(req.Msg.GetMessages())
+	if source == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("name tab message is required"))
+	}
+
+	fallback := fallbackTabName(source)
+	if service == nil || service.provider == nil {
+		return connect.NewResponse(&aiserverv1.NameTabResponse{Name: fallback}), nil
+	}
+
+	requestID := "name-tab-" + uuid.NewString()
+	modelID, modelSource, _ := service.resolveCommitMessageModelID(ctx)
+	generated := ""
+	err := service.provider.StartStream(ctx, ProviderRequest{
+		RequestID:      requestID,
+		ConversationID: strings.TrimSpace(req.Msg.GetConversationId()),
+		RunID:          requestID,
+		ModelCallID:    requestID + "-model",
+		ModelID:        modelID,
+		Mode:           agentv1.AgentMode_AGENT_MODE_AGENT,
+		ThinkingEffort: "disabled",
+		Messages: []modeladapter.Message{
+			{Role: "system", Content: "Generate a concise task title from the user's request. Use the same language as the request. For Chinese use 6-18 characters; for other languages use 2-6 words. Preserve important code identifiers, commands, paths, and product names. Return only the title without quotes, markdown, punctuation, or explanation."},
+			{Role: "user", Content: source},
+		},
+		MaxTokens:      nameTabMaxOutputTokens,
+		CompileSummary: "generate task title model_source=" + modelSource,
+	}, func(event modeladapter.ModelEvent) error {
+		if event.Kind == modeladapter.ModelEventKindTextDelta {
+			generated += event.Text
+		}
+		return nil
+	})
+	name := cleanTabName(generated)
+	if err != nil || name == "" {
+		logger.Infof("NameTab provider fallback conversation_id=%s error=%v", strings.TrimSpace(req.Msg.GetConversationId()), err)
+		name = fallback
+	}
+	return connect.NewResponse(&aiserverv1.NameTabResponse{Name: name}), nil
+}
+
+func nameTabSourceText(messages []*aiserverv1.ConversationMessage) string {
+	for _, message := range messages {
+		if message == nil || message.GetType() != aiserverv1.ConversationMessage_MESSAGE_TYPE_HUMAN {
+			continue
+		}
+		if text := compactTabText(message.GetText(), nameTabInputMaxRunes); text != "" {
+			return text
+		}
+	}
+	for _, message := range messages {
+		if message == nil {
+			continue
+		}
+		if text := compactTabText(message.GetText(), nameTabInputMaxRunes); text != "" {
+			return text
+		}
+	}
+	return ""
+}
+
+func cleanTabName(value string) string {
+	name := firstCommitMessageLine(stripCommitMessageCodeFence(value))
+	for _, prefix := range []string{"标题：", "标题:", "title:", "task title:"} {
+		if strings.HasPrefix(strings.ToLower(name), strings.ToLower(prefix)) {
+			name = strings.TrimSpace(name[len(prefix):])
+			break
+		}
+	}
+	name = strings.Trim(strings.TrimSpace(name), "`'\"“”‘’。，！？!?：:")
+	return compactTabText(name, nameTabOutputMaxRunes)
+}
+
+func fallbackTabName(value string) string {
+	name := compactTabText(value, nameTabInputMaxRunes)
+	for _, prefix := range []string{"请帮我", "帮我", "请", "麻烦", "我想", "我需要"} {
+		name = strings.TrimSpace(strings.TrimPrefix(name, prefix))
+	}
+	name = strings.NewReplacer(
+		"最新的代码", "最新代码",
+		"，然后", "并",
+		"然后", "并",
+		"查看审查", "审查",
+	).Replace(name)
+	name = strings.Trim(strings.TrimSpace(name), "`'\"“”‘’。，！？!?：:")
+	return compactTabText(name, nameTabOutputMaxRunes)
+}
+
+func compactTabText(value string, maxRunes int) string {
+	value = strings.Join(strings.Fields(value), " ")
+	value = strings.TrimSpace(value)
+	if value == "" || maxRunes <= 0 {
+		return ""
+	}
+	runes := []rune(value)
+	if len(runes) > maxRunes {
+		runes = runes[:maxRunes]
+	}
+	return strings.TrimSpace(string(runes))
 }
 
 func (service *Service) GetThoughtAnnotation(_ context.Context, req *connect.Request[aiserverv1.GetThoughtAnnotationRequest]) (*connect.Response[aiserverv1.GetThoughtAnnotationResponse], error) {

@@ -220,8 +220,8 @@ func (service *Service) startOwnedRun(intent InboundIntent) error {
 func (service *Service) streamForIntent(intent InboundIntent) (*ActiveStream, error) {
 	switch strings.TrimSpace(intent.Kind) {
 	case "run":
-		if intent.ForceNewTurn {
-			if existing, ok := service.broker.Get(intent.RequestID); ok && existing != nil {
+		if existing, ok := service.broker.Get(intent.RequestID); ok && existing != nil {
+			if intent.ForceNewTurn || isTerminalIntentStream(existing) {
 				if err := service.reopenTerminalStreamForNewTurn(existing); err != nil {
 					return nil, err
 				}
