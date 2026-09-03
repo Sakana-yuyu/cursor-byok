@@ -72,7 +72,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 961,
+          "line": 986,
           "column": 18
         }
       ]
@@ -222,7 +222,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 929,
+          "line": 954,
           "column": 26
         },
         {
@@ -239,7 +239,7 @@
       "refs": [
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 373,
+          "line": 393,
           "column": 16
         },
         {
@@ -273,7 +273,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 906,
+          "line": 931,
           "column": 16
         }
       ]
@@ -374,7 +374,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1023,
+          "line": 1048,
           "column": 54
         },
         {
@@ -468,7 +468,7 @@
       "refs": [
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 404,
+          "line": 424,
           "column": 46
         }
       ]
@@ -492,7 +492,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1099,
+          "line": 1124,
           "column": 54
         },
         {
@@ -777,7 +777,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 879,
+          "line": 904,
           "column": 32
         }
       ]
@@ -960,7 +960,7 @@
       "refs": [
         {
           "file": "src/utils/supplierCatalog.js",
-          "line": 243,
+          "line": 245,
           "column": 370
         }
       ]
@@ -1397,22 +1397,22 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 554,
+          "line": 579,
           "column": 63
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 570,
+          "line": 595,
           "column": 70
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 580,
+          "line": 605,
           "column": 63
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 740,
+          "line": 765,
           "column": 70
         },
         {
@@ -1528,12 +1528,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1272,
+          "line": 1297,
           "column": 16
         },
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 477,
+          "line": 497,
           "column": 16
         }
       ]
@@ -1617,7 +1617,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 253,
+          "line": 252,
           "column": 85
         }
       ]
@@ -1694,7 +1694,7 @@
       "refs": [
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 267,
+          "line": 277,
           "column": 26
         }
       ]
@@ -1831,7 +1831,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1134,
+          "line": 1159,
           "column": 22
         }
       ]
@@ -2571,7 +2571,7 @@
       "refs": [
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 373,
+          "line": 393,
           "column": 16
         },
         {
@@ -2588,7 +2588,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 936,
+          "line": 961,
           "column": 118
         },
         {
@@ -2721,7 +2721,7 @@
       "refs": [
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 485,
+          "line": 505,
           "column": 9
         }
       ]
@@ -2733,7 +2733,7 @@
       "refs": [
         {
           "file": "src/utils/supplierCatalog.js",
-          "line": 307,
+          "line": 309,
           "column": 12
         }
       ]
@@ -2774,7 +2774,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 562,
+          "line": 587,
           "column": 12
         }
       ]
@@ -3162,7 +3162,7 @@
       "refs": [
         {
           "file": "src/utils/supplierCatalog.js",
-          "line": 298,
+          "line": 300,
           "column": 12
         }
       ]
@@ -3353,7 +3353,7 @@
       "refs": [
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 383,
+          "line": 403,
           "column": 14
         }
       ]
@@ -3389,12 +3389,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1259,
+          "line": 1284,
           "column": 16
         },
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 450,
+          "line": 470,
           "column": 14
         }
       ]
@@ -3531,7 +3531,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1046,
+          "line": 1071,
           "column": 54
         }
       ]
@@ -3555,12 +3555,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1245,
+          "line": 1270,
           "column": 20
         },
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 469,
+          "line": 489,
           "column": 16
         }
       ]
@@ -3608,12 +3608,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 554,
+          "line": 579,
           "column": 30
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 580,
+          "line": 605,
           "column": 30
         },
         {
@@ -3671,7 +3671,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1111,
+          "line": 1136,
           "column": 54
         }
       ]
@@ -3695,7 +3695,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1158,
+          "line": 1183,
           "column": 61
         }
       ]
@@ -3825,12 +3825,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 353,
+          "line": 352,
           "column": 99
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 367,
+          "line": 366,
           "column": 18
         },
         {
@@ -3960,7 +3960,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1179,
+          "line": 1204,
           "column": 156
         }
       ]
@@ -3996,7 +3996,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1180,
+          "line": 1205,
           "column": 53
         }
       ]
@@ -4047,12 +4047,12 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 135,
+          "line": 134,
           "column": 27
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 931,
+          "line": 956,
           "column": 115
         },
         {
@@ -4110,7 +4110,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1163,
+          "line": 1188,
           "column": 27
         }
       ]
@@ -4281,7 +4281,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 253,
+          "line": 252,
           "column": 30
         }
       ]
@@ -4462,22 +4462,22 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 565,
+          "line": 590,
           "column": 17
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 713,
+          "line": 738,
           "column": 17
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 728,
+          "line": 753,
           "column": 17
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1190,
+          "line": 1215,
           "column": 75
         },
         {
@@ -4690,7 +4690,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1087,
+          "line": 1112,
           "column": 54
         },
         {
@@ -4855,17 +4855,17 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 564,
+          "line": 589,
           "column": 18
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 712,
+          "line": 737,
           "column": 18
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 727,
+          "line": 752,
           "column": 18
         },
         {
@@ -4943,12 +4943,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 256,
+          "line": 255,
           "column": 18
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1142,
+          "line": 1167,
           "column": 50
         }
       ]
@@ -5167,7 +5167,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1158,
+          "line": 1183,
           "column": 87
         }
       ]
@@ -5179,7 +5179,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 874,
+          "line": 899,
           "column": 57
         }
       ]
@@ -5239,7 +5239,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1115,
+          "line": 1140,
           "column": 54
         }
       ]
@@ -5511,7 +5511,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1281,
+          "line": 1306,
           "column": 165
         }
       ]
@@ -5559,12 +5559,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 968,
+          "line": 993,
           "column": 133
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 992,
+          "line": 1017,
           "column": 96
         }
       ]
@@ -5769,7 +5769,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1222,
+          "line": 1247,
           "column": 52
         }
       ]
@@ -5781,12 +5781,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1248,
+          "line": 1273,
           "column": 20
         },
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 430,
+          "line": 450,
           "column": 16
         }
       ]
@@ -5868,7 +5868,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1144,
+          "line": 1169,
           "column": 70
         }
       ]
@@ -5921,7 +5921,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1089,
+          "line": 1114,
           "column": 36
         },
         {
@@ -5967,7 +5967,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1083,
+          "line": 1108,
           "column": 127
         },
         {
@@ -6206,12 +6206,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 310,
+          "line": 309,
           "column": 63
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 832,
+          "line": 857,
           "column": 68
         }
       ]
@@ -6305,7 +6305,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 999,
+          "line": 1024,
           "column": 21
         },
         {
@@ -6480,7 +6480,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1188,
+          "line": 1213,
           "column": 20
         }
       ]
@@ -6504,7 +6504,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 937,
+          "line": 962,
           "column": 95
         }
       ]
@@ -6560,7 +6560,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 254,
+          "line": 253,
           "column": 35
         }
       ]
@@ -6584,7 +6584,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1285,
+          "line": 1310,
           "column": 169
         }
       ]
@@ -6681,7 +6681,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1104,
+          "line": 1129,
           "column": 74
         }
       ]
@@ -6826,7 +6826,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1268,
+          "line": 1293,
           "column": 21
         },
         {
@@ -6843,7 +6843,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 966,
+          "line": 991,
           "column": 18
         }
       ]
@@ -6920,7 +6920,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1228,
+          "line": 1253,
           "column": 155
         }
       ]
@@ -7301,12 +7301,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1263,
+          "line": 1288,
           "column": 16
         },
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 454,
+          "line": 474,
           "column": 14
         }
       ]
@@ -7366,7 +7366,7 @@
       "refs": [
         {
           "file": "src/utils/supplierCatalog.js",
-          "line": 288,
+          "line": 290,
           "column": 12
         }
       ]
@@ -7468,12 +7468,12 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 134,
+          "line": 133,
           "column": 25
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 930,
+          "line": 955,
           "column": 113
         },
         {
@@ -7570,7 +7570,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1168,
+          "line": 1193,
           "column": 22
         }
       ]
@@ -7582,12 +7582,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 511,
+          "line": 523,
           "column": 22
         },
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 310,
+          "line": 330,
           "column": 60
         }
       ]
@@ -7638,7 +7638,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1073,
+          "line": 1098,
           "column": 42
         },
         {
@@ -7677,7 +7677,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1074,
+          "line": 1099,
           "column": 43
         },
         {
@@ -7735,7 +7735,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 966,
+          "line": 991,
           "column": 18
         }
       ]
@@ -7834,7 +7834,7 @@
       "refs": [
         {
           "file": "src/utils/supplierCatalog.js",
-          "line": 144,
+          "line": 145,
           "column": 18
         }
       ]
@@ -7904,12 +7904,12 @@
       "refs": [
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 197,
+          "line": 207,
           "column": 26
         },
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 354,
+          "line": 374,
           "column": 28
         }
       ]
@@ -8015,7 +8015,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 933,
+          "line": 958,
           "column": 120
         }
       ]
@@ -8085,22 +8085,22 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1032,
+          "line": 1057,
           "column": 70
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1036,
+          "line": 1061,
           "column": 72
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1108,
+          "line": 1133,
           "column": 76
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1112,
+          "line": 1137,
           "column": 78
         },
         {
@@ -8139,7 +8139,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1149,
+          "line": 1174,
           "column": 35
         }
       ]
@@ -8413,7 +8413,7 @@
       "refs": [
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 401,
+          "line": 421,
           "column": 11
         }
       ]
@@ -8512,7 +8512,7 @@
       "refs": [
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 377,
+          "line": 397,
           "column": 55
         }
       ]
@@ -8625,12 +8625,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1245,
+          "line": 1270,
           "column": 20
         },
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 469,
+          "line": 489,
           "column": 16
         }
       ]
@@ -8731,7 +8731,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1272,
+          "line": 1297,
           "column": 16
         }
       ]
@@ -8755,7 +8755,7 @@
       "refs": [
         {
           "file": "src/utils/supplierCatalog.js",
-          "line": 316,
+          "line": 318,
           "column": 12
         }
       ]
@@ -8950,7 +8950,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 133,
+          "line": 132,
           "column": 26
         },
         {
@@ -9124,7 +9124,7 @@
       "refs": [
         {
           "file": "src/utils/supplierCatalog.js",
-          "line": 212,
+          "line": 213,
           "column": 24
         }
       ]
@@ -9474,7 +9474,7 @@
       "refs": [
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 410,
+          "line": 430,
           "column": 9
         }
       ]
@@ -9498,7 +9498,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 711,
+          "line": 736,
           "column": 14
         }
       ]
@@ -9510,7 +9510,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 238,
+          "line": 237,
           "column": 23
         }
       ]
@@ -9653,7 +9653,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 899,
+          "line": 924,
           "column": 45
         },
         {
@@ -9885,7 +9885,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 972,
+          "line": 997,
           "column": 18
         },
         {
@@ -9900,7 +9900,7 @@
         },
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 370,
+          "line": 390,
           "column": 54
         },
         {
@@ -10354,7 +10354,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 710,
+          "line": 735,
           "column": 12
         }
       ]
@@ -10596,7 +10596,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 247,
+          "line": 246,
           "column": 30
         }
       ]
@@ -10733,7 +10733,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1146,
+          "line": 1171,
           "column": 64
         }
       ]
@@ -10967,7 +10967,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1126,
+          "line": 1151,
           "column": 61
         }
       ]
@@ -11073,12 +11073,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1156,
+          "line": 1181,
           "column": 68
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1168,
+          "line": 1193,
           "column": 22
         }
       ]
@@ -11198,7 +11198,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 278,
+          "line": 277,
           "column": 45
         }
       ]
@@ -11477,7 +11477,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 575,
+          "line": 600,
           "column": 52
         }
       ]
@@ -11784,7 +11784,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 929,
+          "line": 954,
           "column": 117
         },
         {
@@ -11818,7 +11818,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1226,
+          "line": 1251,
           "column": 18
         },
         {
@@ -11862,7 +11862,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1142,
+          "line": 1167,
           "column": 50
         }
       ]
@@ -11987,7 +11987,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 856,
+          "line": 881,
           "column": 32
         }
       ]
@@ -12023,7 +12023,7 @@
       "refs": [
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 459,
+          "line": 479,
           "column": 14
         }
       ]
@@ -12071,7 +12071,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 725,
+          "line": 750,
           "column": 12
         }
       ]
@@ -12107,7 +12107,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1226,
+          "line": 1251,
           "column": 18
         }
       ]
@@ -12143,7 +12143,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1018,
+          "line": 1043,
           "column": 36
         }
       ]
@@ -12191,12 +12191,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 934,
+          "line": 959,
           "column": 25
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1041,
+          "line": 1066,
           "column": 40
         },
         {
@@ -12213,17 +12213,17 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1222,
+          "line": 1247,
           "column": 19
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1237,
+          "line": 1262,
           "column": 19
         },
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 428,
+          "line": 448,
           "column": 17
         }
       ]
@@ -12235,7 +12235,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 993,
+          "line": 1018,
           "column": 60
         }
       ]
@@ -12609,7 +12609,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 140,
+          "line": 139,
           "column": 28
         }
       ]
@@ -12763,7 +12763,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1007,
+          "line": 1032,
           "column": 96
         }
       ]
@@ -12775,7 +12775,7 @@
       "refs": [
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 412,
+          "line": 432,
           "column": 73
         }
       ]
@@ -12840,7 +12840,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1103,
+          "line": 1128,
           "column": 54
         },
         {
@@ -12929,7 +12929,7 @@
       "refs": [
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 204,
+          "line": 214,
           "column": 26
         },
         {
@@ -13098,7 +13098,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1081,
+          "line": 1106,
           "column": 57
         }
       ]
@@ -13445,12 +13445,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 938,
+          "line": 963,
           "column": 25
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1072,
+          "line": 1097,
           "column": 40
         },
         {
@@ -13569,7 +13569,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1095,
+          "line": 1120,
           "column": 46
         }
       ]
@@ -13663,7 +13663,7 @@
       "refs": [
         {
           "file": "src/utils/supplierCatalog.js",
-          "line": 260,
+          "line": 262,
           "column": 290
         }
       ]
@@ -13935,7 +13935,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1188,
+          "line": 1213,
           "column": 20
         },
         {
@@ -14331,7 +14331,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 112,
+          "line": 111,
           "column": 12
         }
       ]
@@ -14427,7 +14427,7 @@
       "refs": [
         {
           "file": "src/utils/supplierCatalog.js",
-          "line": 131,
+          "line": 132,
           "column": 81
         }
       ]
@@ -14463,7 +14463,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 934,
+          "line": 959,
           "column": 25
         }
       ]
@@ -14615,7 +14615,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 111,
+          "line": 110,
           "column": 47
         },
         {
@@ -14855,12 +14855,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 472,
+          "line": 484,
           "column": 26
         },
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 261,
+          "line": 271,
           "column": 26
         }
       ]
@@ -15309,7 +15309,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 430,
+          "line": 442,
           "column": 26
         }
       ]
@@ -15367,7 +15367,7 @@
         },
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 388,
+          "line": 408,
           "column": 97
         },
         {
@@ -15408,7 +15408,7 @@
       "refs": [
         {
           "file": "src/utils/supplierCatalog.js",
-          "line": 140,
+          "line": 141,
           "column": 12
         }
       ]
@@ -15468,12 +15468,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 523,
+          "line": 548,
           "column": 44
         },
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 317,
+          "line": 337,
           "column": 44
         }
       ]
@@ -15519,12 +15519,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1124,
+          "line": 1149,
           "column": 68
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1134,
+          "line": 1159,
           "column": 22
         }
       ]
@@ -15611,7 +15611,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 239,
+          "line": 238,
           "column": 35
         }
       ]
@@ -15729,7 +15729,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 258,
+          "line": 257,
           "column": 16
         }
       ]
@@ -15816,7 +15816,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1143,
+          "line": 1168,
           "column": 71
         }
       ]
@@ -16037,12 +16037,12 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 77,
+          "line": 76,
           "column": 44
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 79,
+          "line": 78,
           "column": 36
         },
         {
@@ -16156,7 +16156,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 563,
+          "line": 588,
           "column": 14
         }
       ]
@@ -16209,7 +16209,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1080,
+          "line": 1105,
           "column": 126
         }
       ]
@@ -16358,7 +16358,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1145,
+          "line": 1170,
           "column": 66
         }
       ]
@@ -16824,7 +16824,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1220,
+          "line": 1245,
           "column": 18
         }
       ]
@@ -17177,7 +17177,7 @@
       "refs": [
         {
           "file": "src/utils/supplierCatalog.js",
-          "line": 324,
+          "line": 326,
           "column": 12
         }
       ]
@@ -17295,7 +17295,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 261,
+          "line": 260,
           "column": 16
         },
         {
@@ -17611,7 +17611,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 274,
+          "line": 273,
           "column": 39
         }
       ]
@@ -17873,12 +17873,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 972,
+          "line": 997,
           "column": 18
         },
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 383,
+          "line": 403,
           "column": 14
         }
       ]
@@ -18169,7 +18169,7 @@
       "refs": [
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 397,
+          "line": 417,
           "column": 46
         }
       ]
@@ -18246,7 +18246,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1107,
+          "line": 1132,
           "column": 54
         }
       ]
@@ -18405,7 +18405,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1163,
+          "line": 1188,
           "column": 27
         }
       ]
@@ -18434,7 +18434,7 @@
       "refs": [
         {
           "file": "src/utils/supplierCatalog.js",
-          "line": 333,
+          "line": 335,
           "column": 12
         }
       ]
@@ -18482,7 +18482,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 328,
+          "line": 327,
           "column": 56
         }
       ]
@@ -18506,7 +18506,7 @@
       "refs": [
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 419,
+          "line": 439,
           "column": 9
         }
       ]
@@ -18542,12 +18542,12 @@
       "refs": [
         {
           "file": "src/utils/supplierCatalog.js",
-          "line": 240,
+          "line": 241,
           "column": 238
         },
         {
           "file": "src/utils/supplierCatalog.js",
-          "line": 244,
+          "line": 246,
           "column": 266
         }
       ]
@@ -18666,12 +18666,12 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 570,
+          "line": 595,
           "column": 30
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 740,
+          "line": 765,
           "column": 30
         },
         {
@@ -18854,12 +18854,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 136,
+          "line": 135,
           "column": 31
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 932,
+          "line": 957,
           "column": 119
         }
       ]
@@ -19087,12 +19087,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 452,
+          "line": 464,
           "column": 28
         },
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 233,
+          "line": 243,
           "column": 28
         }
       ]
@@ -19266,7 +19266,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 141,
+          "line": 140,
           "column": 29
         }
       ]
@@ -19544,7 +19544,7 @@
       "refs": [
         {
           "file": "src/utils/supplierCatalog.js",
-          "line": 131,
+          "line": 132,
           "column": 67
         }
       ]
@@ -19973,7 +19973,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1070,
+          "line": 1095,
           "column": 54
         },
         {
@@ -20137,7 +20137,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1181,
+          "line": 1206,
           "column": 88
         }
       ]
@@ -20161,7 +20161,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1016,
+          "line": 1041,
           "column": 54
         },
         {
@@ -20284,7 +20284,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 139,
+          "line": 138,
           "column": 27
         },
         {
@@ -20342,7 +20342,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1042,
+          "line": 1067,
           "column": 41
         },
         {
@@ -20650,7 +20650,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1031,
+          "line": 1056,
           "column": 54
         }
       ]
@@ -20816,7 +20816,7 @@
       "refs": [
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 477,
+          "line": 497,
           "column": 16
         }
       ]
@@ -20920,7 +20920,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1035,
+          "line": 1060,
           "column": 54
         },
         {
@@ -21591,7 +21591,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 905,
+          "line": 930,
           "column": 14
         }
       ]
@@ -21793,7 +21793,7 @@
       "refs": [
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 372,
+          "line": 392,
           "column": 14
         }
       ]
@@ -21989,7 +21989,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 974,
+          "line": 999,
           "column": 99
         },
         {
@@ -22100,7 +22100,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1077,
+          "line": 1102,
           "column": 44
         },
         {
@@ -22117,7 +22117,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 236,
+          "line": 235,
           "column": 12
         }
       ]
@@ -22242,7 +22242,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1010,
+          "line": 1035,
           "column": 54
         },
         {
@@ -22512,7 +22512,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1039,
+          "line": 1064,
           "column": 54
         }
       ]
@@ -22536,7 +22536,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 103,
+          "line": 102,
           "column": 12
         },
         {
@@ -22589,12 +22589,12 @@
       "refs": [
         {
           "file": "src/utils/supplierCatalog.js",
-          "line": 158,
+          "line": 159,
           "column": 18
         },
         {
           "file": "src/utils/supplierCatalog.js",
-          "line": 186,
+          "line": 187,
           "column": 18
         }
       ]
@@ -22903,7 +22903,7 @@
       "refs": [
         {
           "file": "src/utils/supplierCatalog.js",
-          "line": 173,
+          "line": 174,
           "column": 18
         }
       ]
@@ -23178,7 +23178,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1057,
+          "line": 1082,
           "column": 21
         }
       ]
@@ -23262,12 +23262,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1220,
+          "line": 1245,
           "column": 18
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1248,
+          "line": 1273,
           "column": 20
         },
         {
@@ -23277,7 +23277,7 @@
         },
         {
           "file": "src/views/ModelCatalog.vue",
-          "line": 430,
+          "line": 450,
           "column": 16
         }
       ]
@@ -23372,7 +23372,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1100,
+          "line": 1125,
           "column": 79
         }
       ]
@@ -23611,7 +23611,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 71,
+          "line": 70,
           "column": 12
         },
         {
@@ -23852,7 +23852,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 907,
+          "line": 932,
           "column": 20
         },
         {
@@ -24118,7 +24118,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 726,
+          "line": 751,
           "column": 14
         }
       ]
@@ -24241,7 +24241,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1007,
+          "line": 1032,
           "column": 49
         }
       ]
@@ -24253,7 +24253,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 961,
+          "line": 986,
           "column": 18
         }
       ]

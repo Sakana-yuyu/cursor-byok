@@ -32,7 +32,7 @@ const (
 	completedExecRetention         = 15 * time.Second
 	defaultNonStreamingCloseGrace  = 30 * time.Second
 	defaultSummaryCompletedThought = "Chat context summarized"
-	providerDefaultMaxOutputTokens = 65536
+	providerDefaultMaxOutputTokens = 4096
 	providerOutputSafetyTokens     = 1024
 
 	// doomLoopThreshold 连续相同工具调用达到该次数时，向模型注入"请改变策略"提示。

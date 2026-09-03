@@ -10,7 +10,6 @@ import { fetchModelCatalog } from "@/services/clientApi";
 import { useModelProbe } from "@/composables/useModelProbe";
 import { isBrowserPreview, runtimeWindow } from "@/services/runtimeAdapter";
 import {
-  classifyModelProtocol,
   createEmptyModelAdapter,
   inferProviderType,
   normalizeModelAdapter,
@@ -25,6 +24,7 @@ import {
 } from "@/utils/supplierGrouping";
 import { MODEL_CATALOG_DRAFT_KEY } from "@/utils/modelCatalogDraft";
 import { supplierTemplate, supplierUsageRequest } from "@/utils/supplierCatalog";
+import { protocolGroupForType } from "@/utils/supplierDetail";
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
@@ -171,10 +171,20 @@ function buildProbeAdapter(model) {
     modelID: model.id,
     tooltipData: `探测 ${model.id}`,
     protocolMode: PROTOCOL_MODE_AUTO,
-    protocolGroup: classifyModelProtocol(inferredType, model.id, d.baseURL || "", "", ""),
+    protocolGroup: protocolGroupForType(
+      inferredType,
+      model.id,
+      d.baseURL || "",
+      inferredType === "openai" ? supplierTemplate(d.supplierID).requestGroup : "",
+    ),
     openAIRequestGroup:
       inferredType === "openai"
-        ? classifyModelProtocol(inferredType, model.id, d.baseURL || "", "", "")
+        ? protocolGroupForType(
+            inferredType,
+            model.id,
+            d.baseURL || "",
+            supplierTemplate(d.supplierID).requestGroup,
+          )
         : "",
   });
 }
@@ -301,10 +311,20 @@ async function handleBatchAdd() {
          balanceQueryField: String(d.balanceQueryField || "").trim(),
          balanceQueryHeadersJSON: String(d.balanceQueryHeadersJSON || "").trim(),
          protocolMode: PROTOCOL_MODE_AUTO,
-        protocolGroup: classifyModelProtocol(inferredType, model.id, baseURL, "", ""),
+        protocolGroup: protocolGroupForType(
+          inferredType,
+          model.id,
+          baseURL,
+          inferredType === "openai" ? supplierTemplate(d.supplierID).requestGroup : "",
+        ),
         openAIRequestGroup:
           inferredType === "openai"
-            ? classifyModelProtocol(inferredType, model.id, baseURL, "", "")
+            ? protocolGroupForType(
+                inferredType,
+                model.id,
+                baseURL,
+                supplierTemplate(d.supplierID).requestGroup,
+              )
             : "",
         groupName,
         tooltipData: String(d.tooltipData || "").trim() || `来自 ${baseURL}`,

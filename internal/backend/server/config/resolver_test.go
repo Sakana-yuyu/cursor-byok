@@ -46,3 +46,70 @@ func TestResolveModelAdapterChannelKeepsExplicitThinkingOverrides(t *testing.T) 
 		t.Fatalf("AnthropicThinkingEffort = %q, want explicit %q", resolved.AnthropicThinkingEffort, "medium")
 	}
 }
+
+func TestResolveModelAdapterChannelUsesProviderSafeDefaultOutputBudgets(t *testing.T) {
+	tests := []struct {
+		name                string
+		adapter             ModelAdapterConfig
+		wantMaxTokens       int
+		wantAnthropicTokens int
+	}{
+		{
+			name: "openai",
+			adapter: ModelAdapterConfig{
+				Type:    "openai",
+				BaseURL: "https://example.com/v1",
+				ModelID: "model-openai",
+			},
+			wantMaxTokens:       4096,
+			wantAnthropicTokens: 65536,
+		},
+		{
+			name: "gemini",
+			adapter: ModelAdapterConfig{
+				Type:    "gemini",
+				BaseURL: "https://example.com/v1beta",
+				ModelID: "model-gemini",
+			},
+			wantMaxTokens:       4096,
+			wantAnthropicTokens: 65536,
+		},
+		{
+			name: "anthropic",
+			adapter: ModelAdapterConfig{
+				Type:    "anthropic",
+				BaseURL: "https://example.com",
+				ModelID: "model-anthropic",
+			},
+			wantMaxTokens:       4096,
+			wantAnthropicTokens: 65536,
+		},
+		{
+			name: "explicit values",
+			adapter: ModelAdapterConfig{
+				Type:                "openai",
+				BaseURL:             "https://example.com/v1",
+				ModelID:             "model-explicit",
+				MaxCompletionTokens: 8192,
+				AnthropicMaxTokens:  1234,
+			},
+			wantMaxTokens:       8192,
+			wantAnthropicTokens: 1234,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resolved, err := resolveModelAdapterChannel([]ModelAdapterConfig{tt.adapter}, tt.adapter.ModelID)
+			if err != nil {
+				t.Fatalf("resolveModelAdapterChannel() error = %v", err)
+			}
+			if resolved.MaxTokens != tt.wantMaxTokens {
+				t.Fatalf("MaxTokens = %d, want %d", resolved.MaxTokens, tt.wantMaxTokens)
+			}
+			if resolved.AnthropicMaxTokens != tt.wantAnthropicTokens {
+				t.Fatalf("AnthropicMaxTokens = %d, want %d", resolved.AnthropicMaxTokens, tt.wantAnthropicTokens)
+			}
+		})
+	}
+}

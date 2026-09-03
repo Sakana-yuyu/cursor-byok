@@ -1,7 +1,10 @@
 package client
 
 import (
+	"encoding/json"
 	"math"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -26,6 +29,43 @@ func TestExecuteGeminiStreamingTest(t *testing.T) {
 	}
 	if !containsGeminiText(metrics.text.String()) || metrics.outputTokens != 2 || !metrics.outputProvided {
 		t.Fatalf("unexpected Gemini benchmark metrics: text=%q output=%d provided=%v", metrics.text.String(), metrics.outputTokens, metrics.outputProvided)
+	}
+}
+
+func TestExecuteOpenAIStreamingTestUsesSafeDefaultMaxTokens(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/v1/chat/completions" {
+			t.Errorf("OpenAI request path = %q, want %q", request.URL.Path, "/v1/chat/completions")
+		}
+		var body map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Errorf("decode OpenAI request: %v", err)
+		}
+		if maxTokens, ok := body["max_tokens"].(float64); !ok || maxTokens != 4096 {
+			t.Errorf("OpenAI max_tokens = %#v, want 4096", body["max_tokens"])
+		}
+		writer.Header().Set("Content-Type", "text/event-stream")
+		_, _ = writer.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: [DONE]\n\n"))
+	}))
+	defer server.Close()
+
+	metrics, err := (&ProxyService{}).executeOpenAIStreamingTest(t.Context(), serverconfig.ModelAdapterConfig{
+		ID:                 "openai-channel",
+		DisplayName:        "Daoxe",
+		Type:               "openai",
+		ProtocolMode:       modelchannel.ProtocolModeAuto,
+		ProtocolGroup:      modelchannel.ProtocolGroupChatCompletions,
+		BaseURL:            server.URL + "/v1",
+		APIKey:             "test-key",
+		ModelID:            "test-model",
+		OpenAIEndpoint:     modelchannel.OpenAIEndpointChatCompletions,
+		OpenAIRequestGroup: modelchannel.OpenAIRequestGroupChatCompletions,
+	})
+	if err != nil {
+		t.Fatalf("executeOpenAIStreamingTest() error = %v", err)
+	}
+	if !strings.Contains(metrics.text.String(), "ok") {
+		t.Fatalf("OpenAI benchmark text = %q, want response text", metrics.text.String())
 	}
 }
 
@@ -201,5 +241,39 @@ func TestBuildOpenAIProbeCandidatesPromotesCompatBeforeEndpointSwitch(t *testing
 		if got[index] != want[index] {
 			t.Fatalf("candidate[%d] mismatch: got=%+v want=%+v", index, got[index], want[index])
 		}
+	}
+}
+
+func TestModelAdapterTestDefaultsMatchProviderSafetyPolicy(t *testing.T) {
+	tests := []struct {
+		name    string
+		adapter serverconfig.ModelAdapterConfig
+		want    int
+	}{
+		{name: "openai", adapter: serverconfig.ModelAdapterConfig{Type: "openai"}, want: 4096},
+		{name: "gemini", adapter: serverconfig.ModelAdapterConfig{Type: "gemini"}, want: 4096},
+		{name: "anthropic", adapter: serverconfig.ModelAdapterConfig{Type: "anthropic"}, want: 65536},
+		{
+			name:    "explicit openai",
+			adapter: serverconfig.ModelAdapterConfig{Type: "openai", MaxCompletionTokens: 8192},
+			want:    8192,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got int
+			switch normalizeModelAdapterTestType(tt.adapter.Type) {
+			case "anthropic":
+				got = modelAdapterTestConfiguredAnthropicMaxTokens(tt.adapter)
+			case "gemini":
+				got = modelAdapterTestConfiguredGeminiMaxTokens(tt.adapter)
+			default:
+				got = modelAdapterTestConfiguredOpenAIMaxTokens(tt.adapter)
+			}
+			if got != tt.want {
+				t.Fatalf("configured benchmark max tokens = %d, want %d", got, tt.want)
+			}
+		})
 	}
 }

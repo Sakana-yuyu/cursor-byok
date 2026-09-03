@@ -6,7 +6,6 @@ import SupplierModelToolbar from "@/components/supplier/SupplierModelToolbar.vue
 import { showModal } from "@/composables/useModal";
 import {
   appState,
-  classifyModelProtocol,
   createEmptyModelAdapter,
   deleteModelAdapterAt,
   deleteModelAdaptersBatch,
@@ -366,9 +365,22 @@ function buildProbeAdapter(model) {
     modelID: model.id,
     tooltipData: `探测 ${model.id}`,
     protocolMode: "auto",
-    protocolGroup: protocolGroupForType(inferredType, model.id, supplierMeta.value.baseURL || queryBaseURL.value),
+    protocolGroup: protocolGroupForType(
+      inferredType,
+      model.id,
+      supplierMeta.value.baseURL || queryBaseURL.value,
+      inferredType === "openai" ? supplierTemplate(supplierMeta.value.supplierID).requestGroup : "",
+    ),
     openAIEndpoint: inferredType === "openai" ? OPENAI_ENDPOINT_RESPONSES : "",
-    openAIRequestGroup: inferredType === "openai" ? protocolGroupForType(inferredType, model.id, supplierMeta.value.baseURL || queryBaseURL.value) : "",
+    openAIRequestGroup:
+      inferredType === "openai"
+        ? protocolGroupForType(
+            inferredType,
+            model.id,
+            supplierMeta.value.baseURL || queryBaseURL.value,
+            supplierTemplate(supplierMeta.value.supplierID).requestGroup,
+          )
+        : "",
     anthropicThinkingEffort: inferredType === "anthropic" ? "xhigh" : "",
   };
 }
@@ -512,9 +524,22 @@ async function handleBatchAddModels() {
         contextWindowTokens: model.contextWindowTokens || 0,
         pricing: model.pricing || null,
         protocolMode: "auto",
-        protocolGroup: protocolGroupForType(inferredType, model.id, seedBaseURL),
+        protocolGroup: protocolGroupForType(
+          inferredType,
+          model.id,
+          seedBaseURL,
+          inferredType === "openai" ? supplierTemplate(supplierMeta.value.supplierID).requestGroup : "",
+        ),
         openAIEndpoint: inferredType === "openai" ? OPENAI_ENDPOINT_RESPONSES : "",
-        openAIRequestGroup: inferredType === "openai" ? protocolGroupForType(inferredType, model.id, seedBaseURL) : "",
+        openAIRequestGroup:
+          inferredType === "openai"
+            ? protocolGroupForType(
+                inferredType,
+                model.id,
+                seedBaseURL,
+                supplierTemplate(supplierMeta.value.supplierID).requestGroup,
+              )
+            : "",
         anthropicThinkingEffort: inferredType === "anthropic" ? "xhigh" : "",
       };
     });

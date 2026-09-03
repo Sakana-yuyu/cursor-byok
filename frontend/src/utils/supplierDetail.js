@@ -51,12 +51,12 @@ export function balanceSourceLabel(source) {
   return String(source || "").trim();
 }
 
-export function protocolGroupForType(type, modelID = "", baseURL = "") {
+export function protocolGroupForType(type, modelID = "", baseURL = "", configuredGroup = "") {
   if (type === "anthropic") return PROTOCOL_GROUP_ANTHROPIC_MESSAGES;
   if (type === "gemini") return PROTOCOL_GROUP_GEMINI_NATIVE;
-  // openai 类型按模型名与 baseURL 推断协议分组（responses / chat_completions），
-  // 与 ModelCatalog.vue 保持一致，避免导入后 protocolGroup 为空导致分组丢失。
-  return classifyModelProtocol(type, modelID, baseURL, "", "");
+  // OpenAI 类型优先采用供应商模板给出的分组，再按模型名与 baseURL 推断；
+  // 兼容 gpt-oss 等模型名规则与供应商实际协议不一致的中转站。
+  return classifyModelProtocol(type, modelID, baseURL, "", configuredGroup);
 }
 
 export function parseBalanceHeaders(value) {

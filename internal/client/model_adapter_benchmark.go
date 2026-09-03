@@ -30,12 +30,13 @@ import (
 )
 
 const (
-	modelAdapterTestUpdatedEvent      = "model-adapter-test:updated"
-	modelAdapterTestPrompt            = "Output the numbers 1 through 120 separated by a single space. No commas, no newlines, no explanation."
-	modelAdapterTestTimeout           = 45 * time.Second
-	modelAdapterTestDefaultMaxTokens  = 65_536
-	modelAdapterTestEmptyTextError    = "未收到文本输出，无法计算测速结果"
-	modelAdapterTestMaxErrorBodyBytes = 8192
+	modelAdapterTestUpdatedEvent              = "model-adapter-test:updated"
+	modelAdapterTestPrompt                    = "Output the numbers 1 through 120 separated by a single space. No commas, no newlines, no explanation."
+	modelAdapterTestTimeout                   = 45 * time.Second
+	modelAdapterTestDefaultMaxTokens          = 4_096
+	modelAdapterTestDefaultAnthropicMaxTokens = 65_536
+	modelAdapterTestEmptyTextError            = "未收到文本输出，无法计算测速结果"
+	modelAdapterTestMaxErrorBodyBytes         = 8192
 )
 
 type ModelAdapterTestStatus string
@@ -912,7 +913,7 @@ func modelAdapterTestConfiguredAnthropicMaxTokens(adapter serverconfig.ModelAdap
 	if adapter.MaxCompletionTokens > 0 {
 		return adapter.MaxCompletionTokens
 	}
-	return modelAdapterTestDefaultMaxTokens
+	return modelAdapterTestDefaultAnthropicMaxTokens
 }
 
 func modelAdapterTestConfiguredOpenAIMaxTokens(adapter serverconfig.ModelAdapterConfig) int {

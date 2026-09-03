@@ -11,7 +11,8 @@ import (
 
 const (
 	defaultChannelContextWindowTokens = 200_000
-	defaultChannelMaxTokens           = 65_536
+	defaultChannelMaxTokens           = 4_096
+	defaultChannelAnthropicMaxTokens  = 65_536
 	defaultChannelAnthropicEffort     = "xhigh"
 )
 
@@ -201,7 +202,7 @@ func resolveModelAdapterChannel(adapters []ModelAdapterConfig, requestedModel st
 		ContextWindowTokens:         defaultChannelContextWindowTokens,
 		MaxTokens:                   defaultChannelMaxTokens,
 		ReasoningEffort:             strings.TrimSpace(matched.ReasoningEffort),
-		AnthropicMaxTokens:          defaultChannelMaxTokens,
+		AnthropicMaxTokens:          defaultChannelAnthropicMaxTokens,
 		AnthropicThinkingEffort:     defaultChannelAnthropicEffort,
 		FastMode:                    matched.FastMode,
 		OpenAIServiceTier:           strings.TrimSpace(matched.OpenAIServiceTier),
