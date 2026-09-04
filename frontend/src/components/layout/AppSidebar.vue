@@ -76,6 +76,7 @@ function selectItem(item) {
         ]"
         :title="collapsed ? item.label : undefined"
         :aria-label="item.label"
+        :data-tour-nav="item.path"
         @click="selectItem(item)"
       >
         <span :class="item.icon" class="shrink-0 text-[17px]" aria-hidden="true"></span>

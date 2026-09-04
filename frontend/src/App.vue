@@ -2,6 +2,7 @@
   <router-view v-if="isStatsOverlay" />
   <template v-else>
     <MainLayout />
+    <GuidedTour />
     <RuntimeHealthBanner />
     <MessageProvider />
     <AdModelProvider v-if="isMainWindow" />
@@ -43,6 +44,7 @@
 </template>
 <script setup>
 import MainLayout from "@/layouts/MainLayout.vue";
+import GuidedTour from "@/components/onboarding/GuidedTour.vue";
 import RuntimeHealthBanner from "@/components/RuntimeHealthBanner.vue";
 import AdModelProvider from "@/components/AdModelProvider.vue";
 import Modal from "@/components/ui/Modal.vue";

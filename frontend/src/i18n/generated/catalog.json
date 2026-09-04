@@ -256,12 +256,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 245,
+          "line": 247,
           "column": 19
         },
         {
           "file": "src/views/Home.vue",
-          "line": 255,
+          "line": 257,
           "column": 19
         }
       ]
@@ -396,7 +396,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 257,
+          "line": 259,
           "column": 19
         }
       ]
@@ -456,8 +456,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 1106
+          "line": 333,
+          "column": 1141
         }
       ]
     },
@@ -622,7 +622,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 201,
+          "line": 203,
           "column": 29
         }
       ]
@@ -888,7 +888,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 130,
+          "line": 132,
           "column": 21
         }
       ]
@@ -1090,8 +1090,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 2445
+          "line": 333,
+          "column": 2480
         }
       ]
     },
@@ -1102,7 +1102,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 50,
+          "line": 52,
           "column": 27
         }
       ]
@@ -1487,7 +1487,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 132,
+          "line": 134,
           "column": 27
         }
       ]
@@ -1535,6 +1535,18 @@
           "file": "src/views/ModelCatalog.vue",
           "line": 497,
           "column": 16
+        }
+      ]
+    },
+    "0ddd0a415cc50804": {
+      "source": "引导完成",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 58,
+          "column": 12
         }
       ]
     },
@@ -1843,8 +1855,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 83,
-          "column": 1
+          "line": 82,
+          "column": 179
         }
       ]
     },
@@ -1867,7 +1879,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 253,
+          "line": 255,
           "column": 19
         }
       ]
@@ -1970,6 +1982,18 @@
           "file": "src/utils/errorHumanizer.js",
           "line": 43,
           "column": 21
+        }
+      ]
+    },
+    "127177fa7f9113a0": {
+      "source": "第二步：启动服务",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 38,
+          "column": 12
         }
       ]
     },
@@ -2146,8 +2170,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 6907
+          "line": 333,
+          "column": 7104
         }
       ]
     },
@@ -2463,7 +2487,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 94,
+          "line": 96,
           "column": 38
         }
       ]
@@ -2644,7 +2668,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 229,
+          "line": 231,
           "column": 16
         }
       ]
@@ -3543,7 +3567,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 120,
+          "line": 122,
           "column": 36
         }
       ]
@@ -3618,12 +3642,12 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 102,
+          "line": 104,
           "column": 122
         },
         {
           "file": "src/views/Home.vue",
-          "line": 111,
+          "line": 113,
           "column": 27
         }
       ]
@@ -3789,7 +3813,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 155,
+          "line": 157,
           "column": 29
         }
       ]
@@ -4086,7 +4110,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 251,
+          "line": 253,
           "column": 19
         }
       ]
@@ -4552,17 +4576,17 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 114,
+          "line": 116,
           "column": 230
         },
         {
           "file": "src/views/Home.vue",
-          "line": 147,
+          "line": 149,
           "column": 19
         },
         {
           "file": "src/views/Home.vue",
-          "line": 176,
+          "line": 178,
           "column": 17
         },
         {
@@ -4613,7 +4637,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 203,
+          "line": 205,
           "column": 30
         }
       ]
@@ -4673,12 +4697,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 228,
+          "line": 230,
           "column": 14
         },
         {
           "file": "src/views/Home.vue",
-          "line": 266,
+          "line": 268,
           "column": 14
         }
       ]
@@ -4796,8 +4820,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 7342
+          "line": 333,
+          "column": 7539
         }
       ]
     },
@@ -4907,7 +4931,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 331,
+          "line": 333,
           "column": 502
         }
       ]
@@ -5068,8 +5092,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 6860
+          "line": 333,
+          "column": 7057
         }
       ]
     },
@@ -5280,7 +5304,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 230,
+          "line": 232,
           "column": 20
         }
       ]
@@ -5316,13 +5340,13 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 313,
+          "line": 315,
           "column": 64
         },
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 2342
+          "line": 333,
+          "column": 2377
         }
       ]
     },
@@ -5357,7 +5381,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 196,
+          "line": 198,
           "column": 20
         }
       ]
@@ -5458,7 +5482,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 160,
+          "line": 162,
           "column": 52
         }
       ]
@@ -5653,8 +5677,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 3634
+          "line": 333,
+          "column": 3708
         }
       ]
     },
@@ -5803,8 +5827,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 7011
+          "line": 333,
+          "column": 7208
         }
       ]
     },
@@ -6264,6 +6288,18 @@
         }
       ]
     },
+    "3f311b68eeddfabe": {
+      "source": "服务运行后，本地代理监听此地址，Cursor 已被自动配置指向它。如果没有生效，用「更多 → 修复代理」一键修复。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 46,
+          "column": 11
+        }
+      ]
+    },
     "3f61b25785f12efb": {
       "source": "在个人安全设置里生成",
       "kind": "text",
@@ -6335,18 +6371,18 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 97,
+          "line": 99,
           "column": 109
         },
         {
           "file": "src/views/Home.vue",
-          "line": 313,
+          "line": 315,
           "column": 89
         },
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 6565
+          "line": 333,
+          "column": 6762
         }
       ]
     },
@@ -6729,7 +6765,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 198,
+          "line": 200,
           "column": 20
         }
       ]
@@ -7616,13 +7652,13 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 175,
+          "line": 177,
           "column": 18
         },
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 5870
+          "line": 333,
+          "column": 6067
         }
       ]
     },
@@ -8068,12 +8104,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 162,
+          "line": 164,
           "column": 60
         },
         {
           "file": "src/views/Home.vue",
-          "line": 298,
+          "line": 300,
           "column": 63
         }
       ]
@@ -8353,7 +8389,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 162,
+          "line": 164,
           "column": 30
         }
       ]
@@ -8389,7 +8425,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 97,
+          "line": 99,
           "column": 34
         }
       ]
@@ -8425,7 +8461,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 146,
+          "line": 148,
           "column": 20
         }
       ]
@@ -8483,7 +8519,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 312,
+          "line": 314,
           "column": 16
         }
       ]
@@ -8683,6 +8719,18 @@
         }
       ]
     },
+    "58c18170204eb051": {
+      "source": "界面语言、调试日志、出站代理等偏好都在「设置」页调整。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 53,
+          "column": 11
+        }
+      ]
+    },
     "58c251fe967ca838": {
       "source": "识图模型",
       "kind": "text",
@@ -8757,6 +8805,18 @@
           "file": "src/utils/supplierCatalog.js",
           "line": 318,
           "column": 12
+        }
+      ]
+    },
+    "598d42ea38257cf0": {
+      "source": "现在去「模型」页添加你的第一个模型吧！之后随时可以回到首页，再次点击「使用引导」复习。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 59,
+          "column": 11
         }
       ]
     },
@@ -8887,8 +8947,20 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 120,
+          "line": 122,
           "column": 166
+        }
+      ]
+    },
+    "5b370c1b1134ea05": {
+      "source": "本地代理地址",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 45,
+          "column": 12
         }
       ]
     },
@@ -8989,7 +9061,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 114,
+          "line": 116,
           "column": 208
         }
       ]
@@ -9028,7 +9100,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 307,
+          "line": 309,
           "column": 66
         }
       ]
@@ -9136,7 +9208,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 173,
+          "line": 175,
           "column": 12
         }
       ]
@@ -9206,8 +9278,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 4875
+          "line": 333,
+          "column": 4949
         }
       ]
     },
@@ -9269,8 +9341,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 1084
+          "line": 333,
+          "column": 1119
         }
       ]
     },
@@ -9486,8 +9558,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 128,
-          "column": 1
+          "line": 127,
+          "column": 71
         }
       ]
     },
@@ -9611,7 +9683,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 48,
+          "line": 50,
           "column": 69
         }
       ]
@@ -9980,7 +10052,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 248,
+          "line": 250,
           "column": 50
         }
       ]
@@ -10166,7 +10238,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 223,
+          "line": 225,
           "column": 30
         }
       ]
@@ -10366,7 +10438,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 160,
+          "line": 162,
           "column": 34
         }
       ]
@@ -10431,12 +10503,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 63,
+          "line": 65,
           "column": 29
         },
         {
           "file": "src/views/Home.vue",
-          "line": 70,
+          "line": 72,
           "column": 27
         }
       ]
@@ -10475,12 +10547,12 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 80,
+          "line": 82,
           "column": 98
         },
         {
           "file": "src/views/Home.vue",
-          "line": 80,
+          "line": 82,
           "column": 116
         },
         {
@@ -10574,6 +10646,18 @@
           "file": "src/components/CursorAccountCard.vue",
           "line": 101,
           "column": 27
+        }
+      ]
+    },
+    "6bf5e8bb73ab3c90": {
+      "source": "在这里添加供应商、拉取模型列表、编辑参数并测试连通性。配置好的模型会自动同步给 Cursor。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 32,
+          "column": 11
         }
       ]
     },
@@ -10704,8 +10788,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 5231
+          "line": 333,
+          "column": 5305
         }
       ]
     },
@@ -10777,7 +10861,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 90,
+          "line": 92,
           "column": 29
         }
       ]
@@ -10931,8 +11015,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 69,
-          "column": 1
+          "line": 68,
+          "column": 144
         }
       ]
     },
@@ -10943,7 +11027,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 120,
+          "line": 122,
           "column": 146
         }
       ]
@@ -11008,8 +11092,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 87,
-          "column": 1
+          "line": 86,
+          "column": 175
         }
       ]
     },
@@ -11460,7 +11544,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 301,
+          "line": 303,
           "column": 69
         }
       ]
@@ -11690,8 +11774,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 78,
-          "column": 1
+          "line": 77,
+          "column": 139
         }
       ]
     },
@@ -12047,7 +12131,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 97,
+          "line": 99,
           "column": 89
         }
       ]
@@ -12167,7 +12251,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 81,
+          "line": 83,
           "column": 116
         }
       ]
@@ -12271,7 +12355,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 259,
+          "line": 261,
           "column": 32
         }
       ]
@@ -12438,6 +12522,18 @@
         }
       ]
     },
+    "810c7b1b2e66198e": {
+      "source": "在「模型」页添加供应商与模型，支持 OpenAI 兼容、Anthropic、Gemini 等接口。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 25,
+          "column": 11
+        }
+      ]
+    },
     "81123c56d5d880d0": {
       "source": "访问密钥",
       "kind": "text",
@@ -12532,7 +12628,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 306,
+          "line": 308,
           "column": 18
         }
       ]
@@ -12544,13 +12640,13 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 4441
+          "line": 333,
+          "column": 4515
         },
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 5870
+          "line": 333,
+          "column": 6067
         }
       ]
     },
@@ -12968,6 +13064,11 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 52,
+          "column": 12
+        },
         {
           "file": "src/components/settings/settingsCategories.js",
           "line": 28,
@@ -13545,7 +13646,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 293,
+          "line": 295,
           "column": 11
         }
       ]
@@ -14070,7 +14171,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 94,
+          "line": 96,
           "column": 29
         }
       ]
@@ -14184,8 +14285,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 7484
+          "line": 333,
+          "column": 7681
         },
         {
           "file": "src/views/RequestMetrics.vue",
@@ -14391,7 +14492,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 298,
+          "line": 300,
           "column": 32
         }
       ]
@@ -14802,7 +14903,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 114,
+          "line": 116,
           "column": 92
         }
       ]
@@ -14831,7 +14932,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 174,
+          "line": 176,
           "column": 14
         }
       ]
@@ -15004,7 +15105,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 145,
+          "line": 147,
           "column": 16
         }
       ]
@@ -15124,8 +15225,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 6204
+          "line": 333,
+          "column": 6401
         }
       ]
     },
@@ -15873,7 +15974,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 248,
+          "line": 250,
           "column": 34
         }
       ]
@@ -15911,6 +16012,18 @@
           "file": "src/components/settings/categories/HistorySettings.vue",
           "line": 583,
           "column": 14
+        }
+      ]
+    },
+    "a417d619087b0ed4": {
+      "source": "第一步：配置模型",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 24,
+          "column": 12
         }
       ]
     },
@@ -16158,6 +16271,23 @@
           "file": "src/components/model-config/SupplierPanel.vue",
           "line": 588,
           "column": 14
+        }
+      ]
+    },
+    "a6360eb15f7f731e": {
+      "source": "使用引导",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 142,
+          "column": 9
+        },
+        {
+          "file": "src/views/Home.vue",
+          "line": 333,
+          "column": 5454
         }
       ]
     },
@@ -16586,8 +16716,8 @@
       "refs": [
         {
           "file": "src/components/ui/ModelTreeMultiSelect.vue",
-          "line": 537,
-          "column": 1
+          "line": 536,
+          "column": 13
         }
       ]
     },
@@ -16675,7 +16805,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 48,
+          "line": 50,
           "column": 33
         }
       ]
@@ -16781,6 +16911,18 @@
         }
       ]
     },
+    "acfc4e74a650e7df": {
+      "source": "下一步",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 159,
+          "column": 18
+        }
+      ]
+    },
     "ad1cafee0ef40257": {
       "source": "已备份残留文件并重新生成 CA。",
       "kind": "text",
@@ -16788,7 +16930,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 190,
+          "line": 192,
           "column": 17
         }
       ]
@@ -17283,7 +17425,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 114,
+          "line": 116,
           "column": 113
         }
       ]
@@ -17418,7 +17560,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 124,
+          "line": 126,
           "column": 44
         }
       ]
@@ -17474,8 +17616,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 4441
+          "line": 333,
+          "column": 4515
         }
       ]
     },
@@ -17844,8 +17986,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 7484
+          "line": 333,
+          "column": 7681
         },
         {
           "file": "src/views/RequestMetrics.vue",
@@ -18015,8 +18157,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 93,
-          "column": 1
+          "line": 92,
+          "column": 9
         }
       ]
     },
@@ -18080,7 +18222,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 97,
+          "line": 99,
           "column": 51
         }
       ]
@@ -18561,6 +18703,18 @@
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
           "line": 151,
           "column": 17
+        }
+      ]
+    },
+    "c0b3fbff51ccc40b": {
+      "source": "完成",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 159,
+          "column": 18
         }
       ]
     },
@@ -19290,7 +19444,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 331,
+          "line": 333,
           "column": 502
         }
       ]
@@ -19368,7 +19522,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 297,
+          "line": 299,
           "column": 18
         }
       ]
@@ -19433,8 +19587,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 2342
+          "line": 333,
+          "column": 2377
         }
       ]
     },
@@ -19498,6 +19652,18 @@
           "file": "src/views/ModelConfig.vue",
           "line": 277,
           "column": 22
+        }
+      ]
+    },
+    "ca28c968a709a890": {
+      "source": "跳过引导",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 155,
+          "column": 12
         }
       ]
     },
@@ -19744,7 +19910,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 294,
+          "line": 296,
           "column": 11
         }
       ]
@@ -19756,12 +19922,12 @@
       "refs": [
         {
           "file": "src/components/layout/AppSidebar.vue",
-          "line": 90,
+          "line": 91,
           "column": 22
         },
         {
           "file": "src/components/layout/AppSidebar.vue",
-          "line": 91,
+          "line": 92,
           "column": 17
         }
       ]
@@ -19925,7 +20091,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 114,
+          "line": 116,
           "column": 358
         }
       ]
@@ -20014,8 +20180,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 5717
+          "line": 333,
+          "column": 5914
         }
       ]
     },
@@ -20115,6 +20281,18 @@
           "file": "src/components/settings/delegation/DelegationGroupEditor.vue",
           "line": 160,
           "column": 19
+        }
+      ]
+    },
+    "d23849c2217e8ef0": {
+      "source": "欢迎使用 Cursor助手",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 17,
+          "column": 12
         }
       ]
     },
@@ -20489,8 +20667,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 72,
-          "column": 1
+          "line": 71,
+          "column": 144
         }
       ]
     },
@@ -20662,12 +20840,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 307,
+          "line": 309,
           "column": 36
         },
         {
           "file": "src/views/Home.vue",
-          "line": 313,
+          "line": 315,
           "column": 34
         }
       ]
@@ -20691,7 +20869,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 301,
+          "line": 303,
           "column": 31
         }
       ]
@@ -20727,7 +20905,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 191,
+          "line": 193,
           "column": 36
         }
       ]
@@ -20854,6 +21032,18 @@
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
           "line": 619,
           "column": 21
+        }
+      ]
+    },
+    "da336fdc0dbd1818": {
+      "source": "上一步",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 157,
+          "column": 117
         }
       ]
     },
@@ -21025,7 +21215,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 267,
+          "line": 269,
           "column": 16
         }
       ]
@@ -21061,7 +21251,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 296,
+          "line": 298,
           "column": 38
         }
       ]
@@ -21078,8 +21268,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 4875
+          "line": 333,
+          "column": 4949
         }
       ]
     },
@@ -21310,22 +21500,22 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 203,
+          "line": 205,
           "column": 60
         },
         {
           "file": "src/views/Home.vue",
-          "line": 248,
+          "line": 250,
           "column": 93
         },
         {
           "file": "src/views/Home.vue",
-          "line": 259,
+          "line": 261,
           "column": 63
         },
         {
           "file": "src/views/Home.vue",
-          "line": 268,
+          "line": 270,
           "column": 20
         }
       ]
@@ -21687,8 +21877,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 4050
+          "line": 333,
+          "column": 4124
         },
         {
           "file": "src/views/RequestMetrics.vue",
@@ -21822,6 +22012,18 @@
         }
       ]
     },
+    "e3fd077e6d2a5232": {
+      "source": "它把你自己的 API 密钥接入 Cursor，无需官方订阅即可使用自定义模型。\n\n接下来用 1 分钟了解使用流程：配置模型 → 启动服务 → 在 Cursor 中使用。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 18,
+          "column": 11
+        }
+      ]
+    },
     "e406825e0a72d2c2": {
       "source": "本地配置",
       "kind": "text",
@@ -21948,8 +22150,8 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 1049
+          "line": 333,
+          "column": 1084
         }
       ]
     },
@@ -22700,12 +22902,12 @@
       "refs": [
         {
           "file": "src/components/layout/AppSidebar.vue",
-          "line": 90,
+          "line": 91,
           "column": 22
         },
         {
           "file": "src/components/layout/AppSidebar.vue",
-          "line": 91,
+          "line": 92,
           "column": 17
         }
       ]
@@ -22850,7 +23052,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 307,
+          "line": 309,
           "column": 93
         }
       ]
@@ -22874,13 +23076,13 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 3217
+          "line": 333,
+          "column": 3252
         },
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 6393
+          "line": 333,
+          "column": 6590
         }
       ]
     },
@@ -22915,7 +23117,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 66,
+          "line": 68,
           "column": 21
         }
       ]
@@ -23101,7 +23303,7 @@
         },
         {
           "file": "src/views/Home.vue",
-          "line": 124,
+          "line": 126,
           "column": 29
         }
       ]
@@ -23282,6 +23484,18 @@
         }
       ]
     },
+    "f4dd8ee65c6c0378": {
+      "source": "配置完成后回到首页启动本地服务，Cursor 的模型请求将由它转发到你的 API。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 39,
+          "column": 11
+        }
+      ]
+    },
     "f4e5ca4931963c4b": {
       "source": "加载档案失败",
       "kind": "text",
@@ -23449,8 +23663,8 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 7011
+          "line": 333,
+          "column": 7208
         }
       ]
     },
@@ -23601,6 +23815,18 @@
           "file": "src/components/control-center/RequestLabPanel.vue",
           "line": 60,
           "column": 21
+        }
+      ]
+    },
+    "f79adc026d93dc24": {
+      "source": "管理供应商与模型",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 31,
+          "column": 12
         }
       ]
     },
@@ -24022,7 +24248,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 231,
+          "line": 233,
           "column": 19
         }
       ]
@@ -24034,7 +24260,7 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 120,
+          "line": 122,
           "column": 57
         }
       ]
@@ -24130,18 +24356,18 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 144,
+          "line": 146,
           "column": 14
         },
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 3217
+          "line": 333,
+          "column": 3252
         },
         {
           "file": "src/views/Home.vue",
-          "line": 331,
-          "column": 6393
+          "line": 333,
+          "column": 6590
         }
       ]
     },
@@ -24176,12 +24402,12 @@
       "refs": [
         {
           "file": "src/views/Home.vue",
-          "line": 183,
+          "line": 185,
           "column": 29
         },
         {
           "file": "src/views/Home.vue",
-          "line": 282,
+          "line": 284,
           "column": 29
         }
       ]
