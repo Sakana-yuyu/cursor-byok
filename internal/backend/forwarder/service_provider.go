@@ -391,7 +391,7 @@ func (service *Service) auditCatalogUncovered(ctx context.Context, requestID str
 }
 
 func (service *Service) resolveProviderOutputBudget(modelID string, modelName string, conversation *ConversationFile, compiled CompiledConversation, thinkingEffort string, recoveryFloor int) (int, map[string]any) {
-	configuredMaxTokens := service.resolveConfiguredProviderMaxOutputTokens(modelID)
+	configuredMaxTokens, configuredFromChannel := service.resolveConfiguredProviderMaxOutputTokens(modelID)
 	contextWindowTokens := compactionContextWindowSize(conversation)
 	estimatedPromptTokens := estimateCompiledPromptTokens(compiled)
 	remainingTokens := int64(0)
@@ -429,18 +429,23 @@ func (service *Service) resolveProviderOutputBudget(modelID string, modelName st
 	// 任一成立即可（推理恒开型模型如 GLM-5.3 系列不依赖 effort 信号）。
 	effortResolved := normalizeRuntimeThinkingEffort(thinkingEffort)
 	thinkingEnabled := effortResolved != "disabled" && (effortResolved != "" || catalogSupportsThinking)
-	// 思考中请求的输出预算下限：思考 token 计入 max_tokens，默认/配置的 4096 会被
-	// 纯思考耗尽（finish_reason=max_tokens、零可见输出截断），故抬到思考下限。
-	if thinkingEnabled && requestMaxTokens < providerThinkingMinOutputTokens {
-		requestMaxTokens = providerThinkingMinOutputTokens
+	// catalog 硬上限对思考模型同样生效：超限请求由 recoverFromMaxTokensExceeded
+	// 在 400 后按中转站真实限制降级并按渠道持久化，这里不做例外。
+	if catalogMax > 0 && catalogMax < requestMaxTokens {
+		requestMaxTokens = catalogMax
 	}
-	// max_output_tokens 截断恢复抬升的下限：截断证明原预算装不下本次输出，同预算
-	// 重试必然复现截断；最终仍受下方 context-window clamp 收口，不会超过窗口剩余。
+	// 思考模型预算抬升：思考 token 计入 max_tokens，协议安全默认值 4096 会被纯思考
+	// 耗尽（finish_reason=max_tokens、零可见输出）。仅当预算来自协议默认值（渠道未
+	// 显式配置，也未因 400 学习到更小限制）时，把预算抬到目录记载的该模型最大输出——
+	// 抬升目标是已知目录上限，不是自由放大；渠道已有值是证据，优先于启发式。
+	if thinkingEnabled && !configuredFromChannel && catalogMax > 0 && requestMaxTokens < catalogMax {
+		requestMaxTokens = catalogMax
+	}
+	// max_output_tokens 截断恢复的一次性有界抬升：截断证明原预算装不下本次输出
+	//（主要兜底目录未覆盖的思考模型），floor 由 actor_recovery 给出固定值，
+	// 不随恢复次数放大；最终仍受下方 context-window clamp 收口。
 	if recoveryFloor > 0 && int64(recoveryFloor) > requestMaxTokens {
 		requestMaxTokens = int64(recoveryFloor)
-	}
-	if catalogMax > 0 && catalogMax < requestMaxTokens && !catalogSupportsThinking {
-		requestMaxTokens = catalogMax
 	}
 	if contextWindowTokens > 0 && estimatedPromptTokens > 0 {
 		remainingTokens = contextWindowTokens - estimatedPromptTokens
@@ -458,6 +463,7 @@ func (service *Service) resolveProviderOutputBudget(modelID string, modelName st
 	}
 	requestKnobs := map[string]any{
 		"configured_max_tokens":             configuredMaxTokens,
+		"configured_from_channel":           configuredFromChannel,
 		"dynamic_max_tokens":                maxTokens,
 		"thinking_enabled":                  thinkingEnabled,
 		"catalog_model_key":                 catalogModelKey,
@@ -529,19 +535,23 @@ func withPreviousCacheFrontierHint(requestKnobs map[string]any, conversation *Co
 	return requestKnobs
 }
 
-func (service *Service) resolveConfiguredProviderMaxOutputTokens(modelID string) int {
+// resolveConfiguredProviderMaxOutputTokens 返回渠道解析出的输出预算，以及该值是否
+// 来自渠道显式配置（含 400 降级学习按渠道持久化的值）。false 表示渠道未配置任何值，
+// 预算走协议安全默认值——只有这种情况才允许思考模型按目录上限抬升。
+func (service *Service) resolveConfiguredProviderMaxOutputTokens(modelID string) (int, bool) {
 	if service == nil || service.resolver == nil {
-		return providerDefaultMaxOutputTokens
+		return providerDefaultMaxOutputTokens, false
 	}
 	channel, err := service.resolver.SelectChannelForModel(context.Background(), strings.TrimSpace(modelID))
 	if err != nil || channel == nil {
-		return providerDefaultMaxOutputTokens
+		return providerDefaultMaxOutputTokens, false
 	}
+	explicit := channel.MaxTokens > 0 || channel.AnthropicMaxTokens > 0
 	maxTokens := configuredProviderMaxOutputTokens(channel.Provider, channel.MaxTokens, channel.AnthropicMaxTokens)
 	if maxTokens <= 0 {
-		return providerDefaultMaxOutputTokens
+		return providerDefaultMaxOutputTokens, false
 	}
-	return maxTokens
+	return maxTokens, explicit
 }
 
 func configuredProviderMaxOutputTokens(provider string, maxTokens int, anthropicMaxTokens int) int {

@@ -49,7 +49,8 @@ func (service *Service) handleMaxOutputTokensRecovery(stream *ActiveStream, conv
 		return true, err
 	}
 	// 只追加提示不调预算对思考模型无效：思考 token 计入 max_tokens，原预算既然被
-	// 思考耗尽，同预算续写必然再次截断。给续写 pass 抬升 max_tokens 下限（一次性）。
+	// 思考耗尽，同预算续写必然再次截断。给续写 pass 一次性有界抬升 max_tokens 下限
+	//（固定值，不做倍数放大；目录已覆盖的思考模型首次请求已按目录上限抬升，极少走到）。
 	stream.mu.Lock()
 	stream.MaxOutputTokensRecoveryFloor = nextMaxOutputTokensRecoveryFloor(stream.ProviderRequestMaxTokens)
 	recoveryFloor := stream.MaxOutputTokensRecoveryFloor
@@ -82,15 +83,14 @@ func maxOutputTokensRecoveryText() string {
 	return "上一轮回复因输出 token 上限被截断（max_output_tokens），只产出了思考过程，没有可见正文或工具调用。请基于本轮任务直接给出简洁的可见回复，或发起必要的工具调用，不要只输出思考内容。"
 }
 
-// nextMaxOutputTokensRecoveryFloor 依据上次请求的 max_tokens 计算截断恢复续写 pass 的下限：
-// 以上次预算为基数按倍数抬升，且不低于思考下限（思考 token 计入 max_tokens 的模型
-// 需要同时容纳思考与可见输出）。上次预算未知（0）时直接使用思考下限。
+// nextMaxOutputTokensRecoveryFloor 计算截断恢复续写 pass 的 max_tokens 下限：
+// 固定有界值（不做倍数放大），且不低于上次请求预算（只抬不降）。上次预算未知（0）
+// 时直接使用有界下限。
 func nextMaxOutputTokensRecoveryFloor(previousMaxTokens int) int {
-	floor := previousMaxTokens * maxOutputTokensRecoveryFloorMultiplier
-	if floor < providerThinkingMinOutputTokens {
-		floor = providerThinkingMinOutputTokens
+	if previousMaxTokens < maxOutputTokensRecoveryMinBudget {
+		return maxOutputTokensRecoveryMinBudget
 	}
-	return floor
+	return previousMaxTokens
 }
 
 const subagentEmptyStopErrorText = "subagent returned empty response after tool result"
