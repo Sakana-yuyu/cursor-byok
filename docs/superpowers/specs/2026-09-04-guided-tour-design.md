@@ -2,7 +2,7 @@
 
 日期：2026-09-04
 分支：feat/guided-tour
-状态：已实现待评审
+状态：已实现（交互式改版）待评审
 
 ## 背景
 
@@ -13,49 +13,61 @@
 （Task 投影、Commit 设置、bash 别名、ProxyMode 枚举等）在本仓库 Go/Vue 重构中
 均已有等价实现或无对应机制，无需引入；本功能为本地自研，与上游无关。
 
-## 交互设计
+## 交互设计（v2：交互式引导）
 
-- 分步 spotlight tour：半透明遮罩镂空高亮当前步骤的目标元素，旁边浮动气泡卡片
-  （标题 + 说明 + 步骤进度 + 跳过/上一步/下一步按钮）。
-- 无目标元素的步骤（欢迎、完成）显示为居中卡片。
-- 步骤可跨页面：进入步骤时按需 `router.push`，等待目标元素渲染（轮询，超时降级为居中卡片，不阻塞流程）。
-- 键盘：Esc 跳过；Enter 下一步。
+- **点击驱动**：`advanceOn: "click"` 的步骤由用户真实点击目标元素前进（点击放行，
+  元素原有行为照常发生——侧边栏导航、启动服务）。用户按引导实际操作一遍，而非看幻灯片。
+- **点击治理**（document capture 阶段监听）：气泡内点击不干预；目标内点击按上条放行并前进；
+  其余页面区域点击拦截（防止引导期间误操作），并让气泡抖动提醒"点这里"。
+  高亮框 `pointer-events: none`，事件治理全在 capture 监听，遮罩不吞事件。
+- **醒目高亮**：目标元素 2px 主题绿（#10AD5D）边框 + 巨幅 box-shadow 镂空遮罩
+  + 脉冲光晕动画（tour-pulse）。
+- **明确指向**：气泡用 floating-ui arrow middleware 带指向箭头，紧贴目标元素；
+  文案一律指令式（"点击「模型」…"）；click 步骤不显示「下一步」，改为
+  绿色"点击高亮位置继续"提示（Enter 仍可推进作为无障碍兜底）。
+- 无目标元素的步骤（欢迎、完成）显示为居中卡片；条件渲染元素等待超时降级居中卡片
+  （单步可用 `elementTimeoutMs` 覆盖，启动服务后的地址步骤放宽到 8s）。
+- **动态步骤**：服务已运行时自动跳过"启动服务"步骤（buildTourSteps(serviceRunning)）。
+- 键盘：Esc 跳过；Enter 下一步（click 步骤除外）。
 - 引导结束后写 localStorage 完成标记（`cursor-byok.guided-tour.completed`），
-  入口常驻首页（用户可重复查看），标记仅供后续"新功能引导"扩展与文案微调。
+  入口常驻首页（用户可重复查看）。
 
-## 步骤内容（7 步，覆盖首页与模型配置页）
+## 步骤内容（7 步；服务运行中为 6 步）
 
-1. 欢迎（首页，居中）：本工具把自定义 API 密钥接入 Cursor，流程三步走。
-2. 侧边栏「模型」入口（高亮 AppSidebar 第 2 项）：第一步先配置供应商与模型。
-3. 模型配置页主体（跳转 /model-config，高亮页面主区域）：添加/编辑供应商与模型。
-4. 首页「启动服务」按钮（返回首页）：配置完成后启动本地服务。
-5. 服务监听地址（高亮首页 proxyListenAddr；服务未运行时元素不存在 → 自动降级居中卡片）：Cursor 已被指向该地址；如未生效用「更多 → 修复代理」。
-6. 侧边栏「设置」入口：语言、日志等偏好。
-7. 完成（居中）：随时可从首页重新打开引导。
+1. 欢迎（首页，居中）。
+2. 点击侧边栏「模型」入口（click 驱动，真实导航）。
+3. 「+ 新增模型」按钮（模型配置页，展示 + 下一步）：说明添加模型入口。
+4. 点击「启动服务」（click 驱动；服务运行中跳过此步）。
+5. 代理监听地址（服务启动后出现；等待超时 8s，降级居中卡片）。
+6. 点击侧边栏「设置」入口（click 驱动）。
+7. 完成（居中，就地显示不跳路由）。
 
 ## 组件与文件
 
 | 文件 | 职责 |
 | --- | --- |
-| `frontend/src/composables/useGuidedTour.js` | 纯逻辑：步骤序列、状态推进、路由跳转、元素等待（可注入依赖）、完成标记。单例 composable。 |
-| `frontend/src/composables/useGuidedTour.test.js` | node --test 单测：推进/回退边界、跳过/完成、跨路由 push、元素等待与超时降级。 |
-| `frontend/src/components/onboarding/GuidedTour.vue` | UI：遮罩镂空（box-shadow 100000px 方案）+ @floating-ui/dom 气泡定位（复用 Tooltip.vue 模式）+ autoUpdate。z-[90000]（低于 Modal 的 z-[100000]）。 |
-| `frontend/src/views/Home.vue` | 顶部操作区新增「使用引导」按钮入口。 |
-| `frontend/src/components/layout/AppSidebar.vue` | nav 按钮加 `data-tour-nav="<path>"` 供选择器定位。 |
-| `frontend/src/views/ModelConfig.vue` | 主区域加 `data-tour-target="model-config-root"`。 |
-| `frontend/e2e/guided-tour.spec.mjs` | Playwright e2e（browser-preview mock 模式）。 |
+| `frontend/src/composables/useGuidedTour.js` | 纯逻辑：步骤序列、状态推进、路由跳转、元素等待（可注入依赖、单步超时）、完成标记。单例 composable。 |
+| `frontend/src/composables/useGuidedTour.test.js` | node --test 单测。 |
+| `frontend/src/components/onboarding/GuidedTour.vue` | UI：镂空遮罩 + 脉冲高亮 + arrow 气泡 + 点击治理 + 键盘。 |
+| `frontend/src/views/Home.vue` | 「使用引导」按钮入口 + 服务按钮/地址 data 标记。 |
+| `frontend/src/components/layout/AppSidebar.vue` | nav 按钮加 `data-tour-nav="<path>"`。 |
+| `frontend/src/views/ModelConfig.vue` | 「新增模型」按钮加 `data-tour-target="model-config-add"`。 |
+| `frontend/e2e/guided-tour.spec.mjs` | Playwright e2e：交互全流程/拦截/跳过/Esc。 |
 
 ## 关键实现决策
 
-- **不引入 driver.js 等依赖**：@floating-ui/dom 已在用，自研组件约 200 行，可控且无供应链负担。
-- **目标元素定位用 data 属性选择器**而非文本匹配，避免文案变更导致引导失效。
-- **遮罩用单个 div + 巨幅 box-shadow 镂空**：天然阻止外部点击（引导期间不可操作页面），圆角用 border-radius + padding 模拟。
-- **元素等待超时（2s）降级居中卡片**：条件渲染的元素（如服务地址）不存在时引导不卡死。
-- **i18n**：源文案直接写中文（zh-CN 唯一源语言），`npm run build` 扫描后补全
-  en-US / ja-JP / ru-RU 非空翻译，placeholder 保持一致。
+- **不引入 driver.js 等依赖**：@floating-ui/dom 已在用，自研可控且无供应链负担。
+- **目标元素定位用 data 属性选择器**，文案变更不破坏引导。
+- **事件治理放 capture 监听**而非遮罩拦截：目标元素真实可点（放行原生行为），
+  非目标区域 preventDefault+stopPropagation 拦截。
+- **i18n**：zh-CN 唯一源语言，`npm run build` 扫描后补全 en/ja/ru 非空翻译。
+- browser-preview 扫描构建：`node ./scripts/run-vite-build.mjs --scan --mode browser-preview`
+  （生产构建需 wails bindings）。
 
 ## 测试
 
-- 单测：composable 纯逻辑（注入 fake router/storage/resolveElement）。
-- e2e：入口点击 → 欢迎卡片 → 跨页推进到模型配置页 → 跳过/完成路径。
-- 手动验证：桌面模式（yarn dev）确认镂空与气泡定位、Esc 退出。
+- 单测：composable 纯逻辑（推进/回退/跳过/完成、跨路由、元素等待、单步超时降级）。
+- e2e：交互式全流程（点击驱动跨页 + 服务 mock 启动后地址步骤自动衔接 + 完成标记）、
+  非目标点击拦截、跳过无标记、Esc。
+- 视觉截图审查：高亮醒目度、箭头指向、指令文案（已通过）。
+

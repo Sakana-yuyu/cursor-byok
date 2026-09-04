@@ -174,3 +174,18 @@ test("currentStep exposes the active step definition or null", async () => {
   controller.skip();
   assert.equal(controller.currentStep(), null);
 });
+
+test("per-step elementTimeoutMs overrides the global timeout", async () => {
+  const { controller } = makeController({
+    steps: [
+      { route: "/", center: true },
+      { route: "/", target: "[data-tour-nav='/model-config']", elementTimeoutMs: 40 },
+    ],
+    elementTimeoutMs: 5000,
+  });
+  const startedAt = Date.now();
+  controller.start(1); // target never resolves
+  await waitFor(() => !controller.state.resolving);
+  assert.equal(controller.state.mode, "center");
+  assert.ok(Date.now() - startedAt < 2000, `should fall back quickly, took ${Date.now() - startedAt}ms`);
+});

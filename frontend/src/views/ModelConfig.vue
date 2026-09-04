@@ -367,7 +367,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="flex h-full min-h-0 text-[#e5e5e5]">
     <!-- 左栏：供应商 + 模型树 -->
-    <div class="flex w-[280px] shrink-0 flex-col border-r border-[#242424]" data-tour-target="model-config-root">
+    <div class="flex w-[280px] shrink-0 flex-col border-r border-[#242424]">
       <div class="flex flex-col gap-2 border-b border-[#242424] p-3">
         <div class="flex items-center justify-between gap-2">
           <div class="min-w-0 truncate text-[12px] text-[#8f8f8f]">
@@ -377,6 +377,7 @@ onBeforeUnmount(() => {
           <button
             type="button"
             aria-label="新增模型"
+            data-tour-target="model-config-add"
             :title="$ls('e552c2accdbf5178')"
             class="flex h-[24px] w-[24px] shrink-0 cursor-pointer items-center justify-center rounded-[6px] bg-gradient-to-b from-[#10AD5D] to-[#0F8A4C] text-white transition-transform duration-150 hover:from-[#12b966] hover:to-[#119a55] active:scale-105"
             @click="openNewModel"

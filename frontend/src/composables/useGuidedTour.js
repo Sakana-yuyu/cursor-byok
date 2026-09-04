@@ -26,7 +26,9 @@ export function isGuidedTourCompleted(storage = defaultStorage()) {
 
 // createGuidedTourController 创建引导控制器。
 // deps：
-//   steps         步骤数组：{ route, target?, placement?, center? }
+//   steps         步骤数组：{ route?, target?, placement?, center?, advanceOn?, elementTimeoutMs? }
+//                 advanceOn="click"：用户点击目标元素后由组件层调用 advance() 前进；
+//                 elementTimeoutMs 覆盖全局等待超时（启动服务等慢操作场景放宽）。
 //   router        { push(path): Promise|void, currentPath(): string }
 //   storage       { getItem(key), setItem(key, value) }，默认 window.localStorage
 //   resolveTarget (selector) => Element|null，同步查询，控制器内部轮询
@@ -79,7 +81,8 @@ export function createGuidedTourController(deps) {
     }
   }
 
-  function waitForTarget(selector, token) {
+  function waitForTarget(selector, token, timeoutOverrideMs) {
+    const timeoutMs = Number.isFinite(timeoutOverrideMs) ? timeoutOverrideMs : elementTimeoutMs;
     return new Promise((resolve) => {
       const startedAt = Date.now();
       const tick = () => {
@@ -92,7 +95,7 @@ export function createGuidedTourController(deps) {
           resolve(el);
           return;
         }
-        if (Date.now() - startedAt >= elementTimeoutMs) {
+        if (Date.now() - startedAt >= timeoutMs) {
           resolve(null);
           return;
         }
@@ -117,7 +120,7 @@ export function createGuidedTourController(deps) {
         if (token !== runToken) return;
       }
       if (step.target) {
-        const el = await waitForTarget(step.target, token);
+        const el = await waitForTarget(step.target, token, step.elementTimeoutMs);
         if (token !== runToken) return;
         if (el) {
           state.targetEl = el;

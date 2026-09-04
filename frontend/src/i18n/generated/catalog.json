@@ -94,7 +94,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 475,
+          "line": 476,
           "column": 23
         },
         {
@@ -1066,7 +1066,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 511,
+          "line": 512,
           "column": 25
         }
       ]
@@ -1545,8 +1545,8 @@
       "refs": [
         {
           "file": "src/components/onboarding/GuidedTour.vue",
-          "line": 58,
-          "column": 12
+          "line": 69,
+          "column": 14
         }
       ]
     },
@@ -1730,7 +1730,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 527,
+          "line": 528,
           "column": 21
         }
       ]
@@ -1992,8 +1992,8 @@
       "refs": [
         {
           "file": "src/components/onboarding/GuidedTour.vue",
-          "line": 38,
-          "column": 12
+          "line": 45,
+          "column": 14
         }
       ]
     },
@@ -3024,7 +3024,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 459,
+          "line": 460,
           "column": 119
         }
       ]
@@ -3598,6 +3598,18 @@
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
           "line": 71,
           "column": 14
+        }
+      ]
+    },
+    "23743bdb6660bf9a": {
+      "source": "它把你自己的 API 密钥接入 Cursor，无需官方订阅即可使用自定义模型。\n\n接下来跟着高亮提示点击操作一遍，1 分钟完成上手。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 21,
+          "column": 13
         }
       ]
     },
@@ -4919,7 +4931,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 552,
+          "line": 553,
           "column": 78
         }
       ]
@@ -5094,6 +5106,18 @@
           "file": "src/views/Home.vue",
           "line": 333,
           "column": 7057
+        }
+      ]
+    },
+    "318558c849e17477": {
+      "source": "在这里添加模型",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 35,
+          "column": 14
         }
       ]
     },
@@ -5412,6 +5436,18 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 550,
           "column": 19
+        }
+      ]
+    },
+    "355e2ec0938c87e2": {
+      "source": "点击「设置」，可以调整界面语言、调试日志等偏好。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 65,
+          "column": 13
         }
       ]
     },
@@ -6271,7 +6307,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 435,
+          "line": 436,
           "column": 15
         }
       ]
@@ -6285,18 +6321,6 @@
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
           "line": 161,
           "column": 41
-        }
-      ]
-    },
-    "3f311b68eeddfabe": {
-      "source": "服务运行后，本地代理监听此地址，Cursor 已被自动配置指向它。如果没有生效，用「更多 → 修复代理」一键修复。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/onboarding/GuidedTour.vue",
-          "line": 46,
-          "column": 11
         }
       ]
     },
@@ -6821,7 +6845,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 511,
+          "line": 512,
           "column": 25
         }
       ]
@@ -6932,7 +6956,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 549,
+          "line": 550,
           "column": 23
         }
       ]
@@ -7524,7 +7548,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 511,
+          "line": 512,
           "column": 25
         }
       ]
@@ -8719,18 +8743,6 @@
         }
       ]
     },
-    "58c18170204eb051": {
-      "source": "界面语言、调试日志、出站代理等偏好都在「设置」页调整。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/onboarding/GuidedTour.vue",
-          "line": 53,
-          "column": 11
-        }
-      ]
-    },
     "58c251fe967ca838": {
       "source": "识图模型",
       "kind": "text",
@@ -8815,8 +8827,8 @@
       "refs": [
         {
           "file": "src/components/onboarding/GuidedTour.vue",
-          "line": 59,
-          "column": 11
+          "line": 70,
+          "column": 13
         }
       ]
     },
@@ -8959,8 +8971,8 @@
       "refs": [
         {
           "file": "src/components/onboarding/GuidedTour.vue",
-          "line": 45,
-          "column": 12
+          "line": 56,
+          "column": 14
         }
       ]
     },
@@ -9126,6 +9138,18 @@
           "file": "src/components/settings/categories/AdvancedSettings.vue",
           "line": 270,
           "column": 47
+        }
+      ]
+    },
+    "5d4a468e917d43bb": {
+      "source": "点击「启动服务」，开启本地代理。启动成功后会自动进入下一步。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 46,
+          "column": 13
         }
       ]
     },
@@ -9302,7 +9326,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 489,
+          "line": 490,
           "column": 23
         }
       ]
@@ -9608,6 +9632,18 @@
           "file": "src/components/ui/ModelTreeSelect.vue",
           "line": 15,
           "column": 41
+        }
+      ]
+    },
+    "62289acf9f5a4146": {
+      "source": "点击左侧「模型」，进入模型配置页。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 29,
+          "column": 13
         }
       ]
     },
@@ -10649,18 +10685,6 @@
         }
       ]
     },
-    "6bf5e8bb73ab3c90": {
-      "source": "在这里添加供应商、拉取模型列表、编辑参数并测试连通性。配置好的模型会自动同步给 Cursor。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/onboarding/GuidedTour.vue",
-          "line": 32,
-          "column": 11
-        }
-      ]
-    },
     "6c24266b75d70ce9": {
       "source": "准备安装 Python 3...",
       "kind": "text",
@@ -11080,7 +11104,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 404,
+          "line": 405,
           "column": 13
         }
       ]
@@ -11595,7 +11619,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 511,
+          "line": 512,
           "column": 25
         },
         {
@@ -12522,18 +12546,6 @@
         }
       ]
     },
-    "810c7b1b2e66198e": {
-      "source": "在「模型」页添加供应商与模型，支持 OpenAI 兼容、Anthropic、Gemini 等接口。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/onboarding/GuidedTour.vue",
-          "line": 25,
-          "column": 11
-        }
-      ]
-    },
     "81123c56d5d880d0": {
       "source": "访问密钥",
       "kind": "text",
@@ -13066,8 +13078,8 @@
       "refs": [
         {
           "file": "src/components/onboarding/GuidedTour.vue",
-          "line": 52,
-          "column": 12
+          "line": 64,
+          "column": 14
         },
         {
           "file": "src/components/settings/settingsCategories.js",
@@ -13107,6 +13119,18 @@
           "file": "src/utils/errorContract.js",
           "line": 80,
           "column": 85
+        }
+      ]
+    },
+    "874d6433aa40ef51": {
+      "source": "点击高亮位置继续",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 233,
+          "column": 138
         }
       ]
     },
@@ -13312,7 +13336,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 517,
+          "line": 518,
           "column": 17
         }
       ]
@@ -13411,7 +13435,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 396,
+          "line": 397,
           "column": 43
         }
       ]
@@ -13776,7 +13800,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 420,
+          "line": 421,
           "column": 13
         }
       ]
@@ -16022,8 +16046,8 @@
       "refs": [
         {
           "file": "src/components/onboarding/GuidedTour.vue",
-          "line": 24,
-          "column": 12
+          "line": 28,
+          "column": 14
         }
       ]
     },
@@ -16281,7 +16305,7 @@
       "refs": [
         {
           "file": "src/components/onboarding/GuidedTour.vue",
-          "line": 142,
+          "line": 215,
           "column": 9
         },
         {
@@ -16918,7 +16942,7 @@
       "refs": [
         {
           "file": "src/components/onboarding/GuidedTour.vue",
-          "line": 159,
+          "line": 236,
           "column": 18
         }
       ]
@@ -17198,7 +17222,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 453,
+          "line": 454,
           "column": 42
         }
       ]
@@ -17232,7 +17256,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 475,
+          "line": 476,
           "column": 23
         },
         {
@@ -17507,7 +17531,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 395,
+          "line": 396,
           "column": 48
         }
       ]
@@ -18713,7 +18737,7 @@
       "refs": [
         {
           "file": "src/components/onboarding/GuidedTour.vue",
-          "line": 159,
+          "line": 236,
           "column": 18
         }
       ]
@@ -18842,7 +18866,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 549,
+          "line": 550,
           "column": 23
         }
       ]
@@ -19662,7 +19686,7 @@
       "refs": [
         {
           "file": "src/components/onboarding/GuidedTour.vue",
-          "line": 155,
+          "line": 229,
           "column": 12
         }
       ]
@@ -19746,7 +19770,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 564,
+          "line": 565,
           "column": 32
         }
       ]
@@ -20064,7 +20088,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 460,
+          "line": 461,
           "column": 40
         }
       ]
@@ -20291,8 +20315,8 @@
       "refs": [
         {
           "file": "src/components/onboarding/GuidedTour.vue",
-          "line": 17,
-          "column": 12
+          "line": 20,
+          "column": 14
         }
       ]
     },
@@ -20419,6 +20443,18 @@
         }
       ]
     },
+    "d3c42b41b822fd27": {
+      "source": "这是本地代理监听地址，Cursor 已被自动配置指向它，模型请求将从这里转发到你的 API。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 57,
+          "column": 13
+        }
+      ]
+    },
     "d3d69990f6b5c533": {
       "source": "策略模式",
       "kind": "text",
@@ -20438,7 +20474,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 462,
+          "line": 463,
           "column": 102
         }
       ]
@@ -21042,7 +21078,7 @@
       "refs": [
         {
           "file": "src/components/onboarding/GuidedTour.vue",
-          "line": 157,
+          "line": 231,
           "column": 117
         }
       ]
@@ -21362,7 +21398,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 442,
+          "line": 443,
           "column": 21
         }
       ]
@@ -21750,6 +21786,18 @@
         }
       ]
     },
+    "e016dafda7d04442": {
+      "source": "点右上角「+」新增供应商和模型，填入 API 地址与密钥即可。现在点「下一步」继续。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/onboarding/GuidedTour.vue",
+          "line": 36,
+          "column": 13
+        }
+      ]
+    },
     "e01c5dae36cf8c35": {
       "source": "开启后会把 JSON 对象覆盖到 OpenAI 请求体。同名字段以这里为准。OpenAI service_tier 支持 auto、default、flex、scale、priority。",
       "kind": "text",
@@ -21911,7 +21959,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 442,
+          "line": 443,
           "column": 21
         }
       ]
@@ -22009,18 +22057,6 @@
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
           "line": 1115,
           "column": 7
-        }
-      ]
-    },
-    "e3fd077e6d2a5232": {
-      "source": "它把你自己的 API 密钥接入 Cursor，无需官方订阅即可使用自定义模型。\n\n接下来用 1 分钟了解使用流程：配置模型 → 启动服务 → 在 Cursor 中使用。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/onboarding/GuidedTour.vue",
-          "line": 18,
-          "column": 11
         }
       ]
     },
@@ -22201,7 +22237,7 @@
         },
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 565,
+          "line": 566,
           "column": 59
         }
       ]
@@ -23165,7 +23201,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 427,
+          "line": 428,
           "column": 15
         }
       ]
@@ -23481,18 +23517,6 @@
           "file": "src/views/ModelCatalog.vue",
           "line": 450,
           "column": 16
-        }
-      ]
-    },
-    "f4dd8ee65c6c0378": {
-      "source": "配置完成后回到首页启动本地服务，Cursor 的模型请求将由它转发到你的 API。",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/onboarding/GuidedTour.vue",
-          "line": 39,
-          "column": 11
         }
       ]
     },
@@ -23818,18 +23842,6 @@
         }
       ]
     },
-    "f79adc026d93dc24": {
-      "source": "管理供应商与模型",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/onboarding/GuidedTour.vue",
-          "line": 31,
-          "column": 12
-        }
-      ]
-    },
     "f7aa06fed9cfc181": {
       "source": "Cursor 账户模型",
       "kind": "text",
@@ -24006,7 +24018,7 @@
       "refs": [
         {
           "file": "src/views/ModelConfig.vue",
-          "line": 454,
+          "line": 455,
           "column": 110
         }
       ]
