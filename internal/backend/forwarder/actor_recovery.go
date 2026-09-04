@@ -48,14 +48,22 @@ func (service *Service) handleMaxOutputTokensRecovery(stream *ActiveStream, conv
 	}); err != nil {
 		return true, err
 	}
+	// 只追加提示不调预算对思考模型无效：思考 token 计入 max_tokens，原预算既然被
+	// 思考耗尽，同预算续写必然再次截断。给续写 pass 抬升 max_tokens 下限（一次性）。
+	stream.mu.Lock()
+	stream.MaxOutputTokensRecoveryFloor = nextMaxOutputTokensRecoveryFloor(stream.ProviderRequestMaxTokens)
+	recoveryFloor := stream.MaxOutputTokensRecoveryFloor
+	stream.mu.Unlock()
 	if service.debug != nil {
 		service.debug.LogRuntime(context.Background(), requestID, conversationID, "max_output_tokens_recovery_triggered", map[string]any{
-			"provider_pass": providerPass,
-			"finish_reason": strings.TrimSpace(finishReason),
+			"provider_pass":         providerPass,
+			"finish_reason":         strings.TrimSpace(finishReason),
+			"previous_max_tokens":   stream.ProviderRequestMaxTokens,
+			"recovery_floor_tokens": recoveryFloor,
 		})
 	}
-	logger.Infof("forwarder max_output_tokens recovery request_id=%s pass=%d finish_reason=%s",
-		strings.TrimSpace(requestID), providerPass, strings.TrimSpace(finishReason))
+	logger.Infof("forwarder max_output_tokens recovery request_id=%s pass=%d finish_reason=%s recovery_floor=%d",
+		strings.TrimSpace(requestID), providerPass, strings.TrimSpace(finishReason), recoveryFloor)
 	if err := service.syncSummaryCarryForward(conversationID, requestID, modelCallID); err != nil {
 		return true, err
 	}
@@ -72,6 +80,17 @@ func (service *Service) handleMaxOutputTokensRecovery(stream *ActiveStream, conv
 // 参考 Reasonix emptyFinalRetryMessage：明确告知模型上一轮被截断、要求给出可见回复而非只输出思考。
 func maxOutputTokensRecoveryText() string {
 	return "上一轮回复因输出 token 上限被截断（max_output_tokens），只产出了思考过程，没有可见正文或工具调用。请基于本轮任务直接给出简洁的可见回复，或发起必要的工具调用，不要只输出思考内容。"
+}
+
+// nextMaxOutputTokensRecoveryFloor 依据上次请求的 max_tokens 计算截断恢复续写 pass 的下限：
+// 以上次预算为基数按倍数抬升，且不低于思考下限（思考 token 计入 max_tokens 的模型
+// 需要同时容纳思考与可见输出）。上次预算未知（0）时直接使用思考下限。
+func nextMaxOutputTokensRecoveryFloor(previousMaxTokens int) int {
+	floor := previousMaxTokens * maxOutputTokensRecoveryFloorMultiplier
+	if floor < providerThinkingMinOutputTokens {
+		floor = providerThinkingMinOutputTokens
+	}
+	return floor
 }
 
 const subagentEmptyStopErrorText = "subagent returned empty response after tool result"

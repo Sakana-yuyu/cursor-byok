@@ -34,6 +34,14 @@ const (
 	defaultSummaryCompletedThought = "Chat context summarized"
 	providerDefaultMaxOutputTokens = 4096
 	providerOutputSafetyTokens     = 1024
+	// providerThinkingMinOutputTokens 是思考中请求的输出预算下限。思考 token 计入
+	// max_tokens（Anthropic/GLM 等思考模型语义），默认 4096 会被纯思考耗尽，
+	// 产生 finish_reason=max_tokens 且零可见输出的回合；思考中至少预留思考+可见回复的空间。
+	providerThinkingMinOutputTokens = 32768
+	// maxOutputTokensRecoveryFloorMultiplier 是 max_output_tokens 截断恢复时，
+	// 以上次请求 max_tokens 为基数抬升下限的倍数；截断说明原预算装不下本次输出，
+	// 同预算重试必然复现截断。
+	maxOutputTokensRecoveryFloorMultiplier = 4
 
 	// doomLoopThreshold 连续相同工具调用达到该次数时，向模型注入"请改变策略"提示。
 	doomLoopThreshold = 3

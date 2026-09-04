@@ -250,6 +250,14 @@ type ActiveStream struct {
 	// MaxTokensRecoveryAttempts 记录本回合因 max_tokens 超限触发降级重试的次数，
 	// 用于限制重试次数避免无限循环。
 	MaxTokensRecoveryAttempts int
+	// MaxOutputTokensRecoveryFloor 记录 max_output_tokens 截断恢复后，续写 pass 的
+	// max_tokens 下限。截断说明原预算装不下（思考+）可见输出，同预算重试必然复现截断；
+	// 由 handleMaxOutputTokensRecovery 设置，driveProvider 读取后即清零（一次性生效）。
+	// 零值表示未触发恢复，沿用 catalog/配置预算。
+	MaxOutputTokensRecoveryFloor int
+	// ProviderRequestMaxTokens 记录最近一次 provider 请求解析后的 max_tokens，
+	// 供 max_output_tokens 截断恢复计算抬升下限（按倍数基于上次预算抬升）。
+	ProviderRequestMaxTokens int
 	// ProviderToolQuarantine 记录本回合因 provider 明确拒绝其 schema/descriptor
 	// 而被隔离的 provider 侧工具名（providerToolSchema400ToolName 提取）。driveProvider
 	// 构建请求时把这些工具从 compiled.Tools 中剔除后重试一次；回合结束即清空。

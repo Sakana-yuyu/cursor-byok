@@ -742,6 +742,26 @@
       }
     },
     {
+      "pattern": "^glm-?5[.-]?3-flash(?:-|$)",
+      "displayName": "GLM-5.3-Flash",
+      "contextWindowTokens": 1000000,
+      "maxOutputTokens": 128000,
+      "supportsVision": true,
+      "supportsAudio": false,
+      "supportsTools": true,
+      "supportsThinking": true
+    },
+    {
+      "pattern": "^glm-?5[.-]?3(?:-|$)",
+      "displayName": "GLM-5.3",
+      "contextWindowTokens": 1000000,
+      "maxOutputTokens": 128000,
+      "supportsVision": false,
+      "supportsAudio": false,
+      "supportsTools": true,
+      "supportsThinking": true
+    },
+    {
       "pattern": "^glm-?5[.-]?2(?:-|$)",
       "displayName": "GLM-5.2",
       "contextWindowTokens": 200000,

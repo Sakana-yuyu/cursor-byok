@@ -308,7 +308,7 @@ func TestRunProviderPassRejectsDelegatedRequestOutsideSharedWindow(t *testing.T)
 	provider := &fakeDelegatedProvider{}
 	adapter := &localDelegatedAgentAdapter{
 		provider: provider,
-		resolveBudget: func(string, string, *ConversationFile, CompiledConversation) (int, map[string]any) {
+		resolveBudget: func(string, string, *ConversationFile, CompiledConversation, string, int) (int, map[string]any) {
 			return 1, nil
 		},
 	}

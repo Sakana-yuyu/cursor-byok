@@ -19,10 +19,29 @@ func TestWindowTokensFromSpreadsheetRules(t *testing.T) {
 		"deepseek-v4-pro":          1_000_000,
 		"kimi-k2.6":                256_000,
 		"glm-5.2":                  200_000,
+		"glm-5.3":                  1_000_000,
+		"glm-5.3-flash":            1_000_000,
 	}
 	for modelID, want := range tests {
 		if got := WindowTokens(modelID); got != want {
 			t.Errorf("WindowTokens(%q) = %d, want %d", modelID, got, want)
+		}
+	}
+}
+
+func TestMaxOutputTokensKnownModels(t *testing.T) {
+	// glm-5.3 系列必须命中专属规则（128K 输出），不得落 ^glm 兜底（4096）：
+	// 兜底值会让思考 token 耗尽 max_tokens，复现「只思考不产出」的截断循环。
+	tests := map[string]int{
+		"glm-5.3":        128_000,
+		"glm-5.3-flash":  128_000,
+		"glm-5.3-flashx": 128_000,
+		"glm-5.2":        8_192,
+		"glm-4.6":        8_192,
+	}
+	for modelID, want := range tests {
+		if got := MaxOutputTokens(modelID); got != want {
+			t.Errorf("MaxOutputTokens(%q) = %d, want %d", modelID, got, want)
 		}
 	}
 }
@@ -63,6 +82,10 @@ func TestCapabilitiesKnownModels(t *testing.T) {
 		{"kimi-k3", true, false, true, 256_000},
 		// GLM-5.2 — 支持视觉
 		{"glm-5.2", true, true, true, 200_000},
+		// GLM-5.3 系列 — 1M 窗口 / 128K 输出 / 推理恒开；不得再落入 ^glm 兜底
+		//（兜底 maxOutput=4096 会被思考 token 耗尽，产生零可见输出截断）。
+		{"glm-5.3", false, true, true, 1_000_000},
+		{"glm-5.3-flash", true, true, true, 1_000_000},
 		// MiMo — 支持思考
 		{"mimo", false, true, true, 128_000},
 		{"mimo-vl", true, true, true, 128_000},

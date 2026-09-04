@@ -227,7 +227,14 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	if quarantined := snapshotProviderToolQuarantine(stream); len(quarantined) > 0 {
 		compiled.Tools = filterToolDescriptorsByNameSet(compiled.Tools, quarantined)
 	}
-	maxTokens, requestKnobs := service.resolveProviderOutputBudget(modelID, modelName, conversation, compiled)
+	stream.mu.Lock()
+	recoveryFloor := stream.MaxOutputTokensRecoveryFloor
+	stream.MaxOutputTokensRecoveryFloor = 0
+	stream.mu.Unlock()
+	maxTokens, requestKnobs := service.resolveProviderOutputBudget(modelID, modelName, conversation, compiled, thinkingEffort, recoveryFloor)
+	stream.mu.Lock()
+	stream.ProviderRequestMaxTokens = maxTokens
+	stream.mu.Unlock()
 	// max_tokens 超限恢复：若本回合因中转站 400 触发过降级重试，用恢复上限覆盖预算，
 	// 确保重试请求的 max_tokens 不超过中转站真实限制。
 	stream.mu.Lock()
@@ -383,7 +390,7 @@ func (service *Service) auditCatalogUncovered(ctx context.Context, requestID str
 	logger.Infof("forwarder catalog_uncovered model_name=%s request_id=%s", modelKey, strings.TrimSpace(requestID))
 }
 
-func (service *Service) resolveProviderOutputBudget(modelID string, modelName string, conversation *ConversationFile, compiled CompiledConversation) (int, map[string]any) {
+func (service *Service) resolveProviderOutputBudget(modelID string, modelName string, conversation *ConversationFile, compiled CompiledConversation, thinkingEffort string, recoveryFloor int) (int, map[string]any) {
 	configuredMaxTokens := service.resolveConfiguredProviderMaxOutputTokens(modelID)
 	contextWindowTokens := compactionContextWindowSize(conversation)
 	estimatedPromptTokens := estimateCompiledPromptTokens(compiled)
@@ -404,11 +411,35 @@ func (service *Service) resolveProviderOutputBudget(modelID string, modelName st
 		catalogModelKey = strings.TrimSpace(modelID)
 	}
 	catalogMax := int64(modelcontext.MaxOutputTokens(catalogModelKey))
+	// 思考模型不受 catalog 硬上限压制：目录若把思考模型的 maxOutput 记小了
+	//（如旧数据 4096/8192），思考 token 会耗尽预算复现零输出截断；极少数中转站
+	// 对超限 max_tokens 返回 400，由 recoverFromMaxTokensExceeded 降级兜底。
+	catalogSupportsThinking := false
+	if capability := modelcontext.Capabilities(catalogModelKey); capability != nil {
+		catalogSupportsThinking = capability.SupportsThinking
+	}
 	if catalogMax <= 0 {
 		// 显示名未命中时再用 modelID 兜底（少数场景 modelID 即真实模型名）。
 		catalogMax = int64(modelcontext.MaxOutputTokens(modelID))
+		if capability := modelcontext.Capabilities(modelID); capability != nil {
+			catalogSupportsThinking = capability.SupportsThinking
+		}
 	}
-	if catalogMax > 0 && catalogMax < requestMaxTokens {
+	// 思考资格：显式 disabled 永远关闭；否则运行时 effort 命中或目录标记思考模型
+	// 任一成立即可（推理恒开型模型如 GLM-5.3 系列不依赖 effort 信号）。
+	effortResolved := normalizeRuntimeThinkingEffort(thinkingEffort)
+	thinkingEnabled := effortResolved != "disabled" && (effortResolved != "" || catalogSupportsThinking)
+	// 思考中请求的输出预算下限：思考 token 计入 max_tokens，默认/配置的 4096 会被
+	// 纯思考耗尽（finish_reason=max_tokens、零可见输出截断），故抬到思考下限。
+	if thinkingEnabled && requestMaxTokens < providerThinkingMinOutputTokens {
+		requestMaxTokens = providerThinkingMinOutputTokens
+	}
+	// max_output_tokens 截断恢复抬升的下限：截断证明原预算装不下本次输出，同预算
+	// 重试必然复现截断；最终仍受下方 context-window clamp 收口，不会超过窗口剩余。
+	if recoveryFloor > 0 && int64(recoveryFloor) > requestMaxTokens {
+		requestMaxTokens = int64(recoveryFloor)
+	}
+	if catalogMax > 0 && catalogMax < requestMaxTokens && !catalogSupportsThinking {
 		requestMaxTokens = catalogMax
 	}
 	if contextWindowTokens > 0 && estimatedPromptTokens > 0 {
@@ -428,8 +459,11 @@ func (service *Service) resolveProviderOutputBudget(modelID string, modelName st
 	requestKnobs := map[string]any{
 		"configured_max_tokens":             configuredMaxTokens,
 		"dynamic_max_tokens":                maxTokens,
+		"thinking_enabled":                  thinkingEnabled,
 		"catalog_model_key":                 catalogModelKey,
 		"catalog_max_output_tokens":         modelcontext.MaxOutputTokens(catalogModelKey),
+		"catalog_supports_thinking":         catalogSupportsThinking,
+		"max_tokens_recovery_floor":         recoveryFloor,
 		"compiled_prompt_tokens_estimate":   estimatedPromptTokens,
 		"context_window_tokens":             contextWindowTokens,
 		"remaining_context_tokens_estimate": remainingTokens,

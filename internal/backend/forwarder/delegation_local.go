@@ -37,7 +37,7 @@ type localDelegatedAgentAdapter struct {
 	recorder             modeladapter.LLMArtifactObserver
 	debug                *debugRecorder
 	broker               *StreamBroker
-	resolveBudget        func(string, string, *ConversationFile, CompiledConversation) (int, map[string]any)
+	resolveBudget        func(string, string, *ConversationFile, CompiledConversation, string, int) (int, map[string]any)
 	toolExecutor         LocalDelegatedToolExecutor
 	maxPasses            int
 	sequence             atomic.Uint64
@@ -299,7 +299,7 @@ func (adapter *localDelegatedAgentAdapter) runProviderPass(ctx context.Context, 
 	finalCompiled := compiled
 	finalCompiled.Messages = cloneDelegatedMessages(view.Messages)
 	if adapter.resolveBudget != nil {
-		maxTokens, requestKnobs = adapter.resolveBudget(request.ModelID, request.ModelName, conversation, finalCompiled)
+		maxTokens, requestKnobs = adapter.resolveBudget(request.ModelID, request.ModelName, conversation, finalCompiled, request.ThinkingEffort, 0)
 	}
 	if requestKnobs == nil {
 		requestKnobs = make(map[string]any)
