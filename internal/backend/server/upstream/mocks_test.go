@@ -695,8 +695,8 @@ func TestAvailableModelsPayloadDecodesWithAdapters(t *testing.T) {
 	if model.GetPrice() != 3.0 {
 		t.Fatalf("price: got %v, want 3.0", model.GetPrice())
 	}
-	if !model.GetVisibleInRoutedModelView() {
-		t.Fatal("visibleInRoutedModelView: want true")
+	if model.GetVisibleInRoutedModelView() {
+		t.Fatal("visibleInRoutedModelView: want false, true hides the model from the settings Models page")
 	}
 
 	displayConfiguration := response.GetDisplayConfiguration()

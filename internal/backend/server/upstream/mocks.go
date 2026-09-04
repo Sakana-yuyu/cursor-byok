@@ -815,8 +815,11 @@ func buildAvailableModelEntriesForMode(adapters []legacyruntime.ModelAdapterConf
 			"inputboxShortModelName":             modelDisplayName,
 			"isRecommendedForBackgroundComposer": false,
 			"name":                               channelID,
-			"visibleInRoutedModelView":           true,
 
+			// visibleInRoutedModelView 必须保持 proto 默认 false：客户端设置页 Models
+			// 列表只展示该字段不为 true 的模型（true 表示折叠进 Auto 路由视图、不单独
+			// 列出），发 true 会让设置页显示 "No models available"。聊天选择器主列表
+			// 由 namedModelSectionIndex 驱动，不依赖此字段。
 			"namedModelSectionIndex": 1,
 			"serverModelName":        channelID,
 			"supportsAgent":          true,
