@@ -5,6 +5,7 @@ import { useMessage } from "@/composables/useMessage";
 import { showModal } from "@/composables/useModal";
 import {
   getFooterAuthorInfo,
+  isCursorRunning,
   openFooterAuthorHome,
 } from "@/services/clientApi";
 import {
@@ -19,7 +20,7 @@ import { closeApplication as closeApplicationNative } from "@/services/clientApi
 import { isWindows } from "@/utils/isWindows";
 import { isMacOS } from "@/utils/isMacOS";
 import { safeErrorLogAttributes } from "@/utils/errorContract";
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { usePolling } from "@/composables/usePolling";
 import AppSidebar from "@/components/layout/AppSidebar.vue";
@@ -204,6 +205,54 @@ usePolling(
   },
   { intervalMs: 60000 },
 );
+
+// --- 底部状态栏：Cursor 运行态 + 时钟 ---
+// 运行态 15s 轮询一次（页面隐藏时暂停，见 isCursorRunningTask 内守卫）；
+// 时钟每秒推进一次，仅作用于 footer 文本，开销可忽略。
+const cursorRunning = ref(false);
+const cursorRunningKnown = ref(false);
+async function isCursorRunningTask() {
+  if (document.hidden) return undefined;
+  try {
+    cursorRunning.value = Boolean(await isCursorRunning());
+    cursorRunningKnown.value = true;
+  } catch {
+    // 桥接不可用（浏览器预览等）保持未知态，不误报「未运行」。
+    cursorRunningKnown.value = false;
+  }
+  return undefined;
+}
+usePolling(isCursorRunningTask, { intervalMs: 15000, immediate: true });
+
+const clockText = ref("");
+let clockTimer = 0;
+function updateClock() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  clockText.value = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+onMounted(() => {
+  updateClock();
+  clockTimer = window.setInterval(updateClock, 1000);
+});
+onUnmounted(() => {
+  if (clockTimer) window.clearInterval(clockTimer);
+});
+
+const gatewayStatusText = computed(() => {
+  if (appState.serviceRunning) return "网关运行中";
+  if (appState.servicePartiallyRunning) return "网关部分运行";
+  return "网关已停止";
+});
+const gatewayStatusColor = computed(() => {
+  if (appState.serviceRunning) return "#10AD5D";
+  if (appState.servicePartiallyRunning) return "#e0b341";
+  return "#b23b3b";
+});
+const cursorStatusText = computed(() => {
+  if (!cursorRunningKnown.value) return "Cursor 状态未知";
+  return cursorRunning.value ? "Cursor 运行中" : "Cursor 未运行";
+});
 </script>
 
 <template>
@@ -332,6 +381,25 @@ usePolling(
         class="flex !pr-1 h-[30px] shrink-0 items-center gap-[8px] border-t border-[#242424] px-[14px] text-[12px] text-[#8f8f8f]"
       >
         <div
+          class="center-row shrink-0 gap-[4px]"
+          :title="gatewayStatusText"
+          aria-live="polite"
+        >
+          <i class="size-[7px] shrink-0 rounded-full" :style="{ backgroundColor: gatewayStatusColor }" />
+          <span>{{ gatewayStatusText }}</span>
+        </div>
+        <div
+          class="center-row shrink-0 gap-[4px]"
+          :title="cursorStatusText"
+          aria-live="polite"
+        >
+          <i
+            class="size-[7px] shrink-0 rounded-full"
+            :style="{ backgroundColor: cursorRunningKnown ? (cursorRunning ? '#10AD5D' : '#7a7a7a') : '#7a7a7a' }"
+          />
+          <span>{{ cursorStatusText }}</span>
+        </div>
+        <div
           v-if="proxyBadgeText"
           class="center-row  border-none gap-[2px]  border-none  px-[0px] py-[3px] leading-none "
           aria-live="polite"
@@ -395,6 +463,11 @@ usePolling(
           </div>
         </div>
         <div class="ml-auto flex shrink-0 items-center gap-[8px]">
+          <span
+            class="shrink-0 tabular-nums text-[#8f8f8f]"
+            :title="'当前时间'"
+            style="font-family: var(--font-num)"
+          >{{ clockText }}</span>
           <LocaleSelect
             :border="false"
             aria-label="界面语言"
