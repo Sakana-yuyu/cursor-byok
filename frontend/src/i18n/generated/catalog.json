@@ -176,7 +176,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 360,
+          "line": 518,
           "column": 30
         }
       ]
@@ -509,8 +509,8 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 338,
-          "column": 106
+          "line": 479,
+          "column": 127
         }
       ]
     },
@@ -890,6 +890,18 @@
           "file": "src/views/Home.vue",
           "line": 132,
           "column": 21
+        }
+      ]
+    },
+    "06e0674ff0866726": {
+      "source": "年度使用热力图",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/charts/UsageHeatmapCalendar.vue",
+          "line": 139,
+          "column": 51
         }
       ]
     },
@@ -1417,12 +1429,12 @@
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 140,
+          "line": 141,
           "column": 30
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 140,
+          "line": 141,
           "column": 48
         }
       ]
@@ -1557,7 +1569,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 163,
+          "line": 164,
           "column": 27
         }
       ]
@@ -1764,6 +1776,18 @@
         }
       ]
     },
+    "0f99c7cdcbd7eaba": {
+      "source": "网关已停止",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/layouts/MainLayout.vue",
+          "line": 245,
+          "column": 10
+        }
+      ]
+    },
     "0fdc6b51017e80c0": {
       "source": "请求实验室",
       "kind": "text",
@@ -1807,7 +1831,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 91,
+          "line": 103,
           "column": 24
         }
       ]
@@ -1855,8 +1879,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 82,
-          "column": 179
+          "line": 83,
+          "column": 1
         }
       ]
     },
@@ -2379,8 +2403,8 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 444,
-          "column": 46
+          "line": 606,
+          "column": 1
         }
       ]
     },
@@ -2439,7 +2463,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 256,
+          "line": 305,
           "column": 13
         }
       ]
@@ -2561,6 +2585,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 899,
           "column": 21
+        }
+      ]
+    },
+    "1940119f05716460": {
+      "source": "多",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/charts/UsageHeatmapCalendar.vue",
+          "line": 190,
+          "column": 13
         }
       ]
     },
@@ -2721,7 +2757,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 304,
+          "line": 353,
           "column": 13
         }
       ]
@@ -2822,7 +2858,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 63,
+          "line": 64,
           "column": 9
         }
       ]
@@ -3123,17 +3159,17 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 245,
+          "line": 386,
           "column": 26
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 285,
+          "line": 426,
           "column": 15
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 376,
+          "line": 534,
           "column": 75
         }
       ]
@@ -3285,7 +3321,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 404,
+          "line": 562,
           "column": 94
         }
       ]
@@ -3338,17 +3374,17 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 245,
+          "line": 386,
           "column": 14
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 283,
+          "line": 424,
           "column": 15
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 368,
+          "line": 526,
           "column": 75
         },
         {
@@ -4242,7 +4278,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 43,
+          "line": 44,
           "column": 24
         }
       ]
@@ -4276,7 +4312,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 388,
+          "line": 546,
           "column": 75
         },
         {
@@ -4307,6 +4343,18 @@
           "file": "src/components/model-config/ModelPanel.vue",
           "line": 166,
           "column": 87
+        }
+      ]
+    },
+    "2b1e258f61886ab6": {
+      "source": "当前区间：",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/MetricsDetail.vue",
+          "line": 514,
+          "column": 1
         }
       ]
     },
@@ -4661,7 +4709,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 179,
+          "line": 180,
           "column": 27
         }
       ]
@@ -5080,7 +5128,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 425,
+          "line": 586,
           "column": 57
         }
       ]
@@ -5154,6 +5202,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 322,
           "column": 5
+        }
+      ]
+    },
+    "3235b63ba57222ad": {
+      "source": "Cursor 状态未知",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/layouts/MainLayout.vue",
+          "line": 253,
+          "column": 41
         }
       ]
     },
@@ -5275,7 +5335,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 171,
+          "line": 172,
           "column": 27
         }
       ]
@@ -5458,7 +5518,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 40,
+          "line": 41,
           "column": 18
         }
       ]
@@ -5747,7 +5807,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 84,
+          "line": 83,
           "column": 68
         },
         {
@@ -6107,7 +6167,7 @@
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 400,
+          "line": 473,
           "column": 13
         }
       ]
@@ -6172,7 +6232,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 406,
+          "line": 564,
           "column": 94
         }
       ]
@@ -6385,12 +6445,12 @@
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 44,
+          "line": 45,
           "column": 23
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 305,
+          "line": 354,
           "column": 21
         },
         {
@@ -6506,6 +6566,18 @@
           "file": "src/views/Diagnostics.vue",
           "line": 156,
           "column": 43
+        }
+      ]
+    },
+    "4106c3f6f7b2f282": {
+      "source": "{0}-{1}-{2} · {3} 次调用 · {4} tokens",
+      "kind": "template",
+      "placeholders": 5,
+      "refs": [
+        {
+          "file": "src/components/charts/UsageHeatmapCalendar.vue",
+          "line": 103,
+          "column": 10
         }
       ]
     },
@@ -7601,7 +7673,7 @@
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 305,
+          "line": 354,
           "column": 21
         }
       ]
@@ -7708,7 +7780,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 96,
+          "line": 108,
           "column": 27
         },
         {
@@ -7725,7 +7797,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 68,
+          "line": 69,
           "column": 9
         }
       ]
@@ -7884,6 +7956,18 @@
           "file": "src/views/ModelGroups.vue",
           "line": 23,
           "column": 36
+        }
+      ]
+    },
+    "51a75f4634dfa859": {
+      "source": "一",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/charts/UsageHeatmapCalendar.vue",
+          "line": 118,
+          "column": 25
         }
       ]
     },
@@ -8596,7 +8680,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 399,
+          "line": 557,
           "column": 52
         }
       ]
@@ -9044,7 +9128,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 95,
+          "line": 107,
           "column": 24
         }
       ]
@@ -9165,6 +9249,18 @@
         }
       ]
     },
+    "5e2cd7801dff29b7": {
+      "source": "自然语言时间范围，如：近3小时",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/MetricsDetail.vue",
+          "line": 507,
+          "column": 15
+        }
+      ]
+    },
     "5e709712ce012f5d": {
       "source": "当前出站请求使用环境变量代理：{0}",
       "kind": "template",
@@ -9172,7 +9268,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 67,
+          "line": 68,
           "column": 9
         }
       ]
@@ -9244,18 +9340,30 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 245,
+          "line": 386,
           "column": 49
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 270,
+          "line": 411,
           "column": 15
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 288,
+          "line": 429,
           "column": 15
+        }
+      ]
+    },
+    "5f7ce6586ee355cc": {
+      "source": "次调用 ·",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/charts/UsageHeatmapCalendar.vue",
+          "line": 141,
+          "column": 88
         }
       ]
     },
@@ -9406,17 +9514,17 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 245,
+          "line": 386,
           "column": 34
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 286,
+          "line": 427,
           "column": 15
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 380,
+          "line": 538,
           "column": 75
         }
       ]
@@ -9428,7 +9536,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 93,
+          "line": 105,
           "column": 23
         }
       ]
@@ -9450,8 +9558,8 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 338,
-          "column": 106
+          "line": 479,
+          "column": 127
         }
       ]
     },
@@ -9582,8 +9690,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 127,
-          "column": 71
+          "line": 128,
+          "column": 1
         }
       ]
     },
@@ -9721,6 +9829,30 @@
           "file": "src/views/Home.vue",
           "line": 50,
           "column": 69
+        }
+      ]
+    },
+    "62e5e4bbfd49d14f": {
+      "source": "网关运行中",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/layouts/MainLayout.vue",
+          "line": 243,
+          "column": 39
+        }
+      ]
+    },
+    "62f99c9a0c50d790": {
+      "source": "少",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/charts/UsageHeatmapCalendar.vue",
+          "line": 183,
+          "column": 13
         }
       ]
     },
@@ -9925,6 +10057,11 @@
           "file": "src/components/control-center/ConfigProfilesPanel.vue",
           "line": 179,
           "column": 68
+        },
+        {
+          "file": "src/views/MetricsDetail.vue",
+          "line": 511,
+          "column": 66
         }
       ]
     },
@@ -10615,7 +10752,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 235,
+          "line": 284,
           "column": 13
         }
       ]
@@ -10943,7 +11080,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 413,
+          "line": 574,
           "column": 57
         }
       ]
@@ -11039,8 +11176,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 68,
-          "column": 144
+          "line": 69,
+          "column": 1
         }
       ]
     },
@@ -11116,8 +11253,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 86,
-          "column": 175
+          "line": 87,
+          "column": 1
         }
       ]
     },
@@ -11798,8 +11935,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 77,
-          "column": 139
+          "line": 78,
+          "column": 1
         }
       ]
     },
@@ -12011,6 +12148,18 @@
         }
       ]
     },
+    "7bb5de20f65657eb": {
+      "source": "{0}月",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/charts/UsageHeatmapCalendar.vue",
+          "line": 113,
+          "column": 53
+        }
+      ]
+    },
     "7c3714574b8fe0d5": {
       "source": "允许改派",
       "kind": "text",
@@ -12167,7 +12316,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 39,
+          "line": 40,
           "column": 17
         }
       ]
@@ -12391,7 +12540,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 350,
+          "line": 418,
           "column": 17
         },
         {
@@ -12729,7 +12878,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 257,
+          "line": 306,
           "column": 21
         }
       ]
@@ -12888,6 +13037,18 @@
         }
       ]
     },
+    "85217f7aff778414": {
+      "source": "日",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/charts/UsageHeatmapCalendar.vue",
+          "line": 118,
+          "column": 52
+        }
+      ]
+    },
     "85435da2715656ab": {
       "source": "最大重试次数",
       "kind": "text",
@@ -12907,7 +13068,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 423,
+          "line": 584,
           "column": 62
         }
       ]
@@ -13514,6 +13675,18 @@
           "file": "src/components/model-config/ModelPanel.vue",
           "line": 44,
           "column": 14
+        }
+      ]
+    },
+    "8bc0ff588cb73591": {
+      "source": "当前时间",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/layouts/MainLayout.vue",
+          "line": 468,
+          "column": 21
         }
       ]
     },
@@ -14372,7 +14545,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 42,
+          "line": 43,
           "column": 7
         }
       ]
@@ -14384,7 +14557,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 119,
+          "line": 120,
           "column": 44
         }
       ]
@@ -14711,7 +14884,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 90,
+          "line": 102,
           "column": 26
         }
       ]
@@ -15338,7 +15511,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 92,
+          "line": 104,
           "column": 23
         }
       ]
@@ -15487,7 +15660,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 414,
+          "line": 575,
           "column": 69
         },
         {
@@ -16068,6 +16241,18 @@
         }
       ]
     },
+    "a4c3313deb180960": {
+      "source": "三",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/charts/UsageHeatmapCalendar.vue",
+          "line": 118,
+          "column": 34
+        }
+      ]
+    },
     "a4c6bdf8be259520": {
       "source": "响应缓存磁盘持久化调研",
       "kind": "text",
@@ -16247,7 +16432,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 421,
+          "line": 582,
           "column": 51
         }
       ]
@@ -16740,8 +16925,8 @@
       "refs": [
         {
           "file": "src/components/ui/ModelTreeMultiSelect.vue",
-          "line": 536,
-          "column": 13
+          "line": 537,
+          "column": 1
         }
       ]
     },
@@ -16894,7 +17079,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 236,
+          "line": 285,
           "column": 13
         }
       ]
@@ -16956,6 +17141,18 @@
           "file": "src/views/Home.vue",
           "line": 192,
           "column": 17
+        }
+      ]
+    },
+    "ad5ec57b2ab4d9c5": {
+      "source": "（自然语言解析）",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/MetricsDetail.vue",
+          "line": 514,
+          "column": 42
         }
       ]
     },
@@ -17234,7 +17431,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 94,
+          "line": 106,
           "column": 24
         }
       ]
@@ -17729,7 +17926,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 445,
+          "line": 606,
           "column": 35
         }
       ]
@@ -18157,7 +18354,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 55,
+          "line": 56,
           "column": 12
         }
       ]
@@ -18174,6 +18371,18 @@
         }
       ]
     },
+    "ba49702837afe50a": {
+      "source": "Cursor 未运行",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/layouts/MainLayout.vue",
+          "line": 254,
+          "column": 47
+        }
+      ]
+    },
     "bac4ff88b5c95a05": {
       "source": "打开视觉委派设置",
       "kind": "text",
@@ -18181,8 +18390,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 92,
-          "column": 9
+          "line": 93,
+          "column": 1
         }
       ]
     },
@@ -18496,7 +18705,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 71,
+          "line": 72,
           "column": 12
         }
       ]
@@ -18530,7 +18739,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 84,
+          "line": 83,
           "column": 30
         },
         {
@@ -18559,7 +18768,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 403,
+          "line": 561,
           "column": 94
         }
       ]
@@ -18674,6 +18883,18 @@
           "file": "src/views/ModelCatalog.vue",
           "line": 439,
           "column": 9
+        }
+      ]
+    },
+    "bf8c693f7c560c0f": {
+      "source": "支持：近3小时 / 昨天 / 8月23日 9点 至现在 / 2026-08-23 09:00 至 2026-08-25",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/MetricsDetail.vue",
+          "line": 502,
+          "column": 21
         }
       ]
     },
@@ -18974,7 +19195,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 422,
+          "line": 583,
           "column": 51
         },
         {
@@ -19169,7 +19390,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 405,
+          "line": 563,
           "column": 94
         }
       ]
@@ -19364,7 +19585,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 84,
+          "line": 83,
           "column": 46
         },
         {
@@ -19422,6 +19643,18 @@
           "file": "src/components/settings/categories/HistorySettings.vue",
           "line": 489,
           "column": 18
+        }
+      ]
+    },
+    "c8c96ee9d1f5bd03": {
+      "source": "无法识别，试试：近3小时 / 昨天到今天 / 8月23日 9点 至现在",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/views/MetricsDetail.vue",
+          "line": 209,
+          "column": 26
         }
       ]
     },
@@ -19524,6 +19757,18 @@
           "file": "src/components/model-config/ModelPanel.vue",
           "line": 147,
           "column": 37
+        }
+      ]
+    },
+    "c9b87f516a38ea36": {
+      "source": "五",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/charts/UsageHeatmapCalendar.vue",
+          "line": 118,
+          "column": 43
         }
       ]
     },
@@ -19633,7 +19878,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 84,
+          "line": 83,
           "column": 85
         },
         {
@@ -19710,7 +19955,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 401,
+          "line": 559,
           "column": 94
         }
       ]
@@ -19999,7 +20244,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 424,
+          "line": 585,
           "column": 62
         },
         {
@@ -20192,7 +20437,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 133,
+          "line": 134,
           "column": 19
         }
       ]
@@ -20221,12 +20466,12 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 49,
+          "line": 50,
           "column": 45
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 67,
+          "line": 66,
           "column": 50
         }
       ]
@@ -20426,6 +20671,18 @@
         }
       ]
     },
+    "d3ad017efcd58f4f": {
+      "source": "网关部分运行",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/layouts/MainLayout.vue",
+          "line": 244,
+          "column": 48
+        }
+      ]
+    },
     "d3b1da3088ddd334": {
       "source": "模型测试失败",
       "kind": "text",
@@ -20510,6 +20767,18 @@
           "file": "src/components/StationSpendCard.vue",
           "line": 320,
           "column": 20
+        }
+      ]
+    },
+    "d452789b558a9034": {
+      "source": "Cursor 运行中",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/layouts/MainLayout.vue",
+          "line": 254,
+          "column": 32
         }
       ]
     },
@@ -20703,8 +20972,8 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 71,
-          "column": 144
+          "line": 72,
+          "column": 1
         }
       ]
     },
@@ -21200,7 +21469,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 445,
+          "line": 606,
           "column": 68
         }
       ]
@@ -21495,7 +21764,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 257,
+          "line": 306,
           "column": 21
         }
       ]
@@ -21631,7 +21900,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 417,
+          "line": 578,
           "column": 99
         }
       ]
@@ -22610,7 +22879,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 76,
+          "line": 75,
           "column": 62
         }
       ]
@@ -22728,17 +22997,17 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 245,
+          "line": 386,
           "column": 42
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 287,
+          "line": 428,
           "column": 15
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 384,
+          "line": 542,
           "column": 75
         }
       ]
@@ -22854,6 +23123,18 @@
         }
       ]
     },
+    "ed9078b923c46eee": {
+      "source": "个活跃日 ·",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/charts/UsageHeatmapCalendar.vue",
+          "line": 141,
+          "column": 34
+        }
+      ]
+    },
     "ee32f25f70508f9c": {
       "source": "清除搜索",
       "kind": "text",
@@ -22902,7 +23183,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 62,
+          "line": 63,
           "column": 9
         }
       ]
@@ -23723,7 +24004,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 73,
+          "line": 74,
           "column": 10
         }
       ]
@@ -24115,7 +24396,7 @@
         },
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 141,
+          "line": 142,
           "column": 18
         },
         {
@@ -24137,17 +24418,17 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 245,
+          "line": 386,
           "column": 20
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 284,
+          "line": 425,
           "column": 15
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 372,
+          "line": 530,
           "column": 75
         },
         {
@@ -24164,7 +24445,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 402,
+          "line": 560,
           "column": 94
         }
       ]
@@ -24484,6 +24765,18 @@
         }
       ]
     },
+    "fe5d30cfd66f0a08": {
+      "source": "{0}-{1}-{2} 无使用",
+      "kind": "template",
+      "placeholders": 3,
+      "refs": [
+        {
+          "file": "src/components/charts/UsageHeatmapCalendar.vue",
+          "line": 102,
+          "column": 32
+        }
+      ]
+    },
     "fe7e3a6ea9089ca0": {
       "source": "测试中 {0}/{1}",
       "kind": "template",
@@ -24515,7 +24808,7 @@
       "refs": [
         {
           "file": "src/layouts/MainLayout.vue",
-          "line": 358,
+          "line": 426,
           "column": 17
         }
       ]
