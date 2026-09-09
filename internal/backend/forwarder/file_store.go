@@ -800,6 +800,8 @@ func mergeConversationMetadata(target *ConversationFile, source *ConversationFil
 		target.Mode = strings.TrimSpace(source.Mode)
 	}
 	target.TokenDetailsUsedTokens = source.TokenDetailsUsedTokens
+	target.UsageAnchorTokens = source.UsageAnchorTokens
+	target.UsageAnchorMessageCount = source.UsageAnchorMessageCount
 	if source.TokenDetailsMaxTokens > 0 {
 		target.TokenDetailsMaxTokens = source.TokenDetailsMaxTokens
 	}

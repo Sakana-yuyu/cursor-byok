@@ -826,6 +826,8 @@ func projectConversationWithContextProjection(conversation *ConversationFile, st
 	projected := cloneConversationFile(conversation)
 	projected.LatestRequestPrefix = nil
 	projected.TokenDetailsUsedTokens = 0
+	// 投影视图与锚点测量的 canonical 前缀不一致，锚点对投影无意义。
+	clearConversationUsageAnchor(projected)
 	projected.Entries = make([]HistoryEntry, 0, len(conversation.Entries))
 	summaryInserted := false
 	insertSummary := func() {

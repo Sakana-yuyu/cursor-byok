@@ -271,6 +271,7 @@ func (adapter *localDelegatedAgentAdapter) buildChildConversation(request delega
 	// A local worker has an independent prompt. Parent usage may describe a full
 	// canonical conversation and must not constrain this worker's final window.
 	child.TokenDetailsUsedTokens = 0
+	clearConversationUsageAnchor(child)
 	child.TokenDetailsMaxTokens = 0
 	if adapter.resolveContextWindow != nil {
 		child.TokenDetailsMaxTokens = adapter.resolveContextWindow(strings.TrimSpace(request.ModelID))

@@ -282,8 +282,10 @@ func (service *Service) buildForcedCompactionPlan(stream *ActiveStream, conversa
 // compaction decisions. Local compile estimates can undercount large histories
 // (tokenizer mismatch, omitted cache fields, sidecar projection); persisted
 // provider usage and auto-compaction markers must still trigger at the 80% budget.
+// When a valid usage anchor exists, the anchored estimate replaces the raw
+// heuristic so systematic over-estimation no longer triggers compaction early.
 func resolveContextPressureTokens(conversation *ConversationFile, compiled CompiledConversation) int64 {
-	tokens := estimateCompiledPromptTokens(compiled)
+	tokens := estimateCompiledPromptTokensAnchored(conversation, compiled)
 	if conversation == nil {
 		return tokens
 	}
@@ -732,6 +734,7 @@ func (service *Service) applyCompactionPlan(stream *ActiveStream, conversationID
 				return nil
 			}
 			item.TokenDetailsUsedTokens = 0
+			clearConversationUsageAnchor(item)
 			clearConversationAutoCompactionState(item)
 			return nil
 		})
@@ -758,6 +761,7 @@ func (service *Service) applyCompactionPlan(stream *ActiveStream, conversationID
 		item.NextTurnSeq = 1
 		appendEntriesInPlace(item, resetEntrySequences(replacementEntries))
 		item.TokenDetailsUsedTokens = 0
+		clearConversationUsageAnchor(item)
 		clearConversationAutoCompactionState(item)
 		return nil
 	})

@@ -23,6 +23,7 @@ func applyCompactionToConversation(conversation *ConversationFile, plan *Pending
 	conversation.NextTurnSeq = 1
 	appendEntriesInPlace(conversation, resetEntrySequences(replacementEntries))
 	conversation.TokenDetailsUsedTokens = 0
+	clearConversationUsageAnchor(conversation)
 	clearConversationAutoCompactionState(conversation)
 	if conversation.TokenDetailsMaxTokens == 0 {
 		conversation.TokenDetailsMaxTokens = projectedConversationMaxTokens

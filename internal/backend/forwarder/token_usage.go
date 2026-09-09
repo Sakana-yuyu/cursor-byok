@@ -89,6 +89,9 @@ func (service *Service) updateConversationTokenState(stream *ActiveStream, conve
 	}
 	now := time.Now().UTC()
 	modelID := activeStreamModelID(stream)
+	// updateConversationMetaAndCheckpoint 持有 stream.mu 调用 update 闭包，
+	// 锚点消息数必须在进入闭包前读出，闭包内再锁 stream.mu 会死锁。
+	anchorCount := activeStreamPromptAnchorMessageCount(stream)
 	autoCompactionReserveTokens := int64(compactionAutoReserveTokens)
 	if finalizeAutoCompaction {
 		autoCompactionReserveTokens = service.resolveCompactionReserveTokens(modelID)
@@ -103,6 +106,12 @@ func (service *Service) updateConversationTokenState(stream *ActiveStream, conve
 		promptTokensTotal := usage.promptTokensTotal()
 		if promptTokensTotal > 0 {
 			item.TokenDetailsUsedTokens = clampInt64ToUint32(promptTokensTotal)
+		}
+		// 真实用量锚点：非投影 parent pass 的消息数 + 本 pass 实报输入 token，
+		// 供 anchored estimation 校准全量启发式估算。锚点无效（0）时保持旧值。
+		if anchorCount > 0 && promptTokensTotal > 0 {
+			item.UsageAnchorTokens = clampInt64ToUint32(promptTokensTotal)
+			item.UsageAnchorMessageCount = anchorCount
 		}
 		if item.TokenDetailsMaxTokens == 0 {
 			item.TokenDetailsMaxTokens = service.resolveContextWindowTokens(modelID)
@@ -122,6 +131,17 @@ func activeStreamModelID(stream *ActiveStream) string {
 	stream.mu.Lock()
 	defer stream.mu.Unlock()
 	return stream.ModelID
+}
+
+// activeStreamPromptAnchorMessageCount 返回本 pass 记录的锚点消息数；0 表示本 pass
+// 为投影/旁路请求，不应更新会话锚点。
+func activeStreamPromptAnchorMessageCount(stream *ActiveStream) int {
+	if stream == nil {
+		return 0
+	}
+	stream.mu.Lock()
+	defer stream.mu.Unlock()
+	return stream.PromptAnchorMessageCount
 }
 
 func updateConversationAutoCompactionState(conversation *ConversationFile, promptTokensTotal int64, reserveTokens int64, modelCallID string, triggeredAt time.Time) {
@@ -160,6 +180,16 @@ func clearConversationAutoCompactionState(conversation *ConversationFile) {
 	conversation.AutoCompactionReserveTokens = 0
 	conversation.AutoCompactionTriggeredAt = ""
 	conversation.AutoCompactionSourceModelCallID = ""
+}
+
+// clearConversationUsageAnchor 在历史被重写（压缩/回退/投影派生）后清除用量锚点：
+// 锚点坐标指向的旧前缀已不存在，继续使用会把别的消息当成已测前缀。
+func clearConversationUsageAnchor(conversation *ConversationFile) {
+	if conversation == nil {
+		return
+	}
+	conversation.UsageAnchorTokens = 0
+	conversation.UsageAnchorMessageCount = 0
 }
 
 func (service *Service) recordTurnUsageSnapshot(stream *ActiveStream, conversationID string, turnSeq int64, requestID string, modelCallID string, status string, usage turnUsageSnapshot, errorText string, turnFinalized bool) error {
