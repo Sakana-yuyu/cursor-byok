@@ -20,6 +20,7 @@ import (
 	"cursor/internal/buildinfo"
 	"cursor/internal/logger"
 	"cursor/internal/netproxy"
+	"cursor/internal/processutil"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -405,6 +406,7 @@ func (m *Manager) spawnWindowsInstaller(archivePath string) error {
 		"-TargetExecutable",
 		executablePath,
 	)
+	processutil.HideWindow(cmd)
 	return cmd.Start()
 }
 

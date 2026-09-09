@@ -15,6 +15,7 @@ import (
 	"syscall"
 
 	"cursor/internal/logger"
+	"cursor/internal/processutil"
 )
 
 const (
@@ -76,9 +77,9 @@ func getCertThumbprint(certPEM []byte) (string, error) {
 
 // hideWindow 返回隐藏命令行窗口的 SysProcAttr
 func hideWindow() *syscall.SysProcAttr {
-	return &syscall.SysProcAttr{
-		HideWindow: true,
-	}
+	cmd := &exec.Cmd{}
+	processutil.HideWindow(cmd)
+	return cmd.SysProcAttr
 }
 
 // isCACertInstalled 检查 CA 证书是否已安装到 Windows 系统根证书存储。

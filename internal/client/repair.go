@@ -9,6 +9,7 @@ import (
 
 	"cursor/internal/cursor"
 	"cursor/internal/logger"
+	"cursor/internal/processutil"
 )
 
 // ProxyRepairResult 描述一次「一键修复代理」的执行结果。
@@ -97,7 +98,9 @@ func (s *ProxyService) RepairProxySettings() (ProxyRepairResult, error) {
 func IsCursorProcessRunning() bool {
 	switch goruntime.GOOS {
 	case "windows":
-		out, err := exec.Command("tasklist", "/FI", "IMAGENAME eq Cursor.exe", "/NH").Output()
+		cmd := exec.Command("tasklist", "/FI", "IMAGENAME eq Cursor.exe", "/NH")
+		processutil.HideWindow(cmd)
+		out, err := cmd.Output()
 		if err != nil {
 			return false
 		}

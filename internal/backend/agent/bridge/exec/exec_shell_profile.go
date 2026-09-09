@@ -133,7 +133,7 @@ func buildExplicitShellProfileCommand(profile string, command string) (string, e
 	}
 	escape := func(value string) string { return strings.ReplaceAll(value, "'", "''") }
 	launcherScript := fmt.Sprintf(
-		"$c=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('%s'));$i=[Diagnostics.ProcessStartInfo]::new();$i.FileName='%s';$i.Arguments='%s';$i.UseShellExecute=$false;$i.RedirectStandardInput=$true;$p=[Diagnostics.Process]::new();$p.StartInfo=$i;[void]$p.Start();$p.StandardInput.Write($c);$p.StandardInput.Close();$p.WaitForExit();exit $p.ExitCode",
+		"$c=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('%s'));$i=[Diagnostics.ProcessStartInfo]::new();$i.FileName='%s';$i.Arguments='%s';$i.UseShellExecute=$false;$i.CreateNoWindow=$true;$i.RedirectStandardInput=$true;$p=[Diagnostics.Process]::new();$p.StartInfo=$i;[void]$p.Start();$p.StandardInput.Write($c);$p.StandardInput.Close();$p.WaitForExit();exit $p.ExitCode",
 		payload, escape(target), escape(strings.Join(targetArgs, " ")))
 	return launcherName + " -NoLogo -NoProfile -NonInteractive -EncodedCommand " + encodePowerShellCommand(launcherScript), nil
 }
