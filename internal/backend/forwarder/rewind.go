@@ -235,6 +235,7 @@ func applyRunRewindConversationState(conversation *ConversationFile, intent Inbo
 		return
 	}
 	conversation.TokenDetailsUsedTokens = 0
+	clearConversationUsageAnchor(conversation)
 	if conversation.TokenDetailsMaxTokens == 0 {
 		conversation.TokenDetailsMaxTokens = projectedConversationMaxTokens
 	}

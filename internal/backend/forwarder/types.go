@@ -36,6 +36,11 @@ type ConversationFile struct {
 	AutoCompactionReserveTokens     int64                                 `json:"auto_compaction_reserve_tokens,omitempty"`
 	AutoCompactionTriggeredAt       string                                `json:"auto_compaction_triggered_at,omitempty"`
 	AutoCompactionSourceModelCallID string                                `json:"auto_compaction_source_model_call_id,omitempty"`
+	// UsageAnchor* 是「真实用量锚点」：最近一次非投影 parent pass 发送时的 compiled
+	// 消息数与 provider 实报输入 token（input + cache 读写）。估算侧以此真实值锚定
+	// 历史前缀、只对增量消息做启发式，消除全量估算随历史累积的系统性漂移。
+	UsageAnchorTokens              uint32                                `json:"usage_anchor_tokens,omitempty"`
+	UsageAnchorMessageCount        int                                   `json:"usage_anchor_message_count,omitempty"`
 	CurrentPlanText                 string                                `json:"current_plan_text,omitempty"`
 	CurrentPlans                    map[string]*agentv1.PlanRegistryEntry `json:"current_plans,omitempty"`
 	MCPTools                        []*agentv1.McpToolDefinition          `json:"mcp_tools,omitempty"`
@@ -215,6 +220,10 @@ type ActiveStream struct {
 	ProviderThinkingSuppressedCount             int
 	ProviderFinishReason                        string
 	ProviderUsage                               turnUsageSnapshot
+	// PromptAnchorMessageCount 记录本 pass 发送的 compiled 消息数（仅非投影 parent pass），
+	// pass 结束时与真实 usage 配对写入会话的用量锚点；0 表示本 pass 不更新锚点
+	// （投影/委派等旁路请求的消息与 canonical 不一致，写入会污染锚点）。
+	PromptAnchorMessageCount                    int
 	ProviderTerminalToolInvocation              bool
 	// SummaryEmittedTurn 记录最近一次已向 RunSSE 流发送会话摘要事件的 turnSeq，
 	// 用于同一 turn 多次 provider pass 时去重（摘要每轮只发一次，内容取最终快照）。

@@ -292,6 +292,14 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	stream.ProviderActive = true
 	stream.ProviderCancel = cancel
 	stream.ProviderPassToolNames = toolDescriptorNames(compiled.Tools)
+	if activeContextProjection == nil {
+		// 非投影 pass：记录 compiled 消息数，pass 结束时与 provider 实报 usage
+		// 配对成会话的用量锚点（anchored estimation 坐标）。
+		stream.PromptAnchorMessageCount = len(compiled.Messages)
+	} else {
+		// 投影 pass 的消息集合与 canonical 不同，写入会把锚点对到被裁剪的前缀上。
+		stream.PromptAnchorMessageCount = 0
+	}
 	stream.UpdatedAt = time.Now().UTC()
 	stream.mu.Unlock()
 	service.setTurnPhase(stream, TurnPhaseProviderRunning)
@@ -393,7 +401,9 @@ func (service *Service) auditCatalogUncovered(ctx context.Context, requestID str
 func (service *Service) resolveProviderOutputBudget(modelID string, modelName string, conversation *ConversationFile, compiled CompiledConversation, thinkingEffort string, recoveryFloor int) (int, map[string]any) {
 	configuredMaxTokens, configuredFromChannel := service.resolveConfiguredProviderMaxOutputTokens(modelID)
 	contextWindowTokens := compactionContextWindowSize(conversation)
-	estimatedPromptTokens := estimateCompiledPromptTokens(compiled)
+	// 输出预算同样采用锚定估算：启发式高估 prompt 会压缩 max_tokens 配额，
+	// 导致长生成被 finish_reason=max_tokens 过早截断。
+	estimatedPromptTokens := estimateCompiledPromptTokensAnchored(conversation, compiled)
 	remainingTokens := int64(0)
 	requestMaxTokens := int64(configuredMaxTokens)
 	if requestMaxTokens <= 0 {
@@ -471,6 +481,7 @@ func (service *Service) resolveProviderOutputBudget(modelID string, modelName st
 		"catalog_supports_thinking":         catalogSupportsThinking,
 		"max_tokens_recovery_floor":         recoveryFloor,
 		"compiled_prompt_tokens_estimate":   estimatedPromptTokens,
+		"usage_anchor_applied":              usageAnchorApplicable(conversation, compiled),
 		"context_window_tokens":             contextWindowTokens,
 		"remaining_context_tokens_estimate": remainingTokens,
 		"provider_output_safety_tokens":     providerOutputSafetyTokens,
@@ -488,7 +499,7 @@ func validateProviderRequestContextBudget(conversation *ConversationFile, compil
 	if contextWindowTokens <= 0 {
 		return nil
 	}
-	estimatedPromptTokens := estimateCompiledPromptTokens(compiled)
+	estimatedPromptTokens := estimateCompiledPromptTokensAnchored(conversation, compiled)
 	if estimatedPromptTokens <= 0 {
 		return nil
 	}
