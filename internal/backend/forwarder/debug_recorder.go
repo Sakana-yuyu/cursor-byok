@@ -54,6 +54,10 @@ type debugRecorder struct {
 	queue       chan debugWriteJob
 	workerOnce  sync.Once
 	health      debugRecorderHealth
+	// mu 保护 closed/queue 的关闭语义：Close 后 enqueue 静默丢弃，
+	// 避免向已关闭 channel 发送（panic 会在调用方 goroutine 炸出）。
+	mu     sync.Mutex
+	closed bool
 }
 
 type debugRecorderHealth struct {
@@ -317,6 +321,11 @@ func (recorder *debugRecorder) enqueue(job debugWriteJob) {
 	if recorder == nil {
 		return
 	}
+	recorder.mu.Lock()
+	defer recorder.mu.Unlock()
+	if recorder.closed {
+		return
+	}
 	recorder.workerOnce.Do(func() {
 		recorder.queue = make(chan debugWriteJob, debugQueueCapacity)
 		safego.GoWithPanicHandler("forwarder:debug-recorder", recorder.writeLoop, func(error) {
@@ -331,6 +340,24 @@ func (recorder *debugRecorder) enqueue(job debugWriteJob) {
 		if shouldWarnDebugQueueDrop(droppedTotal) {
 			logger.Warn("debug recorder queue full, dropping event", "filename", strings.TrimSpace(job.filename), "dropped_total", droppedTotal)
 		}
+	}
+}
+
+// Close 停止写盘 worker：Service 被 Shutdown/丢弃时调用，防止旧 recorder 的
+// goroutine 与 8192 槽 channel 随每次重建（Start/SaveConfig rebuild）永久累积。
+// 已入队的事件仍会被 worker 排空落盘（range closed channel 语义）。
+func (recorder *debugRecorder) Close() {
+	if recorder == nil {
+		return
+	}
+	recorder.mu.Lock()
+	defer recorder.mu.Unlock()
+	if recorder.closed {
+		return
+	}
+	recorder.closed = true
+	if recorder.queue != nil {
+		close(recorder.queue)
 	}
 }
 

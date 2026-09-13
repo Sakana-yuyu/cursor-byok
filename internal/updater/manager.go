@@ -27,6 +27,10 @@ import (
 
 const checkInterval = 20 * time.Minute
 
+// downloadTimeout 是完整安装包下载的独立预算：慢速网络拉取数十上百 MB
+// 需要远超 manifest 检查的时限，超时由 downloadCtx 控制而非 HTTP 客户端。
+const downloadTimeout = 15 * time.Minute
+
 type State string
 
 const (
@@ -65,9 +69,13 @@ type UpdateInfo struct {
 type Manager struct {
 	app *application.App
 
-	client *http.Client
-	ctx    context.Context
-	cancel context.CancelFunc
+	// client 用于 manifest 等小请求（自身 5 分钟超时已远超需要）；
+	// downloadClient 不设整体超时，下载时长由 downloadContext 的
+	// downloadTimeout 单独约束，慢速网络拉取完整安装包不会被误杀。
+	client         *http.Client
+	downloadClient *http.Client
+	ctx            context.Context
+	cancel         context.CancelFunc
 
 	mu             sync.Mutex
 	state          State
@@ -79,11 +87,12 @@ type Manager struct {
 func NewManager(app *application.App) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Manager{
-		app:    app,
-		client: netproxy.NewHTTPClient(5 * time.Minute),
-		ctx:    ctx,
-		cancel: cancel,
-		state:  StateIdle,
+		app:            app,
+		client:         netproxy.NewHTTPClient(5 * time.Minute),
+		downloadClient: netproxy.NewHTTPClient(0),
+		ctx:            ctx,
+		cancel:         cancel,
+		state:          StateIdle,
 	}
 }
 
@@ -149,6 +158,8 @@ func (m *Manager) checkNow(manual bool) {
 	}
 	m.emitState(StateChecking, nil, "", "", false, "")
 
+	// manifest 是小请求，90 秒足够；完整安装包下载（数十至上百 MB）必须
+	// 单独设超时预算，慢速网络下共用 90 秒会让自动更新必然失败。
 	ctx, cancel := context.WithTimeout(m.ctx, 90*time.Second)
 	defer cancel()
 
@@ -169,7 +180,9 @@ func (m *Manager) checkNow(manual bool) {
 	m.setState(StateDownloading, info, "")
 	m.emitState(StateDownloading, info, "", "", false, "")
 
-	archivePath, err := m.downloadUpdate(ctx, info)
+	downloadCtx, downloadCancel := context.WithTimeout(m.ctx, downloadTimeout)
+	defer downloadCancel()
+	archivePath, err := m.downloadUpdate(downloadCtx, info)
 	if err != nil {
 		logger.Errorf("下载更新失败: %v", err)
 		m.setState(StateError, info, "")
@@ -263,7 +276,7 @@ func (m *Manager) downloadUpdate(ctx context.Context, info *UpdateInfo) (string,
 		return "", err
 	}
 
-	resp, err := m.client.Do(req)
+	resp, err := m.downloadClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -556,6 +569,11 @@ func currentPlatformKey() (string, error) {
 }
 
 func archiveSuffix(downloadURL string) string {
+	// 先剥离 query/fragment：签名 CDN 链接（app.zip?sig=...）会把 ?sig=... 当成
+	// 扩展名的一部分，导致 os.CreateTemp 模式含 Windows 非法字符而直接失败。
+	if index := strings.IndexAny(downloadURL, "?#"); index >= 0 {
+		downloadURL = downloadURL[:index]
+	}
 	if strings.HasSuffix(downloadURL, ".tar.gz") {
 		return ".tar.gz"
 	}
@@ -679,8 +697,39 @@ if [ -z "$EXTRACTED_APP" ]; then
   exit 1
 fi
 
-rm -rf "$TARGET_APP"
-mv "$EXTRACTED_APP" "$TARGET_APP"
+# 原子替换：先把新包移动到目标同目录的临时名（同卷 mv 是原子 rename），再把
+# 旧包挪走、新包就位；任何一步失败都恢复旧包。避免旧版先被 rm 后 mv 失败
+# （跨卷/磁盘满/权限）导致应用被删且无回滚。
+TARGET_DIR="$(dirname "$TARGET_APP")"
+STAGED_APP="$TARGET_DIR/.cursor-byok-update-staged.app"
+OLD_APP="$TMP_DIR/old-app-backup"
+
+rm -rf "$STAGED_APP"
+if ! mv "$EXTRACTED_APP" "$STAGED_APP"; then
+  echo "Failed to stage new app bundle next to target" >&2
+  exit 1
+fi
+
+if [ -d "$TARGET_APP" ]; then
+  if ! mv "$TARGET_APP" "$OLD_APP"; then
+    rm -rf "$STAGED_APP"
+    echo "Failed to move old app bundle away (target locked?)" >&2
+    exit 1
+  fi
+fi
+
+if mv "$STAGED_APP" "$TARGET_APP"; then
+  rm -rf "$OLD_APP"
+else
+  # 就位失败：尽力恢复旧包，再清理暂存目录。
+  if [ -d "$OLD_APP" ]; then
+    mv "$OLD_APP" "$TARGET_APP" || true
+  fi
+  rm -rf "$STAGED_APP"
+  echo "Failed to place new app bundle; old bundle restored" >&2
+  exit 1
+fi
+
 open "$TARGET_APP"
 `
 

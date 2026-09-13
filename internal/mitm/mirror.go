@@ -102,6 +102,25 @@ var mirrorDiagnosticHeaders = map[string]bool{
 	"sec-websocket-key":  true,
 }
 
+// mirrorBodyPassthrough 把记录阶段已缓冲的请求体前缀与未读的剩余流重新拼接成
+// req.Body：记录截断时无需把整个大请求（LLM 长上下文可达数十 MB）读进内存，
+// Close 转发给原始 body 以保持连接复用语义。
+type mirrorBodyPassthrough struct {
+	head *bytes.Reader
+	tail io.ReadCloser
+}
+
+func (m *mirrorBodyPassthrough) Read(p []byte) (int, error) {
+	if m.head.Len() > 0 {
+		return m.head.Read(p)
+	}
+	return m.tail.Read(p)
+}
+
+func (m *mirrorBodyPassthrough) Close() error {
+	return m.tail.Close()
+}
+
 // mirrorRecord 是 official.raw.jsonl 的一行。
 type mirrorRecord struct {
 	TS            time.Time            `json:"ts"`
@@ -327,19 +346,20 @@ func (r *mirrorRecorder) recordExchangeRequest(host string, exchange *mirrorExch
 		body = readBody
 		recordedBody := body
 		if len(body) > mirrorBodyMaxBytes {
-			// 记录端截断不影响直通：继续读完剩余部分，重建完整 body 给上游。
-			rest, restErr := io.ReadAll(req.Body)
-			if restErr != nil {
-				logger.Errorf("mirror record drain request body failed: %v", restErr)
-			}
-			body = append(body, rest...)
+			// 记录端截断不影响直通：已缓冲的前缀与未读的剩余流拼接重建 body，
+			// 不再把整个大请求（LLM 长上下文可达数十 MB）全量读进内存。
 			rec.Truncated = true
 			recordedBody = body[:mirrorBodyMaxBytes]
+			r.setRecordBody(&rec, recordedBody)
+			r.setBidiProtocolSummary(&rec, req, recordedBody)
+			r.setRunSSERequestSummary(&rec, req, recordedBody)
+			req.Body = &mirrorBodyPassthrough{head: bytes.NewReader(body), tail: req.Body}
+		} else {
+			r.setRecordBody(&rec, recordedBody)
+			r.setBidiProtocolSummary(&rec, req, recordedBody)
+			r.setRunSSERequestSummary(&rec, req, recordedBody)
+			req.Body = io.NopCloser(bytes.NewReader(body))
 		}
-		r.setRecordBody(&rec, recordedBody)
-		r.setBidiProtocolSummary(&rec, req, recordedBody)
-		r.setRunSSERequestSummary(&rec, req, recordedBody)
-		req.Body = io.NopCloser(bytes.NewReader(body))
 	}
 	if rec.Model == "" {
 		rec.Model = mirrorRequestModel(host, req, body)
@@ -618,8 +638,8 @@ func mirrorRunSSERequestID(req *http.Request, body []byte) (string, string) {
 		return "", "runsse_request_frame_incomplete"
 	}
 	flags := body[0]
-	payloadLength := int(binary.BigEndian.Uint32(body[1:5]))
-	if payloadLength > mirrorConnectFrameMaxBytes || len(body) != 5+payloadLength {
+	payloadLength, lengthOK := mirrorConnectFramePayloadLength(body)
+	if !lengthOK || len(body) != 5+payloadLength {
 		return "", "runsse_request_frame_invalid"
 	}
 	payload := body[5:]
@@ -795,6 +815,20 @@ func (d *mirrorRunSSEFrameDecoder) Write(chunk []byte) {
 	d.writeSSEFrames()
 }
 
+// mirrorConnectFramePayloadLength 从帧头解析 payload 长度并校验上限：比较必须在
+// uint32 域完成——32 位平台上超范围的 int 转换会得到负值，绕过上限检查后
+// 负索引切片直接 panic（该 panic 发生在 MITM 会话 goroutine，会击穿进程）。
+func mirrorConnectFramePayloadLength(buffer []byte) (int, bool) {
+	if len(buffer) < 5 {
+		return 0, false
+	}
+	length := binary.BigEndian.Uint32(buffer[1:5])
+	if length > uint32(mirrorConnectFrameMaxBytes) {
+		return 0, false
+	}
+	return int(length), true
+}
+
 func mirrorConnectFrameHeaderValid(buffer []byte) bool {
 	if len(buffer) < 5 {
 		return false
@@ -803,23 +837,23 @@ func mirrorConnectFrameHeaderValid(buffer []byte) bool {
 	if flags&^uint8(0x03) != 0 {
 		return false
 	}
-	payloadLength := int(binary.BigEndian.Uint32(buffer[1:5]))
-	return payloadLength <= mirrorConnectFrameMaxBytes
+	_, lengthOK := mirrorConnectFramePayloadLength(buffer)
+	return lengthOK
 }
 
 func mirrorConnectFrameComplete(buffer []byte) bool {
 	if !mirrorConnectFrameHeaderValid(buffer) {
 		return false
 	}
-	payloadLength := int(binary.BigEndian.Uint32(buffer[1:5]))
+	payloadLength, _ := mirrorConnectFramePayloadLength(buffer)
 	return len(buffer) >= 5+payloadLength
 }
 
 func (d *mirrorRunSSEFrameDecoder) writeConnectFrames() {
 	for len(d.buffer) >= 5 {
 		flags := d.buffer[0]
-		payloadLength := int(binary.BigEndian.Uint32(d.buffer[1:5]))
-		if payloadLength > mirrorConnectFrameMaxBytes {
+		payloadLength, lengthOK := mirrorConnectFramePayloadLength(d.buffer)
+		if !lengthOK {
 			d.emitFrame(append([]byte(nil), d.buffer[:5]...), &flags, false, "connect_frame_length_invalid", mirrorProtocolFrame{})
 			d.buffer = nil
 			return

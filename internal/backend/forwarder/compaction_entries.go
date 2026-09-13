@@ -308,10 +308,34 @@ func parseManualCompactionDirective(latestUserText string) (string, bool) {
 	}
 }
 
+// streamConversationIdentity 是会被复用流 BidiAppend goroutine 持锁重写的
+// 身份字段快照（ConversationID/TurnSeq）：锁外读取这些字段是数据竞争，
+// 需要先持锁快照再使用。
+type streamConversationIdentity struct {
+	ConversationID string
+	TurnSeq        int64
+}
+
+func snapshotStreamConversationIdentity(stream *ActiveStream) streamConversationIdentity {
+	if stream == nil {
+		return streamConversationIdentity{}
+	}
+	stream.mu.Lock()
+	defer stream.mu.Unlock()
+	return streamConversationIdentity{ConversationID: stream.ConversationID, TurnSeq: stream.TurnSeq}
+}
+
 func buildPreCompactHookRequest(stream *ActiveStream, plan *compactionPlan) *agentv1.ExecuteHookRequest {
 	if stream == nil || plan == nil {
 		return nil
 	}
+	// ConversationId/Model/CurrentModelCallID 会被复用流的 BidiAppend goroutine
+	// 持锁重写，快照必须持锁。
+	stream.mu.Lock()
+	conversationID := stream.ConversationID
+	modelID := stream.ModelID
+	generationID := strings.TrimSpace(stream.CurrentModelCallID)
+	stream.mu.Unlock()
 	query := &agentv1.PreCompactRequestQuery{
 		Trigger:             strings.TrimSpace(plan.Trigger),
 		ContextUsagePercent: plan.ContextUsagePercent,
@@ -320,10 +344,10 @@ func buildPreCompactHookRequest(stream *ActiveStream, plan *compactionPlan) *age
 		MessageCount:        plan.MessageCount,
 		MessagesToCompact:   plan.MessagesToCompact,
 		IsFirstCompaction:   plan.IsFirstCompaction,
-		ConversationId:      &stream.ConversationID,
-		Model:               &stream.ModelID,
+		ConversationId:      &conversationID,
+		Model:               &modelID,
 	}
-	if generationID := strings.TrimSpace(stream.CurrentModelCallID); generationID != "" {
+	if generationID != "" {
 		query.GenerationId = &generationID
 	}
 	return &agentv1.ExecuteHookRequest{

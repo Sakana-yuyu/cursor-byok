@@ -159,10 +159,14 @@ func (s *ProxyService) AutoMatchContextWindows(ctx context.Context, force bool) 
 			normalizedID := normalizeModelIDForMatch(adapters[idx].ModelID)
 			window, ok := windowByID[normalizedID]
 			if ok && window > 0 {
-				adapters[idx].ContextWindowTokens = window
-				result.Details[idx].After = window
-				result.Details[idx].Source = "probe"
-				result.FromProbe++
+				// 与目录命中同策略（见上文“仅下调不覆盖”注释）：探测结果只在用户值
+				// 缺失（<=0）或大于真实窗口时收敛，用户手动设置的更小窗口必须保留。
+				if adapters[idx].ContextWindowTokens <= 0 || window < adapters[idx].ContextWindowTokens {
+					adapters[idx].ContextWindowTokens = window
+					result.Details[idx].After = window
+					result.Details[idx].Source = "probe"
+					result.FromProbe++
+				}
 			}
 			// 中转站探测到价格且 adapter 当前无手动价格 → 回填。
 			if adapters[idx].Pricing == nil {

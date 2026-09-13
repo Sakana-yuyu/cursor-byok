@@ -78,41 +78,45 @@ func optionalDelegationExecutorTime(value time.Time) *time.Time {
 
 // GetDelegationTaskSnapshots returns retained Multitask worker state.
 func (s *ProxyService) GetDelegationTaskSnapshots() []forwarder.DelegationTaskSnapshot {
-	if s == nil || s.backendHost == nil {
+	host := s.currentBackendHost()
+	if s == nil || host == nil {
 		return nil
 	}
-	return s.backendHost.DelegationTaskSnapshots()
+	return host.DelegationTaskSnapshots()
 }
 
 func (s *ProxyService) GetDelegationExecutorSnapshots() []DelegationExecutorSnapshot {
-	if s == nil || s.backendHost == nil {
+	host := s.currentBackendHost()
+	if s == nil || host == nil {
 		return nil
 	}
-	return publicDelegationExecutorSnapshots(s.backendHost.DelegationExecutorSnapshots())
+	return publicDelegationExecutorSnapshots(host.DelegationExecutorSnapshots())
 }
 
 func (s *ProxyService) RefreshDelegationExecutorProbes() ([]DelegationExecutorSnapshot, error) {
-	if s == nil || s.backendHost == nil {
+	host := s.currentBackendHost()
+	if s == nil || host == nil {
 		return nil, nil
 	}
 	ctx := context.Background()
 	if app := application.Get(); app != nil {
 		ctx = app.Context()
 	}
-	items, err := s.backendHost.RefreshDelegationExecutorProbes(ctx)
+	items, err := host.RefreshDelegationExecutorProbes(ctx)
 	return publicDelegationExecutorSnapshots(items), err
 }
 
 // InstallDelegationExecutor 仅安装后端白名单中的 CLI，并在安装完成后返回强制复检结果。
 func (s *ProxyService) InstallDelegationExecutor(id string) (DelegationExecutorSnapshot, error) {
-	if s == nil || s.backendHost == nil {
+	host := s.currentBackendHost()
+	if s == nil || host == nil {
 		return DelegationExecutorSnapshot{}, nil
 	}
 	ctx := context.Background()
 	if app := application.Get(); app != nil {
 		ctx = app.Context()
 	}
-	snapshot, err := s.backendHost.InstallDelegationExecutor(ctx, id)
+	snapshot, err := host.InstallDelegationExecutor(ctx, id)
 	if err != nil {
 		return DelegationExecutorSnapshot{}, err
 	}
@@ -133,8 +137,8 @@ func (s *ProxyService) GetDelegationConfig() (serverconfig.DelegationConfig, err
 	if app != nil {
 		ctx = app.Context()
 	}
-	if s.backendHost != nil {
-		return s.backendHost.GetDelegationConfig(ctx)
+	if host := s.currentBackendHost(); host != nil {
+		return host.GetDelegationConfig(ctx)
 	}
 	cfg, err := s.LoadUserConfig()
 	if err != nil {
@@ -158,12 +162,12 @@ func (s *ProxyService) SaveDelegationConfig(cfg serverconfig.DelegationConfig) (
 		fullConfig UserConfig
 		err        error
 	)
-	if s.backendHost != nil {
-		normalized, err = s.backendHost.SaveDelegationConfig(ctx, cfg)
+	if host := s.currentBackendHost(); host != nil {
+		normalized, err = host.SaveDelegationConfig(ctx, cfg)
 		if err != nil {
 			return serverconfig.DefaultConfig().Delegation, err
 		}
-		fullConfig, err = s.backendHost.LoadConfig(ctx)
+		fullConfig, err = host.LoadConfig(ctx)
 		if err != nil {
 			return serverconfig.DefaultConfig().Delegation, err
 		}
@@ -189,8 +193,9 @@ func (s *ProxyService) SaveDelegationConfig(cfg serverconfig.DelegationConfig) (
 
 // CancelDelegationTask cancels one Multitask worker without stopping siblings.
 func (s *ProxyService) CancelDelegationTask(taskID string) bool {
-	if s == nil || s.backendHost == nil {
+	host := s.currentBackendHost()
+	if s == nil || host == nil {
 		return false
 	}
-	return s.backendHost.CancelDelegationTask(taskID)
+	return host.CancelDelegationTask(taskID)
 }

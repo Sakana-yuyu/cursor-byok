@@ -298,8 +298,11 @@ function rateTone(rate) {
   return "text-[#d4d4d4]";
 }
 
-// 服务端分页加载：只拉当前页的数据
+// 服务端分页加载：只拉当前页的数据。
+// seq 守卫：pageSize/翻页在飞期间再次触发刷新时，后返回的旧响应不得覆盖新数据。
+let refreshSeq = 0;
 async function refresh({ keepPage = false } = {}) {
+  const seq = ++refreshSeq;
   loading.value = true;
   error.value = "";
   try {
@@ -308,17 +311,21 @@ async function refresh({ keepPage = false } = {}) {
       fetchRecentRequestMetricsAbnormalCount(),
       fetchRecentRequestMetricsDegradedCount(),
     ]);
+    if (seq !== refreshSeq) return;
     totalCount.value = count;
     abnormalCount.value = abnormal;
     degradedCount.value = degraded;
     if (!keepPage) page.value = 1;
     if (page.value > totalPages.value) page.value = totalPages.value;
     const offset = (page.value - 1) * pageSize.value;
-    rows.value = await fetchRecentRequestMetrics(pageSize.value, offset);
+    const fetched = await fetchRecentRequestMetrics(pageSize.value, offset);
+    if (seq !== refreshSeq) return;
+    rows.value = fetched;
   } catch (cause) {
+    if (seq !== refreshSeq) return;
     error.value = String(cause?.message || cause || "读取请求明细失败");
   } finally {
-    loading.value = false;
+    if (seq === refreshSeq) loading.value = false;
   }
 }
 

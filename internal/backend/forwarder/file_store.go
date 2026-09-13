@@ -1201,23 +1201,31 @@ func conversationLockIsStale(lockPath string) (bool, error) {
 		}
 		return false, err
 	}
-	if time.Since(info.ModTime()) > conversationLockStaleAfter {
-		return true, nil
-	}
+	mtimeStale := time.Since(info.ModTime()) > conversationLockStaleAfter
 	pid := readConversationLockPID(lockPath)
 	if pid <= 0 {
+		// 锁里没有 PID（旧格式/损坏）：mtime 是唯一可用信号。
 		return time.Since(info.ModTime()) > legacyConversationLockStaleAfter, nil
 	}
 	if pid == os.Getpid() {
 		if lockCreatedBeforeCurrentProcess(lockPath, info.ModTime()) {
 			return true, nil
 		}
+		// 本进程创建的锁：永不因 mtime 超时回收（一次持锁 30 分钟的活操作
+		// 不能被自己拆掉，否则会出现两个 goroutine 并发读改写同一文件）。
 		return false, nil
 	}
 	// 别的进程持锁：先看 PID 是否存活，再用锁里的 created_at 与目标进程的
 	// 实际启动时间交叉验证，防止 Windows/Unix 上的 PID 复用导致孤儿锁
 	// 被误判为「仍被持有」（原持有者已死、PID 被新进程复用是最常见的场景）。
-	return otherProcessLockIsStale(pid, lockPath), nil
+	//
+	// 注意顺序：mtime 超时不再先于 PID 验证直接判死——那会把持锁超 30 分钟
+	// 的存活进程误拆。只有 PID 验证不可用（拿不到启动时间/created_at）时，
+	// mtime 才作为兜底超时。
+	if stale, verified := otherProcessLockIsStale(pid, lockPath); verified {
+		return stale, nil
+	}
+	return mtimeStale, nil
 }
 
 // conversationLockProcessStartTolerance 允许的时钟/调度抖动容差。当目标进程的
@@ -1226,27 +1234,29 @@ func conversationLockIsStale(lockPath string) (bool, error) {
 const conversationLockProcessStartTolerance = 5 * time.Second
 
 // otherProcessLockIsStale 判断「另一个 PID 持有的锁」是否已是孤儿锁。
-//   - PID 不存在 → 孤儿锁。
+// 第二个返回值表示判定是否经过交叉验证：
+//   - PID 不存在 → 孤儿锁（已验证）。
 //   - PID 存在但读不到启动时间（非 Linux 的 /proc、或权限不足拿不到 GetProcessTimes）
-//     → 无法交叉验证，保守判为「非孤儿」（维持原有行为，等待 mtime 兜底）。
+//     → 无法交叉验证（未验证），由调用方的 mtime 兜底决定。
 //   - PID 存在且能拿到启动时间 → 若该进程是【在锁创建之后】才启动的，说明这是
-//     PID 复用后的新进程，原持锁者已死 → 孤儿锁；否则视为原持锁者仍在，锁有效。
-func otherProcessLockIsStale(pid int, lockPath string) bool {
+//     PID 复用后的新进程，原持锁者已死 → 孤儿锁（已验证）；否则视为原持锁者仍在，
+//     锁有效（已验证：持有者存活，mtime 超时也不回收）。
+func otherProcessLockIsStale(pid int, lockPath string) (bool, bool) {
 	startedAt, alive := processStartTime(pid)
 	if !alive {
-		return true
+		return true, true
 	}
 	if startedAt.IsZero() {
-		// 拿不到启动时间，无法排除 PID 复用，保守起见不回收，等 mtime 兜底。
-		return false
+		// 拿不到启动时间，无法排除 PID 复用，交回调用方用 mtime 兜底。
+		return false, false
 	}
 	createdAt := readConversationLockCreatedAt(lockPath)
 	if createdAt.IsZero() {
-		// 锁里没有 created_at（旧格式/损坏），退化为「进程存在即非孤儿」。
-		return false
+		// 锁里没有 created_at（旧格式/损坏），无法做复用交叉验证。
+		return false, false
 	}
 	// 进程启动时间晚于锁创建时刻（含容差）→ PID 复用 → 孤儿锁。
-	return startedAt.After(createdAt.Add(conversationLockProcessStartTolerance))
+	return startedAt.After(createdAt.Add(conversationLockProcessStartTolerance)), true
 }
 
 func lockCreatedBeforeCurrentProcess(lockPath string, modTime time.Time) bool {

@@ -449,10 +449,17 @@ func (host *Host) SaveConfig(ctx context.Context, cfg serverconfig.Config) (serv
 	if err != nil {
 		return serverconfig.Config{}, err
 	}
+	// 判定与重建必须在同一临界区：无锁读 httpServer 会与 Start/Stop 的持锁写
+	// 构成数据竞争；竞争命中时 rebuild 换掉的 agentModule 接管不了已运行
+	// httpServer 捕获的旧 mux，会造成流量与状态错位。
+	var rebuildErr error
+	host.runMu.Lock()
 	if host.httpServer == nil {
-		if rebuildErr := host.rebuild(normalized); rebuildErr != nil {
-			return serverconfig.Config{}, rebuildErr
-		}
+		rebuildErr = host.rebuildLocked(normalized)
+	}
+	host.runMu.Unlock()
+	if rebuildErr != nil {
+		return serverconfig.Config{}, rebuildErr
 	}
 	return normalized, nil
 }
@@ -651,6 +658,12 @@ func (host *Host) rebuild(cfg serverconfig.Config) error {
 
 func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 	host.listenAddr = cfg.BackendListenAddr
+	if host.agentModule != nil && host.agentModule.Service != nil {
+		// 被替换的旧 Service 即将被丢弃：只停其 debug 落盘 worker，防止
+		// 每次 rebuild 泄漏一个 goroutine 和 8192 槽队列（完整 Shutdown 会
+		// 关闭进程级共享 MCP 注册表，未运行时也没有活动流需要取消）。
+		host.agentModule.Service.CloseDebugRecorder()
+	}
 	agentModule := forwarder.NewModuleWithExecutorRegistry(appdata.HistoryRootPath(), host.configs, host.executorRegistry)
 	host.agentModule = agentModule
 	agentContractHandler := forwarder.NewAgentContractHandler(agentModule.Service, host.agentContractModels)

@@ -11,6 +11,7 @@ import (
 	goruntime "runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"cursor/internal/ads"
@@ -378,24 +379,38 @@ func Run(resources EmbeddedResources) error {
 		app.Quit()
 	})
 
-	var currentLocale = i18n.DefaultLocale
+	// locale 的读写来自两个互不相干的 goroutine（locale:changed 前端事件与
+	// proxy:state 后端 lifecycle 事件），普通变量构成数据竞争，用原子值保护。
+	var currentLocale atomic.Value // string
+	currentLocale.Store(i18n.DefaultLocale)
+
+	loadLocale := func() string {
+		if value, ok := currentLocale.Load().(string); ok && value != "" {
+			return value
+		}
+		return i18n.DefaultLocale
+	}
 
 	updateTrayLabels := func(locale string) {
-		currentLocale = i18n.Normalize(locale)
+		current := i18n.Normalize(locale)
+		if current == "" {
+			current = i18n.DefaultLocale
+		}
+		currentLocale.Store(current)
 		state := proxyService.GetState()
 		statusKey := "tray.status.not_started"
 		if state.Running {
 			statusKey = "tray.status.running"
 		}
-		statusItem.SetLabel(i18n.T(currentLocale, statusKey))
-		startItem.SetLabel(i18n.T(currentLocale, "tray.start"))
-		stopItem.SetLabel(i18n.T(currentLocale, "tray.stop"))
-		updateItem.SetLabel(i18n.T(currentLocale, "tray.update"))
-		showItem.SetLabel(i18n.T(currentLocale, "tray.show"))
-		showStatsItem.SetLabel(i18n.T(currentLocale, "tray.show_stats"))
-		hideItem.SetLabel(i18n.T(currentLocale, "tray.hide"))
-		quitItem.SetLabel(i18n.T(currentLocale, "tray.quit"))
-		systray.SetTooltip(i18n.T(currentLocale, appNameKey))
+		statusItem.SetLabel(i18n.T(current, statusKey))
+		startItem.SetLabel(i18n.T(current, "tray.start"))
+		stopItem.SetLabel(i18n.T(current, "tray.stop"))
+		updateItem.SetLabel(i18n.T(current, "tray.update"))
+		showItem.SetLabel(i18n.T(current, "tray.show"))
+		showStatsItem.SetLabel(i18n.T(current, "tray.show_stats"))
+		hideItem.SetLabel(i18n.T(current, "tray.hide"))
+		quitItem.SetLabel(i18n.T(current, "tray.quit"))
+		systray.SetTooltip(i18n.T(current, appNameKey))
 	}
 
 	refreshTray := func() {
@@ -407,7 +422,7 @@ func Run(resources EmbeddedResources) error {
 			startItem.SetEnabled(true)
 			stopItem.SetEnabled(false)
 		}
-		updateTrayLabels(currentLocale)
+		updateTrayLabels(loadLocale())
 		if refreshAdAssetBaseURL() {
 			refreshAdRuntime()
 		}

@@ -41,3 +41,20 @@ func TestUpdateInfoFromManifestRejectsMissingNonLinuxAsset(t *testing.T) {
 	}
 }
 
+
+func TestArchiveSuffixStripsQueryString(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]string{
+		"https://example.invalid/app.zip?sig=abc":          ".zip",
+		"https://example.invalid/app.tar.gz?x=1#frag":      ".tar.gz",
+		"https://example.invalid/app.zip":                   ".zip",
+		"https://example.invalid/update.tar.gz":             ".tar.gz",
+		"https://example.invalid/app.zip?sig=a&b=c":         ".zip",
+	}
+	for url, want := range cases {
+		if got := archiveSuffix(url); got != want {
+			t.Fatalf("archiveSuffix(%q) = %q, want %q", url, got, want)
+		}
+	}
+}

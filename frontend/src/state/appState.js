@@ -1149,19 +1149,32 @@ export async function reloadUserConfig(options = {}) {
 
 export async function saveModelAdapterAt(index, adapter) {
   const currentConfig = await loadPersistedUserConfig();
-  const nextAdapters = dedupeModelAdapters(currentConfig.modelAdapters);
   const nextAdapter = normalizeModelAdapter(adapter);
 
-  if (index >= 0 && index < nextAdapters.length) {
-    nextAdapters.splice(index, 1, nextAdapter);
+  // 先在原始（未去重）列表上定位替换目标：index 基于内存中的 modelAdapters，
+  // 提前去重会让 index 之前的重复条目被移除、索引整体前移，替换到错误的渠道。
+  // 身份命中优先于 index：多窗口并发修改或历史重复条目导致索引漂移时，
+  // 身份定位保证改的是调用方所指的那个 adapter。
+  const rawAdapters = Array.isArray(currentConfig.modelAdapters) ? currentConfig.modelAdapters.slice() : [];
+  const adapterIdentity = buildModelAdapterIdentityKey(nextAdapter);
+  const identityIndex = rawAdapters.findIndex((item) => buildModelAdapterIdentityKey(item) === adapterIdentity);
+
+  let nextAdapters;
+  if (identityIndex >= 0) {
+    // 保存已存在的 adapter（编辑）：按身份原位替换。
+    nextAdapters = rawAdapters;
+    nextAdapters[identityIndex] = nextAdapter;
+  } else if (index >= 0 && index < rawAdapters.length) {
+    // 新身份但带 index（编辑器以“另存/转换”语义落到指定槽位）。
+    nextAdapters = rawAdapters;
+    nextAdapters[index] = nextAdapter;
   } else {
-    nextAdapters.push(nextAdapter);
+    nextAdapters = [...rawAdapters, nextAdapter];
   }
 
   const dedupedAdapters = dedupeModelAdapters(nextAdapters);
-  const targetIdentity = buildModelAdapterIdentityKey(nextAdapter);
   const targetIndex = dedupedAdapters.findIndex(
-    (item) => buildModelAdapterIdentityKey(item) === targetIdentity,
+    (item) => buildModelAdapterIdentityKey(item) === adapterIdentity,
   );
   const result = await persistConfigPayload(
     {

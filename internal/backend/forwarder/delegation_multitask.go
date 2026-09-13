@@ -358,6 +358,7 @@ func (service *Service) keepDelegationTaskAlive(stream *ActiveStream, pending ru
 			stream.mu.Lock()
 			_, active := stream.PendingExecs[execID]
 			terminal := isTerminalStreamStatus(stream.Status)
+			conversationID := stream.ConversationID
 			stream.mu.Unlock()
 			if !active || terminal {
 				return
@@ -366,7 +367,7 @@ func (service *Service) keepDelegationTaskAlive(stream *ActiveStream, pending ru
 			// （RUNNING），让 Cursor 客户端 Task 卡片持续显示 running。不再向主进程
 			// thinking 区域刷 "Delegated workers are still running"（避免刷屏）。
 			// 瞬时失败只计数，连续多次失败才放弃，避免一次抖动导致卡片回退 stopped。
-			if err := service.publishCheckpoint(requestID, stream.ConversationID); err != nil {
+			if err := service.publishCheckpoint(requestID, conversationID); err != nil {
 				consecutiveFailures++
 				logger.Errorf("forwarder delegation progress checkpoint failed request_id=%s exec_id=%s failures=%d err=%v", requestID, execID, consecutiveFailures, err)
 				if consecutiveFailures >= 3 {

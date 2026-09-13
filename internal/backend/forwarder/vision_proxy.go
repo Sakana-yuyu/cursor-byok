@@ -1157,7 +1157,11 @@ func (service *Service) handleSeeImageToolInvocation(stream *ActiveStream, invoc
 	requestID := strings.TrimSpace(stream.RequestID)
 	// 主模型未显式传 question 时，用最近一条用户消息文本作为识图任务的用户意图，
 	// 让识图模型知道用户在问什么（如"这块改错了"），并结合圈画/标注区域作答。
-	userContext := truncateVisionUserContext(strings.TrimSpace(stream.LatestUserText))
+	// LatestUserText 会被复用流的 BidiAppend goroutine 持锁重写，读侧需持锁快照。
+	stream.mu.Lock()
+	latestUserText := stream.LatestUserText
+	stream.mu.Unlock()
+	userContext := truncateVisionUserContext(strings.TrimSpace(latestUserText))
 	seeImageIntent := strings.TrimSpace(args.Question)
 	if seeImageIntent == "" {
 		seeImageIntent = userContext

@@ -262,7 +262,11 @@ func (service *Service) finishSuccessfulTurnAfterCheckpoint(stream *ActiveStream
 	}
 	service.setTurnPhase(stream, TurnPhaseCompleted)
 	// 当前 turn 终态后，排空该会话因「子代理运行期间」排队的新消息。
-	service.drainRunQueue(stream.ConversationID, stream.RequestID)
+	// ConversationID 会被复用流的 BidiAppend goroutine 持锁重写，读侧需持锁快照。
+	stream.mu.Lock()
+	conversationID := stream.ConversationID
+	stream.mu.Unlock()
+	service.drainRunQueue(conversationID, stream.RequestID)
 	return nil
 }
 
@@ -491,10 +495,17 @@ func (service *Service) failStream(stream *ActiveStream, terminalCode string, ca
 	if normalized == nil {
 		return nil
 	}
+	// ConversationID/TurnSeq 会被复用流的 BidiAppend goroutine 持锁重写，读侧快照必须持锁。
+	stream.mu.Lock()
+	conversationID := stream.ConversationID
+	turnSeq := stream.TurnSeq
+	retryAttemptCount := stream.ProviderPassCount
+	currentModelCallID := stream.CurrentModelCallID
+	stream.mu.Unlock()
 	// 用户侧只看到脱敏通用文案；真实根因必须落日志，否则磁盘/解析类故障无从定位。
 	logger.Errorf("forwarder turn failed request_id=%s conversation_id=%s terminal_code=%s app_error_code=%s cause=%s",
 		strings.TrimSpace(stream.RequestID),
-		strings.TrimSpace(stream.ConversationID),
+		strings.TrimSpace(conversationID),
 		resolveTerminalCode(terminalCode, cause),
 		string(normalized.Code),
 		formatTurnFailureCause(cause))
@@ -505,12 +516,9 @@ func (service *Service) failStream(stream *ActiveStream, terminalCode string, ca
 	if errors.As(cause, &providerErr) || resolvedTerminalCode == "provider_error" {
 		metadataType = "provider_error"
 	}
-	stream.mu.Lock()
-	retryAttemptCount := stream.ProviderPassCount
-	stream.mu.Unlock()
 	appendErr := error(nil)
-	if _, err := service.appendConversationEntries(stream, stream.ConversationID, []HistoryEntry{
-		newMetadataEntry(stream.TurnSeq, stream.RequestID, metadataType, map[string]any{
+	if _, err := service.appendConversationEntries(stream, conversationID, []HistoryEntry{
+		newMetadataEntry(turnSeq, stream.RequestID, metadataType, map[string]any{
 			"error":         errorText,
 			"error_code":    string(normalized.Code),
 			"disposition":   string(normalized.Disposition),
@@ -522,9 +530,9 @@ func (service *Service) failStream(stream *ActiveStream, terminalCode string, ca
 	}
 	terminalErr := service.failActiveStreamWithDetails(
 		stream,
-		stream.ConversationID,
+		conversationID,
 		stream.RequestID,
-		stream.CurrentModelCallID,
+		currentModelCallID,
 		TerminalFailure{
 			Code:              resolvedTerminalCode,
 			Message:           errorText,

@@ -54,3 +54,29 @@ func TestSummarizeAndBucketEvents(t *testing.T) {
 		t.Fatalf("unexpected bucket totals: %+v", buckets)
 	}
 }
+
+// 回归：总花费只累计 USD 事件，其他币种（如 CNY）的数值不得混入美元总额。
+func TestSumEventCostExcludesNonUSDCurrencies(t *testing.T) {
+	usd := 2.5
+	cny := 8.0
+	blank := 1.0
+	events := []RequestMetric{
+		{Kind: KindProviderCall, CostUSD: &usd, Currency: "USD"},
+		{Kind: KindProviderCall, CostUSD: &cny, Currency: "CNY"}, // 不得计入
+		{Kind: KindProviderCall, CostUSD: &blank},                 // 空币种视作 USD
+	}
+	cost, currency := sumEventCost(events)
+	if cost == nil || *cost != 3.5 {
+		t.Fatalf("sumEventCost() = %v, want 3.5 (USD 2.5 + 空币种 1.0)", cost)
+	}
+	if currency != "USD" {
+		t.Fatalf("currency = %q, want USD", currency)
+	}
+
+	// 只有非 USD 事件时不得给出美元总额。
+	onlyCNY := []RequestMetric{{Kind: KindProviderCall, CostUSD: &cny, Currency: "CNY"}}
+	cost, _ = sumEventCost(onlyCNY)
+	if cost != nil {
+		t.Fatalf("sumEventCost(onlyCNY) = %v, want nil", cost)
+	}
+}

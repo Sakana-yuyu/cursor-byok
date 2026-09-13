@@ -61,8 +61,8 @@ func TestOtherProcessLockIsStale_ReapedPID(t *testing.T) {
 	if err := os.WriteFile(lockPath, []byte(content), 0o600); err != nil {
 		t.Fatalf("write lock file: %v", err)
 	}
-	if !otherProcessLockIsStale(deadPID, lockPath) {
-		t.Fatalf("otherProcessLockIsStale(%d) = false, want true for reaped lock holder", deadPID)
+	if stale, verified := otherProcessLockIsStale(deadPID, lockPath); !stale || !verified {
+		t.Fatalf("otherProcessLockIsStale(%d) = (%t, %t), want (true, true) for reaped lock holder", deadPID, stale, verified)
 	}
 }
 
@@ -76,7 +76,31 @@ func TestOtherProcessLockIsStale_Self(t *testing.T) {
 	if err := os.WriteFile(lockPath, []byte(content), 0o600); err != nil {
 		t.Fatalf("write lock file: %v", err)
 	}
-	if otherProcessLockIsStale(os.Getpid(), lockPath) {
-		t.Fatalf("otherProcessLockIsStale(self) = true, want false for live holder")
+	if stale, verified := otherProcessLockIsStale(os.Getpid(), lockPath); stale || !verified {
+		t.Fatalf("otherProcessLockIsStale(self) = (%t, %t), want (false, true) for live holder", stale, verified)
+	}
+}
+
+// TestConversationLockIsStaleKeepsVerifiedLiveHolder 覆盖 mtime 短路缺陷：
+// 存活持有者（自身 PID，锁由本进程创建）的锁即使 mtime 超过 30 分钟阈值，
+// 也不得被误判 stale——否则等待方会 os.Remove 活锁，双方并发读改写同一文件。
+func TestConversationLockIsStaleKeepsVerifiedLiveHolder(t *testing.T) {
+	lockPath := filepath.Join(t.TempDir(), "conversation.lock")
+	content := fmt.Sprintf("pid=%d\nowner=%d-1\ncreated_at=%s\n",
+		os.Getpid(), os.Getpid(), time.Now().UTC().Format(time.RFC3339Nano))
+	if err := os.WriteFile(lockPath, []byte(content), 0o600); err != nil {
+		t.Fatalf("write lock file: %v", err)
+	}
+	// 把 mtime 推到 31 分钟前（锁内容不变：持锁期间本就不刷新 mtime）。
+	past := time.Now().Add(-31 * time.Minute)
+	if err := os.Chtimes(lockPath, past, past); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+	stale, err := conversationLockIsStale(lockPath)
+	if err != nil {
+		t.Fatalf("conversationLockIsStale() error = %v", err)
+	}
+	if stale {
+		t.Fatal("conversationLockIsStale() = true for live holder with old mtime, want false")
 	}
 }

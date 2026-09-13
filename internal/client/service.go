@@ -91,6 +91,10 @@ type ProxyService struct {
 	modelTestMu sync.RWMutex
 	// modelTestResults 保存当前进程内的模型测速结果。
 	modelTestResults map[string]ModelAdapterTestResult
+	// modelTestResultsSaveMu 串行化测速结果落盘（固定 .tmp 文件名并发竞争防护，
+	// 参照 cursoraccount 的 saveMu）：两个落盘 goroutine 交错写同一 tmp 时，
+	// rename 失败回退分支还会误删刚持久化的文件。
+	modelTestResultsSaveMu sync.Mutex
 
 	// modelCatalogCache 缓存模型列表结果，减少重复网络调用。
 	modelCatalogCache *metadataCache[ModelCatalogResult]
@@ -232,16 +236,18 @@ func NewProxyService(proxy *mitm.ProxyServer, certManager *certs.Manager, caCert
 	service.agentOps = agentops.New(
 		filepath.Join(appdata.DataRootPath(), "agent-ops", "exports"),
 		func() []forwarder.DelegationTaskSnapshot {
-			if service.backendHost == nil {
+			if host := service.currentBackendHost(); host == nil {
 				return nil
+			} else {
+				return host.DelegationTaskSnapshots()
 			}
-			return service.backendHost.DelegationTaskSnapshots()
 		},
 		func(id string) bool {
-			if service.backendHost == nil {
+			if host := service.currentBackendHost(); host == nil {
 				return false
+			} else {
+				return host.CancelDelegationTask(id)
 			}
-			return service.backendHost.CancelDelegationTask(id)
 		},
 	)
 	service.loadPersistedModelAdapterTestResults()
@@ -275,44 +281,91 @@ func (s *ProxyService) wireRoutingMetricsSnapshot() {
 	}
 }
 
+// currentBackendHost 返回 backend host 的持锁快照（可能为 nil）。
+// 写侧 ensureBackendHost 在 lifecycleMu 下执行，但 bridge RPC 读方不持
+// lifecycleMu：无锁读是数据竞争（[]byte/指针撕裂、新旧混合状态），统一经 s.mu 同步。
+func (s *ProxyService) currentBackendHost() *backend.Host {
+	if s == nil {
+		return nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.backendHost
+}
+
+// currentProxy 返回 mitm 代理的持锁快照（可能为 nil），读写均经 s.mu 同步
+// （写侧 ensureProxy 原先只在 lifecycleMu 下写，GetState/ApplyCursorSettings
+// 等读方不持该锁）。
+func (s *ProxyService) currentProxy() *mitm.ProxyServer {
+	if s == nil {
+		return nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.proxy
+}
+
+// currentCertManager 返回 CA 管理器的持锁快照（可能为 nil）。
+// 写侧 reloadCAFromDiskLocked 持 s.mu 重写，读方必须同锁。
+func (s *ProxyService) currentCertManager() *certs.Manager {
+	if s == nil {
+		return nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.certManager
+}
+
 func (s *ProxyService) ensureBackendHost() error {
 	if s == nil {
 		return nil
 	}
-	if s.backendHost != nil {
+	s.mu.RLock()
+	existing := s.backendHost
+	s.mu.RUnlock()
+	if existing != nil {
 		return nil
 	}
 	host, err := backend.NewHost(s.store, s.cursorAccount)
 	if err != nil {
 		return err
 	}
-	s.backendHost = host
+	s.mu.Lock()
+	if s.backendHost == nil {
+		s.backendHost = host
+	} else {
+		host = s.backendHost // 并发兜底：保留先创建的实例，丢弃本次结果
+	}
+	s.mu.Unlock()
 	s.wireRoutingMetricsSnapshot()
 	return nil
 }
 
 // HasActiveConversation reports whether an embedded backend stream is still processing a conversation.
 func (s *ProxyService) HasActiveConversation(conversationID, requestID string) bool {
-	if s == nil || s.backendHost == nil {
+	host := s.currentBackendHost()
+	if s == nil || host == nil {
 		return false
 	}
-	return s.backendHost.HasActiveConversation(conversationID, requestID)
+	return host.HasActiveConversation(conversationID, requestID)
 }
 
 // GetRecentWorkspaceRoot returns the latest workspace seen by the embedded backend.
 func (s *ProxyService) GetRecentWorkspaceRoot() string {
-	if s == nil || s.backendHost == nil {
+	host := s.currentBackendHost()
+	if s == nil || host == nil {
 		return ""
 	}
-	return s.backendHost.GetRecentWorkspaceRoot()
+	return host.GetRecentWorkspaceRoot()
 }
 
 // ResetUsageMetrics 清空当前 backend writer 管理的用量统计。
 func (s *ProxyService) ResetUsageMetrics() error {
-	if s == nil || s.backendHost == nil {
+	host := s.currentBackendHost()
+	if s == nil || host == nil {
 		return historymetrics.ResetUsageFile(appdata.UsageFilePath())
 	}
-	return s.backendHost.ResetUsageMetrics()
+	return host.ResetUsageMetrics()
 }
 
 func (s *ProxyService) ensureProxy(cfg serverconfig.Config) error {
@@ -320,34 +373,37 @@ func (s *ProxyService) ensureProxy(cfg serverconfig.Config) error {
 		return nil
 	}
 	baseURL := ""
-	if s.backendHost != nil {
-		baseURL = s.backendHost.BaseURL()
+	if host := s.currentBackendHost(); host != nil {
+		baseURL = host.BaseURL()
 	}
 	if baseURL == "" {
 		baseURL = "http://" + cfg.BackendListenAddr
 	}
 	listenAddr := cfg.ProxyListenAddr
 
-	if s.proxy != nil {
-		snapshot := s.proxy.Snapshot()
+	if proxy := s.currentProxy(); proxy != nil {
+		snapshot := proxy.Snapshot()
 		if snapshot.ListenAddr == listenAddr {
-			return s.proxy.UpdateBaseURL(baseURL)
+			return proxy.UpdateBaseURL(baseURL)
 		}
 		if snapshot.Running {
 			return fmt.Errorf("代理正在运行，不能从 %s 切换到 %s，请先停止服务", snapshot.ListenAddr, listenAddr)
 		}
 	}
 
-	proxyServer, err := mitm.NewProxyServer(listenAddr, baseURL, appdata.HistoryRootPath(), s.configs, s.certManager)
+	proxyServer, err := mitm.NewProxyServer(listenAddr, baseURL, appdata.HistoryRootPath(), s.configs, s.currentCertManager())
 	if err != nil {
 		return err
 	}
+	s.mu.Lock()
 	s.proxy = proxyServer
+	s.mu.Unlock()
 	return nil
 }
 
 func (s *ProxyService) waitForBackend(ctx context.Context) error {
-	if s == nil || s.backendHost == nil {
+	host := s.currentBackendHost()
+	if s == nil || host == nil {
 		return nil
 	}
 	ticker := time.NewTicker(backendHealthCheckInterval)
@@ -355,7 +411,7 @@ func (s *ProxyService) waitForBackend(ctx context.Context) error {
 	var lastErr error
 	for {
 		healthCtx, healthCancel := context.WithTimeout(ctx, backendHealthCheckAttemptTimeout)
-		err := s.backendHost.HealthCheck(healthCtx)
+		err := host.HealthCheck(healthCtx)
 		healthCancel()
 		if err == nil {
 			return nil

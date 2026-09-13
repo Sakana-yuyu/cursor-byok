@@ -676,7 +676,7 @@ func (manager *Manager) load() error {
 }
 
 // autoImportOffMarkerName 标记用户主动断开官方账号，阻止后续启动自动导入。
-// 手动 PKCE 登录成功（commitCredentials）时删除该标记。
+// 手动 PKCE 登录成功（commitOAuthCredentials）时删除该标记。
 const autoImportOffMarkerName = "cursor-account.auto-import-off"
 
 func autoImportOffMarkerPath() string {
@@ -914,27 +914,6 @@ func (manager *Manager) finishWithError(generation uint64, message string) {
 		return
 	}
 	manager.state = StateError
-}
-
-func (manager *Manager) commitCredentials(generation uint64, value credentials) error {
-	manager.mu.Lock()
-	defer manager.mu.Unlock()
-	if manager.loginGeneration != generation {
-		return ErrNotSignedIn
-	}
-	if err := manager.save(value); err != nil {
-		manager.state = StateError
-		manager.lastError = fmt.Sprintf("保存 Cursor 登录凭据失败: %v", err)
-		return err
-	}
-	// 手动 PKCE 登录成功，清除「主动断开」标记，恢复自动导入。
-	if markerErr := os.Remove(manager.markerPath()); markerErr != nil && !errors.Is(markerErr, os.ErrNotExist) {
-		logger.Errorf("removeAutoImportOffMarker failed: %v", markerErr)
-	}
-	manager.credentials = value
-	manager.state = StateSignedIn
-	manager.lastError = ""
-	return nil
 }
 
 func (manager *Manager) setAuthorizationError(generation uint64, message string) {

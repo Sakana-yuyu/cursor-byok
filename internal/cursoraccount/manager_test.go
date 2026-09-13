@@ -238,9 +238,10 @@ func TestImportFromCursorBackup(t *testing.T) {
 		manager.mu.Lock()
 		manager.loginGeneration = 3
 		manager.mu.Unlock()
-		if err := manager.commitCredentials(3, credentials{
+		if err := manager.commitOAuthCredentials(3, credentials{
 			AccessToken:  "manual-token",
 			RefreshToken: "manual-refresh",
+			Email:        "manual@example.test",
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -786,5 +787,36 @@ func TestManagerRecoveryExportWritesFileWithoutReturningTokens(t *testing.T) {
 	dest2 := filepath.Join(t.TempDir(), "recovery-again.json")
 	if _, err := manager.ExecuteRecoveryExport(prepared.ConfirmationToken, dest2); err == nil {
 		t.Fatal("expected one-time confirmation rejection")
+	}
+}
+
+// 回归：无 AuthID 的本地导入在 token 轮换后仍按 email 合并到同一账号，
+// 不得新增重复记录（Cursor 客户端会自动刷新 token，旧 token 会失效）。
+func TestManagerImportFromLocalMergesOnEmailAfterTokenRotation(t *testing.T) {
+	manager := newTestManager(t, nil)
+	manager.localAuthReader = func() (credentials, error) {
+		return credentials{AccessToken: "token-old", RefreshToken: "refresh-old", Email: "user@example.com"}, nil
+	}
+	first, err := manager.ImportFromLocal()
+	if err != nil {
+		t.Fatalf("first import: %v", err)
+	}
+	manager.localAuthReader = func() (credentials, error) {
+		return credentials{AccessToken: "token-new", RefreshToken: "refresh-new", Email: "user@example.com"}, nil
+	}
+	rotated, err := manager.ImportFromLocal()
+	if err != nil {
+		t.Fatalf("rotated import: %v", err)
+	}
+	if rotated.ID != first.ID {
+		t.Fatalf("rotated import created duplicate account: first=%s rotated=%s", first.ID, rotated.ID)
+	}
+
+	accounts, err := manager.ListAccounts()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(accounts) != 1 {
+		t.Fatalf("account count = %d, want 1 (email merge)", len(accounts))
 	}
 }

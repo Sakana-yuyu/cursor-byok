@@ -23,17 +23,6 @@ import (
 	serverconfig "cursor/internal/backend/server/config"
 )
 
-// queryConfiguredBalance 是策略 0.5 入口：查找匹配的 adapter 配置，若配置了 BalanceQueryURL 则执行。
-// 返回 (balance, matched)；matched=false 表示未配置或未找到匹配 adapter，调用方继续后续策略。
-func (s *ProxyService) queryConfiguredBalance(ctx context.Context, httpClient *http.Client, request ProviderBalanceRequest, normalizedBaseURL, apiKey string) (ProviderBalance, bool) {
-	adapter, ok := s.findAdapterForBalance(request.Type, request.SupplierID, normalizedBaseURL, apiKey)
-	if !ok {
-		return ProviderBalance{}, false
-	}
-	creds := resolveBalanceCredentials(request, adapter, true)
-	return s.queryConfiguredBalanceWithAdapter(ctx, httpClient, adapter, normalizedBaseURL, apiKey, creds)
-}
-
 func (s *ProxyService) queryConfiguredBalanceWithAdapter(ctx context.Context, httpClient *http.Client, adapter serverconfig.ModelAdapterConfig, normalizedBaseURL, apiKey string, creds balanceCredentials) (ProviderBalance, bool) {
 	queryURL := strings.TrimSpace(adapter.BalanceQueryURL)
 	field := strings.TrimSpace(adapter.BalanceQueryField)

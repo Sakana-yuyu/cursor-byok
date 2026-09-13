@@ -54,8 +54,6 @@ type ProxyServer struct {
 	runMu sync.RWMutex
 	// httpServer 表示当前声明中的 httpServer。
 	httpServer *http.Server
-	// serveErrCh 表示当前声明中的 serveErrCh。
-	serveErrCh chan error
 
 	// mirrorConfig 提供镜像记录配置；nil 表示不启用。
 	mirrorConfig MirrorCaptureConfig
@@ -296,27 +294,23 @@ func (s *ProxyServer) Start() error {
 	// 写入正确的客户端代理设置，避免误写不可连接的 :0。
 	s.addr = ln.Addr().String()
 	s.httpServer = httpServer
-	s.serveErrCh = make(chan error, 1)
 
 	safego.Go("mitm:http-serve", func() {
-		var serveErr error
-		err := httpServer.Serve(ln)
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			serveErr = err
+		serveErr := httpServer.Serve(ln)
+		if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+			// 异常退出（非正常 Shutdown）：服务已不可用，记录根因并关闭镜像
+			// 记录器释放文件句柄。正常 Stop 路径由 Stop 在 Shutdown 后调用
+			// closeMirrorRecorder（幂等，重复调用安全）。
+			logger.Errorf("mitm serve exited unexpectedly addr=%s err=%v", ln.Addr().String(), serveErr)
+		} else {
+			serveErr = nil
 		}
 
 		s.runMu.Lock()
-		if s.serveErrCh != nil {
-			s.serveErrCh <- serveErr
-			close(s.serveErrCh)
-			s.serveErrCh = nil
-		}
 		if s.httpServer == httpServer {
 			s.httpServer = nil
 		}
 		s.runMu.Unlock()
-		// 异常退出（非正常 Shutdown）：服务已不可用，及时关闭镜像记录器释放文件句柄。
-		// 正常 Stop 路径由 Stop 在 Shutdown 后调用 closeMirrorRecorder（幂等，重复调用安全）。
 		if serveErr != nil {
 			s.closeMirrorRecorder()
 		}
@@ -352,8 +346,13 @@ func (s *ProxyServer) IsRunning() bool {
 // Snapshot 用于处理与 Snapshot 相关的逻辑。
 func (s *ProxyServer) Snapshot() Snapshot {
 	baseURL := s.currentBaseURL()
+	// addr 由 Start 在 runMu 写侧赋值，读取需持读锁（无锁读是数据竞争，
+	// GetState 与 StartProxy 在不同 goroutine 上并发执行）。
+	s.runMu.RLock()
+	listenAddr := s.addr
+	s.runMu.RUnlock()
 	return Snapshot{
-		ListenAddr: s.addr,
+		ListenAddr: listenAddr,
 		BaseURL:    baseURL,
 		Running:    s.IsRunning(),
 	}
@@ -470,7 +469,16 @@ func (s *ProxyServer) newGoproxyHandler() *goproxy.ProxyHttpServer {
 				raw = parsedRaw
 			}
 
-			resp, err := s.forwardToServer(req)
+			// 慢 unary RPC（WriteGitCommitMessage 本地生成需等 BYOK 模型出全文）
+			// 走“先回响应头、body 异步填充”的转发：Cursor 对这类请求有 ~10s
+			// 客户端超时，同步转发超时会断连。
+			var resp *http.Response
+			var err error
+			if isUnaryRPCNeedStreamingForward(req.URL.Path) {
+				resp, err = s.forwardToServerStreaming(req)
+			} else {
+				resp, err = s.forwardToServer(req)
+			}
 			if err != nil {
 				logger.Errorf("转发失败： %s %s %v", req.Method, raw, err)
 				return req, goproxy.NewResponse(req, goproxy.ContentTypeText, http.StatusBadGateway, "bad gateway")

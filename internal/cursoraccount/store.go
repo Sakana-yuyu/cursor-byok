@@ -500,9 +500,10 @@ func (s *AccountStore) upsertLocked(value credentials) (CursorAccountSummary, er
 		}
 	} else {
 		for i, record := range records {
-			sameEmail := value.Email != "" && strings.EqualFold(strings.TrimSpace(record.Email), value.Email)
-			sameToken := strings.TrimSpace(record.AccessToken) == value.AccessToken
-			if sameEmail && sameToken {
+			// 无 AuthID 的导入（本地 state.vscdb / 官方备份文件）按 email 合并：
+			// Cursor 客户端会轮换 token，同账号再次导入时 token 已变，
+			// 只认「email+token 双匹配」会让同一账号不断产生重复记录。
+			if value.Email != "" && strings.EqualFold(strings.TrimSpace(record.Email), value.Email) {
 				matched = i
 				break
 			}

@@ -180,8 +180,8 @@ func (s *ProxyService) PreviewRoutingDecision(request routing.PreviewRequest) (r
 }
 
 func (s *ProxyService) routingPreviewCandidates(modelID string) []routing.CandidateInput {
-	if s != nil && s.backendHost != nil {
-		if candidates := s.backendHost.BuildRoutingCandidates(modelID); len(candidates) > 0 {
+	if host := s.currentBackendHost(); s != nil && host != nil {
+		if candidates := host.BuildRoutingCandidates(modelID); len(candidates) > 0 {
 			return candidates
 		}
 	}
@@ -192,8 +192,8 @@ func (s *ProxyService) routingPreviewCandidates(modelID string) []routing.Candid
 }
 
 func (s *ProxyService) GetRoutingDecisionHistory(query routing.DecisionQuery) (routing.DecisionPage, error) {
-	if s != nil && s.backendHost != nil {
-		return s.backendHost.RoutingDecisionHistory(query)
+	if host := s.currentBackendHost(); s != nil && host != nil {
+		return host.RoutingDecisionHistory(query)
 	}
 	if s == nil || s.routingHist == nil {
 		return routing.DecisionPage{Items: []routing.DecisionRecord{}}, nil

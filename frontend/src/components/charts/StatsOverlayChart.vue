@@ -216,12 +216,14 @@ watch(() => props.refreshKey, (next, previous) => {
 });
 
 onMounted(async () => {
+  // 监听器需在 await 之前注册：若组件在加载完成前被卸载，
+  // onUnmounted 会先执行，之后注册的监听器将永久滞留 window。
+  window.addEventListener("resize", resizeChart);
   await loadBuckets();
   if (typeof ResizeObserver !== "undefined" && chartElement.value) {
     resizeObserver = new ResizeObserver(resizeChart);
     resizeObserver.observe(chartElement.value);
   }
-  window.addEventListener("resize", resizeChart);
 });
 
 onUnmounted(() => {

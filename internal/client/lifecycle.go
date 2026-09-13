@@ -210,8 +210,8 @@ func (s *ProxyService) StopProxy() (ProxyState, error) {
 // GetState 用于处理与 GetState 相关的逻辑。
 func (s *ProxyService) GetState() ProxyState {
 	var proxySnap mitm.Snapshot
-	if s.proxy != nil {
-		proxySnap = s.proxy.Snapshot()
+	if proxy := s.currentProxy(); proxy != nil {
+		proxySnap = proxy.Snapshot()
 	}
 	s.mu.RLock()
 	lastError := s.lastError
@@ -221,9 +221,9 @@ func (s *ProxyService) GetState() ProxyState {
 	s.mu.RUnlock()
 	backendListenAddr := ""
 	backendRunning := false
-	if s.backendHost != nil {
-		backendListenAddr = s.backendHost.ListenAddr()
-		backendRunning = s.backendHost.IsRunning()
+	if host := s.currentBackendHost(); host != nil {
+		backendListenAddr = host.ListenAddr()
+		backendRunning = host.IsRunning()
 	}
 	netProxy := netproxy.CurrentStatus()
 	return ProxyState{

@@ -572,6 +572,11 @@ func (s *ProxyService) persistModelAdapterTestResultsAsync(snapshot []ModelAdapt
 			logger.Errorf("persist model adapter test results marshal failed err=%v", err)
 			return
 		}
+		// 固定 .tmp 文件名：并发落盘必须串行化，否则两个 goroutine 交错写
+		// 同一 tmp 后，先 rename 的一方会消费掉另一方的半成品内容，
+		// 回退分支的 os.Remove(path) 还会误删刚持久化的文件。
+		s.modelTestResultsSaveMu.Lock()
+		defer s.modelTestResultsSaveMu.Unlock()
 		tmp := path + ".tmp"
 		if err := os.WriteFile(tmp, payload, 0o600); err != nil {
 			logger.Errorf("persist model adapter test results write failed path=%s err=%v", tmp, err)

@@ -344,8 +344,14 @@ func (m *Manager) CertificateForServerName(serverName string) (*tls.Certificate,
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// 缓存命中先验过期：叶子证书有效期 365 天，进程连续运行超一年后命中的
+	// 缓存已过期但仍在复用，MITM 握手会全部失败。过期即重新签发。
 	if cert, ok := m.cache[host]; ok {
-		return cert, nil
+		if cert.Leaf != nil && time.Now().After(cert.Leaf.NotAfter) {
+			delete(m.cache, host)
+		} else {
+			return cert, nil
+		}
 	}
 
 	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
@@ -431,19 +437,6 @@ func marshalPrivateKeyPEM(key any) ([]byte, error) {
 	}
 }
 
-// loadCAPEMFromFiles 用于处理与 loadCAPEMFromFiles 相关的逻辑。
-func loadCAPEMFromFiles(certPath, keyPath string) ([]byte, []byte, error) {
-	certPEM, err := os.ReadFile(certPath)
-	if err != nil {
-		return nil, nil, err
-	}
-	keyPEM, err := os.ReadFile(keyPath)
-	if err != nil {
-		return nil, nil, err
-	}
-	return certPEM, keyPEM, nil
-}
-
 // loadCAFromPEM 用于处理与 loadCAFromPEM 相关的逻辑。
 func loadCAFromPEM(certPEM, keyPEM []byte) (*x509.Certificate, crypto.PrivateKey, error) {
 	certBlock, _ := pem.Decode(certPEM)
@@ -494,13 +487,6 @@ func normalizeHost(serverName string) string {
 		}
 	}
 	return serverName
-}
-
-// cloneBytes 用于处理与 cloneBytes 相关的逻辑。
-func cloneBytes(src []byte) []byte {
-	dst := make([]byte, len(src))
-	copy(dst, src)
-	return dst
 }
 
 // certKeyMatch 校验 cert PEM 与 key PEM 是否属于同一密钥对。

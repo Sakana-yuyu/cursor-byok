@@ -173,7 +173,14 @@ func (store *Store) PrepareApply(profileID string, current serverconfig.Config) 
 	}
 	token := uuid.NewString()
 	store.mu.Lock()
-	store.ops[token] = pendingApply{token: token, expiresAt: time.Now().Add(60 * time.Second), profileID: profileID}
+	// 顺手清理已过期的待确认操作：ops 只增不删会让长驻桌面进程缓慢累积。
+	now := time.Now()
+	for key, op := range store.ops {
+		if now.After(op.expiresAt) {
+			delete(store.ops, key)
+		}
+	}
+	store.ops[token] = pendingApply{token: token, expiresAt: now.Add(60 * time.Second), profileID: profileID}
 	store.mu.Unlock()
 	return ApplyPreparation{
 		PreparedOperation: controlcenter.PreparedOperation{
@@ -201,6 +208,13 @@ func (store *Store) ExecuteApply(confirmationToken string, current serverconfig.
 	pending.used = true
 	store.ops[pending.token] = pending
 	store.mu.Unlock()
+	// 本次 token 已消费：无论后续成功还是失败都不再可用，执行结束即删除，
+	// 避免 ops map 随每次预览/应用无限增长。
+	defer func() {
+		store.mu.Lock()
+		delete(store.ops, pending.token)
+		store.mu.Unlock()
+	}()
 	profile, err := store.load(pending.profileID)
 	if err != nil {
 		return controlcenter.OperationResult{}, err
@@ -296,7 +310,9 @@ func (store *Store) Import(content string) (Preview, error) {
 	if containsSecret([]byte(content)) {
 		return Preview{}, controlcenter.NewError("profile_import_invalid_schema", "import contains secrets")
 	}
-	if profile.Summary.ID == "" {
+	if profile.Summary.ID == "" || !validProfileID(profile.Summary.ID) {
+		// 导入文件的 ID 不可信（可能是恶意构造的路径遍历载荷）：
+		// 非法/缺失 ID 一律重新生成，既中和攻击面又不阻断正常导入。
 		profile.Summary.ID = uuid.NewString()
 	}
 	now := time.Now().UnixMilli()
@@ -314,6 +330,11 @@ func (store *Store) Count() int {
 }
 
 func (store *Store) write(profile storedProfile) error {
+	if !validProfileID(profile.Summary.ID) {
+		// ID 来自导入文件内容或存储摘要，均不可信；非法 ID 直接拒绝，
+		// 防止路径遍历把 profile 写到 profiles 目录之外。
+		return controlcenter.NewError("profile_id_invalid", "profile id is invalid")
+	}
 	if err := os.MkdirAll(filepath.Join(store.root, "profiles"), 0o700); err != nil {
 		return err
 	}
@@ -329,9 +350,29 @@ func (store *Store) write(profile storedProfile) error {
 	return os.Rename(tmp, path)
 }
 
+// validProfileID reports whether an ID is safe to use as a file name inside
+// the profiles directory. Profile IDs reach profilePath from three sources:
+// frontend requests, imported file content, and stored summaries — all of them
+// untrusted for path construction, so IDs containing traversal sequences or
+// path separators are rejected outright.
+func validProfileID(id string) bool {
+	id = strings.TrimSpace(id)
+	if id == "" || len(id) > 128 || strings.Contains(id, "..") || strings.ContainsAny(id, `/\`) {
+		return false
+	}
+	for _, r := range id {
+		switch {
+		case r >= 'A' && r <= 'Z', r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '.', r == '_', r == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func (store *Store) load(id string) (storedProfile, error) {
 	id = strings.TrimSpace(id)
-	if id == "" {
+	if !validProfileID(id) {
 		return storedProfile{}, controlcenter.NewError("profile_not_found", "profile not found")
 	}
 	raw, err := os.ReadFile(store.profilePath(id))

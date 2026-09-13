@@ -305,7 +305,11 @@ func queryStepFunBalance(ctx context.Context, httpClient *http.Client, apiKey st
 	if jsonErr := json.Unmarshal(body, &payload); jsonErr != nil {
 		return namedBalanceFail(source, "响应解析失败："+jsonErr.Error(), false)
 	}
-	remaining, _ := jsonNumberToFloat(payload.Balance)
+	remaining, ok := jsonNumberToFloat(payload.Balance)
+	if !ok {
+		// 数值缺失/非数值时按失败处理：静默当 0 会向用户误报「余额为零」。
+		return namedBalanceFail(source, "响应缺少可解析的 balance 字段", false)
+	}
 	rv := remaining
 	return ProviderBalance{
 		Supported: true,
@@ -347,7 +351,10 @@ func querySiliconFlowBalance(ctx context.Context, httpClient *http.Client, apiKe
 	if payload.Data == nil {
 		return namedBalanceFail(source, "响应缺少 data 字段", false)
 	}
-	remaining, _ := jsonNumberToFloat(payload.Data.TotalBalance)
+	remaining, ok := jsonNumberToFloat(payload.Data.TotalBalance)
+	if !ok {
+		return namedBalanceFail(source, "响应缺少可解析的 totalBalance 字段", false)
+	}
 	rv := remaining
 	return ProviderBalance{
 		Supported: true,
@@ -422,7 +429,10 @@ func queryNovitaBalance(ctx context.Context, httpClient *http.Client, apiKey str
 	if jsonErr := json.Unmarshal(body, &payload); jsonErr != nil {
 		return namedBalanceFail(source, "响应解析失败："+jsonErr.Error(), false)
 	}
-	raw, _ := jsonNumberToFloat(payload.AvailableBalance)
+	raw, ok := jsonNumberToFloat(payload.AvailableBalance)
+	if !ok {
+		return namedBalanceFail(source, "响应缺少可解析的 availableBalance 字段", false)
+	}
 	remaining := raw / 10000.0
 	message := "查询成功"
 	if remaining <= 0 {

@@ -55,6 +55,8 @@ func ResolveTransportPlan(input TransportPlanInput) (ResolvedTransportPlan, erro
 				return ResolvedTransportPlan{}, fmt.Errorf("gemini model id is required")
 			}
 			applyGeminiTransportPath(parsed, input.ModelID, input.Stream)
+		} else if input.Stream {
+			geminiEnsureStreamMethod(parsed)
 		}
 		if input.Stream {
 			setRawQueryValue(parsed, "alt", "sse")
@@ -195,6 +197,20 @@ func applyGeminiTransportPath(parsed *url.URL, modelID string, stream bool) {
 func geminiURLHasCompleteMethod(path string) bool {
 	lower := strings.ToLower(strings.TrimSpace(path))
 	return strings.HasSuffix(lower, ":generatecontent") || strings.HasSuffix(lower, ":streamgeneratecontent")
+}
+
+// geminiEnsureStreamMethod 把用户显式指定的非流式 :generateContent 端点改写为
+// 流式方法：Stream=true 时 alt=sse 打在非流式方法上会得到矛盾组合——服务端按
+// 非流式返回单个 JSON，调用方按 SSE 流解析必然失败。大小写不敏感（按长度截断）。
+func geminiEnsureStreamMethod(parsed *url.URL) {
+	trimmed := strings.TrimRight(parsed.Path, "/")
+	lower := strings.ToLower(trimmed)
+	if !strings.HasSuffix(lower, ":generatecontent") {
+		return
+	}
+	cut := len(trimmed) - len(":generatecontent")
+	parsed.Path = cleanTransportPath(trimmed[:cut] + ":streamGenerateContent")
+	parsed.RawPath = ""
 }
 
 func setRawQueryValue(parsed *url.URL, key, value string) {

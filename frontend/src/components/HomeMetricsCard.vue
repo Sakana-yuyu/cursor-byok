@@ -151,22 +151,16 @@ const filteredEvents = computed(() => {
 });
 
 // --- 聚合 ---
+// 轮次数据只能来自后端 rangeSummary（明细接口只回 provider_call，不含
+// turn_finalized）：rangeSummary 拉取失败时轮次为 null（界面显示 “—”），
+// 不能用本地事件数冒充 0 造成“零轮次”误导。
 const summary = computed(() => {
-  let turnsTotal = 0;
-  let validTurnsTotal = 0;
-  let invalidTurnsTotal = 0;
   let requestTokensTotal = 0;
   let promptTokensTotal = 0;
   let cacheReadTokens = 0;
   let cacheWriteTokens = 0;
   for (const ev of filteredEvents.value) {
     const kind = String(ev.kind || "").trim();
-    if (kind === "turn_finalized") {
-      turnsTotal++;
-      if (String(ev.status || "").trim() === "completed") validTurnsTotal++;
-      else invalidTurnsTotal++;
-      continue;
-    }
     if (kind !== "provider_call" && kind !== "") continue;
     requestTokensTotal += Number(ev.totalTokens || 0);
     promptTokensTotal += Number(ev.inputTokens || 0) + Number(ev.cacheReadTokens || 0) + Number(ev.cacheWriteTokens || 0);
@@ -175,9 +169,9 @@ const summary = computed(() => {
   }
   const provider = rangeSummary.value;
   return {
-    turnsTotal: provider ? Number(provider.turnsTotal || 0) : turnsTotal,
-    validTurnsTotal: provider ? Number(provider.validTurnsTotal || 0) : validTurnsTotal,
-    invalidTurnsTotal: provider ? Number(provider.invalidTurnsTotal || 0) : invalidTurnsTotal,
+    turnsTotal: provider ? Number(provider.turnsTotal || 0) : null,
+    validTurnsTotal: provider ? Number(provider.validTurnsTotal || 0) : null,
+    invalidTurnsTotal: provider ? Number(provider.invalidTurnsTotal || 0) : null,
     requestTokensTotal: provider ? Number(provider.totalTokens || 0) : requestTokensTotal,
     promptTokensTotal: provider
       ? Number(provider.inputTokens || 0) + Number(provider.cacheReadTokens || 0) + Number(provider.cacheWriteTokens || 0)
@@ -313,13 +307,19 @@ const cacheTooltipContent = computed(() => {
   ].join("\n");
 });
 
+// 轮次来自后端汇总：拉取失败为 null（界面显示 “—”），与伪造 0 区分。
+function formatTurnsValue(value) {
+  if (value == null) return "—";
+  return formatMetricValue(value);
+}
+
 const turnsTooltipContent = computed(() =>
   [
     "按会话回合统计，区分有效与异常。",
     "",
-    `总轮次：${formatMetricValue(summary.value.turnsTotal)}`,
-    `有效轮次：${formatMetricValue(summary.value.validTurnsTotal)}`,
-    `异常轮次：${formatMetricValue(summary.value.invalidTurnsTotal)}`,
+    `总轮次：${formatTurnsValue(summary.value.turnsTotal)}`,
+    `有效轮次：${formatTurnsValue(summary.value.validTurnsTotal)}`,
+    `异常轮次：${formatTurnsValue(summary.value.invalidTurnsTotal)}`,
     `有效占比：${formatRateLabel(validTurnsRate.value)}`,
   ].join("\n"),
 );
@@ -604,19 +604,19 @@ usePolling(() => {
             <div
               class="text-[24px] leading-none text-white"
               style="font-family: var(--font-num)"
-              :title="formatInteger(summary.turnsTotal)"
+              :title="formatTurnsValue(summary.turnsTotal)"
             >
-              {{ formatCompactInteger(summary.turnsTotal) }}
+              {{ summary.turnsTotal == null ? "—" : formatCompactInteger(summary.turnsTotal) }}
             </div>
             <div class="mt-3 text-xs leading-5 text-[#8c8c8c]">
               <span v-if="estimatedCostSourceDisplay" class="mr-2 text-[#737373]">{{ estimatedCostSourceDisplay }}</span>
               有效
-              <span :title="formatInteger(summary.validTurnsTotal)">
-                {{ formatCompactInteger(summary.validTurnsTotal) }}
+              <span :title="formatTurnsValue(summary.validTurnsTotal)">
+                {{ summary.validTurnsTotal == null ? "—" : formatCompactInteger(summary.validTurnsTotal) }}
               </span>
               / 异常
-              <span :title="formatInteger(summary.invalidTurnsTotal)">
-                {{ formatCompactInteger(summary.invalidTurnsTotal) }}
+              <span :title="formatTurnsValue(summary.invalidTurnsTotal)">
+                {{ summary.invalidTurnsTotal == null ? "—" : formatCompactInteger(summary.invalidTurnsTotal) }}
               </span>
             </div>
           </div>

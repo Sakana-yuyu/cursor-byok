@@ -686,11 +686,27 @@ func (service *Service) snapshotVisibleTurns(conversation *ConversationFile) ([]
 	return cloneByteSlices(projection.State.GetTurns()), nil
 }
 
+// CloseDebugRecorder 只停 debug 落盘 worker：供宿主 rebuild 丢弃旧 Service 时调用。
+// 不走完整 Shutdown（会取消活动流并关闭进程级共享的 MCP 注册表，误伤 UI 侧连接）；
+// 未运行被替换的 Service 没有活动流，需要回收的只有 recorder goroutine。
+func (service *Service) CloseDebugRecorder() {
+	if service == nil {
+		return
+	}
+	service.debug.Close()
+}
+
 // Shutdown 在服务退出前主动取消所有未终态活动流。
 // 这样 RunSSE 能先发出 TurnEnded + canceled endstream，避免 Cursor 只看到连接被硬断后报 RetriableError: Canceled。
 func (service *Service) Shutdown(ctx context.Context) error {
 	if service == nil {
 		return nil
+	}
+	// 停 debug 落盘 worker（放最后执行）：Service 即将被丢弃，recorder 不随它
+	// 关闭的话，每次 Start/SaveConfig 的 rebuild 都会泄漏一个 goroutine 和
+	// 8192 槽的队列。defer 保证所有提前 return 路径（无 broker/无活动流）也会停止。
+	if service.debug != nil {
+		defer service.debug.Close()
 	}
 	if service.mcpRuntime != nil {
 		defer service.mcpRuntime.Close()

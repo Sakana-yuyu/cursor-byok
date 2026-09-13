@@ -24,7 +24,7 @@
       "refs": [
         {
           "file": "src/components/charts/StatsOverlayChart.vue",
-          "line": 240,
+          "line": 242,
           "column": 5
         }
       ]
@@ -72,7 +72,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 986,
+          "line": 988,
           "column": 18
         }
       ]
@@ -176,7 +176,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 518,
+          "line": 547,
           "column": 30
         }
       ]
@@ -222,7 +222,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 954,
+          "line": 956,
           "column": 26
         },
         {
@@ -273,7 +273,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 931,
+          "line": 933,
           "column": 16
         }
       ]
@@ -374,7 +374,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1048,
+          "line": 1050,
           "column": 54
         },
         {
@@ -444,7 +444,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 144,
+          "line": 145,
           "column": 50
         }
       ]
@@ -492,7 +492,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1124,
+          "line": 1126,
           "column": 54
         },
         {
@@ -509,7 +509,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 479,
+          "line": 508,
           "column": 127
         }
       ]
@@ -777,7 +777,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 904,
+          "line": 906,
           "column": 32
         }
       ]
@@ -948,7 +948,7 @@
       "refs": [
         {
           "file": "src/utils/supplierDetail.js",
-          "line": 44,
+          "line": 45,
           "column": 39
         }
       ]
@@ -1155,7 +1155,7 @@
       "refs": [
         {
           "file": "src/utils/modelContext.js",
-          "line": 62,
+          "line": 95,
           "column": 18
         }
       ]
@@ -1208,7 +1208,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 482,
+          "line": 489,
           "column": 51
         }
       ]
@@ -1409,22 +1409,22 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 579,
+          "line": 581,
           "column": 63
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 595,
+          "line": 597,
           "column": 70
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 605,
+          "line": 607,
           "column": 63
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 765,
+          "line": 767,
           "column": 70
         },
         {
@@ -1540,7 +1540,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1297,
+          "line": 1299,
           "column": 16
         },
         {
@@ -1634,6 +1634,18 @@
         }
       ]
     },
+    "0e9befb6d497beab": {
+      "source": "智谱账户",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/utils/supplierDetail.js",
+          "line": 44,
+          "column": 42
+        }
+      ]
+    },
     "0eddf68a8774618c": {
       "source": " / 剩余 {0}%",
       "kind": "template",
@@ -1641,7 +1653,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 252,
+          "line": 254,
           "column": 85
         }
       ]
@@ -1831,7 +1843,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 103,
+          "line": 117,
           "column": 24
         }
       ]
@@ -1867,7 +1879,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1159,
+          "line": 1161,
           "column": 22
         }
       ]
@@ -1879,7 +1891,7 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 83,
+          "line": 90,
           "column": 1
         }
       ]
@@ -2117,7 +2129,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 387,
+          "line": 394,
           "column": 34
         }
       ]
@@ -2331,7 +2343,7 @@
       "refs": [
         {
           "file": "src/components/charts/StatsOverlayChart.vue",
-          "line": 243,
+          "line": 245,
           "column": 62
         }
       ]
@@ -2403,8 +2415,8 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 606,
-          "column": 1
+          "line": 634,
+          "column": 46
         }
       ]
     },
@@ -2607,7 +2619,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 63,
+          "line": 62,
           "column": 53
         }
       ]
@@ -2648,7 +2660,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 961,
+          "line": 963,
           "column": 118
         },
         {
@@ -2834,7 +2846,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 587,
+          "line": 589,
           "column": 12
         }
       ]
@@ -2870,7 +2882,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1257,
+          "line": 1270,
           "column": 32
         }
       ]
@@ -3159,17 +3171,17 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 386,
+          "line": 414,
           "column": 26
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 426,
+          "line": 454,
           "column": 15
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 534,
+          "line": 563,
           "column": 75
         }
       ]
@@ -3321,7 +3333,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 562,
+          "line": 591,
           "column": 94
         }
       ]
@@ -3374,22 +3386,22 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 386,
+          "line": 414,
           "column": 14
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 424,
+          "line": 452,
           "column": 15
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 526,
+          "line": 555,
           "column": 75
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 421,
+          "line": 428,
           "column": 62
         }
       ]
@@ -3449,7 +3461,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1284,
+          "line": 1286,
           "column": 16
         },
         {
@@ -3591,7 +3603,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1071,
+          "line": 1073,
           "column": 54
         }
       ]
@@ -3615,7 +3627,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1270,
+          "line": 1272,
           "column": 20
         },
         {
@@ -3668,7 +3680,7 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 98,
+          "line": 105,
           "column": 122
         }
       ]
@@ -3680,12 +3692,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 579,
+          "line": 581,
           "column": 30
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 605,
+          "line": 607,
           "column": 30
         },
         {
@@ -3743,7 +3755,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1136,
+          "line": 1138,
           "column": 54
         }
       ]
@@ -3767,7 +3779,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1183,
+          "line": 1185,
           "column": 61
         }
       ]
@@ -3897,12 +3909,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 352,
+          "line": 354,
           "column": 99
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 366,
+          "line": 368,
           "column": 18
         },
         {
@@ -4032,7 +4044,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1204,
+          "line": 1206,
           "column": 156
         }
       ]
@@ -4068,7 +4080,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1205,
+          "line": 1207,
           "column": 53
         }
       ]
@@ -4124,7 +4136,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 956,
+          "line": 958,
           "column": 115
         },
         {
@@ -4182,7 +4194,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1188,
+          "line": 1190,
           "column": 27
         }
       ]
@@ -4242,7 +4254,7 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 66,
+          "line": 73,
           "column": 73
         }
       ]
@@ -4307,17 +4319,17 @@
         },
         {
           "file": "src/components/charts/StatsOverlayChart.vue",
-          "line": 246,
+          "line": 248,
           "column": 82
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 546,
+          "line": 575,
           "column": 75
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 423,
+          "line": 430,
           "column": 47
         }
       ]
@@ -4353,8 +4365,8 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 514,
-          "column": 1
+          "line": 542,
+          "column": 111
         }
       ]
     },
@@ -4365,7 +4377,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 252,
+          "line": 254,
           "column": 30
         }
       ]
@@ -4377,7 +4389,7 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 128,
+          "line": 135,
           "column": 108
         }
       ]
@@ -4546,22 +4558,22 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 590,
+          "line": 592,
           "column": 17
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 738,
+          "line": 740,
           "column": 17
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 753,
+          "line": 755,
           "column": 17
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1215,
+          "line": 1217,
           "column": 75
         },
         {
@@ -4774,7 +4786,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1112,
+          "line": 1114,
           "column": 54
         },
         {
@@ -4939,17 +4951,17 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 589,
+          "line": 591,
           "column": 18
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 737,
+          "line": 739,
           "column": 18
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 752,
+          "line": 754,
           "column": 18
         },
         {
@@ -5027,12 +5039,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 255,
+          "line": 257,
           "column": 18
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1167,
+          "line": 1169,
           "column": 50
         }
       ]
@@ -5056,7 +5068,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 44,
+          "line": 43,
           "column": 74
         }
       ]
@@ -5128,7 +5140,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 586,
+          "line": 615,
           "column": 57
         }
       ]
@@ -5275,7 +5287,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1183,
+          "line": 1185,
           "column": 87
         }
       ]
@@ -5287,7 +5299,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 899,
+          "line": 901,
           "column": 57
         }
       ]
@@ -5347,7 +5359,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1140,
+          "line": 1142,
           "column": 54
         }
       ]
@@ -5619,7 +5631,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 114,
+          "line": 115,
           "column": 16
         }
       ]
@@ -5631,7 +5643,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1306,
+          "line": 1308,
           "column": 165
         }
       ]
@@ -5679,12 +5691,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 993,
+          "line": 995,
           "column": 133
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1017,
+          "line": 1019,
           "column": 96
         }
       ]
@@ -5797,7 +5809,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 227,
+          "line": 221,
           "column": 68
         },
         {
@@ -5807,7 +5819,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 83,
+          "line": 97,
           "column": 68
         },
         {
@@ -5889,7 +5901,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1247,
+          "line": 1249,
           "column": 52
         }
       ]
@@ -5901,7 +5913,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1273,
+          "line": 1275,
           "column": 20
         },
         {
@@ -5988,7 +6000,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1169,
+          "line": 1171,
           "column": 70
         }
       ]
@@ -6041,7 +6053,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1114,
+          "line": 1116,
           "column": 36
         },
         {
@@ -6087,7 +6099,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1108,
+          "line": 1110,
           "column": 127
         },
         {
@@ -6232,7 +6244,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 564,
+          "line": 593,
           "column": 94
         }
       ]
@@ -6326,12 +6338,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 309,
+          "line": 311,
           "column": 63
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 857,
+          "line": 859,
           "column": 68
         }
       ]
@@ -6425,7 +6437,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1024,
+          "line": 1026,
           "column": 21
         },
         {
@@ -6612,7 +6624,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1213,
+          "line": 1215,
           "column": 20
         }
       ]
@@ -6636,7 +6648,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 962,
+          "line": 964,
           "column": 95
         }
       ]
@@ -6668,7 +6680,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 397,
+          "line": 404,
           "column": 65
         }
       ]
@@ -6692,7 +6704,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 253,
+          "line": 255,
           "column": 35
         }
       ]
@@ -6716,7 +6728,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1310,
+          "line": 1312,
           "column": 169
         }
       ]
@@ -6801,7 +6813,7 @@
       "refs": [
         {
           "file": "src/utils/supplierDetail.js",
-          "line": 72,
+          "line": 73,
           "column": 52
         }
       ]
@@ -6813,7 +6825,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1129,
+          "line": 1131,
           "column": 74
         }
       ]
@@ -6953,12 +6965,12 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 162,
+          "line": 163,
           "column": 20
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1293,
+          "line": 1295,
           "column": 21
         },
         {
@@ -6975,7 +6987,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 991,
+          "line": 993,
           "column": 18
         }
       ]
@@ -6999,12 +7011,12 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 373,
+          "line": 380,
           "column": 22
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 374,
+          "line": 381,
           "column": 17
         }
       ]
@@ -7052,7 +7064,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1253,
+          "line": 1255,
           "column": 155
         }
       ]
@@ -7088,7 +7100,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 311,
+          "line": 305,
           "column": 5
         }
       ]
@@ -7233,7 +7245,7 @@
         },
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 208,
+          "line": 202,
           "column": 38
         }
       ]
@@ -7433,7 +7445,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1288,
+          "line": 1290,
           "column": 16
         },
         {
@@ -7462,7 +7474,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 310,
+          "line": 304,
           "column": 5
         }
       ]
@@ -7590,7 +7602,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 162,
+          "line": 163,
           "column": 20
         },
         {
@@ -7605,7 +7617,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 955,
+          "line": 957,
           "column": 113
         },
         {
@@ -7697,12 +7709,12 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 114,
+          "line": 115,
           "column": 16
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1193,
+          "line": 1195,
           "column": 22
         }
       ]
@@ -7714,7 +7726,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 523,
+          "line": 525,
           "column": 22
         },
         {
@@ -7770,7 +7782,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1098,
+          "line": 1100,
           "column": 42
         },
         {
@@ -7780,7 +7792,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 108,
+          "line": 122,
           "column": 27
         },
         {
@@ -7809,7 +7821,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1099,
+          "line": 1101,
           "column": 43
         },
         {
@@ -7867,7 +7879,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 991,
+          "line": 993,
           "column": 18
         }
       ]
@@ -8159,7 +8171,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 958,
+          "line": 960,
           "column": 120
         }
       ]
@@ -8229,22 +8241,22 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1057,
+          "line": 1059,
           "column": 70
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1061,
+          "line": 1063,
           "column": 72
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1133,
+          "line": 1135,
           "column": 76
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1137,
+          "line": 1139,
           "column": 78
         },
         {
@@ -8283,7 +8295,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1174,
+          "line": 1176,
           "column": 35
         }
       ]
@@ -8680,7 +8692,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 557,
+          "line": 586,
           "column": 52
         }
       ]
@@ -8769,7 +8781,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1270,
+          "line": 1272,
           "column": 20
         },
         {
@@ -8875,7 +8887,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1297,
+          "line": 1299,
           "column": 16
         }
       ]
@@ -9128,7 +9140,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 107,
+          "line": 121,
           "column": 24
         }
       ]
@@ -9179,7 +9191,7 @@
         },
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 63,
+          "line": 70,
           "column": 60
         },
         {
@@ -9256,7 +9268,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 507,
+          "line": 536,
           "column": 15
         }
       ]
@@ -9340,17 +9352,17 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 386,
+          "line": 414,
           "column": 49
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 411,
+          "line": 439,
           "column": 15
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 429,
+          "line": 457,
           "column": 15
         }
       ]
@@ -9514,17 +9526,17 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 386,
+          "line": 414,
           "column": 34
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 427,
+          "line": 455,
           "column": 15
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 538,
+          "line": 567,
           "column": 75
         }
       ]
@@ -9536,7 +9548,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 105,
+          "line": 119,
           "column": 23
         }
       ]
@@ -9558,7 +9570,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 479,
+          "line": 508,
           "column": 127
         }
       ]
@@ -9690,7 +9702,7 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 128,
+          "line": 135,
           "column": 1
         }
       ]
@@ -9702,7 +9714,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 736,
+          "line": 738,
           "column": 14
         }
       ]
@@ -9893,7 +9905,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 924,
+          "line": 926,
           "column": 45
         },
         {
@@ -9985,7 +9997,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 420,
+          "line": 427,
           "column": 47
         }
       ]
@@ -10060,7 +10072,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 511,
+          "line": 540,
           "column": 66
         }
       ]
@@ -10130,7 +10142,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 997,
+          "line": 999,
           "column": 18
         },
         {
@@ -10273,7 +10285,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1334,
+          "line": 1347,
           "column": 32
         }
       ]
@@ -10587,7 +10599,7 @@
       "refs": [
         {
           "file": "src/utils/supplierDetail.js",
-          "line": 68,
+          "line": 69,
           "column": 23
         }
       ]
@@ -10599,7 +10611,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 735,
+          "line": 737,
           "column": 12
         }
       ]
@@ -10901,7 +10913,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 400,
+          "line": 407,
           "column": 47
         }
       ]
@@ -10978,7 +10990,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1171,
+          "line": 1173,
           "column": 64
         }
       ]
@@ -11080,7 +11092,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 574,
+          "line": 603,
           "column": 57
         }
       ]
@@ -11104,7 +11116,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 312,
+          "line": 306,
           "column": 5
         }
       ]
@@ -11164,7 +11176,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 140,
+          "line": 141,
           "column": 9
         }
       ]
@@ -11176,7 +11188,7 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 69,
+          "line": 76,
           "column": 1
         }
       ]
@@ -11212,7 +11224,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1151,
+          "line": 1153,
           "column": 61
         }
       ]
@@ -11253,7 +11265,7 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 87,
+          "line": 94,
           "column": 1
         }
       ]
@@ -11265,7 +11277,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 395,
+          "line": 402,
           "column": 34
         }
       ]
@@ -11318,12 +11330,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1181,
+          "line": 1183,
           "column": 68
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1193,
+          "line": 1195,
           "column": 22
         }
       ]
@@ -11443,7 +11455,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 277,
+          "line": 279,
           "column": 45
         }
       ]
@@ -11640,7 +11652,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 365,
+          "line": 372,
           "column": 115
         }
       ]
@@ -11681,7 +11693,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 257,
+          "line": 251,
           "column": 49
         }
       ]
@@ -11722,7 +11734,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 600,
+          "line": 602,
           "column": 52
         }
       ]
@@ -11935,7 +11947,7 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 78,
+          "line": 85,
           "column": 1
         }
       ]
@@ -12029,7 +12041,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 954,
+          "line": 956,
           "column": 117
         },
         {
@@ -12063,7 +12075,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1251,
+          "line": 1253,
           "column": 18
         },
         {
@@ -12107,7 +12119,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1167,
+          "line": 1169,
           "column": 50
         }
       ]
@@ -12208,7 +12220,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 470,
+          "line": 477,
           "column": 62
         }
       ]
@@ -12244,7 +12256,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 881,
+          "line": 883,
           "column": 32
         }
       ]
@@ -12328,7 +12340,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 750,
+          "line": 752,
           "column": 12
         }
       ]
@@ -12364,7 +12376,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1251,
+          "line": 1253,
           "column": 18
         }
       ]
@@ -12376,7 +12388,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 307,
+          "line": 301,
           "column": 7
         }
       ]
@@ -12400,7 +12412,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1043,
+          "line": 1045,
           "column": 36
         }
       ]
@@ -12448,12 +12460,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 959,
+          "line": 961,
           "column": 25
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1066,
+          "line": 1068,
           "column": 40
         },
         {
@@ -12470,12 +12482,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1247,
+          "line": 1249,
           "column": 19
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1262,
+          "line": 1264,
           "column": 19
         },
         {
@@ -12492,7 +12504,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1018,
+          "line": 1020,
           "column": 60
         }
       ]
@@ -12622,7 +12634,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 425,
+          "line": 432,
           "column": 47
         }
       ]
@@ -12777,7 +12789,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 105,
+          "line": 106,
           "column": 7
         }
       ]
@@ -13020,7 +13032,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1032,
+          "line": 1034,
           "column": 96
         }
       ]
@@ -13068,7 +13080,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 584,
+          "line": 613,
           "column": 62
         }
       ]
@@ -13109,7 +13121,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1128,
+          "line": 1130,
           "column": 54
         },
         {
@@ -13319,7 +13331,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 480,
+          "line": 487,
           "column": 51
         }
       ]
@@ -13384,7 +13396,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1106,
+          "line": 1108,
           "column": 57
         }
       ]
@@ -13608,7 +13620,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 532,
+          "line": 539,
           "column": 11
         }
       ]
@@ -13620,7 +13632,7 @@
       "refs": [
         {
           "file": "src/utils/supplierDetail.js",
-          "line": 72,
+          "line": 73,
           "column": 21
         }
       ]
@@ -13743,12 +13755,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 963,
+          "line": 965,
           "column": 25
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1097,
+          "line": 1099,
           "column": 40
         },
         {
@@ -13787,7 +13799,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 493,
+          "line": 500,
           "column": 15
         }
       ]
@@ -13811,7 +13823,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 111,
+          "line": 112,
           "column": 59
         },
         {
@@ -13867,7 +13879,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1120,
+          "line": 1122,
           "column": 46
         }
       ]
@@ -14233,7 +14245,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1213,
+          "line": 1215,
           "column": 20
         },
         {
@@ -14404,7 +14416,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1297,
+          "line": 1310,
           "column": 32
         }
       ]
@@ -14487,7 +14499,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 411,
+          "line": 418,
           "column": 12
         }
       ]
@@ -14617,7 +14629,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 319,
+          "line": 326,
           "column": 53
         }
       ]
@@ -14677,7 +14689,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 431,
+          "line": 438,
           "column": 66
         }
       ]
@@ -14761,7 +14773,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 959,
+          "line": 961,
           "column": 25
         }
       ]
@@ -14884,7 +14896,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 102,
+          "line": 116,
           "column": 26
         }
       ]
@@ -14975,7 +14987,7 @@
       "refs": [
         {
           "file": "src/utils/modelContext.js",
-          "line": 124,
+          "line": 176,
           "column": 18
         }
       ]
@@ -15112,12 +15124,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1501,
+          "line": 1514,
           "column": 32
         },
         {
           "file": "src/state/appState.js",
-          "line": 1522,
+          "line": 1535,
           "column": 32
         }
       ]
@@ -15153,7 +15165,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 484,
+          "line": 486,
           "column": 26
         },
         {
@@ -15362,7 +15374,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 96,
+          "line": 97,
           "column": 12
         }
       ]
@@ -15458,7 +15470,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 399,
+          "line": 406,
           "column": 65
         }
       ]
@@ -15511,7 +15523,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 104,
+          "line": 118,
           "column": 23
         }
       ]
@@ -15573,6 +15585,11 @@
           "file": "src/components/model-config/ModelPanel.vue",
           "line": 48,
           "column": 14
+        },
+        {
+          "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
+          "line": 67,
+          "column": 1
         }
       ]
     },
@@ -15595,7 +15612,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 434,
+          "line": 441,
           "column": 67
         }
       ]
@@ -15607,7 +15624,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 442,
+          "line": 444,
           "column": 26
         }
       ]
@@ -15660,7 +15677,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 575,
+          "line": 604,
           "column": 69
         },
         {
@@ -15766,7 +15783,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 548,
+          "line": 550,
           "column": 44
         },
         {
@@ -15793,7 +15810,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 398,
+          "line": 405,
           "column": 70
         }
       ]
@@ -15817,12 +15834,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1149,
+          "line": 1151,
           "column": 68
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1159,
+          "line": 1161,
           "column": 22
         }
       ]
@@ -15863,7 +15880,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 94,
+          "line": 93,
           "column": 33
         },
         {
@@ -16027,7 +16044,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 257,
+          "line": 259,
           "column": 16
         }
       ]
@@ -16075,7 +16092,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 482,
+          "line": 489,
           "column": 98
         }
       ]
@@ -16114,7 +16131,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1168,
+          "line": 1170,
           "column": 71
         }
       ]
@@ -16432,7 +16449,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 582,
+          "line": 611,
           "column": 51
         }
       ]
@@ -16478,7 +16495,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 588,
+          "line": 590,
           "column": 14
         }
       ]
@@ -16548,7 +16565,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1105,
+          "line": 1107,
           "column": 126
         }
       ]
@@ -16644,7 +16661,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 468,
+          "line": 475,
           "column": 130
         }
       ]
@@ -16697,7 +16714,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1170,
+          "line": 1172,
           "column": 66
         }
       ]
@@ -16733,7 +16750,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 383,
+          "line": 390,
           "column": 34
         }
       ]
@@ -17151,7 +17168,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 514,
+          "line": 543,
           "column": 42
         }
       ]
@@ -17187,7 +17204,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1245,
+          "line": 1247,
           "column": 18
         }
       ]
@@ -17431,7 +17448,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 106,
+          "line": 120,
           "column": 24
         }
       ]
@@ -17581,7 +17598,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 145,
+          "line": 146,
           "column": 60
         }
       ]
@@ -17658,7 +17675,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 260,
+          "line": 262,
           "column": 16
         },
         {
@@ -17815,7 +17832,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 419,
+          "line": 426,
           "column": 47
         }
       ]
@@ -17926,7 +17943,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 606,
+          "line": 635,
           "column": 35
         }
       ]
@@ -17974,7 +17991,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 273,
+          "line": 275,
           "column": 39
         }
       ]
@@ -17986,7 +18003,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 436,
+          "line": 443,
           "column": 82
         }
       ]
@@ -18212,7 +18229,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 411,
+          "line": 418,
           "column": 12
         }
       ]
@@ -18236,7 +18253,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 997,
+          "line": 999,
           "column": 18
         },
         {
@@ -18390,7 +18407,7 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 93,
+          "line": 100,
           "column": 1
         }
       ]
@@ -18621,7 +18638,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1132,
+          "line": 1134,
           "column": 54
         }
       ]
@@ -18729,7 +18746,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 227,
+          "line": 221,
           "column": 30
         },
         {
@@ -18739,7 +18756,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 83,
+          "line": 97,
           "column": 30
         },
         {
@@ -18768,7 +18785,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 561,
+          "line": 590,
           "column": 94
         }
       ]
@@ -18780,7 +18797,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1188,
+          "line": 1190,
           "column": 27
         }
       ]
@@ -18857,7 +18874,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 327,
+          "line": 329,
           "column": 56
         }
       ]
@@ -18893,7 +18910,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 502,
+          "line": 531,
           "column": 21
         }
       ]
@@ -19011,12 +19028,12 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 373,
+          "line": 380,
           "column": 22
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 374,
+          "line": 381,
           "column": 17
         }
       ]
@@ -19065,12 +19082,12 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 595,
+          "line": 597,
           "column": 30
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 765,
+          "line": 767,
           "column": 30
         },
         {
@@ -19195,7 +19212,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 583,
+          "line": 612,
           "column": 51
         },
         {
@@ -19258,7 +19275,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 957,
+          "line": 959,
           "column": 119
         }
       ]
@@ -19294,7 +19311,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1353,
+          "line": 1366,
           "column": 32
         }
       ]
@@ -19378,7 +19395,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 391,
+          "line": 398,
           "column": 34
         }
       ]
@@ -19390,7 +19407,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 563,
+          "line": 592,
           "column": 94
         }
       ]
@@ -19486,7 +19503,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 464,
+          "line": 466,
           "column": 28
         },
         {
@@ -19563,7 +19580,7 @@
       "refs": [
         {
           "file": "src/utils/modelContext.js",
-          "line": 141,
+          "line": 193,
           "column": 18
         }
       ]
@@ -19575,7 +19592,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 227,
+          "line": 221,
           "column": 46
         },
         {
@@ -19585,7 +19602,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 83,
+          "line": 97,
           "column": 46
         },
         {
@@ -19653,7 +19670,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 209,
+          "line": 233,
           "column": 26
         }
       ]
@@ -19779,7 +19796,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 508,
+          "line": 515,
           "column": 11
         }
       ]
@@ -19827,7 +19844,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 308,
+          "line": 302,
           "column": 7
         }
       ]
@@ -19868,7 +19885,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 227,
+          "line": 221,
           "column": 85
         },
         {
@@ -19878,7 +19895,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 83,
+          "line": 97,
           "column": 85
         },
         {
@@ -19895,7 +19912,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 135,
+          "line": 136,
           "column": 71
         }
       ]
@@ -19955,7 +19972,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 559,
+          "line": 588,
           "column": 94
         }
       ]
@@ -20244,12 +20261,12 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 585,
+          "line": 614,
           "column": 62
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 424,
+          "line": 431,
           "column": 47
         }
       ]
@@ -20408,7 +20425,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1095,
+          "line": 1097,
           "column": 54
         },
         {
@@ -20466,12 +20483,12 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 50,
+          "line": 57,
           "column": 45
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 66,
+          "line": 80,
           "column": 50
         }
       ]
@@ -20584,7 +20601,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1206,
+          "line": 1208,
           "column": 88
         }
       ]
@@ -20608,7 +20625,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1041,
+          "line": 1043,
           "column": 54
         },
         {
@@ -20630,7 +20647,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1378,
+          "line": 1391,
           "column": 14
         }
       ]
@@ -20654,7 +20671,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 122,
+          "line": 123,
           "column": 9
         }
       ]
@@ -20825,7 +20842,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1067,
+          "line": 1069,
           "column": 41
         },
         {
@@ -20972,7 +20989,7 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 72,
+          "line": 79,
           "column": 1
         }
       ]
@@ -21121,7 +21138,7 @@
       "refs": [
         {
           "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
-          "line": 123,
+          "line": 130,
           "column": 7
         }
       ]
@@ -21133,7 +21150,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1056,
+          "line": 1058,
           "column": 54
         }
       ]
@@ -21270,7 +21287,7 @@
       "refs": [
         {
           "file": "src/components/HomeMetricsCard.vue",
-          "line": 257,
+          "line": 251,
           "column": 38
         },
         {
@@ -21415,7 +21432,7 @@
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1060,
+          "line": 1062,
           "column": 54
         },
         {
@@ -21469,7 +21486,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 606,
+          "line": 635,
           "column": 68
         }
       ]
@@ -21735,7 +21752,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 480,
+          "line": 487,
           "column": 94
         }
       ]
@@ -21900,7 +21917,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 578,
+          "line": 607,
           "column": 99
         }
       ]
@@ -22098,7 +22115,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 930,
+          "line": 932,
           "column": 14
         }
       ]
@@ -22199,7 +22216,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 364,
+          "line": 371,
           "column": 56
         }
       ]
@@ -22230,6 +22247,18 @@
           "file": "src/views/ModelConfig.vue",
           "line": 443,
           "column": 21
+        }
+      ]
+    },
+    "e22b1bc8d3536fcc": {
+      "source": "该模型 API 接受的思考强度档位：{0}",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/model-editor/ModelCapabilitiesSection.vue",
+          "line": 65,
+          "column": 17
         }
       ]
     },
@@ -22496,7 +22525,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 999,
+          "line": 1001,
           "column": 99
         },
         {
@@ -22607,7 +22636,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1102,
+          "line": 1104,
           "column": 44
         },
         {
@@ -22749,7 +22778,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1035,
+          "line": 1037,
           "column": 54
         },
         {
@@ -22790,7 +22819,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 106,
+          "line": 107,
           "column": 7
         }
       ]
@@ -22879,7 +22908,7 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 75,
+          "line": 89,
           "column": 62
         }
       ]
@@ -22997,17 +23026,17 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 386,
+          "line": 414,
           "column": 42
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 428,
+          "line": 456,
           "column": 15
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 542,
+          "line": 571,
           "column": 75
         }
       ]
@@ -23019,7 +23048,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1064,
+          "line": 1066,
           "column": 54
         }
       ]
@@ -23345,7 +23374,7 @@
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 366,
+          "line": 373,
           "column": 32
         }
       ]
@@ -23697,7 +23726,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1082,
+          "line": 1084,
           "column": 21
         }
       ]
@@ -23781,12 +23810,12 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1245,
+          "line": 1247,
           "column": 18
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1273,
+          "line": 1275,
           "column": 20
         },
         {
@@ -23891,7 +23920,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1125,
+          "line": 1127,
           "column": 79
         }
       ]
@@ -24028,7 +24057,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 93,
+          "line": 92,
           "column": 53
         },
         {
@@ -24072,7 +24101,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 500,
+          "line": 507,
           "column": 15
         }
       ]
@@ -24096,7 +24125,7 @@
       "refs": [
         {
           "file": "src/utils/supplierDetail.js",
-          "line": 46,
+          "line": 47,
           "column": 36
         }
       ]
@@ -24371,7 +24400,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 932,
+          "line": 934,
           "column": 20
         },
         {
@@ -24418,22 +24447,22 @@
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 386,
+          "line": 414,
           "column": 20
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 425,
+          "line": 453,
           "column": 15
         },
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 530,
+          "line": 559,
           "column": 75
         },
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 422,
+          "line": 429,
           "column": 62
         }
       ]
@@ -24445,7 +24474,7 @@
       "refs": [
         {
           "file": "src/views/MetricsDetail.vue",
-          "line": 560,
+          "line": 589,
           "column": 94
         }
       ]
@@ -24637,7 +24666,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 751,
+          "line": 753,
           "column": 14
         }
       ]
@@ -24712,7 +24741,7 @@
       "refs": [
         {
           "file": "src/views/RequestMetrics.vue",
-          "line": 426,
+          "line": 433,
           "column": 47
         }
       ]
@@ -24760,7 +24789,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 1032,
+          "line": 1034,
           "column": 49
         }
       ]
@@ -24784,7 +24813,7 @@
       "refs": [
         {
           "file": "src/components/model-config/SupplierPanel.vue",
-          "line": 986,
+          "line": 988,
           "column": 18
         }
       ]

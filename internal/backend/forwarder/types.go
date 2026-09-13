@@ -290,7 +290,12 @@ type ActiveStream struct {
 	Backlog                         []StreamEvent
 	BacklogStartCursor              int
 	Subscribers                     map[string]*StreamSubscriber
-	CheckpointConversation          *ConversationFile
+	CheckpointConversation *ConversationFile
+	// CheckpointPersistMu 串行化 persistCheckpointDelta 的完整执行（快照→落盘→回写）
+	// 以及 applyCompactionPlan 的 ReplaceEntries：防抖定时器回调与同步 flush 并发时，
+	// 两侧会快照到同一批 pending 重复落盘，甚至把含重复条目的文件替换回内存 checkpoint
+	// （长对话「重复消息/重复工具调用」的根因）。锁序恒为 persistMu → stream.mu。
+	CheckpointPersistMu             sync.Mutex
 	CheckpointPersistTimer          *time.Timer
 	CheckpointLastPersistedEntrySeq int64
 	PendingExecs                    map[string]runtimecore.PendingExec

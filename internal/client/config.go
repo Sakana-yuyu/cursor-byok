@@ -24,8 +24,8 @@ func (s *ProxyService) LoadUserConfig() (UserConfig, error) {
 	if app != nil {
 		ctx = app.Context()
 	}
-	if s.backendHost != nil {
-		return s.backendHost.LoadConfig(ctx)
+	if host := s.currentBackendHost(); host != nil {
+		return host.LoadConfig(ctx)
 	}
 	if s.store == nil {
 		return serverconfig.DefaultConfig(), nil
@@ -48,8 +48,8 @@ func (s *ProxyService) SaveUserConfig(cfg UserConfig) error {
 		normalized UserConfig
 		err        error
 	)
-	if s.backendHost != nil {
-		normalized, err = s.backendHost.SaveConfig(ctx, cfg)
+	if host := s.currentBackendHost(); host != nil {
+		normalized, err = host.SaveConfig(ctx, cfg)
 	} else if s.store != nil {
 		normalized, err = s.store.Save(ctx, cfg)
 	} else {
@@ -113,11 +113,11 @@ func (s *ProxyService) RevokeMCPServerTrust(workspaceScope string, identifier st
 	if app := application.Get(); app != nil {
 		ctx = app.Context()
 	}
-	if s.backendHost != nil && s.backendHost.ConfigManager() != nil {
-		if err := s.backendHost.ConfigManager().RevokeMCPServerTrust(ctx, workspaceScope, identifier); err != nil {
+	if host := s.currentBackendHost(); host != nil && host.ConfigManager() != nil {
+		if err := host.ConfigManager().RevokeMCPServerTrust(ctx, workspaceScope, identifier); err != nil {
 			return err
 		}
-		cfg, _ := s.backendHost.LoadConfig(ctx)
+		cfg, _ := host.LoadConfig(ctx)
 		s.emitUserConfigChanged(cfg)
 		return nil
 	}

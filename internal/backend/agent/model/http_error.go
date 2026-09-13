@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -89,16 +90,18 @@ func buildHTTPStatusError(prefix string, resp *http.Response) error {
 
 	// 在独立 goroutine 里设置超时关闭 body 的定时器。
 	// 如果 ReadAll 在超时内完成，停止定时器；否则定时器关闭 body 解除阻塞。
-	bodyClosed := false
+	// timedOut 与 timer.Stop() 返回值共同判定：回调写、主流程读必须走原子操作，
+	// 布尔标志裸读写是数据竞争（!stopped 覆盖回调已触发但标记尚未可见的窗口）。
+	var timedOut atomic.Bool
 	timer := time.AfterFunc(errorBodyReadTimeout, func() {
-		bodyClosed = true
+		timedOut.Store(true)
 		_ = resp.Body.Close()
 	})
 
 	limitedBody, err := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
-	timer.Stop()
+	stopped := timer.Stop()
 
-	if bodyClosed {
+	if timedOut.Load() || !stopped {
 		// 超时关闭的 body：io.ReadAll 返回的错误通常是 "read on closed body" 之类，
 		// 我们用明确的超时错误替换，让日志可诊断。
 		if retrySummary := ProviderRetryAttemptSummary(resp); retrySummary != "" {

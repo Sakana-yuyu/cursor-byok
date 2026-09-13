@@ -163,26 +163,43 @@ func (store *UsageFileStore) UpsertEvent(event usageFileEvent) error {
 	return nil
 }
 
-// flushPendingEventsLocked 批量写入所有 pending 事件（调用方必须已持有 store.mu）
+// flushPendingEventsLocked 批量写入所有 pending 事件（调用方必须已持有 store.mu）。
+// 事件在写盘成功后才真正出队：锁竞争/磁盘抖动等任一步失败时回填 pending 并重挂
+// 防抖定时器重试，避免整批 token/花费统计被静默丢弃（防抖回调本身只打日志）。
 func (store *UsageFileStore) flushPendingEventsLocked() error {
 	if len(store.pendingEvents) == 0 {
 		return nil
 	}
 
 	events := store.pendingEvents
-	store.pendingEvents = nil
+	restoreOnFailure := func() {
+		store.pendingEvents = events
+		if store.debounceTimer != nil {
+			store.debounceTimer.Stop()
+		}
+		store.debounceTimer = time.AfterFunc(time.Duration(usageWriteDebounceMs)*time.Millisecond, func() {
+			store.mu.Lock()
+			defer store.mu.Unlock()
+			if err := store.flushPendingEventsLocked(); err != nil {
+				logger.Errorf("forwarder usage debounce flush failed path=%s err=%v", store.path, err)
+			}
+		})
+	}
 
 	if err := os.MkdirAll(filepath.Dir(store.path), 0o755); err != nil {
+		restoreOnFailure()
 		return fmt.Errorf("create usage directory: %w", err)
 	}
 	release, err := acquireConversationLock(store.path + ".lock")
 	if err != nil {
+		restoreOnFailure()
 		return err
 	}
 	defer release()
 
 	doc, err := readUsageFileDocument(store.path)
 	if err != nil {
+		restoreOnFailure()
 		return err
 	}
 	if doc.EventIndex == nil {
@@ -208,7 +225,12 @@ func (store *UsageFileStore) flushPendingEventsLocked() error {
 	}
 
 	doc.UpdatedAt = time.Now().UTC()
-	return writeJSONFileAtomic(store.path, doc)
+	if err := writeJSONFileAtomic(store.path, doc); err != nil {
+		restoreOnFailure()
+		return err
+	}
+	store.pendingEvents = nil
+	return nil
 }
 
 // Reset 清空所有用量统计：Totals、Daily、RecentEvents 全部归零。
@@ -249,6 +271,12 @@ func (store *UsageFileStore) LookupEvent(needle string) (usageFileEvent, bool, e
 	if store == nil || strings.TrimSpace(store.path) == "" {
 		return usageFileEvent{}, false, nil
 	}
+	// 合并防抖窗口内尚未落盘的 pending 事件：RecordEvent 走 2 秒防抖，
+	// 紧随其后的 Lookup（如 turn 收口聚合本回合用量）只读磁盘会确定性漏掉
+	// 刚记录的 provider_call，聚合结果恒为 0。
+	store.mu.Lock()
+	pending := append([]usageFileEvent(nil), store.pendingEvents...)
+	store.mu.Unlock()
 	doc, err := readUsageFileDocument(store.path)
 	if err != nil {
 		return usageFileEvent{}, false, err
@@ -268,10 +296,10 @@ func (store *UsageFileStore) LookupEvent(needle string) (usageFileEvent, bool, e
 			}
 		}
 	}
-	for _, event := range events {
+	matchAggregate := func(event usageFileEvent) {
 		eventID := strings.TrimSpace(event.EventID)
 		if eventID != trimmed && !strings.HasPrefix(eventID, trimmed+"::") {
-			continue
+			return
 		}
 		if !found {
 			aggregate = usageFileEvent{EventID: trimmed, At: event.At}
@@ -286,6 +314,12 @@ func (store *UsageFileStore) LookupEvent(needle string) (usageFileEvent, bool, e
 		aggregate.CacheWriteTokens += nonNegativeInt64(event.CacheWriteTokens)
 		aggregate.TotalTokens += nonNegativeInt64(event.TotalTokens)
 		aggregate.UsagePresent = aggregate.UsagePresent || event.UsagePresent
+	}
+	for _, event := range events {
+		matchAggregate(event)
+	}
+	for _, event := range pending {
+		matchAggregate(event)
 	}
 	if found {
 		return aggregate, true, nil

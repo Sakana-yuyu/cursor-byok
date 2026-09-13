@@ -475,21 +475,38 @@ func (m *Manager) RefreshCatalog(ctx context.Context) (Status, error) {
 		if err != nil {
 			continue
 		}
-		contentReq, err := http.NewRequestWithContext(requestCtx, http.MethodGet, target, nil)
+		// 每个模板独立超时预算：共享 requestCtx 会让目录 + 全部下载挤同一个
+		// 20 秒窗口，前两个慢模板耗尽预算后其余全部静默丢失。
+		itemCtx, itemCancel := context.WithTimeout(ctx, 15*time.Second)
+		contentReq, err := http.NewRequestWithContext(itemCtx, http.MethodGet, target, nil)
 		if err != nil {
+			itemCancel()
 			continue
 		}
 		contentReq.Header.Set("User-Agent", "Cursor-Assistant-Prompt-Manager")
 		contentResp, err := (&http.Client{Timeout: 12 * time.Second}).Do(contentReq)
 		if err != nil || contentResp.StatusCode < 200 || contentResp.StatusCode >= 300 {
+			itemCancel()
 			if contentResp != nil {
 				contentResp.Body.Close()
 			}
+			logger.Warnf("prompt template %q skipped: download error=%v", entry.Name, err)
 			continue
 		}
-		body, readErr := io.ReadAll(io.LimitReader(contentResp.Body, 2<<20))
+		body, readErr := io.ReadAll(io.LimitReader(contentResp.Body, 2<<20+1))
 		contentResp.Body.Close()
-		if readErr != nil || len(strings.TrimSpace(string(body))) == 0 {
+		itemCancel()
+		if readErr != nil {
+			logger.Warnf("prompt template %q skipped: read error=%v", entry.Name, readErr)
+			continue
+		}
+		// 恰好/超过 2MB 视为截断：把半截 Markdown 注入系统提示词是静默数据
+		// 损坏，宁可跳过并记录。
+		if len(body) > 2<<20 {
+			logger.Warnf("prompt template %q skipped: exceeds 2MiB limit", entry.Name)
+			continue
+		}
+		if len(strings.TrimSpace(string(body))) == 0 {
 			continue
 		}
 		templates = append(templates, PromptTemplate{Name: entry.Name, Content: strings.TrimSpace(string(body)), Enabled: enabledByName[entry.Name]})

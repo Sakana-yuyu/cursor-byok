@@ -304,10 +304,12 @@ func LoadUsageSummary(path string, includeCacheWrite bool, lookup *PriceLookup) 
 }
 
 // sumEventCost 汇总 provider_call 事件的已知成本。
+// 只累计 USD（含空币种，视作 USD）：EstimatedCostUSD 字段语义是美元总额，
+// 把 CNY 等其他币种的数值直接相加会得到无意义的和（SummarizeProviderSpend
+// 按币种分桶是同仓库的既定口径）。
 func sumEventCost(events []RequestMetric) (*float64, string) {
 	var total float64
 	found := false
-	currency := ""
 	for _, event := range events {
 		if !IsProviderCall(event.Kind) {
 			continue
@@ -315,16 +317,16 @@ func sumEventCost(events []RequestMetric) (*float64, string) {
 		if event.CostUSD == nil {
 			continue
 		}
+		if currency := strings.ToUpper(strings.TrimSpace(event.Currency)); currency != "" && currency != "USD" {
+			continue
+		}
 		total += *event.CostUSD
 		found = true
-		if currency == "" {
-			currency = event.Currency
-		}
 	}
 	if !found {
 		return nil, ""
 	}
-	return &total, currency
+	return &total, "USD"
 }
 
 // ResetUsageFile 把指定路径的 usage.json 重置为空文档（Totals、Daily、RecentEvents 全部归零）。

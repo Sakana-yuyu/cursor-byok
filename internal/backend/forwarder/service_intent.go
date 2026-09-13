@@ -468,15 +468,17 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	stream.mu.Unlock()
 	if hasCheckpoint {
 		cancelReason := firstNonEmpty(intent.CancelReason, "user aborted")
-		cancelEntry := newMetadataEntry(stream.TurnSeq, intent.RequestID, "control", map[string]any{
+		// turnSeq/conversationID 用函数开头的持锁快照：解锁后裸读会被
+		// 复用流的 BidiAppend goroutine 持锁重写竞争。
+		cancelEntry := newMetadataEntry(turnSeq, intent.RequestID, "control", map[string]any{
 			"status":        "canceled",
 			"reason":        cancelReason,
 			"replay_policy": cancelReplayPolicyForReason(cancelReason),
 		})
 		if strings.TrimSpace(intent.CancelTerminalStatus) == conversationStatusInterrupted {
-			cancelEntry = newInterruptedControlEntry(stream.TurnSeq, intent.RequestID, cancelReason)
+			cancelEntry = newInterruptedControlEntry(turnSeq, intent.RequestID, cancelReason)
 		}
-		if _, err := service.appendConversationEntries(stream, stream.ConversationID, []HistoryEntry{cancelEntry}); err != nil {
+		if _, err := service.appendConversationEntries(stream, conversationID, []HistoryEntry{cancelEntry}); err != nil {
 			logger.Errorf("forwarder cancellation metadata persistence failed request_id=%s conversation_id=%s err=%v", stream.RequestID, stream.ConversationID, err)
 			if memoryErr := service.appendCheckpointEntries(stream, []HistoryEntry{cancelEntry}); memoryErr != nil {
 				return memoryErr
@@ -528,7 +530,7 @@ func (service *Service) handleCancelIntent(intent InboundIntent) error {
 	if hasCheckpoint {
 		if err := service.publishCheckpointWithTerminalAction(
 			stream.RequestID,
-			stream.ConversationID,
+			conversationID,
 			checkpointCancellationAction(firstNonEmpty(intent.CancelReason, "[canceled] User aborted request")),
 		); err != nil {
 			return err

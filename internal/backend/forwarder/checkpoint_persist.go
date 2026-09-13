@@ -72,6 +72,13 @@ func (service *Service) persistCheckpointDelta(stream *ActiveStream, conversatio
 		return nil
 	}
 
+	// 全程持有持久化互斥（锁序 persistMu → stream.mu）：定时器回调与同步 flush
+	// 并发进入时，后进入方会在前者完成后重新快照 CheckpointLastPersistedEntrySeq，
+	// pending 为空直接跳过落盘；否则两侧会各写一遍同一批条目（磁盘重复 + 内存
+	// checkpoint 被含重复条目的版本覆盖）。
+	stream.CheckpointPersistMu.Lock()
+	defer stream.CheckpointPersistMu.Unlock()
+
 	stream.mu.Lock()
 	if stream.CheckpointConversation == nil {
 		stream.mu.Unlock()

@@ -11,18 +11,29 @@ import (
 
 // ApplyCursorSettings 用于处理与 ApplyCursorSettings 相关的逻辑。
 func (s *ProxyService) ApplyCursorSettings() error {
-	if s == nil || s.proxy == nil {
+	if s == nil || s.currentProxy() == nil {
 		return fmt.Errorf("proxy is not initialized")
 	}
+	// 证书材料读取走 s.mu 快照：CA 修复热重载（reloadCAFromDiskLocked）持 s.mu
+	// 重写这些字段，无锁读会拿到新旧混合状态（len 检查通过但读到旧 PEM）。
+	s.mu.RLock()
+	caCertPEM := make([]byte, len(s.caCertPEM))
+	copy(caCertPEM, s.caCertPEM)
+	caFilePath := s.caFilePath
+	s.mu.RUnlock()
 	// 降级启动（CA 异常，certManager=nil）时 caCertPEM 为空，
 	// 绝不能拿空 PEM 去写 CA 证书文件——否则会覆盖真实 CA 证书。
-	if len(s.caCertPEM) == 0 {
+	if len(caCertPEM) == 0 {
 		return errors.New("CA 证书材料缺失（应用已降级启动，本地代理不可用）")
 	}
 	s.caFileMu.Lock()
-	caCertPath, err := cursor.EnsureCACertFile(s.caCertPEM, s.caFilePath)
+	caCertPath, err := cursor.EnsureCACertFile(caCertPEM, caFilePath)
 	if err == nil {
+		// 回写路径与 reloadCAFromDiskLocked 同走 s.mu，保证 caFilePath 的
+		// 读写全部在同一把锁下（caFileMu 只负责串行化本函数自身）。
+		s.mu.Lock()
 		s.caFilePath = caCertPath
+		s.mu.Unlock()
 	}
 	s.caFileMu.Unlock()
 	if err != nil {
@@ -31,7 +42,7 @@ func (s *ProxyService) ApplyCursorSettings() error {
 
 	switch goruntime.GOOS {
 	case "windows", "darwin":
-		if err := cursor.EnsureCACertInstalled(s.caCertPEM, caCertPath); err != nil {
+		if err := cursor.EnsureCACertInstalled(caCertPEM, caCertPath); err != nil {
 			return fmt.Errorf("install ca cert: %w", err)
 		}
 		// Node 默认不读系统证书库（含 Windows 的 LocalMachine\Root），
@@ -41,12 +52,12 @@ func (s *ProxyService) ApplyCursorSettings() error {
 			return fmt.Errorf("set node extra ca certs: %w", err)
 		}
 	case "linux":
-		if err := cursor.EnsureCACertInstalled(s.caCertPEM, caCertPath); err != nil {
+		if err := cursor.EnsureCACertInstalled(caCertPEM, caCertPath); err != nil {
 			return fmt.Errorf("install ca cert: %w", err)
 		}
 	}
 
-	if err := cursor.WriteUserProxySettings(cursor.ProxyURLFromListenAddr(s.proxy.Snapshot().ListenAddr)); err != nil {
+	if err := cursor.WriteUserProxySettings(cursor.ProxyURLFromListenAddr(s.currentProxy().Snapshot().ListenAddr)); err != nil {
 		return err
 	}
 	// 终端预设独立于代理生命周期：即使用户稍后停止代理，Cursor 仍会保留

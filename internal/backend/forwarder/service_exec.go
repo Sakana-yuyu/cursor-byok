@@ -106,8 +106,9 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 	}
 	if !result.IsTerminal {
 		if len(result.HookAdditionalContexts) > 0 {
-			if _, err := service.appendConversationEntries(stream, stream.ConversationID, []HistoryEntry{
-				newMetadataEntry(stream.TurnSeq, stream.RequestID, "shell_hook_additional_context", map[string]any{
+			identity := snapshotStreamConversationIdentity(stream)
+			if _, err := service.appendConversationEntries(stream, identity.ConversationID, []HistoryEntry{
+				newMetadataEntry(identity.TurnSeq, stream.RequestID, "shell_hook_additional_context", map[string]any{
 					"tool_call_id": strings.TrimSpace(pending.ToolCallID),
 					"exec_id":      strings.TrimSpace(pending.ExecID),
 					"contexts":     hookAdditionalContextsToRecords(result.HookAdditionalContexts),
@@ -165,10 +166,11 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 			return err
 		}
 	}
+	identity := snapshotStreamConversationIdentity(stream)
 	if backgroundShellToolCallID != "" {
 		if recordedToolCallID, recorded := recordBackgroundShellActionMemory(stream, backgroundShellToolCallID, time.Now().UTC()); recorded {
-			if _, err := service.appendConversationEntries(stream, stream.ConversationID, []HistoryEntry{
-				newBackgroundShellActionMetadataEntry(stream.TurnSeq, stream.RequestID, recordedToolCallID, backgroundShellActionSourceLocalBackgrounded),
+			if _, err := service.appendConversationEntries(stream, identity.ConversationID, []HistoryEntry{
+				newBackgroundShellActionMetadataEntry(identity.TurnSeq, stream.RequestID, recordedToolCallID, backgroundShellActionSourceLocalBackgrounded),
 			}); err != nil {
 				return err
 			}
@@ -177,7 +179,7 @@ func (service *Service) handleExecResult(intent InboundIntent) error {
 	if err := service.publishToolCallCompleted(intent.RequestID, result.ToolCallID, pending.ModelCallID, result.ToolCall); err != nil {
 		return err
 	}
-	if err := service.syncSummaryCarryForward(stream.ConversationID, intent.RequestID, pending.ModelCallID); err != nil {
+	if err := service.syncSummaryCarryForward(identity.ConversationID, intent.RequestID, pending.ModelCallID); err != nil {
 		return err
 	}
 	if err := service.publishExecCheckpoint(stream, pending); err != nil {
@@ -279,8 +281,9 @@ func (service *Service) handleExecControl(intent InboundIntent) error {
 		if err := service.appendToolResult(stream, pending.ToolCallID, deriveToolNameFromPendingExec(pending), pending.ArgsJSON, result.ToolResultPayload, pending.ReasoningContent, nil); err != nil {
 			return err
 		}
-		_, err := service.appendConversationEntries(stream, stream.ConversationID, []HistoryEntry{
-			newMetadataEntry(stream.TurnSeq, stream.RequestID, "tool_control", map[string]any{
+		identity := snapshotStreamConversationIdentity(stream)
+		_, err := service.appendConversationEntries(stream, identity.ConversationID, []HistoryEntry{
+			newMetadataEntry(identity.TurnSeq, stream.RequestID, "tool_control", map[string]any{
 				"tool_call_id": result.ToolCallID,
 				"payload":      result.ToolResultPayload,
 			}),
@@ -289,7 +292,8 @@ func (service *Service) handleExecControl(intent InboundIntent) error {
 			return err
 		}
 	}
-	if err := service.syncSummaryCarryForward(stream.ConversationID, intent.RequestID, pending.ModelCallID); err != nil {
+	identity := snapshotStreamConversationIdentity(stream)
+	if err := service.syncSummaryCarryForward(identity.ConversationID, intent.RequestID, pending.ModelCallID); err != nil {
 		return err
 	}
 	if err := service.publishToolCallCompleted(intent.RequestID, result.ToolCallID, pending.ModelCallID, nil); err != nil {

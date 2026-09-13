@@ -39,34 +39,48 @@ const allEvents = ref([]);
 const loading = ref(false);
 const error = ref("");
 
+// 请求序号守卫：切换时间范围产生并发在飞请求时，后返回的旧响应不得覆盖新数据。
+let loadEventsSeq = 0;
+
 async function loadEvents() {
+  const seq = ++loadEventsSeq;
+  rangeNow.value = Date.now();
   loading.value = true;
   error.value = "";
   try {
     const data = await fetchProviderEvents(rangeStart.value, rangeEnd.value, "");
+    if (seq !== loadEventsSeq) return;
     const rows = Array.isArray(data) ? data : [];
     allEvents.value = rows.filter(isProviderCallEvent);
   } catch (e) {
+    if (seq !== loadEventsSeq) return;
     error.value = String(e?.message || e || "加载失败");
   } finally {
-    loading.value = false;
+    if (seq === loadEventsSeq) loading.value = false;
   }
 }
 
 // --- 站点消耗（按中转站聚合的用量与花费） ---
 const spendRows = ref([]);
 const spendLoading = ref(false);
-const spendError = ref("");async function loadSpend() {
+const spendError = ref("");
+let loadSpendSeq = 0;
+
+async function loadSpend() {
+  const seq = ++loadSpendSeq;
+  rangeNow.value = Date.now();
   spendLoading.value = true;
   spendError.value = "";
   try {
     const data = await fetchProviderSpendSummary(rangeStart.value, rangeEnd.value);
+    if (seq !== loadSpendSeq) return;
     spendRows.value = Array.isArray(data) ? data : [];
   } catch (e) {
+    if (seq !== loadSpendSeq) return;
     spendError.value = String(e?.message || e || "加载失败");
     spendRows.value = [];
   } finally {
-    spendLoading.value = false;
+    if (seq === loadSpendSeq) spendLoading.value = false;
   }
 }
 
@@ -142,6 +156,14 @@ function parseNaturalPoint(text) {
   // 今天/昨天/本周/本月/上周/上月（含可选 N点 / N:MM）
   const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
   const parseClock = (rest, base) => {
+    // N点半 / N点一刻 / N点三刻 → 分钟；N点M / N:M 原样。无时刻时按当天 0 点。
+    const halfMatch = rest.match(/^\s*(\d{1,2})\s*[点时]\s*(半|一刻|三刻)\s*$/);
+    if (halfMatch) {
+      const h = parseInt(halfMatch[1], 10);
+      const min = { "半": 30, "一刻": 15, "三刻": 45 }[halfMatch[2]];
+      if (h > 23) return null;
+      const x = new Date(base); x.setHours(h, min, 0, 0); return x;
+    }
     const c = rest.match(/^(?:\s*(\d{1,2})[点时:：](\d{1,2})?)?/);
     const h = c && c[1] ? parseInt(c[1], 10) : 0;
     const min = c && c[2] ? parseInt(c[2], 10) : 0;
@@ -174,6 +196,8 @@ function parseNaturalPoint(text) {
     const rest = String(m[4] || "").trim();
     if (rest === "" || /^(至今|到现在)$/.test(rest)) {
       const p = parseClock(rest.replace(/^(至今|到现在)$/, ""), base);
+      // 非法时刻（如 25点）返回 null，不能直接 p.getTime() 崩掉解析。
+      if (!p) return null;
       return { ms: p.getTime(), endExclusive: rest ? null : base.getTime() + 86400_000 };
     }
     const p = parseClock(rest, base);
@@ -241,21 +265,25 @@ const chipActiveClass = "border-[#10AD5D] bg-[#10AD5D] text-white";
 const chipIdleClass =
   "border-[#3f3f3f] bg-[#232323] text-[#a0a0a0] hover:border-[#4a4a4a] hover:text-white";
 
+// 相对时间范围（当日/近N小时等）的“现在”锚点：每次加载数据前刷新，
+// 避免 computed 缓存导致停留在页面打开时刻的冻结窗口。
+const rangeNow = ref(Date.now());
+
 const rangeStart = computed(() => {
-  const now = new Date();
+  const now = new Date(rangeNow.value);
   switch (selectedRange.value) {
     case "today": {
       const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       return d.getTime();
     }
     case "24h":
-      return now.getTime() - 24 * 3600_000;
+      return rangeNow.value - 24 * 3600_000;
     case "3d":
-      return now.getTime() - 3 * 86400_000;
+      return rangeNow.value - 3 * 86400_000;
     case "7d":
-      return now.getTime() - 7 * 86400_000;
+      return rangeNow.value - 7 * 86400_000;
     case "30d":
-      return now.getTime() - 30 * 86400_000;
+      return rangeNow.value - 30 * 86400_000;
     case "all":
       return 0;
     case "custom":
@@ -273,7 +301,7 @@ const rangeEnd = computed(() => {
       return new Date(customEnd.value).getTime() + 86400_000; // 含当天
     }
   }
-  return Date.now();
+  return rangeNow.value;
 });
 
 // --- 模型筛选 ---
@@ -447,16 +475,17 @@ watch([chartData, selectedModel, selectedRange], () => {
   renderChart();
 });
 
-// 站点消耗与事件图表复用相同时间范围，范围变化时同步重载
-watch([rangeStart, rangeEnd], () => {
+// 站点消耗与事件图表复用相同时间范围；watch 原始输入而非派生的 rangeStart/rangeEnd，
+// 否则 loadEvents 内更新 rangeNow 会让 watch 再次触发形成加载循环。
+watch([selectedRange, customStart, customEnd, customStartExact, customEndExact], () => {
   loadSpend();
   loadEvents();
 });
 
 onMounted(async () => {
+  window.addEventListener("resize", resizeChart);
   await Promise.all([loadEvents(), loadSpend(), loadHeatmapEvents()]);
   renderChart();
-  window.addEventListener("resize", resizeChart);
 });
 onUnmounted(() => {
   window.removeEventListener("resize", resizeChart);

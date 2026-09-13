@@ -372,9 +372,12 @@ func (service *Service) beginPendingCompaction(stream *ActiveStream, plan *compa
 	stream.PendingExecs[pendingExec.ExecID] = pendingExec
 	stream.Phase = TurnPhaseCompacting
 	stream.UpdatedAt = time.Now().UTC()
+	// ConversationID 会被复用流的 BidiAppend goroutine 持锁重写，读侧在
+	// 同一临界区快照后再使用。
+	conversationID := stream.ConversationID
 	stream.mu.Unlock()
 	// 先发 checkpoint 让前端获得会话上下文，再发 SummaryStarted 触发 summarize UI。
-	if err := service.publishCheckpoint(stream.RequestID, stream.ConversationID); err != nil {
+	if err := service.publishCheckpoint(stream.RequestID, conversationID); err != nil {
 		return err
 	}
 	if err := service.broker.Publish(stream.RequestID, StreamEvent{
@@ -729,6 +732,10 @@ func (service *Service) applyCompactionPlan(stream *ActiveStream, conversationID
 	}
 	replacementEntries := append([]HistoryEntry(nil), candidateConversation.Entries...)
 	if service.store != nil {
+		// 持久化互斥必须先于 ReplaceEntries 获取并覆盖到 baseline 重置：
+		// 若防抖回调此刻在飞（已快照旧 pending、正写压缩前文件），不等待它结束
+		// 就 ReplaceEntries，旧条目会被 append 回刚压缩完的文件，压缩被静默撤销。
+		stream.CheckpointPersistMu.Lock()
 		persisted, err := service.store.ReplaceEntries(conversationID, replacementEntries, func(item *ConversationFile) error {
 			if item == nil {
 				return nil
@@ -739,6 +746,7 @@ func (service *Service) applyCompactionPlan(stream *ActiveStream, conversationID
 			return nil
 		})
 		if err != nil {
+			stream.CheckpointPersistMu.Unlock()
 			return err
 		}
 		stream.mu.Lock()
@@ -750,6 +758,7 @@ func (service *Service) applyCompactionPlan(stream *ActiveStream, conversationID
 			stream.CheckpointPersistTimer = nil
 		}
 		stream.mu.Unlock()
+		stream.CheckpointPersistMu.Unlock()
 		return nil
 	}
 	_, err = service.updateConversationMetaAndCheckpoint(stream, conversationID, func(item *ConversationFile) error {

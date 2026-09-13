@@ -11,8 +11,8 @@ func (s *ProxyService) runtimeConfigSnapshot(_ context.Context) (localruntime.Ru
 	if s == nil {
 		return localruntime.RuntimeConfigSnapshot{}, nil
 	}
-	if s.backendHost != nil && s.backendHost.ConfigManager() != nil {
-		return s.backendHost.ConfigManager().LegacyRuntimeSnapshot(context.Background())
+	if host := s.currentBackendHost(); host != nil && host.ConfigManager() != nil {
+		return host.ConfigManager().LegacyRuntimeSnapshot(context.Background())
 	}
 	if s.store == nil {
 		return localruntime.RuntimeConfigSnapshot{}, nil

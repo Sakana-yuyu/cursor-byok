@@ -646,7 +646,11 @@ func (aggregate *supervisedAggregate) handleWorkerTerminal(event supervisorAggre
 	}
 	aggregate.mu.Unlock()
 	allowed := aggregate.allowedActions(task, event.snapshot)
-	go aggregate.reviewTask(reviewContext, event.identity, contract, event.snapshot, event.result, issue, allowed)
+	// reviewTask 内部执行完整 LLM 请求：与 checkpoint 路径一致用 safego 隔离
+	// panic，裸 go 一旦 panic 会击穿整个 Wails 主进程。
+	safego.Go("forwarder:supervisor-review", func() {
+		aggregate.reviewTask(reviewContext, event.identity, contract, event.snapshot, event.result, issue, allowed)
+	})
 }
 
 func (aggregate *supervisedAggregate) reviewTask(reviewContext context.Context, identity supervisorTaskIdentity, contract delegation.SupervisionTaskContract, snapshot delegation.TaskSnapshot, result delegation.TaskResult, issue *delegation.SupervisionIssue, allowed []delegation.SupervisionDecisionKind) {

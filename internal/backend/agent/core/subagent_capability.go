@@ -73,19 +73,24 @@ func ResolveTaskSubagentCapability(subagentType string, accessMode string, reado
 }
 
 // ResolveSubagentCapability validates the supported Task type and access pair.
+// 自定义类型（客户端 custom_subagents 任意名称与内置注册表的 browserUse 等）不再
+// 拒绝：prompt 引擎会把可用子代理广播给模型并指引按名调用 Task，proto 映射也
+// 支持 Custom/browserUse/shell，此处拒绝会让模型按指引发出的 Task 必然报错。
+// explore/longContextRead 仍强制 readonly；其他类型的读写语义与 generalPurpose
+// 一致，由 access_mode/readonly 参数决定。
 func ResolveSubagentCapability(subagentType string, readonly bool) (SubagentCapability, error) {
 	capability := SubagentCapability{
 		Type:     strings.TrimSpace(subagentType),
 		Readonly: readonly,
+	}
+	if capability.Type == "" {
+		return SubagentCapability{}, fmt.Errorf("subagent type is required")
 	}
 	switch capability.Type {
 	case "explore", SubagentTypeLongContextRead:
 		if !capability.Readonly {
 			return SubagentCapability{}, fmt.Errorf("subagent type %q must be readonly", capability.Type)
 		}
-	case "generalPurpose":
-	default:
-		return SubagentCapability{}, fmt.Errorf("unsupported subagent type %q", capability.Type)
 	}
 	return capability, nil
 }
