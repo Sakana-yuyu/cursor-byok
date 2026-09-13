@@ -55,8 +55,8 @@ func TestResolveProviderOutputBudgetThinkingLiftsToCatalogMax(t *testing.T) {
 		{name: "explicit effort lifts default to catalog max", modelName: "glm-5.3-flash", thinkingEffort: "xhigh", want: 128_000},
 		// 推理恒开型模型：effort 未设置也按目录思考标记抬升。
 		{name: "catalog thinking lifts default without effort", modelName: "glm-5.3-flash", thinkingEffort: "", want: 128_000},
-		// 抬升目标是目录记载的最大输出（glm-5.2=8192），不是固定大值。
-		{name: "lift bounded by catalog max", modelName: "glm-5.2", thinkingEffort: "xhigh", want: 8_192},
+		// 抬升目标是目录记载的最大输出（glm-4.5-air=98304），不是固定大值。
+		{name: "lift bounded by catalog max", modelName: "glm-4.5-air", thinkingEffort: "xhigh", want: 98_304},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

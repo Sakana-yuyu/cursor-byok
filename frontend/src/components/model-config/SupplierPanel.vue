@@ -244,7 +244,9 @@ const balancePrimary = computed(() => {
   const data = balanceState.data;
   if (!data || !data.supported) return "";
   if (data.unlimited) return "余额 不限额";
-  if (data.source === "token_plan" || data.currency === "%") {
+  // 按币种判断展示形态（token_plan 可能同时带百分比窗口与真实金额，
+  // 金额存在时 currency 为真实币种，优先展示金额，窗口进度由徽章承载）。
+  if (data.currency === "%") {
     const used = data.used != null && Number.isFinite(Number(data.used)) ? Number(data.used) : null;
     const remaining = data.remaining != null && Number.isFinite(Number(data.remaining)) ? Number(data.remaining) : null;
     const plan = String(data.planName || "").trim();

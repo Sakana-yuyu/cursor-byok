@@ -41,6 +41,7 @@ export function balanceSourceLabel(source) {
   if (source === "sub2api_usage") return "sub2api usage";
   if (source === "newapi") return "New API";
   if (source === "token_plan") return "Token Plan";
+  if (source === "zhipu_account") return "智谱账户";
   if (source === "configured") return "自定义查询";
   if (source === "deepseek") return "DeepSeek";
   if (source === "stepfun") return "阶跃星辰";

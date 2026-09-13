@@ -59,6 +59,13 @@ const emit = defineEmits(["update:modelValue", "select-tier", "open-vision-setti
       <span v-if="capabilities.supportsThinking" class="inline-flex items-center gap-0.5 rounded-full border border-[#3f3f3f] bg-[#2a2a2a] px-2 py-0.5 text-[11px] text-[#93c5fd]">
         <span class="icon-[mdi--brain] text-[12px]"></span>思考
       </span>
+      <span
+        v-if="capabilities.supportsThinking && capabilities.reasoningEfforts?.length"
+        class="inline-flex items-center gap-0.5 rounded-full border border-[#3f3f3f] bg-[#2a2a2a] px-2 py-0.5 text-[11px] text-[#93c5fd]"
+        :title="`该模型 API 接受的思考强度档位：${capabilities.reasoningEfforts.join(' / ')}`"
+      >
+        思考强度 {{ capabilities.reasoningEfforts.join("/") }}
+      </span>
       <span v-if="capabilities.supportsTools" class="inline-flex items-center gap-0.5 rounded-full border border-[#3f3f3f] bg-[#2a2a2a] px-2 py-0.5 text-[11px] text-[#fcd34d]">
         <span class="icon-[mdi--tools] text-[12px]"></span>工具
       </span>

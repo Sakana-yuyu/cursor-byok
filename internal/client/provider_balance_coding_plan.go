@@ -198,11 +198,48 @@ func kimiWindowIdentity(value any, index int) (string, string) {
 	return fmt.Sprintf("limit-%d", index+1), fmt.Sprintf("额度窗口 %d", index+1)
 }
 
-func queryZhipuCodingPlan(ctx context.Context, httpClient *http.Client, baseURL, apiKey string, team bool) ProviderBalance {
-	host := "https://api.z.ai"
+// zhipuBalanceHost 按渠道 baseURL 解析智谱余额查询的站点域：
+// bigmodel.cn 渠道走 open.bigmodel.cn，其余（z.ai 国际）走 api.z.ai。
+func zhipuBalanceHost(baseURL string) string {
 	if strings.Contains(strings.ToLower(baseURL), "bigmodel.cn") {
-		host = "https://open.bigmodel.cn"
+		return "https://open.bigmodel.cn"
 	}
+	return "https://api.z.ai"
+}
+
+// queryZhipuCodingPlan 组合智谱双源余额：
+//   - /api/monitor/usage/quota/limit：套餐额度窗口（5h/周，百分比进度）
+//   - /api/biz/account/query-customer-account-report：账户金额（可用余额/累计消费）
+//
+// 两者任一可用即成卡；双源齐全时金额为主展示（Total/Used/Remaining 为金额、
+// Currency 为真实币种），窗口徽章保留套餐进度。金额源 best-effort：失败只影响
+// 金额字段，不拖垮额度结果；额度源失败但金额可用时退回纯金额卡。
+func queryZhipuCodingPlan(ctx context.Context, httpClient *http.Client, baseURL, apiKey string, team bool) ProviderBalance {
+	host := zhipuBalanceHost(baseURL)
+	label := "Zhipu GLM"
+	if team {
+		label = "Zhipu GLM Team"
+	}
+
+	quota, quotaOK := queryZhipuQuotaLimit(ctx, httpClient, host, apiKey, label)
+	money, moneyOK := queryZhipuAccountReport(ctx, httpClient, host, apiKey)
+
+	if quotaOK {
+		if moneyOK {
+			return applyZhipuAccountMoney(quota, money)
+		}
+		return quota
+	}
+	if moneyOK {
+		return zhipuAccountOnlyBalance(money, label)
+	}
+	// 双源都失败：以额度源的失败信息为主（它区分了鉴权/接口/解析错误）。
+	return quota
+}
+
+// queryZhipuQuotaLimit 查询套餐额度窗口。
+// 成功时返回带 Windows 与 PlanName 的百分比余额；失败时 Supported=false。
+func queryZhipuQuotaLimit(ctx context.Context, httpClient *http.Client, host, apiKey, label string) (ProviderBalance, bool) {
 	endpoint := host + "/api/monitor/usage/quota/limit"
 	// 智谱不加 Bearer 前缀（对齐 cc-switch）。
 	body, status, transient, err := codingPlanGET(ctx, httpClient, endpoint, map[string]string{
@@ -211,38 +248,138 @@ func queryZhipuCodingPlan(ctx context.Context, httpClient *http.Client, baseURL,
 		"Accept-Language": "en-US,en",
 	})
 	if err != nil {
-		return namedBalanceFail("token_plan", "网络错误："+err.Error(), transient)
+		return namedBalanceFail("token_plan", "网络错误："+err.Error(), transient), false
 	}
 	if status == http.StatusUnauthorized || status == http.StatusForbidden {
-		return namedBalanceFail("token_plan", fmt.Sprintf("鉴权失败（HTTP %d）", status), false)
+		return namedBalanceFail("token_plan", fmt.Sprintf("鉴权失败（HTTP %d）", status), false), false
 	}
 	if status < 200 || status >= 300 {
-		return namedBalanceFail("token_plan", fmt.Sprintf("接口错误（HTTP %d）", status), false)
+		return namedBalanceFail("token_plan", fmt.Sprintf("接口错误（HTTP %d）", status), false), false
 	}
 	var root map[string]any
 	if json.Unmarshal(body, &root) != nil {
-		return namedBalanceFail("token_plan", "响应解析失败", false)
+		return namedBalanceFail("token_plan", "响应解析失败", false), false
 	}
 	if success, ok := root["success"].(bool); ok && !success {
 		msg, _ := root["msg"].(string)
 		if strings.TrimSpace(msg) == "" {
 			msg = "查询失败"
 		}
-		return namedBalanceFail("token_plan", msg, false)
+		return namedBalanceFail("token_plan", msg, false), false
 	}
 	data, _ := root["data"].(map[string]any)
 	if data == nil {
-		return namedBalanceFail("token_plan", "响应缺少 data", false)
+		return namedBalanceFail("token_plan", "响应缺少 data", false), false
 	}
 	tiers := parseZhipuTiers(data)
-	label := "Zhipu GLM"
-	if team {
-		label = "Zhipu GLM Team"
-	}
 	if level, _ := data["level"].(string); strings.TrimSpace(level) != "" {
 		label = label + " · " + strings.TrimSpace(level)
 	}
-	return codingPlanBalanceFromTiers(label, tiers)
+	balance := codingPlanBalanceFromTiers(label, tiers)
+	return balance, balance.Supported
+}
+
+// zhipuAccountMoney 是 query-customer-account-report 提取的账户金额。
+type zhipuAccountMoney struct {
+	currency  string
+	available float64
+	spent     *float64
+}
+
+// queryZhipuAccountReport 查询账户金额报告（智谱控制台账单页同源接口）。
+// best-effort：网络/鉴权/解析任何失败都返回 ok=false，由调用方降级。
+func queryZhipuAccountReport(ctx context.Context, httpClient *http.Client, host, apiKey string) (zhipuAccountMoney, bool) {
+	endpoint := host + "/api/biz/account/query-customer-account-report"
+	body, status, _, err := codingPlanGET(ctx, httpClient, endpoint, map[string]string{
+		"Authorization":   apiKey,
+		"Content-Type":    "application/json",
+		"Accept-Language": "en-US,en",
+	})
+	if err != nil || status < 200 || status >= 300 {
+		return zhipuAccountMoney{}, false
+	}
+	var root map[string]any
+	if json.Unmarshal(body, &root) != nil {
+		return zhipuAccountMoney{}, false
+	}
+	return parseZhipuAccountReport(root, host)
+}
+
+// parseZhipuAccountReport 解析账户报告响应：data.availableBalance（缺省回退
+// data.balance）为可用余额，data.totalSpendAmount 为累计消费，data.currency
+// 为币种（缺省按站点推断：bigmodel.cn→CNY，z.ai→USD）。
+func parseZhipuAccountReport(root map[string]any, host string) (zhipuAccountMoney, bool) {
+	var money zhipuAccountMoney
+	if success, ok := root["success"].(bool); ok && !success {
+		return money, false
+	}
+	data, _ := root["data"].(map[string]any)
+	if data == nil {
+		return money, false
+	}
+	available, ok := asFloat(data["availableBalance"])
+	if !ok {
+		if fallback, fallbackOK := asFloat(data["balance"]); fallbackOK {
+			available, ok = fallback, true
+		}
+	}
+	if !ok {
+		return money, false
+	}
+	money.available = available
+	if spent, ok := asFloat(data["totalSpendAmount"]); ok {
+		money.spent = &spent
+	}
+	if currency, _ := data["currency"].(string); strings.TrimSpace(currency) != "" {
+		money.currency = strings.ToUpper(strings.TrimSpace(currency))
+	} else if strings.Contains(strings.ToLower(host), "bigmodel.cn") {
+		money.currency = "CNY"
+	} else {
+		money.currency = "USD"
+	}
+	return money, true
+}
+
+// applyZhipuAccountMoney 把账户金额叠加到额度结果上：金额字段替换百分比
+// （Total=可用+累计消费，Remaining=可用，Used=累计消费），窗口徽章与套餐名
+// 保留，Message 追加金额摘要。
+func applyZhipuAccountMoney(balance ProviderBalance, money zhipuAccountMoney) ProviderBalance {
+	balance.Currency = money.currency
+	available := money.available
+	balance.Remaining = &available
+	balance.Used = money.spent
+	if money.spent != nil {
+		total := available + *money.spent
+		balance.Total = &total
+		balance.Message = fmt.Sprintf("%s；账户余额 %.2f，累计消费 %.2f", balance.Message, available, *money.spent)
+	} else {
+		balance.Total = &available
+		balance.Message = fmt.Sprintf("%s；账户余额 %.2f", balance.Message, available)
+	}
+	return balance
+}
+
+// zhipuAccountOnlyBalance 构造纯金额卡（无套餐额度窗口的账户，如按量付费）。
+func zhipuAccountOnlyBalance(money zhipuAccountMoney, label string) ProviderBalance {
+	available := money.available
+	balance := ProviderBalance{
+		Supported: true,
+		Source:    "zhipu_account",
+		Currency:  money.currency,
+		Remaining: &available,
+		Used:      money.spent,
+		PlanName:  label,
+		FetchedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	if money.spent != nil {
+		total := available + *money.spent
+		balance.Total = &total
+		balance.Message = fmt.Sprintf("账户余额 %.2f，累计消费 %.2f", available, *money.spent)
+	} else {
+		balance.Total = &available
+		balance.Message = fmt.Sprintf("账户余额 %.2f", available)
+	}
+	return balance
 }
 
 func parseZhipuTiers(data map[string]any) []codingPlanTier {
@@ -398,14 +535,9 @@ func parseMiniMaxTiers(root map[string]any) []codingPlanTier {
 }
 
 func queryZenMuxCodingPlan(ctx context.Context, httpClient *http.Client, baseURL, apiKey string) ProviderBalance {
-	// ZenMux：用量 URL 常由用户配置；此处尝试常见路径，否则对 baseURL 本身 GET（与 cc-switch 行为接近）。
+	// ZenMux：用量 URL 常由用户配置；直接对 baseURL GET（与 cc-switch 行为接近，
+	// 多数部署把 quota 路径放在 baseURL 里）。
 	endpoint := strings.TrimRight(baseURL, "/")
-	if !strings.Contains(strings.ToLower(endpoint), "quota") && !strings.Contains(strings.ToLower(endpoint), "usage") {
-		// 常见：https://xxx.zenmux.ai/api/v1/quota
-		if u, err := http.NewRequest(http.MethodGet, endpoint, nil); err == nil && u.URL != nil {
-			// keep endpoint as-is; many ZenMux deployments put quota path in baseURL already
-		}
-	}
 	body, status, transient, err := codingPlanGET(ctx, httpClient, endpoint, map[string]string{
 		"Authorization": "Bearer " + apiKey,
 		"Accept":        "application/json",
@@ -676,11 +808,4 @@ func millisToISO(ms *int64) string {
 		v *= 1000
 	}
 	return time.UnixMilli(v).UTC().Format(time.RFC3339)
-}
-
-func maxFloat(a, b float64) float64 {
-	if a > b {
-		return a
-	}
-	return b
 }

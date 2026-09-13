@@ -20,6 +20,10 @@ type Capability struct {
 	SupportsAudio       bool
 	SupportsTools       bool
 	SupportsThinking    bool
+	// ReasoningEfforts 列出该模型 API 接受的思考强度档位（厂商原生枚举，
+	// 如 GLM-5.3 的 low/high/max、Claude 自适应思考的 low~max）。
+	// nil 表示该模型仅支持开关思考（或档位未知），不提供强度选择。
+	ReasoningEfforts []string
 	// Pricing 是该模型官方公布的 token 价格（每百万 token）。
 	// 仅在 adapter 未配置手动/catalog 价格时作为兜底使用。
 	Pricing *BuiltinPricing `json:"-"`
@@ -55,6 +59,7 @@ type modelsCatalogRule struct {
 	SupportsAudio       bool                  `json:"supportsAudio"`
 	SupportsTools       bool                  `json:"supportsTools"`
 	SupportsThinking    bool                  `json:"supportsThinking"`
+	ReasoningEfforts    []string              `json:"reasoningEfforts,omitempty"`
 	Pricing             *modelsCatalogPricing `json:"pricing,omitempty"`
 }
 
@@ -94,6 +99,7 @@ func mustLoadCapabilityRules() []capabilityRule {
 			SupportsAudio:       raw.SupportsAudio,
 			SupportsTools:       raw.SupportsTools,
 			SupportsThinking:    raw.SupportsThinking,
+			ReasoningEfforts:    raw.ReasoningEfforts,
 		}
 		if raw.Pricing != nil {
 			cap.Pricing = &BuiltinPricing{

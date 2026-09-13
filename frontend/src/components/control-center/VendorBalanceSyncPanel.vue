@@ -4,6 +4,7 @@ import Card from "@/components/ui/Card.vue";
 import ControlCenterSection from "@/components/control-center/ControlCenterSection.vue";
 import {
   PROVIDER_BALANCES_SYNCED_EVENT,
+  openModelConfig,
   queryAllProviderBalances,
   syncProviderBalancesAfterAccountChange,
 } from "@/services/clientApi";
@@ -12,9 +13,7 @@ import { appState } from "@/state/appState";
 import { formatMoney } from "@/utils/format";
 import { onAccountSync } from "@/utils/accountSync";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
 
-const router = useRouter();
 const balances = ref([]);
 const loading = ref(false);
 const syncing = ref(false);
@@ -92,7 +91,9 @@ function balanceLabel(item) {
   const balance = item?.balance || {};
   if (!balance.supported) return balance.message || "余额不可用";
   if (balance.unlimited) return "不限额度";
-  if (balance.source === "token_plan" || balance.currency === "%") {
+  // 按币种判断展示形态（token_plan 可能同时带百分比窗口与真实金额，
+  // 金额存在时 currency 为真实币种，优先展示金额，窗口进度由徽章承载）。
+  if (balance.currency === "%") {
     return `已用 ${Number(balance.used || 0).toFixed(0)}%`;
   }
   return formatMoney(balance.remaining, balance.currency);

@@ -238,9 +238,17 @@ func applyOpenAIChatCompletionsCompatibility(body map[string]any, baseURL string
 		body["enable_thinking"] = true
 	case "deepseek":
 		ensureOpenAIThinkingEnabled(body)
-	case "zhipu", "mimo", "minimax":
-		delete(body, "reasoning_effort")
-		ensureOpenAIThinkingEnabled(body)
+	case "zhipu":
+		// GLM-5.2 起官方支持 reasoning_effort（思考强度）；旧模型仍删除该参数，
+		// 仅发 thinking:{type:enabled}。
+		if glmSupportsReasoningEffort(modelID) {
+			body["reasoning_effort"] = zhipuReasoningEffort(effort, modelID)
+			ensureOpenAIThinkingEnabled(body)
+		} else {
+			delete(body, "reasoning_effort")
+			ensureOpenAIThinkingEnabled(body)
+		}
+	case "mimo", "minimax":
 	case "stepfun":
 		if !stepFunModelSupportsReasoningEffort(modelID) {
 			delete(body, "reasoning_effort")
@@ -343,6 +351,75 @@ func kimiK3ReasoningEffort(value any) string {
 	}
 }
 
+// glmModelVersion 解析 GLM 模型名的主次版本（glm-5.3-flash → 5,3；glm-5 → 5,0）。
+// 解析不出版本时返回 (0,0)，后续比较自然判定为不支持。
+func glmModelVersion(modelID string) (major, minor int) {
+	model := strings.ToLower(strings.TrimSpace(modelID))
+	if !strings.HasPrefix(model, "glm") {
+		return 0, 0
+	}
+	rest := strings.TrimPrefix(strings.TrimPrefix(model, "glm"), "-")
+	i := 0
+	for i < len(rest) && rest[i] >= '0' && rest[i] <= '9' {
+		i++
+	}
+	if i == 0 {
+		return 0, 0
+	}
+	major, _ = strconv.Atoi(rest[:i])
+	rest = rest[i:]
+	if len(rest) > 0 && (rest[0] == '.' || rest[0] == '-') {
+		rest = rest[1:]
+		j := 0
+		for j < len(rest) && rest[j] >= '0' && rest[j] <= '9' {
+			j++
+		}
+		if j > 0 {
+			minor, _ = strconv.Atoi(rest[:j])
+		}
+	}
+	return major, minor
+}
+
+// glmSupportsReasoningEffort 报告 GLM 模型是否支持 reasoning_effort 参数。
+// 官方文档：仅 GLM-5.2 及以上版本支持（GLM-5.1/5/5-Turbo 及 4.x 不支持）。
+func glmSupportsReasoningEffort(modelID string) bool {
+	major, minor := glmModelVersion(modelID)
+	return major > 5 || (major == 5 && minor >= 2)
+}
+
+// glmForcesThinking 报告 GLM 模型是否不允许禁用思考。
+// 官方文档：GLM-5.3/5.3-Flash 传入 thinking.type=disabled 直接报错
+//（“请确保开启思考”），迁移指引是改用 enabled + reasoning_effort=low。
+// 5.3 之后的版本按同样策略保守处理。
+func glmForcesThinking(modelID string) bool {
+	major, minor := glmModelVersion(modelID)
+	return major > 5 || (major == 5 && minor >= 3)
+}
+
+// zhipuReasoningEffort 把运行时思考强度映射为 GLM 接受的 reasoning_effort 值。
+// GLM-5.3+ 仅接受 low/high/max：medium 归 high、xhigh 归 max（对齐官方
+// Coding Plan 映射表）；GLM-5.2 接受全部档位，直接透传。
+func zhipuReasoningEffort(value any, modelID string) string {
+	effort := strings.ToLower(strings.TrimSpace(fmt.Sprint(value)))
+	if glmForcesThinking(modelID) {
+		switch effort {
+		case "low":
+			return "low"
+		case "medium", "high":
+			return "high"
+		default: // xhigh / max / 未知
+			return "max"
+		}
+	}
+	switch effort {
+	case "low", "medium", "high", "xhigh", "max":
+		return effort
+	default:
+		return "max"
+	}
+}
+
 func stepFunModelSupportsReasoningEffort(modelID string) bool {
 	model := strings.ToLower(strings.TrimSpace(modelID))
 	return strings.Contains(model, "2603")
@@ -382,6 +459,14 @@ func applyOpenAIThinkingDisable(body map[string]any, req StreamRequest, baseURL 
 	}
 	switch openAIThinkingDisableKind(baseURL, modelID, endpoint) {
 	case "thinking_type":
+		if glmForcesThinking(modelID) {
+			// GLM-5.3 起不接受 thinking.type=disabled；按官方迁移指引降级为
+			// enabled + reasoning_effort=low（最轻思考档）。
+			body["thinking"] = map[string]any{"type": "enabled"}
+			body["reasoning_effort"] = "low"
+			setRequestKnob(req, "thinking_disabled_provider_param", "glm_forced_thinking_low")
+			return
+		}
 		body["thinking"] = map[string]any{"type": "disabled"}
 		delete(body, "reasoning_effort")
 		setRequestKnob(req, "thinking_disabled_provider_param", "thinking.type")

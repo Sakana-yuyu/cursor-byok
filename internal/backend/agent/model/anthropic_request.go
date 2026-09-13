@@ -727,6 +727,14 @@ func applyAnthropicProviderCompatibility(body map[string]any, req StreamRequest,
 			delete(body, "reasoning_effort")
 		}
 	}
+	if strings.Contains(base, "bigmodel") || strings.Contains(base, "z.ai") || strings.Contains(base, "zhipu") || (strings.Contains(model, "glm") && isZhipuOfficialBaseURL(base)) {
+		// GLM-5.3 起 anthropic 端点同样不接受 thinking.type=disabled（原生 API
+		// 会报“请确保开启思考”）；降级为 enabled，沿用模型默认思考强度。
+		if anthropicThinkingType(body) == "disabled" && glmForcesThinking(modelID) {
+			body["thinking"] = map[string]any{"type": "enabled"}
+			setRequestKnob(req, "thinking_disabled_provider_param", "glm_forced_thinking_enabled")
+		}
+	}
 	if strings.Contains(base, "githubcopilot.com") || strings.Contains(base, "githubcopilot") {
 		if cleaned, ok := stripAnthropicThinkingBlocks(body).(map[string]any); ok {
 			for key := range body {

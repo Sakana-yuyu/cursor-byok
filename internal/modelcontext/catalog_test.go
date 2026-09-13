@@ -18,9 +18,14 @@ func TestWindowTokensFromSpreadsheetRules(t *testing.T) {
 		"Qwen/Qwen3.8-Max-Preview": 1_000_000,
 		"deepseek-v4-pro":          1_000_000,
 		"kimi-k2.6":                256_000,
-		"glm-5.2":                  200_000,
+		"glm-5.2":                  1_000_000,
 		"glm-5.3":                  1_000_000,
 		"glm-5.3-flash":            1_000_000,
+		"glm-4-long":               1_000_000,
+		"claude-fable-5-1":         1_000_000,
+		"claude-opus-5":            1_000_000,
+		"gpt-6-astra":              1_048_576,
+		"gemini-3.8-flash":         1_048_576,
 	}
 	for modelID, want := range tests {
 		if got := WindowTokens(modelID); got != want {
@@ -36,8 +41,11 @@ func TestMaxOutputTokensKnownModels(t *testing.T) {
 		"glm-5.3":        128_000,
 		"glm-5.3-flash":  128_000,
 		"glm-5.3-flashx": 128_000,
-		"glm-5.2":        8_192,
-		"glm-4.6":        8_192,
+		"glm-5.2":        128_000,
+		"glm-4.6":        128_000,
+		"glm-4.5-air":    98_304,
+		"glm-4.6v":       32_000,
+		"gpt-6-astra":    128_000,
 	}
 	for modelID, want := range tests {
 		if got := MaxOutputTokens(modelID); got != want {
@@ -80,8 +88,8 @@ func TestCapabilitiesKnownModels(t *testing.T) {
 		// Kimi 3.0 / K3 — 多模态，支持视觉（回归：曾误判为纯文本导致图片被剥离）
 		{"kimi-3.0", true, false, true, 256_000},
 		{"kimi-k3", true, false, true, 256_000},
-		// GLM-5.2 — 支持视觉
-		{"glm-5.2", true, true, true, 200_000},
+		// GLM-5.2 — 2026-09 官方文档：1M 窗口、纯文本
+		{"glm-5.2", false, true, true, 1_000_000},
 		// GLM-5.3 系列 — 1M 窗口 / 128K 输出 / 推理恒开；不得再落入 ^glm 兜底
 		//（兜底 maxOutput=4096 会被思考 token 耗尽，产生零可见输出截断）。
 		{"glm-5.3", false, true, true, 1_000_000},
@@ -214,6 +222,88 @@ func TestBuiltinPricingKimiCurrentPricing(t *testing.T) {
 		{"kimi-3.0", 3.0, 15.0, 0.3},
 		{"kimi-k2.6", 0.95, 4.0, 0.16},
 		{"kimi-k2.7", 0.95, 4.0, 0.19},
+	}
+	for _, tt := range tests {
+		c := Capabilities(tt.modelID)
+		if c == nil || c.Pricing == nil {
+			t.Errorf("Capabilities(%q) pricing = nil, want builtin pricing", tt.modelID)
+			continue
+		}
+		if c.Pricing.Input == nil || *c.Pricing.Input != tt.wantInput {
+			t.Errorf("Capabilities(%q) input = %#v, want %v", tt.modelID, c.Pricing.Input, tt.wantInput)
+		}
+		if c.Pricing.Output == nil || *c.Pricing.Output != tt.wantOutput {
+			t.Errorf("Capabilities(%q) output = %#v, want %v", tt.modelID, c.Pricing.Output, tt.wantOutput)
+		}
+		if c.Pricing.CacheRead == nil || *c.Pricing.CacheRead != tt.wantCache {
+			t.Errorf("Capabilities(%q) cacheRead = %#v, want %v", tt.modelID, c.Pricing.CacheRead, tt.wantCache)
+		}
+		if c.Pricing.Currency != "USD" {
+			t.Errorf("Capabilities(%q) currency = %q, want USD", tt.modelID, c.Pricing.Currency)
+		}
+	}
+}
+
+func TestReasoningEffortsKnownModels(t *testing.T) {
+	// 2026-09 官方文档：GLM-5.3/5.3-Flash 仅接受 low/high/max（且不可禁用思考）；
+	// GLM-5.2 接受全部档位（none/minimal 表示放弃思考，low/medium 内部映射 high）；
+	// Claude 自适应思考为 low~max 五档（默认 high）；GPT-6 Astra 无 none 档；
+	// Gemini 3.8/3.7 Flash 为 low/medium/high（minimal 报错）。
+	tests := []struct {
+		modelID string
+		want    []string
+	}{
+		{"glm-5.3", []string{"low", "high", "max"}},
+		{"glm-5.3-flash", []string{"low", "high", "max"}},
+		{"glm-5.2", []string{"none", "minimal", "low", "medium", "high", "xhigh", "max"}},
+		{"claude-fable-5-1", []string{"low", "medium", "high", "xhigh", "max"}},
+		{"claude-opus-5", []string{"low", "medium", "high", "xhigh", "max"}},
+		{"gpt-6-astra", []string{"low", "medium", "high", "xhigh", "max"}},
+		{"gemini-3.8-flash", []string{"low", "medium", "high"}},
+	}
+	for _, tt := range tests {
+		c := Capabilities(tt.modelID)
+		if c == nil {
+			t.Errorf("Capabilities(%q) returned nil, want non-nil", tt.modelID)
+			continue
+		}
+		if len(c.ReasoningEfforts) != len(tt.want) {
+			t.Errorf("Capabilities(%q).ReasoningEfforts = %v, want %v", tt.modelID, c.ReasoningEfforts, tt.want)
+			continue
+		}
+		for i := range tt.want {
+			if c.ReasoningEfforts[i] != tt.want[i] {
+				t.Errorf("Capabilities(%q).ReasoningEfforts = %v, want %v", tt.modelID, c.ReasoningEfforts, tt.want)
+				break
+			}
+		}
+	}
+	// 不支持强度选择的模型应为 nil（仅开关思考或档位未知）
+	for _, modelID := range []string{"glm-5.1", "glm-4.6", "claude-haiku-4-5", "gemini-3.6-flash"} {
+		if c := Capabilities(modelID); c != nil && c.ReasoningEfforts != nil {
+			t.Errorf("Capabilities(%q).ReasoningEfforts = %v, want nil", modelID, c.ReasoningEfforts)
+		}
+	}
+}
+
+func TestBuiltinPricingNewModels(t *testing.T) {
+	// 2026-09 官方现价（USD/百万 token）：Anthropic、OpenAI、Google、智谱 z.ai 国际价。
+	tests := []struct {
+		modelID    string
+		wantInput  float64
+		wantOutput float64
+		wantCache  float64
+	}{
+		{"claude-fable-5-1", 10, 50, 0.25},
+		{"claude-opus-5", 5, 25, 0.5},
+		{"claude-sonnet-5", 2, 10, 0.2},
+		{"gpt-6-astra", 10, 50, 1},
+		{"gpt-5.6-sol", 4, 20, 0.4},
+		{"gpt-5.6-terra", 2, 12, 0.2},
+		{"gpt-5.6-luna", 0.2, 1.2, 0.02},
+		{"gemini-3.8-flash", 1.5, 7.5, 0.15},
+		{"glm-5.3", 1.4, 4.4, 0.26},
+		{"glm-5.3-flash", 0.15, 0.5, 0.03},
 	}
 	for _, tt := range tests {
 		c := Capabilities(tt.modelID)

@@ -1,7 +1,100 @@
 {
-  "_comment": "模型能力目录。first-match-wins：pattern 按数组顺序匹配，越靠前优先级越高。pattern 经 normalizeModelID 处理后再匹配（小写、去 models/ 前缀、空格/下划线转连字符）。数据源：官方文档 + aiven.io 排行榜 + 社区核实。gpt-5.6-luna/sol/terra 实际为 Codex 上限 272K（非理论 1M）。",
+  "_comment": "模型能力目录。first-match-wins：pattern 按数组顺序匹配，越靠前优先级越高。pattern 经 normalizeModelID 处理后再匹配（小写、去 models/ 前缀、空格/下划线转连字符）。数据源：官方文档 + aiven.io 排行榜 + 社区核实。gpt-5.6-luna/sol/terra 实际为 Codex 上限 272K（非理论 1M）。reasoningEfforts 记录该模型 API 接受的思考强度档位（厂商原生枚举；GLM-5.3/5.3-Flash 与 Claude Fable 5.1 等新模型不可禁用思考，档位中无 none/disabled）。2026-09 按 bigmodel.cn / docs.z.ai / docs.claude.com / developers.openai.com / ai.google.dev 官方文档校正 GLM 全系与三大厂新模型。",
   "_source": "主流大模型列表.xlsx + 官方文档校正",
   "rules": [
+    {
+      "pattern": "^claude-?fable-?5[.-]?1(?:-|$)",
+      "displayName": "Claude Fable 5.1",
+      "contextWindowTokens": 1000000,
+      "maxOutputTokens": 128000,
+      "supportsVision": true,
+      "supportsAudio": false,
+      "supportsTools": true,
+      "supportsThinking": true,
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "pricing": {
+        "input": 10,
+        "output": 50,
+        "cacheRead": 0.25,
+        "cacheWrite": 12.5,
+        "currency": "USD",
+        "source": "official"
+      }
+    },
+    {
+      "pattern": "^claude-?fable-?5(?:-|$)",
+      "displayName": "Claude Fable 5",
+      "contextWindowTokens": 1000000,
+      "maxOutputTokens": 128000,
+      "supportsVision": true,
+      "supportsAudio": false,
+      "supportsTools": true,
+      "supportsThinking": true,
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "pricing": {
+        "input": 10,
+        "output": 50,
+        "cacheRead": 1,
+        "cacheWrite": 12.5,
+        "currency": "USD",
+        "source": "official"
+      }
+    },
+    {
+      "pattern": "^(?:claude-)?opus-?5(?:-|$)|^claude-5-opus(?:-|$)",
+      "displayName": "Claude Opus 5",
+      "contextWindowTokens": 1000000,
+      "maxOutputTokens": 128000,
+      "supportsVision": true,
+      "supportsAudio": false,
+      "supportsTools": true,
+      "supportsThinking": true,
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "pricing": {
+        "input": 5,
+        "output": 25,
+        "cacheRead": 0.5,
+        "cacheWrite": 6.25,
+        "currency": "USD",
+        "source": "official"
+      }
+    },
+    {
+      "pattern": "^claude-?haiku-?4[.-]?5(?:-|$)",
+      "displayName": "Claude Haiku 4.5",
+      "contextWindowTokens": 200000,
+      "maxOutputTokens": 64000,
+      "supportsVision": true,
+      "supportsAudio": false,
+      "supportsTools": true,
+      "supportsThinking": true,
+      "pricing": {
+        "input": 1,
+        "output": 5,
+        "cacheRead": 0.1,
+        "cacheWrite": 1.25,
+        "currency": "USD",
+        "source": "official"
+      }
+    },
     {
       "pattern": "^(?:claude-)?opus-?4[.-]?8(?:-|$)|^claude-4[.-]?8-opus(?:-|$)",
       "displayName": "Claude Opus 4.8",
@@ -60,19 +153,26 @@
       "pattern": "^(?:claude-)?sonnet-?5(?:-|$)|^claude-5-sonnet(?:-|$)",
       "displayName": "Claude Sonnet 5",
       "contextWindowTokens": 1000000,
-      "maxOutputTokens": 64000,
+      "maxOutputTokens": 128000,
       "supportsVision": true,
       "supportsAudio": false,
       "supportsTools": true,
       "supportsThinking": true,
       "pricing": {
-        "input": 3,
-        "output": 15,
-        "cacheRead": 0.3,
-        "cacheWrite": 3.75,
+        "input": 2,
+        "output": 10,
+        "cacheRead": 0.2,
+        "cacheWrite": 2.5,
         "currency": "USD",
         "source": "official"
-      }
+      },
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
     },
     {
       "pattern": "^claude-3-5-sonnet",
@@ -147,14 +247,46 @@
       }
     },
     {
-      "pattern": "^gpt-?5[.-]?6-(?:luna|sol|terra)(?:-|$)",
-      "displayName": "GPT-5.6 (Codex)",
-      "contextWindowTokens": 272000,
-      "maxOutputTokens": 32768,
+      "pattern": "^gpt-?6",
+      "displayName": "GPT-6 Astra",
+      "contextWindowTokens": 1048576,
+      "maxOutputTokens": 128000,
       "supportsVision": true,
       "supportsAudio": false,
       "supportsTools": true,
       "supportsThinking": true,
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "pricing": {
+        "input": 10,
+        "output": 50,
+        "cacheRead": 1,
+        "currency": "USD",
+        "source": "official"
+      }
+    },
+    {
+      "pattern": "^gpt-?5[.-]?6-luna(?:-|$)",
+      "displayName": "GPT-5.6 Luna",
+      "contextWindowTokens": 272000,
+      "maxOutputTokens": 128000,
+      "supportsVision": true,
+      "supportsAudio": false,
+      "supportsTools": true,
+      "supportsThinking": true,
+      "reasoningEfforts": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
       "pricing": {
         "input": 0.2,
         "output": 1.2,
@@ -164,21 +296,79 @@
       }
     },
     {
+      "pattern": "^gpt-?5[.-]?6-terra(?:-|$)",
+      "displayName": "GPT-5.6 Terra",
+      "contextWindowTokens": 272000,
+      "maxOutputTokens": 128000,
+      "supportsVision": true,
+      "supportsAudio": false,
+      "supportsTools": true,
+      "supportsThinking": true,
+      "reasoningEfforts": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "pricing": {
+        "input": 2,
+        "output": 12,
+        "cacheRead": 0.2,
+        "currency": "USD",
+        "source": "official"
+      }
+    },
+    {
+      "pattern": "^gpt-?5[.-]?6-sol(?:-|$)",
+      "displayName": "GPT-5.6 Sol",
+      "contextWindowTokens": 272000,
+      "maxOutputTokens": 128000,
+      "supportsVision": true,
+      "supportsAudio": false,
+      "supportsTools": true,
+      "supportsThinking": true,
+      "reasoningEfforts": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "pricing": {
+        "input": 4,
+        "output": 20,
+        "cacheRead": 0.4,
+        "currency": "USD",
+        "source": "official"
+      }
+    },
+    {
       "pattern": "^gpt-?5[.-]?6(?:-|$)",
       "displayName": "GPT-5.6",
       "contextWindowTokens": 1000000,
-      "maxOutputTokens": 32768,
+      "maxOutputTokens": 128000,
       "supportsVision": true,
       "supportsAudio": false,
       "supportsTools": true,
       "supportsThinking": true,
       "pricing": {
-        "input": 1.25,
-        "output": 10,
-        "cacheRead": 0.125,
+        "input": 4,
+        "output": 20,
+        "cacheRead": 0.4,
         "currency": "USD",
         "source": "official"
-      }
+      },
+      "reasoningEfforts": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ]
     },
     {
       "pattern": "^gpt-?5[.-]?4(?:-|$)",
@@ -295,6 +485,101 @@
         "input": 15,
         "output": 60,
         "cacheRead": 1.875,
+        "currency": "USD",
+        "source": "official"
+      }
+    },
+    {
+      "pattern": "^gemini-3[.-]?8-flash",
+      "displayName": "Gemini 3.8 Flash",
+      "contextWindowTokens": 1048576,
+      "maxOutputTokens": 65536,
+      "supportsVision": true,
+      "supportsAudio": true,
+      "supportsTools": true,
+      "supportsThinking": true,
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "pricing": {
+        "input": 1.5,
+        "output": 7.5,
+        "cacheRead": 0.15,
+        "currency": "USD",
+        "source": "official"
+      }
+    },
+    {
+      "pattern": "^gemini-3[.-]?7-flash",
+      "displayName": "Gemini 3.7 Flash",
+      "contextWindowTokens": 1048576,
+      "maxOutputTokens": 65536,
+      "supportsVision": true,
+      "supportsAudio": true,
+      "supportsTools": true,
+      "supportsThinking": true,
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "pricing": {
+        "input": 1.5,
+        "output": 7.5,
+        "cacheRead": 0.15,
+        "currency": "USD",
+        "source": "official"
+      }
+    },
+    {
+      "pattern": "^gemini-3[.-]?6-flash",
+      "displayName": "Gemini 3.6 Flash",
+      "contextWindowTokens": 1048576,
+      "maxOutputTokens": 65536,
+      "supportsVision": true,
+      "supportsAudio": true,
+      "supportsTools": true,
+      "supportsThinking": true,
+      "pricing": {
+        "input": 1.5,
+        "output": 7.5,
+        "cacheRead": 0.15,
+        "currency": "USD",
+        "source": "official"
+      }
+    },
+    {
+      "pattern": "^gemini-3[.-]?5-flash-lite",
+      "displayName": "Gemini 3.5 Flash-Lite",
+      "contextWindowTokens": 1048576,
+      "maxOutputTokens": 65536,
+      "supportsVision": true,
+      "supportsAudio": true,
+      "supportsTools": true,
+      "supportsThinking": true,
+      "pricing": {
+        "input": 0.3,
+        "output": 2.5,
+        "cacheRead": 0.03,
+        "currency": "USD",
+        "source": "official"
+      }
+    },
+    {
+      "pattern": "^gemini-3[.-]?5-flash",
+      "displayName": "Gemini 3.5 Flash",
+      "contextWindowTokens": 1048576,
+      "maxOutputTokens": 65536,
+      "supportsVision": true,
+      "supportsAudio": true,
+      "supportsTools": true,
+      "supportsThinking": true,
+      "pricing": {
+        "input": 1.5,
+        "output": 9,
+        "cacheRead": 0.15,
         "currency": "USD",
         "source": "official"
       }
@@ -632,8 +917,8 @@
       "supportsTools": true,
       "supportsThinking": false,
       "pricing": {
-        "input": 3.0,
-        "output": 15.0,
+        "input": 3,
+        "output": 15,
         "cacheRead": 0.3,
         "currency": "USD",
         "source": "official"
@@ -649,8 +934,8 @@
       "supportsTools": true,
       "supportsThinking": false,
       "pricing": {
-        "input": 3.0,
-        "output": 15.0,
+        "input": 3,
+        "output": 15,
         "cacheRead": 0.3,
         "currency": "USD",
         "source": "official"
@@ -667,7 +952,7 @@
       "supportsThinking": false,
       "pricing": {
         "input": 0.95,
-        "output": 4.0,
+        "output": 4,
         "cacheRead": 0.16,
         "currency": "USD",
         "source": "official"
@@ -684,7 +969,7 @@
       "supportsThinking": false,
       "pricing": {
         "input": 0.95,
-        "output": 4.0,
+        "output": 4,
         "cacheRead": 0.19,
         "currency": "USD",
         "source": "official"
@@ -749,7 +1034,19 @@
       "supportsVision": true,
       "supportsAudio": false,
       "supportsTools": true,
-      "supportsThinking": true
+      "supportsThinking": true,
+      "reasoningEfforts": [
+        "low",
+        "high",
+        "max"
+      ],
+      "pricing": {
+        "input": 0.15,
+        "output": 0.5,
+        "cacheRead": 0.03,
+        "currency": "USD",
+        "source": "official"
+      }
     },
     {
       "pattern": "^glm-?5[.-]?3(?:-|$)",
@@ -759,17 +1056,38 @@
       "supportsVision": false,
       "supportsAudio": false,
       "supportsTools": true,
-      "supportsThinking": true
+      "supportsThinking": true,
+      "reasoningEfforts": [
+        "low",
+        "high",
+        "max"
+      ],
+      "pricing": {
+        "input": 1.4,
+        "output": 4.4,
+        "cacheRead": 0.26,
+        "currency": "USD",
+        "source": "official"
+      }
     },
     {
       "pattern": "^glm-?5[.-]?2(?:-|$)",
       "displayName": "GLM-5.2",
-      "contextWindowTokens": 200000,
-      "maxOutputTokens": 8192,
-      "supportsVision": true,
+      "contextWindowTokens": 1000000,
+      "maxOutputTokens": 128000,
+      "supportsVision": false,
       "supportsAudio": false,
       "supportsTools": true,
       "supportsThinking": true,
+      "reasoningEfforts": [
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
       "pricing": {
         "input": 1.4,
         "output": 4.4,
@@ -782,8 +1100,8 @@
       "pattern": "^glm-?5[.-]?1(?:-|$)",
       "displayName": "GLM-5.1",
       "contextWindowTokens": 200000,
-      "maxOutputTokens": 8192,
-      "supportsVision": true,
+      "maxOutputTokens": 128000,
+      "supportsVision": false,
       "supportsAudio": false,
       "supportsTools": true,
       "supportsThinking": true,
@@ -799,11 +1117,11 @@
       "pattern": "^glm-?5-turbo(?:-|$)",
       "displayName": "GLM-5-Turbo",
       "contextWindowTokens": 200000,
-      "maxOutputTokens": 8192,
-      "supportsVision": true,
+      "maxOutputTokens": 128000,
+      "supportsVision": false,
       "supportsAudio": false,
       "supportsTools": true,
-      "supportsThinking": false,
+      "supportsThinking": true,
       "pricing": {
         "input": 1.2,
         "output": 4,
@@ -816,11 +1134,11 @@
       "pattern": "^glm-?5(?:-|$)",
       "displayName": "GLM-5",
       "contextWindowTokens": 200000,
-      "maxOutputTokens": 8192,
-      "supportsVision": true,
+      "maxOutputTokens": 128000,
+      "supportsVision": false,
       "supportsAudio": false,
       "supportsTools": true,
-      "supportsThinking": false,
+      "supportsThinking": true,
       "pricing": {
         "input": 1,
         "output": 3.2,
@@ -832,9 +1150,9 @@
     {
       "pattern": "^glm-?4[.-]?7-flashx(?:-|$)",
       "displayName": "GLM-4.7-FlashX",
-      "contextWindowTokens": 128000,
-      "maxOutputTokens": 8192,
-      "supportsVision": true,
+      "contextWindowTokens": 200000,
+      "maxOutputTokens": 128000,
+      "supportsVision": false,
       "supportsAudio": false,
       "supportsTools": true,
       "supportsThinking": false,
@@ -847,14 +1165,31 @@
       }
     },
     {
-      "pattern": "^glm-?4[.-]?7(?:-|$)",
-      "displayName": "GLM-4.7",
+      "pattern": "^glm-?4[.-]?7-flash(?:-|$)",
+      "displayName": "GLM-4.7-Flash",
       "contextWindowTokens": 200000,
-      "maxOutputTokens": 8192,
-      "supportsVision": true,
+      "maxOutputTokens": 128000,
+      "supportsVision": false,
       "supportsAudio": false,
       "supportsTools": true,
       "supportsThinking": false,
+      "pricing": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "currency": "USD",
+        "source": "official"
+      }
+    },
+    {
+      "pattern": "^glm-?4[.-]?7(?:-|$)",
+      "displayName": "GLM-4.7",
+      "contextWindowTokens": 200000,
+      "maxOutputTokens": 128000,
+      "supportsVision": false,
+      "supportsAudio": false,
+      "supportsTools": true,
+      "supportsThinking": true,
       "pricing": {
         "input": 0.6,
         "output": 2.2,
@@ -864,14 +1199,65 @@
       }
     },
     {
-      "pattern": "^glm-?4[.-]?6(?:-|$)",
-      "displayName": "GLM-4.6",
-      "contextWindowTokens": 200000,
-      "maxOutputTokens": 8192,
+      "pattern": "^glm-?4[.-]?6v-flashx(?:-|$)",
+      "displayName": "GLM-4.6V-FlashX",
+      "contextWindowTokens": 128000,
+      "maxOutputTokens": 32000,
       "supportsVision": true,
       "supportsAudio": false,
       "supportsTools": true,
       "supportsThinking": false,
+      "pricing": {
+        "input": 0.04,
+        "output": 0.4,
+        "cacheRead": 0.004,
+        "currency": "USD",
+        "source": "official"
+      }
+    },
+    {
+      "pattern": "^glm-?4[.-]?6v-flash(?:-|$)",
+      "displayName": "GLM-4.6V-Flash",
+      "contextWindowTokens": 128000,
+      "maxOutputTokens": 32000,
+      "supportsVision": true,
+      "supportsAudio": false,
+      "supportsTools": true,
+      "supportsThinking": false,
+      "pricing": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "currency": "USD",
+        "source": "official"
+      }
+    },
+    {
+      "pattern": "^glm-?4[.-]?6v(?:-|$)",
+      "displayName": "GLM-4.6V",
+      "contextWindowTokens": 128000,
+      "maxOutputTokens": 32000,
+      "supportsVision": true,
+      "supportsAudio": false,
+      "supportsTools": true,
+      "supportsThinking": true,
+      "pricing": {
+        "input": 0.3,
+        "output": 0.9,
+        "cacheRead": 0.05,
+        "currency": "USD",
+        "source": "official"
+      }
+    },
+    {
+      "pattern": "^glm-?4[.-]?6(?:-|$)",
+      "displayName": "GLM-4.6",
+      "contextWindowTokens": 200000,
+      "maxOutputTokens": 128000,
+      "supportsVision": false,
+      "supportsAudio": false,
+      "supportsTools": true,
+      "supportsThinking": true,
       "pricing": {
         "input": 0.6,
         "output": 2.2,
@@ -884,11 +1270,11 @@
       "pattern": "^glm-?4[.-]?5-airx(?:-|$)",
       "displayName": "GLM-4.5-AirX",
       "contextWindowTokens": 128000,
-      "maxOutputTokens": 8192,
-      "supportsVision": true,
+      "maxOutputTokens": 98304,
+      "supportsVision": false,
       "supportsAudio": false,
       "supportsTools": true,
-      "supportsThinking": false,
+      "supportsThinking": true,
       "pricing": {
         "input": 1.1,
         "output": 4.5,
@@ -901,11 +1287,11 @@
       "pattern": "^glm-?4[.-]?5-air(?:-|$)",
       "displayName": "GLM-4.5-Air",
       "contextWindowTokens": 128000,
-      "maxOutputTokens": 8192,
-      "supportsVision": true,
+      "maxOutputTokens": 98304,
+      "supportsVision": false,
       "supportsAudio": false,
       "supportsTools": true,
-      "supportsThinking": false,
+      "supportsThinking": true,
       "pricing": {
         "input": 0.2,
         "output": 1.1,
@@ -918,11 +1304,11 @@
       "pattern": "^glm-?4[.-]?5-x(?:-|$)",
       "displayName": "GLM-4.5-X",
       "contextWindowTokens": 128000,
-      "maxOutputTokens": 8192,
-      "supportsVision": true,
+      "maxOutputTokens": 98304,
+      "supportsVision": false,
       "supportsAudio": false,
       "supportsTools": true,
-      "supportsThinking": false,
+      "supportsThinking": true,
       "pricing": {
         "input": 2.2,
         "output": 8.9,
@@ -932,18 +1318,68 @@
       }
     },
     {
-      "pattern": "^glm-?4[.-]?5(?:-|$)",
-      "displayName": "GLM-4.5",
+      "pattern": "^glm-?4[.-]?5-flash(?:-|$)",
+      "displayName": "GLM-4.5-Flash",
       "contextWindowTokens": 128000,
-      "maxOutputTokens": 8192,
-      "supportsVision": true,
+      "maxOutputTokens": 98304,
+      "supportsVision": false,
       "supportsAudio": false,
       "supportsTools": true,
       "supportsThinking": false,
       "pricing": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "currency": "USD",
+        "source": "official"
+      }
+    },
+    {
+      "pattern": "^glm-?4[.-]?5(?:-|$)",
+      "displayName": "GLM-4.5",
+      "contextWindowTokens": 128000,
+      "maxOutputTokens": 98304,
+      "supportsVision": false,
+      "supportsAudio": false,
+      "supportsTools": true,
+      "supportsThinking": true,
+      "pricing": {
         "input": 0.6,
         "output": 2.2,
         "cacheRead": 0.11,
+        "currency": "USD",
+        "source": "official"
+      }
+    },
+    {
+      "pattern": "^glm-?4[.-]?1v-thinking-flashx(?:-|$)",
+      "displayName": "GLM-4.1V-Thinking-FlashX",
+      "contextWindowTokens": 65536,
+      "maxOutputTokens": 16384,
+      "supportsVision": true,
+      "supportsAudio": false,
+      "supportsTools": true,
+      "supportsThinking": true,
+      "pricing": {
+        "input": 2,
+        "output": 2,
+        "currency": "CNY",
+        "source": "official"
+      }
+    },
+    {
+      "pattern": "^glm-?4[.-]?1v-thinking-flash(?:-|$)",
+      "displayName": "GLM-4.1V-Thinking-Flash",
+      "contextWindowTokens": 65536,
+      "maxOutputTokens": 16384,
+      "supportsVision": true,
+      "supportsAudio": false,
+      "supportsTools": true,
+      "supportsThinking": true,
+      "pricing": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
         "currency": "USD",
         "source": "official"
       }
@@ -965,11 +1401,62 @@
       }
     },
     {
-      "pattern": "^glm-?4[.-]?7-flash(?:-|$)|^glm-?4[.-]?5-flash(?:-|$)",
-      "displayName": "GLM Flash",
+      "pattern": "^glm-?4-flashx-250414(?:-|$)",
+      "displayName": "GLM-4-FlashX-250414",
       "contextWindowTokens": 128000,
-      "maxOutputTokens": 8192,
+      "maxOutputTokens": 16384,
       "supportsVision": false,
+      "supportsAudio": false,
+      "supportsTools": true,
+      "supportsThinking": false,
+      "pricing": {
+        "input": 0.1,
+        "output": 0.1,
+        "cacheRead": 0.05,
+        "currency": "CNY",
+        "source": "official"
+      }
+    },
+    {
+      "pattern": "^glm-?4-flash-250414(?:-|$)",
+      "displayName": "GLM-4-Flash-250414",
+      "contextWindowTokens": 128000,
+      "maxOutputTokens": 16384,
+      "supportsVision": false,
+      "supportsAudio": false,
+      "supportsTools": true,
+      "supportsThinking": false,
+      "pricing": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "currency": "USD",
+        "source": "official"
+      }
+    },
+    {
+      "pattern": "^glm-?4-long(?:-|$)",
+      "displayName": "GLM-4-Long",
+      "contextWindowTokens": 1000000,
+      "maxOutputTokens": 4096,
+      "supportsVision": false,
+      "supportsAudio": false,
+      "supportsTools": true,
+      "supportsThinking": false,
+      "pricing": {
+        "input": 1,
+        "output": 1,
+        "cacheRead": 0.5,
+        "currency": "CNY",
+        "source": "official"
+      }
+    },
+    {
+      "pattern": "^glm-?4v-flash(?:-|$)",
+      "displayName": "GLM-4V-Flash",
+      "contextWindowTokens": 16384,
+      "maxOutputTokens": 1024,
+      "supportsVision": true,
       "supportsAudio": false,
       "supportsTools": true,
       "supportsThinking": false,
@@ -1002,49 +1489,15 @@
       "pattern": "^glm-?5v-turbo(?:-|$)",
       "displayName": "GLM-5V-Turbo",
       "contextWindowTokens": 200000,
-      "maxOutputTokens": 8192,
+      "maxOutputTokens": 128000,
       "supportsVision": true,
       "supportsAudio": false,
       "supportsTools": true,
-      "supportsThinking": false,
+      "supportsThinking": true,
       "pricing": {
         "input": 1.2,
         "output": 4,
         "cacheRead": 0.24,
-        "currency": "USD",
-        "source": "official"
-      }
-    },
-    {
-      "pattern": "^glm-?4[.-]?6v-flashx(?:-|$)",
-      "displayName": "GLM-4.6V-FlashX",
-      "contextWindowTokens": 128000,
-      "maxOutputTokens": 8192,
-      "supportsVision": true,
-      "supportsAudio": false,
-      "supportsTools": true,
-      "supportsThinking": false,
-      "pricing": {
-        "input": 0.04,
-        "output": 0.4,
-        "cacheRead": 0.004,
-        "currency": "USD",
-        "source": "official"
-      }
-    },
-    {
-      "pattern": "^glm-?4[.-]?6v(?:-|$)",
-      "displayName": "GLM-4.6V",
-      "contextWindowTokens": 128000,
-      "maxOutputTokens": 8192,
-      "supportsVision": true,
-      "supportsAudio": false,
-      "supportsTools": true,
-      "supportsThinking": false,
-      "pricing": {
-        "input": 0.3,
-        "output": 0.9,
-        "cacheRead": 0.05,
         "currency": "USD",
         "source": "official"
       }
@@ -1057,7 +1510,7 @@
       "supportsVision": true,
       "supportsAudio": false,
       "supportsTools": true,
-      "supportsThinking": false,
+      "supportsThinking": true,
       "pricing": {
         "input": 0.6,
         "output": 1.8,

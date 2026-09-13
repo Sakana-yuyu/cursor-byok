@@ -3,6 +3,7 @@ package client
 import (
 	"encoding/json"
 	"math"
+	"strings"
 	"testing"
 	"time"
 )
@@ -267,5 +268,155 @@ func assertOptionalFloat(t *testing.T, name string, got, want *float64) {
 	}
 	if got == nil || *got != *want {
 		t.Fatalf("expected %s %v, got %#v", name, *want, got)
+	}
+}
+
+func TestParseZhipuAccountReport(t *testing.T) {
+	tests := []struct {
+		name          string
+		root          map[string]any
+		host          string
+		wantOK        bool
+		wantAvailable float64
+		wantSpent     *float64
+		wantCurrency  string
+	}{
+		{
+			name: "标准响应",
+			root: map[string]any{
+				"success": true,
+				"data": map[string]any{
+					"availableBalance": 70.5,
+					"totalSpendAmount": 29.5,
+					"currency":         "cny",
+				},
+			},
+			host:          "https://open.bigmodel.cn",
+			wantOK:        true,
+			wantAvailable: 70.5,
+			wantSpent:     ptrFloat(29.5),
+			wantCurrency:  "CNY",
+		},
+		{
+			name: "availableBalance 缺失回退 balance",
+			root: map[string]any{
+				"data": map[string]any{
+					"balance":          12.34,
+					"totalSpendAmount": 5,
+				},
+			},
+			host:          "https://open.bigmodel.cn",
+			wantOK:        true,
+			wantAvailable: 12.34,
+			wantSpent:     ptrFloat(5),
+			wantCurrency:  "CNY",
+		},
+		{
+			name: "z.ai 无币种默认 USD",
+			root: map[string]any{
+				"data": map[string]any{"availableBalance": 3.2},
+			},
+			host:          "https://api.z.ai",
+			wantOK:        true,
+			wantAvailable: 3.2,
+			wantCurrency:  "USD",
+		},
+		{
+			name:   "success=false",
+			root:   map[string]any{"success": false, "msg": "denied"},
+			host:   "https://open.bigmodel.cn",
+			wantOK: false,
+		},
+		{
+			name:   "缺少 data",
+			root:   map[string]any{"success": true},
+			host:   "https://open.bigmodel.cn",
+			wantOK: false,
+		},
+		{
+			name:   "无可用余额数值",
+			root:   map[string]any{"data": map[string]any{"totalSpendAmount": 5}},
+			host:   "https://open.bigmodel.cn",
+			wantOK: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			money, ok := parseZhipuAccountReport(tt.root, tt.host)
+			if ok != tt.wantOK {
+				t.Fatalf("ok = %v, want %v", ok, tt.wantOK)
+			}
+			if !tt.wantOK {
+				return
+			}
+			if money.available != tt.wantAvailable {
+				t.Fatalf("available = %v, want %v", money.available, tt.wantAvailable)
+			}
+			if tt.wantSpent == nil {
+				if money.spent != nil {
+					t.Fatalf("spent = %v, want nil", *money.spent)
+				}
+			} else if money.spent == nil || *money.spent != *tt.wantSpent {
+				t.Fatalf("spent = %v, want %v", money.spent, *tt.wantSpent)
+			}
+			if money.currency != tt.wantCurrency {
+				t.Fatalf("currency = %q, want %q", money.currency, tt.wantCurrency)
+			}
+		})
+	}
+}
+
+func ptrFloat(v float64) *float64 { return &v }
+
+func TestApplyZhipuAccountMoney(t *testing.T) {
+	quota := codingPlanBalanceFromTiers("Zhipu GLM · Pro", []codingPlanTier{
+		{Known: true, ID: "5h", Name: "5小时", Utilization: 30},
+	})
+	if !quota.Supported {
+		t.Fatalf("expected supported quota balance")
+	}
+
+	spent := 29.5
+	merged := applyZhipuAccountMoney(quota, zhipuAccountMoney{currency: "CNY", available: 70.5, spent: &spent})
+	if merged.Currency != "CNY" {
+		t.Fatalf("currency = %q, want CNY", merged.Currency)
+	}
+	if merged.Remaining == nil || *merged.Remaining != 70.5 {
+		t.Fatalf("remaining = %v, want 70.5", merged.Remaining)
+	}
+	if merged.Used == nil || *merged.Used != 29.5 {
+		t.Fatalf("used = %v, want 29.5", merged.Used)
+	}
+	if merged.Total == nil || *merged.Total != 100 {
+		t.Fatalf("total = %v, want 100 (70.5+29.5)", merged.Total)
+	}
+	if len(merged.Windows) != 1 || merged.Windows[0].ID != "5h" {
+		t.Fatalf("expected quota windows preserved, got %#v", merged.Windows)
+	}
+	if merged.PlanName != "Zhipu GLM · Pro" || merged.Source != "token_plan" {
+		t.Fatalf("plan/source changed: %q / %q", merged.PlanName, merged.Source)
+	}
+	if !strings.Contains(merged.Message, "账户余额") {
+		t.Fatalf("expected money summary in message, got %q", merged.Message)
+	}
+}
+
+func TestZhipuAccountOnlyBalance(t *testing.T) {
+	spent := 29.5
+	balance := zhipuAccountOnlyBalance(zhipuAccountMoney{currency: "CNY", available: 70.5, spent: &spent}, "Zhipu GLM")
+	if !balance.Supported || balance.Source != "zhipu_account" {
+		t.Fatalf("expected supported zhipu_account, got %#v", balance)
+	}
+	if balance.Currency != "CNY" || balance.Remaining == nil || *balance.Remaining != 70.5 {
+		t.Fatalf("unexpected money fields: %#v", balance)
+	}
+	if balance.Total == nil || *balance.Total != 100 {
+		t.Fatalf("total = %v, want 100", balance.Total)
+	}
+	if balance.Used == nil || *balance.Used != 29.5 {
+		t.Fatalf("used = %v, want 29.5", balance.Used)
+	}
+	if balance.PlanName != "Zhipu GLM" || len(balance.Windows) != 0 {
+		t.Fatalf("unexpected plan/windows: %q %#v", balance.PlanName, balance.Windows)
 	}
 }
