@@ -1,16 +1,16 @@
-## v1.0.10
-
-### 新功能
-
-- **模型目录大刷新（2026-09 官方数据）**：新增 Claude Fable 5.1 / Fable 5 / Opus 5 / Haiku 4.5、GPT-6 Astra（1.05M 上下文 / 128K 输出）、Gemini 3.8 / 3.7 / 3.6 / 3.5 Flash 系列；GLM 全系按智谱官方文档校正（GLM-5.2 为 1M 上下文 / 128K 输出、4.5 系 96K 输出、V 后缀才是视觉模型），并补录 GLM-4.7-Flash、4.5-Flash、4.6V-Flash、4.1V-Thinking-Flash(X)、4-Long 等缺失型号。
-- **思考强度档位入库**：模型能力目录新增 reasoningEfforts 字段，记录各模型 API 接受的思考强度档位（GLM-5.3 的 low/high/max、Claude 自适应思考的 low~max、Gemini 3.x 的 low/medium/high 等），模型编辑页能力徽章同步展示。
-- **GLM 思考强度真正生效**：GLM-5.2 起不再丢弃 reasoning_effort，按官方映射透传到上游；GLM-5.3 起禁用思考的请求自动降级为最轻档（enabled + low），两条协议路径（OpenAI / Anthropic）均有守卫，避免上游 400。
-- **智谱余额双源查询**：接入官方账户金额接口 `/api/biz/account/query-customer-account-report`，与套餐额度接口组合展示——Coding Plan 用户同时看到账户余额（可用/累计消费）与 5 小时/周额度窗口进度；按量付费账户（无套餐窗口）也能直接显示余额金额。
+## v1.0.11
 
 ### 修复
 
-- **GLM 模型数据纠错**：修正 GLM-5/5.1/5.2/4.x 系列的上下文与输出上限（此前普遍记为 8192，导致输出被截断）、视觉标记（纯文本模型误标为支持视觉）；修正 GPT-5.6 Sol/Terra 计价（此前统一按 Luna 低价估算，Sol 成本被低估 20 倍）与 Claude Sonnet 5 价格。
-- **稳定性加固批次**：更新器安装包下载改用独立 15 分钟超时预算（慢速网络不再误杀）；模型测速结果落盘加锁防并发丢文件；用量统计写盘失败自动回填重试；MITM 镜像对数十 MB 长上下文请求体改为流式透传（不再整包进内存）；CA 叶子证书过期自动重签（连续运行超一年后 MITM 握手不再全部失败）；自定义余额查询数值解析失败显式报错（不再误报余额为零）。
+- **安全收口（移植自上游）**：模型回复被 provider 内容策略拦截（finish_reason=content_filter）时，回合按正常结束收口，不再照常执行其中已出现的工具调用——被过滤的工具调用参数往往已被截断或污染，继续执行会绕过安全策略。
+- **工具参数别名兼容（移植自上游）**：Read / Write / Delete 路径参数接受 Claude Code 习惯的 `file_path` / `filePath` 写法，Write 内容接受 `content` 别名（修复模型发 `content` 时写出空文件但界面显示正常的隐蔽问题），WebSearch 接受 `query` 作为搜索词别名，Claude 系模型不再频繁报"参数缺失"。
+- **MCP 截断提示补全（移植自上游）**：工具结果文本因总预算被部分截短时，现在会附带一条汇总截断提示，模型不再误以为拿到完整内容；多条被跳过的结果合并为一条提示，不再刷屏。
+- **MCP 截断提示单位修正（移植自上游）**：ListMcpResources 的截断提示按实际成因报告——个数上限触顶按「资源个数」、字节预算裁剪按「字节 + 资源数」，不再把资源个数错标成字节数误导模型。
+- **Anthropic 渠道上下文超限自动恢复（移植自上游）**：溢出识别新增 Anthropic 原生报错措辞（`prompt is too long: N tokens > M maximum`、`model_context_window_exceeded`），Anthropic 协议渠道超限时同样触发强制压缩并自动重试，不再直接失败终态；结构性报错（如不支持 assistant prefill）不受影响。
+
+### 优化
+
+- 合并上游修复批次时补充 8 个回归测试，锁定上述行为（content_filter 收口、参数别名、截断提示、溢出措辞识别）。
 
 > **Windows 用户注意**：安装时若被 SmartScreen 拦截，点击「更多信息」->「仍要运行」即可。
 
@@ -18,11 +18,11 @@
 
 > 名字里的 x64 / x32 / arm64 表示 CPU 架构，认准自己系统的类型下载即可。
 
-- **Windows 64 位（绝大多数 Windows 电脑）**：下载 `cursor-byok-1.0.10-windows-x64-installer.exe`（安装版，推荐）或 `cursor-byok-1.0.10-windows-x64.zip`（绿色版）
-- **Windows ARM64（骁龙/麒麟等 ARM 处理器的 Windows 电脑）**：下载 `cursor-byok-1.0.10-windows-arm64-installer.exe` 或 `cursor-byok-1.0.10-windows-arm64.zip`
-- **Windows 32 位（很老的低配电脑才需要）**：下载 `cursor-byok-1.0.10-windows-x32-installer.exe` 或 `cursor-byok-1.0.10-windows-x32.zip`
-- **macOS Apple Silicon（M1/M2/M3/M4 芯片）**：下载 `cursor-byok-1.0.10-macos-arm64.dmg` 或 `cursor-byok-1.0.10-macos-arm64.tar.gz`
-- **macOS Intel**：下载 `cursor-byok-1.0.10-macos-x64.dmg` 或 `cursor-byok-1.0.10-macos-x64.tar.gz`
-- **Linux 64 位**：下载 `cursor-byok-1.0.10-linux-x64.tar.gz`
+- **Windows 64 位（绝大多数 Windows 电脑）**：下载 `cursor-byok-1.0.11-windows-x64-installer.exe`（安装版，推荐）或 `cursor-byok-1.0.11-windows-x64.zip`（绿色版）
+- **Windows ARM64（骁龙/麒麟等 ARM 处理器的 Windows 电脑）**：下载 `cursor-byok-1.0.11-windows-arm64-installer.exe` 或 `cursor-byok-1.0.11-windows-arm64.zip`
+- **Windows 32 位（很老的低配电脑才需要）**：下载 `cursor-byok-1.0.11-windows-x32-installer.exe` 或 `cursor-byok-1.0.11-windows-x32.zip`
+- **macOS Apple Silicon（M1/M2/M3/M4 芯片）**：下载 `cursor-byok-1.0.11-macos-arm64.dmg` 或 `cursor-byok-1.0.11-macos-arm64.tar.gz`
+- **macOS Intel**：下载 `cursor-byok-1.0.11-macos-x64.dmg` 或 `cursor-byok-1.0.11-macos-x64.tar.gz`
+- **Linux 64 位**：下载 `cursor-byok-1.0.11-linux-x64.tar.gz`
 
 Windows 系统类型可在「设置 → 系统 → 关于 → 系统类型」查看；macOS 在「关于本机」查看芯片或处理器。
