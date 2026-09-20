@@ -457,7 +457,10 @@ func extractUsageErrorCodeFromCause(cause error) string {
 
 // isContextLengthExceededError 判断错误是否为 provider 返回的「输入超出上下文窗口」错误。
 // 兼容 OpenAI 的 code=context_length_exceeded（responses stream 与 chat completions 均会出现），
-// 以及常见的同义文本描述。触发条件：检测到该错误时，转发层会尝试强制压缩上下文并重试。
+// Anthropic 原生的 "prompt is too long: N tokens > M maximum"（4xx 400 invalid_request_error）、
+// model_context_window_exceeded，以及常见的同义文本描述。
+// 触发条件：检测到该错误时，转发层会尝试强制压缩上下文并重试。
+// 注意不要把 "does not support assistant message prefill" 之类结构问题误判为溢出——压缩救不了。
 func isContextLengthExceededError(err error) bool {
 	if err == nil {
 		return false
@@ -469,7 +472,9 @@ func isContextLengthExceededError(err error) bool {
 	// 兼容其它 provider 的同义表达。
 	return strings.Contains(message, "maximum context length") ||
 		strings.Contains(message, "exceeds the context window") ||
-		strings.Contains(message, "exceeds context window")
+		strings.Contains(message, "exceeds context window") ||
+		strings.Contains(message, "prompt is too long") ||
+		strings.Contains(message, "model_context_window_exceeded")
 }
 
 func parseUsageErrorStatusFromText(message string) int {

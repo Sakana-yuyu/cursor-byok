@@ -1184,7 +1184,11 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 		return nil
 	}
 
-	if (hadToolInvocation || shouldResumeAfterToolResults(finishReason)) && !terminalToolInvocation {
+	// content_filter 是 provider 内容策略拦截而非正常收尾：此时流内即使出现过工具调用，
+	// 其参数往往已被过滤或截断，照常执行会绕过安全策略（参照上游 aa47152f 的语义：
+	// 被内容过滤回合的工具调用一律拒绝，回合按正常结束收口）。
+	contentFiltered := strings.TrimSpace(finishReason) == "content_filter"
+	if (hadToolInvocation || shouldResumeAfterToolResults(finishReason)) && !terminalToolInvocation && !contentFiltered {
 		if err := service.publishCheckpoint(requestID, conversationID); err != nil {
 			return service.failStreamIfNonTerminal(stream, "unknown", err)
 		}

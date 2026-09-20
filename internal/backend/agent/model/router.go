@@ -865,15 +865,19 @@ func openAINotFoundReadableError(modelID string, err error) error {
 
 // isContextOverflowStreamError 判断流式 SSE error event 包装出的错误文本是否表示
 // 上下文超限（输入超过模型窗口）。这类错误是确定性的：同一输入重试必然得到同样结果。
-// 匹配 OpenAI Responses 的 "code=context_too_large" 与 OpenAI Chat 的
-// "context_length_exceeded" / "maximum context length" / "exceeds ... context window"。
+// 匹配 OpenAI Responses 的 "code=context_too_large"、OpenAI Chat 的
+// "context_length_exceeded" / "maximum context length" / "exceeds ... context window"，
+// 以及 Anthropic 原生的 "prompt is too long" 与 "model_context_window_exceeded"，
+// 与 forwarder 侧 isContextLengthExceededError 保持同一判定口径。
 func isContextOverflowStreamError(message string) bool {
 	lower := strings.ToLower(message)
 	return strings.Contains(lower, "context_too_large") ||
 		strings.Contains(lower, "context_length_exceeded") ||
 		strings.Contains(lower, "maximum context length") ||
 		strings.Contains(lower, "exceeds the context window") ||
-		strings.Contains(lower, "exceeds context window")
+		strings.Contains(lower, "exceeds context window") ||
+		strings.Contains(lower, "prompt is too long") ||
+		strings.Contains(lower, "model_context_window_exceeded")
 }
 
 // parseProviderErrorStatus 从错误文本中解析 "status=<code>" 的状态码；解析失败返回 0。

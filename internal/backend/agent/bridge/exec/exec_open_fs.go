@@ -2,7 +2,6 @@
 package execbridge
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -24,7 +23,8 @@ func decodeReadExecArgs(raw []byte) (readExecArgs, error) {
 		return readExecArgs{}, err
 	}
 	result := readExecArgs{
-		Path: strings.TrimSpace(readStringArg(args, "path")),
+		// Claude 系模型常按 Claude Code 习惯输出 file_path/filePath 等别名参数，逐个回退兼容。
+		Path: strings.TrimSpace(readStringArg(args, "path", "file_path", "filePath")),
 	}
 	if result.Path == "" {
 		return result, fmt.Errorf("Read path is required")
@@ -79,13 +79,15 @@ func (bridge *Bridge) openRead(toolCall runtimecore.ToolInvocation) (*agentv1.Ag
 
 // openWrite 构造 Write 对应的执行桥请求。
 func (bridge *Bridge) openWrite(toolCall runtimecore.ToolInvocation) (*agentv1.AgentServerMessage, runtimecore.PendingExec, error) {
-	var args struct {
-		Path     string `json:"path"`
-		Contents string `json:"contents"`
-	}
-	if err := json.Unmarshal(toolCall.ArgsJSON, &args); err != nil {
+	args, err := decodeArgsMap(toolCall.ArgsJSON)
+	if err != nil {
 		return nil, runtimecore.PendingExec{}, fmt.Errorf("decode Write args failed: %w", err)
 	}
+	// Claude 系模型常按 Claude Code 习惯输出 file_path/content 等别名参数，逐个回退兼容。
+	// content 必须与完成态渲染（buildWriteCompletedToolCall）保持同一别名集合，
+	// 否则会出现"写入空文件但 UI 显示正常"的不一致。
+	writePath := strings.TrimSpace(readStringArg(args, "path", "file_path", "filePath"))
+	contents := readStringArg(args, "contents", "content")
 	messageID := bridge.nextID()
 	execID := fmt.Sprintf("exec-write-%d", time.Now().UnixNano())
 	encodingHint := "utf-8"
@@ -96,8 +98,8 @@ func (bridge *Bridge) openWrite(toolCall runtimecore.ToolInvocation) (*agentv1.A
 				ExecId: execID,
 				Message: &agentv1.ExecServerMessage_WriteArgs{
 					WriteArgs: &agentv1.WriteArgs{
-						Path:                        strings.TrimSpace(args.Path),
-						FileText:                    args.Contents,
+						Path:                        writePath,
+						FileText:                    contents,
 						EncodingHint:                &encodingHint,
 						ToolCallId:                  toolCall.CallID,
 						ReturnFileContentAfterWrite: true,
@@ -118,12 +120,11 @@ func (bridge *Bridge) openWrite(toolCall runtimecore.ToolInvocation) (*agentv1.A
 
 // openDelete 构造 Delete 对应的执行桥请求。
 func (bridge *Bridge) openDelete(toolCall runtimecore.ToolInvocation) (*agentv1.AgentServerMessage, runtimecore.PendingExec, error) {
-	var args struct {
-		Path string `json:"path"`
-	}
-	if err := json.Unmarshal(toolCall.ArgsJSON, &args); err != nil {
+	args, err := decodeArgsMap(toolCall.ArgsJSON)
+	if err != nil {
 		return nil, runtimecore.PendingExec{}, fmt.Errorf("decode Delete args failed: %w", err)
 	}
+	deletePath := strings.TrimSpace(readStringArg(args, "path", "file_path", "filePath"))
 	messageID := bridge.nextID()
 	execID := fmt.Sprintf("exec-delete-%d", time.Now().UnixNano())
 	serverMessage := &agentv1.AgentServerMessage{
@@ -133,7 +134,7 @@ func (bridge *Bridge) openDelete(toolCall runtimecore.ToolInvocation) (*agentv1.
 				ExecId: execID,
 				Message: &agentv1.ExecServerMessage_DeleteArgs{
 					DeleteArgs: &agentv1.DeleteArgs{
-						Path:       strings.TrimSpace(args.Path),
+						Path:       deletePath,
 						ToolCallId: toolCall.CallID,
 					},
 				},

@@ -2,7 +2,6 @@
 package execbridge
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"unicode/utf8"
@@ -31,13 +30,15 @@ func buildReadCompletedToolCall(toolCallID string, argsJSON []byte, result *agen
 
 // buildDeleteCompletedToolCall 构造 Delete 对应的完成态 ToolCall。
 func buildDeleteCompletedToolCall(toolCallID string, argsJSON []byte, result *agentv1.DeleteResult) *agentv1.ToolCall {
-	var args agentv1.DeleteArgs
-	_ = json.Unmarshal(argsJSON, &args)
-	args.ToolCallId = toolCallID
+	args, _ := decodeArgsMap(argsJSON)
 	return &agentv1.ToolCall{
 		Tool: &agentv1.ToolCall_DeleteToolCall{
 			DeleteToolCall: &agentv1.DeleteToolCall{
-				Args:   &args,
+				Args: &agentv1.DeleteArgs{
+					// 与执行侧（openDelete）保持同一别名集合。
+					Path:       strings.TrimSpace(readStringArg(args, "path", "file_path", "filePath")),
+					ToolCallId: toolCallID,
+				},
 				Result: result,
 			},
 		},
@@ -220,7 +221,8 @@ func buildWriteCompletedToolCall(toolCallID string, argsJSON []byte, result *age
 		Tool: &agentv1.ToolCall_EditToolCall{
 			EditToolCall: &agentv1.EditToolCall{
 				Args: &agentv1.EditArgs{
-					Path:          strings.TrimSpace(readStringArg(args, "path")),
+					// 与执行侧（openWrite）保持同一别名集合。
+					Path:          strings.TrimSpace(readStringArg(args, "path", "file_path", "filePath")),
 					StreamContent: streamContent,
 				},
 				Result: convertWriteResultToEditResult(result),

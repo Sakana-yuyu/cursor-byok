@@ -812,7 +812,8 @@ func DecodeReadToolArgs(raw []byte) (*agentv1.ReadToolArgs, error) {
 		return nil, err
 	}
 	result := &agentv1.ReadToolArgs{
-		Path: strings.TrimSpace(readStringArg(args, "path")),
+		// 与执行侧（decodeReadExecArgs）保持同一别名集合。
+		Path: strings.TrimSpace(readStringArg(args, "path", "file_path", "filePath")),
 	}
 	if result.Path == "" {
 		return result, fmt.Errorf("Read path is required")

@@ -68,12 +68,12 @@ func (bridge *Bridge) openCreatePlan(toolCall runtimecore.ToolInvocation) (*agen
 
 // openWebSearch 构造 WebSearch 交互查询。
 func (bridge *Bridge) openWebSearch(toolCall runtimecore.ToolInvocation) (*agentv1.AgentServerMessage, runtimecore.PendingInteraction, error) {
-	var input struct {
-		SearchTerm string `json:"search_term"`
-	}
-	if err := json.Unmarshal(toolCall.ArgsJSON, &input); err != nil {
+	args, err := runtimecore.DecodeArgsMap(toolCall.ArgsJSON)
+	if err != nil {
 		return nil, runtimecore.PendingInteraction{}, fmt.Errorf("decode WebSearch args failed: %w", err)
 	}
+	// Claude Code 习惯的 query 作为 search_term 的别名兼容，逐个回退。
+	searchTerm := strings.TrimSpace(runtimecore.ReadStringArg(args, "search_term", "query"))
 	messageID := bridge.nextMessageID()
 	serverMessage := &agentv1.AgentServerMessage{
 		Message: &agentv1.AgentServerMessage_InteractionQuery{
@@ -82,7 +82,7 @@ func (bridge *Bridge) openWebSearch(toolCall runtimecore.ToolInvocation) (*agent
 				Query: &agentv1.InteractionQuery_WebSearchRequestQuery{
 					WebSearchRequestQuery: &agentv1.WebSearchRequestQuery{
 						Args: &agentv1.WebSearchArgs{
-							SearchTerm: input.SearchTerm,
+							SearchTerm: searchTerm,
 							ToolCallId: toolCall.CallID,
 						},
 					},

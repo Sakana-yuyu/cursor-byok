@@ -356,6 +356,8 @@ func truncateMcpToolResultForReplay(result *agentv1.McpToolResult) *agentv1.McpT
 		content = content[:mcpReplayContentItemLimit]
 	}
 	totalText := 0
+	totalOriginalText := 0
+	textTruncated := false
 	truncatedContent := make([]*agentv1.McpToolResultContentItem, 0, len(content)+len(notices))
 	for _, item := range content {
 		if item == nil {
@@ -364,13 +366,19 @@ func truncateMcpToolResultForReplay(result *agentv1.McpToolResult) *agentv1.McpT
 		next := proto.Clone(item).(*agentv1.McpToolResultContentItem)
 		if text := next.GetText(); text != nil {
 			original := text.GetText()
+			totalOriginalText += len(original)
 			nextText := truncateReplayText("MCP content item", original, mcpReplayTextItemLimit)
 			remaining := mcpReplayTextTotalLimit - totalText
 			if remaining <= 0 {
-				notices = append(notices, replayTruncationNotice("MCP text", mcpReplayTextTotalLimit, totalText, totalText+len(original)))
+				textTruncated = true
 				continue
 			}
 			nextText = truncateReplayText("MCP text", nextText, remaining)
+			if len(nextText) < len(original) {
+				// 单条超 per-item 上限或被剩余预算截短：不能静默截断，
+				// 统一在循环结束后补一条汇总 notice（参照上游 0f564c0e 的修法）。
+				textTruncated = true
+			}
 			text.Text = nextText
 			totalText += len(nextText)
 			truncatedContent = append(truncatedContent, next)
@@ -382,6 +390,9 @@ func truncateMcpToolResultForReplay(result *agentv1.McpToolResult) *agentv1.McpT
 			notices = append(notices, replayTruncationNotice("MCP image data", mcpReplayBinaryLimit, len(image.GetData()), original))
 		}
 		truncatedContent = append(truncatedContent, next)
+	}
+	if textTruncated {
+		notices = append(notices, replayTruncationNotice("MCP text", mcpReplayTextTotalLimit, totalText, totalOriginalText))
 	}
 	for _, notice := range notices {
 		truncatedContent = append(truncatedContent, &agentv1.McpToolResultContentItem{
@@ -468,8 +479,18 @@ func truncateListMcpResourcesResultForReplay(result *agentv1.ListMcpResourcesExe
 		}
 		cloned.GetSuccess().Resources = cloned.GetSuccess().Resources[:len(cloned.GetSuccess().Resources)-1]
 	}
-	if len(cloned.GetSuccess().Resources) < len(result.GetSuccess().GetResources()) {
-		notice := replayTruncationNotice("ListMcpResources", mcpResourcesReplayLimit, len(cloned.GetSuccess().Resources), len(result.GetSuccess().GetResources()))
+	originalCount := len(result.GetSuccess().GetResources())
+	if len(cloned.GetSuccess().Resources) < originalCount {
+		// 截断有两种成因，notice 必须区分（参照上游 c3951a44：个数上限要按 resources 报告，
+		// 不能套用字节模板把个数当字节数）：
+		// - 个数触顶（结果数 == mcpResourcesReplayCount）：按 resources 个数报告；
+		// - 字节预算删减（触顶后仍被 protojson 预算裁剪）：上限按 bytes、数量按 resources 报告。
+		var notice string
+		if len(cloned.GetSuccess().Resources) < mcpResourcesReplayCount {
+			notice = fmt.Sprintf("[truncated: ListMcpResources result exceeded %d bytes; showing %d of %d resources]", mcpResourcesReplayLimit, len(cloned.GetSuccess().Resources), originalCount)
+		} else {
+			notice = fmt.Sprintf("[truncated: ListMcpResources result exceeded %d resources; showing %d of %d resources]", mcpResourcesReplayCount, len(cloned.GetSuccess().Resources), originalCount)
+		}
 		cloned.GetSuccess().Resources = append(cloned.GetSuccess().Resources, &agentv1.ListMcpResourcesExecResult_McpResource{
 			Uri:         "truncated:list-mcp-resources",
 			Name:        stringPtr("truncated"),
