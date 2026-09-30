@@ -327,3 +327,51 @@ func TestFetchModelCatalogTransportErrorRedactsCandidateURL(t *testing.T) {
 		}
 	}
 }
+
+func TestFetchModelCatalogTransportErrorKeepsNetworkCause(t *testing.T) {
+	service := &ProxyService{
+		publicClient: &http.Client{Transport: roundTripperFunc(func(_ *http.Request) (*http.Response, error) {
+			return nil, fmt.Errorf("dial tcp 127.0.0.1:7890: connect: connection refused")
+		})},
+		modelCatalogCache: newMetadataCache[ModelCatalogResult](modelCatalogCacheTTL),
+	}
+	_, err := service.FetchModelCatalog(ModelCatalogRequest{
+		Type:               "openai",
+		ModelCatalogStatus: "manual_only",
+		BaseURL:            "https://relay.example/v1",
+		APIKey:             "sk-secret",
+		ModelCatalogURL:    "https://relay.example/models",
+	})
+	if err == nil {
+		t.Fatal("expected model catalog request to fail")
+	}
+	message := err.Error()
+	// 底层网络原因必须保留：否则本地代理未启动这类故障在前端只会显示「服务发生异常」。
+	if !strings.Contains(message, "模型目录网络请求失败") {
+		t.Fatalf("message missing network failure label: %s", message)
+	}
+	if !strings.Contains(message, "dial tcp 127.0.0.1:7890: connect: connection refused") {
+		t.Fatalf("message missing dial cause: %s", message)
+	}
+}
+
+func TestFetchModelCatalogAuthFailureIncludesHTTPStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+	}))
+	defer server.Close()
+	service := &ProxyService{publicClient: server.Client(), modelCatalogCache: newMetadataCache[ModelCatalogResult](modelCatalogCacheTTL)}
+	_, err := service.FetchModelCatalog(ModelCatalogRequest{
+		Type:               "openai",
+		ModelCatalogStatus: "manual_only",
+		BaseURL:            server.URL + "/v1",
+		APIKey:             "sk-bad",
+		ModelCatalogURL:    server.URL + "/models",
+	})
+	if err == nil {
+		t.Fatal("expected model catalog request to fail")
+	}
+	if message := err.Error(); !strings.Contains(message, "HTTP 401") {
+		t.Fatalf("auth failure message missing HTTP status: %s", message)
+	}
+}

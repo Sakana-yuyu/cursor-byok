@@ -5,15 +5,18 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
 
 	"cursor/internal/i18n"
+	"cursor/internal/logger"
 	"cursor/internal/modelchannel"
 )
 
@@ -147,13 +150,17 @@ func (s *ProxyService) FetchModelCatalog(request ModelCatalogRequest) (ModelCata
 		}
 		response, requestErr := client.Do(httpRequest)
 		if requestErr != nil {
-			lastErr = fmt.Errorf("模型目录网络请求失败")
+			cause := modelCatalogFailureCause(requestErr)
+			logger.Warnf("model catalog: candidate request failed endpoint=%s cause=%s", modelCatalogLogEndpoint(endpoint), cause)
+			lastErr = fmt.Errorf("模型目录网络请求失败: %s", cause)
 			continue
 		}
 		body, readErr := io.ReadAll(io.LimitReader(response.Body, modelCatalogMaxBodyBytes+1))
 		response.Body.Close()
 		if readErr != nil {
-			lastErr = fmt.Errorf("读取模型目录响应失败")
+			cause := modelCatalogFailureCause(readErr)
+			logger.Warnf("model catalog: candidate response read failed endpoint=%s cause=%s", modelCatalogLogEndpoint(endpoint), cause)
+			lastErr = fmt.Errorf("读取模型目录响应失败: %s", cause)
 			continue
 		}
 		lastStatus = response.StatusCode
@@ -162,11 +169,13 @@ func (s *ProxyService) FetchModelCatalog(request ModelCatalogRequest) (ModelCata
 			continue
 		}
 		if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+			logger.Warnf("model catalog: candidate returned http status endpoint=%s status=%d", modelCatalogLogEndpoint(endpoint), response.StatusCode)
 			lastErr = fmt.Errorf("服务返回 HTTP %d", response.StatusCode)
 			continue
 		}
 		models, decodeErr := decodeModelCatalog(body)
 		if decodeErr != nil {
+			logger.Warnf("model catalog: candidate response decode failed endpoint=%s status=%d cause=%v", modelCatalogLogEndpoint(endpoint), response.StatusCode, decodeErr)
 			lastErr = decodeErr
 			continue
 		}
@@ -178,7 +187,9 @@ func (s *ProxyService) FetchModelCatalog(request ModelCatalogRequest) (ModelCata
 	message := "所有模型目录候选地址均失败"
 	switch {
 	case lastStatus == http.StatusUnauthorized || lastStatus == http.StatusForbidden:
-		message = "模型列表鉴权失败，请检查访问密钥是否有效、是否有模型列表权限"
+		// 消息里必须带 HTTP 状态码：错误文本跨 Wails 直传前端，前端按
+		// 状态码/关键词归一化，带不上就会被兜底成「服务发生异常」。
+		message = fmt.Sprintf("模型列表鉴权失败（HTTP %d），请检查访问密钥是否有效、是否有模型列表权限", lastStatus)
 	case lastStatus > 0:
 		message = fmt.Sprintf("所有模型目录候选地址均失败，最后响应 HTTP %d", lastStatus)
 	}
@@ -195,6 +206,50 @@ func (s *ProxyService) invalidateModelCatalogCaches() {
 		return
 	}
 	s.modelCatalogCache.clearAll()
+}
+
+var (
+	modelCatalogCredentialPattern = regexp.MustCompile(`(?i)(api[_-]?key|token|password|secret)\s*[=:]\s*[^\s,;&?#]+`)
+	modelCatalogURLPattern        = regexp.MustCompile(`[a-zA-Z][a-zA-Z0-9+.-]*://\S+`)
+)
+
+// modelCatalogFailureCause 提取候选请求失败的底层原因，供错误信息与日志展示。
+// client.Do 返回的 *url.Error 前缀带候选地址，而自定义目录地址可能把凭证放进
+// 查询串或 userinfo，因此剥掉全部 url.Error 层；底层错误若仍自带 URL 或凭证
+// 字样也一并抹除，只保留网络层原因（如 dial tcp 127.0.0.1:7890: connect: connection refused）。
+func modelCatalogFailureCause(err error) string {
+	if err == nil {
+		return ""
+	}
+	for {
+		var urlErr *url.Error
+		if !errors.As(err, &urlErr) {
+			break
+		}
+		err = urlErr.Err
+	}
+	message := strings.TrimSpace(err.Error())
+	message = modelCatalogCredentialPattern.ReplaceAllString(message, "[REDACTED]")
+	message = modelCatalogURLPattern.ReplaceAllString(message, "[REDACTED]")
+	if len(message) > 200 {
+		message = message[:200] + "…"
+	}
+	return message
+}
+
+// modelCatalogLogEndpoint 供日志使用的候选地址：去掉 userinfo 与查询串，避免凭证落盘。
+func modelCatalogLogEndpoint(endpoint string) string {
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		return "[REDACTED]"
+	}
+	if parsed.User != nil {
+		parsed.User = nil
+	}
+	if parsed.RawQuery != "" {
+		parsed.RawQuery = "[REDACTED]"
+	}
+	return parsed.String()
 }
 
 func modelCatalogRedirectSafeClient(base *http.Client, trustedBaseURL string, customHeaders http.Header) *http.Client {

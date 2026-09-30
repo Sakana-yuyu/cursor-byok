@@ -15,7 +15,7 @@ import {
   normalizeModelAdapter,
   PROTOCOL_MODE_AUTO,
   saveModelAdaptersBatch,
-  toUserError,
+  toUserErrorWithCause,
 } from "@/state/appState";
 import {
   SUPPLIER_GROUP_MODE_CONNECTION,
@@ -245,7 +245,7 @@ async function fetchModels({ forceRefresh = false } = {}) {
   } catch (error) {
     models.value = [];
     selected.value = new Set();
-    catalogError.value = toUserError(error);
+    catalogError.value = toUserErrorWithCause(error);
   } finally {
     catalogLoading.value = false;
   }
@@ -344,7 +344,7 @@ async function handleBatchAdd() {
     }
     await leavePage();
   } catch (error) {
-    catalogError.value = toUserError(error);
+    catalogError.value = toUserErrorWithCause(error);
   } finally {
     catalogSaving.value = false;
   }
@@ -376,7 +376,7 @@ onMounted(async () => {
     }
     await fetchModels({ forceRefresh: true });
   } catch (error) {
-    catalogError.value = toUserError(error);
+    catalogError.value = toUserErrorWithCause(error);
   } finally {
     loading.value = false;
   }
