@@ -1,4 +1,4 @@
-import { extractStatusCode as extractStructuredStatusCode, normalizeClientError } from "@/utils/errorContract";
+import { extractStatusCode as extractStructuredStatusCode, normalizeClientError } from "./errorContract.js";
 
 // errorHumanizer.js 把 provider/适配器返回的原始错误翻译成人类可读的中文提示。
 //
@@ -70,4 +70,21 @@ export function humanizeProviderError(error) {
 // toUserError 统一使用结构化错误 presenter；字符串解析仅保留在 errorContract 的兼容入口。
 export function toUserError(error) {
   return normalizeClientError(error).userMessage;
+}
+
+/**
+ * toUserErrorWithCause 在友好中文后追加脱敏的技术原因（截断到 160 字符），
+ * 供「拉取模型」这类一次性操作页使用：笼统文案（如「暂时无法连接服务」）
+ * 不足以定位故障时，附带底层原因（如 dial tcp 127.0.0.1:7890: connection refused）
+ * 能让用户直接看出是本地代理不通。
+ * @param {unknown} error 原始错误
+ * @returns {string}
+ */
+export function toUserErrorWithCause(error) {
+  const normalized = normalizeClientError(error);
+  const user = normalized.userMessage || "";
+  const technical = String(normalized.technicalMessage || "").trim();
+  if (!technical || technical === user) return user;
+  const detail = technical.length > 160 ? `${technical.slice(0, 160)}…` : technical;
+  return `${user}（${detail}）`;
 }

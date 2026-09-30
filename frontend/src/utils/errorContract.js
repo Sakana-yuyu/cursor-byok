@@ -78,7 +78,21 @@ export function normalizeClientError(error, { operation = "ui.operation", traceI
     result = { code: "canceled", kind: "canceled", disposition: "canceled", message: "操作已取消" };
   } else if (!result && (lower.includes("timeout") || lower.includes("deadline") || lower.includes("超时"))) {
     result = { code: "timeout", kind: "timeout", disposition: "retryable", message: "请求超时，正在准备恢复" };
-  } else if (!result && (lower.includes("network") || lower.includes("connection refused") || lower.includes("no such host") || lower.includes("failed to fetch"))) {
+  } else if (!result && (
+    // 后端错误文本跨 Wails 直传，中英文网络措辞都要覆盖，
+    // 否则本地代理未启动这类故障会被兜底成「服务发生异常」。
+    lower.includes("network")
+    || lower.includes("connection")
+    || lower.includes("proxyconnect")
+    || lower.includes("proxy")
+    || lower.includes("tls")
+    || lower.includes("x509")
+    || lower.includes("no such host")
+    || lower.includes("failed to fetch")
+    || lower.includes("网络")
+    || lower.includes("代理")
+    || /\beof\b/.test(lower)
+  )) {
     result = { code: "network_error", kind: "network", disposition: "retryable", message: "暂时无法连接服务，正在准备恢复" };
   }
 

@@ -91,9 +91,9 @@ export {
   resolveBalanceProfileForAdapter,
   validateModelAdapters,
 } from "@/utils/modelAdapter";
-// toUserError 定义已归位 utils/errorHumanizer.js，此处转发保持既有调用方零改动。
+// toUserError 系列定义已归位 utils/errorHumanizer.js，此处转发保持既有调用方零改动。
 import { toUserError } from "@/utils/errorHumanizer";
-export { toUserError } from "@/utils/errorHumanizer";
+export { toUserError, toUserErrorWithCause } from "@/utils/errorHumanizer";
 export {
   ANTHROPIC_THINKING_EFFORT_DEFAULT,
   OPENAI_ENDPOINT_CHAT_COMPLETIONS,

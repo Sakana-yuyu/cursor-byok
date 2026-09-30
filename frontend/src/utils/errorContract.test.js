@@ -96,3 +96,31 @@ test("safe log attributes exclude raw messages and causes", () => {
   });
   assert.doesNotMatch(JSON.stringify(attributes), /private|sk-secret/);
 });
+
+test("maps backend model catalog network failure to retryable network error", () => {
+  const error = normalizeClientError(new Error(
+    "所有模型目录候选地址均失败：模型目录网络请求失败: dial tcp 127.0.0.1:7890: connect: connection refused",
+  ));
+
+  assert.equal(error.code, "network_error");
+  assert.equal(error.kind, "network");
+  assert.equal(error.disposition, "retryable");
+});
+
+test("maps backend network wording in Chinese to network error", () => {
+  const error = normalizeClientError(new Error("模型目录网络请求失败"));
+
+  assert.equal(error.code, "network_error");
+  assert.equal(error.disposition, "retryable");
+});
+
+test("maps backend model catalog auth failure via HTTP status in text", () => {
+  const error = normalizeClientError(new Error(
+    "模型列表鉴权失败（HTTP 401），请检查访问密钥是否有效、是否有模型列表权限",
+  ));
+
+  assert.equal(error.code, "authentication_required");
+  assert.equal(error.kind, "authentication");
+  assert.equal(error.disposition, "blocked");
+  assert.equal(error.statusCode, 401);
+});
