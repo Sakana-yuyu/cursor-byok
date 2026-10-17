@@ -1,27 +1,51 @@
 // apply_tool 把 ext_tool 的抽取产物 proto/from_extensions/*.proto 转成编译输入 proto/*.proto。
 //
-// 它做三件事，全部跨平台（早先 build/Taskfile.yml 里的 cp + perl 只能在 macOS/Linux 跑，
+// 它做四件事，全部跨平台（早先 build/Taskfile.yml 里的 cp + perl 只能在 macOS/Linux 跑，
 // 而且那条 sync:proto 任务全仓库零引用，导致抽取产物和编译输入长期漂移）：
 //
 //  1. 拷贝 agent_v1.proto / aiserver_v1.proto。
 //  2. 把 Cursor 自带的 go_package 改写成本仓库的模块路径。
 //  3. 按一张显式修复表还原 ext_tool 的类型解析回退。
+//  4. 补入经过审计的旧会话与仓库状态类型，以及本地模型元数据字段，并验证完整依赖。
 //
-// 关于第 3 点：ext_tool 从 Cursor 扩展 bundle 还原 proto 时，遇到无法确定具体类型的
-// length-delimited 字段会退化成 bytes。wire 层两者等价，但 Go 侧会丢掉类型、被迫手工
-// Marshal/Unmarshal。修复表只收录「原编译 proto 里本来就是 message、新抽取产物退化成
-// bytes、且目标 message 在新产物里依然存在」的字段；目标 message 消失时直接失败，
-// 这样 Cursor 真的删掉某个类型时同步会响亮地报错，而不是静默降级。
+// 关于第 3 点：旧版抽取产物曾把部分 length-delimited 消息字段退化成 bytes。
+// 修复表仅兼容这些已经审计的旧声明；新静态紧凑描述应直接提供正确消息类型。
+// 两种输入都必须精确匹配字段声明和嵌套目标路径，其他变化直接失败，防止静默降级。
 package main
 
 import (
+	"embed"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/jhump/protoreflect/desc"
+	"github.com/jhump/protoreflect/desc/protoparse"
 )
+
+//go:embed compatibility/*.proto.inc
+var compatibilitySources embed.FS
+
+// compatibilityTypes 限定兼容类型的精确范围，不从旧文件自动合并其他协议。
+var compatibilityTypes = map[string][]string{
+	"agent_v1.proto":    {"AgentConversationTurn", "AgentConversationTurnStructure", "ConversationState", "ConversationSummary", "ConversationTurn", "ConversationTurnStructure", "ConversationSummaryArchive", "ShellConversationTurn", "ShellConversationTurnStructure", "ShellOutput"},
+	"aiserver_v1.proto": {"BatchRepositoryStatusRequest", "BatchRepositoryStatusResponse", "RepositoryStatusRequest", "RepositoryStatusResponse"},
+}
+
+type compatibilityField struct {
+	name, scalar, declaration string
+	no                        int32
+}
+
+var compatibilityModelFields = []compatibilityField{
+	{"supports_auto_context", "TYPE_BOOL", "optional bool supports_auto_context = 11;", 11},
+	{"auto_context_max_tokens", "TYPE_INT32", "optional int32 auto_context_max_tokens = 12;", 12},
+	{"context_token_limit", "TYPE_INT32", "optional int32 context_token_limit = 15;", 15},
+	{"context_token_limit_for_max_mode", "TYPE_INT32", "optional int32 context_token_limit_for_max_mode = 16;", 16},
+}
 
 // goPackageRewrite 描述一次 go_package 改写。
 type goPackageRewrite struct {
@@ -42,39 +66,33 @@ var goPackageRewrites = []goPackageRewrite{
 type repair struct {
 	// File 是 proto 文件名。
 	File string
-	// Message 是字段所属 message 的短名；顶层与嵌套同名时取顶层。
+	// Message 是字段所属 message 的文件内路径；嵌套类型使用点分隔。
 	Message string
 	// Degraded 是抽取产物中退化后的字段声明（按去空白后的整行精确匹配）。
 	Degraded string
 	// Restored 是还原后的字段声明。
 	Restored string
-	// TargetMessage 是还原后引用的 message 短名，必须存在于同一文件。
+	// TargetMessage 是还原后引用的 message 路径，必须精确存在于同一文件。
 	TargetMessage string
 }
 
-// extractionRepairs 是当前抽取产物需要的全部类型还原。
-// 每一条都对应一次 `buf breaking` 报出的 "changed type from message to bytes"。
-//
-// 有三处 buf 报出的同类退化**故意**不在表里：aiserver_v1.proto 的
-// ComputerUseAction.cursor_position、ReadResult.file_not_found、SelectedContext.files。
-// 这三个字段的目标 message（CursorPositionAction / ReadFileNotFound / SelectedFile）在新版
-// aiserver_v1 抽取产物里整个消失了，没有可以还原成的类型；它们在 agent_v1 里仍然存在，
-// 也已经在下表前三条里还原。本仓库 gen/ 之外没有任何代码引用这三个 aiserverv1 符号
-// （本地模式全部走 agentv1），所以留作 bytes 无实际影响。
+// extractionRepairs 保留旧版已审计退化声明的兼容路径，当前紧凑描述产物全部应命中已正确分支。
+// 旧 aiserver 产物还曾缺少 CursorPositionAction、ReadFileNotFound、SelectedFile；
+// 当前产物已直接恢复这三个目标及真实字段类型，因此不追加旧版不存在的修复目标。
 var extractionRepairs = []repair{
 	{"agent_v1.proto", "ComputerUseAction", "bytes cursor_position = 11;", "CursorPositionAction cursor_position = 11;", "CursorPositionAction"},
 	{"agent_v1.proto", "ReadResult", "bytes file_not_found = 4;", "ReadFileNotFound file_not_found = 4;", "ReadFileNotFound"},
 	{"agent_v1.proto", "SelectedContext", "repeated bytes files = 4;", "repeated SelectedFile files = 4;", "SelectedFile"},
 
-	{"aiserver_v1.proto", "DiffReviewCapability", "repeated bytes diffs = 2;", "repeated SimpleFileDiff diffs = 2;", "SimpleFileDiff"},
-	{"aiserver_v1.proto", "CmdKQueryHistory", "bytes selection = 3;", "ContextItem.CmdKSelection selection = 3;", "CmdKSelection"},
-	{"aiserver_v1.proto", "ContextItem", "bytes cmd_k_selection = 4;", "CmdKSelection cmd_k_selection = 4;", "CmdKSelection"},
+	{"aiserver_v1.proto", "ComposerCapabilityRequest.DiffReviewCapability", "repeated bytes diffs = 2;", "repeated SimpleFileDiff diffs = 2;", "ComposerCapabilityRequest.DiffReviewCapability.SimpleFileDiff"},
+	{"aiserver_v1.proto", "ContextItem.CmdKQueryHistory", "bytes selection = 3;", "ContextItem.CmdKSelection selection = 3;", "ContextItem.CmdKSelection"},
+	{"aiserver_v1.proto", "ContextItem", "bytes cmd_k_selection = 4;", "CmdKSelection cmd_k_selection = 4;", "ContextItem.CmdKSelection"},
 	{"aiserver_v1.proto", "FSGetMultiFileContentsResponse", "repeated bytes files = 1;", "repeated FileRetrieved files = 1;", "FileRetrieved"},
 	{"aiserver_v1.proto", "RescrapeDocsRequestV2", "bytes new_doc_req = 1;", "NewDocumentationRequest new_doc_req = 1;", "NewDocumentationRequest"},
 	{"aiserver_v1.proto", "ShellArgs", "optional bytes output_notification = 18;", "optional ShellOutputNotificationConfig output_notification = 18;", "ShellOutputNotificationConfig"},
-	{"aiserver_v1.proto", "BranchDiff", "repeated bytes file_diffs = 1;", "repeated FileDiff file_diffs = 1;", "FileDiff"},
+	{"aiserver_v1.proto", "StreamCmdKRequest.BranchDiff", "repeated bytes file_diffs = 1;", "repeated FileDiff file_diffs = 1;", "StreamCmdKRequest.BranchDiff.FileDiff"},
 	{"aiserver_v1.proto", "SubmitLogsRequest", "repeated bytes logs = 1;", "repeated ClientLogEntry logs = 1;", "ClientLogEntry"},
-	{"aiserver_v1.proto", "UsageEventDetails", "bytes ai_review_accepted_comment = 5;", "AiReviewAcceptedComment ai_review_accepted_comment = 5;", "AiReviewAcceptedComment"},
+	{"aiserver_v1.proto", "UsageEventDetails", "bytes ai_review_accepted_comment = 5;", "AiReviewAcceptedComment ai_review_accepted_comment = 5;", "UsageEventDetails.AiReviewAcceptedComment"},
 }
 
 func main() {
@@ -88,6 +106,8 @@ func main() {
 	}
 
 	applied, alreadyCorrect := 0, 0
+	type output struct{ source, target, text string }
+	var outputs []output
 	for _, rewrite := range goPackageRewrites {
 		source := filepath.Join(*from, rewrite.File)
 		target := filepath.Join(*to, rewrite.File)
@@ -120,18 +140,27 @@ func main() {
 				alreadyCorrect++
 			}
 		}
-
-		if err := os.WriteFile(target, []byte(text), 0o644); err != nil {
-			fail("write %s: %v", target, err)
+		text, err = applyCompatibility(text, rewrite.File)
+		if err != nil {
+			fail("%s: compatibility: %v", rewrite.File, err)
 		}
-		fmt.Printf("applied %s -> %s\n", source, target)
+		outputs = append(outputs, output{source, target, text})
+	}
+	if err := os.MkdirAll(*to, 0o755); err != nil {
+		fail("create %s: %v", *to, err)
+	}
+	for _, out := range outputs {
+		if err := os.WriteFile(out.target, []byte(out.text), 0o644); err != nil {
+			fail("write %s: %v", out.target, err)
+		}
+		fmt.Printf("applied %s -> %s\n", out.source, out.target)
 	}
 	fmt.Printf("extraction repairs: applied=%d already-correct=%d total=%d\n", applied, alreadyCorrect, len(extractionRepairs))
 }
 
 // applyRepair 在 message 块内把退化声明替换回真实类型；已经正确时返回 changed=false。
 func applyRepair(text string, item repair) (string, bool, error) {
-	if !regexp.MustCompile(`(?m)^\s*message ` + regexp.QuoteMeta(item.TargetMessage) + ` \{`).MatchString(text) {
+	if _, _, err := messageBlock(text, item.TargetMessage); err != nil {
 		return "", false, fmt.Errorf("target message %q no longer exists; audit this field by hand", item.TargetMessage)
 	}
 	start, end, err := messageBlock(text, item.Message)
@@ -152,31 +181,143 @@ func applyRepair(text string, item repair) (string, bool, error) {
 // 顶层与嵌套同名时（例如 ContextItem 与 DeepSearchSubagentReturnValue.ContextItem）
 // 取顶层那一个，其余歧义一律报错。
 func messageBlock(text string, name string) (int, int, error) {
-	matches := regexp.MustCompile(`(?m)^[ \t]*message `+regexp.QuoteMeta(name)+` \{`).FindAllStringIndex(text, -1)
-	if len(matches) > 1 {
-		topLevel := regexp.MustCompile(`(?m)^message `+regexp.QuoteMeta(name)+` \{`).FindAllStringIndex(text, -1)
-		if len(topLevel) != 1 {
-			return 0, 0, fmt.Errorf("`message %s {` is ambiguous: %d matches, %d of them top-level", name, len(matches), len(topLevel))
+	type block struct {
+		path       string
+		start, end int
+	}
+	var stack, candidates []block
+	for _, match := range regexp.MustCompile(`(?m)^[ \t]*message\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{`).FindAllStringSubmatchIndex(text, -1) {
+		start := match[0]
+		for len(stack) > 0 && stack[len(stack)-1].end <= start {
+			stack = stack[:len(stack)-1]
 		}
-		matches = topLevel
+		short := text[match[2]:match[3]]
+		path := short
+		if len(stack) > 0 {
+			path = stack[len(stack)-1].path + "." + short
+		}
+		depth := 1
+		end := match[1]
+		for end < len(text) && depth > 0 {
+			switch text[end] {
+			case '{':
+				depth++
+			case '}':
+				depth--
+			}
+			end++
+		}
+		if depth != 0 {
+			return 0, 0, fmt.Errorf("message %s is not closed", path)
+		}
+		item := block{path, start, end}
+		stack = append(stack, item)
+		if path == name || (!strings.Contains(name, ".") && short == name) {
+			candidates = append(candidates, item)
+		}
 	}
-	if len(matches) != 1 {
-		return 0, 0, fmt.Errorf("expected exactly one `message %s {`, found %d", name, len(matches))
-	}
-	start := matches[0][0]
-	depth := 0
-	for index := matches[0][1] - 1; index < len(text); index++ {
-		switch text[index] {
-		case '{':
-			depth++
-		case '}':
-			depth--
-			if depth == 0 {
-				return start, index + 1, nil
+	if !strings.Contains(name, ".") && len(candidates) > 1 {
+		var top []block
+		for _, item := range candidates {
+			if item.path == name {
+				top = append(top, item)
 			}
 		}
+		if len(top) == 1 {
+			candidates = top
+		}
 	}
-	return 0, 0, fmt.Errorf("message %s is not closed", name)
+	if len(candidates) != 1 {
+		return 0, 0, fmt.Errorf("message %s has %d exact candidates", name, len(candidates))
+	}
+	return candidates[0].start, candidates[0].end, nil
+}
+
+// applyCompatibility 只补显式缺失顶层类型；完整解析确保兼容片段依赖仍然成立。
+func applyCompatibility(text, file string) (string, error) {
+	names, ok := compatibilityTypes[file]
+	if !ok {
+		return "", fmt.Errorf("未登记兼容文件: %s", file)
+	}
+	data, err := compatibilitySources.ReadFile("compatibility/" + file + ".inc")
+	if err != nil {
+		return "", err
+	}
+	// 先做未链接语法解析，顶层身份不依赖缩进，也不会把 ShellOutputNotification 当作 ShellOutput。
+	parser := protoparse.Parser{Accessor: protoparse.FileContentsFromMap(map[string]string{file: text})}
+	syntaxFiles, err := parser.ParseFilesButDoNotLink(file)
+	if err != nil {
+		return "", fmt.Errorf("兼容输入语法校验失败: %w", err)
+	}
+	topLevel := make(map[string]bool)
+	for _, msg := range syntaxFiles[0].GetMessageType() {
+		topLevel[msg.GetName()] = true
+	}
+	for _, name := range names {
+		if topLevel[name] {
+			continue
+		}
+		start, end, err := messageBlock(string(data), name)
+		if err != nil {
+			return "", err
+		}
+		text = strings.TrimRight(text, "\r\n") + "\n\n// 本仓库保留的旧协议兼容类型。\n" + string(data[start:end]) + "\n"
+	}
+	fd, err := parseCompatibilityInput(text, file)
+	if err != nil {
+		return "", err
+	}
+	if file == "agent_v1.proto" {
+		var model *desc.MessageDescriptor
+		for _, msg := range fd.GetMessageTypes() {
+			if msg.GetName() == "ModelDetails" {
+				model = msg
+				break
+			}
+		}
+		if model == nil {
+			return "", fmt.Errorf("agent.v1.ModelDetails 缺失，无法验证本地模型元数据字段")
+		}
+		var missing []string
+		for _, expected := range compatibilityModelFields {
+			var byName, byNumber *desc.FieldDescriptor
+			for _, field := range model.GetFields() {
+				if field.GetName() == expected.name {
+					byName = field
+				}
+				if field.GetNumber() == expected.no {
+					byNumber = field
+				}
+			}
+			if byName != nil || byNumber != nil {
+				if byName == nil || byNumber != byName || byName.GetType().String() != expected.scalar || byName.IsRepeated() || !byName.AsFieldDescriptorProto().GetProto3Optional() {
+					return "", fmt.Errorf("ModelDetails.%s 与兼容字段号 %d、类型或 optional 语义冲突", expected.name, expected.no)
+				}
+				continue
+			}
+			missing = append(missing, "  "+expected.declaration)
+		}
+		if len(missing) > 0 {
+			_, end, err := messageBlock(text, "ModelDetails")
+			if err != nil {
+				return "", err
+			}
+			text = text[:end-1] + "  // 本地模型选择与模拟响应仍使用的元数据字段。\n" + strings.Join(missing, "\n") + "\n" + text[end-1:]
+		}
+	}
+	if _, err := parseCompatibilityInput(text, file); err != nil {
+		return "", err
+	}
+	return text, nil
+}
+
+func parseCompatibilityInput(text, file string) (*desc.FileDescriptor, error) {
+	parser := protoparse.Parser{Accessor: protoparse.FileContentsFromMap(map[string]string{file: text}), LookupImport: desc.LoadFileDescriptor}
+	files, err := parser.ParseFiles(file)
+	if err != nil {
+		return nil, fmt.Errorf("兼容协议依赖或字段校验失败: %w", err)
+	}
+	return files[0], nil
 }
 
 // declCount 统计块内与给定字段声明完全相同的行数（忽略缩进）。

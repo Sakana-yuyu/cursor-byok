@@ -2,6 +2,7 @@ package forwarder
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -173,42 +174,87 @@ func projectCursorTranscriptEntry(entry HistoryEntry) (cursorTranscriptLine, boo
 	}
 }
 
-// normalizeLegacyShellToolCallPayload 把历史里 Shell 工具调用的 legacy outputNotification
-// （旧版 message 对象格式，如 {"pattern":"...","reason":"..."}）升级为 raw protobuf bytes
-// （protojson 的 base64 形式），使 protojson.Unmarshal 兼容新旧两种格式。
-// 非 legacy 或解析失败时原样返回，best-effort 不破坏现有路径。
+// normalizeLegacyShellToolCallPayload 仅在回放时把旧 bytes/base64 通知还原成当前结构化消息。
+// 已有对象及失败输入原样返回；只替换目标值，不重排历史键、不损失其他大整数，也不修改原切片。
 func normalizeLegacyShellToolCallPayload(payload []byte) []byte {
-	if len(payload) == 0 {
+	if !json.Valid(payload) {
 		return payload
 	}
-	var raw map[string]any
-	if err := json.Unmarshal(payload, &raw); err != nil {
+	shell, shellStart, _, ok := legacyShellJSONField(payload, "shellToolCall", "shell_tool_call")
+	if !ok {
 		return payload
 	}
-	shellToolCall, _ := raw["shellToolCall"].(map[string]any)
-	args, _ := shellToolCall["args"].(map[string]any)
-	notification, legacy := args["outputNotification"].(map[string]any)
-	if !legacy {
+	args, argsStart, _, ok := legacyShellJSONField(shell, "args")
+	if !ok {
 		return payload
 	}
-	notificationJSON, err := json.Marshal(notification)
-	if err != nil {
+	notification, notificationStart, notificationEnd, ok := legacyShellJSONField(args, "outputNotification", "output_notification")
+	if !ok {
+		return payload
+	}
+	var encoded string
+	if err := json.Unmarshal(notification, &encoded); err != nil || bytes.Equal(bytes.TrimSpace(notification), []byte("null")) {
+		return payload
+	}
+	var wire []byte
+	decoded := false
+	// protojson 的 bytes 输入兼容标准和 URL 字母表，以及有无 padding 的四种编码。
+	for _, encoding := range []*base64.Encoding{base64.StdEncoding, base64.RawStdEncoding, base64.URLEncoding, base64.RawURLEncoding} {
+		if value, err := encoding.DecodeString(encoded); err == nil {
+			wire, decoded = value, true
+			break
+		}
+	}
+	if !decoded {
 		return payload
 	}
 	config := &agentv1.ShellOutputNotificationConfig{}
-	if err := protojson.Unmarshal(notificationJSON, config); err != nil {
+	if err := proto.Unmarshal(wire, config); err != nil {
 		return payload
 	}
-	encoded, err := proto.Marshal(config)
+	structured, err := protojson.Marshal(config)
 	if err != nil {
 		return payload
 	}
-	args["outputNotification"] = encoded
-	normalized, err := json.Marshal(raw)
-	if err != nil {
-		return payload
-	}
+	start := shellStart + argsStart + notificationStart
+	end := shellStart + argsStart + notificationEnd
+	normalized := make([]byte, 0, len(payload)-(end-start)+len(structured))
+	normalized = append(normalized, payload[:start]...)
+	normalized = append(normalized, structured...)
+	normalized = append(normalized, payload[end:]...)
 	return normalized
+}
+
+// legacyShellJSONField 使用 RawMessage 记录目标字段的原始字节范围；重复别名交回原有错误路径。
+func legacyShellJSONField(object []byte, names ...string) (json.RawMessage, int, int, bool) {
+	decoder := json.NewDecoder(bytes.NewReader(object))
+	token, err := decoder.Token()
+	if err != nil || token != json.Delim('{') {
+		return nil, 0, 0, false
+	}
+	var selected json.RawMessage
+	start, end, count := 0, 0, 0
+	for decoder.More() {
+		key, err := decoder.Token()
+		if err != nil {
+			return nil, 0, 0, false
+		}
+		var value json.RawMessage
+		if err := decoder.Decode(&value); err != nil {
+			return nil, 0, 0, false
+		}
+		for _, name := range names {
+			if key == name {
+				selected, end = value, int(decoder.InputOffset())
+				start = end - len(value)
+				count++
+			}
+		}
+	}
+	if _, err := decoder.Token(); err != nil || count != 1 {
+		return nil, 0, 0, false
+	}
+	return selected, start, end, true
 }
 
 func projectCursorTranscriptModelMessage(message modeladapter.Message) (cursorTranscriptLine, bool, error) {

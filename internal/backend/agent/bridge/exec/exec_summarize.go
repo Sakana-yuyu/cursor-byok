@@ -295,9 +295,17 @@ func convertMcpResult(result *agentv1.McpResult) *agentv1.McpToolResult {
 			},
 		}
 	case *agentv1.McpResult_Error:
+		errorText := item.Error.GetError()
+		if item.Error.GetNeedsAuth() {
+			// 工具结果类型没有认证标志，必须转成模型可见错误，认证操作由用户处理。
+			if errorText != "" {
+				errorText += "\n"
+			}
+			errorText += "MCP authentication required (needs_auth=true)."
+		}
 		return &agentv1.McpToolResult{
 			Result: &agentv1.McpToolResult_Error{
-				Error: &agentv1.McpToolError{Error: item.Error.GetError()},
+				Error: &agentv1.McpToolError{Error: errorText},
 			},
 		}
 	case *agentv1.McpResult_Rejected:

@@ -4,11 +4,80 @@ import (
 	"strings"
 	"testing"
 
+	"google.golang.org/protobuf/encoding/protowire"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	"cursor/gen/agentv1"
 	runtimecore "cursor/internal/backend/agent/core"
 )
+
+func TestSummarizeMcpStateResultPreservesBoundedServerError(t *testing.T) {
+	server := mcpStateServer("needs-login", 0, "")
+	wire, err := proto.Marshal(server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wire = protowire.AppendTag(wire, 8, protowire.BytesType)
+	wire = protowire.AppendString(wire, "authorization expired "+strings.Repeat("界", 5000))
+	if err := proto.Unmarshal(wire, server); err != nil {
+		t.Fatal(err)
+	}
+	result := &agentv1.McpStateExecResult{Result: &agentv1.McpStateExecResult_Success{
+		Success: &agentv1.McpStateSuccess{Servers: []*agentv1.McpStateServer{server}},
+	}}
+	for _, args := range []string{`{}`, `{"server":"needs-login"}`} {
+		got := summarizeMcpStateResult(result, []byte(args))
+		if !strings.Contains(got, "authorization expired") {
+			t.Errorf("服务诊断丢失（%s）：%q", args, got)
+		}
+		if !strings.Contains(got, "truncated") || len(got) > 6000 {
+			t.Errorf("服务诊断未按单项上限截断（%s）：bytes=%d", args, len(got))
+		}
+	}
+}
+
+func TestSummarizeMcpStateResultSpecificToolKeepsTargetServerFailure(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		args string
+	}{
+		{"identifier", `{"server":"needs-login","tool_name":"search"}`},
+		{"server_name", `{"server":"NEEDS-LOGIN SERVER","tool_name":"search"}`},
+		{"unmatched_pattern", `{"server":"needs-login","tool_name":"search","pattern":"search"}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			for _, toolCount := range []int{0, 1} {
+				target := mcpStateServer("needs-login", toolCount, "target tool must stay filtered")
+				target.ErrorMessage = stringPtr("authorization expired")
+				other := mcpStateServer("other-server", 1, "other tool must stay excluded")
+				other.Tools[0].ToolName = "search"
+				other.ErrorMessage = stringPtr("other diagnostic must stay excluded")
+				result := &agentv1.McpStateExecResult{Result: &agentv1.McpStateExecResult_Success{
+					Success: &agentv1.McpStateSuccess{Servers: []*agentv1.McpStateServer{target, other}},
+				}}
+				got := summarizeMcpStateResult(result, []byte(test.args))
+				if !strings.Contains(got, "authorization expired") || !strings.Contains(got, "matched servers=1 tools=0") {
+					t.Errorf("目标服务错误被工具过滤吞掉（tools=%d）：%q", toolCount, got)
+				}
+				for _, excluded := range []string{"other-server", "other diagnostic", "other tool", "target tool"} {
+					if strings.Contains(got, excluded) {
+						t.Errorf("定向查询混入不匹配内容 %q：%q", excluded, got)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestFilterMcpStateServerDoesNotKeepUnselectedServerFailure(t *testing.T) {
+	server := mcpStateServer("other-server", 1, "")
+	server.Tools[0].ToolName = "search"
+	server.ErrorMessage = stringPtr("authorization expired")
+	if _, matched := filterMcpStateServer(server, getMcpToolsArgs{Server: "needs-login", ToolName: "search"}, nil); matched {
+		t.Fatal("非目标服务不能因错误诊断绕过服务筛选")
+	}
+}
 
 func mcpStateServer(identifier string, toolCount int, description string) *agentv1.McpStateServer {
 	schema, _ := structpb.NewValue(map[string]any{

@@ -124,6 +124,7 @@ func CursorCapabilityMap() []CursorCapabilityEntry {
 		unsupported("ExecServerMessage.mini_swe_agent_bash_args (ShellArgs)", "The local Shell route emits shell_stream_args and does not opt into the mini-SWE transport."),
 		exec("ExecServerMessage.conversation_search_args (ConversationSearchArgs)", "internal/backend/agent/bridge/exec/exec_open_conversation_search.go: Bridge.openSearchConversations"),
 		control("ExecServerMessage.agent_store_conflict_args (AgentStoreConflictArgs)", "Agent-store conflict synchronization control arm."),
+		unsupported("ExecServerMessage.adopt_args (AdoptArgs)", "本地执行桥尚无会话接管请求发送路径。"),
 
 		// ToolCall.oneof inventory. Implemented entries are constructed by real
 		// started/completed routes; the remainder are retained as reviewed protocol support.
@@ -189,6 +190,15 @@ func CursorCapabilityMap() []CursorCapabilityEntry {
 		toolCall("ToolCall.search_conversations_tool_call (SearchConversationsToolCall)", "internal/backend/agent/bridge/exec/exec_open_conversation_search.go: buildSearchConversationsCompletedToolCall"),
 		support("ToolCall.create_goal_tool_call (CreateGoalToolCall)", "Cursor native /goal presentation; cursor-byok does not synthesize local goal tool calls."),
 		support("ToolCall.update_goal_tool_call (UpdateGoalToolCall)", "Cursor native /goal presentation; cursor-byok does not synthesize local goal tool calls."),
+		support("ToolCall.adopt_tool_call (AdoptToolCall)", "会话接管展示类型，本地尚无对应执行发送路径。"),
+		support("ToolCall.get_agent_status_tool_call (GetAgentStatusToolCall)", "跨代理状态查询展示类型，本地未实现对应工具。"),
+		support("ToolCall.send_to_agent_tool_call (SendToAgentToolCall)", "跨代理消息展示类型，本地未实现对应工具。"),
+		support("ToolCall.read_agent_transcript_tool_call (ReadAgentTranscriptToolCall)", "跨代理转录读取展示类型，本地未实现对应工具。"),
+		support("ToolCall.create_agent_tool_call (CreateAgentToolCall)", "独立代理创建展示类型，本地未实现对应工具。"),
+		support("ToolCall.stop_agent_tool_call (StopAgentToolCall)", "独立代理停止展示类型，本地未实现对应工具。"),
+		support("ToolCall.get_pr_code_tour_tool_call (GetPrCodeTourToolCall)", "PR 代码导览展示类型，本地未实现对应工具。"),
+		support("ToolCall.write_canvas_tool_call (WriteCanvasToolCall)", "独立 Canvas 写入展示类型，本地继续使用既有文件编辑与诊断路径。"),
+		support("ToolCall.read_canvas_tool_call (ReadCanvasToolCall)", "独立 Canvas 读取展示类型，本地继续使用既有文件读取路径。"),
 
 		// Every tool schema exposed by any static prompt catalog.
 		promptTool("AskQuestion", "internal/backend/forwarder/interaction_tools.go: Service.handleInteractionToolInvocation -> interaction.Bridge.OpenQuery"),
@@ -227,8 +237,6 @@ func CursorCapabilityMap() []CursorCapabilityEntry {
 		promptTool("WebSearch", "internal/backend/forwarder/interaction_tools.go: Service.handleInteractionToolInvocation -> interaction.Bridge.OpenQuery"),
 		promptTool("Write", "internal/backend/forwarder/write_tool.go: Service.handleWriteToolInvocation"),
 		promptTool("WriteShellStdin", "internal/backend/forwarder/service.go: Service.handleToolInvocation -> exec.Bridge.OpenExec"),
-
-		{ProtocolName: "AbortArgs", Class: CursorCapabilitySharedArgument, Status: "shared"},
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].ProtocolName < entries[j].ProtocolName })
 	return entries

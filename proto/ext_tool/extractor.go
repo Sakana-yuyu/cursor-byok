@@ -119,24 +119,26 @@ func newExtractionRun(options ExtractionOptions) *extractionRun {
 }
 
 var (
-	noRe          = regexp.MustCompile(`(?:^|[,{]\s*)no:\s*(\d+)`)
-	nameRe        = regexp.MustCompile(`(?:^|[,{]\s*)name:\s*["']([^"']+)["']`)
-	kindRe        = regexp.MustCompile(`(?:^|[,{]\s*)kind:\s*["']([^"']+)["']`)
-	enumTypeRe    = regexp.MustCompile(`[,\s]T:\s*[\w$.]+\.getEnumType\s*\(\s*([\w$.]+)\s*\)`)
-	tRe           = regexp.MustCompile(`[,\s]T:\s*([\w$.]+)`)
-	oneofRe       = regexp.MustCompile(`oneof:\s*["']([^"']+)["']`)
-	repeatedRe    = regexp.MustCompile(`repeated:\s*(!0|true)`)
-	optRe         = regexp.MustCompile(`opt:\s*(!0|true)`)
-	keyRe         = regexp.MustCompile(`[,\s]K:\s*(\d+)`)
-	mapValueRe    = regexp.MustCompile(`V:\s*\{([^}]*)\}`)
-	mapValueKRe   = regexp.MustCompile(`(?:^|[,{]\s*)kind:\s*["'](\w+)["']`)
-	mapValueTRe   = regexp.MustCompile(`[,\s]T:\s*([\w$.]+)`)
-	oneofNameRe   = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	fieldNameRe   = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	placeholderRe = regexp.MustCompile(`^\s*(optional\s+|repeated\s+)?[A-Za-z_][A-Za-z0-9_.<>]*\s+(field_\d+|unknown(?:_[A-Za-z0-9_]+)?)\s*=\s*\d+\s*;`)
-	varAliasRe    = regexp.MustCompile(`\b(?:let|const|var)\s+([\w$]+)\s*=\s*([\w$]+)\s*(?:[,;])`)
-	streamCloseRe = regexp.MustCompile(`(?s)message\s+ExecClientControlMessage\s*\{.*?ExecClientStreamClose\s+stream_close\s*=\s*1\s*;`)
-	shellStdoutRe = regexp.MustCompile(`(?s)message\s+ShellStream\s*\{.*?ShellStreamStdout\s+stdout\s*=\s*1\s*;`)
+	noRe                 = regexp.MustCompile(`(?:^|[,{]\s*)no:\s*(\d+)`)
+	nameRe               = regexp.MustCompile(`(?:^|[,{]\s*)name:\s*["']([^"']+)["']`)
+	kindRe               = regexp.MustCompile(`(?:^|[,{]\s*)kind:\s*["']([^"']+)["']`)
+	enumTypeRe           = regexp.MustCompile(`[,\s]T:\s*[\w$.]+\.getEnumType\s*\(\s*([\w$.]+)\s*\)`)
+	tRe                  = regexp.MustCompile(`[,\s]T:\s*([\w$.]+)`)
+	oneofRe              = regexp.MustCompile(`oneof:\s*["']([^"']+)["']`)
+	repeatedRe           = regexp.MustCompile(`repeated:\s*(!0|true)`)
+	optRe                = regexp.MustCompile(`opt:\s*(!0|true)`)
+	keyRe                = regexp.MustCompile(`[,\s]K:\s*(\d+)`)
+	mapValueRe           = regexp.MustCompile(`V:\s*\{([^}]*)\}`)
+	mapValueKRe          = regexp.MustCompile(`(?:^|[,{]\s*)kind:\s*["'](\w+)["']`)
+	mapValueTRe          = regexp.MustCompile(`[,\s]T:\s*([\w$.]+)`)
+	oneofNameRe          = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	fieldNameRe          = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	placeholderRe        = regexp.MustCompile(`^\s*(optional\s+|repeated\s+)?[A-Za-z_][A-Za-z0-9_.<>]*\s+(field_\d+|unknown(?:_[A-Za-z0-9_]+)?)\s*=\s*\d+\s*;`)
+	varAliasRe           = regexp.MustCompile(`\b(?:let|const|var)\s+([\w$]+)\s*=\s*([\w$]+)\s*(?:[,;])`)
+	streamCloseRe        = regexp.MustCompile(`(?s)message\s+ExecClientControlMessage\s*\{.*?ExecClientStreamClose\s+stream_close\s*=\s*1\s*;`)
+	shellStdoutRe        = regexp.MustCompile(`(?s)message\s+ShellStream\s*\{.*?ShellStreamStdout\s+stdout\s*=\s*1\s*;`)
+	controlMessageRe     = regexp.MustCompile(`\bmessage\s+ExecClientControlMessage\s*\{`)
+	shellStreamMessageRe = regexp.MustCompile(`\bmessage\s+ShellStream\s*\{`)
 )
 
 type Field struct {
@@ -216,20 +218,25 @@ type aliasIndex struct {
 
 // ===== Webpack Module Graph =====
 
-// moduleInfo records a webpack module's start position and numeric ID.
+// moduleInfo 记录模块边界及 webpack 工厂函数实际使用的参数名。
 type moduleInfo struct {
-	Start int
-	ID    string
+	Start      int
+	ID         string
+	BodyStart  int
+	ModuleVar  string
+	ExportsVar string
+	RequireVar string
 }
 
 // webpackModuleGraph captures webpack module import/export relationships.
 type webpackModuleGraph struct {
-	namespaceImports map[string][]string // "contextModuleID:namespaceVar" -> target module IDs
-	exportMaps       map[string][]string // "targetModuleID:exportName" -> internal symbols
-	reexportModules  map[string][]string // module ID -> modules reached through __exportStar
-	moduleIDByStart  map[int]string
-	moduleStartByID  map[string]int
-	moduleStarts     []int
+	namespaceImports  map[string][]string // "contextModuleID:namespaceVar" -> target module IDs
+	exportMaps        map[string][]string // "targetModuleID:exportName" -> internal symbols
+	reexportModules   map[string][]string // module ID -> modules reached through __exportStar
+	moduleIDByStart   map[int]string
+	moduleStartByID   map[string]int
+	requireVarByStart map[int]string
+	moduleStarts      []int
 }
 
 type webpackExportTarget struct {
@@ -847,14 +854,15 @@ func absInt(value int) int {
 	return value
 }
 
-var moduleStartRe = regexp.MustCompile(`(?:[{},;]|^|
-)\s*(\d+):(?:function\([\w$,]*\)\s*\{|\([\w$,]*\)\s*=>\s*\{|[\w$]+\s*=>\s*\{)`)
+var moduleStartRe = regexp.MustCompile(`(?:[{},;\r\n]|^)\s*(\d+)\s*:\s*(?:function\s*\(([\w$,\s]*)\)\s*\{|\(([\w$,\s]*)\)\s*=>\s*\{|([\w$]+)\s*=>\s*\{)`)
+var webpackRequireDeclRe = regexp.MustCompile(`\bfunction\s+__webpack_require__\s*\(\s*[\w$]+\s*\)\s*\{`)
+var webpackBootstrapRe = regexp.MustCompile(`\bvar\s+__webpack_exports__\s*=\s*\{\s*\}\s*;\s*(\(\s*\(\s*\)\s*=>\s*\{)\s*["']use strict["']\s*;\s*__webpack_require__\.r\s*\(\s*__webpack_exports__\s*\)`)
 
 func buildModuleStarts(text string) []int {
-	matches := moduleStartRe.FindAllStringSubmatchIndex(text, -1)
-	starts := make([]int, 0, len(matches))
-	for _, match := range matches {
-		starts = append(starts, match[0])
+	infos := buildModuleInfos(text)
+	starts := make([]int, 0, len(infos))
+	for _, info := range infos {
+		starts = append(starts, info.Start)
 	}
 	return starts
 }
@@ -872,42 +880,82 @@ func moduleStartForPos(moduleStarts []int, pos int) int {
 	return moduleStarts[index]
 }
 
-// buildModuleInfos captures both module start positions and module IDs.
+// buildModuleInfos 同时提取模块 ID、函数体起点及参数角色，避免依赖压缩器命名。
 func buildModuleInfos(text string) []moduleInfo {
 	matches := moduleStartRe.FindAllStringSubmatchIndex(text, -1)
 	infos := make([]moduleInfo, 0, len(matches))
 	for _, match := range matches {
 		moduleID := text[match[2]:match[3]]
-		infos = append(infos, moduleInfo{Start: match[0], ID: moduleID})
+		info := moduleInfo{Start: match[0], ID: moduleID, BodyStart: match[1]}
+		for group := 2; group <= 4; group++ {
+			if match[group*2] < 0 {
+				continue
+			}
+			params := strings.Split(text[match[group*2]:match[group*2+1]], ",")
+			roles := []*string{&info.ModuleVar, &info.ExportsVar, &info.RequireVar}
+			for i := 0; i < len(params) && i < len(roles); i++ {
+				*roles[i] = strings.TrimSpace(params[i])
+			}
+			break
+		}
+		infos = append(infos, info)
+	}
+	// 仅识别具有显式运行时函数、exports 声明和 .r 初始化的 webpack 入口。
+	// 入口 ID 使用非数字前缀，避免与模块表冲突；其变量不能泄漏到最后一个数字模块。
+	for _, match := range webpackBootstrapRe.FindAllStringSubmatchIndex(text, -1) {
+		entryStart := match[2]
+		if !webpackRequireDeclRe.MatchString(text[:match[0]]) {
+			continue
+		}
+		infos = append(infos, moduleInfo{
+			Start:      entryStart,
+			ID:         fmt.Sprintf("webpack:bootstrap:%d", entryStart),
+			BodyStart:  match[3],
+			ExportsVar: "__webpack_exports__",
+			RequireVar: "__webpack_require__",
+		})
 	}
 	sort.Slice(infos, func(i, j int) bool { return infos[i].Start < infos[j].Start })
 	return infos
 }
 
-var webpackNsImportRe = regexp.MustCompile(`(?:\b(?:var|let|const)\s+|,\s*)([\w$]+)\s*=\s*n\((\d+)\)`)
-var webpackExportEntryRe = regexp.MustCompile(`([\w$]+)\s*:\s*\(\)\s*=>\s*([\w$]+)`)
-var webpackExportMapRe = regexp.MustCompile(`n\.d\s*\(\s*t\s*,\s*\{([^}]+)\}\s*\)`)
-var webpackCommonJSExportRe = regexp.MustCompile(`(?:\bt|exports)\.([\w$]+)\s*=\s*([\w$]+)\s*[,;]`)
+var webpackExportEntryRe = regexp.MustCompile(`(?:^|,)\s*([\w$]+)\s*:\s*\(\)\s*=>\s*([\w$]+)`)
 var webpackExportStarHelperRe = regexp.MustCompile(`(?:\bvar\s+|,\s*)([\w$]+)\s*=\s*this&&this\.__exportStar\|\|function`)
-var webpackExportStarCallRe = regexp.MustCompile(`([\w$]+)\s*\(\s*n\((\d+)\)\s*,\s*t\s*\)`)
 
 // buildWebpackGraph extracts namespace imports and export maps from webpack bundles.
 func buildWebpackGraph(text string, moduleInfos []moduleInfo) *webpackModuleGraph {
 	g := &webpackModuleGraph{
-		namespaceImports: make(map[string][]string),
-		exportMaps:       make(map[string][]string),
-		reexportModules:  make(map[string][]string),
-		moduleIDByStart:  make(map[int]string),
-		moduleStartByID:  make(map[string]int),
-		moduleStarts:     make([]int, len(moduleInfos)),
+		namespaceImports:  make(map[string][]string),
+		exportMaps:        make(map[string][]string),
+		reexportModules:   make(map[string][]string),
+		moduleIDByStart:   make(map[int]string),
+		moduleStartByID:   make(map[string]int),
+		requireVarByStart: make(map[int]string),
+		moduleStarts:      make([]int, len(moduleInfos)),
 	}
 
 	for i, mi := range moduleInfos {
 		g.moduleIDByStart[mi.Start] = mi.ID
 		g.moduleStartByID[mi.ID] = mi.Start
+		g.requireVarByStart[mi.Start] = mi.RequireVar
 		g.moduleStarts[i] = mi.Start
 	}
 
+	// 同一种压缩参数组合复用正则，避免为每个模块重复编译。
+	patterns := make(map[string]*regexp.Regexp)
+	pattern := func(source string) *regexp.Regexp {
+		if re := patterns[source]; re != nil {
+			return re
+		}
+		re := regexp.MustCompile(source)
+		patterns[source] = re
+		return re
+	}
+	// 不能只接受表达式前缀：属性读取、再次调用或运算后的值已不是模块命名空间。
+	assignmentEnds := func(remainder string) bool {
+		remainder = strings.TrimSpace(remainder)
+		return remainder == "" || strings.ContainsRune(",;}", rune(remainder[0]))
+	}
 	for i := 0; i < len(moduleInfos); i++ {
 		mi := moduleInfos[i]
 		bodyEnd := len(text)
@@ -915,63 +963,85 @@ func buildWebpackGraph(text string, moduleInfos []moduleInfo) *webpackModuleGrap
 			bodyEnd = moduleInfos[i+1].Start
 		}
 
-		// Skip past the module header to find the function body opening brace.
-		// Start from mi.Start + 1 to skip the prefix "{" when the match starts with one
-		// (e.g., fixture: {5801:(e,t,n)=>{...}}).
-		bodyStart := mi.Start
-		for j := mi.Start + 1; j < bodyEnd && j < mi.Start+200; j++ {
-			if text[j] == '{' {
-				bodyStart = j + 1
-				break
+		moduleBody := text[mi.BodyStart:bodyEnd]
+		require := regexp.QuoteMeta(mi.RequireVar)
+		exports := regexp.QuoteMeta(mi.ExportsVar)
+
+		// 第三个参数才是本模块 require；缺少该参数时不能借用其他模块的变量。
+		if mi.RequireVar != "" {
+			importPrefix := `(?:\b(?:var|let|const)\s+|,\s*)([\w$]+)\s*=\s*`
+			requireCall := require + `\s*\(\s*\d+\s*\)`
+			importPatterns := []string{
+				importPrefix + require + `\s*\(\s*(\d+)\s*\)`,
+				// 逗号表达式的前序调用仅加载副作用，只有最后一项决定赋值结果。
+				importPrefix + `\(\s*(?:` + requireCall + `\s*,\s*)+` + require + `\s*\(\s*(\d+)\s*\)\s*\)`,
+			}
+			for _, source := range importPatterns {
+				for _, ns := range pattern(source).FindAllStringSubmatchIndex(moduleBody, -1) {
+					if !assignmentEnds(moduleBody[ns[1]:]) {
+						continue
+					}
+					nsVar := moduleBody[ns[2]:ns[3]]
+					nsModuleID := moduleBody[ns[4]:ns[5]]
+					key := mi.ID + ":" + nsVar
+					g.namespaceImports[key] = append(g.namespaceImports[key], nsModuleID)
+				}
 			}
 		}
-		moduleBody := text[bodyStart:bodyEnd]
-
-		// Extract namespace imports within this module
-		nsMatches := webpackNsImportRe.FindAllStringSubmatch(moduleBody, -1)
-		for _, ns := range nsMatches {
-			nsVar := strings.TrimSpace(ns[1])
-			nsModuleID := strings.TrimSpace(ns[2])
-			key := mi.ID + ":" + nsVar
-			g.namespaceImports[key] = append(g.namespaceImports[key], nsModuleID)
+		// ESM 导出必须同时使用本模块 require 和 exports 参数。
+		if mi.RequireVar != "" && mi.ExportsVar != "" {
+			expMatches := pattern(`(?:^|[^\w$.])`+require+`\.d\s*\(\s*`+exports+`\s*,\s*\{([^}]+)\}\s*\)`).FindAllStringSubmatch(moduleBody, -1)
+			for _, em := range expMatches {
+				exportsBody := em[1]
+				entryMatches := webpackExportEntryRe.FindAllStringSubmatchIndex(exportsBody, -1)
+				for _, entry := range entryMatches {
+					// Getter 必须完整返回一个符号，不能截断属性访问、调用或运算表达式。
+					remainder := strings.TrimSpace(exportsBody[entry[1]:])
+					if remainder != "" && remainder[0] != ',' {
+						continue
+					}
+					exportName := exportsBody[entry[2]:entry[3]]
+					internalSymbol := exportsBody[entry[4]:entry[5]]
+					key := mi.ID + ":" + exportName
+					g.exportMaps[key] = append(g.exportMaps[key], internalSymbol)
+				}
+			}
 		}
-
-		// Extract export maps: n.d(t, { ... })
-		expMatches := webpackExportMapRe.FindAllStringSubmatch(moduleBody, -1)
-		for _, em := range expMatches {
-			exportsBody := em[1]
-			entryMatches := webpackExportEntryRe.FindAllStringSubmatch(exportsBody, -1)
-			for _, entry := range entryMatches {
-				exportName := strings.TrimSpace(entry[1])
-				internalSymbol := strings.TrimSpace(entry[2])
+		// CommonJS 支持 exports.X 与 module.exports.X，且只接受直接符号赋值。
+		var exportObjects []string
+		if mi.ExportsVar != "" {
+			exportObjects = append(exportObjects, exports)
+		}
+		if mi.ModuleVar != "" {
+			exportObjects = append(exportObjects, regexp.QuoteMeta(mi.ModuleVar)+`\.exports`)
+		}
+		if len(exportObjects) > 0 {
+			commonJSMatches := pattern(`(?:^|[^\w$.])(?:`+strings.Join(exportObjects, "|")+`)\.([\w$]+)\s*=\s*([\w$]+)`).FindAllStringSubmatchIndex(moduleBody, -1)
+			for _, match := range commonJSMatches {
+				if !assignmentEnds(moduleBody[match[1]:]) {
+					continue
+				}
+				exportName := moduleBody[match[2]:match[3]]
+				internalSymbol := moduleBody[match[4]:match[5]]
+				if internalSymbol == "" || internalSymbol == "void" || internalSymbol == "undefined" {
+					continue
+				}
 				key := mi.ID + ":" + exportName
 				g.exportMaps[key] = append(g.exportMaps[key], internalSymbol)
 			}
 		}
-
-		// CommonJS output modules assign exports directly (for example t.Empty=o).
-		commonJSMatches := webpackCommonJSExportRe.FindAllStringSubmatch(moduleBody, -1)
-		for _, match := range commonJSMatches {
-			exportName := strings.TrimSpace(match[1])
-			internalSymbol := strings.TrimSpace(match[2])
-			if internalSymbol == "" || internalSymbol == "void" || internalSymbol == "undefined" {
-				continue
+		// 只跟随本模块已声明的 __exportStar 辅助函数。
+		if mi.RequireVar != "" && mi.ExportsVar != "" {
+			exportStarHelpers := make(map[string]bool)
+			for _, match := range webpackExportStarHelperRe.FindAllStringSubmatch(moduleBody, -1) {
+				exportStarHelpers[strings.TrimSpace(match[1])] = true
 			}
-			key := mi.ID + ":" + exportName
-			g.exportMaps[key] = append(g.exportMaps[key], internalSymbol)
-		}
-
-		// CommonJS barrel modules re-export complete downstream modules through
-		// the webpack-transpiled __exportStar helper.
-		exportStarHelpers := make(map[string]bool)
-		for _, match := range webpackExportStarHelperRe.FindAllStringSubmatch(moduleBody, -1) {
-			exportStarHelpers[strings.TrimSpace(match[1])] = true
-		}
-		for _, match := range webpackExportStarCallRe.FindAllStringSubmatch(moduleBody, -1) {
-			if !exportStarHelpers[strings.TrimSpace(match[1])] {
-				continue
+			for _, match := range pattern(`([\w$]+)\s*\(\s*`+require+`\s*\(\s*(\d+)\s*\)\s*,\s*`+exports+`\s*\)`).FindAllStringSubmatch(moduleBody, -1) {
+				if !exportStarHelpers[strings.TrimSpace(match[1])] {
+					continue
+				}
+				g.reexportModules[mi.ID] = append(g.reexportModules[mi.ID], strings.TrimSpace(match[2]))
 			}
-			g.reexportModules[mi.ID] = append(g.reexportModules[mi.ID], strings.TrimSpace(match[2]))
 		}
 	}
 
@@ -1005,6 +1075,17 @@ func (run *extractionRun) extractProtosToDir(inputFile, outputDir string) error 
 	// Extract messages, enums, and services
 	messages := extractMessages(text, moduleStarts, run.diagnostics)
 	enums := extractEnums(text, moduleStarts)
+	compactMessages, compactEnums, err := extractCompactTypes(text, moduleInfos, messages, enums, wpg)
+	if err != nil {
+		return fmt.Errorf("extract compact descriptors: %w", err)
+	}
+	for _, message := range compactMessages {
+		for range message.Fields {
+			run.diagnostics.addParsedField()
+		}
+	}
+	messages = append(messages, compactMessages...)
+	enums = append(enums, compactEnums...)
 	services := extractServices(text, moduleStarts)
 	for _, msg := range messages {
 		if len(msg.Fields) == 0 {
@@ -1202,10 +1283,10 @@ func validateGeneratedProtos(outputDir string, diag *extractionDiagnostics) erro
 }
 
 func validateRequiredAgentShapes(file string, body string) error {
-	if strings.Contains(body, "message ExecClientControlMessage") && !streamCloseRe.MatchString(body) {
+	if controlMessageRe.MatchString(body) && !streamCloseRe.MatchString(body) {
 		return fmt.Errorf("%s: ExecClientControlMessage.stream_close must be ExecClientStreamClose", file)
 	}
-	if strings.Contains(body, "message ShellStream") && !shellStdoutRe.MatchString(body) {
+	if shellStreamMessageRe.MatchString(body) && !shellStdoutRe.MatchString(body) {
 		return fmt.Errorf("%s: ShellStream.stdout must be ShellStreamStdout", file)
 	}
 	return nil

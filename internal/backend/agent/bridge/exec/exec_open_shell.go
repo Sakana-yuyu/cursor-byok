@@ -6,8 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"cursor/gen/agentv1"
 	runtimecore "cursor/internal/backend/agent/core"
 )
@@ -153,15 +151,6 @@ func (bridge *Bridge) openShell(toolCall runtimecore.ToolInvocation) (*agentv1.A
 	}
 	messageID := bridge.nextID()
 	execID := fmt.Sprintf("exec-shell-%d", time.Now().UnixNano())
-	// 新版协议 output_notification 字段是原始 bytes（客户端按 ShellOutputNotificationConfig
-	// proto 反序列化）；旧协议是结构化 message。构造时统一 proto.Marshal 成 bytes。
-	var outputNotification []byte
-	if config := buildShellOutputNotificationConfig(args.NotifyOnOutput); config != nil {
-		outputNotification, err = proto.Marshal(config)
-		if err != nil {
-			return nil, runtimecore.PendingExec{}, fmt.Errorf("marshal shell output notification failed: %w", err)
-		}
-	}
 	serverMessage := &agentv1.AgentServerMessage{
 		Message: &agentv1.AgentServerMessage_ExecServerMessage{
 			ExecServerMessage: &agentv1.ExecServerMessage{
@@ -179,7 +168,7 @@ func (bridge *Bridge) openShell(toolCall runtimecore.ToolInvocation) (*agentv1.A
 						TimeoutBehavior:          agentv1.TimeoutBehavior_TIMEOUT_BEHAVIOR_BACKGROUND,
 						HardTimeout:              int32Ptr(86400000),
 						Description:              stringPtr(args.Description),
-						OutputNotification:       outputNotification,
+						OutputNotification:       buildShellOutputNotificationConfig(args.NotifyOnOutput),
 						RequestedSandboxPolicy:   args.RequestedSandboxPolicy,
 					},
 				},

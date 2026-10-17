@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"cursor/gen/agentv1"
 	runtimecore "cursor/internal/backend/agent/core"
@@ -234,21 +235,17 @@ func filterMcpStateServer(server *agentv1.McpStateServer, input getMcpToolsArgs,
 		}
 		tools = append(tools, tool)
 	}
-	if len(tools) == 0 && (!serverMatchesPattern || input.ToolName != "") {
+	// 明确查询的服务出错时，即使工具尚未加载或被过滤，也必须反馈诊断。
+	keepTargetServerError := input.Server != "" && strings.TrimSpace(server.GetErrorMessage()) != ""
+	if len(tools) == 0 && (!serverMatchesPattern || input.ToolName != "") && !keepTargetServerError {
 		return nil, false
 	}
 	if len(tools) > mcpStateReplayToolLimit {
 		tools = tools[:mcpStateReplayToolLimit]
 	}
-	filtered := &agentv1.McpStateServer{
-		ServerName:       server.GetServerName(),
-		ServerIdentifier: server.GetServerIdentifier(),
-		Plugin:           server.Plugin,
-		Marketplace:      server.Marketplace,
-		Tools:            tools,
-		Instructions:     server.GetInstructions(),
-		Status:           server.Status,
-	}
+	// 保留服务诊断及未知字段，只替换查询实际需要过滤的工具列表。
+	filtered := proto.Clone(server).(*agentv1.McpStateServer)
+	filtered.Tools = tools
 	return filtered, true
 }
 
@@ -269,6 +266,10 @@ func renderMcpStateServer(server *agentv1.McpStateServer, detailed bool) string 
 
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "%s (%s)", name, strings.Join(attributes, ", "))
+	if errorMessage := strings.TrimSpace(server.GetErrorMessage()); errorMessage != "" {
+		builder.WriteString("\n  error: ")
+		builder.WriteString(truncateReplayText("GetMcpTools server error", errorMessage, mcpStateDetailDescriptionLimit))
+	}
 	if detailed {
 		if instructions := mcpStateInstructions(server); instructions != "" {
 			builder.WriteString("\n  instructions: ")
