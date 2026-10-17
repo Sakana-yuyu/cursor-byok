@@ -149,6 +149,13 @@ type BillingQueryConfig struct {
 	Enabled bool `json:"enabled" yaml:"enabled"`
 }
 
+// ExternalAPIConfig 控制供本机工具调用的 OpenAI/Anthropic 兼容接口。
+// 默认关闭；开启后所有请求必须携带本地 API Key。
+type ExternalAPIConfig struct {
+	Enabled bool   `json:"enabled" yaml:"enabled"`
+	APIKey  string `json:"apiKey,omitempty" yaml:"apiKey,omitempty"`
+}
+
 // LocalResponseCacheConfig 控制本地（进程内）精确匹配 LLM 响应缓存。
 // 默认（零值）为关闭：Enabled 为 false 时 provider 链路与今日完全一致。
 type LocalResponseCacheConfig struct {
@@ -260,6 +267,7 @@ type Config struct {
 	Routing                RoutingConfig                  `json:"routing" yaml:"routing"`
 	HomeMetrics            HomeMetricsConfig              `json:"homeMetrics" yaml:"homeMetrics"`
 	BillingQuery           BillingQueryConfig             `json:"billingQuery" yaml:"billingQuery"`
+	ExternalAPI            ExternalAPIConfig              `json:"externalApi" yaml:"externalApi"`
 	LocalResponseCache     LocalResponseCacheConfig       `json:"localResponseCache" yaml:"localResponseCache"`
 	SkillMCPScan           SkillMCPScanConfig             `json:"skillMcpScan" yaml:"skillMcpScan"`
 	MCPTrustGrants         []runtimeconfig.MCPTrustRecord `json:"mcpTrustGrants,omitempty" yaml:"mcpTrustGrants,omitempty"`
@@ -281,6 +289,7 @@ func DefaultConfig() Config {
 		ProxyListenAddr:                 DefaultProxyListenAddr,
 		ModelAdapters:                   []ModelAdapterConfig{},
 		BillingQuery:                    BillingQueryConfig{Enabled: DefaultBillingQueryEnabled},
+		ExternalAPI:                     ExternalAPIConfig{},
 		Routing: RoutingConfig{
 			Mode:   DefaultRoutingMode,
 			Policy: routing.DefaultPolicy(),
@@ -332,6 +341,10 @@ func NormalizeConfig(input Config) (Config, error) {
 	output.ProxyListenAddr = proxyListenAddr
 	output.HomeMetrics.IncludeCacheWriteInHitRate = input.HomeMetrics.IncludeCacheWriteInHitRate
 	output.BillingQuery = input.BillingQuery
+	output.ExternalAPI = normalizeExternalAPIConfig(input.ExternalAPI)
+	if output.ExternalAPI.Enabled && output.ExternalAPI.APIKey == "" {
+		return Config{}, fmt.Errorf("外部 API 启用时 apiKey 不能为空")
+	}
 	output.LocalResponseCache = normalizeLocalResponseCache(input.LocalResponseCache)
 	output.MirrorCapture = input.MirrorCapture
 	output.SkillMCPScan = input.SkillMCPScan
@@ -361,6 +374,13 @@ func NormalizeConfig(input Config) (Config, error) {
 		return Config{}, err
 	}
 	return output, nil
+}
+
+func normalizeExternalAPIConfig(input ExternalAPIConfig) ExternalAPIConfig {
+	return ExternalAPIConfig{
+		Enabled: input.Enabled,
+		APIKey:  strings.TrimSpace(input.APIKey),
+	}
 }
 
 func normalizeMCPTrustGrants(input []runtimeconfig.MCPTrustRecord) []runtimeconfig.MCPTrustRecord {

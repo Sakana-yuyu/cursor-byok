@@ -15,6 +15,7 @@ import (
 	"cursor/internal/appdata"
 	"cursor/internal/backend/delegation"
 	delegationexecutors "cursor/internal/backend/delegation/executors"
+	"cursor/internal/backend/externalapi"
 	"cursor/internal/backend/forwarder"
 	"cursor/internal/backend/server"
 	serverconfig "cursor/internal/backend/server/config"
@@ -682,6 +683,7 @@ func (host *Host) rebuildLocked(cfg serverconfig.Config) error {
 		),
 		server.Mount(ads.RoutePrefix, ads.NewHTTPHandler(appdata.AdsRootPath())),
 		server.Mount("/agent/v1", agentContractHandler),
+		server.Mount("/byok/v1", externalapi.NewHandler(host.configs)),
 		server.GET(healthPath,
 			server.Name("healthz"),
 			server.HTTP(),

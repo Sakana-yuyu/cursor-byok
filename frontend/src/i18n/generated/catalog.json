@@ -321,7 +321,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 489,
+          "line": 560,
           "column": 9
         }
       ]
@@ -376,6 +376,11 @@
           "file": "src/components/model-config/SupplierPanel.vue",
           "line": 1050,
           "column": 54
+        },
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 747,
+          "column": 9
         },
         {
           "file": "src/views/ModelEditor.vue",
@@ -502,6 +507,18 @@
         }
       ]
     },
+    "046870db543bb7ea": {
+      "source": "复制失败，请手动选择接口地址",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 187,
+          "column": 19
+        }
+      ]
+    },
     "0468ee76ee3da30e": {
       "source": "刷新数据",
       "kind": "text",
@@ -550,7 +567,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 538,
+          "line": 609,
           "column": 9
         }
       ]
@@ -871,12 +888,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 233,
+          "line": 304,
           "column": 23
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 287,
+          "line": 358,
           "column": 27
         }
       ]
@@ -1593,7 +1610,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 486,
+          "line": 557,
           "column": 22
         }
       ]
@@ -2283,7 +2300,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 496,
+          "line": 567,
           "column": 58
         }
       ]
@@ -2882,7 +2899,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1270,
+          "line": 1296,
           "column": 32
         }
       ]
@@ -3048,7 +3065,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 414,
+          "line": 485,
           "column": 37
         }
       ]
@@ -3154,7 +3171,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 557,
+          "line": 628,
           "column": 9
         }
       ]
@@ -3803,12 +3820,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 446,
+          "line": 517,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 454,
+          "line": 525,
           "column": 13
         }
       ]
@@ -3885,7 +3902,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 346,
+          "line": 417,
           "column": 23
         }
       ]
@@ -4034,6 +4051,18 @@
           "file": "src/components/settings/categories/PromptSettings.vue",
           "line": 613,
           "column": 13
+        }
+      ]
+    },
+    "275de55256a714d4": {
+      "source": "保存 External API",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 741,
+          "column": 171
         }
       ]
     },
@@ -5708,7 +5737,7 @@
       "refs": [
         {
           "file": "src/utils/errorContract.js",
-          "line": 85,
+          "line": 99,
           "column": 89
         }
       ]
@@ -6058,12 +6087,12 @@
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 470,
+          "line": 541,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 480,
+          "line": 551,
           "column": 11
         }
       ]
@@ -6128,7 +6157,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 151,
+          "line": 152,
           "column": 12
         }
       ]
@@ -6367,7 +6396,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 419,
+          "line": 490,
           "column": 52
         }
       ]
@@ -6542,7 +6571,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 624,
+          "line": 695,
           "column": 13
         }
       ]
@@ -7223,7 +7252,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 577,
+          "line": 648,
           "column": 15
         }
       ]
@@ -7433,7 +7462,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 156,
+          "line": 157,
           "column": 12
         }
       ]
@@ -7644,7 +7673,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 157,
+          "line": 158,
           "column": 12
         }
       ]
@@ -7891,7 +7920,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 511,
+          "line": 582,
           "column": 17
         }
       ]
@@ -8079,6 +8108,18 @@
           "file": "src/components/CursorAccountCard.vue",
           "line": 331,
           "column": 22
+        }
+      ]
+    },
+    "522ae1f685e465f3": {
+      "source": "接口地址已复制",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 185,
+          "column": 21
         }
       ]
     },
@@ -8348,7 +8389,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 497,
+          "line": 568,
           "column": 85
         }
       ]
@@ -8983,7 +9024,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 349,
+          "line": 420,
           "column": 21
         }
       ]
@@ -9285,6 +9326,18 @@
         }
       ]
     },
+    "5e84ea61e8386af7": {
+      "source": "代理",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/utils/errorContract.js",
+          "line": 93,
+          "column": 23
+        }
+      ]
+    },
     "5ebeeb543bc60d3c": {
       "source": "已记录",
       "kind": "text",
@@ -9553,6 +9606,18 @@
         }
       ]
     },
+    "6084ce3821c6ae16": {
+      "source": "保存 External API 配置失败",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 154,
+          "column": 42
+        }
+      ]
+    },
     "609140d9c6613fe0": {
       "source": "刷新中...",
       "kind": "text",
@@ -9731,6 +9796,18 @@
         }
       ]
     },
+    "61964c52c45c5895": {
+      "source": "本机 External API",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 702,
+          "column": 22
+        }
+      ]
+    },
     "61b2dae989c997a3": {
       "source": "未检测到 Cursor，可填写完整的 Cursor.exe 路径。",
       "kind": "text",
@@ -9738,7 +9815,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 463,
+          "line": 534,
           "column": 53
         }
       ]
@@ -9940,17 +10017,17 @@
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 170,
+          "line": 241,
           "column": 39
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 192,
+          "line": 263,
           "column": 43
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 327,
+          "line": 398,
           "column": 42
         },
         {
@@ -10088,6 +10165,11 @@
           "column": 60
         },
         {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 752,
+          "column": 70
+        },
+        {
           "file": "src/components/supplier/SupplierModelCard.vue",
           "line": 123,
           "column": 81
@@ -10213,7 +10295,7 @@
         },
         {
           "file": "src/utils/configNormalize.js",
-          "line": 69,
+          "line": 81,
           "column": 44
         }
       ]
@@ -10285,7 +10367,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1347,
+          "line": 1373,
           "column": 32
         }
       ]
@@ -10345,12 +10427,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 604,
+          "line": 675,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 617,
+          "line": 688,
           "column": 13
         }
       ]
@@ -10551,7 +10633,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 445,
+          "line": 516,
           "column": 9
         }
       ]
@@ -10841,7 +10923,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 392,
+          "line": 463,
           "column": 87
         }
       ]
@@ -11036,6 +11118,18 @@
           "file": "src/views/Home.vue",
           "line": 92,
           "column": 29
+        }
+      ]
+    },
+    "6e494c395cde81a9": {
+      "source": "启用本机 External API",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 716,
+          "column": 11
         }
       ]
     },
@@ -11388,6 +11482,18 @@
         }
       ]
     },
+    "7313f1c10d309e6c": {
+      "source": "对本机应用提供 OpenAI Chat/Responses 与 Anthropic Messages 原生转发。默认关闭，只监听本机请求并复用已配置模型通道。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 702,
+          "column": 46
+        }
+      ]
+    },
     "73328c28fd95a077": {
       "source": "成本优先",
       "kind": "text",
@@ -11431,7 +11537,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 471,
+          "line": 542,
           "column": 9
         }
       ]
@@ -11640,7 +11746,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 376,
+          "line": 447,
           "column": 21
         }
       ]
@@ -12663,6 +12769,18 @@
         }
       ]
     },
+    "807fc7d21153220b": {
+      "source": "例如 cbk_...",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 735,
+          "column": 13
+        }
+      ]
+    },
     "80a57e03f0717f91": {
       "source": "未配置",
       "kind": "text",
@@ -12702,7 +12820,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 348,
+          "line": 419,
           "column": 57
         }
       ]
@@ -13343,12 +13461,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 537,
+          "line": 608,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 548,
+          "line": 619,
           "column": 13
         }
       ]
@@ -13420,7 +13538,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 501,
+          "line": 572,
           "column": 52
         }
       ]
@@ -13828,7 +13946,7 @@
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 588,
+          "line": 659,
           "column": 9
         },
         {
@@ -14081,7 +14199,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 598,
+          "line": 669,
           "column": 11
         }
       ]
@@ -14332,7 +14450,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 443,
+          "line": 514,
           "column": 22
         }
       ]
@@ -14416,7 +14534,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1310,
+          "line": 1336,
           "column": 32
         }
       ]
@@ -15016,6 +15134,18 @@
         }
       ]
     },
+    "97b31b5d63f57e51": {
+      "source": "网络",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/utils/errorContract.js",
+          "line": 92,
+          "column": 23
+        }
+      ]
+    },
     "97cdcdb8a9bce222": {
       "source": "未标注",
       "kind": "text",
@@ -15124,12 +15254,12 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1514,
+          "line": 1540,
           "column": 32
         },
         {
           "file": "src/state/appState.js",
-          "line": 1535,
+          "line": 1561,
           "column": 32
         }
       ]
@@ -15194,7 +15324,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 488,
+          "line": 559,
           "column": 9
         }
       ]
@@ -15278,7 +15408,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 589,
+          "line": 660,
           "column": 23
         }
       ]
@@ -15759,7 +15889,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 392,
+          "line": 463,
           "column": 62
         }
       ]
@@ -15919,6 +16049,18 @@
         }
       ]
     },
+    "a052d4885443bee9": {
+      "source": "生成随机 Key",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 740,
+          "column": 105
+        }
+      ]
+    },
     "a05fbbc9e6621fa9": {
       "source": "{0}数据可能过期",
       "kind": "template",
@@ -15962,7 +16104,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 529,
+          "line": 600,
           "column": 115
         }
       ]
@@ -16882,6 +17024,18 @@
         }
       ]
     },
+    "a8d1bf69c8856a7c": {
+      "source": "只写入后端用户配置，不写入浏览器缓存；修改后点击保存。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 723,
+          "column": 9
+        }
+      ]
+    },
     "a8db4508da6d1bf3": {
       "source": "球形",
       "kind": "text",
@@ -16930,7 +17084,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 525,
+          "line": 596,
           "column": 58
         }
       ]
@@ -17122,6 +17276,18 @@
           "file": "src/components/PromptPreviewModal.vue",
           "line": 34,
           "column": 61
+        }
+      ]
+    },
+    "acc867d141557526": {
+      "source": "启用接口",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 704,
+          "column": 9
         }
       ]
     },
@@ -17866,7 +18032,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 460,
+          "line": 531,
           "column": 76
         }
       ]
@@ -17890,12 +18056,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 556,
+          "line": 627,
           "column": 9
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 568,
+          "line": 639,
           "column": 15
         }
       ]
@@ -17909,6 +18075,18 @@
           "file": "src/views/ModelEditor.vue",
           "line": 136,
           "column": 12
+        }
+      ]
+    },
+    "b56d06be64e1978d": {
+      "source": "本机 External API Key",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 737,
+          "column": 13
         }
       ]
     },
@@ -17931,7 +18109,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 496,
+          "line": 567,
           "column": 45
         }
       ]
@@ -18838,7 +19016,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 578,
+          "line": 649,
           "column": 15
         }
       ]
@@ -19253,12 +19431,12 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 547,
+          "line": 618,
           "column": 13
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 567,
+          "line": 638,
           "column": 15
         }
       ]
@@ -19311,7 +19489,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1366,
+          "line": 1392,
           "column": 32
         }
       ]
@@ -20254,6 +20432,18 @@
         }
       ]
     },
+    "ceb0ad6e7db93b5a": {
+      "source": "启用 External API 前请先填写本机 API Key",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/utils/configNormalize.js",
+          "line": 38,
+          "column": 12
+        }
+      ]
+    },
     "ceb1caca026af2ca": {
       "source": "总 tokens",
       "kind": "text",
@@ -20372,7 +20562,7 @@
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 131,
+          "line": 202,
           "column": 42
         },
         {
@@ -20647,7 +20837,7 @@
       "refs": [
         {
           "file": "src/state/appState.js",
-          "line": 1391,
+          "line": 1417,
           "column": 14
         }
       ]
@@ -21774,6 +21964,18 @@
         }
       ]
     },
+    "ddcef43db255845c": {
+      "source": "External API 接口地址",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 751,
+          "column": 62
+        }
+      ]
+    },
     "ddde08946298195d": {
       "source": "还原",
       "kind": "text",
@@ -22365,7 +22567,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 535,
+          "line": 606,
           "column": 22
         }
       ]
@@ -22479,7 +22681,7 @@
         },
         {
           "file": "src/state/appState.js",
-          "line": 152,
+          "line": 153,
           "column": 12
         },
         {
@@ -22583,7 +22785,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 519,
+          "line": 590,
           "column": 17
         }
       ]
@@ -22855,7 +23057,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 530,
+          "line": 601,
           "column": 154
         }
       ]
@@ -22997,7 +23199,7 @@
       "refs": [
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
-          "line": 605,
+          "line": 676,
           "column": 9
         }
       ]
@@ -23082,6 +23284,18 @@
         }
       ]
     },
+    "ecd56e7a6dcf6e3a": {
+      "source": "调用方使用 Authorization: Bearer 或 x-api-key 传入这里的密钥。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 705,
+          "column": 9
+        }
+      ]
+    },
     "ecf6c32da7bb36bc": {
       "source": "子代理类型",
       "kind": "text",
@@ -23161,6 +23375,18 @@
           "file": "src/components/charts/UsageHeatmapCalendar.vue",
           "line": 141,
           "column": 34
+        }
+      ]
+    },
+    "ee1e7a6ea8643221": {
+      "source": "启用前请填写本机 API Key",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 168,
+          "column": 30
         }
       ]
     },
@@ -23750,7 +23976,7 @@
       "refs": [
         {
           "file": "src/utils/errorContract.js",
-          "line": 82,
+          "line": 96,
           "column": 91
         }
       ]
@@ -24491,6 +24717,18 @@
         }
       ]
     },
+    "fb7f87ae43133552": {
+      "source": "模型 ID 来自上方模型配置的分组/模型名；协议必须与模型通道匹配。",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 748,
+          "column": 9
+        }
+      ]
+    },
     "fbabd4e71ffd4eea": {
       "source": "{0} 条未计价（未知模型）",
       "kind": "template",
@@ -24714,6 +24952,18 @@
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
           "line": 54,
           "column": 43
+        }
+      ]
+    },
+    "fd714ab6bb25a813": {
+      "source": "本机 API Key",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/settings/categories/CursorServiceSettings.vue",
+          "line": 722,
+          "column": 9
         }
       ]
     },

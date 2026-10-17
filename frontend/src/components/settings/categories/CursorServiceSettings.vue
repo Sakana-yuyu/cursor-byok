@@ -4,6 +4,7 @@ import SettingsSection from "@/components/settings/SettingsSection.vue";
 import Button from "@/components/ui/Button.vue";
 import Input from "@/components/ui/Input.vue";
 import Select from "@/components/ui/Select.vue";
+import Switch from "@/components/ui/Switch.vue";
 import { useMessage } from "@/composables/useMessage";
 import {
   ROUTE_MODE_OPTIONS,
@@ -13,6 +14,7 @@ import {
   persistUserConfig,
   saveRoutingMode,
   saveComputerUse,
+  saveExternalAPI,
   setCursorManualPath,
   toUserError,
 } from "@/state/appState";
@@ -37,6 +39,16 @@ const routeModeDraft = ref(appState.routingMode);
 const manualPath = ref("");
 const detectedPath = ref("");
 const terminalEnvironment = ref(null);
+
+const externalAPIDraft = reactive({
+  enabled: Boolean(appState.externalAPI?.enabled),
+  apiKey: String(appState.externalAPI?.apiKey || ""),
+});
+const externalAPIState = reactive({ busy: false, error: "", retry: null });
+const externalAPIEndpoint = computed(() => {
+  const listenAddr = String(appState.configBackendListenAddr || "127.0.0.1:18090").trim();
+  return `http://${listenAddr}/byok/v1`;
+});
 
 const routeModeState = reactive({
   busy: false,
@@ -102,6 +114,17 @@ const routeModeBusy = computed(() => routeModeState.busy || appState.configSavin
 const manualPathBusy = computed(() => manualPathState.busy || manualPathState.queued);
 
 watch(
+  () => appState.externalAPI,
+  (value) => {
+    if (!externalAPIState.busy) {
+      externalAPIDraft.enabled = Boolean(value?.enabled);
+      externalAPIDraft.apiKey = String(value?.apiKey || "");
+    }
+  },
+  { deep: true },
+);
+
+watch(
   () => appState.routingMode,
   (value) => {
     if (!routeModeState.busy) {
@@ -114,6 +137,54 @@ watch(
 function retryState(state) {
   if (typeof state.retry === "function") {
     void state.retry();
+  }
+}
+
+async function saveExternalAPISettings() {
+  externalAPIState.error = "";
+  externalAPIState.busy = true;
+  externalAPIState.retry = () => saveExternalAPISettings();
+  try {
+    await props.autosave.run("cursor-service.external-api", async () => {
+      const result = await saveExternalAPI({
+        enabled: externalAPIDraft.enabled,
+        apiKey: externalAPIDraft.apiKey,
+      });
+      if (!result?.ok) {
+        throw new Error(result?.error || "保存 External API 配置失败");
+      }
+    });
+  } catch (error) {
+    externalAPIState.error = toUserError(error);
+  } finally {
+    externalAPIState.busy = false;
+  }
+}
+
+function handleExternalAPIEnabledChange(enabled) {
+  externalAPIDraft.enabled = Boolean(enabled);
+  if (externalAPIDraft.enabled && !externalAPIDraft.apiKey.trim()) {
+    externalAPIDraft.enabled = false;
+    externalAPIState.error = "启用前请填写本机 API Key";
+    return;
+  }
+  void saveExternalAPISettings();
+}
+
+function generateExternalAPIKey() {
+  if (globalThis.crypto?.randomUUID) {
+    externalAPIDraft.apiKey = `cbk_${globalThis.crypto.randomUUID().replaceAll("-", "")}`;
+  } else {
+    externalAPIDraft.apiKey = `cbk_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+  }
+}
+
+async function copyExternalAPIEndpoint() {
+  try {
+    await navigator.clipboard.writeText(externalAPIEndpoint.value);
+    message.success("接口地址已复制");
+  } catch (_error) {
+    message.error("复制失败，请手动选择接口地址");
   }
 }
 
@@ -624,6 +695,61 @@ onUnmounted(() => {
           >
             一键配对
           </Button>
+        </div>
+      </SettingsRow>
+    </SettingsSection>
+
+    <SettingsSection title="本机 External API" description="对本机应用提供 OpenAI Chat/Responses 与 Anthropic Messages 原生转发。默认关闭，只监听本机请求并复用已配置模型通道。">
+      <SettingsRow
+        label="启用接口"
+        description="调用方使用 Authorization: Bearer 或 x-api-key 传入这里的密钥。"
+        :busy="externalAPIState.busy"
+        :error="externalAPIState.error"
+        @retry="retryState(externalAPIState)"
+      >
+        <Switch
+          compact
+          label=""
+          :enabled="externalAPIDraft.enabled"
+          :busy="externalAPIState.busy"
+          :disabled="externalAPIState.busy"
+          aria-label="启用本机 External API"
+          @change="handleExternalAPIEnabledChange"
+        />
+      </SettingsRow>
+
+      <SettingsRow
+        label="本机 API Key"
+        description="只写入后端用户配置，不写入浏览器缓存；修改后点击保存。"
+        :busy="externalAPIState.busy"
+        :error="externalAPIState.error"
+        @retry="retryState(externalAPIState)"
+      >
+        <div class="w-full max-w-[460px] space-y-2">
+          <Input
+            v-model="externalAPIDraft.apiKey"
+            type="password"
+            allow-visibility-toggle
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="例如 cbk_..."
+            :disabled="externalAPIState.busy"
+            aria-label="本机 External API Key"
+          />
+          <div class="flex flex-wrap justify-end gap-2">
+            <Button variant="default" :disabled="externalAPIState.busy" @click="generateExternalAPIKey">生成随机 Key</Button>
+            <Button variant="primary" :disabled="externalAPIState.busy || (externalAPIDraft.enabled && !externalAPIDraft.apiKey.trim())" @click="saveExternalAPISettings">保存 External API</Button>
+          </div>
+        </div>
+      </SettingsRow>
+
+      <SettingsRow
+        label="接口地址"
+        description="模型 ID 来自上方模型配置的分组/模型名；协议必须与模型通道匹配。"
+      >
+        <div class="flex w-full max-w-[460px] items-center gap-2">
+          <Input :model-value="externalAPIEndpoint" readonly aria-label="External API 接口地址" />
+          <Button variant="default" @click="copyExternalAPIEndpoint">复制</Button>
         </div>
       </SettingsRow>
     </SettingsSection>

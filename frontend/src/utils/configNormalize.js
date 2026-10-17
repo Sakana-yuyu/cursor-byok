@@ -34,6 +34,9 @@ export function validateConfigPayload(payload) {
   if (!SUPPORTED_ROUTE_MODES.has(mode)) {
     return "运行模式仅支持 local 或 upstream";
   }
+  if (payload?.externalApi?.enabled && !asString(payload.externalApi.apiKey).trim()) {
+    return "启用 External API 前请先填写本机 API Key";
+  }
   return "";
 }
 
@@ -44,6 +47,15 @@ export function normalizeLocalResponseCache(source) {
     ttlSeconds: asPositiveInteger(raw.ttlSeconds),
     maxEntries: asPositiveInteger(raw.maxEntries),
     persist: asBoolean(raw.persist, true),
+  };
+}
+
+// 本机 External API 配置：API Key 只存在后端配置，不写入前端 localStorage 快照。
+export function normalizeExternalAPI(source) {
+  const raw = source && typeof source === "object" ? source : {};
+  return {
+    enabled: asBoolean(raw.enabled),
+    apiKey: asString(raw.apiKey).trim(),
   };
 }
 
@@ -191,6 +203,7 @@ export function normalizeConfig(source) {
     billingQuery: {
       enabled: billingQuery.enabled === undefined ? true : asBoolean(billingQuery.enabled),
     },
+    externalAPI: normalizeExternalAPI(raw.externalAPI || raw.externalApi),
     // 本地响应缓存配置：保留在归一化白名单中，避免任何一次配置保存把它清空回默认值
     localResponseCache: normalizeLocalResponseCache(raw.localResponseCache),
     mirrorCapture: normalizeMirrorCapture(raw.mirrorCapture),

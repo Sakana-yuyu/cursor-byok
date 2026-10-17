@@ -59,6 +59,7 @@ import {
   normalizeDelegationForAdapters,
   normalizeHomeMetrics,
   normalizeLocalResponseCache,
+  normalizeExternalAPI,
   normalizeRouteMode,
   normalizeComputerUseMode,
   validateConfigPayload,
@@ -202,6 +203,8 @@ function loadCachedState() {
     // before they can enter reactive state; the first persistence effect below
     // rewrites the same key using the safe whitelist.
     delete parsed.modelAdapters;
+    delete parsed.externalApi;
+    delete parsed.externalAPI;
     delete parsed.serviceLastError;
     delete parsed.netProxyHttp;
     delete parsed.netProxyHttps;
@@ -235,6 +238,7 @@ function buildConfigPayload(source = appState) {
     routing: normalized.routing,
     homeMetrics: normalized.homeMetrics,
     billingQuery: normalized.billingQuery,
+    externalApi: normalized.externalAPI,
     localResponseCache: normalized.localResponseCache,
     mirrorCapture: normalized.mirrorCapture,
     delegation,
@@ -280,6 +284,7 @@ function applyConfigToState(config, { modelAdaptersOnly = false } = {}) {
   appState.computerUseBrowserStartURL = normalized.computerUse.browserStartURL;
   appState.includeCacheWriteInHitRate = normalized.homeMetrics.includeCacheWriteInHitRate;
   appState.billingQuery = normalized.billingQuery;
+  appState.externalAPI = normalized.externalAPI;
   appState.localResponseCache = normalized.localResponseCache;
   appState.mirrorCaptureEnabled = normalized.mirrorCapture.enabled;
   appState.mirrorCaptureProtocolFidelity = normalized.mirrorCapture.protocolFidelity;
@@ -549,6 +554,8 @@ export const appState = reactive({
   includeCacheWriteInHitRate: cachedConfig.homeMetrics.includeCacheWriteInHitRate,
   // 计费查询全局开关：控制是否向上游查询余额/计费接口（本地成本估算不受影响）。
   billingQuery: cachedConfig.billingQuery,
+  // External API 的 API Key 不进入 localStorage，真实配置由启动后的 LoadUserConfig 回填。
+  externalAPI: cachedConfig.externalAPI,
   localResponseCache: cachedConfig.localResponseCache,
   delegation: cachedConfig.delegation,
   // 浮窗偏好是纯前端 UX 状态：localStorage 持久化 + 跨窗口 storage 事件广播。
@@ -1112,6 +1119,25 @@ export async function saveBillingQueryEnabled(enabled) {
   });
   if (!result.ok) {
     appState.billingQuery = previous;
+  }
+  return result;
+}
+
+// 保存本机 External API 配置。API Key 只随一次显式保存提交，不进入缓存快照。
+export async function saveExternalAPI(partial) {
+  const currentConfig = await loadPersistedUserConfig();
+  const previous = appState.externalAPI;
+  const next = normalizeExternalAPI({
+    ...(currentConfig.externalAPI ?? {}),
+    ...(partial ?? {}),
+  });
+  appState.externalAPI = next;
+  const result = await persistConfigPayload({
+    ...currentConfig,
+    externalAPI: next,
+  });
+  if (!result.ok) {
+    appState.externalAPI = previous;
   }
   return result;
 }
