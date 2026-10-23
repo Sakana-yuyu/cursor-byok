@@ -19,8 +19,70 @@ const now = ref(Date.now());
 const { locale } = useLocale();
 let clock;
 
+// 渠道数不超过该阈值时全部展开（小配置保持一眼全览的旧观感）；
+// 超过后按端点分组折叠，只自动展开含冷却渠道的分组。
+const EXPAND_ALL_THRESHOLD = 12;
+
 const hasSnapshot = computed(() => rawSnapshot.value !== null);
 const diagnostics = computed(() => normalizeProviderDiagnostics(rawSnapshot.value, now.value));
+
+// 渠道筛选：按显示名 / 模型 / 分组 / 供应商 / 端点模糊匹配。
+const searchText = ref("");
+// 用户显式展开/收起的分组覆盖（key=端点）；未覆盖时按默认规则展开。
+const groupState = ref({});
+
+function channelMatchesFilter(channel, filter) {
+  if (!filter) return true;
+  return `${channel.displayName} ${channel.modelId} ${channel.groupName} ${channel.provider} ${channel.endpoint}`
+    .toLowerCase()
+    .includes(filter);
+}
+
+// groupedChannels 按安全端点给渠道分组（同一中转站/官方端点的渠道聚在一张卡里，
+// 避免上百个渠道逐条平铺刷屏）；含冷却渠道的分组排在最前，其余按渠道数降序。
+const groupedChannels = computed(() => {
+  const filter = searchText.value.trim().toLowerCase();
+  const groups = new Map();
+  for (const channel of diagnostics.value.channels) {
+    if (!channelMatchesFilter(channel, filter)) continue;
+    const endpoint = channel.endpoint || "";
+    if (!groups.has(endpoint)) {
+      groups.set(endpoint, { key: endpoint, endpoint, channels: [], ready: 0, cooldown: 0 });
+    }
+    const group = groups.get(endpoint);
+    group.channels.push(channel);
+    if (channel.healthState === "cooldown") group.cooldown += 1;
+    else group.ready += 1;
+  }
+  return Array.from(groups.values()).sort((a, b) => {
+    const byCooldown = (b.cooldown > 0 ? 1 : 0) - (a.cooldown > 0 ? 1 : 0);
+    if (byCooldown !== 0) return byCooldown;
+    return b.channels.length - a.channels.length;
+  });
+});
+
+const filteredChannelCount = computed(() =>
+  groupedChannels.value.reduce((total, group) => total + group.channels.length, 0),
+);
+
+function isGroupExpanded(group) {
+  if (Object.prototype.hasOwnProperty.call(groupState.value, group.key)) {
+    return Boolean(groupState.value[group.key]);
+  }
+  if (searchText.value.trim()) return true;
+  if (diagnostics.value.channels.length <= EXPAND_ALL_THRESHOLD) return true;
+  return group.cooldown > 0;
+}
+
+function toggleGroup(group) {
+  groupState.value = { ...groupState.value, [group.key]: !isGroupExpanded(group) };
+}
+
+function setAllGroups(expanded) {
+  const next = {};
+  for (const group of groupedChannels.value) next[group.key] = expanded;
+  groupState.value = next;
+}
 
 async function load() {
   if (loading.value) return;
@@ -43,6 +105,20 @@ async function load() {
 function formatTokens(value) {
   const number = Number(value || 0);
   return number > 0 ? Math.round(number).toLocaleString(locale.value) : "—";
+}
+
+// channelMeta 汇总渠道「供应商 · 协议（· 自定义头）」一行文本，行内与 title 复用。
+function channelMeta(channel) {
+  const meta = `${channel.provider || "—"} · ${channel.protocolGroup || channel.protocolMode || "—"}`;
+  return channel.customHeadersConfigured ? `${meta} · 自定义头` : meta;
+}
+
+// channelTitle 渠道名提示：显示名与模型 ID 不同时附带模型 ID，避免紧凑行丢失该信息。
+function channelTitle(channel) {
+  if (channel.modelId && channel.modelId !== channel.displayName) {
+    return `${channel.displayName}（${channel.modelId}）`;
+  }
+  return channel.displayName;
 }
 
 function snapshotLabel() {
@@ -236,81 +312,131 @@ onUnmounted(() => {
       >
         当前没有可诊断的模型渠道
       </div>
-      <div
-        v-else
-        class="grid gap-2 sm:grid-cols-2"
-      >
-        <article
-          v-for="channel in diagnostics.channels"
-          :key="channel.channelId"
-          class="min-w-0 rounded-[8px] border bg-[#1b1b1b] px-3 py-3"
-          :class="channel.healthState === 'cooldown' ? 'border-amber-800/60' : 'border-white/10'"
-          data-testid="provider-diagnostic-channel"
-        >
-          <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0">
-              <h3
-                class="truncate text-sm font-medium text-white"
-                :title="channel.displayName"
-              >
-                {{ channel.displayName }}
-              </h3>
-              <p
-                class="mt-0.5 truncate text-[11px] text-[#858585]"
-                :title="channel.modelId"
-              >
-                {{ channel.modelId || "未设置模型" }}
-              </p>
-            </div>
-            <span
-              class="shrink-0 rounded-full border px-2 py-0.5 text-[10px]"
-              :class="channel.healthState === 'cooldown' ? 'border-amber-700/70 bg-amber-950/40 text-[#fcd34d]' : 'border-emerald-800/70 bg-emerald-950/30 text-[#a7f3d0]'"
-            >
-              {{ channel.healthState === "cooldown" ? "冷却降权" : "可用" }}
-            </span>
-          </div>
-
-          <dl class="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11px]">
-            <dt class="text-[#a3a3a3]">
-              供应商 / 协议
-            </dt>
-            <dd class="min-w-0 truncate text-[#c7c7c7]">
-              {{ channel.provider || "—" }} · {{ channel.protocolGroup || channel.protocolMode || "—" }}
-            </dd>
-            <dt class="text-[#a3a3a3]">
-              安全端点
-            </dt>
-            <dd
-              class="min-w-0 truncate text-[#c7c7c7]"
-              :title="channel.endpoint"
-            >
-              {{ channel.endpoint || "无有效端点" }}
-            </dd>
-            <dt class="text-[#a3a3a3]">
-              上下文 / 输出
-            </dt>
-            <dd
-              class="text-[#c7c7c7]"
-              style="font-family: var(--font-num)"
-            >
-              {{ formatTokens(channel.contextWindowTokens) }} / {{ formatTokens(channel.maxCompletionTokens) }}
-            </dd>
-            <dt class="text-[#a3a3a3]">
-              凭据
-            </dt>
-            <dd class="text-[#c7c7c7]">
-              {{ channel.credentialConfigured ? "已配置" : "未配置" }}<span v-if="channel.customHeadersConfigured"> · 自定义请求头</span>
-            </dd>
-          </dl>
-
-          <div
-            v-if="channel.healthState === 'cooldown'"
-            class="mt-3 rounded-[6px] bg-amber-950/30 px-2 py-1.5 text-[11px] text-[#fcd34d]"
+      <template v-else>
+        <div class="mb-2 flex flex-wrap items-center gap-2">
+          <input
+            v-model="searchText"
+            type="text"
+            placeholder="筛选渠道：模型 / 分组 / 端点"
+            class="min-w-0 flex-1 rounded-[6px] border border-white/10 bg-black/30 px-3 py-1.5 text-xs text-white outline-none focus:border-[#10AD5D]/60 sm:max-w-72"
           >
-            {{ formatProviderCooldown(channel.cooldownUntilUnixMs, now) }} · {{ formatDiagnosticTimestamp(channel.cooldownUntilUnixMs, locale) }}
+          <span
+            class="shrink-0 text-[11px] text-[#858585]"
+            style="font-family: var(--font-num)"
+          >
+            {{ filteredChannelCount }} / {{ diagnostics.channels.length }} 个渠道
+          </span>
+          <template v-if="groupedChannels.length > 1">
+            <Button
+              variant="text"
+              @click="setAllGroups(true)"
+            >
+              全部展开
+            </Button>
+            <Button
+              variant="text"
+              @click="setAllGroups(false)"
+            >
+              全部收起
+            </Button>
+          </template>
+        </div>
+
+        <div
+          v-if="groupedChannels.length === 0"
+          class="rounded-[8px] border border-white/10 bg-black/15 px-4 py-6 text-center text-sm text-[#858585]"
+        >
+          没有匹配「{{ searchText.trim() }}」的渠道
+        </div>
+        <div
+          v-else
+          class="flex flex-col gap-2"
+        >
+          <div
+            v-for="group in groupedChannels"
+            :key="group.key"
+            class="min-w-0 overflow-hidden rounded-[8px] border bg-[#1b1b1b]"
+            :class="group.cooldown > 0 ? 'border-amber-800/60' : 'border-white/10'"
+          >
+            <button
+              type="button"
+              class="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-white/5"
+              :aria-expanded="isGroupExpanded(group)"
+              @click="toggleGroup(group)"
+            >
+              <span
+                class="icon-[mdi--chevron-right] shrink-0 text-[14px] text-[#858585] transition-transform"
+                :class="isGroupExpanded(group) ? 'rotate-90' : ''"
+              />
+              <span
+                class="min-w-0 flex-1 truncate text-xs text-[#c7c7c7]"
+                :title="group.endpoint"
+              >
+                {{ group.endpoint || "无有效端点" }}
+              </span>
+              <span class="shrink-0 text-[10px] text-[#858585]">
+                {{ group.channels.length }} 个渠道<template v-if="group.cooldown > 0"> · <span class="text-[#fcd34d]">{{ group.cooldown }} 冷却</span></template>
+              </span>
+            </button>
+            <div
+              v-show="isGroupExpanded(group)"
+              class="divide-y divide-white/5 border-t border-white/5"
+            >
+              <div
+                v-for="channel in group.channels"
+                :key="channel.channelId"
+                class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 px-3 py-1.5 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto]"
+                data-testid="provider-diagnostic-channel"
+              >
+                <div class="flex min-w-0 items-center gap-2">
+                  <span
+                    class="size-1.5 shrink-0 rounded-full"
+                    :class="channel.healthState === 'cooldown' ? 'bg-[#fcd34d]' : 'bg-[#6ee7a5]'"
+                  />
+                  <span
+                    class="min-w-0 truncate text-xs text-white"
+                    :title="channelTitle(channel)"
+                  >
+                    {{ channel.displayName }}
+                  </span>
+                  <span
+                    v-if="!channel.credentialConfigured"
+                    class="shrink-0 text-[10px] text-[#fcd34d]"
+                  >
+                    未配置凭据
+                  </span>
+                </div>
+                <div
+                  class="hidden min-w-0 truncate text-[11px] text-[#858585] sm:block"
+                  :title="channelMeta(channel)"
+                >
+                  {{ channelMeta(channel) }}
+                </div>
+                <div class="flex shrink-0 items-center justify-end gap-2">
+                  <span
+                    class="hidden text-[11px] tabular-nums text-[#858585] md:inline"
+                    :title="`上下文 / 输出：${formatTokens(channel.contextWindowTokens)} / ${formatTokens(channel.maxCompletionTokens)}`"
+                  >
+                    {{ formatTokens(channel.contextWindowTokens) }} / {{ formatTokens(channel.maxCompletionTokens) }}
+                  </span>
+                  <span
+                    v-if="channel.healthState === 'cooldown'"
+                    class="whitespace-nowrap text-[10px] text-[#fcd34d]"
+                  >
+                    {{ formatProviderCooldown(channel.cooldownUntilUnixMs, now) }}
+                  </span>
+                  <span
+                    class="shrink-0 rounded-full border px-2 py-0.5 text-[10px]"
+                    :class="channel.healthState === 'cooldown' ? 'border-amber-700/70 bg-amber-950/40 text-[#fcd34d]' : 'border-emerald-800/70 bg-emerald-950/30 text-[#a7f3d0]'"
+                  >
+                    {{ channel.healthState === "cooldown" ? "冷却降权" : "可用" }}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
-        </article>
-      </div>
+        </div>
+      </template>
     </template>
   </section>
 </template>

@@ -325,3 +325,83 @@ func TestBuiltinPricingNewModels(t *testing.T) {
 		}
 	}
 }
+
+func TestCapabilitiesOctober2026Models(t *testing.T) {
+	// 2026-10 新增模型：中转站渠道常见命名（含 Cursor cursor-grok-4.5-* 前缀变体）
+	// 必须命中专属规则，不得落入 ^grok / ^gpt-?6 等兜底规则拿到错误窗口与价格。
+	tests := []struct {
+		modelID        string
+		wantName       string
+		wantContext    int
+		wantVision     bool
+		wantInput      float64 // pricing input；composer-2.5 无 cacheRead 用 -1 标记
+		wantOutput     float64
+		wantCacheRead  float64
+		wantEfforts    []string
+		noCacheRead    bool
+	}{
+		{"grok-4.6", "Grok 4.6", 500_000, true, 2, 6, 0.5, nil, false},
+		{"grok-4.7", "Grok 4.7", 500_000, true, 2, 6, 0.5, nil, false},
+		{"grok-4.7-fast", "Grok 4.7 Fast", 500_000, true, 4, 12, 1, nil, false},
+		{"cursor-grok-4.5-high", "Grok 4.5", 500_000, true, 2, 6, 0.5, nil, false},
+		{"cursor-grok-4.5-low-fast", "Grok 4.5", 500_000, true, 2, 6, 0.5, nil, false},
+		{"claude-opus-5.5", "Claude Opus 5.5", 1_000_000, true, 4, 20, 0.4, []string{"low", "medium", "high", "xhigh", "max"}, false},
+		{"claude-opus-5-5-thinking", "Claude Opus 5.5", 1_000_000, true, 4, 20, 0.4, []string{"low", "medium", "high", "xhigh", "max"}, false},
+		{"claude-sonnet-5.5", "Claude Sonnet 5.5", 1_000_000, true, 2, 10, 0.1, []string{"low", "medium", "high", "xhigh", "max"}, false},
+		{"claude-sonnet-5-5", "Claude Sonnet 5.5", 1_000_000, true, 2, 10, 0.1, []string{"low", "medium", "high", "xhigh", "max"}, false},
+		{"gpt-6-luna", "GPT-6 Luna", 1_048_576, true, 0.1, 0.5, 0.01, []string{"none", "low", "medium", "high", "xhigh"}, false},
+		{"composer-2.5", "Composer 2.5", 200_000, false, 0.5, 2.5, 0, nil, true},
+		// MiniMax-M3.1-Flash：思考为 enabled/adaptive 开关式（无枚举档位，efforts=nil）
+		{"minimax-m3.1-flash", "MiniMax-M3.1-Flash", 1_000_000, true, 0.15, 0.6, 0.015, nil, false},
+		{"minimax-m3.1", "MiniMax-M3.1-Flash", 1_000_000, true, 0.15, 0.6, 0.015, nil, false},
+		{"MiniMax/M3.1-Flash", "MiniMax-M3.1-Flash", 1_000_000, true, 0.15, 0.6, 0.015, nil, false},
+		{"m3.1-flash", "MiniMax-M3.1-Flash", 1_000_000, true, 0.15, 0.6, 0.015, nil, false},
+		// 2026-10 第二批：国内外新模型
+		{"claude-haiku-5.5", "Claude Haiku 5.5", 1_000_000, true, 0.1, 0.5, 0.01, nil, false},
+		{"gpt-6.1-sol", "GPT-6.1 Sol", 272_000, true, 2, 10, 0.1, []string{"none", "low", "medium", "high", "xhigh", "max"}, false},
+		{"deepseek-v4.1-flash", "DeepSeek V4.1 Flash", 1_048_576, true, 0.3, 1.2, 0.006, nil, false},
+		{"qwen3.8-flash", "Qwen3.8-Flash", 1_000_000, true, 0.15, 0.47, 0.015, nil, false},
+		{"doubao-seed-2-1-pro", "Doubao Seed 2.1 Pro", 1_000_000, true, 6, 30, 1.2, nil, false},
+		{"doubao-seed-2.1-pro-0915", "Doubao Seed 2.1 Pro", 1_000_000, true, 6, 30, 1.2, nil, false},
+	}
+	for _, tt := range tests {
+		c := Capabilities(tt.modelID)
+		if c == nil {
+			t.Errorf("Capabilities(%q) returned nil, want non-nil", tt.modelID)
+			continue
+		}
+		if c.DisplayName != tt.wantName {
+			t.Errorf("Capabilities(%q).DisplayName = %q, want %q", tt.modelID, c.DisplayName, tt.wantName)
+		}
+		if c.ContextWindowTokens != tt.wantContext {
+			t.Errorf("Capabilities(%q).ContextWindowTokens = %d, want %d", tt.modelID, c.ContextWindowTokens, tt.wantContext)
+		}
+		if c.SupportsVision != tt.wantVision {
+			t.Errorf("Capabilities(%q).SupportsVision = %v, want %v", tt.modelID, c.SupportsVision, tt.wantVision)
+		}
+		if c.Pricing == nil || c.Pricing.Input == nil || *c.Pricing.Input != tt.wantInput {
+			t.Errorf("Capabilities(%q) input = %#v, want %v", tt.modelID, c.Pricing, tt.wantInput)
+			continue
+		}
+		if c.Pricing.Output == nil || *c.Pricing.Output != tt.wantOutput {
+			t.Errorf("Capabilities(%q) output = %#v, want %v", tt.modelID, c.Pricing.Output, tt.wantOutput)
+		}
+		if tt.noCacheRead {
+			if c.Pricing.CacheRead != nil {
+				t.Errorf("Capabilities(%q) cacheRead = %#v, want nil", tt.modelID, c.Pricing.CacheRead)
+			}
+		} else if c.Pricing.CacheRead == nil || *c.Pricing.CacheRead != tt.wantCacheRead {
+			t.Errorf("Capabilities(%q) cacheRead = %#v, want %v", tt.modelID, c.Pricing.CacheRead, tt.wantCacheRead)
+		}
+		if len(c.ReasoningEfforts) != len(tt.wantEfforts) {
+			t.Errorf("Capabilities(%q).ReasoningEfforts = %v, want %v", tt.modelID, c.ReasoningEfforts, tt.wantEfforts)
+			continue
+		}
+		for i := range tt.wantEfforts {
+			if c.ReasoningEfforts[i] != tt.wantEfforts[i] {
+				t.Errorf("Capabilities(%q).ReasoningEfforts = %v, want %v", tt.modelID, c.ReasoningEfforts, tt.wantEfforts)
+				break
+			}
+		}
+	}
+}

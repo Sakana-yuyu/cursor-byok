@@ -10,6 +10,7 @@ import {
 } from "@/services/clientApi";
 import { runtimeEvents } from "@/services/runtimeAdapter";
 import { appState } from "@/state/appState";
+import { normalizeSupplierBaseURL } from "@/utils/supplierGrouping";
 import { formatMoney } from "@/utils/format";
 import { onAccountSync } from "@/utils/accountSync";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
@@ -20,7 +21,30 @@ const syncing = ref(false);
 const error = ref("");
 
 const billingQueryEnabled = computed(() => appState.billingQuery?.enabled !== false);
-const supportedCount = computed(() => balances.value.filter((item) => item?.balance?.supported).length);
+
+// 余额按连接（规范化 baseURL）去重分组：同一中转站的全部模型通道共享同一份
+// 余额查询结果（查询本身也按 URL+凭据缓存），逐通道平铺会把同一站点渲染成
+// 几十上百张重复卡片。
+const balanceGroups = computed(() => {
+  const map = new Map();
+  for (const item of balances.value) {
+    const baseURL = normalizeSupplierBaseURL(item?.baseURL);
+    const key = baseURL || `adapter::${item?.adapterId || map.size}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        baseURL,
+        host: supplierHost(item?.baseURL),
+        groupName: String(item?.groupName || "").trim(),
+        items: [],
+      });
+    }
+    map.get(key).items.push(item);
+  }
+  return Array.from(map.values());
+});
+
+const supportedCount = computed(() => balanceGroups.value.filter((group) => groupRepresentative(group)?.balance?.supported).length);
 
 // loadSeq 丢弃过期响应：手动同步与账号变更事件并发触发时，
 // 后返回的旧结果不得覆盖新结果（否则错误提示会闪烁或乱序）。
@@ -87,6 +111,28 @@ onBeforeUnmount(() => {
   stopSyncedEvent();
 });
 
+// supplierHost 从 baseURL 提取 host，作为分组卡片的连接标识。
+function supplierHost(baseURL) {
+  const url = String(baseURL || "").trim();
+  if (!url) return "";
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+// groupRepresentative 取组内代表条目：优先可用余额，否则首条（展示失败原因）。
+function groupRepresentative(group) {
+  return group.items.find((item) => item?.balance?.supported) || group.items[0] || null;
+}
+
+// groupSubtitle 生成卡片副标题：连接 host + 通道数（多通道时）。
+function groupSubtitle(group) {
+  const host = group.host || "未设置 URL";
+  return group.items.length > 1 ? `${host} · ${group.items.length} 个通道` : host;
+}
+
 function balanceLabel(item) {
   const balance = item?.balance || {};
   if (!balance.supported) return balance.message || "余额不可用";
@@ -109,9 +155,20 @@ function balanceLabel(item) {
     >
       <template #actions>
         <div class="center-row gap-2">
-          <Button variant="text" @click="openModelConfig">模型配置</Button>
-          <Button :disabled="loading || syncing || !billingQueryEnabled" @click="handleSync">
-            <span v-if="syncing || loading" class="icon-[mdi--loading] animate-spin text-[14px]" />
+          <Button
+            variant="text"
+            @click="openModelConfig"
+          >
+            模型配置
+          </Button>
+          <Button
+            :disabled="loading || syncing || !billingQueryEnabled"
+            @click="handleSync"
+          >
+            <span
+              v-if="syncing || loading"
+              class="icon-[mdi--loading] animate-spin text-[14px]"
+            />
             {{ syncing ? "同步中…" : "立即同步" }}
           </Button>
         </div>
@@ -141,33 +198,43 @@ function balanceLabel(item) {
       >
         暂无已配置余额查询的模型通道。请在模型配置中为供应商填写余额凭据。
       </div>
-      <div v-else class="flex flex-col gap-2">
+      <div
+        v-else
+        class="flex flex-col gap-2"
+      >
         <div class="text-[11px] text-[#737373]">
-          已同步 {{ supportedCount }} / {{ balances.length }} 个通道
+          已同步 {{ supportedCount }} / {{ balanceGroups.length }} 个中转站（共 {{ balances.length }} 个通道）
         </div>
         <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           <div
-            v-for="item in balances"
-            :key="item.adapterId"
+            v-for="group in balanceGroups"
+            :key="group.key"
             class="rounded-[8px] border border-[#343434] bg-[#252525]/70 px-3 py-2.5"
           >
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0">
-                <div class="truncate text-sm text-white">{{ item.groupName || item.displayName || item.modelID }}</div>
-                <div class="mt-0.5 truncate text-[11px] text-[#737373]">{{ item.displayName || item.modelID }}</div>
+                <div class="truncate text-sm text-white">
+                  {{ group.groupName || group.host || "未设置 URL" }}
+                </div>
+                <div
+                  class="mt-0.5 truncate text-[11px] text-[#737373]"
+                  :title="group.baseURL || group.host"
+                >
+                  {{ groupSubtitle(group) }}
+                </div>
               </div>
               <span
                 class="shrink-0 rounded-full px-2 py-0.5 text-[10px]"
-                :class="item.balance?.supported ? 'border border-[#2f6b49] text-[#7dd3a0]' : 'border border-[#4b3b3b] text-[#a3a3a3]'"
+                :class="groupRepresentative(group)?.balance?.supported ? 'border border-[#2f6b49] text-[#7dd3a0]' : 'border border-[#4b3b3b] text-[#a3a3a3]'"
               >
-                {{ item.balance?.supported ? "可用" : "不可用" }}
+                {{ groupRepresentative(group)?.balance?.supported ? "可用" : "不可用" }}
               </span>
             </div>
             <div
               class="mt-2 text-sm font-medium tabular-nums"
-              :class="item.balance?.supported ? 'text-[#6ee7a5]' : 'text-[#737373]'"
+              :class="groupRepresentative(group)?.balance?.supported ? 'text-[#6ee7a5]' : 'text-[#737373]'"
             >
-              {{ balanceLabel(item) }}
+              {{ balanceLabel(groupRepresentative(group)) }}
             </div>
           </div>
         </div>

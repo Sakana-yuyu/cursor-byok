@@ -147,7 +147,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 89,
+          "line": 165,
           "column": 49
         }
       ]
@@ -278,18 +278,6 @@
         }
       ]
     },
-    "02a6880f34453743": {
-      "source": "未设置模型",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 262,
-          "column": 20
-        }
-      ]
-    },
     "031e9187edbdd3f7": {
       "source": "识图完成 2/2",
       "kind": "text",
@@ -299,6 +287,18 @@
           "file": "src/services/browserBindings.js",
           "line": 315,
           "column": 22
+        }
+      ]
+    },
+    "033052e16eefab51": {
+      "source": "个中转站（共",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
+          "line": 206,
+          "column": 65
         }
       ]
     },
@@ -449,7 +449,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 145,
+          "line": 205,
           "column": 50
         }
       ]
@@ -603,7 +603,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 91,
+          "line": 167,
           "column": 27
         }
       ]
@@ -1249,7 +1249,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 61,
+          "line": 137,
           "column": 51
         }
       ]
@@ -1535,6 +1535,18 @@
           "file": "src/services/browserBindings.js",
           "line": 804,
           "column": 78
+        }
+      ]
+    },
+    "0d42a1648f8d74b0": {
+      "source": "全部收起",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
+          "line": 339,
+          "column": 15
         }
       ]
     },
@@ -2413,6 +2425,18 @@
         }
       ]
     },
+    "1646a834d073f7f2": {
+      "source": "」的渠道",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
+          "line": 349,
+          "column": 39
+        }
+      ]
+    },
     "165a4b5e768d56c7": {
       "source": "用于区分模型、渠道分组和供应商预设。",
       "kind": "text",
@@ -2636,7 +2660,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 62,
+          "line": 86,
           "column": 53
         }
       ]
@@ -2650,6 +2674,18 @@
           "file": "src/components/settings/categories/AdvancedSettings.vue",
           "line": 562,
           "column": 22
+        }
+      ]
+    },
+    "19673b331b64107a": {
+      "source": "全部展开",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
+          "line": 333,
+          "column": 15
         }
       ]
     },
@@ -3000,7 +3036,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 31,
+          "line": 93,
           "column": 68
         }
       ]
@@ -3088,21 +3124,14 @@
       "placeholders": 0,
       "refs": [
         {
+          "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
+          "line": 348,
+          "column": 11
+        },
+        {
           "file": "src/views/ModelConfig.vue",
           "line": 460,
           "column": 119
-        }
-      ]
-    },
-    "1db8c972b51700a8": {
-      "source": "· 自定义请求头",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 302,
-          "column": 111
         }
       ]
     },
@@ -3113,13 +3142,13 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 192,
+          "line": 268,
           "column": 52
         },
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 269,
-          "column": 18
+          "line": 432,
+          "column": 24
         }
       ]
     },
@@ -3548,7 +3577,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 93,
+          "line": 169,
           "column": 10
         }
       ]
@@ -3661,7 +3690,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 71,
+          "line": 147,
           "column": 14
         }
       ]
@@ -4825,18 +4854,6 @@
         }
       ]
     },
-    "2dfe17d754ddf97a": {
-      "source": "凭据",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 298,
-          "column": 41
-        }
-      ]
-    },
     "2e034496d49307ee": {
       "source": "工作目录：{0}",
       "kind": "template",
@@ -4909,7 +4926,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 69,
+          "line": 145,
           "column": 14
         }
       ]
@@ -5097,7 +5114,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 43,
+          "line": 67,
           "column": 74
         }
       ]
@@ -5660,7 +5677,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 115,
+          "line": 172,
           "column": 16
         }
       ]
@@ -6249,7 +6266,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 163,
+          "line": 239,
           "column": 7
         }
       ]
@@ -6866,7 +6883,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 124,
+          "line": 200,
           "column": 49
         }
       ]
@@ -6994,7 +7011,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 163,
+          "line": 230,
           "column": 20
         },
         {
@@ -7575,7 +7592,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 49,
+          "line": 125,
           "column": 10
         }
       ]
@@ -7631,13 +7648,13 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 163,
+          "line": 230,
           "column": 20
         },
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 269,
-          "column": 18
+          "line": 432,
+          "column": 24
         },
         {
           "file": "src/components/model-config/SupplierPanel.vue",
@@ -7738,7 +7755,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 115,
+          "line": 172,
           "column": 16
         },
         {
@@ -7884,8 +7901,8 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 287,
-          "column": 18
+          "line": 375,
+          "column": 20
         }
       ]
     },
@@ -7988,6 +8005,16 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
+        {
+          "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
+          "line": 132,
+          "column": 30
+        },
+        {
+          "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
+          "line": 217,
+          "column": 22
+        },
         {
           "file": "src/components/StationSpendCard.vue",
           "line": 102,
@@ -8528,18 +8555,6 @@
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
           "line": 251,
           "column": 23
-        }
-      ]
-    },
-    "5559d6cd66fdb853": {
-      "source": "上下文 / 输出",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 289,
-          "column": 41
         }
       ]
     },
@@ -9137,7 +9152,7 @@
         },
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 62,
+          "line": 138,
           "column": 49
         },
         {
@@ -9156,6 +9171,23 @@
           "file": "src/utils/modelEditorMeta.js",
           "line": 47,
           "column": 24
+        }
+      ]
+    },
+    "5c47241f13f61c54": {
+      "source": "个渠道",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
+          "line": 327,
+          "column": 76
+        },
+        {
+          "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
+          "line": 378,
+          "column": 45
         }
       ]
     },
@@ -9263,6 +9295,18 @@
           "file": "src/views/StatsOverlay.vue",
           "line": 531,
           "column": 17
+        }
+      ]
+    },
+    "5d1d94898fad60f8": {
+      "source": "上下文 / 输出：{0} / {1}",
+      "kind": "template",
+      "placeholders": 2,
+      "refs": [
+        {
+          "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
+          "line": 418,
+          "column": 29
         }
       ]
     },
@@ -9625,7 +9669,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 133,
+          "line": 209,
           "column": 12
         },
         {
@@ -9719,7 +9763,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 236,
+          "line": 312,
           "column": 9
         }
       ]
@@ -9863,7 +9907,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 88,
+          "line": 164,
           "column": 29
         }
       ]
@@ -10173,6 +10217,18 @@
           "file": "src/components/supplier/SupplierModelCard.vue",
           "line": 123,
           "column": 81
+        }
+      ]
+    },
+    "63e2075f7bceb39a": {
+      "source": "{0} · 自定义头",
+      "kind": "template",
+      "placeholders": 1,
+      "refs": [
+        {
+          "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
+          "line": 113,
+          "column": 44
         }
       ]
     },
@@ -10940,6 +10996,18 @@
         }
       ]
     },
+    "6cac16b39789379a": {
+      "source": "冷却",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
+          "line": 378,
+          "column": 137
+        }
+      ]
+    },
     "6cd09500d84b4b2d": {
       "source": "浏览器预览 Gemini 示例模型",
       "kind": "text",
@@ -11270,7 +11338,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 141,
+          "line": 198,
           "column": 9
         }
       ]
@@ -12427,6 +12495,18 @@
         }
       ]
     },
+    "7d2be62a35cd04b3": {
+      "source": "个通道）",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
+          "line": 206,
+          "column": 94
+        }
+      ]
+    },
     "7d4146ca082798f0": {
       "source": "作者",
       "kind": "text",
@@ -12752,7 +12832,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 133,
+          "line": 209,
           "column": 12
         }
       ]
@@ -12786,11 +12866,6 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
-        {
-          "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 302,
-          "column": 18
-        },
         {
           "file": "src/components/settings/delegation/DelegationExecutorsPanel.vue",
           "line": 33,
@@ -12907,7 +12982,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 106,
+          "line": 152,
           "column": 7
         }
       ]
@@ -13632,6 +13707,18 @@
         }
       ]
     },
+    "8984022cc2044dc5": {
+      "source": "筛选渠道：模型 / 分组 / 端点",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
+          "line": 320,
+          "column": 13
+        }
+      ]
+    },
     "8989b881f3eb35e4": {
       "source": "删除中",
       "kind": "text",
@@ -13827,7 +13914,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 53,
+          "line": 129,
           "column": 10
         }
       ]
@@ -13941,8 +14028,8 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 112,
-          "column": 59
+          "line": 161,
+          "column": 13
         },
         {
           "file": "src/components/settings/categories/CursorServiceSettings.vue",
@@ -14587,7 +14674,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 156,
+          "line": 232,
           "column": 12
         },
         {
@@ -15504,7 +15591,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 97,
+          "line": 143,
           "column": 12
         }
       ]
@@ -16010,7 +16097,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 93,
+          "line": 139,
           "column": 33
         },
         {
@@ -16731,7 +16818,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 121,
+          "line": 197,
           "column": 11
         }
       ]
@@ -17358,7 +17445,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 181,
+          "line": 257,
           "column": 52
         }
       ]
@@ -17394,18 +17481,6 @@
           "file": "src/utils/errorHumanizer.js",
           "line": 53,
           "column": 12
-        }
-      ]
-    },
-    "adc392d3ecf29223": {
-      "source": "安全端点",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 280,
-          "column": 41
         }
       ]
     },
@@ -17754,18 +17829,6 @@
           "file": "src/views/ModelEditor.vue",
           "line": 127,
           "column": 12
-        }
-      ]
-    },
-    "b1d321ba26a87349": {
-      "source": "个通道",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 146,
-          "column": 60
         }
       ]
     },
@@ -18337,7 +18400,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 156,
+          "line": 232,
           "column": 12
         },
         {
@@ -18664,6 +18727,18 @@
           "file": "src/components/control-center/RoutingPanel.vue",
           "line": 115,
           "column": 72
+        }
+      ]
+    },
+    "bbcaaa9e889176b4": {
+      "source": "未配置凭据",
+      "kind": "text",
+      "placeholders": 0,
+      "refs": [
+        {
+          "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
+          "line": 405,
+          "column": 21
         }
       ]
     },
@@ -20090,7 +20165,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 136,
+          "line": 193,
           "column": 71
         }
       ]
@@ -20861,7 +20936,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 123,
+          "line": 180,
           "column": 9
         }
       ]
@@ -21020,7 +21095,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 57,
+          "line": 133,
           "column": 10
         }
       ]
@@ -21995,7 +22070,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 82,
+          "line": 158,
           "column": 11
         }
       ]
@@ -22066,11 +22141,6 @@
       "kind": "text",
       "placeholders": 0,
       "refs": [
-        {
-          "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 302,
-          "column": 18
-        },
         {
           "file": "src/views/ModelCatalog.vue",
           "line": 130,
@@ -22749,7 +22819,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 63,
+          "line": 139,
           "column": 10
         }
       ]
@@ -23021,7 +23091,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 107,
+          "line": 153,
           "column": 7
         }
       ]
@@ -23035,6 +23105,18 @@
           "file": "src/components/settings/categories/SkillsMcpSettings.vue",
           "line": 932,
           "column": 52
+        }
+      ]
+    },
+    "e8e151342880e63a": {
+      "source": "{0} · {1} 个通道",
+      "kind": "template",
+      "placeholders": 2,
+      "refs": [
+        {
+          "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
+          "line": 133,
+          "column": 35
         }
       ]
     },
@@ -23356,12 +23438,12 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 79,
+          "line": 155,
           "column": 14
         },
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 83,
+          "line": 159,
           "column": 11
         }
       ]
@@ -23440,18 +23522,6 @@
           "file": "src/layouts/MainLayout.vue",
           "line": 63,
           "column": 9
-        }
-      ]
-    },
-    "ee9fcc5637bfb1bc": {
-      "source": "供应商 / 协议",
-      "kind": "text",
-      "placeholders": 0,
-      "refs": [
-        {
-          "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 274,
-          "column": 41
         }
       ]
     },
@@ -24158,7 +24228,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 150,
+          "line": 226,
           "column": 59
         }
       ]
@@ -24283,7 +24353,7 @@
       "refs": [
         {
           "file": "src/components/control-center/VendorBalanceSyncPanel.vue",
-          "line": 92,
+          "line": 138,
           "column": 53
         },
         {
@@ -24784,7 +24854,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 74,
+          "line": 150,
           "column": 14
         }
       ]
@@ -24880,7 +24950,7 @@
       "refs": [
         {
           "file": "src/components/diagnostics/ProviderDiagnosticsPanel.vue",
-          "line": 203,
+          "line": 279,
           "column": 52
         }
       ]
