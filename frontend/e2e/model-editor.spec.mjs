@@ -157,9 +157,11 @@ test("编辑既有模型：加载草稿并支持保存并测试", async ({ page 
   await expect(fieldInput(page, "模型标识")).toHaveValue("gpt-4.1-mini");
   await expect(fieldInput(page, "显示名称")).toHaveValue("Demo GPT");
 
-  // 行为字段按类型显示
+  // 行为字段按类型显示（思考档位为快捷点击 chips，含最高档）
   await expect(page.getByText("最大输出 Token", { exact: true })).toBeVisible();
-  await expect(page.getByText("推理强度上限", { exact: true })).toBeVisible();
+  await expect(page.getByText("思考档位", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "最高", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "极高", exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "保存并测试", exact: true }).click();
   await expect(page.getByText("总生成 61 t/s | 正文 22 t/s | 首响应 24.6 s | 首字 27.2 s")).toBeVisible();
