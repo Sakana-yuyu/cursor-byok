@@ -37,6 +37,33 @@ export {
 const SUPPORTED_MODEL_ADAPTER_TYPES = new Set(["openai", "anthropic", "gemini"]);
 const SUPPORTED_REASONING_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 const SUPPORTED_ANTHROPIC_THINKING_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
+const MAX_CUSTOM_THINKING_EFFORTS = 8;
+// 自定义思考档位 token 约束与后端 modelcontext.NormalizeCustomThinkingEffort 一致。
+const CUSTOM_THINKING_EFFORT_PATTERN = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+
+// 归一化自定义思考档位列表：仅 openai 渠道保留；逐项小写化并做 token 校验、
+// 去重、剔除标准档位、限量。全部非法时返回空数组。
+export function normalizeCustomThinkingEfforts(values) {
+  const output = [];
+  const seen = new Set();
+  for (const item of Array.isArray(values) ? values : []) {
+    const value = asString(item).trim().toLowerCase();
+    if (!value || SUPPORTED_REASONING_EFFORTS.has(value) || value === "disabled") continue;
+    if (!CUSTOM_THINKING_EFFORT_PATTERN.test(value) || seen.has(value)) continue;
+    seen.add(value);
+    output.push(value);
+    if (output.length >= MAX_CUSTOM_THINKING_EFFORTS) break;
+  }
+  return output;
+}
+
+// 思考档位取值：标准档位直接通过；openai 渠道允许命中自定义档位列表的值作为
+// 默认/上限档位（后端按渠道配置原样透传 reasoning_effort）。
+function resolveReasoningEffortWithCustom(type, effort, customThinkingEfforts) {
+  if (SUPPORTED_REASONING_EFFORTS.has(effort)) return effort;
+  if (type === "openai" && customThinkingEfforts.includes(effort)) return effort;
+  return "medium";
+}
 export const ANTHROPIC_AUTH_MODE_LEGACY_DUAL = "legacy_dual";
 export const ANTHROPIC_AUTH_MODE_AUTO = "auto";
 export const ANTHROPIC_AUTH_MODE_X_API_KEY = "x_api_key";
@@ -158,6 +185,7 @@ export function createEmptyModelAdapter() {
     tooltipData: "备注",
     modelID: "",
     reasoningEffort: "medium",
+    customThinkingEfforts: [],
     openAIEndpoint: OPENAI_ENDPOINT_RESPONSES,
     openAIRequestGroup: OPENAI_REQUEST_GROUP_RESPONSES,
     openAIExtraParamsEnabled: false,
@@ -267,6 +295,10 @@ export function normalizeModelAdapter(source) {
     if (!trimmed || trimmed === primaryApiKey || apiKeysPool.includes(trimmed)) continue;
     apiKeysPool.push(trimmed);
   }
+  // 自定义思考档位：仅 openai 渠道生效（reasoning_effort 原样透传）。
+  const customThinkingEfforts = normalizedType === "openai"
+    ? normalizeCustomThinkingEfforts(raw.customThinkingEfforts ?? raw.custom_thinking_efforts)
+    : [];
   if (isCursorAccount) {
     return {
       ...createEmptyModelAdapter(),
@@ -309,9 +341,8 @@ export function normalizeModelAdapter(source) {
     disabled: asBoolean(raw.disabled),
     tooltipData: asString(raw.tooltipData),
     modelID: asString(raw.modelID),
-    reasoningEffort: SUPPORTED_REASONING_EFFORTS.has(normalizedReasoningEffort)
-      ? normalizedReasoningEffort
-      : "medium",
+    reasoningEffort: resolveReasoningEffortWithCustom(normalizedType, normalizedReasoningEffort, customThinkingEfforts),
+    customThinkingEfforts,
     openAIEndpoint: normalizedType === "openai" ? normalizedOpenAIEndpoint : "",
     openAIRequestGroup: normalizedType === "openai" ? protocolGroup : "",
     openAIExtraParamsEnabled,
@@ -466,8 +497,10 @@ export function validateModelAdapters(source) {
     if (!adapter.protocolGroup) {
       return `${prefix} 的协议分组与模型类型不匹配`;
     }
-    if ((adapter.type === "openai" || adapter.type === "gemini") && !SUPPORTED_REASONING_EFFORTS.has(adapter.reasoningEffort)) {
-      return `${prefix} 的推理强度仅支持 low、medium、high、xhigh、max`;
+    if ((adapter.type === "openai" || adapter.type === "gemini")
+      && !SUPPORTED_REASONING_EFFORTS.has(adapter.reasoningEffort)
+      && !(adapter.type === "openai" && normalizeCustomThinkingEfforts(adapter.customThinkingEfforts).includes(adapter.reasoningEffort))) {
+      return `${prefix} 的思考档位仅支持 low、medium、high、xhigh、max 或自定义档位内的值`;
     }
     if (adapter.type === "openai" && !isValidOpenAIEndpoint(adapter.openAIEndpoint)) {
       return `${prefix} 的 OpenAI 端点仅支持 /v1/responses、/v1/chat/completions 或以 / 开头的自定义路径`;

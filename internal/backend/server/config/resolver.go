@@ -202,6 +202,7 @@ func resolveModelAdapterChannel(adapters []ModelAdapterConfig, requestedModel st
 		ContextWindowTokens:         defaultChannelContextWindowTokens,
 		MaxTokens:                   defaultChannelMaxTokens,
 		ReasoningEffort:             strings.TrimSpace(matched.ReasoningEffort),
+		CustomThinkingEfforts:       matched.CustomThinkingEfforts,
 		AnthropicMaxTokens:          defaultChannelAnthropicMaxTokens,
 		AnthropicThinkingEffort:     defaultChannelAnthropicEffort,
 		FastMode:                    matched.FastMode,

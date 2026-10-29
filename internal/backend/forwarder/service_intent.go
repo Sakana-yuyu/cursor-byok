@@ -7,6 +7,7 @@ import (
 	runtimecore "cursor/internal/backend/agent/core"
 	"cursor/internal/backend/delegation"
 	"cursor/internal/logger"
+	"cursor/internal/modelcontext"
 	"fmt"
 	"strings"
 	"time"
@@ -957,12 +958,35 @@ func extractRuntimeThinkingEffortFromRequestedModel(model *agentv1.RequestedMode
 		if effort := normalizeRuntimeThinkingEffort(parameter.GetValue()); effort != "" {
 			return effort
 		}
+		// 参数 ID 已显式声明为 effort：值可能是渠道自定义思考档位（AvailableModels
+		// 会原样下发 customThinkingEfforts 配置的档位），token 校验通过即保留，
+		// 由 router 按渠道配置决定是否采用。
+		if effort := customRuntimeThinkingEffortToken(parameter.GetValue()); effort != "" {
+			return effort
+		}
 	}
 	if model.GetIsVariantStringRepresentation() {
 		if _, effort := splitRuntimeThinkingEffortVariantString(model.GetModelId()); effort != "" {
 			return effort
 		}
 		return normalizeRuntimeThinkingEffort(model.GetModelId())
+	}
+	return ""
+}
+
+// customRuntimeThinkingEffortToken 校验并返回可信的自定义思考档位 token：与渠道
+// customThinkingEfforts 的形态约束一致（字母数字开头、可含 - 与 _、1~32 位小写）。
+// 额外要求长度 ≥2 且至少含一个字母，避免 "gpt:5" 这类 modelID 子串在变体串拆分时
+// 被误判为档位。
+func customRuntimeThinkingEffortToken(raw string) string {
+	token := modelcontext.NormalizeCustomThinkingEffort(raw)
+	if token == "" || len(token) < 2 {
+		return ""
+	}
+	for _, r := range token {
+		if r >= 'a' && r <= 'z' {
+			return token
+		}
 	}
 	return ""
 }
@@ -1029,6 +1053,11 @@ func splitRuntimeThinkingEffortVariantString(raw string) (string, string) {
 	}
 	modelID := strings.TrimSpace(text[:index])
 	effort := normalizeRuntimeThinkingEffort(text[index+1:])
+	if effort == "" {
+		// 变体串后缀是自定义档位（channelID:custom）时同样拆分，保证自定义档位
+		// 在变体（exploded）客户端上可选中回传。
+		effort = customRuntimeThinkingEffortToken(text[index+1:])
+	}
 	if modelID == "" || effort == "" {
 		return "", ""
 	}

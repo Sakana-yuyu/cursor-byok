@@ -13,7 +13,7 @@ export const anthropicThinkingEffortOptions = [
   { label: "中", value: "medium", icon: "icon-[mdi--head-lightbulb-outline]" },
   { label: "高", value: "high", icon: "icon-[mdi--brain]" },
   { label: "极高", value: "xhigh", icon: "icon-[mdi--head-cog-outline]" },
-  { label: "Max", value: "max", icon: "icon-[mdi--brain]" },
+  { label: "最高", value: "max", icon: "icon-[mdi--brain]" },
 ];
 
 export const CONTEXT_TIERS = [
@@ -43,7 +43,8 @@ export const fieldTips = {
   modelCatalogURL: "直接读取模型列表的完整 URL。留空时使用供应商预设地址或兼容协议的自动候选地址。",
   apiKey: "调用该模型服务需要使用的访问密钥。",
   contextWindowTokens: "模型单次可接受的最大上下文 Token 数。留空时使用默认值。",
-  reasoningEffort: "渠道允许的推理强度上限。客户端选择低于上限时保留客户端值，选择高于上限时自动限制到这里；越高通常越稳，但也可能更慢。",
+  reasoningEffort: "思考档位（默认与上限）：客户端未选择时用这里；客户端选择更高档位时自动限制到这里。自定义档位仅 OpenAI 兼容渠道可用，会出现在 Cursor 的 Effort 下拉并原样发送给服务端。",
+  customThinkingEfforts: "厂商自定义思考档位（如 adaptive、none），仅 OpenAI 兼容渠道支持：添加后出现在 Cursor 的 Effort 下拉与变体列表，选中即按原值发送 reasoning_effort；也可直接点击作为渠道默认档位。",
   maxCompletionTokens: "单次回复允许生成的最大 Token 数。留空时使用默认值。",
   openAIEndpoint: "选择接口协议端点。选“自定义路径”时，请在接口地址栏填写完整请求地址（含 /chat/completions 或 /responses 路径后缀），系统会根据末段自动判断协议形态。",
   protocolMode: "自动识别会根据供应商、模型名称和接口地址选择协议；固定协议会严格使用你指定的协议，测速不会自动覆盖。",

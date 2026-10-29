@@ -92,6 +92,9 @@ type ModelAdapterConfig struct {
 	ModelID string `json:"modelID"`
 	// ReasoningEffort 表示当前声明中的 ReasoningEffort。
 	ReasoningEffort string `json:"reasoningEffort"`
+	// CustomThinkingEfforts 表示该渠道额外接受的自定义思考档位（厂商原生枚举值）。
+	// 仅 openai 渠道生效：档位出现在客户端 Effort 列表，运行时原样透传上游。
+	CustomThinkingEfforts []string `json:"customThinkingEfforts,omitempty"`
 	// OpenAIEndpoint 表示 OpenAI 兼容适配器使用的 API 端点。
 	OpenAIEndpoint string `json:"openAIEndpoint"`
 	// OpenAIRequestGroup 表示 OpenAI 兼容适配器使用的请求分组。
@@ -224,6 +227,12 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			return nil, err
 		}
 		nextType := normalizeModelAdapterType(item.Type)
+		// 自定义思考档位仅 openai 渠道生效（reasoning_effort 原样透传）；运行时
+		// 侧做静默归一化，非法项丢弃，避免存量脏配置阻断启动。
+		customThinkingEfforts := modelcontext.NormalizeCustomThinkingEfforts(item.CustomThinkingEfforts)
+		if nextType != "openai" {
+			customThinkingEfforts = nil
+		}
 		protocolMode := modelchannel.NormalizeProtocolMode(item.ProtocolMode)
 		protocolGroup := modelchannel.ResolveProtocolGroup(protocolMode, nextType, item.ModelID, baseURL, item.OpenAIEndpoint, firstNonEmptyProtocolGroup(item.ProtocolGroup, item.OpenAIRequestGroup))
 		openAIEndpoint := modelchannel.NormalizeOpenAIEndpoint(nextType, item.OpenAIEndpoint)
@@ -239,22 +248,23 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			SupplierID:      strings.TrimSpace(item.SupplierID),
 			ProtocolMode:    protocolMode,
 
-			ProtocolGroup:        protocolGroup,
-			BaseURL:              baseURL,
-			APIKey:               strings.TrimSpace(item.APIKey),
-			TooltipData:          strings.TrimSpace(item.TooltipData),
-			ModelID:              strings.TrimSpace(item.ModelID),
-			ReasoningEffort:      normalizeReasoningEffort(item.ReasoningEffort),
-			OpenAIEndpoint:       openAIEndpoint,
-			OpenAIRequestGroup:   modelchannel.NormalizeOpenAIRequestGroup(nextType, openAIEndpoint, protocolGroup),
-			ContextWindowTokens:  modelcontext.Resolve(item.ModelID, normalizeMaxCompletionTokens(item.ContextWindowTokens)),
-			MaxCompletionTokens:  normalizeMaxCompletionTokens(item.MaxCompletionTokens),
-			AnthropicAuthMode:    modelchannel.NormalizeAnthropicAuthMode(item.AnthropicAuthMode),
-			AnthropicMaxTokens:   normalizeMaxCompletionTokens(item.AnthropicMaxTokens),
-			ThinkingBudgetTokens: normalizeMaxCompletionTokens(item.ThinkingBudgetTokens),
-			Pricing:              item.Pricing,
-			FastMode:             item.FastMode,
-			OpenAIServiceTier:    strings.TrimSpace(item.OpenAIServiceTier),
+			ProtocolGroup:         protocolGroup,
+			BaseURL:               baseURL,
+			APIKey:                strings.TrimSpace(item.APIKey),
+			TooltipData:           strings.TrimSpace(item.TooltipData),
+			ModelID:               strings.TrimSpace(item.ModelID),
+			ReasoningEffort:       normalizeReasoningEffortWithCustom(item.ReasoningEffort, customThinkingEfforts),
+			CustomThinkingEfforts: customThinkingEfforts,
+			OpenAIEndpoint:        openAIEndpoint,
+			OpenAIRequestGroup:    modelchannel.NormalizeOpenAIRequestGroup(nextType, openAIEndpoint, protocolGroup),
+			ContextWindowTokens:   modelcontext.Resolve(item.ModelID, normalizeMaxCompletionTokens(item.ContextWindowTokens)),
+			MaxCompletionTokens:   normalizeMaxCompletionTokens(item.MaxCompletionTokens),
+			AnthropicAuthMode:     modelchannel.NormalizeAnthropicAuthMode(item.AnthropicAuthMode),
+			AnthropicMaxTokens:    normalizeMaxCompletionTokens(item.AnthropicMaxTokens),
+			ThinkingBudgetTokens:  normalizeMaxCompletionTokens(item.ThinkingBudgetTokens),
+			Pricing:               item.Pricing,
+			FastMode:              item.FastMode,
+			OpenAIServiceTier:     strings.TrimSpace(item.OpenAIServiceTier),
 		}
 		if next.Type == "openai" {
 			next.OpenAIExtraParamsEnabled = item.OpenAIExtraParamsEnabled
@@ -405,6 +415,15 @@ func normalizeReasoningEffort(value string) string {
 	}
 }
 
+// normalizeReasoningEffortWithCustom 在标准档位之外接受渠道自定义思考档位：
+// 命中 custom 列表时原样（小写）保留，否则回落标准归一化。
+func normalizeReasoningEffortWithCustom(value string, custom []string) string {
+	if modelcontext.ContainsCustomThinkingEffort(custom, value) {
+		return strings.ToLower(strings.TrimSpace(value))
+	}
+	return normalizeReasoningEffort(value)
+}
+
 func normalizeAnthropicThinkingEffort(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "", "xhigh":
@@ -467,6 +486,8 @@ type ResolvedChannel struct {
 	MaxTokens int
 	// ReasoningEffort 表示当前声明中的 ReasoningEffort。
 	ReasoningEffort string
+	// CustomThinkingEfforts 表示该渠道的自定义思考档位列表（仅 openai 渠道非空）。
+	CustomThinkingEfforts []string
 	// OpenAIEndpoint 表示 OpenAI 兼容适配器使用的 API 端点。
 	OpenAIEndpoint string
 	// OpenAIRequestGroup 表示 OpenAI 兼容适配器使用的请求分组。

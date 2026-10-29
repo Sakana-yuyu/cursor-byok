@@ -603,7 +603,7 @@ func TestAvailableModelsPayloadUsesCompactEffortPickerContract(t *testing.T) {
 			}
 			variants := entry["variants"].([]map[string]any)
 			if tc.wantCompact {
-				if len(variants) != 4 {
+				if len(variants) != 5 {
 					t.Fatalf("compact variants: got %#v, want one per effort value", variants)
 				}
 				seenEfforts := make(map[string]bool, len(variants))
@@ -624,6 +624,7 @@ func TestAvailableModelsPayloadUsesCompactEffortPickerContract(t *testing.T) {
 					"medium": true,
 					"high":   true,
 					"xhigh":  true,
+					"max":    true,
 				}) {
 					t.Fatalf("compact effort values: got %#v", seenEfforts)
 				}
@@ -650,6 +651,7 @@ func assertCompactEffortParameterLabels(t *testing.T, definition map[string]any)
 		"medium": "Medium",
 		"high":   "High",
 		"xhigh":  "Extra High",
+		"max":    "Max",
 	}) {
 		t.Fatalf("compact effort labels: got %#v", labels)
 	}
@@ -944,6 +946,69 @@ func TestFormatTokenCount(t *testing.T) {
 	for _, tc := range cases {
 		if got := formatTokenCount(tc.in); got != tc.want {
 			t.Fatalf("formatTokenCount(%d): got %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// 自定义思考档位必须完整出现在 AvailableModels：compact 参数下拉保留 max 与
+// 自定义档位（仅去 disabled），渠道默认档位为自定义值时 tagline 原样展示。
+func TestAvailableModelsPayloadAdvertisesCustomThinkingEfforts(t *testing.T) {
+	adapters := []legacyruntime.ModelAdapterConfig{{
+		ID:                    "channel-custom",
+		DisplayName:           "Vendor Reason",
+		ModelID:               "vendor-model",
+		Type:                  "openai",
+		ReasoningEffort:       "adaptive",
+		CustomThinkingEfforts: []string{"adaptive", "deep-think"},
+		ContextWindowTokens:   128000,
+	}}
+
+	request, err := proto.Marshal(&aiserverv1.AvailableModelsRequest{
+		UseModelParameters:                boolPtr(true),
+		VariantsWillBeShownInExplodedList: boolPtr(false),
+	})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	reqCtx := newRequestContextWithAdapters(adapters)
+	reqCtx.RequestBody = request
+	payload, err := AvailableModelsMockBuilder(reqCtx)
+	if err != nil {
+		t.Fatalf("builder: %v", err)
+	}
+	entry := payload["models"].([]map[string]any)[0]
+
+	definition, exists := findModelParameterDefinition(entry, "effort")
+	if !exists {
+		t.Fatalf("effort definition missing: %#v", entry["parameterDefinitions"])
+	}
+	parameterType := definition["parameterType"].(map[string]any)
+	values := parameterType["enumParameter"].(map[string]any)["values"].([]map[string]any)
+	got := make([]string, 0, len(values))
+	for _, value := range values {
+		got = append(got, value["value"].(string))
+	}
+	// compact 模式：disabled 去除，max 与自定义档位保留且有序（自定义在 max 前）。
+	want := []string{"low", "medium", "high", "xhigh", "adaptive", "deep-think", "max"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("compact effort values: got %v, want %v", got, want)
+	}
+	if entry["tagline"] != "adaptive" {
+		t.Fatalf("tagline should follow custom default effort: got %v", entry["tagline"])
+	}
+
+	variants := entry["variants"].([]map[string]any)
+	if len(variants) != len(want) {
+		t.Fatalf("compact variants: got %d, want %d", len(variants), len(want))
+	}
+	for _, variant := range variants {
+		parameters := modelVariantParameters(variant)
+		effort := parameters["effort"]
+		displayName, _ := variant["displayName"].(string)
+		if effort == "adaptive" || effort == "deep-think" {
+			if !strings.Contains(displayName, effort) {
+				t.Fatalf("custom variant display name %q must contain effort %q", displayName, effort)
+			}
 		}
 	}
 }

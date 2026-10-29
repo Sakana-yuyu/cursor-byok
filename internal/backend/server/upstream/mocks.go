@@ -1015,7 +1015,7 @@ func buildCLIModelDetails(adapters []legacyruntime.ModelAdapterConfig) []map[str
 }
 
 func buildModelParameterDefinitions(adapter legacyruntime.ModelAdapterConfig, contextTokens int, explodedVariants bool) []map[string]any {
-	definitions := buildThinkingEffortParameterDefinitions(adapter.Type, explodedVariants)
+	definitions := buildThinkingEffortParameterDefinitions(adapter, explodedVariants)
 	if contextTokens > 0 {
 		definitions = append(definitions, map[string]any{
 			"id":              modelRuntimeContextParameterID,
@@ -1049,8 +1049,8 @@ func buildModelParameterDefinitions(adapter legacyruntime.ModelAdapterConfig, co
 	return definitions
 }
 
-func buildThinkingEffortParameterDefinitions(adapterType string, explodedVariants bool) []map[string]any {
-	values := thinkingEffortValuesForAdapter(adapterType)
+func buildThinkingEffortParameterDefinitions(adapter legacyruntime.ModelAdapterConfig, explodedVariants bool) []map[string]any {
+	values := thinkingEffortValuesForAdapter(adapter)
 	if !explodedVariants {
 		values = compactThinkingEffortValues(values)
 	}
@@ -1076,7 +1076,7 @@ func buildThinkingEffortParameterDefinitions(adapterType string, explodedVariant
 }
 
 func buildModelVariants(adapter legacyruntime.ModelAdapterConfig, channelID string, modelDisplayName string, tooltipData string, defaultThinkingEffort string, contextTokens int, explodedVariants bool) []map[string]any {
-	values := orderThinkingEffortValues(thinkingEffortValuesForAdapter(adapter.Type), defaultThinkingEffort)
+	values := orderThinkingEffortValues(thinkingEffortValuesForAdapter(adapter), defaultThinkingEffort)
 	if !explodedVariants {
 		values = compactThinkingEffortValues(values)
 	}
@@ -1102,7 +1102,7 @@ func buildModelVariants(adapter legacyruntime.ModelAdapterConfig, channelID stri
 			"isMaxMode":                false,
 			"parameterValues":          parameterValues,
 		}
-		if explodedVariants && normalizeAvailableModelThinkingEffort(value, true, "") != "disabled" {
+		if explodedVariants && !isDisabledThinkingEffortValue(value) {
 			variant["tagline"] = thinkingEffortDisplayName(value)
 		}
 		if channelID != "" {
@@ -1132,7 +1132,7 @@ func formatCompactTokenCount(tokens int) string {
 
 func buildThinkingEffortVariantDisplayName(modelDisplayName string, effortValue string) string {
 	modelDisplayName = html.EscapeString(strings.TrimSpace(modelDisplayName))
-	if normalizeAvailableModelThinkingEffort(effortValue, true, "") == "disabled" {
+	if isDisabledThinkingEffortValue(effortValue) {
 		return modelDisplayName
 	}
 	effortDisplayName := thinkingEffortDisplayName(effortValue)
@@ -1143,37 +1143,65 @@ func buildThinkingEffortVariantDisplayName(modelDisplayName string, effortValue 
 	return modelDisplayName + ` <span class="ui-model-picker__item-tagline" style="color: var(--cursor-text-secondary); white-space: nowrap;">:icon-brain: ` + effortDisplayName + `</span>`
 }
 
-func thinkingEffortValuesForAdapter(adapterType string) []string {
+func thinkingEffortValuesForAdapter(adapter legacyruntime.ModelAdapterConfig) []string {
 	values := []string{"disabled", "low", "medium", "high", "xhigh"}
-	if adapterType := strings.ToLower(strings.TrimSpace(adapterType)); adapterType == "openai" || adapterType == "anthropic" {
+	if adapterType := strings.ToLower(strings.TrimSpace(adapter.Type)); adapterType == "openai" || adapterType == "anthropic" {
 		values = append(values, "max")
 	}
-	return values
+	// 自定义档位（仅 openai 渠道配置）插在 max 之前，语义上视为低于"最高"的
+	// 厂商特殊档位；Cursor 的 Effort 下拉与变体列表都会展示并回传这些值。
+	return insertCustomThinkingEfforts(values, adapter.CustomThinkingEfforts)
+}
+
+// insertCustomThinkingEfforts 把自定义档位插入标准档位列表的 max 之前（无 max
+// 则追加到末尾），保持既有顺序不重排。
+func insertCustomThinkingEfforts(values []string, custom []string) []string {
+	custom = modelcontext.NormalizeCustomThinkingEfforts(custom)
+	if len(custom) == 0 {
+		return values
+	}
+	maxIndex := -1
+	for index, value := range values {
+		if strings.EqualFold(strings.TrimSpace(value), "max") {
+			maxIndex = index
+			break
+		}
+	}
+	if maxIndex < 0 {
+		return append(append([]string{}, values...), custom...)
+	}
+	output := make([]string, 0, len(values)+len(custom))
+	output = append(output, values[:maxIndex]...)
+	output = append(output, custom...)
+	output = append(output, values[maxIndex:]...)
+	return output
 }
 
 func compactThinkingEffortValues(values []string) []string {
-	compactValues := []string{"low", "medium", "high", "xhigh"}
-	available := make(map[string]bool, len(values))
+	// compact 参数模式下仅去掉 disabled（思考开关由客户端自身控制）；max 与
+	// 自定义档位必须保留，否则 Cursor 的 Effort 下拉永远不会出现这些选项，
+	// 渠道配置的 max 上限也就无从选择。
+	output := make([]string, 0, len(values))
 	for _, value := range values {
-		available[value] = true
-	}
-
-	output := make([]string, 0, len(compactValues))
-	for _, value := range compactValues {
-		if available[value] {
-			output = append(output, value)
+		normalized := strings.ToLower(strings.TrimSpace(value))
+		if normalized == "" || normalized == "disabled" {
+			continue
 		}
+		output = append(output, normalized)
 	}
 	return output
 }
 
 func compactThinkingEffortDefault(value string) string {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "low", "medium", "high", "xhigh":
-		return strings.ToLower(strings.TrimSpace(value))
-	case "max":
-		return "xhigh"
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	switch normalized {
+	case "low", "medium", "high", "xhigh", "max":
+		return normalized
 	default:
+		// 自定义档位作为渠道默认档位时原样展示；disabled/空/未知回退 medium。
+		if modelcontext.NormalizeCustomThinkingEffort(normalized) != "" {
+			return normalized
+		}
 		return "medium"
 	}
 }
@@ -1199,7 +1227,14 @@ func defaultThinkingEffortForAdapter(adapter legacyruntime.ModelAdapterConfig) s
 	if strings.EqualFold(strings.TrimSpace(adapter.Type), "anthropic") {
 		return normalizeAvailableModelThinkingEffort(adapter.AnthropicThinkingEffort, true, "xhigh")
 	}
-	return normalizeAvailableModelThinkingEffort(adapter.ReasoningEffort, true, "medium")
+	if effort := normalizeAvailableModelThinkingEffort(adapter.ReasoningEffort, true, ""); effort != "" {
+		return effort
+	}
+	// 渠道默认档位选了自定义档位（配置归一化原样保留）时跟随展示。
+	if custom := modelcontext.NormalizeCustomThinkingEffort(adapter.ReasoningEffort); custom != "" {
+		return custom
+	}
+	return "medium"
 }
 
 func normalizeAvailableModelThinkingEffort(raw string, allowMax bool, fallback string) string {
@@ -1216,6 +1251,12 @@ func normalizeAvailableModelThinkingEffort(raw string, allowMax bool, fallback s
 	default:
 		return fallback
 	}
+}
+
+// isDisabledThinkingEffortValue 判断档位值是否为 disabled（对自定义档位安全：
+// 未知值不会被误判为 disabled）。
+func isDisabledThinkingEffortValue(value string) bool {
+	return strings.EqualFold(strings.TrimSpace(value), "disabled")
 }
 
 func thinkingEffortDisplayName(value string) string {

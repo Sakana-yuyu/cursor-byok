@@ -84,3 +84,52 @@ test("normalizeModelAdapter：无密钥池时输出空数组且不生成幻影�
   });
   assert.deepEqual(legacy.apiKeys, []);
 });
+
+test("normalizeModelAdapter：自定义思考档位仅 openai 渠道保留并去重", async () => {
+  const { normalizeModelAdapter } = await import("./modelAdapter.js");
+  const adapter = normalizeModelAdapter({
+    displayName: "自定义档位",
+    type: "openai",
+    baseURL: "https://api.example.com/v1",
+    apiKey: "sk-x",
+    modelID: "vendor-model",
+    customThinkingEfforts: ["adaptive", "ADAPTIVE", "deep-think", "max", "带空格"],
+  });
+  assert.deepEqual(adapter.customThinkingEfforts, ["adaptive", "deep-think"]);
+
+  const anthropic = normalizeModelAdapter({
+    displayName: "anthropic 忽略",
+    type: "anthropic",
+    baseURL: "https://api.example.com",
+    apiKey: "sk-ant",
+    modelID: "claude-fable-5",
+    customThinkingEfforts: ["adaptive"],
+  });
+  assert.deepEqual(anthropic.customThinkingEfforts, []);
+});
+
+test("normalizeModelAdapter：reasoningEffort 允许选自定义档位作默认，未命中回落 medium", async () => {
+  const { normalizeModelAdapter } = await import("./modelAdapter.js");
+  const base = {
+    displayName: "默认档位",
+    type: "openai",
+    baseURL: "https://api.example.com/v1",
+    apiKey: "sk-x",
+    modelID: "vendor-model",
+    customThinkingEfforts: ["adaptive"],
+  };
+  assert.equal(normalizeModelAdapter({ ...base, reasoningEffort: "Adaptive" }).reasoningEffort, "adaptive");
+  assert.equal(normalizeModelAdapter({ ...base, reasoningEffort: "turbo" }).reasoningEffort, "medium");
+  assert.equal(normalizeModelAdapter({ ...base }).reasoningEffort, "medium");
+});
+
+test("normalizeCustomThinkingEfforts：token 形态校验与限量", async () => {
+  const { normalizeCustomThinkingEfforts } = await import("./modelAdapter.js");
+  assert.deepEqual(
+    normalizeCustomThinkingEfforts(["Adaptive", "v2_think", "none", "-bad", "a:b", "max", ""]),
+    ["adaptive", "v2_think", "none"],
+  );
+  const capped = normalizeCustomThinkingEfforts(["a1", "b2", "c3", "d4", "e5", "f6", "g7", "h8", "i9", "j0"]);
+  assert.equal(capped.length, 8);
+  assert.deepEqual(normalizeCustomThinkingEfforts(undefined), []);
+});

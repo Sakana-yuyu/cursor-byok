@@ -185,7 +185,12 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 		}
 		routingDecision, rankedChannels = router.rankLiveChannels(policy, req, channels)
 		if effort := strings.TrimSpace(routingDecision.EffectiveThinkingEffort); effort != "" {
-			req.ThinkingEffort = resolveEffectiveThinkingEffort(req.ThinkingEffort, effort)
+			if normalizeRuntimeThinkingEffort(req.ThinkingEffort) == "" && modelcontext.NormalizeCustomThinkingEffort(req.ThinkingEffort) != "" {
+				// 运行时显式选择的自定义档位优先于路由策略的标准档位；此处无渠道
+				// 上下文，仅按 token 形态保留，streamChannel 会按渠道配置再校验成员。
+			} else {
+				req.ThinkingEffort = resolveEffectiveThinkingEffort(req.ThinkingEffort, effort)
+			}
 		}
 	}
 	defer func() {
@@ -584,12 +589,23 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 	if resolved.ModelSource != legacyruntime.ModelSourceThirdParty || resolved.CredentialScope != legacyruntime.CredentialScopeAdapterAPIKey {
 		return fmt.Errorf("第三方模型来源或凭据作用域无效")
 	}
+	// 渠道配置档位：标准值同时作为上限与运行时缺省默认；自定义值（命中
+	// customThinkingEfforts）仅作缺省默认，不构成标准上限。anthropic 渠道档位取
+	// anthropicThinkingEffort，自定义档位对其无意义（配置归一化已保证为空）。
 	configuredThinkingEffortMaximum := normalizeRuntimeThinkingEffort(channel.ReasoningEffort)
+	configuredThinkingEffortDefault := ""
+	if configuredThinkingEffortMaximum == "" && modelcontext.ContainsCustomThinkingEffort(channel.CustomThinkingEfforts, channel.ReasoningEffort) {
+		configuredThinkingEffortDefault = strings.ToLower(strings.TrimSpace(channel.ReasoningEffort))
+	}
 	if resolved.Provider == "anthropic" {
 		configuredThinkingEffortMaximum = normalizeRuntimeThinkingEffort(channel.AnthropicThinkingEffort)
+		configuredThinkingEffortDefault = ""
 	}
 	resolved.ConfiguredThinkingEffortMaximum = configuredThinkingEffortMaximum
 	resolved.ReasoningEffort = openAIReasoningEffortFromRuntime(channel.ReasoningEffort)
+	if resolved.ReasoningEffort == "" && configuredThinkingEffortDefault != "" {
+		resolved.ReasoningEffort = configuredThinkingEffortDefault
+	}
 	resolved.OpenAIEndpoint = strings.TrimSpace(channel.OpenAIEndpoint)
 	resolved.ToolCallMode = strings.TrimSpace(channel.ToolCallMode)
 	resolved.OpenAIRequestGroup = strings.TrimSpace(channel.OpenAIRequestGroup)
@@ -607,7 +623,10 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 	resolved.ThinkingBudgetTokens = channel.ThinkingBudgetTokens
 	resolved.ProviderStreamIdleTimeout = resolveProviderStreamIdleTimeout(req.ProviderStreamIdleTimeout, router.resolver.ProviderStreamIdleTimeout(ctx))
 	runtimeThinkingEffort := normalizeRuntimeThinkingEffort(req.ThinkingEffort)
-	effectiveThinkingEffort := resolveEffectiveThinkingEffort(runtimeThinkingEffort, configuredThinkingEffortMaximum)
+	if runtimeThinkingEffort == "" && modelcontext.ContainsCustomThinkingEffort(channel.CustomThinkingEfforts, req.ThinkingEffort) {
+		runtimeThinkingEffort = strings.ToLower(strings.TrimSpace(req.ThinkingEffort))
+	}
+	effectiveThinkingEffort := resolveEffectiveThinkingEffortWithCustom(runtimeThinkingEffort, configuredThinkingEffortMaximum, configuredThinkingEffortDefault, channel.CustomThinkingEfforts)
 	if effectiveThinkingEffort != "" {
 		resolved.ThinkingEffort = effectiveThinkingEffort
 		if effectiveThinkingEffort == "disabled" {
@@ -615,6 +634,11 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 			resolved.AnthropicThinkingEffort = ""
 		} else {
 			resolved.ReasoningEffort = openAIReasoningEffortFromRuntime(effectiveThinkingEffort)
+			if resolved.ReasoningEffort == "" && resolved.Provider != "anthropic" && resolved.Provider != "gemini" && modelcontext.NormalizeCustomThinkingEffort(effectiveThinkingEffort) != "" {
+				// 自定义档位原样透传 OpenAI 兼容路径的 reasoning_effort；
+				// gemini 档位映射为固定 thinkingBudget，自定义值无意义不留。
+				resolved.ReasoningEffort = effectiveThinkingEffort
+			}
 			resolved.AnthropicThinkingEffort = effectiveThinkingEffort
 		}
 	} else {

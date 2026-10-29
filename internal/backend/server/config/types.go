@@ -70,10 +70,16 @@ type ModelAdapterConfig struct {
 	APIKey        string `json:"apiKey" yaml:"apiKey"`
 	// APIKeys 是同渠道的备用密钥池（不含主 apiKey）：请求时按渠道维度轮换使用，
 	// 每把密钥是独立的冷却单元——单把限流/失效只冷却该密钥，不拖垮整个模型。
-	APIKeys                     []string `json:"apiKeys,omitempty" yaml:"apiKeys,omitempty"`
-	TooltipData                 string   `json:"tooltipData" yaml:"tooltipData"`
-	ModelID                     string   `json:"modelID" yaml:"modelID"`
-	ReasoningEffort             string   `json:"reasoningEffort" yaml:"reasoningEffort"`
+	APIKeys         []string `json:"apiKeys,omitempty" yaml:"apiKeys,omitempty"`
+	TooltipData     string   `json:"tooltipData" yaml:"tooltipData"`
+	ModelID         string   `json:"modelID" yaml:"modelID"`
+	ReasoningEffort string   `json:"reasoningEffort" yaml:"reasoningEffort"`
+	// CustomThinkingEfforts 是该渠道额外接受的自定义思考档位（厂商原生枚举值，
+	// 如 none、adaptive）。档位会出现在 Cursor 的 Effort 下拉与变体列表中，运行时
+	// 命中即原样透传给上游 reasoning_effort / thinking 配置；reasoningEffort 也可
+	// 直接选中自定义档位作为默认/上限。仅 openai/gemini 渠道生效；anthropic 协议
+	// effort 枚举固定，忽略该字段。
+	CustomThinkingEfforts       []string `json:"customThinkingEfforts,omitempty" yaml:"customThinkingEfforts,omitempty"`
 	OpenAIEndpoint              string   `json:"openAIEndpoint" yaml:"openAIEndpoint"`
 	OpenAIRequestGroup          string   `json:"openAIRequestGroup,omitempty" yaml:"openAIRequestGroup,omitempty"`
 	OpenAIExtraParamsEnabled    bool     `json:"openAIExtraParamsEnabled" yaml:"openAIExtraParamsEnabled"`
@@ -524,6 +530,18 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			return nil, err
 		}
 		nextType := normalizeModelAdapterType(item.Type)
+		// 自定义思考档位仅对 openai 兼容渠道有意义（reasoning_effort 原样透传）；
+		// gemini 的档位映射为固定 thinkingBudget、anthropic 的 adaptive effort 枚举
+		// 由协议固定，两者的该配置一并忽略。
+		customThinkingEfforts := modelcontext.NormalizeCustomThinkingEfforts(item.CustomThinkingEfforts)
+		if nextType != "openai" {
+			customThinkingEfforts = nil
+		}
+		if nextType == "openai" {
+			if invalid := modelcontext.FirstInvalidCustomThinkingEffort(item.CustomThinkingEfforts); invalid != "" {
+				return nil, i18n.NewError("error.model_adapter.custom_thinking_efforts_invalid", i18n.CodeInvalidModelAdapter, fmt.Sprintf("模型适配器自定义思考档位 %q 非法：仅支持字母数字开头、可含 - 与 _ 的 1~32 位标识符，且不能与标准档位同名", invalid))
+			}
+		}
 		protocolMode := modelchannel.NormalizeProtocolMode(item.ProtocolMode)
 		protocolGroup := modelchannel.ResolveProtocolGroup(protocolMode, nextType, item.ModelID, baseURL, item.OpenAIEndpoint, firstNonEmptyProtocolGroup(item.ProtocolGroup, item.OpenAIRequestGroup))
 		openAIEndpoint := modelchannel.NormalizeOpenAIEndpoint(nextType, item.OpenAIEndpoint)
@@ -545,7 +563,8 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			APIKeys:                   normalizeAPIKeyPool(item.APIKeys, strings.TrimSpace(item.APIKey)),
 			TooltipData:               strings.TrimSpace(item.TooltipData),
 			ModelID:                   strings.TrimSpace(item.ModelID),
-			ReasoningEffort:           normalizeReasoningEffort(item.ReasoningEffort),
+			ReasoningEffort:           normalizeReasoningEffortWithCustom(item.ReasoningEffort, customThinkingEfforts),
+			CustomThinkingEfforts:     customThinkingEfforts,
 			OpenAIEndpoint:            openAIEndpoint,
 			OpenAIRequestGroup:        modelchannel.NormalizeOpenAIRequestGroup(nextType, openAIEndpoint, protocolGroup),
 			ContextWindowTokens:       modelcontext.Resolve(item.ModelID, normalizeMaxCompletionTokens(item.ContextWindowTokens)),
@@ -594,7 +613,7 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 		case next.ProtocolGroup == "":
 			return nil, i18n.NewError("error.model_adapter.protocol_group_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 protocolGroup 与 provider 不匹配")
 		case next.Type == "openai" && next.ReasoningEffort == "":
-			return nil, i18n.NewError("error.model_adapter.reasoning_effort_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 reasoningEffort 仅支持 low、medium、high、xhigh、max")
+			return nil, i18n.NewError("error.model_adapter.reasoning_effort_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 reasoningEffort 仅支持 low、medium、high、xhigh、max 或自定义思考档位（customThinkingEfforts）内的值")
 		case next.Type == "gemini" && next.ReasoningEffort == "":
 			return nil, i18n.NewError("error.model_adapter.reasoning_effort_invalid", i18n.CodeInvalidModelAdapter, "模型适配器 reasoningEffort 仅支持 low、medium、high、xhigh、max")
 		case next.Type == "openai" && next.OpenAIEndpoint == "":
@@ -832,6 +851,16 @@ func normalizeReasoningEffort(value string) string {
 	default:
 		return ""
 	}
+}
+
+// normalizeReasoningEffortWithCustom 在标准档位之外接受渠道自定义思考档位：
+// 值命中 custom 列表时原样（小写）保留，否则回落标准归一化。自定义档位作为
+// reasoningEffort 上限/默认值时不参与档位大小比较，运行时按显式选择透传。
+func normalizeReasoningEffortWithCustom(value string, custom []string) string {
+	if modelcontext.ContainsCustomThinkingEffort(custom, value) {
+		return strings.ToLower(strings.TrimSpace(value))
+	}
+	return normalizeReasoningEffort(value)
 }
 
 func normalizeAnthropicThinkingEffort(value string) string {
