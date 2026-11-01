@@ -236,6 +236,8 @@ type ModelEvent struct {
 	ThinkingSignature string
 	// ThinkingSignatureSource 表示思考签名的 provider 语义来源。
 	ThinkingSignatureSource string
+	// ThinkingOpaque 表示本段思考在 provider 侧存在，但没有返回可读文本（如 Anthropic redacted/omitted thinking）。
+	ThinkingOpaque bool
 	// ProviderItemID 保存 provider 原始 output item id，用于 stateless Responses replay。
 	ProviderItemID string
 	// ProviderStatus 保存 provider 原始 output item status，用于 stateless Responses replay。

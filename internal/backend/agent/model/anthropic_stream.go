@@ -214,6 +214,7 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 		terminalMessageDelta := false
 		thinkingStarted := time.Time{}
 		currentThinkingSignature := ""
+		currentThinkingOpaque := false
 		thinkParser := &anthropicThinkTagParser{}
 		currentModel := modelID
 		inputTokens := int64(0)
@@ -254,12 +255,14 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 				ThinkingDurationMS:      duration,
 				ThinkingSignature:       thinkingSignature,
 				ThinkingSignatureSource: thinkingSignatureSource,
+				ThinkingOpaque:          currentThinkingOpaque,
 			}); err != nil {
 				return err
 			}
 			outwardEvent = true
 			thinkingStarted = time.Time{}
 			currentThinkingSignature = ""
+			currentThinkingOpaque = false
 			return nil
 		}
 		emitTextDelta := func(text string) error {
@@ -287,6 +290,7 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 			if thinkingStarted.IsZero() {
 				thinkingStarted = time.Now()
 			}
+			currentThinkingOpaque = false
 			outwardEvent = true
 			return wrappedSink(ModelEvent{
 				Kind:          ModelEventKindThinkingDelta,
@@ -435,6 +439,15 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 				applyUsage(event.Message.Usage)
 			case "content_block_start":
 				openContentBlocks[event.Index] = struct{}{}
+				if blockType := strings.TrimSpace(event.ContentBlock.Type); blockType == "thinking" || blockType == "redacted_thinking" {
+					// 先登记思考段：若上游只回 signature（display=omitted）或 redacted_thinking，
+					// content_block_stop 仍会发出 ThinkingCompleted，由 forwarder 展示说明占位。
+					if thinkingStarted.IsZero() {
+						thinkingStarted = time.Now()
+						currentThinkingOpaque = true
+					}
+					streamIdle.MarkEffectiveContent()
+				}
 				if strings.TrimSpace(event.ContentBlock.Type) == "tool_use" {
 					if err := flushTaggedTextTail(); err != nil {
 						return err

@@ -123,6 +123,23 @@ func TestGeminiThinkingDisabledUsesZeroBudget(t *testing.T) {
 	}
 }
 
+func TestGeminiRequestBodyIncludesThoughtsOnlyWhenThinking(t *testing.T) {
+	thinkingConfig := func(effort string) map[string]any {
+		body, err := geminiRequestBody(StreamRequest{Messages: []Message{{Role: "user", Content: "hi"}}, ReasoningEffort: effort}, "gemini-2.5-pro")
+		if err != nil {
+			t.Fatalf("build gemini body: %v", err)
+		}
+		config, _ := body["generationConfig"].(map[string]any)["thinkingConfig"].(map[string]any)
+		return config
+	}
+	if config := thinkingConfig("high"); config["includeThoughts"] != true || config["thinkingBudget"] != 16384 {
+		t.Fatalf("high thinkingConfig = %#v, want includeThoughts=true budget=16384", config)
+	}
+	if config := thinkingConfig("disabled"); config["includeThoughts"] != nil || config["thinkingBudget"] != 0 {
+		t.Fatalf("disabled thinkingConfig = %#v, want budget=0 without includeThoughts", config)
+	}
+}
+
 func runGeminiTestStream(t *testing.T, body string) ([]ModelEvent, int64, int64, int64, error) {
 	t.Helper()
 	adapter := &GeminiAdapter{}

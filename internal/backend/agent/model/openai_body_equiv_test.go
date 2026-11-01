@@ -45,7 +45,7 @@ func legacyOpenAIResponsesBodyPipeline(req StreamRequest, modelID string, baseUR
 			requestBody.Tools = tools
 		}
 		if effort := strings.TrimSpace(req.ReasoningEffort); effort != "" {
-			requestBody.Reasoning = &openAIResponsesReasoning{Effort: effort, Summary: "auto"}
+			requestBody.Reasoning = &openAIResponsesReasoning{Effort: effort, Summary: "detailed"}
 			requestBody.Include = []string{"reasoning.encrypted_content"}
 		}
 		body = requestBody
@@ -138,8 +138,8 @@ func TestBuildOpenAIResponsesBodyMapUsesSupportedReasoningIncludes(t *testing.T)
 	if !ok {
 		t.Fatalf("reasoning = %#v, want object", body["reasoning"])
 	}
-	if reasoning["effort"] != "medium" || reasoning["summary"] != "auto" {
-		t.Fatalf("reasoning = %#v, want effort=medium and summary=auto", reasoning)
+	if reasoning["effort"] != "medium" || reasoning["summary"] != "detailed" {
+		t.Fatalf("reasoning = %#v, want effort=medium and summary=detailed", reasoning)
 	}
 
 	include, ok := body["include"].([]any)

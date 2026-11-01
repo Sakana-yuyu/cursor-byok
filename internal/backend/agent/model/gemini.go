@@ -179,7 +179,12 @@ func geminiRequestBody(req StreamRequest, modelID string) (map[string]any, error
 		generationConfig["maxOutputTokens"] = req.MaxTokens
 	}
 	if effort := strings.TrimSpace(req.ReasoningEffort); effort != "" {
-		generationConfig["thinkingConfig"] = map[string]any{"thinkingBudget": geminiThinkingBudget(effort)}
+		budget := geminiThinkingBudget(effort)
+		thinkingConfig := map[string]any{"thinkingBudget": budget}
+		if budget > 0 {
+			thinkingConfig["includeThoughts"] = true
+		}
+		generationConfig["thinkingConfig"] = thinkingConfig
 	}
 	if len(generationConfig) > 0 {
 		body["generationConfig"] = generationConfig

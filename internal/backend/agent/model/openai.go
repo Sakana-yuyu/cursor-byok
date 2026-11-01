@@ -840,7 +840,7 @@ func buildOpenAIResponsesBodyMap(req StreamRequest, modelID string, promptCacheK
 		body["tools"] = toJSONAnySlice(tools)
 	}
 	if effort := strings.TrimSpace(req.ReasoningEffort); effort != "" {
-		body["reasoning"] = map[string]any{"effort": effort, "summary": "auto"}
+		body["reasoning"] = map[string]any{"effort": effort, "summary": "detailed"}
 		body["include"] = []any{"reasoning.encrypted_content"}
 	}
 	return body, nil

@@ -123,6 +123,12 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 				Reasoning        json.RawMessage       `json:"reasoning"`
 				ReasoningDetails json.RawMessage       `json:"reasoning_details"`
 				ToolCalls        []openAIToolCallDelta `json:"tool_calls"`
+				// Gemini OpenAI 兼容流把思考摘要放在普通 content 中，仅以 extra_content.google.thought 标记。
+				ExtraContent *struct {
+					Google *struct {
+						Thought bool `json:"thought"`
+					} `json:"google"`
+				} `json:"extra_content,omitempty"`
 			} `json:"delta"`
 
 			FinishReason *string `json:"finish_reason"`
@@ -527,6 +533,10 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		// Kimi K2 系列在思考阶段会把同一片段同时放进 content 与 reasoning_content，
 		// 导致思考内容被当作正常文本重复输出。此处识别这种重复并跳过 content。
 		reasoning := openAIChatDeltaReasoningText(choice.Delta.ReasoningContent, choice.Delta.Reasoning, choice.Delta.ReasoningDetails)
+		if choice.Delta.ExtraContent != nil && choice.Delta.ExtraContent.Google != nil && choice.Delta.ExtraContent.Google.Thought && choice.Delta.Content != "" {
+			reasoning += choice.Delta.Content
+			choice.Delta.Content = ""
+		}
 		if reasoning != "" {
 			if err := emitThinkingDelta(reasoning); err != nil {
 				return fail(err)

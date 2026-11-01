@@ -776,8 +776,13 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 			stream.ProviderAccumulatedReasoningItemID = strings.TrimSpace(event.ProviderItemID)
 			stream.ProviderAccumulatedReasoningStatus = strings.TrimSpace(event.ProviderStatus)
 			stream.ProviderAccumulatedReasoningSummary = append([]byte(nil), event.ProviderSummary...)
+			stream.UpdatedAt = time.Now().UTC()
+			stream.mu.Unlock()
+		}
+		if strings.TrimSpace(event.ThinkingSignature) != "" || event.ThinkingOpaque {
+			stream.mu.Lock()
 			shouldEmitSyntheticThinking = len(bytes.TrimSpace(stream.ProviderAccumulatedReasoning)) == 0 &&
-				strings.TrimSpace(event.ThinkingSignatureSource) == modeladapter.ReasoningSignatureSourceOpenAIResponses
+				(event.ThinkingOpaque || strings.TrimSpace(event.ThinkingSignatureSource) == modeladapter.ReasoningSignatureSourceOpenAIResponses)
 			if shouldEmitSyntheticThinking {
 				encryptedOnlyThinking = true
 				if stream.ProviderSyntheticThinkingStartedAt.IsZero() {
@@ -805,7 +810,7 @@ func (service *Service) applyProviderModelEvent(stream *ActiveStream, event mode
 		if shouldEmitSyntheticThinking {
 			// encrypted-only 场景：首次发布合成占位文本，让用户看到 thinking 指示。
 			if err := service.broker.Publish(requestID, StreamEvent{
-				Message: buildThinkingDeltaMessage("模型正在加密推理中，请稍候……", event.ThinkingStyle),
+				Message: buildThinkingDeltaMessage(opaqueThinkingPlaceholder(event.ThinkingSignatureSource), event.ThinkingStyle),
 			}); err != nil {
 				return err
 			}

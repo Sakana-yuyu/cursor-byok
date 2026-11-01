@@ -208,6 +208,7 @@ func applyOpenAIChatCompletionsCompatibility(body map[string]any, baseURL string
 	// 按 provider 策略重命名输出 token 上限键：必须在 kind 空值提前返回之前执行，
 	// OpenAI 官方端点（无 kind）上的 o 系/gpt-5 模型同样需要 max_completion_tokens。
 	renameOpenAIMaxTokensField(body, policy.MaxTokensField)
+	applyGeminiOpenAICompatThoughts(body, baseURL)
 	if kind == "" {
 		return
 	}
@@ -272,6 +273,42 @@ func renameOpenAIMaxTokensField(body map[string]any, target string) {
 	if _, exists := body["max_completion_tokens"]; !exists {
 		body["max_completion_tokens"] = value
 	}
+}
+
+// applyGeminiOpenAICompatThoughts 让 Gemini 官方 OpenAI 兼容端点返回思考摘要。
+// 该端点默认不回思考内容，需通过字面量 extra_body.google.thinking_config.include_thoughts
+// 开启；思考强度仍由 reasoning_effort 控制（include_thoughts 与 thinking_level/budget 不同，可共存）。
+// 用户若已在 extra params 中显式配置 include_thoughts，则保留用户值。
+func applyGeminiOpenAICompatThoughts(body map[string]any, baseURL string) {
+	if len(body) == 0 || !strings.Contains(strings.ToLower(baseURL), "generativelanguage.googleapis.com") {
+		return
+	}
+	effort, ok := body["reasoning_effort"]
+	if !ok {
+		return
+	}
+	switch strings.ToLower(strings.TrimSpace(fmt.Sprint(effort))) {
+	case "", "none", "disabled", "off", "false", "0":
+		return
+	}
+	extraBody, _ := body["extra_body"].(map[string]any)
+	if extraBody == nil {
+		extraBody = map[string]any{}
+	}
+	google, _ := extraBody["google"].(map[string]any)
+	if google == nil {
+		google = map[string]any{}
+	}
+	thinkingConfig, _ := google["thinking_config"].(map[string]any)
+	if thinkingConfig == nil {
+		thinkingConfig = map[string]any{}
+	}
+	if _, exists := thinkingConfig["include_thoughts"]; !exists {
+		thinkingConfig["include_thoughts"] = true
+	}
+	google["thinking_config"] = thinkingConfig
+	extraBody["google"] = google
+	body["extra_body"] = extraBody
 }
 
 func ensureOpenAIThinkingEnabled(body map[string]any) {
