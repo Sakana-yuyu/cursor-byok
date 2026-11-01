@@ -14,7 +14,9 @@ func TestProviderResumeStartsNextPassWithoutFixedDelay(t *testing.T) {
 	conversation := testConversation([]HistoryEntry{
 		testUserMessageEntry(t, 1, "request-resume", "继续执行"),
 	})
-	provider := &contextProjectionRequestProvider{requests: make(chan ProviderRequest, 1)}
+	// 无缓冲：provider pass 阻塞在发送请求上，直到下方断言读完状态后才 <-provider.requests，
+	// 避免 CI 快机上异步 pass 先跑完导致 ProviderActive 已回落为 false 的时序竞态。
+	provider := &contextProjectionRequestProvider{requests: make(chan ProviderRequest)}
 	broker := NewStreamBroker()
 	service := newServiceWithDependencies(store, NewHistoryProjector(), contextProjectionLifecycleCompiler{}, provider, broker)
 	stream, err := broker.OpenStream(
