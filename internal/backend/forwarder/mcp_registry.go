@@ -760,9 +760,25 @@ const (
 	mcpResponseHeaderTimeout = 30 * time.Second
 )
 
-func mcpHTTPClient(headers map[string]string) *http.Client {
-	base := http.DefaultTransport
-	if transport, ok := http.DefaultTransport.(*http.Transport); ok {
+// 所有 MCP 连接共享同一个基础 Transport（连接池）：header 由 mcpHeaderTransport
+// 逐请求注入，无需每次连接都 Clone 一个新池；否则频繁重连时旧池空闲连接要等
+// IdleConnTimeout 才释放，socket 会堆积。以 http.DefaultTransport 指针为缓存键，
+// 启动期 netproxy 替换默认 Transport 后自动重建，保证代理设置生效。
+var (
+	mcpBaseTransportMu     sync.Mutex
+	mcpBaseTransportSource http.RoundTripper
+	mcpBaseTransport       http.RoundTripper
+)
+
+func sharedMCPBaseTransport() http.RoundTripper {
+	mcpBaseTransportMu.Lock()
+	defer mcpBaseTransportMu.Unlock()
+	source := http.DefaultTransport
+	if mcpBaseTransport != nil && mcpBaseTransportSource == source {
+		return mcpBaseTransport
+	}
+	base := source
+	if transport, ok := source.(*http.Transport); ok {
 		cloned := transport.Clone()
 		cloned.DialContext = (&net.Dialer{Timeout: mcpConnectTimeout, KeepAlive: 30 * time.Second}).DialContext
 		if cloned.TLSHandshakeTimeout <= 0 || cloned.TLSHandshakeTimeout > mcpTLSHandshakeTimeout {
@@ -773,7 +789,16 @@ func mcpHTTPClient(headers map[string]string) *http.Client {
 		}
 		base = cloned
 	}
-	return &http.Client{Transport: mcpHeaderTransport{base: base, headers: cloneStringMap(headers)}}
+	if previous, ok := mcpBaseTransport.(*http.Transport); ok && previous != nil {
+		previous.CloseIdleConnections()
+	}
+	mcpBaseTransportSource = source
+	mcpBaseTransport = base
+	return base
+}
+
+func mcpHTTPClient(headers map[string]string) *http.Client {
+	return &http.Client{Transport: mcpHeaderTransport{base: sharedMCPBaseTransport(), headers: cloneStringMap(headers)}}
 }
 
 func snapshotMCPRuntimeEntry(entry *mcpRuntimeEntry) MCPRuntimeSnapshot {

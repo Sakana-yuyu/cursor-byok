@@ -402,10 +402,8 @@ func delegationResultRunStatus(resultPayload string) agentv1.SubagentRunStatus {
 	}
 }
 
-func delegationResultRunTitle(resultPayload string) string {
-	_ = resultPayload
-	return "委派任务"
-}
+// delegationRunTitle 是委派 SubagentRun 的固定卡片标题（结果载荷不含标题信息）。
+const delegationRunTitle = "委派任务"
 
 // delegationResultRunDetail 返回委派失败的简要原因（成功时为空）。
 func delegationResultRunDetail(resultPayload string) string {
@@ -497,7 +495,7 @@ func (service *Service) handleDelegationResult(stream *ActiveStream, payload *st
 	markExecCompleted(stream, pending)
 	// 记录委派终态，供 publishCheckpoint 通过 subagent_runs_by_parent_tool_call_id
 	// 同步给 Cursor 客户端（Task 卡片从 stopped/运行中恢复为 succeeded/error）。
-	service.recordDelegationRunTerminal(stream, pending, delegationResultRunStatus(resultPayload), delegationResultRunTitle(resultPayload), delegationResultRunDetail(resultPayload))
+	service.recordDelegationRunTerminal(stream, pending, delegationResultRunStatus(resultPayload), delegationRunTitle, delegationResultRunDetail(resultPayload))
 	if err := service.appendToolResult(stream, pending.ToolCallID, "Task", pending.ArgsJSON, resultPayload, pending.ReasoningContent, nil); err != nil {
 		logger.Errorf("forwarder delegation terminal append tool result failed request_id=%s exec_id=%s tool_call_id=%s err=%v", strings.TrimSpace(stream.RequestID), strings.TrimSpace(pending.ExecID), strings.TrimSpace(pending.ToolCallID), err)
 		return err
