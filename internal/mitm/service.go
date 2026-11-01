@@ -1,6 +1,7 @@
 package mitm
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
@@ -594,7 +595,7 @@ func (s *ProxyServer) forwardToServerStreaming(incoming *http.Request) (*http.Re
 		return nil, fmt.Errorf("read request body: %w", err)
 	}
 	incoming.Body.Close()
-	incoming.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
+	incoming.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 	incoming.ContentLength = int64(len(bodyBytes))
 
 	rawURL, err := rawURLForRelay(incoming)
@@ -648,7 +649,7 @@ func (s *ProxyServer) forwardToServerStreaming(incoming *http.Request) (*http.Re
 		if forwardCtx == nil {
 			forwardCtx = context.Background()
 		}
-		serverReq, err := http.NewRequestWithContext(forwardCtx, incoming.Method, forwardURL.String(), strings.NewReader(string(bodyBytes)))
+		serverReq, err := http.NewRequestWithContext(forwardCtx, incoming.Method, forwardURL.String(), bytes.NewReader(bodyBytes))
 		if err != nil {
 			pw.CloseWithError(fmt.Errorf("build forward request: %w", err))
 			return

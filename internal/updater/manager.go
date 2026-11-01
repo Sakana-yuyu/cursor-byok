@@ -290,8 +290,23 @@ func (m *Manager) downloadUpdate(ctx context.Context, info *UpdateInfo) (string,
 	if err != nil {
 		return "", err
 	}
+	// Windows 上无法删除仍被打开的文件：失败路径必须先关闭句柄再删除，
+	// 否则每次下载/校验失败都会在 %TEMP% 残留一个完整更新包。
+	tempPath := tempFile.Name()
+	closed := false
+	closeTemp := func() error {
+		if closed {
+			return nil
+		}
+		closed = true
+		return tempFile.Close()
+	}
+	discardTemp := func() {
+		_ = closeTemp()
+		_ = os.Remove(tempPath)
+	}
 	defer func() {
-		_ = tempFile.Close()
+		_ = closeTemp()
 	}()
 
 	hasher := sha256.New()
@@ -304,7 +319,12 @@ func (m *Manager) downloadUpdate(ctx context.Context, info *UpdateInfo) (string,
 	})
 	m.emitProgress(info, 0, total)
 	if _, err := io.Copy(io.MultiWriter(tempFile, hasher, progress), resp.Body); err != nil {
-		_ = os.Remove(tempFile.Name())
+		discardTemp()
+		return "", err
+	}
+	// 显式关闭并检查错误：延迟写入错误可能在 Close 时才暴露。
+	if err := closeTemp(); err != nil {
+		_ = os.Remove(tempPath)
 		return "", err
 	}
 	m.emitProgress(info, total, total)
@@ -312,12 +332,12 @@ func (m *Manager) downloadUpdate(ctx context.Context, info *UpdateInfo) (string,
 	expectedChecksum := strings.TrimSpace(strings.TrimPrefix(info.Asset.Checksum, "sha256:"))
 	actualChecksum := hex.EncodeToString(hasher.Sum(nil))
 	if expectedChecksum != "" && !strings.EqualFold(expectedChecksum, actualChecksum) {
-		_ = os.Remove(tempFile.Name())
+		_ = os.Remove(tempPath)
 		return "", fmt.Errorf("checksum mismatch: expected %s got %s", expectedChecksum, actualChecksum)
 	}
 
-	logger.Infof("更新包下载完成：version=%s path=%s", info.Version, tempFile.Name())
-	return tempFile.Name(), nil
+	logger.Infof("更新包下载完成：version=%s path=%s", info.Version, tempPath)
+	return tempPath, nil
 }
 
 func (m *Manager) installReadyUpdate() error {

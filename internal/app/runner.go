@@ -234,7 +234,7 @@ func Run(resources EmbeddedResources) error {
 		return adCore.SetAssetBaseURL(browserReachableLoopbackBaseURL(backendListenAddr) + ads.RoutePrefix)
 	}
 	refreshAdRuntime := func() {
-		runtimeState, err := adCore.GetRuntime(context.Background())
+		runtimeState, err := adCore.GetRuntime(adRefreshCtx)
 		if err != nil {
 			return
 		}
@@ -252,7 +252,7 @@ func Run(resources EmbeddedResources) error {
 	}
 	refreshAdAsync := func() {
 		safego.Go("ad:refresh", func() {
-			refreshAd(context.Background())
+			refreshAd(adRefreshCtx)
 		})
 	}
 	startAdRefreshLoop := func(ctx context.Context) {
