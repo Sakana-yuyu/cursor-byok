@@ -334,7 +334,13 @@ func (service *Service) watchNativeDelegationProgress(requestID, execID string) 
 	safego.Go("forwarder:native-delegation-watchdog", func() {
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
-		for range ticker.C {
+		done := service.shutdownSignal()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+			}
 			item, ok := service.nativeDelegationTask(execID)
 			if !ok || delegatedStatusTerminal(item.Status) {
 				return
@@ -439,7 +445,13 @@ func (service *Service) keepNativeDelegationAlive(requestID, execID string) {
 	safego.Go("forwarder:native-delegation-progress", func() {
 		ticker := time.NewTicker(nativeDelegationProgressInterval)
 		defer ticker.Stop()
-		for range ticker.C {
+		done := service.shutdownSignal()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+			}
 			item, ok := service.nativeDelegationTask(execID)
 			if !ok || delegatedStatusTerminal(item.Status) {
 				return

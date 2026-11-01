@@ -396,16 +396,33 @@ func cleanCursorTranscriptAssistantText(text string) string {
 
 func cleanTranscriptContextTags(text string) string {
 	cleaned := text
+	// 快速预检：正文不含对应开标签时跳过该正则，避免长 transcript 被全文扫描 N 次。
+	lower := strings.ToLower(cleaned)
 	for _, pattern := range transcriptContextTagPatterns {
-		cleaned = pattern.ReplaceAllString(cleaned, "")
+		if !strings.Contains(lower, pattern.openTag) {
+			continue
+		}
+		next := pattern.re.ReplaceAllString(cleaned, "")
+		if next != cleaned {
+			cleaned = next
+			lower = strings.ToLower(cleaned)
+		}
 	}
 	return collapseTranscriptBlankLines(cleaned)
 }
 
-func compileTranscriptContextTagPatterns(tags []string) []*regexp.Regexp {
-	patterns := make([]*regexp.Regexp, 0, len(tags))
+type transcriptContextTagPattern struct {
+	openTag string
+	re      *regexp.Regexp
+}
+
+func compileTranscriptContextTagPatterns(tags []string) []transcriptContextTagPattern {
+	patterns := make([]transcriptContextTagPattern, 0, len(tags))
 	for _, tag := range tags {
-		patterns = append(patterns, regexp.MustCompile(`(?is)<`+regexp.QuoteMeta(tag)+`(?:\s[^>]*)?>.*?</`+regexp.QuoteMeta(tag)+`>`))
+		patterns = append(patterns, transcriptContextTagPattern{
+			openTag: "<" + strings.ToLower(tag),
+			re:      regexp.MustCompile(`(?is)<` + regexp.QuoteMeta(tag) + `(?:\s[^>]*)?>.*?</` + regexp.QuoteMeta(tag) + `>`),
+		})
 	}
 	return patterns
 }

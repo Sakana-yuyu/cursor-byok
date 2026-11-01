@@ -259,6 +259,13 @@ func (service *Service) synthesizeImageDescriptions(ctx context.Context, request
 		wg.Add(1)
 		go func(index int, current modeladapter.Message) {
 			defer wg.Done()
+			// 裸 goroutine 的 panic 会直接崩掉整个进程；兜底保留原消息继续转发。
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Errorf("forwarder vision proxy message panic recovered request_id=%s panic=%v", strings.TrimSpace(requestID), r)
+					result[index] = current
+				}
+			}()
 			result[index] = service.synthesizeMessageImagesWithSemaphore(visionCtx, requestID, conversationID, current, config, sem)
 		}(i, message)
 	}

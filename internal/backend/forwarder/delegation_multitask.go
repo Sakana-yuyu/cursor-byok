@@ -354,7 +354,13 @@ func (service *Service) keepDelegationTaskAlive(stream *ActiveStream, pending ru
 		ticker := time.NewTicker(delegationTaskProgressInterval)
 		defer ticker.Stop()
 		consecutiveFailures := 0
-		for range ticker.C {
+		done := service.shutdownSignal()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+			}
 			stream.mu.Lock()
 			_, active := stream.PendingExecs[execID]
 			terminal := isTerminalStreamStatus(stream.Status)

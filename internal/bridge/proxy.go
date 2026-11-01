@@ -739,14 +739,7 @@ func (s *ProxyService) QueryAllProviderBalances() []ProviderBalanceSummaryItem {
 		wg.Add(1)
 		go func(index int, adapter serverconfig.ModelAdapterConfig) {
 			defer wg.Done()
-			defer func() {
-				if r := recover(); r != nil {
-					logger.Infof("bridge query provider balance panic recovered adapter_id=%s panic=%v",
-						strings.TrimSpace(adapter.ID), r)
-				}
-			}()
-			sem <- struct{}{}
-			defer func() { <-sem }()
+			// 基础字段先落位：即使后续 panic，前端也能拿到可识别的行而不是空数据。
 			item := ProviderBalanceSummaryItem{
 				AdapterID:   adapter.ID,
 				DisplayName: adapter.DisplayName,
@@ -754,6 +747,15 @@ func (s *ProxyService) QueryAllProviderBalances() []ProviderBalanceSummaryItem {
 				BaseURL:     adapter.BaseURL,
 				ModelID:     adapter.ModelID,
 			}
+			results[index] = item
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Errorf("bridge query provider balance panic recovered adapter_id=%s panic=%v",
+						strings.TrimSpace(adapter.ID), r)
+				}
+			}()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 			item.Balance = s.queryProviderBalanceSafe(adapter)
 			s.core.RecordRoutingMetrics(adapter.ID, item.Balance)
 			results[index] = item

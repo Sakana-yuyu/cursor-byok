@@ -136,6 +136,12 @@ type Service struct {
 	// visionProxyPassBudget 控制自动识图在主模型首字前可占用的总时间。
 	// 仅测试可覆盖；生产使用 visionProxyPassTimeout，避免把该运行时策略持久化进历史。
 	visionProxyPassBudget func() time.Duration
+
+	// shutdownCh 在 Shutdown 时关闭，供后台轮询 goroutine（委派进度/看门狗）退出；
+	// 惰性初始化，兼容测试中直接构造的 Service 字面量。
+	shutdownOnce      sync.Once
+	shutdownCloseOnce sync.Once
+	shutdownCh        chan struct{}
 }
 
 // RecentWorkspaceRoot returns the latest non-empty workspace root observed
@@ -696,12 +702,28 @@ func (service *Service) CloseDebugRecorder() {
 	service.debug.Close()
 }
 
+// shutdownSignal 返回 Shutdown 时关闭的通道，后台轮询 goroutine 据此退出。
+func (service *Service) shutdownSignal() <-chan struct{} {
+	service.shutdownOnce.Do(func() {
+		service.shutdownCh = make(chan struct{})
+	})
+	return service.shutdownCh
+}
+
+func (service *Service) signalShutdown() {
+	service.shutdownSignal()
+	service.shutdownCloseOnce.Do(func() {
+		close(service.shutdownCh)
+	})
+}
+
 // Shutdown 在服务退出前主动取消所有未终态活动流。
 // 这样 RunSSE 能先发出 TurnEnded + canceled endstream，避免 Cursor 只看到连接被硬断后报 RetriableError: Canceled。
 func (service *Service) Shutdown(ctx context.Context) error {
 	if service == nil {
 		return nil
 	}
+	service.signalShutdown()
 	// 停 debug 落盘 worker（放最后执行）：Service 即将被丢弃，recorder 不随它
 	// 关闭的话，每次 Start/SaveConfig 的 rebuild 都会泄漏一个 goroutine 和
 	// 8192 槽的队列。defer 保证所有提前 return 路径（无 broker/无活动流）也会停止。

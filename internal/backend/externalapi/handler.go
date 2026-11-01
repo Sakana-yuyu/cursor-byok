@@ -428,8 +428,10 @@ func (h *handler) copyStream(w http.ResponseWriter, response *http.Response, idl
 	if idle <= 0 {
 		idle = 90 * time.Second
 	}
+	// 缓冲区跨轮复用：超时后直接 return，不会再读已被后台 goroutine 占用的 buffer。
+	buffer := make([]byte, 32*1024)
 	for {
-		chunk, err := readWithIdle(response.Body, 32*1024, idle)
+		chunk, err := readWithIdle(response.Body, buffer, idle)
 		if len(chunk) > 0 {
 			if _, writeErr := w.Write(chunk); writeErr != nil {
 				return
@@ -463,14 +465,13 @@ func (h *handler) copyBody(w http.ResponseWriter, response *http.Response) {
 	_, _ = w.Write(body)
 }
 
-func readWithIdle(body io.ReadCloser, size int, idle time.Duration) ([]byte, error) {
+func readWithIdle(body io.ReadCloser, buffer []byte, idle time.Duration) ([]byte, error) {
 	type result struct {
 		data []byte
 		err  error
 	}
 	resultCh := make(chan result, 1)
 	go func() {
-		buffer := make([]byte, size)
 		n, err := body.Read(buffer)
 		resultCh <- result{data: buffer[:n], err: err}
 	}()
