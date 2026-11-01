@@ -99,7 +99,8 @@ func (watchdog *providerStreamIdleWatchdog) AttachBody(body io.Closer) {
 	}
 	watchdog.mu.Lock()
 	watchdog.body = body
-	shouldClose := watchdog.timedOut || watchdog.stopped
+	// canceledByParent 覆盖 parent 先取消、body 后挂上的边界：迟到的 AttachBody 也要关闭。
+	shouldClose := watchdog.timedOut || watchdog.stopped || watchdog.canceledByParent
 	watchdog.mu.Unlock()
 	if shouldClose {
 		_ = body.Close()
@@ -238,17 +239,19 @@ func providerStreamChunkTimeout(idleTimeout time.Duration) time.Duration {
 	return derived
 }
 
-// resetStreamReadDeadline 在每次 SSE 块读取前设置读超时，块到达后清除。
-// 客户端 *http.Response 没有服务端 ResponseController 的读 deadline 能力，
-// 因此改为定时看护：timeout 内无块到达即关闭响应体，使阻塞中的读返回
-// 错误。超时触发会先原子记录标记再关闭 body；返回的 disarm 在每次 Scan 返回后
-// 调用，报告本次是否发生过读超时。调用方据此把扫描错误转换为可被
+// newStreamChunkDeadline 为单条 SSE 流创建复用的逐块读超时守护。客户端
+// *http.Response 没有服务端 ResponseController 的读 deadline 能力，因此改为
+// 定时看护：timeout 内无块到达即关闭响应体，使阻塞中的读返回错误。
+// 用法：进入扫描循环前创建一次；每次阻塞读前 arm()，读返回后 disarm()，
+// 返回值表示本次读期间是否发生过超时。调用方据此把扫描错误转换为可被
 // IsStreamConnectionReset 识别的读超时错误（net.Error），从而触发 pre-output
 // 流式重连。
-// 响应体不可用时静默忽略（fallback，不改变原有行为）。
-func resetStreamReadDeadline(resp *http.Response, timeout time.Duration) (disarm func() bool, ok bool) {
+// 响应体不可用时返回空操作闭包（fallback，不改变原有行为）。
+// 单个复用 timer 替代此前每行 AfterFunc 新建 timer + 闭包 + atomic.Bool 的写法，
+// 消除多流并发、每秒数百行时的分配与 GC 压力。
+func newStreamChunkDeadline(resp *http.Response, timeout time.Duration) (arm func(), disarm func() bool) {
 	if resp == nil || resp.Body == nil {
-		return func() bool { return false }, false
+		return func() {}, func() bool { return false }
 	}
 	if timeout <= 0 {
 		timeout = chunkTimeout
@@ -258,11 +261,16 @@ func resetStreamReadDeadline(resp *http.Response, timeout time.Duration) (disarm
 		timedOut.Store(true)
 		_ = resp.Body.Close()
 	})
-	return func() bool {
+	arm = func() {
+		timedOut.Store(false)
+		timer.Reset(timeout)
+	}
+	disarm = func() bool {
 		stopped := timer.Stop()
 		// !stopped 覆盖回调已触发或正在触发、但原子标记尚未可见的竞态窗口。
 		return timedOut.Load() || !stopped
-	}, true
+	}
+	return arm, disarm
 }
 
 // streamChunkTimeoutError 构造可被 IsStreamConnectionReset 识别的逐块读超时错误。

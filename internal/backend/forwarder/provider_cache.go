@@ -60,6 +60,12 @@ func newCachingProviderGateway(inner ProviderGateway, settings func() (bool, tim
 	}
 }
 
+// FlushResponseCacheToDisk 供服务关闭时冲刷缓存落盘：节流定时器最长延迟 2s，
+// 不冲刷的话每次退出固定丢最近 ≤2s 的缓存变更。
+func (gateway *cachingProviderGateway) FlushResponseCacheToDisk() {
+	gateway.store.flushToDisk()
+}
+
 // StartStream 在缓存关闭时直接透传；开启时按精确匹配尝试命中或录制后有条件写入，
 // 只复用已完整收口的响应。进行中的流不做合并，避免用户重试或重复发送时等待旧流
 // 取消收尾，把旧流剩余时长直接叠加到新请求 TTFT。
@@ -199,7 +205,10 @@ type responseCacheEntry struct {
 
 // responseCacheStore 是带 TTL 与 LRU 淘汰上限的内存响应缓存，可持久化到磁盘。
 type responseCacheStore struct {
+	// mu 保护 entries/order/dirty 等内存状态；writeMu 只串行化锁外的磁盘写入
+	// （固定 .tmp 名不可并发），落盘期间不阻塞缓存读写。
 	mu                  sync.Mutex
+	writeMu             sync.Mutex
 	path                string               // 磁盘持久化路径；空表示不支持持久化
 	ttlProvider         func() time.Duration // 当前 TTL（热加载），用于磁盘恢复时续期
 	persistenceProvider func() bool          // 当前是否允许读写磁盘缓存（支持设置热加载）
@@ -340,6 +349,9 @@ func (store *responseCacheStore) put(key string, entry *responseCacheEntry, maxE
 	store.ensureLoaded()
 	if _, exists := store.entries[key]; !exists {
 		store.order = append(store.order, key)
+	} else {
+		// 覆盖写入同样视为最近使用：否则刚重录的热条目仍按旧位置被当作最旧淘汰。
+		store.touchLocked(key)
 	}
 	store.entries[key] = entry
 	// LRU 淘汰：超出上限时逐出最久未使用的条目。
@@ -366,20 +378,33 @@ func (store *responseCacheStore) markDirtyLocked() {
 }
 
 // flushToDisk 立即把当前内存内容写入磁盘（节流回调与关闭前兜底共用）。
+// 锁内只做快照并认领 dirty，序列化与写盘在锁外执行：整缓存 Marshal + WriteFile
+// 可能上百毫秒，全程持锁会让所有并发请求的缓存读写排队（TTFT 毛刺）。
 func (store *responseCacheStore) flushToDisk() {
 	store.mu.Lock()
-	defer store.mu.Unlock()
 	store.saveTimer = nil
 	store.syncPersistenceLocked()
 	if !store.dirty || !store.persistActive {
+		store.mu.Unlock()
 		return
 	}
+	// 先清 dirty 再快照：落盘期间的增量写入会重新置 dirty 并调度下一次落盘，
+	// 不会被本次快照覆盖丢失。
+	store.dirty = false
 	snapshot := make(map[string]*responseCacheEntry, len(store.entries))
 	for key, entry := range store.entries {
 		snapshot[key] = entry
 	}
-	if err := saveResponseCacheToDisk(store.path, snapshot); err == nil {
-		store.dirty = false
+	store.mu.Unlock()
+
+	// 固定 .tmp 临时名不能并发写：节流定时器与关闭兜底可能同时到达，这里串行化。
+	store.writeMu.Lock()
+	defer store.writeMu.Unlock()
+	if err := saveResponseCacheToDisk(store.path, snapshot); err != nil {
+		// 落盘失败恢复 dirty，等待下一次触发重试。
+		store.mu.Lock()
+		store.dirty = true
+		store.mu.Unlock()
 	}
 }
 

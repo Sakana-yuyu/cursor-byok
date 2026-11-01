@@ -716,14 +716,13 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 	chunkReadTimeout := providerStreamChunkTimeout(req.ProviderStreamIdleTimeout)
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), openAIStreamMaxTokenSize)
+	// 每流一个复用 timer：见 newStreamChunkDeadline（替代逐行 AfterFunc 的分配）。
+	armChunkReadDeadline, disarmChunkReadDeadline := newStreamChunkDeadline(resp, chunkReadTimeout)
 scanLoop:
 	for {
-		disarm := func() bool { return false }
-		if d, ok := resetStreamReadDeadline(resp, chunkReadTimeout); ok {
-			disarm = d
-		}
+		armChunkReadDeadline()
 		scanOK := scanner.Scan()
-		chunkTimedOut = chunkTimedOut || disarm()
+		chunkTimedOut = chunkTimedOut || disarmChunkReadDeadline()
 		if !scanOK {
 			break
 		}

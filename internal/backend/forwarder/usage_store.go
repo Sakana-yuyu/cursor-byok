@@ -25,6 +25,8 @@ const (
 	// 防抖批量写入配置
 	usageWriteDebounceMs = 2000 // 2秒内的写入合并为一次
 	usageWriteMaxBatch   = 50   // 或累积50个事件立即写入
+	// 磁盘持续故障时 pending 的硬上限：溢出丢最旧的一半，防止无界增长拖垮内存。
+	usagePendingEventsHardLimit = 10_000
 )
 
 type UsageFileStore struct {
@@ -143,6 +145,14 @@ func (store *UsageFileStore) UpsertEvent(event usageFileEvent) error {
 
 	store.pendingEvents = append(store.pendingEvents, event)
 
+	// 磁盘持续故障时 pending 无上界增长会拖垮内存：超过硬上限丢最旧的一半并告警。
+	// 正常路径防抖 2s / 批量上限都会及时清空，永远到不了这里。
+	if len(store.pendingEvents) >= usagePendingEventsHardLimit {
+		dropped := len(store.pendingEvents) - usagePendingEventsHardLimit/2
+		logger.Errorf("forwarder usage pending overflow, dropping oldest events path=%s dropped=%d", store.path, dropped)
+		store.pendingEvents = append(make([]usageFileEvent, 0, usagePendingEventsHardLimit), store.pendingEvents[dropped:]...)
+	}
+
 	// 达到批量上限立即写入
 	if len(store.pendingEvents) >= usageWriteMaxBatch {
 		return store.flushPendingEventsLocked()
@@ -161,6 +171,21 @@ func (store *UsageFileStore) UpsertEvent(event usageFileEvent) error {
 	})
 
 	return nil
+}
+
+// Flush 把防抖窗口内尚未落盘的 pending 事件立即写入磁盘，供服务关闭时调用。
+// 失败时事件回填 pending 并返回错误（与防抖路径一致，不静默丢弃）。
+func (store *UsageFileStore) Flush() error {
+	if store == nil || strings.TrimSpace(store.path) == "" {
+		return nil
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if store.debounceTimer != nil {
+		store.debounceTimer.Stop()
+		store.debounceTimer = nil
+	}
+	return store.flushPendingEventsLocked()
 }
 
 // flushPendingEventsLocked 批量写入所有 pending 事件（调用方必须已持有 store.mu）。
@@ -319,6 +344,13 @@ func (store *UsageFileStore) LookupEvent(needle string) (usageFileEvent, bool, e
 		matchAggregate(event)
 	}
 	for _, event := range pending {
+		// 快照后防抖落盘可能已把同一批事件写入磁盘：EventID 已在磁盘索引里的
+		// pending 事件跳过，避免 token/调用数被累计两次。
+		if eventID := strings.TrimSpace(event.EventID); eventID != "" {
+			if _, onDisk := events[eventID]; onDisk {
+				continue
+			}
+		}
 		matchAggregate(event)
 	}
 	if found {

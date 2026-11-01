@@ -743,6 +743,15 @@ func (service *Service) Shutdown(ctx context.Context) error {
 		// 关闭调度器：清空所有排队项并禁止晋升，避免关闭期间启动新的 provider 调用。
 		service.runQueue.Close()
 	}
+	// 关闭前冲刷本地状态：响应缓存节流落盘最长延迟 2s、用量事件防抖 2s + 批量
+	// 上限触发，不冲刷的话每次退出固定丢最近 ≤2s 的缓存变更与 token 统计。
+	// 放在 broker nil 早退之前，保证无活动流时同样执行。
+	if flusher, ok := service.provider.(interface{ FlushResponseCacheToDisk() }); ok {
+		flusher.FlushResponseCacheToDisk()
+	}
+	if err := service.usageStore.Flush(); err != nil {
+		logger.Errorf("forwarder usage flush on shutdown failed path=%s err=%v", service.usageStore.path, err)
+	}
 	if service.broker == nil {
 		return nil
 	}

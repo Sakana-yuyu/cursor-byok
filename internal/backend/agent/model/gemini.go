@@ -381,13 +381,12 @@ func (adapter *GeminiAdapter) streamGeminiEvents(resp *http.Response, req Stream
 	// pre-output 重连的读超时错误（见下方 scanner.Err 处理）。
 	var chunkTimedOut bool
 	chunkReadTimeout := providerStreamChunkTimeout(req.ProviderStreamIdleTimeout)
+	// 每流一个复用 timer：见 newStreamChunkDeadline（替代逐行 AfterFunc 的分配）。
+	armChunkReadDeadline, disarmChunkReadDeadline := newStreamChunkDeadline(resp, chunkReadTimeout)
 	for {
-		disarm := func() bool { return false }
-		if d, ok := resetStreamReadDeadline(resp, chunkReadTimeout); ok {
-			disarm = d
-		}
+		armChunkReadDeadline()
 		scanOK := scanner.Scan()
-		chunkTimedOut = chunkTimedOut || disarm()
+		chunkTimedOut = chunkTimedOut || disarmChunkReadDeadline()
 		if !scanOK {
 			break
 		}
