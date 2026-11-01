@@ -7,9 +7,11 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
+	"weak"
 
 	"cursor/internal/logger"
 
@@ -25,7 +27,6 @@ var (
 	installOnce             sync.Once
 	initialDefaultTransport = cloneDefaultTransport()
 	defaultResolver         = &proxyResolver{}
-	proxyTransports         sync.Map
 )
 
 // InstallDefaultTransport makes clients with a nil Transport use the same
@@ -63,8 +64,27 @@ func NewTransport(base *http.Transport) *http.Transport {
 	if transport.ResponseHeaderTimeout <= 0 {
 		transport.ResponseHeaderTimeout = defaultResponseHeaderTimeout
 	}
-	proxyTransports.Store(transport, struct{}{})
+	registerProxyTransport(transport)
 	return transport
+}
+
+// proxyTransports 只持有 transport 的弱引用：探测/测速/rebuild 会高频新建
+// transport，强引用会让它们连同连接池永远无法被 GC。被回收后由 cleanup 自动摘除。
+var (
+	proxyTransportsMu sync.Mutex
+	proxyTransports   = make(map[weak.Pointer[http.Transport]]struct{})
+)
+
+func registerProxyTransport(transport *http.Transport) {
+	pointer := weak.Make(transport)
+	proxyTransportsMu.Lock()
+	proxyTransports[pointer] = struct{}{}
+	proxyTransportsMu.Unlock()
+	runtime.AddCleanup(transport, func(pointer weak.Pointer[http.Transport]) {
+		proxyTransportsMu.Lock()
+		delete(proxyTransports, pointer)
+		proxyTransportsMu.Unlock()
+	}, pointer)
 }
 
 // ProxyForRequest resolves the proxy URL for a single request.
@@ -318,12 +338,17 @@ func statusFromSnapshot(snapshot proxySnapshot) Status {
 }
 
 func closeIdleProxyConnections() {
-	proxyTransports.Range(func(key any, _ any) bool {
-		if transport, ok := key.(*http.Transport); ok && transport != nil {
-			transport.CloseIdleConnections()
+	proxyTransportsMu.Lock()
+	live := make([]*http.Transport, 0, len(proxyTransports))
+	for pointer := range proxyTransports {
+		if transport := pointer.Value(); transport != nil {
+			live = append(live, transport)
 		}
-		return true
-	})
+	}
+	proxyTransportsMu.Unlock()
+	for _, transport := range live {
+		transport.CloseIdleConnections()
+	}
 }
 
 func cloneDefaultTransport() *http.Transport {
