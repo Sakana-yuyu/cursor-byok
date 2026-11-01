@@ -403,7 +403,13 @@ func TestDispatchInboundIntentStartupFailureTerminalizesStreamBeforePromotion(t 
 		if err != nil {
 			return err
 		}
-		return errors.New("forced post failure")
+		// 只让 owner 启动失败：后继晋升成功后所有权稳定保留。若后继也失败，
+		// 晋升 goroutine 会把无 pending 的会话状态删除，owner 变回空串，
+		// 与下方断言形成调度顺序竞态（CI 高负载下必现偶发失败）。
+		if intent.RequestID == "request-1" {
+			return errors.New("forced post failure")
+		}
+		return nil
 	}
 	if result, _, _ := service.runQueue.Submit(testRunIntent("conversation-a", "request-2")); result != runQueueStart {
 		t.Fatalf("successor seed submit = %q", result)
@@ -438,8 +444,12 @@ func TestDispatchInboundIntentStartupFailureTerminalizesStreamBeforePromotion(t 
 
 func TestStartAdmittedRunTerminalStreamReleasesOwnerWithoutOverwrite(t *testing.T) {
 	service := &Service{broker: NewStreamBroker(), runQueue: newRunQueue()}
-	service.startOwnedRunHook = func(InboundIntent) error {
-		return errors.New("forced post failure")
+	service.startOwnedRunHook = func(intent InboundIntent) error {
+		// 同上：只让 owner 启动失败，避免后继晋升 goroutine 删除无 pending 的会话状态。
+		if intent.RequestID == "request-1" {
+			return errors.New("forced post failure")
+		}
+		return nil
 	}
 	if result, _, _ := service.runQueue.Submit(testRunIntent("conversation-a", "request-1")); result != runQueueStart {
 		t.Fatalf("owner submit = %q", result)
@@ -485,7 +495,11 @@ func TestStartAdmittedRunTerminalizationFailureReleasesOwner(t *testing.T) {
 		if _, err := service.streamForIntent(intent); err != nil {
 			return err
 		}
-		return errors.New("forced post failure")
+		// 同上：只让 owner 启动失败，后继晋升成功后所有权稳定保留。
+		if intent.RequestID == "request-1" {
+			return errors.New("forced post failure")
+		}
+		return nil
 	}
 	service.broker.failOverride = func(string, string, string) error {
 		return errStreamNotActive
