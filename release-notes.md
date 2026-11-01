@@ -1,13 +1,27 @@
-## v1.0.17
-
-### 优化
-
-- **MCP 连接共享连接池**：所有 HTTP / SSE 类 MCP 服务器现在共用一个底层连接池（请求头仍逐连接独立注入）。此前每次建连都会新建一个连接池，MCP 服务器频繁断线重连时旧连接要等约 90 秒才释放，长时间运行后可能堆积大量空闲 socket。系统代理设置变更后连接池会自动重建并释放旧连接。
-- 清理委派任务标题的冗余代码，行为不变。
+## v1.0.18
 
 ### 修复
 
-- 修复一个在 CI 快机上偶发失败的测试时序竞态（`TestProviderResumeStartsNextPassWithoutFixedDelay`），不影响运行时行为。
+- **配置保存可能永久挂起**：模型「测试成功自动恢复 / 测试失败自动停用」时，保存队列里的一个自等待缺陷会让本次会话之后的所有配置保存静默挂起（界面显示已改，实际未落盘）。已修复。
+- **应用退出丢失最近统计**：退出时不再丢最近约 2 秒的 token 用量与本地响应缓存变更，关机前统一冲刷落盘。
+- **更新包下载失败残留临时文件**：Windows 上删除仍被打开的文件会失败，导致每次下载/校验失败都在 %TEMP% 残留一个完整更新包；现在先关闭句柄再删除。
+- **识图代理异常闪退**：自动识图处理单条消息发生内部异常时兜底保留原消息继续转发，不再崩掉整个后台进程。
+- **余额汇总异常出现空白行**：批量余额查询中某渠道内部异常时仍显示该渠道名称与地址。
+
+### 安全
+
+- **Web 抓取内网防护加强**：拦截「域名解析到内网/本机地址」的绕过（如 `127.0.0.1.nip.io`），并把 CGNAT 段（100.64.0.0/10）纳入拦截范围。
+
+### 优化
+
+- **统计准确性**：防抖落盘窗口内的用量事件不再被重复累计（磁盘与内存快照重叠时按事件 ID 去重）；磁盘持续故障时待写队列有硬上限，不再无界增长。
+- **流式响应更稳更快**：本地响应缓存落盘移出锁外，落盘期间不再阻塞并发请求（消除偶发首字延迟毛刺）；四个 SSE 解析器的逐块读超时改为每流一个复用定时器，降低长对话下的分配与 GC 压力；外部 API 流式转发复用读缓冲。
+- **连接与内存治理**：所有 MCP 连接共享一个底层连接池（频繁断线重连不再堆积空闲 socket）；代理 Transport 注册表改弱引用，探测/测速产生的历史连接池可被正常回收；委派任务后台轮询在保存配置重建/退出时立即停止。
+- **其他**：配置档案写入改唯一临时文件 + Sync 后原子替换；模型可用性探测重置后丢弃进行中的旧结果；mitm 请求转发省两次整包拷贝；清理委派标题死代码。
+
+### 开发
+
+- 修复一个在 CI 快机上偶发失败的测试时序竞态；`-tags benchmark` 编译失败（方法重复声明）。
 
 > **Windows 用户注意**：安装时若被 SmartScreen 拦截，点击「更多信息」->「仍要运行」即可。
 
@@ -15,11 +29,11 @@
 
 > 名字里的 x64 / x32 / arm64 表示 CPU 架构，认准自己系统的类型下载即可。
 
-- **Windows 64 位（绝大多数 Windows 电脑）**：下载 `cursor-byok-1.0.17-windows-x64-installer.exe`（安装版，推荐）或 `cursor-byok-1.0.17-windows-x64.zip`（绿色版）
-- **Windows ARM64（骁龙/麒麟等 ARM 处理器的 Windows 电脑）**：下载 `cursor-byok-1.0.17-windows-arm64-installer.exe` 或 `cursor-byok-1.0.17-windows-arm64.zip`
-- **Windows 32 位（很老的低配电脑才需要）**：下载 `cursor-byok-1.0.17-windows-x32-installer.exe` 或 `cursor-byok-1.0.17-windows-x32.zip`
-- **macOS Apple Silicon（M1/M2/M3/M4 芯片）**：下载 `cursor-byok-1.0.17-macos-arm64.dmg` 或 `cursor-byok-1.0.17-macos-arm64.tar.gz`
-- **macOS Intel**：下载 `cursor-byok-1.0.17-macos-x64.dmg` 或 `cursor-byok-1.0.17-macos-x64.tar.gz`
-- **Linux 64 位**：下载 `cursor-byok-1.0.17-linux-x64.tar.gz`
+- **Windows 64 位（绝大多数 Windows 电脑）**：下载 `cursor-byok-1.0.18-windows-x64-installer.exe`（安装版，推荐）或 `cursor-byok-1.0.18-windows-x64.zip`（绿色版）
+- **Windows ARM64（骁龙/麒麟等 ARM 处理器的 Windows 电脑）**：下载 `cursor-byok-1.0.18-windows-arm64-installer.exe` 或 `cursor-byok-1.0.18-windows-arm64.zip`
+- **Windows 32 位（很老的低配电脑才需要）**：下载 `cursor-byok-1.0.18-windows-x32-installer.exe` 或 `cursor-byok-1.0.18-windows-x32.zip`
+- **macOS Apple Silicon（M1/M2/M3/M4 芯片）**：下载 `cursor-byok-1.0.18-macos-arm64.dmg` 或 `cursor-byok-1.0.18-macos-arm64.tar.gz`
+- **macOS Intel**：下载 `cursor-byok-1.0.18-macos-x64.dmg` 或 `cursor-byok-1.0.18-macos-x64.tar.gz`
+- **Linux 64 位**：下载 `cursor-byok-1.0.18-linux-x64.tar.gz`
 
 Windows 系统类型可在「设置 → 系统 → 关于 → 系统类型」查看；macOS 在「关于本机」查看芯片或处理器。
