@@ -9,6 +9,8 @@ import { humanizeProviderError } from "@/utils/errorHumanizer";
 export function useModelProbe() {
   const results = reactive({});
   const probing = ref(false);
+  // reset() 递增代次；进行中的 worker 写回前比对，避免旧结果在重置后重新出现。
+  let generation = 0;
 
   function statusOf(key) {
     return results[key]?.status || "";
@@ -17,6 +19,7 @@ export function useModelProbe() {
     return results[key]?.message || "";
   }
   function reset() {
+    generation += 1;
     for (const key of Object.keys(results)) {
       delete results[key];
     }
@@ -38,22 +41,26 @@ export function useModelProbe() {
     list.forEach((item) => {
       results[item.id] = { status: "checking", message: "" };
     });
+    const runGeneration = generation;
     try {
       const queue = [...list];
       const workers = Array.from({ length: concurrency }, async () => {
-        while (queue.length > 0) {
+        while (queue.length > 0 && runGeneration === generation) {
           const item = queue.shift();
           if (!item) break;
+          let next;
           try {
             const res = await probeModelAdapter(buildAdapter(item));
             const ok = Boolean(res?.ok);
-            results[item.id] = {
+            next = {
               status: ok ? "ok" : "fail",
               message: ok ? "" : (res?.message || "模型不可用"),
             };
           } catch (error) {
-            results[item.id] = { status: "fail", message: humanizeProviderError(error) };
+            next = { status: "fail", message: humanizeProviderError(error) };
           }
+          if (runGeneration !== generation) break;
+          results[item.id] = next;
         }
       });
       await Promise.allSettled(workers);

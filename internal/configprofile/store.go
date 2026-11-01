@@ -343,11 +343,32 @@ func (store *Store) write(profile storedProfile) error {
 		return err
 	}
 	path := store.profilePath(profile.Summary.ID)
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, payload, 0o600); err != nil {
+	// 唯一临时文件名：并发导入同一 ID 时不再共用 .tmp 导致 Rename 失败或内容交错；
+	// Sync 后再 Rename，避免断电留下空文件。
+	tmpFile, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	tmp := tmpFile.Name()
+	if _, err := tmpFile.Write(payload); err != nil {
+		_ = tmpFile.Close()
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := tmpFile.Sync(); err != nil {
+		_ = tmpFile.Close()
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := tmpFile.Close(); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
 // validProfileID reports whether an ID is safe to use as a file name inside
