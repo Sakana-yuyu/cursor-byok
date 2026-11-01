@@ -3,6 +3,7 @@ package interaction
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"html"
 	"io"
@@ -303,11 +304,35 @@ func validateWebFetchURL(rawURL string) (*neturl.URL, error) {
 	if host == "" {
 		return nil, fmt.Errorf("web fetch url host is required")
 	}
-	if isBlockedWebFetchHost(host) {
+	if isBlockedWebFetchHost(host) || resolvesToBlockedWebFetchIP(host) {
 		return nil, fmt.Errorf("web fetch host is not public-web accessible")
 	}
 	return parsedURL, nil
 }
+
+// resolvesToBlockedWebFetchIP 拦截「域名解析到内网/本机」的绕过（如 127.0.0.1.nip.io）。
+// 不在 Dialer 层校验：走本地代理时实际连接的是 127.0.0.1 代理端口，会误杀全部抓取。
+// 解析失败时放行，交由代理远端解析（本地 DNS 被污染/不可用的常见场景）。
+func resolvesToBlockedWebFetchIP(host string) bool {
+	host = strings.Trim(strings.ToLower(host), "[]")
+	if net.ParseIP(host) != nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), webFetchResolveTimeout)
+	defer cancel()
+	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return false
+	}
+	for _, addr := range addrs {
+		if isBlockedWebFetchHost(addr.IP.String()) {
+			return true
+		}
+	}
+	return false
+}
+
+const webFetchResolveTimeout = 3 * time.Second
 
 func isBlockedWebFetchHost(host string) bool {
 	host = strings.Trim(strings.ToLower(host), "[]")
@@ -322,8 +347,12 @@ func isBlockedWebFetchHost(host string) bool {
 		ip.IsPrivate() ||
 		ip.IsLinkLocalUnicast() ||
 		ip.IsLinkLocalMulticast() ||
-		ip.IsUnspecified()
+		ip.IsUnspecified() ||
+		webFetchCGNATRange.Contains(ip)
 }
+
+// 100.64.0.0/10（CGNAT / Tailscale 等组网）不在 IsPrivate 范围内，需单独拦截。
+var webFetchCGNATRange = &net.IPNet{IP: net.IPv4(100, 64, 0, 0), Mask: net.CIDRMask(10, 32)}
 
 func isWebFetchTextContentType(contentType string) bool {
 	mediaType, _, err := mime.ParseMediaType(contentType)

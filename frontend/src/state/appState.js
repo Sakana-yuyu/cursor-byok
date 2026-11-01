@@ -94,6 +94,7 @@ export {
 } from "@/utils/modelAdapter";
 // toUserError 系列定义已归位 utils/errorHumanizer.js，此处转发保持既有调用方零改动。
 import { toUserError } from "@/utils/errorHumanizer";
+import { safeErrorLogAttributes } from "@/utils/errorContract";
 export { toUserError, toUserErrorWithCause } from "@/utils/errorHumanizer";
 export {
   ANTHROPIC_THINKING_EFFORT_DEFAULT,
@@ -803,7 +804,9 @@ export function setModelAdapterDisabledFlag(adapterID, disabled) {
       return { ok: true, error: "" };
     }
     appState.modelAdapters = adapters;
-    return persistConfigPayload({
+    // 已占用队列槽位：必须直接调 Now 版本。若再走 persistConfigPayload 会排到
+    // configPersistTail（即本 pending）之后，形成自等待，之后所有配置保存永久挂起。
+    return persistConfigPayloadNow({
       ...currentConfig,
       modelAdapters: adapters,
     }, { modelAdaptersOnly: true });
@@ -1045,7 +1048,9 @@ export async function showStatsOverlay(position) {
 function bindStatsOverlayShowRequest() {
   if (statsOverlayShowRequestBound || typeof window === "undefined") return;
   window.addEventListener(STATS_OVERLAY_SHOW_REQUESTED_EVENT, () => {
-    void showStatsOverlay();
+    showStatsOverlay().catch((error) => {
+      console.error("[appState] show stats overlay failed", safeErrorLogAttributes(error, { operation: "statsOverlay.show" }));
+    });
   });
   statsOverlayShowRequestBound = true;
 }
