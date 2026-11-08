@@ -35,11 +35,19 @@ type Router struct {
 	healthMu        sync.Mutex
 	healthByChannel map[string]channelHealth
 	healthVersion   uint64
+	// affinity 维护会话粘性（prompt cache 亲和），见 session_affinity.go。
+	affinity *sessionAffinity
+	// keyLanes 维护每密钥并发闸门，见 key_lane.go。
+	keyLanes *keyLanes
 }
 
 type channelHealth struct {
 	cooldownUntil time.Time
 	version       uint64
+	// failures 记录 rateLimitForgetWindow 内的连续失败次数，用于 429 无
+	// Retry-After 时的指数退避；成功清除冷却或遗忘窗口过后从 1 重新计。
+	failures      int
+	lastFailureAt time.Time
 }
 
 type ChannelResolver interface {
@@ -66,6 +74,8 @@ func NewRouter(resolver ChannelResolver) *Router {
 		accountGateway:  unavailableAccountModelGateway{},
 		resolver:        resolver,
 		healthByChannel: make(map[string]channelHealth),
+		affinity:        &sessionAffinity{},
+		keyLanes:        &keyLanes{},
 	}
 }
 
@@ -258,7 +268,7 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 			}
 		} else {
 			var selectErr error
-			channel, selectErr = router.selectChannel(ctx, req.ModelID)
+			channel, selectErr = router.selectChannelWithAffinity(ctx, req.ModelID, req.ConversationID, tried)
 			if selectErr != nil {
 				return classifyRouterError(req, selectErr)
 			}
@@ -317,6 +327,9 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 		if streamErr == nil || ctx.Err() != nil {
 			if streamErr == nil {
 				router.clearChannelFailure(channel, observedHealthVersion)
+				// 渠道成功应答：建立/刷新该（会话, 模型）的粘性，让后续
+				// 轮次优先复用同渠道，保住上游 prompt cache。
+				router.recordSessionAffinity(req, channel)
 			}
 			return classifyRouterError(req, streamErr)
 		}
@@ -333,7 +346,22 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 		if clientVisibleEvents > 0 {
 			return classifyRouterError(req, midStreamInterruptedError(streamErr))
 		}
+		// 每密钥并发闸门排队超时：该密钥在途流已满且等不到名额。这不是上游
+		// 失败——不冷却、不退避，直接换下一候选；全部候选都忙时该错误经
+		// firstErr 正常冒泡。
+		if errors.Is(streamErr, ErrKeyLaneBusy) {
+			if firstErr == nil {
+				firstErr = streamErr
+			}
+			tried[channelKey] = struct{}{}
+			logger.Infof("key lane busy, skip channel request_id=%s model_call_id=%s channel=%s attempt=%d",
+				strings.TrimSpace(req.RequestID), strings.TrimSpace(req.ModelCallID), strings.TrimSpace(channel.ID), attempt+1)
+			continue
+		}
 		router.recordChannelFailure(channel, streamErr)
+		// 渠道失败：清除指向该渠道的会话粘性，让后续轮次重新路由（对应
+		// magpie 的 unanswered 语义——失败渠道不应继续吸住会话）。
+		router.dropSessionAffinity(req, channel)
 		if firstErr == nil {
 			firstErr = streamErr
 		}
@@ -379,11 +407,18 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 	return classifyRouterError(req, fmt.Errorf("all model channels failed"))
 }
 
-func (router *Router) selectChannel(ctx context.Context, modelID string) (*legacyruntime.ResolvedChannel, error) {
+// selectChannelWithAffinity 在默认路由路径上选择渠道：先尝试会话粘性
+// （同一对话固定复用上次成功渠道，保护上游 prompt cache），粘性不可用时
+// 回退 preferHealthyChannel。tried 是本轮 Stream 已失败的渠道指纹集合，
+// 粘性渠道在其中时跳过粘性避免原地打转。
+func (router *Router) selectChannelWithAffinity(ctx context.Context, modelID, conversationID string, tried map[string]struct{}) (*legacyruntime.ResolvedChannel, error) {
 	if resolver, ok := router.resolver.(multiChannelResolver); ok {
 		channels, err := resolver.SelectChannelsForModel(ctx, modelID)
 		if err != nil || len(channels) == 0 {
 			return nil, err
+		}
+		if sticky := router.pickStickyChannel(channels, conversationID, modelID, tried); sticky != nil {
+			return sticky, nil
 		}
 		return router.preferHealthyChannel(channels), nil
 	}
@@ -435,21 +470,39 @@ func (router *Router) recordChannelFailure(channel *legacyruntime.ResolvedChanne
 	if router == nil || channel == nil || strings.TrimSpace(channel.ID) == "" || err == nil {
 		return
 	}
-	cooldown := channelFailureCooldown(err)
+	key := channelHealthMapKey(channel)
+	now := time.Now()
+	router.healthMu.Lock()
+	// 失败计数：遗忘窗口内的连续失败递增；窗口外重新从 1 计。
+	// 计数只服务于 429 指数退避，且无论本次是否产生冷却都应更新。
+	failures := 1
+	if existing, ok := router.healthByChannel[key]; ok && now.Sub(existing.lastFailureAt) < rateLimitForgetWindow {
+		failures = existing.failures + 1
+	}
+	cooldown := channelFailureCooldown(err, failures)
+	existing, ok := router.healthByChannel[key]
 	if cooldown <= 0 {
+		// 不产生冷却的错误（永久 4xx、未知错误）不建健康记录、不动版本号
+		// （版本号语义只属于冷却状态），仅把失败计数并入既有记录，供下次
+		// 限流退避参考。
+		if ok {
+			existing.failures = failures
+			existing.lastFailureAt = now
+			router.healthByChannel[key] = existing
+		}
+		router.healthMu.Unlock()
 		return
 	}
-	key := channelHealthMapKey(channel)
-	deadline := time.Now().Add(cooldown)
-	router.healthMu.Lock()
 	router.healthVersion++
-	existing, ok := router.healthByChannel[key]
+	deadline := now.Add(cooldown)
 	if ok && existing.cooldownUntil.After(deadline) {
 		deadline = existing.cooldownUntil
 	}
 	router.healthByChannel[key] = channelHealth{
 		cooldownUntil: deadline,
 		version:       router.healthVersion,
+		failures:      failures,
+		lastFailureAt: now,
 	}
 	router.healthMu.Unlock()
 }
@@ -511,15 +564,18 @@ func channelConfigurationFingerprint(channel *legacyruntime.ResolvedChannel) str
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-func channelFailureCooldown(err error) time.Duration {
+func channelFailureCooldown(err error, consecutiveFailures int) time.Duration {
 	status := parseProviderErrorStatus(err.Error())
 	var statusErr *HTTPStatusError
 	if errors.As(err, &statusErr) && statusErr != nil {
 		status = statusErr.StatusCode
 	}
 	switch status {
-	case 401, 402, 403:
+	case 401, 403:
 		return 10 * time.Minute
+	case 402:
+		// 余额/配额耗尽：比鉴权错误冷却更久，避免限流期间反复撞计费墙。
+		return channelFailureQuotaCooldown
 	case 429:
 		// 尊重上游 Retry-After 限流信号，钳制到 [1min, 10min]：
 		// 下限避免过短冷却在限流期间反复撞墙；上限避免异常大值让渠道长期不可用。
@@ -535,7 +591,20 @@ func channelFailureCooldown(err error) time.Duration {
 				return retryAfter
 			}
 		}
-		return time.Minute
+		// 上游未给 Retry-After：按连续失败次数指数退避（1min 起逐次翻倍、
+		// 封顶 rateLimitCooldownMax），避免限流期间固定 1min 反复撞墙。
+		shift := consecutiveFailures - 1
+		if shift < 0 {
+			shift = 0
+		}
+		if shift > rateLimitBackoffMaxShift {
+			shift = rateLimitBackoffMaxShift
+		}
+		backoff := channelFailureCooldownMin << uint(shift)
+		if backoff > rateLimitCooldownMax {
+			backoff = rateLimitCooldownMax
+		}
+		return backoff
 	case 500, 502, 503, 504:
 		return time.Minute
 	default:
@@ -681,6 +750,15 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 		}
 		return sink(event)
 	}
+	// 每密钥并发闸门：同一渠道凭据的在途流超过配置上限时排队等待；等待
+	// 不是失败也不冷却，超时以 ErrKeyLaneBusy 冒泡，路由层按「忙」跳过该
+	// 候选。名额在整个流期间持有（含下方协议降级回退的二次 dispatch，
+	// 对应 magpie 复用已付费 ticket 的语义）。
+	releaseLane, laneErr := router.acquireKeyLane(ctx, channel)
+	if laneErr != nil {
+		return laneErr
+	}
+	defer releaseLane()
 	streamErr = router.dispatchByProvider(ctx, resolved, identitySink)
 	// 失败回退：claude-on-openai 升级到 anthropic 后，若错误表明中转商不支持 /v1/messages
 	// 端点（404/405/400），降级回 openai 协议重试一次，避免渠道因升级而不可用。

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	legacyruntime "cursor/internal/runtime"
 )
@@ -117,5 +118,132 @@ func TestChannelConfigurationFingerprintDoesNotExposeCredentialMaterial(t *testi
 	}
 	if fingerprint == channel.APIKey || fingerprint == channel.BaseURL {
 		t.Fatal("configuration fingerprint exposed raw credential material")
+	}
+}
+
+// cooldownRemaining 读取渠道当前冷却的剩余时长；无记录时返回 0。
+func cooldownRemaining(t *testing.T, router *Router, channel *legacyruntime.ResolvedChannel) time.Duration {
+	t.Helper()
+	router.healthMu.Lock()
+	defer router.healthMu.Unlock()
+	entry, ok := router.healthByChannel[channelHealthMapKey(channel)]
+	if !ok {
+		return 0
+	}
+	if remaining := time.Until(entry.cooldownUntil); remaining > 0 {
+		return remaining
+	}
+	return 0
+}
+
+func TestRateLimitCooldownEscalatesWithoutRetryAfter(t *testing.T) {
+	channel := &legacyruntime.ResolvedChannel{ID: "channel-a", Provider: "openai", BaseURL: "https://provider.example/v1", APIKey: "sk-a", Model: "model-a"}
+	router := NewRouter(nil)
+	want := []time.Duration{
+		time.Minute,
+		2 * time.Minute,
+		4 * time.Minute,
+		8 * time.Minute,
+		16 * time.Minute,
+		30 * time.Minute, // 1min<<5 = 32min 封顶到 30min
+		30 * time.Minute,
+	}
+	for i, expected := range want {
+		router.recordChannelFailure(channel, fmt.Errorf("provider status=429"))
+		got := cooldownRemaining(t, router, channel)
+		if got < expected-2*time.Second || got > expected+2*time.Second {
+			t.Fatalf("failure #%d cooldown = %s, want ~%s", i+1, got, expected)
+		}
+	}
+}
+
+func TestRateLimitCooldownPrefersRetryAfterOverBackoff(t *testing.T) {
+	channel := &legacyruntime.ResolvedChannel{ID: "channel-a", Provider: "openai", BaseURL: "https://provider.example/v1", APIKey: "sk-a", Model: "model-a"}
+	router := NewRouter(nil)
+	// 上游给了 Retry-After=2min：优先于指数退避（首败退避本应为 1min）
+	router.recordChannelFailure(channel, &HTTPStatusError{
+		StatusCode: 429,
+		Message:    "provider status=429",
+		Headers:    map[string][]string{"Retry-After": {"120"}},
+	})
+	if got := cooldownRemaining(t, router, channel); got < 110*time.Second || got > 130*time.Second {
+		t.Fatalf("Retry-After cooldown = %s, want ~2m", got)
+	}
+}
+
+func TestRateLimitFailureCountForgetsAfterWindow(t *testing.T) {
+	channel := &legacyruntime.ResolvedChannel{ID: "channel-a", Provider: "openai", BaseURL: "https://provider.example/v1", APIKey: "sk-a", Model: "model-a"}
+	router := NewRouter(nil)
+	router.recordChannelFailure(channel, fmt.Errorf("provider status=429"))
+	router.recordChannelFailure(channel, fmt.Errorf("provider status=429"))
+	router.healthMu.Lock()
+	if failures := router.healthByChannel[channelHealthMapKey(channel)].failures; failures != 2 {
+		router.healthMu.Unlock()
+		t.Fatalf("failures = %d, want 2", failures)
+	}
+	// 遗忘窗口外的旧失败：计数应从 1 重新开始
+	entry := router.healthByChannel[channelHealthMapKey(channel)]
+	entry.lastFailureAt = time.Now().Add(-rateLimitForgetWindow - time.Minute)
+	router.healthByChannel[channelHealthMapKey(channel)] = entry
+	router.healthMu.Unlock()
+
+	router.recordChannelFailure(channel, fmt.Errorf("provider status=429"))
+	router.healthMu.Lock()
+	failures := router.healthByChannel[channelHealthMapKey(channel)].failures
+	router.healthMu.Unlock()
+	if failures != 1 {
+		t.Fatalf("failures after forget window = %d, want 1", failures)
+	}
+}
+
+func TestQuotaExhaustedCooldownLongerThanAuthFailure(t *testing.T) {
+	channel := &legacyruntime.ResolvedChannel{ID: "channel-a", Provider: "openai", BaseURL: "https://provider.example/v1", APIKey: "sk-a", Model: "model-a"}
+	router := NewRouter(nil)
+	router.recordChannelFailure(channel, fmt.Errorf("provider status=402"))
+	quota := cooldownRemaining(t, router, channel)
+	if quota < channelFailureQuotaCooldown-2*time.Second || quota > channelFailureQuotaCooldown+2*time.Second {
+		t.Fatalf("402 cooldown = %s, want ~%s", quota, channelFailureQuotaCooldown)
+	}
+
+	other := &legacyruntime.ResolvedChannel{ID: "channel-b", Provider: "openai", BaseURL: "https://provider.example/v1", APIKey: "sk-b", Model: "model-a"}
+	router.recordChannelFailure(other, fmt.Errorf("provider status=401"))
+	auth := cooldownRemaining(t, router, other)
+	if auth < 9*time.Minute || auth > 11*time.Minute {
+		t.Fatalf("401 cooldown = %s, want ~10m", auth)
+	}
+}
+
+func TestSuccessClearsFailureCount(t *testing.T) {
+	channel := &legacyruntime.ResolvedChannel{ID: "channel-a", Provider: "openai", BaseURL: "https://provider.example/v1", APIKey: "sk-a", Model: "model-a"}
+	router := NewRouter(nil)
+	router.recordChannelFailure(channel, fmt.Errorf("provider status=429"))
+	router.recordChannelFailure(channel, fmt.Errorf("provider status=429"))
+	observed := router.channelHealthVersion(channel)
+	router.clearChannelFailure(channel, observed)
+	router.healthMu.Lock()
+	_, exists := router.healthByChannel[channelHealthMapKey(channel)]
+	router.healthMu.Unlock()
+	if exists {
+		t.Fatal("success did not clear failure state")
+	}
+	// 清零后的下一次失败应从退避序列起点开始
+	router.recordChannelFailure(channel, fmt.Errorf("provider status=429"))
+	if got := cooldownRemaining(t, router, channel); got < 58*time.Second || got > 62*time.Second {
+		t.Fatalf("cooldown after reset = %s, want ~1m", got)
+	}
+}
+
+func TestNonCooldownFailureDoesNotBlockLaterCooldown(t *testing.T) {
+	channel := &legacyruntime.ResolvedChannel{ID: "channel-a", Provider: "openai", BaseURL: "https://provider.example/v1", APIKey: "sk-a", Model: "model-a"}
+	router := NewRouter(nil)
+	// 400 永久错误不产生冷却
+	router.recordChannelFailure(channel, fmt.Errorf("provider status=400"))
+	if got := cooldownRemaining(t, router, channel); got != 0 {
+		t.Fatalf("400 error produced cooldown %s, want 0", got)
+	}
+	// 随后的 429 正常产生指数退避冷却
+	router.recordChannelFailure(channel, fmt.Errorf("provider status=429"))
+	if got := cooldownRemaining(t, router, channel); got < 58*time.Second || got > 62*time.Second {
+		t.Fatalf("429 cooldown after non-cooldown failure = %s, want ~1m", got)
 	}
 }

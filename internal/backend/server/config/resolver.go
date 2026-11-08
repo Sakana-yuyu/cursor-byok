@@ -208,6 +208,7 @@ func resolveModelAdapterChannel(adapters []ModelAdapterConfig, requestedModel st
 		FastMode:                    matched.FastMode,
 		OpenAIServiceTier:           strings.TrimSpace(matched.OpenAIServiceTier),
 		ToolCallMode:                strings.TrimSpace(matched.ToolCallMode),
+		MaxConcurrencyPerKey:        matched.MaxConcurrencyPerKey,
 	}
 	if matched.ContextWindowTokens > 0 {
 		resolved.ContextWindowTokens = matched.ContextWindowTokens

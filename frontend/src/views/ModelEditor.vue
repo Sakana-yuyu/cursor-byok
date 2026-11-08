@@ -97,6 +97,7 @@ const createEmptyModelAdapter = () => ({
   anthropicMaxTokens: 0,
   anthropicThinkingEffort: ANTHROPIC_THINKING_EFFORT_DEFAULT,
   thinkingBudgetTokens: 0,
+  maxConcurrencyPerKey: 0,
   pricing: null,
   fastMode: false,
   openAIServiceTier: "",
@@ -197,6 +198,9 @@ function createOptionalPositiveIntegerModel(key) {
 
 const maxCompletionTokensInput = createOptionalPositiveIntegerModel("maxCompletionTokens");
 const anthropicMaxTokensInput = createOptionalPositiveIntegerModel("anthropicMaxTokens");
+// 单密钥并发上限：0 = 不限制；正数时超出的请求本地排队（最长 30s），排队超时
+// 自动换下一候选且不冷却，防止并发子代理把单把密钥打爆触发上游限流。
+const maxConcurrencyPerKeyInput = createOptionalPositiveIntegerModel("maxConcurrencyPerKey");
 
 // 备用密钥池：textarea 每行一把密钥，去空、去重、剔除与主密钥重复项；
 // 请求时后端按渠道维度轮换，单把密钥限流只冷却该密钥。
@@ -1242,6 +1246,21 @@ onMounted(async () => {
                       spellcheck="false"
                       class="resize-none rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 py-2 font-mono text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
                     />
+                  </label>
+
+                  <label class="flex flex-col gap-1">
+                    <span class="center-row justify-start gap-1.5 text-sm text-[#d4d4d4]">
+                      <Tooltip :content="fieldTips.maxConcurrencyPerKey" />
+                      <span>单密钥并发上限（可选）</span>
+                    </span>
+                    <input
+                      v-model="maxConcurrencyPerKeyInput"
+                      type="number"
+                      min="0"
+                      placeholder="0 = 不限制"
+                      class="h-9 min-w-0 rounded-[6px] border border-[#3f3f3f] bg-[#232323] px-3 text-sm text-[#e5e5e5] outline-none focus:border-[#10AD5D]"
+                    >
+                    <span class="text-xs leading-5 text-[#737373]">限制同一把密钥（含备用池）同时在途的请求数；超出后本地排队，超时自动换下一候选且不冷却。</span>
                   </label>
 
                   <label class="flex flex-col gap-1 md:col-span-2">

@@ -10,7 +10,7 @@ import (
 )
 
 func TestChannelFailureCooldownDoesNotPanicWithoutStructuredStatus(t *testing.T) {
-	got := channelFailureCooldown(errors.New("provider status=429"))
+	got := channelFailureCooldown(errors.New("provider status=429"), 1)
 	if got != time.Minute {
 		t.Fatalf("channelFailureCooldown() = %s, want 1m", got)
 	}

@@ -62,5 +62,6 @@ export const fieldTips = {
   balanceAccessToken: "New API 个人安全设置中生成的访问令牌（不是渠道 sk）。",
   balanceUserID: "New API 用户 ID，请求头 New-Api-User 使用。",
   balanceCodingPlanProvider: "Token Plan 供应商。智谱团队版与个人版 baseURL 相同，必须显式选择 Team。",
+  maxConcurrencyPerKey: "限制同一把密钥（含备用密钥池）同时在途的请求数，适合按请求并发计费或限制并发会话数的供应商。超出上限的请求会在本地排队等待（最长 30 秒），超时自动换下一个候选渠道，不触发冷却。",
 };
 

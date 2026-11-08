@@ -127,6 +127,11 @@ type ModelAdapterConfig struct {
 	// 工具目录注入系统提示，模型以 <tool_call> 文本块发起调用）。仅 OpenAI
 	// chat completions 路径实现；空值等价 native。
 	ToolCallMode string `json:"toolCallMode,omitempty" yaml:"toolCallMode,omitempty"`
+	// MaxConcurrencyPerKey 是单把密钥（含主密钥与备用池密钥）的在途请求流上限。
+	// 0（默认）= 不限制；正数时超出上限的请求进入本地 FIFO 排队（最长等待 30s），
+	// 排队超时按「忙」跳过该渠道换下一个候选，不计冷却不退避。防止并发子代理
+	// 把单把密钥打爆触发上游限流。
+	MaxConcurrencyPerKey int `json:"maxConcurrencyPerKey,omitempty" yaml:"maxConcurrencyPerKey,omitempty"`
 	// Disabled 停用该渠道：不出现在 Cursor 的模型列表，也不参与请求路由。
 	// 由「测试失败自动停用 / 测试成功自动恢复」联动维护，也可在界面手动启停。
 	Disabled bool `json:"disabled,omitempty" yaml:"disabled,omitempty"`
@@ -580,6 +585,7 @@ func NormalizeModelAdapterConfigs(input []ModelAdapterConfig) ([]ModelAdapterCon
 			BalanceQueryField:         strings.TrimSpace(item.BalanceQueryField),
 			BalanceQueryHeaders:       item.BalanceQueryHeaders,
 			ToolCallMode:              normalizeToolCallMode(item.ToolCallMode),
+			MaxConcurrencyPerKey:      normalizeMaxConcurrencyPerKey(item.MaxConcurrencyPerKey),
 			BalanceProfile:            strings.ToLower(strings.TrimSpace(item.BalanceProfile)),
 			BalanceAccessToken:        strings.TrimSpace(item.BalanceAccessToken),
 			BalanceUserID:             strings.TrimSpace(item.BalanceUserID),
@@ -759,12 +765,21 @@ func modelAdapterConfigDedupeIdentity(adapter ModelAdapterConfig) string {
 		strings.TrimSpace(adapter.AnthropicAuthMode),
 		strconv.FormatBool(adapter.CustomHeadersEnabled),
 		strings.TrimSpace(adapter.ToolCallMode),
+		strconv.Itoa(adapter.MaxConcurrencyPerKey),
 		strings.TrimSpace(adapter.CompatibilityKind),
 		strings.TrimSpace(adapter.CustomHeadersJSON),
 		// 密钥池参与去重：同一连接不同备用密钥组合是不同的渠道配置，
 		// 但不进 StableID，避免增删密钥导致既有渠道 ID 与测试记录漂移。
 		strings.Join(adapter.APIKeys, "\x1f"),
 	}, "\n")
+}
+
+// normalizeMaxConcurrencyPerKey 规范化单密钥并发上限：负数视为不限制（0）。
+func normalizeMaxConcurrencyPerKey(value int) int {
+	if value < 0 {
+		return 0
+	}
+	return value
 }
 
 // normalizeAPIKeyPool 规范化备用密钥池：去空白、去空串、去重（含与主 apiKey 重复项）。

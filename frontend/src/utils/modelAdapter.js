@@ -370,6 +370,10 @@ export function normalizeModelAdapter(source) {
     thinkingBudgetTokens: asPositiveInteger(
       raw.thinkingBudgetTokens ?? raw.thinking_budget_tokens,
     ),
+    // 单密钥并发上限（0 = 不限制）：防止并发子代理把单把密钥打爆触发上游限流
+    maxConcurrencyPerKey: asPositiveInteger(
+      raw.maxConcurrencyPerKey ?? raw.max_concurrency_per_key,
+    ),
     pricing: normalizePricing(raw.pricing),
     fastMode: normalizedType === "openai" ? asBoolean(raw.fastMode ?? raw.fast_mode) : false,
     openAIServiceTier: normalizedType === "openai" ? asString(raw.openAIServiceTier ?? raw.openai_service_tier) : "",

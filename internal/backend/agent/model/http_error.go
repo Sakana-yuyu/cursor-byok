@@ -18,6 +18,22 @@ const (
 	channelFailureCooldownMax = 10 * time.Minute
 )
 
+// 渠道失败冷却的进阶调度参数（借鉴 magpie 的差异化冷却设计）：
+//   - 402 余额/配额耗尽比鉴权错误冷却更久；
+//   - 429 无 Retry-After 时按连续失败次数指数退避并封顶，
+//     避免「固定 1min 冷却 → 冷却一结束立刻撞墙」的节拍式空转；
+//   - 连续失败计数在遗忘窗口内无新失败时清零，限流恢复后立即回归正常轮换。
+const (
+	// channelFailureQuotaCooldown 是 402（余额/配额耗尽）的冷却时长。
+	channelFailureQuotaCooldown = 15 * time.Minute
+	// rateLimitBackoffMaxShift 限制 429 指数退避的移位上限（1min<<5=32min，随后封顶）。
+	rateLimitBackoffMaxShift = 5
+	// rateLimitCooldownMax 是 429 无 Retry-After 指数退避的封顶时长。
+	rateLimitCooldownMax = 30 * time.Minute
+	// rateLimitForgetWindow 是连续失败计数的遗忘窗口：窗口内无新失败则计数从 1 重新开始。
+	rateLimitForgetWindow = 30 * time.Minute
+)
+
 const (
 	// maxErrorBodyBytes 表示错误响应体最多读取的字节数。
 	maxErrorBodyBytes = 8192

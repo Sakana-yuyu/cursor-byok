@@ -518,4 +518,7 @@ type ResolvedChannel struct {
 	ToolCallMode string
 	// ThinkingBudgetTokens 表示当前声明中的 ThinkingBudgetTokens。
 	ThinkingBudgetTokens int
+	// MaxConcurrencyPerKey 是单把密钥（含备用池密钥）的在途请求流上限；
+	// 0 = 不限制。由每密钥并发闸门消费（modeladapter/key_lane.go）。
+	MaxConcurrencyPerKey int
 }
