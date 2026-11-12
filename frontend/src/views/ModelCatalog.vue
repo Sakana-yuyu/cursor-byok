@@ -351,10 +351,18 @@ async function handleBatchAdd() {
 }
 
 async function leavePage() {
-  // 批量添加成功：回模型配置列表（浏览器）或关闭独立编辑窗（桌面）
+  // 批量添加成功：主窗口返回模型配置列表；独立编辑窗关闭窗口；浏览器回列表
   if (isBrowserPreview) {
     await router.push("/model-config");
     return;
+  }
+  try {
+    if ((await runtimeWindow.Name()) === "main") {
+      await router.push("/model-config");
+      return;
+    }
+  } catch {
+    // 窗口名不可读时按独立窗口处理
   }
   await runtimeWindow.Close();
 }

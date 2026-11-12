@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"io/fs"
 	"net"
+	"os"
 	goruntime "runtime"
 	"strings"
 	"sync"
@@ -219,8 +220,17 @@ func Run(resources EmbeddedResources) error {
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: "com.cursor-assistant.single-instance",
 			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
-				logger.Infof("检测到实例请求，已忽略")
-				// 不激活窗口，避免干扰用户工作
+				if hasLaunchFlag(data.Args) {
+					logger.Infof("检测到静默启动的实例请求，保持主窗口隐藏")
+					return
+				}
+				if w := mainWindow; w != nil {
+					// 保留当前路由，仅把窗口带到前台；最小化态由 Focus 内部恢复。
+					w.Show().Focus()
+					logger.Infof("检测到实例请求，已激活主窗口")
+					return
+				}
+				logger.Infof("检测到实例请求，主窗口尚未就绪")
 			},
 		},
 	})
@@ -281,8 +291,12 @@ func Run(resources EmbeddedResources) error {
 	if desktopSettingsErr != nil {
 		logger.Warnf("读取桌面设置失败，使用默认启动行为: %v", desktopSettingsErr)
 	}
+	// 「静默启动」只作用于自动启动场景（autostart 入口传入 --silent）；
+	// 手动双击/命令行启动必须显示主窗口，否则用户只能去托盘找窗口。
+	hiddenAtLaunch := startHidden(desktopSettings.SilentStart, os.Args[1:])
 
 	mainWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Name:                mainWindowName,
 		Title:               appName,
 		Width:               1280,
 		Height:              860,
@@ -291,7 +305,7 @@ func Run(resources EmbeddedResources) error {
 		DisableResize:       false,
 		Frameless:           goruntime.GOOS == "windows",
 		URL:                 "/#/",
-		Hidden:              desktopSettings.SilentStart,
+		Hidden:              hiddenAtLaunch,
 		HideOnEscape:        false,
 		MinimiseButtonState: application.ButtonEnabled,
 		MaximiseButtonState: application.ButtonEnabled,
@@ -346,6 +360,12 @@ func Run(resources EmbeddedResources) error {
 		window.Show().Focus()
 	}
 	toggleMainWindow := func() {
+		// 最小化窗口仍带 WS_VISIBLE，IsVisible() 为真：托盘点击应恢复而非隐藏，
+		// 否则「最小化 + 点托盘」会让窗口只剩托盘入口。
+		if window.IsMinimised() {
+			window.Show().Focus()
+			return
+		}
 		if window.IsVisible() {
 			window.Hide()
 			return

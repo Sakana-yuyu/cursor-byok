@@ -28,6 +28,7 @@ const noopWindow = {
   IsMaximised: () => Promise.resolve(false),
   Close: () => Promise.resolve(),
   Hide: () => Promise.resolve(),
+  Name: () => Promise.resolve("browser-preview"),
 };
 
 const noopBrowser = {

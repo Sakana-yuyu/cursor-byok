@@ -15,8 +15,8 @@ func TestAutostartDesktopEntryEscapesExecutablePath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildDesktopEntry() error = %v", err)
 	}
-	if !strings.Contains(entry, `Exec="/tmp/Cursor Assistant/\$work\\client\".bin"`) {
-		t.Fatalf("entry = %q, path was not safely escaped", entry)
+	if !strings.Contains(entry, `Exec="/tmp/Cursor Assistant/\$work\\client\".bin" --silent`) {
+		t.Fatalf("entry = %q, path was not safely escaped or silent flag missing", entry)
 	}
 	if !strings.Contains(entry, "Terminal=false") {
 		t.Fatalf("entry = %q, Terminal=false missing", entry)

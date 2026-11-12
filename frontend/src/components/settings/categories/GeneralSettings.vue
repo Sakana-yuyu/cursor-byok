@@ -205,7 +205,7 @@ onMounted(async () => {
 
       <SettingsRow
         label="静默启动"
-        description="启动应用时保持主窗口隐藏，仅显示托盘图标"
+        description="随系统自动启动时保持主窗口隐藏，仅显示托盘图标（手动打开应用仍会显示窗口）"
         :busy="desktopSettingsState.busy"
         :error="desktopSettingsState.error"
         @retry="retryState(desktopSettingsState)"

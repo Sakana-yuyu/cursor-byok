@@ -30,7 +30,7 @@ func BuildDesktopEntry(executable string) (string, error) {
 		return "", errors.New("executable path contains a newline")
 	}
 	escaped := strings.NewReplacer("\\", "\\\\", "\"", "\\\"", "$", "\\$").Replace(executable)
-	return fmt.Sprintf("[Desktop Entry]\nType=Application\nName=Cursor BYOK\nExec=\"%s\"\nTerminal=false\nX-GNOME-Autostart-enabled=true\n", escaped), nil
+	return fmt.Sprintf("[Desktop Entry]\nType=Application\nName=Cursor BYOK\nExec=\"%s\" %s\nTerminal=false\nX-GNOME-Autostart-enabled=true\n", escaped, SilentLaunchFlag), nil
 }
 
 // WriteAutostart atomically creates or updates the per-user autostart entry.
