@@ -266,7 +266,14 @@ func parseIntegerLiteral(raw string, key string, minValue int64, maxValue int64)
 	}
 	parsed, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("%s must be an integer", key)
+		// JSON 字面量可能带小数点/指数（json.Number 原样透传），
+		// 整数值浮点表示与 ParseInt 失败但无损的情况一并接受
+		// （上游 9cb16e11 的 as_i64→as_f64 整数值回退同语义）。
+		floatParsed, floatErr := strconv.ParseFloat(raw, 64)
+		if floatErr != nil {
+			return 0, fmt.Errorf("%s must be an integer", key)
+		}
+		return parseIntegerFloat(floatParsed, key, minValue, maxValue)
 	}
 	if parsed < minValue || parsed > maxValue {
 		return 0, fmt.Errorf("%s is outside supported integer range", key)

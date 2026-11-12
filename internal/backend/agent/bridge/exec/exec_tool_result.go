@@ -4,6 +4,7 @@ package execbridge
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 
 	"google.golang.org/protobuf/proto"
@@ -39,8 +40,8 @@ func decodeShellArgsForResult(argsJSON []byte) shellResultArgs {
 		args.Command = strings.TrimSpace(readStringArg(argsMap, "command"))
 		args.Description = strings.TrimSpace(readStringArg(argsMap, "description"))
 		args.WorkingDirectory = strings.TrimSpace(readStringArg(argsMap, "working_directory", "workingDirectory"))
-		if blockUntilMS, found, err := runtimecore.ReadFloat64Arg(argsMap, "block_until_ms", "blockUntilMS"); err == nil && found {
-			args.BlockUntilMS = blockUntilMS
+		if blockUntilMS, found, err := runtimecore.ReadInt64Arg(argsMap, "block_until_ms", "blockUntilMS"); err == nil && found && blockUntilMS >= 0 && blockUntilMS <= math.MaxInt32 {
+			args.BlockUntilMS = float64(blockUntilMS)
 			args.BlockUntilMSSet = true
 		}
 	}

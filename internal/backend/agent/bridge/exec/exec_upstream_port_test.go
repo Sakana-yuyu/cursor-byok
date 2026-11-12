@@ -19,8 +19,57 @@ func runtimecoreToolInvocation(toolName string, argsJSON string) runtimecore.Too
 
 // 以下用例锁定自上游 cursor-byok Rust 版移植的兼容性修复：
 // - fc1e96d6 工具参数别名（Claude 系模型常按 Claude Code 习惯发 file_path/content/query）
+// - 9e2d2241 工具名大小写归一 + Bash→Shell 别名
+// - 9cb16e11 block_until_ms 必须是整数值毫秒数
 // - 0f564c0e MCP 文本被部分截断时必须补 notice
 // - c3951a44 ListMcpResources 截断 notice 按实际成因报告单位
+
+// TestCanonicalToolKindBashAliasAndCase 锁定上游 9e2d2241 的语义：
+// Anthropic 系模型常按 Claude Code 习惯把 Shell 工具写成 Bash；大小写变体
+// 也必须归一到同一 canonical kind，不能报 unsupported exec tool。
+func TestCanonicalToolKindBashAliasAndCase(t *testing.T) {
+	for name, want := range map[string]string{
+		"Shell": "shell", "shell": "shell", "SHELL": "shell",
+		"Bash": "shell", "bash": "shell", "BASH": "shell",
+		"Read": "read", "read": "read",
+		"WriteShellStdin": "write_shell_stdin",
+		"GetMcpTools":     "mcp_state",
+	} {
+		if got := canonicalToolKind(name); got != want {
+			t.Fatalf("canonicalToolKind(%q) = %q, want %q", name, got, want)
+		}
+	}
+	if got := canonicalToolKind("not-a-tool"); got != "" {
+		t.Fatalf("canonicalToolKind(not-a-tool) = %q, want empty", got)
+	}
+}
+
+// TestShellBlockUntilMSRequiresInteger 锁定上游 9cb16e11/b85cb378 的语义：
+// block_until_ms 只接受整数值毫秒数；小数、负数、超出 int32 proto 范围的值
+// 一律协议错误，不能静默截断或回绕。
+func TestShellBlockUntilMSRequiresInteger(t *testing.T) {
+	bridge := NewBridge()
+	// 整数（含数字字符串与整数值浮点）接受。
+	for _, argsJSON := range []string{
+		`{"command":"echo hi","block_until_ms":15000}`,
+		`{"command":"echo hi","block_until_ms":15000.0}`,
+		`{"command":"echo hi","blockUntilMS":15000}`,
+	} {
+		if _, _, err := bridge.OpenExec(OpenExecContext{WorkspaceHint: "/ws"}, runtimecoreToolInvocation("Shell", argsJSON)); err != nil {
+			t.Fatalf("OpenExec(Shell, %s) error = %v, want accepted", argsJSON, err)
+		}
+	}
+	// 小数、负数、超 int32 范围拒绝。
+	for _, argsJSON := range []string{
+		`{"command":"echo hi","block_until_ms":1500.5}`,
+		`{"command":"echo hi","block_until_ms":-1}`,
+		`{"command":"echo hi","block_until_ms":99999999999}`,
+	} {
+		if _, _, err := bridge.OpenExec(OpenExecContext{WorkspaceHint: "/ws"}, runtimecoreToolInvocation("Shell", argsJSON)); err == nil {
+			t.Fatalf("OpenExec(Shell, %s) error = nil, want rejection", argsJSON)
+		}
+	}
+}
 
 func TestReadAcceptsFilePathAliases(t *testing.T) {
 	for _, alias := range []string{"path", "file_path", "filePath"} {

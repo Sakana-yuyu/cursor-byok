@@ -192,8 +192,8 @@ const coreTemplates = [
 
 // The following rows mirror cc-switch's provider preset catalog. Unknown usage APIs intentionally stay none.
 const catalogRows = [
-  ["kimi", "Kimi", "anthropic", "https://platform.kimi.com?aff=cc-switch", "https://platform.kimi.com?aff=cc-switch", "https://api.moonshot.cn/anthropic", ["kimi-k2.7-code"], { usageStatus: "fixed", usageProvider: "moonshot", modelCatalogURLs: ["https://api.moonshot.cn/anthropic/v1/models"] }],
-  ["kimi_coding", "Kimi For Coding", "anthropic", "https://www.kimi.com/code/?aff=cc-switch", "https://www.kimi.com/code/?aff=cc-switch", "https://api.kimi.com/coding", [], { usageStatus: "token_plan", usageProvider: "kimi", modelCatalogURLs: ["https://api.kimi.com/coding/v1/models"] }],
+  ["kimi", "Kimi", "anthropic", "https://platform.kimi.com?aff=cc-switch", "https://platform.kimi.com?aff=cc-switch", "https://api.moonshot.cn/anthropic", ["kimi-k3", "kimi-k2.7-code"], { usageStatus: "fixed", usageProvider: "moonshot", modelCatalogURLs: ["https://api.moonshot.cn/anthropic/v1/models"] }],
+  ["kimi_coding", "Kimi For Coding", "anthropic", "https://www.kimi.com/code/?aff=cc-switch", "https://www.kimi.com/code/?aff=cc-switch", "https://api.kimi.com/coding", ["k3", "kimi-for-coding"], { usageStatus: "token_plan", usageProvider: "kimi", modelCatalogURLs: ["https://api.kimi.com/coding/v1/models"] }],
   ["packycode", "PackyCode", "anthropic", "https://www.packyapi.ai", "https://www.packyapi.ai/register?aff=cc-switch", "https://www.packyapi.ai/v1", [], { modelCatalogURLs: ["https://www.packyapi.ai/v1/models", "https://cf.api.fan/v1/models", "https://slb-v1.api.fan/v1/models"] }],
   ["zetaapi", "ZetaAPI", "anthropic", "https://zetaapi.ai", "https://zetaapi.ai/go/u117", "https://api.zetaapi.ai/v1", [], {}],
   ["apinebula", "APINebula", "anthropic", "https://apinebula.ai", "https://apinebula.ai/VjM74M", "https://apinebula.ai/v1", [], {}],
@@ -240,7 +240,7 @@ const catalogRows = [
   ["cherryin", "CherryIN", "anthropic", "https://open.cherryin.ai", "https://open.cherryin.ai/console/token", "https://open.cherryin.net", ["anthropic/claude-sonnet-5", "anthropic/claude-opus-5", "anthropic/claude-haiku-4.5"], { modelCatalogURLs: ["https://open.cherryin.net/v1/models"] }],
   ["codex", "Codex", "openai", "https://openai.com/chatgpt/pricing", "https://chatgpt.com", "https://chatgpt.com/backend-api/codex", ["gpt-5.6-sol", "gpt-5.6-luna"], { modelCatalogStatus: "manual_only", usageStatus: "none", usageSource: "OAuth 专用入口，不走普通 API Key 余额查询" }],
   ["daoxe", "Daoxe", "openai", "https://api.daoxe.com", "https://api.daoxe.com", "https://api.daoxe.com/v1", [], { endpoint: "/v1/chat/completions", requestGroup: "chat_completions", modelCatalogURLs: ["https://api.daoxe.com/v1/models"], usageStatus: "none", source: "manual", verification: "observed_api" }],
-  ["deepseek", "DeepSeek", "openai", "https://platform.deepseek.com", "https://platform.deepseek.com/api_keys", "https://api.deepseek.com/v1", ["deepseek-chat", "deepseek-reasoner"], { usageStatus: "fixed", usageProvider: "deepseek", modelCatalogURLs: ["https://api.deepseek.com/v1/models", "https://api.deepseek.com/anthropic/v1/models"] }],
+  ["deepseek", "DeepSeek", "openai", "https://platform.deepseek.com", "https://platform.deepseek.com/api_keys", "https://api.deepseek.com/v1", ["deepseek-v4-pro", "deepseek-v4-flash", "deepseek-chat", "deepseek-reasoner"], { usageStatus: "fixed", usageProvider: "deepseek", modelCatalogURLs: ["https://api.deepseek.com/v1/models", "https://api.deepseek.com/anthropic/v1/models"] }],
   ["eflowcode", "E-FlowCode", "anthropic", "https://e-flowcode.cc", "https://e-flowcode.cc", "https://e-flowcode.cc/v1", [], {}],
   ["gemini_native", "Gemini Native", "gemini", "https://ai.google.dev/gemini-api", "https://aistudio.google.com/app/apikey", "https://generativelanguage.googleapis.com/v1beta", ["gemini-2.5-pro", "gemini-2.5-flash"], { modelCatalogStatus: "gemini_models", modelCatalogURLs: ["https://generativelanguage.googleapis.com/v1beta/models"], usageStatus: "none", usageSource: "Google 官方模型目录；公开用量接口未接入" }],
   ["github_copilot", "GitHub Copilot", "openai", "https://github.com/features/copilot", "https://github.com/settings/copilot", "https://api.githubcopilot.com", ["claude-sonnet-4-5", "gpt-4.1"], { modelCatalogStatus: "manual_only", usageStatus: "none", usageSource: "OAuth 专用入口，不走普通 API Key 余额查询" }],
@@ -260,8 +260,8 @@ const catalogRows = [
   ["xai", "xAI (Grok)", "openai", "https://x.ai/grok", "https://console.x.ai", "https://api.x.ai/v1", ["grok-4.5"], {}],
   ["xiaomi_mimo", "Xiaomi MiMo", "anthropic", "https://platform.xiaomimimo.com", "https://platform.xiaomimimo.com/#/console/api-keys", "https://api.xiaomimimo.com/anthropic", ["mimo-v2.5-pro"], {}],
   ["xiaomi_mimo_token_plan_cn", "Xiaomi MiMo Token Plan (China)", "anthropic", "https://platform.xiaomimimo.com/#/token-plan", "https://platform.xiaomimimo.com/#/console/plan-manage", "https://token-plan-cn.xiaomimimo.com/anthropic", ["mimo-v2.5-pro"], { usageStatus: "none", usageSource: "Token Plan 用量接口未在当前后端核验" }],
-  ["zhipu_glm", "Zhipu GLM", "anthropic", "https://open.bigmodel.cn", "https://www.bigmodel.cn/claude-code?ic=RRVJPB5SII", "https://open.bigmodel.cn/api/anthropic", ["glm-5.1"], { usageStatus: "token_plan", usageProvider: "zhipu" }],
-  ["zhipu_glm_en", "Zhipu GLM en", "anthropic", "https://z.ai", "https://z.ai/subscribe?ic=8JVLJQFSKB", "https://api.z.ai/api/anthropic", ["glm-5.1"], { usageStatus: "token_plan", usageProvider: "zhipu" }],
+  ["zhipu_glm", "Zhipu GLM", "anthropic", "https://open.bigmodel.cn", "https://www.bigmodel.cn/claude-code?ic=RRVJPB5SII", "https://open.bigmodel.cn/api/anthropic", ["glm-5.3", "glm-5.2", "glm-4.7"], { usageStatus: "token_plan", usageProvider: "zhipu" }],
+  ["zhipu_glm_en", "Zhipu GLM en", "anthropic", "https://z.ai", "https://z.ai/subscribe?ic=8JVLJQFSKB", "https://api.z.ai/api/anthropic", ["glm-5.3", "glm-5.2", "glm-4.7"], { usageStatus: "token_plan", usageProvider: "zhipu" }],
 ];
 
 const SUPPLIER_LABEL_COLLATOR = new Intl.Collator("en", {
@@ -290,7 +290,7 @@ const compatibilityTemplates = new Map([
     label: "Kimi / Moonshot（兼容配置）",
     type: "openai",
     baseURL: "https://api.moonshot.cn/v1",
-    models: ["kimi-k2.5", "moonshot-v1-128k"],
+    models: ["kimi-k3", "kimi-k2.5", "moonshot-v1-128k"],
     usageStatus: "fixed",
     usageProvider: "moonshot",
     modelCatalogURLs: ["https://api.moonshot.cn/v1/models"],
@@ -300,7 +300,7 @@ const compatibilityTemplates = new Map([
     label: "Zhipu GLM（兼容配置）",
     type: "openai",
     baseURL: "https://open.bigmodel.cn/api/paas/v4",
-    models: ["glm-4.5", "glm-4.6"],
+    models: ["glm-5.3", "glm-5.2", "glm-4.7"],
     usageStatus: "token_plan",
     usageProvider: "zhipu",
   })],
@@ -309,7 +309,7 @@ const compatibilityTemplates = new Map([
     label: "Zhipu GLM Team（兼容配置）",
     type: "openai",
     baseURL: "https://open.bigmodel.cn/api/paas/v4",
-    models: ["glm-4.5", "glm-4.6"],
+    models: ["glm-5.3", "glm-5.2", "glm-4.7"],
     usageStatus: "token_plan",
     usageProvider: "zhipu_team",
   })],

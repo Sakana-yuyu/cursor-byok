@@ -3,6 +3,7 @@ package execbridge
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -27,10 +28,15 @@ func decodeShellArgs(raw []byte) (shellResultArgs, error) {
 		return result, fmt.Errorf("Shell command is required")
 	}
 	result.RequestedSandboxPolicy = decodeShellRequestedSandboxPolicy(args)
-	if blockUntilMS, found, err := runtimecore.ReadFloat64Arg(args, "block_until_ms", "blockUntilMS"); err != nil {
+	// block_until_ms 必须是整数值毫秒数（参照上游 9cb16e11）：浮点数/超范围一律
+	// 协议错误而不是静默截断，避免 int32 proto timeout 溢出回绕。
+	if blockUntilMS, found, err := runtimecore.ReadInt64Arg(args, "block_until_ms", "blockUntilMS"); err != nil {
 		return result, err
 	} else if found {
-		result.BlockUntilMS = blockUntilMS
+		if blockUntilMS < 0 || blockUntilMS > math.MaxInt32 {
+			return result, fmt.Errorf("Shell block_until_ms is out of range")
+		}
+		result.BlockUntilMS = float64(blockUntilMS)
 		result.BlockUntilMSSet = true
 	}
 	notifyOnOutput, err := decodeShellOutputNotificationArgs(args)

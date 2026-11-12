@@ -67,8 +67,8 @@ func applyReadonlyShellPolicy(argsJSON []byte, workspacePaths []string) ([]byte,
 		args["profile"] = "auto"
 		mutated = true
 	}
-	if blockUntilMS, found, err := runtimecore.ReadFloat64Arg(args, "block_until_ms", "blockUntilMS"); err != nil {
-		return nil, fmt.Errorf("inspect Shell block_until_ms must be a number")
+	if blockUntilMS, found, err := runtimecore.ReadInt64Arg(args, "block_until_ms", "blockUntilMS"); err != nil {
+		return nil, fmt.Errorf("inspect Shell block_until_ms must be an integer")
 	} else if found && (blockUntilMS <= 0 || blockUntilMS > readonlyShellMaxBlockUntilMS) {
 		return nil, fmt.Errorf("inspect Shell block_until_ms must stay within a short foreground window (1-%d ms)", readonlyShellMaxBlockUntilMS)
 	}
