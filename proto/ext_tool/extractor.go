@@ -133,7 +133,7 @@ var (
 	mapValueTRe          = regexp.MustCompile(`[,\s]T:\s*([\w$.]+)`)
 	oneofNameRe          = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	fieldNameRe          = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	placeholderRe        = regexp.MustCompile(`^\s*(optional\s+|repeated\s+)?[A-Za-z_][A-Za-z0-9_.<>]*\s+(field_\d+|unknown(?:_[A-Za-z0-9_]+)?)\s*=\s*\d+\s*;`)
+	placeholderRe        = regexp.MustCompile(`^\s*(optional\s+|repeated\s+)?[A-Za-z_][A-Za-z0-9_.<>]*\s+(field_\d+|unknown(?:_\d+)?)\s*=\s*\d+\s*;`)
 	varAliasRe           = regexp.MustCompile(`\b(?:let|const|var)\s+([\w$]+)\s*=\s*([\w$]+)\s*(?:[,;])`)
 	streamCloseRe        = regexp.MustCompile(`(?s)message\s+ExecClientControlMessage\s*\{.*?ExecClientStreamClose\s+stream_close\s*=\s*1\s*;`)
 	shellStdoutRe        = regexp.MustCompile(`(?s)message\s+ShellStream\s*\{.*?ShellStreamStdout\s+stdout\s*=\s*1\s*;`)
@@ -854,7 +854,14 @@ func absInt(value int) int {
 	return value
 }
 
-var moduleStartRe = regexp.MustCompile(`(?:[{},;\r\n]|^)\s*(\d+)\s*:\s*(?:function\s*\(([\w$,\s]*)\)\s*\{|\(([\w$,\s]*)\)\s*=>\s*\{|([\w$]+)\s*=>\s*\{)`)
+// 模块表头兼容三种 webpack 输出：`123:function(t,e,r){`、`123:(t,e,r)=>{`/`123:t=>{`，
+// 以及 Cursor 3.27 起的方法简写 `123(t,e,r){`（简写仅接受 `{`/`,`/`}` 前缀，避免误配普通调用）。
+// 分组：1=冒号形式 ID，2/3/4=冒号形式参数，5=简写 ID，6=简写参数。
+var moduleStartRe = regexp.MustCompile(`(?:(?:[{},;\r\n]|^)\s*(\d+)\s*:\s*(?:function\s*\(([\w$,\s]*)\)\s*\{|\(([\w$,\s]*)\)\s*=>\s*\{|([\w$]+)\s*=>\s*\{)|[{},]\s*(\d+)\s*\(([\w$,\s]*)\)\s*\{)`)
+
+// webpackMinifiedBootstrapRe 识别压缩后的入口：`let n={};(()=>{"use strict";e.r(n)`。
+// 分组：1=exports 变量，2=入口 IIFE 起点，3=require 变量，4=.r 的实参（须与 1 相同；Go 正则无反向引用，代码中校验）。
+var webpackMinifiedBootstrapRe = regexp.MustCompile(`\b(?:var|let|const)\s+([\w$]+)\s*=\s*\{\s*\}\s*;\s*(\(\s*\(\s*\)\s*=>\s*\{)\s*["']use strict["']\s*;\s*([\w$]+)\.r\s*\(\s*([\w$]+)\s*\)`)
 var webpackRequireDeclRe = regexp.MustCompile(`\bfunction\s+__webpack_require__\s*\(\s*[\w$]+\s*\)\s*\{`)
 var webpackBootstrapRe = regexp.MustCompile(`\bvar\s+__webpack_exports__\s*=\s*\{\s*\}\s*;\s*(\(\s*\(\s*\)\s*=>\s*\{)\s*["']use strict["']\s*;\s*__webpack_require__\.r\s*\(\s*__webpack_exports__\s*\)`)
 
@@ -885,9 +892,13 @@ func buildModuleInfos(text string) []moduleInfo {
 	matches := moduleStartRe.FindAllStringSubmatchIndex(text, -1)
 	infos := make([]moduleInfo, 0, len(matches))
 	for _, match := range matches {
-		moduleID := text[match[2]:match[3]]
+		idGroup := 1
+		if match[2] < 0 {
+			idGroup = 5 // 方法简写分支
+		}
+		moduleID := text[match[idGroup*2]:match[idGroup*2+1]]
 		info := moduleInfo{Start: match[0], ID: moduleID, BodyStart: match[1]}
-		for group := 2; group <= 4; group++ {
+		for _, group := range []int{2, 3, 4, 6} {
 			if match[group*2] < 0 {
 				continue
 			}
@@ -913,6 +924,26 @@ func buildModuleInfos(text string) []moduleInfo {
 			BodyStart:  match[3],
 			ExportsVar: "__webpack_exports__",
 			RequireVar: "__webpack_require__",
+		})
+	}
+	// 压缩入口：require 必须是此前声明、形如 webpack 运行时（返回 .exports 并以 .call 执行模块）的函数。
+	for _, match := range webpackMinifiedBootstrapRe.FindAllStringSubmatchIndex(text, -1) {
+		exportsVar := text[match[2]:match[3]]
+		requireVar := text[match[6]:match[7]]
+		if text[match[8]:match[9]] != exportsVar {
+			continue
+		}
+		requireDecl := regexp.MustCompile(`\bfunction\s+` + regexp.QuoteMeta(requireVar) + `\s*\(\s*[\w$]+\s*\)\s*\{[\s\S]{0,400}?\.exports[\s\S]{0,400}?\.call\(`)
+		if !requireDecl.MatchString(text[:match[0]]) {
+			continue
+		}
+		entryStart := match[4]
+		infos = append(infos, moduleInfo{
+			Start:      entryStart,
+			ID:         fmt.Sprintf("webpack:bootstrap:%d", entryStart),
+			BodyStart:  match[5],
+			ExportsVar: exportsVar,
+			RequireVar: requireVar,
 		})
 	}
 	sort.Slice(infos, func(i, j int) bool { return infos[i].Start < infos[j].Start })
@@ -1306,7 +1337,8 @@ func extractMessages(text string, moduleStarts []int, diagnostics *extractionDia
 	typeNameRe := regexp.MustCompile(`this\.typeName\s*=\s*"([\w.]+)"`)
 
 	// Pattern: this.fields = n.util.newFieldList(() => [...])
-	fieldsRe := regexp.MustCompile(`this\.fields\s*=\s*\w+(?:\.proto3)?\.util\.newFieldList\s*\(\s*\(\s*\)\s*=>\s*\[`)
+	// Cursor 3.27 起压缩器会多包一层括号：newFieldList((()=>[...]))，故箭头前允许一个可选 "("。
+	fieldsRe := regexp.MustCompile(`this\.fields\s*=\s*\w+(?:\.proto3)?\.util\.newFieldList\s*\(\s*\(?\s*\(\s*\)\s*=>\s*\[`)
 
 	for _, classMatch := range classMatches {
 		varName := text[classMatch[2]:classMatch[3]]
@@ -1355,7 +1387,7 @@ func extractMessages(text string, moduleStarts []int, diagnostics *extractionDia
 	// Pattern 2: transpiled/minified bundle style
 	// Example:
 	// i.runtime=n.proto3,i.typeName="agent.v1.McpArgs",i.fields=n.proto3.util.newFieldList(()=>[{...}]);
-	assignmentRe := regexp.MustCompile(`([\w$]+)\.typeName\s*=\s*"([\w.]+)"\s*[,;]\s*[\w$]+\.fields\s*=\s*\w+(?:\.\w+)*\.util\.newFieldList\s*\(\s*\(\s*\)\s*=>\s*\[`)
+	assignmentRe := regexp.MustCompile(`([\w$]+)\.typeName\s*=\s*"([\w.]+)"\s*[,;]\s*[\w$]+\.fields\s*=\s*\w+(?:\.\w+)*\.util\.newFieldList\s*\(\s*\(?\s*\(\s*\)\s*=>\s*\[`)
 	assignmentMatches := assignmentRe.FindAllStringSubmatchIndex(text, -1)
 
 	// Build class declaration index for resolving InternalName.

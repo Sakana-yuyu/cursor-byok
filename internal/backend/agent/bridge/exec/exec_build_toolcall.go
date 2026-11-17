@@ -571,14 +571,44 @@ func summarizeShellTerminalPayload(stdout string, stderr string, exit *agentv1.S
 			sections = append(sections, trimmedStderr)
 		}
 	}
+	// Cursor 3.27 起客户端会标记 OOM 终止；不告诉模型的话它只看到截断输出和非零退出码。
+	oomNotice := shellOomKillNotice(exit.GetOomKill())
 	if len(sections) > 0 {
+		if oomNotice != "" {
+			sections = append(sections, oomNotice)
+		}
 		return strings.Join(sections, "\n\n")
 	}
 	if exit != nil {
-		return fmt.Sprintf("shell exited with code=%d cwd=%s", exit.GetCode(), strings.TrimSpace(exit.GetCwd()))
+		summary := fmt.Sprintf("shell exited with code=%d cwd=%s", exit.GetCode(), strings.TrimSpace(exit.GetCwd()))
+		if oomNotice != "" {
+			summary += "\n" + oomNotice
+		}
+		return summary
 	}
 	if closedWithoutExit {
 		return "shell stream closed without captured output"
 	}
 	return "shell completed without captured output"
+}
+
+// shellOomKillNotice 把客户端上报的 OOM 终止信息转成模型可见说明。
+func shellOomKillNotice(oom *agentv1.ShellOomKill) string {
+	if oom == nil {
+		return ""
+	}
+	limit := ""
+	if bytes := oom.GetMemoryLimitBytes(); bytes > 0 {
+		limit = fmt.Sprintf(" (memory limit %d MiB)", bytes/(1024*1024))
+	}
+	switch oom.GetKind() {
+	case agentv1.ShellOomKill_KIND_COMMAND_KILLED:
+		return "[The command was killed by the out-of-memory killer" + limit + ". Reduce memory usage or process the data in smaller batches.]"
+	case agentv1.ShellOomKill_KIND_COMMAND_FAILED:
+		return "[The command failed because it ran out of memory" + limit + ". Reduce memory usage or process the data in smaller batches.]"
+	case agentv1.ShellOomKill_KIND_UNCONFIRMED:
+		return "[The command may have been terminated for running out of memory" + limit + ".]"
+	default:
+		return ""
+	}
 }

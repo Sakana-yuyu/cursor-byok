@@ -124,7 +124,6 @@ func CursorCapabilityMap() []CursorCapabilityEntry {
 		unsupported("ExecServerMessage.mini_swe_agent_bash_args (ShellArgs)", "The local Shell route emits shell_stream_args and does not opt into the mini-SWE transport."),
 		exec("ExecServerMessage.conversation_search_args (ConversationSearchArgs)", "internal/backend/agent/bridge/exec/exec_open_conversation_search.go: Bridge.openSearchConversations"),
 		control("ExecServerMessage.agent_store_conflict_args (AgentStoreConflictArgs)", "Agent-store conflict synchronization control arm."),
-		unsupported("ExecServerMessage.adopt_args (AdoptArgs)", "本地执行桥尚无会话接管请求发送路径。"),
 
 		// ToolCall.oneof inventory. Implemented entries are constructed by real
 		// started/completed routes; the remainder are retained as reviewed protocol support.
@@ -190,7 +189,18 @@ func CursorCapabilityMap() []CursorCapabilityEntry {
 		toolCall("ToolCall.search_conversations_tool_call (SearchConversationsToolCall)", "internal/backend/agent/bridge/exec/exec_open_conversation_search.go: buildSearchConversationsCompletedToolCall"),
 		support("ToolCall.create_goal_tool_call (CreateGoalToolCall)", "Cursor native /goal presentation; cursor-byok does not synthesize local goal tool calls."),
 		support("ToolCall.update_goal_tool_call (UpdateGoalToolCall)", "Cursor native /goal presentation; cursor-byok does not synthesize local goal tool calls."),
-		support("ToolCall.adopt_tool_call (AdoptToolCall)", "会话接管展示类型，本地尚无对应执行发送路径。"),
+		// Cursor 3.27 新增的工具展示类型；本地 prompt 目录不暴露对应工具，也没有执行发送路径。
+		support("ToolCall.generate_video_tool_call (GenerateVideoToolCall)", "视频生成展示类型（Cursor 3.27），本地未实现对应工具。"),
+		support("ToolCall.x_search_tool_call (XSearchToolCall)", "X 搜索展示类型（Cursor 3.27），本地未实现对应工具。"),
+		support("ToolCall.get_origin_pr_code_tour_tool_call (GetPrCodeTourToolCall)", "源 PR 代码导览展示类型（Cursor 3.27），本地未实现对应工具。"),
+		support("ToolCall.update_origin_pr_code_tour_tool_call (UpdatePrCodeTourToolCall)", "源 PR 代码导览更新展示类型（Cursor 3.27），本地未实现对应工具。"),
+		support("ToolCall.list_tracked_tasks_tool_call (ListTrackedTasksToolCall)", "Tracked Tasks 列表展示类型（Cursor 3.27），本地继续使用 TodoWrite。"),
+		support("ToolCall.create_tracked_tasks_tool_call (CreateTrackedTasksToolCall)", "Tracked Tasks 创建展示类型（Cursor 3.27），本地继续使用 TodoWrite。"),
+		support("ToolCall.update_tracked_tasks_tool_call (UpdateTrackedTasksToolCall)", "Tracked Tasks 更新展示类型（Cursor 3.27），本地继续使用 TodoWrite。"),
+		support("ToolCall.delete_tracked_tasks_tool_call (DeleteTrackedTasksToolCall)", "Tracked Tasks 删除展示类型（Cursor 3.27），本地继续使用 TodoWrite。"),
+		support("ToolCall.update_tracked_task_statuses_tool_call (UpdateTrackedTaskStatusesToolCall)", "Tracked Tasks 状态更新展示类型（Cursor 3.27），本地继续使用 TodoWrite。"),
+		support("ToolCall.update_tracked_task_tags_tool_call (UpdateTrackedTaskTagsToolCall)", "Tracked Tasks 标签更新展示类型（Cursor 3.27），本地继续使用 TodoWrite。"),
+		support("ToolCall.create_project_tool_call (CreateProjectToolCall)", "项目创建展示类型（Cursor 3.27），本地未实现对应工具。"),
 		support("ToolCall.get_agent_status_tool_call (GetAgentStatusToolCall)", "跨代理状态查询展示类型，本地未实现对应工具。"),
 		support("ToolCall.send_to_agent_tool_call (SendToAgentToolCall)", "跨代理消息展示类型，本地未实现对应工具。"),
 		support("ToolCall.read_agent_transcript_tool_call (ReadAgentTranscriptToolCall)", "跨代理转录读取展示类型，本地未实现对应工具。"),

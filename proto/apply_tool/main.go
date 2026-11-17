@@ -38,13 +38,30 @@ var compatibilityTypes = map[string][]string{
 type compatibilityField struct {
 	name, scalar, declaration string
 	no                        int32
+	optional                  bool
 }
 
-var compatibilityModelFields = []compatibilityField{
-	{"supports_auto_context", "TYPE_BOOL", "optional bool supports_auto_context = 11;", 11},
-	{"auto_context_max_tokens", "TYPE_INT32", "optional int32 auto_context_max_tokens = 12;", 12},
-	{"context_token_limit", "TYPE_INT32", "optional int32 context_token_limit = 15;", 15},
-	{"context_token_limit_for_max_mode", "TYPE_INT32", "optional int32 context_token_limit_for_max_mode = 16;", 16},
+// compatibilityMessageField 描述 agent_v1.proto 中某个顶层 message 需要保留的字段集合。
+type compatibilityMessageField struct {
+	message, comment string
+	// required 为 true 时 message 缺失即拒绝生成；否则缺失时跳过（无字段可补）。
+	required bool
+	fields   []compatibilityField
+}
+
+// compatibilityMessageFields 显式列出新版安装包已删除、但本仓库仍需读写的字段。
+// 只在字段缺失时补入；字段名或字段号已存在但类型/语义不同则拒绝生成。
+var compatibilityMessageFields = []compatibilityMessageField{
+	{"ModelDetails", "本地模型选择与模拟响应仍使用的元数据字段。", true, []compatibilityField{
+		{"supports_auto_context", "TYPE_BOOL", "optional bool supports_auto_context = 11;", 11, true},
+		{"auto_context_max_tokens", "TYPE_INT32", "optional int32 auto_context_max_tokens = 12;", 12, true},
+		{"context_token_limit", "TYPE_INT32", "optional int32 context_token_limit = 15;", 15, true},
+		{"context_token_limit_for_max_mode", "TYPE_INT32", "optional int32 context_token_limit_for_max_mode = 16;", 16, true},
+	}},
+	// Cursor 3.27 删除了该字段（新客户端改为 model_id + parameters），旧客户端仍会发送变体串标记。
+	{"RequestedModel", "旧版 Cursor 客户端仍会发送的变体串标记。", false, []compatibilityField{
+		{"is_variant_string_representation", "TYPE_BOOL", "bool is_variant_string_representation = 8;", 8, false},
+	}},
 }
 
 // goPackageRewrite 描述一次 go_package 改写。
@@ -268,41 +285,46 @@ func applyCompatibility(text, file string) (string, error) {
 		return "", err
 	}
 	if file == "agent_v1.proto" {
-		var model *desc.MessageDescriptor
-		for _, msg := range fd.GetMessageTypes() {
-			if msg.GetName() == "ModelDetails" {
-				model = msg
-				break
-			}
-		}
-		if model == nil {
-			return "", fmt.Errorf("agent.v1.ModelDetails 缺失，无法验证本地模型元数据字段")
-		}
-		var missing []string
-		for _, expected := range compatibilityModelFields {
-			var byName, byNumber *desc.FieldDescriptor
-			for _, field := range model.GetFields() {
-				if field.GetName() == expected.name {
-					byName = field
-				}
-				if field.GetNumber() == expected.no {
-					byNumber = field
+		for _, rule := range compatibilityMessageFields {
+			var target *desc.MessageDescriptor
+			for _, msg := range fd.GetMessageTypes() {
+				if msg.GetName() == rule.message {
+					target = msg
+					break
 				}
 			}
-			if byName != nil || byNumber != nil {
-				if byName == nil || byNumber != byName || byName.GetType().String() != expected.scalar || byName.IsRepeated() || !byName.AsFieldDescriptorProto().GetProto3Optional() {
-					return "", fmt.Errorf("ModelDetails.%s 与兼容字段号 %d、类型或 optional 语义冲突", expected.name, expected.no)
+			if target == nil {
+				if !rule.required {
+					continue
 				}
-				continue
+				return "", fmt.Errorf("agent.v1.%s 缺失，无法验证兼容字段", rule.message)
 			}
-			missing = append(missing, "  "+expected.declaration)
-		}
-		if len(missing) > 0 {
-			_, end, err := messageBlock(text, "ModelDetails")
-			if err != nil {
-				return "", err
+			var missing []string
+			for _, expected := range rule.fields {
+				var byName, byNumber *desc.FieldDescriptor
+				for _, field := range target.GetFields() {
+					if field.GetName() == expected.name {
+						byName = field
+					}
+					if field.GetNumber() == expected.no {
+						byNumber = field
+					}
+				}
+				if byName != nil || byNumber != nil {
+					if byName == nil || byNumber != byName || byName.GetType().String() != expected.scalar || byName.IsRepeated() || byName.AsFieldDescriptorProto().GetProto3Optional() != expected.optional {
+						return "", fmt.Errorf("%s.%s 与兼容字段号 %d、类型或 optional 语义冲突", rule.message, expected.name, expected.no)
+					}
+					continue
+				}
+				missing = append(missing, "  "+expected.declaration)
 			}
-			text = text[:end-1] + "  // 本地模型选择与模拟响应仍使用的元数据字段。\n" + strings.Join(missing, "\n") + "\n" + text[end-1:]
+			if len(missing) > 0 {
+				_, end, err := messageBlock(text, rule.message)
+				if err != nil {
+					return "", err
+				}
+				text = text[:end-1] + "  // " + rule.comment + "\n" + strings.Join(missing, "\n") + "\n" + text[end-1:]
+			}
 		}
 	}
 	if _, err := parseCompatibilityInput(text, file); err != nil {

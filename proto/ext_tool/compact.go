@@ -11,7 +11,9 @@ var (
 	compactClassRE   = regexp.MustCompile(`\bclass\s+([\w$]+)\s+extends\s+([\w$.]+)\s*\{`)
 	compactMethodRE  = regexp.MustCompile(`\bstatic\s+\$\s*\(\s*\)\s*\{\s*return\s*`)
 	compactPackageRE = regexp.MustCompile(`\bstatic\s+\$p\s*\(\s*\)\s*\{\s*return\s*([^;}]+)`)
-	compactConstRE   = regexp.MustCompile(`(?:\b(?:var|let|const)\s+|,)\s*([\w$]+)\s*=\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')`)
+	// 字符串常量；Cursor 3.27 起压缩器会把包名包成逗号表达式 `A8t=(r.MethodKind.Unary,"aiserver.v1.")`，
+	// 前序项只允许无副作用的属性访问，最终值仍须是字符串字面量。
+	compactConstRE   = regexp.MustCompile(`(?:\b(?:var|let|const)\s+|,)\s*([\w$]+)\s*=\s*(?:\((?:\s*[\w$.]+\s*,)+\s*)?("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')`)
 	compactEnumRE    = regexp.MustCompile(`(?:\b(?:var|let|const)\s+|[,;])\s*([\w$]+)\s*=\s*(?:\(\s*(?:[\w$.]+\.proto3\s*,\s*)+)*\(\s*0\s*,\s*([\w$]+(?:\(\d+\))?)\.([\w$]+)\s*\)\s*\(`)
 	compactHelperRE  = regexp.MustCompile(`\bfunction\s+([\w$]+)\s*\(\s*([\w$]+)\s*,\s*([\w$]+)\s*,\s*([\w$]+)\s*,\s*([\w$]+)\s*,\s*([\w$]+)\s*\)\s*\{`)
 	compactRuntimeRE = regexp.MustCompile(`^\s*[\w$.]+\.proto3\s*,`)
@@ -32,7 +34,7 @@ func extractCompactTypes(text string, moduleInfos []moduleInfo, legacyMessages [
 	for i, info := range moduleInfos {
 		starts[i] = info.Start
 	}
-	constants := make(map[int]map[string][]string)
+	constants := make(compactConstants)
 	for _, m := range compactConstRE.FindAllStringSubmatchIndex(text, -1) {
 		module := moduleStartForPos(starts, m[0])
 		symbol := text[m[2]:m[3]]
@@ -41,9 +43,9 @@ func extractCompactTypes(text string, moduleInfos []moduleInfo, legacyMessages [
 			continue
 		}
 		if constants[module] == nil {
-			constants[module] = make(map[string][]string)
+			constants[module] = make(map[string][]compactConstDef)
 		}
-		constants[module][symbol] = append(constants[module][symbol], value)
+		constants[module][symbol] = append(constants[module][symbol], compactConstDef{value: value, pos: m[0]})
 	}
 	classes := make(map[int]map[string][]*compactClass)
 	var descriptors []*compactClass
@@ -97,7 +99,7 @@ func extractCompactTypes(text string, moduleInfos []moduleInfo, legacyMessages [
 		visiting[c] = true
 		defer delete(visiting, c)
 		if c.packageExpr != "" {
-			prefix, err := compactConstant(c.packageExpr, c.module, constants)
+			prefix, err := compactConstant(c.packageExpr, c.module, c.pos, constants)
 			if err != nil {
 				return "", err
 			}
@@ -158,16 +160,47 @@ func extractCompactTypes(text string, moduleInfos []moduleInfo, legacyMessages [
 	return messages, enums, nil
 }
 
-func compactConstant(expr string, module int, constants map[int]map[string][]string) (string, error) {
+// compactConstDef 记录一次字符串常量定义及其位置。
+type compactConstDef struct {
+	value string
+	pos   int
+}
+
+// compactConstants 按模块起点、符号名索引字符串常量定义。
+type compactConstants map[int]map[string][]compactConstDef
+
+var compactPackagePrefixRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*\.$`)
+
+// compactConstant 解析紧凑描述引用的包名前缀常量。
+// Cursor 3.27 起入口被 scope-hoist 成一个大模块，短名（如 i）会在嵌套作用域里重复声明：
+// 唯一值直接采用；多值时只保留形如包名前缀（以 "." 结尾）的定义，仍不唯一则取使用点之前最近的
+// 定义（压缩器同名遮蔽时最近的前序声明即词法作用域内可见的那个）。
+func compactConstant(expr string, module int, usePos int, constants compactConstants) (string, error) {
 	expr = strings.TrimSpace(expr)
 	if strings.HasPrefix(expr, `"`) || strings.HasPrefix(expr, "'") {
 		return compactString(expr)
 	}
-	values := uniqueSortedStrings(constants[module][expr])
-	if len(values) != 1 {
-		return "", fmt.Errorf("模块 %d 常量 %s 有 %d 个字符串定义", module, expr, len(values))
+	defs := constants[module][expr]
+	values := make([]string, 0, len(defs))
+	for _, def := range defs {
+		values = append(values, def.value)
 	}
-	return values[0], nil
+	if unique := uniqueSortedStrings(values); len(unique) == 1 {
+		return unique[0], nil
+	}
+	best := -1
+	for i, def := range defs {
+		if def.pos >= usePos || !compactPackagePrefixRE.MatchString(def.value) {
+			continue
+		}
+		if best < 0 || def.pos > defs[best].pos {
+			best = i
+		}
+	}
+	if best < 0 {
+		return "", fmt.Errorf("模块 %d 常量 %s 有 %d 个字符串定义且使用点前无包名前缀定义", module, expr, len(uniqueSortedStrings(values)))
+	}
+	return defs[best].value, nil
 }
 
 // compactTarget 只接受同模块局部符号或由 webpack 图唯一证明的命名空间引用。
@@ -309,7 +342,7 @@ func compactFields(c *compactClass, msg Message, resolver *TypeResolver, kinds m
 	return result, nil
 }
 
-func compactEnums(text string, starts []int, constants map[int]map[string][]string, g *webpackModuleGraph) ([]Enum, error) {
+func compactEnums(text string, starts []int, constants compactConstants, g *webpackModuleGraph) ([]Enum, error) {
 	helpers := compactEnumHelpers(text, starts)
 	var enums []Enum
 	for _, m := range compactEnumRE.FindAllStringSubmatchIndex(text, -1) {
@@ -350,7 +383,7 @@ func compactEnums(text string, starts []int, constants map[int]map[string][]stri
 		if err != nil || len(args) < 4 || len(args) > 5 {
 			return nil, fmt.Errorf("紧凑枚举参数无效: %v", err)
 		}
-		prefix, err := compactConstant(args[1], module, constants)
+		prefix, err := compactConstant(args[1], module, m[0], constants)
 		if err != nil {
 			return nil, err
 		}

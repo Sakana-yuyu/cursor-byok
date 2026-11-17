@@ -303,6 +303,15 @@ func convertMcpResult(result *agentv1.McpResult) *agentv1.McpToolResult {
 			}
 			errorText += "MCP authentication required (needs_auth=true)."
 		}
+		// Cursor 3.27 起错误附带 HTTP 状态、重试间隔与工具定义恢复信息，工具结果类型无对应字段，
+		// 一并转成模型可见文本，模型才能据此改用新 schema 或换用可用工具。
+		if status := item.Error.GetHttpStatus(); status > 0 {
+			errorText = appendMcpErrorLine(errorText, fmt.Sprintf("HTTP status: %d", status))
+		}
+		if retryAfter := item.Error.GetRetryAfterMs(); retryAfter > 0 {
+			errorText = appendMcpErrorLine(errorText, fmt.Sprintf("Retry after: %dms", retryAfter))
+		}
+		errorText = appendMcpErrorLine(errorText, mcpRecoveryNotice(item.Error.GetRecovery()))
 		return &agentv1.McpToolResult{
 			Result: &agentv1.McpToolResult_Error{
 				Error: &agentv1.McpToolError{Error: errorText},
@@ -324,7 +333,7 @@ func convertMcpResult(result *agentv1.McpResult) *agentv1.McpToolResult {
 		return &agentv1.McpToolResult{
 			Result: &agentv1.McpToolResult_Error{
 				Error: &agentv1.McpToolError{
-					Error: fmt.Sprintf("tool not found: %s", item.ToolNotFound.GetName()),
+					Error: appendMcpErrorLine(fmt.Sprintf("tool not found: %s", item.ToolNotFound.GetName()), mcpRecoveryNotice(item.ToolNotFound.GetRecovery())),
 				},
 			},
 		}
@@ -530,3 +539,54 @@ func truncateReadMcpResourceResultForReplay(result *agentv1.ReadMcpResourceExecR
 	}
 	return cloned
 }
+
+// appendMcpErrorLine 在 MCP 错误文本后追加一行非空说明。
+func appendMcpErrorLine(text string, line string) string {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return text
+	}
+	if strings.TrimSpace(text) == "" {
+		return line
+	}
+	return text + "\n" + line
+}
+
+// mcpRecoveryNotice 把 Cursor 客户端对 MCP 工具定义的恢复结果转成模型可读说明：
+// 工具 schema 已变化时附上新 schema，工具已移除时列出可用工具，便于模型自行纠正调用。
+func mcpRecoveryNotice(recovery *agentv1.McpRecovery) string {
+	if recovery == nil {
+		return ""
+	}
+	var lines []string
+	switch recovery.GetOutcome() {
+	case agentv1.McpRecovery_OUTCOME_CHANGED:
+		lines = append(lines, "The MCP tool definition has changed; retry with the updated input schema.")
+	case agentv1.McpRecovery_OUTCOME_REMOVED:
+		lines = append(lines, "The MCP tool no longer exists on this server.")
+	case agentv1.McpRecovery_OUTCOME_UNCHANGED:
+		lines = append(lines, "The MCP tool definition is unchanged; check the arguments before retrying.")
+	case agentv1.McpRecovery_OUTCOME_REFRESH_FAILED:
+		lines = append(lines, "Refreshing the MCP tool definitions failed.")
+	}
+	if schema := strings.TrimSpace(recovery.GetFreshInputSchemaJson()); schema != "" {
+		lines = append(lines, "Updated input schema: "+truncateReplayText("MCP input schema", schema, mcpRecoverySchemaLimit))
+	}
+	if tools := recovery.GetAvailableTools(); len(tools) > 0 {
+		shown := tools
+		if len(shown) > mcpRecoveryToolListLimit {
+			shown = shown[:mcpRecoveryToolListLimit]
+		}
+		line := "Available tools: " + strings.Join(shown, ", ")
+		if len(tools) > len(shown) {
+			line += fmt.Sprintf(" (and %d more)", len(tools)-len(shown))
+		}
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n")
+}
+
+const (
+	mcpRecoverySchemaLimit   = 8 * 1024
+	mcpRecoveryToolListLimit = 50
+)
