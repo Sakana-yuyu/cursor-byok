@@ -143,6 +143,14 @@ func (store *UsageFileStore) UpsertEvent(event usageFileEvent) error {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
+	// 同一 EventID 只保留最后一次写入，并移到队尾，避免重复占用批量额度。
+	for index, pending := range store.pendingEvents {
+		if pending.EventID == event.EventID {
+			copy(store.pendingEvents[index:], store.pendingEvents[index+1:])
+			store.pendingEvents = store.pendingEvents[:len(store.pendingEvents)-1]
+			break
+		}
+	}
 	store.pendingEvents = append(store.pendingEvents, event)
 
 	// 磁盘持续故障时 pending 无上界增长会拖垮内存：超过硬上限丢最旧的一半并告警。
@@ -296,31 +304,29 @@ func (store *UsageFileStore) LookupEvent(needle string) (usageFileEvent, bool, e
 	if store == nil || strings.TrimSpace(store.path) == "" {
 		return usageFileEvent{}, false, nil
 	}
-	// 合并防抖窗口内尚未落盘的 pending 事件：RecordEvent 走 2 秒防抖，
-	// 紧随其后的 Lookup（如 turn 收口聚合本回合用量）只读磁盘会确定性漏掉
-	// 刚记录的 provider_call，聚合结果恒为 0。
-	store.mu.Lock()
-	pending := append([]usageFileEvent(nil), store.pendingEvents...)
-	store.mu.Unlock()
-	doc, err := readUsageFileDocument(store.path)
-	if err != nil {
-		return usageFileEvent{}, false, err
-	}
 	trimmed := strings.TrimSpace(needle)
 	if trimmed == "" {
 		return usageFileEvent{}, false, nil
 	}
+	// 读盘与 pending 合并必须处于同一锁窗口：否则旧 pending 快照可能
+	// 覆盖快照后已更新并落盘的新值。Flush/Upsert/Reset 均使用此锁。
+	store.mu.Lock()
+	doc, err := readUsageFileDocument(store.path)
+	if err != nil {
+		store.mu.Unlock()
+		return usageFileEvent{}, false, err
+	}
+	events := doc.EventIndex
+	if events == nil {
+		events = buildUsageEventIndex(doc.RecentEvents)
+	}
+	for _, event := range store.pendingEvents {
+		events[event.EventID] = event
+	}
+	store.mu.Unlock()
+
 	var aggregate usageFileEvent
 	found := false
-	events := doc.EventIndex
-	if len(events) == 0 {
-		events = make(map[string]usageFileEvent, len(doc.RecentEvents))
-		for _, event := range doc.RecentEvents {
-			if eventID := strings.TrimSpace(event.EventID); eventID != "" {
-				events[eventID] = event
-			}
-		}
-	}
 	matchAggregate := func(event usageFileEvent) {
 		eventID := strings.TrimSpace(event.EventID)
 		if eventID != trimmed && !strings.HasPrefix(eventID, trimmed+"::") {
@@ -341,16 +347,6 @@ func (store *UsageFileStore) LookupEvent(needle string) (usageFileEvent, bool, e
 		aggregate.UsagePresent = aggregate.UsagePresent || event.UsagePresent
 	}
 	for _, event := range events {
-		matchAggregate(event)
-	}
-	for _, event := range pending {
-		// 快照后防抖落盘可能已把同一批事件写入磁盘：EventID 已在磁盘索引里的
-		// pending 事件跳过，避免 token/调用数被累计两次。
-		if eventID := strings.TrimSpace(event.EventID); eventID != "" {
-			if _, onDisk := events[eventID]; onDisk {
-				continue
-			}
-		}
 		matchAggregate(event)
 	}
 	if found {

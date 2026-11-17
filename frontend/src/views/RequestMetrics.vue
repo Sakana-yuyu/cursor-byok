@@ -301,7 +301,9 @@ function rateTone(rate) {
 // 服务端分页加载：只拉当前页的数据。
 // seq 守卫：pageSize/翻页在飞期间再次触发刷新时，后返回的旧响应不得覆盖新数据。
 let refreshSeq = 0;
+let disposed = false;
 async function refresh({ keepPage = false } = {}) {
+  if (disposed) return;
   const seq = ++refreshSeq;
   loading.value = true;
   error.value = "";
@@ -338,7 +340,7 @@ watch([page, pageSize], () => {
 const AUTO_REFRESH_INTERVAL_MS = 5000;
 
 function autoRefresh() {
-  if (document.hidden || loading.value) return;
+  if (disposed || document.hidden || loading.value) return;
   return refresh({ keepPage: true });
 }
 
@@ -353,12 +355,18 @@ function handleVisibilityChange() {
 }
 
 onMounted(async () => {
-  await Promise.allSettled([refresh(), reloadUserConfig({ modelAdaptersOnly: true })]);
+  await Promise.allSettled([
+    refresh(),
+    reloadUserConfig({ modelAdaptersOnly: true, shouldApply: () => !disposed }),
+  ]);
+  if (disposed) return;
   startAutoRefresh();
   document.addEventListener("visibilitychange", handleVisibilityChange);
 });
 
 onUnmounted(() => {
+  disposed = true;
+  refreshSeq += 1;
   stopAutoRefresh();
   document.removeEventListener("visibilitychange", handleVisibilityChange);
 });

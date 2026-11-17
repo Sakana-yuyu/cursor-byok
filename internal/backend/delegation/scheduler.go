@@ -299,11 +299,22 @@ func (s *Scheduler) run(state *taskState) {
 		s.finishFromContext(state, queueCtx.Err())
 		return
 	}
-	defer func() { <-s.slots }()
+	// 在启动 executor 前由 runner 持有槽位；启动后转交给 executor，
+	// 逻辑取消/超时可以立即返回，但不能提前增加实际执行并发。
+	defer func() {
+		if !executorStarted {
+			<-s.slots
+		}
+	}()
 
 	s.mu.Lock()
 	if isTerminalStatus(state.snapshot.Status) {
 		s.mu.Unlock()
+		return
+	}
+	if err := queueCtx.Err(); err != nil {
+		s.mu.Unlock()
+		s.finishFromContext(state, err)
 		return
 	}
 	state.snapshot.Status = TaskRunning
@@ -336,12 +347,17 @@ func (s *Scheduler) run(state *taskState) {
 	executorStarted = true
 	go s.watchEffectiveProgress(state)
 	executorTaskID := state.snapshot.ID
-	safego.Go("delegation:executor", func() {
-		result := s.executor(executionCtx, request)
-		s.mu.Lock()
-		delete(s.activeExecutions, executorTaskID)
-		s.mu.Unlock()
-		resultChannel <- result
+	safego.GoWithPanicHandler("delegation:executor", func() {
+		// 即使 executor panic，或 runner 已因取消退出，执行所有权仍会回收。
+		defer func() {
+			s.mu.Lock()
+			delete(s.activeExecutions, executorTaskID)
+			s.mu.Unlock()
+			<-s.slots
+		}()
+		resultChannel <- s.executor(executionCtx, request)
+	}, func(err error) {
+		resultChannel <- TaskResult{Error: err}
 	})
 	var result TaskResult
 	select {

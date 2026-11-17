@@ -66,7 +66,9 @@ func (s *ProxyService) StartProxy() (ProxyState, error) {
 	}
 
 	logger.Infof("start service requested config_path=%s logs_root=%s", s.configPath, s.logsRoot)
+	var rollback startupRollback
 	fail := func(step string, err error) (ProxyState, error) {
+		err = errors.Join(err, rollback.run())
 		logger.Errorf("start service failed step=%s err=%v", step, err)
 		s.setLastError(err)
 		s.emitState()
@@ -83,11 +85,16 @@ func (s *ProxyService) StartProxy() (ProxyState, error) {
 	if caIncomplete {
 		return fail("ca_incomplete", errors.New("本地 CA 异常，本地代理不可用，请在首页执行「一键修复」后重启应用"))
 	}
+	if err := cursor.ValidateUserSettings(); err != nil {
+		return fail("validate_cursor_settings", err)
+	}
 	if err := s.ensureBackendHost(); err != nil {
 		return fail("ensure_backend_host", err)
 	}
 	logPhase("backend-host-ready")
 	if !s.backendHost.IsRunning() {
+		host := s.backendHost
+		rollback.add("backend", host.Stop)
 		logger.Infof("starting embedded backend listen_addr=%s", s.backendHost.ListenAddr())
 		if err := s.backendHost.Start(); err != nil {
 			return fail("start_backend", err)
@@ -108,10 +115,16 @@ func (s *ProxyService) StartProxy() (ProxyState, error) {
 	}
 	logPhase("proxy-ensure")
 
-	// 启动时注入账号信息
-	if err := cursor.InjectCursorUserInfo(localruntime.InjectAccountEmail, localruntime.InjectAuthToken); err != nil {
-		logger.Errorf("injectCursorUserInfo failed: %v", err)
-		// 不阻断启动，仅记录日志
+	s.mu.RLock()
+	settingsWereApplied := s.cursorSettingsApplied
+	s.mu.RUnlock()
+	if !settingsWereApplied {
+		if err := cursor.InjectCursorUserInfo(localruntime.InjectAccountEmail, localruntime.InjectAuthToken); err != nil {
+			return fail("inject_cursor_user_info", err)
+		}
+		rollback.add("Cursor 登录态", func(context.Context) error {
+			return cursor.RestoreInjectedCursorUserInfo(localruntime.InjectAuthToken)
+		})
 	}
 
 	// 自动拉取 Cursor 客户端已登录的官方账号（注入前已备份到 cursor-auth-backup.json），
@@ -126,6 +139,8 @@ func (s *ProxyService) StartProxy() (ProxyState, error) {
 	}
 
 	if s.proxy != nil && !s.proxy.IsRunning() {
+		proxy := s.proxy
+		rollback.add("MITM 代理", proxy.Stop)
 		logger.Infof("starting mitm proxy listen_addr=%s", s.proxy.Snapshot().ListenAddr)
 		if err := s.proxy.Start(); err != nil {
 			return fail("start_mitm_proxy", err)
@@ -134,18 +149,8 @@ func (s *ProxyService) StartProxy() (ProxyState, error) {
 	logPhase("mitm-started")
 
 	logPhase("apply-cursor-settings")
-	if err := s.ApplyCursorSettings(); err != nil {
-		stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer stopCancel()
-		if s.proxy != nil {
-			_ = s.proxy.Stop(stopCtx)
-		}
-		_ = s.backendHost.Stop(stopCtx)
-		startErr := fmt.Errorf("服务已启动，但注入 Cursor 配置失败: %w", err)
-		logger.Errorf("start service failed step=apply_cursor_settings err=%v", startErr)
-		s.setLastError(startErr)
-		s.emitState()
-		return s.GetState(), startErr
+	if err := s.applyCursorSettingsLocked(); err != nil {
+		return fail("apply_cursor_settings", fmt.Errorf("服务已启动，但注入 Cursor 配置失败: %w", err))
 	}
 
 	s.setLastError(nil)
@@ -179,20 +184,24 @@ func (s *ProxyService) StopProxy() (ProxyState, error) {
 	// 原先先清代理再关 backend，会在 stop_backend 卡住时让 Cursor 立刻变成 unauthenticated。
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
+	var stopErr error
 	if s.backendHost != nil {
 		logger.Infof("stopping embedded backend listen_addr=%s", s.backendHost.ListenAddr())
 		if err := s.backendHost.Stop(ctx); err != nil && !errors.Is(err, context.Canceled) {
-			return fail("stop_backend", err)
+			stopErr = errors.Join(stopErr, fmt.Errorf("stop backend: %w", err))
 		}
 	}
 	if s.proxy != nil && s.proxy.IsRunning() {
 		logger.Infof("stopping mitm proxy listen_addr=%s", s.proxy.Snapshot().ListenAddr)
 		if err := s.proxy.Stop(ctx); err != nil {
-			return fail("stop_mitm_proxy", err)
+			stopErr = errors.Join(stopErr, fmt.Errorf("stop mitm proxy: %w", err))
 		}
 	}
-	if err := s.ClearCursorSettings(); err != nil {
-		return fail("clear_cursor_settings", err)
+	if err := s.clearCursorSettingsLocked(); err != nil {
+		stopErr = errors.Join(stopErr, fmt.Errorf("clear cursor settings: %w", err))
+	}
+	if stopErr != nil {
+		return fail("stop_and_restore", stopErr)
 	}
 
 	s.setLastError(nil)
@@ -294,6 +303,8 @@ func (s *ProxyService) emitState() {
 
 // ShutdownForQuit 用于处理与 ShutdownForQuit 相关的逻辑。
 func (s *ProxyService) ShutdownForQuit() {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	var finalErr error
@@ -309,7 +320,7 @@ func (s *ProxyService) ShutdownForQuit() {
 			finalErr = errors.Join(finalErr, err)
 		}
 	}
-	if err := s.ClearCursorSettings(); err != nil {
+	if err := s.clearCursorSettingsLocked(); err != nil {
 		finalErr = errors.Join(finalErr, err)
 	}
 	if finalErr != nil {

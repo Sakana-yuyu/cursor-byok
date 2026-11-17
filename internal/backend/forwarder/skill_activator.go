@@ -1,6 +1,7 @@
 // skill_activator.go 实现内置技能的「调用链稀疏激活」：
 // 不再每个请求全量注入所有技能，而是用 BM25 对当前请求文本与各技能 description
-// 做语义相关性打分，只激活 Top-K（默认 3）相关技能；元技能 find-skills 始终常驻。
+// 做语义相关性打分，优先保留用户明确点名的技能，其余按 Top-K（默认 3）推荐；
+// 元技能 find-skills 始终常驻。
 //
 // 子代理请求会重打分，并以父会话最近一次激活集作保底候选，保证调用链上下文一致性。
 //
@@ -380,9 +381,9 @@ func (a *SkillActivator) Activate(queryText string, parentActivated []string) []
 	return a.ActivateForWorkspace("", queryText, parentActivated)
 }
 
-// ActivateForWorkspace 返回应注入的技能列表（顺序：元技能优先，再按相关性降序）。
+// ActivateForWorkspace 返回应注入的技能列表（顺序：元技能、明确点名、相关性推荐）。
 // parentActivated 是父会话最近激活的技能名集合（子代理保底用），可为空。
-// 结果含常驻元技能 find-skills（若存在）+ Top-K 打分技能，去重后截断到 activatedSkillsMaxInject。
+// 自动推荐受 Top-K 与总预算限制；用户明确点名的已启用技能不被预算截断。
 func (a *SkillActivator) ActivateForWorkspace(workspaceRoot string, queryText string, parentActivated []string) []GlobalSkill {
 	return a.activateForWorkspaceExcluding(workspaceRoot, queryText, parentActivated, nil)
 }
@@ -418,12 +419,15 @@ func (a *SkillActivator) activateForWorkspaceExcluding(workspaceRoot string, que
 
 	qTerms := tokenize(queryText)
 	parentSet := normalizeParentNames(parentActivated)
+	queryLower := strings.ToLower(queryText)
+	explicitCount := 0
 
 	// 打分（仅对 others）。
 	type scored struct {
-		skill      GlobalSkill
-		score      float64
-		fromParent bool
+		skill         GlobalSkill
+		score         float64
+		fromParent    bool
+		explicitOrder int
 	}
 	results := make([]scored, 0, len(others))
 	for _, s := range others {
@@ -440,13 +444,23 @@ func (a *SkillActivator) activateForWorkspaceExcluding(workspaceRoot string, que
 				sc = 1e-9
 			}
 		}
-		if sc > activatedSkillsThreshold || isParent {
-			results = append(results, scored{skill: s, score: sc, fromParent: isParent})
+		explicitOrder := skillMentionOffset(queryLower, strings.ToLower(s.Name))
+		if explicitOrder >= 0 {
+			explicitCount++
+		}
+		if sc > activatedSkillsThreshold || isParent || explicitOrder >= 0 {
+			results = append(results, scored{skill: s, score: sc, fromParent: isParent, explicitOrder: explicitOrder})
 		}
 	}
 
-	// 排序：分数降序；同分时父集优先；再按名称稳定排序。
+	// 点名技能按用户提及顺序优先，不能被描述词的相关性分数挤掉。
 	sort.SliceStable(results, func(i, j int) bool {
+		if (results[i].explicitOrder >= 0) != (results[j].explicitOrder >= 0) {
+			return results[i].explicitOrder >= 0
+		}
+		if results[i].explicitOrder >= 0 && results[i].explicitOrder != results[j].explicitOrder {
+			return results[i].explicitOrder < results[j].explicitOrder
+		}
 		if results[i].score != results[j].score {
 			return results[i].score > results[j].score
 		}
@@ -456,7 +470,7 @@ func (a *SkillActivator) activateForWorkspaceExcluding(workspaceRoot string, que
 		return results[i].skill.Name < results[j].skill.Name
 	})
 
-	topK := activatedSkillsTopK
+	topK := max(activatedSkillsTopK, explicitCount)
 	if topK > len(results) {
 		topK = len(results)
 	}
@@ -481,11 +495,37 @@ func (a *SkillActivator) activateForWorkspaceExcluding(workspaceRoot string, que
 		activated = append(activated, results[k].skill)
 	}
 
-	// 最终截断到上限（含元技能）。
-	if len(activated) > activatedSkillsMaxInject {
-		activated = activated[:activatedSkillsMaxInject]
+	// 自动推荐仍受稀疏预算限制；显式点名不受 Top-K 截断，但不绕过扫描启用设置。
+	limit := max(activatedSkillsMaxInject, len(meta)+explicitCount)
+	if len(activated) > limit {
+		activated = activated[:limit]
 	}
 	return activated
+}
+
+// skillMentionOffset matches a complete skill name, including /name and $name.
+// Chinese prose may directly follow a command; ASCII name suffixes must not match.
+func skillMentionOffset(queryLower, nameLower string) int {
+	if nameLower == "" {
+		return -1
+	}
+	isNameByte := func(b byte) bool {
+		return b >= 'a' && b <= 'z' || b >= '0' && b <= '9' || b == '-' || b == '_' || b == '.'
+	}
+	for start := 0; start < len(queryLower); {
+		relative := strings.Index(queryLower[start:], nameLower)
+		if relative < 0 {
+			return -1
+		}
+		index := start + relative
+		end := index + len(nameLower)
+		if (index == 0 || !isNameByte(queryLower[index-1])) &&
+			(end == len(queryLower) || !isNameByte(queryLower[end])) {
+			return index
+		}
+		start = end
+	}
+	return -1
 }
 
 // bm25Score 计算查询词项对第 docIndex 个文档的 BM25 得分。

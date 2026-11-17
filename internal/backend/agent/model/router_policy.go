@@ -99,22 +99,7 @@ func (router *Router) rankLiveChannels(
 }
 
 func (router *Router) channelOnCooldown(channel *legacyruntime.ResolvedChannel) bool {
-	if router == nil || channel == nil {
-		return false
-	}
-	key := channelHealthMapKey(channel)
-	now := time.Now()
-	router.healthMu.Lock()
-	defer router.healthMu.Unlock()
-	health, ok := router.healthByChannel[key]
-	if !ok {
-		return false
-	}
-	if !health.cooldownUntil.After(now) {
-		delete(router.healthByChannel, key)
-		return false
-	}
-	return true
+	return router.isChannelCoolingDown(channel)
 }
 
 func nextRankedChannel(

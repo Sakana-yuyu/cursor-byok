@@ -50,6 +50,11 @@ type channelHealth struct {
 	lastFailureAt time.Time
 }
 
+// 冷却到期只恢复可选性；失败历史仍需保留到遗忘窗口结束，供下一次限流退避使用。
+func (health channelHealth) expired(now time.Time) bool {
+	return !health.cooldownUntil.After(now) && now.Sub(health.lastFailureAt) >= rateLimitForgetWindow
+}
+
 type ChannelResolver interface {
 	SelectChannelForModel(context.Context, string) (*legacyruntime.ResolvedChannel, error)
 	ProviderStreamIdleTimeout(context.Context) time.Duration
@@ -433,7 +438,7 @@ func (router *Router) preferHealthyChannel(channels []*legacyruntime.ResolvedCha
 	router.healthMu.Lock()
 	defer router.healthMu.Unlock()
 	for key, health := range router.healthByChannel {
-		if !health.cooldownUntil.After(now) {
+		if health.expired(now) {
 			delete(router.healthByChannel, key)
 		}
 	}
@@ -445,7 +450,7 @@ func (router *Router) preferHealthyChannel(channels []*legacyruntime.ResolvedCha
 		}
 		key := channelHealthMapKey(channel)
 		health, cooled := router.healthByChannel[key]
-		if !cooled {
+		if !cooled || !health.cooldownUntil.After(now) {
 			return channel
 		}
 		if earliest == nil || health.cooldownUntil.Before(earliestUntil) {
@@ -454,6 +459,26 @@ func (router *Router) preferHealthyChannel(channels []*legacyruntime.ResolvedCha
 		}
 	}
 	return earliest
+}
+
+// isChannelCoolingDown 仅在冷却和失败历史均到期时回收记录。
+func (router *Router) isChannelCoolingDown(channel *legacyruntime.ResolvedChannel) bool {
+	if router == nil || channel == nil {
+		return false
+	}
+	now := time.Now()
+	key := channelHealthMapKey(channel)
+	router.healthMu.Lock()
+	defer router.healthMu.Unlock()
+	health, ok := router.healthByChannel[key]
+	if !ok {
+		return false
+	}
+	if health.expired(now) {
+		delete(router.healthByChannel, key)
+		return false
+	}
+	return health.cooldownUntil.After(now)
 }
 
 func (router *Router) channelHealthVersion(channel *legacyruntime.ResolvedChannel) uint64 {
@@ -899,9 +924,9 @@ func downgradeAnthropicBackToOpenAI(resolved *StreamRequest, channel *legacyrunt
 //  2. 已知瞬时白名单：部分中转网关（如 daoxe.com）对合法请求偶发返回
 //     400 "Invalid request for the selected model"，压过 Classify 对 400 的
 //     Blocked 处置，允许退避后重试；
-//  2.5. 已知 pre-output 瞬时哨兵：上游静默卡死（空闲看门狗超时）发生在任何内容
-//       转发给客户端之前，重发不会重复输出，属可重试瞬时失败；该错误无结构化
-//       状态码，Classify 会误落 Internal/Fatal，须显式放行。
+//     2.5. 已知 pre-output 瞬时哨兵：上游静默卡死（空闲看门狗超时）发生在任何内容
+//     转发给客户端之前，重发不会重复输出，属可重试瞬时失败；该错误无结构化
+//     状态码，Classify 会误落 Internal/Fatal，须显式放行。
 //  3. apperror.Classify 的结构化处置为权威基线：仅 DispositionRetryable 视为非永久，
 //     其余（Blocked/Fatal/Canceled/Degraded）一律视为永久。对只携带历史
 //     "status=<code>" 文本、无结构化状态码的错误，Classify 会落到 Internal/Fatal，

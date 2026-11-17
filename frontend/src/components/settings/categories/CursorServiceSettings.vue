@@ -11,7 +11,7 @@ import {
   COMPUTER_USE_MODE_OPTIONS,
   appState,
   getCursorManualPath,
-  persistUserConfig,
+  saveAutoMatchContextWindow,
   saveRoutingMode,
   saveComputerUse,
   saveExternalAPI,
@@ -393,7 +393,7 @@ async function handleContextMatchEnabledChange(enabled) {
   contextMatchState.retry = () => handleContextMatchEnabledChange(nextValue);
   try {
     await props.autosave.run("cursor-service.context-match-enabled", async () => {
-      const result = await persistUserConfig();
+      const result = await saveAutoMatchContextWindow(nextValue);
       if (!result?.ok) {
         throw new Error(result?.error || "保存失败");
       }

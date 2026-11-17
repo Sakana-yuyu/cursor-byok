@@ -13,7 +13,7 @@ jobs:
   # 所以在这里重复一遍只会多花两三分钟、拿不到新信号。lint 与 E2E 才是 build.yml
   # 没有覆盖的部分。
   frontend:
-    name: Frontend lint / e2e
+    name: Frontend unit / lint / e2e
     runs-on: ubuntu-24.04
     steps:
       - name: Check out source
@@ -38,6 +38,10 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: yarn install --frozen-lockfile
+
+      - name: Unit tests
+        working-directory: frontend
+        run: yarn test:unit
 
       - name: Lint
         working-directory: frontend

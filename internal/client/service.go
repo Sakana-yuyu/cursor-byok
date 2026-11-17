@@ -141,14 +141,19 @@ func (s *ProxyService) ClearCAIncomplete() {
 	s.mu.Unlock()
 }
 
-// reloadCAFromDiskLocked 修复并重新加载本地 CA：当 CA 材料不完整（key 缺失等）时，
-// 调用 certs.RepairAndReloadManager 备份残留 + 重新生成，并用新 Manager 更新内存状态
-// （certManager / caCertPEM / caFilePath），随后清掉 caIncomplete 标志，使代理可立即启动。
-// 调用方需持有 s.mu（或在外部串行化，避免与 StartProxy/ApplyCursorSettings 竞争）。
+// reloadCAFromDiskLocked 修复并重新加载本地 CA，同时重建停止的代理，避免继续使用旧签名器。
+// 调用方须依次持有 lifecycleMu、caFileMu、mu；运行中的代理必须先停止，且拒绝时不改磁盘。
 // 返回的 backupPath 为残留文件备份路径（空表示材料原本就完整、未重建）。
 func (s *ProxyService) reloadCAFromDiskLocked() (backupPath string, err error) {
 	if s == nil {
 		return "", errors.New("proxy service is not initialized")
+	}
+	var proxySnapshot mitm.Snapshot
+	if s.proxy != nil {
+		proxySnapshot = s.proxy.Snapshot()
+		if proxySnapshot.Running {
+			return "", errors.New("代理正在运行，请先停止服务后再修复或重载 CA")
+		}
 	}
 	certPath := appdata.CACertFilePath()
 	keyPath := appdata.CAKeyFilePath()
@@ -159,7 +164,17 @@ func (s *ProxyService) reloadCAFromDiskLocked() (backupPath string, err error) {
 	if manager == nil {
 		return backup, errors.New("CA reload returned nil manager")
 	}
+	// ProxyServer 构造时捕获 CA 和证书缓存；仅替换 certManager 不会更新它们。
+	// 先构造替代实例，成功后再一起发布，避免前端看见新 CA 而代理仍用旧 CA。
+	var replacement *mitm.ProxyServer
+	if s.proxy != nil {
+		replacement, err = mitm.NewProxyServer(proxySnapshot.ListenAddr, proxySnapshot.BaseURL, appdata.HistoryRootPath(), s.configs, manager)
+		if err != nil {
+			return backup, fmt.Errorf("rebuild proxy after CA reload: %w", err)
+		}
+	}
 	s.certManager = manager
+	s.proxy = replacement
 	newPEM := manager.CACertPEM()
 	copiedCert := make([]byte, len(newPEM))
 	copy(copiedCert, newPEM)
@@ -171,15 +186,20 @@ func (s *ProxyService) reloadCAFromDiskLocked() (backupPath string, err error) {
 }
 
 // ReloadCAFromDisk 是 reloadCAFromDiskLocked 的公开入口（供 bridge 调用）。
-// 在 s.mu 保护下执行修复+重载，并 emitState 让前端同步。
+// 与 StartProxy/StopProxy 串行；运行中拒绝修复，停止后重建代理，再 emitState 同步前端。
 // 返回 backupPath（空表示材料已完整、未重建）。
 func (s *ProxyService) ReloadCAFromDisk() (backupPath string, err error) {
 	if s == nil {
 		return "", errors.New("proxy service is not initialized")
 	}
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	// 与 ApplyCursorSettings 的文件写入保持相同顺序：caFileMu -> mu。
+	s.caFileMu.Lock()
 	s.mu.Lock()
 	backup, err := s.reloadCAFromDiskLocked()
 	s.mu.Unlock()
+	s.caFileMu.Unlock()
 	if err != nil {
 		s.setLastError(err)
 		s.emitState()

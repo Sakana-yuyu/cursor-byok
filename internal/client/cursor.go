@@ -7,13 +7,36 @@ import (
 
 	"cursor/internal/cursor"
 	"cursor/internal/logger"
+	localruntime "cursor/internal/runtime"
 )
 
-// ApplyCursorSettings 用于处理与 ApplyCursorSettings 相关的逻辑。
+// ApplyCursorSettings serializes standalone repair with start/stop and CA reload.
 func (s *ProxyService) ApplyCursorSettings() error {
-	if s == nil || s.currentProxy() == nil {
+	if s == nil {
+		return errors.New("proxy service is not initialized")
+	}
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	return s.applyCursorSettingsLocked()
+}
+
+func (s *ProxyService) applyCursorSettingsLocked() (applyErr error) {
+	if s.currentProxy() == nil {
 		return fmt.Errorf("proxy is not initialized")
 	}
+	if err := cursor.ValidateUserSettings(); err != nil {
+		return err
+	}
+	s.mu.RLock()
+	alreadyApplied := s.cursorSettingsApplied
+	s.mu.RUnlock()
+	defer func() {
+		if applyErr != nil && !alreadyApplied {
+			if err := cursor.RestoreHostSettings(); err != nil {
+				applyErr = errors.Join(applyErr, fmt.Errorf("恢复宿主设置失败: %w", err))
+			}
+		}
+	}()
 	// 证书材料读取走 s.mu 快照：CA 修复热重载（reloadCAFromDiskLocked）持 s.mu
 	// 重写这些字段，无锁读会拿到新旧混合状态（len 检查通过但读到旧 PEM）。
 	s.mu.RLock()
@@ -69,25 +92,26 @@ func (s *ProxyService) ApplyCursorSettings() error {
 	return nil
 }
 
-// ClearCursorSettings 用于处理与 ClearCursorSettings 相关的逻辑。
+// ClearCursorSettings restores only settings still owned by this application.
 func (s *ProxyService) ClearCursorSettings() error {
-	if goruntime.GOOS == "darwin" || goruntime.GOOS == "windows" || goruntime.GOOS == "linux" {
-		if err := cursor.ClearSystemNodeExtraCACerts(); err != nil {
-			return err
-		}
+	if s == nil {
+		return errors.New("proxy service is not initialized")
 	}
-	if err := cursor.ClearUserProxySettings(); err != nil {
-		return err
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	return s.clearCursorSettingsLocked()
+}
+
+func (s *ProxyService) clearCursorSettingsLocked() error {
+	hostErr := cursor.RestoreHostSettings()
+	authErr := cursor.RestoreInjectedCursorUserInfo(localruntime.InjectAuthToken)
+	if authErr != nil {
+		authErr = fmt.Errorf("restore cursor user info: %w", authErr)
 	}
-	// 恢复 Cursor 官方登录态：清除注入的模拟账号（state.vscdb cursorAuth/*）。
-	// 停止服务/退出/直连官方时必须执行，否则模拟 token 残留导致官方连接 401。
-	// 恢复失败不可静默成功——上层需据此提示用户手动处理，否则直连官方会 401。
-	if err := cursor.RestoreCursorUserInfo(); err != nil {
+	if hostErr == nil {
 		s.setCursorSettingsApplied(false)
-		return fmt.Errorf("restore cursor user info: %w", err)
 	}
-	s.setCursorSettingsApplied(false)
-	return nil
+	return errors.Join(hostErr, authErr)
 }
 
 // GetDeviceID 用于处理与 GetDeviceID 相关的逻辑。

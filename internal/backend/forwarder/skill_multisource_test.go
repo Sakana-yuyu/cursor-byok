@@ -1,11 +1,15 @@
 package forwarder
 
 import (
+	"encoding/xml"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
+
+	promptengine "cursor/internal/backend/agent/prompt"
 )
 
 // setHomeForTest 让 os.UserHomeDir 指向临时目录（Windows 读 USERPROFILE，Unix 读 HOME）。
@@ -318,5 +322,244 @@ func TestParseMCPJSONRegression(t *testing.T) {
 	}
 	if _, ok := servers["filesystem"]; !ok {
 		t.Errorf("servers missing key filesystem, got %v", servers)
+	}
+}
+
+func TestSkillMentionOffsetBoundaries(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		query string
+		skill string
+		want  int
+	}{
+		{"bare", "spec-design", "spec-design", 0},
+		{"slash Chinese suffix", "/spec-design中文", "spec-design", 1},
+		{"dollar", "$spec-design", "spec-design", 1},
+		{"Chinese adjacent", "请用spec-design中文", "spec-design", len("请用")},
+		{"caller lowercases", "/SPEC-DESIGN中文", "Spec-Design", 1},
+		{"ASCII prefix", "prefixspec-design", "spec-design", -1},
+		{"ASCII suffix", "spec-designer", "spec-design", -1},
+		{"hyphen prefix", "my-spec-design", "spec-design", -1},
+		{"hyphen suffix", "spec-design-extra", "spec-design", -1},
+		{"underscore prefix", "my_spec-design", "spec-design", -1},
+		{"underscore suffix", "spec-design_extra", "spec-design", -1},
+		{"dot prefix", "my.spec-design", "spec-design", -1},
+		{"dot suffix", "spec-design.md", "spec-design", -1},
+		{"digit prefix", "1spec-design", "spec-design", -1},
+		{"digit suffix", "spec-design2", "spec-design", -1},
+		{"skip invalid first match", "spec-designer /spec-design", "spec-design", len("spec-designer /")},
+		{"first valid match", "$spec-design /spec-design", "spec-design", 1},
+		{"empty name", "/spec-design", "", -1},
+		{"empty query", "", "spec-design", -1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := skillMentionOffset(strings.ToLower(tc.query), strings.ToLower(tc.skill)); got != tc.want {
+				t.Fatalf("skillMentionOffset(%q, %q) = %d, want %d", tc.query, tc.skill, got, tc.want)
+			}
+		})
+	}
+}
+
+// All scan roots and legacy data are temporary; never inspect the real user HOME.
+func newExplicitSkillTestStore(t *testing.T) (*SkillStore, map[string]bool, string) {
+	t.Helper()
+	home := t.TempDir()
+	setHomeForTest(t, home)
+	root := filepath.Join(home, ".claude", "skills")
+	enabled := make(map[string]bool)
+	for _, name := range []string{"spec-design", "review-notes", "release-guide", "trace-check", "build-plan", "find-skills"} {
+		writeScannerTestSkill(t, root, name, `quartz & <notes> "quoted"`)
+		enabled[name] = true
+	}
+	for _, name := range []string{"noise-alpha", "noise-beta", "noise-gamma", "noise-delta"} {
+		writeScannerTestSkill(t, root, name, "spec design compiler regression concurrency database browser networking latency profiling memory storage serialization migration deployment")
+		enabled[name] = true
+	}
+	InvalidateSkillScanCache()
+	t.Cleanup(InvalidateSkillScanCache)
+	store := NewSkillStore(t.TempDir())
+	store.SetScanSettings(true, map[string]bool{string(SkillSourceClaude): true}, enabled)
+	return store, enabled, filepath.Join(root, "spec-design", "SKILL.md")
+}
+
+func activatedTestSkillNames(skills []GlobalSkill) []string {
+	names := make([]string, 0, len(skills))
+	for _, skill := range skills {
+		names = append(names, skill.Name)
+	}
+	return names
+}
+
+func TestExplicitSkillMentionOutranksHigherScores(t *testing.T) {
+	store, _, _ := newExplicitSkillTestStore(t)
+	query := "compiler regression concurrency database browser networking latency profiling memory storage serialization migration deployment /SPEC-DESIGN中文"
+	skills, err := store.ScanForWorkspace("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	idx := store.activator.ensureIndex(skills)
+	terms := tokenize(query)
+	targetScore := bm25Score(idx, idx.nameToDoc["spec-design"], terms)
+	for _, name := range []string{"noise-alpha", "noise-beta", "noise-gamma", "noise-delta"} {
+		if score := bm25Score(idx, idx.nameToDoc[name], terms); score <= targetScore {
+			t.Fatalf("fixture %s score %g must exceed spec-design score %g", name, score, targetScore)
+		}
+	}
+	got := activatedTestSkillNames(store.activator.Activate(query, nil))
+	if len(got) != 1+activatedSkillsTopK || got[0] != "find-skills" || got[1] != "spec-design" {
+		t.Fatalf("activation = %v, want meta then explicit skill ahead of higher-score candidates within normal budget", got)
+	}
+}
+
+func TestExplicitSkillMentionsExceedTopKAndCompileStably(t *testing.T) {
+	store, enabled, _ := newExplicitSkillTestStore(t)
+	query := "/TRACE-CHECK中文 $spec-design /release-guide /build-plan $review-notes /trace-check compiler regression"
+	want := []string{"find-skills", "trace-check", "spec-design", "release-guide", "build-plan", "review-notes"}
+	var firstPrompt string
+	for attempt := 0; attempt < 5; attempt++ {
+		// Rebuild both scanner and activator state, as well as compiling repeatedly.
+		InvalidateSkillScanCache()
+		rebuilt := NewSkillStore(store.root)
+		rebuilt.SetScanSettings(true, map[string]bool{string(SkillSourceClaude): true}, enabled)
+		got := activatedTestSkillNames(rebuilt.activator.Activate(query, nil))
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("attempt %d activation = %v, want %v (all explicit skills, in mention order)", attempt, got, want)
+		}
+		for compile := 0; compile < 2; compile++ {
+			prompt, count, err := rebuilt.BuildActivatedSkillsPromptSection(query, nil)
+			if err != nil || count != len(want) {
+				t.Fatalf("attempt %d compile %d: count=%d err=%v, want %d", attempt, compile, count, err, len(want))
+			}
+			if attempt == 0 && compile == 0 {
+				firstPrompt = prompt
+			} else if prompt != firstPrompt {
+				t.Fatalf("attempt %d compile %d changed prompt", attempt, compile)
+			}
+		}
+	}
+}
+
+func TestExplicitSkillMentionRespectsScanSettingsAndExclusions(t *testing.T) {
+	store, enabled, targetPath := newExplicitSkillTestStore(t)
+	for _, fallback := range []bool{false, true} {
+		mode := "activated"
+		if fallback {
+			mode = "full-list fallback"
+		}
+		t.Run(mode, func(t *testing.T) {
+			for _, tc := range []struct {
+				name      string
+				scan      bool
+				sources   map[string]bool
+				disabled  bool
+				excluded  bool
+				wantSkill bool
+				wantEmpty bool
+			}{
+				{name: "enabled baseline", scan: true, wantSkill: true},
+				{name: "skill disabled", scan: true, disabled: true},
+				{name: "source disabled", scan: true, sources: map[string]bool{string(SkillSourceClaude): false}, wantEmpty: true},
+				{name: "scan disabled", scan: false, wantEmpty: true},
+				{name: "client path excluded", scan: true, excluded: true},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					candidate := NewSkillStore(store.root)
+					if fallback {
+						candidate.activator = nil
+					}
+					settings := cloneSkillSettingMap(enabled)
+					settings["spec-design"] = !tc.disabled
+					candidate.SetScanSettings(tc.scan, tc.sources, settings)
+					var excluded map[string]struct{}
+					if tc.excluded {
+						excluded = map[string]struct{}{skillPathKey(targetPath): {}}
+					}
+					prompt, count, err := candidate.buildActivatedSkillsPromptSectionForWorkspaceExcluding("", "/spec-design中文 $spec-design compiler regression", nil, excluded)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if got := strings.Contains(prompt, targetPath); got != tc.wantSkill {
+						t.Fatalf("target present=%v, want %v; count=%d prompt=%s", got, tc.wantSkill, count, prompt)
+					}
+					if tc.wantEmpty && (prompt != "" || count != 0) {
+						t.Fatalf("disabled scan/source returned count=%d prompt=%s", count, prompt)
+					}
+					if !tc.wantEmpty && count == 0 {
+						t.Fatal("fixture must retain other enabled skills")
+					}
+					if tc.wantSkill && strings.Count(prompt, targetPath) != 1 {
+						t.Fatal("repeated explicit mentions duplicated the skill")
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestScannedSkillPromptUsesSharedInstructionsAndCatalog(t *testing.T) {
+	store, _, _ := newExplicitSkillTestStore(t)
+	skills, err := store.ScanForWorkspace("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	prompt, count, err := store.BuildAgentSkillsPromptSectionForWorkspace("")
+	if err != nil || count != len(skills) || count == 0 {
+		t.Fatalf("scanned prompt count=%d skills=%d err=%v", count, len(skills), err)
+	}
+	want, _ := buildAgentSkillsSectionFromList(skills)
+	if prompt != want {
+		t.Fatal("workspace scan did not reuse the shared list renderer")
+	}
+	assertTestSkillCatalog(t, prompt, skills)
+}
+
+func TestSkillPromptCatalogEscapesXML(t *testing.T) {
+	skills := []GlobalSkill{
+		{Name: "xml", FullPath: `/tmp/a&b/<skill>"'/SKILL.md`, Description: `Use <notes> & "quotes" and 'apostrophes'.`},
+		{Name: `fallback<&>"'`, FullPath: "/tmp/fallback/SKILL.md", Description: "  "},
+	}
+	prompt, count := buildAgentSkillsSectionFromList(skills)
+	if count != len(skills) {
+		t.Fatalf("count=%d, want %d", count, len(skills))
+	}
+	assertTestSkillCatalog(t, prompt, skills)
+	if prompt, count := buildAgentSkillsSectionFromList(nil); prompt != "" || count != 0 {
+		t.Fatalf("empty list produced count=%d prompt=%q", count, prompt)
+	}
+}
+
+func assertTestSkillCatalog(t *testing.T, prompt string, skills []GlobalSkill) {
+	t.Helper()
+	prefix := "<agent_skills>\n" + promptengine.SkillUsageInstructions + "\n"
+	if !strings.HasPrefix(prompt, prefix) || !strings.HasSuffix(prompt, "\n</available_skills>\n</agent_skills>") {
+		t.Fatalf("missing shared instructions or nested catalog structure: %s", prompt)
+	}
+	if strings.Count(prompt, promptengine.SkillUsageInstructions) != 1 || strings.Contains(prompt, "Only use skills listed below") {
+		t.Fatal("instructions duplicated or obsolete exclusive allowlist retained")
+	}
+	// The prose intentionally mentions literal XML tag names; decode only the actual catalog.
+	catalogXML := strings.TrimSuffix(strings.TrimPrefix(prompt, prefix), "\n</agent_skills>")
+	var catalog struct {
+		XMLName     xml.Name `xml:"available_skills"`
+		Description string   `xml:"description,attr"`
+		Skills      []struct {
+			FullPath    string `xml:"fullPath,attr"`
+			Description string `xml:",chardata"`
+		} `xml:"agent_skill"`
+	}
+	if err := xml.Unmarshal([]byte(catalogXML), &catalog); err != nil {
+		t.Fatalf("catalog XML is not escaped correctly: %v\n%s", err, catalogXML)
+	}
+	if catalog.Description == "" || len(catalog.Skills) != len(skills) {
+		t.Fatalf("catalog description=%q entries=%d, want %d", catalog.Description, len(catalog.Skills), len(skills))
+	}
+	for i, skill := range skills {
+		description := strings.TrimSpace(skill.Description)
+		if description == "" {
+			description = skill.Name
+		}
+		if catalog.Skills[i].FullPath != skill.FullPath || catalog.Skills[i].Description != description {
+			t.Fatalf("catalog entry %d = %+v, want path=%q description=%q", i, catalog.Skills[i], skill.FullPath, description)
+		}
 	}
 }

@@ -22,6 +22,8 @@ import (
 	"sync"
 	"unicode"
 
+	promptengine "cursor/internal/backend/agent/prompt"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -252,20 +254,8 @@ func (s *SkillStore) BuildAgentSkillsPromptSectionForWorkspace(workspaceRoot str
 	if len(skills) == 0 {
 		return "", 0, nil
 	}
-	lines := make([]string, 0, len(skills)+2)
-	lines = append(lines, `<agent_skills>`)
-	for _, sk := range skills {
-		desc := strings.TrimSpace(sk.Description)
-		if desc == "" {
-			desc = sk.Name
-		}
-		lines = append(lines,
-			fmt.Sprintf(`<agent_skill fullPath="%s">%s</agent_skill>`,
-				escapeSharedRulePromptText(sk.FullPath), escapeSharedRulePromptText(desc)),
-		)
-	}
-	lines = append(lines, `</agent_skills>`)
-	return strings.Join(lines, "\n"), len(skills), nil
+	prompt, count := buildAgentSkillsSectionFromList(skills)
+	return prompt, count, nil
 }
 
 // BuildActivatedSkillsPromptSection 按「调用链稀疏激活」选取技能并构建 <agent_skills> 片段。
@@ -355,11 +345,11 @@ func buildAgentSkillsSectionFromList(skills []GlobalSkill) (string, int) {
 	if len(skills) == 0 {
 		return "", 0
 	}
-	lines := make([]string, 0, len(skills)+3)
-	// 静默约束：明确告诉模型按需读用、无需在回复中声明，避免模型反复念叨技能。
+	lines := make([]string, 0, len(skills)+5)
 	lines = append(lines,
 		`<agent_skills>`,
-		`以下技能按需静默使用：相关时用 Read 工具读取其文件并遵循其中的指引，作为正常工作流的一部分执行。除非用户明确询问，否则不要在回复中声明、列举或解释你正在使用哪个技能。`)
+		promptengine.SkillUsageInstructions,
+		`<available_skills description="Additional enabled skills discovered in configured skill directories.">`)
 	for _, sk := range skills {
 		desc := strings.TrimSpace(sk.Description)
 		if desc == "" {
@@ -370,7 +360,7 @@ func buildAgentSkillsSectionFromList(skills []GlobalSkill) (string, int) {
 				escapeSharedRulePromptText(sk.FullPath), escapeSharedRulePromptText(desc)),
 		)
 	}
-	lines = append(lines, `</agent_skills>`)
+	lines = append(lines, `</available_skills>`, `</agent_skills>`)
 	return strings.Join(lines, "\n"), len(skills)
 }
 

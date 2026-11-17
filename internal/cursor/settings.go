@@ -9,14 +9,12 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 
 	"cursor/internal/appdata"
 	"cursor/internal/logger"
-	"cursor/internal/processutil"
 	"cursor/internal/terminalenv"
 )
 
@@ -57,140 +55,12 @@ func EnsureCACertFile(certPEM []byte, currentPath string) (string, error) {
 	return certPath, nil
 }
 
-// SetSystemNodeExtraCACerts 用于处理与 SetSystemNodeExtraCACerts 相关的逻辑。
-func SetSystemNodeExtraCACerts(caCertPath string) error {
-	caCertPath = strings.TrimSpace(caCertPath)
-	if caCertPath == "" {
-		return errors.New("CA 证书路径为空")
-	}
-	if err := os.Setenv("NODE_EXTRA_CA_CERTS", caCertPath); err != nil {
-		return fmt.Errorf("设置进程环境变量失败: %w", err)
-	}
-
-	switch runtime.GOOS {
-	case "darwin":
-		out, err := exec.Command("launchctl", "setenv", "NODE_EXTRA_CA_CERTS", caCertPath).CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("写入 macOS 用户环境变量失败: %w: %s", err, strings.TrimSpace(string(out)))
-		}
-	case "linux":
-		// Linux 发行版环境变量持久化方式差异较大，这里先确保当前进程生效。
-		logger.Infof("setSystemNodeExtraCACerts: linux detected, applied to current process only")
-	case "windows":
-		// setx 只影响「此后新启动」的进程（例如重启后的 Cursor），
-		// 不会改变已运行进程的环境，因此当前进程靠上面的 os.Setenv 生效。
-		// setx 会把变量写入用户环境变量（HKCU\Environment），最长 1024 字符。
-		cmd := exec.Command("setx", nodeExtraCACertsEnvName, caCertPath)
-		processutil.HideWindow(cmd)
-		cmd.Stderr = nil
-		if out, err := cmd.Output(); err != nil {
-			return fmt.Errorf("写入 Windows 用户环境变量失败: %w: %s", err, strings.TrimSpace(string(out)))
-		}
-		logger.Infof("setSystemNodeExtraCACerts: windows user env persisted via setx, restart Cursor to take effect")
-	default:
-		return fmt.Errorf("不支持的系统: %s", runtime.GOOS)
-	}
-
-	logger.Infof("setSystemNodeExtraCACerts: NODE_EXTRA_CA_CERTS=%s", caCertPath)
-	return nil
-}
-
 // nodeExtraCACertsEnvName 是 Node.js 读取额外受信任 CA 的环境变量名。
 const nodeExtraCACertsEnvName = "NODE_EXTRA_CA_CERTS"
 
-// ClearSystemNodeExtraCACerts 用于处理与 ClearSystemNodeExtraCACerts 相关的逻辑。
-func ClearSystemNodeExtraCACerts() error {
-	if err := os.Unsetenv(nodeExtraCACertsEnvName); err != nil {
-		return fmt.Errorf("清理进程环境变量失败: %w", err)
-	}
-
-	switch runtime.GOOS {
-	case "darwin":
-		out, err := exec.Command("launchctl", "unsetenv", nodeExtraCACertsEnvName).CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("清理 macOS 用户环境变量失败: %w: %s", err, strings.TrimSpace(string(out)))
-		}
-	case "linux":
-		logger.Infof("clearSystemNodeExtraCACerts: linux detected, cleared in current process only")
-	case "windows":
-		// 删除用户环境变量（HKCU\Environment）。即使不存在也按成功处理。
-		cmd := exec.Command("reg", "delete", `HKCU\Environment`, "/v", nodeExtraCACertsEnvName, "/f")
-		processutil.HideWindow(cmd)
-		cmd.Stderr = nil
-		if out, err := cmd.Output(); err != nil {
-			// 注册表项不存在属于正常情况，不当作错误。
-			logger.Infof("clearSystemNodeExtraCACerts: reg delete returned err (likely absent): %v: %s", err, strings.TrimSpace(string(out)))
-		}
-		logger.Infof("clearSystemNodeExtraCACerts: windows user env removed, restart Cursor to take effect")
-	default:
-		return fmt.Errorf("不支持的系统: %s", runtime.GOOS)
-	}
-
-	logger.Infof("clearSystemNodeExtraCACerts: NODE_EXTRA_CA_CERTS cleared")
-	return nil
-}
-
-// WriteUserProxySettings 用于处理与 WriteUserProxySettings 相关的逻辑。
+// WriteUserProxySettings 在持久化原值后接管代理设置。
 func WriteUserProxySettings(proxyURL string) error {
-	proxyURL = strings.TrimSpace(proxyURL)
-	if proxyURL == "" {
-		return errors.New("代理地址为空")
-	}
-
-	settingsPath, err := resolveCursorSettingsPath()
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
-		return fmt.Errorf("创建 Cursor 配置目录失败: %w", err)
-	}
-
-	settings := make(map[string]any)
-	data, err := os.ReadFile(settingsPath)
-	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("读取 Cursor 配置失败: %w", err)
-		}
-	} else if len(bytes.TrimSpace(data)) > 0 {
-		parsed, err := decodeCursorSettingsJSONC(data)
-		if err != nil {
-			if removeErr := os.Remove(settingsPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
-				return fmt.Errorf("解析 Cursor 配置失败，且删除损坏配置失败: %w", removeErr)
-			}
-			logger.Infof("writeCursorUserProxySettings: removed invalid settings path=%s err=%v", settingsPath, err)
-			data = nil
-		} else {
-			settings = parsed
-		}
-	}
-
-	settings["http.proxy"] = proxyURL
-	settings["http.proxyKerberosServicePrincipal"] = proxyURL
-	settings["http.proxySupport"] = "on"
-	settings["cursor.general.disableHttp2"] = true
-	settings["http.experimental.systemCertificatesV2"] = true
-
-	encoded, err := json.MarshalIndent(settings, "", "  ")
-	if err != nil {
-		return fmt.Errorf("序列化 Cursor 配置失败: %w", err)
-	}
-	encoded = append(encoded, '\n')
-
-	if len(bytes.TrimSpace(data)) > 0 && bytes.Equal(data, encoded) {
-		logger.Infof("writeCursorUserProxySettings: unchanged path=%s proxy=%s", settingsPath, proxyURL)
-		return nil
-	}
-
-	tempPath := settingsPath + ".tmp"
-	if err := os.WriteFile(tempPath, encoded, 0o644); err != nil {
-		return fmt.Errorf("写入 Cursor 配置临时文件失败: %w", err)
-	}
-	if err := os.Rename(tempPath, settingsPath); err != nil {
-		return fmt.Errorf("保存 Cursor 配置失败: %w", err)
-	}
-
-	logger.Infof("writeCursorUserProxySettings: path=%s proxy=%s", settingsPath, proxyURL)
-	return nil
+	return writeOwnedProxySettings(proxyURL)
 }
 
 // EnsureTerminalEnvironmentSettings writes a dedicated Cursor terminal profile
@@ -294,58 +164,9 @@ func writeCursorSettings(settingsPath string, settings map[string]any) error {
 	return nil
 }
 
-// ClearUserProxySettings 用于处理与 ClearUserProxySettings 相关的逻辑。
+// ClearUserProxySettings 仅恢复快照中仍由本应用持有的代理设置。
 func ClearUserProxySettings() error {
-	settingsPath, err := resolveCursorSettingsPath()
-	if err != nil {
-		return err
-	}
-
-	data, err := os.ReadFile(settingsPath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return fmt.Errorf("读取 Cursor 配置失败: %w", err)
-	}
-	if len(bytes.TrimSpace(data)) == 0 {
-		return nil
-	}
-
-	settings := make(map[string]any)
-	parsed, err := decodeCursorSettingsJSONC(data)
-	if err != nil {
-		return fmt.Errorf("解析 Cursor 配置失败: %w", err)
-	}
-	settings = parsed
-
-	changed := false
-	for _, key := range injectedCursorSettingsKeys {
-		if _, exists := settings[key]; exists {
-			delete(settings, key)
-			changed = true
-		}
-	}
-	if !changed {
-		return nil
-	}
-
-	encoded, err := json.MarshalIndent(settings, "", "  ")
-	if err != nil {
-		return fmt.Errorf("序列化 Cursor 配置失败: %w", err)
-	}
-	encoded = append(encoded, '\n')
-
-	tempPath := settingsPath + ".tmp"
-	if err := os.WriteFile(tempPath, encoded, 0o644); err != nil {
-		return fmt.Errorf("写入 Cursor 配置临时文件失败: %w", err)
-	}
-	if err := os.Rename(tempPath, settingsPath); err != nil {
-		return fmt.Errorf("保存 Cursor 配置失败: %w", err)
-	}
-
-	logger.Infof("clearCursorUserProxySettings: path=%s", settingsPath)
-	return nil
+	return restoreOwnedProxySettings()
 }
 
 // VerifyUserProxySettings 读取 Cursor settings.json，校验 http.proxy 是否已正确注入。
@@ -415,6 +236,9 @@ func decodeCursorSettingsJSONC(data []byte) (map[string]any, error) {
 	}
 	if err := json.Unmarshal(normalized, &result); err != nil {
 		return nil, err
+	}
+	if result == nil {
+		return nil, errors.New("Cursor 配置顶层必须是 JSON 对象，不能为 null")
 	}
 	return result, nil
 }

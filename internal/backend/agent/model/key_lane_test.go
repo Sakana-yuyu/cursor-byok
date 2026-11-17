@@ -186,6 +186,80 @@ func TestKeyLanesDistinctKeysIndependent(t *testing.T) {
 	second()
 }
 
+func TestKeyLanesRaisedLimitGrantsQueuedBeforeNewcomer(t *testing.T) {
+	first := make(chan struct{}, 1)
+	second := make(chan struct{}, 1)
+	lanes := &keyLanes{lanes: map[string]*keyLane{
+		"key-a": {limit: 1, busy: 1, queue: []chan struct{}{first, second}},
+	}}
+	// All additional capacity belongs to existing waiters, not this newcomer.
+	release, err := lanes.acquire(context.Background(), "key-a", 3, time.Millisecond)
+	if release != nil {
+		release()
+	}
+	if !errors.Is(err, ErrKeyLaneBusy) {
+		t.Fatalf("newcomer bypassed queued waiters: %v", err)
+	}
+	for i, notified := range []chan struct{}{first, second} {
+		select {
+		case <-notified:
+		default:
+			t.Fatalf("waiter %d did not receive raised capacity", i)
+		}
+	}
+	for i := 0; i < 3; i++ {
+		lanes.release("key-a")
+	}
+	if len(lanes.lanes) != 0 {
+		t.Fatal("lane leaked after all holders released")
+	}
+}
+
+func TestKeyLanesLoweredLimitWaitsForExistingHolders(t *testing.T) {
+	notified := make(chan struct{}, 1)
+	lanes := &keyLanes{lanes: map[string]*keyLane{
+		"key-a": {limit: 3, busy: 3, queue: []chan struct{}{notified}},
+	}}
+	_, err := lanes.acquire(context.Background(), "key-a", 1, time.Millisecond)
+	if !errors.Is(err, ErrKeyLaneBusy) {
+		t.Fatalf("newcomer exceeded lowered limit: %v", err)
+	}
+	for i := 0; i < 2; i++ {
+		lanes.release("key-a")
+		select {
+		case <-notified:
+			t.Fatalf("waiter granted while %d existing holders still occupy the lane", 2-i)
+		default:
+		}
+	}
+	lanes.release("key-a")
+	select {
+	case <-notified:
+	default:
+		t.Fatal("waiter not granted after capacity became available")
+	}
+	lanes.release("key-a")
+	if len(lanes.lanes) != 0 {
+		t.Fatal("lane leaked after all holders released")
+	}
+}
+
+func TestKeyLanesCancelledContextDoesNotTakeFreeSlot(t *testing.T) {
+	lanes := &keyLanes{}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	release, err := lanes.acquire(ctx, "key-a", 1, time.Second)
+	if release != nil {
+		release()
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled acquire = %v, want context.Canceled", err)
+	}
+	if len(lanes.lanes) != 0 {
+		t.Fatal("cancelled request created lane state")
+	}
+}
+
 func TestKeyLanesLimitHotReloadTakesNewestConfig(t *testing.T) {
 	lanes := &keyLanes{}
 	release, err := lanes.acquire(context.Background(), "key-a", 1, time.Second)

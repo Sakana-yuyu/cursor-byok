@@ -146,6 +146,7 @@ import {
   dismissDefenderExclusion,
 } from "@/services/clientApi";
 import { getHistoryDebugUsage } from "@/services/runtimeControlApi";
+import { createConfigWriter } from "@/services/configWriter";
 import { createServiceViewState } from "@/state/serviceViewState";
 import { createUpdateViewState } from "@/state/updateViewState";
 const APP_STATE_STORAGE_KEY = "cursor-client:runtime-state:v2";
@@ -301,68 +302,25 @@ async function loadPersistedUserConfig() {
   return normalizeConfig(await loadUserConfig());
 }
 
-let configPersistTail = Promise.resolve();
+const configWriter = createConfigWriter({
+  load: loadPersistedUserConfig,
+  save: saveUserConfig,
+  prepare(config) {
+    const normalized = normalizeConfig(config);
+    const preValidationError = validateModelAdapters(normalized.modelAdapters);
+    if (preValidationError) return { error: preValidationError };
+    const payload = buildConfigPayload(normalized);
+    return {
+      payload,
+      error: validateConfigPayload(payload) || validateModelAdapters(payload.modelAdapters),
+    };
+  },
+  apply: applyConfigToState,
+  setSaving(value) { appState.configSaving = value; },
+  toError: toUserError,
+});
 
-async function persistConfigPayload(config, options = {}) {
-  const pendingSave = configPersistTail.catch(() => {}).then(() => (
-    persistConfigPayloadNow(config, options)
-  ));
-  configPersistTail = pendingSave.catch(() => {});
-  return pendingSave;
-}
-
-async function persistConfigPayloadNow(config, { modelAdaptersOnly = false } = {}) {
-  const latestConfig = await loadPersistedUserConfig();
-  const requestedConfig = normalizeConfig(config);
-  const mergedConfig = {
-    ...latestConfig,
-    ...requestedConfig,
-    modelAdapters: modelAdaptersOnly
-      ? requestedConfig.modelAdapters
-      : normalizeModelAdapters(appState.modelAdapters),
-    delegation: modelAdaptersOnly
-      ? latestConfig.delegation
-      : normalizeDelegation(appState.delegation),
-  };
-  const normalizedForValidation = normalizeConfig(mergedConfig);
-  const prePayloadValidationError = validateModelAdapters(normalizedForValidation.modelAdapters);
-  if (prePayloadValidationError) {
-    return { ok: false, error: prePayloadValidationError };
-  }
-  const payload = buildConfigPayload(normalizedForValidation);
-  const configValidationError = validateConfigPayload(payload);
-  if (configValidationError) {
-    return {
-      ok: false,
-      error: configValidationError,
-    };
-  }
-  const validationError = validateModelAdapters(payload.modelAdapters);
-  if (validationError) {
-    return {
-      ok: false,
-      error: validationError,
-    };
-  }
-
-  appState.configSaving = true;
-  try {
-    await saveUserConfig(payload);
-    const persisted = await loadPersistedUserConfig();
-    applyConfigToState(persisted, { modelAdaptersOnly });
-    return {
-      ok: true,
-      error: "",
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      error: toUserError(error),
-    };
-  } finally {
-    appState.configSaving = false;
-  }
-}
+const persistConfigPatch = configWriter.patch;
 
 function applyProxyState(raw) {
   const state = raw && typeof raw === "object" ? raw : {};
@@ -788,31 +746,18 @@ export function startModelAdapterTest(adapter) {
   });
 }
 
-// 把「测试失败 → 停用 / 成功 → 恢复」落到配置。目标状态已达成时跳过保存。
-// 排队进 configPersistTail 执行，保证读-改-写原子性。
+// 模型状态更新与普通设置共用队列，在执行槽内读取并修改最新模型列表。
 export function setModelAdapterDisabledFlag(adapterID, disabled) {
-  const pending = configPersistTail.catch(() => {}).then(async () => {
-    const currentConfig = await loadPersistedUserConfig();
+  return configWriter.transaction(async ({ config, persist }) => {
     let changed = false;
-    const adapters = (currentConfig.modelAdapters || []).map((item) => {
-      if (item.id !== adapterID) return item;
-      if (Boolean(item.disabled) === disabled) return item;
+    const adapters = config.modelAdapters.map((item) => {
+      if (item.id !== adapterID || Boolean(item.disabled) === disabled) return item;
       changed = true;
       return normalizeModelAdapter({ ...item, disabled });
     });
-    if (!changed) {
-      return { ok: true, error: "" };
-    }
-    appState.modelAdapters = adapters;
-    // 已占用队列槽位：必须直接调 Now 版本。若再走 persistConfigPayload 会排到
-    // configPersistTail（即本 pending）之后，形成自等待，之后所有配置保存永久挂起。
-    return persistConfigPayloadNow({
-      ...currentConfig,
-      modelAdapters: adapters,
-    }, { modelAdaptersOnly: true });
+    if (!changed) return { ok: true, error: "" };
+    return persist({ modelAdapters: adapters }, { modelAdaptersOnly: true });
   });
-  configPersistTail = pending.catch(() => {});
-  return pending;
 }
 
 export async function runModelAdapterTest(adapter) {
@@ -820,91 +765,41 @@ export async function runModelAdapterTest(adapter) {
 }
 
 export async function setAutoDisableFailedModels(enabled) {
-  const currentConfig = await loadPersistedUserConfig();
-  const nextValue = Boolean(enabled);
-  if (currentConfig.autoDisableFailedModels === nextValue) {
-    appState.autoDisableFailedModels = nextValue;
-    return { ok: true, error: "" };
-  }
-  appState.autoDisableFailedModels = nextValue;
-  return persistConfigPayload({
-    ...currentConfig,
-    autoDisableFailedModels: nextValue,
-  });
+  return persistConfigPatch({ autoDisableFailedModels: Boolean(enabled) });
 }
 
 export async function persistUserConfig() {
-  const currentConfig = await loadPersistedUserConfig();
-  return persistConfigPayload({
-    ...currentConfig,
+  // 此入口显式保存当前编辑中的配置域；其他设置入口只提交自身字段。
+  return persistConfigPatch(() => ({
     modelAdapters: normalizeModelAdapters(appState.modelAdapters),
-    routing: {
-      mode: appState.routingMode,
-    },
+    routing: { mode: appState.routingMode },
     autoMatchContextWindow: appState.autoMatchContextWindow,
-    homeMetrics: {
-      ...currentConfig.homeMetrics,
-      includeCacheWriteInHitRate: appState.includeCacheWriteInHitRate,
-    },
-    delegation: appState.delegation,
-  });
+    homeMetrics: { includeCacheWriteInHitRate: appState.includeCacheWriteInHitRate },
+    delegation: normalizeDelegation(appState.delegation),
+  }));
 }
 
 export async function saveIncludeCacheWriteInHitRate(value) {
-  const currentConfig = await loadPersistedUserConfig();
   const previousValue = appState.includeCacheWriteInHitRate;
   const nextValue = asBoolean(value);
   appState.includeCacheWriteInHitRate = nextValue;
-  const result = await persistConfigPayload({
-    ...currentConfig,
-    homeMetrics: {
-      ...currentConfig.homeMetrics,
-      includeCacheWriteInHitRate: nextValue,
-    },
+  const result = await persistConfigPatch({
+    homeMetrics: { includeCacheWriteInHitRate: nextValue },
   });
-  if (!result.ok) {
-    appState.includeCacheWriteInHitRate = previousValue;
-  }
+  if (!result.ok) appState.includeCacheWriteInHitRate = previousValue;
   return result;
 }
 
 export async function saveLocalResponseCacheEnabled(enabled) {
-  const currentConfig = await loadPersistedUserConfig();
-  const nextValue = asBoolean(enabled);
-  const previous = appState.localResponseCache;
-  appState.localResponseCache = { ...previous, enabled: nextValue };
-  const result = await persistConfigPayload({
-    ...currentConfig,
-    localResponseCache: {
-      ...currentConfig.localResponseCache,
-      enabled: nextValue,
-    },
-  });
-  if (!result.ok) {
-    appState.localResponseCache = previous;
-  }
-  return result;
+  return saveLocalResponseCacheSettings({ enabled: asBoolean(enabled) });
 }
 
 export async function saveLocalResponseCacheSettings(partial) {
-  const currentConfig = await loadPersistedUserConfig();
+  const patch = partial && typeof partial === "object" ? { ...partial } : {};
   const previous = appState.localResponseCache;
-  const nextCache = normalizeLocalResponseCache({
-    ...currentConfig.localResponseCache,
-    ...previous,
-    ...(partial && typeof partial === "object" ? partial : {}),
-  });
-  appState.localResponseCache = nextCache;
-  const result = await persistConfigPayload({
-    ...currentConfig,
-    localResponseCache: {
-      ...currentConfig.localResponseCache,
-      ...nextCache,
-    },
-  });
-  if (!result.ok) {
-    appState.localResponseCache = previous;
-  }
+  appState.localResponseCache = normalizeLocalResponseCache({ ...previous, ...patch });
+  const result = await persistConfigPatch({ localResponseCache: patch });
+  if (!result.ok) appState.localResponseCache = previous;
   return result;
 }
 
@@ -1077,194 +972,146 @@ export async function openRequestMetricsWindow() {
   await openRequestMetrics();
 }
 
-export async function saveRoutingMode(mode) {
-  const currentConfig = await loadPersistedUserConfig();
-  return persistConfigPayload({
-    ...currentConfig,
-    routing: {
-      ...(currentConfig.routing ?? {}),
-      mode: normalizeRouteMode(mode),
-    },
-  });
+export async function saveAutoMatchContextWindow(enabled) {
+  return persistConfigPatch({ autoMatchContextWindow: asBoolean(enabled) });
 }
 
-// saveComputerUse 增量保存 ComputerUse 执行模式配置（合并当前配置，失败回滚）。
+export async function saveRoutingMode(mode) {
+  return persistConfigPatch({ routing: { mode: normalizeRouteMode(mode) } });
+}
+
 export async function saveComputerUse(partial) {
-  const currentConfig = await loadPersistedUserConfig();
-  return persistConfigPayload({
-    ...currentConfig,
-    computerUse: {
-      ...(currentConfig.computerUse ?? {}),
-      ...partial,
-    },
-  });
+  return persistConfigPatch({ computerUse: { ...partial } });
 }
 
 export async function saveDebugLogEnabled(enabled) {
-  const currentConfig = await loadPersistedUserConfig();
-  return persistConfigPayload({
-    ...currentConfig,
-    log: !!enabled,
-  });
+  return persistConfigPatch({ log: !!enabled });
 }
 
-// saveBillingQueryEnabled 增量保存计费查询全局开关（失败回滚由调用方按需处理，
-// 与 saveIncludeCacheWriteInHitRate 一致在保存前乐观更新）。
 export async function saveBillingQueryEnabled(enabled) {
-  const currentConfig = await loadPersistedUserConfig();
   const previous = appState.billingQuery;
   const nextValue = asBoolean(enabled);
-  appState.billingQuery = { ...(previous ?? {}), enabled: nextValue };
-  const result = await persistConfigPayload({
-    ...currentConfig,
-    billingQuery: {
-      ...(currentConfig.billingQuery ?? {}),
-      enabled: nextValue,
-    },
-  });
-  if (!result.ok) {
-    appState.billingQuery = previous;
-  }
+  appState.billingQuery = { ...previous, enabled: nextValue };
+  const result = await persistConfigPatch({ billingQuery: { enabled: nextValue } });
+  if (!result.ok) appState.billingQuery = previous;
   return result;
 }
 
-// 保存本机 External API 配置。API Key 只随一次显式保存提交，不进入缓存快照。
+// API Key 只随显式字段补丁提交，不进入缓存快照。
 export async function saveExternalAPI(partial) {
-  const currentConfig = await loadPersistedUserConfig();
+  const patch = { ...partial };
   const previous = appState.externalAPI;
-  const next = normalizeExternalAPI({
-    ...(currentConfig.externalAPI ?? {}),
-    ...(partial ?? {}),
-  });
-  appState.externalAPI = next;
-  const result = await persistConfigPayload({
-    ...currentConfig,
-    externalAPI: next,
-  });
-  if (!result.ok) {
-    appState.externalAPI = previous;
-  }
+  appState.externalAPI = normalizeExternalAPI({ ...previous, ...patch });
+  const result = await persistConfigPatch({ externalAPI: patch });
+  if (!result.ok) appState.externalAPI = previous;
   return result;
 }
 
 export async function saveMirrorCaptureEnabled(enabled) {
-  const currentConfig = await loadPersistedUserConfig();
-  const nextEnabled = !!enabled;
-  return persistConfigPayload({
-    ...currentConfig,
-    mirrorCapture: {
-      ...(currentConfig.mirrorCapture ?? {}),
-      enabled: nextEnabled,
-      // 关闭镜像记录时一并关闭保真子开关，避免留下一个不生效却仍显示为开启的状态。
-      protocolFidelity: nextEnabled && !!currentConfig.mirrorCapture?.protocolFidelity,
-    },
+  return persistConfigPatch({
+    mirrorCapture: enabled
+      ? { enabled: true }
+      : { enabled: false, protocolFidelity: false },
   });
 }
 
 export async function saveMirrorCaptureProtocolFidelity(enabled) {
-  const currentConfig = await loadPersistedUserConfig();
-  return persistConfigPayload({
-    ...currentConfig,
-    mirrorCapture: {
-      ...(currentConfig.mirrorCapture ?? {}),
-      protocolFidelity: !!enabled,
-    },
-  });
+  return persistConfigPatch({ mirrorCapture: { protocolFidelity: !!enabled } });
 }
 
 export async function reloadUserConfig(options = {}) {
   const config = await loadPersistedUserConfig();
-  applyConfigToState(config, options);
+  if (options.shouldApply?.() !== false) applyConfigToState(config, options);
   return config;
 }
 
 export async function saveModelAdapterAt(index, adapter) {
-  const currentConfig = await loadPersistedUserConfig();
-  const nextAdapter = normalizeModelAdapter(adapter);
+  return configWriter.transaction(async ({ config: currentConfig, persist }) => {
+    const nextAdapter = normalizeModelAdapter(adapter);
 
-  // 先在原始（未去重）列表上定位替换目标：index 基于内存中的 modelAdapters，
-  // 提前去重会让 index 之前的重复条目被移除、索引整体前移，替换到错误的渠道。
-  // 身份命中优先于 index：多窗口并发修改或历史重复条目导致索引漂移时，
-  // 身份定位保证改的是调用方所指的那个 adapter。
-  const rawAdapters = Array.isArray(currentConfig.modelAdapters) ? currentConfig.modelAdapters.slice() : [];
-  const adapterIdentity = buildModelAdapterIdentityKey(nextAdapter);
-  const identityIndex = rawAdapters.findIndex((item) => buildModelAdapterIdentityKey(item) === adapterIdentity);
+    // 先在原始（未去重）列表上定位替换目标：index 基于内存中的 modelAdapters，
+    // 提前去重会让 index 之前的重复条目被移除、索引整体前移，替换到错误的渠道。
+    // 身份命中优先于 index：多窗口并发修改或历史重复条目导致索引漂移时，
+    // 身份定位保证改的是调用方所指的那个 adapter。
+    const rawAdapters = Array.isArray(currentConfig.modelAdapters) ? currentConfig.modelAdapters.slice() : [];
+    const adapterIdentity = buildModelAdapterIdentityKey(nextAdapter);
+    const identityIndex = rawAdapters.findIndex((item) => buildModelAdapterIdentityKey(item) === adapterIdentity);
 
-  let nextAdapters;
-  if (identityIndex >= 0) {
+    let nextAdapters;
+    if (identityIndex >= 0) {
     // 保存已存在的 adapter（编辑）：按身份原位替换。
-    nextAdapters = rawAdapters;
-    nextAdapters[identityIndex] = nextAdapter;
-  } else if (index >= 0 && index < rawAdapters.length) {
+      nextAdapters = rawAdapters;
+      nextAdapters[identityIndex] = nextAdapter;
+    } else if (index >= 0 && index < rawAdapters.length) {
     // 新身份但带 index（编辑器以“另存/转换”语义落到指定槽位）。
-    nextAdapters = rawAdapters;
-    nextAdapters[index] = nextAdapter;
-  } else {
-    nextAdapters = [...rawAdapters, nextAdapter];
-  }
+      nextAdapters = rawAdapters;
+      nextAdapters[index] = nextAdapter;
+    } else {
+      nextAdapters = [...rawAdapters, nextAdapter];
+    }
 
-  const dedupedAdapters = dedupeModelAdapters(nextAdapters);
-  const targetIndex = dedupedAdapters.findIndex(
-    (item) => buildModelAdapterIdentityKey(item) === adapterIdentity,
-  );
-  const result = await persistConfigPayload(
-    {
-      ...currentConfig,
-      modelAdapters: dedupedAdapters,
-    },
-    { modelAdaptersOnly: true },
-  );
-  if (!result.ok) {
-    return result;
-  }
-  return {
-    ...result,
-    index: targetIndex,
-    adapter: appState.modelAdapters[targetIndex] ?? null,
-  };
+    const dedupedAdapters = dedupeModelAdapters(nextAdapters);
+    const targetIndex = dedupedAdapters.findIndex(
+      (item) => buildModelAdapterIdentityKey(item) === adapterIdentity,
+    );
+    const result = await persist(
+      {
+        modelAdapters: dedupedAdapters,
+      },
+      { modelAdaptersOnly: true },
+    );
+    if (!result.ok) {
+      return result;
+    }
+    return {
+      ...result,
+      index: targetIndex,
+      adapter: appState.modelAdapters[targetIndex] ?? null,
+    };
+  });
 }
 
 export async function saveModelAdaptersBatch(adapters) {
-  const currentConfig = await loadPersistedUserConfig();
-  const existingAdapters = normalizeModelAdapters(currentConfig.modelAdapters);
-  const nextAdapters = existingAdapters.slice();
-  const indexByIdentity = new Map(nextAdapters.map((adapter, index) => [buildModelAdapterIdentityKey(adapter), index]));
-  let added = 0;
-  let skipped = 0;
-  let updated = 0;
+  return configWriter.transaction(async ({ config: currentConfig, persist }) => {
+    const existingAdapters = normalizeModelAdapters(currentConfig.modelAdapters);
+    const nextAdapters = existingAdapters.slice();
+    const indexByIdentity = new Map(nextAdapters.map((adapter, index) => [buildModelAdapterIdentityKey(adapter), index]));
+    let added = 0;
+    let skipped = 0;
+    let updated = 0;
 
-  for (const source of Array.isArray(adapters) ? adapters : []) {
-    const adapter = normalizeModelAdapter(source);
-    const identity = buildModelAdapterIdentityKey(adapter);
-    const existingIndex = indexByIdentity.get(identity);
-    if (existingIndex == null) {
-      indexByIdentity.set(identity, nextAdapters.length);
-      nextAdapters.push(adapter);
-      added += 1;
-      continue;
+    for (const source of Array.isArray(adapters) ? adapters : []) {
+      const adapter = normalizeModelAdapter(source);
+      const identity = buildModelAdapterIdentityKey(adapter);
+      const existingIndex = indexByIdentity.get(identity);
+      if (existingIndex == null) {
+        indexByIdentity.set(identity, nextAdapters.length);
+        nextAdapters.push(adapter);
+        added += 1;
+        continue;
+      }
+
+      const existing = nextAdapters[existingIndex];
+      const merged = mergeDuplicateModelAdapter(existing, adapter);
+      if (JSON.stringify(merged) !== JSON.stringify(existing)) {
+        nextAdapters[existingIndex] = merged;
+        updated += 1;
+      } else {
+        skipped += 1;
+      }
     }
 
-    const existing = nextAdapters[existingIndex];
-    const merged = mergeDuplicateModelAdapter(existing, adapter);
-    if (JSON.stringify(merged) !== JSON.stringify(existing)) {
-      nextAdapters[existingIndex] = merged;
-      updated += 1;
-    } else {
-      skipped += 1;
+    if (added === 0 && updated === 0) {
+      return { ok: true, error: "", added, skipped, updated, total: 0 };
     }
-  }
-
-  if (added === 0 && updated === 0) {
-    return { ok: true, error: "", added, skipped, updated, total: 0 };
-  }
-  const result = await persistConfigPayload(
-    {
-      ...currentConfig,
-      modelAdapters: nextAdapters,
-    },
-    { modelAdaptersOnly: true },
-  );
-  return result.ok ? { ...result, added, skipped, updated, total: added + skipped + updated } : result;
+    const result = await persist(
+      {
+        modelAdapters: nextAdapters,
+      },
+      { modelAdaptersOnly: true },
+    );
+    return result.ok ? { ...result, added, skipped, updated, total: added + skipped + updated } : result;
+  });
 }
 
 /**
@@ -1287,67 +1134,68 @@ const PROVIDER_LEVEL_FIELDS = new Set([
 ]);
 
 export async function updateModelAdaptersBySupplier(supplierIdentity, providerPatch, options = {}) {
-  const currentConfig = await loadPersistedUserConfig();
-  const allAdapters = normalizeModelAdapters(currentConfig.modelAdapters);
+  return configWriter.transaction(async ({ config: currentConfig, persist }) => {
+    const allAdapters = normalizeModelAdapters(currentConfig.modelAdapters);
 
-  // 找出属于本供应商的 adapter 及其下标
-  const targetIndices = [];
-  for (let i = 0; i < allAdapters.length; i++) {
-    if (adapterMatchesSupplierIdentity(allAdapters[i], supplierIdentity)) {
-      targetIndices.push(i);
+    // 找出属于本供应商的 adapter 及其下标
+    const targetIndices = [];
+    for (let i = 0; i < allAdapters.length; i++) {
+      if (adapterMatchesSupplierIdentity(allAdapters[i], supplierIdentity)) {
+        targetIndices.push(i);
+      }
     }
-  }
-  if (targetIndices.length === 0) {
-    return { ok: false, error: "未找到属于该供应商的模型配置", updated: 0, conflicts: [] };
-  }
-
-  // 只取允许覆盖的字段
-  const patch = {};
-  for (const key of Object.keys(providerPatch || {})) {
-    if (PROVIDER_LEVEL_FIELDS.has(key)) {
-      patch[key] = providerPatch[key];
+    if (targetIndices.length === 0) {
+      return { ok: false, error: "未找到属于该供应商的模型配置", updated: 0, conflicts: [] };
     }
-  }
-  if (Object.keys(patch).length === 0) {
-    return { ok: true, error: "", updated: 0, conflicts: [] };
-  }
 
-  // 应用 patch，保留模型级字段不变
-  const nextAdapters = allAdapters.slice();
-  for (const idx of targetIndices) {
-    nextAdapters[idx] = normalizeModelAdapter({ ...allAdapters[idx], ...patch });
-  }
-
-  // 冲突检测：检查 patch 后的 adapter 是否与非目标 adapter 的 identity 碰撞
-  const targetSet = new Set(targetIndices);
-  const nonTargetIdentities = new Map();
-  for (let i = 0; i < nextAdapters.length; i++) {
-    if (!targetSet.has(i)) {
-      nonTargetIdentities.set(buildModelAdapterIdentityKey(nextAdapters[i]), i);
+    // 只取允许覆盖的字段
+    const patch = {};
+    for (const key of Object.keys(providerPatch || {})) {
+      if (PROVIDER_LEVEL_FIELDS.has(key)) {
+        patch[key] = providerPatch[key];
+      }
     }
-  }
-  const conflicts = [];
-  for (const idx of targetIndices) {
-    const key = buildModelAdapterIdentityKey(nextAdapters[idx]);
-    if (nonTargetIdentities.has(key)) {
-      conflicts.push({
-        targetIndex: idx,
-        conflictIndex: nonTargetIdentities.get(key),
-        modelID: nextAdapters[idx].modelID,
-      });
+    if (Object.keys(patch).length === 0) {
+      return { ok: true, error: "", updated: 0, conflicts: [] };
     }
-  }
-  if (conflicts.length > 0 && !options.forceOverwrite) {
-    return { ok: false, error: "存在重复模型冲突，请确认后重试", updated: 0, conflicts };
-  }
 
-  const result = await persistConfigPayload(
-    { ...currentConfig, modelAdapters: nextAdapters },
-    { modelAdaptersOnly: true },
-  );
-  return result.ok
-    ? { ...result, updated: targetIndices.length, conflicts }
-    : result;
+    // 应用 patch，保留模型级字段不变
+    const nextAdapters = allAdapters.slice();
+    for (const idx of targetIndices) {
+      nextAdapters[idx] = normalizeModelAdapter({ ...allAdapters[idx], ...patch });
+    }
+
+    // 冲突检测：检查 patch 后的 adapter 是否与非目标 adapter 的 identity 碰撞
+    const targetSet = new Set(targetIndices);
+    const nonTargetIdentities = new Map();
+    for (let i = 0; i < nextAdapters.length; i++) {
+      if (!targetSet.has(i)) {
+        nonTargetIdentities.set(buildModelAdapterIdentityKey(nextAdapters[i]), i);
+      }
+    }
+    const conflicts = [];
+    for (const idx of targetIndices) {
+      const key = buildModelAdapterIdentityKey(nextAdapters[idx]);
+      if (nonTargetIdentities.has(key)) {
+        conflicts.push({
+          targetIndex: idx,
+          conflictIndex: nonTargetIdentities.get(key),
+          modelID: nextAdapters[idx].modelID,
+        });
+      }
+    }
+    if (conflicts.length > 0 && !options.forceOverwrite) {
+      return { ok: false, error: "存在重复模型冲突，请确认后重试", updated: 0, conflicts };
+    }
+
+    const result = await persist(
+      { modelAdapters: nextAdapters },
+      { modelAdaptersOnly: true },
+    );
+    return result.ok
+      ? { ...result, updated: targetIndices.length, conflicts }
+      : result;
+  });
 }
 
 // 余额查询可同步的字段（不含连接字段，保留各分组自身的 apiKey/groupName 等）。
@@ -1385,53 +1233,54 @@ export async function syncBalanceConfigToSameURL(baseURL, balancePatch) {
     return { ok: true, error: "", updated: 0 };
   }
 
-  const currentConfig = await loadPersistedUserConfig();
-  const allAdapters = normalizeModelAdapters(currentConfig.modelAdapters);
-  const targetIndices = [];
-  for (let i = 0; i < allAdapters.length; i++) {
-    if (normalizeBaseURL(allAdapters[i].baseURL) === targetBase) {
-      targetIndices.push(i);
+  return configWriter.transaction(async ({ config: currentConfig, persist }) => {
+    const allAdapters = normalizeModelAdapters(currentConfig.modelAdapters);
+    const targetIndices = [];
+    for (let i = 0; i < allAdapters.length; i++) {
+      if (normalizeBaseURL(allAdapters[i].baseURL) === targetBase) {
+        targetIndices.push(i);
+      }
     }
-  }
-  if (targetIndices.length === 0) {
-    return { ok: false, error: "未找到该 URL 下的模型配置", updated: 0 };
-  }
+    if (targetIndices.length === 0) {
+      return { ok: false, error: "未找到该 URL 下的模型配置", updated: 0 };
+    }
 
-  const nextAdapters = allAdapters.slice();
-  for (const idx of targetIndices) {
+    const nextAdapters = allAdapters.slice();
+    for (const idx of targetIndices) {
     // 只覆盖余额字段；apiKey / groupName / 连接配置保持各 adapter 原值不变。
-    nextAdapters[idx] = normalizeModelAdapter({ ...allAdapters[idx], ...patch });
-  }
+      nextAdapters[idx] = normalizeModelAdapter({ ...allAdapters[idx], ...patch });
+    }
 
-  const result = await persistConfigPayload(
-    { ...currentConfig, modelAdapters: nextAdapters },
-    { modelAdaptersOnly: true },
-  );
-  return result.ok
-    ? { ...result, updated: targetIndices.length }
-    : result;
+    const result = await persist(
+      { modelAdapters: nextAdapters },
+      { modelAdaptersOnly: true },
+    );
+    return result.ok
+      ? { ...result, updated: targetIndices.length }
+      : result;
+  });
 }
 
 export async function deleteModelAdapterAt(index) {
-  const currentConfig = await loadPersistedUserConfig();
-  const nextAdapters = normalizeModelAdapters(currentConfig.modelAdapters);
+  return configWriter.transaction(async ({ config: currentConfig, persist }) => {
+    const nextAdapters = normalizeModelAdapters(currentConfig.modelAdapters);
 
-  if (index < 0 || index >= nextAdapters.length) {
-    return {
-      ok: false,
-      error: "模型配置不存在，无法删除",
-    };
-  }
+    if (index < 0 || index >= nextAdapters.length) {
+      return {
+        ok: false,
+        error: "模型配置不存在，无法删除",
+      };
+    }
 
-  nextAdapters.splice(index, 1);
+    nextAdapters.splice(index, 1);
 
-  return persistConfigPayload(
-    {
-      ...currentConfig,
-      modelAdapters: nextAdapters,
-    },
-    { modelAdaptersOnly: true },
-  );
+    return persist(
+      {
+        modelAdapters: nextAdapters,
+      },
+      { modelAdaptersOnly: true },
+    );
+  });
 }
 
 // 原子批量删除：一次性过滤掉目标渠道并只保存一次，避免逐个删除时多次落盘、
@@ -1439,24 +1288,24 @@ export async function deleteModelAdapterAt(index) {
 export async function deleteModelAdaptersBatch(targets) {
   const list = Array.isArray(targets) ? targets : [];
   if (list.length === 0) return { ok: true, error: "", removed: 0 };
-  const currentConfig = await loadPersistedUserConfig();
-  const existingAdapters = normalizeModelAdapters(currentConfig.modelAdapters);
-  const removeKeys = new Set(
-    list.map((adapter) => buildModelAdapterIdentityKey(normalizeModelAdapter(adapter))),
-  );
-  const nextAdapters = existingAdapters.filter(
-    (adapter) => !removeKeys.has(buildModelAdapterIdentityKey(adapter)),
-  );
-  const removed = existingAdapters.length - nextAdapters.length;
-  if (removed === 0) return { ok: true, error: "", removed: 0 };
-  const result = await persistConfigPayload(
-    {
-      ...currentConfig,
-      modelAdapters: nextAdapters,
-    },
-    { modelAdaptersOnly: true },
-  );
-  return result.ok ? { ...result, removed } : result;
+  return configWriter.transaction(async ({ config: currentConfig, persist }) => {
+    const existingAdapters = normalizeModelAdapters(currentConfig.modelAdapters);
+    const removeKeys = new Set(
+      list.map((adapter) => buildModelAdapterIdentityKey(normalizeModelAdapter(adapter))),
+    );
+    const nextAdapters = existingAdapters.filter(
+      (adapter) => !removeKeys.has(buildModelAdapterIdentityKey(adapter)),
+    );
+    const removed = existingAdapters.length - nextAdapters.length;
+    if (removed === 0) return { ok: true, error: "", removed: 0 };
+    const result = await persist(
+      {
+        modelAdapters: nextAdapters,
+      },
+      { modelAdaptersOnly: true },
+    );
+    return result.ok ? { ...result, removed } : result;
+  });
 }
 /**
  * 按供应商身份删除模型。
@@ -1465,34 +1314,34 @@ export async function deleteModelAdaptersBatch(targets) {
  * mode: 'name' | 'connection' | 'legacy'
  */
 export async function deleteModelAdaptersBySupplier(baseURLOrIdentity, groupName) {
-  const currentConfig = await loadPersistedUserConfig();
-  let identity;
-  if (baseURLOrIdentity && typeof baseURLOrIdentity === "object" && !Array.isArray(baseURLOrIdentity)) {
-    identity = {
-      mode: asString(baseURLOrIdentity.mode || "legacy").trim() || "legacy",
-      source: baseURLOrIdentity.source,
-      baseURL: baseURLOrIdentity.baseURL,
-      groupName: baseURLOrIdentity.groupName,
-    };
-  } else {
-    identity = {
-      mode: "legacy",
-      source: "third_party",
-      baseURL: baseURLOrIdentity,
-      groupName,
-    };
-  }
+  return configWriter.transaction(async ({ config: currentConfig, persist }) => {
+    let identity;
+    if (baseURLOrIdentity && typeof baseURLOrIdentity === "object" && !Array.isArray(baseURLOrIdentity)) {
+      identity = {
+        mode: asString(baseURLOrIdentity.mode || "legacy").trim() || "legacy",
+        source: baseURLOrIdentity.source,
+        baseURL: baseURLOrIdentity.baseURL,
+        groupName: baseURLOrIdentity.groupName,
+      };
+    } else {
+      identity = {
+        mode: "legacy",
+        source: "third_party",
+        baseURL: baseURLOrIdentity,
+        groupName,
+      };
+    }
 
-  const remaining = normalizeModelAdapters(currentConfig.modelAdapters).filter(
-    (adapter) => !adapterMatchesSupplierIdentity(adapter, identity),
-  );
-  return persistConfigPayload(
-    {
-      ...currentConfig,
-      modelAdapters: remaining,
-    },
-    { modelAdaptersOnly: true },
-  );
+    const remaining = normalizeModelAdapters(currentConfig.modelAdapters).filter(
+      (adapter) => !adapterMatchesSupplierIdentity(adapter, identity),
+    );
+    return persist(
+      {
+        modelAdapters: remaining,
+      },
+      { modelAdaptersOnly: true },
+    );
+  });
 }
 export async function syncServiceState() {
   const [state] = await Promise.all([getProxyState(), refreshDebugLogUsage()]);

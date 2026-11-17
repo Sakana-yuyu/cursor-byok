@@ -55,6 +55,9 @@ func (l *keyLanes) acquire(ctx context.Context, key string, limit int, wait time
 	if l == nil || key == "" || limit <= 0 {
 		return func() {}, nil
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	l.mu.Lock()
 	if l.lanes == nil {
 		l.lanes = make(map[string]*keyLane)
@@ -66,7 +69,8 @@ func (l *keyLanes) acquire(ctx context.Context, key string, limit int, wait time
 	}
 	// 配置热更新后以最新上限为准（同指纹不同 limit 的渠道共存时取后到者）。
 	lane.limit = limit
-	if lane.busy < lane.limit {
+	lane.grantQueued()
+	if lane.busy < lane.limit && len(lane.queue) == 0 {
 		lane.busy++
 		l.mu.Unlock()
 		return func() { l.release(key) }, nil
@@ -80,7 +84,11 @@ func (l *keyLanes) acquire(ctx context.Context, key string, limit int, wait time
 	defer timer.Stop()
 	select {
 	case <-notified:
-		// release 方已在临界区内完成 busy++（名额移交），这里直接持有。
+		// 名额可能与取消同时到达；取消的请求不应继续发送给上游。
+		if err := ctx.Err(); err != nil {
+			l.release(key)
+			return nil, err
+		}
 		return func() { l.release(key) }, nil
 	case <-timer.C:
 		if !l.removeQueued(key, notified) {
@@ -140,16 +148,21 @@ func (l *keyLanes) release(key string) {
 	if lane.busy > 0 {
 		lane.busy--
 	}
-	if len(lane.queue) > 0 {
+	lane.grantQueued()
+	if lane.busy == 0 && len(lane.queue) == 0 {
+		delete(l.lanes, key)
+	}
+}
+
+// grantQueued 必须持有 keyLanes.mu；扩容和归还名额共用同一套 FIFO 分配规则。
+// 缩容不打断在途请求，等占用数低于新上限后才继续放行。
+func (lane *keyLane) grantQueued() {
+	for len(lane.queue) > 0 && lane.busy < lane.limit {
 		next := lane.queue[0]
+		lane.queue[0] = nil
 		lane.queue = lane.queue[1:]
-		// 名额直接移交队首：busy 立即回到占用态，被唤醒者取走即持有。
 		lane.busy++
 		next <- struct{}{}
-		return
-	}
-	if lane.busy == 0 {
-		delete(l.lanes, key)
 	}
 }
 

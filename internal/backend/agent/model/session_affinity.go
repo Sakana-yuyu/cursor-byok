@@ -133,26 +133,6 @@ func (router *Router) pickStickyChannel(channels []*legacyruntime.ResolvedChanne
 	return nil
 }
 
-// isChannelCoolingDown 报告渠道是否处于未过期的冷却中，并顺手清理过期条目。
-func (router *Router) isChannelCoolingDown(channel *legacyruntime.ResolvedChannel) bool {
-	if router == nil || channel == nil {
-		return false
-	}
-	now := time.Now()
-	key := channelHealthMapKey(channel)
-	router.healthMu.Lock()
-	defer router.healthMu.Unlock()
-	health, ok := router.healthByChannel[key]
-	if !ok {
-		return false
-	}
-	if !health.cooldownUntil.After(now) {
-		delete(router.healthByChannel, key)
-		return false
-	}
-	return true
-}
-
 // recordSessionAffinity 在渠道成功应答后建立/刷新该（会话, 模型）的粘性。
 func (router *Router) recordSessionAffinity(req StreamRequest, channel *legacyruntime.ResolvedChannel) {
 	if router == nil || router.affinity == nil || channel == nil {

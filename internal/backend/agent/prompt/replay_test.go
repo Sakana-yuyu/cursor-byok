@@ -100,3 +100,71 @@ func TestBuildToolCallReplayMessagesAssistantAndTool(t *testing.T) {
 		t.Fatalf("tool message = %+v", messages[1])
 	}
 }
+
+func TestClientSkillPromptUsesSharedAdditiveInstructions(t *testing.T) {
+	const path = "/workspace/client-skill/SKILL.md"
+	for _, tc := range []struct {
+		name    string
+		context *agentv1.RequestContext
+	}{
+		{
+			name: "agent skills",
+			context: &agentv1.RequestContext{
+				AgentSkills: []*agentv1.AgentSkill{{FullPath: path, Description: "Client skill"}},
+			},
+		},
+		{
+			name: "skill descriptors",
+			context: &agentv1.RequestContext{
+				SkillOptions: &agentv1.SkillOptions{SkillDescriptors: []*agentv1.SkillDescriptor{
+					{ReadmeFilePath: path, Description: "Client skill"},
+				}},
+			},
+		},
+		{
+			name: "combined duplicate catalogs",
+			context: &agentv1.RequestContext{
+				AgentSkills: []*agentv1.AgentSkill{{FullPath: path, Description: "Client skill"}},
+				SkillOptions: &agentv1.SkillOptions{SkillDescriptors: []*agentv1.SkillDescriptor{
+					{ReadmeFilePath: path, Description: "Duplicate client skill"},
+				}},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			prompt := buildRequestContextAgentSkillsSection(tc.context)
+			if strings.Count(prompt, SkillUsageInstructions) != 1 {
+				t.Fatalf("client prompt must include shared instructions exactly once: %s", prompt)
+			}
+			if strings.Contains(prompt, "Only use skills listed below") {
+				t.Fatal("client prompt retained the obsolete exclusive allowlist instruction")
+			}
+			if !strings.HasPrefix(prompt, "<agent_skills>") ||
+				!strings.Contains(prompt, "<available_skills description=") ||
+				!strings.HasSuffix(prompt, "</available_skills>\n\n</agent_skills>") {
+				t.Fatalf("client prompt lost nested catalog structure: %s", prompt)
+			}
+			if strings.Count(prompt, `fullPath="`+path+`"`) != 1 {
+				t.Fatalf("client skill must appear exactly once: %s", prompt)
+			}
+		})
+	}
+}
+
+func TestSkillUsageInstructionsInvocationContract(t *testing.T) {
+	for _, required := range []string{
+		"All <agent_skills> and <available_skills> sections are additive catalogs",
+		"not mutually exclusive allowlists",
+		"/skill-name or $skill-name",
+		"read its SKILL.md with the Read tool and follow its instructions",
+		"Reading and following SKILL.md is how skills are invoked",
+		"no separate skill tool or registration step is required",
+		"If an explicitly requested skill is absent from these catalogs, locate its SKILL.md",
+		"do not reject it solely because it is missing from one list",
+		"Respect explicit disabled-skill settings",
+	} {
+		if !strings.Contains(SkillUsageInstructions, required) {
+			t.Errorf("shared skill instructions missing contract %q", required)
+		}
+	}
+}

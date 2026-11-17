@@ -302,6 +302,9 @@ func buildRequestContextAgentTranscriptsSection(requestContext *agentv1.RequestC
 	}, "\n")
 }
 
+// SkillUsageInstructions keeps client-provided and scanned skill catalogs additive.
+const SkillUsageInstructions = "Skills provide specialized capabilities. All <agent_skills> and <available_skills> sections are additive catalogs, not mutually exclusive allowlists. When a skill is relevant or the user explicitly requests it (for example /skill-name or $skill-name), read its SKILL.md with the Read tool and follow its instructions. Reading and following SKILL.md is how skills are invoked; no separate skill tool or registration step is required. If an explicitly requested skill is absent from these catalogs, locate its SKILL.md in the workspace or configured skill directories and read it before deciding it is unavailable; do not reject it solely because it is missing from one list. Respect explicit disabled-skill settings. Use skills silently as part of your normal workflow; do not announce, list, or explain which skill you are using unless the user asks."
+
 // buildRequestContextAgentSkillsSection 构造 <agent_skills> 片段。
 func buildRequestContextAgentSkillsSection(requestContext *agentv1.RequestContext) string {
 	if requestContext == nil {
@@ -309,7 +312,7 @@ func buildRequestContextAgentSkillsSection(requestContext *agentv1.RequestContex
 	}
 	lines := []string{
 		"<agent_skills>",
-		"Skills provide specialized capabilities. When a skill is relevant to the task, read its file at the provided absolute path with the Read tool and follow the instructions within — use it silently as part of your normal workflow. Do not announce, list, or explain which skill you are using in your replies unless the user explicitly asks. Only use skills listed below.",
+		SkillUsageInstructions,
 		"",
 		`<available_skills description="Skills the agent can use. Use the Read tool with the provided absolute path to fetch full contents.">`,
 	}

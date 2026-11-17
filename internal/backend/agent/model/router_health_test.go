@@ -136,6 +136,82 @@ func cooldownRemaining(t *testing.T, router *Router, channel *legacyruntime.Reso
 	return 0
 }
 
+func TestRateLimitHistorySurvivesCooldownExpiry(t *testing.T) {
+	for name, selectChannel := range map[string]func(*Router, *legacyruntime.ResolvedChannel) bool{
+		"normal routing": func(router *Router, channel *legacyruntime.ResolvedChannel) bool {
+			return router.preferHealthyChannel([]*legacyruntime.ResolvedChannel{channel}) == channel
+		},
+		"routing policy": func(router *Router, channel *legacyruntime.ResolvedChannel) bool {
+			return !router.channelOnCooldown(channel)
+		},
+		"session affinity": func(router *Router, channel *legacyruntime.ResolvedChannel) bool {
+			req := StreamRequest{ConversationID: "conversation", ModelID: "model"}
+			router.recordSessionAffinity(req, channel)
+			return router.pickStickyChannel([]*legacyruntime.ResolvedChannel{channel}, req.ConversationID, req.ModelID, nil) == channel
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			channel := &legacyruntime.ResolvedChannel{ID: "channel-a"}
+			router := NewRouter(nil)
+			router.recordChannelFailure(channel, fmt.Errorf("provider status=429"))
+			key := channelHealthMapKey(channel)
+			entry := router.healthByChannel[key]
+			entry.cooldownUntil = time.Now().Add(-time.Second)
+			router.healthByChannel[key] = entry
+
+			if !selectChannel(router, channel) {
+				t.Fatal("channel remained unavailable after cooldown")
+			}
+			if got := router.channelHealthVersion(channel); got != entry.version {
+				t.Fatalf("selection discarded failure version: got %d, want %d", got, entry.version)
+			}
+			router.recordChannelFailure(channel, fmt.Errorf("provider status=429"))
+			if got := cooldownRemaining(t, router, channel); got < 118*time.Second || got > 120*time.Second {
+				t.Fatalf("cooldown after another rate limit = %s, want ~2m", got)
+			}
+			// A success started before this new failure must not erase it.
+			router.clearChannelFailure(channel, entry.version)
+			if router.healthByChannel[key].failures != 2 {
+				t.Fatal("stale success cleared newer failure history")
+			}
+		})
+	}
+}
+
+func TestChannelHealthCleanupRetainsActiveCooldown(t *testing.T) {
+	for _, sticky := range []bool{false, true} {
+		t.Run(fmt.Sprintf("sticky=%t", sticky), func(t *testing.T) {
+			channel := &legacyruntime.ResolvedChannel{ID: "channel-a"}
+			healthy := &legacyruntime.ResolvedChannel{ID: "channel-b"}
+			router := NewRouter(nil)
+			key := channelHealthMapKey(channel)
+			router.healthByChannel[key] = channelHealth{
+				cooldownUntil: time.Now().Add(time.Minute),
+				lastFailureAt: time.Now().Add(-rateLimitForgetWindow - time.Minute),
+				failures:      3,
+			}
+			check := func() bool {
+				if sticky {
+					return router.isChannelCoolingDown(channel)
+				}
+				return router.preferHealthyChannel([]*legacyruntime.ResolvedChannel{channel, healthy}) != channel
+			}
+			if !check() {
+				t.Fatal("expired failure history lifted an active cooldown")
+			}
+			entry := router.healthByChannel[key]
+			entry.cooldownUntil = time.Now().Add(-time.Second)
+			router.healthByChannel[key] = entry
+			if check() {
+				t.Fatal("expired cooldown still blocked channel")
+			}
+			if _, exists := router.healthByChannel[key]; exists {
+				t.Fatal("expired cooldown and failure history were not reclaimed")
+			}
+		})
+	}
+}
+
 func TestRateLimitCooldownEscalatesWithoutRetryAfter(t *testing.T) {
 	channel := &legacyruntime.ResolvedChannel{ID: "channel-a", Provider: "openai", BaseURL: "https://provider.example/v1", APIKey: "sk-a", Model: "model-a"}
 	router := NewRouter(nil)

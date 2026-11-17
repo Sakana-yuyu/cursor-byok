@@ -243,7 +243,7 @@ func InjectCursorUserInfo(email, token string) error {
 	// 注入前备份官方账号状态（仅在备份不存在时抓取一次），
 	// 供停止服务/直连模式时 RestoreCursorUserInfo 恢复。
 	if err := backupCursorAuthState(stateDBPath, token, email); err != nil {
-		logger.Errorf("backupCursorAuthState failed: %v", err)
+		return fmt.Errorf("备份 Cursor 登录态失败，未注入本地账号: %w", err)
 	}
 
 	values := buildCursorAuthStateValues(email, token)
@@ -428,23 +428,29 @@ func backupCursorAuthState(stateDBPath, injectedToken, injectedEmail string) err
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
-	rows, err := db.Query("SELECT key, value FROM ItemTable WHERE key LIKE 'cursorAuth/%'")
-	if err != nil {
+	var tables int
+	if err := db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'ItemTable'").Scan(&tables); err != nil {
 		return err
 	}
 	existing := map[string]string{}
-	for rows.Next() {
-		var key string
-		var value []byte
-		if err := rows.Scan(&key, &value); err != nil {
-			rows.Close()
+	if tables > 0 {
+		rows, err := db.Query("SELECT key, value FROM ItemTable WHERE key LIKE 'cursorAuth/%'")
+		if err != nil {
 			return err
 		}
-		existing[key] = string(value)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return err
+		for rows.Next() {
+			var key string
+			var value []byte
+			if err := rows.Scan(&key, &value); err != nil {
+				rows.Close()
+				return err
+			}
+			existing[key] = string(value)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
 	}
 
 	backup := map[string]any{}
@@ -464,7 +470,7 @@ func backupCursorAuthState(stateDBPath, injectedToken, injectedEmail string) err
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(backupPath, append(encoded, '\n'), 0o600); err != nil {
+	if err := atomicHostWrite(backupPath, append(encoded, '\n'), 0o600); err != nil {
 		return err
 	}
 	logger.Infof("backupCursorAuthState saved path=%s accessToken=%s cachedEmail=%s", backupPath, maskAuthToken(backup["cursorAuth/accessToken"]), backup["cursorAuth/cachedEmail"])
@@ -524,6 +530,10 @@ func maskAuthToken(raw any) string {
 
 // restoreCursorAuthStateDB 把指定键写回 state.vscdb（values），并删除 removes 中的键。
 func restoreCursorAuthStateDB(path string, values map[string]string, removes []string) error {
+	return restoreCursorAuthStateDBIfOwned(path, values, removes, "")
+}
+
+func restoreCursorAuthStateDBIfOwned(path string, values map[string]string, removes []string, expectedToken string) error {
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return err
@@ -547,6 +557,26 @@ func restoreCursorAuthStateDB(path string, values map[string]string, removes []s
 			_ = tx.Rollback()
 		}
 	}()
+	if expectedToken != "" {
+		var tables int
+		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'ItemTable'").Scan(&tables); err != nil {
+			return err
+		}
+		if tables == 0 {
+			return nil
+		}
+		var current string
+		err := tx.QueryRowContext(ctx, "SELECT value FROM ItemTable WHERE key = ?", "cursorAuth/accessToken").Scan(&current)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if current != expectedToken {
+			return nil
+		}
+	}
 	for key, value := range values {
 		if _, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO ItemTable(key, value) VALUES(?, ?)", key, value); err != nil {
 			return err
@@ -564,6 +594,15 @@ func restoreCursorAuthStateDB(path string, values map[string]string, removes []s
 	return nil
 }
 
+// RestoreInjectedCursorUserInfo leaves an untouched or newly signed-in account alone.
+// This guard also permits recovery after a process restart without an in-memory flag.
+func RestoreInjectedCursorUserInfo(injectedToken string) error {
+	if strings.TrimSpace(injectedToken) == "" {
+		return errors.New("本地账号标识为空，未修改 Cursor 登录态")
+	}
+	return restoreCursorUserInfo(injectedToken)
+}
+
 // RestoreCursorUserInfo 恢复 Cursor 官方登录态：
 //   - 存在备份：写回官方 accessToken/refreshToken/cachedEmail，删除注入的其余键；
 //   - 无备份（如旧版本已污染）：删除全部 cursorAuth/* 键，令 Cursor 回到未登录态，
@@ -571,6 +610,10 @@ func restoreCursorAuthStateDB(path string, values map[string]string, removes []s
 //
 // 供停止服务/退出/直连模式调用，确保本地模拟账号不会残留到官方连接。
 func RestoreCursorUserInfo() error {
+	return restoreCursorUserInfo("")
+}
+
+func restoreCursorUserInfo(expectedToken string) error {
 	stateDBPath, err := resolveCursorStateDBPath()
 	if err != nil {
 		return err
@@ -622,7 +665,7 @@ func RestoreCursorUserInfo() error {
 	if len(values) == 0 && len(removes) == 0 {
 		return nil
 	}
-	if err := restoreCursorAuthStateDB(stateDBPath, values, removes); err != nil {
+	if err := restoreCursorAuthStateDBIfOwned(stateDBPath, values, removes, expectedToken); err != nil {
 		return fmt.Errorf("恢复 Cursor 状态库失败 path=%s: %w", stateDBPath, err)
 	}
 	logger.Infof("restoreCursorUserInfo done path=%s restored=%d removed=%d", stateDBPath, len(values), len(removes))
