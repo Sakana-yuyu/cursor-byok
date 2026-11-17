@@ -56,7 +56,7 @@ func TestBuildAvailableModelMetadataUsesDisplayNameAndFastCapability(t *testing.
 	if !ok || len(parameterDefs) < 2 {
 		t.Fatalf("parameter definitions: got %#v, want effort and fast", fast["parameterDefinitions"])
 	}
-	if parameterDefs[0]["id"] != "effort" || parameterDefs[0]["name"] != "Effort" {
+	if parameterDefs[0]["id"] != "reasoning" || parameterDefs[0]["name"] != "Effort" {
 		t.Fatalf("effort parameter: got %#v", parameterDefs[0])
 	}
 	if _, exists := findModelParameterDefinition(fast, "fast"); !exists {
@@ -545,7 +545,7 @@ func TestAvailableModelsPayloadUsesCompactEffortPickerContract(t *testing.T) {
 				VariantsWillBeShownInExplodedList: boolPtr(false),
 			},
 			wantCompact:     true,
-			wantParameterID: "effort",
+			wantParameterID: "reasoning",
 		},
 		{
 			name: "explicit exploded request preserves effort-specific variants",
@@ -553,7 +553,7 @@ func TestAvailableModelsPayloadUsesCompactEffortPickerContract(t *testing.T) {
 				UseModelParameters:                boolPtr(true),
 				VariantsWillBeShownInExplodedList: boolPtr(true),
 			},
-			wantParameterID:      "effort",
+			wantParameterID:      "reasoning",
 			wantVariantCountMore: true,
 		},
 		{
@@ -609,7 +609,7 @@ func TestAvailableModelsPayloadUsesCompactEffortPickerContract(t *testing.T) {
 				seenEfforts := make(map[string]bool, len(variants))
 				for _, variant := range variants {
 					parameters := modelVariantParameters(variant)
-					effort := parameters["effort"]
+					effort := parameters["reasoning"]
 					displayName, _ := variant["displayName"].(string)
 					if !strings.Contains(displayName, "GPT-5.6 Sol") || !strings.Contains(displayName, thinkingEffortDisplayName(effort)) || variant["displayNameOutsidePicker"] != displayName {
 						t.Fatalf("compact display names: %#v", variant)
@@ -978,7 +978,7 @@ func TestAvailableModelsPayloadAdvertisesCustomThinkingEfforts(t *testing.T) {
 	}
 	entry := payload["models"].([]map[string]any)[0]
 
-	definition, exists := findModelParameterDefinition(entry, "effort")
+	definition, exists := findModelParameterDefinition(entry, "reasoning")
 	if !exists {
 		t.Fatalf("effort definition missing: %#v", entry["parameterDefinitions"])
 	}
@@ -1003,7 +1003,7 @@ func TestAvailableModelsPayloadAdvertisesCustomThinkingEfforts(t *testing.T) {
 	}
 	for _, variant := range variants {
 		parameters := modelVariantParameters(variant)
-		effort := parameters["effort"]
+		effort := parameters["reasoning"]
 		displayName, _ := variant["displayName"].(string)
 		if effort == "adaptive" || effort == "deep-think" {
 			if !strings.Contains(displayName, effort) {

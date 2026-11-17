@@ -358,12 +358,62 @@ func BuildToolResultReplayMessage(toolCallID string, toolCall *agentv1.ToolCall)
 	if !ok || !shape.HasResult {
 		return Message{}, false
 	}
+	content := shape.ResultJSON
+	if notice := readLintsUncheckedPathsNotice(toolCall.GetReadLintsToolCall()); notice != "" {
+		content += "\n\n" + notice
+	}
 	return Message{
 		Role:       "tool",
-		Content:    shape.ResultJSON,
+		Content:    content,
 		ToolCallID: strings.TrimSpace(toolCallID),
 		Name:       shape.ToolName,
 	}, true
+}
+
+// readLintsUncheckedPathsNotice 在 ReadLints 请求了多个路径、但执行层只检查了其中一部分时，
+// 向模型说明哪些路径从未被检查。Cursor 执行层的 DiagnosticsArgs 只能携带单个 path，
+// 若不说明，模型会把未检查的文件误读为「没有诊断」（参照 leookun/cursor-byok#398）。
+func readLintsUncheckedPathsNotice(call *agentv1.ReadLintsToolCall) string {
+	if call == nil || call.GetResult().GetSuccess() == nil {
+		return ""
+	}
+	checked := make(map[string]struct{})
+	checkedList := make([]string, 0, 1)
+	for _, file := range call.GetResult().GetSuccess().GetFileDiagnostics() {
+		path := strings.TrimSpace(file.GetPath())
+		if path == "" {
+			continue
+		}
+		if _, seen := checked[path]; !seen {
+			checked[path] = struct{}{}
+			checkedList = append(checkedList, path)
+		}
+	}
+	unchecked := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, raw := range call.GetArgs().GetPaths() {
+		path := strings.TrimSpace(raw)
+		if path == "" {
+			continue
+		}
+		if _, ok := checked[path]; ok {
+			continue
+		}
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		seen[path] = struct{}{}
+		unchecked = append(unchecked, path)
+	}
+	if len(unchecked) == 0 {
+		return ""
+	}
+	checkedText := "no path"
+	if len(checkedList) > 0 {
+		checkedText = strings.Join(checkedList, ", ")
+	}
+	return fmt.Sprintf("[Only %s was checked; ReadLints reads one path per call. Not checked: %s. Call ReadLints again for each unchecked path.]",
+		checkedText, strings.Join(unchecked, ", "))
 }
 
 // BuildAssistantToolCallReplayMessage 把未完成或已完成的 ToolCall 还原为 assistant tool-call replay message。

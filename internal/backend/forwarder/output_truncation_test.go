@@ -51,6 +51,8 @@ func TestProviderOutputTruncationPreservesPartialTextAndFailsTurn(t *testing.T) 
 			stream.CurrentModelCallID = "call-truncated"
 			stream.ProviderPassCount = 1
 			stream.Status = StreamStatusStreaming
+			// 自动续写额度已用尽：此时才走截断失败收口。
+			stream.ProviderOutputContinuationCount = providerOutputContinuationLimit
 
 			if err := service.applyProviderModelEvent(stream, modeladapter.ModelEvent{Kind: modeladapter.ModelEventKindTextDelta, Text: "这是已保留的部分回复。"}); err != nil {
 				t.Fatalf("apply text delta: %v", err)

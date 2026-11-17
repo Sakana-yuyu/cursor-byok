@@ -75,6 +75,7 @@ const (
 	streamTimerCheckpointBlobs      streamTimerKind = "checkpoint_blobs"
 	streamTimerOrphanCancel         streamTimerKind = "orphan_cancel"
 	streamTimerTurnStale            streamTimerKind = "turn_stale"
+	streamTimerProviderRetry        streamTimerKind = "provider_retry"
 )
 
 // orphan cancel 在「客户端已断连、但任务仍在推进」时不立刻取消，而是按更长的间隔反复
@@ -1103,6 +1104,12 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 				return nil
 			}
 		}
+		// 已产出后中断：router 不会重放，这里落盘部分输出并延迟续写，而不是直接判失败。
+		if retried, err := service.scheduleProviderStreamRetry(stream, payload.Err, accumulatedText, accumulatedReasoning, accumulatedReasoningSignature, accumulatedReasoningSignatureSource, accumulatedReasoningItemID, accumulatedReasoningStatus, accumulatedReasoningSummary, hadToolInvocation); err != nil {
+			return service.failStreamIfNonTerminal(stream, "unknown", err)
+		} else if retried {
+			return nil
+		}
 		var providerErr providerTerminalError
 		if errors.As(payload.Err, &providerErr) {
 			service.setTurnPhase(stream, TurnPhaseFailed)
@@ -1192,7 +1199,9 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 	// content_filter 是 provider 内容策略拦截而非正常收尾：此时流内即使出现过工具调用，
 	// 其参数往往已被过滤或截断，照常执行会绕过安全策略（参照上游 aa47152f 的语义：
 	// 被内容过滤回合的工具调用一律拒绝，回合按正常结束收口）。
-	contentFiltered := strings.TrimSpace(finishReason) == "content_filter"
+	// Anthropic 的 stop_reason=refusal（以及 Gemini SAFETY 归一化后的 refusal）语义相同：
+	// 被拒回合若续写，只会以同样的拒绝反复请求（参照 leookun/cursor-byok#500/#423）。
+	contentFiltered := isPolicyBlockedFinishReason(finishReason)
 	if (hadToolInvocation || shouldResumeAfterToolResults(finishReason)) && !terminalToolInvocation && !contentFiltered {
 		if err := service.publishCheckpoint(requestID, conversationID); err != nil {
 			return service.failStreamIfNonTerminal(stream, "unknown", err)
@@ -1224,6 +1233,13 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 	// 已向用户发送过正文时，通用续写会重复或篡改已展示的上下文。保留部分正文，
 	// 以明确失败终态收口，让客户端和后续回合都知道回复并未完整结束。
 	if isMaxOutputTokensTruncation(finishReason) && !hadToolInvocation && strings.TrimSpace(accumulatedText) != "" {
+		// 先按「从已有输出处继续」自动续写（最多 providerOutputContinuationLimit 次），
+		// 用尽后再以明确的截断失败终态收口。
+		if continued, err := service.scheduleOutputLimitContinuation(stream, conversationID, turnSeq, requestID, modelCallID, usage, finishReason); err != nil {
+			return service.failStreamIfNonTerminal(stream, "unknown", err)
+		} else if continued {
+			return nil
+		}
 		service.setTurnPhase(stream, TurnPhaseFailed)
 		return service.closeStreamWithOutputTruncation(
 			stream,
@@ -1360,6 +1376,8 @@ func (service *Service) handleTimerEvent(stream *ActiveStream, payload *streamTi
 		return service.recoverStaleInteractionWithoutResponse(stream, payload)
 	case streamTimerTurnStale:
 		return service.handleTurnStaleTimeout(stream, payload)
+	case streamTimerProviderRetry:
+		return service.handleProviderRetryTimer(stream)
 	case streamTimerCheckpointBlobs:
 		// checkpoint blob 同步超时：Cursor 断连/blob 确认丢失时，若无人处理，
 		// stream 会永久卡在 TurnPhaseCheckpointing，终态 endstream 永不发出，

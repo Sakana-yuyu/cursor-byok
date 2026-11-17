@@ -110,6 +110,11 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 		})
 	}
 
+	// 后台化任务若在本回合运行期间跑完，在本次 pass 前把结果补进当前回合，
+	// 而不是等到用户再发下一条消息（参照 leookun/cursor-byok#487）。失败只记日志，不阻断回合。
+	if err := service.injectBackgroundedResultsIntoActiveTurn(stream, conversationID, requestID); err != nil {
+		logger.Errorf("forwarder inject backgrounded delegation results failed request_id=%s conversation_id=%s err=%v", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), err)
+	}
 	conversation, _, _, err := service.snapshotCheckpointConversation(stream)
 	if err != nil {
 		service.setTurnPhase(stream, TurnPhaseFailed)
@@ -234,6 +239,12 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	maxTokens, requestKnobs := service.resolveProviderOutputBudget(modelID, modelName, conversation, compiled, thinkingEffort, recoveryFloor)
 	stream.mu.Lock()
 	stream.ProviderRequestMaxTokens = maxTokens
+	// provider 不回报 usage 时（部分中转站/本地模型），用本次请求的估算值兜底上下文用量，
+	// 避免 Cursor 上下文指示与自动压缩永远停在 0（参照 leookun/cursor-byok#460）。
+	stream.ProviderEstimatedPromptTokens = 0
+	if estimate, ok := requestKnobs["compiled_prompt_tokens_estimate"].(int64); ok && estimate > 0 {
+		stream.ProviderEstimatedPromptTokens = estimate
+	}
 	stream.mu.Unlock()
 	// max_tokens 超限恢复：若本回合因中转站 400 触发过降级重试，用恢复上限覆盖预算，
 	// 确保重试请求的 max_tokens 不超过中转站真实限制。

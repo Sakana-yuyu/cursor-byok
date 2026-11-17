@@ -14,6 +14,7 @@ import (
 
 	"cursor/gen/agentv1"
 	runtimecore "cursor/internal/backend/agent/core"
+	"cursor/internal/logger"
 )
 
 func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, sink func(ModelEvent) error) error {
@@ -209,6 +210,10 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 		}
 
 		toolBlocks := make(map[int]*anthropicToolAccumulator)
+		// 已完成的工具调用先暂存，等 stop_reason 到达后再交给 forwarder：Anthropic 的
+		// content_block_stop 早于 message_delta，若立即下发，stop_reason=refusal 的被拒回合
+		// 里流出的工具会在得知拒绝之前就被执行（参照 leookun/cursor-byok#423/#500）。
+		var pendingToolEvents []ModelEvent
 		openContentBlocks := make(map[int]struct{})
 		messageStarted := false
 		terminalMessageDelta := false
@@ -359,6 +364,10 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 			if finishReason == "" {
 				finishReason = "message_stop"
 			}
+			if err := releasePendingAnthropicToolEvents(req, currentModel, finishReason, pendingToolEvents, wrappedSink); err != nil {
+				return err
+			}
+			pendingToolEvents = nil
 			if err := wrappedSink(ModelEvent{
 				Kind:              ModelEventKindTurnFinished,
 				OccurredAt:        time.Now().UTC(),
@@ -516,7 +525,7 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 						return err
 					}
 					streamIdle.MarkEffectiveContent()
-					if err := wrappedSink(ModelEvent{
+					pendingToolEvents = append(pendingToolEvents, ModelEvent{
 						Kind:       ModelEventKindToolLikeCompleted,
 						OccurredAt: time.Now().UTC(),
 						Provider:   "anthropic",
@@ -526,9 +535,7 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 							ToolName: accumulator.Name,
 							ArgsJSON: argsJSON,
 						},
-					}); err != nil {
-						return err
-					}
+					})
 					delete(toolBlocks, event.Index)
 					return nil
 				}
@@ -628,6 +635,25 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 	})
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+// releasePendingAnthropicToolEvents 在回合收口前按原顺序下发暂存的工具调用；
+// stop_reason=refusal 时整体丢弃，被拒回合的工具一律不执行。
+func releasePendingAnthropicToolEvents(req StreamRequest, model string, finishReason string, events []ModelEvent, sink func(ModelEvent) error) error {
+	if len(events) == 0 {
+		return nil
+	}
+	if strings.EqualFold(strings.TrimSpace(finishReason), "refusal") {
+		logger.Warnf("anthropic refusal dropped streamed tool calls request_id=%s model_call_id=%s model=%s count=%d",
+			strings.TrimSpace(req.RequestID), strings.TrimSpace(req.ModelCallID), model, len(events))
+		return nil
+	}
+	for _, event := range events {
+		if err := sink(event); err != nil {
+			return err
+		}
 	}
 	return nil
 }

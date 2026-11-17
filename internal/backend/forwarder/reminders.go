@@ -25,6 +25,8 @@ const (
 	promptContextSourceSubagentEmptyStopRecovery = "subagent_empty_stop_recovery"
 	promptContextSourceMaxOutputTokensRecovery   = "max_output_tokens_recovery"
 	promptContextSourceDebugModeReminder         = "debug_mode_reminder"
+	promptContextSourceProviderContinuation      = "provider_incomplete_continuation"
+	promptContextSourceProviderStreamRecovery    = "provider_stream_recovery_continuation"
 )
 
 // NewReminderInjector 创建默认 reminder 注入器。

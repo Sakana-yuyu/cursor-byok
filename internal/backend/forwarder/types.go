@@ -264,9 +264,18 @@ type ActiveStream struct {
 	// 由 handleMaxOutputTokensRecovery 设置（固定有界值，只抬不降、不随恢复次数放大），
 	// driveProvider 读取后即清零（一次性生效）。零值表示未触发恢复，沿用 catalog/配置预算。
 	MaxOutputTokensRecoveryFloor int
+	// ProviderStreamRetryCount 记录本回合因「已产出后中断」触发续写恢复的次数，
+	// 上限 providerStreamRetryLimit，防止上游持续断流时无限续写。
+	ProviderStreamRetryCount int
+	// ProviderOutputContinuationCount 记录本回合因输出上限截断（已有正文）自动续写的次数，
+	// 上限 providerOutputContinuationLimit。
+	ProviderOutputContinuationCount int
 	// ProviderRequestMaxTokens 记录最近一次 provider 请求解析后的 max_tokens，
 	// 供 max_output_tokens 截断恢复计算抬升下限（不低于上次预算）。
 	ProviderRequestMaxTokens int
+	// ProviderEstimatedPromptTokens 记录最近一次 provider 请求的 prompt token 估算值，
+	// 仅在 provider 未回报 usage 时用于兜底上下文用量展示与自动压缩判断，不作为真实锚点。
+	ProviderEstimatedPromptTokens int64
 	// ProviderToolQuarantine 记录本回合因 provider 明确拒绝其 schema/descriptor
 	// 而被隔离的 provider 侧工具名（providerToolSchema400ToolName 提取）。driveProvider
 	// 构建请求时把这些工具从 compiled.Tools 中剔除后重试一次；回合结束即清空。

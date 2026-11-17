@@ -187,7 +187,19 @@ func (recorder *streamRecorder) completedCleanly() bool {
 // 这类响应不应进入本地响应缓存，否则重试会回放相同的截断流。
 func isTruncationFinishReason(reason string) bool {
 	switch strings.TrimSpace(reason) {
-	case "max_output_tokens", "length", "content_filter":
+	case "max_output_tokens", "length", "content_filter", "refusal":
+		return true
+	default:
+		return false
+	}
+}
+
+// isPolicyBlockedFinishReason 判断收口原因是否为 provider 内容策略拦截：
+// OpenAI 兼容端点报 content_filter，Anthropic 报 refusal（Gemini SAFETY 也归一化为 refusal）。
+// 这类回合内即使流出了工具调用也不应续写，否则会以相同的拒绝反复请求。
+func isPolicyBlockedFinishReason(reason string) bool {
+	switch strings.ToLower(strings.TrimSpace(reason)) {
+	case "content_filter", "refusal":
 		return true
 	default:
 		return false

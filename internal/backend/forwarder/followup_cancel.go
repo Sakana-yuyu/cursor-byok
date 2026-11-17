@@ -276,6 +276,7 @@ func (service *Service) deliverBackgroundedDelegationResult(record backgroundedD
 			conversationID, strings.TrimSpace(record.ExecID), err)
 		return
 	}
+	service.signalBackgroundedResult(conversationID)
 	logger.Infof("forwarder backgrounded delegation result persisted conversation_id=%s exec_id=%s exec_kind=%s tool_call_id=%s status=%s result_chars=%d",
 		conversationID, strings.TrimSpace(record.ExecID), strings.TrimSpace(record.ExecKind), strings.TrimSpace(record.ToolCallID), status, len([]rune(resultText)))
 	if service.debug != nil {
@@ -442,4 +443,98 @@ func aggregateResultReplayText(summary delegatedAggregateResult, rawPayload stri
 		parts = append(parts, segment)
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+// signalBackgroundedResult 标记会话有新的后台任务结果待补进运行中回合。
+func (service *Service) signalBackgroundedResult(conversationID string) {
+	conversationID = strings.TrimSpace(conversationID)
+	if service == nil || conversationID == "" {
+		return
+	}
+	service.backgroundedDelegationMu.Lock()
+	if service.backgroundedResultSignals == nil {
+		service.backgroundedResultSignals = make(map[string]struct{})
+	}
+	service.backgroundedResultSignals[conversationID] = struct{}{}
+	service.backgroundedDelegationMu.Unlock()
+}
+
+// takeBackgroundedResultSignal 取走并清除会话的待补放标记。
+func (service *Service) takeBackgroundedResultSignal(conversationID string) bool {
+	conversationID = strings.TrimSpace(conversationID)
+	if service == nil || conversationID == "" {
+		return false
+	}
+	service.backgroundedDelegationMu.Lock()
+	defer service.backgroundedDelegationMu.Unlock()
+	if _, ok := service.backgroundedResultSignals[conversationID]; !ok {
+		return false
+	}
+	delete(service.backgroundedResultSignals, conversationID)
+	return true
+}
+
+// injectBackgroundedResultsIntoActiveTurn 把本回合运行期间才落盘的后台任务结果补进当前回合。
+// 只在 provider pass 开始前调用：此时没有挂起的工具调用，追加 user 角色的 prompt_context
+// 不会插进 tool_call/tool_result 之间。已回放过的结果按内容哈希去重，下一回合不会重复补放。
+func (service *Service) injectBackgroundedResultsIntoActiveTurn(stream *ActiveStream, conversationID string, requestID string) error {
+	if service == nil || stream == nil || service.store == nil {
+		return nil
+	}
+	if pendingBridgeCount(stream) > 0 || !service.takeBackgroundedResultSignal(conversationID) {
+		return nil
+	}
+	persisted, err := service.store.LoadConversation(conversationID)
+	if err != nil {
+		return err
+	}
+	stream.mu.Lock()
+	turnSeq := stream.TurnSeq
+	stream.mu.Unlock()
+	candidates := service.pendingBackgroundedDelegationEntries(persisted, requestID, turnSeq)
+	if len(candidates) == 0 {
+		return nil
+	}
+	// 磁盘版本可能落后于内存 checkpoint（本回合刚追加、尚未落盘的回放），再按内存版本去重一次。
+	replayed := make(map[string]struct{})
+	if checkpoint, _, _, err := service.snapshotCheckpointConversation(stream); err == nil && checkpoint != nil {
+		for _, entry := range checkpoint.Entries {
+			if hash, ok := backgroundedReplayContentHash(entry); ok {
+				replayed[hash] = struct{}{}
+			}
+		}
+	}
+	entries := make([]HistoryEntry, 0, len(candidates))
+	for _, entry := range candidates {
+		if hash, ok := backgroundedReplayContentHash(entry); ok {
+			if _, done := replayed[hash]; done {
+				continue
+			}
+		}
+		entries = append(entries, entry)
+	}
+	if len(entries) == 0 {
+		return nil
+	}
+	if _, err := service.appendConversationEntries(stream, conversationID, entries); err != nil {
+		return err
+	}
+	logger.Infof("forwarder backgrounded delegation results injected into active turn request_id=%s conversation_id=%s count=%d",
+		strings.TrimSpace(requestID), strings.TrimSpace(conversationID), len(entries))
+	return nil
+}
+
+// backgroundedReplayContentHash 读取后台任务结果回放条目的内容哈希。
+func backgroundedReplayContentHash(entry HistoryEntry) (string, bool) {
+	if strings.TrimSpace(entry.Kind) != "prompt_context" {
+		return "", false
+	}
+	var payload promptContextEntryPayload
+	if err := json.Unmarshal(entry.Payload, &payload); err != nil {
+		return "", false
+	}
+	if strings.TrimSpace(payload.Source) != promptContextSourceBackgroundedDelegationResult {
+		return "", false
+	}
+	return strings.TrimSpace(payload.ContentHash), true
 }

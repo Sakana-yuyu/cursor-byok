@@ -84,7 +84,19 @@ func (snapshot turnUsageSnapshot) requestTokensTotal() int64 {
 
 
 func (service *Service) updateConversationTokenState(stream *ActiveStream, conversationID string, usage turnUsageSnapshot, modelCallID string, finalizeAutoCompaction bool) error {
-	if service == nil || !usage.hasAny() {
+	if service == nil {
+		return nil
+	}
+	// provider 未回报输入侧 usage：用请求前的 prompt 估算兜底（仅影响上下文展示与自动压缩，
+	// 不写入用量记录，也不作为 anchored estimation 的真实锚点）。
+	estimatedUsage := false
+	if usage.promptTokensTotal() == 0 {
+		if estimate := activeStreamEstimatedPromptTokens(stream); estimate > 0 {
+			usage.InputTokens = estimate
+			estimatedUsage = true
+		}
+	}
+	if !usage.hasAny() {
 		return nil
 	}
 	now := time.Now().UTC()
@@ -92,6 +104,9 @@ func (service *Service) updateConversationTokenState(stream *ActiveStream, conve
 	// updateConversationMetaAndCheckpoint 持有 stream.mu 调用 update 闭包，
 	// 锚点消息数必须在进入闭包前读出，闭包内再锁 stream.mu 会死锁。
 	anchorCount := activeStreamPromptAnchorMessageCount(stream)
+	if estimatedUsage {
+		anchorCount = 0
+	}
 	autoCompactionReserveTokens := int64(compactionAutoReserveTokens)
 	if finalizeAutoCompaction {
 		autoCompactionReserveTokens = service.resolveCompactionReserveTokens(modelID)
@@ -135,6 +150,15 @@ func activeStreamModelID(stream *ActiveStream) string {
 
 // activeStreamPromptAnchorMessageCount 返回本 pass 记录的锚点消息数；0 表示本 pass
 // 为投影/旁路请求，不应更新会话锚点。
+func activeStreamEstimatedPromptTokens(stream *ActiveStream) int64 {
+	if stream == nil {
+		return 0
+	}
+	stream.mu.Lock()
+	defer stream.mu.Unlock()
+	return stream.ProviderEstimatedPromptTokens
+}
+
 func activeStreamPromptAnchorMessageCount(stream *ActiveStream) int {
 	if stream == nil {
 		return 0

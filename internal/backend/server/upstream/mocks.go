@@ -22,7 +22,7 @@ const (
 	availableModelsDisableUnusedHours = 2400000
 	availableModelsUpgradeHours       = 2
 
-	modelRuntimeThinkingEffortParameterID = "effort"
+	modelRuntimeThinkingEffortParameterID = "reasoning"
 	modelRuntimeContextParameterID        = "context"
 	modelRuntimeFastParameterID           = "fast"
 

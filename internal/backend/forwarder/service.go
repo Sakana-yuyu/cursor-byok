@@ -111,6 +111,9 @@ type Service struct {
 	// 结果不能写回死流，必须凭该记录按会话归属重新落地。
 	backgroundedDelegationMu sync.Mutex
 	backgroundedDelegations  map[string]backgroundedDelegationExec
+	// backgroundedResultSignals 标记哪些会话有新落盘、尚未补进运行中回合的后台任务结果
+	// （key = conversation_id），同样由 backgroundedDelegationMu 保护。
+	backgroundedResultSignals map[string]struct{}
 	// childParentLinkMu 保护 childParentLinks：记录客户端在子代理 RunSSE 上发来的
 	// 父链路 HTTP 头（key = 子 request_id）。native 子代理是独立 conversation，
 	// 这些头是后端唯一能拿到父会话/父 tool_call 的来源。
