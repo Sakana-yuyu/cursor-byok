@@ -22,10 +22,12 @@ jobs:
       - id: resolve
         shell: bash
         run: |
+          # 两个 macOS 目标都在 Intel runner 上构建；protoc 按宿主选型，应用按 target 交叉编译。
+          # 避免 ARM runner 容量不足使整个 Release 无法生成。
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             MATRIX='{"include":[{"name":"Windows x64 (64位)","runner":"windows-latest","target":"windows","artifact":"windows-x64","protoc_asset":"protoc-29.3-win64.zip"}]}'
           else
-            MATRIX='{"include":[{"name":"Windows x64 (64位)","runner":"windows-latest","target":"windows","artifact":"windows-x64","protoc_asset":"protoc-29.3-win64.zip"},{"name":"Windows ARM64","runner":"windows-latest","target":"windows-arm64","artifact":"windows-arm64","protoc_asset":"protoc-29.3-win64.zip"},{"name":"Windows x32 (32位)","runner":"windows-latest","target":"windows-386","artifact":"windows-x32","protoc_asset":"protoc-29.3-win64.zip"},{"name":"Linux x64","runner":"ubuntu-24.04","target":"linux","artifact":"linux-x64","protoc_asset":"protoc-29.3-linux-x86_64.zip"},{"name":"macOS x64 (Intel)","runner":"macos-15-intel","target":"darwin-amd64","artifact":"macos-x64","protoc_asset":"protoc-29.3-osx-x86_64.zip"},{"name":"macOS ARM64 (Apple Silicon)","runner":"macos-15","target":"darwin-arm64","artifact":"macos-arm64","protoc_asset":"protoc-29.3-osx-aarch_64.zip"}]}'
+            MATRIX='{"include":[{"name":"Windows x64 (64位)","runner":"windows-latest","target":"windows","artifact":"windows-x64","protoc_asset":"protoc-29.3-win64.zip"},{"name":"Windows ARM64","runner":"windows-latest","target":"windows-arm64","artifact":"windows-arm64","protoc_asset":"protoc-29.3-win64.zip"},{"name":"Windows x32 (32位)","runner":"windows-latest","target":"windows-386","artifact":"windows-x32","protoc_asset":"protoc-29.3-win64.zip"},{"name":"Linux x64","runner":"ubuntu-24.04","target":"linux","artifact":"linux-x64","protoc_asset":"protoc-29.3-linux-x86_64.zip"},{"name":"macOS x64 (Intel)","runner":"macos-15-intel","target":"darwin-amd64","artifact":"macos-x64","protoc_asset":"protoc-29.3-osx-x86_64.zip"},{"name":"macOS ARM64 (Apple Silicon)","runner":"macos-15-intel","target":"darwin-arm64","artifact":"macos-arm64","protoc_asset":"protoc-29.3-osx-x86_64.zip"}]}'
           fi
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
 

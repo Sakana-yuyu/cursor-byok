@@ -26,7 +26,7 @@ tasks:
             ref: .SCAN
 
   build:native:
-    summary: 使用本机构建 macOS 程序
+    summary: 在 macOS 宿主上构建指定架构程序
     internal: true
     deps:
       - task: common:build:frontend
@@ -38,20 +38,22 @@ tasks:
           SCAN:
             ref: .SCAN
       - task: common:generate:icons
+    # 目标环境仅作用于最终编译：依赖中的 go run、protoc 和绑定生成器必须在宿主执行。
     cmds:
-      - go build {{.BUILD_FLAGS}} -o {{.OUTPUT}}
+      - >-
+        GOOS=darwin GOARCH={{.ARCH | default ARCH}} CGO_ENABLED=1
+        CGO_CFLAGS="-arch {{.CLANG_ARCH}} -mmacosx-version-min={{.MIN_MACOS}}"
+        CGO_LDFLAGS="-arch {{.CLANG_ARCH}} -mmacosx-version-min={{.MIN_MACOS}}"
+        MACOSX_DEPLOYMENT_TARGET={{.MIN_MACOS}}
+        go build {{.BUILD_FLAGS}} -o "{{.OUTPUT}}"
+      - lipo -verify_arch {{.CLANG_ARCH}} "{{.OUTPUT}}"
     vars:
+      CLANG_ARCH: '{{if eq (.ARCH | default ARCH) "arm64"}}arm64{{else}}x86_64{{end}}'
+      MIN_MACOS: '{{if eq (.ARCH | default ARCH) "arm64"}}11.0{{else}}10.15{{end}}'
       BUILD_FLAGS: '{{if eq .DEV "true"}}{{if .EXTRA_TAGS}}-tags {{.EXTRA_TAGS}} {{end}}-buildvcs=false -gcflags=all="-l" -ldflags="-X cursor/internal/buildinfo.Version={{.APP_VERSION}} -X cursor/internal/buildinfo.Commit={{.GIT_COMMIT}}"{{else}}-tags production{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}} -trimpath -buildvcs=false -ldflags="-w -s -X cursor/internal/buildinfo.Version={{.APP_VERSION}} -X cursor/internal/buildinfo.Commit={{.GIT_COMMIT}}"{{end}}'
       BINARY_NAME: '{{.BINARY_NAME | default .APP_NAME}}'
       DEFAULT_OUTPUT: '{{.BIN_DIR}}/{{.BINARY_NAME}}'
       OUTPUT: '{{ .OUTPUT | default .DEFAULT_OUTPUT }}'
-    env:
-      GOOS: darwin
-      CGO_ENABLED: 1
-      GOARCH: '{{.ARCH | default ARCH}}'
-      CGO_CFLAGS: "-mmacosx-version-min=10.15"
-      CGO_LDFLAGS: "-mmacosx-version-min=10.15"
-      MACOSX_DEPLOYMENT_TARGET: "10.15"
 
   build:universal:
     summary: 构建 macOS 通用包（amd64 + arm64）
