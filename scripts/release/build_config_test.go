@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"text/template"
@@ -12,7 +14,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func TestDarwinCompileKeepsGeneratorsOnHostArchitecture(t *testing.T) {
+type darwinCompileTask struct {
+	Env  map[string]string `yaml:"env"`
+	Vars map[string]string `yaml:"vars"`
+	Cmds []string          `yaml:"cmds"`
+}
+
+func loadDarwinCompileTask(t *testing.T) darwinCompileTask {
+	t.Helper()
 	data, err := os.ReadFile(filepath.Join("..", "..", "build", "darwin", "Taskfile.yml"))
 	if err != nil {
 		t.Fatal(err)
@@ -24,15 +33,16 @@ func TestDarwinCompileKeepsGeneratorsOnHostArchitecture(t *testing.T) {
 	if err := yaml.Unmarshal(data, &document); err != nil {
 		t.Fatal(err)
 	}
-	var compile struct {
-		Env  map[string]string `yaml:"env"`
-		Vars map[string]string `yaml:"vars"`
-		Cmds []string          `yaml:"cmds"`
-	}
+	var compile darwinCompileTask
 	node := document.Tasks["build:native"]
 	if err := node.Decode(&compile); err != nil {
 		t.Fatal(err)
 	}
+	return compile
+}
+
+func TestDarwinCompileKeepsGeneratorsOnHostArchitecture(t *testing.T) {
+	compile := loadDarwinCompileTask(t)
 	if len(compile.Env) != 0 {
 		t.Fatal("target environment leaks into native generator dependencies")
 	}
@@ -85,11 +95,58 @@ func TestDarwinCompileKeepsGeneratorsOnHostArchitecture(t *testing.T) {
 						t.Fatalf("missing %q in compile command %q", expected, command)
 					}
 				}
-				if got := render(compile.Cmds[1]); got != `lipo -verify_arch `+clangArch+` "bin/test-app"` {
+				if got := render(compile.Cmds[1]); got != `lipo "bin/test-app" -verify_arch `+clangArch {
 					t.Fatalf("wrong architecture verification: %s", got)
 				}
 			})
 		}
+	}
+}
+
+// TestDarwinArchitectureVerification executes the Taskfile command with Apple's
+// parser: checking only a rendered string cannot validate variable-arity flags.
+func TestDarwinArchitectureVerification(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("requires Apple's clang and lipo; executed by the native macOS CI gate")
+	}
+	compile := loadDarwinCompileTask(t)
+	if len(compile.Cmds) != 2 {
+		t.Fatal("missing architecture verification command")
+	}
+	parsed, err := template.New("verify").Parse(compile.Cmds[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"x86_64", "arm64"} {
+		t.Run(arch, func(t *testing.T) {
+			object := filepath.Join(t.TempDir(), "test object.o")
+			clang := exec.Command("xcrun", "clang", "-arch", arch, "-x", "c", "-c", "-o", object, "-")
+			clang.Stdin = strings.NewReader("int release_architecture_probe;\n")
+			if output, err := clang.CombinedOutput(); err != nil {
+				t.Fatalf("create %s Mach-O object: %v\n%s", arch, err, output)
+			}
+			verify := func(path, expectedArch string) ([]byte, error) {
+				t.Helper()
+				var command bytes.Buffer
+				if err := parsed.Execute(&command, map[string]string{"OUTPUT": path, "CLANG_ARCH": expectedArch}); err != nil {
+					t.Fatal(err)
+				}
+				return exec.Command("/bin/sh", "-c", command.String()).CombinedOutput()
+			}
+			if output, err := verify(object, arch); err != nil {
+				t.Fatalf("verification rejected matching architecture: %v\n%s", err, output)
+			}
+			wrongArch := "arm64"
+			if arch == wrongArch {
+				wrongArch = "x86_64"
+			}
+			if output, err := verify(object, wrongArch); err == nil {
+				t.Fatalf("verification accepted wrong architecture %s: %s", wrongArch, output)
+			}
+			if _, err := verify(object+".missing", arch); err == nil {
+				t.Fatal("verification accepted a missing artifact")
+			}
+		})
 	}
 }
 

@@ -46,7 +46,7 @@ tasks:
         CGO_LDFLAGS="-arch {{.CLANG_ARCH}} -mmacosx-version-min={{.MIN_MACOS}}"
         MACOSX_DEPLOYMENT_TARGET={{.MIN_MACOS}}
         go build {{.BUILD_FLAGS}} -o "{{.OUTPUT}}"
-      - lipo -verify_arch {{.CLANG_ARCH}} "{{.OUTPUT}}"
+      - lipo "{{.OUTPUT}}" -verify_arch {{.CLANG_ARCH}}
     vars:
       CLANG_ARCH: '{{if eq (.ARCH | default ARCH) "arm64"}}arm64{{else}}x86_64{{end}}'
       MIN_MACOS: '{{if eq (.ARCH | default ARCH) "arm64"}}11.0{{else}}10.15{{end}}'

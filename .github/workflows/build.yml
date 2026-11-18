@@ -35,9 +35,20 @@ jobs:
     name: Verify (reuse test workflow)
     uses: ./.github/workflows/test.yml
 
+  verify-macos-architecture:
+    name: Verify native macOS architecture check
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test ./scripts/release -run '^TestDarwinArchitectureVerification$' -count=1 -v
+
   build:
     name: ${{ matrix.name }}
-    needs: [resolve-matrix, verify]
+    needs: [resolve-matrix, verify, verify-macos-architecture]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
