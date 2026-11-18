@@ -93,6 +93,8 @@ type streamProviderEvent struct {
 	Event modeladapter.ModelEvent
 	Done  bool
 	Err   error
+	// OnAccepted is executed by the actor only after the provider token is checked.
+	OnAccepted func()
 }
 
 type streamTimerEvent struct {
@@ -151,7 +153,10 @@ func (service *Service) dispatchInboundIntent(intent InboundIntent) error {
 	}
 	if strings.TrimSpace(intent.Kind) == "run" {
 		service.reconcileStaleRunQueueOwner(intent.ConversationID)
-		result, ownerRequestID, queuePosition := service.runQueue.Submit(intent)
+		result, ownerRequestID, queuePosition, err := service.runQueue.SubmitChecked(intent, validateDuplicateContextSelection)
+		if err != nil {
+			return err
+		}
 		switch result {
 		case runQueueQueued:
 			logger.Infof("forwarder conversation run queued request_id=%s conversation_id=%s owner_request_id=%s queue_len=%d queue_position=%d",
@@ -693,6 +698,9 @@ func (service *Service) handleProviderEvent(stream *ActiveStream, payload *strea
 	if !providerTokenMatches(stream, payload.Token) {
 		return nil
 	}
+	if payload.OnAccepted != nil {
+		payload.OnAccepted()
+	}
 	if payload.Done {
 		return service.handleProviderDoneEvent(stream, payload)
 	}
@@ -1045,6 +1053,15 @@ func (service *Service) handleProviderDoneEvent(stream *ActiveStream, payload *s
 		// 避免 history 缺失客户端已展示的内容（失败后可回溯、可续接）。
 		flushPartialOutput := func() error {
 			return service.flushAssistantText(stream, conversationID, turnSeq, requestID, accumulatedText, accumulatedReasoning, accumulatedReasoningSignature, accumulatedReasoningSignatureSource, accumulatedReasoningItemID, accumulatedReasoningStatus, accumulatedReasoningSummary, false)
+		}
+		var invalidBudget *modeladapter.ContextBudgetValidationError
+		if errors.As(payload.Err, &invalidBudget) {
+			return service.failStreamIfNonTerminal(stream, "context_budget_invalid", payload.Err)
+		}
+		if recovered, err := service.recoverFromContextBudgetExceeded(stream, payload.Err); err != nil {
+			return service.failStreamIfNonTerminal(stream, compactionOverflowTerminalCode, err)
+		} else if recovered {
+			return nil
 		}
 		// 优先处理「上下文超限」：尝试强制压缩上下文并重试，而不是直接判失败。
 		// 这能挽救因 contextWindowTokens 配置偏大（或模型真实窗口小于配置）导致的 context_length_exceeded。

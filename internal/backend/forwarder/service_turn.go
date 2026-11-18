@@ -7,6 +7,7 @@ import (
 	"cursor/gen/agentv1"
 	"cursor/internal/apperror"
 	runtimecore "cursor/internal/backend/agent/core"
+	modeladapter "cursor/internal/backend/agent/model"
 	"cursor/internal/logger"
 	"encoding/json"
 	"errors"
@@ -466,7 +467,19 @@ func normalizeStreamFailure(stream *ActiveStream, cause error) *apperror.AppErro
 	if stream != nil {
 		traceID = strings.TrimSpace(stream.RequestID)
 	}
-	return apperror.Classify("forwarder.stream", cause, apperror.WithTraceID(traceID))
+	options := []apperror.Option{apperror.WithTraceID(traceID)}
+	var budgetError *modeladapter.ContextBudgetExceededError
+	var validationError *modeladapter.ContextBudgetValidationError
+	if resolveTerminalCode("unknown", cause) == compactionOverflowTerminalCode || errors.As(cause, &budgetError) {
+		options = append(options, apperror.WithCode(apperror.CodeConfiguration),
+			apperror.WithKind(apperror.KindConfiguration), apperror.WithDisposition(apperror.DispositionBlocked),
+			apperror.WithUserMessage("当前输入无法安全压缩到所选上下文范围，请选择更大的 Context 档位或减少本次输入。"))
+	} else if errors.As(cause, &validationError) {
+		options = append(options, apperror.WithCode(apperror.CodeConfiguration),
+			apperror.WithKind(apperror.KindConfiguration), apperror.WithDisposition(apperror.DispositionBlocked),
+			apperror.WithUserMessage("上下文预算或输出参数无效，请检查模型与渠道配置。"))
+	}
+	return apperror.Classify("forwarder.stream", cause, options...)
 }
 
 // formatTurnFailureCause 生成单行、限长的失败根因，供 fail_active_stream 旁的

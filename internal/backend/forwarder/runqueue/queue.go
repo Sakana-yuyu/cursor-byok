@@ -28,6 +28,7 @@ type Cancellation[T Intent] struct {
 
 type conversationState[T Intent] struct {
 	ownerRequestID string
+	ownerIntent    T
 	pending        []T
 }
 
@@ -42,37 +43,52 @@ func New[T Intent]() *Queue[T] {
 	return &Queue[T]{states: make(map[string]*conversationState[T])}
 }
 
-func (q *Queue[T]) Submit(intent T) (result SubmitResult, ownerRequestID string, queuePosition int) {
+func (q *Queue[T]) Submit(intent T) (SubmitResult, string, int) {
+	result, owner, position, _ := q.SubmitChecked(intent, nil)
+	return result, owner, position
+}
+
+// SubmitChecked validates duplicates atomically with ownership and FIFO admission.
+// The checker must be pure: it runs under the queue lock and must not call the queue.
+func (q *Queue[T]) SubmitChecked(intent T, checkDuplicate func(existing, incoming T) error) (SubmitResult, string, int, error) {
 	if q == nil {
-		return "", "", 0
+		return "", "", 0, nil
 	}
 	conversationID := strings.TrimSpace(intent.GetConversationID())
 	requestID := strings.TrimSpace(intent.GetRequestID())
 	if conversationID == "" || requestID == "" {
-		return Duplicate, "", 0
+		return Duplicate, "", 0, nil
 	}
-
 	q.mu.Lock()
 	defer q.mu.Unlock()
-
 	if q.closed {
-		return Duplicate, "", 0
+		return Duplicate, "", 0, nil
 	}
 	state := q.states[conversationID]
 	if state == nil {
-		q.states[conversationID] = &conversationState[T]{ownerRequestID: requestID}
-		return Start, "", 0
+		q.states[conversationID] = &conversationState[T]{ownerRequestID: requestID, ownerIntent: intent}
+		return Start, "", 0, nil
 	}
 	if state.ownerRequestID == requestID {
-		return Duplicate, state.ownerRequestID, 0
+		if checkDuplicate != nil {
+			if err := checkDuplicate(state.ownerIntent, intent); err != nil {
+				return Duplicate, state.ownerRequestID, 0, err
+			}
+		}
+		return Duplicate, state.ownerRequestID, 0, nil
 	}
 	for _, pending := range state.pending {
 		if pending.GetRequestID() == requestID {
-			return Duplicate, state.ownerRequestID, 0
+			if checkDuplicate != nil {
+				if err := checkDuplicate(pending, intent); err != nil {
+					return Duplicate, state.ownerRequestID, 0, err
+				}
+			}
+			return Duplicate, state.ownerRequestID, 0, nil
 		}
 	}
 	state.pending = append(state.pending, intent)
-	return Queued, state.ownerRequestID, len(state.pending)
+	return Queued, state.ownerRequestID, len(state.pending), nil
 }
 
 func (q *Queue[T]) Finish(conversationID string, requestID string) (next T, ok bool) {
@@ -107,6 +123,7 @@ func (q *Queue[T]) Finish(conversationID string, requestID string) (next T, ok b
 	state.pending[0] = cleared
 	state.pending = state.pending[1:]
 	state.ownerRequestID = strings.TrimSpace(next.GetRequestID())
+	state.ownerIntent = next
 	return next, true
 }
 

@@ -31,6 +31,10 @@ func (service *Service) decodeInboundIntent(requestID string, message *agentv1.A
 		if conversationID == "" {
 			return InboundIntent{}, fmt.Errorf("conversation_id is required in run_request")
 		}
+		intent.RequestedContextWindowTokens, err = parseRequestedContextWindowTokens(runRequest.GetRequestedModel())
+		if err != nil {
+			return InboundIntent{}, err
+		}
 		intent.ConversationID = conversationID
 		intent.ConversationState = runRequest.GetConversationState()
 		intent.PreFetchedBlobs = runRequest.GetPreFetchedBlobs()
@@ -85,6 +89,10 @@ func (service *Service) decodeInboundIntent(requestID string, message *agentv1.A
 		if conversationID == "" {
 			return InboundIntent{}, fmt.Errorf("conversation_id is required in prewarm_request")
 		}
+		intent.RequestedContextWindowTokens, err = parseRequestedContextWindowTokens(prewarmRequest.GetRequestedModel())
+		if err != nil {
+			return InboundIntent{}, err
+		}
 		intent.Kind = "run"
 		intent.Prewarm = true
 		intent.StartsRun = true
@@ -132,6 +140,7 @@ func (service *Service) decodeInboundIntent(requestID string, message *agentv1.A
 					intent.ModelName = strings.TrimSpace(stream.ModelName)
 					intent.ThinkingEffort = strings.TrimSpace(stream.ThinkingEffort)
 					intent.MaxMode = stream.MaxMode
+					intent.RequestedContextWindowTokens = stream.RequestedContextWindowTokens
 					intent.SubagentModelOverrides = cloneSubagentModelOverrides(stream.SubagentModelOverrides)
 					intent.SelectedSubagentModels = cloneSelectedSubagentModels(stream.SelectedSubagentModels)
 					intent.SelectedSubagentModelDetails = cloneSelectedSubagentModelDetails(stream.SelectedSubagentModelDetails)
@@ -201,8 +210,15 @@ func (service *Service) shouldReuseActiveRun(intent InboundIntent) bool {
 	case TurnPhaseCanceled, TurnPhaseCompleted, TurnPhaseFailed:
 		return false
 	}
+	if intent.RequestedContextWindowTokens > 0 && intent.RequestedContextWindowTokens != stream.RequestedContextWindowTokens {
+		return false
+	}
 	// 用户切换模型后发送新 run_request 时，不应复用旧 stream（旧模型）。
-	if requestedModel := strings.TrimSpace(intent.ModelID); requestedModel != "" {
+	requestedModel := strings.TrimSpace(intent.ModelID)
+	if intent.ClientMessage != nil && extractRequestedModelID(intent.ClientMessage) == "" {
+		requestedModel = ""
+	}
+	if requestedModel != "" {
 		if currentModel := strings.TrimSpace(stream.ModelID); currentModel != "" && requestedModel != currentModel {
 			return false
 		}
@@ -315,6 +331,10 @@ func (service *Service) handleRunIntent(intent InboundIntent) error {
 	stream.ThinkingEffort = strings.TrimSpace(intent.ThinkingEffort)
 	stream.CustomSystemPrompt = strings.TrimSpace(intent.CustomSystemPrompt)
 	stream.MaxMode = intent.MaxMode
+	stream.RequestedContextWindowTokens = intent.RequestedContextWindowTokens
+	stream.ContextBudgetCeilingTokens = 0
+	stream.ContextBudgetRetryCount = 0
+	stream.ContextBudgetRetryReserveTokens = 0
 	stream.SubagentModelOverrides = cloneSubagentModelOverrides(intent.SubagentModelOverrides)
 	stream.SelectedSubagentModels = cloneSelectedSubagentModels(intent.SelectedSubagentModels)
 	stream.SelectedSubagentModelDetails = cloneSelectedSubagentModelDetails(intent.SelectedSubagentModelDetails)
@@ -1039,7 +1059,7 @@ func normalizeRuntimeThinkingEffort(raw string) string {
 	}
 }
 
-func splitRuntimeThinkingEffortVariantString(raw string) (string, string) {
+func splitLegacyRuntimeThinkingEffortVariantString(raw string) (string, string) {
 	text := strings.TrimSpace(raw)
 	if text == "" {
 		return "", ""

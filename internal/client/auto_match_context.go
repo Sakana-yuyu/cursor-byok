@@ -1,19 +1,14 @@
 // auto_match_context.go 实现自动为所有已存储模型适配器配对正确上下文窗口（contextWindowTokens）的能力。
 //
-// 配对策略（与用户确认一致）：
-//   - 目录命中（modelcontext.Capabilities 知道该模型）：仅下调不覆盖——用户主动设置更小值
-//     （如把 1M 限制为 200K 控制上下文/费用）时保留用户设置，避免自动配对吞掉手动配置；
-//     仅在用户值缺失（<=0）或大于目录真实窗口时收敛到目录值（修正误填过大值，根治 context_length_exceeded）。
-//   - 目录未命中（中转自定义模型，如 gpt-5.6-luna）：保留原值，并探测 provider 的 /models
-//     接口，若能拿到该模型的真实窗口则回填；拿不到则保持不变。
-//
-// 受 config.yaml 的 autoMatchContextWindow 开关控制；启动时自动执行（开关开启时），
-// 也可由前端「一键自动配对」按钮手动触发。MaxMode（请求级开关）继续走目录最大值，
-// 本功能保证目录值准确，因此 MaxMode 自然取到正确最大值。
+// 配对策略：缺失时回填，已有正值只下调、不放大；来源未知的旧值同样保留。
+// 能力识别结果通过 Details 单独报告，不把目录/家族估算当作用户设置。
+// 目录未命中时探测 provider /models，完整 ID 优先，歧义别名不匹配。
+// 受 autoMatchContextWindow 开关控制，也支持手动强制触发。
 package client
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"cursor/internal/backend/server/config"
@@ -55,6 +50,13 @@ type AutoMatchDetail struct {
 	Before int `json:"before"`
 	// After 是配对后的 contextWindowTokens（未改动时与 Before 相同）。
 	After int `json:"after"`
+	// Recognized ceilings are diagnostic metadata, not the configured channel limit.
+	CapabilityTokens            int    `json:"capabilityTokens,omitempty"`
+	MaxOutputTokens             int    `json:"maxOutputTokens,omitempty"`
+	CapabilitySource            string `json:"capabilitySource,omitempty"`
+	ReportedContextWindowTokens int    `json:"reportedContextWindowTokens,omitempty"`
+	MaxInputTokens              int    `json:"maxInputTokens,omitempty"`
+	ContextWindowSource         string `json:"contextWindowSource,omitempty"`
 }
 
 // AutoMatchContextWindows 执行一次自动配对：目录命中仅下调（用户手动设置的更小窗口保留），
@@ -99,6 +101,9 @@ func (s *ProxyService) AutoMatchContextWindows(ctx context.Context, force bool) 
 			After:       before,
 		}
 		if cap := modelcontext.Capabilities(modelID); cap != nil && cap.ContextWindowTokens > 0 {
+			detail.CapabilityTokens = cap.ContextWindowTokens
+			detail.MaxOutputTokens = cap.MaxOutputTokens
+			detail.CapabilitySource = cap.Source
 			// 目录命中：仅下调不覆盖。用户主动设置更小值（如限制上下文/控制费用）时
 			// 保留用户设置；仅在用户值缺失（<=0）或大于目录真实窗口时收敛到目录值，
 			// 防止误填过大值触发 context_length_exceeded。
@@ -136,43 +141,27 @@ func (s *ProxyService) AutoMatchContextWindows(ctx context.Context, force bool) 
 			logger.Errorf("auto match context window: probe failed group_key=%s error=%v", redactProbeBucketKeyForLog(key), err)
 			continue
 		}
-		// 建立模型 ID → contextWindowTokens / pricing 的快速查找（大小写不敏感、去 models/ 前缀）。
-		windowByID := make(map[string]int, len(catalog.Models))
-		pricingByID := make(map[string]*ModelPricing, len(catalog.Models))
-		for _, item := range catalog.Models {
-			id := normalizeModelIDForMatch(item.ID)
-			if id == "" {
+		for _, idx := range bucket.indices {
+			item, ok := matchModelCatalogItem(catalog.Models, adapters[idx].ModelID)
+			if !ok {
 				continue
 			}
-			if item.ContextWindowTokens > 0 {
-				if _, exists := windowByID[id]; !exists {
-					windowByID[id] = item.ContextWindowTokens
-				}
+			window := item.ContextWindowTokens
+			result.Details[idx].CapabilityTokens = window
+			result.Details[idx].MaxOutputTokens = item.MaxOutputTokens
+			result.Details[idx].CapabilitySource = item.CapabilitySource
+			result.Details[idx].ReportedContextWindowTokens = item.ReportedContextWindowTokens
+			result.Details[idx].MaxInputTokens = item.MaxInputTokens
+			result.Details[idx].ContextWindowSource = item.ContextWindowSource
+			if window > 0 && (adapters[idx].ContextWindowTokens <= 0 || window < adapters[idx].ContextWindowTokens) {
+				adapters[idx].ContextWindowTokens = window
+				result.Details[idx].After = window
+				result.Details[idx].Source = "probe"
+				result.FromProbe++
 			}
-			if item.Pricing != nil {
-				if _, exists := pricingByID[id]; !exists {
-					pricingByID[id] = item.Pricing
-				}
-			}
-		}
-		for _, idx := range bucket.indices {
-			normalizedID := normalizeModelIDForMatch(adapters[idx].ModelID)
-			window, ok := windowByID[normalizedID]
-			if ok && window > 0 {
-				// 与目录命中同策略（见上文“仅下调不覆盖”注释）：探测结果只在用户值
-				// 缺失（<=0）或大于真实窗口时收敛，用户手动设置的更小窗口必须保留。
-				if adapters[idx].ContextWindowTokens <= 0 || window < adapters[idx].ContextWindowTokens {
-					adapters[idx].ContextWindowTokens = window
-					result.Details[idx].After = window
-					result.Details[idx].Source = "probe"
-					result.FromProbe++
-				}
-			}
-			// 中转站探测到价格且 adapter 当前无手动价格 → 回填。
-			if adapters[idx].Pricing == nil {
-				if probed, found := pricingByID[normalizedID]; found && probed != nil {
-					adapters[idx].Pricing = convertClientPricingToConfig(probed)
-				}
+			if adapters[idx].Pricing == nil && item.Pricing != nil {
+				adapters[idx].Pricing = convertClientPricingToConfig(item.Pricing)
+				result.Changed = true
 			}
 		}
 	}
@@ -207,7 +196,9 @@ func probeBucketKey(adapter config.ModelAdapterConfig) string {
 	typeName := strings.ToLower(strings.TrimSpace(adapter.Type))
 	baseURL := strings.TrimSpace(adapter.BaseURL)
 	apiKey := strings.TrimSpace(adapter.APIKey)
-	return typeName + "|" + baseURL + "|" + apiKey
+	return metadataIdentityHash("auto_context", typeName, baseURL, apiKey,
+		adapter.SupplierID, adapter.AnthropicAuthMode, adapter.ModelCatalogURL,
+		fmt.Sprint(adapter.CustomHeadersEnabled), adapter.CustomHeadersJSON)
 }
 
 // redactProbeBucketKeyForLog 返回脱敏后的分组键：末段 apiKey 只保留首 4/尾 4 字符，
@@ -231,6 +222,9 @@ func redactProbeBucketKeyForLog(key string) string {
 func (s *ProxyService) fetchCatalogForAutoMatch(ctx context.Context, adapter config.ModelAdapterConfig) (ModelCatalogResult, error) {
 	_ = ctx
 	return s.FetchModelCatalog(ModelCatalogRequest{
+		SupplierID:           adapter.SupplierID,
+		AnthropicAuthMode:    adapter.AnthropicAuthMode,
+		ModelCatalogURL:      adapter.ModelCatalogURL,
 		Type:                 adapter.Type,
 		BaseURL:              adapter.BaseURL,
 		APIKey:               adapter.APIKey,
@@ -260,13 +254,41 @@ func convertClientPricingToConfig(src *ModelPricing) *config.ModelPricing {
 	return dst
 }
 
-// normalizeModelIDForMatch 把模型 ID 归一为用于精确匹配的形式：
-// 去前后空白、转小写、去 models/ 前缀、取末尾段（兼容 owner/model 写法）。
+// normalizeModelIDForMatch preserves provider namespaces for exact matching.
 func normalizeModelIDForMatch(modelID string) string {
-	normalized := strings.ToLower(strings.TrimSpace(modelID))
-	normalized = strings.TrimPrefix(normalized, "models/")
-	if index := strings.LastIndex(normalized, "/"); index >= 0 {
-		normalized = normalized[index+1:]
+	return strings.TrimPrefix(strings.ToLower(strings.TrimSpace(modelID)), "models/")
+}
+
+// matchModelCatalogItem prefers the complete provider ID. Only an unqualified
+// request may use a basename alias, and only when exactly one item owns it.
+func matchModelCatalogItem(items []ModelCatalogItem, modelID string) (ModelCatalogItem, bool) {
+	id := normalizeModelIDForMatch(modelID)
+	if id == "" {
+		return ModelCatalogItem{}, false
 	}
-	return normalized
+	var exact, alias *ModelCatalogItem
+	ambiguousExact, ambiguousAlias := false, false
+	for i := range items {
+		candidate := normalizeModelIDForMatch(items[i].ID)
+		if candidate == id {
+			if exact != nil {
+				ambiguousExact = true
+			}
+			exact = &items[i]
+		}
+		basename := candidate[strings.LastIndex(candidate, "/")+1:]
+		if basename == id {
+			if alias != nil {
+				ambiguousAlias = true
+			}
+			alias = &items[i]
+		}
+	}
+	if exact != nil && !ambiguousExact {
+		return *exact, true
+	}
+	if exact == nil && !strings.Contains(id, "/") && alias != nil && !ambiguousAlias {
+		return *alias, true
+	}
+	return ModelCatalogItem{}, false
 }

@@ -13,7 +13,9 @@ var modelsCatalogJSON []byte
 
 // Capability 表示一个已知模型的能力元数据。
 type Capability struct {
-	DisplayName         string
+	DisplayName string
+	// Source distinguishes builtin metadata from family estimates; it is not an official-limit claim.
+	Source              string
 	ContextWindowTokens int
 	MaxOutputTokens     int
 	SupportsVision      bool
@@ -52,6 +54,7 @@ type modelsCatalogDoc struct {
 // modelsCatalogRule 是 models.json 中单条规则的反序列化结构（pattern 为字符串，启动时编译为正则）。
 type modelsCatalogRule struct {
 	Pattern             string                `json:"pattern"`
+	Source              string                `json:"source,omitempty"`
 	DisplayName         string                `json:"displayName"`
 	ContextWindowTokens int                   `json:"contextWindowTokens"`
 	MaxOutputTokens     int                   `json:"maxOutputTokens"`
@@ -92,6 +95,7 @@ func mustLoadCapabilityRules() []capabilityRule {
 			panic(fmt.Sprintf("modelcontext: invalid pattern %q in models.json: %v", raw.Pattern, err))
 		}
 		cap := Capability{
+			Source:              raw.Source,
 			DisplayName:         raw.DisplayName,
 			ContextWindowTokens: raw.ContextWindowTokens,
 			MaxOutputTokens:     raw.MaxOutputTokens,
@@ -100,6 +104,9 @@ func mustLoadCapabilityRules() []capabilityRule {
 			SupportsTools:       raw.SupportsTools,
 			SupportsThinking:    raw.SupportsThinking,
 			ReasoningEfforts:    raw.ReasoningEfforts,
+		}
+		if cap.Source == "" {
+			cap.Source = "builtin_catalog"
 		}
 		if raw.Pricing != nil {
 			cap.Pricing = &BuiltinPricing{
@@ -122,17 +129,7 @@ func mustLoadCapabilityRules() []capabilityRule {
 // 注：原手写规则数组已迁移至 models.json（go:embed 加载）；以下 lookup 函数签名不变，调用方无感知。
 // Capabilities 根据模型 ID 返回能力元数据；未知模型返回 nil。
 func Capabilities(modelID string) *Capability {
-	normalized := NormalizeModelID(modelID)
-	if normalized == "" {
-		return nil
-	}
-	for i := range capabilityRules {
-		if capabilityRules[i].pattern.MatchString(normalized) {
-			c := capabilityRules[i].capability
-			return &c
-		}
-	}
-	return nil
+	return Lookup(modelID).Capability
 }
 
 // LookupResult 是一次目录查询的结果：区分「已覆盖（目录命中）」「未覆盖（未知模型）」。
@@ -155,24 +152,36 @@ func Lookup(modelID string) LookupResult {
 	if normalized == "" {
 		return LookupResult{NormalizedID: ""}
 	}
-	for i := range capabilityRules {
-		if capabilityRules[i].pattern.MatchString(normalized) {
-			c := capabilityRules[i].capability
-			return LookupResult{
-				Covered:      true,
-				NormalizedID: normalized,
-				Capability:   &c,
+	fullID := normalizeFullModelID(modelID)
+	for _, candidate := range []string{fullID, normalized} {
+		for i := range capabilityRules {
+			// A brand namespace must not match a generic family prefix (Qwen/..., MiniMax/...).
+			if strings.Contains(candidate, "/") && !strings.Contains(capabilityRules[i].pattern.String(), "/") {
+				continue
+			}
+			if capabilityRules[i].pattern.MatchString(candidate) {
+				c := capabilityRules[i].capability
+				c.ReasoningEfforts = append([]string(nil), c.ReasoningEfforts...)
+				return LookupResult{
+					Covered:      true,
+					NormalizedID: normalized,
+					Capability:   &c,
+				}
 			}
 		}
 	}
 	return LookupResult{Covered: false, NormalizedID: normalized}
 }
 
-// NormalizeModelID 对模型 ID 做统一标准化：小写、去 models/ 前缀、去路径段、
-// 空格/下划线转连字符。导出供诊断与前端查询复用，保证判定口径一致。
+// normalizeFullModelID preserves namespaces for explicitly namespaced catalog rules.
+func normalizeFullModelID(value string) string {
+	normalized := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(value)), "models/")
+	return strings.NewReplacer(" ", "-", "_", "-").Replace(normalized)
+}
+
+// NormalizeModelID 保留原有末段标准化 API；能力查询先尝试完整命名空间规则。
 func NormalizeModelID(value string) string {
-	normalized := strings.ToLower(strings.TrimSpace(value))
-	normalized = strings.TrimPrefix(normalized, "models/")
+	normalized := normalizeFullModelID(value)
 	if index := strings.LastIndex(normalized, "/"); index >= 0 {
 		normalized = normalized[index+1:]
 	}
@@ -195,7 +204,7 @@ func SupportsVision(modelID string) *bool {
 // WindowTokens 根据模型 ID 返回上下文窗口大小；未知模型返回 0。
 // 保留向后兼容。
 func WindowTokens(modelID string) int {
-	c := Capabilities(NormalizeModelID(modelID))
+	c := Capabilities(modelID)
 	if c == nil {
 		return 0
 	}

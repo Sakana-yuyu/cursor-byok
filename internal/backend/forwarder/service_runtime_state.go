@@ -131,26 +131,36 @@ func (service *Service) checkpointCompiledConversation(stream *ActiveStream, con
 		return CompiledConversation{}, false, false
 	}
 	_, modelName, latestUserText, mode := checkpointPromptContext(stream)
-	compiled, err := service.compiler.Compile(conversation, mode, latestUserText, modelName, stream.CustomSystemPrompt)
+	customSystemPrompt := ""
+	forceBudgetProjection := false
+	if stream != nil {
+		stream.mu.Lock()
+		customSystemPrompt = stream.CustomSystemPrompt
+		forceBudgetProjection = stream.ContextBudgetRetryCount > 0
+		stream.mu.Unlock()
+	}
+	compiled, err := service.compiler.Compile(conversation, mode, latestUserText, modelName, customSystemPrompt)
 	if err != nil {
 		logger.Errorf("forwarder checkpoint token estimate failed request_id=%s conversation_id=%s err=%v", strings.TrimSpace(activeStreamRequestID(stream)), strings.TrimSpace(conversation.ConversationID), err)
 		return CompiledConversation{}, false, false
 	}
 	compiled = guardCompiledConversationForProvider(compiled)
 	_, manualCompactionRequested := streamManualCompactionDirective(stream)
-	if manualCompactionRequested || !service.contextProjectionPressureExceeded(stream, conversation, compiled) {
+	if manualCompactionRequested || (!forceBudgetProjection && !service.contextProjectionPressureExceeded(stream, conversation, compiled)) {
 		return compiled, true, false
 	}
-	projectedConversation, _, active, _ := service.prepareConversationContextProjectionState(conversation, contextProjectionModelKey(stream))
+	projectedConversation, projectionState, active, _ := service.prepareConversationContextProjectionState(conversation, contextProjectionModelKey(stream))
 	if !active {
 		return compiled, true, false
 	}
-	projectedCompiled, err := service.compiler.Compile(projectedConversation, mode, latestUserText, modelName, stream.CustomSystemPrompt)
+	projectedCompiled, err := service.compiler.Compile(projectedConversation, mode, latestUserText, modelName, customSystemPrompt)
 	if err != nil {
 		logger.Errorf("forwarder projected checkpoint token estimate failed request_id=%s conversation_id=%s err=%v", strings.TrimSpace(activeStreamRequestID(stream)), strings.TrimSpace(conversation.ConversationID), err)
 		return compiled, true, false
 	}
-	return guardCompiledConversationForProvider(projectedCompiled), true, true
+	projectedCompiled = guardCompiledConversationForProvider(projectedCompiled)
+	projectedCompiled.ContextUsageView = contextProjectionUsageView(projectionState)
+	return projectedCompiled, true, true
 }
 
 func (service *Service) checkpointDisplayMaxTokens(stream *ActiveStream, conversation *ConversationFile) int64 {
@@ -170,6 +180,10 @@ func (service *Service) checkpointDisplayUsedTokens(
 	projectionActive bool,
 ) int64 {
 	if hasCompiled && projectionActive {
+		if conversation != nil && conversation.TokenDetailsUsedTokens > 0 && compiled.ContextUsageView != "" &&
+			conversation.TokenDetailsUsageView == compiled.ContextUsageView {
+			return int64(conversation.TokenDetailsUsedTokens)
+		}
 		return estimateCompiledPromptTokens(compiled)
 	}
 

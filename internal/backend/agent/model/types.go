@@ -91,8 +91,12 @@ type StreamRequest struct {
 	ThinkingEffort string
 	// ConfiguredThinkingEffortMaximum 表示渠道允许的最高思考强度。
 	ConfiguredThinkingEffortMaximum string
-	// MaxMode 表示是否使用模型最大上下文窗口（true=目录最大值, false=配置值）。
+	// MaxMode requests the largest available window but never relaxes a known limit.
 	MaxMode bool
+	// RequestedContextWindowTokens preserves this turn's original user selection; zero is unspecified.
+	RequestedContextWindowTokens int
+	// ContextWindowTokens is the hard ceiling used by the forwarder to compile this request; zero supports legacy callers.
+	ContextWindowTokens int
 	// Provider 表示目标 provider 类型，例如 openai 或 anthropic。
 	Provider string
 	// ModelSource 表示请求的凭据和执行来源。账户来源只能交由专用网关处理。

@@ -20,6 +20,9 @@ import (
 func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req StreamRequest, baseURL string, apiKey string, modelID string, promptCacheKeyMaximumLength int, manualPromptCacheKey bool, sink func(ModelEvent) error) error {
 	startedAt := time.Now().UTC()
 	finishedAt := time.Time{}
+	if err := validateContextOverride(req.RequestBodyOverride); err != nil {
+		return err
+	}
 	overrideBody := cloneRequestBodyOverride(req.RequestBodyOverride)
 	var bodyMap map[string]any
 	if len(overrideBody) == 0 {
@@ -58,6 +61,14 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		applyOpenAIServiceTier(bodyMap, req)
 	}
 
+	outputField := classifyProviderCompatibility(baseURL, modelID).MaxTokensField
+	if outputField == "" {
+		outputField = "max_tokens"
+	}
+	if err := validateProviderContextBudget(req, modelID, bodyMap, outputField, "max_tokens", "max_completion_tokens"); err != nil {
+		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", modelID, startedAt, time.Time{}, time.Now().UTC(), "", 0, 0, 0, 0, err))
+		return err
+	}
 	requestURL := OpenAIEndpointURL(baseURL, req.OpenAIEndpoint)
 	recordLLMRequestArtifact(req, "openai", modelID, "POST", requestURL, bodyMap)
 
@@ -102,7 +113,7 @@ func (adapter *OpenAIAdapter) streamChatCompletions(ctx context.Context, req Str
 		Index    int    `json:"index"`
 		ID       string `json:"id"`
 		Function struct {
-			Name      string `json:"name"`
+			Name string `json:"name"`
 			// 部分供应商（如 MiniMax）把 arguments 按 JSON 对象下发而非字符串，
 			// 这里用 RawMessage 接住双态，延迟到分片处理时再判定。
 			Arguments json.RawMessage `json:"arguments"`

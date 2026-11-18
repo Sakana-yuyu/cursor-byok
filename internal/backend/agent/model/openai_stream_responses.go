@@ -39,6 +39,9 @@ func extractOpenAIResponsesReasoningSummaryEntries(raw json.RawMessage) []string
 func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamRequest, baseURL string, apiKey string, modelID string, promptCacheKeyMaximumLength int, manualPromptCacheKey bool, sink func(ModelEvent) error) error {
 	startedAt := time.Now().UTC()
 	finishedAt := time.Time{}
+	if err := validateContextOverride(req.RequestBodyOverride); err != nil {
+		return err
+	}
 	overrideBody := cloneRequestBodyOverride(req.RequestBodyOverride)
 	var bodyMap map[string]any
 	if len(overrideBody) == 0 {
@@ -73,6 +76,10 @@ func (adapter *OpenAIAdapter) streamResponses(ctx context.Context, req StreamReq
 		req.RequestKnobs["tool_admission"] = admission.diagnostics()
 	}
 
+	if err := validateProviderContextBudget(req, modelID, bodyMap, "max_output_tokens"); err != nil {
+		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "openai", modelID, startedAt, time.Time{}, time.Now().UTC(), "", 0, 0, 0, 0, err))
+		return err
+	}
 	requestURL := OpenAIEndpointURL(baseURL, req.OpenAIEndpoint)
 	recordLLMRequestArtifact(req, "openai", modelID, "POST", requestURL, bodyMap)
 

@@ -37,6 +37,9 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 	startedAt := time.Now().UTC()
 	finishedAt := time.Time{}
 	requestURL := anthropicEndpointURL(baseURL)
+	if err := validateContextOverride(req.RequestBodyOverride); err != nil {
+		return err
+	}
 	body := cloneRequestBodyOverride(req.RequestBodyOverride)
 	if len(body) == 0 {
 		thinkingConfig := buildAnthropicThinkingConfig(req)
@@ -125,6 +128,10 @@ func (adapter *AnthropicAdapter) Stream(ctx context.Context, req StreamRequest, 
 	req.ToolAdmission = admission
 	if req.RequestKnobs != nil {
 		req.RequestKnobs["tool_admission"] = admission.diagnostics()
+	}
+	if err := validateProviderContextBudget(req, modelID, body, "max_tokens"); err != nil {
+		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "anthropic", modelID, startedAt, time.Time{}, time.Now().UTC(), "", 0, 0, 0, 0, err))
+		return err
 	}
 	recordLLMRequestArtifact(req, "anthropic", modelID, "POST", requestURL, body)
 

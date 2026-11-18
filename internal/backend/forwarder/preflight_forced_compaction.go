@@ -88,6 +88,11 @@ func (service *Service) escalateForcedPreflightCompaction(stream *ActiveStream, 
 	if service == nil || stream == nil || conversation == nil || cause == nil {
 		return false, nil
 	}
+	// Selecting a smaller window must not become an implicit destructive /summarize.
+	// The selected-budget path uses projections and fails explicitly if they cannot fit.
+	if streamHasContextBudgetSelection(stream) {
+		return false, nil
+	}
 	if resolveTerminalCode("unknown", cause) != compactionOverflowTerminalCode {
 		return false, nil
 	}

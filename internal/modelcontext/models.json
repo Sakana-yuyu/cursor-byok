@@ -1,6 +1,7 @@
 {
   "_comment": "模型能力目录。first-match-wins：pattern 按数组顺序匹配，越靠前优先级越高。pattern 经 normalizeModelID 处理后再匹配（小写、去 models/ 前缀、空格/下划线转连字符）。数据源：官方文档 + aiven.io 排行榜 + 社区核实。gpt-5.6-luna/sol/terra 实际为 Codex 上限 272K（非理论 1M）。reasoningEfforts 记录该模型 API 接受的思考强度档位（厂商原生枚举；GLM-5.3/5.3-Flash 与 Claude Fable 5.1 等新模型不可禁用思考，档位中无 none/disabled）。2026-09 按 bigmodel.cn / docs.z.ai / docs.claude.com / developers.openai.com 官方文档校正 GLM 全系与三大厂新模型。2026-10 增补 grok-4.6/4.7(+fast)、claude-opus-5.5、claude-sonnet-5.5、claude-haiku-5.5、gpt-6-luna、gpt-6.1-sol（标准处理上限 272K）、composer-2.5、MiniMax-M3.1-Flash、DeepSeek V4.1-Flash、Qwen3.8-Flash、Doubao Seed 2.1 Pro，grok-4.5 兼容 Cursor 渠道 cursor-grok-4.5-* 命名。",
   "_source": "主流大模型列表.xlsx + 官方文档校正",
+  "_matching": "前后端共用数组顺序 first-match-wins；完整 ID 优先，再尝试末段内置别名。pattern 使用 Go/JavaScript 共有正则子集；空格及下划线逐字符替换为连字符。source=family_estimate 表示家族估算，其余为已有内置目录记录，不代表本次重新核实官方上限。",
   "rules": [
     {
       "pattern": "^claude-?fable-?5[.-]?1(?:-|$)",
@@ -298,6 +299,7 @@
     },
     {
       "pattern": "^claude",
+      "source": "family_estimate",
       "displayName": "Claude",
       "contextWindowTokens": 200000,
       "maxOutputTokens": 8192,
@@ -365,6 +367,7 @@
     },
     {
       "pattern": "^gpt-?6",
+      "source": "family_estimate",
       "displayName": "GPT-6 Astra",
       "contextWindowTokens": 1048576,
       "maxOutputTokens": 128000,
@@ -754,6 +757,7 @@
     },
     {
       "pattern": "^gemini",
+      "source": "family_estimate",
       "displayName": "Gemini",
       "contextWindowTokens": 128000,
       "maxOutputTokens": 8192,
@@ -873,6 +877,7 @@
     },
     {
       "pattern": "^grok",
+      "source": "family_estimate",
       "displayName": "Grok",
       "contextWindowTokens": 128000,
       "maxOutputTokens": 8192,
@@ -991,6 +996,7 @@
     },
     {
       "pattern": "^qwen",
+      "source": "family_estimate",
       "displayName": "Qwen",
       "contextWindowTokens": 128000,
       "maxOutputTokens": 8192,
@@ -1110,6 +1116,7 @@
     },
     {
       "pattern": "^deepseek",
+      "source": "family_estimate",
       "displayName": "DeepSeek",
       "contextWindowTokens": 64000,
       "maxOutputTokens": 4096,
@@ -1212,6 +1219,7 @@
     },
     {
       "pattern": "^moonshot",
+      "source": "family_estimate",
       "displayName": "Moonshot",
       "contextWindowTokens": 128000,
       "maxOutputTokens": 4096,
@@ -1229,6 +1237,7 @@
     },
     {
       "pattern": "^kimi",
+      "source": "family_estimate",
       "displayName": "Kimi",
       "contextWindowTokens": 128000,
       "maxOutputTokens": 4096,
@@ -1755,6 +1764,7 @@
     },
     {
       "pattern": "^glm",
+      "source": "family_estimate",
       "displayName": "GLM",
       "contextWindowTokens": 128000,
       "maxOutputTokens": 4096,
@@ -1789,6 +1799,7 @@
     },
     {
       "pattern": "^mimo",
+      "source": "family_estimate",
       "displayName": "MiMo",
       "contextWindowTokens": 128000,
       "maxOutputTokens": 8192,
@@ -1894,6 +1905,7 @@
     },
     {
       "pattern": "^minimax",
+      "source": "family_estimate",
       "displayName": "MiniMax",
       "contextWindowTokens": 256000,
       "maxOutputTokens": 8192,
@@ -1980,6 +1992,7 @@
     },
     {
       "pattern": "^step",
+      "source": "family_estimate",
       "displayName": "StepFun",
       "contextWindowTokens": 128000,
       "maxOutputTokens": 8192,

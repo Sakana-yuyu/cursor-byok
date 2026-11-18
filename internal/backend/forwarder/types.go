@@ -16,35 +16,37 @@ import (
 )
 
 type ConversationFile struct {
-	SchemaVersion                   int                                   `json:"schema_version,omitempty"`
-	ConversationID                  string                                `json:"conversation_id"`
-	RootConversationID              string                                `json:"root_conversation_id"`
-	ParentConversationID            string                                `json:"parent_conversation_id"`
-	ParentToolCallID                string                                `json:"parent_tool_call_id"`
-	SubagentTypeName                string                                `json:"subagent_type_name,omitempty"`
-	AgentTranscriptsFolder          string                                `json:"agent_transcripts_folder,omitempty"`
-	Mode                            string                                `json:"mode"`
-	ContextVersion                  int64                                 `json:"context_version,omitempty"`
-	CurrentLoopID                   string                                `json:"current_loop_id,omitempty"`
-	CurrentLoopStatus               string                                `json:"current_loop_status,omitempty"`
-	CurrentRequestID                string                                `json:"current_request_id,omitempty"`
-	CurrentTurnSeq                  int64                                 `json:"current_turn_seq,omitempty"`
-	TokenDetailsUsedTokens          uint32                                `json:"token_details_used_tokens,omitempty"`
-	TokenDetailsMaxTokens           uint32                                `json:"token_details_max_tokens,omitempty"`
-	AutoCompactionPending           bool                                  `json:"auto_compaction_pending,omitempty"`
-	AutoCompactionPromptTokens      int64                                 `json:"auto_compaction_prompt_tokens,omitempty"`
-	AutoCompactionReserveTokens     int64                                 `json:"auto_compaction_reserve_tokens,omitempty"`
-	AutoCompactionTriggeredAt       string                                `json:"auto_compaction_triggered_at,omitempty"`
-	AutoCompactionSourceModelCallID string                                `json:"auto_compaction_source_model_call_id,omitempty"`
+	SchemaVersion          int    `json:"schema_version,omitempty"`
+	ConversationID         string `json:"conversation_id"`
+	RootConversationID     string `json:"root_conversation_id"`
+	ParentConversationID   string `json:"parent_conversation_id"`
+	ParentToolCallID       string `json:"parent_tool_call_id"`
+	SubagentTypeName       string `json:"subagent_type_name,omitempty"`
+	AgentTranscriptsFolder string `json:"agent_transcripts_folder,omitempty"`
+	Mode                   string `json:"mode"`
+	ContextVersion         int64  `json:"context_version,omitempty"`
+	CurrentLoopID          string `json:"current_loop_id,omitempty"`
+	CurrentLoopStatus      string `json:"current_loop_status,omitempty"`
+	CurrentRequestID       string `json:"current_request_id,omitempty"`
+	CurrentTurnSeq         int64  `json:"current_turn_seq,omitempty"`
+	TokenDetailsUsedTokens uint32 `json:"token_details_used_tokens,omitempty"`
+	TokenDetailsMaxTokens  uint32 `json:"token_details_max_tokens,omitempty"`
+	// TokenDetailsUsageView binds stored usage to the compressed provider view, not canonical history.
+	TokenDetailsUsageView           string `json:"token_details_usage_view,omitempty"`
+	AutoCompactionPending           bool   `json:"auto_compaction_pending,omitempty"`
+	AutoCompactionPromptTokens      int64  `json:"auto_compaction_prompt_tokens,omitempty"`
+	AutoCompactionReserveTokens     int64  `json:"auto_compaction_reserve_tokens,omitempty"`
+	AutoCompactionTriggeredAt       string `json:"auto_compaction_triggered_at,omitempty"`
+	AutoCompactionSourceModelCallID string `json:"auto_compaction_source_model_call_id,omitempty"`
 	// UsageAnchor* 是「真实用量锚点」：最近一次非投影 parent pass 发送时的 compiled
 	// 消息数与 provider 实报输入 token（input + cache 读写）。估算侧以此真实值锚定
 	// 历史前缀、只对增量消息做启发式，消除全量估算随历史累积的系统性漂移。
-	UsageAnchorTokens              uint32                                `json:"usage_anchor_tokens,omitempty"`
-	UsageAnchorMessageCount        int                                   `json:"usage_anchor_message_count,omitempty"`
-	CurrentPlanText                 string                                `json:"current_plan_text,omitempty"`
-	CurrentPlans                    map[string]*agentv1.PlanRegistryEntry `json:"current_plans,omitempty"`
-	MCPTools                        []*agentv1.McpToolDefinition          `json:"mcp_tools,omitempty"`
-	MCPToolsInitialized             bool                                  `json:"mcp_tools_initialized,omitempty"`
+	UsageAnchorTokens       uint32                                `json:"usage_anchor_tokens,omitempty"`
+	UsageAnchorMessageCount int                                   `json:"usage_anchor_message_count,omitempty"`
+	CurrentPlanText         string                                `json:"current_plan_text,omitempty"`
+	CurrentPlans            map[string]*agentv1.PlanRegistryEntry `json:"current_plans,omitempty"`
+	MCPTools                []*agentv1.McpToolDefinition          `json:"mcp_tools,omitempty"`
+	MCPToolsInitialized     bool                                  `json:"mcp_tools_initialized,omitempty"`
 	// LastActivatedSkills 记录该会话最近一次稀疏激活注入的技能名列表，
 	// 供子代理会话读取作保底候选（调用链传递）。不进 model-visible history，不影响 replay prefix。
 	LastActivatedSkills []string                   `json:"last_activated_skills,omitempty"`
@@ -167,6 +169,7 @@ type ActiveStream struct {
 	LatestUserText               string
 	Status                       StreamStatus
 	ThinkingEffort               string
+	RequestedContextWindowTokens int
 	CustomSystemPrompt           string
 	MaxMode                      bool
 	SubagentModelOverrides       map[string]runtimecore.SubagentModelOverrideSelection
@@ -174,10 +177,13 @@ type ActiveStream struct {
 	SelectedSubagentModelDetails []*agentv1.ModelDetails
 	ManualCompaction             manualCompactionDirective
 
-	CurrentModelCallID string
-	ProviderActive     bool
-	ProviderCancel     func()
-	ProviderPassCount  int
+	ContextBudgetCeilingTokens      int
+	ContextBudgetRetryCount         int
+	ContextBudgetRetryReserveTokens int64
+	CurrentModelCallID              string
+	ProviderActive                  bool
+	ProviderCancel                  func()
+	ProviderPassCount               int
 	// ProviderTurnStartedAt 记录当前回合（handleRunIntent）的起始时间，
 	// 用于墙钟时长兜底（见 driveProvider 的预算检查）。
 	ProviderTurnStartedAt          time.Time
@@ -223,8 +229,8 @@ type ActiveStream struct {
 	// PromptAnchorMessageCount 记录本 pass 发送的 compiled 消息数（仅非投影 parent pass），
 	// pass 结束时与真实 usage 配对写入会话的用量锚点；0 表示本 pass 不更新锚点
 	// （投影/委派等旁路请求的消息与 canonical 不一致，写入会污染锚点）。
-	PromptAnchorMessageCount                    int
-	ProviderTerminalToolInvocation              bool
+	PromptAnchorMessageCount       int
+	ProviderTerminalToolInvocation bool
 	// SummaryEmittedTurn 记录最近一次已向 RunSSE 流发送会话摘要事件的 turnSeq，
 	// 用于同一 turn 多次 provider pass 时去重（摘要每轮只发一次，内容取最终快照）。
 	SummaryEmittedTurn int64
@@ -296,9 +302,9 @@ type ActiveStream struct {
 	lastDoomLoopSignature string
 	pendingDoomLoopNotice string
 
-	Backlog                         []StreamEvent
-	BacklogStartCursor              int
-	Subscribers                     map[string]*StreamSubscriber
+	Backlog                []StreamEvent
+	BacklogStartCursor     int
+	Subscribers            map[string]*StreamSubscriber
 	CheckpointConversation *ConversationFile
 	// CheckpointPersistMu 串行化 persistCheckpointDelta 的完整执行（快照→落盘→回写）
 	// 以及 applyCompactionPlan 的 ReplaceEntries：防抖定时器回调与同步 flush 并发时，
@@ -430,27 +436,29 @@ type ProviderRequest struct {
 	ModelCallID    string
 	ModelID        string
 	// ModelSource 是来源隔离域；本地响应缓存必须把它纳入键空间。
-	ModelSource         string
-	ModelName           string
-	Role                string
-	ParentModel         string
-	ModelGroupID        string
-	TaskID              string
-	ExecutionMode       string
-	SupervisorModel     string
-	ReviewerModel       string
-	Mode                agentv1.AgentMode
-	ThinkingEffort      string
-	MaxMode             bool
-	Messages            []modeladapter.Message
-	StableMessageCount  int
-	Tools               []json.RawMessage
-	MaxTokens           int
-	RequestKnobs        map[string]any
-	CompileSummary      string
-	Observer            modeladapter.LLMArtifactObserver
-	ArtifactPaths       *modeladapter.LLMArtifactPaths
-	RequestBodyOverride map[string]any
+	ModelSource                  string
+	ModelName                    string
+	Role                         string
+	ParentModel                  string
+	ModelGroupID                 string
+	TaskID                       string
+	ExecutionMode                string
+	SupervisorModel              string
+	ReviewerModel                string
+	Mode                         agentv1.AgentMode
+	ThinkingEffort               string
+	RequestedContextWindowTokens int
+	ContextWindowTokens          int
+	MaxMode                      bool
+	Messages                     []modeladapter.Message
+	StableMessageCount           int
+	Tools                        []json.RawMessage
+	MaxTokens                    int
+	RequestKnobs                 map[string]any
+	CompileSummary               string
+	Observer                     modeladapter.LLMArtifactObserver
+	ArtifactPaths                *modeladapter.LLMArtifactPaths
+	RequestBodyOverride          map[string]any
 	// ProviderStreamIdleTimeout 表示本次调用的 provider 流空闲看门狗时长；
 	// 委派/子代理流显式设置放宽值（父代理流留零，走全局配置默认）。
 	ProviderStreamIdleTimeout time.Duration
@@ -487,6 +495,7 @@ type CompiledConversation struct {
 	StableMessageCount int
 	Tools              []json.RawMessage
 	CompileSummary     string
+	ContextUsageView   string
 }
 
 type ToolRequestKind string
@@ -606,6 +615,7 @@ type InboundIntent struct {
 	ModelID                      string
 	ModelName                    string
 	ThinkingEffort               string
+	RequestedContextWindowTokens int
 	CustomSystemPrompt           string
 	MaxMode                      bool
 	Mode                         agentv1.AgentMode

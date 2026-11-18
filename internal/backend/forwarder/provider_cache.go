@@ -521,13 +521,15 @@ func normalizeCacheMaxTokens(value int) int {
 // ModelSource 参与哈希：账户模型与第三方模型即使 provider-visible 请求一致，
 // 也不能共享本地响应缓存条目。
 type providerCacheKeyHead struct {
-	ConversationID     string `json:"conversation_id"`
-	ModelID            string `json:"model_id"`
-	ModelSource        string `json:"model_source"`
-	Mode               int32  `json:"mode"`
-	ThinkingEffort     string `json:"thinking_effort"`
-	StableMessageCount int    `json:"stable_message_count"`
-	MaxTokens          int    `json:"max_tokens"`
+	ConversationID               string `json:"conversation_id"`
+	ModelID                      string `json:"model_id"`
+	ModelSource                  string `json:"model_source"`
+	Mode                         int32  `json:"mode"`
+	ThinkingEffort               string `json:"thinking_effort"`
+	StableMessageCount           int    `json:"stable_message_count"`
+	MaxTokens                    int    `json:"max_tokens"`
+	RequestedContextWindowTokens int    `json:"requested_context_window_tokens"`
+	ContextWindowTokens          int    `json:"context_window_tokens"`
 }
 
 // providerCacheKey 对归一化请求做 sha256，返回稳定的十六进制缓存键；序列化失败返回空串（不缓存）。
@@ -535,14 +537,22 @@ type providerCacheKeyHead struct {
 // 摘要，避免每次把完整工具定义与全部历史 messages 拼成一个大 JSON 再哈希。
 func providerCacheKey(req ProviderRequest) string {
 	messages := normalizeMessagesForCacheKey(req.Messages)
+	maxTokens := normalizeCacheMaxTokens(req.MaxTokens)
+	if req.RequestedContextWindowTokens > 0 || req.ContextWindowTokens > 0 {
+		// Under a hard context budget, rounded output caps could replay a longer
+		// completion that consumes the safety room of the smaller request.
+		maxTokens = req.MaxTokens
+	}
 	head := providerCacheKeyHead{
-		ConversationID:     strings.TrimSpace(req.ConversationID),
-		ModelID:            req.ModelID,
-		ModelSource:        strings.TrimSpace(req.ModelSource),
-		Mode:               int32(req.Mode),
-		ThinkingEffort:     req.ThinkingEffort,
-		StableMessageCount: req.StableMessageCount,
-		MaxTokens:          normalizeCacheMaxTokens(req.MaxTokens),
+		RequestedContextWindowTokens: req.RequestedContextWindowTokens,
+		ContextWindowTokens:          req.ContextWindowTokens,
+		ConversationID:               strings.TrimSpace(req.ConversationID),
+		ModelID:                      req.ModelID,
+		ModelSource:                  strings.TrimSpace(req.ModelSource),
+		Mode:                         int32(req.Mode),
+		ThinkingEffort:               req.ThinkingEffort,
+		StableMessageCount:           req.StableMessageCount,
+		MaxTokens:                    maxTokens,
 	}
 	headEncoded, err := json.Marshal(head)
 	if err != nil {

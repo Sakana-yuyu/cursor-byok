@@ -93,6 +93,7 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	modelName := stream.ModelName
 	thinkingEffort := stream.ThinkingEffort
 	maxMode := stream.MaxMode
+	requestedContextWindowTokens := stream.RequestedContextWindowTokens
 	mode := stream.Mode
 	latestUserText := stream.LatestUserText
 	customSystemPrompt := stream.CustomSystemPrompt
@@ -143,7 +144,10 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	var activeTurnProjectionStats *activeTurnToolResultCompactionStats
 	projectionSidecarHit := false
 	projectionInvalidationReason := ""
-	if !manualCompactionRequested && service.contextProjectionPressureExceeded(stream, canonicalConversation, canonicalCompiled) {
+	stream.mu.Lock()
+	budgetProjectionRequired := stream.ContextBudgetRetryCount > 0
+	stream.mu.Unlock()
+	if !manualCompactionRequested && (budgetProjectionRequired || service.contextProjectionPressureExceeded(stream, canonicalConversation, canonicalCompiled)) {
 		projectedConversation, projectionState, active, invalidationReason := service.prepareConversationContextProjectionState(canonicalConversation, contextProjectionModelKey(stream))
 		if active {
 			projectedCompiled, compileErr := service.compiler.Compile(projectedConversation, mode, latestUserText, modelName, customSystemPrompt)
@@ -162,7 +166,7 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	}
 	if activeContextProjection != nil && service.contextProjectionPressureExceeded(stream, conversation, compiled) {
 		contextWindowTokens := compactionContextWindowSize(conversation)
-		reserveTokens := service.resolveCompactionReserveTokens(modelID)
+		reserveTokens := service.streamCompactionReserveTokens(stream, conversation)
 		if reserveTokens <= 0 {
 			reserveTokens = compactionAutoReserveTokens
 		}
@@ -280,7 +284,7 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 		canonicalCompiled,
 		compiled,
 		compactionContextWindowSize(conversation),
-		service.resolveCompactionReserveTokens(modelID),
+		service.streamCompactionReserveTokens(stream, conversation),
 		maxTokens,
 		0,
 		1,
@@ -297,6 +301,8 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 		requestKnobs = map[string]any{}
 	}
 	requestKnobs["context_projection"] = projectionDiagnostics
+	requestKnobs["requested_context_window_tokens"] = requestedContextWindowTokens
+	requestKnobs["context_budget"] = service.resolveStreamContextBudget(stream)
 	service.debug.LogRuntime(context.Background(), requestID, conversationID, "context_projection_applied", projectionDiagnostics)
 	ctx, cancel := context.WithCancel(context.Background())
 	stream.mu.Lock()
@@ -316,25 +322,27 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	service.setTurnPhase(stream, TurnPhaseProviderRunning)
 
 	providerRequest := ProviderRequest{
-		RequestID:          requestID,
-		ConversationID:     conversationID,
-		RunID:              requestID,
-		ModelCallID:        modelCallID,
-		ModelID:            modelID,
-		ModelName:          modelName,
-		Role:               "parent",
-		ExecutionMode:      "parent",
-		Mode:               compiled.Mode,
-		ThinkingEffort:     compiled.Mode.String(),
-		MaxMode:            maxMode,
-		Messages:           compiled.Messages,
-		StableMessageCount: compiled.StableMessageCount,
-		Tools:              compiled.Tools,
-		MaxTokens:          maxTokens,
-		RequestKnobs:       requestKnobs,
-		CompileSummary:     compiled.CompileSummary,
-		Observer:           service.recorder,
-		ArtifactPaths:      &modeladapter.LLMArtifactPaths{},
+		RequestID:                    requestID,
+		ConversationID:               conversationID,
+		RunID:                        requestID,
+		ModelCallID:                  modelCallID,
+		ModelID:                      modelID,
+		ModelName:                    modelName,
+		Role:                         "parent",
+		ExecutionMode:                "parent",
+		Mode:                         compiled.Mode,
+		ThinkingEffort:               compiled.Mode.String(),
+		MaxMode:                      maxMode,
+		RequestedContextWindowTokens: requestedContextWindowTokens,
+		ContextWindowTokens:          int(compactionContextWindowSize(conversation)),
+		Messages:                     compiled.Messages,
+		StableMessageCount:           compiled.StableMessageCount,
+		Tools:                        compiled.Tools,
+		MaxTokens:                    maxTokens,
+		RequestKnobs:                 requestKnobs,
+		CompileSummary:               compiled.CompileSummary,
+		Observer:                     service.recorder,
+		ArtifactPaths:                &modeladapter.LLMArtifactPaths{},
 	}
 	// native 子代理流放宽上游看门狗：子代理会话带 SubagentTypeName，可能合法长静默
 	// （长思考/慢工具），由 native 无进展看门狗（5min）兜底；父代理流保持全局默认。
@@ -358,12 +366,14 @@ func (service *Service) driveProvider(stream *ActiveStream) error {
 	// 目录未覆盖审计：模型名不在内置能力目录时记录一次（进程内按模型名去重）。
 	// 只做观测，不改变请求内容、渠道选择或预算；供用户排查「能力未知的模型」入口。
 	service.auditCatalogUncovered(context.Background(), requestID, conversationID, modelName)
-	var markProjectionApplied func()
-	if activeContextProjection != nil {
-		markProjectionApplied = func() {
+	markProjectionApplied := func() {
+		if activeContextProjection != nil {
 			if err := service.markContextProjectionApplied(canonicalConversation, activeContextProjection); err != nil {
 				logger.Errorf("forwarder context projection applied marker failed request_id=%s conversation_id=%s: %v", strings.TrimSpace(requestID), strings.TrimSpace(conversationID), err)
 			}
+		}
+		if err := service.persistPreparedContextUsage(stream, estimateCompiledPromptTokensAnchored(conversation, compiled), activeContextProjection); err != nil {
+			logger.Errorf("forwarder prepared context checkpoint failed request_id=%s conversation_id=%s: %v", requestID, conversationID, err)
 		}
 	}
 	safego.GoWithPanicHandler("forwarder:provider-stream", func() {
@@ -677,28 +687,33 @@ func (service *Service) runProviderStream(stream *ActiveStream, token uint64, ct
 		}
 	}
 	err := service.provider.StartStream(ctx, request, func(event modeladapter.ModelEvent) error {
-		markProviderAccepted()
 		command := streamCommand{
 			Kind: streamCommandProviderEvent,
 			Provider: &streamProviderEvent{
-				Token: token,
-				Event: event,
+				Token:      token,
+				Event:      event,
+				OnAccepted: markProviderAccepted,
 			},
+		}
+		if event.Kind == modeladapter.ModelEventKindProviderError {
+			command.Provider.OnAccepted = nil
 		}
 		if providerEventCanQueueAsync(event) {
 			return service.postStreamCommandAsync(stream, command)
 		}
 		return service.postStreamCommandWait(stream, command)
 	})
+	var onCompletedAccepted func()
 	if err == nil {
-		markProviderAccepted()
+		onCompletedAccepted = markProviderAccepted
 	}
 	if postErr := service.postStreamCommandWait(stream, streamCommand{
 		Kind: streamCommandProviderEvent,
 		Provider: &streamProviderEvent{
-			Token: token,
-			Done:  true,
-			Err:   err,
+			Token:      token,
+			Done:       true,
+			Err:        err,
+			OnAccepted: onCompletedAccepted,
 		},
 	}); postErr != nil && !errors.Is(postErr, errProviderLoopInterrupted) {
 		service.debug.LogProvider(context.Background(), request.RequestID, request.ConversationID, "provider_completion_post_error", map[string]any{
@@ -760,24 +775,14 @@ func (service *Service) syncCanonicalPressureForLargeWindows(conversation *Conve
 }
 
 func (service *Service) resolveContextWindowTokens(modelID string) uint32 {
-	if service == nil || service.resolver == nil {
-		return defaultResolvedContextWindowTokens
-	}
-	channel, err := service.resolver.SelectChannelForModel(context.Background(), strings.TrimSpace(modelID))
-	if err != nil || channel == nil || channel.ContextWindowTokens <= 0 {
-		return defaultResolvedContextWindowTokens
-	}
-	return clampInt64ToUint32(int64(channel.ContextWindowTokens))
+	return clampInt64ToUint32(int64(service.resolveModelContextBudget(modelID, "", 0, 0).EffectiveTokens))
 }
 
 func (service *Service) syncConversationContextWindowTokens(stream *ActiveStream, conversationID string, conversation *ConversationFile) (*ConversationFile, error) {
 	if stream == nil || conversation == nil {
 		return conversation, nil
 	}
-	stream.mu.Lock()
-	modelID := stream.ModelID
-	stream.mu.Unlock()
-	target := service.resolveContextWindowTokens(modelID)
+	target := clampInt64ToUint32(int64(service.resolveStreamContextBudget(stream).EffectiveTokens))
 	if target == 0 || conversation.TokenDetailsMaxTokens == target {
 		return conversation, nil
 	}
@@ -785,7 +790,7 @@ func (service *Service) syncConversationContextWindowTokens(stream *ActiveStream
 		if item == nil {
 			return nil
 		}
-		item.TokenDetailsMaxTokens = target
+		applyConversationContextBudget(item, target)
 		return nil
 	})
 }

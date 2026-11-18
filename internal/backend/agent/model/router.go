@@ -158,6 +158,12 @@ func classifyRouterError(req StreamRequest, err error) error {
 	if err == nil {
 		return nil
 	}
+	// Local budget failures are actionable by the caller, not provider failures.
+	var budgetErr *ContextBudgetExceededError
+	var invalidBudget *ContextBudgetValidationError
+	if errors.As(err, &budgetErr) || errors.As(err, &invalidBudget) {
+		return err
+	}
 	options := []apperror.Option{apperror.WithTraceID(req.RequestID)}
 	if errors.Is(err, ErrMidStreamInterrupted) {
 		options = append(options,
@@ -329,6 +335,15 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 		attemptCount++
 		observedHealthVersion := router.channelHealthVersion(channel)
 		streamErr = router.streamChannel(ctx, req, channel, wrappedSink)
+		// Cancellation can happen in the first sink call. Preserve the no-replay
+		// marker before the cancellation fast path returns a local budget error.
+		var emittedBudgetErr *ContextBudgetExceededError
+		if errors.As(streamErr, &emittedBudgetErr) && (clientVisibleEvents > 0 || errors.Is(streamErr, ErrMidStreamInterrupted)) {
+			emittedBudgetErr.OutputStarted = true
+			if !errors.Is(streamErr, ErrMidStreamInterrupted) {
+				streamErr = midStreamInterruptedError(streamErr)
+			}
+		}
 		if streamErr == nil || ctx.Err() != nil {
 			if streamErr == nil {
 				router.clearChannelFailure(channel, observedHealthVersion)
@@ -345,11 +360,30 @@ func (router *Router) Stream(ctx context.Context, req StreamRequest, sink func(M
 		//     连接级中断打的显式标记；
 		//   - clientVisibleEvents > 0：适配器未打标记（如上游业务错误事件、sink 写
 		//     失败）时的写入计数兜底。
-		if errors.Is(streamErr, ErrMidStreamInterrupted) {
-			return classifyRouterError(req, streamErr)
-		}
-		if clientVisibleEvents > 0 {
+		if errors.Is(streamErr, ErrMidStreamInterrupted) || clientVisibleEvents > 0 {
+			var budgetErr *ContextBudgetExceededError
+			if errors.As(streamErr, &budgetErr) {
+				budgetErr.OutputStarted = true
+			}
+			if errors.Is(streamErr, ErrMidStreamInterrupted) {
+				return classifyRouterError(req, streamErr)
+			}
 			return classifyRouterError(req, midStreamInterruptedError(streamErr))
+		}
+		var budgetErr *ContextBudgetExceededError
+		if errors.As(streamErr, &budgetErr) {
+			logger.Infof("context budget exceeded request_id=%s model_call_id=%s channel=%s attempt=%d window=%d estimated_input=%d max_output=%d",
+				strings.TrimSpace(req.RequestID), strings.TrimSpace(req.ModelCallID), strings.TrimSpace(channel.ID), attempt+1,
+				budgetErr.ContextWindowTokens, budgetErr.EstimatedInputTokens, budgetErr.MaxOutputTokens)
+			// Return the actual smaller channel's budget, even if a previous attempt
+			// failed for a different reason. Do not cool, penalize or replay it here.
+			return streamErr
+		}
+		var invalidBudget *ContextBudgetValidationError
+		if errors.As(streamErr, &invalidBudget) {
+			logger.Infof("context budget invalid request_id=%s model_call_id=%s channel=%s attempt=%d error=%v",
+				strings.TrimSpace(req.RequestID), strings.TrimSpace(req.ModelCallID), strings.TrimSpace(channel.ID), attempt+1, invalidBudget)
+			return streamErr
 		}
 		// 每密钥并发闸门排队超时：该密钥在途流已满且等不到名额。这不是上游
 		// 失败——不冷却、不退避，直接换下一候选；全部候选都忙时该错误经
@@ -662,12 +696,16 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 	resolved.ProviderModelID = strings.TrimSpace(channel.Model)
 	resolved.ResolvedChannelID = strings.TrimSpace(channel.ID)
 	resolved.ResolvedChannelName = strings.TrimSpace(channel.Name)
-	resolved.ResolvedContextWindowTokens = channel.ContextWindowTokens
-	// Max Mode: 使用目录中该模型的理论最大上下文窗口。
-	if req.MaxMode {
-		if catalogMax := modelcontext.WindowTokens(req.ModelID); catalogMax > 0 {
-			resolved.ResolvedContextWindowTokens = catalogMax
-		}
+	budget := modelcontext.ResolveContextBudget(modelcontext.ContextBudgetInput{
+		ModelID:          channel.Model,
+		ConfiguredTokens: channel.ContextWindowTokens,
+		RequestedTokens:  req.RequestedContextWindowTokens,
+		CeilingTokens:    req.ContextWindowTokens,
+	})
+	resolved.ResolvedContextWindowTokens = budget.EffectiveTokens
+	resolved.ContextWindowTokens = budget.EffectiveTokens
+	if resolved.RequestKnobs != nil {
+		resolved.RequestKnobs["context_budget"] = budget
 	}
 	if resolved.ModelSource == legacyruntime.ModelSourceCursorAccount {
 		if resolved.CredentialScope != legacyruntime.CredentialScopeCursorAccount {
@@ -677,6 +715,9 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 		// relay 接入绕过配置归一化的场景，避免第三方凭据进入账户专用链路。
 		if resolved.BaseURL != "" || resolved.APIKey != "" || channel.CustomHeadersEnabled || strings.TrimSpace(channel.CustomHeadersJSON) != "" {
 			return fmt.Errorf("Cursor 账户模型不能携带第三方接口地址、API Key 或自定义请求头")
+		}
+		if err := validateContextInput(resolved); err != nil {
+			return err
 		}
 		return router.accountGateway.Stream(ctx, resolved, sink)
 	}
@@ -766,7 +807,9 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 	var streamErr error
 	channelBaseURL := strings.TrimSpace(channel.BaseURL)
 	channelGroupName := strings.TrimSpace(channel.GroupName)
+	channelEmitted := false
 	identitySink := func(event ModelEvent) error {
+		channelEmitted = true
 		if event.BaseURL == "" {
 			event.BaseURL = channelBaseURL
 		}
@@ -787,7 +830,7 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 	streamErr = router.dispatchByProvider(ctx, resolved, identitySink)
 	// 失败回退：claude-on-openai 升级到 anthropic 后，若错误表明中转商不支持 /v1/messages
 	// 端点（404/405/400），降级回 openai 协议重试一次，避免渠道因升级而不可用。
-	if streamErr != nil && upgraded && shouldFallbackToOpenAI(streamErr) {
+	if streamErr != nil && !channelEmitted && upgraded && shouldFallbackToOpenAI(streamErr) {
 		downgraded := downgradeAnthropicBackToOpenAI(&resolved, channel)
 		if downgraded {
 			applyStreamKnobs(&resolved, runtimeThinkingEffort)
@@ -814,6 +857,13 @@ func (router *Router) streamChannel(ctx context.Context, req StreamRequest, chan
 
 // dispatchByProvider 按 resolved.Provider 选择对应适配器执行流式请求。
 func (router *Router) dispatchByProvider(ctx context.Context, resolved StreamRequest, sink func(ModelEvent) error) error {
+	// A complete wire override replaces these logical messages/output fields;
+	// judging the superseded projection would reject otherwise valid requests.
+	if len(resolved.RequestBodyOverride) == 0 {
+		if err := validateContextInput(resolved); err != nil {
+			return err
+		}
+	}
 	switch resolved.Provider {
 	case "anthropic":
 		return router.anthropic.Stream(ctx, resolved, sink)

@@ -133,3 +133,27 @@ test("normalizeCustomThinkingEfforts：token 形态校验与限量", async () =>
   assert.equal(capped.length, 8);
   assert.deepEqual(normalizeCustomThinkingEfforts(undefined), []);
 });
+
+test("保存与重新归一化往返保留小窗口，能力识别不覆盖渠道设置", async () => {
+  const { normalizeModelAdapter } = await import("./modelAdapter.js");
+  const { resolveModelCapabilities } = await import("./modelContext.js");
+  for (const source of ["third_party", "cursor_account"]) {
+    for (const field of ["contextWindowTokens", "context_window_tokens", "max_input_tokens"]) {
+      const original = { source, type: "openai", modelID: "gpt-6.1-sol", [field]: 32000 };
+      const saved = JSON.parse(JSON.stringify(normalizeModelAdapter(original)));
+      const reloaded = normalizeModelAdapter(saved);
+      assert.equal(reloaded.contextWindowTokens, 32000, `${source}/${field}`);
+      assert.equal(resolveModelCapabilities(reloaded.modelID).contextWindowTokens, 272000);
+      assert.equal(reloaded.maxCompletionTokens, 0);
+    }
+  }
+});
+
+test("未知供应商模型的旧限制与输出设置各自保留", async () => {
+  const { normalizeModelAdapter } = await import("./modelAdapter.js");
+  const adapter = normalizeModelAdapter({
+    type: "openai", modelID: "owner/custom", contextWindowTokens: 16000, maxCompletionTokens: 4096,
+  });
+  assert.equal(normalizeModelAdapter(adapter).contextWindowTokens, 16000);
+  assert.equal(adapter.maxCompletionTokens, 4096);
+});

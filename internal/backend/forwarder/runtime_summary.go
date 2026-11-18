@@ -34,7 +34,7 @@ func (service *Service) bootstrapRuntimeConversation(intent InboundIntent) (*Con
 	if service == nil {
 		return nil, agentv1.AgentMode_AGENT_MODE_AGENT, 0, nil, fmt.Errorf("forwarder service is nil")
 	}
-	contextWindowTokens := service.resolveContextWindowTokens(intent.ModelID)
+	contextWindowTokens := clampInt64ToUint32(int64(service.resolveModelContextBudget(intent.ModelID, intent.ModelName, intent.RequestedContextWindowTokens, 0).EffectiveTokens))
 	var conversation *ConversationFile
 	var err error
 	if service.store != nil {
@@ -85,7 +85,7 @@ func (service *Service) bootstrapRuntimeConversation(intent InboundIntent) (*Con
 		conversation.MCPToolsInitialized = true
 	}
 	if contextWindowTokens > 0 {
-		conversation.TokenDetailsMaxTokens = contextWindowTokens
+		applyConversationContextBudget(conversation, contextWindowTokens)
 	} else if conversation.TokenDetailsMaxTokens == 0 {
 		conversation.TokenDetailsMaxTokens = projectedConversationMaxTokens
 	}
@@ -140,6 +140,9 @@ func (service *Service) syncConversationRecord(conversationID string, conversati
 		item.Mode = conversation.Mode
 		item.TokenDetailsUsedTokens = conversation.TokenDetailsUsedTokens
 		item.TokenDetailsMaxTokens = conversation.TokenDetailsMaxTokens
+		item.TokenDetailsUsageView = conversation.TokenDetailsUsageView
+		item.UsageAnchorTokens = conversation.UsageAnchorTokens
+		item.UsageAnchorMessageCount = conversation.UsageAnchorMessageCount
 		item.AutoCompactionPending = conversation.AutoCompactionPending
 		item.AutoCompactionPromptTokens = conversation.AutoCompactionPromptTokens
 		item.AutoCompactionReserveTokens = conversation.AutoCompactionReserveTokens

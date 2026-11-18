@@ -1,12 +1,85 @@
 package modelcontext
 
-import "testing"
+import (
+	"encoding/json"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+func TestCatalogLoadsSharedRulesInOrder(t *testing.T) {
+	var doc modelsCatalogDoc
+	if err := json.Unmarshal(modelsCatalogJSON, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Rules) != len(capabilityRules) {
+		t.Fatalf("loaded %d rules, JSON has %d", len(capabilityRules), len(doc.Rules))
+	}
+	for i, raw := range doc.Rules {
+		loaded := capabilityRules[i]
+		if loaded.pattern.String() != raw.Pattern || loaded.capability.ContextWindowTokens != raw.ContextWindowTokens || loaded.capability.MaxOutputTokens != raw.MaxOutputTokens || loaded.capability.SupportsThinking != raw.SupportsThinking {
+			t.Fatalf("rule %d differs from shared JSON: %+v", i, loaded.capability)
+		}
+	}
+}
+
+func TestSpecificCapabilityAndEstimateSources(t *testing.T) {
+	for _, id := range []string{"gpt-6.1-sol", "models/GPT_6.1_SOL", "provider/gpt-6.1-sol-latest"} {
+		cap := Capabilities(id)
+		if cap == nil || cap.ContextWindowTokens != 272000 || cap.MaxOutputTokens != 128000 || cap.Source != "builtin_catalog" {
+			t.Fatalf("%s: %+v", id, cap)
+		}
+	}
+	if got := Capabilities("gpt-6-future"); got == nil || got.Source != "family_estimate" {
+		t.Fatalf("family fallback must be labeled: %+v", got)
+	}
+	if got := Capabilities("brand-new-unknown"); got != nil {
+		t.Fatalf("unknown must not acquire a made-up ceiling: %+v", got)
+	}
+}
+
+func TestNamespacesPreserveSpecificCapabilities(t *testing.T) {
+	for _, tt := range []struct{ model, display string }{
+		{"qwen3.8-max-preview", "Qwen3-8-Max-Preview"},
+		{"m3.1-flash", "MiniMax-M3.1-Flash"},
+		{"minimax-m2.7-highspeed", "MiniMax-M2.7-highspeed"},
+		{"deepseek-v4.1-flash", "DeepSeek V4.1 Flash"},
+		{"grok-4.7-fast", "Grok 4.7 Fast"},
+		{"cursor-grok-4.5-low", "Grok 4.5"},
+		{"gpt-6.1-sol", "GPT-6.1 Sol"},
+		{"gpt-5.6-luna", "GPT-5.6 Luna"},
+		{"claude-opus-5.5", "Claude Opus 5.5"},
+		{"claude-sonnet-5.5", "Claude Sonnet 5.5"},
+		{"gemini-3.5-flash-lite", "Gemini 3.5 Flash-Lite"},
+		{"glm-5.3-flash", "GLM-5.3-Flash"},
+		{"doubao-seed-2.1-pro", "Doubao Seed 2.1 Pro"},
+	} {
+		base := Capabilities(tt.model)
+		if base == nil || base.DisplayName != tt.display {
+			t.Fatalf("specific model %s: %+v, want %s", tt.model, base, tt.display)
+		}
+		for _, namespace := range []string{"Qwen", "MiniMax", "DeepSeek", "Claude", "GPT-6", "GLM", "owner-a", "owner-b/subteam"} {
+			for _, id := range []string{namespace + "/" + tt.model, "models/" + namespace + "/" + strings.ToUpper(strings.ReplaceAll(tt.model, "-", "_"))} {
+				got := Capabilities(id)
+				if !reflect.DeepEqual(got, base) {
+					t.Errorf("namespace %s changed capability: %+v != %+v", id, got, base)
+				}
+				if WindowTokens(id) != base.ContextWindowTokens || MaxOutputTokens(id) != base.MaxOutputTokens {
+					t.Errorf("legacy token lookup differs for %s", id)
+				}
+			}
+		}
+	}
+	if got := Capabilities("Qwen/not-a-known-model"); got != nil {
+		t.Fatalf("namespace alone must not create family capability: %+v", got)
+	}
+}
 
 func TestWindowTokensFromSpreadsheetRules(t *testing.T) {
 	tests := map[string]int{
 		"claude-opus-4-8":          1_000_000,
 		"claude-sonnet-4.6-latest": 1_000_000,
-		"gpt-5.6-luna":             272_000,  // Codex 实际上限（非理论 1M）
+		"gpt-5.6-luna":             272_000, // Codex 实际上限（非理论 1M）
 		"gpt-5.6-sol":              272_000,
 		"gpt-5.6-terra":            272_000,
 		"gpt-5.6":                  1_000_000, // 无后缀=理论最大值
@@ -65,11 +138,11 @@ func TestResolveKeepsExplicitValue(t *testing.T) {
 
 func TestCapabilitiesKnownModels(t *testing.T) {
 	tests := []struct {
-		modelID          string
-		wantVision       bool
-		wantThinking     bool
-		wantTools        bool
-		wantContextMin   int
+		modelID        string
+		wantVision     bool
+		wantThinking   bool
+		wantTools      bool
+		wantContextMin int
 	}{
 		// Claude — 支持视觉和思考
 		{"claude-sonnet-4.6", true, true, true, 1_000_000},
@@ -173,11 +246,11 @@ func TestLookup(t *testing.T) {
 
 func TestNormalizeModelID(t *testing.T) {
 	cases := map[string]string{
-		"  CLAUDE_SONNET-4.6 ": "claude-sonnet-4.6",
-		"models/gpt-4o":        "gpt-4o",
+		"  CLAUDE_SONNET-4.6 ":    "claude-sonnet-4.6",
+		"models/gpt-4o":           "gpt-4o",
 		"provider/gemini-2.5-pro": "gemini-2.5-pro",
-		"kimi-k3":              "kimi-k3",
-		"":                     "",
+		"kimi-k3":                 "kimi-k3",
+		"":                        "",
 	}
 	for input, want := range cases {
 		if got := NormalizeModelID(input); got != want {
@@ -330,15 +403,15 @@ func TestCapabilitiesOctober2026Models(t *testing.T) {
 	// 2026-10 新增模型：中转站渠道常见命名（含 Cursor cursor-grok-4.5-* 前缀变体）
 	// 必须命中专属规则，不得落入 ^grok / ^gpt-?6 等兜底规则拿到错误窗口与价格。
 	tests := []struct {
-		modelID        string
-		wantName       string
-		wantContext    int
-		wantVision     bool
-		wantInput      float64 // pricing input；composer-2.5 无 cacheRead 用 -1 标记
-		wantOutput     float64
-		wantCacheRead  float64
-		wantEfforts    []string
-		noCacheRead    bool
+		modelID       string
+		wantName      string
+		wantContext   int
+		wantVision    bool
+		wantInput     float64 // pricing input；composer-2.5 无 cacheRead 用 -1 标记
+		wantOutput    float64
+		wantCacheRead float64
+		wantEfforts   []string
+		noCacheRead   bool
 	}{
 		{"grok-4.6", "Grok 4.6", 500_000, true, 2, 6, 0.5, nil, false},
 		{"grok-4.7", "Grok 4.7", 500_000, true, 2, 6, 0.5, nil, false},

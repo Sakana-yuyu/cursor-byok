@@ -603,8 +603,8 @@ func TestAvailableModelsPayloadUsesCompactEffortPickerContract(t *testing.T) {
 			}
 			variants := entry["variants"].([]map[string]any)
 			if tc.wantCompact {
-				if len(variants) != 5 {
-					t.Fatalf("compact variants: got %#v, want one per effort value", variants)
+				if len(variants) != 5*6*2 {
+					t.Fatalf("compact variants: got %d, want effort × context × fast", len(variants))
 				}
 				seenEfforts := make(map[string]bool, len(variants))
 				for _, variant := range variants {
@@ -615,7 +615,7 @@ func TestAvailableModelsPayloadUsesCompactEffortPickerContract(t *testing.T) {
 						t.Fatalf("compact display names: %#v", variant)
 					}
 					seenEfforts[effort] = true
-					if parameters["context"] != "272000" || parameters["fast"] != "false" {
+					if parameters["context"] == "" || (parameters["fast"] != "false" && parameters["fast"] != "true") {
 						t.Fatalf("compact variant parameters: got %#v", parameters)
 					}
 				}
@@ -998,8 +998,8 @@ func TestAvailableModelsPayloadAdvertisesCustomThinkingEfforts(t *testing.T) {
 	}
 
 	variants := entry["variants"].([]map[string]any)
-	if len(variants) != len(want) {
-		t.Fatalf("compact variants: got %d, want %d", len(variants), len(want))
+	if len(variants) != len(want)*3 {
+		t.Fatalf("compact variants: got %d, want %d", len(variants), len(want)*3)
 	}
 	for _, variant := range variants {
 		parameters := modelVariantParameters(variant)

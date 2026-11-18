@@ -228,6 +228,12 @@ export function normalizeModelSource(value) {
 
 export function normalizeModelAdapter(source) {
   const raw = source && typeof source === "object" ? source : {};
+  const configuredContext = asPositiveInteger(
+    raw.contextWindowTokens ?? raw.context_window_tokens ?? raw.maxInputTokens ?? raw.max_input_tokens,
+  );
+  // Recognized metadata is queried separately; normalizing an existing explicit
+  // limit never replaces it, even if its provenance predates capability tracking.
+  const contextWindowTokens = contextWindowTokensForModel(raw.modelID, configuredContext);
   const sourceType = normalizeModelSource(raw.source ?? raw.modelSource ?? raw.model_source);
   const isCursorAccount = sourceType === MODEL_SOURCE_CURSOR_ACCOUNT;
   const normalizedType = asString(raw.type).toLowerCase();
@@ -318,10 +324,7 @@ export function normalizeModelAdapter(source) {
       modelID: asString(raw.modelID),
       customHeadersEnabled: false,
       customHeadersJSON: "",
-      contextWindowTokens: contextWindowTokensForModel(
-        raw.modelID,
-        raw.contextWindowTokens ?? raw.context_window_tokens ?? raw.maxInputTokens ?? raw.max_input_tokens,
-      ),
+      contextWindowTokens,
       maxCompletionTokens: asPositiveInteger(
         raw.maxCompletionTokens ?? raw.max_completion_tokens ?? raw.max_tokens ?? raw.max_token,
       ),
@@ -356,10 +359,7 @@ export function normalizeModelAdapter(source) {
     customHeadersJSON,
     anthropicExtraParamsEnabled,
     anthropicExtraParamsJSON,
-    contextWindowTokens: contextWindowTokensForModel(
-      raw.modelID,
-      raw.contextWindowTokens ?? raw.context_window_tokens ?? raw.maxInputTokens ?? raw.max_input_tokens,
-    ),
+    contextWindowTokens,
     maxCompletionTokens: asPositiveInteger(
       raw.maxCompletionTokens ?? raw.max_completion_tokens ?? raw.max_tokens ?? raw.max_token,
     ),

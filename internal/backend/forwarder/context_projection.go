@@ -39,6 +39,7 @@ type contextProjectionState struct {
 	ModelKey                 string    `json:"model_key"`
 	Mode                     string    `json:"mode,omitempty"`
 	ContextVersion           int64     `json:"context_version"`
+	ContextWindowTokens      uint32    `json:"context_window_tokens,omitempty"`
 	SummaryStartEntrySeq     int64     `json:"summary_start_entry_seq"`
 	CoveredEntrySeq          int64     `json:"covered_entry_seq"`
 	CoveredPrefixFingerprint string    `json:"covered_prefix_fingerprint"`
@@ -46,6 +47,15 @@ type contextProjectionState struct {
 	Applied                  bool      `json:"applied,omitempty"`
 	CreatedAt                time.Time `json:"created_at"`
 	UpdatedAt                time.Time `json:"updated_at"`
+}
+
+func contextProjectionUsageView(state *contextProjectionState) string {
+	if state == nil {
+		return ""
+	}
+	summaryHash := sha256.Sum256([]byte(state.Summary))
+	return fmt.Sprintf("%s:%s:%d:%d:%d:%s:%x", state.ModelKey, state.Mode, state.ContextWindowTokens,
+		state.SummaryStartEntrySeq, state.CoveredEntrySeq, state.CoveredPrefixFingerprint, summaryHash)
 }
 
 func contextProjectionModelKey(stream *ActiveStream) string {
@@ -244,6 +254,7 @@ func newContextProjectionState(conversation *ConversationFile, modelKey string, 
 		ModelKey:                 modelKey,
 		Mode:                     contextProjectionModeSummary,
 		ContextVersion:           conversation.ContextVersion,
+		ContextWindowTokens:      conversation.TokenDetailsMaxTokens,
 		SummaryStartEntrySeq:     summaryStartEntrySeq,
 		CoveredEntrySeq:          coveredEntrySeq,
 		CoveredPrefixFingerprint: fingerprint,
@@ -270,6 +281,9 @@ func validateContextProjectionState(state *contextProjectionState, conversation 
 	}
 	if strings.TrimSpace(state.ModelKey) != strings.TrimSpace(modelKey) {
 		return false, "model_mismatch"
+	}
+	if state.ContextWindowTokens > 0 && state.ContextWindowTokens != conversation.TokenDetailsMaxTokens {
+		return false, "context_window_changed"
 	}
 	if state.ContextVersion > conversation.ContextVersion {
 		return false, "context_version_ahead"
@@ -903,6 +917,7 @@ func (service *Service) completeContextProjectionRecentTailFallback(conversation
 		ModelKey:                 strings.TrimSpace(plan.ProjectionModelKey),
 		Mode:                     contextProjectionModeRecentTail,
 		ContextVersion:           conversation.ContextVersion,
+		ContextWindowTokens:      conversation.TokenDetailsMaxTokens,
 		SummaryStartEntrySeq:     plan.ProjectionSummaryStartEntrySeq,
 		CoveredEntrySeq:          plan.ProjectionCoveredEntrySeq,
 		CoveredPrefixFingerprint: fingerprint,

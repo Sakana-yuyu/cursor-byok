@@ -139,7 +139,7 @@ func (service *Service) buildAutoCompactionPlan(stream *ActiveStream, conversati
 	}
 	estimatedCompiledTokens := estimateCompiledPromptTokens(compiled)
 	contextTokens := resolveContextPressureTokens(conversation, compiled)
-	reserveTokens := service.resolveCompactionReserveTokens(stream.ModelID)
+	reserveTokens := service.streamCompactionReserveTokens(stream, conversation)
 	if reserveTokens <= 0 {
 		reserveTokens = conversation.AutoCompactionReserveTokens
 	}
@@ -219,7 +219,7 @@ func (service *Service) contextProjectionPressureExceeded(stream *ActiveStream, 
 		return false
 	}
 	contextTokens := resolveContextPressureTokens(conversation, compiled)
-	reserveTokens := service.resolveCompactionReserveTokens(stream.ModelID)
+	reserveTokens := service.streamCompactionReserveTokens(stream, conversation)
 	if reserveTokens <= 0 {
 		reserveTokens = conversation.AutoCompactionReserveTokens
 	}
@@ -245,7 +245,7 @@ func (service *Service) buildForcedCompactionPlan(stream *ActiveStream, conversa
 	if err != nil {
 		return nil, err
 	}
-	reserveTokens := service.resolveCompactionReserveTokens(stream.ModelID)
+	reserveTokens := service.streamCompactionReserveTokens(stream, conversation)
 	if reserveTokens <= 0 {
 		reserveTokens = conversation.AutoCompactionReserveTokens
 	}
@@ -874,6 +874,21 @@ func (service *Service) generateCompactionSummary(ctx context.Context, stream *A
 	if len(messages) == 0 {
 		return "", nil
 	}
+	stream.mu.Lock()
+	requestedContextTokens := stream.RequestedContextWindowTokens
+	stream.mu.Unlock()
+	summaryMaxTokens := compactionSummaryOutputMaxTokens
+	summaryView := CompiledConversation{Messages: messages}
+	if plan.ContextWindowSize > 0 {
+		remaining := plan.ContextWindowSize - estimateCompiledPromptTokens(summaryView) - providerOutputSafetyTokens
+		if remaining < int64(summaryMaxTokens) {
+			summaryMaxTokens = int(max(int64(1), remaining))
+		}
+		window := &ConversationFile{TokenDetailsMaxTokens: clampInt64ToUint32(plan.ContextWindowSize)}
+		if err := validateProviderRequestContextBudget(window, summaryView, summaryMaxTokens); err != nil {
+			return "", err
+		}
+	}
 	accumulated := ""
 	usage := turnUsageSnapshot{}
 	observer := modeladapter.LLMArtifactObserver(service.recorder)
@@ -881,17 +896,19 @@ func (service *Service) generateCompactionSummary(ctx context.Context, stream *A
 		observer = contextProjectionArtifactObserver{}
 	}
 	err = service.provider.StartStream(ctx, ProviderRequest{
-		RequestID:      stream.RequestID,
-		ConversationID: stream.ConversationID,
-		RunID:          stream.RequestID,
-		ModelCallID:    modelCallID,
-		ModelID:        stream.ModelID,
-		Mode:           agentv1.AgentMode_AGENT_MODE_AGENT,
-		Messages:       messages,
-		MaxTokens:      compactionSummaryOutputMaxTokens,
-		CompileSummary: fmt.Sprintf("compaction trigger=%s source=%s turns=%d messages=%d", plan.Trigger, plan.RequestSource, plan.CompactTurnCount, plan.MessagesToCompact),
-		Observer:       observer,
-		ArtifactPaths:  &modeladapter.LLMArtifactPaths{},
+		RequestID:                    stream.RequestID,
+		ConversationID:               stream.ConversationID,
+		RunID:                        stream.RequestID,
+		ModelCallID:                  modelCallID,
+		ModelID:                      stream.ModelID,
+		Mode:                         agentv1.AgentMode_AGENT_MODE_AGENT,
+		Messages:                     messages,
+		MaxTokens:                    summaryMaxTokens,
+		RequestedContextWindowTokens: requestedContextTokens,
+		ContextWindowTokens:          int(plan.ContextWindowSize),
+		CompileSummary:               fmt.Sprintf("compaction trigger=%s source=%s turns=%d messages=%d", plan.Trigger, plan.RequestSource, plan.CompactTurnCount, plan.MessagesToCompact),
+		Observer:                     observer,
+		ArtifactPaths:                &modeladapter.LLMArtifactPaths{},
 	}, func(event modeladapter.ModelEvent) error {
 		if err := providerLoopInterruptErr(ctx, stream, modelCallID); err != nil {
 			return err

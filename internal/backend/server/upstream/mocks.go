@@ -842,8 +842,11 @@ func buildAvailableModelEntriesForMode(adapters []legacyruntime.ModelAdapterConf
 			entry["vendor"] = map[string]any{"id": "MODEL_VENDOR_ID_CURSOR", "displayName": "Cursor"}
 		}
 		if useModelParameters {
-			entry["parameterDefinitions"] = buildModelParameterDefinitions(adapter, contextTokens, explodedVariants)
-			entry["variants"] = buildModelVariants(adapter, channelID, modelDisplayName, tooltipMarkdown, defaultThinkingEffort, contextTokens, explodedVariants)
+			menuContextTokens := modelcontext.ResolveContextBudget(modelcontext.ContextBudgetInput{
+				ModelID: adapter.ModelID, ConfiguredTokens: adapter.ContextWindowTokens,
+			}).EffectiveTokens
+			entry["parameterDefinitions"] = buildModelParameterDefinitions(adapter, menuContextTokens, explodedVariants)
+			entry["variants"] = buildModelVariants(adapter, channelID, modelDisplayName, tooltipMarkdown, defaultThinkingEffort, menuContextTokens, explodedVariants)
 		}
 
 		// 还原原生模型选择器元数据：上下文窗口（含 max 模式）、自动上下文上限、
@@ -860,14 +863,15 @@ func buildAvailableModelEntriesForMode(adapters []legacyruntime.ModelAdapterConf
 	return output
 }
 
-// resolveAvailableModelContextTokens 返回模型在 AvailableModels 中上报的上下文窗口
-// token 数：优先 adapter 显式配置的 ContextWindowTokens，其次内置 modelcontext 目录
-// （models.json 的 pattern 规则，first-match-wins）。未知模型返回 0，调用方省略字段。
+// resolveAvailableModelContextTokens 保留未知模型省略容量元数据的兼容行为；
+// 已知容量与渠道配置统一按有效预算取小，MaxMode 不能扩大渠道限制。
 func resolveAvailableModelContextTokens(adapter legacyruntime.ModelAdapterConfig) int {
-	if adapter.ContextWindowTokens > 0 {
-		return adapter.ContextWindowTokens
+	if adapter.ContextWindowTokens <= 0 && modelcontext.WindowTokens(adapter.ModelID) <= 0 {
+		return 0
 	}
-	return modelcontext.WindowTokens(adapter.ModelID)
+	return modelcontext.ResolveContextBudget(modelcontext.ContextBudgetInput{
+		ModelID: adapter.ModelID, ConfiguredTokens: adapter.ContextWindowTokens,
+	}).EffectiveTokens
 }
 
 // resolveAvailableModelDisplayPrice 返回模型选择器中展示的价格（每百万 token，
@@ -1014,19 +1018,48 @@ func buildCLIModelDetails(adapters []legacyruntime.ModelAdapterConfig) []map[str
 	return models
 }
 
+// modelContextOptions 只构造菜单：首项保留合法旧默认，其余档位不超过有效上限。
+// 任意合法的精确配置/自定义值不做千位取整，也不自动提升默认档位。
+func modelContextOptions(effectiveTokens int, defaultTokens int, customTokens ...int) []int {
+	if effectiveTokens <= 0 {
+		return nil
+	}
+	options := make([]int, 0, 9+len(customTokens))
+	seen := make(map[int]bool)
+	add := func(tokens int) {
+		if tokens > 0 && tokens <= effectiveTokens && !seen[tokens] {
+			options = append(options, tokens)
+			seen[tokens] = true
+		}
+	}
+	add(defaultTokens)
+	for _, tokens := range []int{32000, 64000, 128000, 200000, 256000, 500000, 1000000} {
+		add(tokens)
+	}
+	add(effectiveTokens)
+	for _, tokens := range customTokens {
+		add(tokens)
+	}
+	return options
+}
+
 func buildModelParameterDefinitions(adapter legacyruntime.ModelAdapterConfig, contextTokens int, explodedVariants bool) []map[string]any {
 	definitions := buildThinkingEffortParameterDefinitions(adapter, explodedVariants)
-	if contextTokens > 0 {
+	contextOptions := modelContextOptions(contextTokens, contextTokens, adapter.ContextWindowTokens)
+	if len(contextOptions) > 0 {
+		values := make([]map[string]any, 0, len(contextOptions))
+		for _, tokens := range contextOptions {
+			values = append(values, map[string]any{
+				"value": strconv.Itoa(tokens), "displayName": formatCompactTokenCount(tokens),
+			})
+		}
 		definitions = append(definitions, map[string]any{
 			"id":              modelRuntimeContextParameterID,
 			"markdownTooltip": "Context size the model has available.",
 			"name":            "Context",
 			"parameterType": map[string]any{
 				"enumParameter": map[string]any{
-					"values": []map[string]any{{
-						"value":       strconv.Itoa(contextTokens),
-						"displayName": formatCompactTokenCount(contextTokens),
-					}},
+					"values": values,
 				},
 			},
 		})
@@ -1085,33 +1118,60 @@ func buildModelVariants(adapter legacyruntime.ModelAdapterConfig, channelID stri
 	}
 	channelID = strings.TrimSpace(channelID)
 	modelDisplayName = strings.TrimSpace(modelDisplayName)
-	variants := make([]map[string]any, 0, len(values))
-	for _, value := range values {
-		parameterValues := []map[string]any{{"id": modelRuntimeThinkingEffortParameterID, "value": value}}
-		if contextTokens > 0 {
-			parameterValues = append(parameterValues, map[string]any{"id": modelRuntimeContextParameterID, "value": strconv.Itoa(contextTokens)})
+	contextOptions := modelContextOptions(contextTokens, contextTokens, adapter.ContextWindowTokens)
+	if len(contextOptions) == 0 {
+		// 兼容无 Context 参数的旧 effort-only 调用。
+		contextOptions = []int{0}
+	}
+	fastOptions := []string{"false"}
+	if adapter.FastMode {
+		fastOptions = append(fastOptions, "true")
+	}
+	variants := make([]map[string]any, 0, len(values)*len(contextOptions)*len(fastOptions))
+	for _, tokens := range contextOptions {
+		for _, value := range values {
+			for _, fast := range fastOptions {
+				parameterValues := []map[string]any{{"id": modelRuntimeThinkingEffortParameterID, "value": value}}
+				if tokens > 0 {
+					parameterValues = append(parameterValues, map[string]any{"id": modelRuntimeContextParameterID, "value": strconv.Itoa(tokens)})
+				}
+				if adapter.FastMode {
+					parameterValues = append(parameterValues, map[string]any{"id": modelRuntimeFastParameterID, "value": fast})
+				}
+				variantDisplayName := buildThinkingEffortVariantDisplayName(modelDisplayName, value)
+				if tokens != contextOptions[0] {
+					variantDisplayName += " · " + formatCompactTokenCount(tokens)
+				}
+				if fast == "true" {
+					variantDisplayName += " · Fast"
+				}
+				variant := map[string]any{
+					"displayName":              variantDisplayName,
+					"displayNameOutsidePicker": variantDisplayName,
+					"isDefaultNonMaxConfig":    value == defaultThinkingEffort && tokens == contextOptions[0] && fast == "false",
+					"isMaxMode":                false,
+					"parameterValues":          parameterValues,
+				}
+				if explodedVariants && !isDisabledThinkingEffortValue(value) {
+					variant["tagline"] = thinkingEffortDisplayName(value)
+				}
+				if channelID != "" {
+					// 原有默认 Context / Fast=Off 的 ID 不变，已保存模型选择继续匹配。
+					id := channelID + ":" + value
+					if tokens != contextOptions[0] {
+						id += ":context=" + strconv.Itoa(tokens)
+					}
+					if fast == "true" {
+						id += ":fast=true"
+					}
+					variant["variantStringRepresentation"] = id
+				}
+				if strings.TrimSpace(tooltipData) != "" {
+					variant["tooltipData"] = map[string]any{"markdownContent": tooltipData}
+				}
+				variants = append(variants, variant)
+			}
 		}
-		if adapter.FastMode {
-			parameterValues = append(parameterValues, map[string]any{"id": modelRuntimeFastParameterID, "value": "false"})
-		}
-		variantDisplayName := buildThinkingEffortVariantDisplayName(modelDisplayName, value)
-		variant := map[string]any{
-			"displayName":              variantDisplayName,
-			"displayNameOutsidePicker": variantDisplayName,
-			"isDefaultNonMaxConfig":    value == defaultThinkingEffort,
-			"isMaxMode":                false,
-			"parameterValues":          parameterValues,
-		}
-		if explodedVariants && !isDisabledThinkingEffortValue(value) {
-			variant["tagline"] = thinkingEffortDisplayName(value)
-		}
-		if channelID != "" {
-			variant["variantStringRepresentation"] = channelID + ":" + value
-		}
-		if strings.TrimSpace(tooltipData) != "" {
-			variant["tooltipData"] = map[string]any{"markdownContent": tooltipData}
-		}
-		variants = append(variants, variant)
 	}
 	return variants
 }
@@ -1150,7 +1210,15 @@ func thinkingEffortValuesForAdapter(adapter legacyruntime.ModelAdapterConfig) []
 	}
 	// 自定义档位（仅 openai 渠道配置）插在 max 之前，语义上视为低于"最高"的
 	// 厂商特殊档位；Cursor 的 Effort 下拉与变体列表都会展示并回传这些值。
-	return insertCustomThinkingEfforts(values, adapter.CustomThinkingEfforts)
+	// 渠道旧默认也必须存在于枚举中（包括旧配置留下的 max / 自定义值）。
+	values = insertCustomThinkingEfforts(values, adapter.CustomThinkingEfforts)
+	defaultValue := defaultThinkingEffortForAdapter(adapter)
+	for _, value := range values {
+		if value == defaultValue {
+			return values
+		}
+	}
+	return append(values, defaultValue)
 }
 
 // insertCustomThinkingEfforts 把自定义档位插入标准档位列表的 max 之前（无 max

@@ -51,6 +51,9 @@ func (adapter *GeminiAdapter) Stream(ctx context.Context, req StreamRequest, sin
 
 	startedAt := time.Now().UTC()
 	finishedAt := time.Time{}
+	if err := validateContextOverride(req.RequestBodyOverride); err != nil {
+		return err
+	}
 	body := cloneRequestBodyOverride(req.RequestBodyOverride)
 	if len(body) == 0 {
 		var err error
@@ -72,6 +75,10 @@ func (adapter *GeminiAdapter) Stream(ctx context.Context, req StreamRequest, sin
 	req.ToolAdmission = admission
 	if req.RequestKnobs != nil {
 		req.RequestKnobs["tool_admission"] = admission.diagnostics()
+	}
+	if err := validateProviderContextBudget(req, modelID, body, "maxOutputTokens"); err != nil {
+		recordLLMSummaryArtifact(req, buildLLMSummaryPayload(req, "gemini", modelID, startedAt, time.Time{}, time.Now().UTC(), "", 0, 0, 0, 0, err))
+		return err
 	}
 	requestURL := geminiEndpointURL(baseURL, modelID, true)
 	recordLLMRequestArtifact(req, "gemini", modelID, "POST", requestURL, body)

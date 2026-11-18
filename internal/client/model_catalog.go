@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -55,12 +56,19 @@ type ModelPricing struct {
 
 // ModelCatalogItem 是服务端返回的模型摘要。
 type ModelCatalogItem struct {
-	ID                  string                 `json:"id"`
-	Object              string                 `json:"object,omitempty"`
-	OwnedBy             string                 `json:"ownedBy,omitempty"`
-	ContextWindowTokens int                    `json:"contextWindowTokens,omitempty"`
-	Pricing             *ModelPricing          `json:"pricing,omitempty"`
-	Capabilities        map[string]interface{} `json:"capabilities,omitempty"`
+	ID      string `json:"id"`
+	Object  string `json:"object,omitempty"`
+	OwnedBy string `json:"ownedBy,omitempty"`
+	// ContextWindowTokens is a conservative channel ceiling, not necessarily a reported total.
+	ContextWindowTokens int `json:"contextWindowTokens,omitempty"`
+	// ReportedContextWindowTokens is zero unless a provider explicitly reported context/total.
+	ReportedContextWindowTokens int                    `json:"reportedContextWindowTokens,omitempty"`
+	ContextWindowSource         string                 `json:"contextWindowSource,omitempty"`
+	MaxInputTokens              int                    `json:"maxInputTokens,omitempty"`
+	MaxOutputTokens             int                    `json:"maxOutputTokens,omitempty"`
+	CapabilitySource            string                 `json:"capabilitySource,omitempty"`
+	Pricing                     *ModelPricing          `json:"pricing,omitempty"`
+	Capabilities                map[string]interface{} `json:"capabilities,omitempty"`
 }
 
 // ModelCatalogResult 是拉取模型列表的结果。
@@ -558,18 +566,64 @@ func modelCatalogItemFromValue(value any) (ModelCatalogItem, bool) {
 			return ModelCatalogItem{}, false
 		}
 		id = strings.TrimPrefix(id, "models/")
-		contextWindowTokens := firstInt(item, "contextWindowTokens", "context_window", "context_window_tokens", "contextLength", "context_length", "inputTokenLimit", "input_token_limit")
+		contextKeys := []string{"contextWindowTokens", "context_window", "context_window_tokens", "contextLength", "context_length", "context"}
+		inputKeys := []string{"maxInputTokens", "max_input_tokens", "max_input", "inputTokenLimit", "input_token_limit"}
+		outputKeys := []string{"maxOutputTokens", "max_output_tokens", "max_output", "outputTokenLimit", "output_token_limit"}
+		reportedContextWindowTokens := modelCatalogLimit(item, contextKeys...)
+		contextWindowTokens := reportedContextWindowTokens
+		maxInputTokens := modelCatalogLimit(item, inputKeys...)
+		maxOutputTokens := modelCatalogLimit(item, outputKeys...)
+		contextWindowSource := ""
+		if reportedContextWindowTokens > 0 {
+			contextWindowSource = "provider_context"
+		}
+		// An input-only limit is a conservative channel ceiling, NOT a claim
+		// about total context. Never infer total by adding independent output.
+		if maxInputTokens > 0 && (contextWindowTokens == 0 || maxInputTokens < contextWindowTokens) {
+			contextWindowTokens = maxInputTokens
+			contextWindowSource = "provider_input_limit"
+		}
 		return ModelCatalogItem{
-			ID:                  id,
-			Object:              firstString(item, "object", "type"),
-			OwnedBy:             firstString(item, "owned_by", "ownedBy", "provider"),
-			ContextWindowTokens: contextWindowTokens,
-			Pricing:             modelPricingFromValue(item),
-			Capabilities:        firstMap(item, "capabilities"),
+			ID:                          id,
+			Object:                      firstString(item, "object", "type"),
+			OwnedBy:                     firstString(item, "owned_by", "ownedBy", "provider"),
+			ContextWindowTokens:         contextWindowTokens,
+			ReportedContextWindowTokens: reportedContextWindowTokens,
+			ContextWindowSource:         contextWindowSource,
+			MaxInputTokens:              maxInputTokens,
+			MaxOutputTokens:             maxOutputTokens,
+			CapabilitySource:            "provider",
+			Pricing:                     modelPricingFromValue(item),
+			Capabilities:                firstMap(item, "capabilities"),
 		}, true
 	default:
 		return ModelCatalogItem{}, false
 	}
+}
+
+// modelCatalogLimit only visits documented metadata containers, never pricing.
+// Multiple reported ceilings are intersected conservatively.
+func modelCatalogLimit(values map[string]any, keys ...string) int {
+	result := firstInt(values, keys...)
+	for _, key := range []string{"limit", "limits", "token_limits", "context", "model_info", "top_provider", "capabilities"} {
+		nested, ok := values[key].(map[string]any)
+		if !ok {
+			continue
+		}
+		nestedKeys := append([]string(nil), keys...)
+		if key == "limit" || key == "limits" || key == "token_limits" {
+			switch keys[0] {
+			case "maxInputTokens":
+				nestedKeys = append(nestedKeys, "input")
+			case "maxOutputTokens":
+				nestedKeys = append(nestedKeys, "output")
+			}
+		}
+		if candidate := modelCatalogLimit(nested, nestedKeys...); candidate > 0 && (result == 0 || candidate < result) {
+			result = candidate
+		}
+	}
+	return result
 }
 
 func firstString(values map[string]any, keys ...string) string {
@@ -596,6 +650,11 @@ func firstInt(values map[string]any, keys ...string) int {
 			parsed, err := number.Int64()
 			if err == nil && parsed > 0 {
 				return int(parsed)
+			}
+		case string:
+			parsed, err := strconv.Atoi(strings.TrimSpace(number))
+			if err == nil && parsed > 0 {
+				return parsed
 			}
 		case int:
 			if number > 0 {
