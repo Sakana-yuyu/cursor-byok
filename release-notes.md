@@ -1,9 +1,10 @@
-## v1.0.24
+## v1.0.25
 
-> 本版包含未能发布的 v1.0.23 的全部修复；原 v1.0.23 标签保留，不替换已推送的版本。
+> 本版包含未能发布的 v1.0.23、v1.0.24 的全部修复；原标签保留，不替换已推送的版本。
 
 ### 修复
 
+- **macOS 两种架构均在检查阶段以 201 退出**：修正 `lipo` 参数顺序，避免将产物路径解析为架构名。新增独立 macOS 原生门禁，实际验证正确架构、错误架构及缺失产物三种场景，检查失败时阻止打包。
 - **macOS ARM64 构建排队超时导致整版无法发布**：改用 Intel Mac runner 交叉编译 Apple Silicon 安装包，生成工具保持宿主架构，最终应用单独设置目标架构并校验 Mach-O 架构，不再依赖容量不足的 ARM runner。
 
 - **启动失败不再遗留半启动服务**：代理端口被占用、登录态备份失败等情况下，逆序清理本轮启动的组件并恢复登录态，不停止原本已运行的后端；恢复失败会明确报错。
@@ -26,12 +27,12 @@
 
 ### 下载哪个文件？（按系统选择）
 
-- **Windows 64 位**：`cursor-byok-1.0.24-windows-x64-installer.exe`（安装版）或 `cursor-byok-1.0.24-windows-x64.zip`（绿色版）
-- **Windows ARM64**：`cursor-byok-1.0.24-windows-arm64-installer.exe` 或 `cursor-byok-1.0.24-windows-arm64.zip`
-- **Windows 32 位**：`cursor-byok-1.0.24-windows-x32-installer.exe` 或 `cursor-byok-1.0.24-windows-x32.zip`
-- **macOS Apple Silicon**：`cursor-byok-1.0.24-macos-arm64.dmg` 或 `cursor-byok-1.0.24-macos-arm64.tar.gz`
-- **macOS Intel**：`cursor-byok-1.0.24-macos-x64.dmg` 或 `cursor-byok-1.0.24-macos-x64.tar.gz`
-- **Linux 64 位**：`cursor-byok-1.0.24-linux-x64.tar.gz`
+- **Windows 64 位**：`cursor-byok-1.0.25-windows-x64-installer.exe`（安装版）或 `cursor-byok-1.0.25-windows-x64.zip`（绿色版）
+- **Windows ARM64**：`cursor-byok-1.0.25-windows-arm64-installer.exe` 或 `cursor-byok-1.0.25-windows-arm64.zip`
+- **Windows 32 位**：`cursor-byok-1.0.25-windows-x32-installer.exe` 或 `cursor-byok-1.0.25-windows-x32.zip`
+- **macOS Apple Silicon**：`cursor-byok-1.0.25-macos-arm64.dmg` 或 `cursor-byok-1.0.25-macos-arm64.tar.gz`
+- **macOS Intel**：`cursor-byok-1.0.25-macos-x64.dmg` 或 `cursor-byok-1.0.25-macos-x64.tar.gz`
+- **Linux 64 位**：`cursor-byok-1.0.25-linux-x64.tar.gz`
 
 ## v1.0.22
 
